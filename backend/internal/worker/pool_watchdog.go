@@ -13,20 +13,9 @@ import (
 // It also probes PostgreSQL pg_stat_activity for queries that have been
 // running longer than slowQueryThreshold, which points at stuck locks.
 func StartPoolWatchdog(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Infof("Starting DB Pool Watchdog with tick interval of %v", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("DB Pool Watchdog stopped")
-				return
-			case <-ticker.C:
-				checkDBHealth(db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "DB Pool Watchdog", func(ctx context.Context) {
+		checkDBHealth(db)
+	})
 }
 
 func checkDBHealth(db *sql.DB) {

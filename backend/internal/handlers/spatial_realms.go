@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -421,32 +422,23 @@ func syncExitedSpatialInstance(instanceID uuid.UUID) {
 }
 
 func StartSpatialRealmExpiryWorker(ctx context.Context) {
-	go func() {
-		ticker := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				rows, err := db.DB.QueryContext(ctx, `SELECT id FROM shared_spatial_instances WHERE status='ACTIVE' AND expires_at<=NOW() ORDER BY expires_at LIMIT 100`)
-				if err != nil {
-					continue
-				}
-				ids := make([]uuid.UUID, 0, 100)
-				for rows.Next() {
-					var id uuid.UUID
-					if rows.Scan(&id) == nil {
-						ids = append(ids, id)
-					}
-				}
-				rows.Close()
-				for _, id := range ids {
-					_ = expireSpatialRealm(ctx, id)
-				}
+	worker.RunEvery(ctx, 15*time.Second, "Spatial Realm Expiry", func(ctx context.Context) {
+		rows, err := db.DB.QueryContext(ctx, `SELECT id FROM shared_spatial_instances WHERE status='ACTIVE' AND expires_at<=NOW() ORDER BY expires_at LIMIT 100`)
+		if err != nil {
+			return
+		}
+		ids := make([]uuid.UUID, 0, 100)
+		for rows.Next() {
+			var id uuid.UUID
+			if rows.Scan(&id) == nil {
+				ids = append(ids, id)
 			}
 		}
-	}()
+		rows.Close()
+		for _, id := range ids {
+			_ = expireSpatialRealm(ctx, id)
+		}
+	})
 }
 
 func syncSpatialPlayer(playerID uuid.UUID, region string, x, y int, instanceID uuid.UUID) {

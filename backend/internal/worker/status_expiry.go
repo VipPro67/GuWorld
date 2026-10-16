@@ -13,20 +13,9 @@ import (
 
 // StartStatusExpiryWorker periodically purges expired entries from player statuses.
 func StartStatusExpiryWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Infof("Starting background Status Expiry Worker with tick interval of %v", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Status Expiry Worker stopped")
-				return
-			case <-ticker.C:
-				processStatusExpiryTick(db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Status Expiry Worker", func(ctx context.Context) {
+		processStatusExpiryTick(db)
+	})
 }
 
 func processStatusExpiryTick(db *sql.DB) {

@@ -34,7 +34,7 @@ func StartBatchPersister(ctx context.Context, interval time.Duration) {
 				flushAll(context.Background())
 				return
 			case <-ticker.C:
-				flushAll(ctx)
+				SafeRun("Batch Persister", ctx, flushAll)
 			}
 		}
 	}()

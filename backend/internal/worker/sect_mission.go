@@ -12,20 +12,9 @@ import (
 // whose expires_at has passed are marked EXPIRED, then board missions that
 // expired are deleted (player rows cascade via FK).
 func StartSectMissionWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Infof("Starting background Sect Mission Worker with tick interval of %v", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Sect Mission Worker stopped")
-				return
-			case <-ticker.C:
-				processSectMissionTick(db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Sect Mission Worker", func(ctx context.Context) {
+		processSectMissionTick(db)
+	})
 }
 
 func processSectMissionTick(db *sql.DB) {

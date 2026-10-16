@@ -14,20 +14,9 @@ import (
 // variant human populations and spawns Gu Master NPCs when thresholds are met.
 // Tick interval: 30 minutes.
 func StartGuMasterSpawningWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Info("Starting Gu Master Spawning Worker with tick interval of ", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Gu Master Spawning Worker stopped")
-				return
-			case <-ticker.C:
-				processGuMasterSpawning(ctx, db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Gu Master Spawning Worker", func(ctx context.Context) {
+		processGuMasterSpawning(ctx, db)
+	})
 }
 
 // Spawning thresholds per race.

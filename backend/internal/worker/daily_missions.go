@@ -9,26 +9,19 @@ import (
 )
 
 func StartDailyMissionRolloverWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		defer ticker.Stop()
-		loc, err := time.LoadLocation("Asia/Ho_Chi_Minh")
-		if err != nil {
-			logger.S.Errorf("Daily mission worker: load timezone: %v", err)
-			return
-		}
-		rolloverDailyMissionCycle(ctx, db, time.Now().In(loc).Format("2006-01-02"))
-		for {
-			select {
-			case <-ctx.Done():
-				logger.S.Info("Daily mission rollover worker stopped")
-				return
-			case <-ticker.C:
-				dayKey := time.Now().In(loc).Format("2006-01-02")
-				rolloverDailyMissionCycle(ctx, db, dayKey)
-			}
-		}
-	}()
+	loc, err := time.LoadLocation("Asia/Ho_Chi_Minh")
+	if err != nil {
+		logger.S.Errorf("Daily mission worker: load timezone: %v", err)
+		return
+	}
+	dayKey := func() string { return time.Now().In(loc).Format("2006-01-02") }
+
+	SafeRun("Daily Mission Rollover Worker", ctx, func(ctx context.Context) {
+		rolloverDailyMissionCycle(ctx, db, dayKey())
+	})
+	RunEvery(ctx, interval, "Daily Mission Rollover Worker", func(ctx context.Context) {
+		rolloverDailyMissionCycle(ctx, db, dayKey())
+	})
 }
 
 func rolloverDailyMissionCycle(ctx context.Context, db *sql.DB, dayKey string) {

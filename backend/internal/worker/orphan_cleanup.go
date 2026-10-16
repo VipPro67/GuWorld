@@ -14,21 +14,9 @@ import (
 // indefinitely (e.g., when a payload was queued but later superseded by a newer
 // update that didn't remove the old entry).
 func StartOrphanedKeyCleanup(ctx context.Context, interval time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		logger.S.Info("Orphaned key cleanup worker started")
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				cleanupOrphanedKeys(ctx)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Orphaned Key Cleanup", func(ctx context.Context) {
+		cleanupOrphanedKeys(ctx)
+	})
 }
 
 func cleanupOrphanedKeys(ctx context.Context) {

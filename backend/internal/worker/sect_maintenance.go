@@ -200,20 +200,9 @@ func CalculateSectMaintenanceFee(ctx context.Context, q QueryContextRunner, sect
 }
 
 func StartSectMaintenanceWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Infof("Starting background Sect Maintenance Worker with tick interval of %v", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Sect Maintenance Worker stopped")
-				return
-			case <-ticker.C:
-				processSectMaintenanceTick(ctx, db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Sect Maintenance Worker", func(ctx context.Context) {
+		processSectMaintenanceTick(ctx, db)
+	})
 }
 
 func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {

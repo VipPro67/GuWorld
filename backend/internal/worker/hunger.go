@@ -38,20 +38,9 @@ func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 	hungerWorkerStarted = true
 	hungerWorkerMutex.Unlock()
 
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Infof("Starting background Hunger Worker with tick interval of %v", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Hunger Worker stopped")
-				return
-			case <-ticker.C:
-				processScheduledTicks(ctx, db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Hunger Worker", func(ctx context.Context) {
+		processScheduledTicks(ctx, db)
+	})
 }
 
 // processScheduledTicks handles background SCHEDULED-timing effects.

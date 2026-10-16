@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -606,21 +607,10 @@ func AttackMineSlot(c *gin.Context) {
 
 // StartMineMonsterWorker runs periodically to assign monsters to abandoned mines
 func StartMineMonsterWorker(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute) // check every 10 minutes
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				logger.S.Info("Mine Monster Worker stopped")
-				return
-			case <-ticker.C:
-				AssignMonstersToMines()
-			}
-		}
-	}()
+	run := func(ctx context.Context) { AssignMonstersToMines() }
+	worker.RunEvery(ctx, 10*time.Minute, "Mine Monster", run) // check every 10 minutes
 	// Run once at startup (in background)
-	go AssignMonstersToMines()
+	go worker.SafeRun("Mine Monster", ctx, run)
 }
 
 // pickRandomMineMonsterIDs returns up to n random active monster IDs in a
@@ -762,9 +752,14 @@ func AssignMonstersToMines() {
 
 // StartMidnightMineWorker runs daily at 00:00 to assign monsters to empty mines
 func StartMidnightMineWorker(ctx context.Context) {
+	run := func(ctx context.Context) {
+		logger.S.Info("Midnight Mine Worker - daily reset at 00:00")
+		AssignMonstersToEmptyMines()
+	}
+
 	go func() {
 		logger.S.Info("Midnight Mine Worker - initial run at startup")
-		AssignMonstersToEmptyMines()
+		worker.SafeRun("Midnight Mine", ctx, func(ctx context.Context) { AssignMonstersToEmptyMines() })
 
 		now := time.Now()
 		nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
@@ -776,22 +771,10 @@ func StartMidnightMineWorker(ctx context.Context) {
 		case <-time.After(durationUntilMidnight):
 		}
 
-		logger.S.Info("Midnight Mine Worker - daily reset at 00:00")
-		AssignMonstersToEmptyMines()
-
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				logger.S.Info("Midnight Mine Worker stopped")
-				return
-			case <-ticker.C:
-				logger.S.Info("Midnight Mine Worker - daily reset at 00:00")
-				AssignMonstersToEmptyMines()
-			}
-		}
+		// Aligned to midnight; RunEvery starts its own ticker from here so the
+		// daily reset does not drift with the boot time.
+		worker.SafeRun("Midnight Mine", ctx, run)
+		worker.RunEvery(ctx, 24*time.Hour, "Midnight Mine", run)
 	}()
 }
 

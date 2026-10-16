@@ -15,20 +15,9 @@ import (
 // prosperity, and rebellion checks.
 // Tick interval: 5 minutes.
 func StartSocietySimulationWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Info("Starting Society Simulation Worker with tick interval of ", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Society Simulation Worker stopped")
-				return
-			case <-ticker.C:
-				processSocietyTick(ctx, db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Society Simulation Worker", func(ctx context.Context) {
+		processSocietyTick(ctx, db)
+	})
 }
 
 type societyVariant struct {

@@ -15,20 +15,9 @@ import (
 // auto-production for variant humans (mining, farming, refinement).
 // Tick interval: 10 minutes (processes aperture internal years in batches).
 func StartVariantProductionWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Info("Starting Variant Production Worker with tick interval of ", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Variant Production Worker stopped")
-				return
-			case <-ticker.C:
-				processVariantProductionTick(ctx, db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Variant Production Worker", func(ctx context.Context) {
+		processVariantProductionTick(ctx, db)
+	})
 }
 
 // --- package-level types (used by processApertureProduction) ---

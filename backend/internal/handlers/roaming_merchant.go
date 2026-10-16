@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
@@ -28,19 +29,9 @@ const (
 // random stock) in random wilderness regions, announcing each spawn on world
 // chat.
 func StartRoamingMerchantWorker(ctx context.Context, database *sql.DB, interval time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		roamingMerchantTick(ctx, database)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				roamingMerchantTick(ctx, database)
-			}
-		}
-	}()
+	tick := func(ctx context.Context) { roamingMerchantTick(ctx, database) }
+	go worker.SafeRun("Roaming Merchant", ctx, tick)
+	worker.RunEvery(ctx, interval, "Roaming Merchant", tick)
 }
 
 func roamingMerchantTick(ctx context.Context, database *sql.DB) {

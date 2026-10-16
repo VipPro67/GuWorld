@@ -45,20 +45,9 @@ func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 	growthWorkerStarted = true
 	growthWorkerMutex.Unlock()
 
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Infof("Starting background Growth Worker with tick interval of %v", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Growth Worker stopped")
-				return
-			case <-ticker.C:
-				processGrowthTick(ctx, db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Growth Worker", func(ctx context.Context) {
+		processGrowthTick(ctx, db)
+	})
 }
 
 // processGrowthTick advances Gu growth for every equipped ACTIVE Gu that has a

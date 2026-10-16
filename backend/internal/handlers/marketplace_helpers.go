@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
@@ -126,26 +127,17 @@ func HasBaoHoangAccess(inventory models.GuInventory) bool {
 
 // StartAuctionSettlementWorker runs a background loop to periodically settle expired auctions, buyback orders, and trade offers.
 func StartAuctionSettlementWorker(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := settleExpiredAuctions(); err != nil {
-					logger.S.Errorf("Failed to settle expired auctions: %v", err)
-				}
-				if err := settleExpiredBuybackOrders(); err != nil {
-					logger.S.Errorf("Failed to settle expired buyback orders: %v", err)
-				}
-				if err := settleExpiredTradeOffers(); err != nil {
-					logger.S.Errorf("Failed to settle expired trade offers: %v", err)
-				}
-			}
+	worker.RunEvery(ctx, 30*time.Second, "Auction Settlement", func(ctx context.Context) {
+		if err := settleExpiredAuctions(); err != nil {
+			logger.S.Errorf("Failed to settle expired auctions: %v", err)
 		}
-	}()
+		if err := settleExpiredBuybackOrders(); err != nil {
+			logger.S.Errorf("Failed to settle expired buyback orders: %v", err)
+		}
+		if err := settleExpiredTradeOffers(); err != nil {
+			logger.S.Errorf("Failed to settle expired trade offers: %v", err)
+		}
+	})
 }
 
 func settleExpiredBuybackOrders() error {

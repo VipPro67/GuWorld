@@ -12,20 +12,9 @@ import (
 )
 
 func StartSectTerritoryWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Infof("Starting background Sect Territory Worker with tick interval of %v", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Sect Territory Worker stopped")
-				return
-			case <-ticker.C:
-				processSectTerritoryTick(ctx, db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Sect Territory Worker", func(ctx context.Context) {
+		processSectTerritoryTick(ctx, db)
+	})
 }
 
 type sectTerritoryRow struct {

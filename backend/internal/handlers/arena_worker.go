@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -29,27 +30,17 @@ func StartArenaSettlementWorker(ctx context.Context) {
 
 	var lastSettlementDay int
 
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				logger.S.Info("Arena Settlement Worker stopped.")
-				return
-			case t := <-ticker.C:
-				if t.Hour() == 22 && t.Minute() == 30 {
-					currentDay := t.YearDay()
-					if lastSettlementDay != currentDay {
-						logger.S.Info("Running Daily Arena Settlement...")
-						runArenaSettlement()
-						lastSettlementDay = currentDay
-					}
-				}
+	worker.RunEvery(ctx, time.Minute, "Arena Settlement", func(ctx context.Context) {
+		now := time.Now()
+		if now.Hour() == 22 && now.Minute() == 30 {
+			currentDay := now.YearDay()
+			if lastSettlementDay != currentDay {
+				logger.S.Info("Running Daily Arena Settlement...")
+				runArenaSettlement()
+				lastSettlementDay = currentDay
 			}
 		}
-	}()
+	})
 }
 
 func runArenaSettlement() {

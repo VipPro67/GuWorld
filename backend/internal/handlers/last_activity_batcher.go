@@ -9,6 +9,7 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -71,7 +72,7 @@ func (s *lastActivityStore) StartFlusher(ctx context.Context, flushInterval time
 				logger.S.Info("Last-activity batcher stopped")
 				return
 			case <-ticker.C:
-				s.flush()
+				worker.SafeRun("Last-Activity Batcher", ctx, func(context.Context) { s.flush() })
 			}
 		}
 	}()

@@ -9,6 +9,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -500,44 +501,20 @@ func RegenerateImmortalApertures() error {
 }
 
 func StartTribulationWorker(ctx context.Context) {
-	ticker60 := time.NewTicker(60 * time.Second)
-	ticker15 := time.NewTicker(15 * time.Second)
-
-	go func() {
-		defer ticker60.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				logger.S.Info("Tribulation worker (60s) stopped")
-				return
-			case <-ticker60.C:
-				err := CheckAndTriggerTribulations()
-				if err != nil {
-					logger.S.Errorf("Tribulation background worker error: %v", err)
-				}
-				errRegen := RegenerateImmortalApertures()
-				if errRegen != nil {
-					logger.S.Errorf("Aperture HP regeneration background worker error: %v", errRegen)
-				}
-			}
+	worker.RunEvery(ctx, 60*time.Second, "Tribulation Worker", func(ctx context.Context) {
+		if err := CheckAndTriggerTribulations(); err != nil {
+			logger.S.Errorf("Tribulation background worker error: %v", err)
 		}
-	}()
-
-	go func() {
-		defer ticker15.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				logger.S.Info("Tribulation worker (15s) stopped")
-				return
-			case <-ticker15.C:
-				err := ProcessActiveTribulationGrid()
-				if err != nil {
-					logger.S.Errorf("Tribulation grid worker error: %v", err)
-				}
-			}
+		if errRegen := RegenerateImmortalApertures(); errRegen != nil {
+			logger.S.Errorf("Aperture HP regeneration background worker error: %v", errRegen)
 		}
-	}()
+	})
+
+	worker.RunEvery(ctx, 15*time.Second, "Tribulation Grid Worker", func(ctx context.Context) {
+		if err := ProcessActiveTribulationGrid(); err != nil {
+			logger.S.Errorf("Tribulation grid worker error: %v", err)
+		}
+	})
 
 	logger.S.Info("Tribulation and internal year worker started successfully (Interval: 60s)")
 }

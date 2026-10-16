@@ -9,20 +9,9 @@ import (
 )
 
 func StartPetHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	go func() {
-		logger.S.Infof("Starting Pet Hunger Worker with tick interval of %v", interval)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				logger.S.Info("Pet Hunger Worker stopped")
-				return
-			case <-ticker.C:
-				processPetHungerDecay(ctx, db)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Pet Hunger Worker", func(ctx context.Context) {
+		processPetHungerDecay(ctx, db)
+	})
 }
 
 func processPetHungerDecay(ctx context.Context, db *sql.DB) {

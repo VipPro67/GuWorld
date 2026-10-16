@@ -19,19 +19,9 @@ func StartCombatHistoryCleanup(ctx context.Context, database *sql.DB, interval t
 	if database == nil {
 		return
 	}
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		logger.S.Info("Combat history cleanup worker started")
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				cleanupCombatHistory(ctx, database)
-			}
-		}
-	}()
+	RunEvery(ctx, interval, "Combat History Cleanup", func(ctx context.Context) {
+		cleanupCombatHistory(ctx, database)
+	})
 }
 
 func cleanupCombatHistory(ctx context.Context, database *sql.DB) {

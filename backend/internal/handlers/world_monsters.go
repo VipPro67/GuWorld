@@ -24,6 +24,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -1088,7 +1089,9 @@ func startWorldMonsterWorker(ctx context.Context, interval time.Duration) <-chan
 			case <-ctx.Done():
 				return
 			case now := <-ticker.C:
-				processWorldMonsterTick(ctx, now.UTC())
+				worker.SafeRun("World Monster", ctx, func(ctx context.Context) {
+					processWorldMonsterTick(ctx, now.UTC())
+				})
 			}
 		}
 	}()

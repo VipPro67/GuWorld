@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -21,7 +22,7 @@ var lastEntryCount int
 // in-memory position index. It runs the initial reconcile immediately so the
 // fast path is warm on the very first nearby-players query.
 func StartWorldIndexSyncWorker(ctx context.Context) {
-	reconcile := func() {
+	reconcile := func(ctx context.Context) {
 		entries := loadActiveWorldPositions()
 		if len(entries) == 0 && lastEntryCount == 0 {
 			return
@@ -30,19 +31,10 @@ func StartWorldIndexSyncWorker(ctx context.Context) {
 		lastEntryCount = len(entries)
 	}
 
-	go func() {
-		reconcile()
-		ticker := time.NewTicker(worldIndexSyncInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				reconcile()
-			}
-		}
-	}()
+	// Warm the fast path immediately (off the startup path), then reconcile on
+	// every tick.
+	go worker.SafeRun("World Index Sync", ctx, reconcile)
+	worker.RunEvery(ctx, worldIndexSyncInterval, "World Index Sync", reconcile)
 }
 
 // loadActiveWorldPositions loads the position snapshot of every active player
