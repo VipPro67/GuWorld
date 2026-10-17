@@ -66,3 +66,84 @@ func TestCheckAndApplyRegionalWallDebuff(t *testing.T) {
 		t.Errorf("expected debuffed attack 24.0, got %f", stats["attack"])
 	}
 }
+
+func TestCheckAndApplyRegionalWallDebuffBetween_KhuVucVsNguVuc(t *testing.T) {
+	zoneReg.mu.Lock()
+	zoneReg.zones = []models.Region{
+		{ID: "dai_vuc_nam_cuong", Name: "Đại Vực Nam Cương", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 10000, MaxY: 10000},
+		{ID: "dai_vuc_trung_chau", Name: "Đại Vực Trung Châu", ZoneType: ZoneTypeLarge, MinX: 10000, MinY: 0, MaxX: 20000, MaxY: 10000},
+		{ID: "thanh_mao_son", Name: "Thanh Mao Sơn", ZoneType: ZoneTypeNamed, ParentID: "dai_vuc_nam_cuong", MinX: 2000, MinY: 4000, MaxX: 4000, MaxY: 6000},
+		{ID: "bach_cot_son", Name: "Bạch Cốt Sơn", ZoneType: ZoneTypeNamed, ParentID: "dai_vuc_nam_cuong", MinX: 6000, MinY: 2000, MaxX: 8000, MaxY: 4000},
+		{ID: "phi_hac_son", Name: "Phi Hạc Sơn", ZoneType: ZoneTypeNamed, ParentID: "dai_vuc_trung_chau", MinX: 10000, MinY: 0, MaxX: 12000, MaxY: 2000},
+		{ID: "hub_unparented", Name: "Tân Thủ Cốc", ZoneType: ZoneTypeHub, MinX: 4900, MinY: 4900, MaxX: 5100, MaxY: 5100, EntryX: 5000, EntryY: 5000},
+		{ID: "secret_realm_test", Name: "Bí Cảnh Test", ZoneType: ZoneTypeSecret, MinX: 1000, MinY: 1000, MaxX: 1050, MaxY: 1050},
+	}
+	zoneReg.byID = make(map[string]*models.Region)
+	for i := range zoneReg.zones {
+		zoneReg.byID[zoneReg.zones[i].ID] = &zoneReg.zones[i]
+	}
+	zoneReg.mu.Unlock()
+
+	p := &models.Player{}
+	p.Rank = 2
+	p.SubRank = 1
+	p.Statuses = models.StatusList{}
+
+	// 1. Moving between two different KHU_VUC in the SAME NGU_VUC (Thanh Mao Sơn -> Bạch Cốt Sơn)
+	msgSame := CheckAndApplyRegionalWallDebuffBetween(p, "thanh_mao_son", "bach_cot_son")
+	if msgSame != "" {
+		t.Errorf("expected no suppression when switching KHU_VUC in same NGU_VUC, got %q", msgSame)
+	}
+	if p.Statuses.Has("regional_wall_suppression") {
+		t.Fatalf("regional_wall_suppression should NOT be applied when switching KHU_VUC in same NGU_VUC")
+	}
+
+	// 2. Unparented hub inside Nam Cương (coordinates 5000, 5000) -> Thanh Mao Sơn (Nam Cương)
+	msgHub := CheckAndApplyRegionalWallDebuffBetween(p, "hub_unparented", "thanh_mao_son")
+	if msgHub != "" {
+		t.Errorf("expected no suppression from unparented hub in same NGU_VUC, got %q", msgHub)
+	}
+	if p.Statuses.Has("regional_wall_suppression") {
+		t.Fatalf("regional_wall_suppression should NOT be applied between unparented hub and KHU_VUC in same NGU_VUC")
+	}
+
+	// 3. Secret realm to world KHU_VUC -> should not apply regional wall debuff
+	msgSecret := CheckAndApplyRegionalWallDebuffBetween(p, "secret_realm_test", "thanh_mao_son")
+	if msgSecret != "" {
+		t.Errorf("expected no suppression when transitioning from secret realm, got %q", msgSecret)
+	}
+	if p.Statuses.Has("regional_wall_suppression") {
+		t.Fatalf("regional_wall_suppression should NOT be applied for secret realm")
+	}
+
+	// 4. Moving between KHU_VUC across DIFFERENT NGU_VUC (Thanh Mao Sơn [Nam Cương] -> Phi Hạc Sơn [Trung Châu])
+	msgCross := CheckAndApplyRegionalWallDebuffBetween(p, "thanh_mao_son", "phi_hac_son")
+	if msgCross == "" {
+		t.Errorf("expected suppression message when switching NGU_VUC")
+	}
+	if !p.Statuses.Has("regional_wall_suppression") {
+		t.Fatalf("regional_wall_suppression MUST be applied when crossing NGU_VUC")
+	}
+}
+
+func TestFindLargeZoneAt_BorderResolution(t *testing.T) {
+	zoneReg.mu.Lock()
+	zoneReg.zones = []models.Region{
+		{ID: "dai_vuc_nam_cuong", Name: "Đại Vực Nam Cương", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 10000, MaxY: 10000},
+		{ID: "dai_vuc_trung_chau", Name: "Đại Vực Trung Châu", ZoneType: ZoneTypeLarge, MinX: 10000, MinY: 0, MaxX: 20000, MaxY: 10000},
+		{ID: "phi_hac_son", Name: "Phi Hạc Sơn", ZoneType: ZoneTypeNamed, ParentID: "dai_vuc_trung_chau", MinX: 10000, MinY: 0, MaxX: 12000, MaxY: 2000},
+	}
+	zoneReg.byID = make(map[string]*models.Region)
+	for i := range zoneReg.zones {
+		zoneReg.byID[zoneReg.zones[i].ID] = &zoneReg.zones[i]
+	}
+	zoneReg.mu.Unlock()
+
+	// Coordinate (10000, 1000) falls on the border of dai_vuc_nam_cuong and dai_vuc_trung_chau,
+	// but is specifically inside phi_hac_son (Trung Châu). It should resolve to dai_vuc_trung_chau.
+	lz := FindLargeZoneAt(10000, 1000)
+	if lz == nil || lz.ID != "dai_vuc_trung_chau" {
+		t.Fatalf("expected border point inside phi_hac_son to resolve to dai_vuc_trung_chau, got %v", lz)
+	}
+}
+

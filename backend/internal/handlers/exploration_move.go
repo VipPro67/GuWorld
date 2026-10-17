@@ -49,9 +49,39 @@ func CheckAndApplyRegionalWallDebuffBetween(player *models.Player, fromRegion, t
 }
 
 func largeZoneForRegion(regionID string) *models.Region {
+	if regionID == "" {
+		return nil
+	}
 	for _, ancestorID := range regionScopeIDs(regionID) {
 		if zone := ZoneByID(ancestorID); zone != nil && zone.ZoneType == ZoneTypeLarge {
 			return zone
+		}
+	}
+	zone := ZoneByID(regionID)
+	if zone == nil {
+		return nil
+	}
+	if zone.ZoneType == ZoneTypeLarge {
+		return zone
+	}
+	if strings.EqualFold(zone.ZoneType, ZoneTypeSecret) || strings.EqualFold(zone.ZoneType, ZoneTypeDungeon) {
+		return nil
+	}
+	refX, refY := zone.EntryX, zone.EntryY
+	if refX == 0 && refY == 0 {
+		refX = (zone.MinX + zone.MaxX) / 2
+		refY = (zone.MinY + zone.MaxY) / 2
+	}
+	if refX != 0 || refY != 0 {
+		ensureZonesLoaded()
+		zoneReg.mu.RLock()
+		defer zoneReg.mu.RUnlock()
+		mapID := zone.WorldMapID
+		for i := range zoneReg.zones {
+			z := &zoneReg.zones[i]
+			if z.ZoneType == ZoneTypeLarge && (mapID == "" || z.WorldMapID == "" || z.WorldMapID == mapID) && zoneContains(z, refX, refY) {
+				return z
+			}
 		}
 	}
 	return nil
@@ -147,10 +177,9 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 		}
 	}
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
-	oldLargeZone, newLargeZone := largeZoneForRegion(oldRegion), largeZoneForRegion(destinationRegion)
-	if oldLargeZone != nil && newLargeZone != nil {
-		regionWarning = applyRegionalWallDebuff(player, oldLargeZone, newLargeZone)
-	} else {
+	if oldRegion != "" && destinationRegion != "" {
+		regionWarning = CheckAndApplyRegionalWallDebuffBetween(player, oldRegion, destinationRegion)
+	} else if oldRegion == "" && (oldX != 0 || oldY != 0) {
 		regionWarning = CheckAndApplyRegionalWallDebuff(player, oldX, oldY, player.X, player.Y)
 	}
 	combatTriggered := false

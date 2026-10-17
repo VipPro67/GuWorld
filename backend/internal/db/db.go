@@ -525,9 +525,9 @@ func isRetryableSchemaError(err error) bool {
 // imports Region.csv. The CSV import overwrites/extends this row.
 func seedHubRegion() error {
 	if _, err := schemaDB().Exec(`
-	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at)
-	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 201, 201, 1, 9, true, 'HUB', 4900, 4900, 5100, 5100, 5000, 5000, '{"cell_type_weights":{"Empty":100}}', NOW())
-	ON CONFLICT (id) DO NOTHING;`); err != nil {
+	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at, parent_id)
+	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 201, 201, 1, 9, true, 'HUB', 4900, 4900, 5100, 5100, 5000, 5000, '{"cell_type_weights":{"Empty":100}}', NOW(), 'dai_vuc_nam_cuong')
+	ON CONFLICT (id) DO UPDATE SET parent_id = 'dai_vuc_nam_cuong' WHERE regions.parent_id IS NULL OR regions.parent_id = '';`); err != nil {
 		return err
 	}
 	if _, err := schemaDB().Exec(`INSERT INTO region_world_maps (region_id, world_map_id) VALUES ('hub_nam_cuong', 'world_map') ON CONFLICT (region_id) DO NOTHING`); err != nil {

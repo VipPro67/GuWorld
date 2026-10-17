@@ -470,9 +470,6 @@ func RespondToInvitation(c *gin.Context) {
 	regionalWarning := ""
 	if leaderRegion.Valid && player.CurrentRegion != leaderRegion.String {
 		regionalWarning = CheckAndApplyRegionalWallDebuffBetween(&player, player.CurrentRegion, leaderRegion.String)
-		if regionalWarning == "" && (largeZoneForRegion(player.CurrentRegion) == nil || largeZoneForRegion(leaderRegion.String) == nil) {
-			regionalWarning = CheckAndApplyRegionalWallDebuff(&player, player.X, player.Y, leaderX, leaderY)
-		}
 		if regionalWarning != "" {
 			_, _ = tx.Exec("UPDATE players SET statuses = $1 WHERE id = $2", player.Statuses, player.ID)
 		}
@@ -584,8 +581,12 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 			}
 		}
 		if m.region != leader.CurrentRegion {
-			debuffPct, duration := GetRegionalWallDebuff(m.rank, m.subRank)
-			m.statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)
+			oldLZ := largeZoneForRegion(m.region)
+			newLZ := largeZoneForRegion(leader.CurrentRegion)
+			if oldLZ != nil && newLZ != nil && oldLZ.ID != newLZ.ID && oldLZ.ZoneType == ZoneTypeLarge && newLZ.ZoneType == ZoneTypeLarge {
+				debuffPct, duration := GetRegionalWallDebuff(m.rank, m.subRank)
+				m.statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)
+			}
 			if _, errExec := tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3, statuses = $4 WHERE id = $5", leader.CurrentRegion, leader.X, leader.Y, m.statuses, m.id); errExec != nil {
 				logger.S.Errorf("SyncPartyMembersLocation: failed to update member %s with regional wall debuff: %v", m.id, errExec)
 				continue

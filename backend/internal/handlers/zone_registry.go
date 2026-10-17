@@ -140,7 +140,9 @@ func LoadZoneRegistry(db *sql.DB) error {
 			z.MaxY = z.Height - 1
 		}
 		newReg.zones = append(newReg.zones, z)
-		newReg.byID[z.ID] = &newReg.zones[len(newReg.zones)-1]
+	}
+	for i := range newReg.zones {
+		newReg.byID[newReg.zones[i].ID] = &newReg.zones[i]
 	}
 	if err := rows.Err(); err != nil {
 		return err
@@ -336,6 +338,11 @@ func zonePriorityOf(zoneType string) int {
 // FindLargeZoneAt returns the NGU_VUC zone containing the point.
 func FindLargeZoneAt(x, y int) *models.Region {
 	ensureZonesLoaded()
+	if specific := FindZoneAt(x, y); specific != nil {
+		if lz := largeZoneForRegion(specific.ID); lz != nil {
+			return lz
+		}
+	}
 	zoneReg.mu.RLock()
 	defer zoneReg.mu.RUnlock()
 	for i := range zoneReg.zones {
@@ -471,11 +478,24 @@ func NearestHubOnMap(x, y int, mapID string) (string, int, int) {
 }
 
 // NearestRespawnPointOnMap prefers a HUB on the given map, then falls back to
-// the nearest SAFE_ZONE on that same map. It never returns a point from another
-// map layer.
+// the nearest SAFE_ZONE, but only among zones whose entry lies inside the
+// NGU_VUC containing (x, y). It never returns a point from another map layer or
+// another đại vực.
 func NearestRespawnPointOnMap(x, y int, mapID string) (string, int, int, bool) {
 	zoneReg.mu.RLock()
 	defer zoneReg.mu.RUnlock()
+
+	// Respawn must stay inside the NGU_VUC the player died in. Every Đại Vực
+	// shares the same world-map layer ("world_map"), so a plain map filter would
+	// let a death in one đại vực pull the nearest HUB/SAFE_ZONE from another.
+	var anchor *models.Region
+	for i := range zoneReg.zones {
+		z := &zoneReg.zones[i]
+		if z.ZoneType == ZoneTypeLarge && zoneContains(z, x, y) {
+			anchor = z
+			break
+		}
+	}
 
 	var bestHub, bestSafe *models.Region
 	var hubDist, safeDist float64 = -1, -1
@@ -488,6 +508,9 @@ func NearestRespawnPointOnMap(x, y int, mapID string) (string, int, int, bool) {
 			continue
 		}
 		if mapID != "" && zoneWorldMapIDLocked(z) != mapID {
+			continue
+		}
+		if anchor != nil && !zoneContains(anchor, z.EntryX, z.EntryY) {
 			continue
 		}
 		dx := float64(z.EntryX - x)

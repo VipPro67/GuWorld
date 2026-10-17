@@ -171,9 +171,6 @@ func UseGuOnMap(c *gin.Context) {
 			player.CurrentRegion = targetRegion
 			teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 			debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion)
-			if debuffMsg == "" && (largeZoneForRegion(oldRegion) == nil || largeZoneForRegion(targetRegion) == nil) {
-				debuffMsg = CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y)
-			}
 			if debuffMsg != "" {
 				teleportMsg += " " + debuffMsg
 			}
@@ -209,9 +206,6 @@ func UseGuOnMap(c *gin.Context) {
 		player.CurrentRegion = targetRegion
 		teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion)
-		if debuffMsg == "" && (largeZoneForRegion(oldRegion) == nil || largeZoneForRegion(targetRegion) == nil) {
-			debuffMsg = CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y)
-		}
 		if debuffMsg != "" {
 			teleportMsg += " " + debuffMsg
 		}

@@ -896,8 +896,6 @@ func TravelTeleport(c *gin.Context) {
 	`, dest.ID, player.ID, source.RegionID, source.X, source.Y, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
 
 	// 7. Update Player Position & Check Regional Wall Debuff
-	oldX := player.X
-	oldY := player.Y
 	oldRegion := player.CurrentRegion
 
 	player.CurrentRegion = dest.RegionID
@@ -905,14 +903,7 @@ func TravelTeleport(c *gin.Context) {
 	player.Y = dest.Y
 
 	if oldRegion != dest.RegionID {
-		if newZone := FindLargeZoneAt(dest.X, dest.Y); newZone != nil && newZone.ZoneType == ZoneTypeLarge && newZone.EntryX != 0 && newZone.EntryY != 0 {
-			player.X = newZone.EntryX
-			player.Y = newZone.EntryY
-		}
 		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, dest.RegionID)
-		if debuffMsg == "" && (largeZoneForRegion(oldRegion) == nil || largeZoneForRegion(dest.RegionID) == nil) {
-			debuffMsg = CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, dest.X, dest.Y)
-		}
 		if debuffMsg != "" {
 			logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
 			logMsg += " " + debuffMsg

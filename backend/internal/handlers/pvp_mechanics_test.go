@@ -12,7 +12,7 @@ func TestResolveRespawnPosition_UsesNearestSafeHub(t *testing.T) {
 	zoneReg.mu.Lock()
 	zoneReg.zones = []models.Region{
 		{ID: "dai_vuc_nam_cuong", ZoneType: ZoneTypeLarge, MinX: 1000, MinY: 1000, MaxX: 5000, MaxY: 5000},
-		{ID: "hub_test", ZoneType: ZoneTypeHub, EntryX: 900, EntryY: 900},
+		{ID: "hub_test", ZoneType: ZoneTypeHub, EntryX: 1500, EntryY: 1500},
 		{ID: "hub_far", ZoneType: ZoneTypeHub, EntryX: 15000, EntryY: 10000},
 	}
 	zoneReg.byID = make(map[string]*models.Region)
@@ -27,11 +27,33 @@ func TestResolveRespawnPosition_UsesNearestSafeHub(t *testing.T) {
 	if respawnRegion != "hub_test" {
 		t.Errorf("expected respawn in nearest safe hub, got %s", respawnRegion)
 	}
-	if rx != 900 {
-		t.Errorf("expected hub x coordinate 900, got %d", rx)
+	if rx != 1500 {
+		t.Errorf("expected hub x coordinate 1500, got %d", rx)
 	}
-	if ry != 900 {
-		t.Errorf("expected hub y coordinate 900, got %d", ry)
+	if ry != 1500 {
+		t.Errorf("expected hub y coordinate 1500, got %d", ry)
+	}
+}
+
+// A death must not be pulled into a neighbouring Đại Vực even when that zone's
+// HUB/SAFE_ZONE is closer: respawn stays inside the NGU_VUC containing the death.
+func TestResolveRespawnPosition_StaysInsideDeathNguVuc(t *testing.T) {
+	zoneReg.mu.Lock()
+	zoneReg.zones = []models.Region{
+		{ID: "dai_vuc_nam_cuong", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999},
+		{ID: "dai_vuc_trung_chau", ZoneType: ZoneTypeLarge, MinX: 10000, MinY: 0, MaxX: 19999, MaxY: 9999},
+		{ID: "safe_other_vuc", ZoneType: ZoneTypeSafe, EntryX: 10100, EntryY: 100},
+		{ID: "safe_same_vuc", ZoneType: ZoneTypeSafe, EntryX: 9000, EntryY: 9000},
+	}
+	zoneReg.byID = make(map[string]*models.Region)
+	for i := range zoneReg.zones {
+		zoneReg.byID[zoneReg.zones[i].ID] = &zoneReg.zones[i]
+	}
+	zoneReg.mu.Unlock()
+
+	respawnRegion, rx, ry := ResolveRespawnPosition(nil, uuid.New(), "dai_vuc_nam_cuong", 8000, 100)
+	if respawnRegion != "safe_same_vuc" {
+		t.Fatalf("expected respawn to stay in death NGU_VUC (safe_same_vuc), got %s (%d,%d)", respawnRegion, rx, ry)
 	}
 }
 
