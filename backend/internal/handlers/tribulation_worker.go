@@ -80,7 +80,9 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 	// position and never damage nodes. Bump started_at so the 24h auto-resolve
 	// window only counts online time.
 	if !isPlayerOnline(ev.PlayerID) {
-		_, _ = tx.Exec(`UPDATE tribulation_events SET started_at = NOW() WHERE id = $1`, ev.EventID)
+		if _, err := tx.Exec(`UPDATE tribulation_events SET started_at = NOW() WHERE id = $1`, ev.EventID); err != nil {
+			return fmt.Errorf("update tribulation started_at for offline player: %w", err)
+		}
 		return tx.Commit()
 	}
 

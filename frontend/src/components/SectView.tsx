@@ -51,6 +51,21 @@ interface StockSelection {
   quantity: number;
 }
 
+// Vietnamese translator for Sect Member ranks.
+// Module scope on purpose: it is called from a useMemo, so it must exist before the component body runs.
+const getRankName = (rank: string): string => {
+  switch (rank) {
+    case "NGOAI_MON": return "Đệ Tử Ngoại Môn";
+    case "NOI_MON": return "Đệ Tử Nội Môn";
+    case "TINH_ANH": return "Đệ Tử Tinh Anh";
+    case "CHAN_TRUYEN": return "Đệ Tử Chân Truyền";
+    case "TRUONG_LAO": return "Trưởng Lão";
+    case "HO_PHAP": return "Hộ Pháp";
+    case "CHUONG_MON": return "Chưởng Môn";
+    default: return rank;
+  }
+};
+
 export const SectView: React.FC = () => {
   const {
     player,
@@ -487,20 +502,6 @@ export const SectView: React.FC = () => {
       </div>
     );
   }
-
-  // Vietnamese translator for Sect Member ranks
-  const getRankName = (rank: string): string => {
-    switch (rank) {
-      case "NGOAI_MON": return "Đệ Tử Ngoại Môn";
-      case "NOI_MON": return "Đệ Tử Nội Môn";
-      case "TINH_ANH": return "Đệ Tử Tinh Anh";
-      case "CHAN_TRUYEN": return "Đệ Tử Chân Truyền";
-      case "TRUONG_LAO": return "Trưởng Lão";
-      case "HO_PHAP": return "Hộ Pháp";
-      case "CHUONG_MON": return "Chưởng Môn";
-      default: return rank;
-    }
-  };
 
   const getRankColor = (rank: string): string => {
     switch (rank) {
