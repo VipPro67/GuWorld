@@ -36,7 +36,7 @@ import {
 import { translatePath } from "@/lib/translate";
 import { formatNumber, calculateTribulationProgress } from "@/lib/utils";
 import { Num } from "./Num";
-import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection } from "@/components/ui";
+import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection, SearchableSelect } from "@/components/ui";
 import { CountdownTimer } from "./CountdownTimer";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 
@@ -3282,24 +3282,27 @@ return (
                             ? (completedRecipes.find((r) => r.id === refineRecipeId || r.target_gu_id === refineRecipeId)?.id || refineRecipeId)
                             : (completedRecipes[0]?.id || completedRecipes[0]?.target_gu_id);
 
+                          const recipeOptions = completedRecipes.map((r) => {
+                            const guName = guDictionary?.[r.target_gu_id]?.name || r.target_gu_id || r.id;
+                            const rank = r.target_rank || guDictionary?.[r.target_gu_id]?.rank || 1;
+                            return {
+                              value: r.id,
+                              label: `[${rank} Chuyển] Bí phương ${guName}`,
+                              badge: "100%",
+                              badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800",
+                            };
+                          });
+
                           return (
                             <div className="space-y-1.5">
                               <label className="text-slate-300 font-bold">Chọn Bí Phương Hoàn Thiện</label>
-                              <select
+                              <SearchableSelect
+                                options={recipeOptions}
                                 value={currentSelectedId}
-                                onChange={(e) => setRefineRecipeId(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-orange-500"
-                              >
-                                {completedRecipes.map((r) => {
-                                  const guName = guDictionary?.[r.target_gu_id]?.name || r.target_gu_id || r.id;
-                                  const rank = r.target_rank || guDictionary?.[r.target_gu_id]?.rank || 1;
-                                  return (
-                                    <option key={r.id} value={r.id}>
-                                      [{rank} Chuyển] Bí phương {guName} (Hoàn thiện 100%)
-                                    </option>
-                                  );
-                                })}
-                              </select>
+                                onChange={setRefineRecipeId}
+                                placeholder="Chọn bí phương..."
+                                searchPlaceholder="Tìm bí phương hoàn thiện..."
+                              />
                             </div>
                           );
                         })()}

@@ -30,7 +30,7 @@ import {
   Navigation,
   Crown,
 } from "lucide-react";
-import { GamePanel, GameButton, GameCard, GameTabs, GameModal, GameInput, GameSelect, GameBadge, GameProgressBar, GameSection } from "@/components/ui";
+import { GamePanel, GameButton, GameCard, GameTabs, GameModal, GameInput, GameSelect, GameBadge, GameProgressBar, GameSection, SearchableSelect } from "@/components/ui";
 // UI migrated to shared components
 
 const rankSalaryBonus: Record<string, number> = {
@@ -289,6 +289,37 @@ export const SectView: React.FC = () => {
   const [defendPlayerId, setDefendPlayerId] = useState("");
   const [defendMonsterId, setDefendMonsterId] = useState("");
   const [defendMonsterRank, setDefendMonsterRank] = useState(1);
+
+  const defendMemberOptions = useMemo(() => {
+    return sectMembers
+      .filter((m) => m.player_id !== player?.id)
+      .map((m) => ({
+        value: m.player_id,
+        label: m.username,
+        badge: getRankName(m.member_rank),
+      }));
+  }, [sectMembers, player?.id]);
+
+  const defendMonsterOptions = useMemo(() => {
+    return Object.entries(monsterDictionary || {}).map(([id, spec]) => ({
+      value: id,
+      label: spec.name || id,
+      subLabel: id,
+      badge: `Hạng ${spec.rank || 1}`,
+    }));
+  }, [monsterDictionary]);
+
+  const missionTargetOptions = useMemo(() => {
+    const dict = mMissionType === "DONATE" ? guDictionary : itemDictionary;
+    return Object.entries(dict || {})
+      .sort(([, a], [, b]) => ((a as ApiResponseData)?.rank || 99) - ((b as ApiResponseData)?.rank || 99))
+      .map(([id, spec]) => ({
+        value: id,
+        label: (spec as ApiResponseData)?.name || id,
+        subLabel: id,
+        badge: (spec as ApiResponseData)?.rank ? `Rank ${(spec as ApiResponseData).rank}` : undefined,
+      }));
+  }, [mMissionType, guDictionary, itemDictionary]);
 
   // Territory attack modal state
   const [attackTargetSect, setAttackTargetSect] = useState<ApiResponseData | null>(null);
@@ -1587,40 +1618,33 @@ export const SectView: React.FC = () => {
 
                 {defendType === "member" ? (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn đệ tử phòng thủ</label>
-                    <select
+                    <SearchableSelect
+                      label="Chọn đệ tử phòng thủ"
+                      placeholder="-- Chọn đệ tử --"
+                      searchPlaceholder="Tìm kiếm tên đệ tử..."
+                      options={defendMemberOptions}
                       value={defendPlayerId}
-                      onChange={(e) => setDefendPlayerId(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-cyan-500/50"
-                    >
-                      <option value="">-- Chọn đệ tử --</option>
-                      {sectMembers
-                        .filter((m) => m.player_id !== player.id)
-                        .map((m) => (
-                          <option key={m.player_id} value={m.player_id}>
-                            {m.username} ({getRankName(m.member_rank)})
-                          </option>
-                        ))}
-                    </select>
+                      onChange={setDefendPlayerId}
+                      clearable={true}
+                    />
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn thần thú canh giữ</label>
-                    <select
-                      value={defendMonsterId}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        setDefendMonsterId(id);
-                        const spec = monsterDictionary[id];
-                        if (spec) setDefendMonsterRank(spec.rank || 1);
-                      }}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-cyan-500/50"
-                    >
-                      <option value="">-- Chọn thần thú --</option>
-                      {Object.entries(monsterDictionary || {}).map(([id, spec]) => (
-                        <option key={id} value={id}>{spec.name} (Hạng {spec.rank || 1})</option>
-                      ))}
-                    </select>
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <SearchableSelect
+                        label="Chọn thần thú canh giữ"
+                        placeholder="-- Chọn thần thú --"
+                        searchPlaceholder="Tìm kiếm thần thú..."
+                        options={defendMonsterOptions}
+                        value={defendMonsterId}
+                        onChange={(id) => {
+                          setDefendMonsterId(id);
+                          const spec = monsterDictionary[id];
+                          if (spec) setDefendMonsterRank(spec.rank || 1);
+                        }}
+                        clearable={true}
+                      />
+                    </div>
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[11px] font-bold text-zinc-500 font-mono">Hạng thần thú</label>
@@ -1636,7 +1660,7 @@ export const SectView: React.FC = () => {
                         Phí thuê: {(defendMonsterRank || 1) * 500} Quỹ tông môn.
                       </span>
                     </div>
-                  </div>
+                  </>
                 )}
 
                 <button
@@ -3716,30 +3740,15 @@ export const SectView: React.FC = () => {
                 </div>
 
                 <div className="sm:col-span-2 flex flex-col gap-1.5">
-                  <label className="text-xs text-zinc-400 font-serif font-bold">Mục Tiêu</label>
-                  <div className="flex flex-col gap-1">
-                    <input
-                      type="text"
-                      placeholder="Lọc nhanh..."
-                      value={mTargetSearch}
-                      onChange={e => { setMTargetSearch(e.target.value); setMTargetId(""); }}
-                      className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
-                    />
-                    <select
-                      required
-                      value={mTargetId}
-                      onChange={(e) => setMTargetId(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
-                    >
-                      <option value="">-- Chọn --</option>
-                      {(mMissionType === "DONATE" ? Object.entries(guDictionary) : Object.entries(itemDictionary))
-                        .filter(([id]) => !mTargetSearch || id.toLowerCase().includes(mTargetSearch.toLowerCase()))
-                        .sort(([, a], [, b]) => ((a as ApiResponseData)?.rank || 99) - ((b as ApiResponseData)?.rank || 99))
-                        .map(([id, spec]) => (
-                          <option key={id} value={id}>{(spec as ApiResponseData)?.name || id} ({id})</option>
-                        ))}
-                    </select>
-                  </div>
+                  <SearchableSelect
+                    label="Mục Tiêu"
+                    placeholder="-- Chọn Mục Tiêu --"
+                    searchPlaceholder="Tìm kiếm tên hoặc mã vật phẩm..."
+                    options={missionTargetOptions}
+                    value={mTargetId}
+                    onChange={setMTargetId}
+                    required={true}
+                  />
                 </div>
 
                 <div className="flex flex-col gap-1.5">

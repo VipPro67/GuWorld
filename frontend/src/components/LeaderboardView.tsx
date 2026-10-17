@@ -209,7 +209,7 @@ export const LeaderboardView: React.FC = () => {
       </div>
 
       {/* Leaderboard list */}
-      <div className="space-y-2 relative z-10 max-h-[480px] overflow-y-auto pr-1">
+      <div className="space-y-2 relative z-10 lg:max-h-[600px] overflow-y-visible lg:overflow-y-auto pr-1">
         {leaderboardLoading ? (
           <div className="flex items-center justify-center py-16">
             <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />

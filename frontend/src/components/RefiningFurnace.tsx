@@ -581,7 +581,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   return (
     <GamePanel variant="default" className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mx-auto relative">
       {/* 1. LEFT PANEL: Inventory List */}
-      <div className="lg:col-span-5 glass-panel-gold rounded-3xl p-3 sm:p-5 flex flex-col max-h-[580px] overflow-hidden">
+      <div className="lg:col-span-5 glass-panel-gold rounded-3xl p-3 sm:p-5 flex flex-col lg:max-h-[580px] lg:overflow-hidden">
         <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-4 shrink-0">
           <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
           <h3 className="text-md font-bold text-zinc-100 font-serif">
@@ -594,7 +594,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
         </span>
 
         {/* Scrollable list */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-1">
+        <div className="max-h-72 sm:max-h-96 lg:max-h-none lg:flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-1">
           {availableInventoryGus.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 border border-dashed border-zinc-800/60 rounded-2xl text-xs text-zinc-600 italic">
               Không có Cổ trùng phù hợp hoặc toàn bộ Cổ trùng đã được xếp vào lò.
@@ -758,7 +758,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
       {/* 2. RIGHT PANEL: Furnace Crucible */}
       <div
-        className={`lg:col-span-7 glass-panel rounded-3xl p-3 sm:p-5 flex flex-col max-h-[600px] overflow-y-auto custom-scrollbar relative transition-all duration-300 ${
+        className={`lg:col-span-7 glass-panel rounded-3xl p-3 sm:p-5 flex flex-col lg:max-h-[600px] lg:overflow-y-auto custom-scrollbar relative transition-all duration-300 ${
           isRefining ? "animate-shake border-rose-500/30" : "border-zinc-800/80"
         }`}
       >

@@ -16,7 +16,6 @@ export const TrackingRadarDrawer: React.FC = () => {
 
   useEffect(() => {
     if (isRadarDrawerOpen) fetchTrackedTargets();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRadarDrawerOpen, fetchTrackedTargets]);
   usePolling(fetchTrackedTargets, 10000, isRadarDrawerOpen);
 

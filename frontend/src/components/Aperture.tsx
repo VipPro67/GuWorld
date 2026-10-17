@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { estimateManaFromSnapshot, estimateHPFromSnapshot, guSpecFor, GuInstance, GuSpec, Player, ImmortalAperture, PlayerStatusInstance, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
@@ -37,7 +37,7 @@ import { combatCategory as combatCategoryBlock, disguiseLevel, growthConfig, has
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 import { getRenameCost, getImmortalPenaltyRates } from "@/lib/balance";
-import { GamePanel, GameTabs, GameButton, GameCard, GameProgressBar, GameBadge, GameSection } from "@/components/ui";
+import { GamePanel, GameTabs, GameButton, GameCard, GameProgressBar, GameBadge, GameSection, SearchableSelect } from "@/components/ui";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 import { Num } from "./Num";
 // UI migrated to shared components
@@ -416,6 +416,17 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   // Owned Gu IDs for fake Vital Gu select dropdown
   const ownedGuIds = Array.from(new Set(guInventory.map((g) => g.gu_id)));
+  const fakeVitalGuOptions = useMemo(() => {
+    return ownedGuIds.map((guId) => {
+      const spec = guDictionary[guId];
+      return {
+        value: guId,
+        label: spec?.name || guId,
+        subLabel: guId,
+        badge: spec?.rank ? `Rank ${spec.rank}` : undefined,
+      };
+    });
+  }, [ownedGuIds, guDictionary]);
 
   // Orbit dot positions — evenly spaced, starting from top
   const orbitDots = equippedGus.map((g, i) => {
@@ -1638,23 +1649,16 @@ export const Aperture: React.FC<ApertureProps> = ({
                             <span className="text-[8px] bg-rose-950/40 text-rose-400 border border-rose-900/30 px-1.5 py-0.5 rounded font-mono font-semibold uppercase">Yêu cầu hiệu ứng Biến Hóa / Ngụy Trang Hoàn Mỹ</span>
                           )}
                         </div>
-                        <select
+                        <SearchableSelect
                           id="settings-fakeVitalGu"
                           disabled={!hasFaceChange}
+                          placeholder="-- Mặc định (Không ngụy tạo) --"
+                          searchPlaceholder="Tìm kiếm tên Cổ hoặc mã..."
+                          options={fakeVitalGuOptions}
                           value={fakeVitalGu}
-                          onChange={(e) => setFakeVitalGu(e.target.value)}
-                          className="w-full bg-zinc-950 disabled:bg-zinc-950/30 disabled:opacity-40 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
-                        >
-                          <option value="">-- Mặc định (Không ngụy tạo) --</option>
-                          {ownedGuIds.map((guId) => {
-                            const name = guDictionary[guId]?.name || guId;
-                            return (
-                              <option key={guId} value={guId}>
-                                {name} ({guId})
-                              </option>
-                            );
-                          })}
-                        </select>
+                          onChange={setFakeVitalGu}
+                          clearable={true}
+                        />
                       </div>
                     </div>
                   )}

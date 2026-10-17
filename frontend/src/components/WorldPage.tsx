@@ -376,7 +376,7 @@ export function WorldPage() {
                 <X className="w-6 h-6" />
               </button>
             )}
-            <div className="flex-1 min-h-0 w-full p-2 sm:p-4 overflow-y-auto relative custom-scrollbar">
+            <div className="flex-1 min-h-0 w-full p-2 sm:p-4 pb-28 sm:pb-8 overflow-y-auto relative custom-scrollbar">
               {activeModal === "character" && <Aperture player={gamePlayer!} guDictionary={guDictionary} />}
               {activeModal === "inventory" && (
                 <GuInventory

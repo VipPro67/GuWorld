@@ -202,11 +202,11 @@ export const PlayerProfileModal: React.FC = () => {
   return (
     <div
       onClick={clearInspectedProfile}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] transition-opacity animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4 pb-16 sm:pb-6 bg-[var(--bg-primary)]/80 backdrop-blur-sm overflow-y-auto transition-opacity animate-fade-in cursor-pointer"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-sm sm:max-w-lg bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 relative overflow-y-auto max-h-[90vh] ${glowClass} shadow-2xl flex flex-col gap-4 sm:gap-6 animate-scale-up cursor-default`}
+        className={`w-full max-w-sm sm:max-w-lg bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 my-auto relative overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[90vh] ${glowClass} shadow-2xl flex flex-col gap-4 sm:gap-6 animate-scale-up cursor-default pb-8 sm:pb-6`}
       >
         {/* Status Indicator Banner with Close Button */}
         <div className={`flex items-center justify-between gap-2.5 px-4 py-3 rounded-2xl border ${statusBadge} relative`}>

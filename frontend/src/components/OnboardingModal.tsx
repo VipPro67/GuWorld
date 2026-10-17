@@ -112,8 +112,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-md overflow-y-auto">
-      <div className="glass-panel-gold rounded-3xl p-8 w-full max-w-lg relative overflow-hidden shadow-[0_0_50px_rgba(234,179,8,0.15)] my-8">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4 pb-16 sm:pb-8 bg-zinc-950/90 backdrop-blur-md overflow-y-auto">
+      <div className="glass-panel-gold rounded-3xl p-5 sm:p-8 w-full max-w-lg relative overflow-hidden shadow-[0_0_50px_rgba(234,179,8,0.15)] my-auto">
         <div className="absolute -left-12 -bottom-12 w-28 h-28 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
         <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
 

@@ -422,7 +422,7 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-                <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4 ${currentView === "practice-room" ? "p-0" : ""}`}>
+                <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4 pb-28 sm:pb-8 ${currentView === "practice-room" ? "p-0" : ""}`}>
         {currentView === "practice-room" ? (
           <div className="w-full">
             <TrainingRoom onClose={() => setView("dashboard")} />

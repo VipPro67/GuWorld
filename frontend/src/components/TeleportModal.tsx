@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { canCreatePortal, usesRandomPortal } from "@/lib/effect-blocks";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
+import { SearchableSelect } from "@/components/ui";
 
 export interface RegionInfo {
   id: string;
@@ -104,15 +106,41 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     }
   };
 
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const availableRegions = regions
     .filter((r) => r.is_active && (r.zone_type === "KHU_VUC" || r.zone_type === "NGU_VUC"))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  const portalGuOptions = useMemo(() => {
+    return portalGus.map((g) => {
+      const spec = guSpecFor(g.gu_id, g.rank);
+      const meetsRank = g.rank >= (player?.rank ?? 1);
+      return {
+        value: g.instance_id,
+        label: `${spec?.name || g.gu_id} (Rank ${g.rank})`,
+        badge: meetsRank ? "Hợp Lệ" : `Yêu Cầu Rank ≥ ${player?.rank ?? 1}`,
+        badgeColor: meetsRank ? "bg-emerald-950 text-emerald-300 border-emerald-800" : "bg-red-950 text-red-300 border-red-800",
+      };
+    });
+  }, [portalGus, player?.rank]);
+
+  const regionOptions = useMemo(() => {
+    return availableRegions.map((r) => ({
+      value: r.id,
+      label: r.name,
+      subLabel: `An toàn: (${r.safe_zone_x ?? r.entry_x}, ${r.safe_zone_y ?? r.entry_y})`,
+    }));
+  }, [availableRegions]);
+
   const currentRegionId = player?.current_region ?? "";
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] h-[100dvh] bg-black/75 backdrop-blur-md flex items-center justify-center px-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:px-4">
       <div className="bg-zinc-950 border border-purple-500/40 rounded-3xl w-full max-w-lg max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-left">
         <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-gradient-to-r from-purple-950/30 via-zinc-900/40 to-transparent">
@@ -148,21 +176,13 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-gray-400 mb-1 font-medium font-serif">Chọn Cổ Trùng Dịch Chuyển</label>
-                <select
-                  className="w-full bg-zinc-900 border border-purple-500/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-400 text-xs font-mono"
+                <SearchableSelect
+                  options={portalGuOptions}
                   value={selectedGu}
-                  onChange={(e) => setSelectedGu(e.target.value)}
-                >
-                  {portalGus.map(g => {
-                    const spec = guSpecFor(g.gu_id, g.rank);
-                    const meetsRank = g.rank >= (player?.rank ?? 1);
-                    return (
-                      <option key={g.instance_id} value={g.instance_id}>
-                        {spec?.name || g.gu_id} (Rank {g.rank}) {meetsRank ? "— Hợp Lệ" : `— Yêu Cầu Rank ≥ ${player?.rank ?? 1}`}
-                      </option>
-                    );
-                  })}
-                </select>
+                  onChange={setSelectedGu}
+                  placeholder="Chọn Cổ trùng dịch chuyển..."
+                  searchPlaceholder="Tìm Cổ trùng..."
+                />
               </div>
 
               {!isRankSufficient && activeGu && player && (
@@ -185,19 +205,15 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm text-gray-400 mb-1 font-medium font-serif">Chọn nhanh vùng an toàn khu vực</label>
-                    <select
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-2 text-white text-xs font-mono"
+                    <SearchableSelect
+                      options={regionOptions}
                       value={selectedRegionId}
-                      onChange={(e) => handleSelectRegion(e.target.value)}
+                      onChange={handleSelectRegion}
+                      placeholder="-- Chọn khu vực mục tiêu (Tùy chọn) --"
+                      searchPlaceholder="Tìm khu vực..."
+                      clearable
                       disabled={loading}
-                    >
-                      <option value="">-- Chọn khu vực mục tiêu (Tùy chọn) --</option>
-                      {availableRegions.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} (An toàn: {r.safe_zone_x ?? r.entry_x}, {r.safe_zone_y ?? r.entry_y})
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="flex gap-4">
@@ -246,7 +262,8 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

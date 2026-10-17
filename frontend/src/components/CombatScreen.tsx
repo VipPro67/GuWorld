@@ -52,7 +52,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startSimulationRef = useRef<() => Promise<boolean>>(async () => false);
   const actionLoadingRef = useRef(actionLoading);
-  actionLoadingRef.current = actionLoading;
+  useEffect(() => {
+    actionLoadingRef.current = actionLoading;
+  }, [actionLoading]);
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
   const executePracticeCombat = useGameStore((state) => state.executePracticeCombat);
@@ -186,7 +188,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     return false;
   };
 
-  startSimulationRef.current = handleStartSimulation;
+  useEffect(() => {
+    startSimulationRef.current = handleStartSimulation;
+  }, [handleStartSimulation]);
 
   useEffect(() => {
     const encounterId = player.active_combat?.world_monster_encounter_id;

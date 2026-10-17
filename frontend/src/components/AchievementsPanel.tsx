@@ -152,7 +152,7 @@ export default function AchievementsPanel() {
             {achievements.length === 0 ? (
               <p className="text-xs text-zinc-500 italic">Đang tải...</p>
             ) : (
-              <div className="grid grid-cols-1 gap-3 max-h-[600px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 gap-3 lg:max-h-[600px] overflow-y-visible lg:overflow-y-auto pr-1">
                 {achievements.map((ach: AchievementItem) => {
                   const earned = isEarned(ach.id);
                   const canClaim = !earned && isClaimableAchievement(ach.id, store.player, store.aperture);
@@ -356,7 +356,7 @@ function MainQuestsPanel() {
         <Award className="w-4 h-4 text-amber-500 animate-pulse" />
         Nhiệm Vụ Chính Tuyến
       </div>
-      <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+      <div className="space-y-2 lg:max-h-[600px] overflow-y-visible lg:overflow-y-auto pr-1">
         {quests.length === 0 ? (
           <div className="text-zinc-500 text-xs italic py-6 bg-zinc-950/20 rounded-2xl border border-zinc-900/30 text-center">
             Chưa có nhiệm vụ nào.

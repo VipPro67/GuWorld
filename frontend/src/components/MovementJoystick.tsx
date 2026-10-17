@@ -104,7 +104,7 @@ export function MovementJoystick() {
       className="pointer-events-none fixed z-30 h-24 w-24 -translate-x-1/2 -translate-y-1/2 md:hidden"
       style={{ left: origin.x, top: origin.y }}
     >
-      <div className={`relative h-full w-full rounded-full border border-white/30 bg-zinc-950/55 shadow-2xl backdrop-blur-sm transition-opacity ${movedRef.current ? "opacity-100" : "opacity-60"}`}>
+      <div className={`relative h-full w-full rounded-full border border-white/30 bg-zinc-950/55 shadow-2xl backdrop-blur-sm transition-opacity ${knob.x !== 0 || knob.y !== 0 ? "opacity-100" : "opacity-60"}`}>
         <span className="absolute left-1/2 top-1 -translate-x-1/2 text-xs text-white/45">▲</span>
         <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white/45">▼</span>
         <span className="absolute left-1 top-1/2 -translate-y-1/2 text-xs text-white/45">◀</span>

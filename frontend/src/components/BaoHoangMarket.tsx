@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, guSpecFor, BuybackOrder } from "@/store/useGameStore";
 import {
   AlertCircle,
@@ -24,7 +24,7 @@ import {
   Minus,
   X,
 } from "lucide-react";
-import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge } from "@/components/ui";
+import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge, SearchableSelect } from "@/components/ui";
 import { TradeAssetPickerModal, type AssetTab } from "./TradeAssetPickerModal";
 import { buildBuyOrderExecution, reconcileGuSelection, toggleGuSelection } from "./marketplaceGuSelection";
 
@@ -429,6 +429,64 @@ export function BaoHoangMarket({
   const selectedSellGroup = sellGuGroups.find((group) => group.key === sellGuTarget);
   const sellGuGroup = selectedSellGroup?.gus || [];
   const effectiveSellQuantity = sellItemType === "Recipe" ? 1 : sellQuantity;
+
+  const buybackMaterialOptions = useMemo(() => {
+    return Object.entries(itemDictionary).map(([k, v]) => ({
+      value: k,
+      label: v.name,
+      subLabel: k,
+      badge: v.rank ? `Rank ${v.rank}` : undefined,
+    }));
+  }, [itemDictionary]);
+
+  const buybackRecipeOptions = useMemo(() => {
+    return recipes.map((r) => {
+      const targetGu = r.target_gu_id ? guSpecFor(r.target_gu_id, r.target_rank || 1)?.name : "";
+      return {
+        value: r.id,
+        label: targetGu ? `Bí phương ${targetGu}` : r.id,
+        subLabel: r.id,
+        badge: r.target_rank ? `Rank ${r.target_rank}` : undefined,
+      };
+    });
+  }, [recipes]);
+
+  const sellMaterialOptions = useMemo(() => {
+    return Object.entries(itemDictionary).map(([k, v]) => {
+      const count = player.materials_inventory?.[k] || 0;
+      return {
+        value: k,
+        label: v.name,
+        subLabel: `${k} (Có: ${count})`,
+        badge: count > 0 ? `Có: ${count}` : "Hết",
+        badgeColor: count > 0 ? "bg-emerald-950 text-emerald-300 border-emerald-800" : "bg-zinc-800 text-zinc-500 border-zinc-700",
+      };
+    });
+  }, [itemDictionary, player.materials_inventory]);
+
+  const sellGuOptions = sellGuGroups.map((group) => {
+    const spec = guSpecFor(group.guId, group.rank);
+    return {
+      value: group.key,
+      label: spec?.name || group.guId,
+      subLabel: `${group.gus.length} con trong túi`,
+      badge: `Hạng ${group.rank}`,
+    };
+  });
+
+  const sellRecipeOptions = useMemo(() => {
+    return (player.unlocked_recipes || []).map((ur) => {
+      const rSpec = recipes.find((r) => r.id === ur.recipe_id);
+      const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+      return {
+        value: ur.recipe_id,
+        label: targetGu ? `Bí phương ${targetGu}` : ur.recipe_id,
+        subLabel: ur.recipe_id,
+        badge: `${ur.completion_rate}%`,
+        badgeColor: ur.completion_rate >= 100 ? "bg-emerald-950 text-emerald-300 border-emerald-800" : "bg-amber-950 text-amber-300 border-amber-800",
+      };
+    });
+  }, [player.unlocked_recipes, recipes]);
 
   const eligibleGusForBuybackOrder = (order: BuybackOrder) => {
     if (order.order_type === "SELL" || order.item_type !== "Gu") return [];
@@ -1051,17 +1109,15 @@ export function BaoHoangMarket({
 
                 {bbItemType === "Material" && (
                   <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Chọn Nguyên Liệu Cần Mua</label>
-                    <select
+                    <SearchableSelect
+                      label="Chọn Nguyên Liệu Cần Mua"
+                      placeholder="-- Chọn Nguyên Liệu --"
+                      searchPlaceholder="Tìm tên hoặc mã nguyên liệu..."
+                      options={buybackMaterialOptions}
                       value={bbTargetMat}
-                      onChange={(e) => setBbTargetMat(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
-                    >
-                      <option value="">-- Chọn Nguyên Liệu --</option>
-                      {Object.entries(itemDictionary).map(([k, v]) => (
-                        <option key={k} value={k}>{v.name} ({k})</option>
-                      ))}
-                    </select>
+                      onChange={setBbTargetMat}
+                      clearable={true}
+                    />
                   </div>
                 )}
 
@@ -1090,22 +1146,15 @@ export function BaoHoangMarket({
 
                 {bbItemType === "Recipe" && (
                   <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Chọn Bí Phương Cần Thu Mua</label>
-                    <select
+                    <SearchableSelect
+                      label="Chọn Bí Phương Cần Thu Mua"
+                      placeholder="-- Chọn Bí Phương --"
+                      searchPlaceholder="Tìm tên bí phương hoặc mã..."
+                      options={buybackRecipeOptions}
                       value={bbTargetRecipe}
-                      onChange={(e) => setBbTargetRecipe(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
-                    >
-                      <option value="">-- Chọn Bí Phương --</option>
-                      {recipes.map((r) => {
-                        const targetGu = r.target_gu_id ? guSpecFor(r.target_gu_id, r.target_rank || 1)?.name : "";
-                        return (
-                          <option key={r.id} value={r.id}>
-                            {targetGu ? `Bí phương ${targetGu} (${r.id})` : r.id}
-                          </option>
-                        );
-                      })}
-                    </select>
+                      onChange={setBbTargetRecipe}
+                      clearable={true}
+                    />
                   </div>
                 )}
 
@@ -1172,42 +1221,33 @@ export function BaoHoangMarket({
 
                 {sellItemType === "Material" ? (
                   <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Chọn Nguyên Liệu Trong Túi</label>
-                    <select
+                    <SearchableSelect
+                      label="Chọn Nguyên Liệu Trong Túi"
+                      placeholder="-- Chọn Nguyên Liệu --"
+                      searchPlaceholder="Tìm tên hoặc mã nguyên liệu..."
+                      options={sellMaterialOptions}
                       value={sellMatID}
-                      onChange={(e) => setSellMatID(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
-                    >
-                      <option value="">-- Chọn Nguyên Liệu --</option>
-                      {Object.entries(itemDictionary).map(([k, v]) => (
-                        <option key={k} value={k}>{v.name} ({k})</option>
-                      ))}
-                    </select>
+                      onChange={setSellMatID}
+                      clearable={true}
+                    />
                   </div>
                 ) : sellItemType === "Gu" ? (
                   <div className="space-y-2">
-                    <label className="text-xs text-zinc-400 block mb-1">Chọn loại Cổ Trùng Đăng Bán</label>
-                    <select
+                    <SearchableSelect
+                      label="Chọn loại Cổ Trùng Đăng Bán"
+                      placeholder="-- Chọn Cổ Trùng --"
+                      searchPlaceholder="Tìm tên cổ trùng hoặc bậc..."
+                      options={sellGuOptions}
                       value={sellGuTarget}
-                      onChange={(e) => {
-                        const group = sellGuGroups.find((candidate) => candidate.key === e.target.value);
+                      onChange={(val) => {
+                        const group = sellGuGroups.find((candidate) => candidate.key === val);
                         const next = group ? group.gus.slice(0, 1).map((g) => g.instance_id) : [];
-                        setSellGuTarget(e.target.value);
+                        setSellGuTarget(val);
                         setSellGuInstIDs(next);
                         setSellQuantity(next.length);
                       }}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
-                    >
-                      <option value="">-- Chọn Cổ Trùng --</option>
-                      {sellGuGroups.map((group) => {
-                        const spec = guSpecFor(group.guId, group.rank);
-                        return (
-                          <option key={group.key} value={group.key}>
-                            {spec?.name || group.guId} (Hạng {group.rank}) — {group.gus.length} con
-                          </option>
-                        );
-                      })}
-                    </select>
+                      clearable={true}
+                    />
                     {selectedSellGroup && (
                       <div className="max-h-40 overflow-y-auto space-y-1 rounded-xl border border-zinc-800 bg-zinc-950 p-2">
                         {sellGuGroup.map((g) => {
@@ -1229,23 +1269,15 @@ export function BaoHoangMarket({
                   </div>
                 ) : (
                   <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Chọn Bí Phương Đăng Bán</label>
-                    <select
+                    <SearchableSelect
+                      label="Chọn Bí Phương Đăng Bán"
+                      placeholder="-- Chọn Bí Phương Trong Kho --"
+                      searchPlaceholder="Tìm tên bí phương..."
+                      options={sellRecipeOptions}
                       value={sellRecipeID}
-                      onChange={(e) => setSellRecipeID(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
-                    >
-                      <option value="">-- Chọn Bí Phương Trong Kho --</option>
-                      {(player.unlocked_recipes || []).map((ur) => {
-                        const rSpec = recipes.find((r) => r.id === ur.recipe_id);
-                        const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
-                        return (
-                          <option key={ur.recipe_id} value={ur.recipe_id}>
-                            {targetGu ? `Bí phương ${targetGu} (${ur.completion_rate}%)` : `${ur.recipe_id} (${ur.completion_rate}%)`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                      onChange={setSellRecipeID}
+                      clearable={true}
+                    />
                   </div>
                 )}
 

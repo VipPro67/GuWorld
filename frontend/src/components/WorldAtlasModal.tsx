@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Compass, MapPin, X, Search, Shield, Skull, Crown, Sparkles, Bug, Package, Layers } from "lucide-react";
 import type { Region } from "@/store/useGameStore";
 import { authFetch } from "@/lib/auth";
@@ -99,6 +100,11 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
   // Region details cache & loading state
   const [detailsCache, setDetailsCache] = useState<Record<string, RegionDetailsData>>({});
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const selectedMajorRegion = majorRegions.find((region) => region.id === selectedMajorRegionId) ?? currentMajorRegion;
   const mapRegion = majorRegions.find((region) => region.id === zoomedRegionId);
@@ -191,9 +197,11 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
     return false;
   }, [cleanSearch, detailsCache]);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[95] h-[100dvh] flex items-center justify-center bg-black/80 px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur-md sm:px-6 sm:py-6"
+      className="fixed inset-0 z-[100] h-[100dvh] flex items-center justify-center bg-black/80 px-2 sm:px-4 md:px-6 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur-md"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -229,7 +237,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
                 placeholder="Tìm quái, item, Cổ..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-8 w-44 rounded-lg border border-cyan-900/60 bg-[#091b24] pl-8 pr-7 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-cyan-400 focus:outline-none sm:w-56"
+                className="h-8 w-36 sm:w-44 lg:w-56 rounded-lg border border-cyan-900/60 bg-[#091b24] pl-8 pr-7 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-cyan-400 focus:outline-none"
               />
               {searchQuery && (
                 <button
@@ -252,9 +260,9 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
         </header>
 
         {/* Body Grid */}
-        <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[minmax(0,1.25fr)_minmax(330px,0.85fr)]">
+        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1.25fr)_minmax(330px,0.85fr)] min-h-0 flex-1 overflow-y-auto lg:overflow-hidden custom-scrollbar">
           {/* Left Column: Map Screen */}
-          <div className="flex min-h-0 flex-col border-b border-white/10 p-3 sm:p-4 lg:border-b-0 lg:border-r">
+          <div className="flex shrink-0 flex-col border-b border-white/10 p-2.5 sm:p-4 lg:border-b-0 lg:border-r lg:min-h-0 lg:shrink">
             {/* Map Top Navigation Bar */}
             <div className="mb-2 flex items-center justify-between gap-2">
               {mapRegion ? (
@@ -281,7 +289,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
             </div>
 
             {/* SVG Map Container */}
-            <div className="relative mx-auto flex w-full max-w-[560px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-cyan-950/80 bg-[#05131a] shadow-inner">
+            <div className="relative mx-auto flex w-full max-w-[340px] sm:max-w-[460px] lg:max-w-[560px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-cyan-950/80 bg-[#05131a] shadow-inner">
               <div
                 className="pointer-events-none absolute inset-0 opacity-25"
                 style={{
@@ -509,9 +517,9 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
           </div>
 
           {/* Right Column: Detailed Info Panel */}
-          <aside className="flex min-h-0 flex-col bg-[#07141d]/70 p-3 sm:p-4">
+          <aside className="flex flex-col shrink-0 lg:shrink lg:min-h-0 lg:flex-1 bg-[#07141d]/70 p-3 sm:p-4 pb-12 sm:pb-6 lg:pb-4">
             {/* 1. Current Player Region Badge */}
-            <div className="mb-3 rounded-xl border border-rose-500/25 bg-rose-500/[0.07] px-3 py-2">
+            <div className="mb-2.5 rounded-xl border border-rose-500/25 bg-rose-500/[0.07] px-3 py-2 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-rose-300">
                   <MapPin className="h-3 w-3" /> Vị trí hiện tại
@@ -527,7 +535,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
             </div>
 
             {/* 2. Inspected Region Banner */}
-            <div className="rounded-xl border border-cyan-800/40 bg-cyan-950/20 p-3 shadow">
+            <div className="rounded-xl border border-cyan-800/40 bg-cyan-950/20 p-3 shadow shrink-0">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-1.5">
@@ -562,7 +570,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
             </div>
 
             {/* 3. Navigation Tabs */}
-            <div className="mt-3 flex border-b border-white/10 text-xs">
+            <div className="mt-2.5 flex border-b border-white/10 text-xs shrink-0 overflow-x-auto">
               <button
                 onClick={() => setActiveTab("monsters")}
                 className={`flex items-center gap-1.5 border-b-2 px-3 pb-2 font-medium transition ${
@@ -598,7 +606,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
             </div>
 
             {/* 4. Tab Content Area */}
-            <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
+            <div className="mt-2.5 min-h-[160px] max-h-80 lg:max-h-none lg:min-h-0 lg:flex-1 overflow-y-auto pr-1">
               {loadingDetails && !currentDetails ? (
                 <div className="flex h-32 items-center justify-center text-xs text-zinc-500">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent mr-2" />
@@ -798,7 +806,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
             </div>
 
             {/* Footer Status */}
-            <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2 text-[10px] text-zinc-500">
+            <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2 pb-1 text-[10px] text-zinc-400 shrink-0">
               <div className="flex items-center gap-2">
                 <span className={`inline-block h-2 w-2 rounded-full ${mapRegion && !playerInZoomedRegion ? "bg-zinc-600" : "bg-rose-400"}`} />
                 <span>{mapRegion && !playerInZoomedRegion ? "Bạn đang ở đại vực khác" : "Vị trí của bạn"}</span>
@@ -808,6 +816,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
           </aside>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }
