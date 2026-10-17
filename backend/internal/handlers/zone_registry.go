@@ -386,9 +386,19 @@ func regionScopeIDs(regionID string) []string {
 }
 
 func isRegionWithinScope(parentRegion, candidateRegion string) bool {
-	for _, id := range regionScopeIDs(candidateRegion) {
-		if id == parentRegion {
-			return true
+	if parentRegion == "" || candidateRegion == "" {
+		return false
+	}
+	if parentRegion == candidateRegion {
+		return true
+	}
+	scope1 := regionScopeIDs(parentRegion)
+	scope2 := regionScopeIDs(candidateRegion)
+	for _, id1 := range scope1 {
+		for _, id2 := range scope2 {
+			if id1 == id2 {
+				return true
+			}
 		}
 	}
 	return false

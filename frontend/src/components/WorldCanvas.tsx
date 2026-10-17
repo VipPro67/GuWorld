@@ -1703,7 +1703,6 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
 
     const runtimeMonsters = Object.values(useWorldStore.getState().monsters)
       .filter((monster) => monster.state !== "DEFEATED"
-        && monster.region_id === player.current_region
         && Math.hypot(monster.x + 0.5 - player.x, monster.y + 0.5 - player.y) <= invR)
       .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
       .slice(0, 100);

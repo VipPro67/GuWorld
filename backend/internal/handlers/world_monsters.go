@@ -323,7 +323,7 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 		return worldMonsterActionResult{}, err
 	}
 	dead := worldCombatPlayer{Race: race, Lifespan: lifespan}.deadInCoiChet()
-	if dead || hp <= 0 || region != monster.RegionID || x != target.X || y != target.Y || isWorldMonsterSafeZone(region, x, y) || math.Hypot(float64(x)-monster.X, float64(y)-monster.Y) > monster.AttackRange {
+	if dead || hp <= 0 || !isRegionWithinScope(monster.RegionID, region) || x != target.X || y != target.Y || isWorldMonsterSafeZone(region, x, y) || math.Hypot(float64(x)-monster.X, float64(y)-monster.Y) > monster.AttackRange {
 		return worldMonsterActionResult{Rejected: true}, nil
 	}
 	statuses.Expire(time.Now())
@@ -911,7 +911,6 @@ func broadcastWorldCombat(monster WorldMonster, eventType string, payload map[st
 	authoritative["hp"] = monster.HP
 	authoritative["max_hp"] = monster.MaxHP
 	mapID := worldMapIDForRegion(monster.RegionID)
-	event := WorldCombatEvent{EventID: uuid.NewString(), ServerTime: time.Now().UTC(), RegionID: monster.RegionID, MapID: mapID, EntityID: monster.InstanceID, EntityRevision: monster.Revision, EventType: eventType, Position: WorldPosition{monster.X, monster.Y}, Payload: authoritative}
 	targets := map[uuid.UUID]struct{}{}
 	for _, p := range worldPosIndex.NearbyInScope(int(monster.X), int(monster.Y), WorldMonsterActivationRadius, "", mapID, "") {
 		if !isRegionWithinScope(monster.RegionID, p.Region) {
@@ -921,6 +920,10 @@ func broadcastWorldCombat(monster WorldMonster, eventType string, payload map[st
 			targets[id] = struct{}{}
 		}
 	}
+	if len(targets) == 0 {
+		return
+	}
+	event := WorldCombatEvent{EventID: uuid.NewString(), ServerTime: time.Now().UTC(), RegionID: monster.RegionID, MapID: mapID, EntityID: monster.InstanceID, EntityRevision: monster.Revision, EventType: eventType, Position: WorldPosition{monster.X, monster.Y}, Payload: authoritative}
 	worldMonsterMetrics.eventFanout.Add(uint64(len(targets)))
 	WorldCombatBroadcaster("world:combat", mustMarshal(event), targets)
 }

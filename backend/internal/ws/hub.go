@@ -122,7 +122,7 @@ func (h *Hub) run() {
 				if msg.Exclude != uuid.Nil && pid == msg.Exclude {
 					continue
 				}
-				if len(msg.Targets) > 0 {
+				if msg.Targets != nil {
 					if _, included := msg.Targets[pid]; !included {
 						continue
 					}
@@ -201,6 +201,9 @@ func (h *Hub) BroadcastToChannel(channel ChannelName, payload []byte, exclude uu
 
 // BroadcastToTargets sends a message to specific players in a channel.
 func (h *Hub) BroadcastToTargets(channel ChannelName, payload []byte, targets map[uuid.UUID]struct{}) {
+	if targets != nil && len(targets) == 0 {
+		return
+	}
 	select {
 	case h.broadcast <- &BroadcastMsg{Channel: channel, Payload: payload, Targets: targets}:
 	default:

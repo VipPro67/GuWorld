@@ -21,8 +21,9 @@ import (
 )
 
 type WorldCastTarget struct {
-	Kind string `json:"kind"`
-	ID   string `json:"id"`
+	Kind     string `json:"kind"`
+	ID       string `json:"id"`
+	RegionID string `json:"region_id,omitempty"`
 }
 
 type UseGuOnMapRequest struct {
@@ -432,7 +433,22 @@ func UseGuOnMap(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "command_id is required for monster casts"})
 			return
 		}
-		monster, exists, getErr := cache.GetWorldMonster(c.Request.Context(), player.CurrentRegion, req.Target.ID)
+		targetRegion := player.CurrentRegion
+		if req.Target.RegionID != "" {
+			targetRegion = req.Target.RegionID
+		}
+		monster, exists, getErr := cache.GetWorldMonster(c.Request.Context(), targetRegion, req.Target.ID)
+		if (!exists || getErr != nil) && targetRegion == player.CurrentRegion {
+			for _, scopeID := range regionScopeIDs(player.CurrentRegion) {
+				if scopeID == targetRegion {
+					continue
+				}
+				if m, ok, _ := cache.GetWorldMonster(c.Request.Context(), scopeID, req.Target.ID); ok {
+					monster, exists, getErr = m, ok, nil
+					break
+				}
+			}
+		}
 		if getErr != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Monster runtime unavailable"})
 			return
@@ -441,7 +457,7 @@ func UseGuOnMap(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Monster is no longer active"})
 			return
 		}
-		if monster.RegionID != player.CurrentRegion {
+		if !isRegionWithinScope(monster.RegionID, player.CurrentRegion) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Target is in another region"})
 			return
 		}

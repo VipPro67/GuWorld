@@ -102,6 +102,9 @@ func (sh *ShardedHub) BroadcastToChannel(channel ChannelName, payload []byte, ex
 
 // BroadcastToTargets sends a message to specific players in a channel.
 func (sh *ShardedHub) BroadcastToTargets(channel ChannelName, payload []byte, targets map[uuid.UUID]struct{}) {
+	if targets != nil && len(targets) == 0 {
+		return
+	}
 	shard := sh.GetChannelShard(channel)
 	shard.BroadcastToTargets(channel, payload, targets)
 }
