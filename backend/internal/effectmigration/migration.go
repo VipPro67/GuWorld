@@ -364,7 +364,7 @@ func ConvertGu(id string, raw []byte) Result {
 	return result
 }
 
-var itemMappings = map[string]string{"restore_hp": "RESTORE_HP", "increase_human_qi": "INCREASE_HUMAN_QI", "heal_aperture": "HEAL_APERTURE", "random_constitution": "RANDOM_CONSTITUTION", "random_race": "RANDOM_RACE", "open_mine_chest": "OPEN_MINE_CHEST", "hunger": "RESTORE_HUNGER"}
+var itemMappings = map[string]string{"restore_hp": "RESTORE_HP", "increase_human_qi": "INCREASE_HUMAN_QI", "heal_aperture": "HEAL_APERTURE", "increase_aperture_area": "INCREASE_APERTURE_AREA", "increase_aperture_time_rate": "INCREASE_APERTURE_TIME_RATE", "random_constitution": "RANDOM_CONSTITUTION", "random_race": "RANDOM_RACE", "open_mine_chest": "OPEN_MINE_CHEST", "hunger": "RESTORE_HUNGER"}
 
 func ConvertItem(id string, raw []byte) Result {
 	return convertFlatNative(FormatItem, id, raw, "ON_CONSUME", itemMappings)

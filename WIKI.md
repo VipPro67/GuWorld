@@ -464,7 +464,8 @@ Quái và Cổ trùng **cùng rank là cân bằng** (mất ~3–5 hit để h�
 
 - Dictionary vật phẩm được Admin import từ `backend/data/Item.csv`.
 - Vật phẩm có type, rarity, Chuyển, path, effects, tags và description.
-- Item effects hiện có gồm hồi Chân Nguyên/Sinh lực, trị liệu/hồi phục sinh lực Tiên Khiếu (`heal_aperture`), soul boost, đạo ngân, xóa trạng thái xấu và điều kiện chỉ phàm nhân/chỉ Cổ Tiên.
+- Item effects hiện có gồm hồi Chân Nguyên/Sinh lực, trị liệu/hồi phục sinh lực Tiên Khiếu (`heal_aperture`), mở rộng diện tích Tiên Khiếu (`increase_aperture_area`), tăng tốc độ thời gian Tiên Khiếu (`increase_aperture_time_rate`), soul boost, đạo ngân, xóa trạng thái xấu và điều kiện chỉ phàm nhân/chỉ Cổ Tiên.
+- **Thác Khiếu Đan** (+500.000 diện tích Tiên Khiếu) và **Thôi Thời Đan** (+2 tốc độ thời gian Tiên Khiếu) rơi tỉ lệ nhỏ từ quái tai kiếp (Địa Tai, Thiên Kiếp, Hạo Kiếp, Vạn Kiếp, Hỗn Độn Thần Ma và Kiếp Lực Ma Vật).
 
 ## 6. Luyện Cổ và suy diễn công thức
 

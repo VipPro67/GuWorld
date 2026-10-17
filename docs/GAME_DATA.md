@@ -696,7 +696,7 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | Shared: `luck` | always-on → self | flat | gamefx/player stats | formatter + gamefx tests |
 | Race: `immortal`, `disable_hp_regen`, `disable_mana_regen`, `disable_soul_regen`, `disable_resource_regen` | always-on → self | boolean | lifespan/regen policy; players.race | thiếu label cho một số flag; gamefx tests một phần |
 | Status: `death_drop_mult`, `pvp_immune` | while status active → self | multiplier/bool | **không có field/executor: silent no-op hiện tại, phải fail khi compile v2** | chưa có label/test execution |
-| Item: `hunger`, `restore_hp`, `heal_aperture`, `increase_human_qi`, `random_constitution`, `random_race`, `open_mine_chest` | item use/feed → self/pet/aperture | flat hoặc command enum | item/pet handlers; inventory + players/aperture | `Item.name`; `handlers/item_effects_test.go` (coverage từng key chưa đầy đủ) |
+| Item: `hunger`, `restore_hp`, `heal_aperture`, `increase_aperture_area`, `increase_aperture_time_rate`, `increase_human_qi`, `random_constitution`, `random_race`, `open_mine_chest` | item use/feed → self/pet/aperture | flat hoặc command enum | item/pet handlers; inventory + players/aperture | `Item.name`; `handlers/item_effects_test.go` (coverage từng key chưa đầy đủ) |
 | `killer_moves.effects`: `base_damage_bonus|damage`, `base_defense_bonus|defense|add_base_defense`, `flat_damage`, `flat_defense`, `damage_multiplier|damage_boost`, `defense_multiplier|defense_boost|shield_multiplier`, `success_rate_bonus|stability_bonus|stability_penalty`, `channel_time|channeling|channeling_reduction` | move build/cast → selected enemy or self | flat, ratio, points, ticks; dao scaling `1+marks/100` | builder/manual/auto paths không đồng nhất; `killer_moves` owns snapshot | builder raw key; hầu như chưa có mapping tests |
 | `killer_moves.effects`: `life_steal|lifesteal`, `multi_hit`, `phantom_attack`, `thorns_damage`, `heal`, `bleed`, `poison`, `stun`, `mana_regen`, `heal_hp|regen`, `portal_create`, `random_portal` | hit/cast/world use | percent-vs-ratio legacy, count, flat, bool | manual, auto và world chỉ xử lý các tập con khác nhau; combat/player/world persistence | raw key; simulator chỉ có characterization hạn chế |
 | `aperture_variant_events.effects` | chưa có producer/trigger | chưa xác định | chỉ có JSONB owner event row; **không executor/persistence command** | không UI, không test; mọi payload hiện là no-op |
@@ -938,8 +938,15 @@ Các effect key đặc biệt của Consumable (resolve trong `backend/internal/
 
 - `random_constitution` (value `1`): khi dùng sẽ random **thể chất** mới từ `gamefx.AllConstitutions()`, loại trừ thể chất hiện tại của người chơi. Kết quả được ghi vào `players.constitution`.
 - `random_race` (value `1`): khi dùng sẽ random **chủng tộc** mới từ `gamefx.AllRaces()`, loại trừ chủng tộc hiện tại. Kết quả được ghi vào `players.race`.
+- `increase_aperture_area` (value N): cộng thẳng N vào `immortal_apertures.area_size` (đơn vị mẫu, cùng thang với `area_size` mặc định 3.000.000–10.000.000). Chỉ Cổ Tiên có Tiên Khiếu mới dùng được.
+- `increase_aperture_time_rate` (value N): cộng thẳng N vào `immortal_apertures.time_rate` (hệ số gia tốc, mặc định 10–55). Chỉ Cổ Tiên có Tiên Khiếu mới dùng được.
 
 Hai item mẫu trong `Item.csv`: `ITEM_RANDOM_CONSTITUTION` (Hoán Thể Đan) và `ITEM_RANDOM_RACE` (Hoán Huyết Đan), cùng rank 7 / base_price 200.
+
+Hai đan dược rơi từ quái tai kiếp (tỉ lệ nhỏ, xem `LootTable.csv`):
+
+- `ITEM_APERTURE_EXPANSION_PILL` (Thác Khiếu Đan, rank 6): `INCREASE_APERTURE_AREA` +500.000 diện tích Tiên Khiếu. Rơi 2–10% tùy bảng loot (Địa Tai → Hỗn Độn).
+- `ITEM_APERTURE_TIME_PILL` (Thôi Thời Đan, rank 7): `INCREASE_APERTURE_TIME_RATE` +2 tốc độ thời gian Tiên Khiếu. Rơi 1–5% tùy bảng loot.
 
 ### Recipe
 

@@ -24,17 +24,19 @@ var ValidateItemEffects = map[string]ItemEffectHandler{
 }
 
 var ApplyItemEffects = map[string]ItemEffectHandler{
-	"restore_hp":             restoreHPEffect,
-	"restore_mana":           restoreManaEffect,
-	"soul_boost":             soulBoostEffect,
-	"remove_negative_status": removeNegativeStatusEffect,
-	"lifespan_boost":         lifespanBoostEffect,
-	"open_mine_chest":        openMineChestEffect,
-	"heal_aperture":          healApertureEffect,
-	"increase_human_qi":      increaseHumanQi,
-	"random_constitution":    randomConstitutionEffect,
-	"random_race":            randomRaceEffect,
-	"exit_spatial_realm":     exitSpatialRealmEffect,
+	"restore_hp":                  restoreHPEffect,
+	"restore_mana":                restoreManaEffect,
+	"soul_boost":                  soulBoostEffect,
+	"remove_negative_status":      removeNegativeStatusEffect,
+	"lifespan_boost":              lifespanBoostEffect,
+	"open_mine_chest":             openMineChestEffect,
+	"heal_aperture":               healApertureEffect,
+	"increase_aperture_area":      increaseApertureAreaEffect,
+	"increase_aperture_time_rate": increaseApertureTimeRateEffect,
+	"increase_human_qi":           increaseHumanQi,
+	"random_constitution":         randomConstitutionEffect,
+	"random_race":                 randomRaceEffect,
+	"exit_spatial_realm":          exitSpatialRealmEffect,
 }
 
 func exitSpatialRealmEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
@@ -151,6 +153,48 @@ func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec,
 	}
 
 	return fmt.Sprintf("Đạo hữu sử dụng %s, khôi phục %.0f sinh lực Tiên Khiếu!", item.Name, val), nil
+}
+
+func increaseApertureAreaEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
+	if val <= 0 {
+		return "", nil
+	}
+	if !util.IsImmortalPlayer(player) {
+		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên.", item.Name)
+	}
+	res, err := tx.Exec(`
+		UPDATE immortal_apertures
+		SET area_size = area_size + $1, updated_at = NOW()
+		WHERE player_id = $2
+	`, int64(val), player.ID)
+	if err != nil {
+		return "", fmt.Errorf("lỗi khi mở rộng diện tích Tiên Khiếu: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return "", fmt.Errorf("không tìm thấy Tiên Khiếu của đạo hữu.")
+	}
+	return fmt.Sprintf("Đạo hữu sử dụng %s, gia tăng %.0f diện tích Tiên Khiếu!", item.Name, val), nil
+}
+
+func increaseApertureTimeRateEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
+	if val <= 0 {
+		return "", nil
+	}
+	if !util.IsImmortalPlayer(player) {
+		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên.", item.Name)
+	}
+	res, err := tx.Exec(`
+		UPDATE immortal_apertures
+		SET time_rate = time_rate + $1, updated_at = NOW()
+		WHERE player_id = $2
+	`, val, player.ID)
+	if err != nil {
+		return "", fmt.Errorf("lỗi khi tăng tốc độ thời gian Tiên Khiếu: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return "", fmt.Errorf("không tìm thấy Tiên Khiếu của đạo hữu.")
+	}
+	return fmt.Sprintf("Đạo hữu sử dụng %s, gia tăng %.1f tốc độ thời gian Tiên Khiếu!", item.Name, val), nil
 }
 
 func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
