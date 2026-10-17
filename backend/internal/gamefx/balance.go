@@ -3,6 +3,8 @@ package gamefx
 import (
 	"math"
 	"time"
+
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 // ========================================================================
@@ -67,31 +69,11 @@ func PathMasteryGuUseBaseGain(rank int) int {
 // 2. BẬC QUY MÔ / RANK SCALE & MANA TABLE (CHUẨN HÓA 9 CHUYỂN)
 // ========================================================================
 
-// RankScaleTable defines the exponential cost and power scale across ranks 1 to 9.
-// Mortals: Rank 1=1, Rank 2=2, Rank 3=5, Rank 4=20, Rank 5=100.
-// Immortals: Rank 6=10,000 (10^4), Rank 7=1,000,000 (10^6), Rank 8=100,000,000 (10^8), Rank 9=10,000,000,000 (10^10).
-var RankScaleTable = [10]float64{
-	0: 1.0,
-	1: 1.0,
-	2: 2.0,
-	3: 5.0,
-	4: 20.0,
-	5: 100.0,
-	6: 10000.0,
-	7: 1000000.0,
-	8: 100000000.0,
-	9: 10000000000.0,
-}
-
-// RankScale returns the standard rank scale factor (float64) for a given rank (1-9).
+// RankScale returns the standard rank scale factor (float64) for a given rank
+// (1-9). The canonical table lives in models.RankScaleTable; this wrapper keeps
+// the existing gamefx call sites working.
 func RankScale(rank int) float64 {
-	if rank <= 1 {
-		return RankScaleTable[1]
-	}
-	if rank >= 9 {
-		return RankScaleTable[9]
-	}
-	return RankScaleTable[rank]
+	return models.RankScale(rank)
 }
 
 // InstantDeductionChance calculates the probability of instantly completing
@@ -111,13 +93,7 @@ func InstantDeductionChance(guRank, targetRank int, base, perRankStep, minChance
 // SealingStoneCostByRank returns the number of sealing stones (Phong Ấn Thạch)
 // required to seal a Gu of the given rank (1-9).
 func SealingStoneCostByRank(rank int) int64 {
-	if rank <= 1 {
-		return int64(RankScaleTable[1])
-	}
-	if rank >= 9 {
-		return int64(RankScaleTable[9])
-	}
-	return int64(RankScaleTable[rank])
+	return int64(RankScale(rank))
 }
 
 // ========================================================================

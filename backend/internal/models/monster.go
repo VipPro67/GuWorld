@@ -109,30 +109,15 @@ type Combatant struct {
 }
 
 func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, subRank int, monsterType string) (maxHP, attack, defense float64) {
-	rankMultiplier := 1.0
-	switch rank {
-	case 1:
-		rankMultiplier = 1.0
-	case 2:
-		rankMultiplier = 2.0
-	case 3:
-		rankMultiplier = 5.0
-	case 4:
-		rankMultiplier = 20.0
-	case 5:
-		rankMultiplier = 100.0
-	case 6:
-		rankMultiplier = 10000.0
-	case 7:
-		rankMultiplier = 1000000.0
-	case 8:
-		rankMultiplier = 100000000.0
-	case 9:
-		rankMultiplier = 10000000000.0
-	default:
-		if rank > 9 {
-			rankMultiplier = 10000000000000.0
-		}
+	// Single shared scale table (models.RankScaleTable). Monster base stats are
+	// authored rank-independent in Monster.csv, so the rank curve is the only
+	// thing that grows with rank — matching Gu values (ratio * RankScale).
+	rankMultiplier := RankScale(rank)
+	if rank > 9 {
+		// Chaos/Hybrid tribulation spawns at rank 10 (there is no rank-10 row in
+		// the table). Preserve its historical order-of-magnitude bump over rank 9
+		// (10^10 -> 10^13) instead of clamping it.
+		rankMultiplier = 10000000000000.0
 	}
 
 	typeMultiplier := 1.0

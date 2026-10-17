@@ -903,6 +903,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
 		api.GET("/explore/grid", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
+		api.GET("/explore/regions/:id/details", middleware.AuthRequired(), handlers.GetRegionDetails)
 		api.GET("/explore/maps", middleware.AuthRequired(), handlers.GetWorldMaps)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)

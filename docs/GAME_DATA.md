@@ -952,6 +952,13 @@ Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy
 
 Monster template chứa chỉ số, Gu inventory (`gu_inventory`) và Gu pool (`gu_pool`), item inventory, dao marks, path masteries, AI profile và loot table. Combat handler dùng dữ liệu này để khởi tạo trận, chọn hành động và roll loot.
 
+#### Bảng scale dùng chung (RankScaleTable)
+
+- `models.RankScaleTable` (`internal/models/rank_scale.go`) là **nguồn duy nhất** cho thang 9 bậc: `1, 2, 5, 20, 100` (phàm) và `10^4, 10^6, 10^8, 10^10` (tiên, ×100 mỗi bậc). `gamefx.RankScale` chỉ là wrapper gọi lại — không định nghĩa bảng thứ hai.
+- Gu values và chỉ số quái đều là `<ratio> × RankScale(rank)`. Median Gu (`value / RankScale`) giống hệt nhau ở mọi bậc: DAMAGE 20, HP 10, ATTACK 1, DEFENSE 5. Gu utility dùng ratio 8.
+- **`Monster.csv` là rank-independent.** `base_hp/base_attack/base_defense` không được tăng theo bậc; `models.ScaleMonsterStats` nhân `base × RankScale(rank) × typeMultiplier × subRankMultiplier`. Median base mọi bậc bằng median bậc 1 (90 HP / 12 ATK / 5 DEF). `base_defense` được cap ở **10** (≤ 50% ratio sát thương Gu chuẩn 20) để không có quái nào bất khả chiến bại dưới damage trừ trực tiếp. Thêm quái mới: chọn base quanh mức rank-1 (Elite/Boss dựa vào `typeMultiplier` 1.5/3.0), **không** nhân theo rank — nếu không sẽ double-count và quái immortal thành bất khả chiến bại.
+- Time-to-kill 1 Gu cast chuẩn (~6 hit) được khoá bằng test `TestMonsterTTKBandAcrossRanks` (`internal/models/rank_scale_test.go`).
+
 #### Loot table (bảng rơi đồ)
 
 - Mỗi monster template trỏ tới một bảng override (`Monster.loot_table_id`) — nơi chứa đồ **đặc thù loài** và bonus riêng. Ngoài ra, mọi trận PvE với quái đều roll thêm **bể chung theo bậc** `loot_monster_common` (2 entry/bậc 1–9: `beast_meat_rankN` 60%, `heaven_qi_rankN` 50%, qty 1–2 × hệ số rank). `RollMonsterLoot` (`handlers/combat_loot.go`) = bể chung + override; entry `gu_id` vẫn roll như cũ.

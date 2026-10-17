@@ -14,7 +14,9 @@ Chế độ:
 
 Ví dụ:
   python3 scripts/balance_gu_effects.py                     # audit, factor 10x
-  python3 scripts/balance_gu_effects.py --band 0.35         # audit theo ±35% (docs)
+  python3 scripts/balance_gu_effects.py --band 0.35         # audit theo ±35% (so với median cùng rank)
+  python3 scripts/balance_gu_effects.py --scale             # audit TUYỆT ĐỐI: value = ratio_chuẩn × P(rank)
+  python3 scripts/balance_gu_effects.py --scale --apply     # snap các value lệch scale về ratio chuẩn
   python3 scripts/balance_gu_effects.py --hard              # + bảng ref cứng cho key thưa
   python3 scripts/balance_gu_effects.py --hard --apply      # ghi CSV
   python3 scripts/balance_gu_effects.py --allow GU_A,GU_B   # bỏ qua Cổ đặc biệt
@@ -42,6 +44,19 @@ DOT_STATUS_IDS = {"BLEED", "POISON", "BURN", "SLOW_DAMAGE"}
 DOT_TOTAL_DAMAGE_RATIO = 0.6
 DOT_DEFAULT_TURNS = 3
 FLAT_DAMAGE_PER_RANK_SCALE = 25
+
+# Canon tuyệt đối của dữ liệu: mỗi value phải là <ratio> × RANK_SCALE[rank].
+# Ratio lấy từ phân bố thực tế của Gu.csv (median theo rank giống hệt nhau):
+# DAMAGE 20 (utility 8, đặc biệt 14/15), SHIELD 30, HEAL 20 (thấp 15),
+# HP 10, ATTACK 1, DEFENSE 5. Dùng bởi --scale.
+SCALE_ARCHETYPES = {
+    "DAMAGE||FLAT": [8, 14, 15, 20],
+    "SHIELD||FLAT": [30],
+    "HEAL||FLAT": [15, 20],
+    "STAT_MOD|HP|ADD_FLAT": [10],
+    "STAT_MOD|ATTACK|ADD_FLAT": [1],
+    "STAT_MOD|DEFENSE|ADD_FLAT": [5],
+}
 
 # Ngưỡng lệch mạnh: coi là bất thường khi value lệch khỏi ref quá --factor lần,
 # đo theo TỈ LỆ (max(v/ref, ref/v)) vì sức mạnh Cổ scale theo cấp số nhân.
@@ -200,6 +215,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--factor", type=float, default=10.0, help="lệch > factor lần ref thì coi là bất thường (mặc định 10)")
     ap.add_argument("--band", type=float, default=None, help="thay --factor bằng dung sai ±PCT (vd 0.35 theo docs)")
+    ap.add_argument("--scale", action="store_true", help="audit tuyệt đối theo scale: value = ratio_chuẩn × RANK_SCALE[rank]")
+    ap.add_argument("--scale-tol", type=float, default=0.4, help="dung sai ± cho --scale (mặc định 0.4)")
     ap.add_argument("--min-samples", type=int, default=5, help="số mẫu tối thiểu mỗi rank để coi là key dày")
     ap.add_argument("--hard", action="store_true", help="dùng HARD_REFS cho key thưa")
     ap.add_argument("--hard-file", help="JSON bổ sung/ghi đè HARD_REFS")
@@ -233,6 +250,9 @@ def main():
 
     parsed = build_parsed(rows, id_idx, rank_idx, eff_idx)
     records = _extract(parsed)
+
+    if args.scale:
+        return check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow)
 
     # --- gom mẫu theo (key, rank) ---
     samples = {}
@@ -357,14 +377,18 @@ def main():
         return
 
     # --- ghi CSV giữ nguyên format ---
+    apply_changes(path, rows, parsed, state_changes, text, bom, eff_idx)
+    print(f"\nĐã ghi {path.name} ({len(state_changes)} dòng). Admin -> Dữ liệu -> Import 'Cổ trùng'.")
+
+
+def apply_changes(path, rows, parsed, state_changes, text, bom, eff_idx):
+    """Ghi CSV, chỉ thay đúng cell effects, giữ nguyên format gốc."""
     replacements = []
     for ri in sorted(state_changes):
-        rank, obj, _ = parsed[ri]
+        _, obj, _ = parsed[ri]
         token = rows[ri][eff_idx]
-        orig = token[0]
-        text_out, _ = dump_style(orig, obj)
-        encoded = '"' + text_out.replace('"', '""') + '"'
-        replacements.append((token[1], token[2], encoded))
+        text_out, _ = dump_style(token[0], obj)
+        replacements.append((token[1], token[2], '"' + text_out.replace('"', '""') + '"'))
     for start, end, value in sorted(replacements, reverse=True):
         text = text[:start] + value + text[end:]
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
@@ -376,7 +400,68 @@ def main():
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
-    print(f"\nĐã ghi {path.name} ({len(state_changes)} dòng). Admin -> Dữ liệu -> Import 'Cổ trùng'.")
+
+
+def nearest_arch(ratio, archetypes):
+    return min(archetypes, key=lambda a: abs(ratio - a))
+
+
+def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
+    """Audit tuyệt đối: mỗi value core phải là <ratio> × RANK_SCALE[rank]."""
+    tol = args.scale_tol
+    issues, skipped = [], 0
+    state_changes = {}
+    for rec in records:
+        archetypes = SCALE_ARCHETYPES.get(rec["key"])
+        if not archetypes:
+            continue
+        gu_id = parsed[rec["row"]][2]["id"]
+        if gu_id in allow:
+            skipped += 1
+            continue
+        rank, val = rec["rank"], rec["value"]
+        if not isinstance(val, (int, float)) or isinstance(val, bool) or val == 0:
+            continue
+        ratio = val / RANK_SCALE[rank]
+        near = nearest_arch(ratio, archetypes)
+        if near * (1 - tol) <= ratio <= near * (1 + tol):
+            continue
+        new = num_out(near * RANK_SCALE[rank])
+        if new == val:
+            continue
+        op = locate(rec)
+        if rec["src"][2] == "params.value":
+            op["params"]["value"] = new
+        else:
+            op["value"] = new
+        issues.append((gu_id, rank, rec["key"], val, new, near, ratio))
+        state_changes.setdefault(rec["row"], []).append(gu_id)
+
+    covered = sum(1 for r in records if r["key"] in SCALE_ARCHETYPES)
+    print(f"[--scale] {covered} value core, ratio chuẩn: "
+          + ", ".join(f"{k}= {v}" for k, v in SCALE_ARCHETYPES.items())
+          + f". Dung sai ±{tol:g}.")
+    if skipped:
+        print(f"Bỏ qua {skipped} value thuộc --allow.")
+    if not issues:
+        print("Tất cả value core đúng scale.")
+        return 0
+    issues.sort(key=lambda x: -abs(x[6] / x[5] - 1) if x[5] else 0)
+    for gu_id, rank, key, val, new, near, ratio in issues:
+        print(f"  {gu_id:<40} R{rank} {key:<28} {val:g} -> {new:g}  "
+              f"(ratio {ratio:g} -> {near:g}, {x_dev(ratio, near):+.0f}%)")
+    print(f"\n{len(issues)} value lệch scale trên {len(state_changes)} dòng.")
+    if not args.apply:
+        print("Chỉ xem trước. Thêm --apply để ghi CSV.")
+        return 0
+    apply_changes(path, rows, parsed, state_changes, text, bom, eff_idx)
+    print(f"Đã ghi {path.name} ({len(state_changes)} dòng). Admin -> Dữ liệu -> Import 'Cổ trùng'.")
+    return 0
+
+
+def x_dev(value, ref):
+    return (value / ref - 1) * 100 if ref else 0
+
 
 
 def locate(rec):

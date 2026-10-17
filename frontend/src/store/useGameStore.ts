@@ -1140,6 +1140,8 @@ export interface Region {
     actions?: { deny?: string[] };
   };
   effective_rules?: Region["rules"];
+  has_boss?: boolean;
+  monster_count?: number;
 }
 
 export interface WorldConfig {

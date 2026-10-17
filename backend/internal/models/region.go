@@ -45,4 +45,6 @@ type Region struct {
 	Paths          []string        `json:"paths"`
 	Rules          json.RawMessage `json:"rules"`
 	EffectiveRules json.RawMessage `json:"effective_rules,omitempty"`
+	HasBoss        bool            `json:"has_boss"`
+	MonsterCount   int             `json:"monster_count"`
 }

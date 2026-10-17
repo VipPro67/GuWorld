@@ -58,7 +58,7 @@ type FeedRequest struct {
 	GuInstanceID string `json:"gu_instance_id" binding:"required"`
 }
 
-var guManaTable = gamefx.RankScaleTable
+var guManaTable = models.RankScaleTable
 
 const (
 	feedBloodID    = "blood"

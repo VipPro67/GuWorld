@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -16,12 +17,22 @@ import (
 func GetRegions(c *gin.Context) {
 	getCachedDictionaryPartWithError(c, "explore_regions_v2", &[]models.Region{}, func() (interface{}, error) {
 		query := `
-			SELECT id, name, description, width, height, min_rank, max_rank, is_active, regions.created_at, regions.updated_at,
+			SELECT regions.id, regions.name, regions.description, regions.width, regions.height, regions.min_rank, regions.max_rank, regions.is_active, regions.created_at, regions.updated_at,
 			       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0),
 			       COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0),
-			       COALESCE(rwm.world_map_id, 'world_map'), COALESCE(regions.rules::text,'{}')
+			       COALESCE(rwm.world_map_id, 'world_map'), COALESCE(regions.rules::text,'{}'),
+			       COALESCE(ms.has_boss, FALSE) OR (regions.zone_type = 'BOSS_ZONE') AS has_boss,
+			       COALESCE(ms.monster_count, 0) AS monster_count
 			FROM regions
 			LEFT JOIN region_world_maps rwm ON rwm.region_id = regions.id
+			LEFT JOIN (
+				SELECT region_id,
+				       BOOL_OR(is_boss_spawn = TRUE) AS has_boss,
+				       COUNT(DISTINCT monster_id) AS monster_count
+				FROM monster_spawns
+				WHERE is_active = TRUE
+				GROUP BY region_id
+			) ms ON ms.region_id = regions.id
 			WHERE is_active = TRUE
 			ORDER BY min_rank ASC, name ASC
 		`
@@ -36,7 +47,8 @@ func GetRegions(c *gin.Context) {
 			var r models.Region
 			var rulesJSON string
 			if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive, &r.CreatedAt, &r.UpdatedAt,
-				&r.ParentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &r.WorldMapID, &rulesJSON); err != nil {
+				&r.ParentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &r.WorldMapID, &rulesJSON,
+				&r.HasBoss, &r.MonsterCount); err != nil {
 				return nil, fmt.Errorf("scan active region: %w", err)
 			}
 			r.Rules = json.RawMessage(rulesJSON)
@@ -59,6 +71,389 @@ func GetRegions(c *gin.Context) {
 		builtRegions, ok := value.([]models.Region)
 		return ok && len(builtRegions) > 0
 	})
+}
+
+type RegionMonsterDetail struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Type         string  `json:"type"` // Normal, Elite, Boss
+	MinRank      int     `json:"min_rank"`
+	MaxRank      int     `json:"max_rank"`
+	IsBoss       bool    `json:"is_boss"`
+	IsCapturable bool    `json:"is_capturable"`
+	MaxHP        float64 `json:"max_hp"`
+	BaseAttack   float64 `json:"base_attack"`
+	BaseDefense  float64 `json:"base_defense"`
+	Description  string  `json:"description"`
+}
+
+type RegionDropDetail struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Kind    string   `json:"kind"` // "item" | "gu" | "resource"
+	Rank    int      `json:"rank,omitempty"`
+	Chance  float64  `json:"chance"`
+	MinQty  int      `json:"min_qty"`
+	MaxQty  int      `json:"max_qty"`
+	Sources []string `json:"sources,omitempty"`
+}
+
+type NamedResource struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type RegionDetailsResponse struct {
+	RegionID     string                `json:"region_id"`
+	Name         string                `json:"name"`
+	ZoneType     string                `json:"zone_type"`
+	MinRank      int                   `json:"min_rank"`
+	MaxRank      int                   `json:"max_rank"`
+	Description  string                `json:"description"`
+	Monsters     []RegionMonsterDetail `json:"monsters"`
+	Drops        []RegionDropDetail    `json:"drops"`
+	WildGus      []NamedResource       `json:"wild_gus"`
+	Resources    []NamedResource       `json:"resources"`
+	HasBoss      bool                  `json:"has_boss"`
+	MonsterCount int                   `json:"monster_count"`
+}
+
+func resolveGuName(guID string) string {
+	if ranks, ok := models.GuRegistry[guID]; ok {
+		for _, item := range ranks {
+			if item.Name != "" {
+				return item.Name
+			}
+		}
+	}
+	return guID
+}
+
+func resolveItemName(itemID string) string {
+	if item, ok := models.ItemRegistry[itemID]; ok && item.Name != "" {
+		return item.Name
+	}
+	return itemID
+}
+
+// GetRegionDetails returns the monsters, drop tables, and resources for a region.
+func GetRegionDetails(c *gin.Context) {
+	regionID := c.Param("id")
+	if regionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu mã khu vực"})
+		return
+	}
+
+	var reg models.Region
+	var poolRaw, rulesRaw string
+	err := db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT id, name, COALESCE(description,''), min_rank, max_rank, COALESCE(zone_type,'KHU_VUC'),
+		       COALESCE(pool_weights::text,'{}'), COALESCE(rules::text,'{}')
+		FROM regions WHERE id = $1
+	`, regionID).Scan(&reg.ID, &reg.Name, &reg.Description, &reg.MinRank, &reg.MaxRank, &reg.ZoneType, &poolRaw, &rulesRaw)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Khu vực không tồn tại"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn khu vực"})
+		return
+	}
+	if poolRaw != "" && poolRaw != "{}" {
+		_ = json.Unmarshal([]byte(poolRaw), &reg.PoolWeights)
+	}
+
+	// 1. Quái vật từ monster_spawns
+	monstersMap := make(map[string]*RegionMonsterDetail)
+	lootTablesToMonsters := make(map[string][]string) // lootTableID -> []monsterName
+
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT monster_id, COALESCE(min_rank, 1), COALESCE(max_rank, 9), COALESCE(is_boss_spawn, FALSE)
+		FROM monster_spawns
+		WHERE region_id = $1 AND is_active = TRUE
+	`, regionID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var mID string
+			var minR, maxR int
+			var isBoss bool
+			if err := rows.Scan(&mID, &minR, &maxR, &isBoss); err == nil {
+				detail, exists := monstersMap[mID]
+				if !exists {
+					tpl, hasTpl := models.MonsterRegistry[mID]
+					name := mID
+					mType := "Normal"
+					var hp, atk, def float64
+					var desc string
+					var capturable bool
+					if hasTpl {
+						if tpl.Name != "" {
+							name = tpl.Name
+						}
+						mType = tpl.Type
+						hp = tpl.MaxHP
+						atk = tpl.BaseAttack
+						def = tpl.BaseDefense
+						desc = tpl.Description
+						capturable = tpl.IsCapturable
+						if tpl.LootTableID != "" {
+							lootTablesToMonsters[tpl.LootTableID] = append(lootTablesToMonsters[tpl.LootTableID], name)
+						}
+					}
+					if isBoss || mType == "Boss" {
+						isBoss = true
+						mType = "Boss"
+					}
+					monstersMap[mID] = &RegionMonsterDetail{
+						ID:           mID,
+						Name:         name,
+						Type:         mType,
+						MinRank:      minR,
+						MaxRank:      maxR,
+						IsBoss:       isBoss,
+						IsCapturable: capturable,
+						MaxHP:        hp,
+						BaseAttack:   atk,
+						BaseDefense:  def,
+						Description:  desc,
+					}
+				} else {
+					if minR < detail.MinRank {
+						detail.MinRank = minR
+					}
+					if maxR > detail.MaxRank {
+						detail.MaxRank = maxR
+					}
+					if isBoss {
+						detail.IsBoss = true
+						detail.Type = "Boss"
+					}
+				}
+			}
+		}
+	}
+
+	// Quái Boss từ map_cells
+	bossCells, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT content_id, COALESCE(rank, 1)
+		FROM map_cells
+		WHERE region_id = $1 AND cell_type = 'Boss' AND is_active = TRUE
+	`, regionID)
+	if err == nil {
+		defer bossCells.Close()
+		for bossCells.Next() {
+			var mID string
+			var rank int
+			if err := bossCells.Scan(&mID, &rank); err == nil && mID != "" {
+				if d, ok := monstersMap[mID]; ok {
+					d.IsBoss = true
+					d.Type = "Boss"
+				} else {
+					tpl, hasTpl := models.MonsterRegistry[mID]
+					name := mID
+					var hp, atk, def float64
+					var desc string
+					if hasTpl {
+						if tpl.Name != "" {
+							name = tpl.Name
+						}
+						hp = tpl.MaxHP
+						atk = tpl.BaseAttack
+						def = tpl.BaseDefense
+						desc = tpl.Description
+						if tpl.LootTableID != "" {
+							lootTablesToMonsters[tpl.LootTableID] = append(lootTablesToMonsters[tpl.LootTableID], name)
+						}
+					}
+					monstersMap[mID] = &RegionMonsterDetail{
+						ID:          mID,
+						Name:        name,
+						Type:        "Boss",
+						MinRank:     rank,
+						MaxRank:     rank,
+						IsBoss:      true,
+						MaxHP:       hp,
+						BaseAttack:  atk,
+						BaseDefense: def,
+						Description: desc,
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Tìm danh sách Loot Tables:
+	// A) Loot tables từ RegionLootTables (cho khu vực và cả cha của nó)
+	scope := []string{regionID}
+	var parentID sql.NullString
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT parent_id FROM regions WHERE id = $1`, regionID).Scan(&parentID)
+	if parentID.Valid && parentID.String != "" {
+		scope = append(scope, parentID.String)
+	}
+
+	allLootTableIDs := make(map[string]bool)
+	for ltID := range lootTablesToMonsters {
+		allLootTableIDs[ltID] = true
+	}
+
+	rltRows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT loot_table_id, monster_type, chance
+		FROM region_loot_tables
+		WHERE region_id = ANY($1) AND is_active = TRUE
+	`, pq.Array(scope))
+	if err == nil {
+		defer rltRows.Close()
+		for rltRows.Next() {
+			var ltID, mType string
+			var chance float64
+			if err := rltRows.Scan(&ltID, &mType, &chance); err == nil && ltID != "" {
+				allLootTableIDs[ltID] = true
+				sourceLabel := fmt.Sprintf("Khu vực (%s)", mType)
+				lootTablesToMonsters[ltID] = append(lootTablesToMonsters[ltID], sourceLabel)
+			}
+		}
+	}
+
+	// 3. Nạp chi tiết các loot tables từ DB
+	dropsMap := make(map[string]*RegionDropDetail)
+	if len(allLootTableIDs) > 0 {
+		ltIDList := make([]string, 0, len(allLootTableIDs))
+		for id := range allLootTableIDs {
+			ltIDList = append(ltIDList, id)
+		}
+		ltRows, err := db.DB.QueryContext(c.Request.Context(), `
+			SELECT id, entries::text
+			FROM loot_tables
+			WHERE id = ANY($1)
+		`, pq.Array(ltIDList))
+		if err == nil {
+			defer ltRows.Close()
+			for ltRows.Next() {
+				var ltID, entriesRaw string
+				if err := ltRows.Scan(&ltID, &entriesRaw); err == nil && entriesRaw != "" {
+					var entries []models.LootEntry
+					if json.Unmarshal([]byte(entriesRaw), &entries) == nil {
+						sources := lootTablesToMonsters[ltID]
+						for _, e := range entries {
+							if e.ItemID != "" {
+								key := "item:" + e.ItemID
+								if existing, ok := dropsMap[key]; ok {
+									if e.Chance > existing.Chance {
+										existing.Chance = e.Chance
+									}
+									if e.MaxQty > existing.MaxQty {
+										existing.MaxQty = e.MaxQty
+									}
+									for _, s := range sources {
+										existing.Sources = appendUnique(existing.Sources, s)
+									}
+								} else {
+									dropsMap[key] = &RegionDropDetail{
+										ID:      e.ItemID,
+										Name:    resolveItemName(e.ItemID),
+										Kind:    "item",
+										Rank:    e.Rank,
+										Chance:  e.Chance,
+										MinQty:  e.MinQty,
+										MaxQty:  e.MaxQty,
+										Sources: appendUnique(nil, sources...),
+									}
+								}
+							}
+							if e.GuID != "" {
+								key := "gu:" + e.GuID
+								if existing, ok := dropsMap[key]; ok {
+									if e.Chance > existing.Chance {
+										existing.Chance = e.Chance
+									}
+									for _, s := range sources {
+										existing.Sources = appendUnique(existing.Sources, s)
+									}
+								} else {
+									dropsMap[key] = &RegionDropDetail{
+										ID:      e.GuID,
+										Name:    resolveGuName(e.GuID),
+										Kind:    "gu",
+										Rank:    e.Rank,
+										Chance:  e.Chance,
+										MinQty:  e.MinQty,
+										MaxQty:  e.MaxQty,
+										Sources: appendUnique(nil, sources...),
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 4. Wild Gus & Resources từ PoolWeights
+	wildGusList := make([]NamedResource, 0)
+	for _, guID := range reg.PoolWeights.WildGus {
+		if guID != "" {
+			wildGusList = append(wildGusList, NamedResource{
+				ID:   guID,
+				Name: resolveGuName(guID),
+			})
+		}
+	}
+
+	resourcesList := make([]NamedResource, 0)
+	for _, resID := range reg.PoolWeights.Resources {
+		if resID != "" {
+			resourcesList = append(resourcesList, NamedResource{
+				ID:   resID,
+				Name: resolveItemName(resID),
+			})
+		}
+	}
+
+	// Chuyển maps thành slices
+	monstersList := make([]RegionMonsterDetail, 0, len(monstersMap))
+	hasBoss := reg.ZoneType == "BOSS_ZONE"
+	for _, m := range monstersMap {
+		if m.IsBoss {
+			hasBoss = true
+		}
+		monstersList = append(monstersList, *m)
+	}
+
+	dropsList := make([]RegionDropDetail, 0, len(dropsMap))
+	for _, d := range dropsMap {
+		dropsList = append(dropsList, *d)
+	}
+
+	c.JSON(http.StatusOK, RegionDetailsResponse{
+		RegionID:     reg.ID,
+		Name:         reg.Name,
+		ZoneType:     reg.ZoneType,
+		MinRank:      reg.MinRank,
+		MaxRank:      reg.MaxRank,
+		Description:  reg.Description,
+		Monsters:     monstersList,
+		Drops:        dropsList,
+		WildGus:      wildGusList,
+		Resources:    resourcesList,
+		HasBoss:      hasBoss,
+		MonsterCount: len(monstersList),
+	})
+}
+
+func appendUnique(slice []string, items ...string) []string {
+	seen := make(map[string]bool, len(slice)+len(items))
+	for _, s := range slice {
+		seen[s] = true
+	}
+	for _, it := range items {
+		if it != "" && !seen[it] {
+			slice = append(slice, it)
+			seen[it] = true
+		}
+	}
+	return slice
 }
 
 // GetWorldMaps exposes the configured world layers. Inactive layers stay

@@ -109,3 +109,14 @@ func TestRegionsCacheDoesNotCacheBuildErrorsAsEmptyLists(t *testing.T) {
 		t.Fatal("failed region build was cached")
 	}
 }
+
+func TestGetRegionDetailsEmptyParam(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/explore/regions//details", nil)
+	GetRegionDetails(ctx)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+}
