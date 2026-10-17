@@ -69,3 +69,24 @@ func TestTribulationNextYearHighYearsPassed(t *testing.T) {
 		t.Errorf("GetNextTribulationInfo(6, 0, 13790) = (%v, %v); want (13800, HEAVENLY_TRIBULATION)", nextYear, tribType)
 	}
 }
+
+// Every tribulation-failure path shares one penalty block; the 30% / min-1 rule
+// is the part that is plain Go logic and can drift silently.
+func TestTribulationNodesToDestroy(t *testing.T) {
+	tests := []struct {
+		active int
+		want   int
+	}{
+		{0, 0},  // nothing to flatten
+		{1, 1},  // 0.3 truncates to 0, but min 1 while resources remain
+		{3, 1},  // 0.9 -> 0 -> min 1
+		{4, 1},  // 1.2 -> 1
+		{10, 3}, // 3.0 -> 3
+		{100, 30},
+	}
+	for _, tt := range tests {
+		if got := tribulationNodesToDestroy(tt.active); got != tt.want {
+			t.Errorf("tribulationNodesToDestroy(%d) = %d; want %d", tt.active, got, tt.want)
+		}
+	}
+}

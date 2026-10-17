@@ -1083,6 +1083,43 @@ func chooseTribulationPath(supportedPaths, vitalPaths []string, tribulationType 
 	return eligible[rand.Intn(len(eligible))], true
 }
 
+// tribulationNodesToDestroy returns how many surviving resource nodes a failed
+// tribulation flattens: 30% of them, at least one when any survive.
+func tribulationNodesToDestroy(activeCount int) int {
+	n := int(float64(activeCount) * 0.3)
+	if n < 1 && activeCount > 0 {
+		n = 1
+	}
+	return n
+}
+
+// applyTribulationFailurePenalty applies the shared cost of a failed
+// tribulation: flatten 30% of the aperture's living resource nodes and charge
+// 2000 Nguyên Thạch + 5 Tiên Nguyên. Shared by every failure path so the penalty
+// cannot drift between them.
+func applyTribulationFailurePenalty(tx *sql.Tx, apertureID, playerID string) {
+	var activeNodesCount int
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, apertureID).Scan(&activeNodesCount)
+
+	if n := tribulationNodesToDestroy(activeNodesCount); n > 0 {
+		_, _ = tx.Exec(`
+			DELETE FROM aperture_resource_nodes
+			WHERE id IN (
+				SELECT id FROM aperture_resource_nodes
+				WHERE aperture_id = $1 AND is_destroyed = false
+				ORDER BY random()
+				LIMIT $2
+			)
+		`, apertureID, n)
+	}
+
+	_, _ = tx.Exec(`
+		UPDATE players
+		SET primeval_stones = GREATEST(0, primeval_stones - 2000), immortal_stones = GREATEST(0.0, immortal_stones - 5.0)
+		WHERE id = $1
+	`, playerID)
+}
+
 func failOverduePendingTribulation(ap ApertureCheck, newYearsPassed float64, calcNextType string) {
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -1101,29 +1138,7 @@ func failOverduePendingTribulation(ap ApertureCheck, newYearsPassed float64, cal
 		newHP = 100
 	}
 
-	var activeNodesCount int
-	_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, ap.ID).Scan(&activeNodesCount)
-	nodesToDestroy := int(float64(activeNodesCount) * 0.3)
-	if nodesToDestroy < 1 && activeNodesCount > 0 {
-		nodesToDestroy = 1
-	}
-	if nodesToDestroy > 0 {
-		_, _ = tx.Exec(`
-			DELETE FROM aperture_resource_nodes
-			WHERE id IN (
-				SELECT id FROM aperture_resource_nodes 
-				WHERE aperture_id = $1 AND is_destroyed = false 
-				ORDER BY random() 
-				LIMIT $2
-			)
-		`, ap.ID, nodesToDestroy)
-	}
-
-	_, _ = tx.Exec(`
-		UPDATE players 
-		SET primeval_stones = GREATEST(0, primeval_stones - 2000), immortal_stones = GREATEST(0.0, immortal_stones - 5.0)
-		WHERE id = $1
-	`, ap.PlayerID)
+	applyTribulationFailurePenalty(tx, ap.ID, ap.PlayerID)
 
 	_, _ = tx.Exec(`
 		UPDATE immortal_apertures 
@@ -1217,28 +1232,7 @@ func autoResolveEvent(eventID string, playerID string) {
 		WHERE id = $2
 	`, newHP, ev.ID)
 
-	var activeNodesCount int
-	_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, ev.ApertureID).Scan(&activeNodesCount)
-	nodesToDestroy := int(float64(activeNodesCount) * 0.3)
-	if nodesToDestroy < 1 && activeNodesCount > 0 {
-		nodesToDestroy = 1
-	}
-	if nodesToDestroy > 0 {
-		_, _ = tx.Exec(`
-			DELETE FROM aperture_resource_nodes
-			WHERE id IN (
-				SELECT id FROM aperture_resource_nodes 
-				WHERE aperture_id = $1 AND is_destroyed = false 
-				ORDER BY random() LIMIT $2
-			)
-		`, ev.ApertureID, nodesToDestroy)
-	}
-
-	_, _ = tx.Exec(`
-		UPDATE players 
-		SET primeval_stones = GREATEST(0, primeval_stones - 2000), immortal_stones = GREATEST(0.0, immortal_stones - 5.0)
-		WHERE id = $1
-	`, playerID)
+	applyTribulationFailurePenalty(tx, ev.ApertureID, playerID)
 
 	_, _ = tx.Exec(`
 		INSERT INTO messages (sender_id, receiver_id, content, channel)

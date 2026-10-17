@@ -532,31 +532,8 @@ func ResolveTribulation(c *gin.Context) {
 		ap.State = "DAMAGED"
 		ap.ApertureHP = ap.MaxApertureHP / 10
 
-		// Phá hủy 30% tài nguyên
-		var activeNodesCount int
-		_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, ap.ID).Scan(&activeNodesCount)
-		nodesToDestroy := int(float64(activeNodesCount) * 0.3)
-		if nodesToDestroy < 1 && activeNodesCount > 0 {
-			nodesToDestroy = 1
-		}
-
-		if nodesToDestroy > 0 {
-			_, _ = tx.Exec(`
-				DELETE FROM aperture_resource_nodes
-				WHERE id IN (
-					SELECT id FROM aperture_resource_nodes 
-					WHERE aperture_id = $1 AND is_destroyed = false 
-					ORDER BY random() 
-					LIMIT $2
-				)
-			`, ap.ID, nodesToDestroy)
-		}
-
-		_, _ = tx.Exec(`
-			UPDATE players 
-			SET primeval_stones = GREATEST(0, primeval_stones - 2000), immortal_stones = GREATEST(0.0, immortal_stones - 5.0)
-			WHERE id = $1
-		`, playerID)
+		// Phá hủy 30% tài nguyên + phạt Nguyên Thạch/Tiên Nguyên.
+		applyTribulationFailurePenalty(tx, ap.ID, playerID.String())
 
 		// Giảm diện tích và tốc độ thời gian
 		_, _ = tx.Exec(`
