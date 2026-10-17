@@ -174,7 +174,7 @@ func main() {
 	worker.StartPoolWatchdog(ctx, db.DB, 60*time.Second)
 	worker.StartSectMissionWorker(ctx, db.DB, 60*time.Second)
 	worker.StartSectTerritoryWorker(ctx, db.DB, 1*time.Hour)
-	worker.StartSectMaintenanceWorker(ctx, db.DB, 24*time.Hour)
+	worker.StartSectMaintenanceWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartCombatHistoryCleanup(ctx, db.DB, 24*time.Hour)
 	worker.StartDailyMissionRolloverWorker(ctx, db.DB, 5*time.Minute)
 	handlers.StartLastActivityFlusher(ctx)

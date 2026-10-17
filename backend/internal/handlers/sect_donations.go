@@ -882,6 +882,20 @@ func DonateBulk(c *gin.Context) {
 				if gi.Rank < 6 {
 					rowID = fmt.Sprintf("%s:%s:%d", m.SectID, gi.GuID, gi.Rank)
 					instIDToStore = ""
+				} else {
+					// Tiên Cổ (rank>=6) giữ instance_id riêng nên phải chặn trùng
+					// toàn cục giống DonateGu, nếu không cùng một Tiên Cổ có thể
+					// nằm ở nhiều nơi (kho/quà/túi đồ).
+					if exists, errDup := db.CheckImmortalGuExists(tx, gi.GuID, gi.Rank, []string{gi.InstanceID}); errDup == nil && exists {
+						c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ này đã tồn tại ở nơi khác (kho/đấu giá/túi đồ)"})
+						return
+					}
+					var dup int
+					_ = tx.QueryRow(`SELECT COUNT(*) FROM sect_vault_gu WHERE gu_id = $1 AND rank >= 6 AND quantity > 0 AND instance_id <> $2`, gi.GuID, gi.InstanceID).Scan(&dup)
+					if dup > 0 {
+						c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ này đã tồn tại trong kho tông môn"})
+						return
+					}
 				}
 				hunger := normalizeVaultGuHunger(gi.GuID, gi.Rank, float64(gi.Hunger))
 

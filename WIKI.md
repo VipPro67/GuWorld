@@ -867,7 +867,7 @@ Hệ thống môn phái chia thành 7 cấp bậc rõ rệt:
     $$\text{Bổng Lộc} = (\text{Cấp Tông Môn} \times 100) + \text{Phụ Cấp Chức Vụ}$$
   - **Phụ cấp chức vụ**: Ngoại Môn: `+0` | Nội Môn: `+50` | Tinh Anh: `+150` | Chân Truyền: `+400` | Trưởng Lão: `+1.000` | Hộ Pháp: `+2.000` | Chưởng Môn: `+5.000` Nguyên Thạch.
 - **Phí Duy Trì Tông Môn Hàng Ngày (`SectMaintenanceWorker`)**:
-  - Hệ thống chạy ngầm tự động mỗi 24 giờ.
+  - Phí được tính theo **cửa sổ trượt 24 giờ cho từng tông môn** (mốc `sects.last_maintenance_at`), không phải giờ cố định: worker kiểm tra **mỗi giờ** và chạy **một lượt ngay khi máy chủ khởi động**, nên việc restart backend không thể bỏ sót ngày nào. Tông môn nào đã đóng phí trong 24h gần nhất sẽ được bỏ qua.
   - Chi phí bảo trì:
     $$\text{Phí Duy Trì} = (\text{Cấp Tông Môn} \times 2.000) + (\text{Số Thành Viên} \times 200) + \text{Phí Kho Tàng}$$
   - **Phí Kho Tàng** (chỉ tính tài sản đang nằm trong Bảo khố):
@@ -926,6 +926,8 @@ Bảo khố tông môn gồm 3 khoang riêng biệt: **Cổ Trùng (`sect_vault_
   - Mỗi đệ tử tại một thời điểm chỉ được thực hiện tối đa 1 nhiệm vụ tông môn. Đệ tử có thể chủ động **Hủy bỏ nhiệm vụ** (`AbandonSectMission`) đang làm để nhận nhiệm vụ khác.
 - **Nhiệm Vụ Tùy Biến (Custom Mission)**:
   - Lãnh đạo tông môn có thể tự phát hành nhiệm vụ mới: đặt tên, mô tả, chỉ định vật phẩm/mục tiêu, số lượng cần nộp, số Điểm cống hiến ban thưởng và thời hạn.
+  - **Trả thưởng bằng Quỹ khi hoàn thành**: Quỹ tông môn **không** bị giữ trước lúc ban bố; mỗi lượt đệ tử hoàn thành nhiệm vụ sẽ khấu trừ đúng số Điểm cống hiến thưởng từ Quỹ tông môn. Nếu Quỹ không đủ, nhiệm vụ không thể hoàn thành (báo "Quỹ tông môn không đủ để chi trả nhiệm vụ này!"). Nhờ vậy số điểm thưởng phát ra luôn được Quỹ bảo đảm, không thể cày vô hạn.
+  - Mỗi đệ tử chỉ hoàn thành một nhiệm vụ **một lần duy nhất** (nhiệm vụ đã hoàn thành không thể nhận lại). Nhiệm vụ vẫn nằm trên bảng cho các đệ tử khác tới khi hết hạn hoặc bị thu hồi; thu hồi nhiệm vụ **không** hoàn Quỹ (vì chưa hề khấu trừ khi ban bố).
 - **Cơ Chế Hết Hạn Tự Động (`SectMissionWorker`)**:
   - Nhiệm vụ trên bảng có thời hạn (mặc định 24 giờ; Trưởng Lão/Chưởng Môn có thể tùy chỉnh khi phát hành; đặt `-1` là vô thời hạn).
   - Worker định kỳ quét: Nhiệm vụ hết hạn sẽ tự biến mất khỏi bảng, tiến độ của đệ tử đang thực hiện dở dang cũng chuyển thành trạng thái thất bại (`EXPIRED`).

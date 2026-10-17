@@ -199,7 +199,15 @@ func CalculateSectMaintenanceFee(ctx context.Context, q QueryContextRunner, sect
 	return breakdown.TotalFee, breakdown, nil
 }
 
+// StartSectMaintenanceWorker charges every sect its daily upkeep. The fee for a
+// given sect is due once per rolling 24h window (last_maintenance_at); the tick
+// itself only drives when we look. It runs once at startup and then hourly so a
+// backend restart can never skip a day's charge (the old 24h tick meant a server
+// restarted more often than daily never charged anyone at all).
 func StartSectMaintenanceWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
+	SafeRun("Sect Maintenance Worker", ctx, func(ctx context.Context) {
+		processSectMaintenanceTick(ctx, db)
+	})
 	RunEvery(ctx, interval, "Sect Maintenance Worker", func(ctx context.Context) {
 		processSectMaintenanceTick(ctx, db)
 	})

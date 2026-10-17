@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -132,13 +131,23 @@ func AcceptSectMission(c *gin.Context) {
 		return
 	}
 
-	// Insert player mission
-	_, err = tx.Exec(`
+	// Insert player mission. The upsert makes a retry idempotent and re-opens a
+	// previously expired attempt, but the WHERE guard refuses to reopen a mission
+	// this player already completed — otherwise accept->complete could be looped
+	// forever to farm the contribution reward.
+	res, err := tx.Exec(`
 		INSERT INTO player_sect_missions (player_id, mission_id, current_progress, status, expires_at)
 		VALUES ($1, $2, 0, 'IN_PROGRESS', $3)
+		ON CONFLICT (player_id, mission_id) DO UPDATE
+		SET status = 'IN_PROGRESS', current_progress = 0, assigned_at = now(), expires_at = EXCLUDED.expires_at
+		WHERE player_sect_missions.status <> 'COMPLETED'
 	`, playerID, sm.ID, sm.ExpiresAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to accept mission: " + err.Error()})
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đã hoàn thành nhiệm vụ này rồi!"})
 		return
 	}
 
@@ -192,10 +201,10 @@ func CompleteSectMission(c *gin.Context) {
 
 	var sm SectMission
 	err = tx.QueryRow(`
-		SELECT id, title, mission_type, target_id, target_amount, reward_contribution
+		SELECT id, sect_id, title, mission_type, target_id, target_amount, reward_contribution
 		FROM sect_missions
 		WHERE id = $1
-	`, missionID).Scan(&sm.ID, &sm.Title, &sm.MissionType, &sm.TargetID, &sm.TargetAmount, &sm.RewardContribution)
+	`, missionID).Scan(&sm.ID, &sm.SectID, &sm.Title, &sm.MissionType, &sm.TargetID, &sm.TargetAmount, &sm.RewardContribution)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load mission parameters"})
 		return
@@ -203,13 +212,14 @@ func CompleteSectMission(c *gin.Context) {
 
 	// Verify completion requirements
 	if sm.MissionType == "GATHER" {
-		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), sm.TargetID)
-		if qty < sm.TargetAmount {
+		// Deduct across every inventory category (materials/treasures/...): the
+		// mission counts the item wherever it is stored, so removal must not be
+		// scoped to "materials" — a failed removal used to be swallowed and the
+		// mission still paid out + refilled the vault.
+		if err := InventorySvc.DeductItem(tx, player.ID.String(), sm.TargetID, sm.TargetAmount); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa thu thập đủ linh tài yêu cầu!"})
 			return
 		}
-		// Deduct materials from player
-		InventorySvc.RemoveItem(tx, player.ID.String(), sm.TargetID, "materials", sm.TargetAmount)
 
 		// Add gathered materials to sect vault
 		var memberForVault SectMember
@@ -288,8 +298,27 @@ func CompleteSectMission(c *gin.Context) {
 		}
 	}
 
-	// Update mission status
-	_, err = tx.Exec(`DELETE FROM player_sect_missions WHERE id = $1`, psm.ID)
+	// Charge the reward to the sect treasury at payout time. The guarded UPDATE
+	// locks the sect row and rejects the payout when the treasury is short, so
+	// parallel/completed missions can never mint unbacked contribution points.
+	var fundsLeft int64
+	err = tx.QueryRow(`
+		UPDATE sects SET funds = funds - $1
+		WHERE id = $2 AND funds >= $1
+		RETURNING funds
+	`, sm.RewardContribution, sm.SectID).Scan(&fundsLeft)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ để chi trả nhiệm vụ này!"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to charge sect funds: " + err.Error()})
+		return
+	}
+
+	// Mark the accepted mission as completed instead of deleting it, so the same
+	// player cannot accept-and-complete it over and over for repeat rewards.
+	_, err = tx.Exec(`UPDATE player_sect_missions SET status = 'COMPLETED' WHERE id = $1`, psm.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete mission"})
 		return
@@ -399,19 +428,12 @@ func DeleteSectMission(c *gin.Context) {
 		return
 	}
 
-	// Refund sect funds
-	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, sm.RewardContribution, sm.SectID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn quỹ bang"})
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Đã thu hồi nhiệm vụ tông môn và hoàn lại " + strconv.FormatInt(sm.RewardContribution, 10) + " quỹ bang!"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã thu hồi nhiệm vụ tông môn!"})
 }
 
 // AbandonSectMission lets a player give up their own in-progress mission.
@@ -494,21 +516,18 @@ func CreateCustomMission(c *gin.Context) {
 		return
 	}
 
-	// Deduct sect funds atomically with guard clause
+	// Funds are charged per completion (see CompleteSectMission), never escrowed
+	// at creation: escrow + refund-on-delete was a free money loop (create,
+	// complete, delete -> funds refunded while the reward stayed minted).
+	// Validate up-front only to reject missions that could never be paid.
 	var currentFunds int64
 	missionCost := req.RewardContribution
-	err = tx.QueryRow(`
-		UPDATE sects
-		SET funds = funds - $1
-		WHERE id = $2 AND funds >= $1
-		RETURNING funds
-	`, missionCost, callerSectID).Scan(&currentFunds)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ bang không đủ để ban bố nhiệm vụ này! (Cần tối thiểu " + strconv.FormatInt(missionCost, 10) + " quỹ bang)"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct sect funds: " + err.Error()})
+	if err = tx.QueryRow(`SELECT funds FROM sects WHERE id = $1`, callerSectID).Scan(&currentFunds); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect funds: " + err.Error()})
+		return
+	}
+	if currentFunds < missionCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ bang không đủ để ban bố nhiệm vụ này! (Cần tối thiểu " + strconv.FormatInt(missionCost, 10) + " quỹ bang)"})
 		return
 	}
 

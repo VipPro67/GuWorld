@@ -185,10 +185,14 @@ func RedeemGiftCode(c *gin.Context) {
 	var rewardsJSON []byte
 	var createdBy sql.NullString
 
+	// FOR UPDATE serialises concurrent redemptions of the same code: without it
+	// the per-player COUNT(*) check and the used_count check below are racy and a
+	// player could redeem a max_per_player=1 code several times in parallel.
 	err = tx.QueryRow(`
 		SELECT id, code, rewards, max_uses, used_count, max_per_player, expires_at, is_active, created_by, created_at
 		FROM gift_codes
 		WHERE code = $1
+		FOR UPDATE
 	`, code).Scan(&gc.ID, &gc.Code, &rewardsJSON, &gc.MaxUses, &gc.UsedCount, &gc.MaxPerPlayer, &gc.ExpiresAt, &gc.IsActive, &createdBy, &gc.CreatedAt)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mã quà không tồn tại"})

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"time"
@@ -92,12 +93,9 @@ func PaySectSalary(c *gin.Context) {
 		return
 	}
 
-	if lastSalaryPaidAt != nil {
-		now := time.Now()
-		if now.Sub(*lastSalaryPaidAt) < 24*time.Hour {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn đã phát lương hôm nay. Vui lòng chờ 24h."})
-			return
-		}
+	if lastSalaryPaidAt != nil && time.Since(*lastSalaryPaidAt) < 24*time.Hour {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn đã phát lương hôm nay. Vui lòng chờ 24h."})
+		return
 	}
 
 	rows, err := tx.Query(`
@@ -130,14 +128,23 @@ func PaySectSalary(c *gin.Context) {
 		return
 	}
 
-	if sectFunds < totalSalary {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Quỹ tông môn không đủ! Cần: %d, Hiện có: %d", totalSalary, sectFunds)})
-		return
-	}
-
-	newFunds := sectFunds - totalSalary
-	_, err = tx.Exec(`UPDATE sects SET funds = $1, last_salary_paid_at = now() WHERE id = $2`, newFunds, sectID)
+	// Atomic guarded deduction: this single statement locks the sect row, re-checks
+	// the 24h window and enforces funds sufficiency. Parallel calls (spam) can no
+	// longer all pass the pre-check above and pay every member several times while
+	// the treasury is only debited once.
+	var newFunds int64
+	err = tx.QueryRow(`
+		UPDATE sects
+		SET funds = funds - $1, last_salary_paid_at = now()
+		WHERE id = $2 AND funds >= $1
+		  AND (last_salary_paid_at IS NULL OR last_salary_paid_at <= now() - INTERVAL '24 hours')
+		RETURNING funds
+	`, totalSalary, sectID).Scan(&newFunds)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn đã phát lương hôm nay hoặc quỹ tông môn không đủ!"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
 		return
 	}
