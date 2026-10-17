@@ -327,7 +327,7 @@ func StockSectVault(c *gin.Context) {
 		if itemName == "" {
 			itemName = req.ItemID
 		}
-		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã mua thêm %d %s vào bảo khố tông môn.", rankName, username, req.Quantity, itemName))
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã mua thêm %d %s vào bảo khố tông môn. Tiêu hao %d Quỹ, còn lại %d Quỹ.", rankName, username, req.Quantity, itemName, totalCost, s.Funds))
 	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
@@ -603,7 +603,7 @@ func StockSectVaultBulk(c *gin.Context) {
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
 	if username != "" {
-		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã nhập thêm %d mặt hàng vào bảo khố tông môn.", rankName, username, len(lines)))
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã nhập thêm %d mặt hàng vào bảo khố tông môn. Tiêu hao %d Quỹ, còn lại %d Quỹ.", rankName, username, len(lines), totalCost, s.Funds))
 	}
 
 	c.JSON(http.StatusOK, gin.H{

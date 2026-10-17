@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -63,6 +64,11 @@ func UpgradeSect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
 	}
+
+	// The UPDATE priced the upgrade with the pre-increment level, so recover the
+	// cost from the new level for the chat notice.
+	upgradeCost := int64(newLevel-1) * int64(newLevel-1) * 5000
+	announceSectFundsSpend(sectID, playerID, fmt.Sprintf("nâng cấp tông môn lên Cấp %d", newLevel), upgradeCost, newFunds)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":   "Nâng cấp tông môn thành công!",

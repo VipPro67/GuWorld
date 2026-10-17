@@ -370,6 +370,8 @@ func CompleteSectMission(c *gin.Context) {
 		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + strconv.FormatInt(sm.RewardContribution, 10) + " Điểm cống hiến.",
 		"contribution_points": m.ContributionPoints,
 	})
+
+	announceSectFundsSpend(sm.SectID, playerID, fmt.Sprintf("chi trả nhiệm vụ \"%s\"", sm.Title), sm.RewardContribution, fundsLeft)
 }
 
 // DeleteSectMission lets a sect leader/elder delete a mission posted on the board.

@@ -210,4 +210,6 @@ func PaySectSalary(c *gin.Context) {
 		SectFunds:   newFunds,
 		PaidMembers: members,
 	})
+
+	announceSectFundsSpend(sectID, playerID, fmt.Sprintf("phát bổng lộc cho %d thành viên", len(members)), totalSalary, newFunds)
 }

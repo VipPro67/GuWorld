@@ -857,6 +857,7 @@ Hệ thống môn phái chia thành 7 cấp bậc rõ rệt:
 ### 3. Ngân Quỹ, Bổng Lộc & Chi Phí Bảo Trì
 
 - **Quỹ Tông Môn (`funds`)**: Đơn vị ngân sách tính bằng Nguyên Thạch của tông môn, dùng cho: nâng cấp kiến trúc, thuê thần thú hộ sơn, nhập hàng bảo khố, phát lương đệ tử và trả phí duy trì hàng ngày.
+- **Mọi khoản chi đều có nhật ký trong kênh Tông Môn**: mỗi lần Quỹ bị trừ (nâng cấp tông môn/kiến trúc, nhập hàng bảo khố, thuê thần thú, phát bổng lộc, chi trả nhiệm vụ tông môn, dời sơn môn, phí duy trì) đều gửi một dòng `[Quỹ Tông Môn]` vào chat tông môn ghi rõ **số Quỹ đã chi** và **số Quỹ còn lại**.
 - **Nguồn Thu Quỹ Tông Môn**:
   - Đệ tử quyên góp Nguyên Thạch (tỉ lệ 1:1).
   - Sản lượng tự động từ **Linh Mạch** mỗi phút (gia tăng theo số lượng đệ tử và thần thú canh giữ).

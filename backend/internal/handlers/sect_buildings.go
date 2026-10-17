@@ -161,5 +161,7 @@ func UpgradeSectBuilding(c *gin.Context) {
 		return
 	}
 
+	announceSectFundsSpend(sectID, playerID, fmt.Sprintf("nâng cấp %s lên cấp %d", req.BuildingName, targetLevel), reqFunds, funds-reqFunds)
+
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Đã nâng cấp %s lên cấp %d!", req.BuildingName, targetLevel)})
 }

@@ -29,7 +29,6 @@ type Sect struct {
 	Level                    int             `json:"level"`
 	RequireApproval          bool            `json:"require_approval"`
 	RequirePromotionApproval bool            `json:"require_promotion_approval"`
-	LastVaultDecayAt         *time.Time      `json:"last_vault_decay_at,omitempty"`
 	MapX                     *int            `json:"map_x,omitempty"`
 	MapY                     *int            `json:"map_y,omitempty"`
 	ShieldUntil              *time.Time      `json:"shield_until,omitempty"`
@@ -120,6 +119,24 @@ func sectRankValue(rank string) int {
 // canManageSect reports whether the rank may manage sect operations (missions, vault, settings, kicks).
 func canManageSect(rank string) bool {
 	return rank == "CHUONG_MON" || rank == "TRUONG_LAO" || rank == "HO_PHAP"
+}
+
+// announceSectFundsSpend posts the sect-channel line for a Quỹ deduction so every
+// spend shows up in the tông môn chat with the amount and what is left after it.
+// Call it after the transaction commits; it must never fail the request.
+func announceSectFundsSpend(sectID string, spender uuid.UUID, reason string, spent, remaining int64) {
+	if sectID == "" {
+		return
+	}
+	name := "Tông môn"
+	if spender != uuid.Nil {
+		var username string
+		if err := db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, spender).Scan(&username); err == nil && username != "" {
+			name = fmt.Sprintf("Đạo hữu %s", username)
+		}
+	}
+	_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf(
+		"[Quỹ Tông Môn] %s đã chi %d Quỹ để %s. Quỹ còn lại: %d Quỹ.", name, spent, reason, remaining))
 }
 
 // canDestroyVaultItem reports whether the rank may permanently destroy vault

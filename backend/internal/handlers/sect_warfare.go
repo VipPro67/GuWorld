@@ -380,7 +380,7 @@ func DefendSect(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct funds"})
 			return
 		}
-		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Tông môn đã thuê %s làm thần thú hộ sơn.", name))
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Tông môn đã thuê %s làm thần thú hộ sơn. Tiêu hao %d Quỹ, còn lại %d Quỹ.", name, cost, funds-cost))
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại phòng thủ không hợp lệ!"})
 		return

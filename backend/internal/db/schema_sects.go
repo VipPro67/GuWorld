@@ -20,7 +20,6 @@ func schemaSects() error {
 		require_promotion_approval BOOLEAN NOT NULL DEFAULT FALSE,
 		last_maintenance_at TIMESTAMP WITH TIME ZONE,
 		last_salary_paid_at TIMESTAMP WITH TIME ZONE,
-		last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		last_territory_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		last_relocated_at TIMESTAMP WITH TIME ZONE,
 		defensive_array_ready_at TIMESTAMP WITH TIME ZONE,
@@ -34,6 +33,13 @@ func schemaSects() error {
 	// level 1; reaching the grace limit disbands the sect.
 	if err := execSchema("sects_add_unpaid_maintenance_count", `
 		ALTER TABLE sects ADD COLUMN IF NOT EXISTS unpaid_maintenance_count INTEGER NOT NULL DEFAULT 0;`); err != nil {
+		return err
+	}
+
+	// last_vault_decay_at belonged to the removed vault-decay feature; no code
+	// reads or writes it any more, so existing databases drop it too.
+	if err := execSchema("sects_drop_last_vault_decay_at", `
+		ALTER TABLE sects DROP COLUMN IF EXISTS last_vault_decay_at;`); err != nil {
 		return err
 	}
 
