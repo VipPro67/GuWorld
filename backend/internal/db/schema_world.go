@@ -115,7 +115,6 @@ func schemaWorld() error {
 
 	if err := execSchema("monster_spawns", `
 	CREATE TABLE IF NOT EXISTS monster_spawns (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
 		monster_id VARCHAR(50) NOT NULL REFERENCES monster_templates(id) ON DELETE CASCADE,
 		x INT,
@@ -128,7 +127,8 @@ func schemaWorld() error {
 		is_boss_spawn BOOLEAN NOT NULL DEFAULT FALSE,
 		is_active BOOLEAN NOT NULL DEFAULT TRUE,
 		created_at TIMESTAMP DEFAULT NOW(),
-		updated_at TIMESTAMP DEFAULT NOW()
+		updated_at TIMESTAMP DEFAULT NOW(),
+		PRIMARY KEY (region_id, monster_id)
 	);`); err != nil {
 		return err
 	}

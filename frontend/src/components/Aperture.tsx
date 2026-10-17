@@ -815,6 +815,9 @@ export const Aperture: React.FC<ApertureProps> = ({
                   blessed: "Phúc Trạch",
                   death_penalty: "Hình Phạt Tử Vong",
                 };
+                const bodyModLabels: Record<string, { name: string; desc: string }> = {
+                  sovereign_immortal_body: { name: "Tiên Thể Chí Tôn", desc: "Miễn nhiễm xung đột Đạo Ngân." },
+                };
                 const cell = (label: string, value: string, accent = false) => (
                   <div className={`p-3 rounded-xl border ${accent ? "bg-zinc-950/40 border-zinc-800" : "bg-zinc-950/40 border-zinc-900"}`}>
                     <div className="text-[10px] text-zinc-500 font-mono">{label}</div>
@@ -870,6 +873,18 @@ export const Aperture: React.FC<ApertureProps> = ({
                         <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">Bình thường</div>
                       )}
                     </div>
+                    {player.body_mods && player.body_mods.length > 0 && (
+                      <div className="p-3 rounded-xl border bg-amber-950/20 border-amber-500/30 col-span-2 sm:col-span-4">
+                        <div className="text-[10px] text-amber-500/80 font-mono">Thân Thể</div>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {player.body_mods.map((mod: string) => (
+                            <span key={mod} title={bodyModLabels[mod]?.desc} className="text-xs px-2 py-0.5 rounded-lg bg-amber-900/40 text-amber-200 border border-amber-700/40 font-mono font-semibold">
+                              {bodyModLabels[mod]?.name || mod}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}

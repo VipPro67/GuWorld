@@ -322,7 +322,7 @@ export const characterPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Thuộc tính thân thể</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Ngoài tu vi, hồ sơ còn ghi nhận <strong>Chủng tộc</strong> (Nhân Tộc, Cương Thi, Người Lông, Nhân Ngư, Thạch Nhân, Long Nhân...), <strong>Giới tính</strong>, <strong>Thể chất</strong> (Hoang Cổ Nguyệt Thể, Thanh Liên Đại Nhật Thể...) và mảng <strong>Trạng thái</strong> (ví dụ Trọng Thương giảm 20% chiến lực). Các giá trị này mang hiệu ứng riêng lên tu luyện và chiến đấu, xem chi tiết trong mục Hồ Sơ.
+            Ngoài tu vi, hồ sơ còn ghi nhận <strong>Chủng tộc</strong> (Nhân Tộc, Cương Thi, Người Lông, Nhân Ngư, Thạch Nhân, Long Nhân...), <strong>Giới tính</strong>, <strong>Thể chất</strong> (Hoang Cổ Nguyệt Thể, Thanh Liên Đại Nhật Thể...), <strong>Trạng thái</strong> (ví dụ Trọng Thương giảm 20% chiến lực) và <strong>Thân Thể</strong> (cải tạo vĩnh viễn như Tiên Thể Chí Tôn — miễn nhiễm xung đột Đạo Ngân). Các giá trị này mang hiệu ứng riêng lên tu luyện và chiến đấu, xem chi tiết trong mục Hồ Sơ.
           </p>
         </div>
       </div>

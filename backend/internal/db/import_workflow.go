@@ -78,7 +78,7 @@ var importDatasets = []importDataset{
 	{"loot_table", "LootTable.csv", "loot_tables", true, false, []string{"id"}},
 	{"region_loot", "RegionLootTables.csv", "region_loot_tables", true, false, []string{"region_id", "loot_table_id", "monster_type"}},
 	{"monster", "Monster.csv", "monster_templates", true, false, []string{"id"}},
-	{"monster_spawn", "MonsterSpawn.csv", "monster_spawns", true, false, []string{"region_id", "monster_id", "x", "y"}},
+	{"monster_spawn", "MonsterSpawn.csv", "monster_spawns", true, false, []string{"region_id", "monster_id"}},
 	{"map_cell", "MapCell.csv", "map_cells", true, false, []string{"region_id", "x", "y"}},
 	{"sect_mission", "SectMission.csv", "sect_missions", false, true, []string{"sect_id", "title"}},
 	{"quest", "Quest.csv", "quests", true, false, []string{"id"}},
@@ -183,19 +183,7 @@ func validateImportCSV(dataset importDataset, content []byte) (int, []ImportVali
 		parts := make([]string, len(indexes))
 		valid := true
 		for i, idx := range indexes {
-			optionalSpawnCoordinate := false
-			if dataset.key == "monster_spawn" && (dataset.keyColumns[i] == "x" || dataset.keyColumns[i] == "y") {
-				modeIdx := colIndex(header, "spawn_mode")
-				mode := ""
-				if modeIdx >= 0 && modeIdx < len(row) {
-					mode = strings.TrimSpace(row[modeIdx])
-				}
-				optionalSpawnCoordinate = !strings.EqualFold(mode, "Fixed")
-			}
 			if idx >= len(row) || strings.TrimSpace(row[idx]) == "" {
-				if optionalSpawnCoordinate {
-					continue
-				}
 				issues = append(issues, ImportValidationIssue{Dataset: dataset.key, Row: line, Field: dataset.keyColumns[i], Code: "missing_key", Message: "Khóa dòng không được để trống", Severity: "error"})
 				valid = false
 				continue

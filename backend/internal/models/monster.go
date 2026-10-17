@@ -57,7 +57,6 @@ type LootTable struct {
 }
 
 type MonsterSpawn struct {
-	ID             string  `json:"id"`
 	RegionID       string  `json:"region_id"`
 	MonsterID      string  `json:"monster_id"`
 	X              *int    `json:"x"`

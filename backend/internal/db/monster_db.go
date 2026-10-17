@@ -61,14 +61,14 @@ func LoadMonsterTemplate(tx *sql.Tx, id string) (models.MonsterTemplate, error) 
 func FindFixedSpawn(tx *sql.Tx, regionID string, x, y int) (models.MonsterSpawn, bool, error) {
 	var spawn models.MonsterSpawn
 	query := `
-		SELECT id, region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds,
+		SELECT region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds,
 		       min_rank, max_rank, is_boss_spawn, is_active
 		FROM monster_spawns
 		WHERE region_id = $1 AND x = $2 AND y = $3 AND is_active = TRUE
 		LIMIT 1
 	`
 	err := tx.QueryRow(query, regionID, x, y).Scan(
-		&spawn.ID, &spawn.RegionID, &spawn.MonsterID, &spawn.X, &spawn.Y,
+		&spawn.RegionID, &spawn.MonsterID, &spawn.X, &spawn.Y,
 		&spawn.SpawnMode, &spawn.Chance, &spawn.RespawnSeconds, &spawn.MinRank,
 		&spawn.MaxRank, &spawn.IsBossSpawn, &spawn.IsActive,
 	)

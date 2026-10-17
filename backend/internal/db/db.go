@@ -2591,7 +2591,10 @@ func seedMonsterSpawnsFromCSV(filename string) error {
 		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO monster_spawns (region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds, min_rank, max_rank, is_boss_spawn, is_active)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-			ON CONFLICT DO NOTHING
+			ON CONFLICT (region_id, monster_id) DO UPDATE SET
+				x=EXCLUDED.x, y=EXCLUDED.y, spawn_mode=EXCLUDED.spawn_mode, chance=EXCLUDED.chance,
+				respawn_seconds=EXCLUDED.respawn_seconds, min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank,
+				is_boss_spawn=EXCLUDED.is_boss_spawn, is_active=EXCLUDED.is_active, updated_at=NOW()
 		`, regionID, monsterID, x, y, mode, chance, respawn, minRank, maxRank, boss, active)
 		if err != nil {
 			return fmt.Errorf("insert monster spawn %s/%s: %w", regionID, monsterID, err)

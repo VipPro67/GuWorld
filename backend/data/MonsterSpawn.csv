@@ -282,7 +282,7 @@ ma_to_phuc_dia,monster_desolate_thief_ape,,,Patrol,0.35,120,5,5,False,True
 mac_gia_thanh,monster_dream_bubble_spirit,,,Roaming,0.55,60,4,4,False,True
 mac_gia_thanh,monster_desert_ghost_wraith,,,Roaming,0.55,60,5,5,False,True
 mac_gia_thanh,monster_meteor_firefly,,,Roaming,0.55,60,3,3,False,True
-mac_gia_thanh,monster_desolate_blood_fiend,,,Patrol,0.35,120,3,3,False,True
+mac_gia_thanh,monster_desolate_blood_fiend,,,Patrol,0.35,120,3,5,False,True
 mac_gia_thanh,monster_shattering_shock_ore,,,Patrol,0.35,120,3,3,False,True
 man_hoang_mieu,monster_silvermane_wolf,,,Roaming,0.55,60,7,7,False,True
 man_hoang_mieu,monster_venom_scale_serpent,,,Roaming,0.55,60,7,7,False,True

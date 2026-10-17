@@ -110,11 +110,35 @@ var (
 		return cache.GetClearedCells(coords)
 	}
 	loadWorldMonsterSpawnRank = func(ctx context.Context, spawnID string) (int, error) {
+		regionID, monsterID, ok := parseStaticSpawnID(spawnID)
+		if !ok {
+			return 0, sql.ErrNoRows
+		}
 		var rank int
-		err := db.DB.QueryRowContext(ctx, `SELECT min_rank FROM monster_spawns WHERE id::text=$1`, spawnID).Scan(&rank)
+		err := db.DB.QueryRowContext(ctx, `SELECT min_rank FROM monster_spawns WHERE region_id=$1 AND monster_id=$2`, regionID, monsterID).Scan(&rank)
 		return rank, err
 	}
 )
+
+// Static spawns have no surrogate id: their identity is the (region, monster)
+// pair, which is also the table's primary key. Synthetic actors (procedural
+// cells, map-cell bosses, guards) keep their own prefixed ids.
+const staticSpawnPrefix = "spawn:"
+
+func staticSpawnID(regionID, monsterID string) string {
+	return staticSpawnPrefix + regionID + ":" + monsterID
+}
+
+func parseStaticSpawnID(spawnID string) (regionID, monsterID string, ok bool) {
+	if !strings.HasPrefix(spawnID, staticSpawnPrefix) {
+		return "", "", false
+	}
+	parts := strings.SplitN(strings.TrimPrefix(spawnID, staticSpawnPrefix), ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
 
 type worldCombatPlayer struct {
 	ID       uuid.UUID
@@ -722,9 +746,9 @@ func GetWorldMonsters(c *gin.Context) {
 	mapID := worldMapIDForRegion(entry.Region)
 	scopeRegions := activeScopeRegions(entry.X-radius, entry.Y-radius, entry.X+radius, entry.Y+radius, mapID, entry.Region)
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id::text, region_id, monster_id, x, y, respawn_seconds, min_rank
+		SELECT region_id, monster_id, x, y, respawn_seconds, min_rank
 		FROM monster_spawns WHERE is_active=TRUE AND is_boss_spawn=FALSE AND x IS NOT NULL AND y IS NOT NULL
-		AND region_id = ANY($1) AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5 ORDER BY id`, pq.Array(scopeRegions), entry.X-radius, entry.X+radius, entry.Y-radius, entry.Y+radius)
+		AND region_id = ANY($1) AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5 ORDER BY region_id, monster_id`, pq.Array(scopeRegions), entry.X-radius, entry.X+radius, entry.Y-radius, entry.Y+radius)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot load monster spawns"})
 		return
@@ -735,9 +759,10 @@ func GetWorldMonsters(c *gin.Context) {
 	now := time.Now().UTC()
 	for rows.Next() {
 		var spawn monsterSpawnRow
-		if err := rows.Scan(&spawn.ID, &spawn.RegionID, &spawn.MonsterID, &spawn.X, &spawn.Y, &spawn.RespawnSeconds, &spawn.Rank); err != nil {
+		if err := rows.Scan(&spawn.RegionID, &spawn.MonsterID, &spawn.X, &spawn.Y, &spawn.RespawnSeconds, &spawn.Rank); err != nil {
 			continue
 		}
+		spawn.ID = staticSpawnID(spawn.RegionID, spawn.MonsterID)
 		if !spawnWithinPlayerRadius(spawn, entry, radius) {
 			continue
 		}

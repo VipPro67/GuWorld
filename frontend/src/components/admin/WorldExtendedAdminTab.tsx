@@ -43,9 +43,13 @@ export const WorldExtendedAdminTab: React.FC<{
     fetchData();
   }, [fetchData]);
 
+  const spawnKey = (item: ApiResponseData) => `${item.region_id}:${item.monster_id}`;
+
   const handleSave = async () => {
-    if (!editItem || (!editItem.id && type !== "spawns") || (!isNew && !editItem.id)) {
-      addToast(type === "spawns" ? "Dữ liệu chưa hợp lệ" : "ID không được để trống", "error");
+    if (!editItem) return;
+    const keyReady = type === "spawns" ? Boolean(editItem.region_id && editItem.monster_id) : Boolean(editItem.id);
+    if (!keyReady) {
+      addToast(type === "spawns" ? "Region và quái không được để trống" : "ID không được để trống", "error");
       return;
     }
     if (!canWrite) return;
@@ -56,7 +60,11 @@ export const WorldExtendedAdminTab: React.FC<{
           : type === "quests"
           ? "/api/admin/quests"
           : "/api/admin/dungeons";
-      const url = isNew ? `${BACKEND_URL}${endpoint}` : `${BACKEND_URL}${endpoint}/${editItem.id}`;
+      const url = isNew
+        ? `${BACKEND_URL}${endpoint}`
+        : type === "spawns"
+        ? `${BACKEND_URL}${endpoint}/${encodeURIComponent(editItem.region_id)}/${encodeURIComponent(editItem.monster_id)}`
+        : `${BACKEND_URL}${endpoint}/${editItem.id}`;
       const method = isNew ? "POST" : "PUT";
       const body = { ...editItem };
 
@@ -87,7 +95,7 @@ export const WorldExtendedAdminTab: React.FC<{
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (item: ApiResponseData) => {
     if (!canDelete) return;
     try {
       const endpoint =
@@ -96,7 +104,10 @@ export const WorldExtendedAdminTab: React.FC<{
           : type === "quests"
           ? "/api/admin/quests"
           : "/api/admin/dungeons";
-      const url = `${BACKEND_URL}${endpoint}/${id}`;
+      const url =
+        type === "spawns"
+          ? `${BACKEND_URL}${endpoint}/${encodeURIComponent(item.region_id)}/${encodeURIComponent(item.monster_id)}`
+          : `${BACKEND_URL}${endpoint}/${item.id}`;
       const action = type === "spawns" ? "deleteMonsterSpawn" : type === "quests" ? "deleteWorldQuest" : "deleteDungeon";
       const prepared = prepareAdminAction(action, `xóa ${title.toLocaleLowerCase()}`, new URL(url).pathname);
       if (!prepared) return;
@@ -120,7 +131,6 @@ export const WorldExtendedAdminTab: React.FC<{
     type === "spawns" ? "Điểm Xuất Hiện Quái" : type === "quests" ? "Nhiệm Vụ Thế Giới" : "Phụ Bản / Dungeons";
 
   const columns: AdminGridColumn<ApiResponseData>[] = [
-    { key: "id", label: "ID", value: (item) => item.id, className: "font-mono font-bold text-amber-400" },
     ...(type === "spawns" ? [
       { key: "region_id", label: "Khu vực", value: (item: ApiResponseData) => item.region_id },
       { key: "monster_id", label: "Mẫu quái", value: (item: ApiResponseData) => item.monster_id, className: "font-mono text-emerald-400" },
@@ -128,6 +138,7 @@ export const WorldExtendedAdminTab: React.FC<{
       { key: "spawn_mode", label: "Chế độ", value: (item: ApiResponseData) => item.spawn_mode },
       { key: "active", label: "Trạng thái", value: (item: ApiResponseData) => item.is_active, render: (item: ApiResponseData) => item.is_active ? "Đang bật" : "Đã tắt" },
     ] : [
+      { key: "id", label: "ID", value: (item: ApiResponseData) => item.id, className: "font-mono font-bold text-amber-400" },
       { key: "name", label: "Tên", value: (item: ApiResponseData) => item.title || item.name, className: "font-semibold text-zinc-200" },
       { key: "description", label: "Mô tả", value: (item: ApiResponseData) => item.description, className: "max-w-xs truncate text-zinc-400" },
     ]),
@@ -158,7 +169,7 @@ export const WorldExtendedAdminTab: React.FC<{
               setIsNew(true);
               setEditItem(
                 type === "spawns"
-                  ? { id: "", region_id: "", monster_id: "", x: 0, y: 0, spawn_mode: "normal", chance: 1.0, respawn_seconds: 300, min_rank: 1, max_rank: 9, is_boss_spawn: false, is_active: true }
+                  ? { region_id: "", monster_id: "", x: 0, y: 0, spawn_mode: "normal", chance: 1.0, respawn_seconds: 300, min_rank: 1, max_rank: 9, is_boss_spawn: false, is_active: true }
                   : type === "quests"
                   ? { id: "", title: "", description: "", req_desc: "", message: "", rewards: [] }
                   : { id: "", name: "", type: "normal", required_rank: 1, entry_item: "", description: "", rewards: {}, map_data: [], cooldown_hours: 24, spatial_region_id: "", duration_minutes: 120 }
@@ -177,9 +188,9 @@ export const WorldExtendedAdminTab: React.FC<{
         </div>
       </div>
 
-      <AdminDataGrid rows={data} columns={columns} rowKey={(item) => item.id} loading={loading}
+      <AdminDataGrid rows={data} columns={columns} rowKey={(item) => (type === "spawns" ? spawnKey(item) : item.id)} loading={loading}
         onEdit={canWrite ? (item) => { setIsNew(false); setEditItem(structuredClone(item)); } : undefined}
-        onCopy={canWrite ? copyItem : undefined} onDelete={canDelete ? (item) => handleDelete(item.id) : undefined} />
+        onCopy={canWrite ? copyItem : undefined} onDelete={canDelete ? handleDelete : undefined} />
 
       {/* Edit Modal */}
       {editItem && (
@@ -195,17 +206,19 @@ export const WorldExtendedAdminTab: React.FC<{
             </div>
 
             <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-[11px] font-bold text-zinc-500 font-mono">ID</label>
-                <input
-                  type="text"
-                  disabled={!isNew}
-                  value={editItem.id || ""}
-                  onChange={(e) => setEditItem({ ...editItem, id: e.target.value })}
-                  placeholder={type === "spawns" ? "Để trống để tự tạo UUID" : "ID duy nhất"}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50 disabled:opacity-60"
-                />
-              </div>
+              {type !== "spawns" && (
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">ID</label>
+                  <input
+                    type="text"
+                    disabled={!isNew}
+                    value={editItem.id || ""}
+                    onChange={(e) => setEditItem({ ...editItem, id: e.target.value })}
+                    placeholder="ID duy nhất"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50 disabled:opacity-60"
+                  />
+                </div>
+              )}
 
               {type === "spawns" && (
                 <>
@@ -214,18 +227,20 @@ export const WorldExtendedAdminTab: React.FC<{
                       <label className="text-[11px] font-bold text-zinc-500 font-mono">Region ID</label>
                       <input
                         type="text"
+                        disabled={!isNew}
                         value={editItem.region_id || ""}
                         onChange={(e) => setEditItem({ ...editItem, region_id: e.target.value })}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50"
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50 disabled:opacity-60"
                       />
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-zinc-500 font-mono">Monster Template ID</label>
                       <input
                         type="text"
+                        disabled={!isNew}
                         value={editItem.monster_id || ""}
                         onChange={(e) => setEditItem({ ...editItem, monster_id: e.target.value })}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50"
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50 disabled:opacity-60"
                       />
                     </div>
                   </div>

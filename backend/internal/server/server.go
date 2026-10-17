@@ -224,8 +224,8 @@ func adminRouteSpecs() []adminRouteSpec {
 		// monster_spawns
 		{http.MethodGet, "/monster-spawns", "monster_spawns.read", handlers.AdminListMonsterSpawns, "", "", false, "", false, false, false},
 		{http.MethodPost, "/monster-spawns", "monster_spawns.update", handlers.AdminCreateMonsterSpawn, "admin.create_monster_spawn", "monster_spawn", false, "", false, false, false},
-		{http.MethodPut, "/monster-spawns/:id", "monster_spawns.update", handlers.AdminUpdateMonsterSpawn, "admin.update_monster_spawn", "monster_spawn", false, "", false, false, false},
-		{http.MethodDelete, "/monster-spawns/:id", "monster_spawns.delete", handlers.AdminDeleteMonsterSpawn, "admin.delete_monster_spawn", "monster_spawn", true, "path", false, false, true},
+		{http.MethodPut, "/monster-spawns/:region_id/:monster_id", "monster_spawns.update", handlers.AdminUpdateMonsterSpawn, "admin.update_monster_spawn", "monster_spawn", false, "", false, false, false},
+		{http.MethodDelete, "/monster-spawns/:region_id/:monster_id", "monster_spawns.delete", handlers.AdminDeleteMonsterSpawn, "admin.delete_monster_spawn", "monster_spawn", true, "path", false, false, true},
 		// quests
 		{http.MethodGet, "/quests", "quests.read", handlers.AdminListQuests, "", "", false, "", false, false, false},
 		{http.MethodPost, "/quests", "quests.update", handlers.AdminCreateQuest, "admin.create_quest", "quest", false, "", false, false, false},

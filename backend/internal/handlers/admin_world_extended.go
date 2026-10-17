@@ -16,7 +16,6 @@ import (
 // --- Monster Spawns Handlers ---
 
 type MonsterSpawnRow struct {
-	ID             string  `json:"id"`
 	RegionID       string  `json:"region_id"`
 	MonsterID      string  `json:"monster_id"`
 	X              int     `json:"x"`
@@ -43,8 +42,8 @@ func AdminListMonsterSpawns(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, region_id, monster_id, COALESCE(x,0), COALESCE(y,0), COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true)
-		FROM monster_spawns `+where+` ORDER BY region_id ASC, id ASC`, args...)
+		SELECT region_id, monster_id, COALESCE(x,0), COALESCE(y,0), COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true)
+		FROM monster_spawns `+where+` ORDER BY region_id ASC, monster_id ASC`, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -54,7 +53,7 @@ func AdminListMonsterSpawns(c *gin.Context) {
 	list := []MonsterSpawnRow{}
 	for rows.Next() {
 		var r MonsterSpawnRow
-		if err := rows.Scan(&r.ID, &r.RegionID, &r.MonsterID, &r.X, &r.Y, &r.SpawnMode, &r.Chance, &r.RespawnSeconds, &r.MinRank, &r.MaxRank, &r.IsBossSpawn, &r.IsActive); err != nil {
+		if err := rows.Scan(&r.RegionID, &r.MonsterID, &r.X, &r.Y, &r.SpawnMode, &r.Chance, &r.RespawnSeconds, &r.MinRank, &r.MaxRank, &r.IsBossSpawn, &r.IsActive); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ điểm xuất hiện quái"})
 			return
 		}
@@ -96,23 +95,19 @@ func AdminCreateMonsterSpawn(c *gin.Context) {
 	if req.SpawnMode == "normal" {
 		req.SpawnMode = "Random"
 	}
-	var err error
-	if req.ID == "" {
-		err = db.DB.QueryRowContext(c.Request.Context(), `
+	_, err := db.DB.ExecContext(c.Request.Context(), `
 		INSERT INTO monster_spawns (region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds, min_rank, max_rank, is_boss_spawn, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-		req.RegionID, req.MonsterID, req.X, req.Y, req.SpawnMode, req.Chance, req.RespawnSeconds, req.MinRank, req.MaxRank, req.IsBossSpawn, req.IsActive).Scan(&req.ID)
-	} else {
-		_, err = db.DB.ExecContext(c.Request.Context(), `
-		INSERT INTO monster_spawns (id, region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds, min_rank, max_rank, is_boss_spawn, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-		req.ID, req.RegionID, req.MonsterID, req.X, req.Y, req.SpawnMode, req.Chance, req.RespawnSeconds, req.MinRank, req.MaxRank, req.IsBossSpawn, req.IsActive)
-	}
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (region_id, monster_id) DO UPDATE SET
+			x=EXCLUDED.x, y=EXCLUDED.y, spawn_mode=EXCLUDED.spawn_mode, chance=EXCLUDED.chance,
+			respawn_seconds=EXCLUDED.respawn_seconds, min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank,
+			is_boss_spawn=EXCLUDED.is_boss_spawn, is_active=EXCLUDED.is_active, updated_at=NOW()`,
+		req.RegionID, req.MonsterID, req.X, req.Y, req.SpawnMode, req.Chance, req.RespawnSeconds, req.MinRank, req.MaxRank, req.IsBossSpawn, req.IsActive)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	auditlog.Logf(db.DB, &adminID, "admin.create_monster_spawn", "id=%s", req.ID)
+	auditlog.Logf(db.DB, &adminID, "admin.create_monster_spawn", "region=%s monster=%s", req.RegionID, req.MonsterID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo điểm xuất hiện quái"})
 }
 
@@ -121,14 +116,10 @@ func AdminUpdateMonsterSpawn(c *gin.Context) {
 	if !ok {
 		return
 	}
-	id := c.Param("id")
+	origRegionID, origMonsterID := c.Param("region_id"), c.Param("monster_id")
 	var req MonsterSpawnRow
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if req.ID != "" && req.ID != id {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID điểm xuất hiện"})
 		return
 	}
 	if !validateMonsterSpawnInput(c, &req) {
@@ -136,8 +127,8 @@ func AdminUpdateMonsterSpawn(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `
 		UPDATE monster_spawns SET region_id=$1, monster_id=$2, x=$3, y=$4, spawn_mode=$5, chance=$6, respawn_seconds=$7, min_rank=$8, max_rank=$9, is_boss_spawn=$10, is_active=$11, updated_at=NOW()
-		WHERE id=$12`,
-		req.RegionID, req.MonsterID, req.X, req.Y, req.SpawnMode, req.Chance, req.RespawnSeconds, req.MinRank, req.MaxRank, req.IsBossSpawn, req.IsActive, id)
+		WHERE region_id=$12 AND monster_id=$13`,
+		req.RegionID, req.MonsterID, req.X, req.Y, req.SpawnMode, req.Chance, req.RespawnSeconds, req.MinRank, req.MaxRank, req.IsBossSpawn, req.IsActive, origRegionID, origMonsterID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -151,7 +142,7 @@ func AdminUpdateMonsterSpawn(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy điểm xuất hiện"})
 		return
 	}
-	auditlog.Logf(db.DB, &adminID, "admin.update_monster_spawn", "id=%s", id)
+	auditlog.Logf(db.DB, &adminID, "admin.update_monster_spawn", "region=%s monster=%s", origRegionID, origMonsterID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật điểm xuất hiện quái"})
 }
 
@@ -160,8 +151,8 @@ func AdminDeleteMonsterSpawn(c *gin.Context) {
 	if !ok {
 		return
 	}
-	id := c.Param("id")
-	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM monster_spawns WHERE id=$1`, id)
+	regionID, monsterID := c.Param("region_id"), c.Param("monster_id")
+	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM monster_spawns WHERE region_id=$1 AND monster_id=$2`, regionID, monsterID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -175,7 +166,7 @@ func AdminDeleteMonsterSpawn(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy điểm xuất hiện"})
 		return
 	}
-	auditlog.Logf(db.DB, &adminID, "admin.delete_monster_spawn", "id=%s", id)
+	auditlog.Logf(db.DB, &adminID, "admin.delete_monster_spawn", "region=%s monster=%s", regionID, monsterID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa điểm xuất hiện quái"})
 }
 
