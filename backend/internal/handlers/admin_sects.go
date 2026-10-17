@@ -472,7 +472,6 @@ func AdminStockSectVault(c *gin.Context) {
 		if req.Rank <= 0 {
 			req.Rank = 1
 		}
-		hunger := vaultGuMaxHunger(req.ItemID, req.Rank)
 		var stockInstID string
 		var rowID string
 		if req.Rank >= 6 {
@@ -482,13 +481,12 @@ func AdminStockSectVault(c *gin.Context) {
 			rowID = fmt.Sprintf("%s:%s:%d", sectID, req.ItemID, req.Rank)
 		}
 		_, err = tx.Exec(`
-			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
-			VALUES ($1, $2, $3, $4, $5, 0, $6, $7)
+			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, instance_id)
+			VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (id) DO UPDATE SET
 				quantity = sect_vault_gu.quantity + EXCLUDED.quantity,
-				hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
 				updated_at = NOW()
-		`, rowID, sectID, req.ItemID, req.Rank, req.Quantity, hunger, stockInstID)
+		`, rowID, sectID, req.ItemID, req.Rank, req.Quantity, stockInstID)
 
 	case "material":
 		var dbItemType string

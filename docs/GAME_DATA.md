@@ -1062,10 +1062,10 @@ Zone type không nhận diện fallback về priority của `KHU_VUC`. `FindLarg
 
 **Bảng `map_cells`** — các ô persistent (boss, tài nguyên cấp cao, portal, điểm an toàn). Khóa vị trí là `UNIQUE(region_id, x, y)`, vì cùng tọa độ có thể có nội dung khác nhau ở từng tầng hoặc bí cảnh. Cột `last_cleared_at TIMESTAMPTZ`, `cleared_by UUID` theo dõi respawn; state clear được dùng chung trong cùng region.
 
-**Bảng `monster_spawns`** — giờ là **pool theo zone** (không còn ý nghĩa toạ độ cho loại Roaming/Random). `region_id` trỏ tới Đại Vực hoặc địa danh. Pool được cache trong bộ nhớ lúc start. `x`/`y` chỉ bắt buộc cho `spawn_mode=Fixed`; các mode theo zone như `Roaming`, `Random` và `Patrol` có thể để trống. Quái procedural sinh thành bãi ổn định theo vùng: tâm bãi và loài quái được chọn bằng seed, mật độ cao nhất gần tâm rồi giảm dần ra rìa; ngoài bãi vẫn có một lượng nhỏ quái đi lẻ. Mỗi bãi có 10% cơ hội có một Elite ở tâm nếu pool của zone có template `Elite`; Elite phát hiện trong 8 ô, đuổi tối đa 18 ô quanh bãi và không ra ngoài vùng. Bãi không sinh trong `HUB`/`SAFE_ZONE`.
+**Bảng `monster_spawns`** — giờ là **pool theo zone** (không còn ý nghĩa toạ độ cho loại Roaming/Random). `region_id` trỏ tới Đại Vực hoặc địa danh. Pool được cache trong bộ nhớ lúc start. `x`/`y` chỉ bắt buộc cho `spawn_mode=Fixed`; các mode theo zone như `Roaming`, `Random` và `Patrol` có thể để trống. Quái procedural sinh thành bãi ổn định theo vùng: tâm bãi và loài quái được chọn bằng seed, mật độ cao nhất gần tâm rồi giảm dần ra rìa; ngoài bãi vẫn có một lượng nhỏ quái đi lẻ. Quái **Elite** đi chung pool ambient với quái Normal (không còn cơ chế "Elite ở tâm bãi") nhưng bị nhân weight bằng `eliteSpawnWeightFactor` (0.2) nên hiếm hơn; Elite phát hiện trong 18 ô, đuổi tối đa 30 ô quanh điểm sinh và không ra ngoài vùng. **Vùng không có dòng `monster_spawns` nào thì không sinh quái** — không fallback sang template quái của vùng khác. Bãi không sinh trong `HUB`/`SAFE_ZONE`.
 
 **Phân lớp sinh nội dung**:
-- Quái nhỏ / tài nguyên thấp / Cổ cấp thấp → sinh **procedural** bằng hash seed theo `(zone, x, y, window 180s)`, không đụng DB. Tâm bãi quái dùng lưới seed riêng theo zone; cả vị trí, loài, cấp và roll Elite của bãi ổn định giữa người chơi và lần khởi động.
+- Quái nhỏ / tài nguyên thấp / Cổ cấp thấp → sinh **procedural** bằng hash seed theo `(zone, x, y, window 180s)`, không đụng DB. Tâm bãi quái dùng lưới seed riêng theo zone; cả vị trí, loài và cấp của bãi ổn định giữa người chơi và lần khởi động.
 - Ô quái procedural trong AOI được materialize thành `WorldMonster` Redis với identity ổn định `procedural:<region>:<x>:<y>`; movement và combat sau đó được phát qua `world:combat`. Marker cell chỉ là fallback cho tới khi runtime replacement tại đúng tọa độ xuất hiện.
 - Boss / tài nguyên cấp cao / làng → ô **persistent** trong `map_cells`, nạp vào index bộ nhớ lúc start, có respawn dùng chung. Boss world map chạy thành actor Redis dùng chung, đuổi người chơi trong toàn bộ bounds của region đã gán và không vào `HUB`/`SAFE_ZONE`. Khi chuyển spawn trong `MapCell.csv`, giữ ô cũ dưới dạng `is_active=false` để lần import cập nhật/tắt record cũ; restart backend sau import để nạp ZoneRegistry.
 
@@ -1095,10 +1095,10 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 | --- | --- | --- |
 | `funds` | BIGINT | Quỹ tông môn (đổi từ INTEGER → BIGINT để tránh tràn số khi tích lũy lãnh địa). |
 | `require_approval` | BOOLEAN | DEFAULT FALSE. Bật = phải duyệt đơn gia nhập. |
-| `vault_gu` | JSONB | *(Legacy)* Đã chuyển sang bảng quan hệ `sect_vault_gu`. |
-| `vault_materials` | JSONB | *(Legacy)* Đã chuyển sang bảng quan hệ `sect_vault_materials`. |
-| `vault_recipes` | JSONB | *(Legacy)* Đã chuyển sang bảng quan hệ `sect_vault_recipes`. |
-| `last_vault_decay_at` | TIMESTAMPTZ | Cột lịch sử (không còn dùng do đã bỏ cơ chế tính đói kho tông môn). |
+| `vault_gu` | JSONB | *(Legacy, đã bỏ)* Đã chuyển sang bảng quan hệ `sect_vault_gu`; cột không còn trong `CREATE TABLE`. |
+| `vault_materials` | JSONB | *(Legacy, đã bỏ)* Đã chuyển sang bảng quan hệ `sect_vault_materials`. |
+| `vault_recipes` | JSONB | *(Legacy, đã bỏ)* Đã chuyển sang bảng quan hệ `sect_vault_recipes`. |
+| ~~`last_vault_decay_at`~~ | — | **Đã xoá** (`InitSchema` chạy `DROP COLUMN IF EXISTS`) — thuộc cơ chế đói kho đã bỏ. |
 
 ### Bảng `sect_vault_materials` (Kho Linh tài Tông môn)
 
@@ -1119,9 +1119,9 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 | `gu_id` | VARCHAR(50) | ID Cổ trùng |
 | `rank` | INTEGER | Phẩm cấp Cổ (1-9) |
 | `quantity` | BIGINT | Số lượng tích lũy |
-| `cost` | BIGINT | Giá điểm cống hiến để đổi |
-| `hunger` | DOUBLE PRECISION | Độ no lưu trữ |
 | `instance_id` | VARCHAR(80) | Instance ID gốc (đối với Tiên Cổ rank ≥ 6) |
+
+> Giá điểm cống hiến khi đổi Cổ **không lưu ở bảng** mà suy ra từ `gu_dictionary.base_price` qua `pricing.VaultCost` (= giá gốc, tối thiểu 1 điểm) — xem `sectVaultGuCost`. Độ no cũng không lưu: Cổ trong kho không đói, rút ra luôn bắt đầu `Độ No = 1` (hoặc max nếu `hunger_rate = 0`).
 
 ### Bảng `sect_vault_recipes` (Tàng Kinh Các / Bí Phương Tông môn)
 
@@ -1259,6 +1259,8 @@ Loại tiền được suy ra từ **rank hiệu dụng** qua `pkg/pricing.Stone
 **Pool ngẫu nhiên tự sinh (virtual):** ngoài các món `is_default = false` trong `caravan_shop_items`, `autoShopPool()` (`handlers/shop_catalog.go`) tự bổ sung vào pool ngẫu nhiên mọi **Cổ trùng rank < 6 và rarity < 6** (mỗi variant pinned đúng rank) cùng **thức ăn của chúng** (chỉ các id khớp dòng thật trong `item_dictionary`; các pseudo-food tài nguyên không phải item nên tự bị loại), trừ các id đã có trong `caravan_shop_items`. Các món này **không được persist** vào bảng shop nên không làm bẩn danh sách admin hay CSV export.
 
 **Giá + số lượng (stock) món random:** giá mua = `base_price × 1.5` (`randomPoolMarkup`, làm tròn đến `0.001`, tối thiểu `0.001`). Mỗi món có stock hằng ngày theo rank qua `randomPoolStock(rank)`: **R1 = 100, R2 = 50, R3 = 20, R4 = 5, R5 = 2, R6+ = 0**. Số còn lại trong ngày lưu ở bảng `caravan_shop_daily_stock(day, id, rank, remaining)` — key theo ngày nên tự reset mỗi ngày (stock không reset theo giờ). `/api/shop/buy` trừ stock nguyên tử (`UPDATE ... WHERE remaining >= qty`), hết thì trả lỗi "Hàng này hôm nay đã hết". Món default/admin trong `caravan_shop_items` **không** áp dụng cơ chế này (stock CSV của chúng vẫn chỉ hiển thị). Frontend `CaravanShop` hiển thị đếm ngược tới khung xoay kế tiếp và tự nạp lại khi sang khung mới.
+
+**Shop Võ Đài (arena) — tài nguyên Tiên cấp xoay vòng:** ngoài các dòng tĩnh trong `arena_shop_items`, `GET /api/arena/shop` tự thêm tối đa **30** item `Food`/`Material` rank ≥ 6 từ `item_dictionary` (`arenaRandomResourcePool`, trừ id đã có trong `arena_shop_items`), chọn subset deterministic theo cùng khung giờ bằng `selectArenaRandomResources` → `dailyShopRandomSubset`/`shopRotationBucket`. Giá **đồng giá 99 Xu Đấu Trường**, stock vô hạn, `qty = 1`. Món random **không persist** vào `arena_shop_items` (không hiện ở Admin/CSV export); `POST /api/arena/shop/buy` tra `arenaRandomResourceByID` (toàn pool, không chỉ subset đang hiển thị) nên mua được ngay khi vừa thấy. Cache `arena_shop_items` đổi TTL từ 24h xuống **10 phút** để subset đổi theo khung; admin sửa dữ liệu vẫn `cache.Delete("arena_shop_items")` như cũ.
 
 ### Thương nhân (2 loại)
 

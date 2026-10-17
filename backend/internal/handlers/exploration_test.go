@@ -73,24 +73,27 @@ func TestProceduralMonsterCampsAreStableAndDenseNearCenter(t *testing.T) {
 			cx := gx*monsterCampSpacing + 8 + rng.Intn(monsterCampSpacing-16)
 			cy := gy*monsterCampSpacing + 8 + rng.Intn(monsterCampSpacing-16)
 			camp, ok := findProceduralMonsterCamp(cx, cy, ZoneByID("camp_test"))
-			if ok && camp.distance == 0 && camp.hasElite {
+			if ok && camp.distance == 0 {
 				center, found = camp, true
 				break
 			}
 		}
 	}
 	if !found {
-		t.Fatal("expected a deterministic elite camp in the sample area")
+		t.Fatal("expected a deterministic camp in the sample area")
 	}
-	if center.elite.MonsterID != "monster_test_elite" || center.elite.MinRank < 4 || center.elite.MinRank > 5 {
-		t.Fatalf("elite camp spawn should use the region elite pool: %+v", center.elite)
+	if center.spawn.MonsterID != "monster_test_pack" && center.spawn.MonsterID != "monster_test_elite" {
+		t.Fatalf("camp spawn should come from the region pool: %+v", center.spawn)
+	}
+	if center.spawn.MinRank < 2 || center.spawn.MinRank > 5 {
+		t.Fatalf("camp rank out of pool band: %+v", center.spawn)
 	}
 	got, ok := findProceduralMonsterCamp(center.x, center.y, ZoneByID("camp_test"))
-	if !ok || got.x != center.x || got.y != center.y || got.spawn.MonsterID != center.spawn.MonsterID || got.spawn.MinRank != center.spawn.MinRank || !got.hasElite || got.elite.MonsterID != center.elite.MonsterID {
+	if !ok || got.x != center.x || got.y != center.y || got.spawn.MonsterID != center.spawn.MonsterID || got.spawn.MinRank != center.spawn.MinRank {
 		t.Fatalf("camp center changed across resolutions: first=%+v second=%+v", center, got)
 	}
 	neighbor, ok := findProceduralMonsterCamp(center.x+1, center.y, ZoneByID("camp_test"))
-	if !ok || neighbor.distance != 1 || neighbor.spawn.MonsterID != center.spawn.MonsterID || neighbor.spawn.MinRank != center.spawn.MinRank || !neighbor.hasElite || neighbor.elite.MonsterID != center.elite.MonsterID {
+	if !ok || neighbor.distance != 1 || neighbor.spawn.MonsterID != center.spawn.MonsterID || neighbor.spawn.MinRank != center.spawn.MinRank {
 		t.Fatalf("cells within a camp should share its monster and rank: center=%+v neighbor=%+v", center, neighbor)
 	}
 	monstersInCamp := 0
@@ -98,11 +101,7 @@ func TestProceduralMonsterCampsAreStableAndDenseNearCenter(t *testing.T) {
 		for x := center.x - monsterCampRadius; x <= center.x+monsterCampRadius; x++ {
 			cell := generateCellForZone(x, y, ZoneByID("camp_test"))
 			if cell.Type == "Monster" {
-				wantID := center.spawn.MonsterID
-				if x == center.x && y == center.y {
-					wantID = center.elite.MonsterID
-				}
-				if cell.Content != wantID {
+				if cell.Content != "monster_test_pack" && cell.Content != "monster_test_elite" {
 					t.Fatalf("camp cell (%d,%d) has unexpected monster %q", x, y, cell.Content)
 				}
 				monstersInCamp++
@@ -115,8 +114,93 @@ func TestProceduralMonsterCampsAreStableAndDenseNearCenter(t *testing.T) {
 	if monsterCampSpawnChance(0) <= monsterCampSpawnChance(monsterCampRadius) {
 		t.Fatal("monster spawn chance should taper toward the camp edge")
 	}
-	if monsterCampEliteChance != 0.10 {
-		t.Fatalf("elite spawn chance = %v, want 10%%", monsterCampEliteChance)
+}
+
+// TestZoneWithoutSpawnRowsSpawnsNoMonster guards the rule that a region only
+// spawns monsters listed in monster_spawns; it must never fall back to a
+// template from another region.
+func TestZoneWithoutSpawnRowsSpawnsNoMonster(t *testing.T) {
+	zoneReg.mu.Lock()
+	previousZones, previousPools, previousByID := zoneReg.zones, zoneReg.spawnPools, zoneReg.byID
+	zoneReg.zones = []models.Region{{ID: "empty_zone_test", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999, MinRank: 1, MaxRank: 4,
+		PoolWeights: models.ZonePools{CellWeights: map[string]int{"Monster": 100, "Empty": 0}}}}
+	zoneReg.byID = map[string]*models.Region{"empty_zone_test": &zoneReg.zones[0]}
+	zoneReg.spawnPools = map[string][]models.MonsterSpawn{}
+	zoneReg.mu.Unlock()
+	t.Cleanup(func() {
+		zoneReg.mu.Lock()
+		zoneReg.zones, zoneReg.spawnPools, zoneReg.byID = previousZones, previousPools, previousByID
+		zoneReg.mu.Unlock()
+	})
+
+	for x := 0; x < 80; x++ {
+		for y := 0; y < 80; y++ {
+			if cell := generateCellForZone(x, y, ZoneByID("empty_zone_test")); cell.Type == "Monster" {
+				t.Fatalf("zone without monster_spawns rows spawned %q at (%d,%d)", cell.Content, x, y)
+			}
+		}
+	}
+}
+
+// TestEliteShareIsDampedInAmbientPool verifies Elite templates now share the
+// ambient pool but are made rarer by eliteSpawnWeightFactor, and that an
+// Elite-only pool still spawns its elite.
+func TestEliteShareIsDampedInAmbientPool(t *testing.T) {
+	zoneReg.mu.Lock()
+	previousPools := zoneReg.spawnPools
+	zoneReg.spawnPools = map[string][]models.MonsterSpawn{
+		"elite_pool_test": {
+			{RegionID: "elite_pool_test", MonsterID: "monster_pool_normal", Chance: 1},
+			{RegionID: "elite_pool_test", MonsterID: "monster_pool_elite", Chance: 1},
+		},
+	}
+	zoneReg.mu.Unlock()
+	prevN, hadN := models.MonsterRegistry["monster_pool_normal"]
+	prevE, hadE := models.MonsterRegistry["monster_pool_elite"]
+	models.MonsterRegistry["monster_pool_normal"] = models.MonsterTemplate{ID: "monster_pool_normal", Type: "Normal"}
+	models.MonsterRegistry["monster_pool_elite"] = models.MonsterTemplate{ID: "monster_pool_elite", Type: "Elite"}
+	t.Cleanup(func() {
+		zoneReg.mu.Lock()
+		zoneReg.spawnPools = previousPools
+		zoneReg.mu.Unlock()
+		if hadN {
+			models.MonsterRegistry["monster_pool_normal"] = prevN
+		} else {
+			delete(models.MonsterRegistry, "monster_pool_normal")
+		}
+		if hadE {
+			models.MonsterRegistry["monster_pool_elite"] = prevE
+		} else {
+			delete(models.MonsterRegistry, "monster_pool_elite")
+		}
+	})
+
+	eliteHits, normalHits := 0, 0
+	rng := rand.New(rand.NewSource(1))
+	for i := 0; i < 10000; i++ {
+		s, ok := pickMonsterFromPool("elite_pool_test", rng, false)
+		if !ok {
+			t.Fatal("ambient pool pick failed")
+		}
+		switch s.MonsterID {
+		case "monster_pool_elite":
+			eliteHits++
+		case "monster_pool_normal":
+			normalHits++
+		}
+	}
+	if eliteHits == 0 || normalHits == 0 {
+		t.Fatalf("both templates should appear: elite=%d normal=%d", eliteHits, normalHits)
+	}
+	if eliteHits*2 >= normalHits {
+		t.Fatalf("elite not damped by eliteSpawnWeightFactor: elite=%d normal=%d", eliteHits, normalHits)
+	}
+
+	zoneReg.mu.Lock()
+	zoneReg.spawnPools["elite_pool_test"] = []models.MonsterSpawn{{RegionID: "elite_pool_test", MonsterID: "monster_pool_elite", Chance: 1}}
+	zoneReg.mu.Unlock()
+	if s, ok := pickMonsterFromPool("elite_pool_test", rand.New(rand.NewSource(2)), false); !ok || s.MonsterID != "monster_pool_elite" {
+		t.Fatalf("elite-only pool should still spawn the elite: %+v ok=%v", s, ok)
 	}
 }
 

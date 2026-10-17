@@ -6,7 +6,6 @@ import (
 	"math"
 	"math/rand"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
@@ -17,15 +16,12 @@ import (
 const clearedCellCooldown = 15 * time.Minute
 
 const (
-	monsterCampSpacing     = 48
-	monsterCampRadius      = 6
-	monsterCampEliteChance = 0.10
+	monsterCampSpacing = 48
+	monsterCampRadius  = 6
 )
 
 type proceduralMonsterCamp struct {
 	spawn    models.MonsterSpawn
-	elite    models.MonsterSpawn
-	hasElite bool
 	x, y     int
 	distance int
 }
@@ -116,10 +112,6 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 	seed := GetCellSeed(x, y, zoneID)
 	rng := rand.New(rand.NewSource(seed))
 	camp, hasCamp := findProceduralMonsterCamp(x, y, zone)
-	if hasCamp && camp.hasElite && x == camp.x && y == camp.y {
-		return models.Cell{X: x, Y: y, Type: "Monster", Content: camp.elite.MonsterID,
-			Rank: camp.elite.MinRank, SubRank: rng.Intn(5) + 1}
-	}
 	if hasCamp && rng.Float64() < monsterCampSpawnChance(camp.distance) {
 		return models.Cell{X: x, Y: y, Type: "Monster", Content: camp.spawn.MonsterID,
 			Rank: camp.spawn.MinRank, SubRank: rng.Intn(5) + 1}
@@ -154,26 +146,20 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 
 	switch pickWeightedType(weights, rng) {
 	case "Monster":
-		monsterID := ""
-		rank := zone.MinRank
-		if spawn, ok := pickMonsterFromPool(zoneID, rng, false); ok {
-			monsterID = spawn.MonsterID
-			// Rank-tagged spawn pools pin the monster to its own rank so the
-			// same monster always fights at the same difficulty. Pools without
-			// a rank tag fall back to the zone band.
-			if spawn.MinRank > 0 {
-				rank = spawn.MinRank
-			}
-		} else {
-			monsterID = randomNormalMonsterID(rng)
-			if zone.MaxRank > zone.MinRank {
-				rank += rng.Intn(zone.MaxRank - zone.MinRank + 1)
-			}
+		// A zone only spawns monsters listed in monster_spawns. Zones without a
+		// pool row stay empty instead of falling back to a random template.
+		spawn, ok := pickMonsterFromPool(zoneID, rng, false)
+		if !ok {
+			return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
+		}
+		rank := spawn.MinRank
+		if rank < 1 {
+			rank = zone.MinRank
 		}
 		if rank < 1 {
 			rank = 1
 		}
-		return models.Cell{X: x, Y: y, Type: "Monster", Content: monsterID, Rank: rank, SubRank: rng.Intn(5) + 1}
+		return models.Cell{X: x, Y: y, Type: "Monster", Content: spawn.MonsterID, Rank: rank, SubRank: rng.Intn(5) + 1}
 	case "Resource":
 		type weightedResource struct {
 			id     string
@@ -292,14 +278,11 @@ func findProceduralMonsterCamp(x, y int, zone *models.Region) (proceduralMonster
 				continue
 			}
 			spawn, ok := pickMonsterFromPool(zone.ID, rng, false)
-			monsterID := ""
-			minRank, maxRank := zone.MinRank, zone.MaxRank
-			if ok {
-				monsterID, minRank, maxRank = spawn.MonsterID, spawn.MinRank, spawn.MaxRank
+			if !ok {
+				// No monster_spawns row for this zone: no camp.
+				continue
 			}
-			if monsterID == "" {
-				monsterID = randomNormalMonsterID(rng)
-			}
+			minRank, maxRank := spawn.MinRank, spawn.MaxRank
 			if minRank < 1 {
 				minRank = zone.MinRank
 			}
@@ -313,28 +296,7 @@ func findProceduralMonsterCamp(x, y int, zone *models.Region) (proceduralMonster
 			if maxRank > minRank {
 				rank += rng.Intn(maxRank - minRank + 1)
 			}
-			best = proceduralMonsterCamp{spawn: models.MonsterSpawn{MonsterID: monsterID, MinRank: rank}, x: cx, y: cy, distance: distance}
-			eliteRNG := rand.New(rand.NewSource(GetCellSeed(gx, gy, zone.ID+":monster-camp:elite")))
-			if eliteRNG.Float64() < monsterCampEliteChance {
-				if eliteSpawn, foundElite := pickMonsterFromPoolOfType(zone.ID, eliteRNG, "Elite"); foundElite {
-					eliteMinRank, eliteMaxRank := eliteSpawn.MinRank, eliteSpawn.MaxRank
-					if eliteMinRank < 1 {
-						eliteMinRank = minRank
-					}
-					if eliteMinRank < 1 {
-						eliteMinRank = 1
-					}
-					if eliteMaxRank < eliteMinRank {
-						eliteMaxRank = eliteMinRank
-					}
-					eliteRank := eliteMinRank
-					if eliteMaxRank > eliteMinRank {
-						eliteRank += eliteRNG.Intn(eliteMaxRank - eliteMinRank + 1)
-					}
-					best.elite = models.MonsterSpawn{MonsterID: eliteSpawn.MonsterID, MinRank: eliteRank}
-					best.hasElite = true
-				}
-			}
+			best = proceduralMonsterCamp{spawn: models.MonsterSpawn{MonsterID: spawn.MonsterID, MinRank: rank}, x: cx, y: cy, distance: distance}
 			found = true
 		}
 	}
@@ -350,22 +312,6 @@ func monsterCampSpawnChance(distance int) float64 {
 	default:
 		return 0.3
 	}
-}
-
-// randomNormalMonsterID picks a Normal-type monster from the in-memory registry.
-func randomNormalMonsterID(rng *rand.Rand) string {
-	var ids []string
-	for id, mon := range models.MonsterRegistry {
-		if strings.EqualFold(mon.Type, "Normal") {
-			ids = append(ids, id)
-		}
-	}
-	if len(ids) == 0 {
-		return "monster_wild_boar"
-	}
-	// Sort so the pick is stable across calls (map iteration order is random).
-	sort.Strings(ids)
-	return ids[rng.Intn(len(ids))]
 }
 
 // ResolveCell resolves a world cell. Shared persistent cells (bosses, high

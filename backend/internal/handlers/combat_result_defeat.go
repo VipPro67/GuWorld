@@ -20,13 +20,13 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 	if isVirtual {
 		updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
 		args = append(args, player.ID)
-		if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 10); err != nil {
+		if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 1); err != nil {
 			logger.S.Errorf("Failed to award arena_coin to %s: %v", player.ID, err)
 		} else {
 			defLogs = append(defLogs, simulator.CombatLog{
 				Turn:   simState.Turn,
 				Action: "ARENA_REWARD",
-				Detail: "Thua cuộc tại Võ Đài. Nhận an ủi 10 Xu Đấu Trường.",
+				Detail: "Thua cuộc tại Võ Đài. Nhận an ủi 1 Xu Đấu Trường.",
 			})
 		}
 		defLogs = append(defLogs, simulator.CombatLog{

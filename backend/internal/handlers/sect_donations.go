@@ -388,14 +388,12 @@ func DonateGu(c *gin.Context) {
 	}
 	effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
 	gainedContribution := int(pricing.DonatePoints(effectiveBase))
-	vaultItemCost := int64(pricing.VaultCost(effectiveBase))
 
 	// Add to sect vault
 	itemInstID := guInstance.InstanceID
 	if itemInstID == "" {
 		itemInstID = uuid.New().String()
 	}
-	donatedHunger := normalizeVaultGuHunger(guInstance.GuID, guInstance.Rank, float64(guInstance.Hunger))
 
 	// Tiên Cổ rank>=6 giữ instance_id, không gộp quantity: 1 gu_id chỉ 1 row.
 	// Kiểm tra cross-rank (loại trừ chính instance đang donate) trước khi nhập kho.
@@ -412,21 +410,19 @@ func DonateGu(c *gin.Context) {
 			return
 		}
 		_, err = tx.Exec(`
-			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
-			VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
+			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, instance_id)
+			VALUES ($1, $2, $3, $4, 1, $5)
 			ON CONFLICT (id) DO NOTHING
-		`, rowID, m.SectID, guInstance.GuID, guInstance.Rank, vaultItemCost, donatedHunger, itemInstID)
+		`, rowID, m.SectID, guInstance.GuID, guInstance.Rank, itemInstID)
 	} else {
 		rowID := fmt.Sprintf("%s:%s:%d", m.SectID, guInstance.GuID, guInstance.Rank)
 		_, err = tx.Exec(`
-		INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
-		VALUES ($1, $2, $3, $4, 1, $5, $6, '')
+		INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, instance_id)
+		VALUES ($1, $2, $3, $4, 1, '')
 		ON CONFLICT (id) DO UPDATE SET
 			quantity = sect_vault_gu.quantity + 1,
-			cost = EXCLUDED.cost,
-			hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
 			updated_at = NOW()
-	`, rowID, m.SectID, guInstance.GuID, guInstance.Rank, vaultItemCost, donatedHunger)
+	`, rowID, m.SectID, guInstance.GuID, guInstance.Rank)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
@@ -869,7 +865,6 @@ func DonateBulk(c *gin.Context) {
 				}
 				effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
 				gained := int64(pricing.DonatePoints(effectiveBase))
-				vaultItemCost := int64(pricing.VaultCost(effectiveBase))
 
 				totalGainedContribution += gained
 
@@ -897,17 +892,14 @@ func DonateBulk(c *gin.Context) {
 						return
 					}
 				}
-				hunger := normalizeVaultGuHunger(gi.GuID, gi.Rank, float64(gi.Hunger))
 
 				_, err = tx.Exec(`
-					INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
-					VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
+					INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, instance_id)
+					VALUES ($1, $2, $3, $4, 1, $5)
 					ON CONFLICT (id) DO UPDATE SET
 						quantity = sect_vault_gu.quantity + 1,
-						cost = EXCLUDED.cost,
-						hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
 						updated_at = NOW()
-				`, rowID, m.SectID, gi.GuID, gi.Rank, vaultItemCost, hunger, instIDToStore)
+				`, rowID, m.SectID, gi.GuID, gi.Rank, instIDToStore)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
 					return

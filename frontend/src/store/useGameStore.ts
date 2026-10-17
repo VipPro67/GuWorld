@@ -872,7 +872,6 @@ export interface SectVaultGuItem {
   rank?: number;
   cost: number;
   quantity: number;
-  hunger?: number;
 }
 
 export interface SectVaultRecipe {

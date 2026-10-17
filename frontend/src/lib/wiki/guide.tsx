@@ -155,7 +155,7 @@ export const guidePages: WikiPage[] = [
                 • <strong>Đấu Trường:</strong> Khiêu chiến đội hình Cổ sư của người chơi khác để tích lũy <strong>Chiến Công</strong>. Chiến công dùng để đổi các bảo vật và Cổ trùng độc quyền tại Cửa Hàng Đấu Trường.
               </p>
               <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300">
-                ⏱️ <strong>Giới hạn hàng ngày:</strong> Mỗi ngày đạo hữu được khiêu chiến Võ Đài tối đa <strong>10 trận</strong>; hạn mức đấu trường được làm mới theo ngày. Thắng nhận <strong>50 Xu Đấu Trường</strong>, thua nhận <strong>10 Xu</strong>. Dùng hết lượt để tối đa hóa Chiến Công và Nhân Khí tích lũy.
+                ⏱️ <strong>Giới hạn hàng ngày:</strong> Mỗi ngày đạo hữu được khiêu chiến Võ Đài tối đa <strong>10 trận</strong>; hạn mức đấu trường được làm mới theo ngày. Thắng nhận <strong>50 Xu Đấu Trường</strong>, thua nhận <strong>1 Xu</strong>. Dùng hết lượt để tối đa hóa Chiến Công và Nhân Khí tích lũy.
               </div>
             </div>
           </div>

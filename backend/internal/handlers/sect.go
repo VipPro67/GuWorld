@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 type Sect struct {
@@ -146,72 +147,54 @@ func canDestroyVaultItem(rank string) bool {
 }
 
 type SectVaultGuItem struct {
-	ID         string  `json:"id"`
-	InstanceID string  `json:"instance_id,omitempty"`
-	Rank       int     `json:"rank,omitempty"`
-	Cost       int64   `json:"cost"`
-	Quantity   int64   `json:"quantity"`
-	Hunger     float64 `json:"hunger,omitempty"`
+	ID         string `json:"id"`
+	InstanceID string `json:"instance_id,omitempty"`
+	Rank       int    `json:"rank,omitempty"`
+	Cost       int64  `json:"cost"`
+	Quantity   int64  `json:"quantity"`
 }
 
-// vaultGuMaxHunger returns the effective max hunger for a vault Gu group,
-// falling back to 100 when the dictionary entry is missing or lacks a max.
-func vaultGuMaxHunger(id string, rank int) float64 {
-	if spec, ok := models.GetGu(id, rank); ok && spec.MaxHunger > 0 {
-		return float64(spec.MaxHunger)
+// sectVaultGuCost resolves the contribution-point price of a vault Gu from the
+// dictionary (gu_dictionary.base_price, falling back to the rank table) — the
+// same VaultCost rule used everywhere else. Prices are never snapshotted on the
+// vault row, so re-balancing the dictionary re-prices the whole vault at once.
+func sectVaultGuCost(guID string, rank int) int64 {
+	base := 0.0
+	if spec, ok := models.GetGu(guID, rank); ok {
+		base = spec.BasePrice
+		if spec.Rank > 0 {
+			rank = spec.Rank
+		}
+	} else if spec, ok := models.GetGuAny(guID); ok {
+		base = spec.BasePrice
+		if spec.Rank > 0 {
+			rank = spec.Rank
+		}
 	}
-	if spec, ok := models.GetGuAny(id); ok && spec.MaxHunger > 0 {
-		return float64(spec.MaxHunger)
-	}
-	return 100
+	return int64(pricing.VaultCost(pricing.GuBasePrice(base, rank)))
 }
 
-// normalizeVaultGuHunger backfills legacy entries (missing hunger) to the
-// effective max and clamps the value into [0, max].
-func normalizeVaultGuHunger(id string, rank int, h float64) float64 {
-	max := vaultGuMaxHunger(id, rank)
-	if h <= 0 {
-		return max
+// vaultWithdrawnHunger is the hunger a Gu starts with when it leaves the vault:
+// 1 for Gu that eat (they must be fed immediately), full max otherwise.
+func vaultWithdrawnHunger(guSpec models.Gu) int {
+	if guSpec.HungerRate <= 0 {
+		if guSpec.MaxHunger > 0 {
+			return guSpec.MaxHunger
+		}
+		return 100
 	}
-	if h > max {
-		return max
-	}
-	return h
-}
-
-// mergeVaultGuHunger raises the group hunger to the donated Gu's hunger when
-// the incoming Gu is fresher (max of existing vs donated), clamped to [0, max].
-func mergeVaultGuHunger(id string, rank int, current, donated float64) float64 {
-	max := vaultGuMaxHunger(id, rank)
-	merged := current
-	if donated > merged {
-		merged = donated
-	}
-	if merged <= 0 {
-		return max
-	}
-	if merged > max {
-		return max
-	}
-	return merged
+	return 1
 }
 
 // createVaultWithdrawnGu creates a new player GuInstance withdrawn from the sect vault.
 // As per game rules, Gus with hunger rate > 0 start with hunger = 1.
 // Gus with hunger rate <= 0 (e.g. consumables) keep full max hunger.
 func createVaultWithdrawnGu(guID string, rank int, guSpec models.Gu) models.GuInstance {
-	initialHunger := 1
-	if guSpec.HungerRate <= 0 {
-		initialHunger = guSpec.MaxHunger
-		if initialHunger <= 0 {
-			initialHunger = 100
-		}
-	}
 	return models.GuInstance{
 		InstanceID: uuid.New().String(),
 		GuID:       guID,
 		Rank:       rank,
-		Hunger:     initialHunger,
+		Hunger:     vaultWithdrawnHunger(guSpec),
 		Status:     "ACTIVE",
 		Equipped:   false,
 	}
@@ -243,24 +226,19 @@ func LoadSectVaultJSON(ctx context.Context, runner QueryContextRunner, sectID st
 	}
 
 	// 2. Gu
-	guRows, err := runner.QueryContext(ctx, `SELECT gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 ORDER BY rank DESC, gu_id`, sectID)
+	guRows, err := runner.QueryContext(ctx, `SELECT gu_id, rank, quantity, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 ORDER BY rank DESC, gu_id`, sectID)
 	if err == nil {
 		defer guRows.Close()
 		var gus []SectVaultGuItem
 		mortalIndex := make(map[string]int)
 		for guRows.Next() {
 			var g SectVaultGuItem
-			if err := guRows.Scan(&g.ID, &g.Rank, &g.Cost, &g.Quantity, &g.Hunger, &g.InstanceID); err == nil {
+			if err := guRows.Scan(&g.ID, &g.Rank, &g.Quantity, &g.InstanceID); err == nil {
+				g.Cost = sectVaultGuCost(g.ID, g.Rank)
 				if g.Rank < 6 {
 					key := fmt.Sprintf("%s:%d", g.ID, g.Rank)
 					if idx, ok := mortalIndex[key]; ok {
 						gus[idx].Quantity += g.Quantity
-						if g.Cost > gus[idx].Cost {
-							gus[idx].Cost = g.Cost
-						}
-						if g.Hunger > gus[idx].Hunger {
-							gus[idx].Hunger = g.Hunger
-						}
 					} else {
 						mortalIndex[key] = len(gus)
 						gus = append(gus, g)

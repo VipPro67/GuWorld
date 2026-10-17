@@ -885,21 +885,19 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 		rowID      string
 		guID       string
 		rank       int
-		cost       int64
 		vaultQty   int64
-		hunger     float64
 		instanceID string
 		stolen     int64
 		destroyed  int64
 	}
 	var gusList []stolenGu
-	guRows, err := tx.Query(`SELECT id, gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 ORDER BY id ASC FOR UPDATE`, combat.TargetSectID)
+	guRows, err := tx.Query(`SELECT id, gu_id, rank, quantity, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 ORDER BY id ASC FOR UPDATE`, combat.TargetSectID)
 	if err != nil {
 		logger.S.Errorf("ApplySectWarVictory: failed to load vault Gus for sect %s: %v", combat.TargetSectID, err)
 	} else {
 		for guRows.Next() {
 			var tg stolenGu
-			if err := guRows.Scan(&tg.rowID, &tg.guID, &tg.rank, &tg.cost, &tg.vaultQty, &tg.hunger, &tg.instanceID); err != nil {
+			if err := guRows.Scan(&tg.rowID, &tg.guID, &tg.rank, &tg.vaultQty, &tg.instanceID); err != nil {
 				continue
 			}
 			stolen := sectmechanics.RollPlunderQuantity(tg.vaultQty, plunderPercent, rand.Float64())
@@ -961,11 +959,15 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 			if r <= 0 {
 				r = 1
 			}
+			guSpec, ok := models.GetGu(tg.guID, r)
+			if !ok {
+				guSpec, _ = models.GetGuAny(tg.guID)
+			}
 			memberBuckets[recipient] = append(memberBuckets[recipient], models.GuInstance{
 				InstanceID: instID,
 				GuID:       tg.guID,
 				Rank:       r,
-				Hunger:     int(tg.hunger),
+				Hunger:     vaultWithdrawnHunger(guSpec),
 				Status:     "NORMAL",
 				Equipped:   false,
 				IsVital:    false,

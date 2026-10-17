@@ -539,8 +539,8 @@ export const SectView: React.FC = () => {
   // DonatePoints = basePrice * 0.50 (DonateRatio), minimum 1
   const getDonatePoints = (basePrice: number): number => Math.max(1, Math.floor(basePrice * 0.50));
 
-  // VaultCost = DonatePoints * 1.50 (VaultMarkup), minimum 1
-  const getVaultCost = (basePrice: number): number => Math.max(1, Math.floor(getDonatePoints(basePrice) * 1.50));
+  // VaultCost = base price (1 Điểm cống hiến = 1 giá gốc), minimum 1
+  const getVaultCost = (basePrice: number): number => Math.max(1, Math.round(basePrice));
 
   // RecipeCostByGuRank = GuBasePriceByRank(rank) / 10, minimum 20
   const getRecipeCost = (targetGuRank: number): number => {

@@ -1,6 +1,6 @@
 # Plan: Whitelist quái theo `MonsterSpawn`
 
-> **Trạng thái:** PLAN — chưa implement.
+> **Trạng thái:** PLAN (một phần đã implement). Phần "Elite = camp leader / 10% Elite ở tâm bãi" **đã bị thay thế**: Elite giờ đi chung pool ambient của vùng, bị giảm trọng số bởi `eliteSpawnWeightFactor` (0.2), không còn cơ chế leader bãi. Vùng không có `monster_spawns` thì không sinh quái (không fallback sang vùng khác/registry toàn cục).
 > **Phạm vi:** backend (Go) + `backend/data/MonsterSpawn.csv` + docs.
 > **Mục tiêu:** quái sinh trên bản đồ / combat du ngoạn phải lấy từ `monster_spawns`, không bao giờ chọn ngẫu nhiên từ registry toàn cục.
 

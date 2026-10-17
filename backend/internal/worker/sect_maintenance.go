@@ -255,6 +255,17 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 
 		now := time.Now()
 		cutoff := now.Add(-24 * time.Hour)
+
+		// Spell the fee out term by term: an inflated vault is the only way this
+		// total can grow, and the sect log is where that gets noticed.
+		breakdownText := fmt.Sprintf("Cấp %d (%d) + %d thành viên (%d) + Linh tài %d (%d) + Cổ %d (%d) + Bí phương %d (%d) - giảm giá Bảo Khố %d",
+			breakdown.SectLevel, breakdown.LevelFee,
+			breakdown.MemberCount, breakdown.MemberFee,
+			breakdown.MaterialsCount, breakdown.MaterialsFee,
+			breakdown.MortalGuCount+breakdown.ImmortalGuCount, breakdown.MortalGuFee+breakdown.ImmortalGuFee,
+			breakdown.RecipesCount, breakdown.RecipesFee,
+			breakdown.TreasuryDiscount)
+
 		var remainingFunds int64
 		errDeduct := db.QueryRowContext(ctx, `
 			UPDATE sects SET funds = funds - $1, last_maintenance_at = $2, unpaid_maintenance_count = 0
@@ -263,10 +274,9 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 		`, fee, now, s.id, cutoff).Scan(&remainingFunds)
 
 		if errDeduct == nil {
-			vaultSlots := breakdown.MaterialsCount + breakdown.MortalGuCount + breakdown.ImmortalGuCount + int64(breakdown.RecipesCount)
-			chatMsg := fmt.Sprintf("[Bảo Trì] Tông môn đã thanh toán %d Quỹ duy trì hôm nay (Thành viên: %d, Kho: %d). Quỹ còn lại: %d Quỹ.",
-				fee, breakdown.MemberCount, vaultSlots, remainingFunds)
-			sendSectSystemChatMessage(ctx, db, s.id, chatMsg)
+			sendSectSystemChatMessage(ctx, db, s.id, fmt.Sprintf(
+				"[Bảo Trì] Đã thanh toán %d Quỹ duy trì: %s. Quỹ còn lại: %d Quỹ.",
+				fee, breakdownText, remainingFunds))
 			continue
 		}
 		if errDeduct != sql.ErrNoRows {
@@ -315,8 +325,8 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 				continue
 			}
 			sendSectSystemChatMessage(ctx, db, s.id, fmt.Sprintf(
-				"[Bảo Trì] Chưa đủ quỹ đóng phí duy trì (cần %d, hiện %d). Phí chưa được thu, tông giữ nguyên Cấp %d. Còn %d ngày để bổ sung quỹ trước khi bị giải tán!",
-				fee, curFunds, s.level, sectDisbandGraceDays-unpaidDays))
+				"[Bảo Trì] Chưa đủ quỹ đóng phí duy trì (cần %d, hiện %d): %s. Phí chưa được thu, tông giữ nguyên Cấp %d. Còn %d ngày để bổ sung quỹ trước khi bị giải tán!",
+				fee, curFunds, breakdownText, s.level, sectDisbandGraceDays-unpaidDays))
 			continue
 		}
 
@@ -341,8 +351,8 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 			continue
 		}
 
-		alertChat := fmt.Sprintf("[Bảo Trì] CẢNH BÁO: Tông môn không đủ quỹ duy trì (cần %d), cấp bậc bị giáng xuống Cấp %d!",
-			fee, appliedLevel)
+		alertChat := fmt.Sprintf("[Bảo Trì] CẢNH BÁO: Tông môn không đủ quỹ duy trì (cần %d): %s. Cấp bậc bị giáng xuống Cấp %d!",
+			fee, breakdownText, appliedLevel)
 		sendSectSystemChatMessage(ctx, db, s.id, alertChat)
 
 		notifySectLeader(ctx, db, s.id, s.level, appliedLevel, curFunds, fee)

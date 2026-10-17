@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type ArenaShopItem struct {
@@ -48,6 +49,73 @@ func loadArenaShopItems() ([]ArenaShopItem, error) {
 	return items, nil
 }
 
+// Immortal-grade ("tiên cấp") arena resources.
+//
+// Instead of enumerating hundreds of rank >= 6 Food/Material rows by hand, the
+// shop advertises a deterministic rotating subset sourced from item_dictionary.
+// It mirrors the caravan shop's virtual auto-pool (shop_catalog.go): rotation is
+// derived from the hourly shopRotationBucket seed and the entries are never
+// persisted to arena_shop_items.
+const (
+	maxArenaRandomResources  = 30
+	arenaRandomResourcePrice = 99 // flat Xu Đấu Trường (đồng giá)
+)
+
+// arenaRandomResourcePool returns every rank >= 6 Food/Material dictionary item
+// not already listed explicitly in arena_shop_items.
+func arenaRandomResourcePool() ([]ShopItem, error) {
+	rows, err := db.DB.Query(`
+		SELECT i.id, COALESCE(i.name, i.id), COALESCE(i.item_type, 'Material'), COALESCE(i.rank, 1)
+		FROM item_dictionary i
+		WHERE i.item_type IN ('Food', 'Material')
+		  AND COALESCE(i.rank, 1) >= 6
+		  AND NOT EXISTS (SELECT 1 FROM arena_shop_items a WHERE a.id = i.id)
+		ORDER BY i.id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	pool := []ShopItem{}
+	for rows.Next() {
+		var it ShopItem
+		if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.Rank); err != nil {
+			return nil, err
+		}
+		it.Price = arenaRandomResourcePrice
+		it.Stock = -1
+		it.IsAuto = true
+		pool = append(pool, it)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return pool, nil
+}
+
+// selectArenaRandomResources picks the stable-per-rotation showcase subset,
+// reusing the caravan shop's deterministic shuffle/seed.
+func selectArenaRandomResources(pool []ShopItem) []ShopItem {
+	return dailyShopRandomSubset(pool, maxArenaRandomResources)
+}
+
+// arenaRandomResourceByID resolves a purchase against the full immortal
+// resource pool (not just the current showcase) so a rotation boundary mid-modal
+// can't reject an item the player just saw.
+func arenaRandomResourceByID(itemID string) (*ShopItem, bool) {
+	pool, err := arenaRandomResourcePool()
+	if err != nil {
+		return nil, false
+	}
+	for i := range pool {
+		if pool[i].ID == itemID {
+			return &pool[i], true
+		}
+	}
+	return nil, false
+}
+
 func GetArenaShop(c *gin.Context) {
 	var items []ArenaShopItem
 	if err := cache.GetJSON("arena_shop_items", &items); err == nil && len(items) > 0 {
@@ -61,7 +129,20 @@ func GetArenaShop(c *gin.Context) {
 		return
 	}
 
-	_ = cache.SetJSON("arena_shop_items", items, 24*time.Hour)
+	// Append the rotating immortal-grade resource showcase (rank >= 6 Food /
+	// Material). Auto items live outside arena_shop_items so they never pollute
+	// the admin list or CSV export.
+	if pool, perr := arenaRandomResourcePool(); perr == nil {
+		for _, it := range selectArenaRandomResources(pool) {
+			items = append(items, ArenaShopItem{ID: it.ID, Name: it.Name, Price: int64(it.Price), Qty: 1, Stock: -1})
+		}
+	} else {
+		logger.S.Warnf("arena random resource pool: %v", perr)
+	}
+
+	// Short TTL (not 24h) so the rotating subset refreshes when the rotation
+	// window changes; admin edits still invalidate via cache.Delete("arena_shop_items").
+	_ = cache.SetJSON("arena_shop_items", items, 10*time.Minute)
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
@@ -102,8 +183,14 @@ func BuyArenaShopItem(c *gin.Context) {
 		WHERE a.id = $1
 	`, req.ItemID).Scan(&targetPrice, &targetQty, &targetStock, &targetName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong Shop Đấu Trường"})
-		return
+		// Fall back to the rotating immortal-grade resource pool (Food/Material,
+		// rank >= 6) which is advertised by GetArenaShop but not persisted.
+		auto, ok := arenaRandomResourceByID(req.ItemID)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong Shop Đấu Trường"})
+			return
+		}
+		targetPrice, targetQty, targetStock, targetName = int64(auto.Price), 1, -1, auto.Name
 	}
 
 	totalCost := targetPrice * quantity

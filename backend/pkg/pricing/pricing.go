@@ -6,8 +6,9 @@
 //	base_price (DB or rank-based fallback)
 //	  × SellBackRatio  → sell price at Caravan shop
 //	  × DonateRatio    → contribution points when donating to sect
-//	  × VaultMarkup    → cost in contribution points to buy from sect vault
-//	                     (always > donate so vault-farming is impossible)
+//	  × 1.00           → cost in contribution points to buy from sect vault
+//	                     (never below any merchant's buy-back price, so
+//	                     donate → buy → resell can never profit)
 package pricing
 
 import "math"
@@ -29,10 +30,10 @@ const (
 	// DonateRatio: fraction of base_price awarded as contribution points on donation.
 	DonateRatio = 0.50
 
-	// VaultMarkup: multiplier applied on top of DonateRatio for vault buy cost.
-	// Must be > 1 to prevent donation->buy farming loop.
-	// Net vault cost = base_price × DonateRatio × VaultMarkup
-	VaultMarkup = 1.50
+	// RecipeDonateDivisor: donating a recipe awards RecipeCostByGuRank / this,
+	// so buying the recipe back from the vault always costs more than the
+	// donation paid out.
+	RecipeDonateDivisor = 1.50
 
 	// RecipeRankDivisor: recipe vault cost = GuBasePrice(targetRank) / RecipeRankDivisor
 	RecipeRankDivisor = 10
@@ -153,9 +154,12 @@ func DonatePoints(basePrice float64) int64 {
 }
 
 // VaultCost returns contribution points needed to buy from the sect vault.
-// = DonatePoints * VaultMarkup, always > DonatePoints to prevent farming.
+// = base_price exactly (1 contribution point per base-price unit), minimum 1.
+// That is at or above what any merchant pays back for the same entity (village
+// 0.10×, roaming up to 1.00× of base), so donating stones for points and buying
+// items from the vault can never be turned into a profit loop.
 func VaultCost(basePrice float64) int64 {
-	p := int64(float64(DonatePoints(basePrice)) * VaultMarkup)
+	p := int64(math.Round(basePrice))
 	if p < 1 {
 		return 1
 	}
@@ -174,10 +178,10 @@ func RecipeCostByGuRank(targetGuRank int) int64 {
 
 // RecipeDonatePoints returns contribution points awarded when donating a recipe
 // to a sect. It mirrors the material formula: donate value = vault cost /
-// VaultMarkup, ensuring buying from the vault is always more expensive than
-// donating (no contribution-point farming loop).
+// RecipeDonateDivisor, ensuring buying from the vault is always more expensive
+// than donating (no contribution-point farming loop).
 func RecipeDonatePoints(targetGuRank int) int64 {
-	p := int64(float64(RecipeCostByGuRank(targetGuRank)) / VaultMarkup)
+	p := int64(float64(RecipeCostByGuRank(targetGuRank)) / RecipeDonateDivisor)
 	if p < 1 {
 		return 1
 	}

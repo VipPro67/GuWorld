@@ -192,13 +192,21 @@ func schemaSects() error {
 		gu_id VARCHAR(50) NOT NULL,
 		rank INTEGER NOT NULL DEFAULT 1 CHECK (rank >= 1 AND rank <= 9),
 		quantity BIGINT NOT NULL DEFAULT 1 CHECK (quantity >= 0),
-		cost BIGINT NOT NULL DEFAULT 0,
-		hunger DOUBLE PRECISION NOT NULL DEFAULT 100.0 CHECK (hunger >= 0),
 		instance_id VARCHAR(80) DEFAULT '',
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		CONSTRAINT chk_sect_vault_gu_immortal_qty CHECK (rank < 6 OR quantity <= 1)
 	);`); err != nil {
+		return err
+	}
+	// cost was a snapshot of the contribution price (= dictionary base price since
+	// the VaultCost rule changed) and hunger was the donated Gu's hunger, unused
+	// since vault hunger decay was removed and withdrawals always start at 1.
+	// Both are derived on read now, so existing databases drop them.
+	if err := execSchema("sect_vault_gu_drop_derived_columns", `
+		ALTER TABLE sect_vault_gu
+			DROP COLUMN IF EXISTS cost,
+			DROP COLUMN IF EXISTS hunger;`); err != nil {
 		return err
 	}
 	if err := execSchema("idx_sect_vault_gu_sect_gu", `

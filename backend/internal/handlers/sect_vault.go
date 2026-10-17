@@ -29,7 +29,6 @@ type VaultGuRow struct {
 	Rank       int
 	Cost       int64
 	Quantity   int64
-	Hunger     float64
 	InstanceID string
 }
 
@@ -252,8 +251,6 @@ func StockSectVault(c *gin.Context) {
 		if stockGuRank == 0 {
 			stockGuRank = 1
 		}
-		stockGuCost := int64(pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank)))
-		maxHunger := vaultGuMaxHunger(req.ItemID, stockGuRank)
 		var stockInstID string
 		var rowID string
 		if stockGuRank >= 6 {
@@ -264,14 +261,12 @@ func StockSectVault(c *gin.Context) {
 		}
 
 		_, err = tx.Exec(`
-			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, instance_id)
+			VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (id) DO UPDATE SET
 				quantity = sect_vault_gu.quantity + EXCLUDED.quantity,
-				cost = EXCLUDED.cost,
-				hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
 				updated_at = NOW()
-		`, rowID, s.ID, req.ItemID, stockGuRank, req.Quantity, stockGuCost, maxHunger, stockInstID)
+		`, rowID, s.ID, req.ItemID, stockGuRank, req.Quantity, stockInstID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
 			return
@@ -538,8 +533,6 @@ func StockSectVaultBulk(c *gin.Context) {
 			if stockGuRank == 0 {
 				stockGuRank = 1
 			}
-			stockGuCost := int64(pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank)))
-			maxHunger := vaultGuMaxHunger(line.itemID, stockGuRank)
 			var stockInstID string
 			var rowID string
 			if stockGuRank >= 6 {
@@ -550,14 +543,12 @@ func StockSectVaultBulk(c *gin.Context) {
 			}
 
 			_, err = tx.Exec(`
-				INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, instance_id)
+				VALUES ($1, $2, $3, $4, $5, $6)
 				ON CONFLICT (id) DO UPDATE SET
 					quantity = sect_vault_gu.quantity + EXCLUDED.quantity,
-					cost = EXCLUDED.cost,
-					hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
 					updated_at = NOW()
-			`, rowID, s.ID, line.itemID, stockGuRank, line.quantity, stockGuCost, maxHunger, stockInstID)
+			`, rowID, s.ID, line.itemID, stockGuRank, line.quantity, stockInstID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
 				return
@@ -665,13 +656,13 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 
 		rows, err := tx.Query(`
-			SELECT id, gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '')
+			SELECT id, gu_id, rank, quantity, COALESCE(instance_id, '')
 			FROM sect_vault_gu
 			WHERE sect_id = $1 
 			  AND (gu_id = $2 OR LOWER(gu_id) = LOWER($2) OR id = $2 OR instance_id = $2)
 			  AND ($3 = 0 OR rank = $3)
 			  AND quantity > 0
-			ORDER BY cost ASC, id ASC
+			ORDER BY rank ASC, id ASC
 			FOR UPDATE
 		`, m.SectID, req.ItemID, req.Rank)
 		if err != nil {
@@ -682,11 +673,12 @@ func BuyFromSectVault(c *gin.Context) {
 		var matchedRows []VaultGuRow
 		for rows.Next() {
 			var r VaultGuRow
-			if err := rows.Scan(&r.ID, &r.GuID, &r.Rank, &r.Cost, &r.Quantity, &r.Hunger, &r.InstanceID); err != nil {
+			if err := rows.Scan(&r.ID, &r.GuID, &r.Rank, &r.Quantity, &r.InstanceID); err != nil {
 				rows.Close()
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu bảo khố: " + err.Error()})
 				return
 			}
+			r.Cost = sectVaultGuCost(r.GuID, r.Rank)
 			matchedRows = append(matchedRows, r)
 		}
 		rows.Close()

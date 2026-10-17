@@ -106,7 +106,7 @@ Tải lại
       <div className="text-[10px] text-zinc-550 font-mono max-w-xl">
         * Quy tắc Võ Đài: Cổ sư có thể khiêu chiến <span className="text-amber-500 font-bold">tự do</span>, tối đa 10 lần/ngày.
         Nếu chiến thắng kẻ có hạng cao hơn, hai bên sẽ <span className="text-emerald-600 dark:text-emerald-400 font-bold">hoán đổi vị trí xếp hạng</span> cho nhau.
-        Thắng nhận <span className="text-amber-500 font-bold">50 Xu Đấu Trường</span>, thua nhận <span className="text-amber-500 font-bold">10 Xu</span>.
+        Thắng nhận <span className="text-amber-500 font-bold">50 Xu Đấu Trường</span>, thua nhận <span className="text-amber-500 font-bold">1 Xu</span>.
         Kết toán phát Xu Đấu Trường mỗi 22:30 hằng ngày.
       </div>
 

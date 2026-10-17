@@ -12,7 +12,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
-	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 // GetSectMissions returns open missions
@@ -256,7 +255,6 @@ func CompleteSectMission(c *gin.Context) {
 		// Remove Gu from player
 		donatedGuID := player.GuInventory[targetIdx].GuID
 		donatedGuInstRank := player.GuInventory[targetIdx].Rank
-		donatedGuHunger := float64(player.GuInventory[targetIdx].Hunger)
 		donatedInstanceID := player.GuInventory[targetIdx].InstanceID
 		player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
 		if err := db.RemovePlayerGu(tx, donatedInstanceID); err != nil {
@@ -268,13 +266,6 @@ func CompleteSectMission(c *gin.Context) {
 		var memberForVault SectMember
 		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&memberForVault.SectID)
 		if err == nil {
-			var donatedGuRank int
-			var donatedGuBase int64
-			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, donatedGuID).Scan(&donatedGuBase, &donatedGuRank)
-			if donatedGuRank == 0 {
-				donatedGuRank = 1
-			}
-			vaultItemCost := int64(pricing.VaultCost(pricing.GuBasePrice(float64(donatedGuBase), donatedGuRank)))
 			itemInstID := donatedInstanceID
 			if itemInstID == "" {
 				itemInstID = uuid.New().String()
@@ -285,16 +276,13 @@ func CompleteSectMission(c *gin.Context) {
 				rowID = fmt.Sprintf("%s:%s:%d", memberForVault.SectID, donatedGuID, donatedGuInstRank)
 				instIDToStore = ""
 			}
-			normHunger := normalizeVaultGuHunger(donatedGuID, donatedGuInstRank, donatedGuHunger)
 			_, _ = tx.Exec(`
-				INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
-				VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
+				INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, instance_id)
+				VALUES ($1, $2, $3, $4, 1, $5)
 				ON CONFLICT (id) DO UPDATE SET
 					quantity = sect_vault_gu.quantity + 1,
-					cost = EXCLUDED.cost,
-					hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
 					updated_at = NOW()
-			`, rowID, memberForVault.SectID, donatedGuID, donatedGuInstRank, vaultItemCost, normHunger, instIDToStore)
+			`, rowID, memberForVault.SectID, donatedGuID, donatedGuInstRank, instIDToStore)
 		}
 	}
 
