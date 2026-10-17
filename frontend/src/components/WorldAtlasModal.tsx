@@ -25,6 +25,9 @@ export interface RegionMonsterDetail {
   max_hp: number;
   base_attack: number;
   base_defense: number;
+  max_hp_max: number;
+  attack_max: number;
+  defense_max: number;
   description: string;
 }
 
@@ -63,6 +66,17 @@ const WORLD_SIZE = 30_000;
 const REGION_COLORS = [
   "#0f766e", "#155e75", "#365314", "#854d0e", "#6b21a8", "#9f1239", "#1d4ed8",
 ];
+
+// Rank-scaled monster stats get very large (rank 5 = x100, rank 6 = x10^4,
+// rank 7 = x10^6 ...). Format with thousands separators, and collapse to a
+// single value when the min/max ranks produce the same number.
+function formatMonsterStat(min: number, max: number): string {
+  const lo = Math.round(min);
+  const hi = Math.round(max);
+  if (!Number.isFinite(lo) || lo <= 0) return "—";
+  if (!Number.isFinite(hi) || hi <= lo) return lo.toLocaleString("vi-VN");
+  return `${lo.toLocaleString("vi-VN")} – ${hi.toLocaleString("vi-VN")}`;
+}
 
 export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: WorldAtlasModalProps) {
   const majorRegions = useMemo(
@@ -618,7 +632,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
                                 </span>
                               </div>
                               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400">
-                                <span className="font-mono text-cyan-300">Rank {monster.min_rank}</span>
+                                <span className="font-mono text-cyan-300">Rank {monster.max_rank > monster.min_rank ? `${monster.min_rank}–${monster.max_rank}` : monster.min_rank}</span>
                                 <span>•</span>
                                 <span>{isBoss ? "Thủ Lĩnh / Boss" : isElite ? "Tinh Anh" : "Yêu thú thường"}</span>
                                 {monster.is_capturable && (
@@ -631,8 +645,8 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
                             </div>
                             {monster.max_hp > 0 && (
                               <div className="text-right text-[10px] font-mono text-zinc-400">
-                                <div>Máu: <span className="text-rose-300">{Math.round(monster.max_hp)}</span></div>
-                                <div>Công: <span className="text-amber-300">{Math.round(monster.base_attack)}</span></div>
+                                <div>Máu: <span className="text-rose-300">{formatMonsterStat(monster.max_hp, monster.max_hp_max)}</span></div>
+                                <div>Công: <span className="text-amber-300">{formatMonsterStat(monster.base_attack, monster.attack_max)}</span></div>
                               </div>
                             )}
                           </div>

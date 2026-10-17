@@ -1050,7 +1050,13 @@ Các bí cảnh bản đồ dùng chung có `regions.zone_type='SECRET_REALM'` v
   ]
 }
 ```
-`cell_type_weights` quyết định tỉ lệ các loại ô; `resources` / `wild_gus` là pool tài nguyên và Cổ cấp thấp. `monster_gus` là bộ cổ mà **quái đánh trong vùng mang theo** (và do đó có thể rơi) — xem "Cổ trùng trên quái". Không khai báo → dùng pool mặc định (riêng `monster_gus` rỗng nghĩa là không gán thêm).
+`cell_type_weights` quyết định tỉ lệ các loại ô; `resources` / `wild_gus` là pool tài nguyên và Cổ cấp thấp. `monster_gus` là bộ cổ mà **quái đánh trong vùng mang theo** (và do đó có thể rơi) — xem "Cổ trùng trên quái". `monster_gus` rỗng nghĩa là không gán thêm.
+
+`resources` / `wild_gus` **để trống thì pool được suy ra từ registry theo dải rank của vùng** (`min_rank`–`max_rank`), không còn danh sách hard-code:
+- `resources`: item `item_type` là `Material` hoặc `Food` trong dải rank vùng.
+- `wild_gus`: biến thể Cổ rank ≤ 5 trong dải rank vùng (`HasImmortalRank` loại bỏ Cổ Tiên — Cổ Tiên chỉ đến từ gacha/luyện cổ/đấu giá).
+
+Weight trong cả hai pool dùng `effectiveDropLevel(rank, rarity)` → **cả rank lẫn rarity** đều ảnh hưởng độ hiếm. Khai báo `resources` / `wild_gus` thì danh sách đó được dùng nguyên (override). Pool suy ra được cache theo dải rank và tự xoá khi import lại dữ liệu Vùng/Cổ/Item qua Admin.
 
 **Thứ tự ưu tiên zone_type** — khi một điểm nằm trong nhiều zone chồng lấn, `FindZoneAt` chọn zone có priority cao nhất (bằng → diện tích nhỏ nhất = innermost):
 

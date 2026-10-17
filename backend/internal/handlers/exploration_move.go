@@ -332,8 +332,21 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				player.MaterialsInventory[cell.Content]++
 				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s!", player.X, player.Y, itemName)
 
-				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
+				clearTTL := clearedCellCooldown
+				if pc, found := persistentCellForRegion(player.CurrentRegion, player.X, player.Y); found && pc.RespawnSeconds > 0 {
+					// Shared resource nodes carry their own respawn window.
+					clearTTL = time.Duration(pc.RespawnSeconds) * time.Second
+				}
+				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearTTL); err != nil {
 					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+					return "", false, err
+				}
+				// Persist the shared respawn state for DB-backed nodes (no-op for
+				// procedural cells). Without this map_cells.last_cleared_at never
+				// advances, so the node ignores respawn_seconds and the atlas view
+				// keeps reporting it as available.
+				if err := MarkPersistentCellCleared(tx, player.ID, player.CurrentRegion, player.X, player.Y); err != nil {
+					logger.S.Errorf("Failed to persist cleared resource cell %s (%d,%d) for player %s: %v", player.CurrentRegion, player.X, player.Y, player.ID, err)
 					return "", false, err
 				}
 				broadcastWorldCell(cellEventCleared, WorldCellEvent{RegionID: player.CurrentRegion, X: player.X, Y: player.Y, CellType: cell.Type, ContentID: cell.Content})
@@ -374,8 +387,16 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				player.GuInventory = append(player.GuInventory, newGu)
 				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s!", guName)
 
-				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
+				clearTTL := clearedCellCooldown
+				if pc, found := persistentCellForRegion(player.CurrentRegion, player.X, player.Y); found && pc.RespawnSeconds > 0 {
+					clearTTL = time.Duration(pc.RespawnSeconds) * time.Second
+				}
+				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearTTL); err != nil {
 					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+					return "", false, err
+				}
+				if err := MarkPersistentCellCleared(tx, player.ID, player.CurrentRegion, player.X, player.Y); err != nil {
+					logger.S.Errorf("Failed to persist cleared Gu cell %s (%d,%d) for player %s: %v", player.CurrentRegion, player.X, player.Y, player.ID, err)
 					return "", false, err
 				}
 				cache.BroadcastWildGuCaptured(player.X, player.Y, cell.Content)

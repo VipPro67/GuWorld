@@ -81,10 +81,22 @@ type RegionMonsterDetail struct {
 	MaxRank      int     `json:"max_rank"`
 	IsBoss       bool    `json:"is_boss"`
 	IsCapturable bool    `json:"is_capturable"`
-	MaxHP        float64 `json:"max_hp"`
-	BaseAttack   float64 `json:"base_attack"`
-	BaseDefense  float64 `json:"base_defense"`
-	Description  string  `json:"description"`
+	// MaxHP/BaseAttack/BaseDefense are the template stats scaled to MinRank;
+	// the *Max fields are the same stats at MaxRank. They differ only when a
+	// spawn row spans a rank range.
+	MaxHP       float64 `json:"max_hp"`
+	BaseAttack  float64 `json:"base_attack"`
+	BaseDefense float64 `json:"base_defense"`
+	MaxHPMax    float64 `json:"max_hp_max"`
+	AttackMax   float64 `json:"attack_max"`
+	DefenseMax  float64 `json:"defense_max"`
+	Description string  `json:"description"`
+
+	// base* hold the raw, rank-independent template stats used to compute the
+	// scaled values once the final rank range is known.
+	baseHP  float64
+	baseAtk float64
+	baseDef float64
 }
 
 type RegionDropDetail struct {
@@ -213,10 +225,10 @@ func GetRegionDetails(c *gin.Context) {
 						MaxRank:      maxR,
 						IsBoss:       isBoss,
 						IsCapturable: capturable,
-						MaxHP:        hp,
-						BaseAttack:   atk,
-						BaseDefense:  def,
 						Description:  desc,
+						baseHP:       hp,
+						baseAtk:      atk,
+						baseDef:      def,
 					}
 				} else {
 					if minR < detail.MinRank {
@@ -273,10 +285,10 @@ func GetRegionDetails(c *gin.Context) {
 						MinRank:     rank,
 						MaxRank:     rank,
 						IsBoss:      true,
-						MaxHP:       hp,
-						BaseAttack:  atk,
-						BaseDefense: def,
 						Description: desc,
+						baseHP:      hp,
+						baseAtk:     atk,
+						baseDef:     def,
 					}
 				}
 			}
@@ -418,6 +430,18 @@ func GetRegionDetails(c *gin.Context) {
 		if m.IsBoss {
 			hasBoss = true
 		}
+		// Scale the raw template stats to the rank range the monster spawns at
+		// (subRank 1). Without this the list shows rank-independent base stats,
+		// which read far weaker than the monster actually is at its rank.
+		minR, maxR := m.MinRank, m.MaxRank
+		if minR < 1 {
+			minR = 1
+		}
+		if maxR < minR {
+			maxR = minR
+		}
+		m.MaxHP, m.BaseAttack, m.BaseDefense = models.ScaleMonsterStats(m.baseHP, m.baseAtk, m.baseDef, minR, 1, m.Type)
+		m.MaxHPMax, m.AttackMax, m.DefenseMax = models.ScaleMonsterStats(m.baseHP, m.baseAtk, m.baseDef, maxR, 1, m.Type)
 		monstersList = append(monstersList, *m)
 	}
 

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
@@ -34,10 +36,207 @@ func GetCellSeed(x, y int, zoneKey string) int64 {
 	return int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
 }
 
-// defaultResourcePool / defaultWildGuPool are fallback content pools used by
-// zones that do not define pool_weights in Region.csv.
-var defaultResourcePool = []string{"moon_orchid_petal", "green_bamboo_wine", "jade_stone", "boar_meat"}
-var defaultWildGuPool = []string{"GU_LITTLE_LIGHT", "GU_JADE_SKIN", "GU_BRONZE_RELIC", "GU_FIRE_ARMOR"}
+// cellPoolEntry is one weighted content candidate for a procedural cell: an
+// item id (Rank 0) or a specific Gu rank variant.
+type cellPoolEntry struct {
+	ID     string
+	Rank   int
+	Weight float64
+}
+
+const (
+	cellPoolResource = 1
+	cellPoolWildGu   = 2
+	// Tiên Cổ (rank >= 6) never spawns as a map cell; it only comes from gacha,
+	// refining and auctions (see docs/GAME_DATA.md).
+	maxWildGuRank = 5
+)
+
+// cellPoolCache memoizes rank-band derived pools. Building one scans
+// ItemRegistry/GuRegistry (750+ entries), too heavy to repeat per cell, while
+// the result depends only on (kind, rank band) — at most ~2*81 entries for the
+// whole world. Cleared whenever the zone/item/Gu registries reload.
+var cellPoolCache = struct {
+	mu sync.Mutex
+	m  map[[3]int][]cellPoolEntry
+}{m: make(map[[3]int][]cellPoolEntry)}
+
+func clearCellPoolCache() {
+	cellPoolCache.mu.Lock()
+	cellPoolCache.m = make(map[[3]int][]cellPoolEntry)
+	cellPoolCache.mu.Unlock()
+}
+
+// zoneRankBand returns the inclusive rank band a zone draws content from.
+func zoneRankBand(zone *models.Region) (int, int) {
+	lo, hi := zone.MinRank, zone.MaxRank
+	if lo < 1 {
+		lo = 1
+	}
+	if lo > 9 {
+		lo = 9
+	}
+	if hi < lo {
+		hi = lo
+	}
+	if hi > 9 {
+		hi = 9
+	}
+	return lo, hi
+}
+
+// resourcePool returns the weighted item pool for a zone. An explicit
+// pool_weights.resources list wins; otherwise the pool is derived from the item
+// registry within the zone's rank band (Material/Food only), weighted by
+// effectiveDropLevel(rank, rarity), so a rank-6 zone never drops rank-1 filler.
+func resourcePool(zone *models.Region) []cellPoolEntry {
+	if ids := zone.PoolWeights.Resources; len(ids) > 0 {
+		pool := make([]cellPoolEntry, 0, len(ids))
+		for _, id := range ids {
+			pool = append(pool, cellPoolEntry{ID: id, Weight: itemDropWeight(id)})
+		}
+		return pool
+	}
+	lo, hi := zoneRankBand(zone)
+	return derivedCellPool(cellPoolResource, lo, hi)
+}
+
+// wildGuPool returns the weighted (Gu id, rank) pool for a zone. An explicit
+// pool_weights.wild_gus list wins (still filtered to mortal ranks); otherwise
+// the pool is derived from the Gu registry within the zone's rank band.
+func wildGuPool(zone *models.Region) []cellPoolEntry {
+	if ids := zone.PoolWeights.WildGus; len(ids) > 0 {
+		pool := make([]cellPoolEntry, 0, len(ids))
+		for _, id := range ids {
+			variants := guVariants(id)
+			if len(variants) == 0 {
+				if _, known := models.GuRegistry[id]; known {
+					// Only immortal variants: correctly excluded from the map.
+					continue
+				}
+				// Unloaded/unknown id in a hand-authored pool: keep a neutral
+				// entry so the authored pool is not silently empty.
+				rank := zone.MinRank
+				if rank < 1 {
+					rank = 1
+				}
+				pool = append(pool, cellPoolEntry{ID: id, Rank: rank, Weight: 1.0})
+				continue
+			}
+			pool = append(pool, variants...)
+		}
+		return pool
+	}
+	lo, hi := zoneRankBand(zone)
+	return derivedCellPool(cellPoolWildGu, lo, hi)
+}
+
+// itemDropWeight resolves an item id to its drop weight. An id missing from the
+// registry still spawns with a neutral weight, keeping hand-authored pools that
+// reference unknown ids non-empty (legacy behaviour).
+func itemDropWeight(id string) float64 {
+	spec, ok := models.ItemRegistry[id]
+	if !ok {
+		return 1.0
+	}
+	return guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
+}
+
+// guVariants expands a Gu id into its mortal rank variants, each weighted by
+// effectiveDropLevel(rank, rarity). Immortal (rank >= 6) variants are dropped.
+func guVariants(id string) []cellPoolEntry {
+	if models.HasImmortalRank(id) {
+		return nil
+	}
+	ranks := models.GuRegistry[id]
+	if len(ranks) == 0 {
+		return nil
+	}
+	keys := make([]int, 0, len(ranks))
+	for r := range ranks {
+		keys = append(keys, r)
+	}
+	sort.Ints(keys)
+	out := make([]cellPoolEntry, 0, len(keys))
+	for _, r := range keys {
+		if r > maxWildGuRank {
+			continue
+		}
+		spec := ranks[r]
+		out = append(out, cellPoolEntry{ID: id, Rank: r, Weight: guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))})
+	}
+	return out
+}
+
+// derivedCellPool builds (and caches) the registry-derived pool for a rank band.
+func derivedCellPool(kind, lo, hi int) []cellPoolEntry {
+	key := [3]int{kind, lo, hi}
+	cellPoolCache.mu.Lock()
+	defer cellPoolCache.mu.Unlock()
+	if pool, ok := cellPoolCache.m[key]; ok {
+		return pool
+	}
+	pool := buildDerivedCellPool(kind, lo, hi)
+	cellPoolCache.m[key] = pool
+	return pool
+}
+
+func buildDerivedCellPool(kind, lo, hi int) []cellPoolEntry {
+	pool := make([]cellPoolEntry, 0, 64)
+	switch kind {
+	case cellPoolResource:
+		ids := make([]string, 0, len(models.ItemRegistry))
+		for id, spec := range models.ItemRegistry {
+			if !resourceItemType(spec.Type) || spec.Rank < lo || spec.Rank > hi {
+				continue
+			}
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			pool = append(pool, cellPoolEntry{ID: id, Weight: itemDropWeight(id)})
+		}
+	case cellPoolWildGu:
+		ids := make([]string, 0, len(models.GuRegistry))
+		for id := range models.GuRegistry {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			for _, entry := range guVariants(id) {
+				if entry.Rank < lo || entry.Rank > hi {
+					continue
+				}
+				pool = append(pool, entry)
+			}
+		}
+	}
+	return pool
+}
+
+func resourceItemType(t string) bool {
+	return strings.EqualFold(t, "Material") || strings.EqualFold(t, "Food")
+}
+
+// pickPoolEntry draws one weighted entry. Returns false only for an empty or
+// zero-weight pool.
+func pickPoolEntry(pool []cellPoolEntry, rng *rand.Rand) (cellPoolEntry, bool) {
+	total := 0.0
+	for _, e := range pool {
+		total += e.Weight
+	}
+	if total <= 0 {
+		return cellPoolEntry{}, false
+	}
+	roll := rng.Float64() * total
+	for _, e := range pool {
+		roll -= e.Weight
+		if roll <= 0 {
+			return e, true
+		}
+	}
+	return pool[len(pool)-1], true
+}
 
 // pickWeightedType rolls a cell content type using zone weights. Weights come
 // from a map, so iterate keys in sorted order to keep the pick deterministic
@@ -161,90 +360,26 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 		}
 		return models.Cell{X: x, Y: y, Type: "Monster", Content: spawn.MonsterID, Rank: rank, SubRank: rng.Intn(5) + 1}
 	case "Resource":
-		type weightedResource struct {
-			id     string
-			weight float64
+		entry, ok := pickPoolEntry(resourcePool(zone), rng)
+		if !ok {
+			return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 		}
-		var pool []weightedResource
-		var total float64
-		for _, id := range zone.PoolWeights.Resources {
-			w := 1.0
-			if spec, ok := models.ItemRegistry[id]; ok {
-				w = guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
-			}
-			if w <= 0 {
-				w = 1.0
-			}
-			pool = append(pool, weightedResource{id: id, weight: w})
-			total += w
-		}
-		if len(pool) == 0 {
-			for _, id := range defaultResourcePool {
-				w := 1.0
-				if spec, ok := models.ItemRegistry[id]; ok {
-					w = guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
-				}
-				pool = append(pool, weightedResource{id: id, weight: w})
-				total += w
-			}
-		}
-		itemID := ""
-		r := rng.Float64() * total
-		for _, e := range pool {
-			r -= e.weight
-			if r <= 0 {
-				itemID = e.id
-				break
-			}
-		}
-		if itemID == "" {
-			itemID = pool[0].id
-		}
-		return models.Cell{X: x, Y: y, Type: "Resource", Content: itemID}
+		return models.Cell{X: x, Y: y, Type: "Resource", Content: entry.ID}
 	case "WildGu":
-		type weightedGu struct {
-			id     string
-			weight float64
+		entry, ok := pickPoolEntry(wildGuPool(zone), rng)
+		if !ok {
+			return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 		}
-		var pool []weightedGu
-		var total float64
-		for _, id := range zone.PoolWeights.WildGus {
-			if models.HasImmortalRank(id) {
-				continue
-			}
-			w := 1.0
-			if spec, ok := models.GetGuAny(id); ok {
-				w = guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
-			}
-			if w <= 0 {
-				w = 1.0
-			}
-			pool = append(pool, weightedGu{id: id, weight: w})
-			total += w
+		// The captured Gu is looked up by (id, rank), so the cell must carry the
+		// exact rank variant that was drawn, not the zone's floor rank.
+		rank := entry.Rank
+		if rank < 1 {
+			rank = zone.MinRank
 		}
-		if len(pool) == 0 {
-			for _, id := range defaultWildGuPool {
-				pool = append(pool, weightedGu{id: id, weight: 1.0})
-				total += 1.0
-			}
-		}
-		guID := ""
-		r := rng.Float64() * total
-		for _, e := range pool {
-			r -= e.weight
-			if r <= 0 {
-				guID = e.id
-				break
-			}
-		}
-		if guID == "" {
-			guID = pool[0].id
-		}
-		rank := zone.MinRank
 		if rank < 1 {
 			rank = 1
 		}
-		return models.Cell{X: x, Y: y, Type: "WildGu", Content: guID, Rank: rank}
+		return models.Cell{X: x, Y: y, Type: "WildGu", Content: entry.ID, Rank: rank}
 	default:
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 	}

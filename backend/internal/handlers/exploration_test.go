@@ -300,3 +300,97 @@ func TestIsSafeZone(t *testing.T) {
 		t.Errorf("expected wilderness dai_vuc_nam_cuong at (1000, 1000) NOT to be a safe zone")
 	}
 }
+
+// withRegistries swaps the global item/Gu registries for a test and clears the
+// derived pool cache on both sides so cases cannot leak into each other.
+func withRegistries(t *testing.T, items map[string]models.ItemSpec, gus map[string]map[int]models.GuDictionaryItem) {
+	t.Helper()
+	prevItems, prevGu := models.ItemRegistry, models.GuRegistry
+	clearCellPoolCache()
+	if items != nil {
+		models.ItemRegistry = items
+	}
+	if gus != nil {
+		models.GuRegistry = gus
+	}
+	t.Cleanup(func() {
+		models.ItemRegistry, models.GuRegistry = prevItems, prevGu
+		clearCellPoolCache()
+	})
+}
+
+// TestResourcePoolFallsBackToRankBand verifies the derived resource pool only
+// contains Material/Food from the zone's rank band, and that an explicit
+// pool_weights.resources list still overrides it.
+func TestResourcePoolFallsBackToRankBand(t *testing.T) {
+	withRegistries(t, map[string]models.ItemSpec{
+		"low_mat":  {ID: "low_mat", Type: "Material", Rank: 1},
+		"mid_mat":  {ID: "mid_mat", Type: "Material", Rank: 5},
+		"high_mat": {ID: "high_mat", Type: "Material", Rank: 8},
+		"low_food": {ID: "low_food", Type: "Food", Rank: 2},
+		"currency": {ID: "currency", Type: "Currency", Rank: 1},
+	}, nil)
+
+	low := map[string]bool{}
+	for _, e := range resourcePool(&models.Region{MinRank: 1, MaxRank: 3}) {
+		low[e.ID] = true
+	}
+	if !low["low_mat"] || !low["low_food"] {
+		t.Fatalf("band 1-3 missing low-tier resources: %v", low)
+	}
+	if low["mid_mat"] || low["high_mat"] || low["currency"] {
+		t.Fatalf("band 1-3 leaked out-of-band or non-resource ids: %v", low)
+	}
+
+	high := resourcePool(&models.Region{MinRank: 6, MaxRank: 8})
+	if len(high) != 1 || high[0].ID != "high_mat" {
+		t.Fatalf("band 6-8 = %v, want only high_mat", high)
+	}
+
+	explicit := resourcePool(&models.Region{MinRank: 6, MaxRank: 8,
+		PoolWeights: models.ZonePools{Resources: []string{"low_mat", "mid_mat"}}})
+	if len(explicit) != 2 {
+		t.Fatalf("explicit resources must win verbatim, got %v", explicit)
+	}
+}
+
+// TestWildGuPoolRankAndRarity verifies wild Gu cells carry a rank variant that
+// exists inside the zone band, never an immortal one, and that rarity drives
+// the drop weight (rank and rarity both matter).
+func TestWildGuPoolRankAndRarity(t *testing.T) {
+	withRegistries(t, nil, map[string]map[int]models.GuDictionaryItem{
+		"MORTAL_GU": {
+			1: {ID: "MORTAL_GU", Rank: 1},
+			3: {ID: "MORTAL_GU", Rank: 3},
+		},
+		"IMMORTAL_GU": {
+			6: {ID: "IMMORTAL_GU", Rank: 6},
+		},
+		"RARE_MORTAL": {
+			2: {ID: "RARE_MORTAL", Rank: 2, Rarity: 8},
+		},
+	})
+
+	band := wildGuPool(&models.Region{MinRank: 2, MaxRank: 4})
+	byRank := map[int]cellPoolEntry{}
+	for _, e := range band {
+		byRank[e.Rank] = e
+	}
+	if byRank[3].ID != "MORTAL_GU" {
+		t.Fatalf("expected MORTAL_GU@3 in band 2-4, got %v", byRank)
+	}
+	if _, leaked := byRank[1]; leaked {
+		t.Fatalf("rank-1 variant leaked into band 2-4: %v", byRank)
+	}
+	if len(byRank) != 2 || byRank[2].ID != "RARE_MORTAL" {
+		t.Fatalf("expected exactly MORTAL_GU@3 and RARE_MORTAL@2, got %v", byRank)
+	}
+	// effectiveDropLevel(2, rarity 8) = 8, far rarer than MORTAL_GU@3.
+	if byRank[3].Weight <= byRank[2].Weight {
+		t.Fatalf("rarity must lower the weight: common=%.3f rare=%.3f", byRank[3].Weight, byRank[2].Weight)
+	}
+
+	if pool := wildGuPool(&models.Region{MinRank: 6, MaxRank: 8}); len(pool) != 0 {
+		t.Fatalf("immortal-only Gu must never spawn on the map, got %v", pool)
+	}
+}

@@ -38,14 +38,11 @@ const (
 	worldMonsterTickInterval = 250 * time.Millisecond
 	worldMonsterSafetyTTL    = 5 * time.Minute
 	worldMonsterMoveEventGap = 400 * time.Millisecond
-	// Ordinary monsters must be able to close on a player who walks (base
-	// MOVEMENT = 1 cell/s), otherwise a pursuit is invisible: the client only
-	// renders a 25-cell window, and a 0.15 cell/s crawl never covers it.
-	worldMonsterDefaultSpeed = 1.0
-	worldMonsterEliteSpeed   = 1.4
-	worldMonsterBossSpeed    = 1.4
-	worldMonsterEliteAggro   = 18.0
-	worldMonsterEliteLeash   = 30.0
+	// Movement speed is rank-scaled (see worldMonsterSpeed); Elite and Boss
+	// monsters add this bonus on top of the same rank curve.
+	worldMonsterSpecialSpeedBonus = 0.2
+	worldMonsterEliteAggro        = 14.0
+	worldMonsterEliteLeash        = 22.0
 	// Idle monsters only need their Redis value refreshed occasionally (TTL,
 	// retuned fields). Without a heartbeat every idle actor would issue a CAS +
 	// SET on every 250ms tick.
@@ -456,7 +453,7 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 	}
 	maxHP, attack, defense := models.ScaleMonsterStats(template.MaxHP, template.BaseAttack, template.BaseDefense, spawn.Rank, spawn.SubRank, template.Type)
 	aggroRadius, leashRadius := worldMonsterAggroProfile(spawn.Rank)
-	attackRange, speed := 1.5, worldMonsterDefaultSpeed
+	attackRange, speed := 1.5, worldMonsterSpeed(spawn.Rank)
 	patrolMinX, patrolMinY, patrolMaxX, patrolMaxY := 0, 0, 0, 0
 	if spawn.IsBoss {
 		// Bosses can pursue players throughout their owning region, but remain
@@ -464,12 +461,13 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 		patrolMinX, patrolMinY, patrolMaxX, patrolMaxY = monsterPatrolBounds(spawn.RegionID)
 		leashRadius = patrolRadius(spawn.X, spawn.Y, patrolMinX, patrolMinY, patrolMaxX, patrolMaxY)
 		aggroRadius = leashRadius
-		attackRange, speed = 2, worldMonsterBossSpeed
+		attackRange, speed = 2, worldMonsterSpeed(spawn.Rank)+worldMonsterSpecialSpeedBonus
 	} else if strings.EqualFold(template.Type, "Elite") {
-		// Elite camp leaders notice and pursue players around their camp, but
-		// stay inside their owning region instead of using the boss-wide hunt.
+		// Elite monsters notice and pursue players around their spawn, but stay
+		// inside their owning region instead of using the boss-wide hunt.
 		patrolMinX, patrolMinY, patrolMaxX, patrolMaxY = monsterPatrolBounds(spawn.RegionID)
-		aggroRadius, leashRadius, speed = worldMonsterEliteAggro, worldMonsterEliteLeash, worldMonsterEliteSpeed
+		aggroRadius, leashRadius = worldMonsterEliteAggro, worldMonsterEliteLeash
+		speed = worldMonsterSpeed(spawn.Rank) + worldMonsterSpecialSpeedBonus
 	}
 	monster := WorldMonster{
 		InstanceID: uuid.NewString(), SpawnID: spawn.ID, MonsterTemplateID: spawn.MonsterID, IsBoss: spawn.IsBoss, IsElite: strings.EqualFold(template.Type, "Elite"), Rank: spawn.Rank, SubRank: spawn.SubRank, RegionID: spawn.RegionID,
@@ -482,11 +480,23 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 	return monster, nil
 }
 
+// worldMonsterSpeed returns an ordinary monster's movement speed in cells per
+// second, scaled by rank: 0.9 at rank 1 up to 1.7 at rank 9. Elite and Boss
+// monsters add worldMonsterSpecialSpeedBonus on top of the same curve.
+func worldMonsterSpeed(rank int) float64 {
+	if rank < 1 {
+		rank = 1
+	}
+	if rank > 9 {
+		rank = 9
+	}
+	return 0.8 + 0.1*float64(rank)
+}
+
 // worldMonsterAggroProfile gives ordinary monsters a rank-scaled detection
-// radius wide enough to cover the client's 25-cell investigation window, plus a
-// wider leash so a pursuit is not dropped the moment the player steps one cell
-// out of detection. Detection is 14-22 cells; the pursuit keeps its target out
-// to 22-34 cells of the spawn point.
+// radius plus a slightly wider leash so a pursuit is not dropped the moment the
+// player steps one cell out of detection. Detection is 9-17 cells; the pursuit
+// keeps its target out to 15-23 cells of the spawn point.
 func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
 	if rank < 1 {
 		rank = 1
@@ -494,8 +504,8 @@ func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
 	if rank > 9 {
 		rank = 9
 	}
-	aggroRadius = 14 + float64(rank-1)
-	leashRadius = aggroRadius + 8 + float64(rank-1)*0.5
+	aggroRadius = 8 + float64(rank)
+	leashRadius = aggroRadius + 6
 	return aggroRadius, leashRadius
 }
 
@@ -515,15 +525,16 @@ func applyWorldMonsterTuning(ctx context.Context, monster *WorldMonster) {
 	if monster.IsBoss {
 		monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY = monsterPatrolBounds(monster.RegionID)
 		monster.LeashRadius = patrolRadius(int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY)), monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY)
-		monster.AggroRadius, monster.Speed = monster.LeashRadius, worldMonsterBossSpeed
+		monster.AggroRadius = monster.LeashRadius
+		monster.Speed = worldMonsterSpeed(effectiveRank) + worldMonsterSpecialSpeedBonus
 		monster.AttackRange = 2
 	} else if worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
 		monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY = monsterPatrolBounds(monster.RegionID)
 		monster.AggroRadius, monster.LeashRadius = worldMonsterEliteAggro, worldMonsterEliteLeash
-		monster.Speed = worldMonsterEliteSpeed
+		monster.Speed = worldMonsterSpeed(effectiveRank) + worldMonsterSpecialSpeedBonus
 	} else {
 		monster.AggroRadius, monster.LeashRadius = worldMonsterAggroProfile(effectiveRank)
-		monster.Speed = worldMonsterDefaultSpeed
+		monster.Speed = worldMonsterSpeed(effectiveRank)
 	}
 }
 

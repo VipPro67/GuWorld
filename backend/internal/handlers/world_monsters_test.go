@@ -157,14 +157,32 @@ func TestWorldMonsterAggroProfileScalesWithRankAndStaysLocal(t *testing.T) {
 	rank1Aggro, rank1Leash := worldMonsterAggroProfile(1)
 	rank5Aggro, rank5Leash := worldMonsterAggroProfile(5)
 	rank9Aggro, rank9Leash := worldMonsterAggroProfile(9)
-	if rank1Aggro != 14 || rank5Aggro != 18 || rank9Aggro != 22 {
+	if rank1Aggro != 9 || rank5Aggro != 13 || rank9Aggro != 17 {
 		t.Fatalf("unexpected aggro radii: rank1=%v rank5=%v rank9=%v", rank1Aggro, rank5Aggro, rank9Aggro)
 	}
-	if rank1Leash != 22 || rank5Leash != 28 || rank9Leash != 34 {
+	if rank1Leash != 15 || rank5Leash != 19 || rank9Leash != 23 {
 		t.Fatalf("unexpected leash radii: rank1=%v rank5=%v rank9=%v", rank1Leash, rank5Leash, rank9Leash)
 	}
 	if aggro, leash := worldMonsterAggroProfile(99); aggro != rank9Aggro || leash != rank9Leash {
 		t.Fatalf("rank cap not applied: aggro=%v leash=%v", aggro, leash)
+	}
+}
+
+func TestWorldMonsterSpeedScalesWithRankAndCaps(t *testing.T) {
+	if got := worldMonsterSpeed(1); math.Abs(got-0.9) > 1e-9 {
+		t.Fatalf("rank-1 speed = %v, want 0.9", got)
+	}
+	if got := worldMonsterSpeed(9); math.Abs(got-1.7) > 1e-9 {
+		t.Fatalf("rank-9 speed = %v, want 1.7", got)
+	}
+	if got := worldMonsterSpeed(99); got != worldMonsterSpeed(9) {
+		t.Fatalf("rank cap not applied: %v", got)
+	}
+	if got := worldMonsterSpeed(0); got != worldMonsterSpeed(1) {
+		t.Fatalf("rank floor not applied: %v", got)
+	}
+	if worldMonsterSpeed(5) <= worldMonsterSpeed(4) {
+		t.Fatalf("speed must increase with rank: r4=%v r5=%v", worldMonsterSpeed(4), worldMonsterSpeed(5))
 	}
 }
 
@@ -182,7 +200,8 @@ func TestEliteWorldMonsterUsesCampHunterProfile(t *testing.T) {
 
 	monster := WorldMonster{MonsterTemplateID: templateID, RegionID: "elite_profile_test", Rank: 3}
 	applyWorldMonsterTuning(context.Background(), &monster)
-	if monster.AggroRadius != worldMonsterEliteAggro || monster.LeashRadius != worldMonsterEliteLeash || monster.Speed != worldMonsterEliteSpeed {
+	wantSpeed := worldMonsterSpeed(3) + worldMonsterSpecialSpeedBonus
+	if monster.AggroRadius != worldMonsterEliteAggro || monster.LeashRadius != worldMonsterEliteLeash || monster.Speed != wantSpeed {
 		t.Fatalf("elite hunter profile = aggro %v, leash %v, speed %v", monster.AggroRadius, monster.LeashRadius, monster.Speed)
 	}
 	if monster.PatrolMinX != 0 || monster.PatrolMinY != 0 || monster.PatrolMaxX != WorldWidth-1 || monster.PatrolMaxY != WorldHeight-1 {
@@ -197,7 +216,7 @@ func TestApplyWorldMonsterTuningUpgradesLegacyCachedMonster(t *testing.T) {
 	monster := WorldMonster{MonsterTemplateID: "wolf", Rank: 0, AggroRadius: 12, LeashRadius: 24, Speed: 0.5}
 	applyWorldMonsterTuning(context.Background(), &monster)
 	wantAggro, wantLeash := worldMonsterAggroProfile(7)
-	if monster.Rank != 7 || monster.SubRank != 2 || monster.AggroRadius != wantAggro || monster.LeashRadius != wantLeash || monster.Speed != worldMonsterDefaultSpeed {
+	if monster.Rank != 7 || monster.SubRank != 2 || monster.AggroRadius != wantAggro || monster.LeashRadius != wantLeash || monster.Speed != worldMonsterSpeed(7) {
 		t.Fatalf("legacy monster was not retuned: %+v", monster)
 	}
 }
@@ -215,7 +234,7 @@ func TestApplyWorldMonsterTuningRecoversLegacyFixedSpawnRank(t *testing.T) {
 	monster := WorldMonster{SpawnID: "fixed-spawn", MonsterTemplateID: "wolf", Rank: 0}
 	applyWorldMonsterTuning(context.Background(), &monster)
 	wantAggro8, wantLeash8 := worldMonsterAggroProfile(8)
-	if monster.Rank != 8 || monster.AggroRadius != wantAggro8 || monster.LeashRadius != wantLeash8 || monster.Speed != worldMonsterDefaultSpeed {
+	if monster.Rank != 8 || monster.AggroRadius != wantAggro8 || monster.LeashRadius != wantLeash8 || monster.Speed != worldMonsterSpeed(8) {
 		t.Fatalf("fixed legacy monster was not retuned: %+v", monster)
 	}
 }
@@ -237,7 +256,7 @@ func TestRankScaledAggroControlsActualTickBehavior(t *testing.T) {
 	rank4.Rank = 4
 	applyWorldMonsterTuning(context.Background(), &rank4)
 	inside := []WorldPosEntry{{ID: "p", Region: "field", X: 9, Y: 0}}
-	if got, _ := tickWorldMonster(rank4, inside, now, active); got.State != MonsterStateChase || got.X != 1 {
+	if got, _ := tickWorldMonster(rank4, inside, now, active); got.State != MonsterStateChase || got.X <= 0 {
 		t.Fatalf("rank-4 monster did not chase from the increased aggro range: %+v", got)
 	}
 

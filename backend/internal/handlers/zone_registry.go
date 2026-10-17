@@ -231,6 +231,9 @@ func LoadZoneRegistry(db *sql.DB) error {
 	// Procedural cell content depends on the zone layout, so any (re)load
 	// invalidates cached cells.
 	cellGenCache.clear()
+	// Rank-band content pools are derived from the item/Gu registries, which are
+	// reloaded alongside the zone registry on every admin import.
+	clearCellPoolCache()
 
 	logger.S.Infof("Zone registry loaded: %d zones, %d persistent cells, %d spawn pools", len(newReg.zones), len(newReg.persistent), len(newReg.spawnPools))
 	return nil
