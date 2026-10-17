@@ -43,8 +43,7 @@ ghi bằng domain command nhưng vẫn là `Internal/not exposed` nếu không c
 | beast betting | `beast_betting_rounds` | Internal/not exposed | Betting lifecycle; future admin action must be a domain command. |
 | beast betting | `beast_bets` | Internal/not exposed | Financial/gameplay ledger; immutable from Admin. |
 | combat | `combat_history` | Read-only | `/admin/combat-history`; PVP history and replay logs, append-only. |
-| combat | `arena_rankings` | Domain command only | `/admin/arena-rankings`; view rank and adjust points/challenge counters with reason and audit. Rank remains runtime-owned. |
-| combat | `combat_sessions` | Internal/not exposed | Active session state, cấm editor. |
+| combat | `players.active_combat` | Internal/not exposed | Active session state on player row, cấm editor. |
 | death arena | `death_arena_tournaments` | Internal/not exposed | Tournament aggregate state. |
 | death arena | `death_arena_teams` | Internal/not exposed | Tournament aggregate child. |
 | death arena | `death_arena_team_members` | Internal/not exposed | Tournament aggregate child. |

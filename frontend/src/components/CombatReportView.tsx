@@ -552,9 +552,9 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                     const shieldBuffMult = b.shield_buff_mult ?? 1;
                     const shieldDaoMult = b.shield_dao_mult ?? 1;
                     const shieldDaoBonus = b.shield_dao_bonus ?? 0;
-                    const shieldFinal = b.shield_final ?? (shieldBase * shieldSkillMult * shieldBuffMult + shieldDaoBonus);
+                    const shieldFinal = b.shield_final ?? (shieldBase * (shieldSkillMult + shieldBuffMult - 1) + shieldDaoBonus);
                     const isShield = shieldFinal > 0 || shieldBase > 0;
-                    const baseWithMult = shieldBase * shieldSkillMult * shieldBuffMult;
+                    const baseWithMult = shieldBase * (shieldSkillMult + shieldBuffMult - 1);
 
                     const hasDamage = baseDmg > 0 || (b.final_damage !== undefined && b.final_damage > 0) || (b.hp_damage !== undefined && b.hp_damage > 0);
 
@@ -694,7 +694,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                               <div className="flex items-center gap-1">
                                 <span className="text-zinc-500">Hệ số:</span>
                                 <span className="text-purple-300 font-bold">
-                                  x{(shieldSkillMult * shieldBuffMult).toFixed(2)}
+                                  x{(shieldSkillMult + shieldBuffMult - 1).toFixed(2)}
                                 </span>
                               </div>
                             </>
@@ -743,7 +743,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                                 <span>Hệ Số Chiêu:</span>
                                 <div className="text-right">
                                   <span className="text-purple-300 font-bold">
-                                    x{(shieldSkillMult * shieldBuffMult).toFixed(2)}
+                                    x{(shieldSkillMult + shieldBuffMult - 1).toFixed(2)}
                                   </span>
                                   {b.reason && (
                                     <div className="text-[10px] text-amber-400/90 font-sans">
@@ -752,7 +752,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                                   )}
                                   {shieldBuffMult !== 1 && (
                                     <div className="text-[10px] text-purple-400/80">
-                                      ({shieldSkillMult.toFixed(2)} chiêu × {shieldBuffMult.toFixed(2)} buff)
+                                      ({shieldSkillMult.toFixed(2)} chiêu + {shieldBuffMult.toFixed(2)} buff − 1)
                                     </div>
                                   )}
                                 </div>

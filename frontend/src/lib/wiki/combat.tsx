@@ -72,7 +72,7 @@ export const combatPages: WikiPage[] = [
             </p>
 
             <p className="text-[var(--text-muted)]">
-              • <span className="text-amber-400">a.DamageMult</span>: Damage multiplier (damage_mult from Gu)
+              • <span className="text-amber-400">a.DamageMult</span>: Hệ số sát thương cộng dồn (damage_mult từ Cổ, gộp với cảnh giới lưu phái + buff chờ theo `1 + Σ(m−1)`)
             </p>
 
             <p className="text-[var(--text-muted)]">

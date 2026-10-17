@@ -34,7 +34,6 @@ import {
   BookOpen,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
-import { getRankScale } from "@/lib/balance";
 import { formatNumber, calculateTribulationProgress } from "@/lib/utils";
 import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection } from "@/components/ui";
@@ -44,6 +43,11 @@ import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 // Số giống (chính vật phẩm sản xuất) cần để gieo một khu tài nguyên. Khớp
 // seed_amount trong backend/data/ApertureNodeTemplate.csv (backend là nguồn chân lý).
 const APERTURE_SEED_AMOUNT = 100;
+
+// Mirror of the backend harvest caps (backend/internal/gamefx/aperture_yield.go);
+// used for display only — the server always sends the authoritative bonus.
+const YIELD_TOTAL_CAP = 50;
+const YIELD_DAO_CAP = 50;
 
 export interface DaoGroupDef {
   id: string;
@@ -696,9 +700,10 @@ export const ImmortalApertureView: React.FC = () => {
   }, 0);
   const canAffordBulkRepair = player.immortal_stones >= bulkRepairCost;
 
-  // Total Food Production
+  // Total Food Production — dùng sản lượng server tính (yield_preview), không
+  // tự suy lại công thức ở client.
   const totalFoodProd = apertureNodes.reduce((sum, n) => {
-    if (!n.is_destroyed &&
+    if (!n.is_destroyed && n.yield_preview &&
         ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "SPIRIT_DEER_PASTURE",
          "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
          "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
@@ -706,9 +711,7 @@ export const ImmortalApertureView: React.FC = () => {
          "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
          "NO_FARM", "NO_FARM_ADV", "SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
     ) {
-      const maxOldNodes = Math.min(200, Math.floor((aperture?.area_size || 0) / 100000));
-      const perCellScale = maxOldNodes * 0.25 / 400;
-      return sum + n.production_amount * (n.cells?.length || 1) * perCellScale * getDaoConflictMultiplier(n);
+      return sum + n.yield_preview.expected;
     }
     return sum;
   }, 0);
@@ -1468,310 +1471,106 @@ return (
                                 <span className="text-slate-500 transition-transform group-open:rotate-180">⌄</span>
                               </summary>
                               {!selectedNode.is_destroyed && (() => {
-                            const conflictMult = getDaoConflictMultiplier(selectedNode);
-                            const isConflicting = conflictMult < 0.999;
-                            const isPlant = selectedNode.node_type === "FARMING_ZONE" || selectedNode.zone_type === "khu_trong";
-                            const isHerb = selectedNode.node_type === "BREEDING_ZONE" || selectedNode.zone_type === "khu_nuoi";
-                            const isCarn = false;
-                            const isMine = selectedNode.node_type === "MINING_ZONE" || selectedNode.zone_type === "khu_khai_thac";
-
-                            const pCount = apertureNodes.filter(n => !n.is_destroyed && (n.node_type === "FARMING_ZONE" || n.zone_type === "khu_trong")).length;
-                            const hCount = apertureNodes.filter(n => !n.is_destroyed && (n.node_type === "BREEDING_ZONE" || n.zone_type === "khu_nuoi")).length;
-                            const cCount = apertureNodes.filter(n => !n.is_destroyed && (n.node_type === "MINING_ZONE" || n.zone_type === "khu_khai_thac")).length;
-
-                            const overgrazed = isPlant && hCount > pCount && cCount === 0;
-                            const starvingHerb = isHerb && pCount === 0;
-                            const starvingCarn = isCarn && hCount === 0;
-
-                             const parseItemPaths = (pathVal: ApiResponseData): string[] => {
-                              if (!pathVal) return [];
-                              if (Array.isArray(pathVal)) return pathVal.map(p => String(p).trim());
-                              if (typeof pathVal === "string") {
-                                const s = pathVal.trim();
-                                if (s.startsWith("[") && s.endsWith("]")) {
-                                  try {
-                                    const arr = JSON.parse(s);
-                                    if (Array.isArray(arr)) return arr.map(p => String(p).trim());
-                                  } catch (e) {}
+                                const yp = selectedNode.yield_preview;
+                                if (!yp) {
+                                  return (
+                                    <div className="p-3 text-xs text-slate-400">
+                                      Chưa có dữ liệu sản lượng. Hãy tải lại danh sách khu tài nguyên.
+                                    </div>
+                                  );
                                 }
-                                const cleaned = s.replace(/[\[\]"]/g, "").trim();
-                                return cleaned ? [cleaned] : [];
-                              }
-                              return [];
-                            };
-
-                            const getDaoMarkAmount = (pathStr: string | undefined): number => {
-                              if (!pathStr) return 0;
-                              const paths = parseItemPaths(pathStr);
-                              if (!paths || paths.length === 0) return 0;
-
-                              let maxMarks = 0;
-                              for (const p of paths) {
-                                const target = p.toLowerCase().replace(/ path$/i, "").replace(/_path$/i, "").trim();
-                                for (const d of daoMarks) {
-                                  if (!d || !d.path) continue;
-                                  const dp = d.path.toLowerCase().replace(/ path$/i, "").replace(/_path$/i, "").trim();
-                                  if (dp === target && d.amount > maxMarks) {
-                                    maxMarks = d.amount;
-                                  }
-                                }
-                                const vietToKey: Record<string, string> = {
-                                  "vận": "luck", "vận đạo": "luck",
-                                  "mộc": "wood", "mộc đạo": "wood",
-                                  "hỏa": "fire", "hỏa đạo": "fire",
-                                  "thủy": "water", "thủy đạo": "water",
-                                  "kim": "metal", "kim đạo": "metal",
-                                  "thổ": "earth", "thổ đạo": "earth",
-                                  "lôi": "lightning", "lôi đạo": "lightning",
-                                  "băng": "ice", "băng đạo": "ice",
-                                  "phong": "wind", "phong đạo": "wind",
-                                  "quang": "light", "quang đạo": "light",
-                                  "ám": "dark", "ám đạo": "dark",
-                                  "kiếm": "sword", "kiếm đạo": "sword",
-                                  "đao": "blade", "đao đạo": "blade",
-                                  "thực": "food", "thực đạo": "food",
-                                  "biến hóa": "transformation", "nô": "enslavement",
-                                  "tín": "information", "huyết": "blood", "độc": "poison",
-                                  "nhân": "human", "mộng": "dream", "huyễn": "phantom",
-                                  "sát": "killing", "lực": "strength", "trí": "wisdom",
+                                const factorMeta: Record<string, { icon: string; label: string }> = {
+                                  level: { icon: "⭐", label: "Cấp độ mỏ" },
+                                  dao: { icon: "☯️", label: "Đạo ngân (lưu phái vật phẩm)" },
+                                  area: { icon: "🗺️", label: "Diện tích Tiên Khiếu" },
+                                  conflict: { icon: "⚔️", label: "Xung đột Đạo ngân" },
+                                  ecology: { icon: "🌀", label: "Độ thuần khiết sinh thái" },
+                                  eco: { icon: "🌿", label: "Cân bằng sinh thái" },
+                                  labor: { icon: "⚙️", label: "Cường độ lao động" },
+                                  pop: { icon: "👥", label: "Dân số dị nhân" },
                                 };
-                                const mappedKey = vietToKey[target];
-                                if (mappedKey) {
-                                  for (const d of daoMarks) {
-                                    if (!d || !d.path) continue;
-                                    const dp = d.path.toLowerCase().replace(/ path$/i, "").replace(/_path$/i, "").trim();
-                                    if ((dp === mappedKey || (mappedKey === "killing" && dp === "kill")) && d.amount > maxMarks) {
-                                      maxMarks = d.amount;
-                                    }
-                                  }
-                                }
-                              }
-                              return maxMarks;
-                            };
-
-                            const levelMultiplier = 1.0 + (Math.max(1, selectedNode.level) - 1) * 0.20;
-                            const nodePathMarks = getDaoMarkAmount(selectedNode.path);
-                            const daoMultiplier = 1.0 + nodePathMarks * 0.0001;
-                            let ecoMult = 1.0;
-                            if (overgrazed) ecoMult = 0.5;
-                            else if (starvingHerb || starvingCarn) ecoMult = 0.2;
-                            else if (isPlant && hCount > 0) ecoMult = 1.25;
-
-                            let vhLaborMult = 1.0;
-                            let vhPopBonus = 1.0;
-                            const vhRace = selectedNode.node_type === "HAIRY_MAN_SETTLEMENT" ? "HAIRY_MAN"
-                              : (selectedNode.node_type === "FEATHERMAN_CANYON" ? "FEATHERMAN"
-                              : (isMine || selectedNode.node_type === "ROCKMAN_TRIBE" ? "ROCKMAN" : ""));
-                            const vh = vhRace ? variantHumans.find(v => v.race === vhRace) : undefined;
-                            const vhPop = vh ? vh.population : 0;
-                            const vhLabor = vh ? vh.labor_intensity : "NORMAL";
-                            const laborLabels: Record<string, string> = { LOW: "x0.7 (Nhàn)", NORMAL: "x1.0", HIGH: "x1.5", EXPLOIT: "x2.0 (Bóc lột)" };
-
-                            if (vhRace && vhPop > 0) {
-                              vhPopBonus = 1.0 + vhPop * 0.001;
-                              if (vhLabor === "LOW") vhLaborMult = 0.7;
-                              if (vhLabor === "HIGH") vhLaborMult = 1.5;
-                              if (vhLabor === "EXPLOIT") vhLaborMult = 2.0;
-                            }
-
-                            const getManaVal = (rank: number): number => getRankScale(rank);
-
-                            const areaSize = aperture?.area_size || 0;
-                            const areaMultiplier = 1.0 + areaSize / 10000000.0;
-
-                            let itemRankDivisor = 1.0;
-                            let itemFoodPathMultiplier = 1.0;
-                            let itemSpecName = "";
-                            let itemSpecRank = 1;
-                            let itemPathName = "";
-                            let itemPathMarks = 0;
-
-                            if (selectedNode.production_type === "Material") {
-                              let prodKey = selectedNode.production_key;
-                              if (!prodKey && selectedNode.name && selectedNode.name.includes("(") && selectedNode.name.includes(")")) {
-                                const match = selectedNode.name.match(/\(([^)]+)\)/);
-                                if (match && match[1]) {
-                                  const itemName = match[1].trim().toLowerCase();
-                                  for (const [id, spec] of Object.entries(itemDictionary || {})) {
-                                    if (spec.name.toLowerCase() === itemName) {
-                                      prodKey = id;
-                                      break;
-                                    }
-                                  }
-                                }
-                              }
-
-                              if (prodKey && itemDictionary[prodKey]) {
-                                const item = itemDictionary[prodKey];
-                                itemSpecName = item.name;
-                                const effectiveRank = Math.max(item.rank || 0, item.rarity || 0, 1);
-                                itemSpecRank = effectiveRank;
-                                itemRankDivisor = getManaVal(effectiveRank);
-                                if (item.path) {
-                                  itemPathName = item.path;
-                                  itemPathMarks = getDaoMarkAmount(item.path);
-                                  itemFoodPathMultiplier = 1.0 + itemPathMarks * 0.0001;
-                                }
-                              }
-                            }
-
-                            // Độ thuần khiết Tiên Khiếu (spec §5.1) — khớp backend gamefx.EcologyPurityFactor.
-                            const purityFrac = dominantPurity / 100;
-                            let ecologyMultiplier = 1.0;
-                            if (purityFrac > 0) {
-                              const purityFactor = purityFrac >= 0.70 ? 1.0 : Math.max(0.25, 1.0 - (0.70 - purityFrac) * 1.25);
-                              const conflictReduction = daoNgan?.dao_conflict_reduction_pct ?? 0;
-                              ecologyMultiplier = 1.0 - (1.0 - purityFactor) * (1.0 - conflictReduction / 100);
-                            }
-
-                            const combinedMultiplier = (areaMultiplier * daoMultiplier * conflictMult * ecologyMultiplier * ecoMult * vhLaborMult * vhPopBonus * itemFoodPathMultiplier * levelMultiplier) / itemRankDivisor;
-                            const baseProd = selectedNode.production_amount || 0;
-                            const nodeCells = selectedNode.cells?.length || 1;
-                            const legacyNodeCap = Math.min(200, Math.floor((aperture?.area_size || 0) / 100000));
-                            const cellYieldMultiplier = legacyNodeCap * 0.25 / 400;
-                            const projectedProduction = baseProd * nodeCells * cellYieldMultiplier * combinedMultiplier;
-                            // Khớp backend: floor thật, phần lẻ dồn vào lần thu sau (không làm tròn lên 1).
-                            let rawExpected = projectedProduction > 0 ? Math.floor(projectedProduction) : 0;
-                            if (selectedNode.production_type === "Material" && rawExpected > 10000000) {
-                              rawExpected = 10000000;
-                            }
-                            const expectedYield = rawExpected;
-
-                            const efficiencyPercent = Math.round(combinedMultiplier * 100);
-
-                            // Determine displayed path for Dao Marks row
-                            const displayPath = (itemPathName && (itemPathMarks > 0 || !nodePathMarks)) ? itemPathName : (selectedNode.path || "");
-                            const displayMarks = (itemPathName && (itemPathMarks > 0 || !nodePathMarks)) ? itemPathMarks : nodePathMarks;
-
-                            return (
-                              <div className="p-3 bg-slate-950/80 rounded-xl border border-amber-500/30 text-xs space-y-2.5 shadow-md">
-                                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                                  <div className="font-bold text-amber-400 flex items-center gap-1.5">
-                                    <TrendingUp className="w-4 h-4 text-emerald-400" />
-                                    Phân Tích Hiệu Suất Sản Lượng
-                                  </div>
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    combinedMultiplier >= 1.0
-                                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                      : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                                  }`}>
-                                    Hiệu suất thực tế: {efficiencyPercent.toLocaleString("vi-VN")}% ({combinedMultiplier >= 1.0 ? `+${Math.round((combinedMultiplier - 1) * 100).toLocaleString("vi-VN")}%` : `-${Math.round((1 - combinedMultiplier) * 100).toLocaleString("vi-VN")}%`})
-                                  </span>
-                                </div>
-
-                                {/* Banner Sản Lượng Dự Tính (1 lần thu hoạch) */}
-                                <div className="p-2.5 bg-gradient-to-r from-emerald-950/70 to-slate-900 border border-emerald-500/40 rounded-lg flex items-center justify-between shadow-inner">
-                                  <div>
-                                    <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                                      <Package className="w-3.5 h-3.5 text-emerald-300" />
-                                      Sản Lượng Dự Tính (1 Lần Thu Hoạch)
-                                    </div>
-                                    <div className="text-xs text-slate-300 mt-0.5">
-                                      Gốc: <span className="font-semibold text-slate-200">{baseProd}</span> {selectedNode.production_type === "Stones" ? "Nguyên Thạch" : (itemSpecName || "vật phẩm")}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="text-sm font-extrabold text-emerald-300">
-                                      +{expectedYield.toLocaleString()} {selectedNode.production_type === "Stones" ? "Đá" : "món"}
-                                    </div>
-                                    {selectedNode.production_type === "Material" && itemSpecRank > 1 && (
-                                      <div className="text-[10px] text-amber-400 font-medium">
-                                        (Rank {itemSpecRank}: /{itemRankDivisor >= 10000 ? formatNumber(itemRankDivisor) : itemRankDivisor.toLocaleString("vi-VN")})
+                                const itemSpec = itemDictionary[selectedNode.production_key];
+                                const itemName = selectedNode.production_type === "Stones"
+                                  ? "Nguyên Thạch"
+                                  : (itemSpec?.name || "vật phẩm");
+                                return (
+                                  <div className="p-3 bg-slate-950/80 rounded-xl border border-amber-500/30 text-xs space-y-2.5 shadow-md">
+                                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                                      <div className="font-bold text-amber-400 flex items-center gap-1.5">
+                                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                                        Phân Tích Hiệu Suất Sản Lượng
                                       </div>
-                                    )}
-                                  </div>
-                                </div>
+                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                        yp.bonus >= 1.0
+                                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                          : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                                      }`}>
+                                        Hiệu suất thực tế: ×{yp.bonus.toFixed(2)}
+                                        {yp.capped && <span className="text-amber-400"> (chạm trần)</span>}
+                                      </span>
+                                    </div>
 
-                                <div className="space-y-1.5 text-[11px]">
-                                  {/* 1. Dao Marks Bonus */}
-                                  <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
-                                    <span className="text-slate-300 flex items-center gap-1.5 shrink-0">
-                                      <span>☯️</span> Đạo ngân bổ trợ ({translatePath(displayPath)}):
-                                    </span>
-                                    <span
-                                      className={displayMarks > 0 ? "text-emerald-400 font-bold text-right" : "text-slate-400 text-right"}
-                                      title={`${displayMarks.toLocaleString("vi-VN")} vết Đạo ngân`}
-                                    >
-                                      {((displayMarks * 0.01) / itemRankDivisor) >= 10000
-                                        ? `+${formatNumber((displayMarks * 0.01) / itemRankDivisor)}%`
-                                        : `+${((displayMarks * 0.01) / itemRankDivisor).toFixed(2)}%`}
-                                      {itemRankDivisor > 1 && (
-                                        <span className="text-[10px] text-amber-400 font-normal ml-1">
-                                          (chia Rank /{itemRankDivisor >= 10000 ? formatNumber(itemRankDivisor) : itemRankDivisor.toLocaleString("vi-VN")})
+                                    {/* Banner Sản Lượng Dự Tính (1 lần thu hoạch) */}
+                                    <div className="p-2.5 bg-gradient-to-r from-emerald-950/70 to-slate-900 border border-emerald-500/40 rounded-lg flex items-center justify-between shadow-inner">
+                                      <div>
+                                        <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                          <Package className="w-3.5 h-3.5 text-emerald-300" />
+                                          Sản Lượng Dự Tính (1 Lần Thu Hoạch)
+                                        </div>
+                                        <div className="text-xs text-slate-300 mt-0.5">
+                                          Cơ bản {yp.base} × hiệu suất {yp.bonus.toFixed(2)}
+                                          {yp.divisor > 1 && <> ÷ {formatNumber(yp.divisor)}</>}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 mt-0.5">
+                                          ≈ {yp.expected.toFixed(2)} món/lần · ~{formatNumber(Math.round(yp.per_hour * 10) / 10)} món/giờ
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-sm font-extrabold text-emerald-300">
+                                          +{yp.whole.toLocaleString("vi-VN")} {selectedNode.production_type === "Stones" ? "Đá" : "món"}
+                                        </div>
+                                        {yp.remainder > 0.0001 && (
+                                          <div className="text-[10px] text-slate-400">
+                                            dồn {yp.remainder.toFixed(2)} cho lần sau
+                                          </div>
+                                        )}
+                                        <div className="text-[10px] text-amber-400 font-medium">{itemName}</div>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-1.5 text-[11px]">
+                                      {yp.factors.map((factor) => {
+                                        const meta = factorMeta[factor.key] || { icon: "•", label: factor.key };
+                                        const delta = (factor.value - 1) * 100;
+                                        const negative = factor.value < 0.999;
+                                        const atDaoCap = factor.key === "dao" && factor.value >= YIELD_DAO_CAP;
+                                        return (
+                                          <div key={factor.key} className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
+                                            <span className="text-slate-300 flex items-center gap-1.5 shrink-0">
+                                              <span>{meta.icon}</span> {meta.label}:
+                                            </span>
+                                            <span className={negative ? "text-rose-400 font-bold text-right" : "text-emerald-400 font-bold text-right"}>
+                                              ×{factor.value.toFixed(2)}
+                                              <span className="text-slate-400 font-normal ml-1">
+                                                ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%{atDaoCap ? " · trần" : ""})
+                                              </span>
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                      <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-amber-500/30">
+                                        <span className="text-slate-300 flex items-center gap-1.5">
+                                          <span>⚖️</span> Trần hệ số:
                                         </span>
-                                      )}
-                                    </span>
-                                  </div>
-
-                                  {/* Secondary Node Path Dao Marks if different from item path */}
-                                  {itemPathName && selectedNode.path && itemPathName !== selectedNode.path && nodePathMarks > 0 && (
-                                    <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850 text-[10px]">
-                                      <span className="text-slate-400 flex items-center gap-1.5 shrink-0">
-                                        <span>☯️</span> Đạo ngân mỏ ({translatePath(selectedNode.path)}):
-                                      </span>
-                                      <span
-                                        className="text-emerald-400 font-bold text-right"
-                                        title={`${nodePathMarks.toLocaleString("vi-VN")} vết Đạo ngân`}
-                                      >
-                                        {nodePathMarks >= 10000 ? `+${formatNumber(nodePathMarks)}%` : `+${(nodePathMarks * 1.0).toFixed(1)}%`}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* 2. Node Level Bonus */}
-                                  <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
-                                    <span className="text-slate-300 flex items-center gap-1.5">
-                                      <span>⭐</span> Cấp độ mỏ (Lv.{selectedNode.level}):
-                                    </span>
-                                    <span className="text-amber-400 font-bold">
-                                      +{((selectedNode.level - 1) * 20).toFixed(0)}% sản lượng
-                                    </span>
-                                  </div>
-
-                                  {/* 3. Dao Conflict Status */}
-                                  <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
-                                    <span className="text-slate-300 flex items-center gap-1.5">
-                                      <span>⚔️</span> Xung đột Đạo ngân:
-                                    </span>
-                                    {isConflicting ? (
-                                      <span className="text-rose-400 font-bold">-{((1 - conflictMult) * 100).toFixed(1)}% sản lượng</span>
-                                    ) : (
-                                      <span className="text-emerald-400 font-semibold">Hài hòa (100%)</span>
-                                    )}
-                                  </div>
-
-                                  {/* 4. Ecosystem Status */}
-                                  {(overgrazed || starvingHerb || starvingCarn || (isPlant && hCount > 0)) && (
-                                    <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
-                                      <span className="text-slate-300 flex items-center gap-1.5">
-                                        <span>🌿</span> Trạng thái Sinh Thái:
-                                      </span>
-                                      {overgrazed && <span className="text-amber-400 font-bold">Quá tải gặm nhấm (-50%)</span>}
-                                      {starvingHerb && <span className="text-rose-400 font-bold">Thiếu cỏ thực vật (-80%)</span>}
-                                      {starvingCarn && <span className="text-rose-400 font-bold">Thiếu con mồi (-80%)</span>}
-                                      {!overgrazed && !starvingHerb && !starvingCarn && isPlant && hCount > 0 && (
-                                        <span className="text-emerald-400 font-bold">Phân bón sinh thái (+25%)</span>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {/* 5. Variant Humans Labor Status */}
-                                  {vhRace && vhPop > 0 && (
-                                    <div className="space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-850 text-[10px]">
-                                      <div className="flex justify-between items-center">
-                                        <span className="text-slate-300">{vhRace === "HAIRY_MAN" ? "🦁 Dân số Mao Nhân:" : (vhRace === "FEATHERMAN" ? "🪶 Dân số Vũ Nhân:" : "🪨 Dân số Người Đá:")}</span>
-                                        <span className="text-cyan-400 font-bold">{vhPop.toLocaleString("vi-VN")} (+{(vhPop * 0.1).toFixed(1)}%)</span>
-                                      </div>
-                                      <div className="flex justify-between items-center">
-                                        <span className="text-slate-300">⚙️ Cường độ lao động:</span>
-                                        <span className="text-amber-400 font-bold">{laborLabels[vhLabor] || "x1.0"}</span>
+                                        <span className={yp.capped ? "text-amber-400 font-bold" : "text-slate-400"}>
+                                          ×{yp.bonus.toFixed(2)} / ×{YIELD_TOTAL_CAP}
+                                          {yp.capped ? " (đã chạm trần)" : ""}
+                                        </span>
                                       </div>
                                     </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
+                                  </div>
+                                );
+                              })()}
                             </details>
                           )}
 

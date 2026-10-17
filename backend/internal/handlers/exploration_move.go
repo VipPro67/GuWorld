@@ -949,51 +949,51 @@ func MovePlayerPath(c *gin.Context) {
 		return
 	}
 
-	if req.X < 0 || req.X >= WorldWidth || req.Y < 0 || req.Y >= WorldHeight {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ vượt ra ngoài ranh giới bản đồ."})
-		return
-	}
-
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
+	code, res := ExecuteMovePlayerPath(authID, req)
+	c.JSON(code, res)
+}
+
+// ExecuteMovePlayerPath moves the player along a straight path from its current cell
+// to the requested cell, decoupled from HTTP gin.Context.
+func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
+	if req.X < 0 || req.X >= WorldWidth || req.Y < 0 || req.Y >= WorldHeight {
+		return http.StatusBadRequest, gin.H{"error": "Tọa độ vượt ra ngoài ranh giới bản đồ."}
+	}
+
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Database transaction failure"}
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		logger.S.Errorf("MovePlayerPath: failed to evaluate mana for player=%s: %v", authID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)})
-		return
+		return http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)}
 	}
 	if gamefx.IsDeadState(&player) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể di chuyển!"})
-		return
+		return http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể di chuyển!"}
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
-		return
+		return http.StatusBadRequest, gin.H{"error": errLeader.Error()}
 	}
 
 	cleanupExpiredClearedCells(&player, clearedCellCooldown)
 
 	if player.HP <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"})
-		return
+		return http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"}
 	}
 
 	if player.ActiveCombat != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."})
-		return
+		return http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."}
 	}
 
 	stats := CalculatePlayerStats(&player)
@@ -1009,8 +1009,7 @@ func MovePlayerPath(c *gin.Context) {
 	dist := int(math.Max(dx, dy))
 
 	if dist == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang ở vị trí này rồi."})
-		return
+		return http.StatusBadRequest, gin.H{"error": "Bạn đang ở vị trí này rồi."}
 	}
 
 	// Free movement: the player may click anywhere in the world. The path is
@@ -1026,8 +1025,7 @@ func MovePlayerPath(c *gin.Context) {
 	}
 	var mapInstanceID sql.NullString
 	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&mapInstanceID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
 	}
 	reached := false
 	var eventLogs []string
@@ -1036,8 +1034,7 @@ func MovePlayerPath(c *gin.Context) {
 	for _, step := range path {
 		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(tx, &player, step[0], step[1], "", true, &mapInstanceID)
 		if errArrival != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
-			return
+			return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
 		}
 		lastStepLog = stepLog
 		// Filter out generic movement logs; only keep noteworthy events (encounters, discoveries, gathering, traps, pvp)
@@ -1062,8 +1059,7 @@ func MovePlayerPath(c *gin.Context) {
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during path move: %v", err)
 			_ = tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
-			return
+			return http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()}
 		} else {
 			winner, skipSummary := res.Winner, res.Summary
 			afterCombatCommit := res.AfterCommit
@@ -1093,8 +1089,7 @@ func MovePlayerPath(c *gin.Context) {
 			eventLogs = append(eventLogs, autoLog)
 			if err := tx.Commit(); err != nil {
 				logger.S.Errorf("MovePlayerPath: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()})
-				return
+				return http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()}
 			}
 			if afterCombatCommit != nil {
 				afterCombatCommit()
@@ -1106,44 +1101,39 @@ func MovePlayerPath(c *gin.Context) {
 			if qiGained > 0 {
 				finalLog += fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)
 			}
-			c.JSON(http.StatusOK, gin.H{
+			return http.StatusOK, gin.H{
 				"player":           buildMovePathPlayerUpdate(&player, before),
 				"log":              finalLog,
 				"combat_triggered": false,
 				"skip_result":      skipSummary,
 				"reached":          reached,
-			})
-			return
+			}
 		}
 	}
 
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		logger.S.Errorf("MovePlayerPath: failed to sync Gu inventory for player=%s: %v", player.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"}
 	}
 	var combatJSON any
 	if player.ActiveCombat != nil {
 		b, err := json.Marshal(player.ActiveCombat)
 		if err != nil {
 			logger.S.Errorf("MovePlayerPath: failed to marshal active combat for player=%s: %v", player.ID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
-			return
+			return http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"}
 		}
 		combatJSON = string(b)
 	}
 	if err := savePlayerMovement(tx, &player, combatJSON); err != nil {
 		logger.S.Errorf("MovePlayerPath: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"}
 	}
 
 	syncedMembers := SyncPartyMembersLocation(tx, &player)
 
 	if err := tx.Commit(); err != nil {
 		logger.S.Errorf("MovePlayerPath: tx.Commit failed for player=%s: %v", player.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure: " + err.Error()})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Transaction commit failure: " + err.Error()}
 	}
 
 	syncPlayerFlying(&player)
@@ -1193,11 +1183,11 @@ func MovePlayerPath(c *gin.Context) {
 		finalLog += fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return http.StatusOK, gin.H{
 		"player":               buildMovePathPlayerUpdate(&player, before),
 		"synced_party_members": syncedMembers,
 		"log":                  finalLog,
 		"combat_triggered":     combatTriggered,
 		"reached":              reached,
-	})
+	}
 }

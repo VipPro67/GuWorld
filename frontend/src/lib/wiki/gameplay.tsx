@@ -207,9 +207,9 @@ export const gameplayPages: WikiPage[] = [
               </thead>
               <tbody className="divide-y divide-zinc-900 text-[var(--text-primary)] bg-[var(--surface)]">
                 <tr><td className="p-3 font-bold text-amber-400">damage_flat</td><td className="p-3">Sát thương thuần từ Cổ</td></tr>
-                <tr><td className="p-3 font-bold text-amber-400">damage_mult</td><td className="p-3">Hệ số nhân sát thương</td></tr>
+                <tr><td className="p-3 font-bold text-amber-400">damage_mult</td><td className="p-3">Hệ số sát thương cộng dồn (`1 + Σ(m−1)`)</td></tr>
                 <tr><td className="p-3 font-bold text-cyan-400">shield_flat</td><td className="p-3">Giá trị khiên ảo gốc từ Cổ</td></tr>
-                <tr><td className="p-3 font-bold text-cyan-400">shield_mult</td><td className="p-3">Hệ số nhân khiên</td></tr>
+                <tr><td className="p-3 font-bold text-cyan-400">shield_mult</td><td className="p-3">Hệ số khiên cộng dồn (`1 + Σ(m−1)`)</td></tr>
                 <tr><td className="p-3 font-bold text-emerald-400">daoMult</td><td className="p-3">Khuếch đại Đạo Ngân theo công thức logarit &amp; cảnh giới</td></tr>
                 <tr><td className="p-3 font-bold text-violet-400">dmgMultiplier</td><td className="p-3">Buff/debuff tạm thời (Kiếm Long +50%, weaken -20%...)</td></tr>
                 <tr><td className="p-3 font-bold text-red-400">netDmg</td><td className="p-3">hitDmg &minus; targetDef; floor = 1 (không bao giờ dưới 1)</td></tr>

@@ -31,3 +31,24 @@ func TestHandleWorldWSCommandRejectsMalformedRectangle(t *testing.T) {
 		t.Fatalf("invalid JSON response: %s", body)
 	}
 }
+
+func TestHandleWorldWSCommandRejectsMalformedMovePath(t *testing.T) {
+	status, body := HandleWorldWSCommand(uuid.New(), "world.move_path", json.RawMessage(`{"x": "invalid"}`))
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+	}
+	if !json.Valid(body) {
+		t.Fatalf("invalid JSON response: %s", body)
+	}
+}
+
+func TestHandleWorldWSCommandRejectsMalformedChatSend(t *testing.T) {
+	status, body := HandleWorldWSCommand(uuid.New(), "chat.send", json.RawMessage(`{"content":`))
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+	}
+	if !json.Valid(body) {
+		t.Fatalf("invalid JSON response: %s", body)
+	}
+}
+

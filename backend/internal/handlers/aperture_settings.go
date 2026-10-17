@@ -322,14 +322,10 @@ func UpgradeApertureNode(c *gin.Context) {
 	newDefensePower := n.DefensePower
 	newHPBonus := n.HPBonus
 
-	if n.NodeCategory == "RESOURCE" {
-		// Resource nodes: +50% production per level
-		newProductionAmount = int64(float64(n.ProductionAmount) * 1.5)
-		if newProductionAmount == n.ProductionAmount {
-			newProductionAmount = n.ProductionAmount + 1
-		}
-	} else {
-		// Defense nodes: +25% defense stats per level
+	// Resource nodes gain +50% yield per level through the harvest formula
+	// (gamefx.ApertureYieldLevelStep), so production_amount is left untouched to
+	// avoid applying the level bonus twice. Defense nodes still scale in place.
+	if n.NodeCategory != "RESOURCE" {
 		if n.DefensePower > 0 {
 			newDefensePower = int(float64(n.DefensePower) * 1.25)
 			if newDefensePower == n.DefensePower {

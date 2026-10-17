@@ -489,9 +489,9 @@ Node tài nguyên đặt trong Tiên Khiếu:
 - `node_type`, `name`, `path` — loại node
 - `level`, `hp`, `max_hp` — cấp và HP
 - `x`, `y` — toạ độ grid (0-19)
-- `production_type`, `production_amount`, `production_interval_hours` — sản lượng
+- `production_type`, `production_amount`, `production_interval_hours` — sản lượng; `production_amount` chỉ còn là dữ liệu cũ, sản lượng thu hoạch do `gamefx.ComputeApertureYield` tính từ cấp node, Đạo Ngân, diện tích, sinh thái, lao động và giá vật phẩm (xem `WIKI.md` §21)
 - `is_destroyed` — cờ tương thích dữ liệu cũ; công trình bị phá hủy hoàn toàn được xóa khỏi bảng và không thể sửa chữa
-- Node vùng trả sản lượng theo số ô được giao; lưới 20×20 được lưu trong `aperture_resource_node_cells`.
+- Số khu tài nguyên tối đa mỗi Tiên Khiếu = `min(area_size / 100000, 200)`; lưới 20×20 được lưu trong `aperture_resource_node_cells`.
 - Xung đột Đạo khi tính sản lượng dùng chung `gamefx.DaoCombatProfile` với combat, không dựa trên khoảng cách giữa các node.
 
 ### Bảng `aperture_resource_node_cells`
@@ -500,7 +500,7 @@ Mỗi hàng là một ô thuộc vùng của node; `UNIQUE (aperture_id, x, y)` 
 
 ### Kinh tế và xã hội Dị Nhân trong Tiên Khiếu
 
-- `aperture_node_workers`: gán một phần dân số `aperture_variant_humans` vào node; cặp node/chủng tộc là duy nhất.
+- `aperture_node_workers`: gán một phần dân số `aperture_variant_humans` vào node; cặp node/chủng tộc là duy nhất. Bảng chỉ mang tính tổ chức — sản lượng thu hoạch lấy hệ số dân số/lao động theo chủng tộc của cả Tiên Khiếu, không cộng thêm theo phân công.
 - `aperture_refinement_queue`: hàng đợi luyện chế theo recipe, mode, mục tiêu, tiến độ, ưu tiên và trạng thái bật/tắt; `last_error` và `last_processed_at` cho biết lý do dừng/lần xử lý cuối.
 - `aperture_variant_settlements`: khu định cư theo chủng tộc, sức chứa, nhà ở, kho lương và an ninh.
 - `aperture_variant_events`: sự kiện xã hội (loại, mức độ, effects JSONB, thời điểm giải quyết).
@@ -758,8 +758,8 @@ Cấu trúc flat v2 của mỗi block:
 - `target`: mục tiêu thi triển (`selector`: `SELF`, `TARGET`, `ROW`, `COL`, `ALL_ENEMIES`, `ALL_ALLIES`, `ALL`; `bypass_frontline`: boolean).
 - `conditions`: điều kiện kích hoạt bổ trợ (mảng `{field, operator, value}`).
 - `operations`: mảng các thao tác nguyên tử (Atomic Operations) thuộc 9 nhóm:
-  1. `DAMAGE`: sát thương phẳng (`FLAT`), hệ số (`MULTIPLIER`), lưu phái (`path`).
-  2. `SHIELD`: khiên ảo Chân Nguyên Giáp (`FLAT`, `MULTIPLIER`).
+  1. `DAMAGE`: sát thương phẳng (`FLAT`), hệ số **cộng dồn** (`MULTIPLIER`), lưu phái (`path`).
+  2. `SHIELD`: khiên ảo Chân Nguyên Giáp (`FLAT`, `MULTIPLIER` **cộng dồn**).
   3. `HEAL`: hồi phục `FLAT`, `PERCENT`, `LIFESTEAL` hoặc `RESOURCE` (resource chọn bằng field `resource`).
   4. `DIRECT_HP`: sát thương trực tiếp `FLAT`, `MAX_HP_PERCENT` hoặc hủy khiên `SHIELD_STRIP`.
   5. `STAT_MOD`: biến đổi chỉ số nhân vật (`ATTACK`, `DEFENSE`, `SPEED`, `CRIT_RATE`, `ALL`...) dạng `ADD_FLAT` hoặc `MULTIPLY_PERCENT`.
@@ -770,18 +770,20 @@ Cấu trúc flat v2 của mỗi block:
 
 *Khối `active` (44 key):*
 
+> **Cộng dồn hệ số (damage_mult / shield_mult / `MULTIPLIER`):** các hệ số sát thương và khiên **cộng dồn** theo `1 + Σ(m−1)`, không nhân với nhau. Ví dụ cảnh giới lưu phái ×1.5 + `damage_mult` ×2.0 → `1 + 0.5 + 1.0 = 2.5×` (không phải `3.0×`). Buff chờ (pending) của Cổ thuần buff cũng vào cùng pool. Đạo Ngân (`daoMult`), weak/atk_up, `DOUBLE_DAMAGE_DEALT` và tăng sát thương theo hệ vẫn nhân như cũ.
+
 | Key | Số Cổ | Kiểu | Tác dụng |
 |---|---|---:|---|---|
 | `damage_flat` | 207 | number | Sát thương cố định (tính sau modifier, trước shield/HP) |
 | `damage_path` | 176 | enum | Hệ sát thương (`blood`, `Water Path`, `Sword Path`, `Fire Path`, `Ice Path`, … 20 giá trị) |
 | `shield_flat` | 96 | number | Tạo khiên hộ thể (nhận damage trước HP) |
-| `shield_mult` | 96 | number | Nhân khiên (×1.075 – ×1.35) |
+| `shield_mult` | 96 | number | Cộng dồn khiên (`1 + Σ(m−1)`) |
 | `apply_status` | 450 | enum / object / **mảng** | Gắn status — mảng `[{"id","value","turns"}]` cho phép nhiều status mỗi action (phân bố xem mục Status chiến đấu) |
 | `status_duration_ticks` | 4 | integer | (Legacy) Số lượt status; dữ liệu mới dùng `turns` trong entry |
 | `status_tick_damage` | 1 | number | (Legacy) Damage mỗi tick; dữ liệu mới dùng `value` trong entry |
 | `target_selector` | 55 | enum | Quy tắc chọn mục tiêu: `COL`(38), `ALL`(17), `ROW`(1) |
 | `heal_flat` | 33 | number | Hồi HP cố định (cap max_hp) |
-| `damage_mult` | 18 | number | Nhân sát thương (×1.075 – ×1.35) |
+| `damage_mult` | 18 | number | Cộng dồn sát thương (`1 + Σ(m−1)`) |
 | `mana_regen` | 2 | number | Hồi chân nguyên khi dùng |
 | `armor_pen` | 2 | number | Xuyên Defense phẳng |
 | `blood_drain` | 2 | bool | Cơ chế hút máu (+50% LifeSteal) |

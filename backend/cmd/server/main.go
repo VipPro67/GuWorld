@@ -149,7 +149,6 @@ func main() {
 	playerSvc := services.NewPlayerService(db.DB)
 	handlers.PlayerSvc = playerSvc
 	handlers.RecipeSvc = services.NewRecipeService(db.DB)
-	handlers.CombatSessionSvc = services.NewCombatSessionService(db.DB)
 	handlers.InventorySvc = services.NewInventoryService(db.DB)
 	handlers.QuestSvc = services.NewQuestService(db.DB)
 	handlers.AchievementSvc = services.NewAchievementService(db.DB)
@@ -179,7 +178,9 @@ func main() {
 	worker.StartDailyMissionRolloverWorker(ctx, db.DB, 5*time.Minute)
 	handlers.StartLastActivityFlusher(ctx)
 	worker.StartBatchPersister(ctx, 5*time.Second)
-	worker.StartVariantProductionWorker(ctx, db.DB, 10*time.Minute) // Phase 1: auto-production tick
+	// Aperture node output is granted by the harvest endpoints (aperture_collect.go)
+	// alone; the old per-tick variant-production worker was removed so node yield
+	// has a single source of truth.
 	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute)  // Phase 2: society simulation tick
 	worker.StartGuMasterSpawningWorker(ctx, db.DB, 30*time.Minute)  // Phase 3: Gu Master spawning
 	handlers.StartRoamingMerchantWorker(ctx, db.DB, 2*time.Minute)    // Roaming traders on the world map

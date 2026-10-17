@@ -934,13 +934,13 @@ func TestPureBuffMultipliersApplyToNextAction(t *testing.T) {
 		t.Fatalf("expected attack log for Sát Chiêu Công Kích")
 	}
 
-	// Attack did 100 * (2.0 from GU_MULTIPLIER * 1.5 from GU_OTHER_BUFF) = 300 damage.
-	// If duplicate GU_MULTIPLIER had stacked, it would have been 100 * 2 * 2 * 1.5 = 600 damage.
-	if attackLog.Damage != 300 {
-		t.Fatalf("expected attack to deal exactly 300 damage, but got %.0f", attackLog.Damage)
+	// Attack did 100 * (1 + (2.0-1) + (1.5-1)) = 100 * 2.5 = 250 damage (cộng dồn).
+	// If multipliers still multiplied, it would have been 100 * 2 * 1.5 = 300 damage.
+	if attackLog.Damage != 250 {
+		t.Fatalf("expected attack to deal exactly 250 damage, but got %.0f", attackLog.Damage)
 	}
 
-	// Attacker should have received 100 * 2.0 = 200 shield from 2.0x buffed shield (not 400 from 2x2)
+	// Attacker should have received 100 * (1 + (2.0-1)) = 200 shield from additive 2.0x buff.
 	var shieldActionLog *CombatLog
 	for i := range logs {
 		if logs[i].Action == "GU_SKILL" && strings.Contains(logs[i].Detail, "Tạo Giáp Kỹ") {
@@ -1152,9 +1152,9 @@ func TestSkillShieldBreakdown(t *testing.T) {
 	if bd.ShieldBuffMult != 2.0 {
 		t.Fatalf("expected ShieldBuffMult 2.0, got %v", bd.ShieldBuffMult)
 	}
-	// 200 * 1.5 * 2.0 = 600
-	if bd.ShieldFinal != 600 {
-		t.Fatalf("expected ShieldFinal 600, got %v", bd.ShieldFinal)
+	// Cộng dồn: 200 * (1.5 + 2.0 - 1) = 200 * 2.5 = 500
+	if bd.ShieldFinal != 500 {
+		t.Fatalf("expected ShieldFinal 500, got %v", bd.ShieldFinal)
 	}
 	if bd.ShielderDefense == nil {
 		t.Fatal("expected shielder_defense provenance on the breakdown")

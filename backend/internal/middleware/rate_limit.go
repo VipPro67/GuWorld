@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 var defaultStore RateLimitStore
@@ -41,19 +42,27 @@ func RateLimitByIP(limit int, window time.Duration) gin.HandlerFunc {
 	}
 }
 
+// AllowPlayer checks whether a player is allowed to proceed under the rate limit.
+func AllowPlayer(id uuid.UUID, limit int, window time.Duration) bool {
+	if defaultStore == nil {
+		return true
+	}
+	limit *= rateLimitMultiplier
+	key := "player:" + id.String()
+	allowed, _ := defaultStore.Allow(key, limit, window)
+	return allowed
+}
+
 // RateLimitByPlayer limits requests per authenticated player.
 // Must be placed AFTER AuthRequired().
 func RateLimitByPlayer(limit int, window time.Duration) gin.HandlerFunc {
-	limit *= rateLimitMultiplier
 	return func(c *gin.Context) {
 		id, ok := GetPlayerID(c)
 		if !ok {
 			c.Next()
 			return
 		}
-		key := "player:" + id.String()
-		allowed, _ := defaultStore.Allow(key, limit, window)
-		if !allowed {
+		if !AllowPlayer(id, limit, window) {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error": "Đạo hữu thao tác quá nhanh. Vui lòng đợi rồi thử lại!",
 			})

@@ -213,8 +213,14 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   - LOW: 2 mỏ, MID: 3 mỏ, HIGH/EXTREME: 4 mỏ.
   - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
 - Bản đồ Tiên Khiếu là lưới 20×20. Mỗi node trồng trọt, chăn nuôi hoặc khai thác có thể chiếm một vùng ô liền nhau; nhiều node cùng loại được phép đặt, nhưng mỗi ô chỉ thuộc một node.
-- **Gieo giống:** đặt một khu trồng trọt/chăn nuôi/khai thác cần tiêu hao **100** chính vật phẩm định sản xuất (`prod_key`) làm hạt giống. Mỏ khởi tạo sẵn thì miễn giống; muốn nhân giống loại mới phải kiếm được loại đó (loot/shop) trước. Giống **không được hoàn** khi tháo dỡ.
-- Sản lượng node tỉ lệ với số ô được giao. Khi lấp kín 400 ô, tổng sản lượng được hiệu chỉnh còn 25% mức tối đa của giới hạn node cũ; các hệ số path, Đạo Ngân, sinh thái, lao động và phẩm vật vẫn áp dụng.
+- **Gieo giống:** đặt một khu trồng trọt/chăn nuôi/khai thác cần tiêu hao chính vật phẩm định sản xuất (`prod_key`) làm hạt giống. Số giống = `100 ÷ (giá vật phẩm / 1.000)` (tối thiểu 1): cấp 1 cần 100, cấp 5 cần 4, cấp 6 cần 10, cấp 9 cần 1. Mỏ khởi tạo sẵn thì miễn giống; muốn nhân giống loại mới phải kiếm được loại đó (loot/shop) trước. Giống **không được hoàn** khi tháo dỡ.
+- **Sản lượng mỗi lần thu** (do server tính, gửi kèm trong `yield_preview` của `GET /immortal-aperture/nodes`):
+  `sản lượng = 10 × min(50, hệ số cấp × hệ số Đạo Ngân × hệ số diện tích × xung đột × sinh thái × lao động × dân số) ÷ (giá vật phẩm / 1.000)`
+  - Hệ số cấp: `1 + 0,5 × (cấp − 1)` (cấp 5 = ×3). Cấp **không** nhân vào `production_amount` nữa — cột đó giữ lại cho tương thích dữ liệu, không dùng để tính sản lượng.
+  - Hệ số Đạo Ngân: `min(50, 1 + số vết Đạo Ngân × 0,0001)` theo lưu phái của **vật phẩm sản xuất** (không cộng dồn với lưu phái của khu); chạm trần ở 490.000 vết.
+  - Hệ số diện tích: `1 + area_size / 10.000.000`. Trần tổng mọi hệ số là **×50**.
+  - Số ô không còn ảnh hưởng sản lượng; thay vào đó số khu tài nguyên tối đa = `min(area_size / 100.000, 200)`.
+  - Sản lượng lẻ được dồn tại ô neo (cột `production_remainder`) nên không bị mất.
 - Xung đột Đạo của sản lượng dùng chung hồ sơ combat theo path, Đạo Ngân, path mastery và hiệu ứng giảm xung đột; vị trí node không tạo luật tương khắc riêng.
 - Cổ sư có thể thu hoạch, gỡ/xóa và sửa chữa từng node/vùng.
 - Chế độ **Chọn nhiều node** trên bản đồ cho phép sửa chữa, nâng cấp hoặc san phẳng nhiều node cùng lúc; tổng phí sửa/nâng cấp được kiểm tra trước khi áp dụng.
@@ -1127,7 +1133,7 @@ Sau khi đăng nhập, đại sảnh chia tính năng thành các nhóm:
 Sau khi thành Tiên, Tiên Khiếu không chỉ là lưới đặt công trình:
 
 1. Đặt node tài nguyên/phòng thủ, thu hoạch riêng hoặc tất cả, sửa tất cả node hỏng và nâng từng node. Node tối đa cấp 5; mỗi cấp tăng 500 HP tối đa. Node tài nguyên tăng 50% sản lượng/cấp, node phòng thủ tăng 25% chỉ số/cấp.
-2. Phân công dân số dị nhân còn khả dụng vào node tài nguyên. Sản lượng phụ thuộc dân số, cấp node, hiệu suất chủng tộc, mức lao động và trạng thái node; node bị phá hủy không sản xuất.
+2. Cường độ **LOW / NORMAL / HIGH / EXPLOIT** và dân số dị nhân trong Tiên Khiếu nhân vào sản lượng mọi khu tài nguyên (hệ số lao động và dân số). Phân công dân số vào từng node (`aperture_node_workers`) hiện **không** cộng thêm sản lượng; node bị phá hủy không sản xuất.
 3. Chọn cường độ **LOW / NORMAL / HIGH / EXPLOIT**. Mức cao cho sản lượng nhanh hơn nhưng làm giảm hạnh phúc, tăng áp bức/nguy cơ phản loạn; mức thấp giúp xã hội hồi phục.
 4. Xây khu định cư sẽ đưa 500 cư dân ban đầu cùng kho lương; dân số sinh trưởng mỗi 5 phút và bị giới hạn bởi sức chứa. Có thể tạo hàng đợi luyện chế cho Mao Dân xử lý mỗi 10 phút, tối đa một lần thử/lệnh/tick. Cổ càng cao cấp càng cần nhiều lao động nhàn rỗi: **số Mao Dân = cấp Cổ × 100** (Nhất Chuyển 100, Ngũ Chuyển 500, Lục Chuyển 600, Cửu Chuyển 900). Lao động được giữ chỗ cho toàn tick nên không bị dùng trùng giữa các lệnh. Lần thử tiêu hao nguyên liệu và nguyên thạch dù thất bại; thành công tạo Cổ và tăng tiến độ. Lệnh thiếu tài nguyên sẽ chờ và tự thử lại; hiện chưa nhận bí phương cần Cổ khác làm nguyên liệu.
 5. Xem và nâng cấp khu định cư theo từng chủng tộc. Theo dõi dân số, sức chứa, lương thực, nhà ở, an ninh, hạnh phúc, thịnh vượng và phản loạn; thiếu lương thực hoặc hạnh phúc thấp làm tăng tử vong.

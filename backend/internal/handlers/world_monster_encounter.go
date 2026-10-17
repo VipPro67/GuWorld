@@ -95,6 +95,57 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 			return err
 		}
 	}
+	combat := BuildWorldMonsterCombatState(template, current)
+	beforeGus := append(models.GuInventory(nil), player.GuInventory...)
+	player.ActiveCombat = StartCombat(tx, &combat, &player)
+	if err := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); err != nil {
+		return err
+	}
+
+	abortEncounter := func(err error) error {
+		resetWorldMonsterAfterEncounter(ctx, current)
+		return err
+	}
+
+	var winner string
+	var pendingNotifications []notify.Notification
+	var afterCombatCommit func()
+	if player.CombatSettings.SkipBattle {
+		res, err := ResolveCombat(tx, &player, nil, nil)
+		if err != nil {
+			return abortEncounter(err)
+		}
+		winner, afterCombatCommit = res.Winner, res.AfterCommit
+		pendingNotifications = res.Notifications
+	} else {
+		combatJSON, err := json.Marshal(player.ActiveCombat)
+		if err != nil {
+			return abortEncounter(err)
+		}
+		if err := savePlayerMovement(tx, &player, string(combatJSON)); err != nil {
+			return abortEncounter(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return abortEncounter(err)
+	}
+	if afterCombatCommit != nil {
+		afterCombatCommit()
+	}
+	for _, notification := range pendingNotifications {
+		notify.Publish(notification)
+	}
+	if player.CombatSettings.SkipBattle {
+		FinalizeWorldMonsterEncounter(ctx, current, combat.WorldMonsterEncounterID, winner, player.ID.String())
+		PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
+		return nil
+	}
+	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
+	return nil
+}
+
+// BuildWorldMonsterCombatState constructs a turn-based combat state from a world monster instance.
+func BuildWorldMonsterCombatState(template models.MonsterTemplate, current WorldMonster) models.CombatState {
 	combat := models.BuildCombatStateFromMonsterWithRegion(template, current.Rank, current.SubRank, regionMonsterGuPool(current.RegionID))
 	combat.WorldMonsterRegionID = current.RegionID
 	combat.WorldMonsterID = current.InstanceID
@@ -105,55 +156,17 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 			combat.WorldBossCellRegionID, combat.WorldBossCellX, combat.WorldBossCellY = region, x, y
 		}
 	}
-	beforeGus := append(models.GuInventory(nil), player.GuInventory...)
-	player.ActiveCombat = StartCombat(tx, &combat, &player)
-	if err := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); err != nil {
-		return err
-	}
+	return combat
+}
 
-	var winner string
-	var pendingNotifications []notify.Notification
-	var afterCombatCommit func()
-	if player.CombatSettings.SkipBattle {
-		res, err := ResolveCombat(tx, &player, nil, nil)
-		if err != nil {
-			resetWorldMonsterAfterEncounter(ctx, current)
-			return err
-		}
-		winner, afterCombatCommit = res.Winner, res.AfterCommit
-		pendingNotifications = res.Notifications
+// FinalizeWorldMonsterEncounter unifies post-encounter monster state resolution:
+// If the player won, records defeat and clears the world cell; otherwise, resets the monster to return state.
+func FinalizeWorldMonsterEncounter(ctx context.Context, monster WorldMonster, encounterID, winner, playerID string) {
+	if winner == "Phe Ta" {
+		finishWorldMonsterEncounter(ctx, monster, encounterID, playerID)
 	} else {
-		combatJSON, err := json.Marshal(player.ActiveCombat)
-		if err != nil {
-			resetWorldMonsterAfterEncounter(ctx, current)
-			return err
-		}
-		if err := savePlayerMovement(tx, &player, string(combatJSON)); err != nil {
-			resetWorldMonsterAfterEncounter(ctx, current)
-			return err
-		}
+		resetWorldMonsterAfterEncounter(ctx, monster)
 	}
-	if err := tx.Commit(); err != nil {
-		resetWorldMonsterAfterEncounter(ctx, current)
-		return err
-	}
-	if afterCombatCommit != nil {
-		afterCombatCommit()
-	}
-	for _, notification := range pendingNotifications {
-		notify.Publish(notification)
-	}
-	if player.CombatSettings.SkipBattle {
-		if winner == "Phe Ta" {
-			finishWorldMonsterEncounter(ctx, current, combat.WorldMonsterEncounterID, player.ID.String())
-		} else {
-			resetWorldMonsterAfterEncounter(ctx, current)
-		}
-		PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
-		return nil
-	}
-	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
-	return nil
 }
 
 func finishWorldMonsterEncounter(ctx context.Context, encounter WorldMonster, encounterID, playerID string) {
@@ -237,11 +250,7 @@ func completeWorldMonsterCombat(ctx context.Context, state *models.CombatState, 
 	if err != nil || !exists {
 		return
 	}
-	if winner == "Phe Ta" {
-		finishWorldMonsterEncounter(cleanupCtx, monster, state.WorldMonsterEncounterID, playerID)
-	} else {
-		resetWorldMonsterAfterEncounter(cleanupCtx, monster)
-	}
+	FinalizeWorldMonsterEncounter(cleanupCtx, monster, state.WorldMonsterEncounterID, winner, playerID)
 }
 
 func resetWorldMonsterAfterEncounter(ctx context.Context, before WorldMonster) {

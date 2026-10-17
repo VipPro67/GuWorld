@@ -1,36 +1,54 @@
 package handlers
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
-// HandleWorldWSCommand adapts the existing exploration handlers to the
-// authenticated WebSocket command transport. Keeping one handler path ensures
-// HTTP fallback and WebSocket commands have identical validation and results.
+// HandleWorldWSCommand dispatches authenticated WebSocket commands directly to domain logic
+// without fabricating HTTP requests or contexts.
 func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMessage) (int, json.RawMessage) {
-	method := http.MethodGet
-	target := "/"
-	var body []byte
+	var limit int
+	switch command {
+	case "world.move_path":
+		limit = 120
+	case "world.cells_rect":
+		limit = 240
+	case "world.objects":
+		limit = 30
+	case "chat.send":
+		limit = 30
+	default:
+		return http.StatusNotFound, json.RawMessage(`{"error":"Unknown world command"}`)
+	}
+
+	if !middleware.AllowPlayer(playerID, limit, time.Minute) {
+		return http.StatusTooManyRequests, json.RawMessage(`{"error":"Đạo hữu thao tác quá nhanh. Vui lòng đợi rồi thử lại!"}`)
+	}
+
+	var status int
+	var result any
 
 	switch command {
 	case "world.move_path":
-		method = http.MethodPost
-		target = "/api/explore/move-path"
-		body = payload
+		var req MoveRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return http.StatusBadRequest, json.RawMessage(`{"error":"Invalid move request"}`)
+		}
+		status, result = ExecuteMovePlayerPath(playerID, req)
+
 	case "chat.send":
-		method = http.MethodPost
-		target = "/api/chat/bao-hoang/send"
-		body = payload
+		var req BaoHoangRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return http.StatusBadRequest, json.RawMessage(`{"error":"Content is required"}`)
+		}
+		status, result = ExecuteSendBaoHoangChat(context.Background(), playerID, req)
+
 	case "world.cells_rect":
 		var req struct {
 			MinX int `json:"min_x"`
@@ -41,58 +59,15 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 		if err := json.Unmarshal(payload, &req); err != nil {
 			return http.StatusBadRequest, json.RawMessage(`{"error":"Invalid cells rectangle"}`)
 		}
-		q := url.Values{}
-		q.Set("min_x", fmt.Sprint(req.MinX))
-		q.Set("min_y", fmt.Sprint(req.MinY))
-		q.Set("max_x", fmt.Sprint(req.MaxX))
-		q.Set("max_y", fmt.Sprint(req.MaxY))
-		target = "/api/explore/cells/rect?" + q.Encode()
+		status, result = ExecuteGetCellsRect(playerID, req.MinX, req.MinY, req.MaxX, req.MaxY)
+
 	case "world.objects":
-		target = "/api/explore/objects"
-	default:
-		return http.StatusNotFound, json.RawMessage(`{"error":"Unknown world command"}`)
+		status, result = ExecuteGetExploreObjects()
 	}
 
-	req := httptest.NewRequest(method, target, bytes.NewReader(body))
-	if method == http.MethodPost {
-		req.Header.Set("Content-Type", "application/json")
+	data, err := json.Marshal(result)
+	if err != nil {
+		return http.StatusInternalServerError, json.RawMessage(`{"error":"Failed to marshal response"}`)
 	}
-	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
-	c.Request = req
-	c.Set("player_id", playerID)
-	var limit gin.HandlerFunc
-	switch command {
-	case "world.move_path":
-		limit = middleware.RateLimitByPlayer(120, time.Minute)
-	case "world.cells_rect":
-		limit = middleware.RateLimitByPlayer(240, time.Minute)
-	case "world.objects":
-		limit = middleware.RateLimitByPlayer(30, time.Minute)
-	case "chat.send":
-		limit = middleware.RateLimitByPlayer(30, time.Minute)
-	}
-	if limit != nil {
-		limit(c)
-		if c.IsAborted() {
-			return recorder.Code, json.RawMessage(append([]byte(nil), bytes.TrimSpace(recorder.Body.Bytes())...))
-		}
-	}
-
-	switch command {
-	case "world.move_path":
-		MovePlayerPath(c)
-	case "chat.send":
-		SendBaoHoangChat(c)
-	case "world.cells_rect":
-		GetCellsRect(c)
-	case "world.objects":
-		GetExploreObjects(c)
-	}
-
-	result := bytes.TrimSpace(recorder.Body.Bytes())
-	if len(result) == 0 {
-		result = []byte(`null`)
-	}
-	return recorder.Code, json.RawMessage(append([]byte(nil), result...))
+	return status, json.RawMessage(data)
 }

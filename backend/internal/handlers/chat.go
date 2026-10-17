@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -317,10 +318,6 @@ func SendBaoHoangChat(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	if muted, muteErr := playerChatMuted(db.DB, authID); muteErr == nil && muted {
-		c.JSON(http.StatusForbidden, gin.H{"error": chatMutedMessage})
-		return
-	}
 
 	var req BaoHoangRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -328,30 +325,37 @@ func SendBaoHoangChat(c *gin.Context) {
 		return
 	}
 
+	code, res := ExecuteSendBaoHoangChat(c.Request.Context(), authID, req)
+	c.JSON(code, res)
+}
+
+// ExecuteSendBaoHoangChat performs the core domain logic of sending a chat message,
+// decoupled from HTTP context so it can be called directly by WebSockets or tests.
+func ExecuteSendBaoHoangChat(ctx context.Context, authID uuid.UUID, req BaoHoangRequest) (int, gin.H) {
+	if muted, muteErr := playerChatMuted(db.DB, authID); muteErr == nil && muted {
+		return http.StatusForbidden, gin.H{"error": chatMutedMessage}
+	}
+
 	if req.Channel == "" {
 		req.Channel = "world"
 	}
 
 	if err := ValidateChatMessage(authID.String(), req.Content); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		return http.StatusBadRequest, gin.H{"error": err.Error()}
 	}
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Database error"}
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Failed to load player"}
 	}
 	if gamefx.IsDeadState(&player) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể gửi tin nhắn!"})
-		return
+		return http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể gửi tin nhắn!"}
 	}
 
 	var fee int64
@@ -364,8 +368,7 @@ func SendBaoHoangChat(c *gin.Context) {
 		hasConnectingHeaven := models.InventoryHasGuCapability(player.GuInventory, "CHAT_CONNECT", false)
 		hasDivineSense := models.InventoryHasGuCapability(player.GuInventory, "CHAT_PERCEIVE", false)
 		if !hasConnectingHeaven || !hasDivineSense {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Chat kênh Bảo Hoàng Thiên yêu cầu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) và Thần Niệm Cổ (GU_DIVINE_SENSE) trong túi đồ!"})
-			return
+			return http.StatusBadRequest, gin.H{"error": "Chat kênh Bảo Hoàng Thiên yêu cầu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) và Thần Niệm Cổ (GU_DIVINE_SENSE) trong túi đồ!"}
 		}
 	case "sect":
 		fee = 0
@@ -373,22 +376,19 @@ func SendBaoHoangChat(c *gin.Context) {
 		fee = 0
 		var region string
 		var instanceID sql.NullString
-		if err := tx.QueryRowContext(c.Request.Context(), `SELECT current_region, map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&region, &instanceID); err != nil || region == "" {
-			c.JSON(http.StatusConflict, gin.H{"error": "Không xác định được khu vực hiện tại để gửi chat"})
-			return
+		if err := tx.QueryRowContext(ctx, `SELECT current_region, map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&region, &instanceID); err != nil || region == "" {
+			return http.StatusConflict, gin.H{"error": "Không xác định được khu vực hiện tại để gửi chat"}
 		}
 		chatScope = region
 		if instanceID.Valid && instanceID.String != "" {
 			chatScope += ":" + instanceID.String
 		}
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Kênh chat không hợp lệ"})
-		return
+		return http.StatusBadRequest, gin.H{"error": "Kênh chat không hợp lệ"}
 	}
 
 	if player.PrimevalStones < float64(fee) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Cần %d Nguyên Thạch để gửi tin nhắn kênh này.", fee)})
-		return
+		return http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Cần %d Nguyên Thạch để gửi tin nhắn kênh này.", fee)}
 	}
 
 	globalUUID := "00000000-0000-0000-0000-000000000000"
@@ -398,11 +398,10 @@ func SendBaoHoangChat(c *gin.Context) {
 		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, player.ID).Scan(&sID)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa gia nhập tông môn nào, không thể gửi tin nhắn kênh tông môn!"})
+				return http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa gia nhập tông môn nào, không thể gửi tin nhắn kênh tông môn!"}
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+				return http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()}
 			}
-			return
 		}
 		sectID.String = sID
 		sectID.Valid = true
@@ -415,20 +414,17 @@ func SendBaoHoangChat(c *gin.Context) {
 		RETURNING id
 	`, player.ID, globalUUID, req.Content, req.Channel, sectID, chatScope).Scan(&insertedMessageID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send chat"})
 		fmt.Println("Error inserting chat message:", err)
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Failed to send chat"}
 	}
 
 	if fee > 0 {
 		res, err := tx.Exec("UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1", fee, player.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
-			return
+			return http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"}
 		}
 		if rows, _ := res.RowsAffected(); rows == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để chat kênh này"})
-			return
+			return http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để chat kênh này"}
 		}
 		player.PrimevalStones -= float64(fee)
 	}
@@ -436,13 +432,11 @@ func SendBaoHoangChat(c *gin.Context) {
 	qiGained := 0.0
 	_, err = tx.Exec("UPDATE players SET primeval_stones = primeval_stones WHERE id = $1", player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit chat"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Failed to commit chat"}
 	}
 
 	// Broadcast the new message efficiently (append-only)
@@ -466,7 +460,7 @@ func SendBaoHoangChat(c *gin.Context) {
 	} else {
 		// Fallback to full history on error
 		if req.Channel == "region" {
-			if messages, loadErr := loadBaoHoangMessagesContext(c.Request.Context(), "region", sql.NullString{String: chatScope, Valid: true}); loadErr == nil {
+			if messages, loadErr := loadBaoHoangMessagesContext(ctx, "region", sql.NullString{String: chatScope, Valid: true}); loadErr == nil {
 				_ = cache.PublishEventQuick("chat:region:"+chatScope, chatEventPayload{Messages: messages})
 			}
 		} else {
@@ -479,9 +473,9 @@ func SendBaoHoangChat(c *gin.Context) {
 	if fee > 0 {
 		msg = fmt.Sprintf("Đã truyền tin nhắn thành công! Trừ %d Nguyên Thạch phí truyền phát. Nhân Khí +%.0f.", fee, qiGained)
 	}
-	c.JSON(http.StatusOK, gin.H{
+	return http.StatusOK, gin.H{
 		"message": msg,
-	})
+	}
 }
 
 func GetBaoHoangMessages(c *gin.Context) {

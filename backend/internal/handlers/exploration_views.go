@@ -28,9 +28,8 @@ type WorldObjectView struct {
 	Cleared        bool   `json:"cleared"`
 }
 
-// GetExploreObjects returns the persistent map cells (map_cells) so the large
-// world map can render villages, bosses and high-tier resource points.
-func GetExploreObjects(c *gin.Context) {
+// ExecuteGetExploreObjects returns the persistent map cells without HTTP coupling.
+func ExecuteGetExploreObjects() (int, any) {
 	ensureZonesLoaded()
 
 	zoneReg.mu.RLock()
@@ -50,7 +49,14 @@ func GetExploreObjects(c *gin.Context) {
 		})
 		_ = key
 	}
-	c.JSON(http.StatusOK, out)
+	return http.StatusOK, out
+}
+
+// GetExploreObjects returns the persistent map cells (map_cells) so the large
+// world map can render villages, bosses and high-tier resource points.
+func GetExploreObjects(c *gin.Context) {
+	status, out := ExecuteGetExploreObjects()
+	c.JSON(status, out)
 }
 
 // NearbyCell is a resolved non-empty cell (monster / boss / resource / wild Gu)
@@ -65,23 +71,10 @@ type NearbyCell struct {
 	Region  string `json:"region_id,omitempty"`
 }
 
-// GetCellsRect resolves the non-empty cells inside an explicit rectangle
-// (min_x/min_y/max_x/max_y). Used by the world map to prefetch the exact
-// visible area or a band ahead of the player. Bounded to prevent abuse.
-func GetCellsRect(c *gin.Context) {
-	playerID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
+// ExecuteGetCellsRect resolves non-empty cells inside an explicit rectangle.
+func ExecuteGetCellsRect(playerID uuid.UUID, minX, minY, maxX, maxY int) (int, any) {
 	EnsureWorldPosLoaded(playerID.String())
 	entry, hasScope := worldPosIndex.Get(playerID.String())
-
-	var minX, minY, maxX, maxY int
-	fmt.Sscanf(c.Query("min_x"), "%d", &minX)
-	fmt.Sscanf(c.Query("min_y"), "%d", &minY)
-	fmt.Sscanf(c.Query("max_x"), "%d", &maxX)
-	fmt.Sscanf(c.Query("max_y"), "%d", &maxY)
 
 	if minX < 0 {
 		minX = 0
@@ -96,8 +89,7 @@ func GetCellsRect(c *gin.Context) {
 		maxY = WorldHeight - 1
 	}
 	if maxX < minX || maxY < minY {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Rectangle tọa độ không hợp lệ."})
-		return
+		return http.StatusBadRequest, gin.H{"error": "Rectangle tọa độ không hợp lệ."}
 	}
 
 	// Bound the resolved area so a single request stays cheap.
@@ -130,10 +122,29 @@ func GetCellsRect(c *gin.Context) {
 	}
 	out, err := filterClearedCells(candidates)
 	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Trạng thái bản đồ tạm thời không khả dụng."})
+		return http.StatusServiceUnavailable, gin.H{"error": "Trạng thái bản đồ tạm thời không khả dụng."}
+	}
+	return http.StatusOK, out
+}
+
+// GetCellsRect resolves the non-empty cells inside an explicit rectangle
+// (min_x/min_y/max_x/max_y). Used by the world map to prefetch the exact
+// visible area or a band ahead of the player. Bounded to prevent abuse.
+func GetCellsRect(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	c.JSON(http.StatusOK, out)
+
+	var minX, minY, maxX, maxY int
+	fmt.Sscanf(c.Query("min_x"), "%d", &minX)
+	fmt.Sscanf(c.Query("min_y"), "%d", &minY)
+	fmt.Sscanf(c.Query("max_x"), "%d", &maxX)
+	fmt.Sscanf(c.Query("max_y"), "%d", &maxY)
+
+	status, res := ExecuteGetCellsRect(playerID, minX, minY, maxX, maxY)
+	c.JSON(status, res)
 }
 
 func filterClearedCells(cells []NearbyCell) ([]NearbyCell, error) {

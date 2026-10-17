@@ -699,3 +699,66 @@ func TestRotatingMonsterBucketWindowEventuallyVisitsEveryBucket(t *testing.T) {
 		t.Fatalf("rotating windows visited %d/%d buckets: %#v", len(seen), len(buckets), seen)
 	}
 }
+
+func TestBuildWorldMonsterCombatStateRegular(t *testing.T) {
+	template := models.MonsterTemplate{
+		ID:          "m_wolf",
+		Name:        "Sói Hoang",
+		MaxHP:       100,
+		BaseAttack:  15,
+		BaseDefense: 5,
+	}
+	monster := WorldMonster{
+		InstanceID:        "inst_123",
+		RegionID:          "Southern_Border",
+		MonsterTemplateID: "m_wolf",
+		Rank:              1,
+		SubRank:           1,
+		IsBoss:            false,
+	}
+
+	state := BuildWorldMonsterCombatState(template, monster)
+
+	if state.WorldMonsterRegionID != "Southern_Border" {
+		t.Errorf("WorldMonsterRegionID = %q, want 'Southern_Border'", state.WorldMonsterRegionID)
+	}
+	if state.WorldMonsterID != "inst_123" {
+		t.Errorf("WorldMonsterID = %q, want 'inst_123'", state.WorldMonsterID)
+	}
+	if state.WorldMonsterEncounterID == "" {
+		t.Errorf("expected non-empty WorldMonsterEncounterID")
+	}
+	if state.EnemyType == "BOSS" {
+		t.Errorf("expected regular enemy type, got %q", state.EnemyType)
+	}
+}
+
+func TestBuildWorldMonsterCombatStateBoss(t *testing.T) {
+	template := models.MonsterTemplate{
+		ID:          "m_boss_bear",
+		Name:        "Gấu Bạo Chúa",
+		MaxHP:       1000,
+		BaseAttack:  100,
+		BaseDefense: 50,
+	}
+	monster := WorldMonster{
+		InstanceID:        "inst_boss_999",
+		RegionID:          "Southern_Border",
+		MonsterTemplateID: "m_boss_bear",
+		SpawnID:           "mapcell:Southern_Border:12:34",
+		Rank:              3,
+		SubRank:           2,
+		IsBoss:            true,
+	}
+
+	state := BuildWorldMonsterCombatState(template, monster)
+
+	if state.EnemyType != "BOSS" {
+		t.Errorf("EnemyType = %q, want 'BOSS'", state.EnemyType)
+	}
+	if state.WorldBossCellRegionID != "Southern_Border" || state.WorldBossCellX != 12 || state.WorldBossCellY != 34 {
+		t.Errorf("Boss cell mismatch: got region=%s x=%d y=%d, want Southern_Border:12:34",
+			state.WorldBossCellRegionID, state.WorldBossCellX, state.WorldBossCellY)
+	}
+}
+

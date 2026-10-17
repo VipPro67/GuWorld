@@ -403,6 +403,8 @@ func nodeDaoPurity(nodeDaoMap map[string]int64) float64 {
 	return float64(dominant) / float64(total)
 }
 
+// apertureRewardContext carries everything the harvest formula needs that is
+// expensive to read per node (Dao marks, combat profile, ecology, labor).
 type apertureRewardContext struct {
 	nodeDaoMap              map[string]int64
 	daoProfile              *gamefx.DaoCombatProfile
@@ -419,6 +421,13 @@ type apertureRewardContext struct {
 
 type apertureQueryRower interface {
 	QueryRow(query string, args ...any) *sql.Row
+}
+
+// apertureQueryer is satisfied by both *sql.DB and *sql.Tx so the reward
+// context can be built from a request-scoped query as well as a transaction.
+type apertureQueryer interface {
+	apertureQueryRower
+	Query(query string, args ...any) (*sql.Rows, error)
 }
 
 func loadApertureDaoCombatProfile(q apertureQueryRower, playerID string, daoMarks map[string]int64) (*gamefx.DaoCombatProfile, gamefx.Effects) {
@@ -444,7 +453,13 @@ func loadApertureDaoCombatProfile(q apertureQueryRower, playerID string, daoMark
 	return gamefx.BuildDaoCombatProfileWithReduction(daoMarks, pathMasteries, fx.NonConflictingDaoMarks, fx.DaoConflictReductionPct, nil), fx
 }
 
-func loadApertureRewardContext(tx *sql.Tx, playerID uuid.UUID, apertureID any, allNodes []models.ApertureResourceNode) (*apertureRewardContext, error) {
+func loadApertureRewardContext(q apertureQueryer, playerID uuid.UUID, apertureID any, allNodes []models.ApertureResourceNode) (*apertureRewardContext, error) {
+	return loadApertureRewardContextWithProfile(q, playerID, apertureID, allNodes, nil)
+}
+
+// loadApertureRewardContextWithProfile accepts an already-built Dao profile so
+// request paths that loaded it earlier (GET /nodes) do not pay for it twice.
+func loadApertureRewardContextWithProfile(q apertureQueryer, playerID uuid.UUID, apertureID any, allNodes []models.ApertureResourceNode, profile *gamefx.DaoCombatProfile) (*apertureRewardContext, error) {
 	ctx := &apertureRewardContext{
 		nodeDaoMap: make(map[string]int64),
 		variantHumans: make(map[string]struct {
@@ -454,18 +469,21 @@ func loadApertureRewardContext(tx *sql.Tx, playerID uuid.UUID, apertureID any, a
 	}
 
 	var nodeDaoJSON []byte
-	if err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON); err == nil && len(nodeDaoJSON) > 0 {
+	if err := q.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON); err == nil && len(nodeDaoJSON) > 0 {
 		_ = json.Unmarshal(nodeDaoJSON, &ctx.nodeDaoMap)
 	}
 
-	ctx.daoProfile, _ = loadApertureDaoCombatProfile(tx, playerID.String(), ctx.nodeDaoMap)
+	ctx.daoProfile = profile
+	if ctx.daoProfile == nil {
+		ctx.daoProfile, _ = loadApertureDaoCombatProfile(q, playerID.String(), ctx.nodeDaoMap)
+	}
 	if ctx.daoProfile != nil {
 		ctx.daoConflictReductionPct = ctx.daoProfile.ConflictReductionPct
 	}
 
 	_, ctx.herbivores, _, ctx.overgrazing, ctx.starvationHerb, ctx.starvationCarn = EvaluateEcosystem(allNodes)
 
-	vhRows, err := tx.Query(`SELECT race, population, labor_intensity FROM aperture_variant_humans WHERE aperture_id = $1`, apertureID)
+	vhRows, err := q.Query(`SELECT race, population, labor_intensity FROM aperture_variant_humans WHERE aperture_id = $1`, apertureID)
 	if err == nil {
 		defer vhRows.Close()
 		for vhRows.Next() {
@@ -502,113 +520,153 @@ func apertureDaoConflictMultiplierForProfile(profile *gamefx.DaoCombatProfile, p
 	return multiplier
 }
 
-func computeApertureNodeRewardWithCtx(ctx *apertureRewardContext, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) float64 {
-	// 1. Dao Marks multiplier
-	daoMultiplier := getPathDaoMultiplier(n.Path, ctx.nodeDaoMap)
+// apertureNodeYield assembles every multiplier for one harvest and hands the
+// combination to gamefx, which owns the shared formula and both caps.
+func apertureNodeYield(ctx *apertureRewardContext, n models.ApertureResourceNode, areaSize int64) gamefx.ApertureYield {
+	// Dao amplification follows the produced item's path, falling back to the
+	// zone path, and is applied exactly once.
+	daoMult := 1.0
+	itemBasePrice := 0.0
+	if prodKey := resolveNodeProdKey(n); prodKey != "" {
+		if item, exists := models.ItemRegistry[prodKey]; exists {
+			itemBasePrice = item.BasePrice
+			if item.Path != "" {
+				daoMult = getPathDaoMultiplier(item.Path, ctx.nodeDaoMap)
+			}
+		}
+	}
+	if daoMult <= 1.0 {
+		daoMult = getPathDaoMultiplier(n.Path, ctx.nodeDaoMap)
+	}
 
 	// Dao conflict uses the same per-path combat profile as Gu techniques.
-	conflictMultiplier := apertureDaoConflictMultiplier(ctx, n.Path)
+	conflictMult := apertureDaoConflictMultiplier(ctx, n.Path)
 
-	// 2b. Ecology purity factor (spec §5.1): tạp tu làm cạn kiệt linh khí/khoáng mạch.
-	// Dao conflict reduction also attenuates Dao-mark purity loss; the permanent
-	// sovereign body sets this to 100%, while ordinary Gu reductions stay below 100%.
-	ecologyMultiplier := 1.0
+	// Ecology purity factor (spec §5.1): tạp tu làm cạn kiệt linh khí/khoáng mạch.
+	ecologyMult := 1.0
 	if p := nodeDaoPurity(ctx.nodeDaoMap); p > 0 {
 		purityMultiplier := gamefx.EcologyPurityFactor(p)
 		ecologyPenalty := (1.0 - purityMultiplier) * (1.0 - ctx.daoConflictReductionPct/100.0)
-		ecologyMultiplier = 1.0 - ecologyPenalty
+		ecologyMult = 1.0 - ecologyPenalty
 	}
 
-	// 3. Ecosystem multiplier
-	ecoMultiplier := 1.0
+	ecoMult := 1.0
 	switch n.NodeType {
 	case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "FARMING_ZONE":
 		if ctx.overgrazing {
-			ecoMultiplier = 0.5
+			ecoMult = 0.5
 		} else if ctx.herbivores > 0 {
-			ecoMultiplier = 1.25
+			ecoMult = 1.25
 		}
 	case "SPIRIT_DEER_PASTURE", "BREEDING_ZONE":
 		if ctx.starvationHerb {
-			ecoMultiplier = 0.2
+			ecoMult = 0.2
 		}
 	case "SILVER_WOLF_DEN":
 		if ctx.starvationCarn {
-			ecoMultiplier = 0.2
+			ecoMult = 0.2
 		}
 	}
 
-	// 4. Variant Human labor intensity multiplier
-	laborMultiplier := 1.0
-	variantBonus := 1.0
-	race := getVariantHumanForNode(n.NodeType)
-	if race != "" {
+	laborMult := 1.0
+	popBonus := 1.0
+	if race := getVariantHumanForNode(n.NodeType); race != "" {
 		if vh, ok := ctx.variantHumans[race]; ok {
 			if vh.population > 0 {
-				variantBonus = 1.0 + float64(vh.population)/1000.0
+				popBonus = 1.0 + float64(vh.population)/1000.0
 			}
 			switch vh.laborIntensity {
 			case "LOW":
-				laborMultiplier = 0.7
-			case "NORMAL":
-				laborMultiplier = 1.0
+				laborMult = 0.7
 			case "HIGH":
-				laborMultiplier = 1.5
+				laborMult = 1.5
 			case "EXPLOIT":
-				laborMultiplier = 2.0
+				laborMult = 2.0
 			}
 		}
 	}
 
-	suitabilityMultiplier := 1.0
-
-	// 5. Node Level
-	nodeLevel := n.Level
-	if nodeLevel < 1 {
-		nodeLevel = 1
-	}
-	nodeLevelMultiplier := 1.0 + float64(nodeLevel-1)*0.20
-
-	// 6. Item Rank / Rarity divisor
-	var itemFoodPathMultiplier float64 = 1.0
-	var itemRankDivisor float64 = 1.0
-	if n.ProductionType == "Material" {
-		prodKey := resolveNodeProdKey(n)
-		if prodKey != "" {
-			if item, exists := models.ItemRegistry[prodKey]; exists {
-				if item.Path != "" {
-					itemFoodPathMultiplier = getPathDaoMultiplier(item.Path, ctx.nodeDaoMap)
-				}
-				effectiveRank := item.Rank
-				if item.Rarity > effectiveRank {
-					effectiveRank = item.Rarity
-				}
-				if effectiveRank >= 1 {
-					itemRankDivisor = getManaVal(effectiveRank)
-				}
-			}
-		}
-	}
-
-	cellCount := len(n.Cells)
-	if cellCount < 1 {
-		cellCount = 1
-	}
-	maxNodes := int(areaSize / 100000)
-	if maxNodes > 200 {
-		maxNodes = 200
-	}
-	cellYieldMultiplier := float64(maxNodes) * 0.25 / 400.0
-	baseReward := float64(n.ProductionAmount) * float64(multiples*cellCount) * cellYieldMultiplier
-	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
-	combinedMultiplier := (areaMultiplier * daoMultiplier * conflictMultiplier * ecologyMultiplier * ecoMultiplier * variantBonus * laborMultiplier * suitabilityMultiplier * itemFoodPathMultiplier * nodeLevelMultiplier) / itemRankDivisor
-
-	totalReward := baseReward * combinedMultiplier * bulkMultiplier
-	if n.ProductionType == "Material" && totalReward > 10000000 {
-		totalReward = 10000000
-	}
-	return totalReward
+	return gamefx.ComputeApertureYield(gamefx.ApertureYieldInputs{
+		Level:         n.Level,
+		ItemBasePrice: itemBasePrice,
+		AreaSize:      areaSize,
+		DaoMult:       daoMult,
+		ConflictMult:  conflictMult,
+		EcologyMult:   ecologyMult,
+		EcoMult:       ecoMult,
+		LaborMult:     laborMult,
+		PopBonus:      popBonus,
+	})
 }
+
+var apertureYieldFactorOrder = []string{"level", "dao", "area", "conflict", "ecology", "eco", "labor", "pop"}
+
+func apertureYieldFactors(y gamefx.ApertureYield) []models.ApertureYieldFactor {
+	factors := make([]models.ApertureYieldFactor, 0, len(apertureYieldFactorOrder))
+	for _, key := range apertureYieldFactorOrder {
+		if value, ok := y.Parts[key]; ok {
+			factors = append(factors, models.ApertureYieldFactor{Key: key, Value: value})
+		}
+	}
+	return factors
+}
+
+// buildApertureYieldPreview mirrors what a harvest would grant right now,
+// including the fractional yield already carried on the node's anchor cell.
+func buildApertureYieldPreview(ctx *apertureRewardContext, n models.ApertureResourceNode, areaSize int64, remainder float64, effectiveTimeRate float64) *models.ApertureYieldPreview {
+	y := apertureNodeYield(ctx, n, areaSize)
+	expected := y.Count + remainder
+	whole := int64(math.Floor(expected))
+	if n.ProductionType == "Material" && whole > 10000000 {
+		whole = 10000000
+	}
+	intervalHours := n.ProductionIntervalHours
+	if intervalHours <= 0 {
+		intervalHours = 1
+	}
+	perHour := y.Count * effectiveTimeRate / float64(intervalHours)
+	return &models.ApertureYieldPreview{
+		Base:      gamefx.ApertureYieldBase,
+		Expected:  expected,
+		Whole:     whole,
+		Remainder: expected - float64(whole),
+		Bonus:     y.Bonus,
+		RawBonus:  y.RawBonus,
+		Capped:    y.Capped,
+		Divisor:   y.Divisor,
+		PerHour:   perHour,
+		Factors:   apertureYieldFactors(y),
+	}
+}
+
+// loadApertureRemainders reads the carried fractional yield for every node of
+// an aperture in one query (keyed "nodeID:x:y").
+func loadApertureRemainders(q apertureQueryer, apertureID string) map[string]float64 {
+	out := make(map[string]float64)
+	rows, err := q.Query(`SELECT node_id, x, y, production_remainder FROM aperture_resource_node_cells WHERE aperture_id = $1`, apertureID)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var nodeID string
+		var x, y int
+		var remainder float64
+		if err := rows.Scan(&nodeID, &x, &y, &remainder); err == nil {
+			out[fmt.Sprintf("%s:%d:%d", nodeID, x, y)] = remainder
+		}
+	}
+	return out
+}
+
+func computeApertureNodeRewardWithCtx(ctx *apertureRewardContext, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) float64 {
+	total := apertureNodeYield(ctx, n, areaSize).Count * bulkMultiplier
+	if n.ProductionType == "Material" && total > 10000000 {
+		total = 10000000
+	}
+	return total
+}
+
 
 // computeApertureNodeReward computes the total reward for harvesting a single resource node,
 // applying all multipliers (Dao marks, conflicts, ecosystem, labor, suitability, area size)

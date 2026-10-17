@@ -1464,7 +1464,8 @@ func Simulate(state *CombatState) []CombatLog {
 				pendingShield := getPendingShieldMult(actor)
 				combinedMult := skillMult
 				if pendingShield > 1.0 {
-					combinedMult *= pendingShield
+					// Cộng dồn: skillMult + pendingShield - 1 (thay vì nhân).
+					combinedMult = skillMult + pendingShield - 1.0
 					actor.PendingShieldBuffs = nil // consume all pending shield buffs
 				} else {
 					pendingShield = 1.0
@@ -1828,10 +1829,12 @@ func Simulate(state *CombatState) []CombatLog {
 					dmgMultiplier *= 2.0
 				}
 
+				// Cộng dồn với skill mult (Gu damage_mult) thay vì nhân; xem skillMult bên dưới.
 				pendingDamage := getPendingDamageMult(actor)
 				if pendingDamage > 1.0 {
-					dmgMultiplier *= pendingDamage
 					actor.PendingDamageBuffs = nil // consume all pending damage buffs
+				} else {
+					pendingDamage = 1.0
 				}
 
 				shieldBypass := hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD") || (hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") && actor.CustomState != nil && actor.CustomState["sat_khi_level"] > 10)
@@ -1908,6 +1911,10 @@ func Simulate(state *CombatState) []CombatLog {
 					skillMult := a.DamageMult
 					if skillMult <= 0 {
 						skillMult = 1.0
+					}
+					// Cộng dồn Gu damage_mult với buff chờ: 1 + Σ(m-1).
+					if pendingDamage > 1.0 {
+						skillMult += pendingDamage - 1.0
 					}
 
 					totalHitDmg := 0.0
@@ -3408,10 +3415,11 @@ func getPendingDamageMult(actor *CombatantAuto) float64 {
 	if len(actor.PendingDamageBuffs) == 0 {
 		return 1.0
 	}
+	// Cộng dồn bonus: 1 + Σ(m-1) thay vì nhân.
 	mult := 1.0
 	for _, m := range actor.PendingDamageBuffs {
 		if m > 0 {
-			mult *= m
+			mult += m - 1.0
 		}
 	}
 	return mult
@@ -3421,10 +3429,11 @@ func getPendingShieldMult(actor *CombatantAuto) float64 {
 	if len(actor.PendingShieldBuffs) == 0 {
 		return 1.0
 	}
+	// Cộng dồn bonus: 1 + Σ(m-1) thay vì nhân.
 	mult := 1.0
 	for _, m := range actor.PendingShieldBuffs {
 		if m > 0 {
-			mult *= m
+			mult += m - 1.0
 		}
 	}
 	return mult

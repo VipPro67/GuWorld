@@ -597,6 +597,18 @@ export interface ApertureResourceNode {
   production_key: string;
   cells?: { x: number; y: number }[];
   dao_conflict_multiplier?: number;
+  yield_preview?: {
+    base: number;
+    expected: number;
+    whole: number;
+    remainder: number;
+    bonus: number;
+    raw_bonus: number;
+    capped: boolean;
+    divisor: number;
+    per_hour: number;
+    factors: { key: string; value: number }[];
+  };
 }
 
 export interface ApertureVariantHuman {

@@ -133,23 +133,8 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	simState.CaptureTurnSnapshots = true
 	logs := simulator.Simulate(simState)
 
-	// Log đội hình thực tế mang vào sim để skip mode nhìn thấy pet/NPC có load không.
-	allyParts := make([]string, 0, len(simState.Allies))
-	allySummary := make([]map[string]interface{}, 0, len(simState.Allies))
-	for _, a := range simState.Allies {
-		allyParts = append(allyParts, fmt.Sprintf("%s (%s)", a.Name, a.Kind))
-		allySummary = append(allySummary, map[string]interface{}{
-			"id": a.ID, "name": a.Name, "kind": a.Kind,
-			"hp": a.HP, "max_hp": a.MaxHP,
-		})
-	}
-	logs = append([]simulator.CombatLog{{
-		Turn:   0,
-		Action: "FORMATION",
-		Detail: fmt.Sprintf("Phe ta xuất trận (%d): %s", len(allyParts), strings.Join(allyParts, ", ")),
-	}}, logs...)
-
-	_, alliesAlive, finalPlayerHP := combatOutcome(simState, player.ID.String())
+	formationLogs := BuildFormationLogs(simState.Allies)
+	logs = append(formationLogs, logs...)
 
 	applyLoveGuPenalties(player, logs)
 
@@ -158,35 +143,34 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	// post-consumption changes (e.g. loot).
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
-	var finalMana float64
-	for _, a := range simState.Allies {
-		if a.ID == player.ID.String() {
-			finalMana = a.Mana
-			break
-		}
-	}
-
 	logs = append(logs, usageLogs...)
+
+	typeLog := BuildCombatTypeLog(player.ActiveCombat)
+	logs = append([]simulator.CombatLog{typeLog}, logs...)
+
+	outcome := EvaluateCombatOutcome(CombatOutcomeInput{
+		SimState:      simState,
+		PlayerID:      player.ID.String(),
+		PlayerX:       player.X,
+		PlayerY:       player.Y,
+		CurrentRegion: player.CurrentRegion,
+		ActiveCombat:  player.ActiveCombat,
+		IsVirtual:     isVirtual,
+		IsTribulation: isTribulation,
+	}, logs)
+
+	alliesAlive := outcome.AlliesAlive
+	finalPlayerHP := outcome.FinalPlayerHP
+	finalMana := outcome.FinalPlayerMana
+	enemyName := outcome.EnemyName
+	summary := make(map[string]interface{})
+	for k, v := range outcome.Summary {
+		summary[k] = v
+	}
 
 	var updateQuery string
 	var args []interface{}
-
-	enemyName := ""
-	rawEnemyType := ""
-	if player.ActiveCombat != nil {
-		enemyName = player.ActiveCombat.EnemyName
-		rawEnemyType = player.ActiveCombat.EnemyType
-	}
-	// combatTypeLabel is a human-readable label for the log header only; the raw
-	// EnemyType is what combat-history decisions and rows must use (e.g. "PVP").
-	enemyTypeLabel := combatTypeLabel(player.ActiveCombat)
-	logs = append([]simulator.CombatLog{{
-		Turn:   0,
-		Action: "COMBAT_TYPE",
-		Detail: fmt.Sprintf("=== %s ===", enemyTypeLabel),
-	}}, logs...)
-
-	summary := make(map[string]interface{})
+	rawEnemyType := outcome.RawEnemyType
 
 	// Capture the battle region before the outcome branch: a defeat respawns the
 	// player (applyAutoCombatDefeat mutates CurrentRegion), and combat history
@@ -195,7 +179,7 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 
 	if alliesAlive {
 		if isVirtual {
-			if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 50); err != nil {
+			if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", int64(outcome.ArenaCoinsAwarded)); err != nil {
 				logger.S.Errorf("Failed to award arena_coin to %s: %v", player.ID, err)
 			} else {
 				logs = append(logs, simulator.CombatLog{
@@ -275,12 +259,11 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 				summary["sect_war_won"] = true
 			}
 
-			if !isTribulation && player.ActiveCombat.TargetSectID == "" {
+			if outcome.ShouldClearCell {
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
 				}
-				coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+				player.ClearedCells[outcome.ClearedCellKey] = time.Now().Format(time.RFC3339)
 				publishClearedCell = true
 			}
 			// player.ClearedCells implements driver.Valuer, so it goes straight
@@ -304,15 +287,7 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		return nil, fmt.Errorf("failed to finalize combat outcome: %w", err)
 	}
 
-	qiReward := 2.0
-	if alliesAlive {
-		enemyRank := 1
-		if player.ActiveCombat != nil {
-			enemyRank = player.ActiveCombat.EnemyRank
-		}
-		qiReward = combatHumanQiReward(enemyRank)
-	}
-	qiGained := AddHumanQi(player, qiReward)
+	qiGained := AddHumanQi(player, outcome.HumanQiReward)
 	_, err = tx.Exec("UPDATE players SET human_qi = $1 WHERE id = $2", player.HumanQi, player.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update human_qi: %w", err)
@@ -345,10 +320,7 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		logs = append(logs, *fakeWallLog)
 	}
 
-	winner := "Phe Địch"
-	if alliesAlive {
-		winner = "Phe Ta"
-	}
+	winner := outcome.Winner
 
 	// Queue external effects for the caller to run only after its transaction commits.
 	targetPlayerID := ""
@@ -395,6 +367,13 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	summary["winner"] = winner
 	summary["enemy_name"] = enemyName
 	summary["enemy_type"] = rawEnemyType
+	allySummary := make([]map[string]interface{}, 0, len(simState.Allies))
+	for _, a := range simState.Allies {
+		allySummary = append(allySummary, map[string]interface{}{
+			"id": a.ID, "name": a.Name, "kind": a.Kind,
+			"hp": a.HP, "max_hp": a.MaxHP,
+		})
+	}
 	summary["allies"] = allySummary
 
 	player.ActiveCombat = nil
@@ -478,7 +457,8 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			}
 		}
 		if active.ShieldMult > 0 {
-			act.ShieldMult *= active.ShieldMult
+			// Cộng dồn bonus: act.ShieldMult (đã gồm attainment) + (value-1).
+			act.ShieldMult += active.ShieldMult - 1.0
 		}
 		// Registry-driven statuses (BLEED/POISON/BURN/FEAR/CONFUSE/STEALTH/
 		// SLEEP/BLIND/CHARM/BIND + catalog). Entries with chance opt into the
@@ -512,7 +492,8 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			act.Defense += 30.0
 		}
 		if active.DamageMult > 0 {
-			act.DamageMult *= active.DamageMult
+			// Cộng dồn bonus: act.DamageMult (đã gồm attainment) + (value-1).
+			act.DamageMult += active.DamageMult - 1.0
 		}
 		if active.TargetSelector != "" {
 			act.TargetType = active.TargetSelector
@@ -546,7 +527,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 							act.Path = []string{op.Path}
 						}
 						if strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0 {
-							act.DamageMult *= op.Value
+							act.DamageMult += op.Value - 1.0
 						} else if strings.EqualFold(op.SubType, "MAX_HP_PERCENT") && op.Value > 0 {
 							if op.Value <= 1.0 {
 								act.DamageHPPercent = op.Value
@@ -556,7 +537,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 						}
 					case gameplayeffects.OpShield:
 						if strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0 {
-							act.ShieldMult *= op.Value
+							act.ShieldMult += op.Value - 1.0
 						}
 					case gameplayeffects.OpHeal:
 						if strings.EqualFold(op.SubType, "LIFESTEAL") {

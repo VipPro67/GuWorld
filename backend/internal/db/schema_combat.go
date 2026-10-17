@@ -18,17 +18,6 @@ func schemaCombat() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("combat_sessions", `
-	CREATE TABLE IF NOT EXISTS combat_sessions (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		state JSONB NOT NULL DEFAULT '{}',
-		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		UNIQUE (player_id)
-	);`); err != nil {
-		return err
-	}
 
 	if err := execSchema("arena_rankings", `
 	CREATE TABLE IF NOT EXISTS arena_rankings (

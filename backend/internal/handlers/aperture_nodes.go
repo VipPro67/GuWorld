@@ -176,12 +176,10 @@ func ManageApertureNodesBatch(c *gin.Context) {
 			newMaxHP := n.MaxHP + 500
 			newProduction := n.ProductionAmount
 			newDefense, newHPBonus := n.DefensePower, n.HPBonus
-			if n.Category == "RESOURCE" {
-				newProduction = int64(float64(n.ProductionAmount) * 1.5)
-				if newProduction == n.ProductionAmount {
-					newProduction++
-				}
-			} else {
+			// Resource nodes gain yield from the harvest formula per level
+			// (gamefx.ApertureYieldLevelStep), so production_amount is not scaled
+			// here to avoid applying the level bonus twice.
+			if n.Category != "RESOURCE" {
 				if newDefense > 0 {
 					newDefense = int(float64(newDefense) * 1.25)
 					if newDefense == n.DefensePower {
@@ -268,6 +266,24 @@ func apertureCellsAreConnected(cells []models.ApertureGridCell) bool {
 	return len(remaining) == 0
 }
 
+// apertureSeedQuantity scales the template's rank-1 seed cost down as the
+// produced item gets more valuable, so every rank repays its seed in roughly
+// the same number of harvests: seed = baseSeed / (base_price / 1000).
+func apertureSeedQuantity(baseSeed int, prodKey string) int64 {
+	if baseSeed <= 0 {
+		return 0
+	}
+	item, ok := models.ItemRegistry[prodKey]
+	if !ok || item.BasePrice <= 0 {
+		return int64(baseSeed)
+	}
+	qty := int64(math.Round(float64(baseSeed) * 1000.0 / item.BasePrice))
+	if qty < 1 {
+		qty = 1
+	}
+	return qty
+}
+
 func PlaceApertureNode(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -345,6 +361,30 @@ func PlaceApertureNode(c *gin.Context) {
 	if ap.State == "TRIBULATION_ACTIVE" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Khiếu đang có tai kiếp càn quét, không thể xây dựng!"})
 		return
+	}
+
+	// Resource zones are capped by aperture size so a player cannot spam
+	// one-cell farms across the whole grid (reuses the old maxNodes budget).
+	if template.NodeCategory == "" || template.NodeCategory == "RESOURCE" {
+		maxNodes := int(ap.AreaSize / 100000)
+		if maxNodes > 200 {
+			maxNodes = 200
+		}
+		if maxNodes < 1 {
+			maxNodes = 1
+		}
+		var resourceCount int
+		if err := tx.QueryRow(`
+			SELECT COUNT(1) FROM aperture_resource_nodes
+			WHERE aperture_id = $1 AND is_destroyed = false AND COALESCE(node_category, 'RESOURCE') = 'RESOURCE'
+		`, ap.ID).Scan(&resourceCount); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra số khu tài nguyên"})
+			return
+		}
+		if resourceCount >= maxNodes {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Khiếu chỉ cho phép tối đa %d khu tài nguyên với diện tích hiện tại (%d). Hãy san phẳng bớt.", maxNodes, ap.AreaSize)})
+			return
+		}
 	}
 
 	var immortalStones int64
@@ -512,7 +552,7 @@ func PlaceApertureNode(c *gin.Context) {
 			return
 		}
 		if template.SeedAmount > 0 {
-			seedQty := int64(template.SeedAmount)
+			seedQty := apertureSeedQuantity(template.SeedAmount, nodeProdKey)
 			seedName = nodeProdKey
 			if itemSpec, exists := models.ItemRegistry[nodeProdKey]; exists {
 				seedName = itemSpec.Name

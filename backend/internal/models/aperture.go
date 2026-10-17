@@ -80,6 +80,29 @@ type ApertureResourceNode struct {
 	ProductionKey           string             `json:"production_key"`
 	Cells                   []ApertureGridCell `json:"cells,omitempty"`
 	DaoConflictMultiplier   float64            `json:"dao_conflict_multiplier,omitempty"`
+	YieldPreview            *ApertureYieldPreview `json:"yield_preview,omitempty"`
+}
+
+// ApertureYieldFactor is one multiplier of the harvest breakdown (gamefx
+// ComputeApertureYield). Keys: level, dao, area, conflict, ecology, eco, labor, pop.
+type ApertureYieldFactor struct {
+	Key   string  `json:"key"`
+	Value float64 `json:"value"`
+}
+
+// ApertureYieldPreview mirrors gamefx.ComputeApertureYield so the client never
+// has to re-derive the harvest formula.
+type ApertureYieldPreview struct {
+	Base      float64               `json:"base"`
+	Expected  float64               `json:"expected"`
+	Whole     int64                 `json:"whole"`
+	Remainder float64               `json:"remainder"`
+	Bonus     float64               `json:"bonus"`
+	RawBonus  float64               `json:"raw_bonus"`
+	Capped    bool                  `json:"capped"`
+	Divisor   float64               `json:"divisor"`
+	PerHour   float64               `json:"per_hour"`
+	Factors   []ApertureYieldFactor `json:"factors"`
 }
 
 type ApertureGridCell struct {

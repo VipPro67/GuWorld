@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -387,6 +388,7 @@ func GetApertureNodes(c *gin.Context) {
 			COALESCE(n.hp_bonus, 0), COALESCE(n.damage_reduction, 0), COALESCE(n.blocks_movement, false),
 			COALESCE(n.required_gu_id, ''), COALESCE(n.required_gu_rank, 0),
 			COALESCE(n.zone_type, ''), COALESCE(n.food_path, ''), COALESCE(n.item_tier, ''),
+			COALESCE(n.production_key, ''),
 			COALESCE((SELECT json_agg(json_build_object('x', c.x, 'y', c.y) ORDER BY c.y, c.x)
 				FROM aperture_resource_node_cells c WHERE c.node_id = n.id),
 				json_build_array(json_build_object('x', n.x, 'y', n.y)))
@@ -411,7 +413,7 @@ func GetApertureNodes(c *gin.Context) {
 			&n.NodeCategory, &n.DefensePower, &n.AttackRange,
 			&n.HPBonus, &n.DamageReduction, &n.BlocksMovement,
 			&n.RequiredGuID, &n.RequiredGuRank,
-			&n.ZoneType, &n.FoodPath, &n.ItemTier, &cellsJSON)
+			&n.ZoneType, &n.FoodPath, &n.ItemTier, &n.ProductionKey, &cellsJSON)
 		if err == nil {
 			_ = json.Unmarshal(cellsJSON, &n.Cells)
 			n.DaoConflictMultiplier = apertureDaoConflictMultiplierForProfile(daoProfile, n.Path)
@@ -422,6 +424,69 @@ func GetApertureNodes(c *gin.Context) {
 		}
 	}
 
+	// Attach the server-computed harvest preview so the client never has to
+	// re-derive the yield formula (and can never disagree with the payout).
+	attachApertureYieldPreviews(playerID.String(), nodes, daoProfile)
+
 	c.JSON(http.StatusOK, nodes)
 
 }
+
+// attachApertureYieldPreviews fills YieldPreview for every resource node of the
+// player's aperture. Best-effort: on any read error the nodes are returned
+// without a preview instead of failing the whole request.
+func attachApertureYieldPreviews(playerID string, nodes []models.ApertureResourceNode, daoProfile *gamefx.DaoCombatProfile) {
+	if len(nodes) == 0 {
+		return
+	}
+	var apertureIDStr string
+	var areaSize int64
+	var timeRate, tsm float64
+	var race string
+	err := db.DB.QueryRow(`
+		SELECT a.id::text, a.area_size, COALESCE(a.time_rate, 1.0), p.time_speed_multiplier, COALESCE(p.race, '')
+		FROM immortal_apertures a
+		JOIN players p ON a.player_id = p.id
+		WHERE a.player_id = $1
+	`, playerID).Scan(&apertureIDStr, &areaSize, &timeRate, &tsm, &race)
+	if err != nil {
+		return
+	}
+	if timeRate <= 0 {
+		timeRate = 1.0
+	}
+	dummyP := models.Player{}
+	dummyP.Race = race
+	if !gamefx.Get(&dummyP).Immortal {
+		if tsm <= 0 {
+			tsm = 1.0
+		}
+		if bonus, err := db.EquippedTimeSpeedBonus(db.DB, playerID); err == nil {
+			tsm += bonus
+		}
+	} else {
+		tsm = 1.0
+	}
+	effectiveTimeRate := timeRate * tsm
+	if effectiveTimeRate <= 0 {
+		effectiveTimeRate = 1.0
+	}
+
+	pid, err := uuid.Parse(playerID)
+	if err != nil {
+		return
+	}
+	rewardCtx, err := loadApertureRewardContextWithProfile(db.DB, pid, apertureIDStr, nodes, daoProfile)
+	if err != nil {
+		return
+	}
+	remainders := loadApertureRemainders(db.DB, apertureIDStr)
+	for i := range nodes {
+		if nodes[i].NodeCategory != "RESOURCE" {
+			continue
+		}
+		remainder := remainders[fmt.Sprintf("%s:%d:%d", nodes[i].ID, nodes[i].X, nodes[i].Y)]
+		nodes[i].YieldPreview = buildApertureYieldPreview(rewardCtx, nodes[i], areaSize, remainder, effectiveTimeRate)
+	}
+}
+
