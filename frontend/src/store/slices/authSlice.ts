@@ -244,6 +244,10 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   logout: () => {
+    // Idempotent: a 401 is handled both centrally (authFetch) and by the legacy
+    // per-slice checks, so logout would otherwise run twice per expired session.
+    const current = get();
+    if (!current.player && !current.token) return;
     get().unsubscribePlayerEvents();
     get().unsubscribeTradeEvents();
     get().unsubscribeBaoHoangMessages();

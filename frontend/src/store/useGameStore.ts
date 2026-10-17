@@ -2425,8 +2425,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
 // A 401 from any request means the session is gone. Doing it here, rather than in
 // all 24 slices, also covers callers that never checked for 401 themselves.
+// logout() is idempotent, so the legacy per-slice checks are harmless.
 setUnauthorizedHandler(() => {
-  const state = useGameStore.getState();
-  // Guard against a burst of parallel 401s turning into a burst of logout posts.
-  if (state.player || state.token) state.logout();
+  useGameStore.getState().logout();
 });
