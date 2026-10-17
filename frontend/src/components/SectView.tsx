@@ -380,6 +380,71 @@ export const SectView: React.FC = () => {
     setCurrentPage(1);
   }, [searchTerm, selectedRegion]);
 
+  // Hooks must run on every render, so they live above the early returns below.
+
+  // Donation materials listing
+  const playerMaterials = useMemo(() => {
+    return Object.entries(player?.materials_inventory || {}).filter(([_, qty]) => qty > 0);
+  }, [player?.materials_inventory]);
+
+  // Donation Gu listing (Filter out Vital Gu and equipped Gu)
+  const playerDonatableGus = useMemo(() => {
+    return (player?.gu_inventory || []).filter(g => !g.is_vital && !g.equipped && g.status !== "DEAD");
+  }, [player?.gu_inventory]);
+
+  const sect = mySectStatus?.sect;
+  const normalizedVaultSearch = vaultSearch.trim().toLocaleLowerCase();
+  const filteredVaultGus = useMemo(() => {
+    const merged = new Map<string, SectVaultGuItem>();
+    for (const item of sect?.vault_gu ?? []) {
+      const key = `${item.id}_${item.rank || 0}`;
+      const existing = merged.get(key);
+      if (existing) {
+        existing.quantity = (existing.quantity || 0) + (item.quantity || 0);
+      } else {
+        merged.set(key, { ...item });
+      }
+    }
+
+    return Array.from(merged.values())
+      .filter((item) => {
+        if (item.quantity !== undefined && item.quantity <= 0) return false;
+        const spec = guDictionary[item.id];
+        const rank = item.rank || spec?.rank || 1;
+        if (vaultRankFilter === "6+" ? rank < 6 : vaultRankFilter !== "All" && rank !== Number(vaultRankFilter)) {
+          return false;
+        }
+        return !normalizedVaultSearch || (spec?.name || item.id).toLocaleLowerCase().includes(normalizedVaultSearch);
+      })
+      .sort((a, b) => (a.rank || guDictionary[a.id]?.rank || 1) - (b.rank || guDictionary[b.id]?.rank || 1));
+  }, [sect?.vault_gu, guDictionary, normalizedVaultSearch, vaultRankFilter]);
+
+  const filteredVaultMaterials = useMemo(
+    () =>
+      Object.entries(sect?.vault_materials ?? {}).filter(([id, quantity]) => {
+        if (quantity <= 0) return false;
+        const spec = itemDictionary[id];
+        const rank = spec?.rank || 1;
+        if (vaultRankFilter === "6+" ? rank < 6 : vaultRankFilter !== "All" && rank !== Number(vaultRankFilter)) {
+          return false;
+        }
+        return !normalizedVaultSearch || (spec?.name || id).toLocaleLowerCase().includes(normalizedVaultSearch);
+      }),
+    [sect?.vault_materials, itemDictionary, normalizedVaultSearch, vaultRankFilter],
+  );
+
+  const filteredVaultRecipes = useMemo(
+    () =>
+      (sect?.vault_recipes ?? []).filter((recipe) =>
+        !normalizedVaultSearch || formatRecipeName(recipe.recipe_id).toLocaleLowerCase().includes(normalizedVaultSearch),
+      ),
+    [sect?.vault_recipes, normalizedVaultSearch],
+  );
+
+  useEffect(() => {
+    setVaultPage(1);
+  }, [vaultTab, vaultSearch, vaultRankFilter]);
+
   const handleCreateSect = async () => {
     if (!createSectName.trim() || !createSectDesc.trim()) return;
     const ok = await createSect(createSectName.trim(), createSectDesc.trim(), createSectRegion);
@@ -539,15 +604,7 @@ export const SectView: React.FC = () => {
   const promotionReq = mySectStatus?.member ? getPromotionRequirements(mySectStatus.member.member_rank) : null;
   const canPromote = promotionReq && player.rank >= promotionReq.reqRank && mySectStatus!.member!.contribution_points >= promotionReq.points;
 
-  // Donation materials listing
-  const playerMaterials = useMemo(() => {
-    return Object.entries(player.materials_inventory || {}).filter(([_, qty]) => qty > 0);
-  }, [player.materials_inventory]);
-
-  // Donation Gu listing (Filter out Vital Gu and equipped Gu)
-  const playerDonatableGus = useMemo(() => {
-    return (player.gu_inventory || []).filter(g => !g.is_vital && !g.equipped && g.status !== "DEAD");
-  }, [player.gu_inventory]);
+  // Donation materials listing (playerMaterials / playerDonatableGus are hoisted above the early returns)
 
   // Pricing helpers matching backend/pkg/pricing
   const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];
@@ -978,58 +1035,10 @@ export const SectView: React.FC = () => {
     );
   }
 
-  const { member, sect, leaderboard } = mySectStatus;
+  const { member, leaderboard } = mySectStatus;
   const isLeaderOrElder = member?.member_rank === "CHUONG_MON" || member?.member_rank === "TRUONG_LAO" || member?.member_rank === "HO_PHAP";
   // Only Chưởng Môn and Hộ Pháp may destroy vault items.
   const canDestroyVault = member?.member_rank === "CHUONG_MON" || member?.member_rank === "HO_PHAP";
-
-  const normalizedVaultSearch = vaultSearch.trim().toLocaleLowerCase();
-  const filteredVaultGus = useMemo(() => {
-    const merged = new Map<string, SectVaultGuItem>();
-    for (const item of sect?.vault_gu ?? []) {
-      const key = `${item.id}_${item.rank || 0}`;
-      const existing = merged.get(key);
-      if (existing) {
-        existing.quantity = (existing.quantity || 0) + (item.quantity || 0);
-      } else {
-        merged.set(key, { ...item });
-      }
-    }
-
-    return Array.from(merged.values())
-      .filter((item) => {
-        if (item.quantity !== undefined && item.quantity <= 0) return false;
-        const spec = guDictionary[item.id];
-        const rank = item.rank || spec?.rank || 1;
-        if (vaultRankFilter === "6+" ? rank < 6 : vaultRankFilter !== "All" && rank !== Number(vaultRankFilter)) {
-          return false;
-        }
-        return !normalizedVaultSearch || (spec?.name || item.id).toLocaleLowerCase().includes(normalizedVaultSearch);
-      })
-      .sort((a, b) => (a.rank || guDictionary[a.id]?.rank || 1) - (b.rank || guDictionary[b.id]?.rank || 1));
-  }, [sect?.vault_gu, guDictionary, normalizedVaultSearch, vaultRankFilter]);
-
-  const filteredVaultMaterials = useMemo(
-    () =>
-      Object.entries(sect?.vault_materials ?? {}).filter(([id, quantity]) => {
-        if (quantity <= 0) return false;
-        const spec = itemDictionary[id];
-        const rank = spec?.rank || 1;
-        if (vaultRankFilter === "6+" ? rank < 6 : vaultRankFilter !== "All" && rank !== Number(vaultRankFilter)) {
-          return false;
-        }
-        return !normalizedVaultSearch || (spec?.name || id).toLocaleLowerCase().includes(normalizedVaultSearch);
-      }),
-    [sect?.vault_materials, itemDictionary, normalizedVaultSearch, vaultRankFilter],
-  );
-
-  const filteredVaultRecipes = useMemo(
-    () =>
-      (sect?.vault_recipes ?? []).filter((recipe) =>
-        !normalizedVaultSearch || formatRecipeName(recipe.recipe_id).toLocaleLowerCase().includes(normalizedVaultSearch),
-      ),
-    [sect?.vault_recipes, normalizedVaultSearch],
-  );
 
   const vaultItemCount =
     vaultTab === "gu" ? filteredVaultGus.length
@@ -1038,10 +1047,6 @@ export const SectView: React.FC = () => {
   const vaultTotalPages = Math.max(1, Math.ceil(vaultItemCount / vaultItemsPerPage));
   const currentVaultPage = Math.min(vaultPage, vaultTotalPages);
   const vaultStartIndex = (currentVaultPage - 1) * vaultItemsPerPage;
-
-  useEffect(() => {
-    setVaultPage(1);
-  }, [vaultTab, vaultSearch, vaultRankFilter]);
 
   const renderDestroyButton = (itemType: "gu" | "material" | "recipe", itemId: string, label: string, rank?: number) => {
     if (!canDestroyVault) return null;

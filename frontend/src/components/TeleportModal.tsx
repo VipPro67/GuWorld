@@ -111,8 +111,6 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     setMounted(true);
   }, []);
 
-  if (!isOpen || !mounted) return null;
-
   const availableRegions = regions
     .filter((r) => r.is_active && (r.zone_type === "KHU_VUC" || r.zone_type === "NGU_VUC"))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -137,6 +135,9 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
       subLabel: `An toàn: (${r.safe_zone_x ?? r.entry_x}, ${r.safe_zone_y ?? r.entry_y})`,
     }));
   }, [availableRegions]);
+
+  // All hooks must run on every render, so the render gate sits after them.
+  if (!isOpen || !mounted) return null;
 
   const currentRegionId = player?.current_region ?? "";
 

@@ -105,20 +105,31 @@ func RollRegionLoot(tx *sql.Tx, regionID string, monsterType string, rank int) R
 		logger.S.Warnf("RollRegionLoot: query failed: %v", err)
 		return rolled
 	}
-	defer rows.Close()
 
+	// Drain and close the rows BEFORE issuing LoadLootTable on the same tx:
+	// a Tx pins one connection, so querying loot_tables while these rows are
+	// still open desyncs the protocol (pq: unexpected Parse response) and
+	// poisons the whole transaction (every later Exec fails with bad connection).
+	type regionLootRow struct {
+		lootTableID string
+		chance      float64
+	}
+	var buffered []regionLootRow
 	for rows.Next() {
-		var lootTableID string
-		var chance float64
-		if err := rows.Scan(&lootTableID, &chance); err != nil {
+		var r regionLootRow
+		if err := rows.Scan(&r.lootTableID, &r.chance); err != nil {
+			continue
+		}
+		buffered = append(buffered, r)
+	}
+	rows.Close()
+
+	for _, r := range buffered {
+		if rand.Float64() > r.chance {
 			continue
 		}
 
-		if rand.Float64() > chance {
-			continue
-		}
-
-		if lt, err := db.LoadLootTable(tx, lootTableID); err == nil {
+		if lt, err := db.LoadLootTable(tx, r.lootTableID); err == nil {
 			regionLoot := RollLoot(lt, rank)
 			for k, v := range regionLoot.Items {
 				rolled.Items[k] += v
@@ -233,18 +244,24 @@ func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int, regionID s
 			  AND is_active = TRUE AND chance > 0
 			ORDER BY region_id, monster_type, loot_table_id`, pq.Array(scope), monsterType, rank)
 		if err == nil {
+			// Buffer ids and close the rows before LoadLootTable: querying on
+			// the same Tx while these rows are open poisons the connection.
+			lootTableIDs := []string{}
 			for rows.Next() {
 				var lootTableID string
 				if scanErr := rows.Scan(&lootTableID); scanErr != nil {
 					continue
 				}
+				lootTableIDs = append(lootTableIDs, lootTableID)
+			}
+			rows.Close()
+			for _, lootTableID := range lootTableIDs {
 				if lt, loadErr := db.LoadLootTable(tx, lootTableID); loadErr == nil {
 					for _, e := range lt.Entries {
 						appendPreview(e)
 					}
 				}
 			}
-			rows.Close()
 		}
 	}
 	if first {

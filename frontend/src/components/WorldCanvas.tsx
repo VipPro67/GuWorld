@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle, Rectangle } from "pixi.js";
 import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldCombatEvent, type WorldMonster, type WorldObject } from "@/store/useWorldStore";
 import { legacyMonsterHasRuntimeReplacement, runtimeMonsterReplacementKey } from "@/store/worldMonsterReducer";
-import { guSpecFor, useGameStore } from "@/store/useGameStore";
+import { guSpecFor, useGameStore, type Region } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
 import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
 import { MONSTER_ATLAS_MANIFEST } from "./monsterAtlasManifest";
@@ -84,6 +84,95 @@ function clearContainer(container: Container) {
   }
 }
 
+export function resolveActiveZone(
+  regions: Region[],
+  currentRegionId?: string,
+  px?: number,
+  py?: number,
+): Region {
+  if (!regions || regions.length === 0) {
+    return {
+      id: currentRegionId || "default_zone",
+      name: "Khu Vực",
+      description: "",
+      width: 2000,
+      height: 2000,
+      min_rank: 1,
+      max_rank: 5,
+      is_active: true,
+      min_x: 0,
+      min_y: 0,
+      max_x: 2000,
+      max_y: 2000,
+    };
+  }
+
+  // 1. If player has a specific subzone as current_region
+  if (currentRegionId) {
+    const direct = regions.find(
+      (r) =>
+        r.id === currentRegionId &&
+        r.zone_type !== "NGU_VUC" &&
+        r.min_x !== undefined &&
+        r.max_x !== undefined,
+    );
+    if (direct) return direct;
+  }
+
+  // 2. Try to find the smallest subzone containing (px, py)
+  if (px !== undefined && py !== undefined) {
+    let bestZone: Region | null = null;
+    let minArea = Infinity;
+    for (const r of regions) {
+      if (r.zone_type === "NGU_VUC") continue;
+      if (
+        r.min_x !== undefined &&
+        r.max_x !== undefined &&
+        r.min_y !== undefined &&
+        r.max_y !== undefined
+      ) {
+        if (px >= r.min_x && px <= r.max_x && py >= r.min_y && py <= r.max_y) {
+          const area = (r.max_x - r.min_x + 1) * (r.max_y - r.min_y + 1);
+          if (area < minArea) {
+            minArea = area;
+            bestZone = r;
+          }
+        }
+      }
+    }
+    if (bestZone) return bestZone;
+  }
+
+  // 3. Fallback: Region by ID even if NGU_VUC
+  if (currentRegionId) {
+    const fallback = regions.find(
+      (r) => r.id === currentRegionId && r.min_x !== undefined && r.max_x !== undefined,
+    );
+    if (fallback) return fallback;
+  }
+
+  // 4. Default to first valid region with coordinates
+  const firstWithCoords = regions.find(
+    (r) => r.min_x !== undefined && r.max_x !== undefined,
+  );
+  if (firstWithCoords) return firstWithCoords;
+
+  return {
+    id: "default_zone",
+    name: "Khu Vực",
+    description: "",
+    width: 2000,
+    height: 2000,
+    min_rank: 1,
+    max_rank: 5,
+    is_active: true,
+    min_x: 0,
+    min_y: 0,
+    max_x: 2000,
+    max_y: 2000,
+  };
+}
+
 export default function WorldCanvas({ mode, labelSettings, performanceMode }: WorldCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
@@ -145,6 +234,19 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
 
   const regions = useGameStore((s) => s.regions);
   const gamePlayer = useGameStore((s) => s.player);
+  const activeZone = useMemo(
+    () => resolveActiveZone(regions, gamePlayer?.current_region, gamePlayer?.x, gamePlayer?.y),
+    [regions, gamePlayer?.current_region, gamePlayer?.x, gamePlayer?.y],
+  );
+  const activeZoneRef = useRef<Region>(activeZone);
+  useEffect(() => {
+    activeZoneRef.current = activeZone;
+  }, [activeZone]);
+
+  const bgSpriteRef = useRef<TilingSprite | null>(null);
+  const [transitioningZone, setTransitioningZone] = useState<string | null>(null);
+  const lastZoneIdRef = useRef<string>("");
+
   const playerAvatarUrl = gamePlayer?.avatar_url;
   const setPlayerFromServer = useGameStore((s) => s.setPlayerFromServer);
   const setExploredSubZones = useWorldStore((s) => s.setExploredSubZones);
@@ -791,10 +893,15 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       const pos = event.global;
       const stage = stageRef.current;
       const scale = scaleRef.current;
+      const currentZone = activeZoneRef.current;
+      const zoneMinX = currentZone.min_x ?? 0;
+      const zoneMaxX = currentZone.max_x ?? (WORLD_W - 1);
+      const zoneMinY = currentZone.min_y ?? 0;
+      const zoneMaxY = currentZone.max_y ?? (WORLD_H - 1);
       let worldX = (pos.x - stage.position.x) / scale;
       let worldY = (pos.y - stage.position.y) / scale;
-      worldX = Math.max(0, Math.min(WORLD_W - 1, worldX));
-      worldY = Math.max(0, Math.min(WORLD_H - 1, worldY));
+      worldX = Math.max(zoneMinX, Math.min(zoneMaxX, worldX));
+      worldY = Math.max(zoneMinY, Math.min(zoneMaxY, worldY));
       const tx = Math.floor(worldX);
       const ty = Math.floor(worldY);
 
@@ -1036,10 +1143,21 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     clearContainer(container);
     labelRenderStateRef.current = "";
 
-    const largeZones = regs.filter((r) => r.zone_type === "NGU_VUC");
-    const namedZones = regs.filter((r) => r.zone_type === "KHU_VUC");
-    const hub = regs.filter((r) => r.zone_type === "HUB" || r.zone_type === "SAFE_ZONE");
-    const pvpZones = regs.filter((r) => r.zone_type === "PVP_ZONE");
+    const currentZone = activeZoneRef.current;
+    const activeMinX = currentZone.min_x ?? 0;
+    const activeMaxX = currentZone.max_x ?? WORLD_W;
+    const activeMinY = currentZone.min_y ?? 0;
+    const activeMaxY = currentZone.max_y ?? WORLD_H;
+
+    const overlaps = (z: { min_x?: number; min_y?: number; max_x?: number; max_y?: number }) => {
+      if (z.min_x === undefined || z.max_x === undefined || z.min_y === undefined || z.max_y === undefined) return false;
+      return !(z.max_x < activeMinX || z.min_x > activeMaxX || z.max_y < activeMinY || z.min_y > activeMaxY);
+    };
+
+    const largeZones = regs.filter((r) => r.zone_type === "NGU_VUC" && overlaps(r));
+    const namedZones = regs.filter((r) => r.zone_type === "KHU_VUC" && overlaps(r));
+    const hub = regs.filter((r) => (r.zone_type === "HUB" || r.zone_type === "SAFE_ZONE") && overlaps(r));
+    const pvpZones = regs.filter((r) => r.zone_type === "PVP_ZONE" && overlaps(r));
 
     const baseColors = [0x2d5f3f, 0x3f5f2d, 0x5f4f2d, 0x4f2d5f, 0x2d3f5f, 0x5f2d3f];
     const colorFor = (idx: number) => baseColors[idx % baseColors.length];
@@ -1102,6 +1220,14 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       container.addChild(g);
       addRegionLabel(z, rx, ry, rw, rh, 0xfca5a5, 36, "PVP_ZONE"); // PVP zone label
     });
+
+    // Draw active zone boundary
+    const boundary = new Graphics();
+    const zw = activeMaxX - activeMinX + 1;
+    const zh = activeMaxY - activeMinY + 1;
+    boundary.rect(activeMinX, activeMinY, zw, zh);
+    boundary.stroke({ color: 0x38bdf8, width: 2, alpha: 0.65 });
+    container.addChild(boundary);
   }, []);
 
   const drawRegionBackgrounds = useCallback((regs: typeof regions) => {
@@ -1116,9 +1242,16 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       dai_vuc_hac_thien: "black-heaven",
       dai_vuc_bach_thien: "white-heaven",
     };
+    const currentZone = activeZoneRef.current;
+    const activeMinX = currentZone.min_x ?? 0;
+    const activeMaxX = currentZone.max_x ?? WORLD_W;
+    const activeMinY = currentZone.min_y ?? 0;
+    const activeMaxY = currentZone.max_y ?? WORLD_H;
+
     for (const region of regs) {
       if (region.zone_type !== "NGU_VUC" || region.min_x === undefined || region.min_y === undefined
         || region.max_x === undefined || region.max_y === undefined) continue;
+      if (region.max_x < activeMinX || region.min_x > activeMaxX || region.max_y < activeMinY || region.min_y > activeMaxY) continue;
       const texture = regionBackgroundTexturesRef.current[backgroundKeyByRegion[region.id]];
       if (!texture) continue;
       const background = new Sprite(texture);
@@ -1750,11 +1883,17 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     const visionRadius = useWorldStore.getState().investigationRange;
     const runtimeKey = runtimeMonsterReplacementKey(useWorldStore.getState().monsters);
 
+    const currentZone = activeZoneRef.current;
+    const zoneMinX = currentZone.min_x ?? 0;
+    const zoneMaxX = currentZone.max_x ?? (WORLD_W - 1);
+    const zoneMinY = currentZone.min_y ?? 0;
+    const zoneMaxY = currentZone.max_y ?? (WORLD_H - 1);
+
     const overscan = CELL_CHUNK_SIZE;
-    const minWorldX = app ? Math.max(0, (-stage.position.x / scale) - overscan) : window.x - window.r;
-    const maxWorldX = app ? Math.min(WORLD_W - 1, ((app.screen.width - stage.position.x) / scale) + overscan) : window.x + window.r;
-    const minWorldY = app ? Math.max(0, (-stage.position.y / scale) - overscan) : window.y - window.r;
-    const maxWorldY = app ? Math.min(WORLD_H - 1, ((app.screen.height - stage.position.y) / scale) + overscan) : window.y + window.r;
+    const minWorldX = app ? Math.max(zoneMinX, (-stage.position.x / scale) - overscan) : Math.max(zoneMinX, window.x - window.r);
+    const maxWorldX = app ? Math.min(zoneMaxX, ((app.screen.width - stage.position.x) / scale) + overscan) : Math.min(zoneMaxX, window.x + window.r);
+    const minWorldY = app ? Math.max(zoneMinY, (-stage.position.y / scale) - overscan) : Math.max(zoneMinY, window.y - window.r);
+    const maxWorldY = app ? Math.min(zoneMaxY, ((app.screen.height - stage.position.y) / scale) + overscan) : Math.min(zoneMaxY, window.y + window.r);
     const minChunkX = Math.floor(minWorldX / CELL_CHUNK_SIZE);
     const maxChunkX = Math.floor(maxWorldX / CELL_CHUNK_SIZE);
     const minChunkY = Math.floor(minWorldY / CELL_CHUNK_SIZE);
@@ -2093,11 +2232,18 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       bgGraphics.stroke({ color: 0x14361e, width: 0.02, alignment: 0 }); // alignment 0 draws stroke completely inside
 
       const bgTexture = app.renderer.generateTexture(bgGraphics);
+      const initialZone = activeZoneRef.current;
+      const initMinX = initialZone.min_x ?? 0;
+      const initMinY = initialZone.min_y ?? 0;
+      const initMaxX = initialZone.max_x ?? 2000;
+      const initMaxY = initialZone.max_y ?? 2000;
       const bgSprite = new TilingSprite({
         texture: bgTexture,
-        width: WORLD_W,
-        height: WORLD_H
+        width: initMaxX - initMinX + 1,
+        height: initMaxY - initMinY + 1,
       });
+      bgSprite.position.set(initMinX, initMinY);
+      bgSpriteRef.current = bgSprite;
       stageRef.current.addChild(bgSprite);
 
       void Assets.load<Texture>("/assets/world/ground-moss.webp").then((texture) => {
@@ -2362,7 +2508,30 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         if (!isDragging || modeRef.current !== "drag") return;
         const dx = e.global.x - dragStart.x;
         const dy = e.global.y - dragStart.y;
-        stageRef.current.position.set(stageStart.x + dx, stageStart.y + dy);
+        let newX = stageStart.x + dx;
+        let newY = stageStart.y + dy;
+
+        const scale = scaleRef.current;
+        const currentZone = activeZoneRef.current;
+        const minX = currentZone.min_x ?? 0;
+        const maxX = currentZone.max_x ?? WORLD_W;
+        const minY = currentZone.min_y ?? 0;
+        const maxY = currentZone.max_y ?? WORLD_H;
+
+        const pad = 100 * scale;
+        const minStageX = app.screen.width - (maxX * scale) - pad;
+        const maxStageX = -(minX * scale) + pad;
+        const minStageY = app.screen.height - (maxY * scale) - pad;
+        const maxStageY = -(minY * scale) + pad;
+
+        if (minStageX <= maxStageX) {
+          newX = Math.max(minStageX, Math.min(maxStageX, newX));
+        }
+        if (minStageY <= maxStageY) {
+          newY = Math.max(minStageY, Math.min(maxStageY, newY));
+        }
+
+        stageRef.current.position.set(newX, newY);
         scheduleMonsterChunkSyncRef.current();
         setCamera(scaleRef.current, stageRef.current.position.x, stageRef.current.position.y);
         scheduleGroundDropSyncRef.current();
@@ -2700,11 +2869,64 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     drawFog();
   }, [appReady, exploredSubZones, drawFog]);
 
+  // Active Zone Transition: triggers when entering a new subzone (e.g. crossing border or teleport)
+  useEffect(() => {
+    if (!appReady || !activeZone.id) return;
+    if (!lastZoneIdRef.current) {
+      lastZoneIdRef.current = activeZone.id;
+      return;
+    }
+
+    if (lastZoneIdRef.current !== activeZone.id) {
+      lastZoneIdRef.current = activeZone.id;
+      setTransitioningZone(activeZone.name || "Khu Vực Mới");
+
+      // Update background sprite bounds to new active zone
+      if (bgSpriteRef.current) {
+        const minX = activeZone.min_x ?? 0;
+        const minY = activeZone.min_y ?? 0;
+        const maxX = activeZone.max_x ?? 2000;
+        const maxY = activeZone.max_y ?? 2000;
+        bgSpriteRef.current.position.set(minX, minY);
+        bgSpriteRef.current.width = maxX - minX + 1;
+        bgSpriteRef.current.height = maxY - minY + 1;
+      }
+
+      // Clear old zone visuals
+      for (const entry of monsterChunksRef.current.values()) {
+        entry.container.destroy({ children: true });
+      }
+      monsterChunksRef.current.clear();
+      monstersContainerRef.current.removeChildren();
+      clearContainer(monsterLabelsContainerRef.current);
+      monsterLabelRenderKeyRef.current = "";
+
+      // Re-draw regions for the new zone
+      drawRegionBackgrounds(regions);
+      drawRegions(regions);
+
+      // Re-center on player
+      const player = useGameStore.getState().player;
+      if (player && appRef.current) {
+        centerOnPlayer(appRef.current, player.x + 0.5, player.y + 0.5);
+        void fetchNearbyCells(player.x, player.y, investigationRange);
+        if (performanceMode !== "minimal") {
+          void useWorldStore.getState().fetchMonsterSnapshot(investigationRange);
+        }
+      }
+
+      const timer = setTimeout(() => {
+        setTransitioningZone(null);
+      }, 550);
+      return () => clearTimeout(timer);
+    }
+  }, [appReady, activeZone, regions, centerOnPlayer, fetchNearbyCells, investigationRange, performanceMode, drawRegionBackgrounds, drawRegions]);
+
   useEffect(() => {
     if (!appReady || !appRef.current) return;
     drawRegionBackgrounds(regions);
     drawRegions(regions);
-  }, [appReady, regions, drawRegionBackgrounds, drawRegions]);
+  }, [appReady, regions, activeZone, drawRegionBackgrounds, drawRegions]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
@@ -2718,5 +2940,19 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     centerOnPlayer(appRef.current, gamePlayer.x + 0.5, gamePlayer.y + 0.5);
   }, [appReady, cameraCenterRequest, gamePlayer, centerOnPlayer]);
 
-  return <div ref={canvasRef} className="w-full h-full overflow-hidden select-none" />;
+  return (
+    <div ref={canvasRef} className="w-full h-full overflow-hidden select-none relative">
+      {transitioningZone && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950/85 backdrop-blur-sm pointer-events-none transition-opacity duration-300">
+          <div className="flex flex-col items-center gap-3 animate-pulse">
+            <div className="w-10 h-10 rounded-full border-2 border-amber-500/30 border-t-amber-400 animate-spin" />
+            <div className="text-amber-200 font-serif text-lg font-bold tracking-wider">
+              {transitioningZone}
+            </div>
+            <p className="text-xs text-zinc-400 font-serif">Đang tiến vào khu vực mới...</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
