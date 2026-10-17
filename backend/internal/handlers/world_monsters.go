@@ -573,8 +573,9 @@ func proceduralMonsterSpawns(player WorldPosEntry, radius int) []monsterSpawnRow
 
 	// Phase 1: resolve procedural cells (pure in-memory, no Redis).
 	type cellCandidate struct {
-		x, y int
-		cell models.Cell
+		x, y   int
+		cell   models.Cell
+		region string
 	}
 	candidates := make([]cellCandidate, 0, 64)
 	coords := make([]cache.CellCoordKey, 0, 64)
@@ -585,11 +586,12 @@ func proceduralMonsterSpawns(player WorldPosEntry, radius int) []monsterSpawnRow
 				continue
 			}
 			cell := resolveWorldMonsterCell(x, y)
-			if cell.Type != "Monster" || cell.Content == "" || deriveWorldMonsterRegion(x, y) != player.Region {
+			cellRegion := deriveWorldMonsterRegion(x, y)
+			if cell.Type != "Monster" || cell.Content == "" || !isRegionWithinScope(cellRegion, player.Region) {
 				continue
 			}
-			candidates = append(candidates, cellCandidate{x: x, y: y, cell: cell})
-			coords = append(coords, cache.CellCoordKey{RegionID: player.Region, X: x, Y: y})
+			candidates = append(candidates, cellCandidate{x: x, y: y, cell: cell, region: cellRegion})
+			coords = append(coords, cache.CellCoordKey{RegionID: cellRegion, X: x, Y: y})
 		}
 	}
 
@@ -601,11 +603,11 @@ func proceduralMonsterSpawns(player WorldPosEntry, radius int) []monsterSpawnRow
 	}
 
 	for _, c := range candidates {
-		if _, isCleared := cleared[cache.CellCoordKey{RegionID: player.Region, X: c.x, Y: c.y}]; isCleared {
+		if _, isCleared := cleared[cache.CellCoordKey{RegionID: c.region, X: c.x, Y: c.y}]; isCleared {
 			continue
 		}
 		spawns = append(spawns, monsterSpawnRow{
-			ID: fmt.Sprintf("procedural:%s:%d:%d", player.Region, c.x, c.y), RegionID: player.Region,
+			ID: fmt.Sprintf("procedural:%s:%d:%d", c.region, c.x, c.y), RegionID: c.region,
 			MonsterID: c.cell.Content, X: c.x, Y: c.y, RespawnSeconds: int(clearedCellCooldown.Seconds()), Rank: c.cell.Rank, SubRank: c.cell.SubRank,
 		})
 	}
@@ -646,7 +648,7 @@ func activeMonsterBuckets(players []WorldPosEntry, radius, limit int) []ActiveWo
 		}
 		minBX, minBY := monsterBucket(player.X-radius, player.Y-radius)
 		maxBX, maxBY := monsterBucket(player.X+radius, player.Y+radius)
-		for _, scopeRegion := range regionScopeIDs(player.Region) {
+		for _, scopeRegion := range activeScopeRegions(player.X-radius, player.Y-radius, player.X+radius, player.Y+radius, mapID, player.Region) {
 			for bx := minBX; bx <= maxBX && len(buckets) < limit; bx++ {
 				for by := minBY; by <= maxBY && len(buckets) < limit; by++ {
 					key := fmt.Sprintf("%s:%s:%s:%d:%d", mapID, player.InstanceID, scopeRegion, bx, by)
@@ -706,10 +708,12 @@ func GetWorldMonsters(c *gin.Context) {
 		radius = WorldMonsterActivationRadius
 	}
 	snapshotStartedAt := time.Now()
+	mapID := worldMapIDForRegion(entry.Region)
+	scopeRegions := activeScopeRegions(entry.X-radius, entry.Y-radius, entry.X+radius, entry.Y+radius, mapID, entry.Region)
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id::text, region_id, monster_id, x, y, respawn_seconds, min_rank
 		FROM monster_spawns WHERE is_active=TRUE AND is_boss_spawn=FALSE AND x IS NOT NULL AND y IS NOT NULL
-		AND region_id = ANY($1) AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5 ORDER BY id`, pq.Array(regionScopeIDs(entry.Region)), entry.X-radius, entry.X+radius, entry.Y-radius, entry.Y+radius)
+		AND region_id = ANY($1) AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5 ORDER BY id`, pq.Array(scopeRegions), entry.X-radius, entry.X+radius, entry.Y-radius, entry.Y+radius)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot load monster spawns"})
 		return
@@ -752,7 +756,6 @@ func GetWorldMonsters(c *gin.Context) {
 	// Persistent Boss map_cells are the source of truth for shared boss spawns.
 	// They are materialized as normal world actors, so the same AI can chase,
 	// attack, be defeated, and respawn them for every player in that region.
-	scopeRegions := regionScopeIDs(entry.Region)
 	bossRows, bossErr := db.DB.QueryContext(c.Request.Context(), `
 		SELECT region_id, x, y, COALESCE(content_id,''),
 		       CASE WHEN COALESCE(metadata->>'rank','') ~ '^[0-9]+$' THEN (metadata->>'rank')::int ELSE 1 END,
@@ -848,7 +851,7 @@ func GetWorldMonsters(c *gin.Context) {
 	}
 	bucketStartedAt := time.Now()
 	bucketCount, bucketErrors := 0, 0
-	for _, scopeRegion := range regionScopeIDs(entry.Region) {
+	for _, scopeRegion := range scopeRegions {
 		for bx := minBX; bx <= maxBX; bx++ {
 			for by := minBY; by <= maxBY; by++ {
 				bucketCount++

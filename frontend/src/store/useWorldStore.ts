@@ -494,9 +494,12 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         return null;
       }
       const data = JSON.parse(body);
+      const nextX = data.x ?? data.player?.x;
+      const nextY = data.y ?? data.player?.y;
+      const nextRegion = data.region ?? data.player?.current_region;
       // Update local position immediately for smooth UX
-      if (data.x !== undefined && data.y !== undefined) {
-        set({ liveX: data.x, liveY: data.y });
+      if (nextX !== undefined && nextY !== undefined) {
+        set({ liveX: nextX, liveY: nextY });
         // Also update game store player position
         if (typeof window !== "undefined") {
           const { useGameStore } = await import("@/store/useGameStore");
@@ -504,9 +507,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
           if (currentPlayer) {
             useGameStore.getState().setPlayerFromServer({
               ...currentPlayer,
-              x: data.x,
-              y: data.y,
-              current_region: data.region,
+              x: nextX,
+              y: nextY,
+              current_region: nextRegion ?? currentPlayer.current_region,
               primeval_stones: data.player?.primeval_stones ?? currentPlayer.primeval_stones,
               immortal_stones: data.player?.immortal_stones ?? currentPlayer.immortal_stones,
             });
@@ -516,8 +519,10 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       // Refetch nearby cells for new position
       setTimeout(() => {
         const world = useWorldStore.getState();
-        world.fetchNearbyCells(data.x, data.y, world.investigationRange);
-        useWorldStore.getState().fetchNearbyPlayers(data.x, data.y, 300);
+        const targetX = nextX ?? world.liveX;
+        const targetY = nextY ?? world.liveY;
+        world.fetchNearbyCells(targetX, targetY, world.investigationRange);
+        useWorldStore.getState().fetchNearbyPlayers(targetX, targetY, 300);
       }, 100);
       return data;
     } catch (err) {

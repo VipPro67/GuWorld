@@ -404,6 +404,30 @@ func isRegionWithinScope(parentRegion, candidateRegion string) bool {
 	return false
 }
 
+func activeScopeRegions(minX, minY, maxX, maxY int, mapID, playerRegion string) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	add := func(id string) {
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; !ok {
+			seen[id] = struct{}{}
+			result = append(result, id)
+		}
+	}
+	for _, scope := range regionScopeIDs(playerRegion) {
+		add(scope)
+	}
+	for _, zone := range rectZoneCandidates(minX, minY, maxX, maxY, mapID) {
+		add(zone.ID)
+		for _, scope := range regionScopeIDs(zone.ID) {
+			add(scope)
+		}
+	}
+	return result
+}
+
 func worldMapIDForRegion(regionID string) string {
 	seen := make(map[string]struct{}, 4)
 	for current := regionID; current != ""; {
