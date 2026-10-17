@@ -5,7 +5,7 @@ import { manaRegenPerTick, nativeNumericValue } from "@/lib/effect-blocks";
 import type { EffectDictionaryEntry, EffectEnvelope } from "@/lib/effect-blocks";
 import { useUIStore } from "@/store/useUIStore";
 import { wsManager } from "@/lib/websocket";
-import { authFetch } from "@/lib/auth";
+import { authFetch, setUnauthorizedHandler } from "@/lib/auth";
 import { fetchWithDedupe } from "@/lib/fetch";
 import { BACKEND_URL } from "@/lib/config";
 import { getDictionaryCache, setDictionaryCache } from "@/lib/db-cache";
@@ -2422,3 +2422,11 @@ export const useGameStore = create<GameState>((set, get) => {
 
 
 })});
+
+// A 401 from any request means the session is gone. Doing it here, rather than in
+// all 24 slices, also covers callers that never checked for 401 themselves.
+setUnauthorizedHandler(() => {
+  const state = useGameStore.getState();
+  // Guard against a burst of parallel 401s turning into a burst of logout posts.
+  if (state.player || state.token) state.logout();
+});

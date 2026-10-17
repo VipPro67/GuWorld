@@ -43,6 +43,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 
 - **Zustand store is both state + API client.** `frontend/src/store/useGameStore.ts` composes domain slices from `frontend/src/store/slices/*.ts` (notifications, mine, party, chat, arena, feedback, betting, gacha, achievements, pets, instance, marketplace, sect, aperture, trade, inventory, combat, cultivation, profile, auth, referrals, misc). Slices are `StateCreator<any, any, any, Slice>` and use `get()` for cross-cutting calls (`addToast`, `addLog`, `initializeSession`, `applyInventoryFromResponse`, `setPlayerFromServer`). No separate service/API layer; methods call fetch + update state. Shared helpers live in `frontend/src/lib/{auth,config,fetch}.ts`.
 - **Optimistic updates** in combat and some actions; handle rollback on failure.
+- **401 is handled centrally.** `authFetch` (`frontend/src/lib/auth.ts`) owns the session-expired policy: it already handles 409 and 403, and on 401 it calls the handler registered once via `setUnauthorizedHandler` (wired in `useGameStore.ts`) which logs out. Don't add a new `if (response.status === 401)` block in a slice — 237 legacy copies exist; delete them instead of adding more.
 - **SSE subscriptions** in Zustand for player events, trade, chat. Player events now have auto-reconnect with exponential backoff.
 - **Next.js 16 has breaking changes.** Check `node_modules/next/dist/docs/` before writing framework-specific code.
 

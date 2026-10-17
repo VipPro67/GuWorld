@@ -5,6 +5,28 @@ import { BACKEND_URL } from "@/lib/config";
  * Used by useGameStore, useWorldStore, and any future stores.
  */
 
+/** Auth endpoints that must never trigger the session-expired handler. */
+const AUTH_ENDPOINTS = new Set([
+  "/api/auth/send-otp",
+  "/api/auth/register",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/claim-tab",
+  "/api/auth/google/login",
+  "/api/auth/google/callback",
+]);
+
+let unauthorizedHandler: (() => void) | null = null;
+
+/**
+ * Register the callback invoked when an authenticated request returns 401.
+ * Wired once by the game store. Kept as a callback instead of importing the
+ * store here, which would create an import cycle.
+ */
+export const setUnauthorizedHandler = (fn: (() => void) | null): void => {
+  unauthorizedHandler = fn;
+};
+
 /** Read a cookie value by name (browser-only). */
 export const getCookie = (name: string): string | null => {
   if (typeof document === "undefined") return null;
@@ -102,16 +124,7 @@ export const authFetch = async (
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
       const url = new URL(String(input), window.location.origin);
-      const skipsGameplayTab = new Set([
-        "/api/auth/send-otp",
-        "/api/auth/register",
-        "/api/auth/login",
-        "/api/auth/logout",
-        "/api/auth/claim-tab",
-        "/api/auth/google/login",
-        "/api/auth/google/callback",
-      ]).has(url.pathname);
-      if (!isAdminRequest(input) && !skipsGameplayTab) {
+      if (!isAdminRequest(input) && !AUTH_ENDPOINTS.has(url.pathname)) {
         const tabId = gameplayTabId();
         await ensureGameplayTabClaim(token, tabId);
         headers["X-Player-Tab-ID"] = tabId;
@@ -154,6 +167,18 @@ export const authFetch = async (
       onForbiddenRollback?.();
       window.dispatchEvent(new CustomEvent("admin:permission-denied", { detail: { url: requestURL, permission: denied.permission } }));
     }
+  }
+  // A 401 means the session is gone. Handling it here covers every caller,
+  // including the ones that never checked for 401 themselves — and stops short
+  // of the auth endpoints, so logout() logging out cannot recurse.
+  if (response.status === 401 && typeof window !== "undefined" && unauthorizedHandler) {
+    let isAuthEndpoint = false;
+    try {
+      isAuthEndpoint = AUTH_ENDPOINTS.has(new URL(requestURL, window.location.origin).pathname);
+    } catch {
+      // Unparseable URL: treat it as a normal endpoint.
+    }
+    if (!isAuthEndpoint) unauthorizedHandler();
   }
   return response;
 };
