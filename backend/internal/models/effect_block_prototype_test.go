@@ -16,7 +16,7 @@ func TestModularEffectBlockUnmarshal(t *testing.T) {
 				"trigger": "ON_ACTION",
 				"target": { "selector": "TARGET", "bypass_frontline": true },
 				"operations": [
-					{ "op": "DAMAGE", "sub_type": "FLAT", "value": 150.0, "path": "Moon Path" },
+					{ "op": "DAMAGE", "sub_type": "FLAT", "value": 150.0, "path": "Star Path" },
 					{ "op": "STATUS", "status_id": "BLEED", "value": 25.0, "turns": 3, "chance": 0.6 }
 				]
 			},

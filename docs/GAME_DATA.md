@@ -489,7 +489,7 @@ Node tài nguyên đặt trong Tiên Khiếu:
 - `node_type`, `name`, `path` — loại node
 - `level`, `hp`, `max_hp` — cấp và HP
 - `x`, `y` — toạ độ grid (0-19)
-- `production_type`, `production_amount`, `production_interval_hours` — sản lượng; `production_amount` chỉ còn là dữ liệu cũ, sản lượng thu hoạch do `gamefx.ComputeApertureYield` tính từ cấp node, Đạo Ngân, diện tích, sinh thái, lao động và giá vật phẩm (xem `WIKI.md` §21)
+- `production_type`, `production_amount`, `production_interval_hours` — sản lượng; `production_amount` chỉ còn là dữ liệu cũ, sản lượng thu hoạch do `gamefx.ComputeApertureYield` tính từ cấp node, Đạo Ngân, diện tích, sinh thái và lao động — sàn 10 món/lần cho mọi rank (xem `WIKI.md` §21)
 - `is_destroyed` — cờ tương thích dữ liệu cũ; công trình bị phá hủy hoàn toàn được xóa khỏi bảng và không thể sửa chữa
 - Số khu tài nguyên tối đa mỗi Tiên Khiếu = `min(area_size / 100000, 200)`; lưới 20×20 được lưu trong `aperture_resource_node_cells`.
 - Xung đột Đạo khi tính sản lượng dùng chung `gamefx.DaoCombatProfile` với combat, không dựa trên khoảng cách giữa các node.
@@ -983,11 +983,12 @@ Monster template chứa chỉ số, Gu inventory (`gu_inventory`) và Gu pool (`
   1. **Bể chung theo bậc** `loot_monster_common` (mọi quái).
   2. **Override đặc thù loài** `Monster.loot_table_id`.
   3. **Loot theo vùng** — bảng `region_loot_tables`, áp dụng theo `region_id` + `monster_type` (Normal/Elite/Boss…) + dải `min_rank`/`max_rank`.
-- Bảng `region_loot_tables` (CSV `RegionLootTables.csv`, dataset "Loot theo vùng") là mapping `region_id, loot_table_id, monster_type, min_rank, max_rank, chance, is_active`; PK `(region_id, loot_table_id, monster_type)`. Mỗi rule có `chance` kích hoạt riêng (mỗi rule là một lần roll độc lập, không chia sẻ ngân sách xác suất với lớp khác).
-- CSV `RegionLootTables.csv` chỉ chứa mapping; bảng loot đích (`loot_region_*`) khai báo trong `LootTable.csv` như bảng loot bình thường, `entries` tham chiếu `item_id` có thật trong `Item.csv`.
-- **Kế thừa theo phân cấp vùng:** `RollRegionLoot` tra cả `region_id` hiện tại **và tổ tiên** (`parent_id`), nên rule đặt ở `dai_vuc_dong_hai` tự áp dụng cho mọi KHU_VUC con (ví dụ `ngoc_ho_dao`). Nhờ vậy chỉ cần khai báo rule ở cấp đại vực.
+- Bảng `region_loot_tables` (CSV `RegionLootTables.csv`, dataset "Loot theo vùng") là mapping `region_id, loot_table_id, monster_type, min_rank, max_rank, chance, is_active`; PK `(region_id, loot_table_id, monster_type)`. Mỗi rule có `chance` kích hoạt riêng (mỗi rule là một lần roll độc lập, không chia sẻ ngân sách xác suất với lớp khác). `monster_type` so khớp **không phân biệt hoa/thường** (`lower(monster_type) = lower($2)`), nên `EnemyType` là `Boss` hay `BOSS` đều khớp.
+- CSV chỉ chứa mapping; bảng loot đích (đặt tên `loot_monster_<region_id>_<normal|elite|boss>`) khai báo trong `LootTable.csv` như bảng loot bình thường, `entries` tham chiếu `item_id` có thật trong `Item.csv`.
+- **Dải rank là của rule, không lọc lại theo `entry.Rank`:** `RollRegionLoot` gọi `rollRegionLootTable` (bỏ qua cổng `entry.Rank`) vì `min_rank`/`max_rank` của rule đã giới hạn bậc. Nếu áp tiếp luật `entry.Rank` (chỉ đúng cho lớp 1–2) thì một rule phủ nhiều rank mà bảng loot chỉ gắn 1 rank sẽ rớt rỗng ở các rank còn lại.
+- **Kế thừa theo phân cấp vùng:** `RollRegionLoot` tra cả `region_id` hiện tại **và tổ tiên** (`parent_id`), nên rule đặt ở đại vực (NGU_VUC) tự áp dụng cho mọi KHU_VUC/SAFE_ZONE con.
 - **Region loot áp dụng cho cả combat ngoài overworld lẫn khám phá:** combat khởi tạo từ `BuildCombatStateFromMonster` được gán `WorldMonsterRegionID = player.CurrentRegion` (exploration) hoặc `current.RegionID` (world monster encounter), nên `EnemyType` + region được truyền đúng vào `RollMonsterLoot`.
-- Ví dụ dữ liệu Đông Hải: `RegionLootTables.csv` map `dai_vuc_dong_hai` → `loot_region_dong_hai_normal` (Normal, rank 1–9, chance 1.0), `_elite` (Elite, rank 2–9, 0.8), `_boss` (Boss, rank 3–9, 1.0). Các bảng loot tương ứng chứa tài nguyên đặc hữu vùng biển (`fish_scales`, `pure_spring_drop`, `water_weed`, `deep_sea_pearl`, `gold_dragonfish_scale`…).
+- **Khoảng trống dữ liệu đã biết:** 5 đại vực (`dai_vuc_bac_nguyen`, `dai_vuc_dong_hai`, `dai_vuc_nam_cuong`, `dai_vuc_tay_mac`, `dai_vuc_trung_chau`) và các safe-zone `tan_thu_coc_*` có spawn nhưng không có dòng `RegionLootTables` nào → quái spawn trực tiếp trong đó không rơi region loot (~40 spawn). Thêm rule cấp đại vực sẽ phủ luôn safe-zone con, nhưng sẽ **cộng dồn** cùng rule sẵn có của các KHU_VUC con (do kế thừa).
 
 #### Cổ trùng trên quái (monster/region Gu pool)
 

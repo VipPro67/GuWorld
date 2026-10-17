@@ -30,6 +30,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/dictionary/loot-tables` | Public loot table dictionary only. |
 | GET | `/dictionary/regions` | Public wiki region dictionary only. |
 | GET | `/dictionary/monster-spawns` | Public wiki monster spawn dictionary only. |
+| GET | `/dictionary/region-loot` | Public wiki region loot rules dictionary only (`[{region_id, loot_table_id, monster_type, min_rank, max_rank, chance}]`). |
 | GET | `/recipes` | Public refining recipes. Thêm query param `?all=true` để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. Hỗ trợ `If-None-Match`; response trả `ETag` và `X-Catalog-Revision`, còn `304` giữ nguyên cache hiện tại của client. |
 | GET | `/gus/:instance_id/history` | Lịch sử vòng đời một cá thể Cổ (chỉ Tiên Cổ rank ≥ 6 có log). `instance_id` bất biến qua trade/bán/kho; destroy (thả/đói/chết) đóng timeline. |
 | POST | `/auth/send-otp` | Send OTP via email to register. |
@@ -251,20 +252,20 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/tribulations/:eventId/engage` | Xuất trận chống quái tai kiếp — tạo `active_combat` (nhiều địch, `enemy_type` = `TRIBULATION_BOSS`/`TRIBULATION_MONSTER`) rồi đánh qua combat UI thông thường (`/combat/start`). Giáp + máu người chơi tiêu hao trước, sát thương tràn sẽ trừ `immortal_apertures.aperture_hp`. |
 | POST | `/tribulations/:eventId/resolve` |
 
-`POST /immortal-aperture/nodes` accepts `{node_type, x, y, path, prod_key, cells}`. `cells` is a connected array of `{x,y}` cells on the 20×20 grid; omitted `cells` means the single anchor cell. The seed cost is scaled by the produced item's value: `max(1, round(seed_amount × 1000 / base_price))`. Resource zones are capped at `min(area_size / 100000, 200)` per aperture.
+`POST /immortal-aperture/nodes` accepts `{node_type, x, y, path, prod_key, cells}`. `cells` is a connected array of `{x,y}` cells on the 20×20 grid; omitted `cells` means the single anchor cell. The seed cost is `ApertureNodeTemplate.seed_amount` (100) for every rank. Resource zones are capped at `min(area_size / 100000, 200)` per aperture.
 
 `GET /immortal-aperture/nodes` returns each node's `cells`, its combat-derived `dao_conflict_multiplier` when below 1, and a server-computed `yield_preview`:
 
 ```json
 "yield_preview": {
   "base": 10, "expected": 10.7, "whole": 10, "remainder": 0.7,
-  "bonus": 1.07, "raw_bonus": 1.07, "capped": false, "divisor": 1,
+  "bonus": 1.07, "raw_bonus": 1.07, "capped": false,
   "per_hour": 32.1,
   "factors": [{"key": "level", "value": 1}, {"key": "dao", "value": 1}, ...]
 }
 ```
 
-`factors` keys are `level, dao, area, conflict, ecology, eco, labor, pop`. `production_amount` is legacy: the harvest formula no longer reads it.
+`factors` keys are `level, dao, area, conflict, ecology, eco, labor, pop`. Yield is `max(10, 10 × bonus)`, so every rank — and every debuffed node — yields at least 10 per harvest, and the 100-seed planting cost always repays within 10 harvests. `production_amount` is legacy: the harvest formula no longer reads it.
 
 `POST /immortal-aperture/nodes/batch` accepts `{action, node_ids}` for `repair`, `upgrade`, or permanent `delete` of up to 400 selected nodes. Repair and upgrade validate and charge the combined cost in one transaction.
 

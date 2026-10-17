@@ -49,6 +49,27 @@ func TestRollLootRankFilter(t *testing.T) {
 		}
 	}
 }
+
+// Region loot is scoped by the region rule's rank range, so its entries must
+// roll regardless of the per-entry rank tag; otherwise a region-wide rule with
+// single-rank entries would drop nothing at the other ranks it covers.
+func TestRollRegionLootTableIgnoresEntryRank(t *testing.T) {
+	lt := models.LootTable{
+		ID: "region_test",
+		Entries: []models.LootEntry{
+			{ItemID: "signature", Rank: 3, MinQty: 1, MaxQty: 1, Chance: 1.0},
+		},
+	}
+	got := rollRegionLootTable(lt, 5)
+	if got.Items["signature"] <= 0 {
+		t.Errorf("region loot (rank 5) should still drop rank-3-tagged entry, got %+v", got.Items)
+	}
+	// The global roll keeps the rank gate for common pool / per-monster tables.
+	if RollLoot(lt, 5).Items["signature"] > 0 {
+		t.Errorf("RollLoot should keep the rank gate")
+	}
+}
+
 func TestGetGuDropChancePercentTiers(t *testing.T) {
 	for rank := 1; rank <= 5; rank++ {
 		boss := GetGuDropChancePercent(rank, "boss")

@@ -225,11 +225,8 @@ func formatChangedFields(sets []string, args []interface{}) string {
 						"theft":       "Thâu đạo",
 						"phantom":     "Huyễn đạo",
 						"painting":    "Họa đạo",
-						"weapon":      "Binh đạo",
 						"killing":     "Sát đạo",
 						"kill":        "Sát đạo",
-						"restriction": "Cấm đạo",
-						"pill":        "Đan đạo",
 					}
 					parts := []string{}
 					for k, v := range m {

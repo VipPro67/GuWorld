@@ -160,9 +160,11 @@ type precomputedPools struct {
 	guByRank      map[string][]weightedGuEntry // "1,2,3" → pool
 	materials     []weightedMaterialEntry
 	foods         []weightedMaterialEntry
+	drops         []weightedMaterialEntry          // Material + Food (rương mỏ)
 	recipesByRank map[string][]weightedRecipeEntry // "all" → pool (mine chest)
 	totalMat      float64
 	totalFood     float64
+	totalDrops    float64
 }
 
 var globalPrecomputedPools *precomputedPools
@@ -200,9 +202,13 @@ func getPrecomputedPools() *precomputedPools {
 		case "Material":
 			pc.materials = append(pc.materials, weightedMaterialEntry{id: id, weight: w})
 			pc.totalMat += w
+			pc.drops = append(pc.drops, weightedMaterialEntry{id: id, weight: w})
+			pc.totalDrops += w
 		case "Food":
 			pc.foods = append(pc.foods, weightedMaterialEntry{id: id, weight: w})
 			pc.totalFood += w
+			pc.drops = append(pc.drops, weightedMaterialEntry{id: id, weight: w})
+			pc.totalDrops += w
 		}
 	}
 
@@ -237,7 +243,8 @@ func getPrecomputedPools() *precomputedPools {
 			var targetGuID string
 			var targetRank, variant int
 			if err := rows.Scan(&targetGuID, &targetRank, &variant); err == nil {
-				weight := rankDropMultiplier(targetRank)
+				// Rương mỏ: mọi rank đều có thể ra, rank cao hiếm hơn.
+				weight := recipeDropMultiplier(targetRank)
 				if weight > 0 {
 					pc.recipesByRank["all"] = append(pc.recipesByRank["all"], weightedRecipeEntry{
 						id:         fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant),
@@ -311,6 +318,21 @@ func (pc *precomputedPools) rollFood() string {
 		}
 	}
 	return pc.foods[0].id
+}
+
+// rollDrop picks from the combined Material + Food pool (rương mỏ).
+func (pc *precomputedPools) rollDrop() string {
+	if len(pc.drops) == 0 || pc.totalDrops <= 0 {
+		return ""
+	}
+	r := rand.Float64() * pc.totalDrops
+	for _, d := range pc.drops {
+		r -= d.weight
+		if r <= 0 {
+			return d.id
+		}
+	}
+	return pc.drops[0].id
 }
 
 // ── Immortal Gu cache (5-minute TTL) ────────────────────────────────

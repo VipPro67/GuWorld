@@ -28,11 +28,11 @@
 
 > Bảng quan hệ `dao_marks` (relational mirror) đã bị **xóa** để thống nhất nguồn dữ liệu. Không còn `dao_marks` table.
 
-**Danh sách path hợp lệ** (49 path, lấy từ cột `path` trong `backend/cmd/server/data/Gu.csv` — key = lowercase bỏ hậu tố `" path"`):
+**Danh sách path hợp lệ** (44 path, lấy từ cột `path` trong `backend/data/Gu.csv` — key = lowercase bỏ hậu tố `" path"`):
 
-Blade, Blood, Bone, Cloud, Concealment, Creation, Dark, Death, Destruction, Dream, Earth, Enchantment, Enslavement, Fire, Food, Formation, Heaven, Human, Ice, Illusion, Information, Investigation, Life, Light, Lightning, Luck, Metal, Moon, Movement, Poison, Qi, Refinement, Rule, Shadow, Smoke, Soul, Sound, Space, Strength, Sun, Sword, Theft, Theme, Time, Transformation, Water, Wind, Wisdom, Wood.
+Blade, Blood, Bone, Cloud, Creation, Dark, Death, Destruction, Dream, Earth, Emotion, Enslavement, Fire, Food, Formation, Heaven, Human, Ice, Information, Investigation, Killing, Light, Lightning, Luck, Metal, Painting, Phantom, Poison, Qi, Refinement, Rule, Soul, Sound, Space, Star, Strength, Sword, Theft, Time, Transformation, Water, Wind, Wisdom, Wood.
 
-> `Sun`, `Creation`, `Destruction`, `Death` được bổ sung qua các Cổ `GU_SUN_EMPEROR`, `GU_CREATION_ORIGIN`, `GU_DESTRUCTION_NOVA`, `GU_DEATH_REAPER` để đủ 8 cặp đối nghịch trong `isOpposingPath`.
+> `Creation`, `Destruction`, `Death` tồn tại trong Gu.csv nên vẫn tham gia bảng tương khắc; `Moon Path` đã được gộp vào `Star Path` và `Pill Path` đã bị xóa.
 
 ### 1.3 Công Thức Tính DaoBonus
 
@@ -186,7 +186,7 @@ Cảnh giới không còn nhảy trực tiếp — điểm tích lũy từ nhi�
 - `dungeon_flower_wine`: `{"attainment": {"path": "Star Path", "amount": 10}}`
 - Mộng cảnh được đưa vào **CSV-driven** từ `backend/cmd/server/data/DreamRealm.csv` (import/export qua Admin tab "Dữ liệu" → "Mộng cảnh"):
   - `dream_realm_star_constellation`: `{"attainment": {"path": "Dream Path", "amount": 50}}`
-  - **49 mộng cảnh** `dream_realm_<path>` — 1 cho mỗi lưu phái (danh sách `dreamRealmPaths` trong `db.go`), thưởng `{"attainment": {"path": "<Path> Path", "amount": 50}}` + tài liệu path + 100 Nguyên Thạch, vào bằng `dream_path_material`, cooldown 24h. Cột `map_data` trống → sinh tự động theo `path`; điền `map_data` để ghi cốt truyện riêng.
+  - **47 mộng cảnh** `dream_realm_<path>` — 1 cho mỗi lưu phái (danh sách `dreamRealmPaths` trong `db.go`), thưởng `{"attainment": {"path": "<Path> Path", "amount": 50}}` + tài liệu path + 100 Nguyên Thạch, vào bằng `dream_path_material`, cooldown 24h. Cột `map_data` trống → sinh tự động theo `path`; điền `map_data` để ghi cốt truyện riêng.
 - **Bí cảnh** `SECRET_REALM` (`secret_realm_sword_mountain`, `secret_realm_fire_cave`, `secret_realm_water_palace`) — thưởng **Đạo Ngân** qua `rewards.dao_marks` (xử lý tại `instance.go` completion), cooldown 48h.
 
 ---
@@ -222,7 +222,7 @@ Tại `killer_move.go:449-457`, `calculatePathConflict()`:
 - Khác đường: +10% penalty (`killerMovePathConflictPenaltyBase`)
 - Đối nghịch: +20% penalty (`killerMovePathOppositionPenalty`)
 
-**Cặp đối nghịch** (`killer_move.go:1000-1019`) — cả 8 cặp đều có path tồn tại trong Gu.csv (49 paths, gồm Sun/Creation/Destruction/Death đã bổ sung qua GU_SUN_EMPEROR, GU_CREATION_ORIGIN, GU_DESTRUCTION_NOVA, GU_DEATH_REAPER):
+**Cặp đối nghịch** (`killer_move.go:1000-1019`) — các cặp hiện hành đều có path tồn tại trong Gu.csv (44 paths; `Creation`/`Destruction`/`Death` đều có Cổ trong Gu.csv):
 
 | Path A | Path B |
 |--------|--------|
@@ -231,9 +231,7 @@ Tại `killer_move.go:449-457`, `calculatePathConflict()`:
 | Metal | Wood |
 | Light | Dark |
 | Lightning | Earth |
-| Moon | Sun |
 | Creation | Destruction |
-| Life | Death |
 
 ---
 

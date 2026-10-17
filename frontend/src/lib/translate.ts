@@ -108,15 +108,12 @@ export const PATH_MAP: Record<string, string> = {
   Theft: "Thâu",
   Phantom: "Huyễn",
   Painting: "Họa",
-  Weapon: "Binh",
   Killing: "Sát",
   Kill: "Sát",
   Death: "Tử",
   Creation: "Tạo Hóa",
   Destruction: "Hủy Diệt",
   Investigation: "Trinh Sát",
-  Restriction: "Cấm",
-  Pill: "Đan",
 };
 
 export const pathLabels: Record<string, string> = {
@@ -172,10 +169,7 @@ export const pathLabels: Record<string, string> = {
   "Theft Path": "Thâu Đạo",
   "Phantom Path": "Huyễn Đạo",
   "Painting Path": "Họa Đạo",
-  "Weapon Path": "Binh Đạo",
   "Killing Path": "Sát Đạo",
-  "Restriction Path": "Cấm Đạo",
-  "Pill Path": "Đan Đạo",
 };
 
 

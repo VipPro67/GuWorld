@@ -21,16 +21,16 @@ const (
 	DaoGroupHeavenHuman        DaoGroup = "HEAVEN_HUMAN"
 )
 
-// CanonicalPaths contains all 49 standardized path keys in GuWorld.
+// CanonicalPaths contains all 40 standardized path keys in GuWorld.
 var CanonicalPaths = []string{
 	// ELEMENTAL (13)
 	"metal", "wood", "water", "fire", "earth", "wind", "lightning", "ice", "cloud", "light", "dark", "star", "sound",
 	// SPACE_TIME (2)
 	"space", "time",
-	// RULE_ORDER (3)
-	"rule", "restriction", "formation",
-	// KINETIC_WEAPON (4)
-	"sword", "blade", "weapon", "killing",
+	// RULE_ORDER (2)
+	"rule", "formation",
+	// KINETIC_WEAPON (3)
+	"sword", "blade", "killing",
 	// BODY_LIFE (4)
 	"strength", "bone", "transformation", "food",
 	// SOUL_MIND (5)
@@ -39,8 +39,8 @@ var CanonicalPaths = []string{
 	"information", "luck", "theft", "phantom", "painting",
 	// ORGANIC_CORRUPTION (2)
 	"blood", "poison",
-	// CRAFT_ALCHEMY (2)
-	"refinement", "pill",
+	// CRAFT_ALCHEMY (1)
+	"refinement",
 	// HEAVEN_HUMAN (3)
 	"heaven", "human", "qi",
 }
@@ -57,11 +57,11 @@ var PathToDaoGroup = map[string]DaoGroup{
 	"space": DaoGroupSpaceTime, "time": DaoGroupSpaceTime,
 
 	// RULE_ORDER
-	"rule": DaoGroupRuleOrder, "restriction": DaoGroupRuleOrder, "formation": DaoGroupRuleOrder,
+	"rule": DaoGroupRuleOrder, "formation": DaoGroupRuleOrder,
 
 	// KINETIC_WEAPON
 	"sword": DaoGroupKineticWeapon, "blade": DaoGroupKineticWeapon,
-	"weapon": DaoGroupKineticWeapon, "killing": DaoGroupKineticWeapon,
+	"killing": DaoGroupKineticWeapon,
 
 	// BODY_LIFE
 	"strength": DaoGroupBodyLife, "bone": DaoGroupBodyLife,
@@ -71,7 +71,7 @@ var PathToDaoGroup = map[string]DaoGroup{
 	"soul": DaoGroupSoulMind, "wisdom": DaoGroupSoulMind,
 	"emotion": DaoGroupSoulMind, "enslavement": DaoGroupSoulMind, "dream": DaoGroupSoulMind,
 
-	// INFORMATION_STEALTH
+	// INFORMATION_STEALTH (6)
 	"information": DaoGroupInformationStealth, "luck": DaoGroupInformationStealth,
 	"theft": DaoGroupInformationStealth, "phantom": DaoGroupInformationStealth, "painting": DaoGroupInformationStealth,
 	"investigation": DaoGroupInformationStealth,
@@ -80,7 +80,7 @@ var PathToDaoGroup = map[string]DaoGroup{
 	"blood": DaoGroupOrganicCorruption, "poison": DaoGroupOrganicCorruption, "death": DaoGroupOrganicCorruption,
 
 	// CRAFT_ALCHEMY
-	"refinement": DaoGroupCraftAlchemy, "pill": DaoGroupCraftAlchemy, "creation": DaoGroupCraftAlchemy,
+	"refinement": DaoGroupCraftAlchemy, "creation": DaoGroupCraftAlchemy,
 
 	// RULE_ORDER / DESTRUCTION
 	"destruction": DaoGroupRuleOrder,
@@ -179,14 +179,12 @@ var pairOverrides = map[string]float64{
 	pairKey("strength", "blood"):       0.94,
 	pairKey("sword", "blade"):          0.95,
 	pairKey("sword", "killing"):        0.96,
-	pairKey("refinement", "pill"):      0.97,
 	pairKey("wood", "fire"):            0.95,
 	pairKey("fire", "earth"):           0.95,
 	pairKey("earth", "metal"):          0.95,
 	pairKey("metal", "water"):          0.95,
 	pairKey("water", "wood"):           0.95,
 	pairKey("creation", "destruction"): 0.55,
-	pairKey("life", "death"):           0.55,
 }
 
 // CleanPath normalizes a path string key to its canonical form.

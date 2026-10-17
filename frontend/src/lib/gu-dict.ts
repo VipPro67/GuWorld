@@ -26,7 +26,7 @@ import { INTERNAL_BACKEND_URL as BACKEND_URL } from "./config";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cachedWikiData: any = null;
-function getStaticWikiData() {
+export function getStaticWikiData() {
   if (cachedWikiData) return cachedWikiData;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -38,19 +38,6 @@ function getStaticWikiData() {
 }
 
 export async function fetchAllGus(): Promise<GuDictionaryItem[]> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/dictionary/gus`, {
-      cache: "force-cache",
-      next: { revalidate: 3600 },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return Array.isArray(data) ? data : Object.values(data || {});
-    }
-  } catch {
-    // Fallback below
-  }
-
   const staticData = getStaticWikiData();
   return staticData?.gus || [];
 }
@@ -132,6 +119,15 @@ export interface WikiMonsterSpawn {
   is_boss_spawn: boolean;
 }
 
+export interface WikiRegionLoot {
+  region_id: string;
+  loot_table_id: string;
+  monster_type: string;
+  min_rank: number;
+  max_rank: number;
+  chance: number;
+}
+
 
 export interface RequiredGuItem {
   rank: number; // 0 = any rank (legacy recipe)
@@ -171,40 +167,8 @@ export async function fetchDictionaryUnified(): Promise<{
   lootTables: LootTable[];
   regions: WikiRegion[];
   monsterSpawns: WikiMonsterSpawn[];
+  regionLoot: WikiRegionLoot[];
 }> {
-  try {
-    const request = (part: string) => fetch(`${BACKEND_URL}/api/dictionary/${part}`, {
-      cache: "force-cache",
-      next: { revalidate: 3600 },
-    });
-    const [guRes, itemRes, monsterRes, lootRes, regionRes, spawnRes] = await Promise.all([
-      request("gus"),
-      request("items"),
-      request("monsters"),
-      request("loot-tables"),
-      request("regions"),
-      request("monster-spawns"),
-    ]);
-    if ([guRes, itemRes, monsterRes, lootRes, regionRes, spawnRes].every((res) => res.ok)) {
-      const guData = await guRes.json();
-      const itemsRecord: Record<string, ItemSpec> = await itemRes.json();
-      const monstersRecord: Record<string, MonsterTemplate> = await monsterRes.json();
-      const gus = Array.isArray(guData) ? guData : Object.values(guData || {});
-      const items = Object.values(itemsRecord).map((item) => ({
-        ...item,
-        item_type: item.item_type || item.type || "Material",
-      }));
-      const monsters = Object.values(monstersRecord);
-      const lootTables: LootTable[] = await lootRes.json();
-      const regions: WikiRegion[] = await regionRes.json();
-      const monsterSpawns: WikiMonsterSpawn[] = await spawnRes.json();
-
-      return { gus, items, monsters, lootTables, regions, monsterSpawns };
-    }
-  } catch {
-    // Fallback below
-  }
-
   const staticData = getStaticWikiData();
   if (staticData) {
     return {
@@ -214,26 +178,14 @@ export async function fetchDictionaryUnified(): Promise<{
       lootTables: staticData.lootTables || [],
       regions: staticData.regions || [],
       monsterSpawns: staticData.monsterSpawns || [],
+      regionLoot: staticData.regionLoot || [],
     };
   }
 
-  return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };
+  return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [], regionLoot: [] };
 }
 
 export async function fetchMasterRecipes(): Promise<RefiningRecipe[]> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/recipes?all=true`, {
-      cache: "force-cache",
-      next: { revalidate: 3600 },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data || [];
-    }
-  } catch {
-    // Fallback below
-  }
-
   const staticData = getStaticWikiData();
   return staticData?.recipes || [];
 }

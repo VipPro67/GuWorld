@@ -2,9 +2,13 @@ package handlers
 
 import (
 	"crypto/md5"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,8 +50,18 @@ type WikiMonsterSpawn struct {
 	IsBossSpawn bool    `json:"is_boss_spawn"`
 }
 
+// WikiRegionLoot is a lightweight representation of region-specific loot rules for the public wiki.
+type WikiRegionLoot struct {
+	RegionID    string  `json:"region_id"`
+	LootTableID string  `json:"loot_table_id"`
+	MonsterType string  `json:"monster_type"`
+	MinRank     int     `json:"min_rank"`
+	MaxRank     int     `json:"max_rank"`
+	Chance      float64 `json:"chance"`
+}
+
 // DictionaryResponse is the unified catalog the game client hydrates its
-// IndexedDB from. Wiki-only sections (loot_tables, regions, monster_spawns)
+// IndexedDB from. Wiki-only sections (loot_tables, regions, monster_spawns, region_loot)
 // are served by their dedicated /api/dictionary/* part endpoints instead.
 type DictionaryResponse struct {
 	Gu            interface{}                  `json:"gu"`
@@ -274,6 +288,22 @@ func GetMonsterSpawns(c *gin.Context) {
 	})
 }
 
+// GetRegionLoot returns only the public wiki region loot table rules.
+func GetRegionLoot(c *gin.Context) {
+	getCachedDictionaryPartWithError(c, "game_dictionary_region_loot", &[]WikiRegionLoot{}, func() (interface{}, error) {
+		res := loadAllRegionLoot(c)
+		return res, nil
+	}, func(val interface{}) bool {
+		if list, ok := val.(*[]WikiRegionLoot); ok && list != nil {
+			return len(*list) > 0
+		}
+		if list, ok := val.([]WikiRegionLoot); ok {
+			return len(list) > 0
+		}
+		return false
+	})
+}
+
 // GetDictionary returns the unified Gu and Item master catalogs, cached in memory/Redis with ETag support.
 func GetDictionary(c *gin.Context) {
 	getCachedDictionaryPart(c, "game_dictionary_unified", &DictionaryResponse{}, func() interface{} {
@@ -378,3 +408,138 @@ func buildWikiMonsterSpawns() []WikiMonsterSpawn {
 	}
 	return spawns
 }
+
+// loadRegionLootFromCSV reads RegionLootTables.csv as a fallback when database is empty or unavailable.
+func loadRegionLootFromCSV() []WikiRegionLoot {
+	path := csvPath("RegionLootTables.csv")
+	f, err := os.Open(path)
+	if err != nil {
+		logger.S.Warnf("dictionary: failed to open RegionLootTables.csv fallback: %v", err)
+		return []WikiRegionLoot{}
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.LazyQuotes = true
+	r.TrimLeadingSpace = true
+	r.FieldsPerRecord = -1
+
+	header, err := r.Read()
+	if err != nil {
+		return []WikiRegionLoot{}
+	}
+
+	col := func(name string) int {
+		for i, h := range header {
+			if strings.EqualFold(strings.TrimSpace(h), name) {
+				return i
+			}
+		}
+		return -1
+	}
+
+	regionIdx, lootIdx, typeIdx := col("region_id"), col("loot_table_id"), col("monster_type")
+	minRankIdx, maxRankIdx, chanceIdx, activeIdx := col("min_rank"), col("max_rank"), col("chance"), col("is_active")
+	if regionIdx < 0 || lootIdx < 0 || typeIdx < 0 {
+		return []WikiRegionLoot{}
+	}
+
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+
+	var list []WikiRegionLoot
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+
+		active := true
+		if activeIdx >= 0 {
+			av := strings.ToLower(get(row, activeIdx))
+			if av == "false" || av == "0" || av == "no" {
+				active = false
+			}
+		}
+		if !active {
+			continue
+		}
+
+		regionID, lootID, monsterType := get(row, regionIdx), get(row, lootIdx), get(row, typeIdx)
+		if regionID == "" || lootID == "" || monsterType == "" {
+			continue
+		}
+
+		minRank, maxRank, chance := 1, 9, 1.0
+		if minRankIdx >= 0 {
+			if v := get(row, minRankIdx); v != "" {
+				fmt.Sscanf(v, "%d", &minRank)
+			}
+		}
+		if maxRankIdx >= 0 {
+			if v := get(row, maxRankIdx); v != "" {
+				fmt.Sscanf(v, "%d", &maxRank)
+			}
+		}
+		if chanceIdx >= 0 {
+			if v := get(row, chanceIdx); v != "" {
+				fmt.Sscanf(v, "%f", &chance)
+			}
+		}
+
+		list = append(list, WikiRegionLoot{
+			RegionID:    regionID,
+			LootTableID: lootID,
+			MonsterType: monsterType,
+			MinRank:     minRank,
+			MaxRank:     maxRank,
+			Chance:      chance,
+		})
+	}
+	return list
+}
+
+// loadAllRegionLoot queries every active region loot rule from the database,
+// falling back to RegionLootTables.csv if the database table is empty or unpopulated.
+func loadAllRegionLoot(c *gin.Context) []WikiRegionLoot {
+	var list []WikiRegionLoot
+	if db.DB != nil {
+		rows, err := db.DB.QueryContext(c.Request.Context(),
+			`SELECT region_id, loot_table_id, monster_type, min_rank, max_rank, chance
+			 FROM region_loot_tables
+			 WHERE is_active = TRUE
+			 ORDER BY region_id, monster_type, loot_table_id`)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var r WikiRegionLoot
+				if err := rows.Scan(&r.RegionID, &r.LootTableID, &r.MonsterType, &r.MinRank, &r.MaxRank, &r.Chance); err != nil {
+					logger.S.Warnf("dictionary: failed to scan region loot row: %v", err)
+					continue
+				}
+				list = append(list, r)
+			}
+			if err := rows.Err(); err != nil {
+				logger.S.Warnf("dictionary: region loot row iteration error: %v", err)
+			}
+		} else {
+			logger.S.Warnf("dictionary: failed to load region loot: %v", err)
+		}
+	}
+
+	if len(list) == 0 {
+		list = loadRegionLootFromCSV()
+	}
+	if list == nil {
+		list = []WikiRegionLoot{}
+	}
+	return list
+}
+

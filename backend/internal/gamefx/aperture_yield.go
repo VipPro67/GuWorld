@@ -2,14 +2,15 @@ package gamefx
 
 // Immortal Aperture harvest yield (WIKI §21).
 //
-//	count/lần = BASE × min(TOTAL_CAP, levelM × daoM × areaM × xung đột × sinh thái × lao động × dân số)
-//	            ÷ (giá vật phẩm / 1000)
+//	count/lần = 10 × min(TOTAL_CAP, levelM × daoM × areaM × xung đột × sinh thái × lao động × dân số)
 //
-// The node's stored production_amount, its cell count and the item's RankScale
-// divisor no longer take part: the produced item's base_price is the only rank
-// scaling, so every rank needs ~the same number of harvests to repay its seed.
+// The node's stored production_amount, its cell count and the produced item's
+// rank take no part: every rank starts from the same 10-per-harvest floor and
+// pays the same 100-seed planting cost, so a node always repays its seed in at
+// most 10 harvests.
 const (
-	// ApertureYieldBase is the per-harvest amount for a level-1 node at 1.00 multiplier.
+	// ApertureYieldBase is both the per-harvest base and the hard floor, so a
+	// debuffed (starved / overgrazed / impure) node still yields this much.
 	ApertureYieldBase = 10.0
 	// ApertureYieldTotalCap bounds the combined multiplier (level included).
 	ApertureYieldTotalCap = 50.0
@@ -19,23 +20,23 @@ const (
 	ApertureYieldPopCap = 5.0
 	// ApertureYieldLevelStep is the production gain per node level.
 	ApertureYieldLevelStep = 0.5
-	// ApertureYieldPriceDivisor keeps the price/1000 divisor sane for cheap items.
-	ApertureYieldPriceDivisor = 1000.0
+	// ApertureSeedRepayHarvests is the planting cost in harvests a plain node
+	// must cover: 100 seeds ÷ 10 per harvest.
+	ApertureSeedRepayHarvests = 10
 )
 
 // ApertureYieldInputs carries the pre-computed multipliers for one harvest.
 // Callers stay responsible for reading Dao marks, ecology and labor from the
 // database; this function only applies the shared combination rules.
 type ApertureYieldInputs struct {
-	Level         int
-	ItemBasePrice float64
-	AreaSize      int64
-	DaoMult       float64
-	ConflictMult  float64
-	EcologyMult   float64
-	EcoMult       float64
-	LaborMult     float64
-	PopBonus      float64
+	Level        int
+	AreaSize     int64
+	DaoMult      float64
+	ConflictMult float64
+	EcologyMult  float64
+	EcoMult      float64
+	LaborMult    float64
+	PopBonus     float64
 }
 
 // ApertureYield is the combination result. Parts holds every multiplier keyed
@@ -45,14 +46,12 @@ type ApertureYield struct {
 	Count    float64
 	Bonus    float64
 	RawBonus float64
-	Divisor  float64
 	Capped   bool
 	Parts    map[string]float64
 }
 
-// ComputeApertureYield combines the multipliers, applies both caps and divides
-// by the item price scale. It is pure so the whole harvesting economy can be
-// unit-tested without a database.
+// ComputeApertureYield combines the multipliers and applies both caps. It is
+// pure so the whole harvesting economy can be unit-tested without a database.
 func ComputeApertureYield(in ApertureYieldInputs) ApertureYield {
 	level := in.Level
 	if level < 1 {
@@ -82,16 +81,15 @@ func ComputeApertureYield(in ApertureYieldInputs) ApertureYield {
 		capped = true
 	}
 
-	divisor := in.ItemBasePrice / ApertureYieldPriceDivisor
-	if divisor < 1 {
-		divisor = 1
+	count := ApertureYieldBase * used
+	if count < ApertureYieldBase {
+		count = ApertureYieldBase
 	}
 
 	return ApertureYield{
-		Count:    ApertureYieldBase * used / divisor,
+		Count:    count,
 		Bonus:    used,
 		RawBonus: raw,
-		Divisor:  divisor,
 		Capped:   capped,
 		Parts: map[string]float64{
 			"level":    levelM,

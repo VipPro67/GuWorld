@@ -2673,7 +2673,7 @@ func seedMapCellsFromCSV(filename string) error {
 	return nil
 }
 
-// dreamRealmPaths lists the 49 lưu phái (path) canonical keys with their
+// dreamRealmPaths lists the 44 lưu phái (path) canonical keys with their
 // Vietnamese display names. Keys must match the lowercase path keys used in
 // players.path_masteries and Gu.csv (see docs/CANH_GIOI_DAO_NGAN.md).
 var dreamRealmPaths = []struct {
@@ -2728,10 +2728,7 @@ var dreamRealmPaths = []struct {
 	{"theft", "Thâu Đạo"},
 	{"phantom", "Huyễn Đạo"},
 	{"painting", "Họa Đạo"},
-	{"weapon", "Binh Đạo"},
 	{"killing", "Sát Đạo"},
-	{"restriction", "Cấm Đạo"},
-	{"pill", "Đan Đạo"},
 }
 
 var pathMaterialIDs = map[string]bool{
@@ -2752,7 +2749,7 @@ var pathMaterialIDs = map[string]bool{
 
 	// Vũ khí, Sát phạt & Đặc thù
 	"sword": true, "blade": true, "theft": true, "phantom": true,
-	"painting": true, "weapon": true, "killing": true, "restriction": true, "pill": true,
+	"painting": true, "killing": true,
 }
 
 // pathMaterialID returns the reward material id for a path key, falling back

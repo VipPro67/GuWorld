@@ -100,7 +100,6 @@ type ApertureYieldPreview struct {
 	Bonus     float64               `json:"bonus"`
 	RawBonus  float64               `json:"raw_bonus"`
 	Capped    bool                  `json:"capped"`
-	Divisor   float64               `json:"divisor"`
 	PerHour   float64               `json:"per_hour"`
 	Factors   []ApertureYieldFactor `json:"factors"`
 }

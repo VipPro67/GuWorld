@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function WikiIndexPage() {
-  const { gus, items, monsters, lootTables, regions, monsterSpawns } = await fetchDictionaryUnified();
+  const { gus, items, monsters, lootTables, regions, monsterSpawns, regionLoot } = await fetchDictionaryUnified();
   const recipes = await fetchMasterRecipes();
 
   const guideSections = wikiPages.filter((p) => !p.subCategory && p.category !== "roadmap");
@@ -45,6 +45,7 @@ export default async function WikiIndexPage() {
       initialLootTables={lootTables}
       initialRegions={regions}
       initialMonsterSpawns={monsterSpawns}
+      initialRegionLoot={regionLoot}
       guideSections={guideSections}
       roadmap={roadmap}
       subByParent={subByParent}

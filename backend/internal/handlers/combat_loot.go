@@ -40,6 +40,19 @@ func lootEntryEligible(e models.LootEntry, rank int) bool {
 }
 
 func RollLoot(lt models.LootTable, rank int) RolledLoot {
+	return rollLoot(lt, rank, true)
+}
+
+// rollRegionLootTable rolls every entry of a region loot table ignoring the
+// per-entry rank gate. Region loot is already rank-scoped by the matching
+// region_loot_tables row (min_rank/max_rank), so re-applying entry.Rank only
+// opens gaps: a region-wide rule whose entries are tagged with a single rank
+// would otherwise drop nothing at every other rank the rule covers.
+func rollRegionLootTable(lt models.LootTable, rank int) RolledLoot {
+	return rollLoot(lt, rank, false)
+}
+
+func rollLoot(lt models.LootTable, rank int, gateByRank bool) RolledLoot {
 	rolled := RolledLoot{
 		Items: make(map[string]int),
 		Gus:   []string{},
@@ -48,7 +61,7 @@ func RollLoot(lt models.LootTable, rank int) RolledLoot {
 	qtyMul := lootQuantityMultiplier(rank)
 
 	for _, entry := range lt.Entries {
-		if !lootEntryEligible(entry, rank) {
+		if gateByRank && !lootEntryEligible(entry, rank) {
 			continue
 		}
 		effectiveChance := math.Min(entry.Chance*chanceMul, 1.0)
@@ -95,7 +108,7 @@ func RollRegionLoot(tx *sql.Tx, regionID string, monsterType string, rank int) R
 	rows, err := tx.Query(`
 		SELECT loot_table_id, chance FROM region_loot_tables
 		WHERE region_id = ANY($1)
-		  AND monster_type = $2 
+		  AND lower(monster_type) = lower($2) 
 		  AND min_rank <= $3 
 		  AND max_rank >= $3
 		  AND is_active = TRUE
@@ -130,7 +143,7 @@ func RollRegionLoot(tx *sql.Tx, regionID string, monsterType string, rank int) R
 		}
 
 		if lt, err := db.LoadLootTable(tx, r.lootTableID); err == nil {
-			regionLoot := RollLoot(lt, rank)
+			regionLoot := rollRegionLootTable(lt, rank)
 			for k, v := range regionLoot.Items {
 				rolled.Items[k] += v
 			}
@@ -206,8 +219,8 @@ func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int, regionID s
 	qtyMul := lootQuantityMultiplier(rank)
 	msg := fmt.Sprintf(" [Thiên Cơ hiển lộ (Rank %d x%.1f) - Tỉ lệ rơi đồ: ", rank, qtyMul)
 	first := true
-	appendPreview := func(entry models.LootEntry) {
-		if !lootEntryEligible(entry, rank) {
+	appendPreview := func(entry models.LootEntry, gateByRank bool) {
+		if gateByRank && !lootEntryEligible(entry, rank) {
 			return
 		}
 		if !first {
@@ -225,13 +238,13 @@ func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int, regionID s
 	}
 	if pool, err := db.LoadLootTable(tx, lootMonsterCommonPoolID); err == nil {
 		for _, e := range pool.Entries {
-			appendPreview(e)
+			appendPreview(e, true)
 		}
 	}
 	if overrideID != "" {
 		if lt, err := db.LoadLootTable(tx, overrideID); err == nil {
 			for _, e := range lt.Entries {
-				appendPreview(e)
+				appendPreview(e, true)
 			}
 		}
 	}
@@ -239,7 +252,7 @@ func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int, regionID s
 		scope := regionLootScope(tx, regionID)
 		rows, err := tx.Query(`
 			SELECT loot_table_id FROM region_loot_tables
-			WHERE region_id = ANY($1) AND monster_type = $2
+			WHERE region_id = ANY($1) AND lower(monster_type) = lower($2)
 			  AND min_rank <= $3 AND max_rank >= $3
 			  AND is_active = TRUE AND chance > 0
 			ORDER BY region_id, monster_type, loot_table_id`, pq.Array(scope), monsterType, rank)
@@ -258,7 +271,7 @@ func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int, regionID s
 			for _, lootTableID := range lootTableIDs {
 				if lt, loadErr := db.LoadLootTable(tx, lootTableID); loadErr == nil {
 					for _, e := range lt.Entries {
-						appendPreview(e)
+						appendPreview(e, false)
 					}
 				}
 			}

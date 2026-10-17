@@ -130,7 +130,7 @@ func reloadImportedData() []string {
 	InvalidateDictionaryMemoryCache()
 	invalidateRecipeCatalog()
 	invalidateCachedDictionaryPart("explore_regions_v2")
-	cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_statuses", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns", "game_quests_list", "explore_regions")
+	cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_statuses", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns", "game_dictionary_region_loot", "game_quests_list", "explore_regions")
 	return warnings
 }
 
@@ -212,7 +212,7 @@ var dictionaryCacheKeys = []string{
 	"game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items",
 	"game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races",
 	"game_dictionary_statuses", "game_dictionary_loot_tables", "game_dictionary_regions",
-	"game_dictionary_monster_spawns",
+	"game_dictionary_monster_spawns", "game_dictionary_region_loot",
 }
 
 func applyDatasetRuntimeBehavior(datasets []db.Dataset) []string {
@@ -433,6 +433,7 @@ func AdminClearCache(c *gin.Context) {
 		"game_dictionary_loot_tables",
 		"game_dictionary_regions",
 		"game_dictionary_monster_spawns",
+		"game_dictionary_region_loot",
 		"game_quests_list",
 		"explore_regions",
 		"explore_regions_v2",

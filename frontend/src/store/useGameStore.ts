@@ -605,7 +605,6 @@ export interface ApertureResourceNode {
     bonus: number;
     raw_bonus: number;
     capped: boolean;
-    divisor: number;
     per_hour: number;
     factors: { key: string; value: number }[];
   };

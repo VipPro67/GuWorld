@@ -215,6 +215,7 @@ function buildWikiData() {
       max_y: parseInt(r[regionCol("max_y")]) || 0,
       entry_x: parseInt(r[regionCol("entry_x")]) || 0,
       entry_y: parseInt(r[regionCol("entry_y")]) || 0,
+      is_active: (r[regionCol("is_active")] || "true").toLowerCase() === "true",
       pool_weights: safeJSON(r[regionCol("pool_weights")], { resources: [], wild_gus: [] }),
     });
   }
@@ -261,6 +262,30 @@ function buildWikiData() {
     });
   }
 
+  // 8. Region Loot Tables
+  const regionLootRows = readCSVFile("RegionLootTables.csv");
+  const regionLootHeader = regionLootRows[0] || [];
+  const regionLootCol = (name) => regionLootHeader.indexOf(name);
+  const regionLoot = [];
+
+  for (let i = 1; i < regionLootRows.length; i++) {
+    const r = regionLootRows[i];
+    const regionId = r[regionLootCol("region_id")];
+    const lootTableId = r[regionLootCol("loot_table_id")];
+    if (!regionId || !lootTableId) continue;
+    const isActive = (r[regionLootCol("is_active")] || "true").toLowerCase() === "true";
+    if (!isActive) continue;
+
+    regionLoot.push({
+      region_id: regionId,
+      loot_table_id: lootTableId,
+      monster_type: r[regionLootCol("monster_type")] || "Normal",
+      min_rank: parseInt(r[regionLootCol("min_rank")]) || 1,
+      max_rank: parseInt(r[regionLootCol("max_rank")]) || 9,
+      chance: parseFloat(r[regionLootCol("chance")]) || 1.0,
+    });
+  }
+
   const result = {
     gus,
     items,
@@ -269,6 +294,7 @@ function buildWikiData() {
     regions,
     lootTables,
     monsterSpawns: spawns,
+    regionLoot,
     generatedAt: new Date().toISOString(),
   };
 
@@ -276,7 +302,7 @@ function buildWikiData() {
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result));
 
   console.log(`[build-wiki-cache] Successfully generated ${OUTPUT_FILE}`);
-  console.log(`[build-wiki-cache] Stats: ${gus.length} Gus, ${items.length} Items, ${monsters.length} Monsters, ${recipes.length} Recipes, ${regions.length} Regions, ${lootTables.length} LootTables, ${spawns.length} Spawns.`);
+  console.log(`[build-wiki-cache] Stats: ${gus.length} Gus, ${items.length} Items, ${monsters.length} Monsters, ${recipes.length} Recipes, ${regions.length} Regions, ${lootTables.length} LootTables, ${spawns.length} Spawns, ${regionLoot.length} RegionLoot.`);
 }
 
 buildWikiData();

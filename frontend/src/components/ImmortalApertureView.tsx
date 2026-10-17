@@ -34,15 +34,14 @@ import {
   BookOpen,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
+import { APERTURE_SEED_BASE } from "@/lib/balance";
 import { formatNumber, calculateTribulationProgress } from "@/lib/utils";
 import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection, SearchableSelect } from "@/components/ui";
 import { CountdownTimer } from "./CountdownTimer";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 
-// Số giống (chính vật phẩm sản xuất) cần để gieo một khu tài nguyên. Khớp
-// seed_amount trong backend/data/ApertureNodeTemplate.csv (backend là nguồn chân lý).
-const APERTURE_SEED_AMOUNT = 100;
+// Số giống để gieo một khu tài nguyên — giống nhau ở mọi rank (xem APERTURE_SEED_BASE).
 
 // Mirror of the backend harvest caps (backend/internal/gamefx/aperture_yield.go);
 // used for display only — the server always sends the authoritative bonus.
@@ -1519,7 +1518,6 @@ return (
                                         </div>
                                         <div className="text-xs text-slate-300 mt-0.5">
                                           Cơ bản {yp.base} × hiệu suất {yp.bonus.toFixed(2)}
-                                          {yp.divisor > 1 && <> ÷ {formatNumber(yp.divisor)}</>}
                                         </div>
                                         <div className="text-[10px] text-slate-400 mt-0.5">
                                           ≈ {yp.expected.toFixed(2)} món/lần · ~{formatNumber(Math.round(yp.per_hour * 10) / 10)} món/giờ
@@ -1838,7 +1836,7 @@ return (
                                     "Space Path", "Blood Path", "Blade Path", "Sword Path",
                                     "Food Path", "Star Path", "Poison Path", "Human Path", "Enslavement Path",
                                     "Strength Path", "Bone Path", "Transformation Path", "Rule Path",
-                                    "Luck Path", "Refinement Path", "Soul Path", "Sound Path", "Faith Path"
+                                    "Luck Path", "Refinement Path", "Soul Path", "Sound Path"
                                   ];
                                   defaultPaths.forEach(dp => pathsSet.add(dp));
 
@@ -2021,10 +2019,11 @@ return (
                                           </div>
                                           {(() => {
                                             const seedHave = player.materials_inventory?.[buildProdKey] ?? 0;
-                                            const seedShort = seedHave < APERTURE_SEED_AMOUNT;
+                                            const seedNeed = APERTURE_SEED_BASE;
+                                            const seedShort = seedHave < seedNeed;
                                             return (
                                               <div className={`text-[10px] pt-1.5 flex items-center justify-between border-t border-slate-800 font-semibold ${seedShort ? "text-rose-400" : "text-emerald-400"}`}>
-                                                <span>🌱 Giống cần: <strong>{APERTURE_SEED_AMOUNT}× {selectedItemSpec.name}</strong></span>
+                                                <span>🌱 Giống cần: <strong>{seedNeed}× {selectedItemSpec.name}</strong></span>
                                                 <span>Trong túi: {seedHave}</span>
                                               </div>
                                             );
@@ -2043,7 +2042,7 @@ return (
                                   </button>
                                   <button
                                     onClick={() => handleBuildNode(pendingBuildZone, buildPath, buildProdKey)}
-                                    disabled={actionLoading || !buildProdKey || buildCells.length === 0 || (player.materials_inventory?.[buildProdKey] ?? 0) < APERTURE_SEED_AMOUNT}
+                                    disabled={actionLoading || !buildProdKey || buildCells.length === 0 || (player.materials_inventory?.[buildProdKey] ?? 0) < APERTURE_SEED_BASE}
                                     className="flex-1 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 disabled:from-slate-800 disabled:text-slate-500 text-slate-950 text-[10px] font-bold rounded transition"
                                   >
                                     {actionLoading ? "Đang xây..." : "Xác nhận Xây"}

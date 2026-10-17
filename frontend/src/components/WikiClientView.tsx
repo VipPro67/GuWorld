@@ -20,7 +20,7 @@ import {
   Map as MapIcon,
   RotateCcw,
 } from "lucide-react";
-import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiRegion, type WikiMonsterSpawn, reqGuQty, reqGuRank } from "@/lib/gu-dict";
+import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiRegion, type WikiMonsterSpawn, type WikiRegionLoot, reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
 import { translatePath } from "@/lib/translate";
@@ -73,6 +73,7 @@ interface Props {
   initialLootTables: LootTable[];
   initialRegions: WikiRegion[];
   initialMonsterSpawns: WikiMonsterSpawn[];
+  initialRegionLoot?: WikiRegionLoot[];
   guideSections: ApiResponseData[];
   roadmap: ApiResponseData;
   subByParent: Record<string, ApiResponseData[]>;
@@ -138,6 +139,7 @@ export default function WikiClientView({
   initialLootTables,
   initialRegions,
   initialMonsterSpawns,
+  initialRegionLoot = [],
   guideSections,
   roadmap,
   subByParent,
@@ -253,6 +255,9 @@ export default function WikiClientView({
   // Expand state for long lists in region and monster cards
   const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({});
   const [expandedMonsters, setExpandedMonsters] = useState<Record<string, boolean>>({});
+  const [expandedRegionLoot, setExpandedRegionLoot] = useState<Record<string, boolean>>({});
+  const [regionLootTab, setRegionLootTab] = useState<Record<string, "region" | "monster">>({});
+  const [monsterDropTab, setMonsterDropTab] = useState<Record<string, "monster" | "region">>({});
 
   const toggleRegionExpand = (regionId: string) => {
     setExpandedRegions(prev => ({
@@ -265,6 +270,27 @@ export default function WikiClientView({
     setExpandedMonsters(prev => ({
       ...prev,
       [monsterId]: !prev[monsterId]
+    }));
+  };
+
+  const toggleRegionLootExpand = (regionId: string) => {
+    setExpandedRegionLoot(prev => ({
+      ...prev,
+      [regionId]: !prev[regionId]
+    }));
+  };
+
+  const setRegionDropTab = (regionId: string, tab: "region" | "monster") => {
+    setRegionLootTab(prev => ({
+      ...prev,
+      [regionId]: tab
+    }));
+  };
+
+  const setMonsterLootTab = (monsterId: string, tab: "monster" | "region") => {
+    setMonsterDropTab(prev => ({
+      ...prev,
+      [monsterId]: tab
     }));
   };
 
@@ -341,57 +367,103 @@ export default function WikiClientView({
     return map;
   }, [initialLootTables]);
 
-  // Source lookup: item -> { regions, monsters }
+  // Region loot map: region_id -> WikiRegionLoot[]
+  const regionLootMap = useMemo(() => {
+    const map = new Map<string, WikiRegionLoot[]>();
+    initialRegionLoot.forEach((rl) => {
+      if (!map.has(rl.region_id)) map.set(rl.region_id, []);
+      map.get(rl.region_id)!.push(rl);
+    });
+    return map;
+  }, [initialRegionLoot]);
+
+  // Source lookup: item -> { gatherRegions, lootRegions, monsters }
   const itemSourceMap = useMemo(() => {
-    const map = new Map<string, { regions: string[]; monsters: string[] }>();
-    // From region pool_weights.resources
+    const map = new Map<string, { gatherRegions: string[]; lootRegions: string[]; monsters: string[] }>();
+    const ensure = (id: string) => {
+      if (!map.has(id)) map.set(id, { gatherRegions: [], lootRegions: [], monsters: [] });
+      return map.get(id)!;
+    };
+
+    // 1. From region pool_weights.resources (Thu thập/Khai thác)
     initialRegions.forEach((r) => {
       (r.pool_weights?.resources || []).forEach((itemId) => {
-        if (!map.has(itemId)) map.set(itemId, { regions: [], monsters: [] });
-        map.get(itemId)!.regions.push(r.id);
+        const src = ensure(itemId);
+        if (!src.gatherRegions.includes(r.id)) src.gatherRegions.push(r.id);
       });
     });
-    // From loot table entries
+
+    // 2. From region loot tables (Loot khu vực)
+    initialRegionLoot.forEach((rl) => {
+      const lt = lootTableMap.get(rl.loot_table_id);
+      if (!lt) return;
+      lt.entries.forEach((e) => {
+        if (e.item_id) {
+          const src = ensure(e.item_id);
+          if (!src.lootRegions.includes(rl.region_id)) src.lootRegions.push(rl.region_id);
+        }
+      });
+    });
+
+    // 3. From monster loot table entries (Loot từ quái)
     initialMonsters.forEach((m) => {
       if (!m.loot_table_id) return;
       const lt = lootTableMap.get(m.loot_table_id);
       if (!lt) return;
       lt.entries.forEach((e) => {
         if (e.item_id) {
-          if (!map.has(e.item_id)) map.set(e.item_id, { regions: [], monsters: [] });
-          const src = map.get(e.item_id)!;
+          const src = ensure(e.item_id);
           if (!src.monsters.includes(m.id)) src.monsters.push(m.id);
         }
       });
     });
-    return map;
-  }, [initialRegions, initialMonsters, lootTableMap]);
 
-  // Source lookup: gu -> { wildRegions, dropMonsters }
+    return map;
+  }, [initialRegions, initialRegionLoot, initialMonsters, lootTableMap]);
+
+  // Source lookup: gu -> { wildRegions, lootRegions, dropMonsters }
   const guSourceMap = useMemo(() => {
-    const map = new Map<string, { wildRegions: string[]; dropMonsters: string[] }>();
-    // From region pool_weights.wild_gus
+    const map = new Map<string, { wildRegions: string[]; lootRegions: string[]; dropMonsters: string[] }>();
+    const ensure = (id: string) => {
+      if (!map.has(id)) map.set(id, { wildRegions: [], lootRegions: [], dropMonsters: [] });
+      return map.get(id)!;
+    };
+
+    // 1. From region pool_weights.wild_gus (Hoang dã)
     initialRegions.forEach((r) => {
       (r.pool_weights?.wild_gus || []).forEach((guId) => {
-        if (!map.has(guId)) map.set(guId, { wildRegions: [], dropMonsters: [] });
-        map.get(guId)!.wildRegions.push(r.id);
+        const src = ensure(guId);
+        if (!src.wildRegions.includes(r.id)) src.wildRegions.push(r.id);
       });
     });
-    // From loot table entries
+
+    // 2. From region loot tables (Loot khu vực)
+    initialRegionLoot.forEach((rl) => {
+      const lt = lootTableMap.get(rl.loot_table_id);
+      if (!lt) return;
+      lt.entries.forEach((e) => {
+        if (e.gu_id) {
+          const src = ensure(e.gu_id);
+          if (!src.lootRegions.includes(rl.region_id)) src.lootRegions.push(rl.region_id);
+        }
+      });
+    });
+
+    // 3. From monster loot table entries (Loot từ quái)
     initialMonsters.forEach((m) => {
       if (!m.loot_table_id) return;
       const lt = lootTableMap.get(m.loot_table_id);
       if (!lt) return;
       lt.entries.forEach((e) => {
         if (e.gu_id) {
-          if (!map.has(e.gu_id)) map.set(e.gu_id, { wildRegions: [], dropMonsters: [] });
-          const src = map.get(e.gu_id)!;
+          const src = ensure(e.gu_id);
           if (!src.dropMonsters.includes(m.id)) src.dropMonsters.push(m.id);
         }
       });
     });
+
     return map;
-  }, [initialRegions, initialMonsters, lootTableMap]);
+  }, [initialRegions, initialRegionLoot, initialMonsters, lootTableMap]);
 
   // Monster -> regions map
   const monsterRegionMap = useMemo(() => {
@@ -520,24 +592,72 @@ export default function WikiClientView({
         const nameClean = removeAccents((monster.name || "").toLowerCase());
         const idClean = removeAccents((monster.id || "").toLowerCase());
         const typeClean = removeAccents((monster.type || "").toLowerCase());
-        if (!nameClean.includes(cleanSearch) && !idClean.includes(cleanSearch) && !typeClean.includes(cleanSearch)) return false;
+        let matches = nameClean.includes(cleanSearch) || idClean.includes(cleanSearch) || typeClean.includes(cleanSearch);
+
+        if (!matches && monster.loot_table_id) {
+          const lt = lootTableMap.get(monster.loot_table_id);
+          if (lt) {
+            matches = lt.entries.some((e) => {
+              const targetId = e.item_id || e.gu_id || "";
+              const targetName = e.gu_id ? guMap.get(targetId)?.name : itemMap.get(targetId)?.name;
+              return removeAccents(targetId.toLowerCase()).includes(cleanSearch) ||
+                (targetName && removeAccents(targetName.toLowerCase()).includes(cleanSearch));
+            });
+          }
+        }
+
+        if (!matches) return false;
       }
       if (monsterType !== "all" && monster.type !== monsterType) return false;
-      return true; // We don't have rank in MonsterTemplate for this simple filter currently, unless we add it
+      return true;
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [initialMonsters, cleanSearch, monsterType]);
+  }, [initialMonsters, cleanSearch, monsterType, lootTableMap, itemMap, guMap]);
 
   const filteredRegions = useMemo(() => {
     return initialRegions.filter((region) => {
       if (cleanSearch) {
         const nameClean = removeAccents((region.name || "").toLowerCase());
+        const idClean = removeAccents((region.id || "").toLowerCase());
         const descClean = removeAccents((region.description || "").toLowerCase());
-        if (!nameClean.includes(cleanSearch) && !descClean.includes(cleanSearch)) return false;
+        let matches = nameClean.includes(cleanSearch) || idClean.includes(cleanSearch) || descClean.includes(cleanSearch);
+
+        if (!matches) {
+          const rules = [
+            ...(regionLootMap.get(region.id) || []),
+            ...(region.parent_id ? (regionLootMap.get(region.parent_id) || []) : []),
+          ];
+          matches = rules.some((rl) => {
+            const lt = lootTableMap.get(rl.loot_table_id);
+            if (!lt) return false;
+            return lt.entries.some((e) => {
+              const targetId = e.item_id || e.gu_id || "";
+              const targetName = e.gu_id ? guMap.get(targetId)?.name : itemMap.get(targetId)?.name;
+              return removeAccents(targetId.toLowerCase()).includes(cleanSearch) ||
+                (targetName && removeAccents(targetName.toLowerCase()).includes(cleanSearch));
+            });
+          });
+        }
+
+        if (!matches) {
+          const res = region.pool_weights?.resources || [];
+          const wild = region.pool_weights?.wild_gus || [];
+          matches = res.some((rId) => {
+            const itemName = itemMap.get(rId)?.name;
+            return removeAccents(rId.toLowerCase()).includes(cleanSearch) ||
+              (itemName && removeAccents(itemName.toLowerCase()).includes(cleanSearch));
+          }) || wild.some((gId) => {
+            const guName = guMap.get(gId)?.name;
+            return removeAccents(gId.toLowerCase()).includes(cleanSearch) ||
+              (guName && removeAccents(guName.toLowerCase()).includes(cleanSearch));
+          });
+        }
+
+        if (!matches) return false;
       }
       if (regionZoneType !== "all" && region.zone_type !== regionZoneType) return false;
       return true;
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [initialRegions, cleanSearch, regionZoneType]);
+  }, [initialRegions, cleanSearch, regionZoneType, regionLootMap, lootTableMap, itemMap, guMap]);
 
   // Pagination metadata and sliced items
   const currentTotalItems = useMemo(() => {
@@ -595,6 +715,18 @@ export default function WikiClientView({
       setSearchQuery(target.name);
     } else {
       setSearchQuery(guId);
+    }
+  };
+
+  const locateItem = (itemId: string) => {
+    setActiveTab("items");
+    setPageSize(DEFAULT_PAGE_SIZES["items"]);
+    setCurrentPage(1);
+    const target = itemMap.get(itemId);
+    if (target) {
+      setSearchQuery(target.name);
+    } else {
+      setSearchQuery(itemId);
     }
   };
 
@@ -1269,24 +1401,67 @@ export default function WikiClientView({
                       </div>
 
                       {/* Source Locations */}
-                      {guSourceMap.has(gu.id) && (guSourceMap.get(gu.id)!.wildRegions.length > 0 || guSourceMap.get(gu.id)!.dropMonsters.length > 0) && (
+                      {guSourceMap.has(gu.id) && (
+                        (guSourceMap.get(gu.id)!.wildRegions.length > 0 ||
+                         guSourceMap.get(gu.id)!.lootRegions.length > 0 ||
+                         guSourceMap.get(gu.id)!.dropMonsters.length > 0)
+                      ) && (
                         <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-zinc-900/40">
-                          {guSourceMap.get(gu.id)!.wildRegions.slice(0, 2).map((rId) => {
-                            const region = regionMap.get(rId);
-                            return (
-                              <span key={`w-${rId}`} className="px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] font-mono flex items-center gap-1">
-                                <MapPin className="w-2.5 h-2.5" />
-                                {region ? region.name : rId}
-                              </span>
-                            );
-                          })}
                           {guSourceMap.get(gu.id)!.dropMonsters.slice(0, 2).map((mId) => {
                             const monster = monsterMap.get(mId);
                             return (
-                              <span key={`m-${mId}`} className="px-1.5 py-0.5 rounded bg-red-950/30 text-red-400 border border-red-500/20 text-[8px] font-mono flex items-center gap-1">
+                              <button
+                                key={`m-${mId}`}
+                                type="button"
+                                onClick={(ev) => {
+                                  ev.preventDefault();
+                                  ev.stopPropagation();
+                                  locateMonster(mId);
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-red-950/30 text-red-400 border border-red-500/20 text-[8px] font-mono flex items-center gap-1 hover:border-red-500/40 cursor-pointer"
+                                title={`Rơi từ quái: ${monster ? monster.name : mId}`}
+                              >
                                 <Skull className="w-2.5 h-2.5" />
-                                {monster ? monster.name : mId}
-                              </span>
+                                <span className="truncate max-w-[85px]">{monster ? monster.name : mId}</span>
+                              </button>
+                            );
+                          })}
+                          {guSourceMap.get(gu.id)!.lootRegions.slice(0, 2).map((rId) => {
+                            const region = regionMap.get(rId);
+                            return (
+                              <button
+                                key={`lr-${rId}`}
+                                type="button"
+                                onClick={(ev) => {
+                                  ev.preventDefault();
+                                  ev.stopPropagation();
+                                  locateRegion(rId);
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-amber-950/30 text-amber-400 border border-amber-500/20 text-[8px] font-mono flex items-center gap-1 hover:border-amber-500/40 cursor-pointer"
+                                title={`Loot khu vực: ${region ? region.name : rId}`}
+                              >
+                                <Layers className="w-2.5 h-2.5" />
+                                <span className="truncate max-w-[85px]">{region ? region.name : rId}</span>
+                              </button>
+                            );
+                          })}
+                          {guSourceMap.get(gu.id)!.wildRegions.slice(0, 2).map((rId) => {
+                            const region = regionMap.get(rId);
+                            return (
+                              <button
+                                key={`w-${rId}`}
+                                type="button"
+                                onClick={(ev) => {
+                                  ev.preventDefault();
+                                  ev.stopPropagation();
+                                  locateRegion(rId);
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] font-mono flex items-center gap-1 hover:border-orange-500/40 cursor-pointer"
+                                title={`Hoang dã tại: ${region ? region.name : rId}`}
+                              >
+                                <MapPin className="w-2.5 h-2.5" />
+                                <span className="truncate max-w-[85px]">{region ? region.name : rId}</span>
+                              </button>
                             );
                           })}
                         </div>
@@ -1368,24 +1543,55 @@ export default function WikiClientView({
                     </p>
 
                     {/* Source Locations */}
-                    {itemSourceMap.has(item.id) && (itemSourceMap.get(item.id)!.regions.length > 0 || itemSourceMap.get(item.id)!.monsters.length > 0) && (
+                    {itemSourceMap.has(item.id) && (
+                      (itemSourceMap.get(item.id)!.monsters.length > 0 ||
+                       itemSourceMap.get(item.id)!.lootRegions.length > 0 ||
+                       itemSourceMap.get(item.id)!.gatherRegions.length > 0)
+                    ) && (
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {itemSourceMap.get(item.id)!.regions.slice(0, 2).map((rId) => {
-                          const region = regionMap.get(rId);
-                          return (
-                            <span key={`r-${rId}`} className="px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] font-mono flex items-center gap-1">
-                              <MapPin className="w-2.5 h-2.5" />
-                              {region ? region.name : rId}
-                            </span>
-                          );
-                        })}
                         {itemSourceMap.get(item.id)!.monsters.slice(0, 2).map((mId) => {
                           const monster = monsterMap.get(mId);
                           return (
-                            <span key={`m-${mId}`} className="px-1.5 py-0.5 rounded bg-red-950/30 text-red-400 border border-red-500/20 text-[8px] font-mono flex items-center gap-1">
+                            <button
+                              key={`m-${mId}`}
+                              type="button"
+                              onClick={() => locateMonster(mId)}
+                              className="px-1.5 py-0.5 rounded bg-red-950/30 text-red-400 border border-red-500/20 text-[8px] font-mono flex items-center gap-1 hover:border-red-500/40 cursor-pointer"
+                              title={`Rơi từ quái: ${monster ? monster.name : mId}`}
+                            >
                               <Skull className="w-2.5 h-2.5" />
-                              {monster ? monster.name : mId}
-                            </span>
+                              <span className="truncate max-w-[85px]">{monster ? monster.name : mId}</span>
+                            </button>
+                          );
+                        })}
+                        {itemSourceMap.get(item.id)!.lootRegions.slice(0, 2).map((rId) => {
+                          const region = regionMap.get(rId);
+                          return (
+                            <button
+                              key={`lr-${rId}`}
+                              type="button"
+                              onClick={() => locateRegion(rId)}
+                              className="px-1.5 py-0.5 rounded bg-amber-950/30 text-amber-400 border border-amber-500/20 text-[8px] font-mono flex items-center gap-1 hover:border-amber-500/40 cursor-pointer"
+                              title={`Loot khu vực: ${region ? region.name : rId}`}
+                            >
+                              <Layers className="w-2.5 h-2.5" />
+                              <span className="truncate max-w-[85px]">{region ? region.name : rId}</span>
+                            </button>
+                          );
+                        })}
+                        {itemSourceMap.get(item.id)!.gatherRegions.slice(0, 2).map((rId) => {
+                          const region = regionMap.get(rId);
+                          return (
+                            <button
+                              key={`gr-${rId}`}
+                              type="button"
+                              onClick={() => locateRegion(rId)}
+                              className="px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] font-mono flex items-center gap-1 hover:border-orange-500/40 cursor-pointer"
+                              title={`Thu thập tại: ${region ? region.name : rId}`}
+                            >
+                              <MapPin className="w-2.5 h-2.5" />
+                              <span className="truncate max-w-[85px]">{region ? region.name : rId}</span>
+                            </button>
                           );
                         })}
                       </div>
@@ -1613,6 +1819,64 @@ export default function WikiClientView({
                 {paginatedMonsters.map((monster) => {
                   const regions = monsterRegionMap.get(monster.id) || [];
                   const lootTable = lootTableMap.get(monster.loot_table_id);
+                  const monsterLootEntries = lootTable?.entries || [];
+
+                  // Region loot that this monster can drop when fought in its spawning regions
+                  const monsterRegionLootEntries: Array<{
+                    id: string;
+                    isGu: boolean;
+                    name: string;
+                    chance: number;
+                    minQty: number;
+                    maxQty: number;
+                    regionId: string;
+                    regionName: string;
+                  }> = [];
+
+                  const seenRegionDropKeys = new Set<string>();
+                  regions.forEach((rId) => {
+                    const regObj = regionMap.get(rId);
+                    const rules = [
+                      ...(regionLootMap.get(rId) || []),
+                      ...(regObj?.parent_id ? (regionLootMap.get(regObj.parent_id) || []) : []),
+                    ];
+                    const regionName = regObj?.name || rId;
+                    rules.forEach((rl) => {
+                      const mType = (monster.type || "Normal").toLowerCase();
+                      const rlType = (rl.monster_type || "Normal").toLowerCase();
+                      const matches = rlType === mType
+                        || (mType === "boss" && rlType === "boss")
+                        || (mType === "elite" && rlType === "elite")
+                        || (mType !== "boss" && mType !== "elite" && rlType === "normal");
+
+                      if (!matches) return;
+                      const lt = lootTableMap.get(rl.loot_table_id);
+                      if (!lt) return;
+                      lt.entries.forEach((e) => {
+                        const isGu = !!e.gu_id;
+                        const targetId = e.item_id || e.gu_id || "";
+                        if (!targetId) return;
+                        const dedupKey = `${rId}_${targetId}`;
+                        if (seenRegionDropKeys.has(dedupKey)) return;
+                        seenRegionDropKeys.add(dedupKey);
+
+                        const targetName = isGu
+                          ? (guMap.get(targetId)?.name || targetId)
+                          : (itemMap.get(targetId)?.name || targetId);
+
+                        monsterRegionLootEntries.push({
+                          id: targetId,
+                          isGu,
+                          name: targetName,
+                          chance: e.chance,
+                          minQty: e.min_qty || 1,
+                          maxQty: e.max_qty || 1,
+                          regionId: rId,
+                          regionName,
+                        });
+                      });
+                    });
+                  });
 
                   return (
                     <div
@@ -1673,6 +1937,7 @@ export default function WikiClientView({
                                 return (
                                   <button
                                     key={rId}
+                                    type="button"
                                     onClick={() => locateRegion(rId)}
                                     className="px-2 py-1 rounded bg-zinc-950/40 text-[10px] text-[var(--text-secondary)] border border-zinc-900/60 hover:border-emerald-500/30 hover:text-emerald-400 transition-colors cursor-pointer text-left"
                                   >
@@ -1684,38 +1949,115 @@ export default function WikiClientView({
                           )}
                         </div>
 
-                        {/* Drops */}
+                        {/* Drops: Show both Monster Loot and Region Loot */}
                         <div>
-                          <h4 className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                            <Layers className="w-3 h-3 text-amber-500" />
-                            Vật phẩm rơi (Loot)
-                          </h4>
-                          {!lootTable || lootTable.entries.length === 0 ? (
-                            <p className="text-[10px] text-zinc-600 italic font-mono">Không có vật phẩm rơi</p>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider flex items-center gap-1.5">
+                              <Layers className="w-3 h-3 text-amber-500" />
+                              Vật phẩm rơi (Loot)
+                            </h4>
+                            {monsterRegionLootEntries.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setMonsterLootTab(monster.id, "monster")}
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors cursor-pointer ${
+                                    (monsterDropTab[monster.id] || "monster") === "monster"
+                                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                      : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+                                  }`}
+                                >
+                                  Loot quái ({monsterLootEntries.length})
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setMonsterLootTab(monster.id, "region")}
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors cursor-pointer ${
+                                    monsterDropTab[monster.id] === "region"
+                                      ? "bg-orange-500/20 text-orange-300 border border-orange-500/40"
+                                      : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+                                  }`}
+                                >
+                                  Loot khu vực ({monsterRegionLootEntries.length})
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {(monsterDropTab[monster.id] || "monster") === "monster" ? (
+                            monsterLootEntries.length === 0 ? (
+                              <p className="text-[10px] text-zinc-600 italic font-mono">Không có vật phẩm rơi riêng</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {(expandedMonsters[monster.id] ? monsterLootEntries : monsterLootEntries.slice(0, 5)).map((e, idx) => {
+                                  const targetId = e.item_id || e.gu_id || "";
+                                  const isGu = !!e.gu_id;
+                                  const targetName = isGu
+                                    ? (guMap.get(targetId)?.name || targetId)
+                                    : (itemMap.get(targetId)?.name || targetId);
+
+                                  return (
+                                    <div key={idx} className="flex items-center justify-between text-[10px] font-mono p-1.5 rounded-lg bg-zinc-950/30 border border-zinc-900/40">
+                                      <button
+                                        type="button"
+                                        onClick={() => isGu ? locateGu(targetId) : locateItem(targetId)}
+                                        className="text-[var(--text-primary)] hover:text-amber-400 transition-colors truncate max-w-[130px] text-left cursor-pointer"
+                                        title={`Xem ${isGu ? "Cổ trùng" : "Vật phẩm"}: ${targetName}`}
+                                      >
+                                        {targetName}
+                                        {(e.min_qty && e.max_qty && (e.min_qty > 1 || e.max_qty > 1)) ? (
+                                          <span className="text-[9px] text-zinc-500 ml-1">
+                                            (x{e.min_qty === e.max_qty ? e.min_qty : `${e.min_qty}-${e.max_qty}`})
+                                          </span>
+                                        ) : null}
+                                      </button>
+                                      <span className="text-zinc-500 shrink-0">{(e.chance * 100).toFixed(1)}%</span>
+                                    </div>
+                                  );
+                                })}
+                                {monsterLootEntries.length > 5 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleMonsterExpand(monster.id)}
+                                    className="text-[9px] text-amber-500 hover:text-amber-400 italic text-center mt-1 cursor-pointer w-full hover:bg-amber-500/10 rounded py-0.5 transition-colors"
+                                  >
+                                    {expandedMonsters[monster.id] ? "Thu gọn ▴" : `+ ${monsterLootEntries.length - 5} mục khác ▾`}
+                                  </button>
+                                )}
+                              </div>
+                            )
                           ) : (
                             <div className="space-y-1.5">
-                              {(expandedMonsters[monster.id] ? lootTable.entries : lootTable.entries.slice(0, 5)).map((e, idx) => {
-                                const targetName = e.item_id
-                                  ? (itemMap.get(e.item_id)?.name || e.item_id)
-                                  : e.gu_id
-                                    ? (guMap.get(e.gu_id)?.name || e.gu_id)
-                                    : "Unknown";
-
-                                return (
-                                  <div key={idx} className="flex items-center justify-between text-[10px] font-mono p-1.5 rounded-lg bg-zinc-950/30 border border-zinc-900/40">
-                                    <span className="text-[var(--text-primary)] truncate max-w-[120px]">
-                                      {targetName}
-                                    </span>
-                                    <span className="text-zinc-500 shrink-0">{(e.chance * 100).toFixed(1)}%</span>
+                              {(expandedMonsters[monster.id] ? monsterRegionLootEntries : monsterRegionLootEntries.slice(0, 5)).map((e, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-[10px] font-mono p-1.5 rounded-lg bg-zinc-950/30 border border-zinc-900/40">
+                                  <div className="flex items-center gap-1 min-w-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => e.isGu ? locateGu(e.id) : locateItem(e.id)}
+                                      className="text-[var(--text-primary)] hover:text-orange-400 transition-colors truncate max-w-[110px] text-left cursor-pointer"
+                                      title={`Xem: ${e.name}`}
+                                    >
+                                      {e.name}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => locateRegion(e.regionId)}
+                                      className="px-1 py-0.2 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] truncate max-w-[75px] hover:border-orange-500/40 cursor-pointer"
+                                      title={`Khu vực: ${e.regionName}`}
+                                    >
+                                      {e.regionName}
+                                    </button>
                                   </div>
-                                );
-                              })}
-                              {lootTable.entries.length > 5 && (
+                                  <span className="text-zinc-500 shrink-0">{(e.chance * 100).toFixed(1)}%</span>
+                                </div>
+                              ))}
+                              {monsterRegionLootEntries.length > 5 && (
                                 <button
+                                  type="button"
                                   onClick={() => toggleMonsterExpand(monster.id)}
-                                  className="text-[9px] text-amber-500 hover:text-amber-400 italic text-center mt-1 cursor-pointer w-full hover:bg-amber-500/10 rounded py-0.5 transition-colors"
+                                  className="text-[9px] text-orange-500 hover:text-orange-400 italic text-center mt-1 cursor-pointer w-full hover:bg-orange-500/10 rounded py-0.5 transition-colors"
                                 >
-                                  {expandedMonsters[monster.id] ? "Thu gọn ▴" : `+ ${lootTable.entries.length - 5} mục khác ▾`}
+                                  {expandedMonsters[monster.id] ? "Thu gọn ▴" : `+ ${monsterRegionLootEntries.length - 5} mục khác ▾`}
                                 </button>
                               )}
                             </div>
@@ -1759,6 +2101,92 @@ export default function WikiClientView({
                   const wildGus = region.pool_weights?.wild_gus || [];
                   const resources = region.pool_weights?.resources || [];
                   const monstersInRegion = regionMonsterMap.get(region.id) || [];
+
+                  // 1. Region loot from RegionLootTables for this region
+                  const regionLootRules = [
+                    ...(regionLootMap.get(region.id) || []),
+                    ...(region.parent_id ? (regionLootMap.get(region.parent_id) || []) : []),
+                  ];
+                  const regionLootEntries: Array<{
+                    id: string;
+                    isGu: boolean;
+                    name: string;
+                    chance: number;
+                    minQty: number;
+                    maxQty: number;
+                    monsterType: string;
+                  }> = [];
+
+                  const seenRegionDropKeys = new Set<string>();
+                  regionLootRules.forEach((rl) => {
+                    const lt = lootTableMap.get(rl.loot_table_id);
+                    if (!lt) return;
+                    lt.entries.forEach((e) => {
+                      const isGu = !!e.gu_id;
+                      const targetId = e.item_id || e.gu_id || "";
+                      if (!targetId) return;
+                      const dedupKey = `${rl.monster_type}_${targetId}`;
+                      if (seenRegionDropKeys.has(dedupKey)) return;
+                      seenRegionDropKeys.add(dedupKey);
+
+                      const name = isGu
+                        ? (guMap.get(targetId)?.name || targetId)
+                        : (itemMap.get(targetId)?.name || targetId);
+
+                      regionLootEntries.push({
+                        id: targetId,
+                        isGu,
+                        name,
+                        chance: e.chance,
+                        minQty: e.min_qty || 1,
+                        maxQty: e.max_qty || 1,
+                        monsterType: rl.monster_type,
+                      });
+                    });
+                  });
+
+                  // 2. Monster loot from monsters that inhabit this region
+                  const regionMonsterLootEntries: Array<{
+                    id: string;
+                    isGu: boolean;
+                    name: string;
+                    chance: number;
+                    minQty: number;
+                    maxQty: number;
+                    monsterName: string;
+                    monsterId: string;
+                  }> = [];
+
+                  const seenMonsterDropKeys = new Set<string>();
+                  monstersInRegion.forEach((mId) => {
+                    const m = monsterMap.get(mId);
+                    if (!m || !m.loot_table_id) return;
+                    const lt = lootTableMap.get(m.loot_table_id);
+                    if (!lt) return;
+                    lt.entries.forEach((e) => {
+                      const isGu = !!e.gu_id;
+                      const targetId = e.item_id || e.gu_id || "";
+                      if (!targetId) return;
+                      const dedupKey = `${mId}_${targetId}`;
+                      if (seenMonsterDropKeys.has(dedupKey)) return;
+                      seenMonsterDropKeys.add(dedupKey);
+
+                      const name = isGu
+                        ? (guMap.get(targetId)?.name || targetId)
+                        : (itemMap.get(targetId)?.name || targetId);
+
+                      regionMonsterLootEntries.push({
+                        id: targetId,
+                        isGu,
+                        name,
+                        chance: e.chance,
+                        minQty: e.min_qty || 1,
+                        maxQty: e.max_qty || 1,
+                        monsterName: m.name,
+                        monsterId: m.id,
+                      });
+                    });
+                  });
 
                   return (
                     <div
@@ -1816,6 +2244,7 @@ export default function WikiClientView({
                                 return (
                                   <button
                                     key={mId}
+                                    type="button"
                                     onClick={() => locateMonster(mId)}
                                     className="px-2 py-1 rounded-lg bg-zinc-950/30 text-[10px] text-[var(--text-secondary)] border border-zinc-900/40 hover:border-red-500/30 hover:text-red-400 transition-colors cursor-pointer text-left truncate flex items-center justify-between"
                                   >
@@ -1826,6 +2255,7 @@ export default function WikiClientView({
                               })}
                               {monstersInRegion.length > 5 && (
                                 <button
+                                  type="button"
                                   onClick={() => toggleRegionExpand(region.id)}
                                   className="text-[9px] text-emerald-500 hover:text-emerald-400 italic text-center mt-1 cursor-pointer w-full hover:bg-emerald-500/10 rounded py-0.5 transition-colors"
                                 >
@@ -1849,21 +2279,34 @@ export default function WikiClientView({
                               {(expandedRegions[region.id] ? wildGus : wildGus.slice(0, 4)).map((gId) => {
                                 const gu = guMap.get(gId);
                                 return (
-                                  <span key={`gu-${gId}`} className="px-1.5 py-0.5 rounded bg-indigo-950/30 text-indigo-400 border border-indigo-500/20 text-[9px] font-mono truncate max-w-full">
+                                  <button
+                                    key={`gu-${gId}`}
+                                    type="button"
+                                    onClick={() => locateGu(gId)}
+                                    className="px-1.5 py-0.5 rounded bg-indigo-950/30 text-indigo-400 border border-indigo-500/20 text-[9px] font-mono truncate max-w-full hover:border-indigo-500/40 cursor-pointer"
+                                    title={`Cổ trùng: ${gu ? gu.name : gId}`}
+                                  >
                                     {gu ? gu.name : gId}
-                                  </span>
+                                  </button>
                                 );
                               })}
                               {(expandedRegions[region.id] ? resources : resources.slice(0, 4)).map((rId) => {
                                 const item = itemMap.get(rId);
                                 return (
-                                  <span key={`res-${rId}`} className="px-1.5 py-0.5 rounded bg-sky-950/30 text-sky-400 border border-sky-500/20 text-[9px] font-mono truncate max-w-full">
+                                  <button
+                                    key={`res-${rId}`}
+                                    type="button"
+                                    onClick={() => locateItem(rId)}
+                                    className="px-1.5 py-0.5 rounded bg-sky-950/30 text-sky-400 border border-sky-500/20 text-[9px] font-mono truncate max-w-full hover:border-sky-500/40 cursor-pointer"
+                                    title={`Vật phẩm: ${item ? item.name : rId}`}
+                                  >
                                     {item ? item.name : rId}
-                                  </span>
+                                  </button>
                                 );
                               })}
                               {(wildGus.length + resources.length > 8) && !expandedRegions[region.id] && (
                                 <button
+                                  type="button"
                                   onClick={() => toggleRegionExpand(region.id)}
                                   className="px-1.5 py-0.5 rounded bg-emerald-950/30 text-emerald-400 border border-emerald-500/20 text-[9px] font-mono hover:bg-emerald-900/50 transition-colors cursor-pointer"
                                 >
@@ -1873,6 +2316,129 @@ export default function WikiClientView({
                             </div>
                           )}
                         </div>
+                      </div>
+
+                      {/* Region Drops & Loot: Show both Region Loot and Monster Loot */}
+                      <div className="mt-4 pt-4 border-t border-zinc-900/60">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider flex items-center gap-1.5">
+                            <Layers className="w-3 h-3 text-amber-500" />
+                            Chiến lợi phẩm (Loot)
+                          </h4>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setRegionDropTab(region.id, "region")}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors cursor-pointer ${
+                                (regionLootTab[region.id] || "region") === "region"
+                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                  : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+                              }`}
+                            >
+                              Loot khu vực ({regionLootEntries.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRegionDropTab(region.id, "monster")}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors cursor-pointer ${
+                                regionLootTab[region.id] === "monster"
+                                  ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                                  : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+                              }`}
+                            >
+                              Loot từ quái ({regionMonsterLootEntries.length})
+                            </button>
+                          </div>
+                        </div>
+
+                        {(regionLootTab[region.id] || "region") === "region" ? (
+                          regionLootEntries.length === 0 ? (
+                            <p className="text-[10px] text-zinc-600 italic font-mono">Chưa ghi nhận rơi đồ đặc trưng khu vực</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {(expandedRegionLoot[region.id] ? regionLootEntries : regionLootEntries.slice(0, 5)).map((e, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-[10px] font-mono p-1.5 rounded-lg bg-zinc-950/30 border border-zinc-900/40">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => e.isGu ? locateGu(e.id) : locateItem(e.id)}
+                                      className="text-[var(--text-primary)] hover:text-amber-400 transition-colors truncate max-w-[120px] text-left cursor-pointer"
+                                      title={`Xem: ${e.name}`}
+                                    >
+                                      {e.name}
+                                      {(e.minQty > 1 || e.maxQty > 1) ? (
+                                        <span className="text-[9px] text-zinc-500 ml-1">
+                                          (x{e.minQty === e.maxQty ? e.minQty : `${e.minQty}-${e.maxQty}`})
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                    <span className={`text-[8px] px-1 py-0.2 rounded font-mono ${
+                                      e.monsterType === "Boss" ? "bg-red-950/30 text-red-400 border border-red-500/20" :
+                                      e.monsterType === "Elite" ? "bg-purple-950/30 text-purple-400 border border-purple-500/20" :
+                                      "bg-zinc-900 text-zinc-400 border border-zinc-800"
+                                    }`}>
+                                      {e.monsterType}
+                                    </span>
+                                  </div>
+                                  <span className="text-zinc-500 shrink-0">{(e.chance * 100).toFixed(1)}%</span>
+                                </div>
+                              ))}
+                              {regionLootEntries.length > 5 && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRegionLootExpand(region.id)}
+                                  className="text-[9px] text-amber-500 hover:text-amber-400 italic text-center mt-1 cursor-pointer w-full hover:bg-amber-500/10 rounded py-0.5 transition-colors"
+                                >
+                                  {expandedRegionLoot[region.id] ? "Thu gọn ▴" : `+ ${regionLootEntries.length - 5} mục khác ▾`}
+                                </button>
+                              )}
+                            </div>
+                          )
+                        ) : (
+                          regionMonsterLootEntries.length === 0 ? (
+                            <p className="text-[10px] text-zinc-600 italic font-mono">Không có quái rơi đồ tại khu vực này</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {(expandedRegionLoot[region.id] ? regionMonsterLootEntries : regionMonsterLootEntries.slice(0, 5)).map((e, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-[10px] font-mono p-1.5 rounded-lg bg-zinc-950/30 border border-zinc-900/40">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => e.isGu ? locateGu(e.id) : locateItem(e.id)}
+                                      className="text-[var(--text-primary)] hover:text-red-400 transition-colors truncate max-w-[110px] text-left cursor-pointer"
+                                      title={`Xem: ${e.name}`}
+                                    >
+                                      {e.name}
+                                      {(e.minQty > 1 || e.maxQty > 1) ? (
+                                        <span className="text-[9px] text-zinc-500 ml-1">
+                                          (x{e.minQty === e.maxQty ? e.minQty : `${e.minQty}-${e.maxQty}`})
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => locateMonster(e.monsterId)}
+                                      className="text-[8px] px-1 py-0.2 rounded bg-red-950/30 text-red-400 border border-red-500/20 truncate max-w-[80px] hover:border-red-500/40 cursor-pointer"
+                                      title={`Quái: ${e.monsterName}`}
+                                    >
+                                      {e.monsterName}
+                                    </button>
+                                  </div>
+                                  <span className="text-zinc-500 shrink-0">{(e.chance * 100).toFixed(1)}%</span>
+                                </div>
+                              ))}
+                              {regionMonsterLootEntries.length > 5 && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRegionLootExpand(region.id)}
+                                  className="text-[9px] text-red-500 hover:text-red-400 italic text-center mt-1 cursor-pointer w-full hover:bg-red-500/10 rounded py-0.5 transition-colors"
+                                >
+                                  {expandedRegionLoot[region.id] ? "Thu gọn ▴" : `+ ${regionMonsterLootEntries.length - 5} mục khác ▾`}
+                                </button>
+                              )}
+                            </div>
+                          )
+                        )}
                       </div>
                     </div>
                   );

@@ -526,13 +526,9 @@ func apertureNodeYield(ctx *apertureRewardContext, n models.ApertureResourceNode
 	// Dao amplification follows the produced item's path, falling back to the
 	// zone path, and is applied exactly once.
 	daoMult := 1.0
-	itemBasePrice := 0.0
 	if prodKey := resolveNodeProdKey(n); prodKey != "" {
-		if item, exists := models.ItemRegistry[prodKey]; exists {
-			itemBasePrice = item.BasePrice
-			if item.Path != "" {
-				daoMult = getPathDaoMultiplier(item.Path, ctx.nodeDaoMap)
-			}
+		if item, exists := models.ItemRegistry[prodKey]; exists && item.Path != "" {
+			daoMult = getPathDaoMultiplier(item.Path, ctx.nodeDaoMap)
 		}
 	}
 	if daoMult <= 1.0 {
@@ -587,15 +583,14 @@ func apertureNodeYield(ctx *apertureRewardContext, n models.ApertureResourceNode
 	}
 
 	return gamefx.ComputeApertureYield(gamefx.ApertureYieldInputs{
-		Level:         n.Level,
-		ItemBasePrice: itemBasePrice,
-		AreaSize:      areaSize,
-		DaoMult:       daoMult,
-		ConflictMult:  conflictMult,
-		EcologyMult:   ecologyMult,
-		EcoMult:       ecoMult,
-		LaborMult:     laborMult,
-		PopBonus:      popBonus,
+		Level:        n.Level,
+		AreaSize:     areaSize,
+		DaoMult:      daoMult,
+		ConflictMult: conflictMult,
+		EcologyMult:  ecologyMult,
+		EcoMult:      ecoMult,
+		LaborMult:    laborMult,
+		PopBonus:     popBonus,
 	})
 }
 
@@ -633,7 +628,6 @@ func buildApertureYieldPreview(ctx *apertureRewardContext, n models.ApertureReso
 		Bonus:     y.Bonus,
 		RawBonus:  y.RawBonus,
 		Capped:    y.Capped,
-		Divisor:   y.Divisor,
 		PerHour:   perHour,
 		Factors:   apertureYieldFactors(y),
 	}
@@ -666,7 +660,6 @@ func computeApertureNodeRewardWithCtx(ctx *apertureRewardContext, n models.Apert
 	}
 	return total
 }
-
 
 // computeApertureNodeReward computes the total reward for harvesting a single resource node,
 // applying all multipliers (Dao marks, conflicts, ecosystem, labor, suitability, area size)

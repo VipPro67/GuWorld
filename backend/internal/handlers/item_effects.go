@@ -299,40 +299,22 @@ func formatSummaryOfRewards(reward map[string]interface{}) string {
 
 func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
 	msg := fmt.Sprintf("Mở %s thành công!\n", item.Name)
-	// reward is implicitly used in messages
 
-	// ── 20 % → Nguyên Thạch  |  80 % → Vật phẩm (vật liệu / bí phương)
-	if rand.Float64() < 0.20 {
-		// ── STONES: 100-500
-		stones := int64(100 + rand.Intn(401))
-		player.PrimevalStones += float64(stones)
-		msg += fmt.Sprintf("- 💎 Nhận được %d Nguyên Thạch\n", stones)
-		_ = map[string]interface{}{
-			"type":     "stones",
-			"quantity": stones,
+	// ── Roll type: Recipe 40% | Vật phẩm (Material/Food) 60% ──
+	if rand.Float64()*100.0 < 40.0 {
+		// ── RECIPE DROP (40%) ──
+		recipeMsg, _ := rollRecipeDrop(tx, player, item)
+		if recipeMsg != "" {
+			msg += recipeMsg
+		} else {
+			// Hết bí phương khả dụng → rơi vật phẩm
+			itemMsg, _ := rollItemDrop(tx, player)
+			msg += itemMsg
 		}
 	} else {
-		// ── ITEM POOL ──
-		// Roll type: Material 80%, Recipe 20%
-		roll := rand.Float64() * 100.0
-
-		if roll < 40.0 {
-			// ── RECIPE DROP (40%) ──
-			var recipeMsg string
-			recipeMsg, _ = rollRecipeDrop(tx, player, item)
-			if recipeMsg != "" {
-				msg += recipeMsg
-			} else {
-				var matMsg string
-				matMsg, _ = rollMaterialDrop(tx, player, item)
-				msg += matMsg
-			}
-		} else {
-			// ── MATERIAL DROP (60%) ──
-			var matMsg string
-			matMsg, _ = rollMaterialDrop(tx, player, item)
-			msg += matMsg
-		}
+		// ── ITEM DROP (60%) ──
+		itemMsg, _ := rollItemDrop(tx, player)
+		msg += itemMsg
 	}
 
 	return msg, nil
@@ -363,6 +345,34 @@ func rankDropMultiplier(rank int) float64 {
 	}
 }
 
+// recipeDropMultiplier weights mine-chest recipe drops: higher rank rarer, but
+// every rank stays reachable (recipes are sellable, so deep-rank drops must not
+// be effectively impossible like rankDropMultiplier's 6+ tail).
+func recipeDropMultiplier(rank int) float64 {
+	switch {
+	case rank <= 1:
+		return 1.0
+	case rank == 2:
+		return 0.7
+	case rank == 3:
+		return 0.45
+	case rank == 4:
+		return 0.28
+	case rank == 5:
+		return 0.16
+	case rank == 6:
+		return 0.09
+	case rank == 7:
+		return 0.05
+	case rank == 8:
+		return 0.025
+	case rank == 9:
+		return 0.012
+	default: // 10+
+		return 0.006
+	}
+}
+
 // effectiveDropLevel returns the drop-weighting level for a Gu/item, taking the
 // higher of its rank and its rarity tier (1-9). A rank < 6 mortal Gu tagged
 // with a high rarity is thus as rare as a high-rank Gu.
@@ -373,9 +383,9 @@ func effectiveDropLevel(rank, rarity int) int {
 	return rank
 }
 
-func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, map[string]interface{}) {
+func rollItemDrop(tx *sql.Tx, player *models.Player) (string, map[string]interface{}) {
 	pc := getPrecomputedPools()
-	chosen := pc.rollMaterial()
+	chosen := pc.rollDrop()
 	if chosen == "" {
 		return "- Hòm trống rỗng, không có gì đặc biệt.\n", map[string]interface{}{"type": "none"}
 	}

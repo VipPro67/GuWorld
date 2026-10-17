@@ -479,6 +479,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/dictionary/loot-tables", middleware.RateLimitByIP(120, time.Minute), handlers.GetLootTables)
 		api.GET("/dictionary/regions", middleware.RateLimitByIP(120, time.Minute), handlers.GetDictionaryRegions)
 		api.GET("/dictionary/monster-spawns", middleware.RateLimitByIP(120, time.Minute), handlers.GetMonsterSpawns)
+		api.GET("/dictionary/region-loot", middleware.RateLimitByIP(120, time.Minute), handlers.GetRegionLoot)
 		api.GET("/recipes", middleware.RateLimitByIP(60, time.Minute), handlers.GetRecipes)
 		api.GET("/gus/:instance_id/history", middleware.RateLimitByIP(60, time.Minute), handlers.GetGuHistory)
 

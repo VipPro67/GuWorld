@@ -266,24 +266,6 @@ func apertureCellsAreConnected(cells []models.ApertureGridCell) bool {
 	return len(remaining) == 0
 }
 
-// apertureSeedQuantity scales the template's rank-1 seed cost down as the
-// produced item gets more valuable, so every rank repays its seed in roughly
-// the same number of harvests: seed = baseSeed / (base_price / 1000).
-func apertureSeedQuantity(baseSeed int, prodKey string) int64 {
-	if baseSeed <= 0 {
-		return 0
-	}
-	item, ok := models.ItemRegistry[prodKey]
-	if !ok || item.BasePrice <= 0 {
-		return int64(baseSeed)
-	}
-	qty := int64(math.Round(float64(baseSeed) * 1000.0 / item.BasePrice))
-	if qty < 1 {
-		qty = 1
-	}
-	return qty
-}
-
 func PlaceApertureNode(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -552,7 +534,7 @@ func PlaceApertureNode(c *gin.Context) {
 			return
 		}
 		if template.SeedAmount > 0 {
-			seedQty := apertureSeedQuantity(template.SeedAmount, nodeProdKey)
+			seedQty := int64(template.SeedAmount)
 			seedName = nodeProdKey
 			if itemSpec, exists := models.ItemRegistry[nodeProdKey]; exists {
 				seedName = itemSpec.Name

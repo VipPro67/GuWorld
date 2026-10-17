@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Compass, MapPin, X, Search, Shield, Skull, Crown, Sparkles, Bug, Package, Layers } from "lucide-react";
 import type { Region } from "@/store/useGameStore";
-import { authFetch } from "@/lib/auth";
-import { BACKEND_URL } from "@/lib/config";
+import { getRegionDetailsFromCache, getStaticRegions } from "@/lib/atlas";
 
 interface WorldAtlasModalProps {
   regions: Region[];
@@ -79,7 +78,11 @@ function formatMonsterStat(min: number, max: number): string {
   return `${lo.toLocaleString("vi-VN")} – ${hi.toLocaleString("vi-VN")}`;
 }
 
-export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: WorldAtlasModalProps) {
+export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, onClose }: WorldAtlasModalProps) {
+  const regions = useMemo(
+    () => (propRegions && propRegions.length > 0 ? propRegions : getStaticRegions()),
+    [propRegions]
+  );
   const majorRegions = useMemo(
     () => regions.filter((region) => region.zone_type === "NGU_VUC" && region.is_active),
     [regions],
@@ -97,9 +100,9 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"monsters" | "drops" | "list">("monsters");
 
-  // Region details cache & loading state
+  // Region details cache
   const [detailsCache, setDetailsCache] = useState<Record<string, RegionDetailsData>>({});
-  const [loadingDetails, setLoadingDetails] = useState(false);
+  const loadingDetails = false;
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -141,28 +144,23 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
     return regions.find((r) => r.id === inspectedSubRegionId) || currentRegion || subRegions[0];
   }, [inspectedSubRegionId, regions, currentRegion, subRegions]);
 
-  // Fetch region details
-  const fetchDetails = useCallback(async (regionId: string) => {
-    if (!regionId || detailsCache[regionId]) return;
-    setLoadingDetails(true);
-    try {
-      const res = await authFetch(`${BACKEND_URL}/api/explore/regions/${regionId}/details`);
-      if (res.ok) {
-        const data: RegionDetailsData = await res.json();
-        setDetailsCache((prev) => ({ ...prev, [regionId]: data }));
-      }
-    } catch (err) {
-      console.warn("fetch region details error:", err);
-    } finally {
-      setLoadingDetails(false);
+  // Resolve region details directly from CSV wiki-cache (instant 0ms response)
+  const getDetails = useCallback((regionId: string): RegionDetailsData | null => {
+    if (!regionId) return null;
+    if (detailsCache[regionId]) return detailsCache[regionId];
+    const resolved = getRegionDetailsFromCache(regionId, regions);
+    if (resolved) {
+      setDetailsCache((prev) => ({ ...prev, [regionId]: resolved }));
+      return resolved;
     }
-  }, [detailsCache]);
+    return null;
+  }, [detailsCache, regions]);
 
   useEffect(() => {
     if (inspectedRegion?.id) {
-      void fetchDetails(inspectedRegion.id);
+      getDetails(inspectedRegion.id);
     }
-  }, [inspectedRegion?.id, fetchDetails]);
+  }, [inspectedRegion?.id, getDetails]);
 
   useEffect(() => {
     if (currentMajorRegion) {
@@ -178,7 +176,9 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const currentDetails = inspectedRegion ? detailsCache[inspectedRegion.id] : null;
+  const currentDetails = inspectedRegion
+    ? (detailsCache[inspectedRegion.id] || getRegionDetailsFromCache(inspectedRegion.id, regions))
+    : null;
 
   // Search filter
   const cleanSearch = searchQuery.trim().toLowerCase();
@@ -187,7 +187,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
     if (r.name.toLowerCase().includes(cleanSearch) || r.id.toLowerCase().includes(cleanSearch)) {
       return true;
     }
-    const cached = detailsCache[r.id];
+    const cached = detailsCache[r.id] || getRegionDetailsFromCache(r.id, regions);
     if (cached) {
       if (cached.monsters?.some((m) => m.name.toLowerCase().includes(cleanSearch))) return true;
       if (cached.drops?.some((d) => d.name.toLowerCase().includes(cleanSearch))) return true;
@@ -195,7 +195,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
       if (cached.resources?.some((res) => res.name.toLowerCase().includes(cleanSearch))) return true;
     }
     return false;
-  }, [cleanSearch, detailsCache]);
+  }, [cleanSearch, detailsCache, regions]);
 
   if (!mounted) return null;
 

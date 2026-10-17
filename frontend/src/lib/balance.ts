@@ -85,6 +85,13 @@ export function getSealingStoneCost(rank: number): number {
 }
 
 // ========================================================================
+// 2b. GIỐNG TIÊN KHIẾU
+// ========================================================================
+
+/** Seed amount to plant one aperture resource zone — same for every rank. */
+export const APERTURE_SEED_BASE = 100;
+
+// ========================================================================
 // 3. CHI PHÍ ĐỔI ĐẠO HIỆU & HÌNH PHẠT CỔ TIÊN (RENAME & RE-IDENTITY)
 // ========================================================================
 

@@ -489,4 +489,3 @@ func attachApertureYieldPreviews(playerID string, nodes []models.ApertureResourc
 		nodes[i].YieldPreview = buildApertureYieldPreview(rewardCtx, nodes[i], areaSize, remainder, effectiveTimeRate)
 	}
 }
-

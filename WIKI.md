@@ -213,12 +213,13 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   - LOW: 2 mỏ, MID: 3 mỏ, HIGH/EXTREME: 4 mỏ.
   - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
 - Bản đồ Tiên Khiếu là lưới 20×20. Mỗi node trồng trọt, chăn nuôi hoặc khai thác có thể chiếm một vùng ô liền nhau; nhiều node cùng loại được phép đặt, nhưng mỗi ô chỉ thuộc một node.
-- **Gieo giống:** đặt một khu trồng trọt/chăn nuôi/khai thác cần tiêu hao chính vật phẩm định sản xuất (`prod_key`) làm hạt giống. Số giống = `100 ÷ (giá vật phẩm / 1.000)` (tối thiểu 1): cấp 1 cần 100, cấp 5 cần 4, cấp 6 cần 10, cấp 9 cần 1. Mỏ khởi tạo sẵn thì miễn giống; muốn nhân giống loại mới phải kiếm được loại đó (loot/shop) trước. Giống **không được hoàn** khi tháo dỡ.
+- **Gieo giống:** đặt một khu trồng trọt/chăn nuôi/khai thác cần tiêu hao **100** chính vật phẩm định sản xuất (`prod_key`) làm hạt giống, **giống nhau ở mọi rank**. Mỏ khởi tạo sẵn thì miễn giống; muốn nhân giống loại mới phải kiếm được loại đó (loot/shop) trước. Giống **không được hoàn** khi tháo dỡ.
 - **Sản lượng mỗi lần thu** (do server tính, gửi kèm trong `yield_preview` của `GET /immortal-aperture/nodes`):
-  `sản lượng = 10 × min(50, hệ số cấp × hệ số Đạo Ngân × hệ số diện tích × xung đột × sinh thái × lao động × dân số) ÷ (giá vật phẩm / 1.000)`
-  - Hệ số cấp: `1 + 0,5 × (cấp − 1)` (cấp 5 = ×3). Cấp **không** nhân vào `production_amount` nữa — cột đó giữ lại cho tương thích dữ liệu, không dùng để tính sản lượng.
+  `sản lượng = max(10, 10 × min(50, hệ số cấp × hệ số Đạo Ngân × hệ số diện tích × xung đột × sinh thái × lao động × dân số))`
+  - **Sàn 10 món/lần cho mọi rank** và mọi loại vật phẩm: một node Lv1 không bonus đã thu 10 món, nên 100 giống luôn hoàn trong tối đa 10 lần thu (có bonus thì nhanh hơn). Node bị phạt sinh thái/xung đột nặng cũng không xuống dưới 10.
+  - Hệ số cấp: `1 + 0,5 × (cấp − 1)` (cấp 5 = ×3). Cấp **không** nhân vào `production_amount` — cột đó giữ lại cho tương thích dữ liệu, không dùng để tính sản lượng.
   - Hệ số Đạo Ngân: `min(50, 1 + số vết Đạo Ngân × 0,0001)` theo lưu phái của **vật phẩm sản xuất** (không cộng dồn với lưu phái của khu); chạm trần ở 490.000 vết.
-  - Hệ số diện tích: `1 + area_size / 10.000.000`. Trần tổng mọi hệ số là **×50**.
+  - Hệ số diện tích: `1 + area_size / 10.000.000`. Trần tổng mọi hệ số là **×50** (tối đa 500 món/lần).
   - Số ô không còn ảnh hưởng sản lượng; thay vào đó số khu tài nguyên tối đa = `min(area_size / 100.000, 200)`.
   - Sản lượng lẻ được dồn tại ô neo (cột `production_remainder`) nên không bị mất.
 - Xung đột Đạo của sản lượng dùng chung hồ sơ combat theo path, Đạo Ngân, path mastery và hiệu ứng giảm xung đột; vị trí node không tạo luật tương khắc riêng.
@@ -413,7 +414,7 @@ Cổ sư có thể:
 - Dùng Cổ tiêu hao hoặc Cổ hỗ trợ.
 - Vứt bỏ Cổ.
 
-**Tiên Cổ duy nhất:** Cổ từ **Lục Chuyển trở lên (Tiên Cổ)** là độc nhất toàn thiên hạ — mỗi `gu_id` chỉ tồn tại một instance trên toàn server. Các kênh nhận Cổ (Mở đá, Rương Mỏ Linh Thạch, Luyện Cổ, quái rơi đồ) đều loại trừ Tiên Cổ đã tồn tại (trong túi bất kỳ đạo hữu, đấu giá) trước khi roll; nếu hết ứng viên hợp lệ sẽ rơi vật phẩm/thạch bù trừ. Mỗi Tiên Cổ có một mã hiệu (`instance_id`) theo nó suốt đời — mua bán, trao đổi, gửi kho tông môn đều giữ nguyên mã hiệu. Thả, bỏ đói chết hay mất khi bại trận là kết thúc vòng đời mã hiệu đó; sau đó thiên hạ mới có thể xuất hiện lại Cổ cùng loại với mã hiệu mới. Lịch sử đời Cổ xem ở trang cá thể.
+**Tiên Cổ duy nhất:** Cổ từ **Lục Chuyển trở lên (Tiên Cổ)** là độc nhất toàn thiên hạ — mỗi `gu_id` chỉ tồn tại một instance trên toàn server. Các kênh nhận Cổ (Mở đá, Luyện Cổ, quái rơi đồ) đều loại trừ Tiên Cổ đã tồn tại (trong túi bất kỳ đạo hữu, đấu giá) trước khi roll; nếu hết ứng viên hợp lệ sẽ rơi vật phẩm/thạch bù trừ. Mỗi Tiên Cổ có một mã hiệu (`instance_id`) theo nó suốt đời — mua bán, trao đổi, gửi kho tông môn đều giữ nguyên mã hiệu. Thả, bỏ đói chết hay mất khi bại trận là kết thúc vòng đời mã hiệu đó; sau đó thiên hạ mới có thể xuất hiện lại Cổ cùng loại với mã hiệu mới. Lịch sử đời Cổ xem ở trang cá thể.
 
 **Hiệu ứng Trưởng thành (Growth):** Một số Cổ (Lực đạo/Thổ đạo như Hùng Lực, Hắc Thỉ, Ngọc Bì, Thiết Cốt, Tự Lực...) có hiệu ứng `growth` — khi trang bị ở trạng thái ACTIVE, chỉ số thưởng (Công/Thủ/Máu/Tốc) tăng dần theo thời gian tới mức tối đa (`hours_to_max` giờ). Quy tắc:
 
@@ -1007,6 +1008,8 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 - Có danh sách mine slots với rarity và phần thưởng tích lũy.
 - Cổ sư chiếm mỏ, nhận thưởng, bỏ mỏ hoặc tấn công mỏ người khác.
 - Worker có thể gán quái vào mỏ bỏ hoang.
+- **Tích lũy:** mỗi phút chiếm mỏ tự roll một lần, tỉ lệ ra **Rương Mỏ Linh Thạch** tăng theo rarity mỏ (Thường 8% → Siêu Cấp 50%). Nhận rương khi Nhận thưởng / Từ bỏ mỏ; **cướp mỏ chỉ được một nửa** số rương. Quái Dược Dã Thố cũng rơi rương.
+- **Mở Rương Mỏ Linh Thạch** (dùng trong túi đồ): không ra Nguyên Thạch. Kết quả là **Bí phương (40%)** hoặc **Vật liệu/Cổ lương (60%)**. Bí phương ra được **mọi Chuyển**, Chuyển càng cao càng hiếm; trùng bí phương đã có thì giữ mức hoàn thiện cao hơn. Vật phẩm weight theo rank/rarity (rank cao hiếm hơn).
 
 ## 15. Tổ đội và Đấu trường
 
