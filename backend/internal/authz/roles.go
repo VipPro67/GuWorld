@@ -21,6 +21,7 @@ var readOnly = []string{
 	"recipes.read", "monsters.read", "loot_tables.read", "gift_codes.read",
 	"constitution_dictionary.read", "race_dictionary.read", "status_dictionary.read",
 	"monster_spawns.read", "quests.read", "dungeons.read", "sect_mines.read",
+	"world_bosses.read",
 }
 
 // BuiltinRoles returns fresh copies of the built-in policies.
@@ -43,7 +44,8 @@ func BuiltinRoles() []BuiltinRole {
 			"combat_history.read", "map_drops.read", "map_drops.update", "map_drops.delete", "arena_rankings.read", "arena_rankings.update",
 			"shop.read", "shop.update", "shop.delete", "arena_shop.read", "arena_shop.update", "arena_shop.delete",
 			"mine_slots.read", "mine_slots.update", "gift_codes.read", "gift_codes.update", "monster_spawns.read", "monster_spawns.update", "monster_spawns.delete",
-			"dungeons.read", "dungeons.update", "dungeons.delete", "sect_mines.read", "sect_mines.update")},
+			"dungeons.read", "dungeons.update", "dungeons.delete", "sect_mines.read", "sect_mines.update",
+			"world_bosses.read", "world_bosses.update", "world_bosses.delete")},
 		{Key: SuperAdminRole, Name: "Super Admin", Description: "Unrestricted administrative access", Level: 100, Permissions: []string{AdminAccessPermission, "admin.*"}},
 	}
 	for i := range roles {

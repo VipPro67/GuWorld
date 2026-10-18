@@ -1,0 +1,286 @@
+package handlers
+
+import (
+	"fmt"
+	"math"
+	"net/http"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+)
+
+// AdminWorldBoss is the admin-facing projection of one live boss actor kept in
+// Redis while the spawn is active (see cache.WorldMonster).
+type AdminWorldBoss struct {
+	RegionID          string     `json:"region_id"`
+	InstanceID        string     `json:"instance_id"`
+	SpawnID           string     `json:"spawn_id"`
+	MonsterTemplateID string     `json:"monster_template_id"`
+	Name              string     `json:"name"`
+	Rank              int        `json:"rank"`
+	SubRank           int        `json:"sub_rank"`
+	X                 float64    `json:"x"`
+	Y                 float64    `json:"y"`
+	SpawnX            float64    `json:"spawn_x"`
+	SpawnY            float64    `json:"spawn_y"`
+	HP                float64    `json:"hp"`
+	MaxHP             float64    `json:"max_hp"`
+	State             string     `json:"state"`
+	TargetID          string     `json:"target_id,omitempty"`
+	RespawnSeconds    int        `json:"respawn_seconds"`
+	RespawnAt         *time.Time `json:"respawn_at,omitempty"`
+	Revision          int64      `json:"revision"`
+	LastUpdateAt      time.Time  `json:"last_update_at"`
+}
+
+func newAdminWorldBoss(monster cache.WorldMonster) AdminWorldBoss {
+	name := monster.MonsterTemplateID
+	if template, ok := models.MonsterRegistry[monster.MonsterTemplateID]; ok && template.Name != "" {
+		name = template.Name
+	}
+	out := AdminWorldBoss{
+		RegionID: monster.RegionID, InstanceID: monster.InstanceID, SpawnID: monster.SpawnID,
+		MonsterTemplateID: monster.MonsterTemplateID, Name: name,
+		Rank: monster.Rank, SubRank: monster.SubRank,
+		X: monster.X, Y: monster.Y, SpawnX: monster.SpawnX, SpawnY: monster.SpawnY,
+		HP: monster.HP, MaxHP: monster.MaxHP, State: monster.State, TargetID: monster.TargetID,
+		RespawnSeconds: monster.RespawnSeconds, Revision: monster.Revision, LastUpdateAt: monster.LastUpdateAt,
+	}
+	if !monster.RespawnAt.IsZero() {
+		respawnAt := monster.RespawnAt
+		out.RespawnAt = &respawnAt
+	}
+	return out
+}
+
+// AdminListWorldBosses returns every live boss currently held in Redis. Bosses
+// are only materialized while a spawn is active, so this is the authoritative
+// "where is the boss right now" view.
+func AdminListWorldBosses(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	if cache.Client == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Redis không khả dụng — chưa thể đọc vị trí boss"})
+		return
+	}
+	regionFilter := strings.TrimSpace(c.Query("region_id"))
+	regions, err := cache.WorldBossRegionIDs(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể liệt kê khu vực có boss: " + err.Error()})
+		return
+	}
+	bosses := make([]AdminWorldBoss, 0, len(regions))
+	for _, regionID := range regions {
+		if regionFilter != "" && regionID != regionFilter {
+			continue
+		}
+		members, err := cache.WorldBossesInRegion(c.Request.Context(), regionID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể đọc boss khu vực %s: %v", regionID, err)})
+			return
+		}
+		for _, member := range members {
+			bosses = append(bosses, newAdminWorldBoss(member))
+		}
+	}
+	sort.Slice(bosses, func(i, j int) bool {
+		if bosses[i].RegionID != bosses[j].RegionID {
+			return bosses[i].RegionID < bosses[j].RegionID
+		}
+		if bosses[i].X != bosses[j].X {
+			return bosses[i].X < bosses[j].X
+		}
+		return bosses[i].Y < bosses[j].Y
+	})
+	c.JSON(http.StatusOK, gin.H{"data": bosses, "total": len(bosses)})
+}
+
+type adminWorldBossUpdateRequest struct {
+	X     *float64 `json:"x"`
+	Y     *float64 `json:"y"`
+	HP    *float64 `json:"hp"`
+	State *string  `json:"state"`
+}
+
+func (req adminWorldBossUpdateRequest) empty() bool {
+	return req.X == nil && req.Y == nil && req.HP == nil && req.State == nil
+}
+
+// applyAdminWorldBossUpdate mutates a live boss from an admin request. It is a
+// pure value transform (bounds are passed in) so the rules stay unit-testable
+// without Redis. The returned event name is empty when nothing changed.
+func applyAdminWorldBossUpdate(monster *cache.WorldMonster, req adminWorldBossUpdateRequest, minX, minY, maxX, maxY int, now time.Time) (string, error) {
+	if req.empty() {
+		return "", fmt.Errorf("cần ít nhất một trường để cập nhật (x, y, hp hoặc state)")
+	}
+	if req.State != nil {
+		switch strings.ToUpper(strings.TrimSpace(*req.State)) {
+		case MonsterStateIdle, MonsterStateChase, MonsterStateAttack, MonsterStateReturn, MonsterStateDefeated:
+		default:
+			return "", fmt.Errorf("state không hợp lệ")
+		}
+	}
+	for _, value := range []*float64{req.X, req.Y, req.HP} {
+		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0)) {
+			return "", fmt.Errorf("toạ độ và HP phải là số hữu hạn")
+		}
+	}
+
+	event := ""
+	// Revive/defeat first: they reset position and HP, so later field writes win.
+	if req.State != nil {
+		switch strings.ToUpper(strings.TrimSpace(*req.State)) {
+		case MonsterStateDefeated:
+			monster.State = MonsterStateDefeated
+			monster.HP = 0
+			monster.TargetID = ""
+			monster.RespawnAt = now.Add(monsterRespawnDelay(monster.RespawnSeconds))
+			event = "monster_defeated"
+		case MonsterStateIdle:
+			monster.State = MonsterStateIdle
+			monster.HP = monster.MaxHP
+			monster.X, monster.Y = monster.SpawnX, monster.SpawnY
+			monster.TargetID = ""
+			monster.RespawnAt = time.Time{}
+			event = "monster_respawned"
+		default:
+			state := strings.ToUpper(strings.TrimSpace(*req.State))
+			if state != monster.State {
+				monster.State = state
+				monster.RespawnAt = time.Time{}
+				event = "monster_updated"
+			}
+		}
+	}
+
+	if req.X != nil || req.Y != nil {
+		x, y := monster.X, monster.Y
+		if req.X != nil {
+			x = *req.X
+		}
+		if req.Y != nil {
+			y = *req.Y
+		}
+		if x < float64(minX) || x > float64(maxX) || y < float64(minY) || y > float64(maxY) {
+			return "", fmt.Errorf("toạ độ (%d, %d) nằm ngoài khu vực %s", int(x), int(y), monster.RegionID)
+		}
+		if x != monster.X || y != monster.Y {
+			monster.X, monster.Y = x, y
+			monster.TargetID = ""
+			if event == "" {
+				event = "monster_moved"
+			}
+		}
+	}
+
+	if req.HP != nil {
+		hp := math.Min(math.Max(*req.HP, 0), monster.MaxHP)
+		if hp != monster.HP {
+			monster.HP = hp
+			if hp == 0 {
+				monster.State = MonsterStateDefeated
+				monster.TargetID = ""
+				monster.RespawnAt = now.Add(monsterRespawnDelay(monster.RespawnSeconds))
+				event = "monster_defeated"
+			} else if monster.State == MonsterStateDefeated {
+				monster.State = MonsterStateIdle
+				monster.RespawnAt = time.Time{}
+				event = "monster_respawned"
+			} else if event == "" {
+				event = "monster_updated"
+			}
+		}
+	}
+
+	if event == "" {
+		return "", nil
+	}
+	monster.Revision++
+	monster.LastUpdateAt = now
+	return event, nil
+}
+
+// AdminUpdateWorldBoss teleports, heals, damages or revives one live boss. The
+// write uses the revision CAS the workers use, so a concurrent tick cannot be
+// clobbered and cannot clobber this update.
+func AdminUpdateWorldBoss(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+	if cache.Client == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Redis không khả dụng — chưa thể cập nhật boss"})
+		return
+	}
+	regionID, instanceID := c.Param("region_id"), c.Param("instance_id")
+	var req adminWorldBossUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	monster, exists, err := cache.GetWorldMonster(c.Request.Context(), regionID, instanceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc boss: " + err.Error()})
+		return
+	}
+	// world:monster:{region}:{instance} also holds ordinary monsters, so this
+	// endpoint must refuse anything outside the boss scope it was granted.
+	if !exists || !monster.IsBoss {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy boss đang sống với region/instance này"})
+		return
+	}
+
+	oldBucketX, oldBucketY := monsterBucket(int(monster.X), int(monster.Y))
+	minX, minY, maxX, maxY := monsterPatrolBounds(regionID)
+	event, err := applyAdminWorldBossUpdate(&monster, req, minX, minY, maxX, maxY, time.Now().UTC())
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if event == "" {
+		c.JSON(http.StatusOK, gin.H{"message": "Không có thay đổi nào được áp dụng"})
+		return
+	}
+
+	newBucketX, newBucketY := monsterBucket(int(monster.X), int(monster.Y))
+	written, err := casWorldMonster(c.Request.Context(), monster, monster, monster.Revision-1, oldBucketX, oldBucketY, newBucketX, newBucketY, monsterTTL(monster.RespawnSeconds))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi boss: " + err.Error()})
+		return
+	}
+	if !written {
+		c.JSON(http.StatusConflict, gin.H{"error": "Boss vừa được worker cập nhật, hãy thử lại"})
+		return
+	}
+	broadcastWorldCombat(monster, event, map[string]any{"admin_id": adminID.String()})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật boss", "data": newAdminWorldBoss(monster)})
+}
+
+// AdminPurgeWorldBosses removes every live boss actor of one region from Redis.
+// The next AOI snapshot rematerializes them from static map-cell data, so this
+// is a "reset spawns" operation rather than a content edit.
+func AdminPurgeWorldBosses(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	if cache.Client == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Redis không khả dụng — chưa thể xoá boss"})
+		return
+	}
+	regionID := strings.TrimSpace(c.Query("region_id"))
+	if regionID == "" || len(regionID) > 50 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "region_id là bắt buộc"})
+		return
+	}
+	if err := cache.PruneWorldBosses(c.Request.Context(), regionID, map[string]struct{}{}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xoá boss: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xoá boss đang sống của khu vực; snapshot kế tiếp sẽ tạo lại từ dữ liệu tĩnh"})
+}

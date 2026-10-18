@@ -52,10 +52,10 @@ func TestBuiltinRoleResourceMatrix(t *testing.T) {
 		want []string
 	}{
 		{"player", []string{}},
-		{"observer", []string{"apertures", "arena_rankings", "arena_shop", "audit", "combat_history", "constitution_dictionary", "dungeons", "game_data", "gift_codes", "gu_dictionary", "gus", "item_dictionary", "loot_tables", "map_cells", "map_drops", "mine_slots", "monitoring", "monster_spawns", "monsters", "players", "quests", "race_dictionary", "recipes", "regions", "sect_mines", "sects", "shop", "status_dictionary"}},
+		{"observer", []string{"apertures", "arena_rankings", "arena_shop", "audit", "combat_history", "constitution_dictionary", "dungeons", "game_data", "gift_codes", "gu_dictionary", "gus", "item_dictionary", "loot_tables", "map_cells", "map_drops", "mine_slots", "monitoring", "monster_spawns", "monsters", "players", "quests", "race_dictionary", "recipes", "regions", "sect_mines", "sects", "shop", "status_dictionary", "world_bosses"}},
 		{"support_admin", []string{"audit", "gus", "players"}},
 		{"content_admin", []string{"cache", "constitution_dictionary", "game_data", "gu_dictionary", "images", "item_dictionary", "loot_tables", "monsters", "quests", "race_dictionary", "recipes", "status_dictionary"}},
-		{"game_admin", []string{"apertures", "arena_rankings", "arena_shop", "audit", "combat_history", "dungeons", "gift_codes", "gus", "map_cells", "map_drops", "mine_slots", "monitoring", "monster_spawns", "players", "regions", "sect_mines", "sects", "shop"}},
+		{"game_admin", []string{"apertures", "arena_rankings", "arena_shop", "audit", "combat_history", "dungeons", "gift_codes", "gus", "map_cells", "map_drops", "mine_slots", "monitoring", "monster_spawns", "players", "regions", "sect_mines", "sects", "shop", "world_bosses"}},
 		{"finance_viewer", []string{"billing"}},
 		{"super_admin", resourceKeys(All())},
 	}

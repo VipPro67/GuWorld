@@ -52,6 +52,8 @@ export const ADMIN_ACTIONS = {
   deleteLootTable: { permission: "loot_tables.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   updateMonsterSpawn: { permission: "monster_spawns.update", riskLevel: "medium", confirmationRequired: false, reasonRequired: false, reauthenticationRequired: false },
   deleteMonsterSpawn: { permission: "monster_spawns.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
+  updateWorldBoss: { permission: "world_bosses.update", riskLevel: "high", confirmationRequired: true, reasonRequired: false, reauthenticationRequired: false },
+  purgeWorldBosses: { permission: "world_bosses.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   updateWorldQuest: { permission: "quests.update", riskLevel: "medium", confirmationRequired: false, reasonRequired: false, reauthenticationRequired: false },
   deleteWorldQuest: { permission: "quests.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   updateDungeon: { permission: "dungeons.update", riskLevel: "medium", confirmationRequired: false, reasonRequired: false, reauthenticationRequired: false },

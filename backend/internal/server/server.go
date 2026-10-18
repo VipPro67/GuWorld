@@ -226,6 +226,10 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/monster-spawns", "monster_spawns.update", handlers.AdminCreateMonsterSpawn, "admin.create_monster_spawn", "monster_spawn", false, "", false, false, false},
 		{http.MethodPut, "/monster-spawns/:region_id/:monster_id", "monster_spawns.update", handlers.AdminUpdateMonsterSpawn, "admin.update_monster_spawn", "monster_spawn", false, "", false, false, false},
 		{http.MethodDelete, "/monster-spawns/:region_id/:monster_id", "monster_spawns.delete", handlers.AdminDeleteMonsterSpawn, "admin.delete_monster_spawn", "monster_spawn", true, "path", false, false, true},
+		// world_bosses (live boss actors held in Redis, not static spawn data)
+		{http.MethodGet, "/world-bosses", "world_bosses.read", handlers.AdminListWorldBosses, "", "", false, "", false, false, false},
+		{http.MethodPut, "/world-bosses/:region_id/:instance_id", "world_bosses.update", handlers.AdminUpdateWorldBoss, "admin.update_world_boss", "world_boss", false, "", false, false, false},
+		{http.MethodDelete, "/world-bosses", "world_bosses.delete", handlers.AdminPurgeWorldBosses, "admin.purge_world_bosses", "world_boss", true, "path", false, false, true},
 		// quests
 		{http.MethodGet, "/quests", "quests.read", handlers.AdminListQuests, "", "", false, "", false, false, false},
 		{http.MethodPost, "/quests", "quests.update", handlers.AdminCreateQuest, "admin.create_quest", "quest", false, "", false, false, false},

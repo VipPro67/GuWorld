@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -260,6 +262,39 @@ func boolInt(value bool) int {
 		return 1
 	}
 	return 0
+}
+
+// WorldBossRegionIDs lists every region that currently holds at least one live
+// boss actor. Bosses are stored one SET per region, so admin tooling needs this
+// scan to build a global view.
+func WorldBossRegionIDs(ctx context.Context) ([]string, error) {
+	if Client == nil {
+		return nil, errors.New("redis unavailable")
+	}
+	const prefix = "world:monsters:bosses:"
+	seen := make(map[string]struct{})
+	var cursor uint64
+	for {
+		keys, next, err := Client.Scan(ctx, cursor, prefix+"*", 256).Result()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range keys {
+			if regionID := strings.TrimPrefix(key, prefix); regionID != "" && regionID != key {
+				seen[regionID] = struct{}{}
+			}
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	regions := make([]string, 0, len(seen))
+	for regionID := range seen {
+		regions = append(regions, regionID)
+	}
+	sort.Strings(regions)
+	return regions, nil
 }
 
 // WorldBossesInRegion lists region-wide actors independently from their local

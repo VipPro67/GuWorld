@@ -88,6 +88,7 @@ import { PlayerRolesEditor } from "./admin/PlayerRolesEditor";
 import { CombatHistoryAdminTab } from "./admin/CombatHistoryAdminTab";
 import { MapDropsAdminTab } from "./admin/MapDropsAdminTab";
 import { ArenaRankingsAdminTab } from "./admin/ArenaRankingsAdminTab";
+import { WorldBossesAdminTab } from "./admin/WorldBossesAdminTab";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
@@ -3963,6 +3964,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
       {section === "combat_history" && <CombatHistoryAdminTab addToast={addToast} />}
       {section === "map_drops" && <MapDropsAdminTab addToast={addToast} canEdit={canAdminAction("updateMapDrop")} canDelete={canAdminAction("deleteMapDrop")} />}
       {section === "arena_rankings" && <ArenaRankingsAdminTab addToast={addToast} canEdit={canAdminAction("updateArenaRanking")} />}
+      {section === "world_bosses" && <WorldBossesAdminTab addToast={addToast} canEdit={canAdminAction("updateWorldBoss")} canDelete={canAdminAction("purgeWorldBosses")} />}
 
       {/* Shop section */}
       {section === "shop" && (

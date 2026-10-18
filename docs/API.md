@@ -668,6 +668,16 @@ Các thao tác flush Redis, commit bulk import, xóa dữ liệu, điều chỉn
 
 Mọi route mutation vẫn đi qua audit middleware trước permission middleware, vì vậy cả kết quả thành công lẫn thất bại/permission denied đều tạo audit record. Các thay đổi nhiều bảng (bulk import và role assignment) ghi success audit trong cùng transaction; nếu audit hoặc cập nhật thất bại, transaction rollback.
 
+## Admin — Boss thế giới (runtime)
+
+Boss là actor runtime trong Redis, không phải bảng dữ liệu: chúng chỉ tồn tại khi spawn đang active (`world:monsters:bosses:{region}` + `world:monster:{region}:{instance}`), được materialize từ `map_cells` (`cell_type='boss'`) và `monster_spawns.is_boss_spawn=true`. Các route dưới đây cần permission `world_bosses.*`; boss chưa materialize (chưa có người tới khu vực) không xuất hiện trong danh sách.
+
+| Method | Path | Permission | Ghi chú |
+| --- | --- | --- | --- |
+| GET | `/admin/world-bosses` | `world_bosses.read` | Liệt kê boss đang sống toàn server; query `region_id` để lọc. Trả `{data, total}`, mỗi phần tử có `region_id`, `instance_id`, `spawn_id`, `monster_template_id`, `name`, `rank`/`sub_rank`, `x`/`y`, `spawn_x`/`spawn_y`, `hp`/`max_hp`, `state`, `target_id`, `respawn_seconds`, `respawn_at`, `revision`, `last_update_at`. Redis không khả dụng → `503`. |
+| PUT | `/admin/world-bosses/:region_id/:instance_id` | `world_bosses.update` | Body `{x?, y?, hp?, state?}`. Toạ độ phải nằm trong khu vực; `hp` được clamp `[0, max_hp]`. `hp=0` → `DEFEATED` + `respawn_at`; `state="IDLE"` → hồi sinh tại điểm spawn với đầy HP và xoá `respawn_at`. Ghi bằng CAS theo `revision` như worker (xung đột trả `409`), broadcast `monster_moved`/`monster_updated`/`monster_defeated`/`monster_respawned`. Boss không còn trong Redis → `404`. |
+| DELETE | `/admin/world-bosses?region_id=` | `world_bosses.delete` | Xoá mọi boss đang sống của khu vực khỏi Redis (snapshot kế tiếp materialize lại từ dữ liệu tĩnh). Bắt buộc `reason` + `confirmation_target`; được audit là destructive. |
+
 ## World monster runtime
 
 `GET /api/world/monsters?r=25` returns the authoritative ordinary-monster snapshot for the authenticated player's current region and AOI. `r` defaults to and is capped at 25, while clients normally send their actual 10–25-cell investigation radius. A snapshot materializes intersecting non-boss `monster_spawns` on demand; each result has a fresh `instance_id`, stable `spawn_id`, position, HP, state, revision, and server timestamps.
@@ -683,4 +693,4 @@ world-position broadcast radius is not used as the monster activation radius.
 {"command_id":"uuid","gu_instance_id":"uuid","target":{"kind":"monster","id":"monster-instance-uuid"}}
 ```
 
-The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The targeted WebSocket channel `world:combat` carries `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, and `monster_respawned`.
+The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The targeted WebSocket channel `world:combat` carries `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, `monster_respawned`, and `monster_updated` (admin runtime edits).

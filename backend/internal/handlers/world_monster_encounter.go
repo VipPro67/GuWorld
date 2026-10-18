@@ -215,6 +215,12 @@ func finishWorldMonsterEncounter(ctx context.Context, encounter WorldMonster, en
 // defeated runtime actor reveals the old static spawn and can trigger another
 // encounter before the actor's respawn timer expires.
 func clearDefeatedWorldMonsterCell(monster WorldMonster, playerID string) {
+	// A purge (or an expired actor) makes DefeatWorldMonster return a zero-value
+	// monster when there is nothing left to clean up; writing a cleared cell for
+	// an empty region would hide an unrelated map cell at (0,0).
+	if monster.RegionID == "" {
+		return
+	}
 	region, x, y, procedural := proceduralMonsterCell(monster.SpawnID)
 	if !procedural {
 		region, x, y, procedural = mapCellBossSpawn(monster.SpawnID)

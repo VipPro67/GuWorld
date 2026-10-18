@@ -11,6 +11,7 @@ import {
   Layers,
   MapPin,
   Package,
+  Skull,
   Swords,
   Users,
 } from "lucide-react";
@@ -18,7 +19,7 @@ import {
 export const ADMIN_MODULE_KEYS = [
   "players", "sects", "data", "logs", "monitoring", "shop", "mines",
   "gift_codes", "apertures", "topup_wallet", "gu_history", "combat_history", "map_drops",
-  "arena_rankings",
+  "arena_rankings", "world_bosses",
 ] as const;
 
 export type AdminModuleKey = (typeof ADMIN_MODULE_KEYS)[number];
@@ -41,6 +42,7 @@ export const ADMIN_NAVIGATION: readonly AdminNavigationItem[] = [
   { key: "combat_history", label: "Lịch sử chiến đấu", icon: Swords, route: "/admin/combat_history", permission: "combat_history.read", group: "game", order: 45 },
   { key: "map_drops", label: "Đồ rơi bản đồ", icon: MapPin, route: "/admin/map_drops", permission: "map_drops.read", group: "game", order: 46 },
   { key: "arena_rankings", label: "Xếp hạng đấu trường", icon: Swords, route: "/admin/arena_rankings", permission: "arena_rankings.read", group: "game", order: 47 },
+  { key: "world_bosses", label: "Boss thế giới", icon: Skull, route: "/admin/world_bosses", permission: "world_bosses.read", group: "game", order: 48 },
   { key: "data", label: "Dữ liệu", icon: Database, route: "/admin/data", permission: "game_data.read", group: "content", order: 50 },
   { key: "shop", label: "Cửa hàng", icon: Package, route: "/admin/shop", permission: "shop.read", group: "economy", order: 60 },
   { key: "mines", label: "Mỏ", icon: Layers, route: "/admin/mines", permission: "mine_slots.read", group: "economy", order: 70 },
