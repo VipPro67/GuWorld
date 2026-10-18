@@ -537,30 +537,61 @@ func seedHubRegion() error {
 	return nil
 }
 
-// seedStarterSpatialRealm creates one small, fully walkable shared realm on a
-// fresh database. ON CONFLICT DO NOTHING keeps admin edits and later imports.
+// seedStarterSpatialRealm seeds the canonical Reverend Insanity secret realms &
+// inheritance grounds on a fresh database. ON CONFLICT DO NOTHING preserves admin edits.
 func seedStarterSpatialRealm() error {
 	queries := []struct {
 		query string
 		args  []any
 	}{
+		// 1. Regions
 		{`INSERT INTO regions
-			(id,name,description,width,height,min_rank,max_rank,is_active,zone_type,min_x,min_y,max_x,max_y,entry_x,entry_y,pool_weights,paths)
-			VALUES ($1,$2,$3,20,20,1,2,TRUE,'SECRET_REALM',1000,1000,1019,1019,1000,1000,$4::jsonb,'[]'::jsonb)
-			ON CONFLICT (id) DO NOTHING`, []any{"realm_qingmu_valley", "Thanh Mộc Cốc", "Bí cảnh bản đồ khởi đầu, nơi người mới có thể khám phá tài nguyên và đối đầu dã trư.", `{"cell_type_weights":{"Monster":30,"Resource":40,"Empty":30},"resources":["ginseng","jade_stone"],"wild_gus":[]}`}},
-		{`INSERT INTO region_world_maps(region_id,world_map_id) VALUES ('realm_qingmu_valley','world_map') ON CONFLICT (region_id) DO NOTHING`, nil},
+			(id,name,description,width,height,min_rank,max_rank,is_active,zone_type,min_x,min_y,max_x,max_y,entry_x,entry_y,pool_weights,paths,rules)
+			VALUES
+			('realm_qingmu_valley','Thanh Mộc Cốc','Bí cảnh bản đồ khởi đầu, nơi người mới có thể khám phá tài nguyên và đối đầu dã trư.',20,20,1,2,TRUE,'SECRET_REALM',1000,1000,1019,1019,1000,1000,'{"cell_type_weights":{"Monster":30,"Resource":40,"Empty":30},"resources":["ginseng","jade_stone"],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":2,"pvp_mode":"SAFE_ZONE","allow_teleport":false,"max_players":10,"lifetime_seconds":3600,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('realm_hoa_tuu_cave','Hoa Tửu Mật Đạo','Mật đạo sâu trong lòng đất Thanh Mao Sơn do Hoa Tửu Hành Giả lưu lại, cất giấu Tửu Trùng và cơ quan bẫy rập.',30,30,1,2,TRUE,'SECRET_REALM',1100,1100,1129,1129,1100,1100,'{"cell_type_weights":{"Monster":30,"Resource":20,"Empty":50},"resources":["ginseng"],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":2,"pvp_mode":"SAFE_ZONE","allow_teleport":false,"max_players":1,"lifetime_seconds":7200,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('realm_bach_cot_hall','Bạch Cốt Động','Động phủ cất giấu truyền thừa Bạch Cốt Chân Nhân, rải rác vạn bộ hài cốt và gai xương ma đạo.',30,30,3,4,TRUE,'SECRET_REALM',2000,2000,2029,2029,2000,2000,'{"cell_type_weights":{"Monster":40,"Resource":10,"Empty":50},"resources":["jade_stone"],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":4,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":4,"lifetime_seconds":10800,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('realm_three_kings_sanctum','Tam Vương Phúc Địa','Phúc địa thượng cổ của Tam Vương (Bá Vương, Khốc Vu, Cừu Cửu). Tranh đoạt cơ duyên chính ma khốc liệt.',40,40,4,5,TRUE,'SECRET_REALM',3000,3000,3039,3039,3000,3000,'{"cell_type_weights":{"Monster":30,"Resource":20,"Empty":50},"resources":[],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":5,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":30,"lifetime_seconds":14400,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('realm_dang_hon_summit','Đãng Hồn Sơn','Thiên địa bí cảnh đệ nhất Hồn Đạo trong Hồ Tiên Phúc Địa, gió Đãng Hồn vù vù thổi, Can Đảm Cổ sinh sôi nảy nở.',40,40,6,9,TRUE,'SECRET_REALM',4000,4000,4039,4039,4000,4000,'{"cell_type_weights":{"Monster":40,"Resource":20,"Empty":40},"resources":[],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":9,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":20,"lifetime_seconds":21600,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb)
+			ON CONFLICT (id) DO NOTHING`, nil},
+
+		// 2. Map linkages
+		{`INSERT INTO region_world_maps(region_id,world_map_id)
+			VALUES
+			('realm_qingmu_valley','world_map'),
+			('realm_hoa_tuu_cave','world_map'),
+			('realm_bach_cot_hall','world_map'),
+			('realm_three_kings_sanctum','world_map'),
+			('realm_dang_hon_summit','world_map')
+			ON CONFLICT (region_id) DO NOTHING`, nil},
+
+		// 3. Items & Monster templates
 		{`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,path)
-			VALUES ('ginseng','Nhân sâm','Food',1,'{"schema_version":2,"blocks":[]}'::jsonb,'Thức ăn mọc trong Thanh Mộc Cốc.','Wood Path'),
+			VALUES
+			('ginseng','Nhân sâm','Food',1,'{"schema_version":2,"blocks":[]}'::jsonb,'Thức ăn mọc trong mật đạo và rừng sâu.','Wood Path'),
 			('jade_stone','Ngọc Thạch','Food',1,'{"schema_version":2,"blocks":[]}'::jsonb,'Ngọc thạch có linh khí, dùng dưỡng thương.','Earth Path')
 			ON CONFLICT (id) DO NOTHING`, nil},
+
 		{`INSERT INTO monster_templates(id,name,type,max_hp,base_attack,base_defense,ai_profile,description,is_active,is_capturable)
-			VALUES ('monster_wild_boar','Dã Trư','Normal',60,9,3,'beast_basic','Dã thú phổ biến tại Thanh Mộc Cốc.',TRUE,FALSE)
+			VALUES
+			('monster_wild_boar','Dã Trư','Normal',60,9,3,'beast_basic','Dã thú phổ biến tại Thanh Mộc Cốc.',TRUE,FALSE),
+			('monster_cave_centipede','Địa Huyệt Ngô Công','Normal',85,11,1,'beast_basic','Rết khổng lồ trăm chân đào hầm dưới lòng đất Nam Cương.',TRUE,FALSE),
+			('monster_bone_dog','Cốt Thương Dã Khuyển','Normal',85,11,1,'beast_basic','Chó săn biến dị toàn thân mọc gai xương nhọn hoắt tại Bạch Cốt Sơn.',TRUE,FALSE),
+			('monster_bone_general','Bạch Cốt Tướng Quân','Elite',175,15,3,'boss_balanced','Thủ vệ khôi lỗi ngưng tụ từ vạn bộ hài cốt của Bạch Cốt Đạo Nhân.',TRUE,FALSE),
+			('monster_boar_king','Dã Trư Vương','Elite',175,15,3,'beast_basic','Lợn rừng đầu đàn thân hình hộ pháp mang theo sức mạnh một trư.',TRUE,FALSE),
+			('monster_three_kings_boss','Tam Vương Khôi Lỗi','Boss',325,23,6,'boss_balanced','Thần thông cơ quan lưu lại từ truyền thừa Tam Vương Phúc Địa.',TRUE,FALSE),
+			('monster_immemorial_soul_beast','Đãng Hồn Thái Cổ Hồn Thú','Elite',350,28,8,'boss_balanced','Hồn thú khổng lồ hấp thụ chấn động của Đãng Hồn Sơn hồn phách vạn trượng.',TRUE,FALSE)
 			ON CONFLICT (id) DO NOTHING`, nil},
-		{`INSERT INTO monster_spawns(region_id,monster_id,spawn_mode,chance,respawn_seconds,min_rank,max_rank,is_active)
-			SELECT 'realm_qingmu_valley','monster_wild_boar','Random',1,60,1,2,TRUE
-			WHERE NOT EXISTS (SELECT 1 FROM monster_spawns WHERE region_id='realm_qingmu_valley' AND monster_id='monster_wild_boar' AND x IS NULL AND y IS NULL AND is_active=TRUE)`, nil},
-		{`INSERT INTO instance_templates(id,name,type,required_rank,entry_item,description,rewards,map_data,cooldown_hours,spatial_region_id,duration_minutes)
-			VALUES ('spatial_realm_qingmu_valley','Bí Cảnh Sơ Khai: Thanh Mộc Cốc','SPATIAL_REALM',1,'NONE','Một khu rừng linh khí dành cho chuyến thám hiểm đầu tiên. Tìm tài nguyên, chiến đấu với dã trư và trở lại bằng cổng ở phía đông điểm vào.','{}'::jsonb,'[]'::jsonb,0,'realm_qingmu_valley',60)
+
+		// 4. Instance templates (Rules, Scopes, Durations)
+		{`INSERT INTO instance_templates
+			(id,name,type,scope,required_rank,entry_item,description,rewards,map_data,cooldown_hours,spatial_region_id,duration_minutes,rules)
+			VALUES
+			('spatial_realm_qingmu_valley','Bí Cảnh Sơ Khai: Thanh Mộc Cốc','SPATIAL_REALM','SHARED',1,'NONE','Một khu rừng linh khí dành cho chuyến thám hiểm đầu tiên. Tìm tài nguyên, chiến đấu với dã trư và trở lại bằng cổng ở phía đông điểm vào.','{}'::jsonb,'[]'::jsonb,0,'realm_qingmu_valley',60,'{"max_allowed_rank":2,"pvp_mode":"SAFE_ZONE","allow_teleport":false,"max_players":10,"lifetime_seconds":3600,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('spatial_realm_hoa_tuu','Truyền Thừa: Hoa Tửu Mật Đạo','SPATIAL_REALM','SOLO',1,'NONE','Mật đạo lòng đất Thanh Mao Sơn do Hoa Tửu Hành Giả lưu lại trước khi vẫn lạc. Tràn ngập rượu hương, bầy rết ngô công và cơ quan bí mật.','{}'::jsonb,'[]'::jsonb,0,'realm_hoa_tuu_cave',120,'{"max_allowed_rank":2,"pvp_mode":"SAFE_ZONE","allow_teleport":false,"max_players":1,"lifetime_seconds":7200,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('spatial_realm_bach_cot','Truyền Thừa: Bạch Cốt Động','SPATIAL_REALM','PARTY',3,'NONE','Động phủ bí hiểm dưới chân Bạch Cốt Sơn do Bạch Cốt Chân Nhân lưu lại. Cần vượt qua Bạch Cốt Tướng Quân để kích hoạt đài truyền thừa.','{}'::jsonb,'[]'::jsonb,0,'realm_bach_cot_hall',180,'{"max_allowed_rank":4,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":4,"lifetime_seconds":10800,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('spatial_realm_three_kings','Bí Cảnh: Tam Vương Phúc Địa','SPATIAL_REALM','SHARED',4,'NONE','Bí cảnh tranh đoạt chung toàn server trên đỉnh Tam Vương Sơn. Nơi lưu lại truyền thừa của ba đại ma đầu Ngũ chuyển viễn cổ.','{}'::jsonb,'[]'::jsonb,0,'realm_three_kings_sanctum',240,'{"max_allowed_rank":5,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":30,"lifetime_seconds":14400,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('spatial_realm_dang_hon','Bí Cảnh Tiên Cấp: Đãng Hồn Sơn - Hồ Tiên','SPATIAL_REALM','SHARED',6,'NONE','Bí cảnh tranh đoạt Tiên Cấp. Cổ Tiên bước lên Đãng Hồn Sơn thu hoạch Can Đảm Cổ, lĩnh ngộ chân truyền Hồ Tiên Phúc Địa.','{}'::jsonb,'[]'::jsonb,0,'realm_dang_hon_summit',360,'{"max_allowed_rank":9,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":20,"lifetime_seconds":21600,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb)
 			ON CONFLICT (id) DO NOTHING`, nil},
 	}
 	for _, item := range queries {
@@ -568,15 +599,49 @@ func seedStarterSpatialRealm() error {
 			return err
 		}
 	}
+
+	// 5. World Map Entry Portals & Secret Realm Internal Cells (Exits, Monsters, Altars)
 	_, err := schemaDB().Exec(`
 		INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
 		VALUES
+		-- World Map Entry Portals
+		('thanh_mao_son',3050,5050,'ENTRY_PORTAL','spatial_realm_hoa_tuu','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_hoa_tuu","label":"Cổng vào: Hoa Tửu Mật Đạo"}'::jsonb,0,TRUE),
+		('bach_cot_son',7050,3050,'ENTRY_PORTAL','spatial_realm_bach_cot','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_bach_cot","label":"Cổng vào: Bạch Cốt Động"}'::jsonb,0,TRUE),
+		('three_kings_mountain',9050,3050,'ENTRY_PORTAL','spatial_realm_three_kings','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_three_kings","label":"Cổng vào: Tam Vương Phúc Địa"}'::jsonb,0,TRUE),
+		('hu_tien_phuc_dia',17050,5050,'ENTRY_PORTAL','spatial_realm_dang_hon','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_dang_hon","label":"Cổng vào: Đãng Hồn Sơn"}'::jsonb,0,TRUE),
+
+		-- Starter Realm (Thanh Mộc Cốc)
 		('realm_qingmu_valley',1001,1000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về"}'::jsonb,0,TRUE),
 		('realm_qingmu_valley',1002,1000,'Monster','monster_wild_boar','{"rank":1}'::jsonb,60,TRUE),
 		('realm_qingmu_valley',1000,1001,'Resource','ginseng','{}'::jsonb,600,TRUE),
 		('realm_qingmu_valley',1002,1001,'Resource','jade_stone','{}'::jsonb,600,TRUE),
 		('realm_qingmu_valley',1005,1005,'Monster','monster_wild_boar','{"rank":1,"name":"Thủ Hộ Dã Trư Vương"}'::jsonb,120,TRUE),
-		('realm_qingmu_valley',1005,1006,'INHERITANCE_ALTAR','altar_qingmu_elder','{"altar_name":"Đài Truyền Thừa: Thanh Mộc Lão Nhân","path":"Wood Path","tier":"MORTAL","guardian_coord":{"x":1005,"y":1005},"req_rank":1,"req_dao_marks":{},"rewards":{"gus":["GU_BLADE_AURA_1"],"recipes":[],"primeval_stones":1000,"materials":{"ginseng":5},"legacy_text":"Lão phu lưu lại truyền thừa này cho hậu bối hữu duyên bước chân vào Thanh Mộc Cốc..."}}'::jsonb,0,TRUE)
+		('realm_qingmu_valley',1005,1006,'INHERITANCE_ALTAR','altar_qingmu_elder','{"altar_name":"Đài Truyền Thừa: Thanh Mộc Lão Nhân","path":"Wood Path","tier":"MORTAL","guardian_coord":{"x":1005,"y":1005},"req_rank":1,"req_dao_marks":{},"rewards":{"gus":["GU_BLADE_AURA_1"],"recipes":[],"primeval_stones":1000,"materials":{"ginseng":5},"legacy_text":"Lão phu lưu lại truyền thừa này cho hậu bối hữu duyên bước chân vào Thanh Mộc Cốc..."}}'::jsonb,0,TRUE),
+
+		-- Realm 1: Hoa Tửu Mật Đạo
+		('realm_hoa_tuu_cave',1101,1100,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Thanh Mao Sơn"}'::jsonb,0,TRUE),
+		('realm_hoa_tuu_cave',1105,1105,'Monster','monster_cave_centipede','{"rank":1}'::jsonb,60,TRUE),
+		('realm_hoa_tuu_cave',1110,1110,'Monster','monster_cave_centipede','{"rank":2,"name":"Thạch Khống Bách Túc Vương"}'::jsonb,120,TRUE),
+		('realm_hoa_tuu_cave',1110,1111,'INHERITANCE_ALTAR','altar_hoa_tuu','{"altar_name":"Đài Truyền Thừa: Hoa Tửu Hành Giả","path":"Food Path","tier":"MORTAL","guardian_coord":{"x":1110,"y":1110},"req_rank":1,"req_dao_marks":{},"rewards":{"gus":["GU_FOOD_WINE_CAPACITY_2","GU_BLADE_AURA_1"],"recipes":[],"primeval_stones":5000,"materials":{"ginseng":10},"legacy_text":"Cổ Nguyệt nhất tộc tự xưng chính đạo, giả nhân giả nghĩa ép bản tọa vào tuyệt lộ. Hậu bối hữu duyên nếu mở được mật thất này, hãy nhận lấy Tửu Cổ, đột phá gông xiềng mà san bằng Thanh Mao Sơn!"}}'::jsonb,0,TRUE),
+
+		-- Realm 2: Bạch Cốt Động
+		('realm_bach_cot_hall',2001,2000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Bạch Cốt Sơn"}'::jsonb,0,TRUE),
+		('realm_bach_cot_hall',2008,2008,'Monster','monster_bone_dog','{"rank":3}'::jsonb,60,TRUE),
+		('realm_bach_cot_hall',2015,2015,'Monster','monster_bone_general','{"rank":4,"name":"Bạch Cốt Tướng Quân"}'::jsonb,180,TRUE),
+		('realm_bach_cot_hall',2015,2016,'INHERITANCE_ALTAR','altar_bach_cot','{"altar_name":"Đài Truyền Thừa: Bạch Cốt Chân Nhân","path":"Bone Path","tier":"MORTAL","guardian_coord":{"x":2015,"y":2015},"req_rank":3,"req_dao_marks":{"Bone Path":20},"rewards":{"gus":["GU_SHARP_DECISION_2","GU_WIND_DECISION_1"],"recipes":[],"primeval_stones":20000,"materials":{},"dao_marks":{"Bone Path":50},"legacy_text":"Cốt nhục tương liên, ma đạo bất diệt! Luyện hóa cốt tủy đúc thành ma thân, đạp bằng xương trắng vấn đỉnh thương khung!"}}'::jsonb,0,TRUE),
+
+		-- Realm 3: Tam Vương Phúc Địa
+		('realm_three_kings_sanctum',3001,3000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Tam Vương Sơn"}'::jsonb,0,TRUE),
+		('realm_three_kings_sanctum',3010,3010,'Monster','monster_boar_king','{"rank":4}'::jsonb,60,TRUE),
+		('realm_three_kings_sanctum',3020,3020,'Monster','monster_three_kings_boss','{"rank":5,"name":"Tam Vương Cơ Quan Khôi Lỗi"}'::jsonb,240,TRUE),
+		('realm_three_kings_sanctum',3020,3021,'INHERITANCE_ALTAR','altar_three_kings_ba_tu','{"altar_name":"Đài Truyền Thừa: Bá Vương Thiết Bá Tú","path":"Strength Path","tier":"MORTAL","guardian_coord":{"x":3020,"y":3020},"req_rank":4,"req_dao_marks":{},"rewards":{"gus":["GU_SHARP_DECISION_2"],"recipes":[],"primeval_stones":50000,"materials":{},"dao_marks":{"Strength Path":100},"legacy_text":"Lực đạo bất hủ! Nhất lực hàng thập hội, đập vỡ thiên địa càn khôn!"}}'::jsonb,0,TRUE),
+		('realm_three_kings_sanctum',3025,3020,'INHERITANCE_ALTAR','altar_three_kings_khoc_vu','{"altar_name":"Đài Truyền Thừa: Khốc Vu Lão Nhân","path":"Soul Path","tier":"MORTAL","guardian_coord":{"x":3020,"y":3020},"req_rank":4,"req_dao_marks":{},"rewards":{"gus":["GU_GUTS_GU"],"recipes":[],"primeval_stones":50000,"materials":{},"dao_marks":{"Soul Path":100},"legacy_text":"Hồn phách gào khóc, âm phong thấu cốt! Vạn quỷ nghe lệnh, chấp chưởng u minh!"}}'::jsonb,0,TRUE),
+
+		-- Realm 4: Đãng Hồn Sơn - Hồ Tiên
+		('realm_dang_hon_summit',4001,4000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Hồ Tiên Phúc Địa"}'::jsonb,0,TRUE),
+		('realm_dang_hon_summit',4015,4015,'Monster','monster_immemorial_soul_beast','{"rank":6}'::jsonb,120,TRUE),
+		('realm_dang_hon_summit',4025,4025,'Monster','monster_immemorial_soul_beast','{"rank":7,"name":"Thái Cổ Đãng Hồn Thú Hoàng"}'::jsonb,300,TRUE),
+		('realm_dang_hon_summit',4025,4026,'INHERITANCE_ALTAR','altar_hu_immortal','{"altar_name":"Đài Chân Truyền Tiên Cấp: Hồ Tiên - Đãng Hồn Sơn","path":"Soul Path","tier":"IMMORTAL","guardian_coord":{"x":4025,"y":4025},"req_rank":6,"req_dao_marks":{"Soul Path":100},"rewards":{"gus":["GU_GUTS","GU_GUTS_GU"],"recipes":[],"primeval_stones":0,"immortal_stones":500,"materials":{},"dao_marks":{"Soul Path":500},"legacy_text":"Đãng Hồn Sơn rung động, Can Đảm Cổ vô song! Hồ Tiên ta lưu lại phúc địa cho Cổ Tiên hữu duyên chấp chưởng thiên địa bí cảnh, tráng đại thần hồn vạn trượng!"}}'::jsonb,0,TRUE)
 		ON CONFLICT (region_id,x,y) DO NOTHING`)
 	return err
 }
