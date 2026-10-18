@@ -73,6 +73,12 @@ DAMAGE_SCOPE_RATIO = {
 }
 MULTI_TARGET_SELECTORS = {"ROW", "COL", "ALL_ENEMIES"}
 
+# GROWTH_CAP (nuôi cổ): bám bậc stat_base — ATK 1×P, DEF 5×P, HP 10×P; SPEED là
+# thang nhỏ cố định (không ×P). Mọi block grow luôn đủ 4 chỉ số.
+GROWTH_CAP_RATIO = {"ATTACK": 1, "DEFENSE": 5, "HP": 10}
+GROWTH_CAP_SPEED = {1: 1, 2: 1, 3: 2, 4: 2, 5: 4, 6: 6, 7: 8, 8: 10, 9: 12}
+GROWTH_CAP_STATS = ("ATTACK", "DEFENSE", "HP", "SPEED")
+
 # Bậc nền cũ -> bậc nền mới: ratio khớp CHÍNH XÁC được đổi sang ratio mới (bỏ qua
 # dung sai), dùng khi nâng hệ số nền mà vẫn giữ các bậc tiện ích/đặc biệt.
 SCALE_RATIO_REMAP = {
@@ -108,13 +114,8 @@ HARD_REFS = {
         "per_rank": {"1": 20, "2": 30, "3": 50, "4": 80, "5": 100, "6": 200, "7": 350, "8": 500, "9": 1000}
     },
 
-    # Growth Caps
-    "STAT_MOD|ATTACK|GROWTH_CAP": {"flat": 2},
-    "STAT_MOD|DEFENSE|GROWTH_CAP": {"flat": 2},
-    "STAT_MOD|HP|GROWTH_CAP": {"flat": 2},
-    "STAT_MOD|SPEED|GROWTH_CAP": {
-        "per_rank": {"1": 1, "2": 1, "3": 2, "4": 2, "5": 4, "6": 6, "7": 8, "8": 10, "9": 12}
-    },
+    # Growth Caps: chuẩn hoá riêng bởi normalize_growth_caps (GROWTH_CAP_RATIO +
+    # GROWTH_CAP_SPEED), không dùng HARD_REFS.
 
     # Direct HP & Shield & Heals
     "HEAL||LIFESTEAL": {"flat": 0.5},
@@ -356,6 +357,47 @@ def x_dev(value, ref):
     return (value / ref - 1) * 100 if ref else 0
 
 
+def growth_cap_value(stat, rank):
+    rank = min(max(rank, 1), 9)
+    if stat == "SPEED":
+        return GROWTH_CAP_SPEED[rank]
+    return GROWTH_CAP_RATIO[stat] * RANK_SCALE[rank]
+
+
+def normalize_growth_caps(parsed, allow):
+    """Chuẩn hoá GROWTH_CAP theo rank và bảo đảm mọi block grow đủ ATK/DEF/HP/SPEED."""
+    changes = {}
+    for ri, (rank, obj, meta) in parsed.items():
+        if meta["id"] in allow:
+            continue
+        blocks = obj if isinstance(obj, list) else obj.get("blocks", [])
+        for blk in blocks:
+            if not isinstance(blk, dict):
+                continue
+            ops = blk.get("operations")
+            if not isinstance(ops, list):
+                continue
+            caps = [o for o in ops if isinstance(o, dict) and o.get("op") == "STAT_MOD"
+                    and o.get("sub_type") == "GROWTH_CAP"]
+            if not caps:
+                continue
+            changed = False
+            present = {o.get("stat"): o for o in caps}
+            for stat in GROWTH_CAP_STATS:
+                want = num_out(growth_cap_value(stat, rank))
+                op = present.get(stat)
+                if op is None:
+                    ops.append({"op": "STAT_MOD", "stat": stat,
+                                "sub_type": "GROWTH_CAP", "value": want})
+                    changed = True
+                elif op.get("value") != want:
+                    op["value"] = want
+                    changed = True
+            if changed:
+                changes[ri] = meta["id"]
+    return changes
+
+
 def strip_multitarget_multipliers(parsed, allow):
     """Bỏ DAMAGE/MULTIPLIER trong block multi-target (ưu đãi diện rộng đã nằm ở ratio FLAT)."""
     changes = {}
@@ -388,6 +430,8 @@ def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
     issues, skipped = [], 0
     state_changes = {}
     for ri, gu_id in strip_multitarget_multipliers(parsed, allow).items():
+        state_changes.setdefault(ri, []).append(gu_id)
+    for ri, gu_id in normalize_growth_caps(parsed, allow).items():
         state_changes.setdefault(ri, []).append(gu_id)
 
     for rec in records:
@@ -441,12 +485,14 @@ def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
         print(f"Bỏ qua {skipped} value thuộc --allow.")
     if not issues:
         print("Tất cả value core đúng scale.")
+    else:
+        issues.sort(key=lambda x: -abs(x[6] / x[5] - 1) if x[5] else 0)
+        for gu_id, rank, key, val, new, near, ratio in issues:
+            print(f"  {gu_id:<40} R{rank} {key:<28} {val:g} -> {new:g}  "
+                  f"(ratio {ratio:g} -> {near:g}, {x_dev(ratio, near):+.0f}%)")
+        print(f"\n{len(issues)} value lệch scale trên {len(state_changes)} dòng.")
+    if not state_changes:
         return 0
-    issues.sort(key=lambda x: -abs(x[6] / x[5] - 1) if x[5] else 0)
-    for gu_id, rank, key, val, new, near, ratio in issues:
-        print(f"  {gu_id:<40} R{rank} {key:<28} {val:g} -> {new:g}  "
-              f"(ratio {ratio:g} -> {near:g}, {x_dev(ratio, near):+.0f}%)")
-    print(f"\n{len(issues)} value lệch scale trên {len(state_changes)} dòng.")
     if not args.apply:
         print("Chỉ xem trước. Thêm --apply để ghi CSV.")
         return 0
@@ -473,6 +519,8 @@ def self_test():
     assert dot_damage_cap(99, 3) == 60000000000
     assert SCALE_RATIO_REMAP["HEAL||FLAT"][15] == 20
     assert DAMAGE_SCOPE_RATIO["ALL_ENEMIES"] == 18 and DAMAGE_SCOPE_RATIO["COL"] == 24
+    assert growth_cap_value("ATTACK", 6) == 10**4 and growth_cap_value("HP", 9) == 10**11
+    assert growth_cap_value("SPEED", 9) == 12 and growth_cap_value("SPEED", 0) == 1
     _p = {0: (1, [{"target": {"selector": "ALL_ENEMIES"}, "operations": [
         {"op": "DAMAGE", "sub_type": "FLAT", "value": 8},
         {"op": "DAMAGE", "sub_type": "MULTIPLIER", "value": 2.5}]}], {"id": "GU_X"})}
@@ -603,6 +651,8 @@ def main():
             continue
 
         # 2. Kiểm tra key dense hoặc hard ref
+        if key.endswith("|GROWTH_CAP"):
+            continue  # chuẩn hoá bởi normalize_growth_caps
         ref, source = ref_for(key, rank)
         if ref is None:
             if key in sparse:

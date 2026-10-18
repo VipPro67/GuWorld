@@ -38,6 +38,7 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 | `passive.stat_base_defense` | `5 × P` | cộng phòng ngự nền |
 | `passive.stat_base_hp` | `10 × P` | cộng máu nền |
 | `passive.stat_base_speed` | `1` | cộng tốc độ nền | ko scale mạnh như các chỉ số khác
+| `passive` `GROWTH_CAP` (nuôi cổ) | `ATK 1×P`, `DEF 5×P`, `HP 10×P`; `SPEED` = `1/1/2/2/4/6/8/10/12` theo rank (không ×P) | mọi block grow luôn đủ 4 chỉ số |
 | DOT (`BLEED`/`POISON`/`BURN`/`SLOW_DAMAGE`) | Tổng damage mỗi lần áp dụng ≤ `60% × damage_flat chuẩn` cùng rank; `value/tick ≤ 0.6 × 30 × P / turns` | Với 3 lượt, mỗi tick bằng tối đa 20% damage FLAT chuẩn. DOT lâu hơn giảm damage/tick tương ứng. |
 
 ## 3. Bảng chuẩn rank 1–9
