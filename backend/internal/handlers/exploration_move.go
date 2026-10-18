@@ -248,6 +248,15 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				if err := checkRegionAction(targetPlayer.CurrentRegion, "pvp"); err != nil {
 					return err.Error(), false, nil
 				}
+				if instanceID.Valid && instanceID.String != "" {
+					if instUUID, errUUID := uuid.Parse(instanceID.String); errUUID == nil {
+						if instRules, errRules := GetSpatialRealmRules(instUUID); errRules == nil && instRules != nil {
+							if instRules.PvPMode == "SAFE" {
+								return "Khu vực bí cảnh này cấm giao tranh giữa các Cổ sư (SAFE mode)!", false, nil
+							}
+						}
+					}
+				}
 				if err := checkRegionAction(targetPlayer.CurrentRegion, "combat"); err != nil {
 					return err.Error(), false, nil
 				}

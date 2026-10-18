@@ -296,9 +296,11 @@ export async function generateStaticParams() {
   return uniqueIds.map((guId) => ({ guId }));
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { guId } = await params;
-  const gu = await fetchGuById(guId);
+  const sp = await searchParams;
+  const rank = Number(sp?.rank) || undefined;
+  const gu = await fetchGuById(guId, rank);
   if (!gu) return { title: "Cổ Trùng Không Tìm Thấy" };
 
   const pathName = gu.path && gu.path.length > 0 ? gu.path.map(p => translatePath(p) || p).join(" / ") : "Không có";
@@ -330,15 +332,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       follow: true,
     },
     alternates: {
-      canonical: `/wiki/gu/${gu.id}`,
+      canonical: `/wiki/gu/${gu.id}${gu.rank ? `?rank=${gu.rank}` : ""}`,
     },
   };
 }
 
-export default async function GuWikiPage({ params }: Props) {
+export default async function GuWikiPage({ params, searchParams }: Props) {
   const { guId } = await params;
+  const sp = await searchParams;
+  const rank = Number(sp?.rank) || undefined;
   const [gu, items] = await Promise.all([
-    fetchGuById(guId),
+    fetchGuById(guId, rank),
     fetchAllItems(),
   ]);
   if (!gu) notFound();

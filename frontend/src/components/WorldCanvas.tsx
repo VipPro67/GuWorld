@@ -538,7 +538,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       byKey.set(`${obj.x},${obj.y}`, obj);
     }
     for (const cell of nearbyCells) {
-      if (cell.cell_type !== "Boss" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village" && cell.cell_type !== "TeleportArray" && cell.cell_type !== "ENTRY_PORTAL") continue;
+      if (cell.cell_type !== "Boss" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village" && cell.cell_type !== "TeleportArray" && cell.cell_type !== "ENTRY_PORTAL" && cell.cell_type !== "INHERITANCE_ALTAR") continue;
 		if (cell.cell_type === "Boss" && legacyMonsterHasRuntimeReplacement(cell, useWorldStore.getState().monsters)) continue;
       const key = `${cell.x},${cell.y}`;
       if (!byKey.has(key)) {
@@ -894,6 +894,9 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         return;
       } else {
         selectObject(obj);
+        if (obj.cell_type === "INHERITANCE_ALTAR" && obj.content_id) {
+          useGameStore.getState().fetchAltarInfo(obj.content_id);
+        }
       }
     },
     [performMove, selectObject, gamePlayer],
@@ -1296,12 +1299,13 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         const isResource = o.cell_type === "Resource";
         const isTeleport = o.cell_type === "TeleportArray";
         const isEntryPortal = o.cell_type === "ENTRY_PORTAL";
+        const isAltar = o.cell_type === "INHERITANCE_ALTAR";
         const isMerchant = o.cell_type === "Merchant";
         if (isBoss && legacyMonsterHasRuntimeReplacement(o, useWorldStore.getState().monsters)) continue;
         if (isResource && player && Math.hypot(o.x + 0.5 - px, o.y + 0.5 - py) > invR) continue;
 
         const g = new Graphics();
-        const size = isBoss ? 0.8 : isTeleport || isEntryPortal ? 0.75 : 0.6;
+        const size = isBoss ? 0.8 : isTeleport || isEntryPortal || isAltar ? 0.75 : 0.6;
         if (isBoss) {
           // Boss: Star/Diamond shape with glowing aura
           g.circle(0, 0, size + 0.2);
@@ -1321,6 +1325,15 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           g.fill({ color: 0x10b981 }); // Lighter top
           g.circle(-0.15, -0.3, size * 0.3);
           g.fill({ color: 0x34d399 }); // Highlight
+        } else if (isAltar) {
+          // Ancient Inheritance Altar
+          g.circle(0, 0, size + 0.25);
+          g.fill({ color: 0xf59e0b, alpha: 0.25 }); // Golden Aura
+          g.rect(-size * 0.7, -size * 0.35, size * 1.4, size * 0.7);
+          g.fill({ color: 0x78350f, alpha: 0.95 });
+          g.stroke({ color: 0xfbbf24, width: 0.1 });
+          g.poly([0, -size * 0.9, size * 0.45, -size * 0.35, -size * 0.45, -size * 0.35]);
+          g.fill({ color: 0xa855f7 }); // Glowing purple gem
         } else if (isEntryPortal) {
           // Fixed entrance to a server-wide spatial realm.
           g.circle(0, 0, size + 0.25);
@@ -1373,7 +1386,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         });
         container.addChild(g);
 
-        const labelColor = isBoss ? 0xfecaca : isEntryPortal ? 0xfcd34d : isTeleport ? 0x67e8f9 : isMerchant ? 0xfde68a : 0xffffff;
+        const labelColor = isBoss ? 0xfecaca : isEntryPortal ? 0xfcd34d : isAltar ? 0xfef08a : isTeleport ? 0x67e8f9 : isMerchant ? 0xfde68a : 0xffffff;
         let text = o.content_id;
         if (isBoss || o.cell_type === "Monster") {
           text = monsterDictionary[o.content_id]?.name || text;
@@ -1385,6 +1398,8 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           text = `🌀 ${o.content_id || "Trận Pháp"}`;
         } else if (isEntryPortal) {
           text = `🚪 ${o.content_id.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`;
+        } else if (isAltar) {
+          text = `🏛️ ${o.content_id.replace(/^altar_/, "").replace(/_/g, " ")}`;
         } else if (isMerchant) {
           text = `🪙 ${o.content_id || "Thương Nhân"}`;
         }

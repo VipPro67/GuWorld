@@ -725,6 +725,17 @@ func TravelTeleport(c *gin.Context) {
 		return
 	}
 
+	var playerMapInst sql.NullString
+	_ = tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, authID).Scan(&playerMapInst)
+	if playerMapInst.Valid && playerMapInst.String != "" {
+		if instUUID, errUUID := uuid.Parse(playerMapInst.String); errUUID == nil {
+			if rules, errRules := GetSpatialRealmRules(instUUID); errRules == nil && rules != nil && !rules.AllowTeleport {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể sử dụng truyền tống khi đang ở trong Bí cảnh!"})
+				return
+			}
+		}
+	}
+
 	playerSectID := getPlayerSectID(tx, authID)
 
 	// Check team rank gate for teleport

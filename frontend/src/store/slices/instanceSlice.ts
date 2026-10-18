@@ -72,7 +72,7 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
     } catch (err) {
       console.error("Failed to fetch active instance:", err);
-      get().addToast("Lỗi tải phó bản.", "error");
+      get().addToast("Lỗi tải thông tin thám hiểm.", "error");
     }
   },
 
@@ -88,13 +88,13 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Không thể tiến vào phó bản.");
+      if (!response.ok) throw new Error(data.error || "Không thể tiến vào thám hiểm.");
       set({
         activeInstanceSession: data.session,
         activeInstanceTemplate: data.template,
       });
-      get().addToast(data.message || "Tiến vào phó bản thành công!", "success");
-      get().addLog(data.message || `Tiến vào phó bản: ${instanceId}`);
+      get().addToast(data.message || "Tiến vào thành công!", "success");
+      get().addLog(data.message || `Tiến vào: ${instanceId}`);
       await Promise.all([get().refreshPlayerSummary(), get().fetchInstances()]);
       return true;
     } catch (caught: unknown) {
@@ -117,7 +117,7 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Hành động phó bản thất bại.");
+      if (!response.ok) throw new Error(data.error || "Hành động thám hiểm thất bại.");
 
       if (data.session) {
         set({ activeInstanceSession: data.session });
@@ -130,7 +130,7 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().applyInventoryFromResponse(data);
       get().addToast(data.message || "Thực hiện hành động thành công!", "success");
-      get().addLog(data.message || "Đã hành động trong phó bản.");
+      get().addLog(data.message || "Đã hành động trong thám hiểm.");
       await get().refreshPlayerSummary();
       if (data.session?.status !== "ACTIVE") {
         await get().fetchInstances();

@@ -1045,6 +1045,33 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			instance.POST("/spatial/exit", handlers.ExitSpatialRealm)
 		}
 
+		// Dream Realms — dedicated API for Mộng Cảnh (scenario Q&A system)
+		dreamRealms := api.Group("/dream-realms")
+		dreamRealms.Use(middleware.AuthRequired())
+		dreamRealms.Use(middleware.RequireOnboarded())
+		dreamRealms.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		{
+			dreamRealms.GET("", handlers.ListDreamRealms)
+			dreamRealms.GET("/active", handlers.GetActiveDreamSession)
+			dreamRealms.POST("/enter", handlers.EnterDreamRealm)
+			dreamRealms.POST("/action", handlers.ActionDreamRealm)
+			dreamRealms.POST("/exit", handlers.ExitDreamRealm)
+		}
+
+		// Spatial Realms — dedicated API for walkable Hybrid Bí Cảnh & Truyền Thừa Tiền Nhân
+		spatialRealms := api.Group("/spatial-realms")
+		spatialRealms.Use(middleware.AuthRequired())
+		spatialRealms.Use(middleware.RequireOnboarded())
+		spatialRealms.Use(middleware.RateLimitByPlayer(30, time.Minute))
+		{
+			spatialRealms.GET("", handlers.ListSpatialRealms)
+			spatialRealms.GET("/active", handlers.GetActiveSpatialRealm)
+			spatialRealms.GET("/altar-info", handlers.GetInheritanceAltarInfo)
+			spatialRealms.POST("/enter", handlers.EnterSpatialRealm)
+			spatialRealms.POST("/exit", handlers.ExitSpatialRealm)
+			spatialRealms.POST("/claim-altar", handlers.ClaimInheritanceAltar)
+		}
+
 		// Sect — group: 40/min, per player: 25/min
 		sect := api.Group("/sects")
 		sect.Use(middleware.AuthRequired())

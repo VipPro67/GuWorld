@@ -2,7 +2,7 @@
 
 
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -21,6 +21,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiRegion, type WikiMonsterSpawn, type WikiRegionLoot, reqGuQty, reqGuRank } from "@/lib/gu-dict";
+import { indexGus, guAt } from "@/lib/gu-index";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
 import { translatePath } from "@/lib/translate";
@@ -332,12 +333,13 @@ export default function WikiClientView({
   // Clean and filter helper
   const cleanSearch = useMemo(() => removeAccents(searchQuery.toLowerCase().trim()), [searchQuery]);
 
-  // Map Gu IDs to Names for Recipe lookup
-  const guMap = useMemo(() => {
-    const map = new Map<string, GuDictionaryItem>();
-    initialGus.forEach((g) => map.set(g.id, g));
-    return map;
-  }, [initialGus]);
+  // Map Gu IDs (+ rank) to specs for Recipe lookup. Ids repeat across ranks.
+  const guIndex = useMemo(() => indexGus(initialGus), [initialGus]);
+  const guMap = guIndex.byId;
+  const guFor = useCallback(
+    (guId: string, rank?: number | null) => guAt(guIndex, guId, rank),
+    [guIndex]
+  );
 
   // Map Item IDs to Names for Recipe lookup
   const itemMap = useMemo(() => {
@@ -553,7 +555,7 @@ export default function WikiClientView({
 
   const filteredRecipes = useMemo(() => {
     let list = initialRecipes.filter((recipe) => {
-      const targetGu = guMap.get(recipe.target_gu_id);
+      const targetGu = guFor(recipe.target_gu_id, recipe.target_rank);
       const targetName = targetGu ? targetGu.name : recipe.target_gu_id;
 
       // Search check
@@ -577,14 +579,14 @@ export default function WikiClientView({
     } else {
       // Default sort by target Gu Name
       list = [...list].sort((a, b) => {
-        const nameA = guMap.get(a.target_gu_id)?.name || a.target_gu_id;
-        const nameB = guMap.get(b.target_gu_id)?.name || b.target_gu_id;
+        const nameA = guFor(a.target_gu_id, a.target_rank)?.name || a.target_gu_id;
+        const nameB = guFor(b.target_gu_id, b.target_rank)?.name || b.target_gu_id;
         return nameA.localeCompare(nameB);
       });
     }
 
     return list;
-  }, [initialRecipes, cleanSearch, recipeRank, recipeSort, guMap]);
+  }, [initialRecipes, cleanSearch, recipeRank, recipeSort, guFor]);
 
   const filteredMonsters = useMemo(() => {
     return initialMonsters.filter((monster) => {
@@ -706,11 +708,11 @@ export default function WikiClientView({
   }, [activeTab, pageSize, filteredRegions, paginationInfo.startIndex, paginationInfo.endIndex]);
 
   // Navigate to Gu tab and filter by name
-  const locateGu = (guId: string) => {
+  const locateGu = (guId: string, rank?: number | null) => {
     setActiveTab("gus");
     setPageSize(DEFAULT_PAGE_SIZES["gus"]);
     setCurrentPage(1);
-    const target = guMap.get(guId);
+    const target = guFor(guId, rank);
     if (target) {
       setSearchQuery(target.name);
     } else {
@@ -1295,7 +1297,7 @@ export default function WikiClientView({
                   return (
                     <Link
                       key={gu.id + "_" + gu.rank}
-                      href={`/wiki/gu/${gu.id}`}
+                      href={`/wiki/gu/${gu.id}?rank=${gu.rank}`}
                       className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-indigo-500/40 transition-all hover:bg-[var(--bg-elevated)] hover:-translate-y-0.5 duration-200 shadow-sm hover:shadow-md cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1648,7 +1650,7 @@ export default function WikiClientView({
               <>
                 <div className="space-y-3">
                 {paginatedRecipes.map((recipe) => {
-                  const targetGu = guMap.get(recipe.target_gu_id);
+                  const targetGu = guFor(recipe.target_gu_id, recipe.target_rank);
                   const targetName = targetGu ? targetGu.name : recipe.target_gu_id;
 
                   return (
@@ -1689,7 +1691,7 @@ export default function WikiClientView({
 
                         {targetGu && (
                           <button
-                            onClick={() => locateGu(recipe.target_gu_id)}
+                            onClick={() => locateGu(recipe.target_gu_id, recipe.target_rank)}
                             className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300 font-mono mt-4 text-left cursor-pointer"
                           >
                             <span>Xem chỉ số Cổ</span>
@@ -1711,10 +1713,10 @@ export default function WikiClientView({
                           ) : (
                             <div className="space-y-1">
                               {Object.entries(recipe.required_gus).map(([guId, value]) => {
-                                const reqGu = guMap.get(guId);
-                                const reqName = reqGu ? reqGu.name : guId;
                                 const qty = reqGuQty(value);
                                 const rank = reqGuRank(value);
+                                const reqGu = guFor(guId, rank || null);
+                                const reqName = reqGu ? reqGu.name : guId;
                                 return (
                                   <div
                                     key={guId}

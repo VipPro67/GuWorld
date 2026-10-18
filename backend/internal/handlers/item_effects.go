@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -34,6 +36,7 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"heal_aperture":               healApertureEffect,
 	"increase_aperture_area":      increaseApertureAreaEffect,
 	"increase_aperture_time_rate": increaseApertureTimeRateEffect,
+	"add_dao_marks":               addDaoMarksEffect,
 	"increase_human_qi":           increaseHumanQi,
 	"random_constitution":         randomConstitutionEffect,
 	"random_race":                 randomRaceEffect,
@@ -196,6 +199,53 @@ func increaseApertureTimeRateEffect(tx *sql.Tx, player *models.Player, item mode
 		return "", fmt.Errorf("không tìm thấy Tiên Khiếu của đạo hữu.")
 	}
 	return fmt.Sprintf("Đạo hữu sử dụng %s, gia tăng %.1f tốc độ thời gian Tiên Khiếu!", item.Name, val), nil
+}
+
+// DaoMarksItemPath trả về path chuẩn hoá mà item "Đạo Tài" bổ sung Đạo Ngân vào
+// (lấy path đầu tiên trong cột path của item_dictionary).
+func DaoMarksItemPath(item models.ItemSpec) string {
+	if strings.TrimSpace(item.Path) == "" {
+		return ""
+	}
+	var paths []string
+	if err := json.Unmarshal([]byte(item.Path), &paths); err != nil {
+		return ""
+	}
+	for _, p := range paths {
+		if clean := gamefx.CleanPath(p); clean != "" {
+			return clean
+		}
+	}
+	return ""
+}
+
+// addDaoMarksEffect cộng Đạo Ngân của đúng lưu phái mà item thuộc về. Item dùng
+// effect block ADD_DAO_MARKS, params.value = số Đạo Ngân mỗi món (1000 ở
+// Đạo Tài). Đạo Ngân được ghi vào player.DaoMarks; UseItem/UseItems persist
+// xuống immortal_apertures sau khi áp toàn bộ effect (giống soul_boost).
+func addDaoMarksEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
+	if val <= 0 {
+		return "", nil
+	}
+	if !util.IsImmortalPlayer(player) {
+		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên.", item.Name)
+	}
+	path := DaoMarksItemPath(item)
+	if path == "" {
+		return "", fmt.Errorf("%s không xác định được lưu phái để bổ sung Đạo Ngân.", item.Name)
+	}
+	var hasAperture bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM immortal_apertures WHERE player_id = $1)`, player.ID).Scan(&hasAperture); err != nil {
+		return "", fmt.Errorf("không thể kiểm tra Tiên Khiếu: %w", err)
+	}
+	if !hasAperture {
+		return "", fmt.Errorf("không tìm thấy Tiên Khiếu của đạo hữu.")
+	}
+	if player.DaoMarks == nil {
+		player.DaoMarks = make(models.DaoMarksMap)
+	}
+	player.DaoMarks[path] += int64(val)
+	return fmt.Sprintf("Đạo hữu sử dụng %s, gia tăng %.0f Đạo Ngân [%s]!", item.Name, val, strings.ToUpper(path)), nil
 }
 
 func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {

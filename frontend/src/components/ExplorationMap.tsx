@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { guSpecFor, useGameStore, Player, Region } from "@/store/useGameStore";
-import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, HelpCircle, Crown, Home, Gift, Skull, Package, Shield, X, DoorOpen } from "lucide-react";
+import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, HelpCircle, Crown, Home, Gift, Skull, Package, Shield, X, DoorOpen, Landmark } from "lucide-react";
 
 import { LogConsole } from "./LogConsole";
 import { SharedSpatialRealmControls } from "./SharedSpatialRealmControls";
+import { SpatialRealmHUD } from "./SpatialRealmHUD";
+import { InheritanceAltarModal } from "./InheritanceAltarModal";
 import { GamePanel, GameButton } from "@/components/ui";
 import { usePolling } from "@/lib/usePolling";
 import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
@@ -101,6 +103,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   const guDictionary = useGameStore((state) => state.guDictionary);
   const itemDictionary = useGameStore((state) => state.itemDictionary);
   const monsterDictionary = useGameStore((state) => state.monsterDictionary);
+  const fetchAltarInfo = useGameStore((state) => state.fetchAltarInfo);
 
   const handleExitMap = async () => {
     if (isExploringActiveRegion) {
@@ -234,6 +237,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
       const realmName = content.replace(/^spatial_realm_/, "").replace(/_/g, " ");
       return `Cổng vào bí cảnh: ${realmName}`;
     }
+    if (type === "INHERITANCE_ALTAR") {
+      const altarName = content.replace(/^altar_/, "").replace(/_/g, " ");
+      return `Đài Truyền Thừa: ${altarName}`;
+    }
     if (type === "Monster" || type === "Boss") {
       return monsterDictionary[content]?.name || content.split(" ")[0];
     }
@@ -265,6 +272,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
         return <DoorOpen className="w-5 h-5 text-violet-400" />;
       case "ENTRY_PORTAL":
         return <DoorOpen className="w-5 h-5 text-amber-300" />;
+      case "INHERITANCE_ALTAR":
+        return <Landmark className="w-5 h-5 text-amber-400 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]" />;
       default:
         return null;
     }
@@ -495,6 +504,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
       </div>
 
       <SharedSpatialRealmControls enabled={isExploringActiveRegion} currentRegion={player.current_region} x={player.x} y={player.y} />
+      <SpatialRealmHUD />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Map Grid & Logs */}
@@ -540,10 +550,18 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                   return (
                     <div
                       key={`${x},${y}`}
-                      onClick={() => isMovable && handleGridCellClick(x, y)}
+                      onClick={() => {
+                        if (cellData.cell_type === "INHERITANCE_ALTAR") {
+                          fetchAltarInfo(cellData.content);
+                          return;
+                        }
+                        if (isMovable) handleGridCellClick(x, y);
+                      }}
                       className={`aspect-square rounded-xl border flex flex-col justify-center items-center relative transition-all duration-300 ${
                         isPlayerCell
                           ? "bg-emerald-500/10 border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.2)] animate-pulse"
+                          : cellData.cell_type === "INHERITANCE_ALTAR"
+                          ? "bg-amber-950/40 border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:scale-105 cursor-pointer"
                           : isMovable
                           ? "bg-zinc-950/30 border-zinc-800 hover:bg-emerald-950/20 hover:border-emerald-500/30 cursor-pointer"
                           : isOutOfBounds
@@ -965,6 +983,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           </div>
         </div>
       )}
+
+      <InheritanceAltarModal />
     </GamePanel>
   );
 };

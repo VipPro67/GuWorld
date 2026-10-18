@@ -216,7 +216,9 @@ func schemaWorld() error {
 		map_data JSONB NOT NULL DEFAULT '[]',
 		cooldown_hours INTEGER NOT NULL DEFAULT 24,
 		spatial_region_id VARCHAR(50) REFERENCES regions(id) ON DELETE SET NULL,
-		duration_minutes INTEGER NOT NULL DEFAULT 120
+		duration_minutes INTEGER NOT NULL DEFAULT 120,
+		scope VARCHAR(20) NOT NULL DEFAULT 'SHARED' CHECK (scope IN ('SHARED','PARTY','SOLO')),
+		rules JSONB NOT NULL DEFAULT '{}'
 	);`); err != nil {
 		return err
 	}
@@ -225,13 +227,18 @@ func schemaWorld() error {
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		template_id VARCHAR(50) NOT NULL REFERENCES instance_templates(id) ON DELETE CASCADE,
 		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+		scope VARCHAR(20) NOT NULL DEFAULT 'SHARED' CHECK (scope IN ('SHARED','PARTY','SOLO')),
+		owner_id UUID REFERENCES players(id) ON DELETE CASCADE,
+		party_id UUID REFERENCES parties(id) ON DELETE CASCADE,
 		status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','CLOSED')),
 		opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		expires_at TIMESTAMPTZ NOT NULL,
 		closed_at TIMESTAMPTZ,
 		close_reason VARCHAR(30) NOT NULL DEFAULT ''
 	);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_spatial_instances_one_active ON shared_spatial_instances(template_id) WHERE status='ACTIVE';
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_spatial_instances_one_active ON shared_spatial_instances(template_id) WHERE scope='SHARED' AND status='ACTIVE';
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_spatial_instances_party_active ON shared_spatial_instances(party_id) WHERE scope='PARTY' AND status='ACTIVE';
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_spatial_instances_solo_active ON shared_spatial_instances(owner_id) WHERE scope='SOLO' AND status='ACTIVE';
 	CREATE INDEX IF NOT EXISTS idx_shared_spatial_instances_expiry ON shared_spatial_instances(expires_at) WHERE status='ACTIVE';
 	`); err != nil {
 		return err
@@ -268,6 +275,7 @@ func schemaMapGroundDrops() error {
 	CREATE TABLE IF NOT EXISTS map_ground_drops (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+		map_instance_id UUID,
 		x INT NOT NULL,
 		y INT NOT NULL,
 		loser_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -282,7 +290,8 @@ func schemaMapGroundDrops() error {
 		return err
 	}
 	if err := execSchema("map_ground_drops_location_idx", `
-	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_location ON map_ground_drops (region_id, x, y);`); err != nil {
+	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_location ON map_ground_drops (region_id, x, y);
+	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_instance ON map_ground_drops (region_id, map_instance_id, x, y);`); err != nil {
 		return err
 	}
 	if err := execSchema("map_ground_drops_active_idx", `

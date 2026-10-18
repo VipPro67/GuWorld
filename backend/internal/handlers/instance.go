@@ -365,7 +365,7 @@ func EnterInstance(c *gin.Context) {
 		LIMIT 1
 	`, playerID).Scan(&dummy)
 	if err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang thám hiểm một phó bản khác!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang thám hiểm một mộng cảnh hoặc bí cảnh khác!"})
 		return
 	}
 
@@ -383,7 +383,7 @@ func EnterInstance(c *gin.Context) {
 		)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phó bản yêu cầu!"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mộng cảnh yêu cầu!"})
 			} else {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 			}
@@ -407,7 +407,7 @@ func EnterInstance(c *gin.Context) {
 			return
 		}
 		if dailyEntries >= MaxDailyInstanceEntries {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu đã hết lượt thám hiểm phó bản hôm nay (tối đa %d lượt/ngày)!", MaxDailyInstanceEntries)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu đã hết lượt thám hiểm mộng cảnh hôm nay (tối đa %d lượt/ngày)!", MaxDailyInstanceEntries)})
 			return
 		}
 	}
@@ -424,7 +424,7 @@ func EnterInstance(c *gin.Context) {
 		if err == nil && remainingSeconds > 0 {
 			hours := remainingSeconds / 3600
 			minutes := (remainingSeconds % 3600) / 60
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu cần đợi %d giờ %d phút nữa mới có thể vào lại phó bản này!", hours, minutes)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu cần đợi %d giờ %d phút nữa mới có thể vào lại mộng cảnh này!", hours, minutes)})
 			return
 		}
 		if err != nil && err != sql.ErrNoRows {
@@ -442,7 +442,7 @@ func EnterInstance(c *gin.Context) {
 
 	// 4. Validate requirements
 	if player.Rank < template.RequiredRank {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cảnh giới của đạo hữu chưa đủ yêu cầu để vào phó bản này!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cảnh giới của đạo hữu chưa đủ yêu cầu để vào mộng cảnh này!"})
 		return
 	}
 
@@ -493,7 +493,7 @@ func EnterInstance(c *gin.Context) {
 			Action:         "instance.enter",
 			EntityType:     "instance_template",
 			EntityID:       template.ID,
-			RequestSummary: fmt.Sprintf("Tiến vào bí cảnh %s | Tiêu hao vé vào: 1x %s", template.Name, template.EntryItem),
+			RequestSummary: fmt.Sprintf("Tiến vào mộng cảnh %s | Tiêu hao vé vào: 1x %s", template.Name, template.EntryItem),
 			Metadata: map[string]interface{}{
 				"instance_id":   template.ID,
 				"instance_name": template.Name,
@@ -505,7 +505,7 @@ func EnterInstance(c *gin.Context) {
 	}
 
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
-		"message":  "Tiến vào phó bản \"" + template.Name + "\" thành công!",
+		"message":  "Tiến vào mộng cảnh \"" + template.Name + "\" thành công!",
 		"session":  session,
 		"template": template,
 	})
@@ -545,7 +545,7 @@ func ActionInstance(c *gin.Context) {
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có phó bản nào đang hoạt động!"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có mộng cảnh nào đang hoạt động!"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 		}
@@ -697,7 +697,7 @@ func ActionInstance(c *gin.Context) {
 	if player.HP <= 0 {
 		player.HP = 1
 		sessionFailed = true
-		logResult = "Đạo hữu bị thương nặng dẫn đến thám hiểm phó bản thất bại!"
+		logResult = "Đạo hữu bị thương nặng dẫn đến thám hiểm mộng cảnh thất bại!"
 	}
 
 	if player.SoulHP <= 0 {
@@ -785,7 +785,7 @@ func ActionInstance(c *gin.Context) {
 				Action:         "instance.choose_option",
 				EntityType:     "instance_session",
 				EntityID:       session.ID.String(),
-				RequestSummary: fmt.Sprintf("Kỳ ngộ bí cảnh %s: %s | Tiêu hao: %s", template.Name, option.Text, string(reqBytes)),
+				RequestSummary: fmt.Sprintf("Kỳ ngộ mộng cảnh %s: %s | Tiêu hao: %s", template.Name, option.Text, string(reqBytes)),
 				Metadata: map[string]interface{}{
 					"instance_id":  template.ID,
 					"option_text":  option.Text,
@@ -806,7 +806,7 @@ func ActionInstance(c *gin.Context) {
 		return
 	}
 
-	// Complete phó bản! nextStage can be -1 (COMPLETED) or -2 (FAILED/QUIETLY EXIT)
+	// Complete mộng cảnh! nextStage can be -1 (COMPLETED) or -2 (FAILED/QUIETLY EXIT)
 	if nextStage == -1 {
 		// Award rewards
 		var rewards InstanceReward
@@ -833,16 +833,16 @@ func ActionInstance(c *gin.Context) {
 			} else if len(rewards.DaoMarks) > 0 {
 				// Bí cảnh: award Đạo Ngân (Dao Marks) directly.
 				if _, err := addMultipleDaoMarksTx(tx, player.ID.String(), rewards.DaoMarks); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân từ bí cảnh: " + err.Error()})
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân từ mộng cảnh: " + err.Error()})
 					return
 				}
 				daoTexts := make([]string, 0, len(rewards.DaoMarks))
 				for path, amt := range rewards.DaoMarks {
 					daoTexts = append(daoTexts, fmt.Sprintf("%d Đạo Ngân %s", amt, path))
 				}
-				logResult = "Chúc mừng đạo hữu chinh phục bí cảnh thành công, nhận được " + strings.Join(daoTexts, ", ") + "!"
+				logResult = "Chúc mừng đạo hữu chinh phục mộng cảnh thành công, nhận được " + strings.Join(daoTexts, ", ") + "!"
 			} else {
-				logResult = "Chúc mừng đạo hữu đã chinh phục thành công phó bản này!"
+				logResult = "Chúc mừng đạo hữu đã chinh phục thành công mộng cảnh này!"
 			}
 		}
 

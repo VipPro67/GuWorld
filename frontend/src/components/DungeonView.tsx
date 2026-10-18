@@ -89,7 +89,7 @@ export const DungeonView: React.FC = () => {
         <div className="flex items-center gap-3">
           <BookOpen className="w-6 h-6 text-purple-400" />
           <div>
-            <h1 className="text-lg font-serif font-bold text-zinc-100">Bí Cảnh & Mộng Cảnh</h1>
+            <h1 className="text-lg font-serif font-bold text-zinc-100">Truyền Thừa & Bí Cảnh Cổ</h1>
             <p className="text-xs text-zinc-500 font-mono">Thám hiểm nhận Chân Ý tăng cảnh giới</p>
           </div>
         </div>
@@ -187,13 +187,13 @@ export const DungeonView: React.FC = () => {
         /* INSTANCE TEMPLATES LIST VIEW */
         dungeons.length === 0 ? (
           <div className="text-center text-sm text-zinc-500 font-mono py-16">
-            Đang tải phó bản...
+            Đang tải dữ liệu thám hiểm...
           </div>
         ) : (
         <div className="flex flex-col gap-4">
           {isDailyLimitReached && (
             <div className="bg-amber-950/40 border border-amber-800/40 rounded-2xl p-4 text-xs font-mono text-amber-200 flex items-center gap-2">
-              ⚠️ Đạo hữu đã sử dụng hết lượt thám hiểm phó bản hôm nay ({instanceDailyEntriesUsed}/{instanceDailyEntriesMax} lượt). Hãy quay lại vào ngày mai!
+              ⚠️ Đạo hữu đã sử dụng hết lượt thám hiểm hôm nay ({instanceDailyEntriesUsed}/{instanceDailyEntriesMax} lượt). Hãy quay lại vào ngày mai!
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

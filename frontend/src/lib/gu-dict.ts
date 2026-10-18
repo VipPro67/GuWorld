@@ -42,9 +42,13 @@ export async function fetchAllGus(): Promise<GuDictionaryItem[]> {
   return staticData?.gus || [];
 }
 
-export async function fetchGuById(id: string): Promise<GuDictionaryItem | null> {
+export async function fetchGuById(id: string, rank?: number): Promise<GuDictionaryItem | null> {
   const gus = await fetchAllGus();
-  return gus.find((g) => g.id === id) || null;
+  return (
+    gus.find((g) => g.id === id && (rank == null || g.rank === rank)) ||
+    gus.find((g) => g.id === id) ||
+    null
+  );
 }
 
 export interface ItemSpec {

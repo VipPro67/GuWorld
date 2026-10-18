@@ -21,6 +21,8 @@ import { createGachaSlice, type GachaSlice } from "@/store/slices/gachaSlice";
 import { createAchievementsSlice, type AchievementsSlice } from "@/store/slices/achievementsSlice";
 import { createPetsSlice, type PetsSlice } from "@/store/slices/petsSlice";
 import { createInstanceSlice, type InstanceSlice } from "@/store/slices/instanceSlice";
+import { createDreamRealmSlice, type DreamRealmSlice } from "@/store/slices/dreamRealmSlice";
+import { createSpatialRealmSlice, type SpatialRealmSlice } from "@/store/slices/spatialRealmSlice";
 import { createMarketplaceSlice, type MarketplaceSlice, type BuybackOrder, type AsyncTradeOffer, type TradeOfferData } from "@/store/slices/marketplaceSlice";
 export type { BuybackOrder, AsyncTradeOffer, TradeOfferData };
 import { createSectSlice, type SectSlice } from "@/store/slices/sectSlice";
@@ -1167,7 +1169,7 @@ export interface WorldConfig {
   hub_y: number;
 }
 
-interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, PvPSlice {
+interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, PvPSlice {
   player: Player | null;
   playerStateRevision: number | null;
   manaSnapshot: ManaSnapshot | null;
@@ -1693,6 +1695,8 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createAchievementsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createPetsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createInstanceSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createDreamRealmSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createSpatialRealmSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createMarketplaceSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createSectSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createApertureSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),

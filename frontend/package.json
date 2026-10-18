@@ -8,7 +8,7 @@
     "dev": "next dev",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types src/components/admin/actions.test.ts src/lib/effect-blocks.test.ts src/lib/effect-presentation.test.ts src/components/EffectBlockView.test.mjs src/components/marketplaceGuSelection.test.ts src/store/playerRevision.test.ts src/store/worldMonsterReducer.test.ts src/store/pendingActions.test.mjs src/store/slices/recipeSync.test.mjs src/lib/player-reconciliation.test.ts src/lib/gu-effect-search.test.ts src/lib/pagination.test.ts src/lib/action-hotbar.test.ts src/lib/gu-mana.test.ts",
+    "test": "node --test --experimental-strip-types src/components/admin/actions.test.ts src/lib/effect-blocks.test.ts src/lib/effect-presentation.test.ts src/components/EffectBlockView.test.mjs src/components/marketplaceGuSelection.test.ts src/store/playerRevision.test.ts src/store/worldMonsterReducer.test.ts src/store/pendingActions.test.mjs src/store/slices/recipeSync.test.mjs src/lib/player-reconciliation.test.ts src/lib/gu-effect-search.test.ts src/lib/gu-index.test.ts src/lib/pagination.test.ts src/lib/action-hotbar.test.ts src/lib/gu-mana.test.ts",
     "typecheck": "tsc --noEmit",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
