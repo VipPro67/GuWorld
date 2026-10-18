@@ -29,7 +29,9 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 
 | Trường effects | Công thức | Ghi chú |
 | --- | --- | --- |
-| `active.damage_flat` | `30 × P` | sát thương 1 đòn tiêu chuẩn |
+| `active.damage_flat` (đơn mục tiêu) | `30 × P` | sát thương 1 đòn tiêu chuẩn |
+| `active.damage_flat` (hàng/cột `ROW`/`COL`) | `24 × P` (80%) | AoE theo hàng/cột |
+| `active.damage_flat` (toàn bộ địch `ALL_ENEMIES`) | `18 × P` (60%) | AoE; block multi-target không dùng `DAMAGE/MULTIPLIER` (ưu đãi đã nằm ở ratio) |
 | `active.shield_flat` | `30 × P` | lá chắn phòng thủ tiêu chuẩn |
 | `active.heal_flat` | `20 × P` | hồi máu tiêu chuẩn |
 | `passive.stat_base_attack` | `1 × P` | cộng tấn công nền |
@@ -52,7 +54,9 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 | 8 | 100.000.000 | 3.000.000.000 | 3.000.000.000 | 2.000.000.000 | 100.000.000 | 500.000.000 | 1.000.000.000 | 100.000 | 1.000.000 | 1.200\* |
 | 9 | 10.000.000.000 | 300.000.000.000 | 300.000.000.000 | 200.000.000.000 | 10.000.000.000 | 50.000.000.000 | 100.000.000.000 | 10.000.000 | 100.000.000 | 2.500\* |
 
-> Ví dụ đối chiếu thực tế: `GU_DIAMOND_THOUGHT` (R6) `damage_flat=300.000` — khớp chuẩn `30×P`. `GU_FLYING_SWORD` (R7) `damage_flat=14.000.000` (`14×P`, cổ đặc biệt) và `GU_BLOOD_DEITY` (R9) `damage_flat=80.000.000.000` (`8×P`, cổ tiện ích) dùng các bậc thấp hơn bậc nền. `GU_MYRIAD_SELF` (R7) dùng `passive.stat_base_attack=1.000.000` (`1×P`) vì phân thân nhân theo `BaseAttack` (`summon_phantom` → `PhantomDamageScale`).
+> Cột `dmg` là sát thương **đơn mục tiêu** (`30×P`). AoE suy ra từ đó: hàng/cột = `dmg × 0,8`, toàn bộ địch = `dmg × 0,6` (không nhân thêm `DAMAGE/MULTIPLIER`).
+
+> Ví dụ đối chiếu thực tế: `GU_DIAMOND_THOUGHT` (R6, đơn mục tiêu) `damage_flat=300.000` — khớp `30×P`. `GU_FLYING_SWORD` (R7, `COL`) `damage_flat=24.000.000` (`24×P`, 80%) và `GU_BLOOD_DEITY` (R9, `ALL_ENEMIES`) `damage_flat=180.000.000.000` (`18×P`, 60%). `GU_MYRIAD_SELF` (R7) dùng `passive.stat_base_attack=1.000.000` (`1×P`) vì phân thân nhân theo `BaseAttack` (`summon_phantom` → `PhantomDamageScale`).
 
 ## 4. Cách áp dụng khi sửa Gu.csv
 

@@ -14,6 +14,7 @@ Thư mục `scripts/` chứa các bộ công cụ Python tự động hóa để
 | `sync_droploot_coverage.py` | Bổ sung các item Dải A & B vào loot table quái vật và khu vực để đảm bảo 100% item đều có nguồn rơi rớt trong game. | `backend/data/LootTable.csv` |
 | `adjust_game_prices.py` | Cân bằng giá Cổ, Item và phí Recipe theo Rank chuẩn (`GuRankScaling.md`, `pkg/pricing`). Hỗ trợ chọn lọc (`--target`), bảo vệ tiền tệ và phân cấp Nguyên Thạch / Tiên Nguyên Thạch. | `Item.csv`, `Gu.csv`, `Recipe.csv` |
 | `balance_gu_effects.py` | Cân bằng sức mạnh hiệu ứng Cổ theo chuẩn quy mô Rank (`P(rank)`). Giới hạn ngân sách sát thương DoT, phủ 100% các key thưa bằng `HARD_REFS` và sửa lỗi chỉ số bất thường. | `backend/data/Gu.csv` |
+| `overhaul_spawns_and_loot.py` | Tối ưu toàn diện Monster Spawn & Loot Tables: phân loại lại Boss/Elite/Normal, sinh quái bổ sung cho các phái/rank thiếu, giới hạn spawn (1–4 khu vực), thu gọn loot table (2–3 entries quái thường, 4–5 entries boss), đảm bảo 0 item chỉ rớt từ Boss. | `Monster.csv`, `MonsterSpawn.csv`, `LootTable.csv`, `RegionLootTables.csv` |
 | `verify_game_data.py` | Kiểm tra toàn diện toàn bộ data: khớp ID, thức ăn hợp lệ, công thức hợp lệ, Tiên Cổ duy nhất, 100% droploot coverage. | Toàn bộ CSV |
 
 ---
@@ -32,8 +33,8 @@ python3 scripts/sync_gu_food.py
 # Bước 3: Tạo lại công thức luyện Cổ với logic thừa kế & Tiên Cổ duy nhất
 python3 scripts/rebuild_recipes.py
 
-# Bước 4: Đồng bộ droploot đảm bảo tất cả item đều rớt từ quái hoặc khu vực
-python3 scripts/sync_droploot_coverage.py
+# Bước 4: Tối ưu quái vật, phân bố spawn cân bằng và thu gọn loot table
+PYTHONPATH=scripts python3 scripts/overhaul_spawns_and_loot.py --apply
 
 # Bước 5: Kiểm tra toàn vẹn dữ liệu
 python3 scripts/verify_game_data.py

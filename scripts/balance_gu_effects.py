@@ -51,10 +51,9 @@ FLAT_DAMAGE_PER_RANK_SCALE = 30
 
 # Canon tuyệt đối của dữ liệu: mỗi value phải là <ratio> × RANK_SCALE[rank].
 # Ratio lấy từ phân bố thực tế của Gu.csv (median theo rank giống hệt nhau):
-# DAMAGE nền 30 (utility 8, đặc biệt 14/15; 20 là bậc nền cũ, remap sang 30),
-# SHIELD 30, HEAL 20 (bậc 15 cũ remap sang 20), HP 10, ATTACK 1, DEFENSE 5. Dùng bởi --scale.
+# SHIELD 30, HEAL 20 (bậc 15 cũ remap sang 20), HP 10, ATTACK 1, DEFENSE 5.
+# DAMAGE FLAT tách riêng theo phạm vi mục tiêu (xem DAMAGE_SCOPE_RATIO).
 SCALE_ARCHETYPES = {
-    "DAMAGE||FLAT": [8, 14, 15, 20, 30],
     "SHIELD||FLAT": [30],
     "HEAL||FLAT": [15, 20],
     "STAT_MOD|HP|ADD_FLAT": [10],
@@ -62,10 +61,21 @@ SCALE_ARCHETYPES = {
     "STAT_MOD|DEFENSE|ADD_FLAT": [5],
 }
 
+# DAMAGE FLAT theo phạm vi mục tiêu (× RANK_SCALE[rank]): đơn mục tiêu 30 (nền),
+# hàng/cột 24 (80% nền), toàn bộ địch 18 (60% nền). Block multi-target bị bỏ
+# DAMAGE/MULTIPLIER để ưu đãi diện rộng không nhân chồng lên sát thương.
+DAMAGE_SCOPE_RATIO = {
+    "SELF": 30,
+    "TARGET": 30,
+    "ROW": 24,
+    "COL": 24,
+    "ALL_ENEMIES": 18,
+}
+MULTI_TARGET_SELECTORS = {"ROW", "COL", "ALL_ENEMIES"}
+
 # Bậc nền cũ -> bậc nền mới: ratio khớp CHÍNH XÁC được đổi sang ratio mới (bỏ qua
 # dung sai), dùng khi nâng hệ số nền mà vẫn giữ các bậc tiện ích/đặc biệt.
 SCALE_RATIO_REMAP = {
-    "DAMAGE||FLAT": {20: 30},
     "HEAL||FLAT": {15: 20},
 }
 
@@ -296,6 +306,8 @@ def _extract(parsed):
                 if not isinstance(op, dict):
                     continue
                 o = op.get("op")
+                tgt = blk.get("target")
+                selector = tgt.get("selector") if isinstance(tgt, dict) else None
                 if o == "STATUS":
                     key, val, src = key_str("STATUS", op.get("status_id"), ""), op.get("value"), (bi, oi, "value")
                 elif o == "UNIQUE":
@@ -310,6 +322,7 @@ def _extract(parsed):
                 records.append({
                     "row": ri, "rank": rank, "key": key, "value": val,
                     "src": src, "obj": obj, "meta": meta, "op": op,
+                    "selector": selector,
                 })
     return records
 
@@ -343,15 +356,53 @@ def x_dev(value, ref):
     return (value / ref - 1) * 100 if ref else 0
 
 
+def strip_multitarget_multipliers(parsed, allow):
+    """Bỏ DAMAGE/MULTIPLIER trong block multi-target (ưu đãi diện rộng đã nằm ở ratio FLAT)."""
+    changes = {}
+    for ri, (_, obj, meta) in parsed.items():
+        if meta["id"] in allow:
+            continue
+        blocks = obj if isinstance(obj, list) else obj.get("blocks", [])
+        for blk in blocks:
+            if not isinstance(blk, dict):
+                continue
+            tgt = blk.get("target")
+            selector = tgt.get("selector") if isinstance(tgt, dict) else None
+            if selector not in MULTI_TARGET_SELECTORS:
+                continue
+            ops = blk.get("operations")
+            if not isinstance(ops, list):
+                continue
+            kept = [op for op in ops
+                    if not (isinstance(op, dict) and op.get("op") == "DAMAGE"
+                            and op.get("sub_type") == "MULTIPLIER")]
+            if len(kept) != len(ops):
+                blk["operations"] = kept
+                changes[ri] = meta["id"]
+    return changes
+
+
 def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
     """Audit tuyệt đối: mỗi value core phải là <ratio> × RANK_SCALE[rank]."""
     tol = args.scale_tol
     issues, skipped = [], 0
     state_changes = {}
+    for ri, gu_id in strip_multitarget_multipliers(parsed, allow).items():
+        state_changes.setdefault(ri, []).append(gu_id)
+
     for rec in records:
-        archetypes = SCALE_ARCHETYPES.get(rec["key"])
-        if not archetypes:
+        key = rec["key"]
+        # DAMAGE FLAT theo phạm vi mục tiêu; DAMAGE MULTIPLIER đã bị bỏ ở block multi-target.
+        if key == "DAMAGE||MULTIPLIER":
             continue
+        if key == "DAMAGE||FLAT":
+            target = DAMAGE_SCOPE_RATIO.get(rec.get("selector") or "")
+            if target is None:
+                continue
+        else:
+            archetypes = SCALE_ARCHETYPES.get(key)
+            if not archetypes:
+                continue
         gu_id = parsed[rec["row"]][2]["id"]
         if gu_id in allow:
             skipped += 1
@@ -360,11 +411,16 @@ def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
         if not isinstance(val, (int, float)) or isinstance(val, bool) or val == 0:
             continue
         ratio = val / RANK_SCALE[rank]
-        near = SCALE_RATIO_REMAP.get(rec["key"], {}).get(ratio)
-        if near is None:
-            near = nearest_arch(ratio, archetypes)
-            if near * (1 - tol) <= ratio <= near * (1 + tol):
+        if key == "DAMAGE||FLAT":
+            if target * (1 - tol) <= ratio <= target * (1 + tol):
                 continue
+            near = target
+        else:
+            near = SCALE_RATIO_REMAP.get(key, {}).get(ratio)
+            if near is None:
+                near = nearest_arch(ratio, archetypes)
+                if near * (1 - tol) <= ratio <= near * (1 + tol):
+                    continue
         new = num_out(near * RANK_SCALE[rank])
         if new == val:
             continue
@@ -373,12 +429,13 @@ def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
             op["params"]["value"] = new
         else:
             op["value"] = new
-        issues.append((gu_id, rank, rec["key"], val, new, near, ratio))
+        issues.append((gu_id, rank, key, val, new, near, ratio))
         state_changes.setdefault(rec["row"], []).append(gu_id)
 
-    covered = sum(1 for r in records if r["key"] in SCALE_ARCHETYPES)
+    covered = sum(1 for r in records if r["key"] in SCALE_ARCHETYPES or r["key"] == "DAMAGE||FLAT")
     print(f"[--scale] {covered} value core, ratio chuẩn: "
           + ", ".join(f"{k}= {v}" for k, v in SCALE_ARCHETYPES.items())
+          + ", DAMAGE||FLAT= " + str(DAMAGE_SCOPE_RATIO)
           + f". Dung sai ±{tol:g}.")
     if skipped:
         print(f"Bỏ qua {skipped} value thuộc --allow.")
@@ -414,8 +471,13 @@ def self_test():
     assert dot_damage_cap(4, 3) == 120
     assert dot_damage_cap(4, 6) == 60
     assert dot_damage_cap(99, 3) == 60000000000
-    assert SCALE_RATIO_REMAP["DAMAGE||FLAT"][20] == 30
     assert SCALE_RATIO_REMAP["HEAL||FLAT"][15] == 20
+    assert DAMAGE_SCOPE_RATIO["ALL_ENEMIES"] == 18 and DAMAGE_SCOPE_RATIO["COL"] == 24
+    _p = {0: (1, [{"target": {"selector": "ALL_ENEMIES"}, "operations": [
+        {"op": "DAMAGE", "sub_type": "FLAT", "value": 8},
+        {"op": "DAMAGE", "sub_type": "MULTIPLIER", "value": 2.5}]}], {"id": "GU_X"})}
+    assert strip_multitarget_multipliers(_p, set()) == {0: "GU_X"}
+    assert _p[0][1][0]["operations"] == [{"op": "DAMAGE", "sub_type": "FLAT", "value": 8}]
     obj = [{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]
     out, _ = dump_style('[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]', obj)
     assert out == '[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]'
