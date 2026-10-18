@@ -627,8 +627,6 @@ bach_sa_nguyen,monster_earth_trench_centipede,,,Stationary,0.25,300,7,7,True,Tru
 bat_bai_coc,monster_refinement_tier3_elite,,,Stationary,0.25,300,6,6,True,True
 dai_vuc_bac_nguyen,monster_flower_butterfly,,,Roaming,0.45,90,1,1,False,True
 luyen_co_dong,monster_wandering,,,Roaming,0.45,90,2,2,False,True
-thanh_thao_hai,monster_dream_mist_fox,,,Stationary,0.25,300,6,6,True,True
-nam_cuong_gioi_bich_bac,monster_desolate_death_hydra,,,Stationary,0.25,300,6,6,True,True
 dai_vuc_tay_mac,monster_blade_beetle,,,Roaming,0.45,90,1,1,False,True
 dai_vuc_nam_cuong,monster_scholar_puppet,,,Patrol,0.45,90,2,2,False,True
 thanh_mao_son,monster_formation_spirit_grass,,,Roaming,0.45,90,1,1,False,True
@@ -638,7 +636,6 @@ lau_lan_co_dia,monster_desert_ghost_boss,,,Stationary,0.25,300,4,4,True,True
 khi_hai_phuc_dia,monster_qi_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 tay_mac_cuc_nam,monster_metal_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 am_luu_cu_hac,monster_ancient_desert_ghost_king,,,Stationary,0.25,300,6,6,True,True
-dai_vuc_dong_hai,monster_dream_dao_supreme_avatar,,,Stationary,0.25,300,9,9,True,True
 dai_vuc_nam_cuong,monster_poison_tier4_elite,,,Stationary,0.25,300,9,9,True,True
 dai_vuc_tay_mac,monster_destruction_ant,,,Roaming,0.45,90,1,1,False,True
 dai_vuc_trung_chau,monster_heaven_sparrow,,,Roaming,0.45,90,1,1,False,True
@@ -650,13 +647,10 @@ tm_gioi_bich_dong,monster_wind_tier3_elite,,,Stationary,0.25,300,7,7,True,True
 linh_duyen_trai_canh,monster_east_sea_dragonfish,,,Stationary,0.25,300,4,4,True,True
 tc_gioi_bich_nam,monster_qi_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 tc_van_kiem_nhai,monster_ancient_flying_sword_dragon,,,Stationary,0.25,300,7,7,True,True
-thanh_thao_hai,monster_dream_mist_fox,,,Stationary,0.25,300,6,6,True,True
 kim_tinh_hai,monster_dream_mist_fox,,,Stationary,0.25,300,6,6,True,True
-huyet_hai_co_vuc,monster_blood_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 dai_vuc_trung_chau,monster_wine_monkey,,,Roaming,0.45,90,1,1,False,True
 thien_dinh_ngoai_vi,monster_white_light_divine_sovereign,,,Stationary,0.25,300,9,9,True,True
 long_cung_di_tich,monster_tide_dragon_emperor,,,Stationary,0.25,300,9,9,True,True
-tay_mac_cuc_nam,monster_metal_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 dan_qing_hoa_canh,monster_abyss_maw_beast,,,Roaming,0.45,90,2,2,False,True
 lac_da_thung_lung,monster_primordial_dire_wolf,,,Roaming,0.45,90,2,2,False,True
 tc_gioi_bich_bac,monster_primordial_qi_dragon,,,Stationary,0.25,300,6,6,True,True
@@ -664,15 +658,11 @@ vo_vong_sa_hai,monster_water_tier3_elite,,,Stationary,0.25,300,6,6,True,True
 tc_ta_ma_quyet,monster_ice_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 tc_kiem_minh_hai,monster_immemorial_sword_emperor,,,Stationary,0.25,300,7,7,True,True
 van_truong_hai_cau,monster_enslavement_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
-khi_hai_phuc_dia,monster_qi_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 thiet_gia_thanh,monster_killing_hoang_da_r1r3,,,Patrol,0.45,90,2,2,False,True
 tm_gioi_bich_tay,monster_ancient_creation_womb_titan,,,Stationary,0.25,300,7,7,True,True
 dai_vuc_bac_nguyen,monster_dream_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
-tc_kiem_minh_hai,monster_immemorial_sword_emperor,,,Stationary,0.25,300,7,7,True,True
-huyet_hai_co_vuc,monster_blood_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 bn_gioi_bich_tay,monster_wind_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 lac_da_thung_lung,monster_transformation_hoang_da_r1r3,,,Patrol,0.45,90,2,2,False,True
-nam_cuong_gioi_bich_tay,monster_desolate_death_hydra,,,Stationary,0.25,300,6,6,True,True
 tieu_gia_tran,monster_wood_hoang_da_r1r3,,,Patrol,0.45,90,2,2,False,True
 thien_khanh_dia_hac,monster_fire_thai_co_r8r9,,,Stationary,0.25,300,8,8,True,True
 dai_vuc_nam_cuong,monster_destruction_tier1_elite,,,Patrol,0.45,90,2,2,False,True
