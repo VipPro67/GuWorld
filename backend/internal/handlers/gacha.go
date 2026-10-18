@@ -147,6 +147,7 @@ type weightedGuEntry struct {
 type weightedMaterialEntry struct {
 	id     string
 	weight float64
+	rank   int // effectiveDropLevel, dùng cho boost rương Tiên Thạch
 }
 
 type weightedRecipeEntry struct {
@@ -194,20 +195,21 @@ func getPrecomputedPools() *precomputedPools {
 
 	// Build material and food pools once
 	for id, spec := range models.ItemRegistry {
-		w := rankDropMultiplier(effectiveDropLevel(spec.Rank, spec.Rarity))
+		lvl := effectiveDropLevel(spec.Rank, spec.Rarity)
+		w := rankDropMultiplier(lvl)
 		if w <= 0 {
 			continue
 		}
 		switch spec.Type {
 		case "Material":
-			pc.materials = append(pc.materials, weightedMaterialEntry{id: id, weight: w})
+			pc.materials = append(pc.materials, weightedMaterialEntry{id: id, weight: w, rank: lvl})
 			pc.totalMat += w
-			pc.drops = append(pc.drops, weightedMaterialEntry{id: id, weight: w})
+			pc.drops = append(pc.drops, weightedMaterialEntry{id: id, weight: w, rank: lvl})
 			pc.totalDrops += w
 		case "Food":
-			pc.foods = append(pc.foods, weightedMaterialEntry{id: id, weight: w})
+			pc.foods = append(pc.foods, weightedMaterialEntry{id: id, weight: w, rank: lvl})
 			pc.totalFood += w
-			pc.drops = append(pc.drops, weightedMaterialEntry{id: id, weight: w})
+			pc.drops = append(pc.drops, weightedMaterialEntry{id: id, weight: w, rank: lvl})
 			pc.totalDrops += w
 		}
 	}
@@ -328,6 +330,35 @@ func (pc *precomputedPools) rollDrop() string {
 	r := rand.Float64() * pc.totalDrops
 	for _, d := range pc.drops {
 		r -= d.weight
+		if r <= 0 {
+			return d.id
+		}
+	}
+	return pc.drops[0].id
+}
+
+// rollDropBoosted như rollDrop nhưng nhân trọng số các mục rank >= minRank lên
+// factor lần. Rương Mỏ Tiên Thạch dùng để đẩy tỉ lệ vật phẩm Chuyển 6-9.
+func (pc *precomputedPools) rollDropBoosted(minRank int, factor float64) string {
+	if len(pc.drops) == 0 {
+		return ""
+	}
+	weightOf := func(d weightedMaterialEntry) float64 {
+		if d.rank >= minRank {
+			return d.weight * factor
+		}
+		return d.weight
+	}
+	var total float64
+	for _, d := range pc.drops {
+		total += weightOf(d)
+	}
+	if total <= 0 {
+		return pc.rollDrop()
+	}
+	r := rand.Float64() * total
+	for _, d := range pc.drops {
+		r -= weightOf(d)
 		if r <= 0 {
 			return d.id
 		}

@@ -26,6 +26,7 @@ var itemBlockCodeToKey = map[string]string{
 	"RANDOM_CONSTITUTION":         "random_constitution",
 	"RANDOM_RACE":                 "random_race",
 	"OPEN_MINE_CHEST":             "open_mine_chest",
+	"OPEN_IMMORTAL_MINE_CHEST":    "open_immortal_mine_chest",
 	"CHANGE_RACE":                 "change_race",
 	"LIFESPAN_BOOST":              "lifespan_boost",
 	"SOUL_BOOST":                  "soul_boost",
@@ -135,7 +136,7 @@ type ItemEffectCommand struct {
 var itemEffectCodes = map[string]bool{
 	"mortal_only": true, "immortal_only": true, "min_rank": true, "max_rank": true,
 	"restore_hp": true, "restore_mana": true, "soul_boost": true, "remove_negative_status": true,
-	"lifespan_boost": true, "open_mine_chest": true, "heal_aperture": true,
+	"lifespan_boost": true, "open_mine_chest": true, "open_immortal_mine_chest": true, "heal_aperture": true,
 	"increase_aperture_area": true, "increase_aperture_time_rate": true,
 	"increase_human_qi": true, "random_constitution": true, "random_race": true,
 	"change_race": true, "hunger": true, "exit_spatial_realm": true,

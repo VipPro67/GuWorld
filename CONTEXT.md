@@ -86,3 +86,15 @@ Tác động tiêu cực của tạp tu lên Tiên Khiếu: các đạo ngân xu
 
 ### Thanh Đạo Tẩy Thể (Dao Mark Cleansing / Expulsion)
 Cơ chế/vật phẩm cho phép Cổ Tiên chủ động phân giải, tẩy trừ hoặc dẫn lưu các đạo ngân tạp nham ra khỏi cơ thể để khôi phục độ thuần khiết và thoát khỏi trạng thái phản phệ.
+
+## System Economy & Valuation (Kinh Tế Hệ Thống & Định Giá)
+
+### Tỷ Lệ Thu Mua Thương Nhân (Merchant Buy-back Spread)
+Tỷ lệ chiết khấu khi NPC (Thương đoàn Caravan, Thôn trang, Thương nhân lưu động) thu mua vật phẩm, nguyên liệu và Cổ trùng từ người chơi so với giá cơ sở (`base_price`). Tỷ lệ này phân tầng theo Rank và chủng loại để bảo đảm người chơi bán chiến lợi phẩm farm được luôn có lãi ròng sau chi phí, đồng thời chống đầu cơ kiếm lời từ việc mua đi bán lại với hệ thống.
+
+### Kỳ Vọng Hợp Luyện (Refinement Expected Value)
+Nguyên tắc định giá Cổ trùng: Giá trị Cổ bậc cao sau hợp luyện phải lớn hơn tổng chi phí nguyên liệu kỳ vọng chia cho xác suất thành công bình quân ($\text{Value}(Rank_{N+1}) > \frac{\text{TotalCost}}{\text{SuccessRate}}$). Đảm bảo người chơi chấp nhận rủi ro luyện Cổ khi thành công luôn có thặng dư kinh tế tương xứng.
+
+### Tiên Phàm Giới Hạn Kinh Tế (Mortal-Immortal Economic Boundary)
+Ranh giới phân tách triệt để giữa kinh tế Phàm trần (Rank 1–5, dùng Nguyên Thạch, giao dịch tại Thôn trang/Thương đoàn, quyên góp Tông môn) và Tiên giới (Rank 6–9, dùng Tiên Nguyên Thạch, giao dịch Tiên Cổ và Tiên Tài). Tông môn phàm giới không thu nạp Tiên Tài; quy đổi tiền tệ chỉ cho phép 1 chiều từ Nguyên Thạch lên Tiên Nguyên Thạch với tỷ giá cao để phục vụ Cổ Tiên sơ kỳ.
+

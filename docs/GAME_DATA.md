@@ -696,10 +696,12 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | Shared: `luck` | always-on → self | flat | gamefx/player stats | formatter + gamefx tests |
 | Race: `immortal`, `disable_hp_regen`, `disable_mana_regen`, `disable_soul_regen`, `disable_resource_regen` | always-on → self | boolean | lifespan/regen policy; players.race | thiếu label cho một số flag; gamefx tests một phần |
 | Status: `death_drop_mult`, `pvp_immune` | while status active → self | multiplier/bool | **không có field/executor: silent no-op hiện tại, phải fail khi compile v2** | chưa có label/test execution |
-| Item: `hunger`, `restore_hp`, `heal_aperture`, `increase_aperture_area`, `increase_aperture_time_rate`, `increase_human_qi`, `random_constitution`, `random_race`, `open_mine_chest` | item use/feed → self/pet/aperture | flat hoặc command enum | item/pet handlers; inventory + players/aperture | `Item.name`; `handlers/item_effects_test.go` (coverage từng key chưa đầy đủ) |
+| Item: `hunger`, `restore_hp`, `heal_aperture`, `increase_aperture_area`, `increase_aperture_time_rate`, `increase_human_qi`, `random_constitution`, `random_race`, `open_mine_chest`, `open_immortal_mine_chest` | item use/feed → self/pet/aperture | flat hoặc command enum | item/pet handlers; inventory + players/aperture | `Item.name`; `handlers/item_effects_test.go` (coverage từng key chưa đầy đủ) |
 | `killer_moves.effects`: `base_damage_bonus|damage`, `base_defense_bonus|defense|add_base_defense`, `flat_damage`, `flat_defense`, `damage_multiplier|damage_boost`, `defense_multiplier|defense_boost|shield_multiplier`, `success_rate_bonus|stability_bonus|stability_penalty`, `channel_time|channeling|channeling_reduction` | move build/cast → selected enemy or self | flat, ratio, points, ticks; dao scaling `1+marks/100` | builder/manual/auto paths không đồng nhất; `killer_moves` owns snapshot | builder raw key; hầu như chưa có mapping tests |
 | `killer_moves.effects`: `life_steal|lifesteal`, `multi_hit`, `phantom_attack`, `thorns_damage`, `heal`, `bleed`, `poison`, `stun`, `mana_regen`, `heal_hp|regen`, `portal_create`, `random_portal` | hit/cast/world use | percent-vs-ratio legacy, count, flat, bool | manual, auto và world chỉ xử lý các tập con khác nhau; combat/player/world persistence | raw key; simulator chỉ có characterization hạn chế |
 | `aperture_variant_events.effects` | chưa có producer/trigger | chưa xác định | chỉ có JSONB owner event row; **không executor/persistence command** | không UI, không test; mọi payload hiện là no-op |
+
+**Mỏ (mine):** `mine_slots.mine_type` (`mortal`/`immortal`). Phàm Mạch nhả `mine_chest`; Tiên Mạch nhả `mine_chest_immortal` (effect `OPEN_IMMORTAL_MINE_CHEST`, boost trọng số item/bí phương rank ≥6 ×5 khi mở). Tỉ lệ rương Tiên Mạch decay theo phút tích lũy (`CalculateMineRewards`, `handlers/mine.go`): giảm 50%/2h, sàn 20% base, reset mỗi claim.
 
 Seed fallback trong `schema_dictionaries.go` dùng cùng key với CSV và không tạo
 namespace mới. Khác biệt seed/CSV phải được kiểm tra parity; đáng chú ý
@@ -1137,7 +1139,21 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 | `quantity` | BIGINT | Số lượng tích lũy |
 | `instance_id` | VARCHAR(80) | Instance ID gốc (đối với Tiên Cổ rank ≥ 6) |
 
-> Giá điểm cống hiến khi đổi Cổ **không lưu ở bảng** mà suy ra từ `gu_dictionary.base_price` qua `pricing.VaultCost` (= giá gốc, tối thiểu 1 điểm) — xem `sectVaultGuCost`. Độ no cũng không lưu: Cổ trong kho không đói, rút ra luôn bắt đầu `Độ No = 1` (hoặc max nếu `hunger_rate = 0`).
+> Giá điểm cống hiến khi đổi Cổ **không lưu ở bảng** mà suy ra từ `gu_dictionary.base_price` qua `pricing.VaultCost` (= 1.0× giá gốc, tối thiểu 1 điểm; đối với Tiên Cổ rank ≥ 6 áp dụng hệ số quy đổi $\times 1.000$ điểm) — xem `sectVaultGuCost`. Độ no cũng không lưu: Cổ trong kho không đói, rút ra luôn bắt đầu `Độ No = 1` (hoặc max nếu `hunger_rate = 0`).
+
+### Quy chế Nhập kho (Stock), Rút kho (Withdraw) & Quyên góp (Donate) Bảo khố Tông môn
+
+1. **Nhập kho từ Hệ thống (`StockSectVault` / `StockSectVaultBulk`)**:
+   - **Chi phí Quỹ Tông Môn**: $1.5\times$ giá base (`pricing.ItemBasePrice` hoặc `pricing.RecipeCostByGuRank`). Đối với vật phẩm Tiên cấp (Rank $\ge 6$), nhân thêm hệ số quy đổi $\times 1.000$.
+   - **Mở khóa theo Cấp Tông môn**: Cứ 10 cấp tông môn mở khóa 1 bậc Rank (`maxLevel := sectLevel/10 + 1`, tối đa Rank 9). Tông môn cấp 50 mở Rank 6, cấp 80 mở Rank 9.
+   - **Giới hạn số lượng Tiên tài**: Mỗi lần nhập tối đa 5 đơn vị Tiên phẩm cùng loại; tổng lượng tồn kho bảo khố không vượt quá 200 đơn vị cho mỗi loại Tiên phẩm.
+
+2. **Rút/Mua từ Bảo khố (`BuyFromSectVault`)**:
+   - **Chi phí Điểm cống hiến**: Đúng $1.0\times$ giá base (`pricing.VaultCost`). Đối với Tiên phẩm / Tiên Cổ / Tiên Bí phương (Rank $\ge 6$), chi phí cống hiến nhân hệ số $\times 1.000$.
+
+3. **Quyên góp vào Bảo khố (`DonateMaterials` / `DonateGu` / `DonateRecipe` / `DonateBulk`)**:
+   - **Điều kiện Cấp Tông môn**: Tông môn phải đạt `sectLevel >= (rank - 1) * 10` mới có thể thu nạp vật phẩm/Cổ trùng/Bí phương phẩm cấp đó.
+   - **Điểm thưởng & Quỹ Tông Môn**: $1.0\times$ điểm quyên góp (`pricing.DonatePoints`). Đối với Rank $\ge 6$, giá base được nhân $\times 1.000$ trước khi tính điểm cống hiến và cộng vào Quỹ Tông Môn.
 
 ### Bảng `sect_vault_recipes` (Tàng Kinh Các / Bí Phương Tông môn)
 

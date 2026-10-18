@@ -2652,66 +2652,9 @@ func Simulate(state *CombatState) []CombatLog {
 							})
 						}
 					}
-
-					// Auto-restore mana using stones
-					if actor.AutoRestoreMana && actor.Mana < actor.MaxMana {
-						manaPct := actor.Mana / actor.MaxMana * 100
-						if manaPct <= actor.ManaThreshold {
-							regenMult := 1.0
-							if actor.RefineManaTier > 0 {
-								regenMult = 0.4 + actor.RefineManaTier*0.1
-							}
-							neededMana := actor.MaxMana - actor.Mana
-
-							if actor.Rank >= 6 {
-								if actor.ImmortalStones >= 1 {
-									manaPerStone := (1.0 / math.Pow(100, float64(actor.Rank-6))) * regenMult
-									if manaPerStone > 0 {
-										stonesNeeded := math.Ceil(neededMana / manaPerStone)
-										stonesToConsume := math.Min(stonesNeeded, float64(actor.ImmortalStones))
-										restore := stonesToConsume * manaPerStone
-										actor.ImmortalStones -= stonesToConsume
-										actor.Mana += restore
-										if actor.Mana > actor.MaxMana {
-											actor.Mana = actor.MaxMana
-										}
-										turnLogs = append(turnLogs, CombatLog{
-											Turn:      turn,
-											ActorId:   actor.ID,
-											ActorName: actor.Name,
-											Action:    "MANA_RESTORE",
-											Detail:    fmt.Sprintf("%s tự động nghiền nát %d Tiên Nguyên Thạch, khôi phục %.0f tiên nguyên!", actor.Name, int64(stonesToConsume), restore),
-										})
-									}
-								}
-							} else {
-								if actor.PrimevalStones >= 1 {
-									rankMult := math.Pow(10.0, float64(actor.Rank-1))
-									subRankMult := math.Pow(2.0, float64(actor.SubRank-1))
-									manaPerStone := (20.0 / (rankMult * subRankMult)) * regenMult
-									if manaPerStone > 0 {
-										stonesNeeded := math.Ceil(neededMana / manaPerStone)
-										stonesToConsume := math.Min(stonesNeeded, float64(actor.PrimevalStones))
-										restore := stonesToConsume * manaPerStone
-										actor.PrimevalStones -= stonesToConsume
-										actor.Mana += restore
-										if actor.Mana > actor.MaxMana {
-											actor.Mana = actor.MaxMana
-										}
-										turnLogs = append(turnLogs, CombatLog{
-											Turn:      turn,
-											ActorId:   actor.ID,
-											ActorName: actor.Name,
-											Action:    "MANA_RESTORE",
-											Detail:    fmt.Sprintf("%s tự động hấp thu %d Nguyên Thạch, khôi phục %.0f %s!", actor.Name, int64(stonesToConsume), restore, actor.GetManaName()),
-										})
-									}
-								}
-							}
-						}
-					}
 				}
 			}
+
 
 			if ccDisabledThisTurn[actor] {
 				continue

@@ -64,35 +64,33 @@ func StoneTierByRank(rank int) string {
 // Ranks 1-5 are in Primeval Stones (Nguyên Thạch); ranks 6-9 are Tiên Cổ and
 // are in Immortal Stones (Tiên Nguyên Thạch) - see StoneTierByRank.
 // Index 0 unused; index i = rank i.
-// Index 0 unused; index i = rank i.
 var guRankBasePrice = [10]float64{
-	0,    // unused
-	200,  // Rank 1 - Nhat Chuyen
-	500,  // Rank 2 - Nhi Chuyen
-	1200, // Rank 3 - Tam Chuyen
-	2500, // Rank 4 - Tu Chuyen
-	5000, // Rank 5 - Ngu Chuyen
-	200,  // Rank 6 - Luc Chuyen (Tien Co, Immortal Stones)
-	500,  // Rank 7 - That Chuyen
-	1200, // Rank 8 - Bat Chuyen
-	2500, // Rank 9 - Cuu Chuyen
+	0,        // unused
+	250,      // Rank 1 - Nhat Chuyen (250 NT)
+	1000,     // Rank 2 - Nhi Chuyen (1.000 NT, 4.0x)
+	4000,     // Rank 3 - Tam Chuyen (4.000 NT, 4.0x)
+	22000,    // Rank 4 - Tu Chuyen (22.000 NT, 5.5x)
+	250000,   // Rank 5 - Ngu Chuyen (250.000 NT, 11.4x)
+	3500,     // Rank 6 - Luc Chuyen (3.500 TNT, Immortal Stones)
+	35000,    // Rank 7 - That Chuyen (35.000 TNT, 10.0x)
+	550000,   // Rank 8 - Bat Chuyen (550.000 TNT, 15.7x)
+	14000000, // Rank 9 - Cuu Chuyen (14.000.000 TNT, 25.5x)
 }
 
 // itemRankBasePrice maps Item rank (1-9) to base price.
 // Ranks 1-5 are in Primeval Stones (Nguyên Thạch); ranks 6-9 are in Immortal
 // Stones (Tiên Nguyên Thạch) - see StoneTierByRank.
-// Rank 1 = 1, scales proportionally to the Gu curve (Gu / 200).
 var itemRankBasePrice = [10]float64{
-	0,   // unused
-	1,   // Rank 1
-	3,   // Rank 2
-	6,   // Rank 3
-	13,  // Rank 4
-	25,  // Rank 5
-	10,  // Rank 6
-	25,  // Rank 7
-	60,  // Rank 8
-	150, // Rank 9
+	0,     // unused
+	2,     // Rank 1 (2 NT)
+	8,     // Rank 2 (8 NT, 4.0x)
+	35,    // Rank 3 (35 NT, 4.4x)
+	200,   // Rank 4 (200 NT, 5.7x)
+	2000,  // Rank 5 (2.000 NT, 10.0x)
+	5,     // Rank 6 (5 TNT, Hạ phẩm Tiên tài)
+	50,    // Rank 7 (50 TNT, 10.0x)
+	750,   // Rank 8 (750 TNT, 15.0x)
+	15000, // Rank 9 (15.000 TNT, 20.0x)
 }
 
 // ---- Base price helpers ----------------------------------------------------

@@ -1009,7 +1009,9 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 - Cổ sư chiếm mỏ, nhận thưởng, bỏ mỏ hoặc tấn công mỏ người khác.
 - Worker có thể gán quái vào mỏ bỏ hoang.
 - **Tích lũy:** mỗi phút chiếm mỏ tự roll một lần, tỉ lệ ra **Rương Mỏ Linh Thạch** tăng theo rarity mỏ (Thường 8% → Siêu Cấp 50%). Nhận rương khi Nhận thưởng / Từ bỏ mỏ; **cướp mỏ chỉ được một nửa** số rương. Quái Dược Dã Thố cũng rơi rương.
+- **Tiên Mạch (Tiên Nguyên Thạch)** nhả **Rương Mỏ Tiên Thạch** thay vì rương thường. Tỉ lệ rương Tiên Mạch **giảm dần theo thời gian tích lũy**: giảm 50% mỗi 2 giờ, sàn 20% tỉ lệ gốc, reset mỗi lần nhận thưởng — khuyến khích nhận thưởng thường xuyên thay vì để tích trữ.
 - **Mở Rương Mỏ Linh Thạch** (dùng trong túi đồ): không ra Nguyên Thạch. Kết quả là **Bí phương (40%)** hoặc **Vật liệu/Cổ lương (60%)**. Bí phương ra được **mọi Chuyển**, Chuyển càng cao càng hiếm; trùng bí phương đã có thì giữ mức hoàn thiện cao hơn. Vật phẩm weight theo rank/rarity (rank cao hiếm hơn).
+- **Mở Rương Mỏ Tiên Thạch:** cùng 40% Bí phương / 60% Vật liệu-Cổ lương, nhưng **bí phương và vật phẩm Chuyển 6-9 (rank >5) được nhân trọng số x5** nên rơi nhiều hơn hẳn so với rương thường.
 
 ## 15. Tổ đội và Đấu trường
 

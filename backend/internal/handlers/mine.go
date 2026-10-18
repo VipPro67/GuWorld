@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"time"
@@ -48,7 +49,7 @@ type MineSlotResponse struct {
 	AccumulatedChests int        `json:"accumulated_chests"`
 }
 
-func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (int64, float64, int) {
+func CalculateMineRewards(slotID int, rarity, mineType string, lastClaimedAt time.Time) (int64, float64, int) {
 	elapsed := time.Since(lastClaimedAt)
 	elapsedMinutes := int(elapsed.Minutes())
 	if elapsedMinutes <= 0 {
@@ -68,12 +69,36 @@ func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (i
 	r := rand.New(rand.NewSource(seed))
 	chests := 0
 	for i := 0; i < elapsedMinutes; i++ {
-		if r.Float64() < rates.ChestChance {
+		chance := rates.ChestChance
+		if mineType == "immortal" {
+			chance *= immortalChestDecay(i)
+		}
+		if r.Float64() < chance {
 			chests++
 		}
 	}
 
 	return stones, qi, chests
+}
+
+// immortalChestDecay: hệ số nhân tỉ lệ rương của Tiên Mạch theo số phút tích
+// lũy (anti-AFK). Giảm 50% mỗi 2 giờ (120 phút), sàn 20% base; reset mỗi claim
+// vì phút được đếm lại từ lastClaimedAt.
+func immortalChestDecay(minute int) float64 {
+	decay := math.Pow(0.5, float64(minute)/120.0)
+	if decay < 0.2 {
+		return 0.2
+	}
+	return decay
+}
+
+// mineChestItemID trả về item rương theo loại mỏ: Tiên Mạch nhả Rương Mỏ Tiên
+// Thạch (tỉ lệ bí phương/vật phẩm rank >5 cao hơn), còn lại là rương thường.
+func mineChestItemID(mineType string) string {
+	if mineType == "immortal" {
+		return "mine_chest_immortal"
+	}
+	return "mine_chest"
 }
 
 func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int64, qi float64, chests int, mineType string) error {
@@ -96,7 +121,7 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int64, qi f
 	}
 
 	if chests > 0 {
-		if err := InventorySvc.AddItem(tx, playerID.String(), "mine_chest", "materials", int64(chests)); err != nil {
+		if err := InventorySvc.AddItem(tx, playerID.String(), mineChestItemID(mineType), "materials", int64(chests)); err != nil {
 			return err
 		}
 	}
@@ -148,7 +173,7 @@ func GetMineSlots(c *gin.Context) {
 		chests := 0
 
 		if occupierID != nil && lastClaimedAt != nil {
-			stones, qi, chests = CalculateMineRewards(id, rarity, *lastClaimedAt)
+			stones, qi, chests = CalculateMineRewards(id, rarity, mineType, *lastClaimedAt)
 		}
 
 		slots = append(slots, MineSlotResponse{
@@ -313,7 +338,7 @@ func ClaimMineRewards(c *gin.Context) {
 	}
 
 	// 2. Calculate rewards
-	stones, qi, chests := CalculateMineRewards(req.SlotID, rarity, *lastClaimedAt)
+	stones, qi, chests := CalculateMineRewards(req.SlotID, rarity, mineType, *lastClaimedAt)
 	if stones == 0 && qi == 0.0 && chests == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chưa tích lũy đủ thời gian (tối thiểu 1 phút) để nhận thưởng!"})
 		return
@@ -399,7 +424,7 @@ func AbandonMineSlot(c *gin.Context) {
 	}
 
 	// 2. Calculate and grant rewards
-	stones, qi, chests := CalculateMineRewards(req.SlotID, rarity, *lastClaimedAt)
+	stones, qi, chests := CalculateMineRewards(req.SlotID, rarity, mineType, *lastClaimedAt)
 	if stones > 0 || qi > 0.0 || chests > 0 {
 		err = AddMineRewardsToPlayerTx(tx, authID, stones, qi, chests, mineType)
 		if err != nil {

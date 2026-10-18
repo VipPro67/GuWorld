@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
-"""Cân bằng value effect của Gu.csv theo (key, rank).
+"""
+scripts/balance_gu_effects.py
 
-"Key" của một effect = (op, stat/status_id/code, sub_type), ví dụ
-("DAMAGE", "", "FLAT") hay ("STAT_MOD", "ATTACK", "ADD_FLAT").
+Cân bằng value effect của Gu.csv theo (key, rank) và thang chuẩn GuRankScaling.
+
+"Key" của một effect = (op, stat/status_id/code, sub_type), ví dụ:
+  - ("DAMAGE", "", "FLAT")
+  - ("STAT_MOD", "ATTACK", "ADD_FLAT")
+  - ("STATUS", "BLEED", "")
+  - ("UNIQUE", "ADD_LIFESPAN_YEARS", "")
 
 Chế độ:
   - Key "dày" (>= --min-samples mẫu ở mọi rank có mặt): ref = median theo rank.
-  - Key "thưa": chỉ cân khi có --hard và key nằm trong HARD_REFS (hoặc --hard-file).
+  - Key "thưa": cân bằng dựa trên bảng chuẩn HARD_REFS (bật qua cờ --hard hoặc tự động).
   - DOT (BLEED/POISON/BURN/SLOW_DAMAGE): tổng damage một lần áp dụng tối đa
-    60% damage FLAT chuẩn cùng rank, chia theo số lượt hiệu lực.
-  - Ngưỡng lệch: --factor (mặc định 10×, đo theo tỉ lệ) hoặc --band (dung sai ±PCT).
-  - Mặc định chỉ audit (in báo cáo); --apply mới ghi CSV.
+    60% damage FLAT chuẩn cùng rank, chia theo số lượt hiệu lực (turns).
+  - Ngưỡng lệch: --factor (mặc định 10×) hoặc --band (dung sai ±PCT, vd: 0.35).
+  - Scale tuyệt đối: --scale kiểm tra tỉ lệ chuẩn với RANK_SCALE[rank] (docs/GuRankScaling.md).
+  - Mặc định chỉ xem trước (dry-run / audit); thêm --apply để ghi trực tiếp vào CSV.
 
-Ví dụ:
-  python3 scripts/balance_gu_effects.py                     # audit, factor 10x
-  python3 scripts/balance_gu_effects.py --band 0.35         # audit theo ±35% (so với median cùng rank)
-  python3 scripts/balance_gu_effects.py --scale             # audit TUYỆT ĐỐI: value = ratio_chuẩn × P(rank)
-  python3 scripts/balance_gu_effects.py --scale --apply     # snap các value lệch scale về ratio chuẩn
-  python3 scripts/balance_gu_effects.py --hard              # + bảng ref cứng cho key thưa
-  python3 scripts/balance_gu_effects.py --hard --apply      # ghi CSV
-  python3 scripts/balance_gu_effects.py --allow GU_A,GU_B   # bỏ qua Cổ đặc biệt
-  python3 scripts/balance_gu_effects.py --list-keys         # phân loại key
+Cách dùng:
+  python3 scripts/balance_gu_effects.py                     # audit phát hiện lệch chuẩn & DoT vượt ngân sách
+  python3 scripts/balance_gu_effects.py --hard              # audit toàn diện cả các key thưa (sparse)
+  python3 scripts/balance_gu_effects.py --scale             # audit tuyệt đối theo tỷ lệ P(rank)
+  python3 scripts/balance_gu_effects.py --hard --apply      # áp dụng cân bằng vào Gu.csv
+  python3 scripts/balance_gu_effects.py --scale --apply     # snap các chỉ số core về tỷ lệ chuẩn
 
 Sau --apply: Admin -> tab "Dữ liệu" -> Import bảng "Cổ trùng".
 """
@@ -58,17 +62,13 @@ SCALE_ARCHETYPES = {
     "STAT_MOD|DEFENSE|ADD_FLAT": [5],
 }
 
-# Ngưỡng lệch mạnh: coi là bất thường khi value lệch khỏi ref quá --factor lần,
-# đo theo TỈ LỆ (max(v/ref, ref/v)) vì sức mạnh Cổ scale theo cấp số nhân.
-# --band PCT (tuỳ chọn) đổi sang chế độ dung sai ±PCT như docs/GuRankScaling.md.
-
-# Ref cứng cho key thưa (n < min-samples). Bật bằng --hard.
-#   {"flat": x}                -> hằng số (mọi rank)
-#   {"per_rank": {r: x, ...}}  -> theo từng rank
+# Bảng quy chuẩn cho các key thưa (sparse keys, n < min-samples).
+# Định dạng:
+#   {"flat": x}                -> giá trị hằng số (cho mọi rank)
+#   {"per_rank": {r: x, ...}}  -> giá trị riêng theo từng rank
 #   {"curve": "P", "k": x}     -> x * RANK_SCALE[rank]
-# Chỉ seed các hằng số rõ ràng (mọi mẫu khớp nhau). Key thưa không có ở đây sẽ
-# được liệt kê ở mục "sparse chưa phủ" để tự bổ sung, không bị âm thầm bỏ qua.
 HARD_REFS = {
+    # Stat Multipliers & Flat Bonuses
     "STAT_MOD|DAMAGE_DEALT|MULTIPLY_PERCENT": {"flat": 0.12},
     "STAT_MOD|DAO_MARK|MULTIPLY_PERCENT": {"flat": 10},
     "STAT_MOD|REFINE_SUCCESS|ADD_FLAT": {"flat": 4},
@@ -78,15 +78,35 @@ HARD_REFS = {
     "STAT_MOD|HEARING|ADD_FLAT": {"flat": 5},
     "STAT_MOD|MANA|ADD_FLAT": {"flat": 2},
     "STAT_MOD|TIME_SPEED|ADD_FLAT": {"flat": 0.5},
+    "STAT_MOD|DISGUISE|ADD_FLAT": {"flat": 1},
+    "STAT_MOD|REFINE_MANA_TIER|ADD_FLAT": {"flat": 1},
+    "STAT_MOD|SOUL_REFINEMENT|ADD_FLAT": {"flat": 2},
+    "STAT_MOD|TENACITY|ADD_FLAT": {"flat": 5},
+    "STAT_MOD|PATH_RESISTANCE|ADD_FLAT": {"flat": 0.5},
+    "STAT_MOD|PATH_RESISTANCE|MULTIPLY_PERCENT": {"flat": 0.1},
+    "STAT_MOD|LUCK|ADD_FLAT": {
+        "per_rank": {"1": 5, "2": 10, "3": 15, "4": 20, "5": 30, "6": 50, "7": 100, "8": 200, "9": 500}
+    },
+    "STAT_MOD|STORAGE|ADD_FLAT": {
+        "per_rank": {"1": 20, "2": 30, "3": 50, "4": 80, "5": 100, "6": 200, "7": 350, "8": 500, "9": 1000}
+    },
+
+    # Growth Caps
+    "STAT_MOD|ATTACK|GROWTH_CAP": {"flat": 2},
+    "STAT_MOD|DEFENSE|GROWTH_CAP": {"flat": 2},
+    "STAT_MOD|HP|GROWTH_CAP": {"flat": 2},
+    "STAT_MOD|SPEED|GROWTH_CAP": {
+        "per_rank": {"1": 1, "2": 1, "3": 2, "4": 2, "5": 4, "6": 6, "7": 8, "8": 10, "9": 12}
+    },
+
+    # Direct HP & Shield & Heals
     "HEAL||LIFESTEAL": {"flat": 0.5},
+    "HEAL||RESOURCE": {"flat": 1},
     "DIRECT_HP||SHIELD_STRIP": {"flat": 0.5},
+    "DIRECT_HP||MAX_HP_PERCENT": {"flat": 0.4},
     "SHIELD||MULTIPLIER": {"flat": 2},
-    "UNIQUE|INCREASE_TIME_SPEED|": {"flat": 0.5},
-    "UNIQUE|REDUCE_STRESS|": {"flat": 25},
-    "UNIQUE|RESTORE_MENTAL|": {"flat": 25},
-    "UNIQUE|RESTORE_SOUL_HP|": {"flat": 20},
-    "UNIQUE|SOUL_REGEN_TICK|": {"flat": 2},
-    "UNIQUE|MANA_REGEN_TICK|": {"flat": 10},
+
+    # Status Effects
     "STATUS|CHARM|": {"flat": 1},
     "STATUS|SLOW|": {"flat": 1},
     "STATUS|SLOW1|": {"flat": 1},
@@ -96,6 +116,45 @@ HARD_REFS = {
     "STATUS|REVIVE_LOCK|": {"flat": 1},
     "STATUS|LAST_STAND|": {"flat": 1},
     "STATUS|ATK_UP|": {"flat": 1},
+    "STATUS|EVASION|": {"flat": 1},
+    "STATUS|WEAK|": {"flat": 1},
+
+    # Unique Effects
+    "UNIQUE|INCREASE_TIME_SPEED|": {"flat": 0.5},
+    "UNIQUE|DECREASE_TIME_SPEED|": {"flat": -0.5},
+    "UNIQUE|REDUCE_STRESS|": {"flat": 25},
+    "UNIQUE|RESTORE_MENTAL|": {"flat": 25},
+    "UNIQUE|RESTORE_SOUL_HP|": {"flat": 20},
+    "UNIQUE|SOUL_REGEN_TICK|": {"flat": 2},
+    "UNIQUE|MANA_REGEN_TICK|": {"flat": 10},
+    "UNIQUE|ADD_SOUL_MAX|": {"flat": 10},
+    "UNIQUE|ADD_THOUGHT_MAX|": {"flat": 10},
+    "UNIQUE|CAPTURE_BONUS|": {"flat": 0.25},
+    "UNIQUE|CC_RESIST|": {"flat": 0.5},
+    "UNIQUE|CULTIVATION_EFFICIENCY|": {"flat": 0.5},
+    "UNIQUE|DAO_MARK_GAIN|": {"flat": 1.0},
+    "UNIQUE|LUCK|": {"flat": 10},
+    "UNIQUE|MENTAL_RESISTANCE|": {"flat": 0.8},
+    "UNIQUE|PATH_RESISTANCE_MODIFIER|": {"flat": 0.5},
+    "UNIQUE|SOUL_DEFENSE|": {"flat": 0.6},
+    "UNIQUE|STAT_MODS|": {"flat": 10},
+    "UNIQUE|TENACITY|": {"flat": 0.3},
+    "UNIQUE|HP_REGEN|": {"curve": "P", "k": 5},
+    "UNIQUE|ADD_LIFESPAN_YEARS|": {
+        "per_rank": {"1": 1, "2": 5, "3": 10, "4": 50, "5": 100, "6": 500, "7": 1000, "8": 2000, "9": 5000}
+    },
+    "UNIQUE|GROWTH_DURATION_HOURS|": {
+        "per_rank": {"1": 24, "2": 24, "3": 30, "4": 50, "5": 120, "6": 240, "7": 240, "8": 240, "9": 240}
+    },
+    "UNIQUE|GENERATE_STONES_TICK|": {
+        "per_rank": {"1": 10, "2": 20, "3": 50, "4": 100, "5": 200, "6": 500, "7": 1000, "8": 2000, "9": 5000}
+    },
+    "UNIQUE|GENERATE_IMMORTAL_STONES_TICK|": {
+        "per_rank": {"1": 1, "2": 1, "3": 1, "4": 5, "5": 10, "6": 100, "7": 1000, "8": 1000, "9": 1000}
+    },
+    "UNIQUE|THOUGHT_REGEN_TICK|": {
+        "per_rank": {"1": 1, "2": 2, "3": 5, "4": 10, "5": 20, "6": 50, "7": 100, "8": 200, "9": 500}
+    },
 }
 
 
@@ -182,11 +241,11 @@ def in_band(v, ref, factor, band):
     return max(v / ref, ref / v) <= factor
 
 
-def dot_damage_cap(rank, turns):
-    """Giới hạn tổng sát thương DoT ở 60% damage FLAT chuẩn cùng rank."""
+def dot_damage_cap(rank, turns, ratio=DOT_TOTAL_DAMAGE_RATIO):
+    """Giới hạn tổng sát thương DoT ở ratio (mặc định 60%) damage FLAT chuẩn cùng rank."""
     rank_scale = RANK_SCALE[min(max(rank, 1), 9)]
     duration = turns if turns > 0 else DOT_DEFAULT_TURNS
-    return FLAT_DAMAGE_PER_RANK_SCALE * rank_scale * DOT_TOTAL_DAMAGE_RATIO / duration
+    return FLAT_DAMAGE_PER_RANK_SCALE * rank_scale * ratio / duration
 
 
 def build_parsed(rows, id_idx, rank_idx, eff_idx):
@@ -211,8 +270,152 @@ def build_parsed(rows, id_idx, rank_idx, eff_idx):
     return parsed
 
 
+def locate(rec):
+    obj = rec["obj"]
+    bi, oi, _ = rec["src"]
+    blocks = obj if isinstance(obj, list) else obj["blocks"]
+    return blocks[bi]["operations"][oi]
+
+
+def _extract(parsed):
+    """Pass 1: gom record value số từ parsed states."""
+    records = []
+    for ri, (rank, obj, meta) in parsed.items():
+        blocks = obj if isinstance(obj, list) else obj.get("blocks", [])
+        for bi, blk in enumerate(blocks):
+            if not isinstance(blk, dict):
+                continue
+            for oi, op in enumerate(blk.get("operations", [])):
+                if not isinstance(op, dict):
+                    continue
+                o = op.get("op")
+                if o == "STATUS":
+                    key, val, src = key_str("STATUS", op.get("status_id"), ""), op.get("value"), (bi, oi, "value")
+                elif o == "UNIQUE":
+                    params = op.get("params")
+                    if not isinstance(params, dict) or not is_number(params.get("value")):
+                        continue
+                    key, val, src = key_str("UNIQUE", op.get("code"), ""), params.get("value"), (bi, oi, "params.value")
+                else:
+                    key, val, src = key_str(o, op.get("stat"), op.get("sub_type")), op.get("value"), (bi, oi, "value")
+                if not is_number(val):
+                    continue
+                records.append({
+                    "row": ri, "rank": rank, "key": key, "value": val,
+                    "src": src, "obj": obj, "meta": meta, "op": op,
+                })
+    return records
+
+
+def apply_changes(path, rows, parsed, state_changes, text, bom, eff_idx):
+    """Ghi CSV, chỉ thay đúng cell effects, giữ nguyên format gốc."""
+    replacements = []
+    for ri in sorted(state_changes):
+        _, obj, _ = parsed[ri]
+        token = rows[ri][eff_idx]
+        text_out, _ = dump_style(token[0], obj)
+        replacements.append((token[1], token[2], '"' + text_out.replace('"', '""') + '"'))
+    for start, end, value in sorted(replacements, reverse=True):
+        text = text[:start] + value + text[end:]
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(bom + text.encode("utf-8"))
+        os.chmod(tmp, path.stat().st_mode)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def nearest_arch(ratio, archetypes):
+    return min(archetypes, key=lambda a: abs(ratio - a))
+
+
+def x_dev(value, ref):
+    return (value / ref - 1) * 100 if ref else 0
+
+
+def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
+    """Audit tuyệt đối: mỗi value core phải là <ratio> × RANK_SCALE[rank]."""
+    tol = args.scale_tol
+    issues, skipped = [], 0
+    state_changes = {}
+    for rec in records:
+        archetypes = SCALE_ARCHETYPES.get(rec["key"])
+        if not archetypes:
+            continue
+        gu_id = parsed[rec["row"]][2]["id"]
+        if gu_id in allow:
+            skipped += 1
+            continue
+        rank, val = rec["rank"], rec["value"]
+        if not isinstance(val, (int, float)) or isinstance(val, bool) or val == 0:
+            continue
+        ratio = val / RANK_SCALE[rank]
+        near = nearest_arch(ratio, archetypes)
+        if near * (1 - tol) <= ratio <= near * (1 + tol):
+            continue
+        new = num_out(near * RANK_SCALE[rank])
+        if new == val:
+            continue
+        op = locate(rec)
+        if rec["src"][2] == "params.value":
+            op["params"]["value"] = new
+        else:
+            op["value"] = new
+        issues.append((gu_id, rank, rec["key"], val, new, near, ratio))
+        state_changes.setdefault(rec["row"], []).append(gu_id)
+
+    covered = sum(1 for r in records if r["key"] in SCALE_ARCHETYPES)
+    print(f"[--scale] {covered} value core, ratio chuẩn: "
+          + ", ".join(f"{k}= {v}" for k, v in SCALE_ARCHETYPES.items())
+          + f". Dung sai ±{tol:g}.")
+    if skipped:
+        print(f"Bỏ qua {skipped} value thuộc --allow.")
+    if not issues:
+        print("Tất cả value core đúng scale.")
+        return 0
+    issues.sort(key=lambda x: -abs(x[6] / x[5] - 1) if x[5] else 0)
+    for gu_id, rank, key, val, new, near, ratio in issues:
+        print(f"  {gu_id:<40} R{rank} {key:<28} {val:g} -> {new:g}  "
+              f"(ratio {ratio:g} -> {near:g}, {x_dev(ratio, near):+.0f}%)")
+    print(f"\n{len(issues)} value lệch scale trên {len(state_changes)} dòng.")
+    if not args.apply:
+        print("Chỉ xem trước. Thêm --apply để ghi CSV.")
+        return 0
+    apply_changes(path, rows, parsed, state_changes, text, bom, eff_idx)
+    print(f"Đã ghi {path.name} ({len(state_changes)} dòng). Admin -> Dữ liệu -> Import 'Cổ trùng'.")
+    return 0
+
+
+def self_test():
+    assert compute_ref([12, 12, 12, 12000000]) == 12
+    assert clamp_value(12000000, 12, 10) == 120
+    assert clamp_value(1, 12, 10) == 1.2
+    assert in_band(20, 12, 10, None) is True
+    assert in_band(121, 12, 10, None) is False
+    assert in_band(16, 12, None, 0.35) is True
+    assert in_band(20, 12, None, 0.35) is False
+    assert num_out(16.2) == 16.2
+    assert num_out(4.0) == 4
+    assert num_out(2000.0) == 2000
+    assert key_str("STAT_MOD", "ATTACK", "ADD_FLAT") == "STAT_MOD|ATTACK|ADD_FLAT"
+    assert key_str("STATUS", "BLEED", None) == "STATUS|BLEED|"
+    assert dot_damage_cap(4, 3) == 100
+    assert dot_damage_cap(4, 6) == 50
+    assert dot_damage_cap(99, 3) == 50000000000
+    obj = [{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]
+    out, _ = dump_style('[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]', obj)
+    assert out == '[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]'
+    print("self-test OK")
+    return 0
+
+
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--factor", type=float, default=10.0, help="lệch > factor lần ref thì coi là bất thường (mặc định 10)")
     ap.add_argument("--band", type=float, default=None, help="thay --factor bằng dung sai ±PCT (vd 0.35 theo docs)")
     ap.add_argument("--scale", action="store_true", help="audit tuyệt đối theo scale: value = ratio_chuẩn × RANK_SCALE[rank]")
@@ -222,6 +425,7 @@ def main():
     ap.add_argument("--hard-file", help="JSON bổ sung/ghi đè HARD_REFS")
     ap.add_argument("--snap", action="store_true", help="gán bằng ref thay vì kẹp về biên")
     ap.add_argument("--allow", default="", help="danh sách gu_id bỏ qua, phân tách bằng dấu phẩy")
+    ap.add_argument("--dot-ratio", type=float, default=DOT_TOTAL_DAMAGE_RATIO, help="tỷ lệ ngân sách damage của DoT so với Flat chuẩn (mặc định 0.6 = 60%%)")
     ap.add_argument("--apply", action="store_true", help="ghi CSV (mặc định chỉ xem trước)")
     ap.add_argument("--list-keys", action="store_true", help="chỉ in phân loại key rồi thoát")
     ap.add_argument("--dump-hard", action="store_true", help="in HARD_REFS skeleton từ median của key thưa")
@@ -301,26 +505,31 @@ def main():
         return
 
     # --- đánh giá & sửa ---
-    state_changes = {}   # row -> list of applied info
+    state_changes = {}
     issues, uncovered = [], set()
+
     for rec in records:
         key, rank, val = rec["key"], rec["rank"], rec["value"]
         status_id = rec["op"].get("status_id", "")
+
+        # 1. Kiểm tra ngân sách DoT (Bleed, Poison, Burn, Slow Damage)
         if rec["op"].get("op") == "STATUS" and isinstance(status_id, str) and status_id in DOT_STATUS_IDS:
             gu_id = parsed[rec["row"]][2]["id"]
             if gu_id in allow:
                 continue
             turns = rec["op"].get("turns", DOT_DEFAULT_TURNS)
             turns = turns if isinstance(turns, int) and not isinstance(turns, bool) else DOT_DEFAULT_TURNS
-            ref = dot_damage_cap(rank, turns)
+            ref = dot_damage_cap(rank, turns, args.dot_ratio)
             if val <= ref:
                 continue
             new = num_out(ref)
-            rec["op"]["value"] = new
+            op = locate(rec)
+            op["value"] = new
             issues.append((gu_id, rank, key, val, new, ref, val / ref - 1, "dot-budget"))
             state_changes.setdefault(rec["row"], []).append(gu_id)
             continue
 
+        # 2. Kiểm tra key dense hoặc hard ref
         ref, source = ref_for(key, rank)
         if ref is None:
             if key in sparse:
@@ -333,6 +542,7 @@ def main():
             continue
         if in_band(val, ref, args.factor, args.band):
             continue
+
         if args.band is not None:
             lo, hi = ref * (1 - args.band), ref * (1 + args.band)
             new = ref if args.snap else (lo if val < lo else hi)
@@ -341,6 +551,7 @@ def main():
         new = num_out(new)
         if new == val:
             continue
+
         dev = val / ref - 1
         op = locate(rec)
         if rec["src"][2] == "params.value":
@@ -350,178 +561,41 @@ def main():
         issues.append((gu_id, rank, key, val, new, ref, dev, source))
         state_changes.setdefault(rec["row"], []).append(gu_id)
 
-    # --- báo cáo ---
+    # --- Báo cáo ---
     mode = f"band ±{args.band:g}" if args.band is not None else f"factor {args.factor:g}×"
     print(f"Đọc {len(parsed)} Cổ có effect, {len(records)} value số, "
           f"{len(dense)} key dày / {len(sparse)} key thưa. Ngưỡng: {mode}.")
     if not issues:
-        print("Không có value nào lệch ngoài ngưỡng.")
+        print("Tất cả value effect đã chuẩn xác và nằm trong ngưỡng cân bằng.")
     else:
         by_key = {}
         issues.sort(key=lambda x: -abs(x[6]))
+        print(f"\nPhát hiện {len(issues)} effect cần cân bằng:")
         for gu_id, rank, key, val, new, ref, dev, source in issues:
             by_key.setdefault(key, 0)
             by_key[key] += 1
             print(f"  {gu_id:<40} R{rank} {key:<44} {val:g} -> {new:g}  (ref={ref:g}, {dev*100:+.0f}%, {source})")
-        print("\nTheo key:")
+        print("\nTổng hợp theo loại effect:")
         for k, n in sorted(by_key.items(), key=lambda x: -x[1]):
             print(f"  {k:<52} {n}")
+
     if uncovered:
-        print(f"\nKey thưa chưa phủ ({len(uncovered)}) — cần --hard-file để cân:")
+        print(f"\nKey thưa chưa phủ ({len(uncovered)}) — cần --hard-file hoặc bổ sung HARD_REFS:")
         for k in sorted(uncovered):
             print(f"  {k}")
+    else:
+        if hard_enabled:
+            print("\n[ĐỘ PHỦ 100%] Toàn bộ các key thưa (sparse keys) đã được bao phủ bởi HARD_REFS.")
 
     if not args.apply or not issues:
         if issues and not args.apply:
-            print("\nChỉ xem trước. Thêm --apply để ghi CSV.")
+            print("\n[CHẾ ĐỘ XEM TRƯỚC (DRY-RUN)] Thêm cờ --apply để ghi trực tiếp vào Gu.csv.")
         return
 
-    # --- ghi CSV giữ nguyên format ---
+    # --- Ghi CSV giữ nguyên format ---
     apply_changes(path, rows, parsed, state_changes, text, bom, eff_idx)
-    print(f"\nĐã ghi {path.name} ({len(state_changes)} dòng). Admin -> Dữ liệu -> Import 'Cổ trùng'.")
-
-
-def apply_changes(path, rows, parsed, state_changes, text, bom, eff_idx):
-    """Ghi CSV, chỉ thay đúng cell effects, giữ nguyên format gốc."""
-    replacements = []
-    for ri in sorted(state_changes):
-        _, obj, _ = parsed[ri]
-        token = rows[ri][eff_idx]
-        text_out, _ = dump_style(token[0], obj)
-        replacements.append((token[1], token[2], '"' + text_out.replace('"', '""') + '"'))
-    for start, end, value in sorted(replacements, reverse=True):
-        text = text[:start] + value + text[end:]
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    try:
-        with os.fdopen(fd, "wb") as out:
-            out.write(bom + text.encode("utf-8"))
-        os.chmod(tmp, path.stat().st_mode)
-        os.replace(tmp, path)
-    finally:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-
-
-def nearest_arch(ratio, archetypes):
-    return min(archetypes, key=lambda a: abs(ratio - a))
-
-
-def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
-    """Audit tuyệt đối: mỗi value core phải là <ratio> × RANK_SCALE[rank]."""
-    tol = args.scale_tol
-    issues, skipped = [], 0
-    state_changes = {}
-    for rec in records:
-        archetypes = SCALE_ARCHETYPES.get(rec["key"])
-        if not archetypes:
-            continue
-        gu_id = parsed[rec["row"]][2]["id"]
-        if gu_id in allow:
-            skipped += 1
-            continue
-        rank, val = rec["rank"], rec["value"]
-        if not isinstance(val, (int, float)) or isinstance(val, bool) or val == 0:
-            continue
-        ratio = val / RANK_SCALE[rank]
-        near = nearest_arch(ratio, archetypes)
-        if near * (1 - tol) <= ratio <= near * (1 + tol):
-            continue
-        new = num_out(near * RANK_SCALE[rank])
-        if new == val:
-            continue
-        op = locate(rec)
-        if rec["src"][2] == "params.value":
-            op["params"]["value"] = new
-        else:
-            op["value"] = new
-        issues.append((gu_id, rank, rec["key"], val, new, near, ratio))
-        state_changes.setdefault(rec["row"], []).append(gu_id)
-
-    covered = sum(1 for r in records if r["key"] in SCALE_ARCHETYPES)
-    print(f"[--scale] {covered} value core, ratio chuẩn: "
-          + ", ".join(f"{k}= {v}" for k, v in SCALE_ARCHETYPES.items())
-          + f". Dung sai ±{tol:g}.")
-    if skipped:
-        print(f"Bỏ qua {skipped} value thuộc --allow.")
-    if not issues:
-        print("Tất cả value core đúng scale.")
-        return 0
-    issues.sort(key=lambda x: -abs(x[6] / x[5] - 1) if x[5] else 0)
-    for gu_id, rank, key, val, new, near, ratio in issues:
-        print(f"  {gu_id:<40} R{rank} {key:<28} {val:g} -> {new:g}  "
-              f"(ratio {ratio:g} -> {near:g}, {x_dev(ratio, near):+.0f}%)")
-    print(f"\n{len(issues)} value lệch scale trên {len(state_changes)} dòng.")
-    if not args.apply:
-        print("Chỉ xem trước. Thêm --apply để ghi CSV.")
-        return 0
-    apply_changes(path, rows, parsed, state_changes, text, bom, eff_idx)
-    print(f"Đã ghi {path.name} ({len(state_changes)} dòng). Admin -> Dữ liệu -> Import 'Cổ trùng'.")
-    return 0
-
-
-def x_dev(value, ref):
-    return (value / ref - 1) * 100 if ref else 0
-
-
-
-def locate(rec):
-    obj = rec["obj"]
-    bi, oi, _ = rec["src"]
-    blocks = obj if isinstance(obj, list) else obj["blocks"]
-    return blocks[bi]["operations"][oi]
-
-
-def self_test():
-    assert compute_ref([12, 12, 12, 12000000]) == 12
-    assert clamp_value(12000000, 12, 10) == 120
-    assert clamp_value(1, 12, 10) == 1.2
-    assert in_band(20, 12, 10, None) is True
-    assert in_band(121, 12, 10, None) is False
-    assert in_band(16, 12, None, 0.35) is True
-    assert in_band(20, 12, None, 0.35) is False
-    assert num_out(16.2) == 16.2
-    assert num_out(4.0) == 4
-    assert num_out(2000.0) == 2000
-    assert key_str("STAT_MOD", "ATTACK", "ADD_FLAT") == "STAT_MOD|ATTACK|ADD_FLAT"
-    assert key_str("STATUS", "BLEED", None) == "STATUS|BLEED|"
-    assert dot_damage_cap(4, 3) == 100
-    assert dot_damage_cap(4, 6) == 50
-    assert dot_damage_cap(99, 3) == 50000000000
-    obj = [{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]
-    out, _ = dump_style('[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]', obj)
-    assert out == '[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]'
-    print("self-test OK")
-    return 0
-
-
-def _extract(parsed):
-    """Pass 1: gom record value số từ parsed states."""
-    records = []
-    for ri, (rank, obj, meta) in parsed.items():
-        blocks = obj if isinstance(obj, list) else obj.get("blocks", [])
-        for bi, blk in enumerate(blocks):
-            if not isinstance(blk, dict):
-                continue
-            for oi, op in enumerate(blk.get("operations", [])):
-                if not isinstance(op, dict):
-                    continue
-                o = op.get("op")
-                if o == "STATUS":
-                    key, val, src = key_str("STATUS", op.get("status_id"), ""), op.get("value"), (bi, oi, "value")
-                elif o == "UNIQUE":
-                    params = op.get("params")
-                    if not isinstance(params, dict) or not is_number(params.get("value")):
-                        continue
-                    key, val, src = key_str("UNIQUE", op.get("code"), ""), params.get("value"), (bi, oi, "params.value")
-                else:
-                    key, val, src = key_str(o, op.get("stat"), op.get("sub_type")), op.get("value"), (bi, oi, "value")
-                if not is_number(val):
-                    continue
-                records.append({
-                    "row": ri, "rank": rank, "key": key, "value": val,
-                    "src": src, "obj": obj, "meta": meta, "op": op,
-                })
-    return records
+    print(f"\n[HOÀN TẤT] Đã ghi các thay đổi vào {path.name} ({len(state_changes)} dòng Cổ).")
+    print("Vui lòng vào Admin -> Dữ liệu -> Import 'Cổ trùng' để cập nhật vào Database.")
 
 
 if __name__ == "__main__":

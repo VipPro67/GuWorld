@@ -346,6 +346,7 @@ export const SectView: React.FC = () => {
   const [stockSearch, setStockSearch] = useState("");
   const [stockRankFilter, setStockRankFilter] = useState("All");
   const [stockPathFilter, setStockPathFilter] = useState("All");
+  const [stockOnlyAvailable, setStockOnlyAvailable] = useState(true);
 
   useEffect(() => {
     fetchSects();
@@ -564,24 +565,30 @@ export const SectView: React.FC = () => {
 
   // Unit cost (quỹ tông môn) for stocking an item — mirrors backend pkg/pricing
   const getStockUnitCost = (type: "gu" | "material" | "recipe", id: string): number => {
-    const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];
+    const guRankBasePrice = [0, 250, 1000, 4000, 22000, 250000, 3500, 35000, 550000, 14000000];
+    const itemRankBasePrice = [0, 2, 8, 35, 200, 2000, 5, 50, 750, 15000];
     if (type === "gu") {
       const spec = guDictionary[id];
       const rank = spec?.rank || 1;
-      const basePrice = (spec?.base_price && spec.base_price > 0) ? spec.base_price : (guRankBasePrice[rank] || guRankBasePrice[1]);
-      return basePrice;
+      let basePrice = (spec?.base_price && spec.base_price > 0) ? spec.base_price : (guRankBasePrice[rank] || guRankBasePrice[1]);
+      if (rank >= 6) basePrice *= 1000;
+      return Math.max(1, Math.round(basePrice * 1.5));
     }
     if (type === "recipe") {
       const info = recipes.find((r) => r.id === id);
       const targetGuSpec = info ? guDictionary[info.target_gu_id] : null;
       const rank = targetGuSpec?.rank || 1;
-      return getRecipeCost(rank);
+      let cost = getRecipeCost(rank);
+      if (rank >= 6) cost *= 1000;
+      return Math.max(1, Math.round(cost * 1.5));
     }
     const spec = itemDictionary[id];
     const itType = (spec?.item_type || spec?.type || "").toLowerCase();
     if (itType === "consumable" || itType === "currency") return 0;
     const rank = spec?.rank || 1;
-    return rank * 50; // backend: 50 quỹ / hạng
+    let basePrice = (spec?.base_price && spec.base_price > 0) ? spec.base_price : (itemRankBasePrice[rank] || itemRankBasePrice[1]);
+    if (rank >= 6) basePrice *= 1000;
+    return Math.max(1, Math.round(basePrice * 1.5));
   };
 
   // Promotion requirements helper
@@ -608,21 +615,21 @@ export const SectView: React.FC = () => {
   // Donation materials listing (playerMaterials / playerDonatableGus are hoisted above the early returns)
 
   // Pricing helpers matching backend/pkg/pricing
-  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];
-  const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 10, 25, 60, 150];
+  const guRankBasePrice = [0, 250, 1000, 4000, 22000, 250000, 3500, 35000, 550000, 14000000];
+  const itemRankBasePrice = [0, 2, 8, 35, 200, 2000, 5, 50, 750, 15000];
 
   const getItemBasePrice = (matId: string): number => {
     const spec = itemDictionary[matId];
-    if (!spec) return 5;
+    if (!spec) return 2;
     if (spec.base_price && spec.base_price > 0) return spec.base_price;
-    return itemRankBasePrice[spec.rank || 1] || 5;
+    return itemRankBasePrice[spec.rank || 1] || 2;
   };
 
   const getGuBasePrice = (guId: string): number => {
     const spec = guDictionary[guId];
-    if (!spec) return 200;
+    if (!spec) return 250;
     if (spec.base_price && spec.base_price > 0) return spec.base_price;
-    return guRankBasePrice[spec.rank || 1] || 200;
+    return guRankBasePrice[spec.rank || 1] || 250;
   };
 
   // DonatePoints = basePrice * 0.50 (DonateRatio), minimum 1
@@ -637,11 +644,23 @@ export const SectView: React.FC = () => {
     return Math.max(20, p);
   };
 
-  // Get material contribution points value (DonateRatio = 50%)
-  const getMaterialValue = (matId: string): number => getDonatePoints(getItemBasePrice(matId));
+  // Get material contribution points value (DonateRatio = 50%, x1000 for Rank >= 6)
+  const getMaterialValue = (matId: string): number => {
+    const spec = itemDictionary[matId];
+    const rank = spec?.rank || 1;
+    let base = getItemBasePrice(matId);
+    if (rank >= 6) base *= 1000;
+    return getDonatePoints(base);
+  };
 
-  // Get Gu contribution points value (DonateRatio = 50%)
-  const getGuValue = (guId: string): number => getDonatePoints(getGuBasePrice(guId));
+  // Get Gu contribution points value (DonateRatio = 50%, x1000 for Rank >= 6)
+  const getGuValue = (guId: string, rank?: number): number => {
+    const spec = guSpecFor(guId, rank) || guDictionary[guId];
+    const r = rank || spec?.rank || 1;
+    let base = getGuBasePrice(guId);
+    if (r >= 6) base *= 1000;
+    return getDonatePoints(base);
+  };
 
   // Filter sects
   const filteredSects = (sects || []).filter((sect) => {
@@ -3851,6 +3870,7 @@ export const SectView: React.FC = () => {
 
                 {(() => {
                   const sectLvl = sect?.level || 1;
+                  const maxItemLevel = Math.min(5, Math.floor(sectLvl / 10) + 1);
                   const recipeEntries: [string, { name: string; rank: number; rarity: number; path?: string[] | string }][] = recipes
                     ? (recipes.map((r) => {
                         const targetGuSpec = guDictionary[r.target_gu_id];
@@ -3876,15 +3896,22 @@ export const SectView: React.FC = () => {
                         return Math.max(spec.rank || 1, spec.rarity || 0) < 6;
                       });
 
-                  const availableRanks = Array.from(new Set(allEntries.map(([, spec]) => (spec.rank || 1)))).sort((a, b) => a - b);
+                  const candidateEntries = stockOnlyAvailable
+                    ? allEntries.filter(([, spec]) => (spec.rank || 1) <= maxItemLevel)
+                    : allEntries;
 
-                  const availablePaths = Array.from(new Set(allEntries.flatMap(([, spec]): string[] => {
+                  const availableRanks = Array.from(new Set(candidateEntries.map(([, spec]) => (spec.rank || 1)))).sort((a, b) => a - b);
+
+                  const availablePaths = Array.from(new Set(candidateEntries.flatMap(([, spec]): string[] => {
                     return parsePaths(spec.path);
                   }))).filter(Boolean).sort((a, b) => translatePath(a).localeCompare(translatePath(b), "vi"));
 
                   const filtered = allEntries.filter(([id, spec]) => {
                     const name = spec.name || id;
                     const rank = spec.rank || 1;
+                    const locked = rank > maxItemLevel;
+                    if (stockOnlyAvailable && locked) return false;
+
                     const q = stockSearch.trim().toLowerCase();
                     const matchesSearch = !q || name.toLowerCase().includes(q) || id.toLowerCase().includes(q);
                     const matchesRank = stockRankFilter === "All" || rank.toString() === stockRankFilter;
@@ -3893,15 +3920,47 @@ export const SectView: React.FC = () => {
                     return matchesSearch && matchesRank && matchesPath;
                   });
 
+                  const selectableItems = filtered.filter(([, spec]) => (spec.rank || 1) <= maxItemLevel);
+                  const allSearchSelected = selectableItems.length > 0 && selectableItems.every(([id]) => !!stockSelections[id]);
+
+                  const handleToggleSelectAllSearch = () => {
+                    if (allSearchSelected) {
+                      setStockSelections(prev => {
+                        const next = { ...prev };
+                        selectableItems.forEach(([id]) => {
+                          delete next[id];
+                        });
+                        return next;
+                      });
+                    } else {
+                      setStockSelections(prev => {
+                        const next = { ...prev };
+                        selectableItems.forEach(([id, spec]) => {
+                          const itemSpec = itemDictionary[id];
+                          const itType = (itemSpec?.item_type || itemSpec?.type || "").toLowerCase();
+                          if (stockItemType === "material" && (itType === "consumable" || itType === "currency")) {
+                            return;
+                          }
+                          const name = spec.name || id;
+                          const unitCost = getStockUnitCost(stockItemType, id);
+                          if (!next[id]) {
+                            next[id] = { item_type: stockItemType, item_id: id, name, unit_cost: unitCost, quantity: 1 };
+                          }
+                        });
+                        return next;
+                      });
+                    }
+                  };
+
                   const selectedCount = Object.keys(stockSelections).length;
                   const totalCost = Object.values(stockSelections).reduce((sum, it) => sum + it.unit_cost * it.quantity, 0);
                   const canAfford = (sect?.funds || 0) >= totalCost;
 
                   return (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                      <div className="md:col-span-2 bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4">
-                        <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
-                          <div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full min-w-0">
+                      <div className="lg:col-span-2 min-w-0 bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-900 pb-3">
+                          <div className="min-w-0 flex-1">
                             <h4 className="text-sm font-bold text-zinc-200 font-serif">
                               {stockItemType === "gu" ? "Danh Sách Cổ Trùng" : stockItemType === "recipe" ? "Danh Sách Bí Phương" : "Danh Sách Linh Tài"}
                             </h4>
@@ -3913,40 +3972,91 @@ export const SectView: React.FC = () => {
                                 : "Tích chọn Linh tài và số lượng cần nhập kho."}
                             </p>
                           </div>
-                          <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800">
-                            Tìm thấy: {filtered.length} loại
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800 shrink-0">
+                              Tìm thấy: <strong className="text-cyan-400 font-semibold">{filtered.length}</strong> loại
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input
-                            type="text"
-                            value={stockSearch}
-                            onChange={(e) => setStockSearch(e.target.value)}
-                            placeholder={stockItemType === "gu" ? "Tìm kiếm cổ trùng..." : stockItemType === "recipe" ? "Tìm kiếm bí phương..." : "Tìm kiếm linh tài..."}
-                            className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-cyan-500/50"
-                          />
-                          <div className="flex gap-2">
+                        <div className="flex flex-col gap-2.5">
+                          <div className="relative w-full">
+                            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                              type="text"
+                              value={stockSearch}
+                              onChange={(e) => setStockSearch(e.target.value)}
+                              placeholder={stockItemType === "gu" ? "Tìm kiếm cổ trùng..." : stockItemType === "recipe" ? "Tìm kiếm bí phương..." : "Tìm kiếm linh tài..."}
+                              className="w-full bg-zinc-950 border border-zinc-900 rounded-xl pl-9 pr-8 py-2 text-xs font-mono text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/50"
+                            />
+                            {stockSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setStockSearch("")}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-0.5 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
                             <select
                               value={stockRankFilter}
                               onChange={(e) => setStockRankFilter(e.target.value)}
-                              className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-cyan-500/50 cursor-pointer outline-none"
+                              className="bg-zinc-950 border border-zinc-900 rounded-xl px-2.5 py-1.5 text-xs font-mono text-zinc-300 focus:outline-none focus:border-cyan-500/50 cursor-pointer outline-none"
                             >
                               <option value="All">Tất cả Hạng</option>
                               {availableRanks.map((rank) => (
                                 <option key={rank} value={rank.toString()}>Hạng {rank}</option>
                               ))}
                             </select>
+
                             <select
                               value={stockPathFilter}
                               onChange={(e) => setStockPathFilter(e.target.value)}
-                              className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-cyan-500/50 cursor-pointer outline-none"
+                              className="bg-zinc-950 border border-zinc-900 rounded-xl px-2.5 py-1.5 text-xs font-mono text-zinc-300 focus:outline-none focus:border-cyan-500/50 cursor-pointer outline-none"
                             >
                               <option value="All">Tất cả Phái</option>
                               {availablePaths.map((path) => (
                                 <option key={path} value={path}>{translatePath(path)}</option>
                               ))}
                             </select>
+
+                            <button
+                              type="button"
+                              onClick={() => setStockOnlyAvailable(!stockOnlyAvailable)}
+                              className={`px-2.5 py-1.5 rounded-xl border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                                stockOnlyAvailable
+                                  ? "bg-cyan-950/40 border-cyan-500/40 text-cyan-300 font-semibold"
+                                  : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                              }`}
+                            >
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                stockOnlyAvailable ? "bg-cyan-600 border-cyan-500 text-white" : "border-zinc-700 bg-zinc-950"
+                              }`}>
+                                {stockOnlyAvailable && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                              <span>Chỉ món nhập được</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={handleToggleSelectAllSearch}
+                              disabled={selectableItems.length === 0}
+                              className={`sm:ml-auto px-3 py-1.5 rounded-xl border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                                allSearchSelected
+                                  ? "bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/40"
+                                  : "bg-cyan-600/20 border-cyan-500/40 text-cyan-300 hover:bg-cyan-600/30"
+                              }`}
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>
+                                {allSearchSelected
+                                  ? `Bỏ chọn (${selectableItems.length})`
+                                  : `Chọn tất cả (${selectableItems.length})`}
+                              </span>
+                            </button>
                           </div>
                         </div>
 
@@ -3956,9 +4066,8 @@ export const SectView: React.FC = () => {
                           ) : (
                             filtered.map(([id, spec]) => {
                               const name = spec.name || id;
-const rank = spec.rank || 1;
-                               const maxItemLevel = Math.min(5, Math.floor(sectLvl / 10) + 1);
-                               const locked = rank > maxItemLevel;
+                              const rank = spec.rank || 1;
+                              const locked = rank > maxItemLevel;
                               const unitCost = getStockUnitCost(stockItemType, id);
                               const isSelected = !!stockSelections[id];
                               const sel = stockSelections[id];
@@ -4007,7 +4116,7 @@ const rank = spec.rank || 1;
                                       {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3px]" />}
                                     </div>
 
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                       <h5 className="text-xs font-bold text-zinc-200 truncate">{locked ? "🔒 " : ""}{name}</h5>
                                       <p className="text-[10px] text-zinc-500 font-mono mt-1">
                                         Hạng {rank} • Giá nhập: <span className="text-cyan-400 font-semibold">{unitCost} Quỹ</span>
@@ -4055,10 +4164,23 @@ const rank = spec.rank || 1;
                         </div>
                       </div>
 
-                      <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 h-fit md:sticky md:top-4">
-                        <h4 className="text-xs font-bold text-zinc-300 font-serif border-b border-zinc-900 pb-2.5">
-                          Tóm Tắt Nhập Kho ({selectedCount} loại)
-                        </h4>
+                      <div className="lg:col-span-1 min-w-0 bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 h-fit lg:sticky lg:top-4">
+                        <div className="flex items-center justify-between border-b border-zinc-900 pb-2.5">
+                          <h4 className="text-xs font-bold text-zinc-300 font-serif">
+                            Tóm Tắt Nhập Kho ({selectedCount} loại)
+                          </h4>
+                          {selectedCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setStockSelections({})}
+                              className="text-[10px] text-zinc-500 hover:text-red-400 font-mono transition-colors flex items-center gap-1 cursor-pointer"
+                              title="Xóa tất cả vật phẩm đã chọn"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Xóa hết
+                            </button>
+                          )}
+                        </div>
 
                         {selectedCount === 0 ? (
                           <div className="flex flex-col items-center justify-center py-10 text-center gap-2">

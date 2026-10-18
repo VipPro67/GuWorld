@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -262,44 +263,76 @@ func TestStockVaultRejectsConsumableAndCurrency(t *testing.T) {
 		Rank:     1,
 	}
 	models.ItemRegistry["test_material_item"] = models.ItemSpec{
-		ID:       "test_material_item",
-		Name:     "Test Ore",
-		Type:     "Material",
-		ItemType: "Material",
-		Rank:     1,
+		ID:        "test_material_item",
+		Name:      "Test Ore",
+		Type:      "Material",
+		ItemType:  "Material",
+		Rank:      1,
+		BasePrice: 2.0,
 	}
 
 	// 1. Direct itemType consumable
-	_, code, _ := stockItemUnitCost(nil, 10, "consumable", "test_consumable_item")
+	_, _, code, _ := stockItemUnitCost(nil, 10, "consumable", "test_consumable_item")
 	if code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden for consumable itemType, got %d", code)
 	}
 
 	// 2. Direct itemType currency
-	_, code, _ = stockItemUnitCost(nil, 10, "currency", "test_currency_item")
+	_, _, code, _ = stockItemUnitCost(nil, 10, "currency", "test_currency_item")
 	if code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden for currency itemType, got %d", code)
 	}
 
 	// 3. itemType material but item is Consumable in dictionary
-	_, code, _ = stockItemUnitCost(nil, 10, "material", "test_consumable_item")
+	_, _, code, _ = stockItemUnitCost(nil, 10, "material", "test_consumable_item")
 	if code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden for material that is Consumable, got %d", code)
 	}
 
 	// 4. itemType material but item is Currency in dictionary
-	_, code, _ = stockItemUnitCost(nil, 10, "material", "test_currency_item")
+	_, _, code, _ = stockItemUnitCost(nil, 10, "material", "test_currency_item")
 	if code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden for material that is Currency, got %d", code)
 	}
 
-	// 5. Normal material item should succeed
-	unitCost, code, msg := stockItemUnitCost(nil, 10, "material", "test_material_item")
+	// 5. Normal material item should succeed and have 1.5x price
+	unitCost, effRank, code, msg := stockItemUnitCost(nil, 10, "material", "test_material_item")
 	if code != http.StatusOK {
 		t.Fatalf("expected 200 OK for valid Material item, got %d (msg: %s)", code, msg)
 	}
-	if unitCost <= 0 {
-		t.Fatalf("expected positive unitCost, got %d", unitCost)
+	if effRank != 1 {
+		t.Fatalf("expected effective rank 1, got %d", effRank)
+	}
+	// ItemBasePriceByRank(1) = 2.0 -> 2.0 * 1.5 = 3
+	if unitCost != 3 {
+		t.Fatalf("expected unitCost 3 (1.5x base price 2), got %d", unitCost)
+	}
+
+	// 6. Immortal material (Rank 6): requires sect level >= 50
+	models.ItemRegistry["test_immortal_item"] = models.ItemSpec{
+		ID:        "test_immortal_item",
+		Name:      "Test Immortal Material",
+		Type:      "Material",
+		ItemType:  "Material",
+		Rank:      6,
+		BasePrice: 200.0,
+	}
+	// Level 40 sect cannot stock Rank 6
+	_, _, code, _ = stockItemUnitCost(nil, 40, "material", "test_immortal_item")
+	if code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for Rank 6 material on sect level 40, got %d", code)
+	}
+	// Level 50 sect can stock Rank 6
+	unitCost6, effRank6, code, msg := stockItemUnitCost(nil, 50, "material", "test_immortal_item")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200 OK for Rank 6 material on sect level 50, got %d (msg: %s)", code, msg)
+	}
+	if effRank6 != 6 {
+		t.Fatalf("expected effective rank 6, got %d", effRank6)
+	}
+	// ItemBasePriceByRank(6) = 200.0 -> * 1000 * 1.5 = 300000
+	if unitCost6 != 300000 {
+		t.Fatalf("expected unitCost6 300000, got %d", unitCost6)
 	}
 }
 
@@ -316,6 +349,65 @@ func TestCanDestroyVaultItem(t *testing.T) {
 		if canDestroyVaultItem(rank) {
 			t.Fatalf("expected %s to be denied from destroying vault items", rank)
 		}
+	}
+}
+
+func TestStockSectVaultGatingAndPricing(t *testing.T) {
+	// Register mock items for ranks 1 through 9
+	for r := 1; r <= 9; r++ {
+		models.ItemRegistry[fmt.Sprintf("mock_mat_r%d", r)] = models.ItemSpec{
+			ID:        fmt.Sprintf("mock_mat_r%d", r),
+			Name:      fmt.Sprintf("Mock Material R%d", r),
+			Type:      "Material",
+			ItemType:  "Material",
+			Rank:      r,
+			BasePrice: float64(r * 10),
+		}
+	}
+
+	// Level 0 sect: maxLevel 1
+	_, effRank, code, _ := stockItemUnitCost(nil, 0, "material", "mock_mat_r1")
+	if code != http.StatusOK || effRank != 1 {
+		t.Fatalf("expected level 0 sect to allow rank 1, got code=%d rank=%d", code, effRank)
+	}
+	_, _, code, _ = stockItemUnitCost(nil, 0, "material", "mock_mat_r2")
+	if code != http.StatusForbidden {
+		t.Fatalf("expected level 0 sect to reject rank 2, got code=%d", code)
+	}
+
+	// Level 10 sect: maxLevel 2
+	_, effRank, code, _ = stockItemUnitCost(nil, 10, "material", "mock_mat_r2")
+	if code != http.StatusOK || effRank != 2 {
+		t.Fatalf("expected level 10 sect to allow rank 2, got code=%d rank=%d", code, effRank)
+	}
+	_, _, code, _ = stockItemUnitCost(nil, 10, "material", "mock_mat_r3")
+	if code != http.StatusForbidden {
+		t.Fatalf("expected level 10 sect to reject rank 3, got code=%d", code)
+	}
+
+	// Level 50 sect: maxLevel 6 (Rank 6 Tiên tài)
+	unitCost6, effRank6, code, _ := stockItemUnitCost(nil, 50, "material", "mock_mat_r6")
+	if code != http.StatusOK || effRank6 != 6 {
+		t.Fatalf("expected level 50 sect to allow rank 6, got code=%d rank=%d", code, effRank6)
+	}
+	// BasePrice = 60, Rank 6 multiplier = 1000, 1.5x import multiplier = 60 * 1000 * 1.5 = 90,000
+	if unitCost6 != 90000 {
+		t.Fatalf("expected unitCost 90000 for rank 6 material, got %d", unitCost6)
+	}
+	// Level 50 cannot stock rank 7
+	_, _, code, _ = stockItemUnitCost(nil, 50, "material", "mock_mat_r7")
+	if code != http.StatusForbidden {
+		t.Fatalf("expected level 50 sect to reject rank 7, got code=%d", code)
+	}
+
+	// Level 80 sect: maxLevel 9 (Rank 9 Tiên tài)
+	unitCost9, effRank9, code, _ := stockItemUnitCost(nil, 80, "material", "mock_mat_r9")
+	if code != http.StatusOK || effRank9 != 9 {
+		t.Fatalf("expected level 80 sect to allow rank 9, got code=%d rank=%d", code, effRank9)
+	}
+	// BasePrice = 90, Rank 9 multiplier = 1000, 1.5x import multiplier = 90 * 1000 * 1.5 = 135,000
+	if unitCost9 != 135000 {
+		t.Fatalf("expected unitCost 135000 for rank 9 material, got %d", unitCost9)
 	}
 }
 

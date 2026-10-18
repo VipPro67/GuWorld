@@ -162,11 +162,13 @@ func DonateMaterials(c *gin.Context) {
 	}
 
 	var m SectMember
+	var sectLevel int
 	err = tx.QueryRow(`
-		SELECT id, sect_id, contribution_points
-		FROM sect_members
-		WHERE player_id = $1
-	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints)
+		SELECT sm.id, sm.sect_id, sm.contribution_points, s.level
+		FROM sect_members sm
+		JOIN sects s ON s.id = sm.sect_id
+		WHERE sm.player_id = $1
+	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints, &sectLevel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -194,7 +196,16 @@ func DonateMaterials(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không thể quyên góp vật phẩm thuộc loại Tiêu hao hoặc Tiền tệ vào bảo khố tông môn!"})
 		return
 	}
-	pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
+	requiredSectLevel := (matRank - 1) * 10
+	if sectLevel < requiredSectLevel {
+		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để thu nạp Linh tài hạng %d! (Hiện tại: Cấp %d)", requiredSectLevel, matRank, sectLevel)})
+		return
+	}
+	basePrice := pricing.ItemBasePrice(dbBasePrice, matRank)
+	if matRank >= 6 {
+		basePrice *= 1000.0
+	}
+	pointsPerItem := pricing.DonatePoints(basePrice)
 
 	gainedContribution := int64(pointsPerItem) * req.Amount
 
@@ -333,11 +344,13 @@ func DonateGu(c *gin.Context) {
 	}
 
 	var m SectMember
+	var sectLevel int
 	err = tx.QueryRow(`
-		SELECT id, sect_id, contribution_points
-		FROM sect_members
-		WHERE player_id = $1
-	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints)
+		SELECT sm.id, sm.sect_id, sm.contribution_points, s.level
+		FROM sect_members sm
+		JOIN sects s ON s.id = sm.sect_id
+		WHERE sm.player_id = $1
+	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints, &sectLevel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -369,6 +382,12 @@ func DonateGu(c *gin.Context) {
 		return
 	}
 
+	requiredSectLevel := (guInstance.Rank - 1) * 10
+	if sectLevel < requiredSectLevel {
+		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để thu nạp Cổ trùng hạng %d! (Hiện tại: Cấp %d)", requiredSectLevel, guInstance.Rank, sectLevel)})
+		return
+	}
+
 	// Calculate base price & points from gu_dictionary (or in-memory registry)
 	var guRank int = guInstance.Rank
 	var guBasePrice float64
@@ -387,6 +406,9 @@ func DonateGu(c *gin.Context) {
 		}
 	}
 	effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
+	if guRank >= 6 {
+		effectiveBase *= 1000.0
+	}
 	gainedContribution := int(pricing.DonatePoints(effectiveBase))
 
 	// Add to sect vault
@@ -526,11 +548,13 @@ func DonateRecipe(c *gin.Context) {
 	}
 
 	var m SectMember
+	var sectLevel int
 	err = tx.QueryRow(`
-		SELECT id, sect_id, contribution_points
-		FROM sect_members
-		WHERE player_id = $1
-	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints)
+		SELECT sm.id, sm.sect_id, sm.contribution_points, s.level
+		FROM sect_members sm
+		JOIN sects s ON s.id = sm.sect_id
+		WHERE sm.player_id = $1
+	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints, &sectLevel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -548,7 +572,15 @@ func DonateRecipe(c *gin.Context) {
 			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1
 		`, req.RecipeID).Scan(&targetGuRank)
 	}
+	requiredSectLevel := (targetGuRank - 1) * 10
+	if sectLevel < requiredSectLevel {
+		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để thu nạp Bí phương hạng %d! (Hiện tại: Cấp %d)", requiredSectLevel, targetGuRank, sectLevel)})
+		return
+	}
 	basePoints := pricing.RecipeDonatePoints(targetGuRank)
+	if targetGuRank >= 6 {
+		basePoints *= 1000
+	}
 	gainedContribution := int(float64(basePoints) * progress.CompletionRate / 100.0)
 	if gainedContribution < 1 {
 		gainedContribution = 1
@@ -678,11 +710,13 @@ func DonateBulk(c *gin.Context) {
 	}
 
 	var m SectMember
+	var sectLevel int
 	err = tx.QueryRow(`
-		SELECT id, sect_id, contribution_points
-		FROM sect_members
-		WHERE player_id = $1
-	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints)
+		SELECT sm.id, sm.sect_id, sm.contribution_points, s.level
+		FROM sect_members sm
+		JOIN sects s ON s.id = sm.sect_id
+		WHERE sm.player_id = $1
+	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints, &sectLevel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -760,11 +794,20 @@ func DonateBulk(c *gin.Context) {
 				dbBasePrice = 0
 				itemType = ""
 			}
-			pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
 			if strings.EqualFold(itemType, "Consumable") || strings.EqualFold(itemType, "Currency") {
 				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Không thể quyên góp vật phẩm thuộc loại Tiêu hao hoặc Tiền tệ vào bảo khố: %s", materialName)})
 				return
 			}
+			requiredSectLevel := (matRank - 1) * 10
+			if sectLevel < requiredSectLevel {
+				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để thu nạp Linh tài hạng %d: %s (Hiện tại: Cấp %d)", requiredSectLevel, matRank, materialName, sectLevel)})
+				return
+			}
+			basePrice := pricing.ItemBasePrice(dbBasePrice, matRank)
+			if matRank >= 6 {
+				basePrice *= 1000.0
+			}
+			pointsPerItem := pricing.DonatePoints(basePrice)
 			gained := int64(pointsPerItem) * matReq.Amount
 			totalGainedContribution += gained
 
@@ -845,6 +888,11 @@ func DonateBulk(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Vui lòng tháo Cổ trùng ra trước khi quyên góp!"})
 					return
 				}
+				requiredSectLevel := (gi.Rank - 1) * 10
+				if sectLevel < requiredSectLevel {
+					c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để thu nạp Cổ trùng hạng %d: %s (Hiện tại: Cấp %d)", requiredSectLevel, gi.Rank, gi.GuID, sectLevel)})
+					return
+				}
 
 				// Fetch base price using in-memory Gu registry
 				var guRank int = gi.Rank
@@ -864,6 +912,9 @@ func DonateBulk(c *gin.Context) {
 					}
 				}
 				effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
+				if guRank >= 6 {
+					effectiveBase *= 1000.0
+				}
 				gained := int64(pricing.DonatePoints(effectiveBase))
 
 				totalGainedContribution += gained
@@ -948,10 +999,17 @@ func DonateBulk(c *gin.Context) {
 					SELECT COALESCE(gd.rank,1)
 					FROM refining_recipes rr
 					JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank
-					WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1
 				`, recipeReq.RecipeID).Scan(&targetGuRank)
 			}
+			requiredSectLevel := (targetGuRank - 1) * 10
+			if sectLevel < requiredSectLevel {
+				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để thu nạp Bí phương hạng %d: %s (Hiện tại: Cấp %d)", requiredSectLevel, targetGuRank, recipeReq.RecipeID, sectLevel)})
+				return
+			}
 			basePoints := pricing.RecipeDonatePoints(targetGuRank)
+			if targetGuRank >= 6 {
+				basePoints *= 1000
+			}
 			gained := int(float64(basePoints) * progress.CompletionRate / 100.0)
 			if gained < 1 {
 				gained = 1

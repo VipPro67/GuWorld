@@ -171,7 +171,11 @@ func sectVaultGuCost(guID string, rank int) int64 {
 			rank = spec.Rank
 		}
 	}
-	return int64(pricing.VaultCost(pricing.GuBasePrice(base, rank)))
+	cost := pricing.VaultCost(pricing.GuBasePrice(base, rank))
+	if rank >= 6 {
+		cost *= 1000
+	}
+	return int64(cost)
 }
 
 // vaultWithdrawnHunger is the hunger a Gu starts with when it leaves the vault:

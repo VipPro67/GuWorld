@@ -122,14 +122,14 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   const buyTier: StoneTier = selectedBuyItem?.currency === "immortal" ? "immortal" : "primeval";
 
-  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];
-  const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 10, 25, 60, 150];
+  const guRankBasePrice = [0, 250, 1000, 4000, 22000, 250000, 3500, 35000, 550000, 14000000];
+  const itemRankBasePrice = [0, 2, 8, 35, 200, 2000, 5, 50, 750, 15000];
 
   const getGuBasePrice = (guId: string, rank?: number): number => {
     const spec = guSpecFor(guId, rank) || guDictionary[guId];
-    if (!spec) return 200;
+    if (!spec) return 250;
     if (spec.base_price && spec.base_price > 0) return spec.base_price;
-    return guRankBasePrice[spec.rank || 1] || 200;
+    return guRankBasePrice[spec.rank || 1] || 250;
   };
 
   const getItemBasePrice = (itemId: string): number => {

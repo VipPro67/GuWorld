@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -83,44 +84,46 @@ func planVaultGuDeductions(matchedRows []VaultGuRow, quantity int64) ([]VaultGuD
 }
 
 // stockItemUnitCost computes the sect-funds unit cost for stocking an item and
-// enforces the rank gates (Gu: rank 1-5 & <= sect level; material: rank <= sect level).
-// Returns (unitCost, httpStatusOK, "") on success; otherwise (0, status, errorMessage).
-func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int64, int, string) {
+// enforces the rank gates (10 sect levels = 1 rank level, up to rank 9).
+// Returns (unitCost, effectiveRank, httpStatusOK, "") on success; otherwise (0, 0, status, errorMessage).
+func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int64, int, int, string) {
 	itemType = strings.ToLower(itemType)
 	if itemType == "consumable" || itemType == "currency" {
-		return 0, http.StatusForbidden, "Không thể nhập vật phẩm loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn."
+		return 0, 0, http.StatusForbidden, "Không thể nhập vật phẩm loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn."
 	}
 	if itemType == "gu" {
-		return 0, http.StatusForbidden, "Không thể nhập Cổ trùng vào bảo khố."
+		return 0, 0, http.StatusForbidden, "Không thể nhập Cổ trùng vào bảo khố."
+	}
+
+	maxLevel := sectLevel/10 + 1
+	if maxLevel > 9 {
+		maxLevel = 9
 	}
 
 	if itemType == "material" {
-		// calculate max allowed item level based on sect level (10 sect levels = 1 item level, max 5)
-		maxLevel := sectLevel/10 + 1
-		if maxLevel > 5 {
-			maxLevel = 5
-		}
 		var matRank, matRarity int
+		var matBasePrice float64
 		var dbItemType string
 		var err error = sql.ErrNoRows
 		if tx != nil {
-			err = tx.QueryRow(`SELECT COALESCE(rank, 1), COALESCE(rarity, 0), COALESCE(item_type, '') FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank, &matRarity, &dbItemType)
+			err = tx.QueryRow(`SELECT COALESCE(rank, 1), COALESCE(rarity, 0), COALESCE(base_price, 0), COALESCE(item_type, '') FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank, &matRarity, &matBasePrice, &dbItemType)
 		}
 		if err != nil {
 			if spec, ok := models.ItemRegistry[itemID]; ok {
 				matRank = spec.Rank
 				matRarity = spec.Rarity
+				matBasePrice = spec.BasePrice
 				dbItemType = spec.Type
 				if dbItemType == "" {
 					dbItemType = spec.ItemType
 				}
 			} else {
-				return 0, http.StatusBadRequest, "Vật phẩm không tồn tại trong từ điển"
+				return 0, 0, http.StatusBadRequest, "Vật phẩm không tồn tại trong từ điển"
 			}
 		}
 
 		if strings.EqualFold(dbItemType, "Consumable") || strings.EqualFold(dbItemType, "Currency") {
-			return 0, http.StatusForbidden, "Không thể nhập vật phẩm thuộc loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn."
+			return 0, 0, http.StatusForbidden, "Không thể nhập vật phẩm thuộc loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn."
 		}
 
 		effectiveLevel := matRank
@@ -128,15 +131,19 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int6
 			effectiveLevel = matRarity
 		}
 
-		if effectiveLevel >= 6 {
-			return 0, http.StatusForbidden, "Không thể nhập Tiên phẩm Linh tài vào bảo khố tông môn (chỉ hỗ trợ phàm phẩm cấp 1-5)."
-		}
-
 		if effectiveLevel > maxLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", (effectiveLevel-1)*10, effectiveLevel, sectLevel)
+			return 0, 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", (effectiveLevel-1)*10, effectiveLevel, sectLevel)
 		}
 
-		return int64(effectiveLevel * 50), http.StatusOK, ""
+		baseCost := pricing.ItemBasePrice(matBasePrice, effectiveLevel)
+		if effectiveLevel >= 6 {
+			baseCost *= 1000.0
+		}
+		unitCost := int64(math.Round(baseCost * 1.5))
+		if unitCost < 1 {
+			unitCost = 1
+		}
+		return unitCost, effectiveLevel, http.StatusOK, ""
 	}
 
 	if itemType == "recipe" {
@@ -149,7 +156,7 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int6
 			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text) = $1
 		`, itemID).Scan(&targetGuRank, &targetGuRarity)
 		if err != nil {
-			return 0, http.StatusBadRequest, "Bí phương không tồn tại trong tàng kinh các"
+			return 0, 0, http.StatusBadRequest, "Bí phương không tồn tại trong tàng kinh các"
 		}
 
 		effectiveLevel := targetGuRank
@@ -157,22 +164,22 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int6
 			effectiveLevel = targetGuRarity
 		}
 
-		if effectiveLevel >= 6 {
-			return 0, http.StatusForbidden, "Không thể nhập Tiên cấp Bí phương vào bảo khố tông môn (chỉ hỗ trợ phàm cấp 1-5)."
+		if effectiveLevel > maxLevel {
+			return 0, 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", (effectiveLevel-1)*10, effectiveLevel, sectLevel)
 		}
 
-		// calculate max allowed item level based on sect level (10 sect levels = 1 item level, max 5)
-		maxLevel := sectLevel/10 + 1
-		if maxLevel > 5 {
-			maxLevel = 5
+		baseCost := float64(pricing.RecipeCostByGuRank(effectiveLevel))
+		if effectiveLevel >= 6 {
+			baseCost *= 1000.0
 		}
-		if effectiveLevel > maxLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", (effectiveLevel-1)*10, effectiveLevel, sectLevel)
+		unitCost := int64(math.Round(baseCost * 1.5))
+		if unitCost < 1 {
+			unitCost = 1
 		}
-		return pricing.RecipeCostByGuRank(effectiveLevel), http.StatusOK, ""
+		return unitCost, effectiveLevel, http.StatusOK, ""
 	}
 
-	return 0, http.StatusBadRequest, "Loại vật phẩm không hợp lệ (chỉ hỗ trợ gu, material hoặc recipe)"
+	return 0, 0, http.StatusBadRequest, "Loại vật phẩm không hợp lệ (chỉ hỗ trợ gu, material hoặc recipe)"
 }
 
 // StockSectVault allows leaders/elders to buy vault items using sect funds
@@ -222,12 +229,27 @@ func StockSectVault(c *gin.Context) {
 		return
 	}
 
-	unitCost, code, msg := stockItemUnitCost(tx, s.Level, req.ItemType, req.ItemID)
+	unitCost, effectiveRank, code, msg := stockItemUnitCost(tx, s.Level, req.ItemType, req.ItemID)
 	if code != http.StatusOK {
 		c.JSON(code, gin.H{"error": msg})
 		return
 	}
 	itemType := strings.ToLower(req.ItemType)
+
+	if effectiveRank >= 6 {
+		if req.Quantity > 5 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mỗi lần chỉ được nhập tối đa 5 Tiên phẩm cùng loại!"})
+			return
+		}
+		if itemType == "material" {
+			var currentInVault int64
+			_ = tx.QueryRow(`SELECT COALESCE(quantity, 0) FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2`, s.ID, req.ItemID).Scan(&currentInVault)
+			if currentInVault+req.Quantity > 200 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bảo khố chỉ có thể lưu trữ tối đa 200 đơn vị Tiên phẩm cùng loại (hiện có: %d)!", currentInVault)})
+				return
+			}
+		}
+	}
 
 	totalCost := int64(unitCost) * int64(req.Quantity)
 	if s.Funds < totalCost {
@@ -497,20 +519,37 @@ func StockSectVaultBulk(c *gin.Context) {
 	}
 
 	type stockLine struct {
-		itemType string
-		itemID   string
-		quantity int64
-		unitCost int64
+		itemType      string
+		itemID        string
+		quantity      int64
+		unitCost      int64
+		effectiveRank int
 	}
 	lines := make([]stockLine, 0, len(req.Items))
 	var totalCost int64
+	plannedImmortalQty := make(map[string]int64)
 	for _, it := range req.Items {
-		unitCost, code, msg := stockItemUnitCost(tx, s.Level, it.ItemType, it.ItemID)
+		unitCost, effectiveRank, code, msg := stockItemUnitCost(tx, s.Level, it.ItemType, it.ItemID)
 		if code != http.StatusOK {
 			c.JSON(code, gin.H{"error": msg})
 			return
 		}
-		lines = append(lines, stockLine{strings.ToLower(it.ItemType), it.ItemID, it.Quantity, unitCost})
+		if effectiveRank >= 6 {
+			if it.Quantity > 5 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Mỗi lần chỉ được nhập tối đa 5 Tiên phẩm cùng loại: %s", it.ItemID)})
+				return
+			}
+			if strings.ToLower(it.ItemType) == "material" {
+				var currentInVault int64
+				_ = tx.QueryRow(`SELECT COALESCE(quantity, 0) FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2`, s.ID, it.ItemID).Scan(&currentInVault)
+				if currentInVault+plannedImmortalQty[it.ItemID]+it.Quantity > 200 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bảo khố chỉ có thể lưu trữ tối đa 200 đơn vị Tiên phẩm cùng loại (%s hiện có: %d)!", it.ItemID, currentInVault+plannedImmortalQty[it.ItemID])})
+					return
+				}
+				plannedImmortalQty[it.ItemID] += it.Quantity
+			}
+		}
+		lines = append(lines, stockLine{strings.ToLower(it.ItemType), it.ItemID, it.Quantity, unitCost, effectiveRank})
 		totalCost += unitCost * it.Quantity
 	}
 
@@ -748,7 +787,11 @@ func BuyFromSectVault(c *gin.Context) {
 		var matRank int
 		var matBasePrice float64
 		_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&matBasePrice, &matRank)
-		cost = int64(pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank))) * quantity
+		baseCost := pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank))
+		if matRank >= 6 {
+			baseCost *= 1000
+		}
+		cost = baseCost * quantity
 
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
@@ -802,7 +845,11 @@ func BuyFromSectVault(c *gin.Context) {
 		} else {
 			_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1`, req.ItemID).Scan(&targetGuRank)
 		}
-		cost = int64(pricing.RecipeCostByGuRank(targetGuRank))
+		baseRecipeCost := pricing.RecipeCostByGuRank(targetGuRank)
+		if targetGuRank >= 6 {
+			baseRecipeCost *= 1000
+		}
+		cost = int64(baseRecipeCost)
 
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})

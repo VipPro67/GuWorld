@@ -407,41 +407,9 @@ func combatOutcome(simState *simulator.CombatState, playerID string) (enemiesAli
 // counts plus the corresponding log lines. Shared by AutoCombatStart and
 // ResolveCombat so resource consumption is identical on all paths.
 func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator.CombatantAuto, isVirtual bool, turn int) (itemsUsed int, stonesSpent, immortalStonesSpent float64, usageLogs []simulator.CombatLog) {
-	itemsUsed = simPlayer.ItemsUsedInBattle
-
-	if !isVirtual {
-		if itemsUsed > 0 {
-			remaining := itemsUsed
-			invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
-			for _, inv := range invItems {
-				if remaining <= 0 {
-					break
-				}
-				item, ok := models.ItemRegistry[inv.ItemID]
-				if !ok || item.Type != "Consumable" {
-					continue
-				}
-				if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
-					remove := inv.Quantity
-					if remove > int64(remaining) {
-						remove = int64(remaining)
-					}
-					_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), inv.ItemID, "consumables", "materials", "other")
-					if cat == "" {
-						cat = "consumables"
-					}
-					if err := InventorySvc.RemoveItem(tx, player.ID.String(), inv.ItemID, cat, remove); err != nil {
-						logger.S.Warnf("Failed to remove consumable %s: %v", inv.ItemID, err)
-					}
-					remaining -= int(remove)
-				}
-			}
-		}
-
-		stonesSpent = player.PrimevalStones - simPlayer.PrimevalStones
-		immortalStonesSpent = player.ImmortalStones - simPlayer.ImmortalStones
-		player.PrimevalStones = simPlayer.PrimevalStones
-		player.ImmortalStones = simPlayer.ImmortalStones
+	itemsUsed = 0
+	stonesSpent = 0
+	immortalStonesSpent = 0
 
 		if simPlayer != nil && len(simPlayer.GuUsedCounts) > 0 {
 			beforeGus := append(models.GuInventory(nil), player.GuInventory...)
@@ -476,7 +444,6 @@ func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator
 				}
 			}
 		}
-	}
 
 	if itemsUsed > 0 {
 		usageLogs = append(usageLogs, simulator.CombatLog{

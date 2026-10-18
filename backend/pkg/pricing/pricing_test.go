@@ -34,8 +34,8 @@ func TestRecipeCompletionFactor(t *testing.T) {
 			t.Fatalf("RecipeCompletionFactor(%v) = %v, want %v", tc.rate, got, tc.want)
 		}
 	}
-	// Rank 1 base = 200 → 50% → base 100 → SellPrice 10.
-	if got := RecipeSellPrice(1, 50); got != 10 {
-		t.Fatalf("RecipeSellPrice(1, 50) = %v, want 10", got)
+	// Rank 1 base = 250 → 50% → base 125 → SellPrice 12.5.
+	if got := RecipeSellPrice(1, 50); got != 12.5 {
+		t.Fatalf("RecipeSellPrice(1, 50) = %v, want 12.5", got)
 	}
 }

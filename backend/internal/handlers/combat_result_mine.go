@@ -43,7 +43,7 @@ func applyAutoCombatMineOccupation(tx *sql.Tx, player *models.Player, activeComb
 				fmt.Sprintf("Mỏ #%d (%s) của bạn đã bị đạo hữu [%s] tấn công và đánh chiếm thành công!", slotID, rarity, player.Username))
 		}
 		if lastClaimedAt != nil {
-			stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+			stones, qi, chests := CalculateMineRewards(slotID, rarity, mineType, *lastClaimedAt)
 			stonesHalf := stones / 2
 			qiHalf := qi / 2.0
 			chestsHalf := chests / 2

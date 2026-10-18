@@ -30,6 +30,7 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"remove_negative_status":      removeNegativeStatusEffect,
 	"lifespan_boost":              lifespanBoostEffect,
 	"open_mine_chest":             openMineChestEffect,
+	"open_immortal_mine_chest":    openImmortalMineChestEffect,
 	"heal_aperture":               healApertureEffect,
 	"increase_aperture_area":      increaseApertureAreaEffect,
 	"increase_aperture_time_rate": increaseApertureTimeRateEffect,
@@ -298,22 +299,40 @@ func formatSummaryOfRewards(reward map[string]interface{}) string {
 }
 
 func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
+	return openMineChestRoll(tx, player, item, 0, 1.0)
+}
+
+// openImmortalMineChestEffect mở Rương Mỏ Tiên Thạch (nhả từ Tiên Mạch). Cùng
+// tỉ lệ 40% bí phương / 60% vật phẩm như rương thường, nhưng ưu tiên rank >= 6
+// (x5 trọng số) nên bí phương lẫn vật phẩm trên Chuyển 5 rơi nhiều hơn hẳn.
+func openImmortalMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
+	return openMineChestRoll(tx, player, item, mineChestBoostMinRank, mineChestBoostFactor)
+}
+
+// mineChestBoostMinRank/Factor: rank >= 6 (tức Chuyển 6-9) được nhân trọng số
+// khi roll từ Rương Mỏ Tiên Thạch.
+const (
+	mineChestBoostMinRank = 6
+	mineChestBoostFactor  = 5.0
+)
+
+func openMineChestRoll(tx *sql.Tx, player *models.Player, item models.ItemSpec, boostMinRank int, boostFactor float64) (string, error) {
 	msg := fmt.Sprintf("Mở %s thành công!\n", item.Name)
 
 	// ── Roll type: Recipe 40% | Vật phẩm (Material/Food) 60% ──
 	if rand.Float64()*100.0 < 40.0 {
 		// ── RECIPE DROP (40%) ──
-		recipeMsg, _ := rollRecipeDrop(tx, player, item)
+		recipeMsg, _ := rollRecipeDrop(tx, player, boostMinRank, boostFactor)
 		if recipeMsg != "" {
 			msg += recipeMsg
 		} else {
 			// Hết bí phương khả dụng → rơi vật phẩm
-			itemMsg, _ := rollItemDrop(tx, player)
+			itemMsg, _ := rollItemDrop(tx, player, boostMinRank, boostFactor)
 			msg += itemMsg
 		}
 	} else {
 		// ── ITEM DROP (60%) ──
-		itemMsg, _ := rollItemDrop(tx, player)
+		itemMsg, _ := rollItemDrop(tx, player, boostMinRank, boostFactor)
 		msg += itemMsg
 	}
 
@@ -383,9 +402,14 @@ func effectiveDropLevel(rank, rarity int) int {
 	return rank
 }
 
-func rollItemDrop(tx *sql.Tx, player *models.Player) (string, map[string]interface{}) {
+func rollItemDrop(tx *sql.Tx, player *models.Player, boostMinRank int, boostFactor float64) (string, map[string]interface{}) {
 	pc := getPrecomputedPools()
-	chosen := pc.rollDrop()
+	var chosen string
+	if boostFactor > 1.0 {
+		chosen = pc.rollDropBoosted(boostMinRank, boostFactor)
+	} else {
+		chosen = pc.rollDrop()
+	}
 	if chosen == "" {
 		return "- Hòm trống rỗng, không có gì đặc biệt.\n", map[string]interface{}{"type": "none"}
 	}
@@ -403,7 +427,7 @@ func rollItemDrop(tx *sql.Tx, player *models.Player) (string, map[string]interfa
 	}
 }
 
-func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (string, map[string]interface{}) {
+func rollRecipeDrop(tx *sql.Tx, player *models.Player, boostMinRank int, boostFactor float64) (string, map[string]interface{}) {
 	pc := getPrecomputedPools()
 	allRecipes := pc.recipesByRank["all"]
 	if len(allRecipes) == 0 {
@@ -430,9 +454,17 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (strin
 		return "", nil // All recipes at 100%
 	}
 
+	// Rương Tiên Thạch ưu tiên bí phương rank >= 6 bằng cách nhân trọng số.
+	weightOf := func(c weightedRecipeEntry) float64 {
+		if boostFactor > 1.0 && c.targetRank >= boostMinRank {
+			return c.weight * boostFactor
+		}
+		return c.weight
+	}
+
 	var totalWeight float64
 	for _, c := range candidates {
-		totalWeight += c.weight
+		totalWeight += weightOf(c)
 	}
 	if totalWeight <= 0 {
 		return "", nil
@@ -441,7 +473,7 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (strin
 	r := rand.Float64() * totalWeight
 	chosen := candidates[len(candidates)-1]
 	for _, c := range candidates {
-		r -= c.weight
+		r -= weightOf(c)
 		if r <= 0 {
 			chosen = c
 			break
