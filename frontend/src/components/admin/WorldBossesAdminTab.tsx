@@ -44,6 +44,7 @@ export const WorldBossesAdminTab: React.FC<{
   canDelete: boolean;
 }> = ({ addToast, canEdit, canDelete }) => {
   const [rows, setRows] = useState<WorldBossRow[]>([]);
+  const [bossRegions, setBossRegions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [regionFilter, setRegionFilter] = useState("");
   const [searchText, setSearchText] = useState("");
@@ -58,6 +59,7 @@ export const WorldBossesAdminTab: React.FC<{
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Không thể tải boss đang sống");
       setRows(Array.isArray(result.data) ? result.data : []);
+      setBossRegions(Array.isArray(result.boss_regions) ? result.boss_regions : []);
     } catch (error) {
       // Polling failures must not spam a toast every refresh interval.
       if (!silent) addToast(error instanceof Error ? error.message : "Lỗi tải boss", "error");
@@ -73,8 +75,8 @@ export const WorldBossesAdminTab: React.FC<{
   }, [load]);
 
   const regions = useMemo(
-    () => [...new Set(rows.map((row) => row.region_id))].sort(),
-    [rows],
+    () => [...new Set([...bossRegions, ...rows.map((row) => row.region_id)])].sort(),
+    [bossRegions, rows],
   );
 
   const visible = useMemo(() => {
@@ -120,6 +122,31 @@ export const WorldBossesAdminTab: React.FC<{
     await update(edit, { x: form.x, y: form.y, hp: form.hp }, "cập nhật boss");
   };
 
+  const spawnRegion = async () => {
+    if (!regionFilter) return;
+    const action = prepareAdminAction("spawnWorldBoss", "spawn/hồi sinh boss từ ô boss", regionFilter);
+    if (!action) return;
+    setLoading(true);
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/admin/world-bosses/spawn`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": action.idempotencyKey },
+        body: JSON.stringify({ region_id: regionFilter }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể spawn boss");
+      addToast(result.message || "Đã spawn boss", "success");
+      if (Array.isArray(result.errors) && result.errors.length > 0) {
+        addToast(result.errors.slice(0, 3).join("; "), "info");
+      }
+      await load();
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : "Lỗi spawn boss", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const purgeRegion = async () => {
     if (!regionFilter) return;
     const endpoint = `${BACKEND_URL}/api/admin/world-bosses?region_id=${encodeURIComponent(regionFilter)}`;
@@ -158,6 +185,7 @@ export const WorldBossesAdminTab: React.FC<{
         <p className="mt-1 text-xs text-zinc-500">Dữ liệu runtime trong Redis: vị trí, HP, mục tiêu, hồi sinh. Tự làm mới mỗi {REFRESH_MS / 1000}s.</p>
       </div>
       <div className="flex items-center gap-2">
+        {canEdit && <button type="button" onClick={() => void spawnRegion()} disabled={!regionFilter || loading} title="Tạo mới hoặc hồi sinh boss từ ô boss (map_cells) của khu vực đang lọc" className="rounded-lg border border-emerald-900/60 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40">Spawn từ ô boss</button>}
         {canDelete && <button type="button" onClick={() => void purgeRegion()} disabled={!regionFilter || loading} title="Xoá mọi boss đang sống của khu vực đang lọc (snapshot sau sẽ tạo lại)" className="rounded-lg border border-red-900/60 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-40"><Trash2 className="mr-1.5 inline h-3.5 w-3.5" />Xoá boss khu vực</button>}
         <button type="button" onClick={() => void load()} disabled={loading} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"><RefreshCw className={`mr-1.5 inline h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />Làm mới</button>
       </div>
@@ -198,7 +226,7 @@ export const WorldBossesAdminTab: React.FC<{
       </table>
     </div>
 
-    <p className="text-[10px] text-zinc-600">Tổng {visible.length} / {rows.length} boss đang sống. Boss chưa materialize (chưa có người tới khu vực) không xuất hiện ở đây.</p>
+    <p className="text-[10px] text-zinc-600">Tổng {visible.length} / {rows.length} boss đang sống. Boss chưa materialize không nằm trong bảng — chọn khu vực rồi bấm "Spawn từ ô boss" để tạo từ ô boss (map_cells).</p>
 
     {edit && <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-lg space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
       <div className="flex items-start justify-between"><div><h3 className="text-sm font-bold text-zinc-100">Sửa boss · {edit.name}</h3><p className="mt-1 font-mono text-[10px] text-zinc-600">{edit.region_id} / {edit.instance_id}</p></div><button type="button" onClick={() => setEdit(null)} className="rounded p-1.5 text-zinc-400 hover:bg-zinc-800"><X className="h-4 w-4" /></button></div>

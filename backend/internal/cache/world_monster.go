@@ -297,6 +297,69 @@ func WorldBossRegionIDs(ctx context.Context) ([]string, error) {
 	return regions, nil
 }
 
+func worldMonsterBucketFor(x, y float64) (int, int) {
+	bx, by := int(math.Floor(x)), int(math.Floor(y))
+	if bx < 0 {
+		bx = (bx - 31) / 32
+	} else {
+		bx /= 32
+	}
+	if by < 0 {
+		by = (by - 31) / 32
+	} else {
+		by /= 32
+	}
+	return bx, by
+}
+
+// deleteWorldBossMember removes one live boss actor plus its bucket and set
+// membership. The spawn pointer is only dropped when it still belongs to this
+// instance, so a newer replacement is never unlinked.
+func deleteWorldBossMember(ctx context.Context, regionID, instanceID, spawnID string, x, y float64) error {
+	if Client == nil {
+		return errors.New("redis unavailable")
+	}
+	bx, by := worldMonsterBucketFor(x, y)
+	return Client.Eval(ctx, `
+		if redis.call('GET', KEYS[2]) == ARGV[1] then redis.call('DEL', KEYS[2]) end
+		redis.call('DEL', KEYS[1]); redis.call('SREM', KEYS[3], ARGV[1]); redis.call('SREM', KEYS[4], ARGV[1])
+		return 1
+	`, []string{worldMonsterKey(regionID, instanceID), worldMonsterSpawnKey(spawnID), worldMonsterBucketKey(regionID, bx, by), worldBossSetKey(regionID)}, instanceID).Err()
+}
+
+// freshestWorldBosses keeps exactly one actor per spawn identity (the most
+// recently updated one) and returns the rest as duplicates. Spawn pointers can
+// expire while a refreshed actor keeps living; without this the next snapshot
+// materializes a second actor for the same spawn and both stay in the set.
+func freshestWorldBosses(members []worldBossSetMember) ([]worldBossSetMember, []worldBossSetMember) {
+	canonical := make(map[string]worldBossSetMember, len(members))
+	for _, member := range members {
+		key := member.monster.SpawnID
+		if key == "" {
+			key = "instance:" + member.id
+		}
+		current, seen := canonical[key]
+		if !seen || member.monster.LastUpdateAt.After(current.monster.LastUpdateAt) ||
+			(member.monster.LastUpdateAt.Equal(current.monster.LastUpdateAt) && member.monster.Revision > current.monster.Revision) {
+			canonical[key] = member
+		}
+	}
+	kept := make([]worldBossSetMember, 0, len(canonical))
+	duplicates := make([]worldBossSetMember, 0, len(members)-len(canonical))
+	for _, member := range members {
+		key := member.monster.SpawnID
+		if key == "" {
+			key = "instance:" + member.id
+		}
+		if canonical[key].id == member.id {
+			kept = append(kept, member)
+			continue
+		}
+		duplicates = append(duplicates, member)
+	}
+	return kept, duplicates
+}
+
 // WorldBossesInRegion lists region-wide actors independently from their local
 // AOI bucket; bosses need this view to pursue players across their full zone.
 func WorldBossesInRegion(ctx context.Context, regionID string) ([]WorldMonster, error) {
@@ -355,7 +418,11 @@ func loadWorldBossSet(ctx context.Context, regionID string) ([]worldBossSetMembe
 		}
 		members = append(members, worldBossSetMember{id: ids[i], monster: monster})
 	}
-	return members, stale, nil
+	kept, duplicates := freshestWorldBosses(members)
+	for _, duplicate := range duplicates {
+		_ = deleteWorldBossMember(ctx, regionID, duplicate.id, duplicate.monster.SpawnID, duplicate.monster.X, duplicate.monster.Y)
+	}
+	return kept, stale, nil
 }
 
 // PruneWorldBosses removes runtime boss actors whose static map-cell spawn was
@@ -371,24 +438,10 @@ func PruneWorldBosses(ctx context.Context, regionID string, keepSpawnIDs map[str
 		_ = Client.SRem(ctx, setKey, stale...).Err()
 	}
 	for _, member := range members {
-		id, monster := member.id, member.monster
-		if _, keep := keepSpawnIDs[monster.SpawnID]; keep {
+		if _, keep := keepSpawnIDs[member.monster.SpawnID]; keep {
 			continue
 		}
-		bx, by := int(math.Floor(monster.X)), int(math.Floor(monster.Y))
-		bucketX, bucketY := bx/32, by/32
-		if bx < 0 {
-			bucketX = (bx - 31) / 32
-		}
-		if by < 0 {
-			bucketY = (by - 31) / 32
-		}
-		err = Client.Eval(ctx, `
-			if redis.call('GET', KEYS[2]) == ARGV[1] then redis.call('DEL', KEYS[2]) end
-			redis.call('DEL', KEYS[1]); redis.call('SREM', KEYS[3], ARGV[1]); redis.call('SREM', KEYS[4], ARGV[1])
-			return 1
-		`, []string{worldMonsterKey(regionID, id), worldMonsterSpawnKey(monster.SpawnID), worldMonsterBucketKey(regionID, bucketX, bucketY), setKey}, id).Err()
-		if err != nil {
+		if err := deleteWorldBossMember(ctx, regionID, member.id, member.monster.SpawnID, member.monster.X, member.monster.Y); err != nil {
 			return err
 		}
 	}
@@ -461,11 +514,15 @@ func CASWorldMonster(ctx context.Context, previous, monster WorldMonster, expect
 		local raw = redis.call('GET', KEYS[1]); if not raw then return 0 end
 		local current = cjson.decode(raw); if current.revision ~= tonumber(ARGV[1]) then return -1 end
 		redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[4])
+		-- Keep the spawn pointer alive for as long as its actor lives; otherwise
+		-- the pointer expires first and the next snapshot materializes a second
+		-- actor for the same spawn (duplicate bosses).
+		if redis.call('GET', KEYS[5]) == ARGV[3] then redis.call('PEXPIRE', KEYS[5], ARGV[4]) end
 		if KEYS[2] ~= KEYS[3] then redis.call('SREM', KEYS[2], ARGV[3]) end
 		redis.call('SADD', KEYS[3], ARGV[3]); redis.call('PEXPIRE', KEYS[3], ARGV[4])
 		if ARGV[5] == '1' then redis.call('SADD', KEYS[4], ARGV[3]); redis.call('PEXPIRE', KEYS[4], ARGV[4]) end
 		return 1
-	`, []string{key, worldMonsterBucketKey(monster.RegionID, oldBucketX, oldBucketY), worldMonsterBucketKey(monster.RegionID, bucketX, bucketY), worldBossSetKey(monster.RegionID)}, expectedRevision, data, monster.InstanceID, ttl.Milliseconds(), boolInt(monster.IsBoss)).Int()
+	`, []string{key, worldMonsterBucketKey(monster.RegionID, oldBucketX, oldBucketY), worldMonsterBucketKey(monster.RegionID, bucketX, bucketY), worldBossSetKey(monster.RegionID), worldMonsterSpawnKey(monster.SpawnID)}, expectedRevision, data, monster.InstanceID, ttl.Milliseconds(), boolInt(monster.IsBoss)).Int()
 	return result == 1, err
 }
 
@@ -538,9 +595,20 @@ func HitWorldMonster(ctx context.Context, regionID, instanceID, commandID string
 		if err != nil {
 			return err
 		}
+		// Refresh the spawn pointer alongside the actor when it still owns the
+		// spawn, so hits cannot outlive the pointer and spawn a duplicate.
+		refreshPointer := false
+		if out.SpawnID != "" {
+			if owner, ownerErr := tx.Get(ctx, worldMonsterSpawnKey(out.SpawnID)).Result(); ownerErr == nil && owner == out.InstanceID {
+				refreshPointer = true
+			}
+		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, key, updated, ttl)
 			pipe.Set(ctx, commandKey, string(outcome), ttl)
+			if refreshPointer {
+				pipe.PExpire(ctx, worldMonsterSpawnKey(out.SpawnID), ttl)
+			}
 			return nil
 		})
 		return err
