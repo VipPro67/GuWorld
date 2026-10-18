@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { Num } from "./Num";
+import { SpatialRealmsModal } from "./SpatialRealmsModal";
 import Link from "next/link";
 
 interface HubItem {
@@ -74,6 +75,7 @@ export const LobbyView: React.FC = () => {
     addToast,
     aperture,
     fetchAperture,
+    setSpatialDirectoryOpen,
   } = useGameStore();
   const [manaNow, setManaNow] = useState(() => Date.now());
 
@@ -287,14 +289,22 @@ export const LobbyView: React.FC = () => {
       iconColor: "text-yellow-500",
     },
     {
-      id: "dungeon",
-      label: "Mộng Cảnh & Bí Cảnh",
+      id: "dream-realm",
+      label: "Mộng Cảnh",
       icon: Gem,
-      gradient: "from-purple-500 to-fuchsia-600",
+      gradient: "from-purple-500 to-indigo-600",
       glow: "group-hover:shadow-[0_0_25px_rgba(168,85,247,0.45)]",
       borderColor: "border-purple-400/30",
-      iconColor: "text-purple-500",
-      //locked: true, // Locked for dev
+      iconColor: "text-purple-400",
+    },
+    {
+      id: "spatial-realms",
+      label: "Bí Cảnh & Truyền Thừa",
+      icon: Compass,
+      gradient: "from-amber-500 to-orange-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
+      borderColor: "border-amber-400/30",
+      iconColor: "text-amber-400",
     },
     {
       id: "gacha",
@@ -366,6 +376,10 @@ export const LobbyView: React.FC = () => {
     if (item.locked) return;
     if (item.id === "divination") {
       openDivinationModal();
+      return;
+    }
+    if (item.id === "spatial-realms") {
+      setSpatialDirectoryOpen(true);
       return;
     }
     setView(item.id);
@@ -649,6 +663,7 @@ export const LobbyView: React.FC = () => {
           })}
         </div>
       </div>
+      <SpatialRealmsModal />
     </div>
   );
 };

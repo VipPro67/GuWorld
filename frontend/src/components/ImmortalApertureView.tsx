@@ -730,7 +730,8 @@ export const ImmortalApertureView: React.FC = () => {
   const cleanseAvailable = cleanseTarget?.amount ?? 0;
   const cleanseEffective = Math.min(cleanseMarks, cleanseAvailable, 10000);
   const cleanseStoneCost = Math.ceil(cleanseEffective / 100);
-  const cleanseRefund = Math.floor(cleanseEffective * 0.3);
+  const cleanseRefundQty = Math.floor((cleanseEffective * 0.3) / 1000);
+  const cleanseRefundMarks = cleanseRefundQty * 1000;
   const totalMarksNow = daoNgan?.total_marks ?? 0;
   const dominantAmount = (daoNgan?.paths ?? []).find((p) => p.path === daoNgan?.dominant_path)?.amount ?? 0;
   const purityAfter = (totalMarksNow - cleanseEffective) > 0
@@ -2329,7 +2330,8 @@ return (
                           </div>
                           <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
                             <div className="text-[10px] text-slate-500 uppercase">Đạo Tài Thu Hồi</div>
-                            <div className="font-bold text-emerald-300">{cleanseRefund.toLocaleString()}</div>
+                            <div className="font-bold text-emerald-300">{cleanseRefundQty.toLocaleString()} món</div>
+                            <div className="text-[10px] text-emerald-500/80">+{cleanseRefundMarks.toLocaleString()} Đạo Ngân</div>
                           </div>
                           <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
                             <div className="text-[10px] text-slate-500 uppercase">Độ Thuần Khiết</div>
@@ -2340,7 +2342,8 @@ return (
                         </div>
 
                         <p className="text-[11px] text-slate-500 leading-relaxed">
-                          Tiêu hao <b>1 Tiên Nguyên Thạch / 100 Đạo Ngân tạp</b>. Hoàn trả 30% giá trị dưới dạng Đạo Tài của lưu phái tương ứng.
+                          Tiêu hao <b>1 Tiên Nguyên Thạch / 100 Đạo Ngân tạp</b>. Hoàn trả 30% giá trị dưới dạng <b>Đạo Tài</b> của lưu phái tương ứng ({cleanseRefundQty.toLocaleString()} món
+                          {cleanseTarget ? ` ${translatePath(cleanseTarget.path)}` : ""}, mỗi món bổ sung 1.000 Đạo Ngân khi sử dụng).
                           Bế quan hồi phục 12 giờ giữa mỗi lần đại tẩy thể. Tối đa 10.000 Đạo Ngân / lần.
                         </p>
                       </div>

@@ -19,6 +19,9 @@ import { LogConsole } from "./LogConsole";
 import { DirectActionHotbar, type HotbarAction } from "./DirectActionHotbar";
 import { NotificationBell } from "./NotificationBell";
 import { dispatchHotbarAction } from "@/lib/action-hotbar";
+import { SpatialRealmHUD } from "./SpatialRealmHUD";
+import { InheritanceAltarModal } from "./InheritanceAltarModal";
+import { SpatialRealmsModal } from "./SpatialRealmsModal";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
   ssr: false,
@@ -39,6 +42,7 @@ const EntertainmentPanel = dynamic(() => import("./EntertainmentPanel").then(m =
 const ArenaView = dynamic(() => import("./ArenaView").then(m => m.ArenaView), { ssr: false });
 const PremiumStoreView = dynamic(() => import("./PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
 const DungeonView = dynamic(() => import("./DungeonView").then(m => m.DungeonView), { ssr: false });
+const DreamRealmView = dynamic(() => import("./DreamRealmView").then(m => m.DreamRealmView), { ssr: false });
 const ImmortalApertureView = dynamic(() => import("./ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
 const PartyView = dynamic(() => import("./PartyView").then(m => m.PartyView), { ssr: false });
 const TargetHud = dynamic(() => import("./TargetHud").then(m => m.TargetHud), { ssr: false });
@@ -56,7 +60,8 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
   GroundDrop:    { icon: "🎁",  label: "Chiến Lợi Phẩm",  color: "text-amber-300",   borderColor: "border-amber-500/40",   bgColor: "bg-amber-950/70" },
   Sect:          { icon: "🏯",  label: "Tông Môn",         color: "text-yellow-300",  borderColor: "border-yellow-500/50",  bgColor: "bg-yellow-950/70" },
   TeleportArray: { icon: "🌀",  label: "Truyền Tống Trận", color: "text-cyan-300",    borderColor: "border-cyan-500/50",    bgColor: "bg-cyan-950/70" },
-  ENTRY_PORTAL:  { icon: "🚪",  label: "Cổng Bí Cảnh",      color: "text-amber-300",   borderColor: "border-amber-500/50",   bgColor: "bg-amber-950/70" },
+  ENTRY_PORTAL:      { icon: "🚪",  label: "Cổng Bí Cảnh",      color: "text-amber-300",   borderColor: "border-amber-500/50",   bgColor: "bg-amber-950/70" },
+  INHERITANCE_ALTAR: { icon: "🏛️",  label: "Đài Truyền Thừa",   color: "text-amber-200",   borderColor: "border-amber-400/50",   bgColor: "bg-amber-950/70" },
 };
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 
@@ -146,6 +151,7 @@ export function WorldPage() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [showGeneralSettings, setShowGeneralSettings] = useState(false);
   const [showWorldAtlas, setShowWorldAtlas] = useState(false);
+  const [showSpatialRealms, setShowSpatialRealms] = useState(false);
   const [mapPerformanceMode, setMapPerformanceMode] = useState<MapPerformanceMode>(() => {
     if (typeof window === "undefined") return "full";
     const saved = localStorage.getItem(MAP_PERFORMANCE_STORAGE_KEY);
@@ -211,7 +217,8 @@ export function WorldPage() {
     { id: "cultivation", label: "Tu Luyện", icon: Zap, color: "text-violet-400" },
     { id: "practice-room", label: "Phòng Tập", icon: Swords, color: "text-indigo-400" },
     { id: "pvp-arena", label: "Đấu Trường Realtime", icon: Swords, color: "text-emerald-300" },
-    { id: "dungeon", label: "Bí Cảnh", icon: Compass, color: "text-indigo-400" },
+    { id: "spatial-realms", label: "Bí Cảnh", icon: Landmark, color: "text-amber-400" },
+    { id: "dream-realm", label: "Mộng Cảnh", icon: Compass, color: "text-purple-400" },
     { id: "party", label: "Tổ Đội", icon: Users, color: "text-amber-400" },
     { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
     { id: "auction", label: "Chợ Tiên", icon: Store, color: "text-amber-400", locked: !isImmortal },
@@ -242,7 +249,7 @@ export function WorldPage() {
 
   const menuGroups = [
     { id: "character", label: "Nhân vật", icon: User, itemIds: ["character", "inventory", "inventory-gu", "aperture", "refine", "cultivation", "practice-room"] },
-    { id: "world", label: "Khám phá", icon: Compass, itemIds: ["dungeon", "mine", "teleport", "party", "sect", "world-atlas", "teleport-directory", "teleport-build", "divination"] },
+    { id: "world", label: "Khám phá", icon: Compass, itemIds: ["spatial-realms", "dream-realm", "dungeon", "mine", "teleport", "party", "sect", "world-atlas", "teleport-directory", "teleport-build", "divination"] },
     { id: "trade", label: "Giao dịch", icon: Store, itemIds: ["auction", "shop", "premium-store", "topup"] },
     { id: "activities", label: "Hoạt động", icon: Swords, itemIds: ["arena", "death-arena", "martial-arena", "pvp-arena", "leaderboard", "gacha", "achievements", "pets"] },
     { id: "other", label: "Khác", icon: Settings, itemIds: ["feedback", "combat-history", "audit-logs", "activity-log", "general-settings", "utilities", "wiki"] },
@@ -256,6 +263,10 @@ export function WorldPage() {
   const openHotbarAction = (actionId: string) => {
     if (actionId === "wiki") {
       router.push("/wiki");
+      return;
+    }
+    if (actionId === "spatial-realms") {
+      setShowSpatialRealms(true);
       return;
     }
     dispatchHotbarAction(actionId, {
@@ -433,7 +444,7 @@ export function WorldPage() {
               {activeModal === "gacha" && <EntertainmentPanel />}
               {activeModal === "arena" && <ArenaView />}
               {activeModal === "premium_store" && <PremiumStoreView />}
-              {activeModal === "dungeon" && <DungeonView />}
+              {(activeModal === "dungeon" || activeModal === "dream-realm") && <DreamRealmView />}
               {activeModal === "teleport_directory" && gamePlayer && (
                 <TeleportDirectoryModal
                   player={gamePlayer}
@@ -667,6 +678,10 @@ export function WorldPage() {
                     ? `Hài cốt: ${(selectedObject.dropData || groundDrops.find(d => d.id === selectedObject.id))?.loser_name || "Vô danh"}`
                     : selectedObject.cell_type === "Sect"
                     ? `Tông Môn: ${selectedObject.content_id}`
+                    : selectedObject.cell_type === "ENTRY_PORTAL"
+                    ? `Cổng Vào: ${selectedObject.content_id.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`
+                    : selectedObject.cell_type === "INHERITANCE_ALTAR"
+                    ? `Đài Truyền Thừa: ${selectedObject.content_id.replace(/^altar_/, "").replace(/_/g, " ")}`
                     : selectedObject.content_id}
                 </div>
                 <div className="text-[10px] text-zinc-500 font-serif">
@@ -959,6 +974,63 @@ onClick={() => {
                     </>
                   );
                 })()
+              ) : selectedObject.cell_type === "INHERITANCE_ALTAR" ? (
+                (() => {
+                  const isStanding = gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y;
+                  return (
+                    <>
+                      <button
+                        onClick={() => useGameStore.getState().fetchAltarInfo(selectedObject.content_id)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg shadow-amber-950/40"
+                      >
+                        <span>🏛️</span>
+                        <span>Khảo Nghiệm Đài</span>
+                      </button>
+                      {!isStanding && (
+                        <button
+                          disabled={isMoving}
+                          title="Tiếp Cận Đài Truyền Thừa"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                          }}
+                          className="px-3 flex items-center justify-center gap-1 py-2.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-bold font-serif transition-all cursor-pointer"
+                        >
+                          <span>🏃</span>
+                          <span>Đến Gần</span>
+                        </button>
+                      )}
+                    </>
+                  );
+                })()
+              ) : selectedObject.cell_type === "ENTRY_PORTAL" ? (
+                (() => {
+                  const isStanding = gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y;
+                  const realmId = selectedObject.content_id.replace(/^spatial_realm_/, "");
+                  return (
+                    <>
+                      <button
+                        onClick={() => useGameStore.getState().enterSpatialRealm(realmId)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg shadow-amber-950/40"
+                      >
+                        <span>🚪</span>
+                        <span>Tiến Vào Bí Cảnh</span>
+                      </button>
+                      {!isStanding && (
+                        <button
+                          disabled={isMoving}
+                          title="Tiếp Cận Cổng Bí Cảnh"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                          }}
+                          className="px-3 flex items-center justify-center gap-1 py-2.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-bold font-serif transition-all cursor-pointer"
+                        >
+                          <span>🏃</span>
+                          <span>Đến Gần</span>
+                        </button>
+                      )}
+                    </>
+                  );
+                })()
               ) : (
                 <button
                   disabled={isMoving || !!selectedObject.cleared}
@@ -1042,6 +1114,10 @@ onClick={() => {
 
       {mapPerformanceMode !== "off" && <GuQuickBar />}
       {mapPerformanceMode !== "off" && <MovementJoystick />}
+
+      <SpatialRealmHUD />
+      <InheritanceAltarModal />
+      <SpatialRealmsModal isOpen={showSpatialRealms} onClose={() => setShowSpatialRealms(false)} />
     </div>
   );
 }

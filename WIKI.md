@@ -379,7 +379,7 @@ $$\text{EcologyPurityFactor} = \max\left(0.25,\ 1.0 - (0.70 - P) \times 1.25\rig
 
 **Thanh Đạo Tẩy Thể**: dùng Tiên Nguyên Thạch để bóc tách Đạo Ngân ngoại hệ, nâng cao Độ Thuần Khiết:
 - Chi phí: **1 Tiên Nguyên Thạch / 100 Đạo Ngân tạp**.
-- Hoàn trả **30%** giá trị dưới dạng Đạo Tài của lưu phái tương ứng.
+- Hoàn trả **30%** giá trị dưới dạng **Đạo Tài** của lưu phái tương ứng: `floor(30% × marks / 1.000)` món `dao_material_<path>`. Mỗi món khi sử dụng bổ sung **1.000 Đạo Ngân** đúng phái đó vào Tiên Khiếu.
 - Bế quan hồi phục **12 giờ** giữa các lần, tối đa **10.000 Đạo Ngân/lần**. Không thể tẩy phái chủ đạo.
 
 ## 4. Cổ trùng và bọc đồ
@@ -729,13 +729,33 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
   - Trận đấu diễn ra **tự động** (mô phỏng chiến đấu), không tiêu hao tài nguyên, không cần online lúc thi đấu.
 - **Phần thưởng (Top 3):** Nguyên Thạch, Tiên Nguyên Thạch, Cổ Trùng, vật phẩm và danh hiệu độc quyền (nhận qua mục Phần Thưởng).
 
-## 10. Phó bản
+## 10. Mộng Cảnh, Bí Cảnh & Truyền Thừa
 
-- Instance có template, session active và action theo option index.
-- Cổ sư vào instance, chọn hành động và nhận kết quả theo stage/map data.
-- **Mộng Cảnh (DREAM_REALM):** có 1 mộng cảnh cho mỗi lưu phái (49 path). Hoàn thành mộng cảnh của lưu phái X giúp **tăng cảnh giới lưu phái X** (thưởng +50 Chân Ý cho đúng path đó). Vào bằng `dream_path_material`, cooldown 24 giờ/lần, tiêu hao Soul HP.
-- **Bí Cảnh (SECRET_REALM):** phó bản chiến đấu thưởng Đạo Ngân theo path, cooldown 48 giờ.
-- **Truyền Thừa (INHERITANCE_*):** phó bản cốt truyện riêng (vd. Truyền Thừa Hoa Tửu Hành Giả).
+Hệ thống phân định rõ rệt giữa ba cơ chế khám phá:
+
+### 10.1 Mộng Cảnh (Dream Realm)
+- **Cơ chế:** Thám hiểm ký ức và mộng cảnh của tiền nhân thông qua các lựa chọn tình huống và vấn đáp cốt truyện.
+- **Tiêu hao & Điều kiện:** Tiêu hao Mộng Cảnh Thạch (`dream_path_material`) và Hồn Phách (`soul_hp`). Cooldown 24 giờ/lần.
+- **Phần thưởng:** Tăng Chân Ý (Attainment / cảnh giới lưu phái) cho 49 lưu phái tương ứng (+50 Chân Ý khi hoàn thành mộng cảnh của lưu phái đó).
+
+### 10.2 Bí Cảnh Không Gian (Spatial Secret Realm)
+- **Cơ chế:** Không gian bản đồ riêng biệt với lối vào/ra độc lập (`ENTRY_PORTAL` & `EXIT_PORTAL`) xuất hiện trên bản đồ thế giới Ngũ Vực. Hỗ trợ cả không gian dùng chung (`SHARED`) và không gian riêng tổ đội/cá nhân (`PARTY`/`PRIVATE`).
+- **Luật Bí Cảnh (Rules):**
+  - Trạng thái chiến đấu: `SAFE_ZONE` (an toàn tuyệt đối) hoặc `FREE_PK` (tự do tranh đoạt, không tính điểm ác danh).
+  - Cấm Dịch Chuyển (`NO_TELEPORT`): Trận pháp truyền tống ngoài không gian không thể can thiệp.
+  - Đếm ngược thời gian tồn tại (`lifetime_seconds`): Hết hạn tự động trục xuất cổ sư về cổng vào.
+  - Giới hạn quân số (`max_players`).
+- **Giao diện HUD:** Nổi trên bản đồ hiển thị tên bí cảnh, thời gian còn lại, quy tắc khu vực và nút thoái xuất khẩn cấp.
+
+### 10.3 Đài Truyền Thừa (Inheritance Altar)
+- **Cơ chế:** Nằm sâu trong bí cảnh hoặc các hiểm địa bản đồ, bảo lưu di trạch của tiền bối Cổ Sư / Cổ Tiên.
+- **Điều kiện Khảo Nghiệm:**
+  - Tiêu diệt Hộ Vệ Thần Thú (`guardian_monster_id`): Đài chỉ kích hoạt khi Hộ Vệ đã bị tiêu diệt và đang trong chu kỳ hồi sinh.
+  - Cảnh giới tối thiểu (`min_rank`).
+  - Đạo Ngân yêu cầu (`required_dao_marks` theo lưu phái chỉ định).
+  - Tín vật truyền thừa (`required_tokens`): Cần vật phẩm chìa khóa để giải phong ấn.
+- **Chân Truyền Độc Bản (Immortal Uniqueness):** Với các di trạch Tiên cấp (`is_immortal_unique`), mỗi cổ tiên chỉ được lĩnh hội 1 lần trong đời (lưu trữ kiểm tra qua `player_inheritance_claims`).
+- **Phần Thưởng:** Đạo Ngân vĩnh viễn, Tiên Cổ/Cổ trùng độc môn, Tiên Tài quý hiếm, Nguyên Thạch / Tiên Nguyên Thạch.
 
 ## 11. Hồn phách
 

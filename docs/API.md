@@ -259,7 +259,7 @@ và nhận `frame` mỗi tick, gửi ý định điều khiển bằng lệnh We
 | DELETE | `/immortal-aperture/nodes/:id` |
 | POST | `/immortal-aperture/time-rate` |
 | POST | `/immortal-aperture/labor` |
-| POST | `/immortal-aperture/cleanse-dao-marks` | Thanh Đạo Tẩy Thể — bóc tách Đạo Ngân ngoại hệ (body `{path, marks}`), tiêu hao Tiên Nguyên Thạch, hoàn trả 30% Đạo Tài, cooldown 12 giờ. |
+| POST | `/immortal-aperture/cleanse-dao-marks` | Thanh Đạo Tẩy Thể — bóc tách Đạo Ngân ngoại hệ (body `{path, marks}`), tiêu hao Tiên Nguyên Thạch, hoàn trả 30% dưới dạng Đạo Tài (`refund_item`, `refund_qty`, `refund_marks`), cooldown 12 giờ. |
 | POST | `/immortal-aperture/nodes/:id/repair` |
 | POST | `/immortal-aperture/nodes/repair-all` |
 | POST | `/immortal-aperture/nodes/:id/upgrade` |
@@ -355,17 +355,32 @@ và nhận `frame` mỗi tick, gửi ý định điều khiển bằng lệnh We
 
 | POST | `/soul/refine` |
 | GET | `/instance/active` |
-| GET | `/instance/list` | Danh sách phó bản + `cooldown_remaining` (giây) của player |
+| GET | `/instance/list` | Danh sách phụ bản cũ + `cooldown_remaining` (giây) của player |
 | POST | `/instance/enter` |
 | POST | `/instance/action` |
 | GET | `/instance/spatial` | Danh sách template `SPATIAL_REALM`, số người đang ở phiên chung và cổng cố định (`entry_region_id`, `entry_x`, `entry_y`) |
 | GET | `/instance/spatial/active` | Bí cảnh bản đồ mà người chơi đang tham gia, nếu có |
 | POST | `/instance/spatial/enter` | Body `{ "template_id": "..." }`; chỉ tạo hoặc tham gia phiên chung khi player đứng tại đúng `ENTRY_PORTAL` của template, lưu điểm hồi quy riêng cho người vào |
 | POST | `/instance/spatial/exit` | Thoát tại ô cổng có `cell_type=EXIT_PORTAL`/`PORTAL_EXIT`, `content_id=EXIT_SPATIAL_REALM`, hoặc `metadata.action=EXIT_SPATIAL_REALM` |
+| GET | `/dream-realms` | Danh sách Mộng Cảnh (`DREAM_REALM`), số lượt thám hiểm trong ngày và thời gian hồi chiêu |
+| GET | `/dream-realms/active` | Phiên Mộng Cảnh đang diễn ra của người chơi (nếu có) |
+| POST | `/dream-realms/enter` | Tiến vào Mộng Cảnh. Body: `{ "instance_id": "..." }` |
+| POST | `/dream-realms/action` | Chọn quyết định trong ải Mộng Cảnh. Body: `{ "option_index": 0 }` |
+| POST | `/dream-realms/exit` | Thoát / rút lui sớm khỏi Mộng Cảnh đang diễn ra |
+| GET | `/spatial-realms` | Danh sách Bí Cảnh Không Gian & Truyền Thừa (`SPATIAL_REALM`, `SPATIAL_INHERITANCE`), hỗ trợ phân loại `scope` (`SHARED`, `PARTY`, `SOLO`) và `rules` JSONB |
+| GET | `/spatial-realms/active` | Bí cảnh bản đồ hiện tại của người chơi (kèm thông tin phiên, thời hạn `expires_at`, quy tắc `rules`) |
+| GET | `/spatial-realms/altar-info` | Tra cứu chi tiết Đài Truyền Thừa (`altar_id`), điều kiện khảo nghiệm (cảnh giới, Đạo Ngân, tín vật, trạng thái thủ hộ thú, đã nhận hay chưa) |
+| POST | `/spatial-realms/enter` | Tiến vào Bí Cảnh / Truyền Thừa. Body: `{ "template_id": "..." }`. Kiểm tra Rule Engine (cảnh giới, áp chế, tín vật tiêu hao `rules.entry_item`, tổ đội theo `scope=PARTY`) |
+| POST | `/spatial-realms/exit` | Thoát tại ô cổng thoát của bí cảnh |
+| POST | `/spatial-realms/claim-altar` | Tiếp nhận di sản Đài Truyền Thừa (`INHERITANCE_ALTAR`). Body: `{ "altar_id": "..." }`. Kiểm tra khoảng cách, diệt Thủ hộ giả, điều kiện Đạo Ngân, cảnh giới, tín vật, chống nhận lặp (độc bản Rank 6+ qua `player_inheritance_claims`). Cấp phát Cổ trùng, phương thuốc, nguyên thạch, đạo tài. |
 
 `POST /chat/bao-hoang/send` nhận `channel=region` để gửi miễn phí vào khu vực hiện tại. Lịch sử khu vực được cô lập theo `current_region` và `map_instance_id`; kênh cập nhật theo vị trí mới khi frontend đồng bộ khóa hiện tại. Mỗi lần tải chỉ trả tối đa 50 tin gần nhất.
 
-Bí cảnh bản đồ dùng `instance_templates.type=SPATIAL_REALM`, `spatial_region_id` trỏ tới region `SECRET_REALM`, và `duration_minutes`. Mỗi template chỉ có một phiên ACTIVE dùng chung. Người chơi phải đứng đúng ô `ENTRY_PORTAL` được gắn với template; kiểm tra này nằm ở backend. Khi hết giờ, worker đóng phiên, trả tất cả người tham gia về vị trí đã lưu và xóa ground drop trong region đó. Item effect `exit_spatial_realm` dùng chung đường thoát; chưa gắn vào Cổ Trùng cụ thể.
+Bí cảnh bản đồ và Vùng truyền thừa (`SPATIAL_REALM`, `SPATIAL_INHERITANCE`) vận hành theo mô hình Hybrid Scope:
+- **`SHARED`**: 1 phiên chung toàn server per template. Mọi người chơi cùng vào 1 bản đồ.
+- **`PARTY`**: 1 phiên riêng cho từng tổ đội (`party_id`), kiểm tra số lượng thành viên tối thiểu/tối đa.
+- **`SOLO`**: 1 phiên riêng cho từng cá nhân (`owner_id`).
+- **Rule Engine (`rules` JSONB)**: `duration_minutes` (hết hạn worker dọn), `pvp_mode` (`SAFE` cấm PK / `FREE_PK`), `max_allowed_rank` & `apply_rank_suppression`, `allow_teleport` (cấm truyền tống khi đang ở bí cảnh), `death_penalty` (`EVICT` / `SAFE_RESPAWN`), `entry_item` & `entry_item_count`. Ground drops được cô lập per `map_instance_id`.
 
 ## Gacha (Cổ Từ / Mở Đá)
 

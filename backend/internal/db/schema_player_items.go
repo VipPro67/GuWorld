@@ -201,5 +201,24 @@ func schemaPlayerItems() error {
 		return err
 	}
 
+	if err := execSchema("player_inheritance_claims", `
+	CREATE TABLE IF NOT EXISTS player_inheritance_claims (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		altar_id VARCHAR(50) NOT NULL,
+		template_id VARCHAR(50) NOT NULL,
+		claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		tier VARCHAR(20) NOT NULL DEFAULT 'MORTAL' CHECK (tier IN ('MORTAL', 'IMMORTAL')),
+		rewards_snapshot JSONB NOT NULL DEFAULT '{}'
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_player_inheritance_unique_claim 
+		ON player_inheritance_claims (player_id, altar_id) 
+		WHERE tier = 'IMMORTAL';
+	CREATE INDEX IF NOT EXISTS idx_player_inheritance_history 
+		ON player_inheritance_claims (player_id, claimed_at);
+	`); err != nil {
+		return err
+	}
+
 	return nil
 }

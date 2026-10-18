@@ -39,6 +39,7 @@ const EntertainmentPanel = dynamic(() => import("@/components/EntertainmentPanel
 const AchievementsPanel = dynamic(() => import("@/components/AchievementsPanel"), { ssr: false });
 const ImmortalApertureView = dynamic(() => import("@/components/ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
 const DungeonView = dynamic(() => import("@/components/DungeonView").then(m => m.DungeonView), { ssr: false });
+const DreamRealmView = dynamic(() => import("@/components/DreamRealmView").then(m => m.DreamRealmView), { ssr: false });
 const PetPanel = dynamic(() => import("@/components/PetPanel").then(m => m.PetPanel), { ssr: false });
 const SectView = dynamic(() => import("@/components/SectView").then(m => m.SectView), { ssr: false });
 const PartyView = dynamic(() => import("@/components/PartyView").then(m => m.PartyView), { ssr: false });
@@ -322,7 +323,7 @@ export default function Home() {
     "premium-store": "Cửa hàng", shop: "Thương hội", auction: "Chợ Tiên",
     arena: "Đấu trường", "death-arena": "Sinh tử đài", "martial-arena": "Đại Hội Võ Thuật", leaderboard: "Bảng xếp hạng",
     gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân", mine: "Khai khoáng",
-    aperture: "Tiên khiếu", dungeon: "Bí cảnh", sect: "Tông môn",
+    aperture: "Tiên khiếu", "dream-realm": "Mộng Cảnh", dungeon: "Bí cảnh & Truyền thừa", sect: "Tông môn",
     "combat-history": "Lịch sử chiến đấu", feedback: "Góp ý", "audit-logs": "Nhật ký hệ thống",
     "pvp-arena": "Đấu trường thời gian thực",
     utilities: "Tiện ích",
@@ -559,9 +560,13 @@ export default function Home() {
           <div className="w-full">
             <ImmortalApertureView />
           </div>
+        ) : currentView === "dream-realm" ? (
+          <div className="w-full">
+            <DreamRealmView />
+          </div>
         ) : currentView === "dungeon" ? (
           <div className="w-full">
-            <DungeonView />
+            <DreamRealmView />
           </div>
         ) : currentView === "sect" ? (
           <div className="w-full">

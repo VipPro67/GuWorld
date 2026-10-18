@@ -98,3 +98,23 @@ Nguyên tắc định giá Cổ trùng: Giá trị Cổ bậc cao sau hợp luy�
 ### Tiên Phàm Giới Hạn Kinh Tế (Mortal-Immortal Economic Boundary)
 Ranh giới phân tách triệt để giữa kinh tế Phàm trần (Rank 1–5, dùng Nguyên Thạch, giao dịch tại Thôn trang/Thương đoàn, quyên góp Tông môn) và Tiên giới (Rank 6–9, dùng Tiên Nguyên Thạch, giao dịch Tiên Cổ và Tiên Tài). Tông môn phàm giới không thu nạp Tiên Tài; quy đổi tiền tệ chỉ cho phép 1 chiều từ Nguyên Thạch lên Tiên Nguyên Thạch với tỷ giá cao để phục vụ Cổ Tiên sơ kỳ.
 
+## Real-world Exploration & Inheritances (Mộng Cảnh, Bí Cảnh & Truyền Thừa)
+
+### Mộng Cảnh (Dream Realm)
+Không gian tiềm thức và ký ức tàn dư của tiền nhân hoặc thiên địa, vận hành thuần túy theo cơ chế kịch bản tình huống lựa chọn (Scenario-Choice Q&A). Cổ sư dùng thần hồn tiến vào, chịu rủi ro tổn hao Hồn Lực (Soul HP) nếu lựa chọn sai, có thể trợ lực bằng Cổ Mộng Đạo (Cổ Giải Mộng). Phần thưởng tối hậu là Chân Ý (Path Attainment) giúp thăng cấp cảnh giới lưu phái. Tuyệt đối không gắn với bản đồ di chuyển không gian.
+_Avoid_: Bí cảnh, phó bản bản đồ, dungeon bản đồ
+
+### Bí Cảnh Không Gian (Spatial Secret Realm)
+Không gian tiểu giới hoặc phúc địa vô chủ tồn tại độc lập với Ngũ Vực nhưng có lối vào/lối ra cụ thể trên bản đồ thế giới. Vận hành theo mô hình phiên dùng chung (Shared Spatial Instance) có thời lượng giới hạn. Cổ sư tự do di chuyển theo tọa độ, khai thác tài nguyên, săn quái, tranh đoạt hoặc tương tác với môi trường theo các quy tắc bí cảnh (áp chế tu vi, vùng an toàn hoặc hỗn chiến tự do).
+_Avoid_: Mộng cảnh, dungeon trả lời câu hỏi
+
+### Truyền Thừa Tiền Nhân (Spatial Inheritance Ground)
+Không gian khảo nghiệm kín đáo do tiền nhân, ma đầu hoặc chính đạo cao thủ lưu lại để tuyển chọn truyền nhân. Vận hành theo mô hình phiên riêng biệt cho cá nhân hoặc tổ đội (Private/Party Spatial Instance). Gồm các ải thử thách thực chiến, giải mã cơ quan trận pháp, đánh bại Thủ Hộ Thú và kích hoạt Đài Truyền Thừa (Inheritance Altar) để kế thừa Cổ trùng độc bản, bí kíp, phương thuốc hợp luyện và di sản.
+_Avoid_: Bí cảnh đại trà, mộng cảnh
+
+### Đài Truyền Thừa (Inheritance Altar)
+Điểm phong ấn cơ quan lưu giữ di sản của tiền nhân trên bản đồ không gian, yêu cầu đánh bại Thủ Hộ Giả (Guardian Boss) và thỏa mãn các điều kiện về Đạo Ngân lưu phái hoặc cảnh giới để lĩnh nhận. Di sản Tiên Cổ/Bậc cao (Rank 6+) là độc bản vĩnh viễn (chỉ nhận một lần trong đời); di sản phàm trần (Rank 1–5) có thể hỗ trợ chu kỳ làm mới tùy cấu hình khảo nghiệm.
+
+### Quy Tắc Bí Cảnh (Spatial Realm Rules / Realm Rules)
+Tập luật môi trường ràng buộc hành vi của mọi Cổ sư khi hiện diện bên trong một Bí cảnh hoặc Vùng truyền thừa. Bao gồm: Thời lượng đếm ngược (Duration Timer), Cơ chế PK (Vùng An Toàn / Hỗn Chiến Tự Do), Giới hạn cảnh giới tối đa & Áp chế tu vi (Rank Suppression), Quy tắc trừng phạt tử vong (trục xuất về thế giới hoặc hồi sinh tại cổng), và Cấm đoán truyền tống trận.
+

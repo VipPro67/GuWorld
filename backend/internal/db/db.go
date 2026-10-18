@@ -574,7 +574,9 @@ func seedStarterSpatialRealm() error {
 		('realm_qingmu_valley',1001,1000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về"}'::jsonb,0,TRUE),
 		('realm_qingmu_valley',1002,1000,'Monster','monster_wild_boar','{"rank":1}'::jsonb,60,TRUE),
 		('realm_qingmu_valley',1000,1001,'Resource','ginseng','{}'::jsonb,600,TRUE),
-		('realm_qingmu_valley',1002,1001,'Resource','jade_stone','{}'::jsonb,600,TRUE)
+		('realm_qingmu_valley',1002,1001,'Resource','jade_stone','{}'::jsonb,600,TRUE),
+		('realm_qingmu_valley',1005,1005,'Monster','monster_wild_boar','{"rank":1,"name":"Thủ Hộ Dã Trư Vương"}'::jsonb,120,TRUE),
+		('realm_qingmu_valley',1005,1006,'INHERITANCE_ALTAR','altar_qingmu_elder','{"altar_name":"Đài Truyền Thừa: Thanh Mộc Lão Nhân","path":"Wood Path","tier":"MORTAL","guardian_coord":{"x":1005,"y":1005},"req_rank":1,"req_dao_marks":{},"rewards":{"gus":["GU_BLADE_AURA_1"],"recipes":[],"primeval_stones":1000,"materials":{"ginseng":5},"legacy_text":"Lão phu lưu lại truyền thừa này cho hậu bối hữu duyên bước chân vào Thanh Mộc Cốc..."}}'::jsonb,0,TRUE)
 		ON CONFLICT (region_id,x,y) DO NOTHING`)
 	return err
 }
@@ -2992,7 +2994,7 @@ func SeedInstanceTemplates() error {
 					"stage_index": 4,
 					"description": "Bộ xương khô đột ngột sụp xuống, vách ngăn phía dưới mở ra hé lộ Moonlight Gu và rương Nguyên Thạch. Đạo hữu đã thành công kế thừa y bát Hoa Tửu Hành Giả!",
 					"options": [
-						{"text": "Thu nhận phần thưởng và kết thúc phó bản", "next_stage": -1, "requirements": {}}
+						{"text": "Thu nhận phần thưởng và kết thúc mộng cảnh", "next_stage": -1, "requirements": {}}
 					]
 				},
 				{

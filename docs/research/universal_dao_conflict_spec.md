@@ -158,8 +158,8 @@ $$N_{\text{eff}} = 1.0 + \sum_{q \neq p, \, \text{amt}(q) > \text{grace}} 2.0 \t
    - Ví dụ: Tẩy $1,000$ Đạo Ngân = $10$ Tiên Nguyên Thạch; Tẩy $10,000$ Đạo Ngân = $100$ Tiên Nguyên Thạch.
 2. **Thu hồi tài nguyên (Resource Refund):**
    - Hoàn trả **$30\%$ giá trị** Đạo Ngân bị bóc tách dưới dạng **Đạo Tài (Dao Materials)** thuộc lưu phái tương ứng:
-     $$\text{RefundMaterials} = \lfloor \text{CleansedMarks} \times 0.30 \rfloor$$
-   - Đạo Tài thu hồi được dùng trực tiếp để nuôi Cổ trùng, luyện Cổ, hoặc bán đổi lấy tài nguyên bồi dưỡng cho lưu phái chính.
+     $$\text{RefundQty} = \left\lfloor \frac{\lfloor \text{CleansedMarks} \times 0.30 \rfloor}{1\,000} \right\rfloor \text{ món}$$
+   - Mỗi món `dao_material_<path>` (rank 6, Consumable, effect `ADD_DAO_MARKS` = 1000) khi sử dụng bổ sung **1.000 Đạo Ngân** đúng lưu phái đó, dùng trực tiếp để nuôi Cổ trùng / luyện Cổ / giao dịch, hoặc bồi dưỡng lưu phái chính. Không làm tròn lên: tẩy nhỏ không được lợi.
 3. **Nhịp độ & Giới hạn bế quan:**
    - Cooldown: **$12$ Giờ** giữa mỗi lần đại tẩy thể.
    - Hạn mức mỗi lần tẩy: Tối đa **$10,000$ Đạo Ngân / lần**.
@@ -197,7 +197,7 @@ $$N_{\text{eff}} = 1.0 + \sum_{q \neq p, \, \text{amt}(q) > \text{grace}} 2.0 \t
 - [x] **Phase 1:** `gamefx/dao_combat_profile.go` — mẫu số động, $N_{\text{eff}}$, $F_{\text{Multi}}$, sàn `0.08`, `RealmControlForLevel(4)=1.00`, helper `ManaTaxMultiplier`/`CastFailureChance`/`BackfireChance`/`DaoPurity`/`EcologyPurityFactor`/`EffectivePathCount`/`IsChaoticTribulation`; Boss/Hoang Thú `HasNonConflictingDao=true` (`combat_auto.go`).
 - [x] **Phase 2:** `simulator/engine.go` — Mana Tax, Fizzle (`DAO_CAST_FAILED`), Backfire (`DAO_BACKFIRE`, true damage + giảm 50% uy lực), log tương ứng. **Cập nhật sau:** đánh thường (`BASIC_ATTACK`) được miễn phản phệ; thêm sàn `DaoConflictTotalFloor = 10.000` (tổng Đạo Ngân ≤ 10k miễn toàn bộ xung đột) áp cả combat, kháng đạo tự nhiên và Kiếp Nạn Hỗn Loạn.
 - [x] **Phase 3:** `aperture_collect.go` + `services/player_service.go` + `tribulation_trigger.go` — `EcologyPurityFactor` áp vào sản lượng node và Tiên Nguyên; kiếp nạn `CHAOTIC_TRIBULATION` (khuếch đại HP/Công quái, path lai tạp, rải đều Đạo Ngân thưởng).
-- [x] **Phase 4:** `handlers/aperture_cleanse.go` + route `POST /api/immortal-aperture/cleanse-dao-marks` + cột `immortal_apertures.last_cleanse_at` + UI Purity Badge & Cleansing Modal (`ImmortalApertureView.tsx`, `apertureSlice.ts`).
+- [x] **Phase 4:** `handlers/aperture_cleanse.go` + route `POST /api/immortal-aperture/cleanse-dao-marks` + cột `immortal_apertures.last_cleanse_at` + UI Purity Badge & Cleansing Modal (`ImmortalApertureView.tsx`, `apertureSlice.ts`). **Cập nhật sau:** refund đổi từ số "Đạo Tài" trừu tượng sang item thật `dao_material_<path>` (44 item rank 6 trong `Item.csv`, effect `ADD_DAO_MARKS` = 1.000 Đạo Ngân/món, `handlers/item_effects.go` `addDaoMarksEffect`); `refund_qty = floor(30% × marks / 1000)`.
 - [ ] **Hoãn:** tuỳ chọn "hoàn thành bế quan ngay" bằng Tiên Nguyên Thạch (chưa cần thiết cho v1).
 
 

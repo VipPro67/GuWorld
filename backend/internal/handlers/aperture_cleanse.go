@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // Thanh Đạo Tẩy Thể (Dao Cleansing) — spec §6.
@@ -21,6 +22,9 @@ const (
 	cleanseMaxMarks      = 10000 // max marks stripped per cleanse
 	cleanseMarksPerStone = 100   // 1 Tiên Nguyên Thạch per 100 tạp đạo ngân
 	cleanseRefundRatio   = 0.30  // 30% refunded as Dao Materials
+	// cleanseRefundMarks là số Đạo Ngân mà 1 món Đạo Tài hoàn trả bổ sung khi
+	// dùng (khớp params.value của block ADD_DAO_MARKS trong Item.csv).
+	cleanseRefundMarks = 1000
 )
 
 type cleanseDaoMarksRequest struct {
@@ -161,10 +165,16 @@ func CleanseDaoMarks(c *gin.Context) {
 		return
 	}
 
-	refund := int64(float64(cleansed) * cleanseRefundRatio)
+	// Hoàn trả 30% Đạo Ngân đã bóc tách dưới dạng Đạo Tài của lưu phái đó;
+	// mỗi món bổ sung cleanseRefundMarks Đạo Ngân khi sử dụng.
 	refundItem := "dao_material_" + targetPath
-	if refund > 0 {
-		if err := InventorySvc.AddItem(tx, playerID.String(), refundItem, "materials", refund); err != nil {
+	refundQty := cleanseRefundQty(cleansed)
+	if refundQty > 0 {
+		if _, ok := models.ItemRegistry[refundItem]; !ok {
+			// Chưa import Đạo Tài vào item_dictionary → bỏ hoàn trả, vẫn tẩy thành công.
+			logger.S.Warnf("cleanse refund skipped: item %s not in registry", refundItem)
+			refundQty = 0
+		} else if err := InventorySvc.AddItem(tx, playerID.String(), refundItem, "materials", refundQty); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn trả Đạo Tài"})
 			return
 		}
@@ -176,14 +186,24 @@ func CleanseDaoMarks(c *gin.Context) {
 	}
 
 	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
-		"message":     fmt.Sprintf("Thanh Đạo Tẩy Thể thành công! Bóc tách %d Đạo Ngân hệ %s, tiêu hao %d Tiên Nguyên Thạch, thu hồi %d Đạo Tài.", cleansed, strings.ToUpper(targetPath), stoneCost, refund),
-		"cleansed":    cleansed,
-		"path":        targetPath,
-		"stone_cost":  stoneCost,
-		"refund":      refund,
-		"refund_item": refundItem,
-		"dao_marks":   daoMarks,
+		"message":      fmt.Sprintf("Thanh Đạo Tẩy Thể thành công! Bóc tách %d Đạo Ngân hệ %s, tiêu hao %d Tiên Nguyên Thạch, thu hồi %d Đạo Tài (+%d Đạo Ngân khi dùng).", cleansed, strings.ToUpper(targetPath), stoneCost, refundQty, refundQty*cleanseRefundMarks),
+		"cleansed":     cleansed,
+		"path":         targetPath,
+		"stone_cost":   stoneCost,
+		"refund_item":  refundItem,
+		"refund_qty":   refundQty,
+		"refund_marks": refundQty * cleanseRefundMarks,
+		"dao_marks":    daoMarks,
 	})
+}
+
+// cleanseRefundQty trả về số món Đạo Tài hoàn trả: floor(30% marks / 1000).
+// Không làm tròn lên — tẩy nhỏ không được lợi (1 món luôn đáng 1000 Đạo Ngân).
+func cleanseRefundQty(cleansed int64) int64 {
+	if cleansed <= 0 {
+		return 0
+	}
+	return int64(float64(cleansed)*cleanseRefundRatio) / cleanseRefundMarks
 }
 
 func formatCleanseRemain(d time.Duration) string {

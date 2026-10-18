@@ -1317,7 +1317,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               </div>
                             )}
                             <Link
-                              href={`/wiki/gu/${spec.id}`}
+                              href={`/wiki/gu/${spec.id}?rank=${spec.rank}`}
                               className="col-span-2 flex items-center justify-center gap-1.5 rounded-lg border border-zinc-800/70 bg-zinc-900/40 p-2 font-mono text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 sm:col-span-3"
                             >
                               <BookOpen className="h-3.5 w-3.5" /> Xem chi tiết trên Wiki
@@ -1650,7 +1650,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                         </div>
                                       )}
                                       <Link
-                                        href={`/wiki/gu/${spec.id}`}
+                                        href={`/wiki/gu/${spec.id}?rank=${spec.rank}`}
                                         className="col-span-2 md:col-span-3 bg-zinc-900/40 hover:bg-zinc-800/60 rounded-lg p-2 border border-zinc-800/50 text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-1.5 font-mono text-[10px]"
                                       >
                                         <BookOpen className="w-3.5 h-3.5" />
