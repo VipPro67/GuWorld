@@ -229,6 +229,7 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodDelete, "/monster-spawns/:region_id/:monster_id", "monster_spawns.delete", handlers.AdminDeleteMonsterSpawn, "admin.delete_monster_spawn", "monster_spawn", true, "path", false, false, true},
 		// world_bosses (live boss actors held in Redis, not static spawn data)
 		{http.MethodGet, "/world-bosses", "world_bosses.read", handlers.AdminListWorldBosses, "", "", false, "", false, false, false},
+		{http.MethodPost, "/world-bosses/spawn", "world_bosses.update", handlers.AdminSpawnWorldBosses, "admin.spawn_world_bosses", "world_boss", false, "", false, false, false},
 		{http.MethodPut, "/world-bosses/:region_id/:instance_id", "world_bosses.update", handlers.AdminUpdateWorldBoss, "admin.update_world_boss", "world_boss", false, "", false, false, false},
 		{http.MethodDelete, "/world-bosses", "world_bosses.delete", handlers.AdminPurgeWorldBosses, "admin.purge_world_bosses", "world_boss", true, "path", false, false, true},
 		// quests
