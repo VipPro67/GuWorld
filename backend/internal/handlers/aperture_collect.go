@@ -239,18 +239,9 @@ func CollectApertureResource(c *gin.Context) {
 	}
 	notify.Send(db.DB, playerID, "aperture_harvest", "Thu Hoạch Tiên Khiếu", fullRewardMsg)
 
-	resp := gin.H{
+	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
 		"message": fullRewardMsg,
-	}
-	if n.ProductionType == "Stones" {
-		var stones float64
-		_ = db.DB.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, playerID).Scan(&stones)
-		resp["primeval_stones"] = stones
-	} else if n.ProductionType == "Material" {
-		resp["materials_inventory"] = loadMaterialsInventory(playerID.String())
-	}
-
-	c.JSON(http.StatusOK, resp)
+	})
 }
 
 // applyBulkReward applies a combined multiplier and an optional bulk discount to a base reward,
@@ -905,14 +896,12 @@ func CollectAllApertureResources(c *gin.Context) {
 	bulkMsg := fmt.Sprintf("Thu hoạch hàng loạt %d mỏ thành công!%s Nhân Khí +%d (Sản lượng -20%%).", readyCount, detailStr, productiveCount)
 	notify.Send(db.DB, playerID, "aperture_harvest_bulk", "Thu Hoạch Hàng Loạt Tiên Khiếu", bulkMsg)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":             bulkMsg,
-		"count":               readyCount,
-		"total_stones":        totalStones,
-		"primeval_stones":     updatedStones,
-		"materials":           materialTotals,
-		"materials_inventory": loadMaterialsInventory(playerID.String()),
-		"collected":           results,
+	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
+		"message":      bulkMsg,
+		"count":        readyCount,
+		"total_stones": totalStones,
+		"materials":    materialTotals,
+		"collected":    results,
 	})
 }
 
@@ -1033,11 +1022,10 @@ func RepairAllApertureNodes(c *gin.Context) {
 	repairAllMsg := fmt.Sprintf("Sửa chữa hàng loạt %d công trình thành công! Tiêu tốn tổng cộng %d Tiên Nguyên Thạch (Phí +30%%).", len(results), totalCost)
 	notify.Send(db.DB, playerID, "aperture_repair_bulk", "Sửa Chữa Hàng Loạt Tiên Khiếu", repairAllMsg)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":         repairAllMsg,
-		"repaired_count":  len(results),
-		"total_cost":      totalCost,
-		"nodes":           results,
-		"immortal_stones": newStones,
+	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
+		"message":        repairAllMsg,
+		"repaired_count": len(results),
+		"total_cost":     totalCost,
+		"nodes":          results,
 	})
 }

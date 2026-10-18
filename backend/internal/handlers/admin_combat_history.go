@@ -20,7 +20,7 @@ func AdminListCombatHistory(c *gin.Context) {
 	page, limit := adminPage(c, 25, 100)
 	search := strings.TrimSpace(c.Query("search"))
 	pattern := "%" + search + "%"
-	filter := `($1 = '' OR h.id::text ILIKE $2 OR h.player_id::text ILIKE $2 OR p.username ILIKE $2 OR h.enemy_name ILIKE $2 OR h.region ILIKE $2 OR h.winner ILIKE $2)`
+	filter := `($1 = '' OR h.id::text ILIKE $2 OR h.player_id::text ILIKE $2 OR p.username ILIKE $2 OR h.enemy_name ILIKE $2 OR h.enemy_type ILIKE $2 OR h.region ILIKE $2 OR h.winner ILIKE $2)`
 
 	var total int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `

@@ -175,16 +175,14 @@ func CleanseDaoMarks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":             fmt.Sprintf("Thanh Đạo Tẩy Thể thành công! Bóc tách %d Đạo Ngân hệ %s, tiêu hao %d Tiên Nguyên Thạch, thu hồi %d Đạo Tài.", cleansed, strings.ToUpper(targetPath), stoneCost, refund),
-		"cleansed":            cleansed,
-		"path":                targetPath,
-		"stone_cost":          stoneCost,
-		"refund":              refund,
-		"refund_item":         refundItem,
-		"immortal_stones":     newStones,
-		"dao_marks":           daoMarks,
-		"materials_inventory": loadMaterialsInventory(playerID.String()),
+	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
+		"message":     fmt.Sprintf("Thanh Đạo Tẩy Thể thành công! Bóc tách %d Đạo Ngân hệ %s, tiêu hao %d Tiên Nguyên Thạch, thu hồi %d Đạo Tài.", cleansed, strings.ToUpper(targetPath), stoneCost, refund),
+		"cleansed":    cleansed,
+		"path":        targetPath,
+		"stone_cost":  stoneCost,
+		"refund":      refund,
+		"refund_item": refundItem,
+		"dao_marks":   daoMarks,
 	})
 }
 

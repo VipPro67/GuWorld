@@ -203,6 +203,12 @@ func BuyArenaShopItem(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
 	// Deduct coins (atomic FOR UPDATE + check + deduct)
 	if err := InventorySvc.RemoveItem(tx, authID.String(), "arena_coin", "materials", totalCost); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Xu Đấu Trường!"})
@@ -229,7 +235,10 @@ func BuyArenaShopItem(c *gin.Context) {
 		return
 	}
 
-	tx.Commit()
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu giao dịch"})
+		return
+	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "arena_shop_purchase", EntityType: "arena_shop_item",
@@ -239,5 +248,8 @@ func BuyArenaShopItem(c *gin.Context) {
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Đổi %dx %s thành công! Nhân Khí +%d.", totalQty, targetName, 5*quantity), "cost": totalCost})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
+		"message": fmt.Sprintf("Đổi %dx %s thành công! Nhân Khí +%d.", totalQty, targetName, 5*quantity),
+		"cost":    totalCost,
+	})
 }

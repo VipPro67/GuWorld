@@ -123,10 +123,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (payload.itemType === "Gu") {
         await get().fetchGuInventory();
       }
-      const pid = get().player?.id;
-      if (pid) {
-        await get().fetchPlayerStatus(pid, true);
-      }
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -148,10 +144,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (!response.ok) throw new Error(data.error || "Đặt giá thất bại");
       get().addLog(data.message || "Đặt giá thành công");
       get().applyInventoryFromResponse(data);
-      const pid = get().player?.id;
-      if (pid) {
-        await get().fetchPlayerStatus(pid, true);
-      }
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {
@@ -170,10 +162,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addLog(data.message || "Đã hủy");
       get().applyInventoryFromResponse(data);
       await get().fetchGuInventory();
-      const pid = get().player?.id;
-      if (pid) {
-        await get().fetchPlayerStatus(pid, true);
-      }
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {
@@ -246,8 +234,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addLog(data.message || "Tạo đơn thu mua thành công");
       get().addToast(data.message || "Tạo đơn thu mua thành công", "success");
       get().applyInventoryFromResponse(data);
-      const pid = get().player?.id;
-      if (pid) await get().fetchPlayerStatus(pid, true);
       await get().fetchBuybackOrders();
       return true;
     } catch (caught: unknown) {
@@ -280,8 +266,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(data.message || "Bán vật phẩm thành công", "success");
       get().applyInventoryFromResponse(data);
       await get().fetchGuInventory();
-      const pid = get().player?.id;
-      if (pid) await get().fetchPlayerStatus(pid, true);
       await get().fetchBuybackOrders();
       return true;
     } catch (caught: unknown) {
@@ -308,8 +292,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addLog(data.message || "Hủy đơn thu mua thành công");
       get().addToast(data.message || "Hủy đơn thu mua thành công", "success");
       get().applyInventoryFromResponse(data);
-      const pid = get().player?.id;
-      if (pid) await get().fetchPlayerStatus(pid, true);
       await get().fetchBuybackOrders();
       return true;
     } catch (caught: unknown) {
@@ -356,8 +338,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(data.message || "Đăng đơn trao đổi thành công", "success");
       get().applyInventoryFromResponse(data);
       await get().fetchGuInventory();
-      const pid = get().player?.id;
-      if (pid) await get().fetchPlayerStatus(pid, true);
       await get().fetchTradeOffers();
       return true;
     } catch (caught: unknown) {
@@ -385,8 +365,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(data.message || "Trao đổi tự động thành công", "success");
       get().applyInventoryFromResponse(data);
       await get().fetchGuInventory();
-      const pid = get().player?.id;
-      if (pid) await get().fetchPlayerStatus(pid, true);
       await get().fetchTradeOffers();
       return true;
     } catch (caught: unknown) {
@@ -414,8 +392,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(data.message || "Hủy đơn trao đổi thành công", "success");
       get().applyInventoryFromResponse(data);
       await get().fetchGuInventory();
-      const pid = get().player?.id;
-      if (pid) await get().fetchPlayerStatus(pid, true);
       await get().fetchTradeOffers();
       return true;
     } catch (caught: unknown) {

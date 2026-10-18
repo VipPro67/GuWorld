@@ -215,11 +215,11 @@ func ManageApertureNodesBatch(c *gin.Context) {
 		return
 	}
 	actionLabel := map[string]string{"repair": "Sửa chữa", "upgrade": "Nâng cấp", "delete": "San phẳng"}[req.Action]
-	response := gin.H{"message": fmt.Sprintf("%s %d node thành công.", actionLabel, len(nodes)), "count": len(nodes), "cost": totalCost}
-	if totalCost > 0 {
-		response["immortal_stones"] = newStones
-	}
-	c.JSON(http.StatusOK, response)
+	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
+		"message": fmt.Sprintf("%s %d node thành công.", actionLabel, len(nodes)),
+		"count":   len(nodes),
+		"cost":    totalCost,
+	})
 }
 
 func loadApertureNodeCells(tx *sql.Tx, apertureID any) (map[string][]models.ApertureGridCell, error) {
@@ -661,15 +661,10 @@ func PlaceApertureNode(c *gin.Context) {
 		Success:   true,
 	})
 
-	resp := gin.H{
-		"node":            node,
-		"message":         buildMsg,
-		"immortal_stones": newStones,
-	}
-	if hasItem || seedsConsumed > 0 {
-		resp["materials_inventory"] = loadMaterialsInventory(playerID.String())
-	}
-	c.JSON(http.StatusOK, resp)
+	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
+		"node":    node,
+		"message": buildMsg,
+	})
 }
 
 // UninstallApertureNode uninstalls a node, deleting it and refunding 1x node_<type> to materials_inventory
@@ -742,10 +737,9 @@ func UninstallApertureNode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":             fmt.Sprintf("Tháo dỡ thành công %s, đã thu hồi lại mô hình mỏ vào túi đồ.", n.Name),
-		"node_id":             nodeIDStr,
-		"materials_inventory": loadMaterialsInventory(playerID.String()),
+	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
+		"message": fmt.Sprintf("Tháo dỡ thành công %s, đã thu hồi lại mô hình mỏ vào túi đồ.", n.Name),
+		"node_id": nodeIDStr,
 	})
 }
 

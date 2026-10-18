@@ -107,7 +107,7 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       const data = await response.json();
       if (response.ok) {
         get().addToast(data.message, "success");
-        await get().fetchPlayerStatus(get().player!.id);
+        get().applyInventoryFromResponse(data);
         return true;
       } else {
         set({ error: data.error });
