@@ -107,19 +107,7 @@ export function resolveActiveZone(
     };
   }
 
-  // 1. If player has a specific subzone as current_region
-  if (currentRegionId) {
-    const direct = regions.find(
-      (r) =>
-        r.id === currentRegionId &&
-        r.zone_type !== "NGU_VUC" &&
-        r.min_x !== undefined &&
-        r.max_x !== undefined,
-    );
-    if (direct) return direct;
-  }
-
-  // 2. Try to find the smallest subzone containing (px, py)
+  // 1. If player coordinates are provided, find the best subzone containing (px, py)
   if (px !== undefined && py !== undefined) {
     let bestZone: Region | null = null;
     let minArea = Infinity;
@@ -133,7 +121,7 @@ export function resolveActiveZone(
       ) {
         if (px >= r.min_x && px <= r.max_x && py >= r.min_y && py <= r.max_y) {
           const area = (r.max_x - r.min_x + 1) * (r.max_y - r.min_y + 1);
-          if (area < minArea) {
+          if (area < minArea || (area === minArea && r.id === currentRegionId)) {
             minArea = area;
             bestZone = r;
           }
@@ -141,6 +129,18 @@ export function resolveActiveZone(
       }
     }
     if (bestZone) return bestZone;
+  }
+
+  // 2. If no subzone contains (px, py), check if currentRegionId points to a specific subzone
+  if (currentRegionId) {
+    const direct = regions.find(
+      (r) =>
+        r.id === currentRegionId &&
+        r.zone_type !== "NGU_VUC" &&
+        r.min_x !== undefined &&
+        r.max_x !== undefined,
+    );
+    if (direct) return direct;
   }
 
   // 3. Fallback: Region by ID even if NGU_VUC
@@ -794,7 +794,18 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
               if (walkVersionRef.current !== myVersion) return;
               setPlayerFromServer(np);
               setExploredSubZones(np.visited_subzones || []);
-              if (res.log) addWorldLog(res.log);
+              if (res.log) {
+                addWorldLog(res.log);
+                if (
+                  res.log.includes("Cảnh giới") ||
+                  res.log.includes("không thể") ||
+                  res.log.includes("cấm Cổ trùng") ||
+                  res.log.includes("Ranh giới bí cảnh")
+                ) {
+                  useGameStore.getState().addToast(res.log, "error");
+                  moveTargetRef.current = null;
+                }
+              }
 
               // Handle skip battle result
               if (res.skip_result) {
@@ -894,16 +905,18 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       const stage = stageRef.current;
       const scale = scaleRef.current;
       const currentZone = activeZoneRef.current;
-      const zoneMinX = currentZone.min_x ?? 0;
-      const zoneMaxX = currentZone.max_x ?? (WORLD_W - 1);
-      const zoneMinY = currentZone.min_y ?? 0;
-      const zoneMaxY = currentZone.max_y ?? (WORLD_H - 1);
-      let worldX = (pos.x - stage.position.x) / scale;
-      let worldY = (pos.y - stage.position.y) / scale;
-      worldX = Math.max(zoneMinX, Math.min(zoneMaxX, worldX));
-      worldY = Math.max(zoneMinY, Math.min(zoneMaxY, worldY));
+      const worldX = Math.max(0, Math.min(WORLD_W - 1, (pos.x - stage.position.x) / scale));
+      const worldY = Math.max(0, Math.min(WORLD_H - 1, (pos.y - stage.position.y) / scale));
       const tx = Math.floor(worldX);
       const ty = Math.floor(worldY);
+
+      const isOutsideCurrentZone = Boolean(
+        currentZone &&
+        ((currentZone.min_x !== undefined && tx < currentZone.min_x) ||
+         (currentZone.max_x !== undefined && tx > currentZone.max_x) ||
+         (currentZone.min_y !== undefined && ty < currentZone.min_y) ||
+         (currentZone.max_y !== undefined && ty > currentZone.max_y))
+      );
 
       const s = useWorldStore.getState();
       if (s.targetingGu) {
@@ -1010,13 +1023,15 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
 
       s.selectObject(null);
 
-      // Tap on empty terrain inside investigation range to move there
+      // Tap on empty terrain to move there
       const px = gamePlayer?.x ?? 0;
       const py = gamePlayer?.y ?? 0;
       const dist = Math.hypot(tx - px, ty - py);
-      if (!isTouchDevice() && dist <= s.investigationRange) {
-        moveTargetRef.current = { x: tx, y: ty };
-        performMove(tx, ty);
+      if (!isTouchDevice()) {
+        if (isOutsideCurrentZone || dist <= s.investigationRange) {
+          moveTargetRef.current = { x: tx, y: ty };
+          performMove(tx, ty);
+        }
       }
     },
     [performMove, gamePlayer, handleObjectClick, monsterDictionary],
@@ -1148,10 +1163,10 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     const activeMaxX = currentZone.max_x ?? WORLD_W;
     const activeMinY = currentZone.min_y ?? 0;
     const activeMaxY = currentZone.max_y ?? WORLD_H;
-
+    const margin = 1000;
     const overlaps = (z: { min_x?: number; min_y?: number; max_x?: number; max_y?: number }) => {
       if (z.min_x === undefined || z.max_x === undefined || z.min_y === undefined || z.max_y === undefined) return false;
-      return !(z.max_x < activeMinX || z.min_x > activeMaxX || z.max_y < activeMinY || z.min_y > activeMaxY);
+      return !(z.max_x < activeMinX - margin || z.min_x > activeMaxX + margin || z.max_y < activeMinY - margin || z.min_y > activeMaxY + margin);
     };
 
     const largeZones = regs.filter((r) => r.zone_type === "NGU_VUC" && overlaps(r));
@@ -1247,11 +1262,12 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     const activeMaxX = currentZone.max_x ?? WORLD_W;
     const activeMinY = currentZone.min_y ?? 0;
     const activeMaxY = currentZone.max_y ?? WORLD_H;
+    const margin = 1000;
 
     for (const region of regs) {
       if (region.zone_type !== "NGU_VUC" || region.min_x === undefined || region.min_y === undefined
         || region.max_x === undefined || region.max_y === undefined) continue;
-      if (region.max_x < activeMinX || region.min_x > activeMaxX || region.max_y < activeMinY || region.min_y > activeMaxY) continue;
+      if (region.max_x < activeMinX - margin || region.min_x > activeMaxX + margin || region.max_y < activeMinY - margin || region.min_y > activeMaxY + margin) continue;
       const texture = regionBackgroundTexturesRef.current[backgroundKeyByRegion[region.id]];
       if (!texture) continue;
       const background = new Sprite(texture);
@@ -2232,17 +2248,12 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       bgGraphics.stroke({ color: 0x14361e, width: 0.02, alignment: 0 }); // alignment 0 draws stroke completely inside
 
       const bgTexture = app.renderer.generateTexture(bgGraphics);
-      const initialZone = activeZoneRef.current;
-      const initMinX = initialZone.min_x ?? 0;
-      const initMinY = initialZone.min_y ?? 0;
-      const initMaxX = initialZone.max_x ?? 2000;
-      const initMaxY = initialZone.max_y ?? 2000;
       const bgSprite = new TilingSprite({
         texture: bgTexture,
-        width: initMaxX - initMinX + 1,
-        height: initMaxY - initMinY + 1,
+        width: WORLD_W,
+        height: WORLD_H,
       });
-      bgSprite.position.set(initMinX, initMinY);
+      bgSprite.position.set(0, 0);
       bgSpriteRef.current = bgSprite;
       stageRef.current.addChild(bgSprite);
 
@@ -2518,7 +2529,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         const minY = currentZone.min_y ?? 0;
         const maxY = currentZone.max_y ?? WORLD_H;
 
-        const pad = 100 * scale;
+        const pad = 400 * scale;
         const minStageX = app.screen.width - (maxX * scale) - pad;
         const maxStageX = -(minX * scale) + pad;
         const minStageY = app.screen.height - (maxY * scale) - pad;
@@ -2880,17 +2891,6 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     if (lastZoneIdRef.current !== activeZone.id) {
       lastZoneIdRef.current = activeZone.id;
       setTransitioningZone(activeZone.name || "Khu Vực Mới");
-
-      // Update background sprite bounds to new active zone
-      if (bgSpriteRef.current) {
-        const minX = activeZone.min_x ?? 0;
-        const minY = activeZone.min_y ?? 0;
-        const maxX = activeZone.max_x ?? 2000;
-        const maxY = activeZone.max_y ?? 2000;
-        bgSpriteRef.current.position.set(minX, minY);
-        bgSpriteRef.current.width = maxX - minX + 1;
-        bgSpriteRef.current.height = maxY - minY + 1;
-      }
 
       // Clear old zone visuals
       for (const entry of monsterChunksRef.current.values()) {

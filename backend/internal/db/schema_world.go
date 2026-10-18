@@ -132,6 +132,12 @@ func schemaWorld() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("monster_spawns_region_monster_unique", `
+	DELETE FROM monster_spawns a USING monster_spawns b
+	WHERE a.ctid < b.ctid AND a.region_id = b.region_id AND a.monster_id = b.monster_id;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_monster_spawns_region_monster ON monster_spawns (region_id, monster_id);`); err != nil {
+		return err
+	}
 	if err := execSchema("monster_spawns_monster_idx", `
 	CREATE INDEX IF NOT EXISTS idx_monster_spawns_monster ON monster_spawns (monster_id);`); err != nil {
 		return err

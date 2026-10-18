@@ -42,16 +42,17 @@ from gen_path_items import DAI_A_DATA, DAI_B_DATA
 SEED = 20261018
 
 # Stats baseline per rank
+# Rank-independent base stats (scaled at runtime by ScaleMonsterStats with RankScale and typeMultiplier)
 RANK_STATS = {
-    1: {"hp": 40.0, "atk": 8.0, "def": 4.0},
-    2: {"hp": 80.0, "atk": 15.0, "def": 8.0},
-    3: {"hp": 180.0, "atk": 25.0, "def": 15.0},
-    4: {"hp": 380.0, "atk": 45.0, "def": 30.0},
-    5: {"hp": 850.0, "atk": 80.0, "def": 55.0},
-    6: {"hp": 1800.0, "atk": 160.0, "def": 95.0},
-    7: {"hp": 3800.0, "atk": 300.0, "def": 180.0},
-    8: {"hp": 8500.0, "atk": 580.0, "def": 350.0},
-    9: {"hp": 18000.0, "atk": 1100.0, "def": 680.0},
+    1: {"hp": 85.0, "atk": 11.0, "def": 0.08},
+    2: {"hp": 85.0, "atk": 11.0, "def": 0.08},
+    3: {"hp": 85.0, "atk": 11.0, "def": 0.08},
+    4: {"hp": 85.0, "atk": 11.0, "def": 0.08},
+    5: {"hp": 85.0, "atk": 11.0, "def": 0.08},
+    6: {"hp": 85.0, "atk": 11.0, "def": 0.08},
+    7: {"hp": 85.0, "atk": 11.0, "def": 0.08},
+    8: {"hp": 85.0, "atk": 11.0, "def": 0.08},
+    9: {"hp": 85.0, "atk": 11.0, "def": 0.08},
 }
 
 def clean_ascii_id(s):

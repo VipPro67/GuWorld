@@ -2532,6 +2532,13 @@ func seedMonsterSpawnsFromCSV(filename string) error {
 	if regionIdx < 0 || monsterIdx < 0 {
 		return fmt.Errorf("MonsterSpawn.csv missing required columns (region_id, monster_id)")
 	}
+	if _, err := activeCSVImportDB().Exec(`
+		DELETE FROM monster_spawns a USING monster_spawns b
+		WHERE a.ctid < b.ctid AND a.region_id = b.region_id AND a.monster_id = b.monster_id;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_monster_spawns_region_monster ON monster_spawns (region_id, monster_id);
+	`); err != nil {
+		return fmt.Errorf("ensure unique index on monster_spawns: %w", err)
+	}
 	get := func(row []string, idx int) string {
 		if idx < 0 || idx >= len(row) {
 			return ""
