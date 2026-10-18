@@ -413,7 +413,7 @@ func FeedGu(c *gin.Context) {
 	if feedEventMsg != "" {
 		msg += " " + feedEventMsg
 	}
-	respondActionGuOnly(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": msg,
 	})
 }
@@ -630,7 +630,7 @@ func FeedGroup(c *gin.Context) {
 		Success:   true,
 	})
 
-	respondActionGuOnly(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Đã cho ăn thành công %d con %s! Tiêu hao: %s.", fedCount, specs.Name, foodStr),
 	})
 }
@@ -878,7 +878,7 @@ func FeedAll(c *gin.Context) {
 		Success:   true,
 	})
 
-	respondActionGuOnly(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Cho %s ăn thành công! Đã khôi phục cho %d Cổ trùng. Tiêu hao: %s.", scopeName, fedCount, foodStr),
 	})
 }

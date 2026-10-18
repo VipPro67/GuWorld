@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,10 +39,22 @@ type CombatSummary struct {
 	LootCount        int     `json:"loot_count"`
 }
 
+// isBossCombatType reports whether a fight was against a boss. Boss fights are
+// always recorded, win or lose, so the player and admins can review the run.
+func isBossCombatType(enemyType string) bool {
+	switch strings.ToLower(strings.TrimSpace(enemyType)) {
+	case "boss", "world_boss", "tribulation_boss":
+		return true
+	default:
+		return false
+	}
+}
+
 // shouldRecordCombatHistory reports whether a finished fight is persisted to
-// combat_history: every PVP match counts, PVE only when the player side lost.
+// combat_history: every boss fight and PVP match counts, other PVE only when the
+// player side lost.
 func shouldRecordCombatHistory(enemyType, winner string) bool {
-	return enemyType == "PVP" || winner == "Phe Địch"
+	return isBossCombatType(enemyType) || enemyType == "PVP" || winner == "Phe Địch"
 }
 
 // SaveCombatHistory persists a completed combat result to the combat_history table.

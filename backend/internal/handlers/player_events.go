@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -108,7 +109,7 @@ func ClearPendingPlayerQueues(playerID string) {
 // The broad snapshot stays cheap, while active_combat is reconciled against its
 // PostgreSQL source of truth before it can affect client navigation.
 func PublishPlayerSnapshot(player *models.Player, eventType string, domains ...PlayerEventDomain) {
-	if player == nil {
+	if player == nil || db.DB == nil {
 		return
 	}
 	// The caller commonly holds the pre-commit model. Reload after invalidating
@@ -256,6 +257,9 @@ func normalizePlayerEventDomains(domains []PlayerEventDomain, fallback PlayerEve
 }
 
 func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, error) {
+	if db.DB == nil {
+		return PlayerRealtimeSnapshot{}, errors.New("database not initialized")
+	}
 	var cached PlayerRealtimeSnapshot
 	if err := cache.GetJSON("player_snapshot:"+playerID.String(), &cached); err == nil && cached.ID != "" {
 		// Redis accelerates the broad realtime snapshot, but active_combat drives

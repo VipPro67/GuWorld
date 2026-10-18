@@ -11,7 +11,7 @@ import (
 )
 
 func refreshActionPlayerState(player *models.Player) {
-	if player == nil || player.ID == uuid.Nil {
+	if player == nil || player.ID == uuid.Nil || db.DB == nil {
 		return
 	}
 	// Read the response fields and their revision from one MVCC snapshot. Never
@@ -20,12 +20,15 @@ func refreshActionPlayerState(player *models.Player) {
 		SELECT p.state_revision + COALESCE((
 			SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id
 		), 0), p.primeval_stones, p.immortal_stones, p.human_qi,
-		p.hp, p.current_thought, p.soul_hp, p.lifespan
+		p.hp, p.base_hp, p.current_mana, p.max_mana, p.current_thought, p.soul_hp, p.lifespan,
+		p.aptitude_percent, p.sub_rank, p.rank, p.wall_progress
 		FROM players p WHERE p.id = $1
 	`, player.ID).Scan(
 		&player.StateRevision, &player.PrimevalStones,
-		&player.ImmortalStones, &player.HumanQi, &player.HP,
+		&player.ImmortalStones, &player.HumanQi,
+		&player.HP, &player.BaseHP, &player.CurrentMana, &player.MaxMana,
 		&player.CurrentThought, &player.SoulHP, &player.Lifespan,
+		&player.AptitudePercent, &player.SubRank, &player.Rank, &player.WallProgress,
 	)
 }
 
@@ -56,6 +59,14 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 // This eliminates the completed_quests and unlocked_recipes DB queries from every action response.
 func respondActionWithInventory(c *gin.Context, status int, player models.Player, extra ...gin.H) {
 	refreshActionPlayerState(&player)
+	if player.GuInventory == nil {
+		if player.ID != uuid.Nil && db.DB != nil {
+			player.GuInventory, _ = db.LoadPlayerGus(db.DB, player.ID.String(), false)
+		}
+		if player.GuInventory == nil {
+			player.GuInventory = models.GuInventory{}
+		}
+	}
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
@@ -68,6 +79,17 @@ func respondActionWithInventory(c *gin.Context, status int, player models.Player
 		"primeval_stones":     player.PrimevalStones,
 		"immortal_stones":     player.ImmortalStones,
 		"human_qi":            player.HumanQi,
+		"hp":                  player.HP,
+		"base_hp":             player.BaseHP,
+		"current_mana":        player.CurrentMana,
+		"max_mana":            player.MaxMana,
+		"current_thought":     player.CurrentThought,
+		"soul_hp":             player.SoulHP,
+		"lifespan":            player.Lifespan,
+		"aptitude_percent":    player.AptitudePercent,
+		"rank":                player.Rank,
+		"sub_rank":            player.SubRank,
+		"wall_progress":       player.WallProgress,
 		"state_revision":      player.StateRevision,
 	}
 	for _, e := range extra {
@@ -86,22 +108,37 @@ func respondActionWithInventory(c *gin.Context, status int, player models.Player
 // gu_inventory (feed, equip, drop, status changes). No materials DB query is made.
 func respondActionGuOnly(c *gin.Context, status int, player models.Player, extra ...gin.H) {
 	refreshActionPlayerState(&player)
+	if player.GuInventory == nil {
+		if player.ID != uuid.Nil && db.DB != nil {
+			player.GuInventory, _ = db.LoadPlayerGus(db.DB, player.ID.String(), false)
+		}
+		if player.GuInventory == nil {
+			player.GuInventory = models.GuInventory{}
+		}
+	}
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, CombatStatsDomain)
 	resp := gin.H{
-		"success":         true,
-		"gu_inventory":    player.GuInventory,
-		"primeval_stones": player.PrimevalStones,
-		"immortal_stones": player.ImmortalStones,
-		"human_qi":        player.HumanQi,
-		"hp":              player.HP,
-		"current_thought": player.CurrentThought,
-		"soul_hp":         player.SoulHP,
-		"lifespan":        player.Lifespan,
-		"state_revision":  player.StateRevision,
+		"success":          true,
+		"gu_inventory":     player.GuInventory,
+		"primeval_stones":  player.PrimevalStones,
+		"immortal_stones":  player.ImmortalStones,
+		"human_qi":         player.HumanQi,
+		"hp":               player.HP,
+		"base_hp":          player.BaseHP,
+		"current_mana":     player.CurrentMana,
+		"max_mana":         player.MaxMana,
+		"current_thought":  player.CurrentThought,
+		"soul_hp":          player.SoulHP,
+		"lifespan":         player.Lifespan,
+		"aptitude_percent": player.AptitudePercent,
+		"rank":             player.Rank,
+		"sub_rank":         player.SubRank,
+		"wall_progress":    player.WallProgress,
+		"state_revision":   player.StateRevision,
 	}
 	for _, e := range extra {
 		for k, v := range e {

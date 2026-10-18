@@ -457,7 +457,7 @@ func AbandonMineSlot(c *gin.Context) {
 	}
 	invalidateMineSlotsCache()
 
-	respondActionOnly(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": "Từ bỏ mỏ linh thạch thành công, đã nhận toàn bộ phần thưởng tích lũy!",
 		"rewards": gin.H{
 			"stones": stones,

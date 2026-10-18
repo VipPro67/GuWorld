@@ -282,9 +282,14 @@ func ClaimDailyMission(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cấp phần thưởng"})
 		return
 	}
+	player, err := evaluateManaTx(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
+		return
+	}
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phần thưởng"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Đã nhận thưởng nhiệm vụ", "reward_type": rewardType, "reward": reward})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": "Đã nhận thưởng nhiệm vụ", "reward_type": rewardType, "reward": reward})
 }

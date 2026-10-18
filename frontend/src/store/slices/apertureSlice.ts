@@ -248,10 +248,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().applyInventoryFromResponse(data);
       await get().fetchDaoMarks(true);
       await get().fetchDaoNgan(true);
-      const pid = get().player?.id;
-      if (pid) {
-        await get().fetchPlayerStatus(pid, true);
-      }
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -1070,10 +1066,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().applyInventoryFromResponse(data);
       await get().fetchAperture(true);
       await get().fetchDaoMarks(true);
-      const pid = get().player?.id;
-      if (pid) {
-        await get().fetchPlayerStatus(pid, true);
-      }
       set({ activeTribulation: null });
       return true;
     } catch (caught: unknown) {

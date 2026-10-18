@@ -1402,49 +1402,77 @@ export const useGameStore = create<GameState>((set, get) => {
   // are handled by the WebSocket player.updated / delta events.
   const applyInventoryFromResponse = (data: ApiResponseData) => {
     const currentPlayer = get().player;
-    if (!currentPlayer) return;
-    const incomingRevision = typeof data.state_revision === "number" ? data.state_revision : undefined;
-    if (!shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision)) return;
+    if (!currentPlayer || !data) return;
+    const source = (data.player ? { ...data, ...data.player } : data) as ApiResponseData;
+    const incomingRevision = typeof source.state_revision === "number" ? source.state_revision : undefined;
+    if (!shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision, { allowEqual: true })) return;
     const updates: Partial<Player> = {};
-    if (data.gu_inventory !== undefined) {
+    if (Array.isArray(source.gu_inventory)) {
       // Re-use the same sparse/equipped logic from setPlayerFromServer
-      const incomingInv: GuInstance[] = data.gu_inventory || [];
+      const incomingInv: GuInstance[] = source.gu_inventory;
       updates.gu_inventory = incomingInv;
       updates.is_sparse_gu_inventory = false;
-      if (Array.isArray(data.equipped_gus)) {
-        updates.equipped_gus = data.equipped_gus;
+      if (Array.isArray(source.equipped_gus)) {
+        updates.equipped_gus = source.equipped_gus;
       } else {
         const equippedSet = new Set<string>();
         incomingInv.forEach((g) => { if (g.equipped) equippedSet.add(g.instance_id); });
         updates.equipped_gus = Array.from(equippedSet);
       }
     }
-    if (data.materials_inventory !== undefined) {
-      updates.materials_inventory = data.materials_inventory ?? {};
+    if (source.materials_inventory && typeof source.materials_inventory === "object" && !Array.isArray(source.materials_inventory)) {
+      updates.materials_inventory = source.materials_inventory as Record<string, number>;
     }
-    if (data.primeval_stones !== undefined) {
-      updates.primeval_stones = Number(data.primeval_stones);
+    if (source.primeval_stones !== undefined && !isNaN(Number(source.primeval_stones))) {
+      updates.primeval_stones = Number(source.primeval_stones);
     }
-    if (data.immortal_stones !== undefined) {
-      updates.immortal_stones = Number(data.immortal_stones);
+    if (source.immortal_stones !== undefined && !isNaN(Number(source.immortal_stones))) {
+      updates.immortal_stones = Number(source.immortal_stones);
     }
-    if (data.human_qi !== undefined) {
-      updates.human_qi = Number(data.human_qi);
+    if (source.human_qi !== undefined && !isNaN(Number(source.human_qi))) {
+      updates.human_qi = Number(source.human_qi);
     }
-    if (data.hp !== undefined) {
-      updates.hp = Number(data.hp);
+    if (source.hp !== undefined && !isNaN(Number(source.hp))) {
+      updates.hp = Number(source.hp);
     }
-    if (data.current_thought !== undefined) {
-      updates.current_thought = Number(data.current_thought);
+    if (typeof source.base_hp === "number" && source.base_hp > 0) {
+      updates.base_hp = Number(source.base_hp);
     }
-    if (data.soul_hp !== undefined) {
-      updates.soul_hp = Number(data.soul_hp);
+    if (source.current_mana !== undefined && !isNaN(Number(source.current_mana))) {
+      updates.current_mana = Number(source.current_mana);
     }
-    if (data.lifespan !== undefined) {
-      updates.lifespan = Number(data.lifespan);
+    if (typeof source.max_mana === "number" && source.max_mana > 0) {
+      updates.max_mana = Number(source.max_mana);
     }
-    if (data.recipes !== undefined) {
-      updates.unlocked_recipes = data.recipes;
+    if (source.current_thought !== undefined) {
+      updates.current_thought = Number(source.current_thought);
+    }
+    if (source.soul_hp !== undefined) {
+      updates.soul_hp = Number(source.soul_hp);
+    }
+    if (source.lifespan !== undefined) {
+      updates.lifespan = Number(source.lifespan);
+    }
+    if (source.aptitude_percent !== undefined) {
+      updates.aptitude_percent = Number(source.aptitude_percent);
+    }
+    if (source.rank !== undefined) {
+      updates.rank = Number(source.rank);
+    }
+    if (source.sub_rank !== undefined) {
+      updates.sub_rank = Number(source.sub_rank);
+    }
+    if (source.wall_progress !== undefined) {
+      updates.wall_progress = Number(source.wall_progress);
+    }
+    if (source.dao_marks !== undefined && typeof source.dao_marks === "object") {
+      updates.dao_marks = source.dao_marks as Record<string, number>;
+    }
+    if (source.recipes !== undefined) {
+      updates.unlocked_recipes = source.recipes;
+    }
+    if (source.unlocked_recipes !== undefined) {
+      updates.unlocked_recipes = source.unlocked_recipes;
     }
     if (Object.keys(updates).length > 0) {
       const merged = normalizePlayer({ ...currentPlayer, ...updates });

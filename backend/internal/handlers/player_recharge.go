@@ -84,7 +84,7 @@ func RechargeWithStones(c *gin.Context) {
 			IPAddress: c.ClientIP(), Success: true,
 		})
 
-		respondActionOnly(c, http.StatusOK, player, gin.H{
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
 			"message": fmt.Sprintf("Luyện hóa thành công %d Tiên Nguyên Thạch thành %d hạt Tiên Nguyên!", stonesToUse, int(manaGain)),
 		})
 		return
@@ -164,7 +164,7 @@ func RechargeWithStones(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 
-	respondActionOnly(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Nạp %d nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
 	})
 }

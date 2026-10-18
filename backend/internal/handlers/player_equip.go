@@ -516,7 +516,7 @@ func UpdateGuStatus(c *gin.Context) {
 		})
 	}
 
-	respondActionGuOnly(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Cập nhật trạng thái Cổ trùng thành %s thành công!", req.Status),
 	})
 }

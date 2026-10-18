@@ -1006,9 +1006,6 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         }
       } catch (e) {}
 
-      if (get().player?.id) {
-        await get().fetchPlayerStatus(get().player!.id);
-      }
       return { success: true, message: data.message, looted: data.looted };
     } catch (caught: unknown) {
       const e = caught instanceof Error ? caught : new Error(String(caught));

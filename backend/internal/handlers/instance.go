@@ -504,7 +504,7 @@ func EnterInstance(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message":  "Tiến vào phó bản \"" + template.Name + "\" thành công!",
 		"session":  session,
 		"template": template,

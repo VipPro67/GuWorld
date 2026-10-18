@@ -351,7 +351,7 @@ func CreateListing(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("người bán=%s (%s) | loại vật phẩm=%s | tên=%s | id=%s | sl=%d | giá=%.3f %s | loại=%s", player.Username, authID, req.ItemType, itemName, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Đăng bán thành công", "listing_id": listingID})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": "Đăng bán thành công", "listing_id": listingID})
 }
 
 func ListListings(c *gin.Context) {
@@ -941,7 +941,7 @@ func CancelListing(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("người hủy=%s (%s) | vật phẩm=%s | sl=%d | loại=%s", player.Username, authID, itemName, qty, listingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy listing và hoàn trả vật phẩm"})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": "Đã hủy listing và hoàn trả vật phẩm"})
 }
 
 func marketplaceItemDomains(itemType string) []PlayerEventDomain {
