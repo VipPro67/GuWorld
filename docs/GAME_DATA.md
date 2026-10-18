@@ -1292,7 +1292,7 @@ Sủng vật được lưu dưới dạng `non_player_actors.actor_kind = 'COMPA
 
 | Cột | Kiểu | Ghi chú |
 | --- | --- | --- |
-| `is_capturable` | BOOLEAN | DEFAULT FALSE. Có thể bắt làm sủng vật không |
+| `is_capturable` | BOOLEAN | DEFAULT FALSE. Có thể bắt làm sủng vật không. `Monster.csv` bật cho mọi quái dã ngoại (`Normal`/`Elite`) là sinh vật sống; khôi lỗi/thạch nhân/tàn niệm/linh thể/cây cỏ, `Boss`, `Tribulation_*` và `HumanCultivator` để FALSE |
 | `capture_chance` | DOUBLE PRECISION | Tỷ lệ bắt cơ bản (0.0-1.0). rank 1 = 0.25, rank 5 = 0.10 |
 | `pet_hunger_per_hour` | DOUBLE PRECISION | Tốc độ đói mỗi giờ. Mặc định 2 |
 

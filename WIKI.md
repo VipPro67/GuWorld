@@ -665,7 +665,8 @@ Trong tab **Cài đặt** của hồ sơ (Aperture), đạo hữu có thể ch�
 
 Trong chiến đấu, đạo hữu có thể bắt quái vật làm sủng vật:
 
-- **Điều kiện:** Quái vật phải có cờ `is_capturable` trong dictionary quái vật (hiện tại: Dế Mèn, Ong Vàng, Rắn Hổ, Bọ Cạp, Nhện Độc).
+- **Điều kiện:** Quái vật phải có cờ `is_capturable` trong dictionary quái vật — **mọi quái dã ngoại (Normal/Elite) đều bắt được**, trừ khôi lỗi/thạch nhân/tàn niệm/linh thể/cây cỏ (không phải sinh vật sống). Boss, quái Tai Kiếp và Tu Sĩ Nhân Loại **không** bắt được.
+- **Đạo ngân Nô đạo:** tỉ lệ bắt và chỉ số sủng vật bắt được nhân thêm `1 + sqrt(đạo_ngân_Nô_đạo)/100` (dampened: 10.000 đạo ngân = ×2). Chỉ áp từ **Lục Chuyển (rank 6)** trở lên.
 - **Yêu cầu Chuyển:** Cổ trùng bắt buộc phải **Chuyển ≥ Chuyển quái** mới có thể bắt.
 - **Tỉ lệ bắt:** `clamp(template.capture_chance × hpFactor × typeFactor + captureBonus, 1%, 100%)`.
   ```
