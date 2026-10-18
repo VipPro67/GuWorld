@@ -181,6 +181,11 @@ Rules:
 - Always pass `ctx`; `RunEvery` stops on cancellation.
 - Workers that must flush on shutdown (batch persister, last-activity batcher) or that
   need a `done` channel keep their own loop, but wrap the tick body in `SafeRun`.
+- Work that a tick hands off (because it opens a transaction or runs heavy CPU) goes to a
+  bounded pool rather than running inline, so one slow item cannot blow the tick budget.
+  Example: `dispatchWorldMonsterEncounter` (`handlers/world_monsters.go`) reserves a slot on
+  a buffered channel and runs `startWorldMonsterEncounter` under `SafeRun` in a goroutine;
+  when the pool is full the contact is deferred to its next cooldown instead of queueing.
 
 ## Quản lý dữ liệu gameplay
 

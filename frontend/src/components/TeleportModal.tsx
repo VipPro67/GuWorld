@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { canCreatePortal, usesRandomPortal } from "@/lib/effect-blocks";
+import { canCreatePortal, portalRange, usesRandomPortal } from "@/lib/effect-blocks";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 import { SearchableSelect } from "@/components/ui";
@@ -47,6 +47,7 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   const activeGu = player?.gu_inventory?.find(g => g.instance_id === selectedGu);
   const activeSpec = activeGu ? guSpecFor(activeGu.gu_id, activeGu.rank) : null;
   const isRandomPortal = usesRandomPortal(activeSpec?.effects);
+  const teleportRange = activeSpec ? portalRange(activeSpec.effects, activeGu?.rank ?? player?.rank ?? 1) : 0;
 
   useEffect(() => {
     if (portalGus.length > 0 && !selectedGu) {
@@ -89,11 +90,19 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     if (!selectedGu || !isRankSufficient) return;
     if (!isRandomPortal && (!targetX || !targetY)) return;
 
+    const tx = isRandomPortal ? 0 : parseInt(targetX);
+    const ty = isRandomPortal ? 0 : parseInt(targetY);
+    if (!isRandomPortal && teleportRange > 0) {
+      const dist = Math.max(Math.abs(tx - currentX), Math.abs(ty - currentY));
+      if (dist > teleportRange) {
+        setError(`Cổ trùng ${activeSpec?.name ?? "này"} chỉ dịch chuyển tối đa ${teleportRange} ô (mục tiêu cách ${dist} ô).`);
+        return;
+      }
+    }
+
     setTeleporting(true);
     setError(null);
     try {
-      const tx = isRandomPortal ? 0 : parseInt(targetX);
-      const ty = isRandomPortal ? 0 : parseInt(targetY);
       const res = await useGuOnMap(selectedGu, tx, ty);
       if (res) {
         useGameStore.getState().addToast(res.message, "success");
@@ -158,6 +167,7 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
           <div className="text-zinc-400">Vị trí hiện tại: <span className="text-emerald-400 font-bold">({currentX}, {currentY})</span></div>
           <div className="text-zinc-400">Khu vực: <span className="text-amber-400 font-bold">{currentRegionId || "Không xác định"}</span></div>
           <div className="text-zinc-400">Cảnh giới: <span className="text-cyan-400 font-bold">Rank {player?.rank ?? 1}</span></div>
+          <div className="text-zinc-400">Tầm dịch chuyển: <span className="text-purple-400 font-bold">{!activeGu ? "—" : teleportRange > 0 ? `${teleportRange} ô` : "Vô hạn"}</span></div>
         </div>
 
         {error && <div className="shrink-0 px-6 py-2.5 text-xs font-mono text-red-400 bg-red-950/30 border-b border-red-900/50">{error}</div>}
@@ -200,7 +210,8 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 
               {isRandomPortal ? (
                 <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded text-purple-300 text-sm">
-                  ✨ Cổ trùng này sẽ dịch chuyển đạo hữu tới một vị trí ngẫu nhiên trên thế giới. Không cần nhập tọa độ.
+                  ✨ Cổ trùng này sẽ dịch chuyển đạo hữu tới một vị trí ngẫu nhiên
+                  {teleportRange > 0 ? ` trong phạm vi ${teleportRange} ô` : " trên thế giới"}. Không cần nhập tọa độ.
                 </div>
               ) : (
                 <div className="space-y-3">

@@ -83,6 +83,137 @@ func summonGrid(position string) (int, int) {
 	}
 }
 
+// findMechanic returns the first mechanic matching trigger+code.
+func findMechanic(mechanics []CombatMechanic, trigger, actionCode string) (CombatMechanic, bool) {
+	for _, mechanic := range mechanics {
+		if mechanic.Trigger == trigger && mechanic.ActionCode == actionCode {
+			return mechanic, true
+		}
+	}
+	return CombatMechanic{}, false
+}
+
+// spawnSummonedMonster builds the SUMMON_MONSTER minion for actor and appends it
+// to the matching side. rank is the rank of the summoning Gu. daoMult amplifies
+// the stats after the anti-abuse clamps, exactly like the damage/shield/heal of
+// the summoning Gu's own action. Returns the minion and its SUMMONED log detail.
+func spawnSummonedMonster(actor *CombatantAuto, m CombatMechanic, rank int, isAlly bool, state *CombatState, summonCount int, daoMult float64) (*CombatantAuto, string) {
+	ms := []CombatMechanic{m}
+	rankFactor := gamefx.RankScale(rank)
+	hpScale := mechanicFloat(ms, m.Trigger, "SUMMON_MONSTER", "hp_scale", 1)
+	damageScale := mechanicFloat(ms, m.Trigger, "SUMMON_MONSTER", "damage_scale", 1)
+	hp := mechanicFloat(ms, m.Trigger, "SUMMON_MONSTER", "hp", 0) * hpScale * rankFactor
+	damage := mechanicFloat(ms, m.Trigger, "SUMMON_MONSTER", "damage", 0) * damageScale * rankFactor
+	defense := mechanicFloat(ms, m.Trigger, "SUMMON_MONSTER", "defense", 0) * damageScale * rankFactor
+	if hp > actor.MaxHP*2.0 {
+		hp = actor.MaxHP * 2.0
+	}
+	if hp <= 0 {
+		hp = actor.MaxHP * 0.5
+	}
+	if damage > actor.BaseDmg*3.0 {
+		damage = actor.BaseDmg * 3.0
+	}
+	// Dao marks amplify the summon after the anti-abuse clamps, otherwise the
+	// clamp would swallow the whole bonus at high dao mark counts.
+	hp *= daoMult
+	damage *= daoMult
+	defense *= daoMult
+	name := mechanicString(ms, m.Trigger, "SUMMON_MONSTER", "name", "Triệu hồi vật")
+	gridX, gridY := summonGrid(mechanicString(ms, m.Trigger, "SUMMON_MONSTER", "position", "frontline"))
+	minion := &CombatantAuto{
+		ID:      fmt.Sprintf("%s_summon_%d", actor.ID, summonCount),
+		Name:    name + " (Triệu hồi)",
+		Kind:    "Minion",
+		Rank:    rank,
+		GridX:   gridX,
+		GridY:   gridY,
+		MaxHP:   hp,
+		HP:      hp,
+		BaseDmg: damage,
+		BaseDef: defense,
+		Speed:   actor.Speed,
+	}
+	if isAlly {
+		state.Allies = append(state.Allies, minion)
+	} else {
+		state.Enemies = append(state.Enemies, minion)
+	}
+	detail := fmt.Sprintf("%s triệu hồi %s (%.0f HP, %.0f công) lên chiến trường!", actor.Name, name, hp, damage)
+	if daoMult > 1.0 {
+		detail = fmt.Sprintf("%s triệu hồi %s (%.0f HP, %.0f công, Đạo Ngân ×%.2f) lên chiến trường!", actor.Name, name, hp, damage, daoMult)
+	}
+	return minion, detail
+}
+
+// spawnWolfFrontline builds the SUMMON_WOLF_FRONTLINE minion (Địa Lang Vương)
+// for actor, pushes it to the frontline and pulls the caster back to mid.
+func spawnWolfFrontline(actor *CombatantAuto, isAlly bool, state *CombatState, daoMult float64) string {
+	minionHP := actor.MaxHP * 0.50 * daoMult
+	minion := &CombatantAuto{
+		ID:      actor.ID + "_dialang",
+		Name:    "Địa Lang Vương (Triệu hồi)",
+		Kind:    "Minion",
+		GridX:   1, // Frontline
+		GridY:   2, // Mid
+		MaxHP:   minionHP,
+		HP:      minionHP,
+		BaseDmg: actor.BaseDmg / 3.0 * daoMult,
+		BaseDef: actor.BaseDef / 2.0 * daoMult,
+	}
+	if isAlly {
+		state.Allies = append(state.Allies, minion)
+	} else {
+		state.Enemies = append(state.Enemies, minion)
+	}
+	actor.GridX = 2 // Move actor to Mid
+	detail := fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP)
+	if daoMult > 1.0 {
+		detail = fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP, Đạo Ngân ×%.2f) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP, daoMult)
+	}
+	return detail
+}
+
+// applyBattleStartSummons fires ON_BATTLE_START summon hooks once, before the
+// first turn, so summoning Gu reinforce the field at battle start instead of
+// recasting their summon every turn. summonCount is shared with the per-turn
+// ON_CAST path so minion IDs stay unique across both.
+func applyBattleStartSummons(state *CombatState, summonCount *int) []CombatLog {
+	var logs []CombatLog
+	apply := func(combatants []*CombatantAuto, isAlly bool) {
+		// Snapshot the length: summons append to the same slice.
+		n := len(combatants)
+		for i := 0; i < n; i++ {
+			actor := combatants[i]
+			if actor == nil || actor.Kind == "Minion" {
+				continue
+			}
+			for _, m := range actor.Mechanics {
+				if m.Trigger != "ON_BATTLE_START" {
+					continue
+				}
+				switch m.ActionCode {
+				case "SUMMON_MONSTER":
+					if hasMinion(state, actor.ID) {
+						continue
+					}
+					daoMult, _ := actorDaoMultiplier(actor, m.Path)
+					_, detail := spawnSummonedMonster(actor, m, m.Rank, isAlly, state, *summonCount, daoMult)
+					*summonCount++
+					logs = append(logs, CombatLog{Turn: 0, ActorId: actor.ID, ActorName: actor.Name, Action: "SUMMONED", Detail: detail})
+				case "SUMMON_WOLF_FRONTLINE":
+					daoMult, _ := actorDaoMultiplier(actor, m.Path)
+					detail := spawnWolfFrontline(actor, isAlly, state, daoMult)
+					logs = append(logs, CombatLog{Turn: 0, ActorId: actor.ID, ActorName: actor.Name, Action: "SUMMONED", Detail: detail})
+				}
+			}
+		}
+	}
+	apply(state.Allies, true)
+	apply(state.Enemies, false)
+	return logs
+}
+
 // lifespanByRank approximates an enemy's thọ nguyên from its rank. Players use
 // their tracked Lifespan; monsters have none, so this is the calibration knob
 // for ON_BATTLE_START/SEIZE_INITIATIVE. Tune here, not per-Gu.
@@ -693,6 +824,13 @@ type actionOutcome struct {
 	firstTarget *CombatantAuto
 }
 
+// maxInfiniteRebornRewinds bounds a REBORN with max_uses=0 (declared unlimited).
+// A rewind resets the turn counter, so an unlimited rewind escapes maxTurns and
+// can hold the caller's transaction (and the player row lock) indefinitely.
+// Only the unlimited rewind path is capped; explicit finite uses and in-place
+// revives (which maxTurns already bounds) keep their configured behaviour.
+const maxInfiniteRebornRewinds = 5
+
 // Simulate runs the deterministic auto-battle using pre-computed actions.
 func Simulate(state *CombatState) []CombatLog {
 	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
@@ -709,6 +847,10 @@ func Simulate(state *CombatState) []CombatLog {
 	var logs []CombatLog
 	rebornUses := make(map[string]int)
 	summonCount := 0 // unique suffix for SUMMON_MONSTER minions
+
+	// ON_BATTLE_START summon hooks resolve before the initial snapshot so the
+	// minions are on the field from turn one and survive REBORN rewind.
+	battleStartLogs := applyBattleStartSummons(state, &summonCount)
 	initialState := cloneCombatState(state)
 
 	startSnap := buildSnapshot(state)
@@ -718,6 +860,11 @@ func Simulate(state *CombatState) []CombatLog {
 		Detail:   "Trận chiến bắt đầu.",
 		Snapshot: startSnap,
 	})
+	for i := range battleStartLogs {
+		battleStartLogs[i].Snapshot = startSnap
+	}
+	logs = append(logs, battleStartLogs...)
+
 	if len(state.InitialLogs) > 0 {
 		for _, initLog := range state.InitialLogs {
 			initLog.Turn = 0
@@ -1594,28 +1741,7 @@ func Simulate(state *CombatState) []CombatLog {
 			if hasMechanic(a.Mechanics, "ON_CAST", "SUMMON_WOLF_FRONTLINE") {
 				// Summoned beasts scale with the summoning Gu's dao marks, exactly
 				// like the damage/shield/heal of the action itself (daoMult above).
-				minionHP := actor.MaxHP * 0.50 * daoMult
-				minion := &CombatantAuto{
-					ID:      actor.ID + "_dialang",
-					Name:    "Địa Lang Vương (Triệu hồi)",
-					Kind:    "Minion",
-					GridX:   1, // Frontline
-					GridY:   2, // Mid
-					MaxHP:   minionHP,
-					HP:      minionHP,
-					BaseDmg: actor.BaseDmg / 3.0 * daoMult,
-					BaseDef: actor.BaseDef / 2.0 * daoMult,
-				}
-				if isAlly {
-					state.Allies = append(state.Allies, minion)
-				} else {
-					state.Enemies = append(state.Enemies, minion)
-				}
-				actor.GridX = 2 // Move actor to Mid
-				detail := fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP)
-				if hasDao && daoMult > 1.0 {
-					detail = fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP, Đạo Ngân ×%.2f) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP, daoMult)
-				}
+				detail := spawnWolfFrontline(actor, isAlly, state, daoMult)
 				turnLogs = append(turnLogs, CombatLog{
 					Turn:      turn,
 					ActorId:   actor.ID,
@@ -1630,51 +1756,8 @@ func Simulate(state *CombatState) []CombatLog {
 			// Gu. Clamps keep a summon from out-scaling its caster.
 			// ponytail: fixed clamps (2x caster HP, 3x caster damage) - tune these
 			// multipliers if summons should hit harder or tankier.
-			if hasMechanic(a.Mechanics, "ON_CAST", "SUMMON_MONSTER") && !hasMinion(state, actor.ID) {
-				rankFactor := gamefx.RankScale(a.Rank)
-				hpScale := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "hp_scale", 1)
-				damageScale := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "damage_scale", 1)
-				hp := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "hp", 0) * hpScale * rankFactor
-				damage := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "damage", 0) * damageScale * rankFactor
-				defense := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "defense", 0) * damageScale * rankFactor
-				if hp > actor.MaxHP*2.0 {
-					hp = actor.MaxHP * 2.0
-				}
-				if hp <= 0 {
-					hp = actor.MaxHP * 0.5
-				}
-				if damage > actor.BaseDmg*3.0 {
-					damage = actor.BaseDmg * 3.0
-				}
-				// Dao marks amplify the summon after the anti-abuse clamps, otherwise
-				// the clamp would swallow the whole bonus at high dao mark counts.
-				hp *= daoMult
-				damage *= daoMult
-				defense *= daoMult
-				name := mechanicString(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "name", "Triệu hồi vật")
-				gridX, gridY := summonGrid(mechanicString(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "position", "frontline"))
-				minion := &CombatantAuto{
-					ID:      fmt.Sprintf("%s_summon_%d", actor.ID, summonCount),
-					Name:    name + " (Triệu hồi)",
-					Kind:    "Minion",
-					Rank:    a.Rank,
-					GridX:   gridX,
-					GridY:   gridY,
-					MaxHP:   hp,
-					HP:      hp,
-					BaseDmg: damage,
-					BaseDef: defense,
-					Speed:   actor.Speed,
-				}
-				if isAlly {
-					state.Allies = append(state.Allies, minion)
-				} else {
-					state.Enemies = append(state.Enemies, minion)
-				}
-				detail := fmt.Sprintf("%s triệu hồi %s (%.0f HP, %.0f công) lên chiến trường!", actor.Name, name, hp, damage)
-				if hasDao && daoMult > 1.0 {
-					detail = fmt.Sprintf("%s triệu hồi %s (%.0f HP, %.0f công, Đạo Ngân ×%.2f) lên chiến trường!", actor.Name, name, hp, damage, daoMult)
-				}
+			if m, ok := findMechanic(a.Mechanics, "ON_CAST", "SUMMON_MONSTER"); ok && !hasMinion(state, actor.ID) {
+				_, detail := spawnSummonedMonster(actor, m, a.Rank, isAlly, state, summonCount, daoMult)
 				turnLogs = append(turnLogs, CombatLog{
 					Turn:      turn,
 					ActorId:   actor.ID,
@@ -2803,6 +2886,10 @@ func Simulate(state *CombatState) []CombatLog {
 			if maxUses < 0 {
 				maxUses = 1
 			}
+			rewinds := allowRewind && strings.ToLower(mechanicString(mechs, "ON_DEATH", "REBORN", "mode", "rewind")) != "in_place"
+			if unlimited && rewinds && rebornUses[c.ID] >= maxInfiniteRebornRewinds {
+				return false
+			}
 			if !unlimited && rebornUses[c.ID] >= maxUses {
 				return false
 			}
@@ -2821,7 +2908,7 @@ func Simulate(state *CombatState) []CombatLog {
 				return false
 			}
 			rebornUses[c.ID]++
-			if allowRewind && strings.ToLower(mechanicString(mechs, "ON_DEATH", "REBORN", "mode", "rewind")) != "in_place" {
+			if rewinds {
 				return true
 			}
 			hpPct := mechanicFloat(mechs, "ON_DEATH", "REBORN", "revive_hp_percent", 0.5)

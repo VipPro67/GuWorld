@@ -211,6 +211,11 @@ type CombatMechanic struct {
 	ActionCode string
 	Params     []byte // legacy authoring payload; never decoded by the simulator
 	Values     map[string]any
+	// Rank and Path identify the source Gu. Action mechanics carry them on the
+	// SimAction already, but battle-start hooks (e.g. SUMMON_MONSTER) fire
+	// without an action, so they need the source rank/paths to scale.
+	Rank int
+	Path []string
 }
 
 // NewCombatMechanic compiles native mechanic parameters before simulation.

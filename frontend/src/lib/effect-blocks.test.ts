@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EMPTY_EFFECT_ENVELOPE, captureBonus, combatCategory, disguiseLevel, effectEnvelope, growthConfig, hasCapability, investigation, isCombatEligible, normalizeEffectEnvelope, operationsBy, statModifier, type EffectEnvelope } from "./effect-blocks.ts";
+import { EMPTY_EFFECT_ENVELOPE, captureBonus, combatCategory, disguiseLevel, effectEnvelope, growthConfig, hasCapability, investigation, isCombatEligible, normalizeEffectEnvelope, operationsBy, portalRange, statModifier, type EffectEnvelope } from "./effect-blocks.ts";
 const effects: EffectEnvelope = { schema_version: 2, blocks: [
   { id: "passive", trigger: "ALWAYS_ON", target: { selector: "SELF" }, operations: [
     { op: "STAT_MOD", stat: "INVESTIGATION", value: 2 }, { op: "STAT_MOD", stat: "INVESTIGATION", value: 3 },
@@ -29,4 +29,21 @@ test("capture-only Gu stays battle-eligible", () => {
   ] };
   assert.equal(isCombatEligible(captureOnly), true);
   assert.equal(captureBonus(captureOnly), 0.1);
+});
+
+test("portalRange follows explicit params, ignore capability, and rank fallback", () => {
+  const portal = (code: string, params?: Record<string, unknown>): EffectEnvelope => ({ schema_version: 2, blocks: [
+    { id: "portal", trigger: "CAPABILITY", target: { selector: "SELF" }, operations: [{ op: "UNIQUE", code, params }] },
+  ] });
+  assert.equal(portalRange(portal("PORTAL_CREATE", { range: 1234 }), 5), 1234);
+  assert.equal(portalRange(portal("RANDOM_PORTAL", { range: 777 }), 5), 777);
+  assert.equal(portalRange(portal("PORTAL_CREATE", {}), 5), 1000);
+  assert.equal(portalRange(portal("PORTAL_CREATE", {}), 9), 30000);
+  assert.equal(portalRange(portal("IGNORE_MOVEMENT_RANGE"), 5), 0);
+  const both: EffectEnvelope = { schema_version: 2, blocks: [
+    { id: "portal", trigger: "CAPABILITY", target: { selector: "SELF" }, operations: [
+      { op: "UNIQUE", code: "PORTAL_CREATE", params: { range: 1500 } }, { op: "UNIQUE", code: "IGNORE_MOVEMENT_RANGE" },
+    ] },
+  ] };
+  assert.equal(portalRange(both, 5), 1500);
 });

@@ -65,6 +65,17 @@ const isAdminRequest = (input: RequestInfo | URL): boolean => {
   }
 };
 
+// Pathname of a request, or "" when the input/base is not a parseable URL.
+// Safari throws "The string did not match the expected pattern" from new URL
+// when origin is opaque (WebView/iframe), so this must never be unguarded.
+const safePathname = (input: RequestInfo | URL): string => {
+  try {
+    return new URL(String(input), window.location.origin).pathname;
+  } catch {
+    return "";
+  }
+};
+
 const ensureGameplayTabClaim = async (token: string, tabId: string): Promise<void> => {
   const claimKey = `${token}:${tabId}`;
   if (claimedTabSession === claimKey) return;
@@ -123,8 +134,8 @@ export const authFetch = async (
     const token = localStorage.getItem("gu_auth_token");
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
-      const url = new URL(String(input), window.location.origin);
-      if (!isAdminRequest(input) && !AUTH_ENDPOINTS.has(url.pathname)) {
+      const urlPath = safePathname(input);
+      if (!isAdminRequest(input) && !AUTH_ENDPOINTS.has(urlPath)) {
         const tabId = gameplayTabId();
         await ensureGameplayTabClaim(token, tabId);
         headers["X-Player-Tab-ID"] = tabId;

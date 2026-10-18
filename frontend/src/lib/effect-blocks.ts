@@ -229,6 +229,28 @@ export function growthConfig(value: EffectLike): GrowthConfig | null {
 export const canCreatePortal = (value: EffectLike) =>
   hasCapability(value, "PORTAL_CREATE") || hasCapability(value, "IGNORE_MOVEMENT_RANGE");
 export const usesRandomPortal = (value: EffectLike) => hasCapability(value, "RANDOM_PORTAL");
+
+/** Default teleport range by Cổ rank, mirroring backend handlers.GuTeleportRange. */
+const DEFAULT_PORTAL_RANGE_BY_RANK: Record<number, number> = {
+  1: 100, 2: 200, 3: 400, 4: 800, 5: 1000,
+  6: 3000, 7: 10000, 8: 20000, 9: 30000,
+};
+
+/**
+ * Maximum teleport distance in world cells for a Cổ. Explicit
+ * PORTAL_CREATE/RANDOM_PORTAL params.range is authoritative. Without one,
+ * IGNORE_MOVEMENT_RANGE means unlimited; otherwise the rank table applies.
+ * Returns 0 when unlimited.
+ */
+export function portalRange(value: EffectLike, rank: number): number {
+  for (const code of ["PORTAL_CREATE", "RANDOM_PORTAL"]) {
+    const op = operationsBy(value, { op: "UNIQUE", code })[0];
+    const range = op?.params?.range;
+    if (typeof range === "number" && range > 0) return range;
+  }
+  if (hasCapability(value, "IGNORE_MOVEMENT_RANGE")) return 0;
+  return DEFAULT_PORTAL_RANGE_BY_RANK[rank] ?? 0;
+}
 export const captureBonus = (value: EffectLike) => operationsBy(value, { code: "CAPTURE_BONUS" })
   .reduce((sum, op) => sum + (typeof op.params?.value === "number" ? op.params.value : numericValue(op).value), 0);
 export const refinementTier = (value: EffectLike) => operationsBy(value, { op: "STAT_MOD", stat: "REFINE_MANA_TIER" })[0]?.value ?? 0;

@@ -521,6 +521,39 @@ func checkPartyLeaderOrSolo(tx *sql.Tx, player *models.Player) error {
 	return nil
 }
 
+// checkPartyTeleportRankGate blocks a party leader's teleport when any member
+// outranks the teleporting Gu. Party members follow the leader, so a member
+// above the Gu's rank cannot be carried through the portal. Non-leaders only
+// move themselves and are not gated here.
+func checkPartyTeleportRankGate(tx *sql.Tx, player *models.Player, guRank int) error {
+	if player.PartyID == nil {
+		return nil
+	}
+	var isLeader bool
+	if err := tx.QueryRow("SELECT (leader_id = $1) FROM parties WHERE id = $2", player.ID, player.PartyID).Scan(&isLeader); err != nil || !isLeader {
+		return nil
+	}
+	rows, err := tx.Query(`SELECT username, rank FROM players WHERE party_id = $1 AND id <> $2`, player.PartyID, player.ID)
+	if err != nil {
+		return fmt.Errorf("Không thể kiểm tra thành viên tổ đội")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var username string
+		var rank int
+		if err := rows.Scan(&username, &rank); err != nil {
+			return fmt.Errorf("Không thể đọc thông tin thành viên tổ đội")
+		}
+		if rank > guRank {
+			return fmt.Errorf("Không thể dịch chuyển: thành viên tổ đội %s (Rank %d) cao hơn phẩm cấp Cổ dịch chuyển (Rank %d)!", username, rank, guRank)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("Không thể đọc thông tin thành viên tổ đội")
+	}
+	return nil
+}
+
 type SyncedPartyMember struct {
 	ID        uuid.UUID
 	Username  string

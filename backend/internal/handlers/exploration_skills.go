@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -17,6 +20,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -32,6 +36,93 @@ type UseGuOnMapRequest struct {
 	Target       *WorldCastTarget `json:"target,omitempty"`
 	TargetX      int              `json:"target_x"`
 	TargetY      int              `json:"target_y"`
+}
+
+// chebyshevDistance returns the grid distance used by world movement and map
+// skills (diagonal steps count as one).
+func chebyshevDistance(x1, y1, x2, y2 int) int {
+	dx, dy := x2-x1, y2-y1
+	if dx < 0 {
+		dx = -dx
+	}
+	if dy < 0 {
+		dy = -dy
+	}
+	if dx > dy {
+		return dx
+	}
+	return dy
+}
+
+// randomTeleportTarget picks a random destination. A positive limit keeps the
+// jump within that many cells of the caster; 0 means anywhere on the map.
+func randomTeleportTarget(cx, cy, limit int) (int, int) {
+	if limit <= 0 {
+		return rand.Intn(WorldWidth), rand.Intn(WorldHeight)
+	}
+	span := 2*limit + 1
+	x := cx + rand.Intn(span) - limit
+	y := cy + rand.Intn(span) - limit
+	if x < 0 {
+		x = 0
+	} else if x >= WorldWidth {
+		x = WorldWidth - 1
+	}
+	if y < 0 {
+		y = 0
+	} else if y >= WorldHeight {
+		y = WorldHeight - 1
+	}
+	return x, y
+}
+
+// persistGuHungerTx writes a Gu's post-cast hunger with a short bounded retry.
+//
+// Every mutation flow that calls EvaluateAndPersistMana runs with a 2s
+// transaction lock_timeout (setFastFailTimeouts) and lazy hunger decay
+// (EvaluatePlayerHungerTx) also updates the same player_gu rows. A cast can
+// therefore lose a lock race and abort the statement with 55P03, which used to
+// surface as the misleading "Không thể cập nhật độ no Cổ trùng" error. Retrying
+// the whole cast is unsafe (position, cooldown and monster side effects would be
+// replayed), so only this single write is retried inside a SAVEPOINT:
+// PostgreSQL allows ROLLBACK TO SAVEPOINT on an aborted transaction and then
+// lets the statement run again.
+//
+// The attempt count stays deliberately small: the caller already holds the
+// players row FOR UPDATE, so every extra wait also blocks concurrent requests
+// for the same player.
+func persistGuHungerTx(ctx context.Context, tx *sql.Tx, playerID uuid.UUID, gu *models.GuInstance) error {
+	const attempts = 2
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if _, err := tx.ExecContext(ctx, `SAVEPOINT sp_gu_hunger`); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx,
+			`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+			gu.Hunger, gu.InstanceID, playerID)
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `RELEASE SAVEPOINT sp_gu_hunger`)
+			return err
+		}
+		if _, rbErr := tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT sp_gu_hunger`); rbErr != nil {
+			// The transaction is unusable now; surface that instead of the
+			// transient error so the caller does not advertise a retry.
+			return rbErr
+		}
+		lastErr = err
+		if !worker.IsHungerTransientError(err) || attempt == attempts-1 {
+			break
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 150 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return err
+		case <-timer.C:
+		}
+	}
+	return lastErr
 }
 
 func UseGuOnMap(c *gin.Context) {
@@ -111,9 +202,6 @@ func UseGuOnMap(c *gin.Context) {
 
 	_, hasPortalCreate := models.GuSpecCapability(specs, "PORTAL_CREATE")
 	_, hasRandomPortal := models.GuSpecCapability(specs, "RANDOM_PORTAL")
-	if _, hasIgnoreRange := models.GuSpecCapability(specs, "IGNORE_MOVEMENT_RANGE"); hasIgnoreRange {
-		hasPortalCreate = true
-	}
 	if specs.Effects.Active != nil {
 		if specs.Effects.Active.PortalCreate {
 			hasPortalCreate = true
@@ -122,6 +210,12 @@ func UseGuOnMap(c *gin.Context) {
 			hasRandomPortal = true
 		}
 	}
+	// IGNORE_MOVEMENT_RANGE also enables targeted teleport, but a random-portal
+	// Cổ must stay random (the client sends no coordinates for it).
+	if _, hasIgnoreRange := models.GuSpecCapability(specs, "IGNORE_MOVEMENT_RANGE"); hasIgnoreRange && !hasPortalCreate && !hasRandomPortal {
+		hasPortalCreate = true
+	}
+	teleportRange := GuTeleportRange(&specs)
 
 	cost := gamefx.EnergyCost(&player, &specs)
 	if hasPortalCreate || hasRandomPortal {
@@ -138,11 +232,16 @@ func UseGuOnMap(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Không thể dịch chuyển trong bí cảnh; hãy dùng cổng thoát"})
 			return
 		}
+		if err := checkPartyTeleportRankGate(tx, &player, targetGu.Rank); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		cost = GetPortalManaCost(&player, &specs)
 	}
 	logs := []string{}
 	var cdDuration time.Duration = 10 * time.Second // default CD
 	applied := false
+	teleported := false
 	effectType := "utility"
 	effectValue := 0.0
 
@@ -153,6 +252,15 @@ func UseGuOnMap(c *gin.Context) {
 				"error": fmt.Sprintf("Không thể thực hiện dịch chuyển: Cổ trùng dịch chuyển (%s Rank %d) thấp hơn tu vi bản thân (Rank %d)!", specs.Name, targetGu.Rank, player.Rank),
 			})
 			return
+		}
+		if teleportRange > 0 {
+			dist := chebyshevDistance(player.X, player.Y, req.TargetX, req.TargetY)
+			if dist > teleportRange {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": fmt.Sprintf("Cổ trùng %s chỉ dịch chuyển tối đa %d ô (mục tiêu cách %d ô).", specs.Name, teleportRange, dist),
+				})
+				return
+			}
 		}
 		// We can teleport to TargetX, TargetY if within bounds
 		if inWorld(req.TargetX, req.TargetY) {
@@ -170,12 +278,13 @@ func UseGuOnMap(c *gin.Context) {
 			player.Y = req.TargetY
 			player.CurrentRegion = targetRegion
 			teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
-			debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion)
+			debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion, tx)
 			if debuffMsg != "" {
 				teleportMsg += " " + debuffMsg
 			}
 			logs = append(logs, teleportMsg)
 			applied = true
+			teleported = true
 			cdDuration = 120 * time.Second
 			effectType = "teleport"
 			logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
@@ -193,7 +302,7 @@ func UseGuOnMap(c *gin.Context) {
 		oldX := player.X
 		oldY := player.Y
 		oldRegion := player.CurrentRegion
-		targetX, targetY := rand.Intn(WorldWidth), rand.Intn(WorldHeight)
+		targetX, targetY := randomTeleportTarget(player.X, player.Y, teleportRange)
 		targetRegion := DeriveRegionAtOnMap(targetX, targetY, worldMapIDForRegion(player.CurrentRegion))
 		if targetRegion != oldRegion {
 			if err := checkRegionEntry(targetRegion, player.Rank, player.GuInventory); err != nil {
@@ -205,12 +314,13 @@ func UseGuOnMap(c *gin.Context) {
 		player.Y = targetY
 		player.CurrentRegion = targetRegion
 		teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
-		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion)
+		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion, tx)
 		if debuffMsg != "" {
 			teleportMsg += " " + debuffMsg
 		}
 		logs = append(logs, teleportMsg)
 		applied = true
+		teleported = true
 		cdDuration = 120 * time.Second
 		effectType = "teleport"
 		logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
@@ -521,7 +631,12 @@ func UseGuOnMap(c *gin.Context) {
 	if targetGu.Hunger < 0 {
 		targetGu.Hunger = 0
 	}
-	if _, errGu := tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2`, targetGu.Hunger, targetGu.InstanceID); errGu != nil {
+	if errGu := persistGuHungerTx(c.Request.Context(), tx, player.ID, targetGu); errGu != nil {
+		logger.S.Errorf("[UseGuOnMap] failed to persist hunger for player=%s gu=%s: %v", player.ID, targetGu.InstanceID, errGu)
+		if worker.IsHungerTransientError(errGu) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Hệ thống đang bận, đạo hữu vui lòng thử lại sau ít giây."})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật độ no Cổ trùng"})
 		return
 	}
@@ -537,6 +652,13 @@ func UseGuOnMap(c *gin.Context) {
 		return
 	}
 
+	// A successful teleport drags the party along (leader only). Non-teleport
+	// Gu casts must never relocate party members to the caster's cell.
+	var syncedMembers []SyncedPartyMember
+	if teleported {
+		syncedMembers = SyncPartyMembersLocation(tx, &player)
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
@@ -544,19 +666,44 @@ func UseGuOnMap(c *gin.Context) {
 
 	syncPlayerFlying(&player)
 
+	if teleported {
+		broadcastWorldPos(WorldPosEvent{
+			ID:        player.ID.String(),
+			Username:  player.Username,
+			AvatarURL: player.AvatarURL,
+			X:         player.X,
+			Y:         player.Y,
+			Region:    player.CurrentRegion,
+			TS:        time.Now().UnixMilli(),
+		})
+		for _, sm := range syncedMembers {
+			broadcastWorldPos(WorldPosEvent{
+				ID:        sm.ID.String(),
+				Username:  sm.Username,
+				AvatarURL: sm.AvatarURL,
+				X:         sm.X,
+				Y:         sm.Y,
+				Region:    sm.Region,
+				TS:        time.Now().UnixMilli(),
+			})
+			PublishPlayerPositionDelta(sm.ID, sm.X, sm.Y)
+		}
+	}
+
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
-		"player":           player,
-		"message":          strings.Join(logs, " "),
-		"logs":             logs,
-		"effect_type":      effectType,
-		"effect_value":     effectValue,
-		"cooldown_seconds": cdDuration.Seconds(),
-		"damage_dealt":     damageDealt,
-		"target_defeated":  targetDefeated,
-		"target_hp":        targetHP,
-		"target_max_hp":    targetMaxHP,
-		"target_name":      targetName,
-		"target_x":         req.TargetX,
-		"target_y":         req.TargetY,
+		"player":               player,
+		"message":              strings.Join(logs, " "),
+		"logs":                 logs,
+		"effect_type":          effectType,
+		"effect_value":         effectValue,
+		"cooldown_seconds":     cdDuration.Seconds(),
+		"damage_dealt":         damageDealt,
+		"target_defeated":      targetDefeated,
+		"target_hp":            targetHP,
+		"target_max_hp":        targetMaxHP,
+		"target_name":          targetName,
+		"target_x":             req.TargetX,
+		"target_y":             req.TargetY,
+		"synced_party_members": syncedMembers,
 	})
 }

@@ -94,9 +94,11 @@ func buildTeamCombatant(member *teamMemberCombatant) (*simulator.CombatantAuto, 
 
 	// Build actions from equipped Gus
 	var allActions []simulator.SimAction
+	var allMechanics []simulator.CombatMechanic
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" && gu.Hunger > 0 {
 			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+				allMechanics = append(allMechanics, battleStartSummonMechanics(spec)...)
 				if hasCombatActiveEffects(&spec) {
 					act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
 					if err != nil {
@@ -171,6 +173,7 @@ func buildTeamCombatant(member *teamMemberCombatant) (*simulator.CombatantAuto, 
 		Tenacity:             charFX.Tenacity,
 		CCResist:             charFX.CCResist,
 		Actions:              allActions,
+		Mechanics:            allMechanics,
 		AutoHealHP:           false,
 		HealThreshold:        0.3,
 		AutoRestoreMana:      true,

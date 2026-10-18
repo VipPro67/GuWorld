@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 func TestFormatStarvedGuNotification(t *testing.T) {
@@ -167,5 +169,23 @@ func TestVaultGuLazyDecay(t *testing.T) {
 	}
 	if len(kept) != 1 || kept[0].ID != "GU_TEST_1" {
 		t.Errorf("expected 1 surviving item (GU_TEST_1), got %d items", len(kept))
+	}
+}
+
+func TestIsHungerTransientError(t *testing.T) {
+	transient := []string{"57014", "40P01", "55P03"}
+	for _, code := range transient {
+		if !IsHungerTransientError(&pq.Error{Code: pq.ErrorCode(code)}) {
+			t.Errorf("IsHungerTransientError(%s) = false, want true", code)
+		}
+	}
+	permanent := []string{"23505", "25P02", "42P01"}
+	for _, code := range permanent {
+		if IsHungerTransientError(&pq.Error{Code: pq.ErrorCode(code)}) {
+			t.Errorf("IsHungerTransientError(%s) = true, want false", code)
+		}
+	}
+	if IsHungerTransientError(nil) {
+		t.Error("IsHungerTransientError(nil) = true, want false")
 	}
 }

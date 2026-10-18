@@ -166,7 +166,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Mỗi request tiến **tối đa 150 ô** để commit vị trí mịn (người chơi khác thấy chuyển động gần real-time, đổi hướng/dừng sớm hơn); trả `{player, log, combat_triggered, reached, skip_result?}` (đã tối ưu: loại bỏ `logs` mảng và `stats` thừa, `player` là snapshot cập nhật vị trí/sinh lực/trạng thái tinh gọn, tránh query DB dư thừa); nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
 | POST | `/explore/teleport` | *(Đã vô hiệu hóa)* Dịch chuyển bằng tiền đã bị hủy bỏ. Trả về `400 Bad Request` yêu cầu sử dụng Cổ trùng dịch chuyển (`POST /explore/use_gu`). |
 | GET | `/explore/players` | Người chơi ở gần để hiển thị/tương tác trên bản đồ. |
-| POST | `/explore/use_gu` | Dùng Cổ bản đồ (ví dụ mở cổng). |
+| POST | `/explore/use_gu` | Dùng Cổ bản đồ (ví dụ mở cổng). Cổ dịch chuyển (`PORTAL_CREATE`/`RANDOM_PORTAL`) bị giới hạn tầm theo rank Cổ hoặc `params.range`; trả `synced_party_members` khi đội trưởng kéo tổ đội theo. |
 | GET | `/world/drops` | Chiến lợi phẩm/hài cốt còn hạn trong viewport; mặc định quanh người chơi (radius 25), hỗ trợ `x`, `y`, `radius` tùy chỉnh (radius tối đa 127). Query theo bounding box tọa độ, không giới hạn theo region của người chơi. |
 | POST | `/world/drops/:id/loot` | Nhặt một ground drop khi đủ điều kiện khóa sở hữu. |
 

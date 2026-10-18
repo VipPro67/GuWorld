@@ -762,3 +762,77 @@ func TestBuildWorldMonsterCombatStateBoss(t *testing.T) {
 	}
 }
 
+// waitWorldMonsterEncounterPoolIdle blocks until no encounter worker holds a
+// slot, so pool assertions are deterministic regardless of test ordering.
+func waitWorldMonsterEncounterPoolIdle(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		filled := 0
+		for i := 0; i < cap(worldMonsterEncounterSlots); i++ {
+			select {
+			case worldMonsterEncounterSlots <- struct{}{}:
+				filled++
+			default:
+			}
+		}
+		for i := 0; i < filled; i++ {
+			<-worldMonsterEncounterSlots
+		}
+		if filled == cap(worldMonsterEncounterSlots) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("world monster encounter pool never drained")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// TestContactDispatchesEncounterOffTick verifies a proximity contact is handed
+// to the bounded background pool instead of being resolved inline by the tick.
+func TestContactDispatchesEncounterOffTick(t *testing.T) {
+	now := time.Now().UTC()
+	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1, Attack: 25}
+	m := testMonster(now.Add(-time.Second))
+	// Chase -> Attack with the player already inside attack range exercises the
+	// transition that reserves the encounter.
+	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateChase, p.ID.String(), 2, now.Add(-time.Second)
+	m.X, m.Y = 1, 0
+	_, attacks := installWorldAttackTest(t, now, []WorldMonster{m}, p)
+
+	before := worldMonsterMetrics.encounterDispatched.Load()
+	processWorldMonsterTick(context.Background(), now)
+	if got := worldMonsterMetrics.encounterDispatched.Load(); got != before+1 {
+		t.Fatalf("encounterDispatched = %d, want %d", got, before+1)
+	}
+	// The legacy inline damage path must remain unused.
+	if attacks.Load() != 0 {
+		t.Fatalf("legacy inline attack ran %d times, want 0", attacks.Load())
+	}
+}
+
+// TestEncounterDispatchDefersWhenPoolFull verifies the tick never blocks: when
+// every worker slot is taken, the contact is deferred instead of queueing.
+func TestEncounterDispatchDefersWhenPoolFull(t *testing.T) {
+	waitWorldMonsterEncounterPoolIdle(t)
+	for i := 0; i < cap(worldMonsterEncounterSlots); i++ {
+		worldMonsterEncounterSlots <- struct{}{}
+	}
+	defer func() {
+		for i := 0; i < cap(worldMonsterEncounterSlots); i++ {
+			<-worldMonsterEncounterSlots
+		}
+	}()
+
+	deferredBefore := worldMonsterMetrics.encounterDeferred.Load()
+	dispatchedBefore := worldMonsterMetrics.encounterDispatched.Load()
+	dispatchWorldMonsterEncounter(context.Background(), WorldMonster{InstanceID: "m-full", RegionID: "field"}, uuid.NewString())
+
+	if got := worldMonsterMetrics.encounterDeferred.Load(); got != deferredBefore+1 {
+		t.Fatalf("encounterDeferred = %d, want %d", got, deferredBefore+1)
+	}
+	if got := worldMonsterMetrics.encounterDispatched.Load(); got != dispatchedBefore {
+		t.Fatalf("encounterDispatched changed on a full pool: %d -> %d", dispatchedBefore, got)
+	}
+}
