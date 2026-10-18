@@ -211,7 +211,10 @@ export function combatCategory(value: EffectLike): CombatCategory {
   return "other";
 }
 export function isCombatEligible(value: EffectLike): boolean {
-  return blocksByTrigger(value, "ON_ACTION", "ON_HIT", "BEFORE_HIT", "ON_TURN_START", "ON_DEATH", "COMBAT_PASSIVE", "ON_BATTLE_START", "BEFORE_ENEMY_ATTACK", "ON_CAST").length > 0;
+  // Capture-capable Gu author their bonus as a CAPABILITY block, which is not a
+  // combat trigger — without this clause they never enter the battle loadout.
+  return blocksByTrigger(value, "ON_ACTION", "ON_HIT", "BEFORE_HIT", "ON_TURN_START", "ON_DEATH", "COMBAT_PASSIVE", "ON_BATTLE_START", "BEFORE_ENEMY_ATTACK", "ON_CAST").length > 0
+    || captureBonus(value) > 0;
 }
 
 export interface GrowthConfig { max_attack: number; max_defense: number; max_hp: number; max_speed: number; hours_to_max: number }

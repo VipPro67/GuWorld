@@ -323,10 +323,25 @@ export const PvPArenaCanvas: React.FC<PvPArenaCanvasProps> = ({ setup, localPlay
         const current = buffer.curr;
         if (!current) return;
 
-        // Fit the arena into the canvas, centred.
-        const scale = Math.min(instance.screen.width / setup.width, instance.screen.height / setup.height);
-        const offsetX = (instance.screen.width - setup.width * scale) / 2;
-        const offsetY = (instance.screen.height - setup.height * scale) / 2;
+        // Fit the arena into the canvas, accounting for bottom controls in mobile portrait.
+        const isPortrait = instance.screen.height > instance.screen.width * 1.15;
+        let scale: number;
+        let offsetX: number;
+        let offsetY: number;
+
+        if (isPortrait) {
+          // Reserve ~240px for mobile controls at bottom to keep arena clear of touch controls
+          const bottomReserved = 240;
+          const availableHeight = Math.max(220, instance.screen.height - bottomReserved);
+          scale = Math.min(instance.screen.width / setup.width, availableHeight / setup.height);
+          offsetX = (instance.screen.width - setup.width * scale) / 2;
+          offsetY = Math.max(8, (availableHeight - setup.height * scale) / 2 + 8);
+        } else {
+          scale = Math.min(instance.screen.width / setup.width, instance.screen.height / setup.height);
+          offsetX = (instance.screen.width - setup.width * scale) / 2;
+          offsetY = (instance.screen.height - setup.height * scale) / 2;
+        }
+
         root.scale.set(scale);
         root.position.set(offsetX, offsetY);
         if (controlRef.current) {

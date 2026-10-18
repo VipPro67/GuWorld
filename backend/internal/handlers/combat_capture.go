@@ -11,12 +11,28 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 const captureHPThreshold = 0.30 // bắt khi HP ≤ 30% max
+
+// captureDaoFactor khuếch đại tỉ lệ bắt và chỉ số thú bắt được theo đạo ngân Nô đạo.
+// Dampened có chủ đích: DaoAmplification trong combat (1 + marks/100) sẽ đẩy mọi
+// roll vượt cap 1.0 khi đạo ngân cao. Công thức sqrt theo refine_deduce.go.
+// ponytail: tune divisor /100 nếu cần balance (10k marks = ×2, 40k = ×3).
+func captureDaoFactor(daoMarks models.DaoMarksMap) float64 {
+	if daoMarks == nil {
+		return 1.0
+	}
+	marks := daoMarks[gamefx.CleanPath("enslavement")]
+	if marks <= 0 {
+		return 1.0
+	}
+	return 1.0 + math.Sqrt(float64(marks))/100.0
+}
 
 type CaptureRequest struct {
 	PlayerID string `json:"player_id" binding:"required"`
@@ -114,6 +130,8 @@ func CaptureMonster(c *gin.Context) {
 		return
 	}
 
+	daoFactor := captureDaoFactor(player.DaoMarks)
+
 	// Tính capture chance theo công thức
 	hpRatio := 1.0 - player.ActiveCombat.EnemyHP/player.ActiveCombat.EnemyMaxHP
 	if hpRatio < 0.1 {
@@ -132,7 +150,7 @@ func CaptureMonster(c *gin.Context) {
 		typeFactor = 0.0
 	}
 
-	chance := monTemplate.CaptureChance*hpFactor*typeFactor + totalCaptureBonus
+	chance := (monTemplate.CaptureChance*hpFactor*typeFactor + totalCaptureBonus) * daoFactor
 	if chance > 1.0 {
 		chance = 1.0
 	}
@@ -150,6 +168,10 @@ func CaptureMonster(c *gin.Context) {
 			monTemplate.MaxHP, monTemplate.BaseAttack, monTemplate.BaseDefense,
 			player.ActiveCombat.EnemyRank, player.ActiveCombat.EnemySubRank, monTemplate.Type,
 		)
+		// Đạo ngân Nô đạo: thú bắt được mạnh hơn theo số đạo ngân của chủ.
+		hp *= daoFactor
+		atk *= daoFactor
+		def *= daoFactor
 		speed := 8.0 + float64(player.ActiveCombat.EnemyRank)*2.0 + float64(player.ActiveCombat.EnemySubRank)*0.5
 
 		_, errPet := tx.Exec(`

@@ -1286,6 +1286,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                           {pathLabel(p)}
                         </span>
                       ))}
+                      {spec && captureBonus(spec) > 0 && (
+                        <PawPrint aria-label="Có thể bắt thú" className="w-3 h-3 text-purple-400" />
+                      )}
                     </div>
                     {spec?.primary_role && (
                       <div className="mt-1.5 text-[9px] text-zinc-500">

@@ -450,10 +450,16 @@ export const PvPArenaView: React.FC<PvPArenaViewProps> = ({ onClose }) => {
       const drag = aimDragRef.current;
       if (!drag) return;
 
-      // Check Cancel Zone hover
+      // Check Cancel Zone hover with generous 15px hit buffer
       if (cancelZoneRef.current) {
         const cz = cancelZoneRef.current.getBoundingClientRect();
-        if (clientX >= cz.left && clientX <= cz.right && clientY >= cz.top && clientY <= cz.bottom) {
+        const buffer = 15;
+        if (
+          clientX >= cz.left - buffer &&
+          clientX <= cz.right + buffer &&
+          clientY >= cz.top - buffer &&
+          clientY <= cz.bottom + buffer
+        ) {
           controlRef.current.cancelCast = true;
           setIsCancelHovered(true);
           return;
@@ -586,39 +592,42 @@ export const PvPArenaView: React.FC<PvPArenaViewProps> = ({ onClose }) => {
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#070d0b] select-none">
       {/* ── Top Header Bar ────────────────────────────────────────────────── */}
-      <div className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/10 bg-black/60 backdrop-blur-md px-3 py-2">
-        <div className="flex items-baseline gap-2.5">
-          <span className="font-serif text-sm font-bold text-emerald-100 sm:text-base tracking-wide">
-            Đấu Trường Thời Gian Thực
-          </span>
-          <span className="font-mono text-[11px] text-zinc-500">tick {frame?.tick ?? 0}</span>
+      <div className="z-20 flex shrink-0 flex-col gap-1.5 border-b border-white/10 bg-black/75 backdrop-blur-md px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between sm:py-2">
+        <div className="flex items-center justify-between sm:justify-start gap-2.5">
+          <div className="flex items-baseline gap-2">
+            <span className="font-serif text-sm font-bold text-emerald-100 sm:text-base tracking-wide">
+              Đấu Trường Realtime
+            </span>
+            <span className="font-mono text-[10px] text-zinc-500">t{frame?.tick ?? 0}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setUiMode((m) => (m === "mobile" ? "pc" : "mobile"))}
+              title="Đổi chế độ giao diện điều khiển MOBA"
+              className="flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-200 transition hover:bg-emerald-500/25 active:scale-95"
+            >
+              {uiMode === "mobile" ? "📱 Mobile" : "💻 PC"}
+            </button>
+
+            <button
+              onClick={() => {
+                stopPvP();
+                onClose();
+              }}
+              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-zinc-300 transition hover:bg-white/15 hover:text-white"
+            >
+              Thoát
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5 text-xs">
-          {/* Layout Mode Toggle */}
-          <button
-            onClick={() => setUiMode((m) => (m === "mobile" ? "pc" : "mobile"))}
-            title="Đổi chế độ giao diện điều khiển MOBA"
-            className="flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 transition hover:bg-emerald-500/25 active:scale-95"
-          >
-            {uiMode === "mobile" ? "📱 MOBA Mobile" : "💻 MOBA PC"}
-          </button>
-
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-x-3 gap-y-1 text-xs">
           <VitalBar label="HP" value={local?.hp ?? 0} max={local?.max_hp ?? 1} color="bg-emerald-500" />
           <VitalBar label="Mana" value={local?.mana ?? 0} max={100} color="bg-sky-500" />
           {opponent && (
             <VitalBar label={opponent.name} value={opponent.hp} max={opponent.max_hp} color="bg-rose-500" />
           )}
-
-          <button
-            onClick={() => {
-              stopPvP();
-              onClose();
-            }}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1 font-medium text-zinc-300 transition hover:bg-white/15 hover:text-white"
-          >
-            Thoát
-          </button>
         </div>
       </div>
 

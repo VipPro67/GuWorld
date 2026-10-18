@@ -21,14 +21,103 @@ interface MobaControlsProps {
   cancelZoneRef: React.RefObject<HTMLDivElement | null>;
 }
 
-const STICK_RADIUS = 50;
+interface SkillSlotPosition {
+  bottom: number;
+  right: number;
+  size: number;
+}
 
 /**
- * Mobile MOBA HUD overlay:
- * - Left: Virtual analog movement stick with visual runic boundary
- * - Right: Main Attack button + Ergonomic radial skill arc cluster
- * - Top-Right: Cancel Zone for aborting skill cast
+ * Portrait configuration:
+ * Optimally compact 2-column arc cluster positioned strictly on the right side
+ * (right: 18px to 148px, bottom: 18px to 230px).
+ * Leaves the entire left half completely unobstructed for the virtual joystick,
+ * and does not reach upward into the arena playing area.
  */
+const PORTRAIT_CONFIGS: Record<number, SkillSlotPosition[]> = {
+  1: [{ bottom: 20, right: 104, size: 50 }],
+  2: [
+    { bottom: 20, right: 104, size: 48 },
+    { bottom: 82, right: 86, size: 50 },
+  ],
+  3: [
+    { bottom: 20, right: 104, size: 48 },
+    { bottom: 78, right: 94, size: 48 },
+    { bottom: 100, right: 22, size: 54 },
+  ],
+  4: [
+    { bottom: 20, right: 104, size: 48 },
+    { bottom: 76, right: 94, size: 48 },
+    { bottom: 98, right: 22, size: 48 },
+    { bottom: 148, right: 44, size: 54 }, // Ultimate
+  ],
+  5: [
+    { bottom: 18, right: 104, size: 46 },
+    { bottom: 72, right: 96, size: 46 },
+    { bottom: 96, right: 22, size: 46 },
+    { bottom: 124, right: 86, size: 46 },
+    { bottom: 154, right: 30, size: 52 }, // Ultimate
+  ],
+  6: [
+    // Skill 1: Bottom left of Attack
+    { bottom: 18, right: 104, size: 46 },
+    // Skill 2: Above Skill 1
+    { bottom: 72, right: 98, size: 46 },
+    // Skill 3: Above Attack
+    { bottom: 96, right: 22, size: 46 },
+    // Skill 4: Above Skill 2
+    { bottom: 124, right: 98, size: 46 },
+    // Skill 5: Above Skill 3
+    { bottom: 148, right: 22, size: 46 },
+    // Skill 6 (Ultimate): Apex at the top, crowned between columns
+    { bottom: 178, right: 60, size: 52 },
+  ],
+};
+
+/**
+ * Landscape configuration:
+ * Wide sweeping MOBA fan arc curving around the main attack button.
+ */
+const LANDSCAPE_CONFIGS: Record<number, SkillSlotPosition[]> = {
+  1: [{ bottom: 20, right: 110, size: 56 }],
+  2: [
+    { bottom: 20, right: 140, size: 54 },
+    { bottom: 88, right: 88, size: 54 },
+  ],
+  3: [
+    { bottom: 20, right: 165, size: 54 },
+    { bottom: 85, right: 115, size: 54 },
+    { bottom: 145, right: 20, size: 60 },
+  ],
+  4: [
+    { bottom: 18, right: 180, size: 52 },
+    { bottom: 72, right: 135, size: 52 },
+    { bottom: 125, right: 82, size: 52 },
+    { bottom: 172, right: 18, size: 58 },
+  ],
+  5: [
+    { bottom: 16, right: 195, size: 50 },
+    { bottom: 62, right: 150, size: 50 },
+    { bottom: 108, right: 106, size: 50 },
+    { bottom: 152, right: 62, size: 50 },
+    { bottom: 190, right: 16, size: 56 },
+  ],
+  6: [
+    { bottom: 16, right: 210, size: 48 },
+    { bottom: 58, right: 168, size: 48 },
+    { bottom: 100, right: 126, size: 48 },
+    { bottom: 140, right: 86, size: 48 },
+    { bottom: 178, right: 48, size: 48 },
+    { bottom: 216, right: 14, size: 54 },
+  ],
+};
+
+const getArcPosition = (i: number, total: number, isPortrait: boolean): SkillSlotPosition => {
+  const configs = isPortrait ? PORTRAIT_CONFIGS : LANDSCAPE_CONFIGS;
+  const list = configs[total] ?? configs[6] ?? configs[4];
+  return list[i] ?? { bottom: 20 + i * 40, right: 20 + i * 30, size: 48 };
+};
+
 export const MobaControls: React.FC<MobaControlsProps> = ({
   skills,
   basicAttackSkill,
@@ -45,6 +134,28 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
   onAimEnd,
   cancelZoneRef,
 }) => {
+  // Screen orientation detection for dynamic layout adaptation
+  const [isPortrait, setIsPortrait] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerHeight > window.innerWidth;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, []);
+
+  const stickRadius = isPortrait ? 42 : 50;
+
   // ── Joystick state ────────────────────────────────────────────────────────
   const stickBaseRef = useRef<HTMLDivElement>(null);
   const stickKnobRef = useRef<HTMLDivElement>(null);
@@ -69,19 +180,19 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
       const dx = e.clientX - stickCenter.current.x;
       const dy = e.clientY - stickCenter.current.y;
       const len = Math.hypot(dx, dy);
-      const clampedLen = Math.min(len, STICK_RADIUS);
+      const clampedLen = Math.min(len, stickRadius);
       const angle = Math.atan2(dy, dx);
       const nx = Math.cos(angle) * clampedLen;
       const ny = Math.sin(angle) * clampedLen;
 
       setKnobOffset({ x: nx, y: ny });
       if (len > 5) {
-        onMove(nx / STICK_RADIUS, ny / STICK_RADIUS);
+        onMove(nx / stickRadius, ny / stickRadius);
       } else {
         onMove(0, 0);
       }
     },
-    [onMove],
+    [onMove, stickRadius],
   );
 
   const handleStickMove = useCallback(
@@ -90,19 +201,19 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
       const dx = e.clientX - stickCenter.current.x;
       const dy = e.clientY - stickCenter.current.y;
       const len = Math.hypot(dx, dy);
-      const clampedLen = Math.min(len, STICK_RADIUS);
+      const clampedLen = Math.min(len, stickRadius);
       const angle = Math.atan2(dy, dx);
       const nx = Math.cos(angle) * clampedLen;
       const ny = Math.sin(angle) * clampedLen;
 
       setKnobOffset({ x: nx, y: ny });
       if (len > 5) {
-        onMove(nx / STICK_RADIUS, ny / STICK_RADIUS);
+        onMove(nx / stickRadius, ny / stickRadius);
       } else {
         onMove(0, 0);
       }
     },
-    [onMove],
+    [onMove, stickRadius],
   );
 
   const handleStickUp = useCallback(
@@ -142,8 +253,6 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
       };
 
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-
-      // Start aiming immediately so reticle shows up
       onAimStart(index, skill, e.clientX, e.clientY);
     },
     [cooldowns, onAimStart],
@@ -168,65 +277,38 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
       const dist = Math.hypot(e.clientX - touch.startX, e.clientY - touch.startY);
 
       if (elapsed < 220 && dist < 14) {
-        // Quick tap: smart auto cast
         onSkillTap(index, skill);
       } else {
-        // Drag release
         onAimEnd(e.clientX, e.clientY);
       }
     },
     [onSkillTap, onAimEnd],
   );
 
-  // Radial fan positions for skills curving around the main attack button at (bottom: 22, right: 22)
-  const getArcPosition = (i: number, total: number) => {
-    const configs: Record<number, Array<{ bottom: number; right: number; size: number }>> = {
-      4: [
-        { bottom: 20, right: 195, size: 58 },
-        { bottom: 85, right: 145, size: 58 },
-        { bottom: 145, right: 85, size: 58 },
-        { bottom: 195, right: 20, size: 66 }, // Ultimate
-      ],
-      5: [
-        { bottom: 18, right: 215, size: 56 },
-        { bottom: 74, right: 165, size: 56 },
-        { bottom: 128, right: 118, size: 56 },
-        { bottom: 180, right: 68, size: 56 },
-        { bottom: 232, right: 18, size: 64 }, // Ultimate
-      ],
-      6: [
-        { bottom: 16, right: 225, size: 54 },
-        { bottom: 68, right: 175, size: 54 },
-        { bottom: 122, right: 128, size: 54 },
-        { bottom: 174, right: 84, size: 54 },
-        { bottom: 224, right: 44, size: 54 },
-        { bottom: 275, right: 14, size: 62 }, // Ultimate
-      ],
-    };
-
-    const list = configs[total] ?? configs[6] ?? configs[4];
-    return list[i] ?? { bottom: 20 + i * 45, right: 20 + i * 35, size: 56 };
-  };
-
-  const HOTKEYS = ["1", "2", "3", "4", "5", "6"];
+  const attackSize = isPortrait ? 68 : 74;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30 select-none overflow-hidden touch-none">
-      {/* ── Cancel Zone (Top Right) ────────────────────────────────────────── */}
+      {/* ── Cancel Zone ────────────────────────────────────────────────────── */}
       {aimingSkillIndex !== null && (
         <div
           ref={cancelZoneRef}
-          className={`pointer-events-auto absolute top-14 right-6 flex flex-col items-center justify-center transition-all ${
+          style={
+            isPortrait
+              ? { bottom: "242px", right: "20px" }
+              : { top: "3.5rem", right: "1.5rem" }
+          }
+          className={`pointer-events-auto absolute flex flex-col items-center justify-center transition-all ${
             isCancelHovered
-              ? "scale-110 shadow-[0_0_25px_rgba(239,68,68,0.9)] bg-rose-600/90 border-rose-300"
-              : "shadow-[0_0_12px_rgba(239,68,68,0.4)] bg-rose-950/70 border-rose-500/60"
-          } rounded-2xl border-2 px-5 py-3 backdrop-blur-md`}
+              ? "scale-105 shadow-[0_0_25px_rgba(239,68,68,0.9)] bg-rose-600/90 border-rose-300"
+              : "shadow-[0_0_12px_rgba(239,68,68,0.4)] bg-rose-950/75 border-rose-500/60"
+          } rounded-2xl border-2 px-4 py-2 backdrop-blur-md`}
         >
           <div className="flex items-center gap-1.5 text-xs font-bold text-rose-100">
-            <span className="text-base leading-none">✕</span>
-            <span>{isCancelHovered ? "THẢ ĐỂ HỦY CHIÊU" : "KÉO VÀO ĐÂY ĐỂ HỦY"}</span>
+            <span className="text-sm leading-none">✕</span>
+            <span>{isCancelHovered ? "THẢ ĐỂ HỦY CHIÊU" : "KÉO LÊN ĐÂY ĐỂ HỦY"}</span>
           </div>
-          <span className="text-[10px] text-rose-300/80">Kéo ra ngoài để tiếp tục ngắm</span>
+          <span className="text-[9px] text-rose-300/80">Thả ra ngoài để tiếp tục thi triển</span>
         </div>
       )}
 
@@ -237,25 +319,36 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
         onPointerMove={handleStickMove}
         onPointerUp={handleStickUp}
         onPointerCancel={handleStickUp}
-        className="pointer-events-auto absolute bottom-6 left-6 flex h-36 w-36 items-center justify-center rounded-full border-2 border-emerald-500/30 bg-emerald-950/20 backdrop-blur-sm touch-none transition-opacity"
-        style={{ opacity: stickActive ? 0.95 : 0.65 }}
+        style={{
+          bottom: isPortrait ? "20px" : "24px",
+          left: isPortrait ? "18px" : "24px",
+          width: isPortrait ? "124px" : "140px",
+          height: isPortrait ? "124px" : "140px",
+          opacity: stickActive ? 0.95 : 0.65,
+        }}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full border-2 border-emerald-500/35 bg-emerald-950/25 backdrop-blur-sm touch-none transition-opacity"
       >
         {/* Cardinal guidelines */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="h-full w-0.5 bg-emerald-500/15" />
           <div className="h-0.5 w-full bg-emerald-500/15" />
         </div>
-        <div className="h-20 w-20 rounded-full border border-emerald-400/25 pointer-events-none" />
+        <div
+          style={{ width: isPortrait ? "68px" : "78px", height: isPortrait ? "68px" : "78px" }}
+          className="rounded-full border border-emerald-400/25 pointer-events-none"
+        />
 
         {/* Joystick Knob */}
         <div
           ref={stickKnobRef}
           style={{
             transform: `translate(${knobOffset.x}px, ${knobOffset.y}px)`,
+            width: isPortrait ? "46px" : "54px",
+            height: isPortrait ? "46px" : "54px",
           }}
-          className="relative flex h-14 w-14 items-center justify-center rounded-full border-2 border-emerald-300 bg-gradient-to-b from-emerald-400/80 to-emerald-700/90 shadow-[0_0_15px_rgba(52,211,153,0.5)] transition-transform duration-75 pointer-events-none"
+          className="relative flex items-center justify-center rounded-full border-2 border-emerald-300 bg-gradient-to-b from-emerald-400/80 to-emerald-700/90 shadow-[0_0_15px_rgba(52,211,153,0.5)] transition-transform duration-75 pointer-events-none"
         >
-          <div className="h-4 w-4 rounded-full bg-white/70 shadow" />
+          <div className="h-3.5 w-3.5 rounded-full bg-white/70 shadow" />
         </div>
       </div>
 
@@ -264,8 +357,8 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
         <div
           style={{
             position: "absolute",
-            bottom: "22px",
-            right: "22px",
+            bottom: isPortrait ? "20px" : "22px",
+            right: isPortrait ? "20px" : "22px",
           }}
           className="pointer-events-auto"
         >
@@ -278,7 +371,7 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
             isSelected={false}
             isAiming={false}
             shape="circle"
-            size={76}
+            size={attackSize}
             showDetails={false}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -288,11 +381,11 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
         </div>
       )}
 
-      {/* ── Radial Skill Arc (Curving Around Main Attack) ──────────────────── */}
+      {/* ── Skill Cluster (Curving Around Main Attack) ─────────────────────── */}
       <div className="pointer-events-auto absolute inset-0 touch-none">
         {skills.map((skill, index) => {
           const remaining = cooldowns[skill.gu_id] ?? 0;
-          const pos = getArcPosition(index, skills.length);
+          const pos = getArcPosition(index, skills.length, isPortrait);
           const isAiming = aimingSkillIndex === index;
           const name = guDictionary[skill.gu_id]?.name || skill.gu_id.replace(/^GU_/, "").replace(/_/g, " ");
           const imageUrl = guDictionary[skill.gu_id]?.image_url;
@@ -311,7 +404,7 @@ export const MobaControls: React.FC<MobaControlsProps> = ({
                 index={index}
                 name={name}
                 imageUrl={imageUrl}
-                hotkey={HOTKEYS[index] ?? ""}
+                hotkey=""
                 cooldownRemainingMs={remaining}
                 isSelected={selectedIndex === index}
                 isAiming={isAiming}

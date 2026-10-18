@@ -94,6 +94,13 @@ minion rỗng. Clamp cố định: HP ≤ 2× caster, damage ≤ 3× caster, đ�
 `engine.go`. Mỗi Cổ chỉ giữ 1 minion (`hasMinion`) nên cast lặp mỗi lượt không
 stack.
 
+**Thú triệu hồi scale theo đạo ngân.** Sau clamp, `hp`/`damage`/`defense` của
+minion nhân thêm `daoMult` của action path (`actorDaoMultiplier(actor, a.Path)`,
+`engine.go`) — cùng hệ số mà damage/shield/heal của chính action đó dùng. Áp
+**sau** clamp để clamp anti-abuse không ăn hết phần khuếch đại khi đạo ngân cao.
+`SUMMON_WOLF_FRONTLINE` cũng nhân cùng `daoMult` vào `MaxHP`/`BaseDmg`/`BaseDef`.
+Log `SUMMONED` in thêm `Đạo Ngân ×N` khi `daoMult > 1`.
+
 Gu candidates contain only `schema_version` and `blocks`; legacy sibling
 namespaces are not copied into candidate output.
 
@@ -833,7 +840,7 @@ Cấu trúc flat v2 của mỗi block:
 | `armor_pen` | 2 | number | Xuyên Defense phẳng |
 | `blood_drain` | 2 | bool | Cơ chế hút máu (+50% LifeSteal) |
 | `cleansing_power` | 2 | number | Thanh tẩy (cấp độ) |
-| `capture_bonus` | 15 | number | +% tỉ lệ bắt monster. Sau refactor Block v2 viết lại thành block `trigger: CAPABILITY` + `op: UNIQUE, code: CAPTURE_BONUS, params: {value}`; handler `combat_capture.go` đọc qua `models.GuSpecCapabilityFloat(spec, "CAPTURE_BONUS", "value")` |
+| `capture_bonus` | 15 | number | +% tỉ lệ bắt monster. Sau refactor Block v2 viết lại thành block `trigger: CAPABILITY` + `op: UNIQUE, code: CAPTURE_BONUS, params: {value}`; handler `combat_capture.go` đọc qua `models.GuSpecCapabilityFloat(spec, "CAPTURE_BONUS", "value")`. Đạo ngân Nô đạo nhân thêm `captureDaoFactor` (xem `combat_capture.go`): `1 + sqrt(enslavement_marks)/100`, áp cho cả roll bắt lẫn chỉ số thú bắt được. Mortal (rank < 6) không có `dao_marks` nên factor = 1.0 |
 | `summon_monster_id` | 4 | string | Triệu hồi đơn vị (`MONSTER_*`) |
 | `summon_phantom` | 4 | bool | Triệu hồi hư ảnh (dmg = BaseAttack) |
 | `range` | 7 | number | Tầm tấn công |

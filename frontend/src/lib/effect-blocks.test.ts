@@ -23,3 +23,10 @@ test("normalizeEffectEnvelope loads Gu.csv arrays, API envelopes, and JSON strin
 });
 test("modifier selectors sum canonical operations", () => { assert.equal(investigation(effects), 5); assert.equal(disguiseLevel(effects), 4); assert.equal(statModifier(effects, "speed"), 0.2); assert.equal(operationsBy(effects, { op: "damage" }).length, 1); });
 test("domain selectors read block operations", () => { assert.equal(hasCapability(effects, "disguise"), true); assert.equal(isCombatEligible(effects), true); assert.equal(captureBonus(effects), 0.25); assert.equal(combatCategory(effects), "attack"); assert.deepEqual(growthConfig(effects), { max_attack: 12, max_defense: 0, max_hp: 0, max_speed: 0, hours_to_max: 48 }); });
+test("capture-only Gu stays battle-eligible", () => {
+  const captureOnly: EffectEnvelope = { schema_version: 2, blocks: [
+    { id: "CAPTURE_BONUS", trigger: "CAPABILITY", target: { selector: "SELF" }, operations: [{ op: "UNIQUE", code: "CAPTURE_BONUS", params: { value: 0.1 } }] },
+  ] };
+  assert.equal(isCombatEligible(captureOnly), true);
+  assert.equal(captureBonus(captureOnly), 0.1);
+});

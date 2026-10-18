@@ -1592,7 +1592,9 @@ func Simulate(state *CombatState) []CombatLog {
 
 			// ── Special Actions preprocessing ──
 			if hasMechanic(a.Mechanics, "ON_CAST", "SUMMON_WOLF_FRONTLINE") {
-				minionHP := actor.MaxHP * 0.50
+				// Summoned beasts scale with the summoning Gu's dao marks, exactly
+				// like the damage/shield/heal of the action itself (daoMult above).
+				minionHP := actor.MaxHP * 0.50 * daoMult
 				minion := &CombatantAuto{
 					ID:      actor.ID + "_dialang",
 					Name:    "Địa Lang Vương (Triệu hồi)",
@@ -1601,8 +1603,8 @@ func Simulate(state *CombatState) []CombatLog {
 					GridY:   2, // Mid
 					MaxHP:   minionHP,
 					HP:      minionHP,
-					BaseDmg: actor.BaseDmg / 3.0,
-					BaseDef: actor.BaseDef / 2.0,
+					BaseDmg: actor.BaseDmg / 3.0 * daoMult,
+					BaseDef: actor.BaseDef / 2.0 * daoMult,
 				}
 				if isAlly {
 					state.Allies = append(state.Allies, minion)
@@ -1610,12 +1612,16 @@ func Simulate(state *CombatState) []CombatLog {
 					state.Enemies = append(state.Enemies, minion)
 				}
 				actor.GridX = 2 // Move actor to Mid
+				detail := fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP)
+				if hasDao && daoMult > 1.0 {
+					detail = fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP, Đạo Ngân ×%.2f) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP, daoMult)
+				}
 				turnLogs = append(turnLogs, CombatLog{
 					Turn:      turn,
 					ActorId:   actor.ID,
 					ActorName: actor.Name,
 					Action:    "SUMMONED",
-					Detail:    fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP),
+					Detail:    detail,
 				})
 			}
 			// SUMMON_MONSTER: data-driven summon. The combat builder injects the
@@ -1640,6 +1646,11 @@ func Simulate(state *CombatState) []CombatLog {
 				if damage > actor.BaseDmg*3.0 {
 					damage = actor.BaseDmg * 3.0
 				}
+				// Dao marks amplify the summon after the anti-abuse clamps, otherwise
+				// the clamp would swallow the whole bonus at high dao mark counts.
+				hp *= daoMult
+				damage *= daoMult
+				defense *= daoMult
 				name := mechanicString(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "name", "Triệu hồi vật")
 				gridX, gridY := summonGrid(mechanicString(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "position", "frontline"))
 				minion := &CombatantAuto{
@@ -1660,12 +1671,16 @@ func Simulate(state *CombatState) []CombatLog {
 				} else {
 					state.Enemies = append(state.Enemies, minion)
 				}
+				detail := fmt.Sprintf("%s triệu hồi %s (%.0f HP, %.0f công) lên chiến trường!", actor.Name, name, hp, damage)
+				if hasDao && daoMult > 1.0 {
+					detail = fmt.Sprintf("%s triệu hồi %s (%.0f HP, %.0f công, Đạo Ngân ×%.2f) lên chiến trường!", actor.Name, name, hp, damage, daoMult)
+				}
 				turnLogs = append(turnLogs, CombatLog{
 					Turn:      turn,
 					ActorId:   actor.ID,
 					ActorName: actor.Name,
 					Action:    "SUMMONED",
-					Detail:    fmt.Sprintf("%s triệu hồi %s (%.0f HP, %.0f công) lên chiến trường!", actor.Name, name, hp, damage),
+					Detail:    detail,
 				})
 				summonCount++
 			}

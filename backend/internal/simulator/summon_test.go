@@ -3,6 +3,8 @@ package simulator
 import (
 	"strings"
 	"testing"
+
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 )
 
 // SUMMON_MONSTER spawns a minion from the injected template stats, scaled by the
@@ -117,5 +119,53 @@ func TestSummonMonsterEnemySide(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected an enemy-side minion")
+	}
+}
+
+// Thú triệu hồi scale theo đạo ngân của Cổ triệu hồi, không chỉ theo rank: minion
+// nhận đúng daoMult mà damage/shield/heal của action vẫn dùng.
+func TestSummonScalesWithEnslavementDaoMarks(t *testing.T) {
+	profile := gamefx.BuildDaoCombatProfile(map[string]int64{"enslavement": 10000}, nil, false, nil)
+	amp, realmEff, conflict := profile.GetOffensiveFactors("enslavement")
+	want := (1.0 + (amp-1.0)*realmEff) * conflict
+	if want <= 1.5 {
+		t.Fatalf("test setup: dao multiplier %.3f too small to prove scaling", want)
+	}
+
+	ally := newTestCombatant("ally", "Player", 1000000, 10000)
+	ally.Rank = 3
+	ally.Speed = 50
+	ally.DaoMarks = map[string]int64{"enslavement": 10000}
+	ally.Actions = []SimAction{{
+		ActionType: "GU_SKILL", Name: "Ngự Xích Cổ", Rank: 3, Damage: 100, Path: []string{"Enslavement Path"},
+		Mechanics: []CombatMechanic{mech("ON_CAST", "SUMMON_MONSTER",
+			`{"monster_id":"monster_wolf_leader","hp":220,"damage":25,"defense":10,"hp_scale":0.5,"damage_scale":0.33,"position":"frontline"}`)},
+	}}
+	enemy := newTestCombatant("enemy", "Enemy", 1000000, 1)
+	enemy.Speed = 1
+	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 1}}
+
+	state := &CombatState{Seed: 5, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
+	logs := Simulate(state)
+
+	// RankScale(3) = 5 → nền hp 550 / damage 41.25, nhân tiếp daoMult.
+	minions := 0
+	for _, c := range state.Allies {
+		if c.Kind != "Minion" {
+			continue
+		}
+		minions++
+		if c.MaxHP != 550*want {
+			t.Fatalf("minion HP = %.2f, want %.2f (550 × %.3f dao)", c.MaxHP, 550*want, want)
+		}
+		if c.BaseDmg != 41.25*want {
+			t.Fatalf("minion damage = %.2f, want %.2f (41.25 × %.3f dao)", c.BaseDmg, 41.25*want, want)
+		}
+	}
+	if minions != 1 {
+		t.Fatalf("summoned minions = %d, want 1", minions)
+	}
+	if !hasDetail(logs, "Đạo Ngân") {
+		t.Fatal("SUMMONED log should surface the dao mark multiplier")
 	}
 }
