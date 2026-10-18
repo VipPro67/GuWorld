@@ -30,22 +30,22 @@ func GetRegionalWallDebuff(rank int, subRank int) (float64, time.Duration) {
 
 // CheckAndApplyRegionalWallDebuff checks if a player moved from one NGU_VUC to a different NGU_VUC.
 // If so, it applies the "regional_wall_suppression" debuff status to the player's Statuses list.
-func CheckAndApplyRegionalWallDebuff(player *models.Player, fromX, fromY, toX, toY int) string {
+func CheckAndApplyRegionalWallDebuff(player *models.Player, fromX, fromY, toX, toY int, q ...notify.Querier) string {
 	if player == nil || (fromX == 0 && fromY == 0) {
 		return ""
 	}
-	return applyRegionalWallDebuff(player, FindLargeZoneAt(fromX, fromY), FindLargeZoneAt(toX, toY))
+	return applyRegionalWallDebuff(player, FindLargeZoneAt(fromX, fromY), FindLargeZoneAt(toX, toY), q...)
 }
 
 // CheckAndApplyRegionalWallDebuffBetween resolves the containing large zones
 // from region ancestry. Use it when callers know both region IDs: stacked maps
 // can reuse coordinates, so coordinate-only lookup may miss or misidentify a
 // transition between world-map layers.
-func CheckAndApplyRegionalWallDebuffBetween(player *models.Player, fromRegion, toRegion string) string {
+func CheckAndApplyRegionalWallDebuffBetween(player *models.Player, fromRegion, toRegion string, q ...notify.Querier) string {
 	if player == nil || fromRegion == "" || toRegion == "" || fromRegion == toRegion {
 		return ""
 	}
-	return applyRegionalWallDebuff(player, largeZoneForRegion(fromRegion), largeZoneForRegion(toRegion))
+	return applyRegionalWallDebuff(player, largeZoneForRegion(fromRegion), largeZoneForRegion(toRegion), q...)
 }
 
 func largeZoneForRegion(regionID string) *models.Region {
@@ -87,7 +87,7 @@ func largeZoneForRegion(regionID string) *models.Region {
 	return nil
 }
 
-func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Region) string {
+func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Region, q ...notify.Querier) string {
 	if oldZone == nil || newZone == nil {
 		return ""
 	}
@@ -99,16 +99,34 @@ func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Reg
 	}
 
 	debuffPct, duration := GetRegionalWallDebuff(player.Rank, player.SubRank)
-	player.Statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)
+	sourceLabel := fmt.Sprintf("Giới Vực Bích (%s ➔ %s)", oldZone.Name, newZone.Name)
+	player.Statuses.Add("regional_wall_suppression", sourceLabel, duration, debuffPct)
 
 	debuffInt := int(math.Abs(debuffPct * 100))
 	durMinutes := int(duration.Minutes())
+	var msg string
 	if durMinutes >= 60 {
-		return fmt.Sprintf("⚠️ Đạo hữu vừa vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d giờ).",
+		msg = fmt.Sprintf("⚠️ Đạo hữu vừa vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d giờ).",
 			oldZone.Name, newZone.Name, debuffInt, durMinutes/60)
+	} else {
+		msg = fmt.Sprintf("⚠️ Đạo hữu vừa vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d phút).",
+			oldZone.Name, newZone.Name, debuffInt, durMinutes)
 	}
-	return fmt.Sprintf("⚠️ Đạo hữu vừa vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d phút).",
-		oldZone.Name, newZone.Name, debuffInt, durMinutes)
+
+	logger.S.Warnf("[Áp Chế Giới Vực] Người chơi %s (%s) bị áp chế khi vượt Giới Vực Bích từ %s sang %s (giảm %d%%, thời gian %v)",
+		player.Username, player.ID, oldZone.Name, newZone.Name, debuffInt, duration)
+
+	var querier notify.Querier
+	if len(q) > 0 && q[0] != nil {
+		querier = q[0]
+	} else if db.DB != nil {
+		querier = db.DB
+	}
+	if querier != nil && player.ID != uuid.Nil {
+		_ = notify.Send(querier, player.ID, "regional_wall_suppression", "Áp Chế Giới Vực", msg)
+	}
+
+	return msg
 }
 
 // returns the log message plus whether a fight was started. attackTargetID is
@@ -178,9 +196,9 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 	}
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
 	if oldRegion != "" && destinationRegion != "" {
-		regionWarning = CheckAndApplyRegionalWallDebuffBetween(player, oldRegion, destinationRegion)
+		regionWarning = CheckAndApplyRegionalWallDebuffBetween(player, oldRegion, destinationRegion, tx)
 	} else if oldRegion == "" && (oldX != 0 || oldY != 0) {
-		regionWarning = CheckAndApplyRegionalWallDebuff(player, oldX, oldY, player.X, player.Y)
+		regionWarning = CheckAndApplyRegionalWallDebuff(player, oldX, oldY, player.X, player.Y, tx)
 	}
 	combatTriggered := false
 	pvpTriggered := false
@@ -1066,8 +1084,8 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 			return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
 		}
 		lastStepLog = stepLog
-		// Filter out generic movement logs; only keep noteworthy events (encounters, discoveries, gathering, traps, pvp)
-		if !strings.HasPrefix(stepLog, "Di chuyển thành công đến") {
+		// Filter out generic movement logs; only keep noteworthy events (encounters, discoveries, gathering, traps, pvp, warnings)
+		if !strings.HasPrefix(stepLog, "Di chuyển thành công đến") || strings.Contains(stepLog, "⚠️") {
 			eventLogs = append(eventLogs, stepLog)
 		}
 		if triggered {

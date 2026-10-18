@@ -165,9 +165,9 @@ func TestPortalManaCostAndUsability(t *testing.T) {
 	}
 
 	// Test GetPortalManaCost
-	// 1. Mortal Rank 5 player, Rank 5 Gu, 10% base cost on MaxMana 500 = 50
-	if cost := GetPortalManaCost(playerMortal5, specMortal5); cost != 50.0 {
-		t.Errorf("expected 50.0, got %f", cost)
+	// 1. Mortal Rank 5 player, Rank 5 Gu, flat base cost 10
+	if cost := GetPortalManaCost(playerMortal5, specMortal5); cost != 10.0 {
+		t.Errorf("expected 10.0, got %f", cost)
 	}
 
 	// 2. Immortal Rank 6 player, Rank 6 Gu, 10 base cost = 10
@@ -203,8 +203,8 @@ func TestPortalManaCostAndUsability(t *testing.T) {
 		t.Errorf("expected mortal 5 usability to pass, got: %v", err)
 	}
 
-	// 2. Mortal 5 using Mortal 5, but not enough mana (cost = 50, current = 40)
-	playerMortal5.CurrentMana = 40
+	// 2. Mortal 5 using Mortal 5, but not enough mana (cost = 10, current = 5)
+	playerMortal5.CurrentMana = 5
 	if err := ValidateGuUsable(playerMortal5, guInstMortal5, specMortal5, true); err == nil {
 		t.Error("expected error due to insufficient mana, got nil")
 	}

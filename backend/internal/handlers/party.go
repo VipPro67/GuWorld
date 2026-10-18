@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -469,7 +470,7 @@ func RespondToInvitation(c *gin.Context) {
 
 	regionalWarning := ""
 	if leaderRegion.Valid && player.CurrentRegion != leaderRegion.String {
-		regionalWarning = CheckAndApplyRegionalWallDebuffBetween(&player, player.CurrentRegion, leaderRegion.String)
+		regionalWarning = CheckAndApplyRegionalWallDebuffBetween(&player, player.CurrentRegion, leaderRegion.String, tx)
 		if regionalWarning != "" {
 			_, _ = tx.Exec("UPDATE players SET statuses = $1 WHERE id = $2", player.Statuses, player.ID)
 		}
@@ -585,7 +586,22 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 			newLZ := largeZoneForRegion(leader.CurrentRegion)
 			if oldLZ != nil && newLZ != nil && oldLZ.ID != newLZ.ID && oldLZ.ZoneType == ZoneTypeLarge && newLZ.ZoneType == ZoneTypeLarge {
 				debuffPct, duration := GetRegionalWallDebuff(m.rank, m.subRank)
-				m.statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)
+				sourceLabel := fmt.Sprintf("Giới Vực Bích (%s ➔ %s)", oldLZ.Name, newLZ.Name)
+				m.statuses.Add("regional_wall_suppression", sourceLabel, duration, debuffPct)
+
+				debuffInt := int(math.Abs(debuffPct * 100))
+				durMinutes := int(duration.Minutes())
+				var partyNotifyContent string
+				if durMinutes >= 60 {
+					partyNotifyContent = fmt.Sprintf("⚠️ Đạo hữu cùng đội trưởng %s vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d giờ).",
+						leader.Username, oldLZ.Name, newLZ.Name, debuffInt, durMinutes/60)
+				} else {
+					partyNotifyContent = fmt.Sprintf("⚠️ Đạo hữu cùng đội trưởng %s vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d phút).",
+						leader.Username, oldLZ.Name, newLZ.Name, debuffInt, durMinutes)
+				}
+				logger.S.Warnf("[Áp Chế Giới Vực] Thành viên tổ đội %s (%s) bị áp chế khi theo đội trưởng %s vượt Giới Vực Bích từ %s sang %s (giảm %d%%, thời gian %v)",
+					m.username, m.id, leader.Username, oldLZ.Name, newLZ.Name, debuffInt, duration)
+				_ = notify.Send(tx, m.id, "regional_wall_suppression", "Áp Chế Giới Vực (Tổ Đội)", partyNotifyContent)
 			}
 			if _, errExec := tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3, statuses = $4 WHERE id = $5", leader.CurrentRegion, leader.X, leader.Y, m.statuses, m.id); errExec != nil {
 				logger.S.Errorf("SyncPartyMembersLocation: failed to update member %s with regional wall debuff: %v", m.id, errExec)

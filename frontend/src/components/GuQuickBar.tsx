@@ -2,7 +2,8 @@
 
 import { useMemo, useEffect } from "react";
 import { guSpecFor, useGameStore, type GuInstance, type GuSpec } from "@/store/useGameStore";
-import { canCreatePortal, operationsBy, usesRandomPortal } from "@/lib/effect-blocks";
+import { canCreatePortal, operationsBy, refinementTier, usesRandomPortal } from "@/lib/effect-blocks";
+import { formatManaCost, guManaCost, portalManaCost } from "@/lib/gu-mana";
 import { useWorldStore } from "@/store/useWorldStore";
 import { Sparkles, Heart, Shield, Zap, Flame, Compass, Crosshair, Swords } from "lucide-react";
 
@@ -30,6 +31,16 @@ export function GuQuickBar() {
   // Filter equipped Gu that have usable active effects on World Map
   const usableSlots = useMemo<GuSkillSlot[]>(() => {
     if (!player?.gu_inventory) return [];
+
+    // Highest REFINE_MANA_TIER among equipped same-rank active Gu (energy.go).
+    let refineManaTier = 0;
+    for (const gu of player.gu_inventory) {
+      if (!gu.equipped || gu.status !== "ACTIVE" || gu.rank !== player.rank) continue;
+      const equippedSpec = guSpecFor(gu.gu_id, gu.rank);
+      if (!equippedSpec) continue;
+      const tier = refinementTier(equippedSpec.effects);
+      if (tier > refineManaTier) refineManaTier = tier;
+    }
 
     const slots: GuSkillSlot[] = [];
     for (const gu of player.gu_inventory) {
@@ -68,7 +79,10 @@ export function GuQuickBar() {
 
       const castable = operationsBy(spec.effects, { trigger: ["ON_ACTION", "ON_USE"] }).length > 0;
       if (type && !COMBAT_EFFECT_TYPES.has(type) && (castable || type === "teleport")) {
-        const cost = spec.base_mana_cost || 10;
+        const cost =
+          type === "teleport"
+            ? portalManaCost(spec.base_mana_cost, gu.rank, player.rank)
+            : guManaCost(spec.base_mana_cost, gu.rank, player.rank, player.sub_rank, refineManaTier);
         slots.push({
           gu,
           spec,
@@ -81,7 +95,7 @@ export function GuQuickBar() {
     }
 
     return slots.slice(0, 5); // Limit to top 5 hotbar slots
-  }, [player?.gu_inventory, guDictionary]);
+  }, [player?.gu_inventory, player?.rank, player?.sub_rank, guDictionary]);
 
   // Calculate active cooldowns for Gu
   const getCooldownRemains = (instanceId: string): number => {
@@ -232,7 +246,7 @@ export function GuQuickBar() {
               </div>
 
               <div className="text-[7px] sm:text-[8px] font-mono text-zinc-400 leading-tight">
-                {slot.cost} <span className="hidden sm:inline">Mana</span><span className="sm:hidden">M</span>
+                {formatManaCost(slot.cost)} <span className="hidden sm:inline">Mana</span><span className="sm:hidden">M</span>
               </div>
 
               {/* Cooldown Overlay */}

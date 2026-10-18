@@ -903,7 +903,7 @@ func TravelTeleport(c *gin.Context) {
 	player.Y = dest.Y
 
 	if oldRegion != dest.RegionID {
-		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, dest.RegionID)
+		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, dest.RegionID, tx)
 		if debuffMsg != "" {
 			logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
 			logMsg += " " + debuffMsg

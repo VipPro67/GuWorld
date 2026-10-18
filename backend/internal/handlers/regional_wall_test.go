@@ -57,6 +57,10 @@ func TestCheckAndApplyRegionalWallDebuff(t *testing.T) {
 	if math.Abs(wallStatus.Value-(-0.20)) > 1e-6 {
 		t.Errorf("expected debuff value -0.20 for Rank 3.1, got %f", wallStatus.Value)
 	}
+	expectedSource := "Giới Vực Bích (Đại Vực Nam Cương ➔ Đại Vực Trung Châu)"
+	if wallStatus.Source != expectedSource {
+		t.Errorf("expected debuff source %q, got %q", expectedSource, wallStatus.Source)
+	}
 
 	// Calculate stats with debuff applied
 	stats := CalculatePlayerStats(p)
@@ -123,6 +127,15 @@ func TestCheckAndApplyRegionalWallDebuffBetween_KhuVucVsNguVuc(t *testing.T) {
 	}
 	if !p.Statuses.Has("regional_wall_suppression") {
 		t.Fatalf("regional_wall_suppression MUST be applied when crossing NGU_VUC")
+	}
+	expectedSource := "Giới Vực Bích (Đại Vực Nam Cương ➔ Đại Vực Trung Châu)"
+	for _, st := range p.Statuses.Active() {
+		if st.ID == "regional_wall_suppression" {
+			if st.Source != expectedSource {
+				t.Errorf("expected debuff source %q, got %q", expectedSource, st.Source)
+			}
+			break
+		}
 	}
 }
 

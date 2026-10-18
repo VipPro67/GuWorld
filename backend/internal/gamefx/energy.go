@@ -8,8 +8,8 @@ import (
 )
 
 // EnergyCost computes the mana (Chân Nguyên / Tiên Nguyên) required to use a
-// Gu skill for a player. Immortal cultivators pay Tiên Nguyên (scaled by
-// rank/refinement), mortals pay a percentage of MaxMana.
+// Gu skill for a player. BaseManaCost is a flat cost, defined at the Gu's own
+// rank and sub 1; higher player rank/sub-rank lowers it.
 func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 {
 	if util.IsImmortalPlayer(player) {
 		if guSpec.Rank < util.ImmortalRankThreshold {
@@ -32,11 +32,7 @@ func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 
 		return cost
 	}
 
-	baseManaPct := 0.0
-	if guSpec.BaseManaCost > 0.0 {
-		baseManaPct = guSpec.BaseManaCost / 100.0
-	}
-	cost := baseManaPct * player.MaxMana
+	cost := guSpec.BaseManaCost
 
 	if player.Rank > guSpec.Rank && guSpec.Rank < util.ImmortalRankThreshold {
 		cost /= math.Pow(10, float64(player.Rank-guSpec.Rank))
@@ -80,11 +76,7 @@ func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionary
 		return cost
 	}
 
-	baseManaPct := 0.0
-	if guSpec.BaseManaCost > 0.0 {
-		baseManaPct = guSpec.BaseManaCost / 100.0
-	}
-	cost := baseManaPct * actor.MaxMana
+	cost := guSpec.BaseManaCost
 
 	if actor.Rank > guSpec.Rank && guSpec.Rank < util.ImmortalRankThreshold {
 		cost /= math.Pow(10, float64(actor.Rank-guSpec.Rank))

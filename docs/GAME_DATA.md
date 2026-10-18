@@ -288,13 +288,13 @@ Ví dụ:
 
 Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `EnergyCostForCombatant`):
 
-- **Phàm nhân (Rank 1–5):** chi phí = `(BaseManaCost/100) × MaxMana` (mặc định 10% MaxMana). Cổ rank thấp hơn giảm chi phí ÷10/rank; **Cổ rank cao hơn bị nhân hệ số lũy tiến**.
+- **Phàm nhân (Rank 1–5):** chi phí = `BaseManaCost` (mana tuyệt đối, tính ở đúng rank của Cổ và sub 1). Cổ rank thấp hơn giảm chi phí ÷10/rank; **Cổ rank cao hơn bị nhân hệ số lũy tiến**.
 - **Phàm nhân, cùng rank, chênh sub-rank:** mỗi sub-rank trên 1 giảm ÷2 (Cổ không có sub-rank nên tính là sub 1): sub 2 → ÷2, sub 3 → ÷4, sub 4 → ÷8. Chỉ áp dụng khi user và Cổ **cùng rank**; đã chênh rank thì chỉ theo thang rank, sub-rank không cộng dồn.
 - **Cổ Tiên (Rank ≥ 6):** chi phí = `BaseManaCost` (mặc định 1). Cổ dưới Rank 6 miễn phí; Cổ rank cao hơn nhân hệ số lũy tiến; Cổ rank thấp hơn chia 100^chênh lệch.
 
 **Hệ số rank cao hơn** (`HigherRankManaMultiplier(guRank, userRank)`, theo chênh lệch rank Cổ − rank người dùng):
 
-- **Cổ phàm (rank 1–5):** theo bảng `{1, 2, 5, 25, 125}` cho gap `{0,1,2,3,4}` — ví dụ rank 1 dùng Cổ rank 5 (gap 4) tốn **125×** Chân Nguyên.
+- **Cổ phàm (rank 1–5):** theo bảng `{1, 2, 5, 20, 100}` cho gap `{0,1,2,3,4}` — ví dụ rank 1 dùng Cổ rank 5 (gap 4) tốn **100×** Chân Nguyên.
 - **Cổ Tiên (rank ≥ 6):** mỗi bậc chênh lệch nhân ×100 (`100^gap`) — rank 6 dùng Cổ rank 7 tốn ×100, rank 6 dùng rank 8 tốn ×10.000.
 
 - `refine_mana_tier` (passive Cổ cùng rank đang trang bị, lấy bậc cao nhất) giảm 50% chi phí dùng Cổ và đổi hệ số hồi Chân Nguyên bằng đá trong auto-battle (`0.4 + tier*0.1`, mặc định `1.0`).

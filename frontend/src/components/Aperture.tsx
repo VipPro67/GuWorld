@@ -814,6 +814,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                   exhausted: "Kiệt Sức",
                   blessed: "Phúc Trạch",
                   death_penalty: "Hình Phạt Tử Vong",
+                  regional_wall_suppression: "Áp Chế Giới Vực",
                 };
                 const bodyModLabels: Record<string, { name: string; desc: string }> = {
                   sovereign_immortal_body: { name: "Tiên Thể Chí Tôn", desc: "Miễn nhiễm xung đột Đạo Ngân." },
@@ -863,7 +864,12 @@ export const Aperture: React.FC<ApertureProps> = ({
                                   {displayName}{statusRemainLabel(s.expires_at)}
                                 </span>
                                 {regionalWallPct !== null ? (
-                                  <span className="text-[10px] text-rose-300/80">Công / Thủ / Tốc giảm {regionalWallPct}%</span>
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-rose-300/80">Công / Thủ / Tốc giảm {regionalWallPct}%</span>
+                                    {s.source ? (
+                                      <span className="text-[9px] text-zinc-400 font-mono">Lý do: {s.source}</span>
+                                    ) : null}
+                                  </div>
                                 ) : statusEffects ? <EffectEnvelopeView effects={statusEffects} /> : null}
                               </div>
                             );

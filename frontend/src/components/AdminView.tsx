@@ -373,6 +373,7 @@ const statusLabels: Record<string, string> = {
   exhausted: "Kiệt Sức",
   blessed: "Phúc Trạch",
   death_penalty: "Hình Phạt Tử Vong",
+  regional_wall_suppression: "Áp Chế Giới Vực",
 };
 
 function formatStat(val: number): string {

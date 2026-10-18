@@ -100,6 +100,7 @@ export const PlayerProfileModal: React.FC = () => {
     exhausted: "Kiệt Sức",
     blessed: "Phúc Trạch",
     death_penalty: "Hình Phạt Tử Vong",
+    regional_wall_suppression: "Áp Chế Giới Vực",
   };
 
   const constitutionLabel = (key: string): string =>
@@ -330,7 +331,7 @@ export const PlayerProfileModal: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Trạng thái</span>
               {statuses && statuses.length > 0 ? (
                 <div className="flex flex-col gap-1.5">
-                  {statuses.map((s: { id: string; expires_at?: string | null; value?: number }) => {
+                  {statuses.map((s: { id: string; expires_at?: string | null; value?: number; source?: string }) => {
                     let displayName = statusDictionary?.[s.id]?.name || statusLabels[s.id] || s.id;
                     if (s.id.startsWith("cd_gu_")) {
                       displayName = "Hồi chiêu Cổ Trùng";
@@ -349,7 +350,12 @@ export const PlayerProfileModal: React.FC = () => {
                           {displayName}{statusRemainLabel(s.expires_at)}
                         </span>
                         {regionalWallPct !== null ? (
-                          <span className="text-[10px] text-rose-300/80">Công / Thủ / Tốc giảm {regionalWallPct}%</span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] text-rose-300/80">Công / Thủ / Tốc giảm {regionalWallPct}%</span>
+                            {s.source ? (
+                              <span className="text-[9px] text-zinc-400 font-mono">Lý do: {s.source}</span>
+                            ) : null}
+                          </div>
                         ) : statusEffects ? <EffectEnvelopeView effects={statusEffects} /> : null}
                       </div>
                     );

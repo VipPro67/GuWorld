@@ -35,14 +35,8 @@ func GetPortalManaCost(player *models.Player, spec *models.GuDictionaryItem) flo
 		baseCost = 10.0 // default fallback
 	}
 
-	var computedBase float64
-	if player.Rank >= 6 {
-		// Immortal: flat cost in Tiên Nguyên
-		computedBase = baseCost
-	} else {
-		// Mortal: % of MaxMana in Chân Nguyên
-		computedBase = (baseCost / 100.0) * player.MaxMana
-	}
+	// Flat cost in Chân Nguyên / Tiên Nguyên.
+	computedBase := baseCost
 
 	if spec.Rank == player.Rank {
 		return computedBase
