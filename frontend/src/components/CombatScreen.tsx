@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Player, CombatState, Combatant, GuSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
-import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle, PawPrint, Users } from "lucide-react";
+import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, WandSparkles, AlertTriangle, PawPrint, Users } from "lucide-react";
 import { CombatReplayView } from "./CombatReplayView";
 import { CombatReportView } from "./CombatReportView";
 import { Num } from "./Num";
@@ -36,6 +36,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   onRetreat,
 }) => {
   const [selectedGuIds, setSelectedGuIds] = useState<string[]>([]);
+  const [selectedKmIds, setSelectedKmIds] = useState<string[]>([]);
 
   const [simulationLogs, setSimulationLogs] = useState<Record<string, unknown>[]>([]);
   const [simulationWinner, setSimulationWinner] = useState<string | null>(null);
@@ -58,6 +59,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
   const executePracticeCombat = useGameStore((state) => state.executePracticeCombat);
+  const killerMoves = useGameStore((state) => state.killerMoves);
+  const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
   const resolveTribulation = useGameStore((state) => state.resolveTribulation);
   const fetchPlayerStatus = useGameStore((state) => state.fetchPlayerStatus);
   const fetchMineSlots = useGameStore((state) => state.fetchMineSlots);
@@ -152,6 +155,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     const tribulationEventId = isPracticeMode ? undefined : player.active_combat?.tribulation_event_id;
     const loadout = {
       GuIds: selectedGuIds,
+      KillerMoveIds: selectedKmIds,
       ImmortalGuId: null,
       AutoHealHP: autoHealHP,
       HealThreshold: healThreshold,
@@ -744,6 +748,23 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     hasAutoRecommended.current = true;
   }, [settingsLoaded, eligibleGus, combatSettings, recommendLoadout]);
 
+  useEffect(() => {
+    void fetchKillerMoves();
+  }, [fetchKillerMoves]);
+
+  const hasKmLoaded = useRef(false);
+  useEffect(() => {
+    if (!settingsLoaded || hasKmLoaded.current) {
+      return;
+    }
+    const kmLoadout = combatSettings?.killer_move_priorities || combatSettings?.km_priorities;
+    if (kmLoadout && kmLoadout.length > 0) {
+      const activeIds = kmLoadout.map(t => t.gu_id).filter(Boolean);
+      setSelectedKmIds(activeIds);
+      hasKmLoaded.current = true;
+    }
+  }, [settingsLoaded, combatSettings]);
+
   // Sorting for Gu list
   const sortedEligibleGus = useMemo(() => {
     const gus = [...eligibleGus];
@@ -1292,6 +1313,72 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                     {isSelected && (
                       <div className="absolute top-1 right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center">
                         <span className="text-[8px] text-white font-bold">✓</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Killer Move Selection Grid */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2">
+              <WandSparkles className="w-4 h-4 text-amber-400" />
+              Sát Chiêu Trang Bị
+            </h3>
+            <span className="text-xs text-zinc-500 font-mono">
+              {selectedKmIds.length}/4 đã chọn
+            </span>
+          </div>
+          {killerMoves.length === 0 ? (
+            <p className="text-xs text-zinc-600 italic py-2">Chưa sáng tạo sát chiêu nào (vào bảng Sát Chiêu để sáng tạo).</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+              {killerMoves.map(km => {
+                const isSelected = selectedKmIds.includes(km.id);
+                const toggleKm = () => {
+                  if (isSelected) {
+                    setSelectedKmIds(selectedKmIds.filter(id => id !== km.id));
+                  } else {
+                    if (selectedKmIds.length >= 4) {
+                      return;
+                    }
+                    if (!km.available) {
+                      return;
+                    }
+                    setSelectedKmIds([...selectedKmIds, km.id]);
+                  }
+                };
+                return (
+                  <div
+                    key={km.id}
+                    onClick={toggleKm}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all relative ${
+                      !km.available ? 'border-zinc-800/40 bg-zinc-950/30 opacity-50 cursor-not-allowed' :
+                      isSelected ? 'border-amber-500 bg-amber-950/30 ring-1 ring-amber-500/30' :
+                      'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
+                    }`}
+                  >
+                    <div className="font-bold text-sm text-zinc-200 truncate flex items-center gap-1.5">
+                      <span>{km.name}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono font-normal">Bậc {km.main_gu_rank}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-zinc-400 flex-wrap">
+                      <span>{km.components?.length || 1} Cổ</span>
+                      <span>·</span>
+                      <span className="text-emerald-400">{Math.round(km.success_chance * 100)}% thành công</span>
+                    </div>
+                    {!km.available && (
+                      <div className="mt-1 text-[9px] text-rose-400 flex items-center gap-1">
+                        <AlertTriangle className="w-2.5 h-2.5" /> Thiếu Cổ thành phần
+                      </div>
+                    )}
+                    {isSelected && (
+                      <div className="absolute top-1 right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                        <span className="text-[8px] text-zinc-950 font-bold">✓</span>
                       </div>
                     )}
                   </div>

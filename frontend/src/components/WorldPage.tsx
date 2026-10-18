@@ -210,6 +210,7 @@ export function WorldPage() {
     { id: "refine", label: "Luyện Cổ", icon: Sparkles, color: "text-purple-400" },
     { id: "cultivation", label: "Tu Luyện", icon: Zap, color: "text-violet-400" },
     { id: "practice-room", label: "Phòng Tập", icon: Swords, color: "text-indigo-400" },
+    { id: "pvp-arena", label: "Đấu Trường Realtime", icon: Swords, color: "text-emerald-300" },
     { id: "dungeon", label: "Bí Cảnh", icon: Compass, color: "text-indigo-400" },
     { id: "party", label: "Tổ Đội", icon: Users, color: "text-amber-400" },
     { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
@@ -243,7 +244,7 @@ export function WorldPage() {
     { id: "character", label: "Nhân vật", icon: User, itemIds: ["character", "inventory", "inventory-gu", "aperture", "refine", "cultivation", "practice-room"] },
     { id: "world", label: "Khám phá", icon: Compass, itemIds: ["dungeon", "mine", "teleport", "party", "sect", "world-atlas", "teleport-directory", "teleport-build", "divination"] },
     { id: "trade", label: "Giao dịch", icon: Store, itemIds: ["auction", "shop", "premium-store", "topup"] },
-    { id: "activities", label: "Hoạt động", icon: Swords, itemIds: ["arena", "death-arena", "martial-arena", "leaderboard", "gacha", "achievements", "pets"] },
+    { id: "activities", label: "Hoạt động", icon: Swords, itemIds: ["arena", "death-arena", "martial-arena", "pvp-arena", "leaderboard", "gacha", "achievements", "pets"] },
     { id: "other", label: "Khác", icon: Settings, itemIds: ["feedback", "combat-history", "audit-logs", "activity-log", "general-settings", "utilities", "wiki"] },
   ].map((group) => ({ ...group, items: menuItems.filter((item) => group.itemIds.includes(item.id)) }));
 

@@ -47,6 +47,7 @@ const FeedbackView = dynamic(() => import("@/components/FeedbackView").then(m =>
 const AuditLogsView = dynamic(() => import("@/components/AuditLogsView").then(m => m.AuditLogsView), { ssr: false });
 const LeaderboardView = dynamic(() => import("@/components/LeaderboardView").then(m => m.LeaderboardView), { ssr: false });
 const TrainingRoom = dynamic(() => import("@/components/TrainingRoom").then(m => m.TrainingRoom), { ssr: false });
+const PvPArenaView = dynamic(() => import("@/components/PvPArena/PvPArenaView").then(m => m.PvPArenaView), { ssr: false });
 const UtilitiesView = dynamic(() => import("@/components/UtilitiesView").then(m => m.UtilitiesView), { ssr: false });
 
 export default function Home() {
@@ -313,15 +314,17 @@ export default function Home() {
   // The map is the persistent game surface. `dashboard` remains a compatible
   // home route, but no longer replaces the world after login.
   const isWorldMapView = Boolean(player && !player.needs_onboarding && !inCombat);
+  // Full-bleed modes take the whole surface instead of the side drawer.
+  const isFullBleedView = currentView === "practice-room" || currentView === "pvp-arena";
 
   const viewTitles: Record<string, string> = {
-    "practice-room": "Phòng tập", cultivation: "Tu luyện", character: "Nhân vật", inventory: "Túi đồ", "inventory-gu": "Cổ trùng", party: "Tổ đội",
-    refine: "Luyện Cổ", topup: "Nạp", "premium-shop": "Cửa hàng tiên ngọc",
+    "practice-room": "Phòng tập", cultivation: "Tu luyện", character: "Nhân vật", inventory: "Túi đồ", "inventory-gu": "Cổ trùng", party: "Tổ đội",    refine: "Luyện Cổ", topup: "Nạp", "premium-shop": "Cửa hàng tiên ngọc",
     "premium-store": "Cửa hàng", shop: "Thương hội", auction: "Chợ Tiên",
     arena: "Đấu trường", "death-arena": "Sinh tử đài", "martial-arena": "Đại Hội Võ Thuật", leaderboard: "Bảng xếp hạng",
     gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân", mine: "Khai khoáng",
     aperture: "Tiên khiếu", dungeon: "Bí cảnh", sect: "Tông môn",
     "combat-history": "Lịch sử chiến đấu", feedback: "Góp ý", "audit-logs": "Nhật ký hệ thống",
+    "pvp-arena": "Đấu trường thời gian thực",
     utilities: "Tiện ích",
   };
 
@@ -399,12 +402,11 @@ export default function Home() {
                 role="dialog"
                 aria-label={viewTitles[currentView] || "Chức năng"}
                 className={`absolute z-40 flex flex-col overflow-hidden border border-emerald-200/10 bg-[#09130ff2] text-[var(--text-primary)] shadow-[0_24px_80px_rgba(0,0,0,.55)] backdrop-blur-xl ${
-                  currentView === "practice-room"
+                  isFullBleedView
                     ? "inset-0"
-                    : "inset-x-0 inset-y-0 md:inset-y-3 md:left-auto md:right-3 md:top-3 md:w-[min(54vw,780px)] md:rounded-2xl"
-                }`}
+                    : "inset-x-0 inset-y-0 md:inset-y-3 md:left-auto md:right-3 md:top-3 md:w-[min(54vw,780px)] md:rounded-2xl"                }`}
               >
-                {currentView !== "practice-room" && (
+                {!isFullBleedView && (
                   <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/20 px-4 sm:px-5">
                     <div className="min-w-0">
                       <div className="truncate font-serif text-base font-semibold text-emerald-50">{viewTitles[currentView] || "Chức năng"}</div>
@@ -422,10 +424,14 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-                <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4 pb-28 sm:pb-8 ${currentView === "practice-room" ? "p-0" : ""}`}>
+                <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4 pb-28 sm:pb-8 ${isFullBleedView ? "p-0" : ""}`}>
         {currentView === "practice-room" ? (
           <div className="w-full">
             <TrainingRoom onClose={() => setView("dashboard")} />
+          </div>
+        ) : currentView === "pvp-arena" ? (
+          <div className="w-full">
+            <PvPArenaView onClose={() => setView("world-map")} />
           </div>
         ) : currentView === "character" || currentView === "cultivation" ? (
           <div className="w-full">

@@ -109,13 +109,13 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int64, qi f
 		stonesAdd = float64(stones)
 	}
 
-	_, err := tx.Exec(`
+	_, err := tx.Exec(fmt.Sprintf(`
 		UPDATE players
 		SET primeval_stones = primeval_stones + $1,
 		    immortal_stones = immortal_stones + $2,
-		    human_qi = LEAST(human_qi + $3, 100000.0)
+		    human_qi = LEAST(human_qi + $3, %d)
 		WHERE id = $4
-	`, stonesAdd, immortalAdd, qi, playerID)
+	`, int(MaxHumanQi)), stonesAdd, immortalAdd, qi, playerID)
 	if err != nil {
 		return err
 	}

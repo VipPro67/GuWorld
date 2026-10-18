@@ -1105,7 +1105,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
   useEffect(() => {
     if (section === "data") {
-      if (dataTab === "tables") {
+      // The controlled import workflow lives on the "import" tab but needs the
+      // same dataset list as the "tables" tab, so fetch it for both.
+      if (dataTab === "tables" || dataTab === "import") {
         void authFetch(`${BACKEND_URL}/api/admin/data/tables`)
           .then(async response => {
             if (!response.ok) throw new Error("Không thể tải danh sách dataset");
@@ -3687,7 +3689,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
           {dataTab === "import" && (
             <>
-            <DataImportWorkflow canImportDataset={canAdminAction("importGameDataset")} canImportAll={canAdminAction("importAllGameData")} addToast={addToast} />
+            <DataImportWorkflow datasets={datasets} canImportDataset={canAdminAction("importGameDataset")} canImportAll={canAdminAction("importAllGameData")} addToast={addToast} />
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-6">
               <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-2">
                 <Database className="w-4 h-4 text-emerald-400" />

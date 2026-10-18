@@ -249,8 +249,7 @@ export class WebSocketManager {
     }
   }
 
-  public request<T>(channel: string, payload?: unknown, timeoutMs = 30000): Promise<T> {
-    if (!this.isConnected()) return Promise.reject(new WebSocketRequestError("WebSocket chưa kết nối"));
+  public request<T>(channel: string, payload?: unknown, timeoutMs = 30000): Promise<T> {    if (!this.isConnected()) return Promise.reject(new WebSocketRequestError("WebSocket chưa kết nối"));
     const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -268,6 +267,21 @@ export class WebSocketManager {
         reject(error instanceof Error ? error : new WebSocketRequestError(String(error)));
       }
     });
+  }
+
+  // Fire-and-forget command. High-frequency callers (the realtime PvP input
+  // loop) must not allocate a promise per frame just to learn that a frame was
+  // accepted; the authoritative state comes back on the match channel instead.
+  public command(channel: string, payload?: unknown) {
+    if (!this.isConnected()) return;
+    const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    try {
+      this.ws!.send(JSON.stringify({ type: "command", channel, request_id: requestId, payload }));
+    } catch (err) {
+      console.error("[WebSocket] Failed to send command:", err);
+    }
   }
 
   private sendSubscription(channel: string) {

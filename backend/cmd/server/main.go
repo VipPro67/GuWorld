@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
+	"github.com/vippro67/GuWorld/backend/internal/match"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/server"
@@ -88,6 +89,13 @@ func main() {
 		logger.S.Warnf("Failed to load Gu registry: %v (data may need import)", err)
 	} else {
 		logger.S.Info("Gu registry loaded successfully")
+	}
+
+	err = models.LoadMobaProfiles(db.DB)
+	if err != nil {
+		logger.S.Warnf("Failed to load MOBA Gu profiles: %v (realtime mode falls back to defaults)", err)
+	} else {
+		logger.S.Info("MOBA Gu profiles loaded successfully")
 	}
 
 	err = models.LoadItemRegistry(db.DB)
@@ -184,6 +192,7 @@ func main() {
 	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute)  // Phase 2: society simulation tick
 	worker.StartGuMasterSpawningWorker(ctx, db.DB, 30*time.Minute)  // Phase 3: Gu Master spawning
 	handlers.StartRoamingMerchantWorker(ctx, db.DB, 2*time.Minute)    // Roaming traders on the world map
+	match.StartTickLoop(ctx)                                          // Realtime PvP match simulation (20Hz)
 	if cache.Client != nil {
 		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)
 	}

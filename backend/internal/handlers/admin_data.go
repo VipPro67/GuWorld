@@ -119,6 +119,7 @@ func reloadImportedData() []string {
 		}
 	}
 	reload("Gu registry", func() error { return models.LoadGuRegistry(db.DB) })
+	reload("MOBA Gu profiles", func() error { return models.LoadMobaProfiles(db.DB) })
 	reload("Item registry", func() error { return models.LoadItemRegistry(db.DB) })
 	reload("Constitution registry", func() error { return gamefx.LoadConstitutionRegistry(db.DB) })
 	reload("Race registry", func() error { return gamefx.LoadRaceRegistry(db.DB) })
@@ -235,6 +236,7 @@ func applyDatasetRuntimeBehavior(datasets []db.Dataset) []string {
 		}
 	}
 	reload("gu", func() error { return models.LoadGuRegistry(db.DB) })
+	reload("gu_moba", func() error { return models.LoadMobaProfiles(db.DB) })
 	reload("item", func() error { return models.LoadItemRegistry(db.DB) })
 	reload("constitution", func() error { return gamefx.LoadConstitutionRegistry(db.DB) })
 	reload("race", func() error { return gamefx.LoadRaceRegistry(db.DB) })

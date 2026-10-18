@@ -21,6 +21,8 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 		limit = 240
 	case "world.objects":
 		limit = 30
+	case "match.input":
+		limit = matchInputRateLimit
 	case "chat.send":
 		limit = 30
 	default:
@@ -63,6 +65,9 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 
 	case "world.objects":
 		status, result = ExecuteGetExploreObjects()
+
+	case "match.input":
+		status, result = ExecuteMatchInput(playerID, payload)
 	}
 
 	data, err := json.Marshal(result)

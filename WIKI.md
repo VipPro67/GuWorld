@@ -392,7 +392,7 @@ Trong Túi Đồ, mở tab **Sát Chiêu**, chọn một Cổ chính và thêm C
 
 Rank Cổ chính quyết định phần lớn ngân sách sức mạnh; Cổ phụ bổ sung ngân sách với mức giảm dần. Số lượng, phạm vi và độ phức tạp effect làm tăng tải công thức. Khi tải vượt ngân sách, hệ thống tự giảm giá trị effect và hiển thị kết quả trước khi lưu. Cấp lưu phái và độ thành thạo ảnh hưởng tỉ lệ thôi động; dùng thành công giúp tăng thành thạo sát chiêu.
 
-Sát chiêu đã trang bị tự tham gia auto-combat. Effect hồi phục `ON_USE` có thể được dùng ngoài combat bằng nút **Dùng**. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Một instance Cổ có thể tham gia nhiều sát chiêu. Nếu instance đó rời `player_gu`, chết hoặc đổi thành Cổ/rank khác, những công thức tham chiếu nó sẽ tạm thời không dùng được.
+Sát chiêu cần được trang bị và kích hoạt trong **Cài đặt chiến thuật** (Aperture > Cài đặt) hoặc tick chọn trực tiếp trong màn hình **Chuẩn bị chiến đấu** trước trận; sát chiêu không được trang bị/chọn sẽ không tự động kích hoạt. Effect hồi phục `ON_USE` có thể được dùng ngoài combat bằng nút **Dùng**. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Một instance Cổ có thể tham gia nhiều sát chiêu. Nếu instance đó rời `player_gu`, chết hoặc đổi thành Cổ/rank khác, những công thức tham chiếu nó sẽ tạm thời không dùng được.
 
 Mỗi Cổ instance có:
 
@@ -1019,6 +1019,83 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 - **Chiến đấu tổ đội:** Các thành viên trong tổ đội ở cùng Đại Vực sẽ cùng tham gia vào trận chiến khi Trưởng nhóm khởi xướng (cả Turn-based lẫn Auto Combat/Simulation). Đồng đội sẽ tự động chiến đấu bằng các Cổ trùng đang trang bị, Sát chiêu và Thiết lập tự động của chính họ. Phần thưởng chiến thắng (Nguyên thạch, Nguyên liệu, Cổ trùng) sẽ được chia đều cho tất cả thành viên tham chiến, và tiêu hao (Sinh lực, Chân Nguyên, Dược phẩm) cũng được cập nhật tương ứng. Đồng đội không nhận điểm Chân Ý từ trận chiến — chỉ người chơi chính (Trưởng nhóm) được ngộ đạo.
   - **Ngoại lệ — đấu cá nhân:** Khi **đánh mỏ** (cả PvE yêu quái lẫn PvP tranh mỏ) hoặc **khiêu chiến Võ Đài**, không phe nào kéo thành viên tổ đội vào trận; chỉ người chơi chính ra tay (sủng vật và NPC biến thể vẫn tham chiến bình thường). Các loại chiến đấu khác (open-world PvP, dã ngoại, tông môn chiến, tai kiếp) vẫn áp dụng tổ đội như trên.
 - **Võ Đài:** tối đa 10 lượt khiêu chiến/ngày; thắng người xếp cao hơn thì đổi vị trí. Thắng nhận 50, thua nhận 1 Đồng Võ Đài; hệ thống chốt thưởng ngày lúc 22:30. Đồng dùng tại tab Bảo Các của Võ Đài. Bảo Các còn bày thêm một nhóm **tài nguyên Tiên cấp (Food/Material rank ≥ 6)** đổi ngẫu nhiên theo khung giờ, đồng giá **99 Xu Đấu Trường**.
+
+### Đấu Trường Thời Gian Thực (kiểu MOBA)
+
+Khác với Võ Đài (tự đánh theo lượt), đây là chế độ **đánh tay theo thời gian thực**:
+nhân vật tự do chạy trong đấu trường, Cổ trùng dùng như chiêu thức có hướng và
+vùng đánh, và **né đòn được**. Mở từ menu **Hoạt động → Đấu Trường Realtime**
+(hoặc mục *Đấu Trường Realtime* trong hotbar). Bản hiện tại là **luyện tập 1
+người vs Hình Nhân Gỗ**.
+
+**Điều khiển**
+
+**Điều khiển & Giao diện MOBA (PC & Mobile)**
+
+Hệ thống hỗ trợ 2 chế độ điều khiển tối ưu linh hoạt, có nút chuyển đổi trực tiếp trên thanh tiêu đề (`📱 MOBA Mobile` / `💻 MOBA PC`):
+
+| Thiết bị / Chế độ | Thao tác | Tác dụng |
+| --- | --- | --- |
+| **PC MOBA** | `W A S D` hoặc phím mũi tên | Di chuyển nhân vật |
+| **PC MOBA** | `Space` hoặc Chuột Phải (khi không ngắm chiêu) | **Đánh thường (Basic Attack)**: Tự động khóa và tấn công đối thủ gần nhất trong tầm 6.0 ô (hồi 0.6s, không tốn Mana) |
+| **PC MOBA** | Rê chuột trong đấu trường | Tự động định vị điểm ngắm chiêu liên tục theo con trỏ |
+| **PC MOBA** | Giữ phím `Q`, `W`, `E`, `R`, `D`, `F` (hoặc `1`–`6`) | Bật trước vùng ngắm theo chuột; thả phím để **xuất chiêu ngay (Smartcast)** |
+| **PC MOBA** | Nhấp chuột trái vào sàn đấu (khi đang ngắm) | Bắn chiêu tại vị trí chuột |
+| **PC MOBA** | Nhấp chuột phải (khi đang ngắm) hoặc phím `ESC` | Hủy ngắm chiêu ngay lập tức |
+| **Mobile MOBA** | Cần ảo bên trái (`Virtual Joystick`) | Di chuyển nhân vật mượt mà với cảm ứng xoay 360° |
+| **Mobile MOBA** | Nút Đánh Thường tròn lớn (góc dưới bên phải) | **Đánh thường**: Chạm để tự khóa và đánh đối thủ gần nhất trong tầm (hồi 0.6s) |
+| **Mobile MOBA** | Cụm chiêu hình cánh cung (`Radial Arc`) | Bố cục ôm quanh nút đánh thường theo ngón cái tay phải, dễ bấm và phản xạ nhanh |
+| **Mobile MOBA** | Chạm nhanh (Tap) vào chiêu | **Tự động ngắm & xuất chiêu thông minh (Auto-Aim)** vào đối thủ gần nhất trong tầm |
+| **Mobile MOBA** | Giữ nút chiêu rồi kéo (Drag-to-Aim) | Kéo hướng ngắm; kéo càng xa chiêu ra càng xa |
+| **Mobile MOBA** | Kéo vào **Vùng Hủy Chiêu** (góc trên bên phải) | Vùng ngắm chuyển màu đỏ, thả ngón tay để hủy chiêu an toàn |
+| **Chung** | Cổ hệ `SELF` (Tự thân / Khiên) | Bấm/gõ phím là kích hoạt tức thì, không cần ngắm |
+
+**Asset nền chiêu & Giao diện hiển thị:**
+- **Nền chiêu nghệ thuật (Procedural Element Background Art):** Mỗi loại Cổ trùng có asset hình nền nguyên tố đặc sắc vẽ vector thời gian thực: Kim/Đao (vệt chém kiếm khí hoàng kim), Thủy (vòng xoáy thủy triều lam ngọc), Tinh Đạo (tinh vân vũ trụ và thiên thạch tím), Âm Đạo (sóng âm ba đồng tâm huyền ảo), Không Gian (vòng xoáy lỗ hổng thứ nguyên), Pháp Thuẫn (ma trận bát quái lục bảo hộ thể).
+- **Khung kỹ năng MOBA:** Viền kim loại huyền thiết cổ phong, đồng hồ đếm ngược hồi chiêu dạng quét tròn (`conic-gradient`) kèm chữ số to rõ, nhãn tiêu hao Chân Nguyên (Mana), và phím tắt `Q/W/E/R` nổi bật.
+
+**Nhân vật trong đấu trường** dùng ảnh đại diện của người chơi (`avatar_url`); chưa
+đặt thì dùng hình tu sĩ mặc định. Hình Nhân Gỗ được vẽ theo hình người gỗ tập,
+không cần thêm ảnh.
+
+**Bốn kiểu ngắm**
+
+- **Chọn mục tiêu (`TARGET`)** — bấm vào đối thủ trong tầm.
+- **Theo hướng (`DIRECTION`)** — kéo từ nhân vật ra; tia/đạn bay theo hướng đó.
+- **Theo vùng đất (`GROUND`)** — bấm vào điểm trên sàn; vùng tròn/quạt hình thành ở đó.
+- **Tự thân (`SELF`)** — khiên/hồi máu, dùng ngay.
+
+**Né đòn** là phần cốt lõi: chiêu có **thời gian niệm** sẽ hiện vùng ngắm trước
+khi nổ, nên chỉ cần bước ra khỏi vùng hoặc vòng ra sau trụ là trượt. Đạn bay cũng
+né được bằng cách di chuyển ngang. Đòn chọn mục tiêu (`TARGET`) thì **không né
+được** — chỉ né được chiêu có hướng hoặc có vùng.
+
+**Vùng ngắm hiện cho cả hai bên.** Khung hình mỗi tick mang đầy đủ hình dạng, điểm
+ngắm và thời gian niệm của mọi chiêu đang chuẩn bị, nên đối thủ thấy được đúng
+vùng màu đỏ mình sắp ăn đòn — giống như mình thấy vùng xanh của chính mình. Ô ngắm
+đậm dần theo tiến độ niệm: càng gần nổ càng rõ.
+
+**Đang niệm thì đứng yên.** Xuất chiêu khoá di chuyển đến khi chiêu nổ, nên vùng
+ngắm không bị trôi và hai bên đều có khoảng thời gian công bằng để né.
+
+**Hình Nhân Gỗ biết né.** Nó chỉ bước ra khi **đủ thời gian và đủ tốc độ** để thoát
+khỏi vùng ngắm; nếu không thoát được thì đứng chịu đòn. Vì vậy chiêu niệm lâu
+(Tinh Lạc) bị né, còn chiêu nhanh (Thủy Tiễn) thì trúng.
+
+**Luật trong trận**
+
+- Máu và Chân Nguyên là **chỉ số riêng của trận** (Chân Nguyên 100, hồi 6/giây);
+  dùng Cổ trong trận **không** tiêu hao Sinh lực/Chân Nguyên thật của nhân vật.
+- Sát thương vẫn tính theo Công/Thủ của nhân vật và hiệu ứng của Cổ, nên Cổ cấp
+  càng cao đánh càng đau.
+- Mỗi Cổ có **hồi chiêu riêng** theo giây, hiện trên thanh chiêu.
+- Hết máu là thua. Trận cũng kết thúc khi hết 3 phút; ai còn nhiều máu theo tỉ lệ
+  hơn thì thắng.
+- Trụ và tường trong đấu trường **chặn đường đi** nhưng **không chặn chiêu**.
+
+Bộ chiêu luyện tập gồm 6 Cổ cấp thấp, mỗi Cổ minh hoạ một cơ chế:
+Sơ Giai Đao Khí (chọn mục tiêu), Thủy Tiễn (xuyên theo hướng), Sơ Giai Tinh Lạc
+(AoE có độ trễ), Âm Lãng (quạt), Sơ Giai Không Gian Môn (lướt), Pháp Thuẫn (khiên).
 
 ## 16. Chat, mail và feedback
 

@@ -67,7 +67,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/player/profile/:username` |
 | PUT | `/player/profile/settings` | Cập nhật hồ sơ (bio, avatar, mật khẩu, ngụy trang). Username không trùng nhau dù khác hoa/thường; nhập tên người chơi tại các tính năng được hỗ trợ cũng không phân biệt hoa/thường. Đổi tên khác biệt thực sự: Rank 1-2 miễn phí; Rank 3-5 tốn Nguyên Thạch (5k/20k/100k); Rank 6-9 tốn Tiên Nguyên Thạch (100/500/2.5k/10k), tụt Đạo Ngân & Chân Ý Lưu Phái (-30%/-40%/-50%/-70%), tổn hại Tiên Khiếu và phát thông báo Thế Giới (không tụt tiểu cảnh giới). |
 | GET | `/player/combat-settings` | Đọc `combat_settings` (auto-heal/mana + **thứ tự ưu tiên loại** `category_priorities` + **bộ cổ sử dụng** `gu_priorities` + `km_priorities`). |
-| PUT | `/player/combat-settings` | Lưu `combat_settings`. `category_priorities` = thứ tự ưu tiên loại kỹ năng (`shield`, `heal`, `damage`, `other`); `gu_priorities` = **bộ cổ mang theo** (danh sách `gu_id` theo thứ tự `priority`): dùng khi tấn công (ưu tiên hơn gợi ý UI) và khi bị tấn công; rỗng = dùng tất cả Cổ đang trang bị ACTIVE. |
+| PUT | `/player/combat-settings` | Lưu `combat_settings`. `category_priorities` = thứ tự ưu tiên loại kỹ năng (`shield`, `heal`, `damage`, `other`); `gu_priorities` = **bộ cổ mang theo** (danh sách `gu_id` theo thứ tự `priority`); `killer_move_priorities` (hoặc `km_priorities`) = **sát chiêu trang bị** trong chiến đấu (danh sách ID sát chiêu theo thứ tự ưu tiên và điều kiện kích hoạt): sát chiêu không được trang bị ở đây hoặc trong loadout trận đấu sẽ không tự động kích hoạt. |
 | GET | `/player/referrals` |
 | POST | `/player/referrals/claim` |
 | POST | `/player/referrals/bind` |
@@ -143,7 +143,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | DELETE | `/killer-moves/:id` | Xóa sát chiêu của người chơi hiện tại. |
 | POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). Target rank ≥ 6 trùng toàn server → **409** (kể cả race thua khi concurrent). |
 | POST | `/refine/deduce` | Suy diễn recipe. |
-| POST | `/combat/start` | Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
+| POST | `/combat/start` | Bắt đầu mô phỏng tự động chiến đấu. Body nhận `loadout` (`GuIds[]`, `KillerMoveIds[]`, `AutoHealHP`, `HealThreshold`, `AutoRestoreMana`, `ManaThreshold`). Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
 | POST | `/combat/practice` | Như `/combat/start`. |
 | GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng) và các trận PVE **thua**; PVE thắng không lưu. Bản ghi PVE cũ hơn 30 ngày bị worker xóa theo lô. |
 | GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để replay. Log `TURN_END` có snapshot cuối lượt của hai phe (HP, Chân Nguyên, khiên, công/thủ/tốc độ và `statuses[]` gồm loại, giá trị, thời hạn còn lại); các trận lịch sử cũ không có snapshot giữa lượt vẫn đọc được. |
@@ -218,6 +218,33 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/mine/claim` |
 | POST | `/mine/abandon` |
 | POST | `/mine/attack` |
+
+## Đấu trường thời gian thực (Realtime PvP) — Auth
+
+Chế độ PvP mô phỏng theo thời gian thực (kiểu MOBA): nhân vật di chuyển tự do
+trong đấu trường, cổ trùng được dùng như chiêu thức có hướng/vùng, né đòn được.
+Server là chủ sở hữu trạng thái (authoritative) và chạy vòng lặp tick 20Hz.
+
+| Method | Path | Mô tả |
+| --- | --- | --- |
+| POST | `/pvp/match/practice` | Tạo trận luyện tập 1 người vs Hình Nhân Gỗ. Trả `Setup` (đấu trường, đội hình, kit chiêu, hằng số di chuyển). |
+
+Trạng thái trực tiếp không trả qua HTTP: client đăng ký kênh `match:<match_id>`
+và nhận `frame` mỗi tick, gửi ý định điều khiển bằng lệnh WebSocket `match.input`.
+
+- `Setup.tick_ms` = 50; `Setup.speed_to_tiles_per_tick` và `Setup.actor_radius`
+  là hằng số di chuyển server dùng, client dùng lại để dự đoán vị trí (không
+  hard-code, tránh lệch).
+- `frame.events` là danh sách one-shot (`cast_start`, `cast_end`, `hit`,
+  `shield_absorb`, `shield`, `blink`, `death`, `match_end`) để client phát hiệu ứng.
+- `frame.participants[].cast` là **vùng ngắm (telegraph)** của chiêu đang niệm, gửi
+  cho mọi người trong trận: `start_tick`, `ends_tick`, `cast_mode`, `shape`,
+  `radius`, `length`, `width`, `angle_deg`, `move_distance`, `aim_x`, `aim_y`,
+  `target_id`. Nhờ vậy đối thủ vẽ được đúng vùng mình sắp ăn đòn. `target_id` có
+  nghĩa là đòn chọn mục tiêu (không né được) — client đánh dấu nạn nhân thay vì vẽ
+  vùng. Vùng ngắm vẽ bằng cùng hình học mà server dùng để resolve.
+- Server kiểm tra lại mọi ý định: mode khớp `cast_mode`, hồi chiêu, mana,
+  thời gian niệm, tầm chiêu và tốc độ di chuyển. Client chỉ gửi ý định.
 
 ## Immortal aperture, dao marks and tribulations
 
@@ -530,6 +557,7 @@ WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa p
 | `world:pos` | S→C | Vị trí người chơi di chuyển trên bản đồ lớn; payload mang `region_id` và fan-out theo AOI cùng khu vực |
 | `world:cell` | S→C | Sự kiện Boss/tài nguyên bị tiêu diệt hoặc hồi sinh; payload mang `region_id`, client apply theo tọa độ global kể cả khi viewport cắt qua ranh giới khu vực |
 | `combat` | S→C | Biến động chiến đấu realtime |
+| `match:<match_id>` | S→C | Khung hình (frame) mô phỏng đấu trường thời gian thực, 20Hz. Server chỉ gửi cho người chơi có mặt trong trận đó. |
 | `notification` | S→C | Thông báo mới (chuông thông báo) |
 
 ### Lệnh WorldMap qua WebSocket
@@ -544,6 +572,7 @@ di chuyển và kéo camera. Client gửi envelope
 | `world.move_path` | `{x,y}` | `POST /explore/move-path` |
 | `world.cells_rect` | `{min_x,min_y,max_x,max_y}` | `GET /explore/cells/rect` |
 | `world.objects` | `{}` | `GET /explore/objects` |
+| `match.input` | `{seq, move:{dx,dy}, casts:[{gu_id,rank,mode,ax,ay,target_id}]}` | Không có (chỉ WebSocket) |
 
 Danh tính người chơi luôn lấy từ phiên WebSocket đã xác thực, không lấy từ
 payload. Các HTTP endpoint vẫn được giữ làm fallback khi WebSocket chưa kết nối.

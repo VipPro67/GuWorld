@@ -203,9 +203,9 @@ func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec, va
 		return "", nil
 	}
 
-	player.HumanQi += val
+	gained := AddHumanQi(player, val)
 
-	return fmt.Sprintf("Đạo hữu sử dụng %s, tăng 50.000 nhân khí!", item.Name), nil
+	return fmt.Sprintf("Đạo hữu sử dụng %s, tăng %.0f nhân khí!", item.Name, gained), nil
 }
 
 func lifespanBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {

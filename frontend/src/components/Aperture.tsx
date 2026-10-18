@@ -21,6 +21,7 @@ import {
   User,
   Camera,
   Swords,
+  WandSparkles,
   Gift,
   Ticket,
   Check,
@@ -302,22 +303,28 @@ export const Aperture: React.FC<ApertureProps> = ({
   }, [player.username]);
 
   // Auto combat settings state
-  const defaults = { auto_heal_hp: false, heal_threshold: 30, auto_restore_mana: false, mana_threshold: 30, gu_priorities: [], km_priorities: [], skip_battle: false };
+  const defaults = { auto_heal_hp: false, heal_threshold: 30, auto_restore_mana: false, mana_threshold: 30, gu_priorities: [], killer_move_priorities: [], km_priorities: [], skip_battle: false };
   const saved = player.combat_settings || store.combatSettings || defaults;
   const [csAutoHealHP, setCsAutoHealHP] = useState(saved.auto_heal_hp);
   const [csHealThreshold, setCsHealThreshold] = useState(saved.heal_threshold);
   const [csAutoRestoreMana, setCsAutoRestoreMana] = useState(saved.auto_restore_mana);
   const [csManaThreshold, setCsManaThreshold] = useState(saved.mana_threshold);
   const [csGuPriorities, setCsGuPriorities] = useState(saved.gu_priorities || []);
+  const [csKmPriorities, setCsKmPriorities] = useState(saved.killer_move_priorities || saved.km_priorities || []);
   const [csSkipBattle, setCsSkipBattle] = useState(saved.skip_battle);
   const [combatCategoryTab, setCombatCategoryTab] = useState<"all" | "damage" | "heal" | "shield" | "other">("all");
   const [combatSettingsLoaded, setCombatSettingsLoaded] = useState(false);
 
   React.useEffect(() => {
-    if (activeTab === "settings" && !combatSettingsLoaded && !store.combatSettingsLoading) {
-      store.fetchCombatSettings().then(() => {
-        setCombatSettingsLoaded(true);
-      });
+    if (activeTab === "settings") {
+      if (!combatSettingsLoaded && !store.combatSettingsLoading) {
+        store.fetchCombatSettings().then(() => {
+          setCombatSettingsLoaded(true);
+        });
+      }
+      if (store.killerMoves.length === 0 && !store.killerMovesLoading) {
+        void store.fetchKillerMoves();
+      }
     }
   }, [activeTab, combatSettingsLoaded]);
 
@@ -330,6 +337,7 @@ export const Aperture: React.FC<ApertureProps> = ({
       setCsManaThreshold(cs.mana_threshold);
       setCsSkipBattle(cs.skip_battle);
       setCsGuPriorities(cs.gu_priorities || []);
+      setCsKmPriorities(cs.killer_move_priorities || cs.km_priorities || []);
     }
   }, [store.combatSettings, combatSettingsLoaded]);
 
@@ -1849,6 +1857,104 @@ export const Aperture: React.FC<ApertureProps> = ({
                     )}
                   </div>
 
+                  {/* Killer Moves Tactics Section */}
+                  <div className="bg-zinc-950/40 border border-zinc-850 rounded-xl p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <WandSparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-[11px] font-mono font-bold text-zinc-300 uppercase tracking-wider">
+                          Chiến Thuật Sát Chiêu
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {csKmPriorities.length}/4 đã trang bị
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-zinc-400">
+                      Chọn sát chiêu sẽ kích hoạt trong chiến đấu. Sát chiêu không được trang bị ở đây sẽ không tự xuất chiêu.
+                    </p>
+
+                    {store.killerMoves.length === 0 ? (
+                      <p className="text-[10px] text-zinc-600 italic py-2">
+                        Chưa có sát chiêu nào được sáng tạo. Hãy vào mục Sát Chiêu để sáng tạo trước.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {store.killerMoves.map((km) => {
+                          const idx = csKmPriorities.findIndex(t => t.gu_id === km.id);
+                          const inLoadout = idx !== -1;
+                          const tactic = inLoadout ? csKmPriorities[idx] : null;
+                          const condition = tactic?.use_condition || "always";
+                          const condVal = tactic?.condition_value || 30;
+                          const reorder = (dir: number) => {
+                            const list = [...csKmPriorities];
+                            const i = list.findIndex(t => t.gu_id === km.id);
+                            const j = i + dir;
+                            if (i < 0 || j < 0 || j >= list.length) return;
+                            const tmp = list[i];
+                            list[i] = list[j];
+                            list[j] = tmp;
+                            setCsKmPriorities(list.map((t, k) => ({ ...t, priority: k + 1 })));
+                          };
+                          return (
+                            <div key={km.id} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${inLoadout ? "bg-amber-950/20 border-amber-900/40" : "bg-zinc-950/20 border-zinc-900 opacity-60"}`}>
+                              <input type="checkbox" checked={inLoadout}
+                                onChange={e => {
+                                  if (e.target.checked) {
+                                    if (csKmPriorities.length >= 4) {
+                                      store.addToast("Chỉ có thể trang bị tối đa 4 sát chiêu!", "error");
+                                      return;
+                                    }
+                                    setCsKmPriorities([...csKmPriorities, { gu_id: km.id, priority: csKmPriorities.length + 1, use_condition: "always", condition_value: 30 }]);
+                                  } else {
+                                    setCsKmPriorities(csKmPriorities.filter(t => t.gu_id !== km.id));
+                                  }
+                                }}
+                                className="accent-amber-500 w-3 h-3 cursor-pointer shrink-0" />
+                              {inLoadout && <span className="text-[10px] text-amber-500 font-mono w-4">{idx + 1}</span>}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[11px] text-zinc-200 font-bold truncate flex items-center gap-1.5">
+                                  <span>{km.name}</span>
+                                  <span className="text-[9px] px-1 py-0.2 bg-zinc-800 text-zinc-400 rounded">Bậc {km.main_gu_rank}</span>
+                                  {!km.available && <span className="text-[9px] text-rose-400 font-normal">(Thiếu Cổ)</span>}
+                                </div>
+                                <div className="text-[9px] text-zinc-500">
+                                  Tỉ lệ: {Math.round(km.success_chance * 100)}% · Hòa hợp: {Math.round(km.harmony * 100)}%
+                                </div>
+                              </div>
+                              {inLoadout && (
+                                <>
+                                  <select value={condition}
+                                    onChange={e => setCsKmPriorities(csKmPriorities.map(t => t.gu_id === km.id ? { ...t, use_condition: e.target.value } : t))}
+                                    className="bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono"
+                                  >
+                                    <option value="always">Luôn</option>
+                                    <option value="hp_below">HP &lt; %</option>
+                                    <option value="mana_above">Chân nguyên &gt; %</option>
+                                    <option value="enemy_hp_below">Máu địch &lt; %</option>
+                                  </select>
+                                  {condition !== "always" && (
+                                    <input type="number" min="1" max="99" value={condVal}
+                                      onChange={e => setCsKmPriorities(csKmPriorities.map(t => t.gu_id === km.id ? { ...t, condition_value: Number(e.target.value) } : t))}
+                                      className="w-12 bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono text-center"
+                                    />
+                                  )}
+                                  <div className="flex gap-0.5">
+                                    <button type="button" onClick={() => reorder(-1)} disabled={idx === 0}
+                                      className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▲</button>
+                                    <button type="button" onClick={() => reorder(1)} disabled={idx === csKmPriorities.length - 1}
+                                      className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▼</button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Save Combat Settings */}
                   <button
                     type="button"
@@ -1860,6 +1966,8 @@ export const Aperture: React.FC<ApertureProps> = ({
                         auto_restore_mana: csAutoRestoreMana,
                         mana_threshold: csManaThreshold,
                         gu_priorities: csGuPriorities,
+                        killer_move_priorities: csKmPriorities,
+                        km_priorities: csKmPriorities,
                         skip_battle: csSkipBattle,
                       });
                       if (success) {

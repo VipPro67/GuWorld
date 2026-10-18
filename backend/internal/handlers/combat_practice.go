@@ -57,7 +57,7 @@ func PracticeCombatStart(c *gin.Context) {
 	}
 
 	var loadoutPtr *simulator.CombatLoadout
-	if len(req.Loadout.GuIds) > 0 {
+	if len(req.Loadout.GuIds) > 0 || req.Loadout.KillerMoveIds != nil {
 		loadoutPtr = &req.Loadout
 	}
 

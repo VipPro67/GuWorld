@@ -167,6 +167,49 @@ func UpdateCombatSettings(c *gin.Context) {
 	}
 	req.CombatSettings.GuPriorities = validGu
 
+	// Sanitize killer_move_priorities: only keep killer moves owned by the player.
+	kmRows, err := tx.Query(`SELECT id::text FROM player_killer_moves WHERE player_id = $1`, authID)
+	if err == nil {
+		ownedKm := make(map[string]bool)
+		for kmRows.Next() {
+			var kmID string
+			if scanErr := kmRows.Scan(&kmID); scanErr == nil {
+				ownedKm[kmID] = true
+			}
+		}
+		kmRows.Close()
+
+		seenKm := make(map[string]bool)
+		var validKm []models.GuTactic
+		kmList := req.CombatSettings.KillerMovePriorities
+		if len(kmList) == 0 {
+			kmList = req.CombatSettings.KmPriorities
+		}
+		for _, t := range kmList {
+			if !ownedKm[t.GuID] || seenKm[t.GuID] {
+				continue
+			}
+			seenKm[t.GuID] = true
+			if t.Priority < 1 {
+				t.Priority = 1
+			}
+			validKm = append(validKm, t)
+		}
+		req.CombatSettings.KillerMovePriorities = validKm
+		req.CombatSettings.KmPriorities = validKm
+
+		// Synchronize is_equipped in player_killer_moves
+		if len(validKm) > 0 {
+			var activeIDs []string
+			for _, t := range validKm {
+				activeIDs = append(activeIDs, t.GuID)
+			}
+			_, _ = tx.Exec(`UPDATE player_killer_moves SET is_equipped = (id = ANY($1)) WHERE player_id = $2`, activeIDs, authID)
+		} else {
+			_, _ = tx.Exec(`UPDATE player_killer_moves SET is_equipped = false WHERE player_id = $1`, authID)
+		}
+	}
+
 	// Sanitize category_priorities: ensure complete permutation of shield, heal, damage, other.
 	validCats := map[string]bool{"shield": true, "heal": true, "damage": true, "other": true}
 	var cleanCats []string

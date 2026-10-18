@@ -262,7 +262,7 @@ func (c *Client) handleMessage(msg WSMessage) {
 			return
 		}
 		switch msg.Channel {
-		case "world.move_path", "world.cells_rect", "world.objects", "chat.send":
+		case "world.move_path", "world.cells_rect", "world.objects", "match.input", "chat.send":
 			select {
 			case c.commands <- msg:
 			default:

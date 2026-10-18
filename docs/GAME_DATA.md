@@ -142,6 +142,7 @@ và session, không chứa role hoặc permission.
 | File | Nội dung |
 | --- | --- |
 | `backend/data/Gu.csv` | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, targeting, rarity, role/tags. |
+| `backend/data/GuMoba.csv` | Thẻ chiêu dùng cho chế độ PvP thời gian thực (kiểu MOBA): cách ngắm, hình dạng vùng đánh, thời gian niệm/hồi chiêu. Không lặp lại sát thương — phần đó vẫn lấy từ `Gu.csv` effects. |
 | `backend/data/Item.csv` | Vật phẩm, nguyên liệu, tiền tệ, consumable và effect. |
 | `backend/data/Recipe.csv` | Công thức luyện Cổ, nguyên liệu, tỉ lệ và chi phí. |
 | `backend/data/Monster.csv`, `LootTable.csv`, `MonsterSpawn.csv`, `RegionLootTables.csv` | Template quái, bảng loot, quy tắc spawn và loot theo vùng. |
@@ -161,6 +162,7 @@ Không ghi số dòng cố định trong tài liệu vì dataset thay đổi th�
 ## Registry runtime
 
 - `models.LoadGuRegistry(db.DB)` load `gu_dictionary` vào `models.GuRegistry` khi server start.
+- `models.LoadMobaProfiles(db.DB)` load `gu_moba_profiles` vào cache trong bộ nhớ. Bảng thiếu/không có dòng không chặn khởi động: Cổ chưa author sẽ dùng mặc định `TARGET`/`SINGLE`, tầm 8, không hồi chiêu.
 - `models.LoadItemRegistry(db.DB)` load `item_dictionary` vào `models.ItemRegistry` khi server start.
 - Runtime gameplay không đọc trực tiếp các namespace authoring `active`, `passive`,
   `growth`, `other` trong các domain derived stats, scouting/profile/refinement
@@ -440,6 +442,47 @@ Danh sách hiện tại (11 thể chất — 10 Thập Tuyệt + Thuần Mộng 
 | `great_earth_origin_body` | Hậu Thổ Nguyên Ương Thể | Thổ Đạo đạo ngân ×150%, +45% defense, +45% kháng hiệu ứng tâm lý, +50% max mana, +100% hồi mana |
 | `universe_great_evolution_body` | Vũ Trụ Đại Diễn Thể | Không Gian Đạo đạo ngân ×150%, +15% attack/defense/speed, +50% max mana, +100% hồi mana |
 | `pure_dream_reality_seeker_body` | Thuần Mộng Cầu Chân Thể | Mộng Đạo đạo ngân ×140%, +10% sát thương Mộng Đạo, +40% max mana, +100% hồi mana |
+
+### Thẻ chiêu PvP thời gian thực — bảng `gu_moba_profiles`
+
+`Gu.csv` mô tả một Cổ đánh vào **ai** (target selector theo lưới 3×3) và gây gì
+(effects Block v2). Chế độ PvP thời gian thực cần thêm một lớp khác: Cổ được
+**ngắm thế nào** và **vùng đánh hình gì**. Lớp đó nằm ở `gu_moba_profiles`,
+author bằng `backend/data/GuMoba.csv` (dataset Admin "Cổ trùng (PvP thời gian thực)").
+
+Bảng này **không lặp lại sát thương**: payload (DAMAGE / STATUS / SHIELD) vẫn đọc
+từ `gu_dictionary.effects`. Cổ không có dòng trong bảng vẫn dùng được, rơi về mặc
+định `TARGET` + `SINGLE`, tầm 8, không hồi chiêu.
+
+| Cột | Kiểu | Ý nghĩa |
+| --- | --- | --- |
+| `gu_id`, `rank` | PK, FK | → `gu_dictionary(id, rank)` ON UPDATE CASCADE / ON DELETE CASCADE |
+| `cast_mode` | VARCHAR(20) | `TARGET` (chọn unit) · `DIRECTION` (hướng) · `GROUND` (điểm đất) · `SELF` |
+| `shape` | VARCHAR(20) | `SINGLE` · `LINE` (dài × rộng) · `CIRCLE` (bán kính) · `CONE` (dài × góc) |
+| `radius` | DOUBLE | Bán kính vùng tròn |
+| `length` | DOUBLE | Chiều dài tia/hình quạt |
+| `width` | DOUBLE | Bề rộng tia |
+| `angle_deg` | DOUBLE | Góc mở của hình quạt |
+| `cast_range` | DOUBLE | Tầm xa tối đa từ người dùng tới điểm/hướng |
+| `cast_time_ms` | INT | Thời gian niệm (đứng yên); 0 = tức thời |
+| `recovery_ms` | INT | Khựng sau khi xuất chiêu |
+| `cooldown_ms` | INT | Hồi chiêu thời gian thực (khác status cooldown theo lượt) |
+| `projectile_speed` | DOUBLE | 0 = đánh tức thời; >0 = đạn bay (ô/giây) |
+| `pierce` | BOOL | Đạn/tia xuyên qua nhiều mục tiêu |
+| `max_targets` | INT | Số mục tiêu tối đa mỗi lần trúng |
+| `move_distance` | DOUBLE | Lướt/dịch chuyển tức thời (ô); 0 = không |
+
+Quy ước chọn mode theo hình:
+
+- `TARGET` + `SINGLE` → đòn chọn mục tiêu cổ điển.
+- `DIRECTION` + `LINE` → skillshot xuyên (đạn bay hoặc tia tức thời).
+- `GROUND` + `CIRCLE` → AoE đặt xuống đất, có `cast_time_ms` thì người chơi né được.
+- `DIRECTION` + `CONE` → sóng/quạt.
+- `GROUND` + `SINGLE` + `move_distance` > 0 → lướt tới điểm.
+- `SELF` → tự buff (khiên/hồi), bắn ngay không cần ngắm.
+
+`cooldown_ms` và mana dùng chung `gu_dictionary.base_mana_cost`; mana trong trận là
+pool riêng (100, hồi 6/giây) nên không tiêu hao mana thật của nhân vật.
 
 ### Cổ của người chơi — bảng `player_gu`
 

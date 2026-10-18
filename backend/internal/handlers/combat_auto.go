@@ -658,8 +658,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 
 	// Player-authored killer moves are precompiled from the saved component
 	// effect selections. Their exact Gu instances are checked against the
-	// player's current player_gu inventory by loadEquippedKillerMoves.
-	killerMoves, kmErr := loadEquippedKillerMoves(tx, player)
+	// player's current player_gu inventory by loadCombatKillerMoves.
+	killerMoves, kmErr := loadCombatKillerMoves(tx, player, reqLoadout)
 	if kmErr != nil {
 		return nil, fmt.Errorf("failed to load killer moves: %w", kmErr)
 	}
@@ -719,12 +719,25 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 
 	// Apply persistent tactics (priority + conditions) to actions
 	settings := player.CombatSettings
+	kmTactics := settings.KillerMovePriorities
+	if len(kmTactics) == 0 {
+		kmTactics = settings.KmPriorities
+	}
 	for i := range allActions {
 		act := &allActions[i]
 		switch act.ActionType {
 		case "GU_SKILL":
 			for _, t := range settings.GuPriorities {
 				if t.GuID == act.SourceID || (act.InstanceID != "" && t.GuID == act.InstanceID) {
+					act.Priority = t.Priority
+					act.UseCondition = t.UseCondition
+					act.ConditionValue = t.ConditionValue
+					break
+				}
+			}
+		case "KILLER_MOVE":
+			for _, t := range kmTactics {
+				if t.GuID == act.KillerMoveID || t.GuID == act.SourceID {
 					act.Priority = t.Priority
 					act.UseCondition = t.UseCondition
 					act.ConditionValue = t.ConditionValue

@@ -317,8 +317,8 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 		switch r.Type {
 		case "human_qi":
 			player.HumanQi += r.Amount
-			if player.HumanQi > 100000.0 {
-				player.HumanQi = 100000.0
+			if player.HumanQi > MaxHumanQi {
+				player.HumanQi = MaxHumanQi
 			}
 		case "primeval_stones":
 			player.PrimevalStones += float64(r.Amount)

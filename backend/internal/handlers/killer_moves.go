@@ -17,6 +17,7 @@ import (
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
 
 const (
@@ -662,6 +663,48 @@ func EquipKillerMove(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trang bị"})
 		return
 	}
+	// Synchronize with player's combat_settings
+	var rawSettings []byte
+	if err := tx.QueryRow(`SELECT combat_settings FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&rawSettings); err == nil {
+		var cs models.AutoCombatConfig
+		if json.Unmarshal(rawSettings, &cs) == nil {
+			if !equipped {
+				// Equipping: add to KillerMovePriorities if not present
+				found := false
+				for _, t := range cs.KillerMovePriorities {
+					if t.GuID == moveID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					cs.KillerMovePriorities = append(cs.KillerMovePriorities, models.GuTactic{
+						GuID:           moveID,
+						Priority:       len(cs.KillerMovePriorities) + 1,
+						UseCondition:   "always",
+						ConditionValue: 30,
+					})
+					cs.KmPriorities = cs.KillerMovePriorities
+					if b, errMarshal := json.Marshal(cs); errMarshal == nil {
+						_, _ = tx.Exec(`UPDATE players SET combat_settings=$1 WHERE id=$2`, b, playerID)
+					}
+				}
+			} else {
+				// Unequipping: remove from KillerMovePriorities
+				filtered := cs.KillerMovePriorities[:0]
+				for _, t := range cs.KillerMovePriorities {
+					if t.GuID != moveID {
+						filtered = append(filtered, t)
+					}
+				}
+				cs.KillerMovePriorities = filtered
+				cs.KmPriorities = filtered
+				if b, errMarshal := json.Marshal(cs); errMarshal == nil {
+					_, _ = tx.Exec(`UPDATE players SET combat_settings=$1 WHERE id=$2`, b, playerID)
+				}
+			}
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trang bị"})
 		return
@@ -674,7 +717,8 @@ func DeleteKillerMove(c *gin.Context) {
 	if !ok {
 		return
 	}
-	res, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM player_killer_moves WHERE id=$1 AND player_id=$2`, c.Param("id"), playerID)
+	moveID := c.Param("id")
+	res, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM player_killer_moves WHERE id=$1 AND player_id=$2`, moveID, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa sát chiêu"})
 		return
@@ -684,26 +728,77 @@ func DeleteKillerMove(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy sát chiêu"})
 		return
 	}
+	// Clean up from combat_settings if present
+	var rawSettings []byte
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT combat_settings FROM players WHERE id=$1`, playerID).Scan(&rawSettings); err == nil {
+		var cs models.AutoCombatConfig
+		if json.Unmarshal(rawSettings, &cs) == nil {
+			filtered := cs.KillerMovePriorities[:0]
+			for _, t := range cs.KillerMovePriorities {
+				if t.GuID != moveID {
+					filtered = append(filtered, t)
+				}
+			}
+			if len(filtered) != len(cs.KillerMovePriorities) {
+				cs.KillerMovePriorities = filtered
+				cs.KmPriorities = filtered
+				if b, errMarshal := json.Marshal(cs); errMarshal == nil {
+					_, _ = db.DB.ExecContext(c.Request.Context(), `UPDATE players SET combat_settings=$1 WHERE id=$2`, b, playerID)
+				}
+			}
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa sát chiêu"})
 }
 
-// Load equipped moves for combat construction. Components are checked against
-// this player's live inventory on every build; missing definitions disable the
-// move instead of silently changing its formula.
-func loadEquippedKillerMoves(tx *sql.Tx, player *models.Player) ([]storedKillerMove, error) {
+// loadCombatKillerMoves loads the killer moves that should be active for combat.
+// 1. If loadout is provided with explicit KillerMoveIds:
+//    - If empty (len == 0), no killer moves are used (player explicitly selected 0).
+//    - If non-empty, only those specific killer moves are loaded.
+// 2. Otherwise (loadout == nil or loadout.KillerMoveIds == nil):
+//    - Fall back to the player's CombatSettings (killer_move_priorities / km_priorities).
+//    - If CombatSettings has no killer moves configured, NO killer moves are loaded (does not auto-cast).
+//    - If CombatSettings has configured killer moves, only those are loaded.
+func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout) ([]storedKillerMove, error) {
 	if tx == nil || player == nil {
 		return nil, nil
 	}
-	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp FROM player_killer_moves WHERE player_id=$1 AND is_equipped=true`, player.ID)
+
+	var targetIDs []string
+	if loadout != nil && loadout.KillerMoveIds != nil {
+		if len(loadout.KillerMoveIds) == 0 {
+			return nil, nil
+		}
+		targetIDs = loadout.KillerMoveIds
+	} else {
+		kmTactics := player.CombatSettings.KillerMovePriorities
+		if len(kmTactics) == 0 {
+			kmTactics = player.CombatSettings.KmPriorities
+		}
+		if len(kmTactics) == 0 {
+			return nil, nil
+		}
+		for _, t := range kmTactics {
+			if t.GuID != "" {
+				targetIDs = append(targetIDs, t.GuID)
+			}
+		}
+		if len(targetIDs) == 0 {
+			return nil, nil
+		}
+	}
+
+	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp FROM player_killer_moves WHERE player_id=$1 AND id = ANY($2)`, player.ID, targetIDs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	owned := make(map[string]models.GuInstance, len(player.GuInventory))
 	for _, g := range player.GuInventory {
 		owned[g.InstanceID] = g
 	}
-	var result []storedKillerMove
+	byID := make(map[string]storedKillerMove)
 	for rows.Next() {
 		var m storedKillerMove
 		var comps, compiled []byte
@@ -728,10 +823,30 @@ func loadEquippedKillerMoves(tx *sql.Tx, player *models.Player) ([]storedKillerM
 			}
 		}
 		if valid && hasCombatEffect {
+			byID[m.ID] = m
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var result []storedKillerMove
+	seen := make(map[string]bool, len(targetIDs))
+	for _, id := range targetIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if m, ok := byID[id]; ok {
 			result = append(result, m)
 		}
 	}
-	return result, rows.Err()
+	return result, nil
+}
+
+// Load equipped moves for combat construction.
+func loadEquippedKillerMoves(tx *sql.Tx, player *models.Player) ([]storedKillerMove, error) {
+	return loadCombatKillerMoves(tx, player, nil)
 }
 
 // ComponentInstanceIDs exposes the Gu IDs whose fullness is consumed by a

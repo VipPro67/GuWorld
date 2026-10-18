@@ -68,6 +68,7 @@ type importDataset struct {
 var importDatasets = []importDataset{
 	{"item", "Item.csv", "item_dictionary", true, false, []string{"id"}},
 	{"gu", "Gu.csv", "gu_dictionary", true, false, []string{"id", "rank"}},
+	{"gu_moba", "GuMoba.csv", "gu_moba_profiles", true, false, []string{"gu_id", "rank"}},
 	{"constitution", "Constitution.csv", "constitution_dictionary", true, false, []string{"key"}},
 	{"race", "Race.csv", "race_dictionary", true, false, []string{"key"}},
 	{"status", "Status.csv", "status_dictionary", true, false, []string{"key"}},

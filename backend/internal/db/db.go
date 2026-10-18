@@ -255,6 +255,7 @@ func InitSchema() error {
 		fn   func() error
 	}{
 		{"dictionaries", schemaDictionaries},
+		{"moba", schemaMoba},
 		{"world", schemaWorld},
 		{"merchants", schemaMerchants},
 		{"parties", schemaParties},
@@ -3432,6 +3433,11 @@ var individualExportDefs = map[string]exportDef{
 		filename: "Gu.csv",
 		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
 		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+	},
+	"gu_moba": {
+		filename: "GuMoba.csv",
+		columns:  []string{"gu_id", "rank", "cast_mode", "shape", "radius", "length", "width", "angle_deg", "cast_range", "cast_time_ms", "recovery_ms", "cooldown_ms", "projectile_speed", "pierce", "max_targets", "move_distance"},
+		query:    `SELECT gu_id, rank, cast_mode, shape, radius, length, width, angle_deg, cast_range, cast_time_ms, recovery_ms, cooldown_ms, projectile_speed, pierce, max_targets, move_distance FROM gu_moba_profiles ORDER BY gu_id, rank`,
 	},
 	"constitution": {
 		filename: "Constitution.csv",

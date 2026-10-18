@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Database, Upload } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import { AdminConfirmDialog } from "./AdminConfirmDialog";
@@ -11,17 +11,15 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:808
 // (Gu.csv ~4400 dòng) vượt xa timeout mặc định 30s của authFetch.
 const IMPORT_TIMEOUT_MS = 300000;
 
-export const IMPORT_DATASETS = [
-  ["item", "Vật phẩm", "Item.csv"], ["gu", "Cổ trùng", "Gu.csv"],
-  ["constitution", "Thể chất", "Constitution.csv"], ["race", "Chủng tộc", "Race.csv"],
-  ["status", "Trạng thái", "Status.csv"], ["recipe", "Cổ phương", "Recipe.csv"],
-  ["shop_item", "Cửa hàng", "ShopItem.csv"], ["arena_shop_item", "Cửa hàng Đấu trường", "ArenaShopItem.csv"],
-  ["region", "Khu vực", "Region.csv"], ["loot_table", "Bảng loot", "LootTable.csv"],
-  ["region_loot", "Loot theo vùng", "RegionLootTables.csv"],
-  ["monster", "Quái vật", "Monster.csv"], ["monster_spawn", "Spawn quái", "MonsterSpawn.csv"],
-  ["map_cell", "Ô bản đồ", "MapCell.csv"], ["sect_mission", "Nhiệm vụ tông môn", "SectMission.csv"],
-  ["quest", "Nhiệm vụ", "Quest.csv"], ["dream_realm", "Mộng cảnh", "DreamRealm.csv"],
-] as const;
+// Danh sách dataset lấy từ `GET /api/admin/data/tables` (nguồn duy nhất là
+// backend `db.Datasets()`), truyền vào qua prop. Không hard-code ở đây nữa:
+// thêm dataset mới ở backend mà quên frontend là lỗi đã từng xảy ra.
+export type ImportDatasetOption = {
+  key: string;
+  label: string;
+  csv_file: string;
+  capabilities?: { import: boolean };
+};
 
 type Issue = { dataset: string; row?: number; field?: string; message: string; severity: string };
 type RowDiff = { kind: string; before?: Record<string, unknown>; after?: Record<string, unknown> };
@@ -183,14 +181,21 @@ function RowDiffView({ diffs }: { diffs: RowDiff[] }) {
   </div>;
 }
 
-export function DataImportWorkflow({ canImportDataset, canImportAll, addToast }: { canImportDataset: boolean; canImportAll: boolean; addToast: (message: string, type: "success" | "error" | "info") => void }) {
+export function DataImportWorkflow({ datasets, canImportDataset, canImportAll, addToast }: { datasets: ImportDatasetOption[]; canImportDataset: boolean; canImportAll: boolean; addToast: (message: string, type: "success" | "error" | "info") => void }) {
+  const options = useMemo(() => datasets.filter(dataset => dataset.capabilities?.import !== false), [datasets]);
   const [scope, setScope] = useState<"dataset" | "all">("dataset");
-  const [dataset, setDataset] = useState<string>(IMPORT_DATASETS[0][0]);
+  const [dataset, setDataset] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Preflight | null>(null);
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState("");
+
+  // Danh sách dataset đến sau lần render đầu (fetch ở AdminView).
+  useEffect(() => {
+    if (options.length === 0) return;
+    setDataset(current => (current && options.some(option => option.key === current) ? current : options[0].key));
+  }, [options]);
 
   const clearPreview = () => { setPreview(null); setReason(""); };
   const preflight = async () => {
@@ -234,7 +239,7 @@ export function DataImportWorkflow({ canImportDataset, canImportAll, addToast }:
           </select>
         </label>
         {scope === "dataset" && <label className="text-xs text-zinc-400">Dataset
-          <select value={dataset} onChange={event => { setDataset(event.target.value); clearPreview(); }} className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-200">{IMPORT_DATASETS.map(([key, label, csv]) => <option key={key} value={key}>{label} — {csv}</option>)}</select>
+          <select value={dataset} disabled={options.length === 0} onChange={event => { setDataset(event.target.value); clearPreview(); }} className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-200 disabled:opacity-50">{options.length === 0 ? <option value="">Đang tải danh sách dataset…</option> : options.map(option => <option key={option.key} value={option.key}>{option.label} — {option.csv_file}</option>)}</select>
         </label>}
         {scope === "dataset" && <label className="text-xs text-zinc-400">Nguồn CSV (không chọn = file server)
           <input type="file" accept=".csv,text/csv" onChange={event => { setFile(event.target.files?.[0] ?? null); clearPreview(); }} className="mt-1 block w-full text-xs text-zinc-400 file:mr-2 file:rounded file:border-0 file:bg-zinc-700 file:px-2 file:py-2 file:text-zinc-100" />

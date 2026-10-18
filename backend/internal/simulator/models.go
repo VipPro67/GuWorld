@@ -9,8 +9,9 @@ import (
 
 // CombatLoadout represents the input data from the player before the battle starts.
 type CombatLoadout struct {
-	GuIds        []string `json:"GuIds"`
-	ImmortalGuId *string  `json:"ImmortalGuId,omitempty"`
+	GuIds         []string `json:"GuIds"`
+	KillerMoveIds []string `json:"KillerMoveIds,omitempty"`
+	ImmortalGuId  *string  `json:"ImmortalGuId,omitempty"`
 
 	AutoHealHP      bool    `json:"AutoHealHP"`
 	HealThreshold   float64 `json:"HealThreshold"`

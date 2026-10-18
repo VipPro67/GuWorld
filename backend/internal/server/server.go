@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
+	"github.com/vippro67/GuWorld/backend/internal/match"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
@@ -382,6 +383,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		handlers.WorldCombatBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
 			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
+		match.Broadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
+			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
+		}
 	}
 	worker.PlayerEventPublisher = func(playerID uuid.UUID, eventType string, domains ...string) {
 		typedDomains := make([]handlers.PlayerEventDomain, 0, len(domains))
@@ -748,6 +752,17 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			combat.POST("/capture", handlers.CaptureMonster)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
+		}
+
+		// Realtime PvP (MOBA-style). This only creates the match; input frames
+		// arrive over the WebSocket command channel and per-tick state is pushed
+		// on the match:<id> channel.
+		pvp := api.Group("/pvp")
+		pvp.Use(middleware.AuthRequired())
+		pvp.Use(middleware.RequireOnboarded())
+		pvp.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		{
+			pvp.POST("/match/practice", handlers.StartPracticeMatch)
 		}
 
 		// Player-created killer moves use Gu components from player_gu and are

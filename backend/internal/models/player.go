@@ -182,13 +182,15 @@ type GuTactic struct {
 
 // AutoCombatConfig holds a player's persistent auto-combat settings.
 type AutoCombatConfig struct {
-	AutoHealHP         bool       `json:"auto_heal_hp"`
-	HealThreshold      float64    `json:"heal_threshold"`
-	AutoRestoreMana    bool       `json:"auto_restore_mana"`
-	ManaThreshold      float64    `json:"mana_threshold"`
-	CategoryPriorities []string   `json:"category_priorities"`
-	GuPriorities       []GuTactic `json:"gu_priorities"`
-	SkipBattle         bool       `json:"skip_battle"`
+	AutoHealHP           bool       `json:"auto_heal_hp"`
+	HealThreshold        float64    `json:"heal_threshold"`
+	AutoRestoreMana      bool       `json:"auto_restore_mana"`
+	ManaThreshold        float64    `json:"mana_threshold"`
+	CategoryPriorities   []string   `json:"category_priorities"`
+	GuPriorities         []GuTactic `json:"gu_priorities"`
+	KillerMovePriorities []GuTactic `json:"killer_move_priorities"`
+	KmPriorities         []GuTactic `json:"km_priorities,omitempty"`
+	SkipBattle           bool       `json:"skip_battle"`
 }
 
 func scanBytes(value interface{}) ([]byte, bool) {
@@ -222,8 +224,15 @@ func (c *AutoCombatConfig) Scan(value interface{}) error {
 		return nil
 	}
 	err := json.Unmarshal(bytes, c)
-	if err == nil && len(c.CategoryPriorities) == 0 {
-		c.CategoryPriorities = []string{"other", "shield", "heal", "damage"}
+	if err == nil {
+		if len(c.CategoryPriorities) == 0 {
+			c.CategoryPriorities = []string{"other", "shield", "heal", "damage"}
+		}
+		if len(c.KillerMovePriorities) == 0 && len(c.KmPriorities) > 0 {
+			c.KillerMovePriorities = c.KmPriorities
+		} else if len(c.KmPriorities) == 0 && len(c.KillerMovePriorities) > 0 {
+			c.KmPriorities = c.KillerMovePriorities
+		}
 	}
 	return err
 }
@@ -240,13 +249,15 @@ func (c AutoCombatConfig) Value() (driver.Value, error) {
 // DefaultAutoCombatConfig returns sensible defaults.
 func DefaultAutoCombatConfig() AutoCombatConfig {
 	return AutoCombatConfig{
-		AutoHealHP:         false,
-		HealThreshold:      30,
-		AutoRestoreMana:    false,
-		ManaThreshold:      30,
-		CategoryPriorities: []string{"other", "shield", "heal", "damage"},
-		GuPriorities:       []GuTactic{},
-		SkipBattle:         false,
+		AutoHealHP:           false,
+		HealThreshold:        30,
+		AutoRestoreMana:      false,
+		ManaThreshold:        30,
+		CategoryPriorities:   []string{"other", "shield", "heal", "damage"},
+		GuPriorities:         []GuTactic{},
+		KillerMovePriorities: []GuTactic{},
+		KmPriorities:         []GuTactic{},
+		SkipBattle:           false,
 	}
 }
 

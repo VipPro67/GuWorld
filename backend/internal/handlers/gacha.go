@@ -781,8 +781,8 @@ func applyGachaRewardInMemory(player *models.Player, reward GachaResultItem) {
 		player.Lifespan += reward.Amount
 	case "human_qi":
 		player.HumanQi += reward.Amount
-		if player.HumanQi > 100000.0 {
-			player.HumanQi = 100000.0
+		if player.HumanQi > MaxHumanQi {
+			player.HumanQi = MaxHumanQi
 		}
 	case "wall_progress":
 		player.WallProgress += reward.Amount
