@@ -47,19 +47,26 @@ RANK_SCALE = {1: 1, 2: 2, 3: 5, 4: 20, 5: 100, 6: 10**4, 7: 10**6, 8: 10**8, 9: 
 DOT_STATUS_IDS = {"BLEED", "POISON", "BURN", "SLOW_DAMAGE"}
 DOT_TOTAL_DAMAGE_RATIO = 0.6
 DOT_DEFAULT_TURNS = 3
-FLAT_DAMAGE_PER_RANK_SCALE = 25
+FLAT_DAMAGE_PER_RANK_SCALE = 30
 
 # Canon tuyệt đối của dữ liệu: mỗi value phải là <ratio> × RANK_SCALE[rank].
 # Ratio lấy từ phân bố thực tế của Gu.csv (median theo rank giống hệt nhau):
-# DAMAGE 20 (utility 8, đặc biệt 14/15), SHIELD 30, HEAL 20 (thấp 15),
-# HP 10, ATTACK 1, DEFENSE 5. Dùng bởi --scale.
+# DAMAGE nền 30 (utility 8, đặc biệt 14/15; 20 là bậc nền cũ, remap sang 30),
+# SHIELD 30, HEAL 20 (bậc 15 cũ remap sang 20), HP 10, ATTACK 1, DEFENSE 5. Dùng bởi --scale.
 SCALE_ARCHETYPES = {
-    "DAMAGE||FLAT": [8, 14, 15, 20],
+    "DAMAGE||FLAT": [8, 14, 15, 20, 30],
     "SHIELD||FLAT": [30],
     "HEAL||FLAT": [15, 20],
     "STAT_MOD|HP|ADD_FLAT": [10],
     "STAT_MOD|ATTACK|ADD_FLAT": [1],
     "STAT_MOD|DEFENSE|ADD_FLAT": [5],
+}
+
+# Bậc nền cũ -> bậc nền mới: ratio khớp CHÍNH XÁC được đổi sang ratio mới (bỏ qua
+# dung sai), dùng khi nâng hệ số nền mà vẫn giữ các bậc tiện ích/đặc biệt.
+SCALE_RATIO_REMAP = {
+    "DAMAGE||FLAT": {20: 30},
+    "HEAL||FLAT": {15: 20},
 }
 
 # Bảng quy chuẩn cho các key thưa (sparse keys, n < min-samples).
@@ -353,9 +360,11 @@ def check_scale(parsed, records, args, rows, text, bom, eff_idx, path, allow):
         if not isinstance(val, (int, float)) or isinstance(val, bool) or val == 0:
             continue
         ratio = val / RANK_SCALE[rank]
-        near = nearest_arch(ratio, archetypes)
-        if near * (1 - tol) <= ratio <= near * (1 + tol):
-            continue
+        near = SCALE_RATIO_REMAP.get(rec["key"], {}).get(ratio)
+        if near is None:
+            near = nearest_arch(ratio, archetypes)
+            if near * (1 - tol) <= ratio <= near * (1 + tol):
+                continue
         new = num_out(near * RANK_SCALE[rank])
         if new == val:
             continue
@@ -402,9 +411,11 @@ def self_test():
     assert num_out(2000.0) == 2000
     assert key_str("STAT_MOD", "ATTACK", "ADD_FLAT") == "STAT_MOD|ATTACK|ADD_FLAT"
     assert key_str("STATUS", "BLEED", None) == "STATUS|BLEED|"
-    assert dot_damage_cap(4, 3) == 100
-    assert dot_damage_cap(4, 6) == 50
-    assert dot_damage_cap(99, 3) == 50000000000
+    assert dot_damage_cap(4, 3) == 120
+    assert dot_damage_cap(4, 6) == 60
+    assert dot_damage_cap(99, 3) == 60000000000
+    assert SCALE_RATIO_REMAP["DAMAGE||FLAT"][20] == 30
+    assert SCALE_RATIO_REMAP["HEAL||FLAT"][15] == 20
     obj = [{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]
     out, _ = dump_style('[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]', obj)
     assert out == '[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]'

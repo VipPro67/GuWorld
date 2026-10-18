@@ -29,30 +29,30 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 
 | Trường effects | Công thức | Ghi chú |
 | --- | --- | --- |
-| `active.damage_flat` | `25 × P` | sát thương 1 đòn tiêu chuẩn |
-| `active.shield_flat` | `20 × P` | lá chắn phòng thủ tiêu chuẩn |
-| `active.heal_flat` | `15 × P` | hồi máu tiêu chuẩn |
+| `active.damage_flat` | `30 × P` | sát thương 1 đòn tiêu chuẩn |
+| `active.shield_flat` | `30 × P` | lá chắn phòng thủ tiêu chuẩn |
+| `active.heal_flat` | `20 × P` | hồi máu tiêu chuẩn |
 | `passive.stat_base_attack` | `1 × P` | cộng tấn công nền |
 | `passive.stat_base_defense` | `5 × P` | cộng phòng ngự nền |
 | `passive.stat_base_hp` | `10 × P` | cộng máu nền |
 | `passive.stat_base_speed` | `1` | cộng tốc độ nền | ko scale mạnh như các chỉ số khác
-| DOT (`BLEED`/`POISON`/`BURN`/`SLOW_DAMAGE`) | Tổng damage mỗi lần áp dụng ≤ `60% × damage_flat chuẩn` cùng rank; `value/tick ≤ 0.6 × 25 × P / turns` | Với 3 lượt, mỗi tick bằng tối đa 20% damage FLAT chuẩn. DOT lâu hơn giảm damage/tick tương ứng. |
+| DOT (`BLEED`/`POISON`/`BURN`/`SLOW_DAMAGE`) | Tổng damage mỗi lần áp dụng ≤ `60% × damage_flat chuẩn` cùng rank; `value/tick ≤ 0.6 × 30 × P / turns` | Với 3 lượt, mỗi tick bằng tối đa 20% damage FLAT chuẩn. DOT lâu hơn giảm damage/tick tương ứng. |
 
 ## 3. Bảng chuẩn rank 1–9
 
 | Rank | `P` | dmg | shield | heal | sATK | sDEF | sHP | sSPD | `E` | Giá |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 1 | 25 | 20 | 15 | 1 | 5 | 10 | 1 | 1 | 200 |
-| 2 | 2 | 50 | 40 | 30 | 2 | 10 | 20 | 2 | 2 | 500 |
-| 3 | 5 | 125 | 100 | 75 | 5 | 25 | 50 | 5 | 5 | 1.200 |
-| 4 | 20 | 500 | 400 | 300 | 20 | 100 | 200 | 20 | 20 | 2.500 |
-| 5 | 100 | 2.500 | 2.000 | 1.500 | 100 | 500 | 1.000 | 100 | 100 | 5.000 |
-| 6 | 10.000 | 250.000 | 200.000 | 150.000 | 10.000 | 50.000 | 100.000 | 1.000 | 100 | 200\* |
-| 7 | 1.000.000 | 25.000.000 | 20.000.000 | 15.000.000 | 1.000.000 | 5.000.000 | 10.000.000 | 10.000 | 10.000 | 500\* |
-| 8 | 100.000.000 | 2.500.000.000 | 2.000.000.000 | 1.500.000.000 | 100.000.000 | 500.000.000 | 1.000.000.000 | 100.000 | 1.000.000 | 1.200\* |
-| 9 | 10.000.000.000 | 250.000.000.000 | 200.000.000.000 | 150.000.000.000 | 10.000.000.000 | 50.000.000.000 | 100.000.000.000 | 10.000.000 | 100.000.000 | 2.500\* |
+| 1 | 1 | 30 | 30 | 20 | 1 | 5 | 10 | 1 | 1 | 200 |
+| 2 | 2 | 60 | 60 | 40 | 2 | 10 | 20 | 2 | 2 | 500 |
+| 3 | 5 | 150 | 150 | 100 | 5 | 25 | 50 | 5 | 5 | 1.200 |
+| 4 | 20 | 600 | 600 | 400 | 20 | 100 | 200 | 20 | 20 | 2.500 |
+| 5 | 100 | 3.000 | 3.000 | 2.000 | 100 | 500 | 1.000 | 100 | 100 | 5.000 |
+| 6 | 10.000 | 300.000 | 300.000 | 200.000 | 10.000 | 50.000 | 100.000 | 1.000 | 100 | 200\* |
+| 7 | 1.000.000 | 30.000.000 | 30.000.000 | 20.000.000 | 1.000.000 | 5.000.000 | 10.000.000 | 10.000 | 10.000 | 500\* |
+| 8 | 100.000.000 | 3.000.000.000 | 3.000.000.000 | 2.000.000.000 | 100.000.000 | 500.000.000 | 1.000.000.000 | 100.000 | 1.000.000 | 1.200\* |
+| 9 | 10.000.000.000 | 300.000.000.000 | 300.000.000.000 | 200.000.000.000 | 10.000.000.000 | 50.000.000.000 | 100.000.000.000 | 10.000.000 | 100.000.000 | 2.500\* |
 
-> Ví dụ đối chiếu thực tế: `GU_DIAMOND_THOUGHT` (R6) `damage_flat=25.000`, `GU_FLYING_SWORD` (R7) `damage_flat=250.000`, `GU_BLOOD_DEITY` (R9) `damage_flat=250.000.000` — khớp chuẩn `25×P`. `GU_MYRIAD_SELF` (R7) `damage_flat` dùng `passive.stat_base_attack=10.000` vì phân thân nhân theo `BaseAttack` (`summon_phantom` → `PhantomDamageScale`).
+> Ví dụ đối chiếu thực tế: `GU_DIAMOND_THOUGHT` (R6) `damage_flat=300.000` — khớp chuẩn `30×P`. `GU_FLYING_SWORD` (R7) `damage_flat=14.000.000` (`14×P`, cổ đặc biệt) và `GU_BLOOD_DEITY` (R9) `damage_flat=80.000.000.000` (`8×P`, cổ tiện ích) dùng các bậc thấp hơn bậc nền. `GU_MYRIAD_SELF` (R7) dùng `passive.stat_base_attack=1.000.000` (`1×P`) vì phân thân nhân theo `BaseAttack` (`summon_phantom` → `PhantomDamageScale`).
 
 ## 4. Cách áp dụng khi sửa Gu.csv
 
