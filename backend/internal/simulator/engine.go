@@ -693,6 +693,13 @@ type actionOutcome struct {
 	firstTarget *CombatantAuto
 }
 
+// maxInfiniteRebornRewinds bounds a REBORN with max_uses=0 (declared unlimited).
+// A rewind resets the turn counter, so an unlimited rewind escapes maxTurns and
+// can hold the caller's transaction (and the player row lock) indefinitely.
+// Only the unlimited rewind path is capped; explicit finite uses and in-place
+// revives (which maxTurns already bounds) keep their configured behaviour.
+const maxInfiniteRebornRewinds = 5
+
 // Simulate runs the deterministic auto-battle using pre-computed actions.
 func Simulate(state *CombatState) []CombatLog {
 	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
@@ -2803,6 +2810,10 @@ func Simulate(state *CombatState) []CombatLog {
 			if maxUses < 0 {
 				maxUses = 1
 			}
+			rewinds := allowRewind && strings.ToLower(mechanicString(mechs, "ON_DEATH", "REBORN", "mode", "rewind")) != "in_place"
+			if unlimited && rewinds && rebornUses[c.ID] >= maxInfiniteRebornRewinds {
+				return false
+			}
 			if !unlimited && rebornUses[c.ID] >= maxUses {
 				return false
 			}
@@ -2821,7 +2832,7 @@ func Simulate(state *CombatState) []CombatLog {
 				return false
 			}
 			rebornUses[c.ID]++
-			if allowRewind && strings.ToLower(mechanicString(mechs, "ON_DEATH", "REBORN", "mode", "rewind")) != "in_place" {
+			if rewinds {
 				return true
 			}
 			hpPct := mechanicFloat(mechs, "ON_DEATH", "REBORN", "revive_hp_percent", 0.5)

@@ -56,6 +56,11 @@ const (
 	worldMonsterMaxPerTick        = 512
 	worldMonsterTickBudget        = 150 * time.Millisecond
 	worldMonsterBucketQueryRadius = 35
+	// Encounter attempts are handed to a bounded background pool instead of
+	// running inline: starting a combat opens a transaction and, with skip-battle
+	// enabled, resolves a full combat, which used to blow the 150ms tick budget
+	// and skip the remaining buckets (visible as monsters stuttering).
+	worldMonsterEncounterWorkers = 8
 )
 
 type WorldMonster = cache.WorldMonster
@@ -89,7 +94,15 @@ var worldMonsterMetrics struct {
 	kills                atomic.Uint64
 	preventedDoubleKills atomic.Uint64
 	eventFanout          atomic.Uint64
+	encounterDispatched  atomic.Uint64
+	encounterDeferred    atomic.Uint64
 }
+
+// worldMonsterEncounterSlots bounds how many contacts may be promoted into a
+// combat at once. The tick reserves a slot without blocking (see
+// dispatchWorldMonsterEncounter); overflow contacts stay in ATTACK and are
+// re-attempted after their persisted cooldown.
+var worldMonsterEncounterSlots = make(chan struct{}, worldMonsterEncounterWorkers)
 
 var worldMonsterBucketCursor atomic.Uint64
 
@@ -1068,7 +1081,16 @@ func tickWorldMonster(monster WorldMonster, candidates []WorldPosEntry, now time
 		monster.Revision++
 	}
 	if oldState != monster.State {
-		return monster, map[string]string{MonsterStateChase: "monster_targeted", MonsterStateAttack: "monster_encounter_started", MonsterStateReturn: "monster_returned", MonsterStateIdle: "monster_returned"}[monster.State]
+		var eventType string
+		switch monster.State {
+		case MonsterStateChase:
+			eventType = "monster_targeted"
+		case MonsterStateAttack:
+			eventType = "monster_encounter_started"
+		case MonsterStateReturn, MonsterStateIdle:
+			eventType = "monster_returned"
+		}
+		return monster, eventType
 	}
 	if oldX != monster.X || oldY != monster.Y {
 		return monster, "monster_moved"
@@ -1138,6 +1160,35 @@ func startWorldMonsterWorker(ctx context.Context, interval time.Duration) <-chan
 		}
 	}()
 	return done
+}
+
+// dispatchWorldMonsterEncounter hands a proximity contact to a bounded
+// background pool so the 250ms tick never blocks on a transaction (and, for
+// skip-battle players, a full combat resolve). The caller already reserved the
+// contact with a compare-and-swap and refreshed the monster's NextAttackAt, so
+// at most one dispatch per cooldown window is in flight. If the pool is full the
+// contact is dropped for this tick; the monster stays in ATTACK and is retried
+// after its cooldown.
+func dispatchWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targetID string) {
+	select {
+	case worldMonsterEncounterSlots <- struct{}{}:
+	default:
+		worldMonsterMetrics.encounterDeferred.Add(1)
+		return
+	}
+	worldMonsterMetrics.encounterDispatched.Add(1)
+	works := monster
+	go func() {
+		defer func() { <-worldMonsterEncounterSlots }()
+		// The worker context outlives the tick; startWorldMonsterEncounter
+		// re-validates the monster from Redis before doing anything.
+		worker.SafeRun("World Monster Encounter", ctx, func(ctx context.Context) {
+			if err := startWorldMonsterEncounter(ctx, works, targetID); err != nil {
+				logger.S.Warnf("start world monster encounter %s -> %s: %v", works.InstanceID, targetID, err)
+				resetWorldMonsterAfterEncounter(ctx, works)
+			}
+		})
+	}()
 }
 
 func processWorldMonsterTick(ctx context.Context, now time.Time) {
@@ -1277,10 +1328,7 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 				broadcastWorldCombat(next, eventType, nil)
 			}
 			if attemptEncounter && next.TargetID != "" {
-				if err := startWorldMonsterEncounter(ctx, next, next.TargetID); err != nil {
-					logger.S.Warnf("start world monster encounter %s -> %s: %v", next.InstanceID, next.TargetID, err)
-					resetWorldMonsterAfterEncounter(ctx, next)
-				}
+				dispatchWorldMonsterEncounter(ctx, next, next.TargetID)
 			}
 		}
 	}

@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -109,6 +111,57 @@ func normalizePolicyPath(value string) string {
 	return strings.TrimSpace(strings.TrimSuffix(value, " path"))
 }
 
+// regionRulesDecode caches the expensive half of regionRulesFor: the per-region
+// JSON decode and the group-presence scan. The world-monster tick calls
+// regionRulesFor twice per online player every 250ms, so without this the same
+// handful of regions is unmarshalled thousands of times per second.
+type regionRulesDecode struct {
+	raw      []byte
+	groups   map[string]json.RawMessage
+	rules    RegionRules
+	hasRules bool
+}
+
+// regionRulesDecodeCache keeps only the per-region decode. The parent-lineage
+// merge still runs per call, so a parent rule change is picked up immediately.
+// Entries are keyed by region id and revalidated against the region's raw Rules
+// bytes, so an admin import (or a test that rewrites zoneReg) invalidates them
+// transparently without a generation counter.
+var regionRulesDecodeCache struct {
+	mu      sync.RWMutex
+	entries map[string]regionRulesDecode
+}
+
+func decodedRegionRules(region *models.Region) (regionRulesDecode, error) {
+	regionRulesDecodeCache.mu.RLock()
+	cached, ok := regionRulesDecodeCache.entries[region.ID]
+	regionRulesDecodeCache.mu.RUnlock()
+	if ok && bytes.Equal(cached.raw, region.Rules) {
+		return cached, nil
+	}
+
+	entry := regionRulesDecode{raw: append([]byte(nil), region.Rules...)}
+	if len(region.Rules) > 0 && string(region.Rules) != "null" {
+		var groups map[string]json.RawMessage
+		if err := json.Unmarshal(region.Rules, &groups); err != nil || groups == nil {
+			return regionRulesDecode{}, fmt.Errorf("rules của khu vực %s không hợp lệ", region.ID)
+		}
+		rules, err := decodeRegionRules(region.Rules)
+		if err != nil {
+			return regionRulesDecode{}, err
+		}
+		entry.groups, entry.rules, entry.hasRules = groups, rules, true
+	}
+
+	regionRulesDecodeCache.mu.Lock()
+	if regionRulesDecodeCache.entries == nil {
+		regionRulesDecodeCache.entries = make(map[string]regionRulesDecode)
+	}
+	regionRulesDecodeCache.entries[region.ID] = entry
+	regionRulesDecodeCache.mu.Unlock()
+	return entry, nil
+}
+
 func regionRulesFor(regionID string) (RegionRules, error) {
 	region := ZoneByID(regionID)
 	if region == nil {
@@ -130,34 +183,29 @@ func regionRulesFor(regionID string) (RegionRules, error) {
 
 	var effective RegionRules
 	for i := len(lineage) - 1; i >= 0; i-- {
-		region := lineage[i]
-		if len(region.Rules) == 0 || string(region.Rules) == "null" {
-			continue
-		}
-		var groups map[string]json.RawMessage
-		if err := json.Unmarshal(region.Rules, &groups); err != nil || groups == nil {
-			return RegionRules{}, fmt.Errorf("rules của khu vực %s không hợp lệ", region.ID)
-		}
-		override, err := decodeRegionRules(region.Rules)
+		decoded, err := decodedRegionRules(lineage[i])
 		if err != nil {
 			return RegionRules{}, err
 		}
+		if !decoded.hasRules {
+			continue
+		}
 		// Group presence is meaningful: an omitted group inherits, while an
 		// explicitly present empty group clears that group from its parent.
-		if _, ok := groups["rank"]; ok {
-			effective.Rank = override.Rank
+		if _, ok := decoded.groups["rank"]; ok {
+			effective.Rank = decoded.rules.Rank
 		}
-		if _, ok := groups["paths"]; ok {
-			effective.Paths = override.Paths
+		if _, ok := decoded.groups["paths"]; ok {
+			effective.Paths = decoded.rules.Paths
 		}
-		if _, ok := groups["gu"]; ok {
-			effective.Gu = override.Gu
+		if _, ok := decoded.groups["gu"]; ok {
+			effective.Gu = decoded.rules.Gu
 		}
-		if _, ok := groups["items"]; ok {
-			effective.Items = override.Items
+		if _, ok := decoded.groups["items"]; ok {
+			effective.Items = decoded.rules.Items
 		}
-		if _, ok := groups["actions"]; ok {
-			effective.Actions = override.Actions
+		if _, ok := decoded.groups["actions"]; ok {
+			effective.Actions = decoded.rules.Actions
 		}
 	}
 	return effective, nil
