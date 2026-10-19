@@ -46,6 +46,40 @@ func GetPortalManaCost(player *models.Player, spec *models.GuDictionaryItem) flo
 	return computedBase * math.Pow(2, float64(diff))
 }
 
+// defaultGuTeleportRange maps a Cổ's rank to the maximum Chebyshev distance
+// (world cells) a teleport may cover when the effect does not declare an
+// explicit PORTAL_CREATE/RANDOM_PORTAL params.range. 0 means unlimited.
+var defaultGuTeleportRange = map[int]int{
+	1: 100,
+	2: 200,
+	3: 400,
+	4: 800,
+	5: 1000,
+	6: 3000,
+	7: 10000,
+	8: 20000,
+	9: 30000,
+}
+
+// GuTeleportRange resolves the maximum teleport distance for a Gu spec.
+// An explicit params.range on PORTAL_CREATE/RANDOM_PORTAL is authoritative.
+// Without one, IGNORE_MOVEMENT_RANGE means unlimited; otherwise the rank table
+// applies. 0 means unlimited.
+func GuTeleportRange(spec *models.GuDictionaryItem) int {
+	if spec == nil {
+		return 0
+	}
+	for _, code := range []string{"PORTAL_CREATE", "RANDOM_PORTAL"} {
+		if value := int(models.GuSpecCapabilityFloat(*spec, code, "range")); value > 0 {
+			return value
+		}
+	}
+	if _, ok := models.GuSpecCapability(*spec, "IGNORE_MOVEMENT_RANGE"); ok {
+		return 0
+	}
+	return defaultGuTeleportRange[spec.Rank]
+}
+
 func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models.GuDictionaryItem, actionRequiresEquipped bool) error {
 	if gu.Status == "DEAD" {
 		return fmt.Errorf("Không thể sử dụng Cổ trùng ĐÃ CHẾT: %s", spec.Name)

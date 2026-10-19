@@ -215,6 +215,13 @@ func init() {
 	hook := NativeHooks["CAPTURE_BONUS"]
 	hook.Params = valueSchema
 	NativeHooks["CAPTURE_BONUS"] = hook
+	// Portal abilities may declare a maximum teleport range in world cells.
+	// Missing/zero range falls back to the rank table in handlers.GuTeleportRange.
+	for _, code := range []string{"PORTAL_CREATE", "RANDOM_PORTAL"} {
+		portalHook := NativeHooks[code]
+		portalHook.Params = map[string]ParamSpec{"range": {Type: "integer", Required: false}}
+		NativeHooks[code] = portalHook
+	}
 	// SUMMON_MONSTER: authored params stay minimal (monster id + author scale);
 	// the combat builder injects the template stats (hp/damage/defense/name)
 	// resolved from MonsterRegistry into the compiled values.

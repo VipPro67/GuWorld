@@ -476,3 +476,75 @@ func TestStoneAperturePetrifiesWithoutManaLoss(t *testing.T) {
 		t.Error("rank mismatch must not raise SubRank or petrify aperture")
 	}
 }
+
+func TestGuTeleportRange(t *testing.T) {
+	portal := func(rank int, raw string) *models.GuDictionaryItem {
+		return &models.GuDictionaryItem{ID: "GU_TEST", Name: "Test", Rank: rank, Effects: mustScanGuEffects(t, raw)}
+	}
+	cases := []struct {
+		name string
+		spec *models.GuDictionaryItem
+		want int
+	}{
+		{
+			name: "ignore movement range is unlimited",
+			spec: portal(5, `[{"id":"C","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"IGNORE_MOVEMENT_RANGE"}]}]`),
+			want: 0,
+		},
+		{
+			name: "explicit portal range",
+			spec: portal(5, `[{"id":"C","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE","params":{"range":1234}}]}]`),
+			want: 1234,
+		},
+		{
+			name: "explicit range wins over ignore capability",
+			spec: portal(5, `[{"id":"C","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE","params":{"range":1500}},{"op":"UNIQUE","code":"IGNORE_MOVEMENT_RANGE"}]}]`),
+			want: 1500,
+		},
+		{
+			name: "explicit random range",
+			spec: portal(5, `[{"id":"C","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"RANDOM_PORTAL","params":{"range":777}}]}]`),
+			want: 777,
+		},
+		{
+			name: "rank fallback rank 5",
+			spec: portal(5, `[{"id":"C","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE","params":{}}]}]`),
+			want: 1000,
+		},
+		{
+			name: "rank fallback rank 9",
+			spec: portal(9, `[{"id":"C","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE","params":{}}]}]`),
+			want: 30000,
+		},
+		{
+			name: "nil spec is unlimited",
+			spec: nil,
+			want: 0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := GuTeleportRange(tc.spec); got != tc.want {
+				t.Fatalf("GuTeleportRange = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestChebyshevDistanceAndRandomTeleportTarget(t *testing.T) {
+	if got := chebyshevDistance(3, 4, 6, 4); got != 3 {
+		t.Fatalf("chebyshevDistance = %d, want 3", got)
+	}
+	if got := chebyshevDistance(0, 0, 4, 9); got != 9 {
+		t.Fatalf("chebyshevDistance = %d, want 9", got)
+	}
+	for i := 0; i < 100; i++ {
+		x, y := randomTeleportTarget(15000, 10000, 500)
+		if chebyshevDistance(15000, 10000, x, y) > 500 {
+			t.Fatalf("randomTeleportTarget exceeded limit: (%d,%d)", x, y)
+		}
+		if !inWorld(x, y) {
+			t.Fatalf("randomTeleportTarget out of world: (%d,%d)", x, y)
+		}
+	}
+}
