@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 func AdminListCombatHistory(c *gin.Context) {
@@ -19,27 +20,44 @@ func AdminListCombatHistory(c *gin.Context) {
 	}
 	page, limit := adminPage(c, 25, 100)
 	search := strings.TrimSpace(c.Query("search"))
-	pattern := "%" + search + "%"
-	filter := `($1 = '' OR h.id::text ILIKE $2 OR h.player_id::text ILIKE $2 OR p.username ILIKE $2 OR h.enemy_name ILIKE $2 OR h.enemy_type ILIKE $2 OR h.region ILIKE $2 OR h.winner ILIKE $2)`
+
+	where := ""
+	args := []interface{}{}
+	if search != "" {
+		where = `WHERE (h.id::text ILIKE $1 OR h.player_id::text ILIKE $1 OR p.username ILIKE $1 OR h.enemy_name ILIKE $1 OR h.enemy_type ILIKE $1 OR h.region ILIKE $1 OR h.winner ILIKE $1)`
+		args = append(args, "%"+search+"%")
+	}
 
 	var total int
-	if err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT COUNT(*) FROM combat_history h
-		LEFT JOIN players p ON p.id = h.player_id
-		WHERE `+filter, search, pattern).Scan(&total); err != nil {
+	var err error
+	if search == "" {
+		// Unfiltered list: avoid a full COUNT(*) on every page load.
+		total, err = fastCountTable(c, "combat_history", "admin:combat_history:total_count", 60*time.Second)
+	} else {
+		err = db.DB.QueryRowContext(c.Request.Context(), `
+			SELECT COUNT(*) FROM combat_history h
+			LEFT JOIN players p ON p.id = h.player_id
+			`+where, args...).Scan(&total)
+	}
+	if err != nil {
+		logger.S.Errorf("admin combat history: count failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm lịch sử chiến đấu"})
 		return
 	}
-	rows, err := db.DB.QueryContext(c.Request.Context(), `
+
+	query := fmt.Sprintf(`
 		SELECT h.id, h.player_id, COALESCE(p.username, ''), h.winner, h.summary,
 		       h.enemy_name, h.enemy_type, h.region,
 		       COALESCE(jsonb_array_length(h.logs), 0), h.created_at
 		FROM combat_history h
 		LEFT JOIN players p ON p.id = h.player_id
-		WHERE `+filter+`
+		%s
 		ORDER BY h.created_at DESC, h.id
-		LIMIT $3 OFFSET $4`, search, pattern, limit, (page-1)*limit)
+		LIMIT $%d OFFSET $%d`, where, len(args)+1, len(args)+2)
+	queryArgs := append(append([]interface{}{}, args...), limit, (page-1)*limit)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, queryArgs...)
 	if err != nil {
+		logger.S.Errorf("admin combat history: list failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải lịch sử chiến đấu"})
 		return
 	}

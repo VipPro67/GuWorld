@@ -32,11 +32,11 @@ func GetActiveTribulation(c *gin.Context) {
 	var endedAt sql.NullTime
 	var hpAfter sql.NullFloat64
 	err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, aperture_id, player_id, tribulation_type, path, difficulty, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at
+		SELECT id, aperture_id, player_id, tribulation_type, path, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at
 		FROM tribulation_events
 		WHERE player_id = $1 AND status = 'ACTIVE'
 		LIMIT 1
-	`, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Difficulty, &ev.Status, &ev.ApertureHPBefore, &hpAfter, &ev.RewardDaoMarks, &ev.StartedAt, &endedAt)
+	`, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Status, &ev.ApertureHPBefore, &hpAfter, &ev.RewardDaoMarks, &ev.StartedAt, &endedAt)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusOK, nil)
@@ -357,10 +357,10 @@ func ResolveTribulation(c *gin.Context) {
 	// 1. Fetch active event
 	var ev models.TribulationEvent
 	err = tx.QueryRow(`
-		SELECT id, aperture_id, player_id, tribulation_type, path, difficulty, reward_dao_marks, started_at
+		SELECT id, aperture_id, player_id, tribulation_type, path, reward_dao_marks, started_at
 		FROM tribulation_events
 		WHERE id = $1 AND player_id = $2 AND status = 'ACTIVE'
-	`, eventID, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Difficulty, &ev.RewardDaoMarks, &ev.StartedAt)
+	`, eventID, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.RewardDaoMarks, &ev.StartedAt)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Đợt tai kiếp này đã được giải quyết hoặc không tồn tại"})
 		return

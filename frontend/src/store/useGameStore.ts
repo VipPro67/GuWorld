@@ -701,7 +701,6 @@ export interface TribulationEvent {
   player_id: string;
   tribulation_type: 'EARTH_CALAMITY' | 'HEAVENLY_TRIBULATION' | 'GRAND_TRIBULATION' | 'MYRIAD_TRIBULATION' | 'CHAOS_CALAMITY' | 'CHAOTIC_TRIBULATION';
   path: string;
-  difficulty: number;
   status: 'ACTIVE' | 'SUCCESS' | 'FAILED';
   aperture_hp_before: number;
   aperture_hp_after: number | null;

@@ -53,7 +53,7 @@ Frontend đồng bộ: `ImmortalApertureView.tsx:1850-1855`
 
 | Nguồn | Handler | Công Thức |
 |-------|---------|-----------|
-| **Thiên Kiếp** (Tribulation) | `tribulation.go:874-883` | Earth: 250 + diff×50. Heavenly: 750 + diff×150. Grand: 7250 + diff×500. Myriad: 86750 + diff×2000 |
+| **Thiên Kiếp** (Tribulation) | `models/aperture.go` `CalculateTribulationReward` | Thưởng cố định theo rank + loại kiếp (không scale theo độ khó). R6: Địa Tai 250 / Thiên Kiếp 750. R7: 1.500 / 5.000 / 20.000. R8: 10.000 / 40.000 / 150.000. R9: 50.000 / 200.000 / 1.500.000 |
 | **Item effect** `dao_mark_gain` | `item_effects.go:118-131` | `player.DaoMarks[pathKey] += int(val)` |
 | **Item effect** `soul_boost` | `item_effects.go:109-115` | `player.DaoMarks["soul"] += int(val)` |
 | **Phi Thăng** (Ascension) | `cultivate.go` | 100 Đạo Ngân cho mỗi một trong 2 lưu phái ngẫu nhiên, không gồm Thiên Đạo |
@@ -247,14 +247,17 @@ Tại `killer_move.go:449-457`, `calculatePathConflict()`:
 
 ### 4.2 Reward Scale
 
-| Loại Kiếp | Công Thức |
-|-----------|-----------|
-| Earth Calamity | 250 + difficulty×50 |
-| Heavenly Tribulation | 750 + difficulty×150 |
-| Grand Tribulation | 7250 + difficulty×500 |
-| Myriad Tribulation | 86750 + difficulty×2000 |
+Thưởng Đạo Ngân **cố định** theo rank người chơi + loại kiếp; không scale theo độ khó quái.
 
-- `tribulation.go:874-883`
+| Rank | Địa Tai | Thiên Kiếp | Hạo Kiếp | Vạn Kiếp | Hỗn Độn |
+|------|---------|------------|----------|----------|---------|
+| 6 | 250 | 750 | — | — | — |
+| 7 | 1.500 | 5.000 | 20.000 | — | — |
+| 8 | — | 10.000 | 40.000 | 150.000 | — |
+| 9 | — | — | 50.000 | 200.000 | 1.500.000 |
+| 10 | — | — | — | — | 1.500.000 |
+
+- `models/aperture.go` `CalculateTribulationReward(rank, tribType)`
 
 ---
 

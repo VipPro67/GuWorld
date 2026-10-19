@@ -115,7 +115,6 @@ type TribulationEvent struct {
 	PlayerID         string     `json:"player_id"`
 	TribulationType  string     `json:"tribulation_type"` // 'EARTH_CALAMITY' | 'HEAVENLY_TRIBULATION' | 'GRAND_TRIBULATION' | 'MYRIAD_TRIBULATION' | 'CHAOS_CALAMITY'
 	Path             string     `json:"path"`
-	Difficulty       int        `json:"difficulty"`
 	Status           string     `json:"status"` // 'ACTIVE' | 'SUCCESS' | 'FAILED'
 	ApertureHPBefore float64    `json:"aperture_hp_before"`
 	ApertureHPAfter  *float64   `json:"aperture_hp_after"`
@@ -483,8 +482,9 @@ func CheckImmortalBreakthrough(rank int, earthCnt, heavenCnt, grandCnt, myriadCn
 
 // GetTribulationRankAndSubRank returns the monster rank and subRank based on
 // the tribulation type. The player rank controls which types can be scheduled,
-// but it does not change the rank of the monster spawned for that type.
-func GetTribulationRankAndSubRank(_ int, tribType string) (rank int, subRank int) {
+// but it does not change the rank of the monster spawned for that type — except
+// for the Chaotic/Hybrid tribulation, which spawns at the player's own rank.
+func GetTribulationRankAndSubRank(playerRank int, tribType string) (rank int, subRank int) {
 	switch tribType {
 	case "EARTH_CALAMITY":
 		return 6, 1
@@ -497,15 +497,20 @@ func GetTribulationRankAndSubRank(_ int, tribType string) (rank int, subRank int
 	case "CHAOS_CALAMITY":
 		return 10, 4
 	case "CHAOTIC_TRIBULATION":
-		return 10, 4
+		if playerRank < 6 {
+			playerRank = 6
+		} else if playerRank > 10 {
+			playerRank = 10
+		}
+		return playerRank, 4
 	default:
 		return 6, 1
 	}
 }
 
-// CalculateTribulationReward calculates the Dao Marks reward based on player rank, tribulation type, and difficulty.
-// Scales smoothly with the target Dao Marks for each realm (Rank 6: ~40k, Rank 7: ~220k, Rank 8: ~1.4M, Rank 9: ~8.5M).
-func CalculateTribulationReward(rank int, tribType string, difficulty int) int64 {
+// CalculateTribulationReward returns the flat Dao Marks reward for a player rank
+// and tribulation type. Rewards no longer scale with tribulation difficulty.
+func CalculateTribulationReward(rank int, tribType string) int64 {
 	if rank < 6 {
 		rank = 6
 	} else if rank > 10 {
@@ -517,45 +522,44 @@ func CalculateTribulationReward(rank int, tribType string, difficulty int) int64
 		tribType = "CHAOS_CALAMITY"
 	}
 
-	diff := int64(difficulty)
 	switch rank {
 	case 6:
 		switch tribType {
 		case "HEAVENLY_TRIBULATION":
-			return 750 + diff*150
+			return 750
 		default:
-			return 250 + diff*50
+			return 250
 		}
 	case 7:
 		switch tribType {
 		case "GRAND_TRIBULATION":
-			return 20000 + diff*2000
+			return 20000
 		case "HEAVENLY_TRIBULATION":
-			return 5000 + diff*500
+			return 5000
 		default:
-			return 1500 + diff*200
+			return 1500
 		}
 	case 8:
 		switch tribType {
 		case "MYRIAD_TRIBULATION":
-			return 150000 + diff*10000
+			return 150000
 		case "GRAND_TRIBULATION":
-			return 40000 + diff*3000
+			return 40000
 		default:
-			return 10000 + diff*1000
+			return 10000
 		}
 	case 9:
 		switch tribType {
 		case "CHAOS_CALAMITY":
-			return 1500000 + diff*50000
+			return 1500000
 		case "MYRIAD_TRIBULATION":
-			return 200000 + diff*15000
+			return 200000
 		default:
-			return 50000 + diff*5000
+			return 50000
 		}
 	case 10:
-		return 1500000 + diff*50000
+		return 1500000
 	default:
-		return 250 + diff*50
+		return 250
 	}
 }

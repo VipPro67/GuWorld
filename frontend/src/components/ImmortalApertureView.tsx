@@ -1333,7 +1333,6 @@ return (
                         <span className="font-bold text-rose-300 text-sm">
                           {getRankName(rank)} - {getTribulationTypeName(activeTribulation.event.tribulation_type)}
                         </span>
-                        <span className="text-slate-400">Độ khó: <span className="text-rose-400 font-bold">{activeTribulation.event.difficulty}</span></span>
                       </div>
                       <div className="text-sm font-bold text-slate-200 uppercase tracking-wide">
                         {activeTribulation.event.path.toUpperCase()} PATH

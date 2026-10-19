@@ -113,7 +113,7 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 
 	if ap.InternalYearsPassed >= triggerYear {
 		spawnType := calcNextType
-		err = spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.EarthCalamityCount+ap.HeavenlyTribulationCount+ap.GrandTribulationCount+ap.MyriadTribulationCount+ap.ChaosCalamityCount+1, ap.ApertureHP, ap.InternalYearsPassed, spawnType, 1.0)
+		err = spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.ApertureHP, ap.InternalYearsPassed, spawnType, 1.0)
 		if err != nil {
 			return err
 		}
@@ -628,7 +628,7 @@ func CheckAndTriggerTribulations() error {
 				if gamefx.IsChaoticTribulation(ap.DaoMarks, nil) {
 					spawnType = "CHAOTIC_TRIBULATION"
 				}
-				err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.EarthCalamityCount+ap.HeavenlyTribulationCount+ap.GrandTribulationCount+ap.MyriadTribulationCount+ap.ChaosCalamityCount+1, ap.ApertureHP, newYearsPassed, spawnType, rewardMult)
+				err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.ApertureHP, newYearsPassed, spawnType, rewardMult)
 				if err != nil {
 					logger.S.Errorf("Failed to spawn tribulation event for player %s: %v", ap.PlayerID, err)
 				}
@@ -820,7 +820,7 @@ func tribulationPathLabel(path string) string {
 	return strings.Join(parts, " + ")
 }
 
-func spawnTribulationEventWorker(apertureID string, playerID string, tribCount int, currentHP float64, newYearsPassed float64, tribulationType string, rewardMult float64) error {
+func spawnTribulationEventWorker(apertureID string, playerID string, currentHP float64, newYearsPassed float64, tribulationType string, rewardMult float64) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
@@ -863,43 +863,6 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		_ = json.Unmarshal(daoMarksRaw, &daoMarks)
 	}
 
-	maxDao := int64(0)
-	for _, val := range daoMarks {
-		if val > maxDao {
-			maxDao = val
-		}
-	}
-
-	expectedDao := 40000.0
-	switch rank {
-	case 6:
-		expectedDao = 40000.0
-	case 7:
-		expectedDao = 220000.0
-	case 8:
-		expectedDao = 1400000.0
-	case 9:
-		expectedDao = 8500000.0
-	default:
-		if rank < 6 {
-			expectedDao = 1000.0
-		} else {
-			expectedDao = 8500000.0
-		}
-	}
-
-	daoBalancingMult := 1.0
-	if expectedDao > 0 {
-		ratio := float64(maxDao) / expectedDao
-		if ratio < 0.25 {
-			ratio = 0.25
-		}
-		if rank < 9 && ratio > 3.0 {
-			ratio = 3.0
-		}
-		daoBalancingMult = ratio
-	}
-
 	// Kiếp Nạn Hỗn Loạn: khuếch đại HP/Công quái theo độ tạp (spec §5.2).
 	calamityMult := 1.0
 	if tribulationType == "CHAOTIC_TRIBULATION" {
@@ -908,8 +871,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		path = chaoticHybridPath(daoMarks, path)
 	}
 
-	difficulty := 1 + tribCount
-	rewardMarks := models.CalculateTribulationReward(rank, tribulationType, difficulty)
+	rewardMarks := models.CalculateTribulationReward(rank, tribulationType)
 	if rewardMult <= 0 {
 		rewardMult = 1.0
 	}
@@ -918,9 +880,9 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	// Insert Tribulation Event
 	eventID := uuid.New()
 	_, err = tx.Exec(`
-		INSERT INTO tribulation_events (id, aperture_id, player_id, tribulation_type, path, difficulty, status, aperture_hp_before, reward_dao_marks, started_at)
-		VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', $7, $8, NOW())
-	`, eventID, apertureID, playerID, tribulationType, path, difficulty, currentHP, rewardMarks)
+		INSERT INTO tribulation_events (id, aperture_id, player_id, tribulation_type, path, status, aperture_hp_before, reward_dao_marks, started_at)
+		VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6, $7, NOW())
+	`, eventID, apertureID, playerID, tribulationType, path, currentHP, rewardMarks)
 	if err != nil {
 		return err
 	}
@@ -966,12 +928,10 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		return fmt.Errorf("load tribulation boss template %s from database: %w", bossTemplateID, err)
 	}
 
-	// Apply difficulty scaling
-	diffMultiplier := 1.0 + float64(difficulty)*0.2
 	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, bossRank, bossSubRank, boss.Type)
-	bossHP := scaledHP * diffMultiplier * daoBalancingMult * calamityMult
-	bossAtk := scaledAtk * diffMultiplier * daoBalancingMult * calamityMult
-	bossDef := scaledDef * diffMultiplier * daoBalancingMult
+	bossHP := scaledHP * calamityMult
+	bossAtk := scaledAtk * calamityMult
+	bossDef := scaledDef
 
 	_, err = tx.Exec(`
 		INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead, rank, sub_rank)
@@ -1000,9 +960,9 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	minionSubRank := 1
 	for i := 0; i < minionCount; i++ {
 		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, bossRank, minionSubRank, minion.Type)
-		mHP := scaledHPm * diffMultiplier * daoBalancingMult * calamityMult
-		mAtk := scaledAtkm * diffMultiplier * daoBalancingMult * calamityMult
-		mDef := scaledDefm * diffMultiplier * daoBalancingMult
+		mHP := scaledHPm * calamityMult
+		mAtk := scaledAtkm * calamityMult
+		mDef := scaledDefm
 
 		_, err = tx.Exec(`
 			INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_dead, rank, sub_rank)
@@ -1152,8 +1112,8 @@ func failOverduePendingTribulation(ap ApertureCheck, newYearsPassed float64, cal
 
 	eventID := uuid.New()
 	_, _ = tx.Exec(`
-		INSERT INTO tribulation_events (id, aperture_id, player_id, tribulation_type, path, difficulty, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at)
-		VALUES ($1, $2, $3, $4, 'general', 1, 'FAILED', $5, $6, 0, NOW(), NOW())
+		INSERT INTO tribulation_events (id, aperture_id, player_id, tribulation_type, path, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at)
+		VALUES ($1, $2, $3, $4, 'general', 'FAILED', $5, $6, 0, NOW(), NOW())
 	`, eventID, ap.ID, ap.PlayerID, calcNextType, ap.ApertureHP, newHP)
 
 	_, _ = tx.Exec(`
@@ -1173,9 +1133,9 @@ func autoResolveEvent(eventID string, playerID string) {
 
 	var ev models.TribulationEvent
 	err = tx.QueryRow(`
-		SELECT id, aperture_id, player_id, tribulation_type, path, difficulty, started_at, aperture_hp_before
+		SELECT id, aperture_id, player_id, tribulation_type, path, started_at, aperture_hp_before
 		FROM tribulation_events WHERE id = $1 AND status = 'ACTIVE'
-	`, eventID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Difficulty, &ev.StartedAt, &ev.ApertureHPBefore)
+	`, eventID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.StartedAt, &ev.ApertureHPBefore)
 	if err != nil {
 		return
 	}

@@ -288,7 +288,6 @@ func schemaAperture() error {
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		tribulation_type VARCHAR(30) NOT NULL,
 		path VARCHAR(50) NOT NULL,
-		difficulty INTEGER NOT NULL DEFAULT 1,
 		status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
 		aperture_hp_before DOUBLE PRECISION NOT NULL,
 		aperture_hp_after DOUBLE PRECISION,

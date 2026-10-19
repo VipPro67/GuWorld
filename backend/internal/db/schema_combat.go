@@ -34,6 +34,10 @@ func schemaCombat() error {
 	CREATE INDEX IF NOT EXISTS idx_combat_history_player_created ON combat_history (player_id, created_at DESC);`); err != nil {
 		return err
 	}
+	if err := execSchema("combat_history_created_id_idx", `
+	CREATE INDEX IF NOT EXISTS idx_combat_history_created_id ON combat_history (created_at DESC, id);`); err != nil {
+		return err
+	}
 	if err := execSchema("combat_history_winner_created_idx", `
 	CREATE INDEX IF NOT EXISTS idx_combat_history_winner_created ON combat_history (winner, created_at DESC);`); err != nil {
 		return err

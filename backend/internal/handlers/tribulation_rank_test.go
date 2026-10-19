@@ -29,6 +29,9 @@ func TestGetTribulationRankAndSubRank(t *testing.T) {
 		{"Rank 9 Grand Tribulation", 9, "GRAND_TRIBULATION", 8, 3},
 		{"Rank 9 Myriad Tribulation", 9, "MYRIAD_TRIBULATION", 9, 4},
 		{"Rank 9 Chaos Calamity", 9, "CHAOS_CALAMITY", 10, 4},
+		{"Rank 6 Chaotic Tribulation", 6, "CHAOTIC_TRIBULATION", 6, 4},
+		{"Rank 8 Chaotic Tribulation", 8, "CHAOTIC_TRIBULATION", 8, 4},
+		{"Rank 10 Chaotic Tribulation", 10, "CHAOTIC_TRIBULATION", 10, 4},
 	}
 
 	for _, tt := range tests {
@@ -110,15 +113,15 @@ func TestRank10UsesChaosCalamity(t *testing.T) {
 
 func TestCalculateTribulationReward(t *testing.T) {
 	// Ensure higher rank and higher tier tribulations yield progressively greater rewards
-	r6Earth := models.CalculateTribulationReward(6, "EARTH_CALAMITY", 1)
-	r6Heaven := models.CalculateTribulationReward(6, "HEAVENLY_TRIBULATION", 1)
+	r6Earth := models.CalculateTribulationReward(6, "EARTH_CALAMITY")
+	r6Heaven := models.CalculateTribulationReward(6, "HEAVENLY_TRIBULATION")
 	if r6Earth >= r6Heaven {
 		t.Errorf("Expected r6Heaven > r6Earth, got %d vs %d", r6Heaven, r6Earth)
 	}
 
-	r7Earth := models.CalculateTribulationReward(7, "EARTH_CALAMITY", 1)
-	r7Heaven := models.CalculateTribulationReward(7, "HEAVENLY_TRIBULATION", 1)
-	r7Grand := models.CalculateTribulationReward(7, "GRAND_TRIBULATION", 1)
+	r7Earth := models.CalculateTribulationReward(7, "EARTH_CALAMITY")
+	r7Heaven := models.CalculateTribulationReward(7, "HEAVENLY_TRIBULATION")
+	r7Grand := models.CalculateTribulationReward(7, "GRAND_TRIBULATION")
 	if !(r7Earth < r7Heaven && r7Heaven < r7Grand) {
 		t.Errorf("Expected r7Earth (%d) < r7Heaven (%d) < r7Grand (%d)", r7Earth, r7Heaven, r7Grand)
 	}
@@ -126,9 +129,9 @@ func TestCalculateTribulationReward(t *testing.T) {
 		t.Errorf("Expected r7Earth > r6Earth, got %d vs %d", r7Earth, r6Earth)
 	}
 
-	r8Heaven := models.CalculateTribulationReward(8, "HEAVENLY_TRIBULATION", 1)
-	r8Grand := models.CalculateTribulationReward(8, "GRAND_TRIBULATION", 1)
-	r8Myriad := models.CalculateTribulationReward(8, "MYRIAD_TRIBULATION", 1)
+	r8Heaven := models.CalculateTribulationReward(8, "HEAVENLY_TRIBULATION")
+	r8Grand := models.CalculateTribulationReward(8, "GRAND_TRIBULATION")
+	r8Myriad := models.CalculateTribulationReward(8, "MYRIAD_TRIBULATION")
 	if !(r8Heaven < r8Grand && r8Grand < r8Myriad) {
 		t.Errorf("Expected r8Heaven (%d) < r8Grand (%d) < r8Myriad (%d)", r8Heaven, r8Grand, r8Myriad)
 	}
@@ -136,9 +139,9 @@ func TestCalculateTribulationReward(t *testing.T) {
 		t.Errorf("Expected r8Heaven > r7Heaven, got %d vs %d", r8Heaven, r7Heaven)
 	}
 
-	r9Grand := models.CalculateTribulationReward(9, "GRAND_TRIBULATION", 1)
-	r9Myriad := models.CalculateTribulationReward(9, "MYRIAD_TRIBULATION", 1)
-	r9Chaos := models.CalculateTribulationReward(9, "CHAOS_CALAMITY", 1)
+	r9Grand := models.CalculateTribulationReward(9, "GRAND_TRIBULATION")
+	r9Myriad := models.CalculateTribulationReward(9, "MYRIAD_TRIBULATION")
+	r9Chaos := models.CalculateTribulationReward(9, "CHAOS_CALAMITY")
 	if !(r9Grand < r9Myriad && r9Myriad < r9Chaos) {
 		t.Errorf("Expected r9Grand (%d) < r9Myriad (%d) < r9Chaos (%d)", r9Grand, r9Myriad, r9Chaos)
 	}

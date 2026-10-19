@@ -526,6 +526,14 @@ export function WorldPage() {
                   {Math.round(gamePlayer.current_thought).toLocaleString('vi-VN')}
                 </span>
               </div>
+              {gamePlayer.rank < 6 && (
+                <div className="relative w-full h-2 sm:h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Nhân Khí: ${Math.round(gamePlayer.human_qi || 0).toLocaleString('vi-VN')} / 500.000`}>
+                  <div className="h-full bg-teal-500 transition-all duration-300" style={{ width: `${Math.min(100, ((gamePlayer.human_qi || 0) / 500000) * 100)}%` }} />
+                  <span className="absolute inset-0 flex items-center justify-center text-[8px] sm:text-[9px] font-bold text-white drop-shadow-md">
+                    {Math.round(gamePlayer.human_qi || 0).toLocaleString('vi-VN')}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex flex-col items-start justify-center mt-0.5 sm:mt-1">
               <div className="max-w-32 sm:max-w-40 truncate text-emerald-300 font-bold text-[11px] sm:text-xs drop-shadow-md" title={currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}>

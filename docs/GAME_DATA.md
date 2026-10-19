@@ -591,7 +591,6 @@ Lưu các sự kiện Kiếp Nạn của Tiên Khiếu:
 - `player_id` (UUID FK → `players(id)`)
 - `tribulation_type` (VARCHAR) — EARTH_CALAMITY / HEAVENLY_TRIBULATION / GRAND_TRIBULATION / MYRIAD_TRIBULATION / CHAOS_CALAMITY
 - `path` (VARCHAR) — Đường hướng kiếp nạn (ví dụ: fire, water, ice)
-- `difficulty` (INTEGER)
 - `status` (VARCHAR) — ACTIVE / SUCCESS / FAILED
 - `aperture_hp_before` (BIGINT) — HP Tiên Khiếu trước kiếp nạn
 - `aperture_hp_after` (BIGINT) — HP Tiên Khiếu sau kiếp nạn (NULL nếu chưa kết thúc)
