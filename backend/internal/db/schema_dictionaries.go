@@ -187,6 +187,12 @@ func seedDefaultRaceConstitutionRows() error {
 		{"variant_beastman", "Thú Nhân", `{"stat_mods":{"attack":0.08,"defense":0.05},"refine":-0.05}`},
 		{"dragonman", "Long Nhân", `{"stat_mods":{"attack":0.10,"defense":0.10},"refine":-0.05}`},
 		{"giant_sun_descendant", "Cự Dương Huyết Mạch", `{"luck":5,"cultivation_efficiency":0.05}`},
+		{"eggman", "Đản Dân", `{"dao_mark":{"cloud":0.05,"wind":0.05},"stat_mods":{"defense":-0.10,"speed":0.10},"healing_received":0.15}`},
+		{"miniman", "Tiểu Nhân", `{"dao_mark":{"wood":0.10},"refine":0.05,"stat_mods":{"attack":-0.12}}`},
+		{"mushroomman", "Nấm Nhân", `{"dao_mark":{"earth":0.10},"stat_mods":{"defense":0.10,"speed":-0.10},"hp_regen":15}`},
+		{"yakshaman", "Dạ Xoa Dân", `{"stat_mods":{"attack":0.12},"dao_mark":{"dark":0.08},"refine":-0.08,"mental_resistance":-0.10}`},
+		{"ghostman", "U Hồn Tộc", `{"dao_mark":{"soul":0.12},"soul_defense":0.20,"soul_regen":0.20,"stat_mods":{"hp":-0.10},"healing_received":-0.15}`},
+		{"ancient_human", "Thái Cổ Nhân Tộc", `{"cultivation_efficiency":0.10,"luck":3,"dao_mark":{"human":0.10},"refine":-0.05}`},
 	}
 	for _, r := range races {
 		if _, err := schemaDB().Exec(`INSERT INTO race_dictionary (key, name, effects) VALUES ($1,$2,$3::jsonb) ON CONFLICT (key) DO NOTHING`, r.key, r.name, r.effects); err != nil {
@@ -210,6 +216,18 @@ func seedDefaultRaceConstitutionRows() error {
 		{"great_earth_origin_body", "Hậu Thổ Nguyên Ương Thể", `{"dao_mark":{"earth":0.50},"stat_mods":{"defense":0.45},"mental_resistance":0.45,"max_mana":0.50,"mana_regen":1}`, 3},
 		{"universe_great_evolution_body", "Vũ Trụ Đại Diễn Thể", `{"dao_mark":{"space":0.50},"stat_mods":{"attack":0.15,"defense":0.15,"speed":0.15},"max_mana":0.50,"mana_regen":1}`, 3},
 		{"pure_dream_reality_seeker_body", "Thuần Mộng Cầu Chân Thể", `{"dao_mark":{"dream":0.40},"path_damage":{"dream":0.10},"max_mana":0.40,"mana_regen":1}`, 3},
+		{"frost_chilling_body", "Hàn Sương Thể", `{"dao_mark":{"ice":0.25},"path_resistance":{"ice":0.10},"stat_mods":{"speed":-0.10}}`, 1},
+		{"blazing_fiery_body", "Xích Liệt Hoang Thể", `{"dao_mark":{"fire":0.25},"path_damage":{"fire":0.10},"stat_mods":{"attack":0.10,"defense":-0.10},"mental_resistance":-0.15}`, 1},
+		{"brute_strength_body", "Cự Lực Man Thể", `{"dao_mark":{"strength":0.25},"stat_mods":{"attack":0.15,"defense":0.10,"speed":-0.10},"mana_regen":-0.20}`, 1},
+		{"heavy_rock_body", "Trọng Nham Huyền Thể", `{"dao_mark":{"earth":0.25},"stat_mods":{"defense":0.25,"speed":-0.15},"mental_resistance":0.15}`, 1},
+		{"spirit_wood_body", "Linh Mộc Dưỡng Sinh Thể", `{"dao_mark":{"wood":0.25},"healing_received":0.30,"hp_regen":20,"stat_mods":{"attack":-0.10}}`, 1},
+		{"iron_bone_body", "Thiết Cốt Huyền Kim Thể", `{"dao_mark":{"metal":0.20},"stat_mods":{"defense":0.20,"speed":-0.10},"tenacity":0.10,"aperture_stress_bonus":0.25}`, 1},
+		{"clear_wisdom_heart_body", "Minh Tuệ Linh Tâm Thể", `{"dao_mark":{"wisdom":0.25},"mental_resistance":0.20,"cc_resist":0.10,"stat_mods":{"attack":-0.10,"hp":-0.10}}`, 1},
+		{"swift_wind_body", "Tật Phong Phi Hành Thể", `{"dao_mark":{"wind":0.25},"stat_mods":{"defense":-0.15,"speed":0.20},"max_mana":-0.10}`, 1},
+		{"night_shade_body", "U Dạ Ám Linh Thể", `{"dao_mark":{"dark":0.25},"soul_defense":0.25,"path_resistance":{"light":-0.10},"healing_received":-0.15}`, 1},
+		{"illusion_light_body", "Huyễn Quang Lưu Chuyển Thể", `{"dao_mark":{"light":0.25},"path_damage":{"light":0.10},"stat_mods":{"speed":0.10},"mana_regen":-0.15}`, 1},
+		{"blood_fiend_body", "Huyết Ma Sát Thể", `{"dao_mark":{"blood":0.25},"stat_mods":{"attack":0.15},"healing_received":0.20,"aperture_stress_bonus":0.35,"refine":-0.10}`, 1},
+		{"dream_phantom_body", "Huyễn Mộng Linh Thể", `{"dao_mark":{"dream":0.20},"path_damage":{"dream":0.05},"mental_resistance":-0.15,"cc_resist":-0.10}`, 1},
 	}
 	for _, c := range constitutions {
 		if _, err := schemaDB().Exec(`INSERT INTO constitution_dictionary (key, name, effects, tier) VALUES ($1,$2,$3::jsonb,$4) ON CONFLICT (key) DO NOTHING`, c.key, c.name, c.effects, c.tier); err != nil {

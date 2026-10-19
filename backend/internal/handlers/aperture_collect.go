@@ -272,6 +272,64 @@ func saveApertureNodeRemainder(tx *sql.Tx, nodeID string, x, y int, remainder fl
 	return err
 }
 
+type apertureCellKey struct {
+	NodeID string
+	X, Y   int
+}
+
+type apertureNodeRemainderUpdate struct {
+	NodeID    string
+	X, Y      int
+	Remainder float64
+}
+
+// loadApertureNodeRemainders reads every cell remainder for an aperture in one
+// query, keyed by node + coordinates. Callers must ensure the anchor rows exist.
+func loadApertureNodeRemainders(tx *sql.Tx, apertureID uuid.UUID) (map[apertureCellKey]float64, error) {
+	rows, err := tx.Query(`SELECT node_id, x, y, production_remainder FROM aperture_resource_node_cells WHERE aperture_id = $1`, apertureID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[apertureCellKey]float64)
+	for rows.Next() {
+		var nodeID string
+		var x, y int
+		var remainder float64
+		if err := rows.Scan(&nodeID, &x, &y, &remainder); err != nil {
+			return nil, err
+		}
+		out[apertureCellKey{nodeID, x, y}] = remainder
+	}
+	return out, rows.Err()
+}
+
+// saveApertureNodeRemainders writes all changed remainders in one statement.
+func saveApertureNodeRemainders(tx *sql.Tx, updates []apertureNodeRemainderUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	ids := make([]string, len(updates))
+	xs := make([]int, len(updates))
+	ys := make([]int, len(updates))
+	remainders := make([]float64, len(updates))
+	for i, u := range updates {
+		ids[i], xs[i], ys[i], remainders[i] = u.NodeID, u.X, u.Y, u.Remainder
+	}
+	_, err := tx.Exec(`
+		UPDATE aperture_resource_node_cells AS c
+		SET production_remainder = u.remainder
+		FROM (
+			SELECT unnest($1::uuid[]) AS node_id,
+			       unnest($2::int[])::smallint AS x,
+			       unnest($3::int[])::smallint AS y,
+			       unnest($4::double precision[]) AS remainder
+		) AS u
+		WHERE c.node_id = u.node_id AND c.x = u.x AND c.y = u.y
+	`, pq.Array(ids), pq.Array(xs), pq.Array(ys), pq.Array(remainders))
+	return err
+}
+
 // computeBulkRepairCost returns the repair cost for a node after applying a bulk fee multiplier
 // (rounded up). Destroyed nodes cannot be repaired because they are deleted.
 func computeBulkRepairCost(hp, maxHP int, isDestroyed bool, feeMultiplier float64) (baseCost, totalCost int) {
@@ -767,6 +825,24 @@ func CollectAllApertureResources(c *gin.Context) {
 		Reward int64  `json:"reward"`
 	}
 
+	// Ensure each node has an anchor cell row, then read every remainder once.
+	// This replaces 2 queries per ready node (insert + select) with one insert
+	// and one select for the whole aperture.
+	if _, err := tx.Exec(`
+		INSERT INTO aperture_resource_node_cells (node_id, aperture_id, x, y)
+		SELECT id, aperture_id, x, y FROM aperture_resource_nodes WHERE aperture_id = $1
+		ON CONFLICT DO NOTHING
+	`, apertureID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải sản lượng lẻ của khu"})
+		return
+	}
+	remainders, err := loadApertureNodeRemainders(tx, apertureID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải sản lượng lẻ của khu"})
+		return
+	}
+	var remainderUpdates []apertureNodeRemainderUpdate
+
 	var readyCount int
 	var productiveCount int
 	var totalStones int64
@@ -807,17 +883,12 @@ func CollectAllApertureResources(c *gin.Context) {
 
 		// Carry fractional yield on the zone's anchor cell so many small areas
 		// still add up to the configured full-grid production target.
-		remainder, err := loadApertureNodeRemainder(tx, n.ID, n.X, n.Y)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải sản lượng lẻ của khu"})
-			return
-		}
+		remainder := remainders[apertureCellKey{n.ID, n.X, n.Y}]
 		accumulatedReward := computeApertureNodeRewardWithCtx(rewardCtx, n, multiples, areaSize, allNodes, 0.8) + remainder
 		reward := int64(math.Floor(accumulatedReward))
-		if err := saveApertureNodeRemainder(tx, n.ID, n.X, n.Y, accumulatedReward-float64(reward)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu sản lượng lẻ của khu"})
-			return
-		}
+		remainderUpdates = append(remainderUpdates, apertureNodeRemainderUpdate{
+			NodeID: n.ID, X: n.X, Y: n.Y, Remainder: accumulatedReward - float64(reward),
+		})
 
 		if n.ProductionType == "Stones" && reward > 0 {
 			totalStones += reward
@@ -841,6 +912,10 @@ func CollectAllApertureResources(c *gin.Context) {
 
 	if readyCount == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có mỏ nào sẵn sàng để thu hoạch."})
+		return
+	}
+	if err := saveApertureNodeRemainders(tx, remainderUpdates); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu sản lượng lẻ của khu"})
 		return
 	}
 

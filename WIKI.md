@@ -38,6 +38,12 @@ Khi đăng ký, đạo hữu mặc định Nhân Tộc  và chọn **Giới tín
 | Thú Nhân (`variant_beastman`) | +8% tấn công, +5% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | Long Nhân (`dragonman`) | +10% tấn công, +10% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | Cự Dương Huyết Mạch (`giant_sun_descendant`) | +5 Vận, +5% hiệu quả tu luyện |
+| Đản Dân (`eggman`) | +5% Vân/Phong Đạo affinity, +10% tốc độ, -10% phòng thủ, +15% hồi phục nhận |
+| Tiểu Nhân (`miniman`) | +10% Mộc Đạo affinity, +5% tỉ lệ Luyện Cổ, -12% tấn công |
+| Nấm Nhân (`mushroomman`) | +10% Thổ Đạo affinity, +10% phòng thủ, -10% tốc độ, +15 HP/h hồi máu thụ động |
+| Dạ Xoa Dân (`yakshaman`) | +12% tấn công, +8% Ám Đạo affinity, -8% tỉ lệ Luyện Cổ, -10% kháng tâm lý |
+| U Hồn Tộc (`ghostman`) | +12% Hồn Đạo affinity, +20% phòng thủ hồn, +20% tốc độ hồi hồn, -10% HP, -15% hồi phục nhận |
+| Thái Cổ Nhân Tộc (`ancient_human`) | +10% hiệu quả tu luyện, +3 Vận, +10% Nhân Đạo affinity, -5% tỉ lệ Luyện Cổ |
 | Cương Thi (`cuong_thi`) | **Bất tử tuổi thọ** (thọ nguyên không bao giờ cạn); **Cấm tự hồi phục** HP, Chân Nguyên/Tiên Nguyên, Nguyên Lực, Thần Hồn. Khi ở trạng thái Tiên Cương: gia tốc thời gian khóa ở `1.0`, Tiên Khiếu thành Tiên Khiếu Chết, không còn tiên kiếp, và bị suy thoái `time_rate` & `area_size` theo thời gian |
 
 Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` (seed từ `data/Race.csv`): admin thêm chủng tộc mới bằng cách sửa CSV (thêm dòng `key,name,effects`) rồi Import bảng "Chủng tộc" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
@@ -88,6 +94,23 @@ Quy tắc áp dụng trạng thái:
 | Hậu Thổ Nguyên Ương Thể (`great_earth_origin_body`) | Thổ Đạo đạo ngân ×150%, +45% phòng thủ, +45% kháng hiệu ứng tâm lý, +50% Chân Nguyên tối đa, +100% hồi mana |
 | Vũ Trụ Đại Diễn Thể (`universe_great_evolution_body`) | Không Gian Đạo đạo ngân ×150%, +15% tấn công/phòng thủ/tốc độ, +50% Chân Nguyên tối đa, +100% hồi mana |
 | Thuần Mộng Cầu Chân Thể (`pure_dream_reality_seeker_body`) | Mộng Đạo đạo ngân ×140%, +10% sát thương Mộng Đạo, +40% Chân Nguyên tối đa, +100% hồi mana |
+
+**Thể chất cấp dưới / Dị Thể (Tier 1 - Trade-off tăng giảm cân bằng):**
+
+| Thể chất | Hiệu ứng |
+| --- | --- |
+| Hàn Sương Thể (`frost_chilling_body`) | Băng Đạo đạo ngân +25%, giảm 10% sát thương Hàn Băng nhận, -10% tốc độ |
+| Xích Liệt Hoang Thể (`blazing_fiery_body`) | Hỏa Đạo đạo ngân +25%, +10% sát thương Hỏa Đạo, +10% tấn công, -10% phòng thủ, -15% kháng tâm lý |
+| Cự Lực Man Thể (`brute_strength_body`) | Lực Đạo đạo ngân +25%, +15% tấn công, +10% phòng thủ, -10% tốc độ, -20% hồi mana |
+| Trọng Nham Huyền Thể (`heavy_rock_body`) | Thổ Đạo đạo ngân +25%, +25% phòng thủ, +15% kháng tâm lý, -15% tốc độ |
+| Linh Mộc Dưỡng Sinh Thể (`spirit_wood_body`) | Mộc Đạo đạo ngân +25%, +30% hồi phục nhận, +20 HP/h hồi máu thụ động, -10% tấn công |
+| Thiết Cốt Huyền Kim Thể (`iron_bone_body`) | Kim Đạo đạo ngân +20%, +20% phòng thủ, +10% kiên cường (tenacity), -10% tốc độ, +25% áp lực Không Khiếu khi trùng kích |
+| Minh Tuệ Linh Tâm Thể (`clear_wisdom_heart_body`) | Trí Đạo đạo ngân +25%, +20% kháng tâm lý, +10% kháng khống chế (CC), -10% tấn công, -10% HP tối đa |
+| Tật Phong Phi Hành Thể (`swift_wind_body`) | Phong Đạo đạo ngân +25%, +20% tốc độ, -15% phòng thủ, -10% Chân Nguyên tối đa |
+| U Dạ Ám Linh Thể (`night_shade_body`) | Ám Đạo đạo ngân +25%, +25% phòng thủ hồn, -10% kháng Quang Đạo, -15% hồi phục nhận |
+| Huyễn Quang Lưu Chuyển Thể (`illusion_light_body`) | Quang Đạo đạo ngân +25%, +10% sát thương Quang Đạo, +10% tốc độ, -15% hồi mana |
+| Huyết Ma Sát Thể (`blood_fiend_body`) | Huyết Đạo đạo ngân +25%, +15% tấn công, +20% hồi phục nhận, +35% áp lực Không Khiếu, -10% tỉ lệ Luyện Cổ |
+| Huyễn Mộng Linh Thể (`dream_phantom_body`) | Mộng Đạo đạo ngân +20%, +5% sát thương Mộng Đạo, -15% kháng tâm lý, -10% kháng CC |
 
 Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuses`). Một số trạng thái có **thời hạn** (đếm theo giờ thực) và tự biến mất khi hết hạn. Danh sách trạng thái được **data-driven** từ bảng `status_dictionary` (seed từ `data/Status.csv`): admin thêm trạng thái mới bằng cách sửa CSV (thêm dòng `key,name,effects,default_duration_minutes,blocked_actions,description`) rồi Import bảng "Trạng thái" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
 

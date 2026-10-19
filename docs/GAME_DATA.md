@@ -404,8 +404,14 @@ Danh sách hiện tại (11 chủng tộc):
 | `variant_beastman` | Thú Nhân | +8% tấn công, +5% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | `dragonman` | Long Nhân | +10% tấn công, +10% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | `giant_sun_descendant` | Cự Dương Huyết Mạch | +5 Vận, +5% hiệu quả tu luyện |
+| `eggman` | Đản Dân | +5% Vân Đạo/Phong Đạo affinity, +10% tốc độ, -10% phòng thủ, +15% hồi phục nhận |
+| `miniman` | Tiểu Nhân | +10% Mộc Đạo affinity, +5% tỉ lệ Luyện Cổ, -12% tấn công |
+| `mushroomman` | Nấm Nhân | +10% Thổ Đạo affinity, +10% phòng thủ, -10% tốc độ, +15 HP/giờ hồi máu thụ động |
+| `yakshaman` | Dạ Xoa Dân | +12% tấn công, +8% Ám Đạo affinity, -8% tỉ lệ Luyện Cổ, -10% kháng tâm lý |
+| `ghostman` | U Hồn Tộc | +12% Hồn Đạo affinity, +20% phòng thủ hồn, +20% tốc độ hồi hồn, -10% HP, -15% hồi phục nhận |
+| `ancient_human` | Thái Cổ Nhân Tộc | +10% hiệu quả tu luyện, +3 Vận, +10% Nhân Đạo affinity, -5% tỉ lệ Luyện Cổ |
 
-**Thêm chủng tộc mới:** sửa `backend/cmd/server/data/Race.csv` (thêm dòng `key,name,effects`) → Admin panel tab **Dữ liệu** → Import bảng `Chủng tộc`. Nếu database rỗng, Go có `defaultRaces()` trong `backend/internal/gamefx/races.go` làm fallback để không vỡ hành vi cũ. `players.race` luôn là **1 key duy nhất** (default `human`).
+**Thêm chủng tộc mới:** sửa `backend/data/Race.csv` (thêm dòng `key,name,effects`) → Admin panel tab **Dữ liệu** → Import bảng `Chủng tộc`. Nếu database rỗng, Go có `defaultRaces()` trong `backend/internal/gamefx/races.go` làm fallback để không vỡ hành vi cũ. `players.race` luôn là **1 key duy nhất** (default `human`).
 
 **Bảng thể chất (constitution) — data-driven, seed từ `data/Constitution.csv` vào bảng `constitution_dictionary`, nạp registry trong memory (`gamefx.ConstitutionRegistry`) khi khởi động:**
 
@@ -415,6 +421,7 @@ Bảng `constitution_dictionary`:
 | --- | --- | --- |
 | `key` | VARCHAR(100) PK | Key tiếng Anh, lưu vào `players.constitution` |
 | `name` | VARCHAR(200) | Tên tiếng Việt hiển thị |
+| `tier` | INTEGER | Phân cấp thể chất: `0` = Thập Tuyệt Thể / Tuyệt đỉnh; `1` = Dị Thể / Bán Thể Chất cấp dưới |
 | `effects` | JSONB | Các effect của thể chất (format bên dưới) |
 
 Format `effects` (JSON object, toàn bộ field đều optional):
@@ -438,23 +445,35 @@ Format `effects` (JSON object, toàn bộ field đều optional):
 | `soul_regen` | % tăng tốc hồi Soul HP thụ động (dưỡng hồn), VD `0.50` = +50% hồi/giờ |
 | `aperture_stress_bonus` | hệ số cộng thêm áp lực Không Khiếu mỗi lần trùng kích (VD `1` = tăng ×2) |
 
-**Thêm thể chất mới:** sửa `backend/cmd/server/data/Constitution.csv` (thêm dòng `key,name,effects`) → Admin panel tab **Dữ liệu** → Import bảng `Thể chất`. Nếu database rỗng, Go có `defaultConstitutions()` trong `backend/internal/gamefx/constitutions.go` làm fallback để không vỡ hành vi cũ.
+**Thêm thể chất mới:** sửa `backend/data/Constitution.csv` (thêm dòng `key,name,effects,tier`) → Admin panel tab **Dữ liệu** → Import bảng `Thể chất`. Nếu database rỗng, Go có `defaultConstitutions()` trong `backend/internal/gamefx/constitutions.go` làm fallback để không vỡ hành vi cũ.
 
-Danh sách hiện tại (11 thể chất — 10 Thập Tuyệt + Thuần Mộng Cầu Chân Thể):
+Danh sách hiện tại:
+- **Tier 0 (Thập Tuyệt Thể + Thuần Mộng Cầu Chân Thể):**
+  - `solar_sun_moon_body` (Thái Nhật Dương Mãng Thể): Quang Đạo đạo ngân ×150%, +20% sát thương Quang Đạo, +50% max mana, +100% hồi mana
+  - `ancient_moon_yin_desolate_body` (Cổ Nguyệt Âm Hoang Thể): Hắc Ám Đạo đạo ngân ×150%, +50% max mana, +100% hồi mana, +20% kháng hiệu ứng tâm lý
+  - `northern_dark_ice_soul_body` (Bắc Minh Băng Phách Thể): Hàn Băng Đạo đạo ngân ×150%, giảm 10% sát thương Hàn Băng nhận, +50% max mana, +100% hồi mana
+  - `forest_sea_reincarnation_body` (Sâm Hải Luân Hồi Thể): Thủy Đạo đạo ngân ×150%, +50% hồi phục nhận, +50% max mana, +100% hồi mana
+  - `myriad_gold_brilliant_flower_body` (Vạn Kim Diệu Hoa Thể): Kim Đạo đạo ngân ×150%, +30% attack, +30% defense, +50% max mana, +100% hồi mana
+  - `blazing_glory_lightning_brilliance_body` (Viêm Hoàng Lôi Trạch Thể): Lôi Đạo đạo ngân ×150%, +20% speed, +50% max mana, +100% hồi mana
+  - `great_strength_true_martial_body` (Đại Lực Chân Võ Thể): Lực Đạo đạo ngân ×150%, +30% attack, +30% defense, +50% max mana, +100% hồi mana
+  - `carefree_wisdom_heart_body` (Tiêu Dao Trí Tâm Thể): Trí Đạo đạo ngân ×150%, +30% kháng hiệu ứng tâm lý, +50% max mana, +100% hồi mana
+  - `great_earth_origin_body` (Hậu Thổ Nguyên Ương Thể): Thổ Đạo đạo ngân ×150%, +45% defense, +45% kháng hiệu ứng tâm lý, +50% max mana, +100% hồi mana
+  - `universe_great_evolution_body` (Vũ Trụ Đại Diễn Thể): Không Gian Đạo đạo ngân ×150%, +15% attack/defense/speed, +50% max mana, +100% hồi mana
+  - `pure_dream_reality_seeker_body` (Thuần Mộng Cầu Chân Thể): Mộng Đạo đạo ngân ×140%, +10% sát thương Mộng Đạo, +40% max mana, +100% hồi mana
 
-| Key | Tên Việt | Hiệu ứng |
-| --- | --- | --- |
-| `solar_sun_moon_body` | Thái Nhật Dương Mãng Thể | Quang Đạo đạo ngân ×150%, +20% sát thương Quang Đạo, +50% max mana, +100% hồi mana |
-| `ancient_moon_yin_desolate_body` | Cổ Nguyệt Âm Hoang Thể | Hắc Ám Đạo đạo ngân ×150%, +50% max mana, +100% hồi mana, +20% kháng hiệu ứng tâm lý |
-| `northern_dark_ice_soul_body` | Bắc Minh Băng Phách Thể | Hàn Băng Đạo đạo ngân ×150%, giảm 10% sát thương Hàn Băng nhận, +50% max mana, +100% hồi mana |
-| `forest_sea_reincarnation_body` | Sâm Hải Luân Hồi Thể | Thủy Đạo đạo ngân ×150%, +50% hồi phục nhận, +50% max mana, +100% hồi mana |
-| `myriad_gold_brilliant_flower_body` | Vạn Kim Diệu Hoa Thể | Kim Đạo đạo ngân ×150%, +30% attack, +30% defense, +50% max mana, +100% hồi mana |
-| `blazing_glory_lightning_brilliance_body` | Viêm Hoàng Lôi Trạch Thể | Lôi Đạo đạo ngân ×150%, +20% speed, +50% max mana, +100% hồi mana |
-| `great_strength_true_martial_body` | Đại Lực Chân Võ Thể | Lực Đạo đạo ngân ×150%, +30% attack, +30% defense, +50% max mana, +100% hồi mana |
-| `carefree_wisdom_heart_body` | Tiêu Dao Trí Tâm Thể | Trí Đạo đạo ngân ×150%, +30% kháng hiệu ứng tâm lý, +50% max mana, +100% hồi mana |
-| `great_earth_origin_body` | Hậu Thổ Nguyên Ương Thể | Thổ Đạo đạo ngân ×150%, +45% defense, +45% kháng hiệu ứng tâm lý, +50% max mana, +100% hồi mana |
-| `universe_great_evolution_body` | Vũ Trụ Đại Diễn Thể | Không Gian Đạo đạo ngân ×150%, +15% attack/defense/speed, +50% max mana, +100% hồi mana |
-| `pure_dream_reality_seeker_body` | Thuần Mộng Cầu Chân Thể | Mộng Đạo đạo ngân ×140%, +10% sát thương Mộng Đạo, +40% max mana, +100% hồi mana |
+- **Tier 1 (Bán Tuyệt Thể / Dị Thể cấp dưới - Trade-off tăng giảm đặc thù):**
+  - `frost_chilling_body` (Hàn Sương Thể): Băng Đạo đạo ngân +25%, giảm 10% sát thương Hàn Băng nhận, -10% tốc độ
+  - `blazing_fiery_body` (Xích Liệt Hoang Thể): Hỏa Đạo đạo ngân +25%, +10% sát thương Hỏa Đạo, +10% attack, -10% defense, -15% kháng tâm lý
+  - `brute_strength_body` (Cự Lực Man Thể): Lực Đạo đạo ngân +25%, +15% attack, +10% defense, -10% speed, -20% hồi mana
+  - `heavy_rock_body` (Trọng Nham Huyền Thể): Thổ Đạo đạo ngân +25%, +25% defense, +15% kháng tâm lý, -15% speed
+  - `spirit_wood_body` (Linh Mộc Dưỡng Sinh Thể): Mộc Đạo đạo ngân +25%, +30% hồi phục nhận, +20 HP/giờ hồi thụ động, -10% attack
+  - `iron_bone_body` (Thiết Cốt Huyền Kim Thể): Kim Đạo đạo ngân +20%, +20% defense, +10% tenacity, -10% speed, +25% áp lực không khiếu
+  - `clear_wisdom_heart_body` (Minh Tuệ Linh Tâm Thể): Trí Đạo đạo ngân +25%, +20% kháng tâm lý, +10% kháng CC, -10% attack, -10% HP
+  - `swift_wind_body` (Tật Phong Phi Hành Thể): Phong Đạo đạo ngân +25%, +20% speed, -15% defense, -10% max mana
+  - `night_shade_body` (U Dạ Ám Linh Thể): Ám Đạo đạo ngân +25%, +25% phòng thủ hồn, -10% kháng Quang Đạo, -15% hồi phục nhận
+  - `illusion_light_body` (Huyễn Quang Lưu Chuyển Thể): Quang Đạo đạo ngân +25%, +10% sát thương Quang Đạo, +10% speed, -15% hồi mana
+  - `blood_fiend_body` (Huyết Ma Sát Thể): Huyết Đạo đạo ngân +25%, +15% attack, +20% hồi phục nhận, +35% áp lực không khiếu, -10% tỉ lệ luyện cổ
+  - `dream_phantom_body` (Huyễn Mộng Linh Thể): Mộng Đạo đạo ngân +20%, +5% sát thương Mộng Đạo, -15% kháng tâm lý, -10% kháng CC
 
 ### Thẻ chiêu PvP thời gian thực — bảng `gu_moba_profiles`
 

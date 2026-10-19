@@ -466,39 +466,83 @@ func GetWorldMonster(ctx context.Context, regionID, instanceID string) (WorldMon
 	return monster, true, nil
 }
 
+// WorldMonsterBucketCoord identifies one AOI bucket to read.
+type WorldMonsterBucketCoord struct{ X, Y int }
+
+// WorldMonstersInBucket returns one bucket's live actors.
 func WorldMonstersInBucket(ctx context.Context, regionID string, bx, by int) ([]WorldMonster, error) {
-	if Client == nil {
-		return nil, errors.New("redis unavailable")
-	}
-	ids, err := Client.SMembers(ctx, worldMonsterBucketKey(regionID, bx, by)).Result()
-	if err != nil || len(ids) == 0 {
+	result, err := WorldMonstersInBuckets(ctx, regionID, []WorldMonsterBucketCoord{{bx, by}})
+	if err != nil {
 		return nil, err
 	}
-	pipe := Client.Pipeline()
-	cmds := make([]*redis.StringCmd, len(ids))
-	for i, id := range ids {
-		cmds[i] = pipe.Get(ctx, worldMonsterKey(regionID, id))
+	return result[WorldMonsterBucketCoord{bx, by}], nil
+}
+
+// WorldMonstersInBuckets reads many buckets in two Redis round trips
+// (SMEMBERS, then GET) instead of two per bucket. Stale set members are pruned.
+func WorldMonstersInBuckets(ctx context.Context, regionID string, coords []WorldMonsterBucketCoord) (map[WorldMonsterBucketCoord][]WorldMonster, error) {
+	out := make(map[WorldMonsterBucketCoord][]WorldMonster, len(coords))
+	if len(coords) == 0 {
+		return out, nil
 	}
-	_, _ = pipe.Exec(ctx)
-	out := make([]WorldMonster, 0, len(ids))
-	stale := make([]interface{}, 0)
-	for i, cmd := range cmds {
+	if Client == nil {
+		return out, errors.New("redis unavailable")
+	}
+
+	setPipe := Client.Pipeline()
+	setCmds := make([]*redis.StringSliceCmd, len(coords))
+	for i, coord := range coords {
+		setCmds[i] = setPipe.SMembers(ctx, worldMonsterBucketKey(regionID, coord.X, coord.Y))
+	}
+	if _, err := setPipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		return out, err
+	}
+
+	type bucketID struct {
+		bucket WorldMonsterBucketCoord
+		id     string
+	}
+	refs := make([]bucketID, 0, len(coords)*4)
+	for i, cmd := range setCmds {
+		ids, err := cmd.Result()
+		if err != nil {
+			continue
+		}
+		for _, id := range ids {
+			refs = append(refs, bucketID{coords[i], id})
+		}
+	}
+	if len(refs) == 0 {
+		return out, nil
+	}
+
+	getPipe := Client.Pipeline()
+	getCmds := make([]*redis.StringCmd, len(refs))
+	for i, ref := range refs {
+		getCmds[i] = getPipe.Get(ctx, worldMonsterKey(regionID, ref.id))
+	}
+	if _, err := getPipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		return out, err
+	}
+
+	stale := make(map[WorldMonsterBucketCoord][]interface{})
+	for i, cmd := range getCmds {
 		raw, getErr := cmd.Bytes()
 		if errors.Is(getErr, redis.Nil) {
-			stale = append(stale, ids[i])
+			stale[refs[i].bucket] = append(stale[refs[i].bucket], refs[i].id)
 			continue
 		}
 		if getErr != nil {
-			return nil, getErr
+			continue
 		}
 		var monster WorldMonster
 		if err := json.Unmarshal(raw, &monster); err != nil {
-			return nil, err
+			continue
 		}
-		out = append(out, monster)
+		out[refs[i].bucket] = append(out[refs[i].bucket], monster)
 	}
-	if len(stale) > 0 {
-		_ = Client.SRem(ctx, worldMonsterBucketKey(regionID, bx, by), stale...).Err()
+	for coord, ids := range stale {
+		_ = Client.SRem(ctx, worldMonsterBucketKey(regionID, coord.X, coord.Y), ids...).Err()
 	}
 	return out, nil
 }

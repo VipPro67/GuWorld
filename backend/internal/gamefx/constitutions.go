@@ -36,6 +36,18 @@ func defaultConstitutions() []ConstitutionDef {
 		{Key: "great_earth_origin_body", Name: "Hậu Thổ Nguyên Ương Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"earth": 0.50}, StatMods: map[string]float64{"defense": 0.45}, MentalResistanceBonus: 0.45, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
 		{Key: "universe_great_evolution_body", Name: "Vũ Trụ Đại Diễn Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"space": 0.50}, StatMods: map[string]float64{"attack": 0.15, "defense": 0.15, "speed": 0.15}, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
 		{Key: "pure_dream_reality_seeker_body", Name: "Thuần Mộng Cầu Chân Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"dream": 0.40}, PathDamageBonus: map[string]float64{"dream": 0.10}, MaxManaBonus: 0.40, ManaRegenBonus: 1}},
+		{Key: "frost_chilling_body", Name: "Hàn Sương Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"ice": 0.25}, PathResistanceBonus: map[string]float64{"ice": 0.10}, StatMods: map[string]float64{"speed": -0.10}}},
+		{Key: "blazing_fiery_body", Name: "Xích Liệt Hoang Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"fire": 0.25}, PathDamageBonus: map[string]float64{"fire": 0.10}, StatMods: map[string]float64{"attack": 0.10, "defense": -0.10}, MentalResistanceBonus: -0.15}},
+		{Key: "brute_strength_body", Name: "Cự Lực Man Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"strength": 0.25}, StatMods: map[string]float64{"attack": 0.15, "defense": 0.10, "speed": -0.10}, ManaRegenBonus: -0.20}},
+		{Key: "heavy_rock_body", Name: "Trọng Nham Huyền Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"earth": 0.25}, StatMods: map[string]float64{"defense": 0.25, "speed": -0.15}, MentalResistanceBonus: 0.15}},
+		{Key: "spirit_wood_body", Name: "Linh Mộc Dưỡng Sinh Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"wood": 0.25}, HealingReceivedBonus: 0.30, HPRegenBonus: 20, StatMods: map[string]float64{"attack": -0.10}}},
+		{Key: "iron_bone_body", Name: "Thiết Cốt Huyền Kim Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"metal": 0.20}, StatMods: map[string]float64{"defense": 0.20, "speed": -0.10}, Tenacity: 0.10, ApertureStressBonus: 0.25}},
+		{Key: "clear_wisdom_heart_body", Name: "Minh Tuệ Linh Tâm Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"wisdom": 0.25}, MentalResistanceBonus: 0.20, CCResist: 0.10, StatMods: map[string]float64{"attack": -0.10, "hp": -0.10}}},
+		{Key: "swift_wind_body", Name: "Tật Phong Phi Hành Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"wind": 0.25}, StatMods: map[string]float64{"defense": -0.15, "speed": 0.20}, MaxManaBonus: -0.10}},
+		{Key: "night_shade_body", Name: "U Dạ Ám Linh Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"dark": 0.25}, SoulDefenseBonus: 0.25, PathResistanceBonus: map[string]float64{"light": -0.10}, HealingReceivedBonus: -0.15}},
+		{Key: "illusion_light_body", Name: "Huyễn Quang Lưu Chuyển Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"light": 0.25}, PathDamageBonus: map[string]float64{"light": 0.10}, StatMods: map[string]float64{"speed": 0.10}, ManaRegenBonus: -0.15}},
+		{Key: "blood_fiend_body", Name: "Huyết Ma Sát Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"blood": 0.25}, StatMods: map[string]float64{"attack": 0.15}, HealingReceivedBonus: 0.20, ApertureStressBonus: 0.35, RefineBonus: -0.10}},
+		{Key: "dream_phantom_body", Name: "Huyễn Mộng Linh Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"dream": 0.20}, PathDamageBonus: map[string]float64{"dream": 0.05}, MentalResistanceBonus: -0.15, CCResist: -0.10}},
 	}
 }
 

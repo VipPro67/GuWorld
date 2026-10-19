@@ -304,19 +304,35 @@ func GetRegionLoot(c *gin.Context) {
 	})
 }
 
+func buildUnifiedDictionary() DictionaryResponse {
+	return DictionaryResponse{
+		Gu:            flatGuDictionary(),
+		Items:         models.ItemRegistry,
+		Monsters:      publicMonsterDictionary(),
+		Constitutions: gamefx.AllConstitutions(),
+		Races:         gamefx.AllRaces(),
+		Statuses:      gamefx.AllStatuses(),
+	}
+}
+
+// WarmDictionaryCache builds the unified catalog once at process start so the
+// first player request does not pay build + marshal cost on a cold cache.
+func WarmDictionaryCache() {
+	val := buildUnifiedDictionary()
+	raw, err := json.Marshal(val)
+	if err != nil {
+		return
+	}
+	hash := md5.Sum(raw)
+	dictCacheMu.Lock()
+	dictCache["game_dictionary_unified"] = dictCacheEntry{rawJSON: raw, etag: fmt.Sprintf(`"%x"`, hash)}
+	dictCacheMu.Unlock()
+}
+
 // GetDictionary returns the unified Gu and Item master catalogs, cached in memory/Redis with ETag support.
 func GetDictionary(c *gin.Context) {
 	getCachedDictionaryPart(c, "game_dictionary_unified", &DictionaryResponse{}, func() interface{} {
-		flatGu := flatGuDictionary()
-		logger.S.Infof("GetDictionary: returning %d gu, %d items, %d monsters", len(flatGu), len(models.ItemRegistry), len(models.MonsterRegistry))
-		return DictionaryResponse{
-			Gu:            flatGu,
-			Items:         models.ItemRegistry,
-			Monsters:      publicMonsterDictionary(),
-			Constitutions: gamefx.AllConstitutions(),
-			Races:         gamefx.AllRaces(),
-			Statuses:      gamefx.AllStatuses(),
-		}
+		return buildUnifiedDictionary()
 	})
 }
 

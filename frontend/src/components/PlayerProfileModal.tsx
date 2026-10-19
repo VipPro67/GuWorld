@@ -76,6 +76,12 @@ export const PlayerProfileModal: React.FC = () => {
     variant_beastman: "Thú Nhân",
     dragonman: "Long Nhân",
     giant_sun_descendant: "Cự Dương Huyết Mạch",
+    eggman: "Đản Dân",
+    miniman: "Tiểu Nhân",
+    mushroomman: "Nấm Nhân",
+    yakshaman: "Dạ Xoa Dân",
+    ghostman: "U Hồn Tộc",
+    ancient_human: "Thái Cổ Nhân Tộc",
   };
   const genderLabels: Record<string, string> = {
     male: "Nam",
@@ -93,6 +99,18 @@ export const PlayerProfileModal: React.FC = () => {
     great_earth_origin_body: "Hậu Thổ Nguyên Ương Thể",
     universe_great_evolution_body: "Vũ Trụ Đại Diễn Thể",
     pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
+    frost_chilling_body: "Hàn Sương Thể",
+    blazing_fiery_body: "Xích Liệt Hoang Thể",
+    brute_strength_body: "Cự Lực Man Thể",
+    heavy_rock_body: "Trọng Nham Huyền Thể",
+    spirit_wood_body: "Linh Mộc Dưỡng Sinh Thể",
+    iron_bone_body: "Thiết Cốt Huyền Kim Thể",
+    clear_wisdom_heart_body: "Minh Tuệ Linh Tâm Thể",
+    swift_wind_body: "Tật Phong Phi Hành Thể",
+    night_shade_body: "U Dạ Ám Linh Thể",
+    illusion_light_body: "Huyễn Quang Lưu Chuyển Thể",
+    blood_fiend_body: "Huyết Ma Sát Thể",
+    dream_phantom_body: "Huyễn Mộng Linh Thể",
   };
   const statusLabels: Record<string, string> = {
     severely_wounded: "Trọng Thương",

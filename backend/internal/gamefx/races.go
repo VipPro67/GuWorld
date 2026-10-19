@@ -41,6 +41,12 @@ func defaultRaces() []RaceDef {
 		{Key: "variant_beastman", Name: "Thú Nhân", Effects: Effects{StatMods: map[string]float64{"attack": 0.08, "defense": 0.05}, RefineBonus: -0.05}},
 		{Key: "dragonman", Name: "Long Nhân", Effects: Effects{StatMods: map[string]float64{"attack": 0.10, "defense": 0.10}, RefineBonus: -0.05}},
 		{Key: "giant_sun_descendant", Name: "Cự Dương Huyết Mạch", Effects: Effects{LuckBonus: 5, CultivationEfficiencyBonus: 0.05}},
+		{Key: "eggman", Name: "Đản Dân", Effects: Effects{DaoNganBonus: map[string]float64{"cloud": 0.05, "wind": 0.05}, StatMods: map[string]float64{"defense": -0.10, "speed": 0.10}, HealingReceivedBonus: 0.15}},
+		{Key: "miniman", Name: "Tiểu Nhân", Effects: Effects{DaoNganBonus: map[string]float64{"wood": 0.10}, RefineBonus: 0.05, StatMods: map[string]float64{"attack": -0.12}}},
+		{Key: "mushroomman", Name: "Nấm Nhân", Effects: Effects{DaoNganBonus: map[string]float64{"earth": 0.10}, StatMods: map[string]float64{"defense": 0.10, "speed": -0.10}, HPRegenBonus: 15}},
+		{Key: "yakshaman", Name: "Dạ Xoa Dân", Effects: Effects{StatMods: map[string]float64{"attack": 0.12}, DaoNganBonus: map[string]float64{"dark": 0.08}, RefineBonus: -0.08, MentalResistanceBonus: -0.10}},
+		{Key: "ghostman", Name: "U Hồn Tộc", Effects: Effects{DaoNganBonus: map[string]float64{"soul": 0.12}, SoulDefenseBonus: 0.20, SoulRegenBonus: 0.20, StatMods: map[string]float64{"hp": -0.10}, HealingReceivedBonus: -0.15}},
+		{Key: "ancient_human", Name: "Thái Cổ Nhân Tộc", Effects: Effects{CultivationEfficiencyBonus: 0.10, LuckBonus: 3, DaoNganBonus: map[string]float64{"human": 0.10}, RefineBonus: -0.05}},
 	}
 }
 

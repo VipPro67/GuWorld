@@ -258,6 +258,7 @@ func FeedGu(c *gin.Context) {
 	// 4. Loop consuming food until full
 	foodOptions := specs.FoodTypes
 	foodConsumed := make(map[string]int)
+	consumedMaterials := make(map[string]int64) // batched removal: one DELETE/UPDATE per item instead of per serving
 	var eatenGuIDs []string
 	var feedEventMsg string
 
@@ -288,10 +289,7 @@ func FeedGu(c *gin.Context) {
 				return
 			}
 			if !isFeedResource(chosenFoodItem) {
-				if err := InventorySvc.RemoveItem(tx, player.ID.String(), chosenFoodItem, "materials", 1); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ thức ăn phù hợp để cho Cổ trùng ăn."})
-					return
-				}
+				consumedMaterials[chosenFoodItem]++
 				if materialQty[chosenFoodItem] > 0 {
 					materialQty[chosenFoodItem]--
 				}
@@ -341,6 +339,11 @@ func FeedGu(c *gin.Context) {
 
 	if len(foodConsumed) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không có thức ăn phù hợp cho %s. Cần một trong: %v", specs.Name, foodOptions)})
+		return
+	}
+
+	if err := InventorySvc.BulkRemoveItems(tx, player.ID.String(), "materials", consumedMaterials); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ thức ăn phù hợp để cho Cổ trùng ăn."})
 		return
 	}
 
@@ -473,6 +476,8 @@ func FeedGroup(c *gin.Context) {
 		return
 	}
 
+	materialQty := make(map[string]int64)
+
 	getAvailableFood := func(targetRank int) string {
 		for _, food := range foodOptions {
 			if isFeedResource(food) {
@@ -480,8 +485,11 @@ func FeedGroup(c *gin.Context) {
 					return food
 				}
 			} else if !strings.HasPrefix(food, "GU_") {
-				qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food)
-				if qty > 0 {
+				if _, cached := materialQty[food]; !cached {
+					qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food)
+					materialQty[food] = qty
+				}
+				if materialQty[food] > 0 {
 					return food
 				}
 			}
@@ -504,8 +512,9 @@ func FeedGroup(c *gin.Context) {
 
 	fedCount := 0
 	foodConsumed := make(map[string]int)
-	consumedGuIDs := []string{}  // Track Gu IDs consumed as food for explicit delete.
-	fedInstanceIDs := []string{} // Track instances actually fed, to stamp last_fed_at.
+	consumedMaterials := make(map[string]int64) // batched removal: one DELETE/UPDATE per item instead of per serving
+	consumedGuIDs := []string{}                 // Track Gu IDs consumed as food for explicit delete.
+	fedInstanceIDs := []string{}                // Track instances actually fed, to stamp last_fed_at.
 
 	// 3. Iterate over the player's Gu inventory and feed hungry ones of matching type
 	for i := 0; i < len(player.GuInventory); i++ {
@@ -531,7 +540,8 @@ func FeedGroup(c *gin.Context) {
 							break
 						}
 					} else {
-						InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1)
+						consumedMaterials[chosenFood]++
+						materialQty[chosenFood]--
 					}
 					foodID = chosenFood
 					foodConsumed[chosenFood]++
@@ -568,6 +578,11 @@ func FeedGroup(c *gin.Context) {
 
 	if fedCount == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có Cổ trùng nào cần cho ăn hoặc không có đủ thức ăn phù hợp"})
+		return
+	}
+
+	if err := InventorySvc.BulkRemoveItems(tx, player.ID.String(), "materials", consumedMaterials); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume feeding materials"})
 		return
 	}
 
@@ -677,6 +692,7 @@ func FeedAll(c *gin.Context) {
 	fedCount := 0
 	foodConsumed := make(map[string]int64)
 	materialQty := make(map[string]int64)
+	consumedMaterials := make(map[string]int64) // batched removal: one DELETE/UPDATE per item instead of per serving
 
 	getAvailableFood := func(specs models.GuDictionaryItem, targetRank int) string {
 		for _, food := range specs.FoodTypes {
@@ -760,12 +776,8 @@ func FeedAll(c *gin.Context) {
 						break
 					}
 				} else {
-					if err := InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1); err == nil {
-						materialQty[chosenFood]--
-					} else {
-						materialQty[chosenFood] = 0
-						continue
-					}
+					consumedMaterials[chosenFood]++
+					materialQty[chosenFood]--
 				}
 				foodID = chosenFood
 				foodConsumed[chosenFood]++
@@ -807,6 +819,11 @@ func FeedAll(c *gin.Context) {
 			errMsg = "Không có Cổ trùng trong túi nào cần cho ăn hoặc không có đủ thức ăn phù hợp"
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+		return
+	}
+
+	if err := InventorySvc.BulkRemoveItems(tx, player.ID.String(), "materials", consumedMaterials); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume feeding materials"})
 		return
 	}
 

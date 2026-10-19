@@ -243,6 +243,7 @@ func UseItems(c *gin.Context) {
 	}
 
 	messages := []string{}
+	consumedByCategory := make(map[string]map[string]int64) // category -> item -> qty, removed in one batch
 
 	for _, itemID := range req.ItemIDs {
 		item, ok := models.ItemRegistry[itemID]
@@ -302,9 +303,16 @@ func UseItems(c *gin.Context) {
 		}
 		messages = append(messages, itemMsg...)
 
-		// Deduct item from the correct category
-		if err := InventorySvc.RemoveItem(tx, player.ID.String(), itemID, itemCategory, 1); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể xóa vật phẩm %s khỏi túi đồ", item.Name)})
+		// Deduct item from the correct category (batched after the loop)
+		if consumedByCategory[itemCategory] == nil {
+			consumedByCategory[itemCategory] = make(map[string]int64)
+		}
+		consumedByCategory[itemCategory][itemID]++
+	}
+
+	for category, items := range consumedByCategory {
+		if err := InventorySvc.BulkRemoveItems(tx, player.ID.String(), category, items); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
 			return
 		}
 	}

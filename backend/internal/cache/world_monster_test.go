@@ -36,6 +36,22 @@ func TestHitWorldMonsterRejectsNonFiniteDamageBeforeRedis(t *testing.T) {
 	}
 }
 
+func TestWorldMonstersInBucketsWithoutRedis(t *testing.T) {
+	previous := Client
+	Client = nil
+	t.Cleanup(func() { Client = previous })
+
+	if got, err := WorldMonstersInBuckets(t.Context(), "region", nil); err != nil || len(got) != 0 {
+		t.Fatalf("empty coords = (%v, %v), want empty map and nil error", got, err)
+	}
+	if _, err := WorldMonstersInBuckets(t.Context(), "region", []WorldMonsterBucketCoord{{X: 1, Y: 2}}); err == nil {
+		t.Fatal("expected redis unavailable error")
+	}
+	if _, err := WorldMonstersInBucket(t.Context(), "region", 1, 2); err == nil {
+		t.Fatal("expected redis unavailable error from single-bucket wrapper")
+	}
+}
+
 func TestApplyWorldMonsterHitKeepsLivingMonsterActive(t *testing.T) {
 	now := time.Date(2026, 10, 4, 6, 0, 0, 0, time.UTC)
 	monster := WorldMonster{HP: 100, MaxHP: 100, State: "CHASE", TargetID: "player", Revision: 3}

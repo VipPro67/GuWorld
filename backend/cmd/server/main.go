@@ -154,6 +154,9 @@ func main() {
 		logger.S.Info("Instance registry loaded successfully")
 	}
 
+	// Precompute the unified dictionary payload off the request path.
+	go handlers.WarmDictionaryCache()
+
 	playerSvc := services.NewPlayerService(db.DB)
 	handlers.PlayerSvc = playerSvc
 	handlers.RecipeSvc = services.NewRecipeService(db.DB)

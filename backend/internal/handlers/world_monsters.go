@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -107,15 +108,15 @@ var worldMonsterEncounterSlots = make(chan struct{}, worldMonsterEncounterWorker
 var worldMonsterBucketCursor atomic.Uint64
 
 var (
-	worldMonstersInBucket     = cache.WorldMonstersInBucket
-	materializeWorldMonster   = cache.MaterializeWorldMonster
-	casWorldMonster           = cache.CASWorldMonster
-	loadWorldCombatPlayers    = loadWorldCombatPlayerSnapshots
-	applyWorldMonsterAction   = applyWorldMonsterAttack
-	applyWorldPlayerCounter   = applyWorldCounterattack
-	resolveWorldMonsterCell   = ResolveCell
-	deriveWorldMonsterRegion  = DeriveRegionAt
-	isWorldMonsterSafeZone    = IsSafeZone
+	worldMonstersInBucket    = cache.WorldMonstersInBucket
+	materializeWorldMonster  = cache.MaterializeWorldMonster
+	casWorldMonster          = cache.CASWorldMonster
+	loadWorldCombatPlayers   = loadWorldCombatPlayerSnapshots
+	applyWorldMonsterAction  = applyWorldMonsterAttack
+	applyWorldPlayerCounter  = applyWorldCounterattack
+	resolveWorldMonsterCell  = ResolveCell
+	deriveWorldMonsterRegion = DeriveRegionAt
+	isWorldMonsterSafeZone   = IsSafeZone
 	// worldMonsterCellsCleared resolves cleared-state for a whole AOI in one
 	// Redis MGET. The old per-cell check cost one round-trip per cell, which
 	// dominated /api/world/monsters latency (up to (2r+1)^2 calls per request).
@@ -445,15 +446,15 @@ func spawnGuards(ctx context.Context, leader WorldMonster, now time.Time) {
 			continue
 		}
 		guardSpawn := monsterSpawnRow{
-			ID:              fmt.Sprintf("guard:%s:%d", leader.InstanceID, i),
-			RegionID:        leader.RegionID,
+			ID:             fmt.Sprintf("guard:%s:%d", leader.InstanceID, i),
+			RegionID:       leader.RegionID,
 			MonsterID:      pickGuardTemplate(leader.RegionID),
-			X:               gx,
-			Y:               gy,
-			RespawnSeconds:  leader.RespawnSeconds,
-			Rank:            leader.Rank,
-			SubRank:         1,
-			IsBoss:          false,
+			X:              gx,
+			Y:              gy,
+			RespawnSeconds: leader.RespawnSeconds,
+			Rank:           leader.Rank,
+			SubRank:        1,
+			IsBoss:         false,
 		}
 		if guardSpawn.MonsterID == "" {
 			continue
@@ -467,7 +468,24 @@ func spawnGuards(ctx context.Context, leader WorldMonster, now time.Time) {
 	}
 }
 
+type guardTemplatePick struct {
+	id      string
+	expires time.Time
+}
+
+var (
+	guardTemplateMu    sync.Mutex
+	guardTemplateCache = map[string]guardTemplatePick{}
+)
+
 func pickGuardTemplate(regionID string) string {
+	guardTemplateMu.Lock()
+	if pick, ok := guardTemplateCache[regionID]; ok && time.Now().Before(pick.expires) {
+		guardTemplateMu.Unlock()
+		return pick.id
+	}
+	guardTemplateMu.Unlock()
+
 	// Pick a random normal monster from the same region
 	var monsterID string
 	err := db.DB.QueryRowContext(context.Background(), `
@@ -476,6 +494,11 @@ func pickGuardTemplate(regionID string) string {
 		ORDER BY RANDOM() LIMIT 1`, regionID).Scan(&monsterID)
 	if err != nil {
 		return ""
+	}
+	if monsterID != "" {
+		guardTemplateMu.Lock()
+		guardTemplateCache[regionID] = guardTemplatePick{id: monsterID, expires: time.Now().Add(time.Minute)}
+		guardTemplateMu.Unlock()
 	}
 	return monsterID
 }
@@ -770,6 +793,8 @@ func GetWorldMonsters(c *gin.Context) {
 	monsters := make([]WorldMonster, 0, 32)
 	occupied := make(map[[2]int]struct{}, 32)
 	now := time.Now().UTC()
+	staticSpawns := make([]monsterSpawnRow, 0, 32)
+	staticRequests := make([]cache.WorldMonsterMaterialization, 0, 32)
 	for rows.Next() {
 		var spawn monsterSpawnRow
 		if err := rows.Scan(&spawn.RegionID, &spawn.MonsterID, &spawn.X, &spawn.Y, &spawn.RespawnSeconds, &spawn.Rank); err != nil {
@@ -783,10 +808,31 @@ func GetWorldMonsters(c *gin.Context) {
 			spawn.Rank = 1
 		}
 		spawn.SubRank = 1
-		monster, created, err := materializeSpawn(c.Request.Context(), spawn, now)
+		candidate, err := worldMonsterCandidateForSpawn(spawn, now)
 		if err != nil {
 			logger.S.Warnf("materialize monster spawn %s: %v", spawn.ID, err)
 			continue
+		}
+		bx, by := monsterBucket(spawn.X, spawn.Y)
+		staticSpawns = append(staticSpawns, spawn)
+		staticRequests = append(staticRequests, cache.WorldMonsterMaterialization{Monster: candidate, BucketX: bx, BucketY: by, TTL: monsterTTL(spawn.RespawnSeconds)})
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot read monster spawns"})
+		return
+	}
+	_ = rows.Close()
+	// One pipelined batch instead of one Redis round trip per spawn.
+	for i, result := range cache.MaterializeWorldMonsters(c.Request.Context(), staticRequests) {
+		spawn := staticSpawns[i]
+		if result.Err != nil {
+			logger.S.Warnf("materialize monster spawn %s: %v", spawn.ID, result.Err)
+			continue
+		}
+		monster, created := result.Monster, result.Created
+		// Elite/Boss spawn guards around them
+		if monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
+			spawnGuards(c.Request.Context(), monster, now)
 		}
 		occupied[[2]int{spawn.X, spawn.Y}] = struct{}{}
 		if monster.State != MonsterStateDefeated {
@@ -796,11 +842,6 @@ func GetWorldMonsters(c *gin.Context) {
 			broadcastWorldCombat(monster, "monster_spawned", nil)
 		}
 	}
-	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot read monster spawns"})
-		return
-	}
-	_ = rows.Close()
 	spawnDuration := time.Since(snapshotStartedAt)
 	// Persistent Boss map_cells are the source of truth for shared boss spawns.
 	// They are materialized as normal world actors, so the same AI can chase,
@@ -901,36 +942,52 @@ func GetWorldMonsters(c *gin.Context) {
 	bucketStartedAt := time.Now()
 	bucketCount, bucketErrors := 0, 0
 	for _, scopeRegion := range scopeRegions {
+		coords := make([]cache.WorldMonsterBucketCoord, 0, (maxBX-minBX+1)*(maxBY-minBY+1))
 		for bx := minBX; bx <= maxBX; bx++ {
 			for by := minBY; by <= maxBY; by++ {
-				bucketCount++
-				actors, bucketErr := worldMonstersInBucket(c.Request.Context(), scopeRegion, bx, by)
-				if bucketErr != nil {
-					bucketErrors++
+				coords = append(coords, cache.WorldMonsterBucketCoord{X: bx, Y: by})
+			}
+		}
+		bucketCount += len(coords)
+		buckets, bucketErr := cache.WorldMonstersInBuckets(c.Request.Context(), scopeRegion, coords)
+		if bucketErr != nil {
+			bucketErrors++
+			continue
+		}
+		for _, coord := range coords {
+			for _, monster := range buckets[coord] {
+				if monster.State == MonsterStateDefeated || math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) > float64(radius) {
 					continue
 				}
-				for _, monster := range actors {
-					if monster.State == MonsterStateDefeated || math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) > float64(radius) {
-						continue
-					}
-					if _, seen := seenActors[monster.InstanceID]; seen {
-						continue
-					}
-					seenActors[monster.InstanceID] = struct{}{}
-					monsters = append(monsters, monster)
+				if _, seen := seenActors[monster.InstanceID]; seen {
+					continue
 				}
+				seenActors[monster.InstanceID] = struct{}{}
+				monsters = append(monsters, monster)
 			}
 		}
 	}
 	bucketDuration := time.Since(bucketStartedAt)
 	proceduralStartedAt := time.Now()
+	proceduralRequests := make([]cache.WorldMonsterMaterialization, 0, 64)
 	for _, spawn := range proceduralMonsterSpawns(entry, radius) {
 		if _, exists := occupied[[2]int{spawn.X, spawn.Y}]; exists {
 			continue
 		}
-		monster, created, err := materializeSpawn(c.Request.Context(), spawn, now)
+		candidate, err := worldMonsterCandidateForSpawn(spawn, now)
 		if err != nil {
 			continue
+		}
+		bx, by := monsterBucket(spawn.X, spawn.Y)
+		proceduralRequests = append(proceduralRequests, cache.WorldMonsterMaterialization{Monster: candidate, BucketX: bx, BucketY: by, TTL: monsterTTL(spawn.RespawnSeconds)})
+	}
+	for _, result := range cache.MaterializeWorldMonsters(c.Request.Context(), proceduralRequests) {
+		if result.Err != nil {
+			continue
+		}
+		monster, created := result.Monster, result.Created
+		if monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
+			spawnGuards(c.Request.Context(), monster, now)
 		}
 		if monster.State != MonsterStateDefeated {
 			monsters = append(monsters, monster)
