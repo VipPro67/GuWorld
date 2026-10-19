@@ -2,9 +2,13 @@ package gamefx
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 // ConstitutionDef describes a single constitution (thể chất) definition.
@@ -20,52 +24,90 @@ type ConstitutionDef struct {
 // ConstitutionRegistry holds the in-memory cache of constitution definitions.
 var ConstitutionRegistry = make(map[string]ConstitutionDef)
 
-// defaultConstitutions returns the built-in constitutions used as a fallback
-// when the constitution_dictionary table is empty (e.g. in tests or before a
-// CSV import). CSV/DB rows are the source of truth once loaded.
-func defaultConstitutions() []ConstitutionDef {
-	return []ConstitutionDef{
-		{Key: "solar_sun_moon_body", Name: "Thái Nhật Dương Mãng Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"light": 0.50}, PathDamageBonus: map[string]float64{"light": 0.20}, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "ancient_moon_yin_desolate_body", Name: "Cổ Nguyệt Âm Hoang Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"dark": 0.50}, MaxManaBonus: 0.50, ManaRegenBonus: 1, MentalResistanceBonus: 0.20}},
-		{Key: "northern_dark_ice_soul_body", Name: "Bắc Minh Băng Phách Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"ice": 0.50}, PathResistanceBonus: map[string]float64{"ice": 0.10}, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "forest_sea_reincarnation_body", Name: "Sâm Hải Luân Hồi Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"water": 0.50}, HealingReceivedBonus: 0.50, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "myriad_gold_brilliant_flower_body", Name: "Vạn Kim Diệu Hoa Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"metal": 0.50}, StatMods: map[string]float64{"attack": 0.30, "defense": 0.30}, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "blazing_glory_lightning_brilliance_body", Name: "Viêm Hoàng Lôi Trạch Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"lightning": 0.50}, StatMods: map[string]float64{"speed": 0.20}, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "great_strength_true_martial_body", Name: "Đại Lực Chân Võ Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"strength": 0.50}, StatMods: map[string]float64{"attack": 0.30, "defense": 0.30}, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "carefree_wisdom_heart_body", Name: "Tiêu Dao Trí Tâm Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"wisdom": 0.50}, MentalResistanceBonus: 0.30, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "great_earth_origin_body", Name: "Hậu Thổ Nguyên Ương Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"earth": 0.50}, StatMods: map[string]float64{"defense": 0.45}, MentalResistanceBonus: 0.45, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "universe_great_evolution_body", Name: "Vũ Trụ Đại Diễn Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"space": 0.50}, StatMods: map[string]float64{"attack": 0.15, "defense": 0.15, "speed": 0.15}, MaxManaBonus: 0.50, ManaRegenBonus: 1}},
-		{Key: "pure_dream_reality_seeker_body", Name: "Thuần Mộng Cầu Chân Thể", Tier: 3, Effects: Effects{DaoNganBonus: map[string]float64{"dream": 0.40}, PathDamageBonus: map[string]float64{"dream": 0.10}, MaxManaBonus: 0.40, ManaRegenBonus: 1}},
-		{Key: "frost_chilling_body", Name: "Hàn Sương Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"ice": 0.25}, PathResistanceBonus: map[string]float64{"ice": 0.10}, StatMods: map[string]float64{"speed": -0.10}}},
-		{Key: "blazing_fiery_body", Name: "Xích Liệt Hoang Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"fire": 0.25}, PathDamageBonus: map[string]float64{"fire": 0.10}, StatMods: map[string]float64{"attack": 0.10, "defense": -0.10}, MentalResistanceBonus: -0.15}},
-		{Key: "brute_strength_body", Name: "Cự Lực Man Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"strength": 0.25}, StatMods: map[string]float64{"attack": 0.15, "defense": 0.10, "speed": -0.10}, ManaRegenBonus: -0.20}},
-		{Key: "heavy_rock_body", Name: "Trọng Nham Huyền Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"earth": 0.25}, StatMods: map[string]float64{"defense": 0.25, "speed": -0.15}, MentalResistanceBonus: 0.15}},
-		{Key: "spirit_wood_body", Name: "Linh Mộc Dưỡng Sinh Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"wood": 0.25}, HealingReceivedBonus: 0.30, HPRegenBonus: 20, StatMods: map[string]float64{"attack": -0.10}}},
-		{Key: "iron_bone_body", Name: "Thiết Cốt Huyền Kim Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"metal": 0.20}, StatMods: map[string]float64{"defense": 0.20, "speed": -0.10}, Tenacity: 0.10, ApertureStressBonus: 0.25}},
-		{Key: "clear_wisdom_heart_body", Name: "Minh Tuệ Linh Tâm Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"wisdom": 0.25}, MentalResistanceBonus: 0.20, CCResist: 0.10, StatMods: map[string]float64{"attack": -0.10, "hp": -0.10}}},
-		{Key: "swift_wind_body", Name: "Tật Phong Phi Hành Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"wind": 0.25}, StatMods: map[string]float64{"defense": -0.15, "speed": 0.20}, MaxManaBonus: -0.10}},
-		{Key: "night_shade_body", Name: "U Dạ Ám Linh Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"dark": 0.25}, SoulDefenseBonus: 0.25, PathResistanceBonus: map[string]float64{"light": -0.10}, HealingReceivedBonus: -0.15}},
-		{Key: "illusion_light_body", Name: "Huyễn Quang Lưu Chuyển Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"light": 0.25}, PathDamageBonus: map[string]float64{"light": 0.10}, StatMods: map[string]float64{"speed": 0.10}, ManaRegenBonus: -0.15}},
-		{Key: "blood_fiend_body", Name: "Huyết Ma Sát Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"blood": 0.25}, StatMods: map[string]float64{"attack": 0.15}, HealingReceivedBonus: 0.20, ApertureStressBonus: 0.35, RefineBonus: -0.10}},
-		{Key: "dream_phantom_body", Name: "Huyễn Mộng Linh Thể", Tier: 1, Effects: Effects{DaoNganBonus: map[string]float64{"dream": 0.20}, PathDamageBonus: map[string]float64{"dream": 0.05}, MentalResistanceBonus: -0.15, CCResist: -0.10}},
+// fallbackConstitutions loads constitution definitions from Constitution.csv
+// when the in-memory registry is unpopulated (e.g. during standalone unit tests).
+func fallbackConstitutions() map[string]ConstitutionDef {
+	fallback := make(map[string]ConstitutionDef)
+	path := csvPath("Constitution.csv")
+	f, err := os.Open(path)
+	if err != nil {
+		return fallback
 	}
-}
+	defer f.Close()
 
-// effectiveConstitutions returns the registry, falling back to the built-in
-// defaults when it has not been loaded from the database yet.
-func effectiveConstitutions() map[string]ConstitutionDef {
-	if len(ConstitutionRegistry) > 0 {
-		return ConstitutionRegistry
+	r := csv.NewReader(f)
+	r.FieldsPerRecord = -1
+	header, err := r.Read()
+	if err != nil {
+		return fallback
 	}
-	fallback := make(map[string]ConstitutionDef, len(defaultConstitutions()))
-	for _, def := range defaultConstitutions() {
-		fallback[def.Key] = def
+	keyIdx, nameIdx, effectsIdx, tierIdx := -1, -1, -1, -1
+	for i, col := range header {
+		switch strings.TrimSpace(strings.ToLower(col)) {
+		case "key":
+			keyIdx = i
+		case "name":
+			nameIdx = i
+		case "effects":
+			effectsIdx = i
+		case "tier":
+			tierIdx = i
+		}
+	}
+	if keyIdx == -1 || nameIdx == -1 {
+		return fallback
+	}
+
+	for {
+		rec, err := r.Read()
+		if err != nil {
+			break
+		}
+		if len(rec) <= keyIdx {
+			continue
+		}
+		key := strings.TrimSpace(rec[keyIdx])
+		if key == "" {
+			continue
+		}
+		name := ""
+		if nameIdx >= 0 && nameIdx < len(rec) {
+			name = strings.TrimSpace(rec[nameIdx])
+		}
+		tier := 0
+		if tierIdx >= 0 && tierIdx < len(rec) {
+			if v, err := strconv.Atoi(strings.TrimSpace(rec[tierIdx])); err == nil {
+				tier = v
+			}
+		}
+		var eff Effects
+		if effectsIdx >= 0 && effectsIdx < len(rec) {
+			raw := strings.TrimSpace(rec[effectsIdx])
+			if raw != "" {
+				_ = json.Unmarshal([]byte(raw), &eff)
+			}
+		}
+		fallback[key] = ConstitutionDef{
+			Key:     key,
+			Name:    name,
+			Tier:    tier,
+			Effects: eff,
+		}
 	}
 	return fallback
 }
 
+// effectiveConstitutions returns the registry, falling back to the CSV dataset
+// when it has not been loaded from the database yet.
+func effectiveConstitutions() map[string]ConstitutionDef {
+	if len(ConstitutionRegistry) > 0 {
+		return ConstitutionRegistry
+	}
+	return fallbackConstitutions()
+}
+
 // LoadConstitutionRegistry queries the database and populates the in-memory
-// cache. When the table is empty the built-in defaults are used.
+// cache. When the table is empty the CSV dataset is used as fallback.
 func LoadConstitutionRegistry(db *sql.DB) error {
 	// Empty-key sentinel rows exist only to keep the players.constitution FK
 	// satisfiable for the '' value; they must never surface in the registry.
@@ -93,10 +135,7 @@ func LoadConstitutionRegistry(db *sql.DB) error {
 	}
 
 	if len(newRegistry) == 0 {
-		for _, def := range defaultConstitutions() {
-
-			newRegistry[def.Key] = def
-		}
+		newRegistry = fallbackConstitutions()
 	}
 	ConstitutionRegistry = newRegistry
 	return nil

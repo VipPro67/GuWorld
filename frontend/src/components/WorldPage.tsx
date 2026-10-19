@@ -31,6 +31,7 @@ const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
     </div>
   ),
 });
+const ExplorationMap = dynamic(() => import("@/components/ExplorationMap").then(m => m.ExplorationMap), { ssr: false });
 
 const GuInventory = dynamic(() => import("./GuInventory").then(m => m.GuInventory), { ssr: false });
 const Aperture = dynamic(() => import("./Aperture").then(m => m.Aperture), { ssr: false });
@@ -65,12 +66,13 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
 };
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 
-type MapPerformanceMode = "full" | "light" | "minimal" | "off";
+type MapPerformanceMode = "full" | "light" | "minimal" | "simple" | "off";
 const MAP_PERFORMANCE_STORAGE_KEY = "gu_world_map_performance_mode";
 const MAP_PERFORMANCE_OPTIONS: { id: MapPerformanceMode; label: string; description: string }[] = [
   { id: "full", label: "Đầy đủ", description: "Bản đồ, quái và người chơi cập nhật như hiện tại." },
   { id: "light", label: "Giảm nhẹ", description: "Giảm cập nhật người chơi và tải trước khu vực." },
   { id: "minimal", label: "Giảm nhiều", description: "Giữ bản đồ để di chuyển, giảm mạnh cập nhật dữ liệu nền." },
+  { id: "simple", label: "Bản đồ lưới (đơn giản)", description: "Chỉ hiện vị trí hiện tại và di chuyển bằng cách bấm ô." },
   { id: "off", label: "Tắt bản đồ", description: "Không dựng bản đồ và không gọi API nền của bản đồ." },
 ];
 
@@ -155,7 +157,7 @@ export function WorldPage() {
   const [mapPerformanceMode, setMapPerformanceMode] = useState<MapPerformanceMode>(() => {
     if (typeof window === "undefined") return "full";
     const saved = localStorage.getItem(MAP_PERFORMANCE_STORAGE_KEY);
-    return saved === "light" || saved === "minimal" || saved === "off" ? saved : "full";
+    return saved === "light" || saved === "minimal" || saved === "simple" || saved === "off" ? saved : "full";
   });
   interface MapLabelSettings {
     monster: boolean;
@@ -299,7 +301,7 @@ export function WorldPage() {
 
   // Movement and Investigation ranges come from the same stats as the grid viewport.
   useEffect(() => {
-    if (mapPerformanceMode === "off") return;
+    if (mapPerformanceMode === "off" || mapPerformanceMode === "simple") return;
     fetchGrid(true).then((data) => {
       if (data?.stats) {
         if (data.stats.movement) setMovementRange(data.stats.movement);
@@ -336,12 +338,16 @@ export function WorldPage() {
               <p className="mt-1 text-xs text-zinc-500">Bật lại trong Cài Đặt Chung. Các chức năng khác vẫn dùng được qua thanh thao tác.</p>
             </div>
           </div>
+        ) : mapPerformanceMode === "simple" ? (
+          <div className="h-full overflow-y-auto custom-scrollbar p-2 sm:p-4">
+            {gamePlayer && <ExplorationMap player={gamePlayer} />}
+          </div>
         ) : (
           <WorldCanvas mode="select" labelSettings={labelSettings} performanceMode={mapPerformanceMode} />
         )}
       </div>
 
-      {mapPerformanceMode !== "off" && <TargetHud />}
+      {mapPerformanceMode !== "off" && mapPerformanceMode !== "simple" && <TargetHud />}
 
       {showWorldActions && (
         <div className="absolute right-2 top-1/2 z-[60] -translate-y-1/2 pointer-events-auto sm:bottom-[calc(env(safe-area-inset-bottom)+6rem)] sm:left-1/2 sm:right-auto sm:top-auto sm:-translate-x-1/2 sm:translate-y-0">
@@ -652,7 +658,7 @@ export function WorldPage() {
         </div>
       )}
 
-      {mapPerformanceMode !== "off" && selectedObject && (
+      {mapPerformanceMode !== "off" && mapPerformanceMode !== "simple" && selectedObject && (
         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-auto animate-fade-in z-20 max-w-[calc(100vw-2rem)]">
           <div className={`relative w-72 max-w-full px-4 py-4 rounded-2xl border ${cfg.borderColor} ${cfg.bgColor} backdrop-blur-md shadow-2xl max-h-[calc(100dvh-10rem)] overflow-y-auto custom-scrollbar`}>
             <button
@@ -1113,7 +1119,7 @@ onClick={() => {
       )}
 
       {mapPerformanceMode !== "off" && <GuQuickBar />}
-      {mapPerformanceMode !== "off" && <MovementJoystick />}
+      {mapPerformanceMode !== "off" && mapPerformanceMode !== "simple" && <MovementJoystick />}
 
       <SpatialRealmHUD />
       <InheritanceAltarModal />

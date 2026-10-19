@@ -347,48 +347,7 @@ interface PlayerGuRow {
   last_fed_at?: string | null;
 }
 
-const raceLabels: Record<string, string> = {
-  human: "Nhân Tộc", cuong_thi: "Cương Thi", fur_people: "Người Lông", merman: "Nhân Ngư",
-  feathered: "Vũ Dân", inkman: "Mặc Nhân", rockman: "Thạch Nhân",
-  snowman: "Tuyết Dân", variant_beastman: "Thú Nhân", dragonman: "Long Nhân",
-  giant_sun_descendant: "Cự Dương Huyết Mạch",
-  eggman: "Đản Dân", miniman: "Tiểu Nhân", mushroomman: "Nấm Nhân",
-  yakshaman: "Dạ Xoa Dân", ghostman: "U Hồn Tộc", ancient_human: "Thái Cổ Nhân Tộc",
-};
 const genderLabels: Record<string, string> = { male: "Nam", female: "Nữ" };
-const constitutionLabels: Record<string, string> = {
-  solar_sun_moon_body: "Thái Nhật Dương Mãng Thể",
-  ancient_moon_yin_desolate_body: "Cổ Nguyệt Âm Hoang Thể",
-  northern_dark_ice_soul_body: "Bắc Minh Băng Phách Thể",
-  forest_sea_reincarnation_body: "Sâm Hải Luân Hồi Thể",
-  myriad_gold_brilliant_flower_body: "Vạn Kim Diệu Hoa Thể",
-  blazing_glory_lightning_brilliance_body: "Viêm Hoàng Lôi Trạch Thể",
-  great_strength_true_martial_body: "Đại Lực Chân Võ Thể",
-  carefree_wisdom_heart_body: "Tiêu Dao Trí Tâm Thể",
-  great_earth_origin_body: "Hậu Thổ Nguyên Ương Thể",
-  universe_great_evolution_body: "Vũ Trụ Đại Diễn Thể",
-  pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
-  frost_chilling_body: "Hàn Sương Thể",
-  blazing_fiery_body: "Xích Liệt Hoang Thể",
-  brute_strength_body: "Cự Lực Man Thể",
-  heavy_rock_body: "Trọng Nham Huyền Thể",
-  spirit_wood_body: "Linh Mộc Dưỡng Sinh Thể",
-  iron_bone_body: "Thiết Cốt Huyền Kim Thể",
-  clear_wisdom_heart_body: "Minh Tuệ Linh Tâm Thể",
-  swift_wind_body: "Tật Phong Phi Hành Thể",
-  night_shade_body: "U Dạ Ám Linh Thể",
-  illusion_light_body: "Huyễn Quang Lưu Chuyển Thể",
-  blood_fiend_body: "Huyết Ma Sát Thể",
-  dream_phantom_body: "Huyễn Mộng Linh Thể",
-};
-const statusLabels: Record<string, string> = {
-  severely_wounded: "Trọng Thương",
-  poisoned: "Trúng Độc",
-  exhausted: "Kiệt Sức",
-  blessed: "Phúc Trạch",
-  death_penalty: "Hình Phạt Tử Vong",
-  regional_wall_suppression: "Áp Chế Giới Vực",
-};
 
 function formatStat(val: number): string {
   if (Math.abs(val) >= 10000) return val.toLocaleString();
@@ -2210,9 +2169,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   </button>
 
                   {isCombatIdentityExpanded && (() => {
-                    const raceLabel = (key: string): string => raceDictionary?.[key]?.name || raceLabels[key] || key;
+                    const raceLabel = (key: string): string => raceDictionary?.[key]?.name || (key === "human" ? "Nhân Tộc" : key);
                     const raceEffects = detail.race ? raceDictionary?.[detail.race]?.effects : undefined;
-                    const constitutionLabel = (key: string): string => constitutionDictionary?.[key]?.name || constitutionLabels[key] || key;
+                    const constitutionLabel = (key: string): string => constitutionDictionary?.[key]?.name || key;
                     const constitutionEffects = detail.constitution ? constitutionDictionary?.[detail.constitution]?.effects : undefined;
 
                     return (
@@ -2245,7 +2204,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                               {detail.statuses.map((s: string | { id: string; expires_at?: string | null }) => {
                                 const sId = typeof s === "string" ? s : s.id;
                                 const sExp = typeof s === "string" ? undefined : s.expires_at;
-                                let displayName = statusDictionary?.[sId]?.name || statusLabels[sId] || sId;
+                                let displayName = statusDictionary?.[sId]?.name || sId;
                                 if (sId.startsWith("cd_gu_")) displayName = "Hồi chiêu Cổ Trùng";
                                 const statusEffects = statusDictionary?.[sId]?.effects;
 

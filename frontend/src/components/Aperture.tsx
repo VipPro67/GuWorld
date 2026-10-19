@@ -790,54 +790,13 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <span className="font-serif font-bold text-zinc-100 text-sm">Thân Phận</span>
               </div>
               {(() => {
-                const raceLabels: Record<string, string> = {
-                  human: "Nhân Tộc", cuong_thi: "Cương Thi", fur_people: "Người Lông", merman: "Nhân Ngư",
-                  feathered: "Vũ Dân", inkman: "Mặc Nhân", rockman: "Thạch Nhân",
-                  snowman: "Tuyết Dân", variant_beastman: "Thú Nhân", dragonman: "Long Nhân",
-                  giant_sun_descendant: "Cự Dương Huyết Mạch",
-                  eggman: "Đản Dân", miniman: "Tiểu Nhân", mushroomman: "Nấm Nhân",
-                  yakshaman: "Dạ Xoa Dân", ghostman: "U Hồn Tộc", ancient_human: "Thái Cổ Nhân Tộc",
-                };
                 const genderLabels: Record<string, string> = { male: "Nam", female: "Nữ" };
-                const constitutionLabels: Record<string, string> = {
-                  solar_sun_moon_body: "Thái Nhật Dương Mãng Thể",
-                  ancient_moon_yin_desolate_body: "Cổ Nguyệt Âm Hoang Thể",
-                  northern_dark_ice_soul_body: "Bắc Minh Băng Phách Thể",
-                  forest_sea_reincarnation_body: "Sâm Hải Luân Hồi Thể",
-                  myriad_gold_brilliant_flower_body: "Vạn Kim Diệu Hoa Thể",
-                  blazing_glory_lightning_brilliance_body: "Viêm Hoàng Lôi Trạch Thể",
-                  great_strength_true_martial_body: "Đại Lực Chân Võ Thể",
-                  carefree_wisdom_heart_body: "Tiêu Dao Trí Tâm Thể",
-                  great_earth_origin_body: "Hậu Thổ Nguyên Ương Thể",
-                  universe_great_evolution_body: "Vũ Trụ Đại Diễn Thể",
-                  pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
-                  frost_chilling_body: "Hàn Sương Thể",
-                  blazing_fiery_body: "Xích Liệt Hoang Thể",
-                  brute_strength_body: "Cự Lực Man Thể",
-                  heavy_rock_body: "Trọng Nham Huyền Thể",
-                  spirit_wood_body: "Linh Mộc Dưỡng Sinh Thể",
-                  iron_bone_body: "Thiết Cốt Huyền Kim Thể",
-                  clear_wisdom_heart_body: "Minh Tuệ Linh Tâm Thể",
-                  swift_wind_body: "Tật Phong Phi Hành Thể",
-                  night_shade_body: "U Dạ Ám Linh Thể",
-                  illusion_light_body: "Huyễn Quang Lưu Chuyển Thể",
-                  blood_fiend_body: "Huyết Ma Sát Thể",
-                  dream_phantom_body: "Huyễn Mộng Linh Thể",
-                };
                 const raceLabel = (key: string): string =>
-                  raceDictionary?.[key]?.name || raceLabels[key] || key;
+                  raceDictionary?.[key]?.name || (key === "human" ? "Nhân Tộc" : key);
                 const raceEffects = player.race ? raceDictionary?.[player.race]?.effects : undefined;
                 const constitutionLabel = (key: string): string =>
-                  constitutionDictionary?.[key]?.name || constitutionLabels[key] || key;
+                  constitutionDictionary?.[key]?.name || key;
                 const constitutionEffects = player.constitution ? constitutionDictionary?.[player.constitution]?.effects : undefined;
-                const statusLabels: Record<string, string> = {
-                  severely_wounded: "Trọng Thương",
-                  poisoned: "Trúng Độc",
-                  exhausted: "Kiệt Sức",
-                  blessed: "Phúc Trạch",
-                  death_penalty: "Hình Phạt Tử Vong",
-                  regional_wall_suppression: "Áp Chế Giới Vực",
-                };
                 const bodyModLabels: Record<string, { name: string; desc: string }> = {
                   sovereign_immortal_body: { name: "Tiên Thể Chí Tôn", desc: "Miễn nhiễm xung đột Đạo Ngân." },
                 };
@@ -865,7 +824,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       {player.statuses && player.statuses.length > 0 ? (
                         <div className="flex flex-col gap-1.5 mt-1">
                           {player.statuses.map((s: PlayerStatusInstance) => {
-                            let displayName = statusDictionary?.[s.id]?.name || statusLabels[s.id] || s.id;
+                            let displayName = statusDictionary?.[s.id]?.name || s.id;
                             if (s.id.startsWith("cd_gu_")) {
                               const instanceId = s.id.substring(6);
                               const gu = player.gu_inventory?.find((g: ApiResponseData) => g.instance_id === instanceId);
