@@ -12,6 +12,22 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+// isRealPlayerAlly reports whether a simulated ally maps to a real players row.
+// Minions have synthetic IDs (e.g. "<uuid>_summon_0") and are never persisted;
+// pets and variant NPCs use their own persistence blocks. None of them may be
+// parsed as a player UUID or written to the players table. This is the guard
+// that keeps battle-start summons from panicking finalize.
+func isRealPlayerAlly(ally *simulator.CombatantAuto, playerID string) bool {
+	if ally == nil {
+		return false
+	}
+	switch ally.Kind {
+	case "Pet", "VariantNPC", "Minion":
+		return false
+	}
+	return ally.ID != playerID
+}
+
 // finalizeAutoCombatOutcome applies the shared tail of an auto-combat after the
 // victory/defeat branch: ON_COMBAT_END Gu events, tribulation aperture/enemy
 // sync, NaN guards, the player row persist, simulated allies' status updates,
@@ -111,7 +127,7 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 	// below; only real player allies are handled here.
 	if !isVirtual {
 		for _, simAlly := range simState.Allies {
-			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" || simAlly.Kind == "VariantNPC" {
+			if !isRealPlayerAlly(simAlly, player.ID.String()) {
 				continue
 			}
 			allyUUID := uuid.MustParse(simAlly.ID)
@@ -178,7 +194,7 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		}
 	} else {
 		for _, simAlly := range simState.Allies {
-			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" || simAlly.Kind == "VariantNPC" {
+			if !isRealPlayerAlly(simAlly, player.ID.String()) {
 				continue
 			}
 			allyID := simAlly.ID
