@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -17,6 +20,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -32,6 +36,55 @@ type UseGuOnMapRequest struct {
 	Target       *WorldCastTarget `json:"target,omitempty"`
 	TargetX      int              `json:"target_x"`
 	TargetY      int              `json:"target_y"`
+}
+
+// persistGuHungerTx writes a Gu's post-cast hunger with a short bounded retry.
+//
+// Every mutation flow that calls EvaluateAndPersistMana runs with a 2s
+// transaction lock_timeout (setFastFailTimeouts) and lazy hunger decay
+// (EvaluatePlayerHungerTx) also updates the same player_gu rows. A cast can
+// therefore lose a lock race and abort the statement with 55P03, which used to
+// surface as the misleading "Không thể cập nhật độ no Cổ trùng" error. Retrying
+// the whole cast is unsafe (position, cooldown and monster side effects would be
+// replayed), so only this single write is retried inside a SAVEPOINT:
+// PostgreSQL allows ROLLBACK TO SAVEPOINT on an aborted transaction and then
+// lets the statement run again.
+//
+// The attempt count stays deliberately small: the caller already holds the
+// players row FOR UPDATE, so every extra wait also blocks concurrent requests
+// for the same player.
+func persistGuHungerTx(ctx context.Context, tx *sql.Tx, playerID uuid.UUID, gu *models.GuInstance) error {
+	const attempts = 2
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if _, err := tx.ExecContext(ctx, `SAVEPOINT sp_gu_hunger`); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx,
+			`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+			gu.Hunger, gu.InstanceID, playerID)
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `RELEASE SAVEPOINT sp_gu_hunger`)
+			return err
+		}
+		if _, rbErr := tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT sp_gu_hunger`); rbErr != nil {
+			// The transaction is unusable now; surface that instead of the
+			// transient error so the caller does not advertise a retry.
+			return rbErr
+		}
+		lastErr = err
+		if !worker.IsHungerTransientError(err) || attempt == attempts-1 {
+			break
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 150 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return err
+		case <-timer.C:
+		}
+	}
+	return lastErr
 }
 
 func UseGuOnMap(c *gin.Context) {
@@ -170,7 +223,7 @@ func UseGuOnMap(c *gin.Context) {
 			player.Y = req.TargetY
 			player.CurrentRegion = targetRegion
 			teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
-			debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion)
+			debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion, tx)
 			if debuffMsg != "" {
 				teleportMsg += " " + debuffMsg
 			}
@@ -205,7 +258,7 @@ func UseGuOnMap(c *gin.Context) {
 		player.Y = targetY
 		player.CurrentRegion = targetRegion
 		teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
-		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion)
+		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion, tx)
 		if debuffMsg != "" {
 			teleportMsg += " " + debuffMsg
 		}
@@ -521,7 +574,12 @@ func UseGuOnMap(c *gin.Context) {
 	if targetGu.Hunger < 0 {
 		targetGu.Hunger = 0
 	}
-	if _, errGu := tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2`, targetGu.Hunger, targetGu.InstanceID); errGu != nil {
+	if errGu := persistGuHungerTx(c.Request.Context(), tx, player.ID, targetGu); errGu != nil {
+		logger.S.Errorf("[UseGuOnMap] failed to persist hunger for player=%s gu=%s: %v", player.ID, targetGu.InstanceID, errGu)
+		if worker.IsHungerTransientError(errGu) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Hệ thống đang bận, đạo hữu vui lòng thử lại sau ít giây."})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật độ no Cổ trùng"})
 		return
 	}
