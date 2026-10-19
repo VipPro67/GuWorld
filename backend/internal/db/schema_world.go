@@ -222,6 +222,13 @@ func schemaWorld() error {
 	);`); err != nil {
 		return err
 	}
+	// Existing databases predate the dungeon scope/rules columns (fresh installs
+	// get them from the CREATE above).
+	if err := execSchema("instance_templates_dungeon_columns", `
+	ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'SHARED' CHECK (scope IN ('SHARED','PARTY','SOLO'));
+	ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS rules JSONB NOT NULL DEFAULT '{}';`); err != nil {
+		return err
+	}
 	if err := execSchema("shared_spatial_instances", `
 	CREATE TABLE IF NOT EXISTS shared_spatial_instances (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -235,7 +242,18 @@ func schemaWorld() error {
 		expires_at TIMESTAMPTZ NOT NULL,
 		closed_at TIMESTAMPTZ,
 		close_reason VARCHAR(30) NOT NULL DEFAULT ''
-	);
+	);`); err != nil {
+		return err
+	}
+	// Existing databases predate the scope/owner/party columns; add them before
+	// the partial indexes below reference scope (fresh installs get them above).
+	if err := execSchema("shared_spatial_instances_dungeon_columns", `
+	ALTER TABLE shared_spatial_instances ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'SHARED' CHECK (scope IN ('SHARED','PARTY','SOLO'));
+	ALTER TABLE shared_spatial_instances ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES players(id) ON DELETE CASCADE;
+	ALTER TABLE shared_spatial_instances ADD COLUMN IF NOT EXISTS party_id UUID REFERENCES parties(id) ON DELETE CASCADE;`); err != nil {
+		return err
+	}
+	if err := execSchema("shared_spatial_instances_indexes", `
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_spatial_instances_one_active ON shared_spatial_instances(template_id) WHERE scope='SHARED' AND status='ACTIVE';
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_spatial_instances_party_active ON shared_spatial_instances(party_id) WHERE scope='PARTY' AND status='ACTIVE';
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_spatial_instances_solo_active ON shared_spatial_instances(owner_id) WHERE scope='SOLO' AND status='ACTIVE';
@@ -287,6 +305,12 @@ func schemaMapGroundDrops() error {
 		expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 	);`); err != nil {
+		return err
+	}
+	// Existing databases predate the dungeon instance column; add it before the
+	// index below references it (fresh installs get it from the CREATE above).
+	if err := execSchema("map_ground_drops_dungeon_columns", `
+	ALTER TABLE map_ground_drops ADD COLUMN IF NOT EXISTS map_instance_id UUID;`); err != nil {
 		return err
 	}
 	if err := execSchema("map_ground_drops_location_idx", `
