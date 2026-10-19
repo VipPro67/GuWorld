@@ -73,31 +73,37 @@ no exact mapping: `passive.soul_refinement`→`STAT_MOD SOUL_REFINEMENT`,
 materials, Huyết Cửu), which is not an effect. Every row is re-checked with
 `effectcatalog.ValidateBlockV2` before import.
 
-**Triệu hồi monster (`SUMMON_MONSTER`).** Hook `ON_CAST`/domain `combat` đã được
-author trong `block_manifest.go` + `manifest.go`; engine spawn minion
-(`Kind: "Minion"`) và scale theo **rank của Cổ triệu hồi** qua
-`gamefx.RankScale(a.Rank)` (rank 1 = ×1 … rank 9 = ×1e10), nhân với
-`hp_scale`/`damage_scale` do data khai báo:
+**Triệu hồi monster (`SUMMON_MONSTER`).** Hook `ON_BATTLE_START`/domain `combat`
+đã được author trong `block_manifest.go` + `manifest.go`; engine spawn minion
+(`Kind: "Minion"`) **một lần duy nhất ở Lượt 0, trước khi bất kỳ ai hành động**
+(`applyBattleStartSummons`, `engine.go`) và scale theo **rank của Cổ triệu hồi**
+qua `gamefx.RankScale(rank)` (rank 1 = ×1 … rank 9 = ×1e10), nhân với
+`hp_scale`/`damage_scale` do data khai báo. `ON_CAST` vẫn được hook chấp nhận để
+các dòng dữ liệu cũ chưa import lại vẫn chạy, nhưng Gu.csv đã chuyển sang
+`ON_BATTLE_START`:
 
 ```json
-[{"id": "SUMMON_MONSTER", "target": {"selector": "SELF"}, "trigger": "ON_CAST",
+[{"id": "SUMMON_MONSTER", "target": {"selector": "SELF"}, "trigger": "ON_BATTLE_START",
   "operations": [{"op": "UNIQUE", "code": "SUMMON_MONSTER",
   "params": {"monster_id": "monster_wolf_leader", "hp_scale": 0.5, "damage_scale": 0.33, "position": "frontline"}}]}]
 ```
 
 Stat gốc lấy từ `MonsterTemplate` (`max_hp`, `base_attack`, `base_defense`) và
 được inject vào mechanic values ở `handlers/combat_auto_resolve.go`
-(`resolveSummonMonsterStats`) vì simulator không import `models`; `monster_id`
+(`resolveSummonMonsterMechanics`) vì simulator không import `models`; `monster_id`
 không tồn tại trong `Monster.csv` thì mechanic bị bỏ + warn chứ không spawn
 minion rỗng. Clamp cố định: HP ≤ 2× caster, damage ≤ 3× caster, đổi
-`hp_scale ≤ 0` thì fallback 0.5× caster — chỉnh ở block `SUMMON_MONSTER` trong
-`engine.go`. Mỗi Cổ chỉ giữ 1 minion (`hasMinion`) nên cast lặp mỗi lượt không
-stack.
+`hp_scale ≤ 0` thì fallback 0.5× caster — chỉnh ở `SUMMON_MONSTER` trong
+`engine.go`. Mỗi Cổ chỉ giữ 1 minion (`hasMinion`), và vì hook chạy đúng một lần
+ở đầu trận nên minion không còn được triệu hồi lại mỗi lượt kể cả khi nó chết.
+`SUMMON_WOLF_FRONTLINE` cũng chuyển sang `ON_BATTLE_START` trong cùng đợt.
 
 **Thú triệu hồi scale theo đạo ngân.** Sau clamp, `hp`/`damage`/`defense` của
-minion nhân thêm `daoMult` của action path (`actorDaoMultiplier(actor, a.Path)`,
-`engine.go`) — cùng hệ số mà damage/shield/heal của chính action đó dùng. Áp
-**sau** clamp để clamp anti-abuse không ăn hết phần khuếch đại khi đạo ngân cao.
+minion nhân thêm `daoMult` của path nguồn (`actorDaoMultiplier`): với hook
+`ON_CAST` là path của action, với hook `ON_BATTLE_START` là `Path` gắn trên
+`CombatMechanic` (`combatMechanicsForSpec` stamp từ Cổ gốc) — cùng hệ số mà
+damage/shield/heal của Cổ đó dùng. Áp **sau** clamp để clamp anti-abuse không ăn
+hết phần khuếch đại khi đạo ngân cao.
 `SUMMON_WOLF_FRONTLINE` cũng nhân cùng `daoMult` vào `MaxHP`/`BaseDmg`/`BaseDef`.
 Log `SUMMONED` in thêm `Đạo Ngân ×N` khi `daoMult > 1`.
 
@@ -729,8 +735,8 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | `ON_DEATH` | `REBORN` | self; probability, ratio HP, count/turns | simulator; combat state | simulator + catalog |
 | `BEFORE_ENEMY_ATTACK` | `FORGET_INTENT_INTERRUPT`, `FORGET_WILL_CONFUSE` | event attacker/targets; probabilities, turns, activation count | simulator; combat state | forget-gu tests + catalog |
 | `ON_TURN_START` | `POEM_INTENT` | self/enemies; hook params | simulator; combat state | effect timing + catalog |
-| `ON_BATTLE_START` | `SEIZE_INITIATIVE` | self vs primary enemy; lifespan ratio | simulator; initiative snapshot | engine + catalog |
-| `ON_CAST` | `SUMMON_WOLF_FRONTLINE`, `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE`, `SUMMON_MONSTER` | hook-declared combat targets; typed params required | simulator; combat state | engine/effect timing + catalog |
+| `ON_BATTLE_START` | `SEIZE_INITIATIVE`, `SUMMON_WOLF_FRONTLINE`, `SUMMON_MONSTER` | self vs primary enemy / self; lifespan ratio hoặc hook params triệu hồi | simulator; initiative snapshot + triệu hồi một lần ở Lượt 0 | engine + catalog |
+| `ON_CAST` | `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE` | hook-declared combat targets; typed params required | simulator; combat state | engine/effect timing + catalog |
 | `ON_HIT` | `BYPASS_SHIELD`, `GUARANTEED_HIT` | event targets; bool | simulator; hit event (GUARANTEED_HIT bỏ qua Evasion/Blind/First Turn Evade/Forget Will Miss) | engine + catalog |
 | `BEFORE_HIT` | `FIRST_TURN_EVADE` | self; bool/turn gate; Định Tiên Du rank 9 mang (rank 6–8 chỉ `portal_create` + `movement`) | simulator; combat state | engine + catalog |
 | `PASSIVE` | `DOUBLE_DAMAGE_DEALT` | self; multiplier | simulator; combat snapshot (`COMBAT_PASSIVE` là tên v2) | engine + catalog |

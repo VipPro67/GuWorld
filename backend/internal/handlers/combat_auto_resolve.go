@@ -809,22 +809,26 @@ func computeGlobalAllStatsBuff(selectedGuIDs []string, resolveSpec func(string) 
 	return total
 }
 
-// resolveSummonMonsterStats injects the monster template stats referenced by a
-// SUMMON_MONSTER mechanic into the compiled mechanic values, so the simulator
-// never needs the monster registry. Unknown template ids are dropped with a
-// warning instead of spawning an empty minion.
-func resolveSummonMonsterStats(act *simulator.SimAction) {
-	for i := range act.Mechanics {
-		m := &act.Mechanics[i]
-		if m.Trigger != "ON_CAST" || m.ActionCode != "SUMMON_MONSTER" {
+// resolveSummonMonsterMechanics injects the monster template stats referenced by
+// a SUMMON_MONSTER mechanic into the compiled mechanic values, so the simulator
+// never needs the monster registry. Both the per-turn ON_CAST form and the
+// battle-start ON_BATTLE_START form resolve here. Unknown template ids are
+// dropped with a warning instead of spawning an empty minion.
+func resolveSummonMonsterMechanics(mechanics []simulator.CombatMechanic) []simulator.CombatMechanic {
+	if len(mechanics) == 0 {
+		return mechanics
+	}
+	out := mechanics[:0]
+	for _, m := range mechanics {
+		if m.ActionCode != "SUMMON_MONSTER" || (m.Trigger != "ON_CAST" && m.Trigger != "ON_BATTLE_START") {
+			out = append(out, m)
 			continue
 		}
 		id, _ := m.Values["monster_id"].(string)
 		tpl, ok := models.MonsterRegistry[id]
 		if !ok || tpl.MaxHP <= 0 {
 			logger.S.Warnf("SUMMON_MONSTER: unknown monster template %q", id)
-			act.Mechanics = append(act.Mechanics[:i], act.Mechanics[i+1:]...)
-			return
+			continue
 		}
 		if m.Values == nil {
 			m.Values = map[string]any{}
@@ -833,21 +837,49 @@ func resolveSummonMonsterStats(act *simulator.SimAction) {
 		m.Values["damage"] = tpl.BaseAttack
 		m.Values["defense"] = tpl.BaseDefense
 		m.Values["name"] = tpl.Name
+		out = append(out, m)
 	}
+	return out
+}
+
+// resolveSummonMonsterStats keeps the SimAction signature used by the builder.
+func resolveSummonMonsterStats(act *simulator.SimAction) {
+	act.Mechanics = resolveSummonMonsterMechanics(act.Mechanics)
 }
 
 // combatMechanicsForSpec is the migration adapter. Registry-loaded definitions
 // always take the compiled path; the legacy fallback supports synthetic specs in
-// tests and can be removed with the legacy effect fields after parity.
+// tests and can be removed with the legacy effect fields after parity. Source
+// rank/paths are stamped onto each mechanic so battle-start hooks (summons) can
+// scale without a SimAction, and SUMMON_MONSTER templates are resolved eagerly.
 func combatMechanicsForSpec(spec models.GuDictionaryItem, action bool) []simulator.CombatMechanic {
-	if compiled := spec.Effects.Compiled(); compiled != nil {
-		return simulator.CompiledCombatMechanics(compiled, action)
-	}
 	var result []simulator.CombatMechanic
-	for _, mechanic := range spec.Effects.Other {
-		isAction := mechanic.EventTrigger == "ON_CAST" || mechanic.EventTrigger == "ON_HIT"
-		if isAction == action {
-			result = append(result, simulator.NewCombatMechanic(mechanic.EventTrigger, mechanic.ActionCode, mechanic.Params))
+	if compiled := spec.Effects.Compiled(); compiled != nil {
+		result = simulator.CompiledCombatMechanics(compiled, action)
+	} else {
+		for _, mechanic := range spec.Effects.Other {
+			isAction := mechanic.EventTrigger == "ON_CAST" || mechanic.EventTrigger == "ON_HIT"
+			if isAction == action {
+				result = append(result, simulator.NewCombatMechanic(mechanic.EventTrigger, mechanic.ActionCode, mechanic.Params))
+			}
+		}
+	}
+	for i := range result {
+		result[i].Rank = spec.Rank
+		result[i].Path = spec.Path
+	}
+	return resolveSummonMonsterMechanics(result)
+}
+
+// battleStartSummonMechanics returns only the ON_BATTLE_START summon hooks of a
+// Gu. Arena builders intentionally do not load passive mechanics, but summoning
+// Gu used to contribute through their per-turn action; this keeps the
+// battle-start summon working there without pulling in unrelated passives.
+func battleStartSummonMechanics(spec models.GuDictionaryItem) []simulator.CombatMechanic {
+	var result []simulator.CombatMechanic
+	for _, m := range combatMechanicsForSpec(spec, false) {
+		if m.Trigger == "ON_BATTLE_START" && (m.ActionCode == "SUMMON_MONSTER" || m.ActionCode == "SUMMON_WOLF_FRONTLINE") {
+			result = append(result, m)
 		}
 	}
 	return result

@@ -169,3 +169,122 @@ func TestSummonScalesWithEnslavementDaoMarks(t *testing.T) {
 		t.Fatal("SUMMONED log should surface the dao mark multiplier")
 	}
 }
+
+// ON_BATTLE_START/SUMMON_MONSTER reinforces the field once, at turn 0, before
+// any combatant acts — instead of recasting the summon on every turn.
+func TestBattleStartSummonMonsterSpawnsOnce(t *testing.T) {
+	ally := newTestCombatant("ally", "Player", 100000, 1000)
+	ally.Rank = 3
+	ally.Speed = 50
+	m := mech("ON_BATTLE_START", "SUMMON_MONSTER",
+		`{"monster_id":"monster_wolf_leader","hp":220,"damage":25,"defense":10,"hp_scale":0.5,"damage_scale":0.33,"position":"frontline"}`)
+	m.Rank = 3
+	ally.Mechanics = []CombatMechanic{m}
+	ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 10}}
+
+	enemy := newTestCombatant("enemy", "Enemy", 100000, 100)
+	enemy.Speed = 1
+	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 1}}
+
+	state := &CombatState{Seed: 5, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
+	logs := Simulate(state)
+
+	minions := 0
+	for _, c := range state.Allies {
+		if c.Kind != "Minion" {
+			continue
+		}
+		minions++
+		if c.MaxHP != 550 {
+			t.Fatalf("minion HP = %.0f, want 550 (220 × 0.5 × RankScale(3))", c.MaxHP)
+		}
+	}
+	if minions != 1 {
+		t.Fatalf("battle-start minions = %d, want 1", minions)
+	}
+	summonedAt := -1
+	for _, l := range logs {
+		if l.Action == "SUMMONED" {
+			summonedAt = l.Turn
+		}
+	}
+	if summonedAt != 0 {
+		t.Fatalf("SUMMONED log turn = %d, want 0 (battle start)", summonedAt)
+	}
+}
+
+// ON_BATTLE_START/SUMMON_WOLF_FRONTLINE summons Địa Lang Vương immediately and
+// pulls the caster back to the mid line.
+func TestBattleStartSummonWolfFrontline(t *testing.T) {
+	ally := newTestCombatant("ally", "Player", 100000, 1000)
+	ally.GridX = 1
+	ally.Mechanics = []CombatMechanic{mech("ON_BATTLE_START", "SUMMON_WOLF_FRONTLINE", `{}`)}
+	ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 10}}
+
+	enemy := newTestCombatant("enemy", "Enemy", 100000, 100)
+	enemy.Speed = 1
+	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 1}}
+
+	state := &CombatState{Seed: 5, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
+	logs := Simulate(state)
+
+	found := false
+	for _, c := range state.Allies {
+		if c.ID == "ally_dialang" && c.Kind == "Minion" {
+			found = true
+			if c.MaxHP != 50000 {
+				t.Fatalf("wolf HP = %.0f, want 50000 (50%% caster)", c.MaxHP)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected Địa Lang Vương minion at battle start")
+	}
+	if ally.GridX != 2 {
+		t.Fatalf("caster GridX = %d, want 2 (pulled to mid)", ally.GridX)
+	}
+	if !hasDetail(logs, "Địa Lang Vương") {
+		t.Fatal("missing SUMMONED log for Địa Lang Vương")
+	}
+}
+
+// Battle-start summons keep the đạo ngân scaling of the source Gu, using the
+// Path stamped on the mechanic instead of a SimAction.
+func TestBattleStartSummonScalesWithDaoMarks(t *testing.T) {
+	profile := gamefx.BuildDaoCombatProfile(map[string]int64{"enslavement": 10000}, nil, false, nil)
+	amp, realmEff, conflict := profile.GetOffensiveFactors("enslavement")
+	want := (1.0 + (amp-1.0)*realmEff) * conflict
+	if want <= 1.5 {
+		t.Fatalf("test setup: dao multiplier %.3f too small to prove scaling", want)
+	}
+
+	ally := newTestCombatant("ally", "Player", 1000000, 10000)
+	ally.Rank = 3
+	ally.Speed = 50
+	ally.DaoMarks = map[string]int64{"enslavement": 10000}
+	m := mech("ON_BATTLE_START", "SUMMON_MONSTER",
+		`{"monster_id":"monster_wolf_leader","hp":220,"damage":25,"defense":10,"hp_scale":0.5,"damage_scale":0.33,"position":"frontline"}`)
+	m.Rank = 3
+	m.Path = []string{"Enslavement Path"}
+	ally.Mechanics = []CombatMechanic{m}
+	ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 10}}
+
+	enemy := newTestCombatant("enemy", "Enemy", 1000000, 1)
+	enemy.Speed = 1
+	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 1}}
+
+	state := &CombatState{Seed: 5, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
+	logs := Simulate(state)
+
+	for _, c := range state.Allies {
+		if c.Kind != "Minion" {
+			continue
+		}
+		if c.MaxHP != 550*want {
+			t.Fatalf("minion HP = %.2f, want %.2f (550 × %.3f dao)", c.MaxHP, 550*want, want)
+		}
+	}
+	if !hasDetail(logs, "Đạo Ngân") {
+		t.Fatal("battle-start SUMMONED log should surface the dao mark multiplier")
+	}
+}
