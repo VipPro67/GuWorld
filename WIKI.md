@@ -1339,6 +1339,8 @@ Không ai được xem trộm hồ sơ từ xa. Muốn biết địch ở đâu,
   mặc định = Chuyển của Cổ, có thể đặt riêng). Khi đang bay, đạo hữu **lướt qua quái thú dưới
   đất**: không kích combat khi dẫm ô quái, không bị phục kích lân cận, và quái sống **không phát
   hiện/đuổi theo**. Dùng lại kỹ năng để **hạ cánh sớm**. Không áp dụng cho PvP hay du ngoạn vùng.
+  Dòng **Phi Hành Cổ** (Phong đạo) có đủ 9 chuyển, từ Sơ Giai Phi Hành Cổ đến Càn Khôn Tiên Cổ;
+  một số Cổ bay sẵn có như Cốt Dực Cổ, Phi Yên Cổ, Mộng Dực Cổ cũng được gắn hiệu ứng này.
 
 ### Ba trụ điểm (áp cho cả hai phe) — cảnh giới là trụ số một
 

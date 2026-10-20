@@ -169,6 +169,16 @@ var Registry = map[string]StatusSpec{
 		Category: CategoryBuff, Path: "wind", BaseChance: 1.0,
 		SelfTarget: true, DefaultTurns: 3,
 	},
+	StatusFlying: {
+		ID: StatusFlying, Behaviour: BehaviourWorldMap, Label: "Phi Hành",
+		Category: CategoryBuff, Path: "wind", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 0,
+	},
+	StatusPhiHanh: {
+		ID: StatusPhiHanh, Behaviour: BehaviourWorldMap, Label: "Phi Hành",
+		Category: CategoryBuff, Path: "wind", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 0,
+	},
 	StatusArmorBreak: {
 		ID: StatusArmorBreak, Behaviour: BehaviourArmorBreak, Label: "Phá Giáp",
 		Category: CategoryBuff, Path: "metal", BaseChance: 0.6,

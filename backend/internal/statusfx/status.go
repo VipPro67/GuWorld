@@ -42,16 +42,23 @@ const (
 	// StatusInvincible is Bất Hoại: takes no damage at all. StatusLastStand is
 	// Bất Tử: still takes damage, but HP never reaches 0. Sát Khí (level > 10)
 	// pierces both.
-	StatusInvincible      = "INVINCIBLE"
-	StatusLastStand       = "LAST_STAND"
-	StatusEvasion         = "EVASION"
-	StatusReviveLock      = "REVIVE_LOCK"
+	StatusInvincible = "INVINCIBLE"
+	StatusLastStand  = "LAST_STAND"
+	StatusEvasion    = "EVASION"
+	StatusReviveLock = "REVIVE_LOCK"
 
 	// Lãng Quên statuses (Wisdom Path). FORGET_EGO seals the victim's Gu
 	// (BehaviourGuSeal); FORGET_REALITY weakens all damage they deal
 	// (BehaviourWeak, intensity from target_damage_reduce_percent).
 	StatusForgetEgo     = "FORGET_EGO"
 	StatusForgetReality = "FORGET_REALITY"
+
+	// StatusFlying is the world-map-only "phi hành" status granted by flying
+	// Gu. It carries no combat behaviour; handlers read it to skip ground
+	// monster encounters. StatusPhiHanh is the legacy alias still accepted by
+	// the activation handler.
+	StatusFlying  = "FLYING"
+	StatusPhiHanh = "PHI_HANH"
 
 	// Gu World Dao Mechanics - New Status Effects
 	StatusEssenceLeak  = "ESSENCE_LEAK"
@@ -111,4 +118,8 @@ const (
 	BehaviourThoughtChaos = "thought_chaos" // THOUGHT_CHAOS - killer move fail chance
 	BehaviourDaoConflict  = "dao_conflict"  // DAO_CONFLICT - reduce heal/shield from allies
 	BehaviourBacklash     = "backlash"      // BACKLASH - instant reflect on shield/killer move break
+
+	// BehaviourWorldMap marks statuses that only affect the world map. Combat
+	// loops intentionally fall through to their no-op default.
+	BehaviourWorldMap = "world_map" // FLYING / PHI_HANH - skip ground monsters
 )

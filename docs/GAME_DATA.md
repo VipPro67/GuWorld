@@ -1506,14 +1506,26 @@ Hai cơ chế, cùng đọc qua `PlayerIgnoresMonsters` (`handlers/player_stats.
 
 - **Chủ động (đa số)** — kỹ năng Active `ON_ACTION` với `STATUS` `status_id` = `FLYING` (hoặc
   `PHI_HANH`). Kích hoạt → vào trạng thái `phi_hanh` trong N phút; **dùng lại để hạ cánh sớm**.
-  Thời gian mặc định = rank của Cổ (phút), hoặc `turns` nếu đặt trong CSV. Cooldown 2 giây.
-  Ví dụ block:
+  Block v2 yêu cầu `turns` >= 1, nên đặt `turns` = rank của Cổ (1–9); handler vẫn fallback về
+  rank nếu `turns` không có. Cooldown 2 giây. Ví dụ block rank 4:
   ```json
   {"trigger":"ON_ACTION","target":{"selector":"SELF"},"operations":[
-    {"op":"STATUS","status_id":"FLYING","turns":0,"value":0,"chance":1}]}
+    {"op":"STATUS","status_id":"FLYING","turns":4,"value":0,"chance":1}]}
   ```
 - **Bị động (cực hiếm)** — capability `IGNORE_MONSTER_ENCOUNTER` trên Cổ trang bị: phi hành vĩnh
   viễn khi đang đeo.
+
+### Cổ phi hành trong dữ liệu
+
+- **Dòng Phi Hành Cổ (Phong đạo, 9 chuyển):**
+  `GU_FLY_SKY_1` (Sơ Giai Phi Hành Cổ) → `GU_FLY_SKY_2` (Lăng Không Cổ) → `GU_FLY_SKY_3`
+  (Ngự Phong Cổ) → `GU_FLY_SKY_4` (Đạp Vân Cổ) → `GU_FLY_SKY_5` (Cửu Tiêu Cổ) →
+  `GU_FLY_SKY_I` rank 6-9 (Phi Hành / Thiên Ngoại / Hư Không / Càn Khôn Tiên Cổ).
+  Mỗi Cổ có `STATUS FLYING` với `turns` = rank (phút), kèm `SPEED`/`MOVEMENT` thụ động theo rank.
+- **Cổ bay sẵn có được gắn thêm Fly:** `GU_BONE_WINGS` (R4), `GU_FLYING_SMOKE` (R5),
+  `GU_FLYING_WING_5` (R5), `GU_LEVEL_CLOUD` (R6), `GU_DREAM_WINGS` (R6).
+- `FLYING` và alias `PHI_HANH` được đăng ký trong `statusfx` với behaviour `world_map` (không có
+  tác dụng trong combat) để Block v2 compile/validate hợp lệ.
 
 World-monster worker bỏ qua người đang bay qua registry in-memory `flyingPlayers`
 (`handlers/world_index.go`), refresh ở mỗi lần di chuyển và mỗi lần toggle. `startWorldMonsterEncounter`

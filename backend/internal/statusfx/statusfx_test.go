@@ -50,11 +50,28 @@ func TestSpecKnownBehaviours(t *testing.T) {
 		StatusSlowDamage, StatusWeak, StatusFreeze, StatusSilence,
 		StatusThorns, StatusRegen, StatusAtkUp, StatusDefUp, StatusTaunt,
 		StatusEssenceLeak, StatusGuSeal, StatusSoulWound, StatusThoughtChaos,
-		StatusDaoConflict, StatusBacklash,
+		StatusDaoConflict, StatusBacklash, StatusFlying, StatusPhiHanh,
 	} {
 		if _, ok := Spec(id); !ok {
 			t.Fatalf("status %s missing from registry", id)
 		}
+	}
+}
+
+func TestResolveFlyingStatusKeepsExplicitDuration(t *testing.T) {
+	op, err := ResolveStatus("FLYING", 0, 4)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if op.ID != StatusFlying || op.Turns != 4 {
+		t.Fatalf("got %+v", op)
+	}
+	spec, ok := Spec(StatusFlying)
+	if !ok {
+		t.Fatal("FLYING must be registered")
+	}
+	if spec.Behaviour != BehaviourWorldMap || !spec.SelfTarget {
+		t.Fatalf("unexpected FLYING spec: %+v", spec)
 	}
 }
 
