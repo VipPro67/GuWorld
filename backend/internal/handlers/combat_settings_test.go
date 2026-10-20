@@ -153,6 +153,47 @@ func TestFilterCombatGuInventory_FallbackToSettings(t *testing.T) {
 	}
 }
 
+func TestBuildSimCombatantNoGuSkillsUsesBasicAttackOnly(t *testing.T) {
+	setupGuRegistry(t)
+
+	p := models.Player{}
+	p.ID = uuid.New()
+	p.Username = "Tester"
+	p.Rank = 1
+	p.BaseHP = 500
+	p.HP = 500
+	p.MaxMana = 100
+	p.CurrentMana = 100
+	p.GuInventory = models.GuInventory{
+		{InstanceID: "a1", GuID: "GU_A", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 50},
+	}
+	// Saved settings would normally supply GU_A; the explicit empty loadout must win.
+	p.CombatSettings = models.AutoCombatConfig{
+		GuPriorities: []models.GuTactic{{GuID: "GU_A", Priority: 1}},
+	}
+
+	simPlayer, err := buildSimCombatant(nil, &p, false, true, &simulator.CombatLoadout{
+		NoGuSkills:    true,
+		AutoHealHP:    true,
+		HealThreshold: 25,
+	})
+	if err != nil {
+		t.Fatalf("buildSimCombatant failed: %v", err)
+	}
+
+	for _, act := range simPlayer.Actions {
+		if act.ActionType == "GU_SKILL" {
+			t.Fatalf("expected no GU_SKILL actions with NoGuSkills, got %+v", act)
+		}
+	}
+	if len(simPlayer.Actions) != 1 || simPlayer.Actions[0].ActionType != "BASIC_ATTACK" {
+		t.Fatalf("expected only BASIC_ATTACK, got %+v", simPlayer.Actions)
+	}
+	if !simPlayer.AutoHealHP || simPlayer.HealThreshold != 25 {
+		t.Fatalf("expected loadout auto-heal settings to apply, got %+v", simPlayer)
+	}
+}
+
 func TestFilterGuLoadoutRetainsPassiveMechanicGus(t *testing.T) {
 	setupGuRegistry(t)
 	models.GuRegistry["GU_PASSIVE_REBORN"] = map[int]models.GuDictionaryItem{

@@ -581,10 +581,12 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	var autoRestoreMana bool
 	var manaThreshold float64
 
-	if isInitiator && reqLoadout != nil && len(reqLoadout.GuIds) > 0 {
-		for _, id := range reqLoadout.GuIds {
-			if inst, ok := resolveGuInstance(id); ok {
-				addSelectedGuInstance(inst)
+	if isInitiator && reqLoadout != nil && (len(reqLoadout.GuIds) > 0 || reqLoadout.NoGuSkills) {
+		if !reqLoadout.NoGuSkills {
+			for _, id := range reqLoadout.GuIds {
+				if inst, ok := resolveGuInstance(id); ok {
+					addSelectedGuInstance(inst)
+				}
 			}
 		}
 		autoHealHP = reqLoadout.AutoHealHP

@@ -157,6 +157,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       GuIds: selectedGuIds,
       KillerMoveIds: selectedKmIds,
       ImmortalGuId: null,
+      NoGuSkills: selectedGuIds.length === 0,
       AutoHealHP: autoHealHP,
       HealThreshold: healThreshold,
       AutoRestoreMana: autoRestoreMana,
@@ -1036,7 +1037,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       <div className="flex gap-4 flex-wrap">
         <button
           onClick={handleStartSimulation}
-          disabled={actionLoading || selectedGuIds.length === 0}
+          disabled={actionLoading}
           className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Play className="w-6 h-6" />
@@ -1243,6 +1244,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 <span className="text-rose-400 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
                   {backlashCount} Cổ bậc cao → có thể mất {backlashCount * 5} Sinh lực/lần sài
+                </span>
+              )}
+              {selectedGuIds.length === 0 && (
+                <span className="text-amber-300/90 flex items-center gap-1">
+                  Không chọn Cổ — sẽ chỉ đánh thường
                 </span>
               )}
               <span className="text-zinc-600 ml-auto">{selectedGuIds.length}/7 đã chọn</span>

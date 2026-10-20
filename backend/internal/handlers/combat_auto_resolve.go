@@ -100,7 +100,11 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 			PathMasteries: ally.PathMasteries,
 		}
 		if ally.ID == player.ID.String() {
-			cInst.GuInventory = filterCombatGuInventory(player.GuInventory, loadoutGuIDs, player.CombatSettings)
+			if loadout.NoGuSkills {
+				cInst.GuInventory = nil
+			} else {
+				cInst.GuInventory = filterCombatGuInventory(player.GuInventory, loadoutGuIDs, player.CombatSettings)
+			}
 		}
 		combatantInfos = append(combatantInfos, cInst)
 	}
