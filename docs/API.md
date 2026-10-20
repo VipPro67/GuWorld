@@ -468,6 +468,7 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là
 | GET | `/admin/map-drops` | Phân trang map drops, tìm kiếm và lọc còn hạn/đã hết hạn. |
 | PUT | `/admin/map-drops/:id` | Cập nhật vị trí, người chơi, loot JSON và thời hạn; được audit. |
 | DELETE | `/admin/map-drops/:id` | Xóa drop với lý do và xác nhận target. |
+| POST | `/admin/map-drops/:id/return` | Trả toàn bộ loot về người rơi đồ (loser) rồi xóa drop; cần lý do, xác nhận target và `Idempotency-Key`. |
 
 ## Admin — players & gus
 
@@ -719,7 +720,7 @@ Boss là actor runtime trong Redis, không phải bảng dữ liệu: chúng ch�
 | Method | Path | Permission | Ghi chú |
 | --- | --- | --- | --- |
 | GET | `/admin/world-bosses` | `world_bosses.read` | Liệt kê boss đang sống toàn server; query `region_id` để lọc. Trả `{data, total, boss_regions}`, mỗi phần tử có `region_id`, `instance_id`, `spawn_id`, `monster_template_id`, `name`, `rank`/`sub_rank`, `x`/`y`, `spawn_x`/`spawn_y`, `hp`/`max_hp`, `state`, `target_id`, `respawn_seconds`, `respawn_at`, `revision`, `last_update_at`; `boss_regions` là các khu vực có ô boss tĩnh (kể cả chưa spawn). Redis không khả dụng → `503`. |
-| POST | `/admin/world-bosses/spawn` | `world_bosses.update` | Body `{region_id, x?, y?}`. Tạo actor từ ô boss (`cell_type='boss'`) của khu vực (hoặc đúng ô `x,y`); hồi sinh boss đang `DEFEATED` tại chỗ, xoá cửa sổ hồi sinh (`map_cells.last_cleared_at`) và broadcast `monster_spawned`/`monster_respawned`. Trả `{created, revived, alive, errors}`. |
+| POST | `/admin/world-bosses/spawn` | `world_bosses.update` | Body `{region_id?, x?, y?}`. Tạo actor từ ô boss (`cell_type='boss'`) của khu vực (hoặc đúng ô `x,y`); bỏ trống `region_id` để chạy toàn bộ khu vực trong một lần; hồi sinh boss đang `DEFEATED` tại chỗ, xoá cửa sổ hồi sinh (`map_cells.last_cleared_at`) và broadcast `monster_spawned`/`monster_respawned`. Trả `{created, revived, alive, errors}`. |
 | PUT | `/admin/world-bosses/:region_id/:instance_id` | `world_bosses.update` | Body `{x?, y?, hp?, state?}`. Toạ độ phải nằm trong khu vực; `hp` được clamp `[0, max_hp]`. `hp=0` → `DEFEATED` + `respawn_at`; `state="IDLE"` → hồi sinh tại điểm spawn với đầy HP và xoá `respawn_at`. Ghi bằng CAS theo `revision` như worker (xung đột trả `409`), broadcast `monster_moved`/`monster_updated`/`monster_defeated`/`monster_respawned`. Boss không còn trong Redis → `404`. |
 | DELETE | `/admin/world-bosses?region_id=` | `world_bosses.delete` | Xoá mọi boss đang sống của khu vực khỏi Redis (snapshot kế tiếp materialize lại từ dữ liệu tĩnh). Bắt buộc `reason` + `confirmation_target`; được audit là destructive. |
 

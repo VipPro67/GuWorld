@@ -122,16 +122,16 @@ export const WorldBossesAdminTab: React.FC<{
     await update(edit, { x: form.x, y: form.y, hp: form.hp }, "cập nhật boss");
   };
 
-  const spawnRegion = async () => {
-    if (!regionFilter) return;
-    const action = prepareAdminAction("spawnWorldBoss", "spawn/hồi sinh boss từ ô boss", regionFilter);
+  const spawnBosses = async (regionID: string) => {
+    const scope = regionID || "tất cả khu vực";
+    const action = prepareAdminAction("spawnWorldBoss", "spawn/hồi sinh boss từ ô boss", scope);
     if (!action) return;
     setLoading(true);
     try {
       const response = await authFetch(`${BACKEND_URL}/api/admin/world-bosses/spawn`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": action.idempotencyKey },
-        body: JSON.stringify({ region_id: regionFilter }),
+        body: JSON.stringify({ region_id: regionID }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Không thể spawn boss");
@@ -185,7 +185,8 @@ export const WorldBossesAdminTab: React.FC<{
         <p className="mt-1 text-xs text-zinc-500">Dữ liệu runtime trong Redis: vị trí, HP, mục tiêu, hồi sinh. Tự làm mới mỗi {REFRESH_MS / 1000}s.</p>
       </div>
       <div className="flex items-center gap-2">
-        {canEdit && <button type="button" onClick={() => void spawnRegion()} disabled={!regionFilter || loading} title="Tạo mới hoặc hồi sinh boss từ ô boss (map_cells) của khu vực đang lọc" className="rounded-lg border border-emerald-900/60 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40">Spawn từ ô boss</button>}
+        {canEdit && <button type="button" onClick={() => void spawnBosses("")} disabled={loading} title="Tạo mới hoặc hồi sinh toàn bộ boss từ ô boss (map_cells) của mọi khu vực" className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40">Hồi sinh tất cả</button>}
+        {canEdit && <button type="button" onClick={() => void spawnBosses(regionFilter)} disabled={loading} title="Tạo mới hoặc hồi sinh boss từ ô boss (map_cells) của khu vực đang lọc; để trống bộ lọc sẽ chạy tất cả khu vực" className="rounded-lg border border-emerald-900/60 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40">Spawn từ ô boss</button>}
         {canDelete && <button type="button" onClick={() => void purgeRegion()} disabled={!regionFilter || loading} title="Xoá mọi boss đang sống của khu vực đang lọc (snapshot sau sẽ tạo lại)" className="rounded-lg border border-red-900/60 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-40"><Trash2 className="mr-1.5 inline h-3.5 w-3.5" />Xoá boss khu vực</button>}
         <button type="button" onClick={() => void load()} disabled={loading} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"><RefreshCw className={`mr-1.5 inline h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />Làm mới</button>
       </div>
@@ -226,7 +227,7 @@ export const WorldBossesAdminTab: React.FC<{
       </table>
     </div>
 
-    <p className="text-[10px] text-zinc-600">Tổng {visible.length} / {rows.length} boss đang sống. Boss chưa materialize không nằm trong bảng — chọn khu vực rồi bấm "Spawn từ ô boss" để tạo từ ô boss (map_cells).</p>
+    <p className="text-[10px] text-zinc-600">Tổng {visible.length} / {rows.length} boss đang sống. Boss chưa materialize không nằm trong bảng — bấm "Hồi sinh tất cả" để tạo từ toàn bộ ô boss (map_cells), hoặc chọn khu vực rồi bấm "Spawn từ ô boss".</p>
 
     {edit && <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-lg space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
       <div className="flex items-start justify-between"><div><h3 className="text-sm font-bold text-zinc-100">Sửa boss · {edit.name}</h3><p className="mt-1 font-mono text-[10px] text-zinc-600">{edit.region_id} / {edit.instance_id}</p></div><button type="button" onClick={() => setEdit(null)} className="rounded p-1.5 text-zinc-400 hover:bg-zinc-800"><X className="h-4 w-4" /></button></div>

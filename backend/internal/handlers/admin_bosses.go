@@ -285,8 +285,8 @@ type adminWorldBossSpawnRequest struct {
 }
 
 // AdminSpawnWorldBosses materializes or revives boss actors from the active
-// boss map_cells of one region, so an admin can force a spawn instead of
-// waiting for the next player AOI snapshot.
+// boss map_cells. An empty region_id targets every region at once, so an admin
+// can populate the whole dashboard in one click instead of region by region.
 func AdminSpawnWorldBosses(c *gin.Context) {
 	adminID, ok := requireAdmin(c)
 	if !ok {
@@ -302,24 +302,32 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 		return
 	}
 	req.RegionID = strings.TrimSpace(req.RegionID)
-	if req.RegionID == "" || len(req.RegionID) > 50 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "region_id là bắt buộc"})
+	if len(req.RegionID) > 50 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "region_id không hợp lệ"})
+		return
+	}
+	if req.RegionID == "" && (req.X != nil || req.Y != nil) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cần region_id khi chỉ định x/y"})
 		return
 	}
 
 	query := `
-		SELECT x, y, COALESCE(content_id,''),
+		SELECT region_id, x, y, COALESCE(content_id,''),
 		       CASE WHEN COALESCE(metadata->>'rank','') ~ '^[0-9]+$' THEN (metadata->>'rank')::int ELSE 1 END,
 		       CASE WHEN COALESCE(metadata->>'sub_rank','') ~ '^[0-9]+$' THEN (metadata->>'sub_rank')::int ELSE 1 END,
 		       COALESCE(respawn_seconds,300)
 		FROM map_cells
-		WHERE region_id=$1 AND is_active=TRUE AND lower(cell_type)='boss'`
-	args := []interface{}{req.RegionID}
+		WHERE is_active=TRUE AND lower(cell_type)='boss'`
+	args := []interface{}{}
+	if req.RegionID != "" {
+		query += ` AND region_id=$1`
+		args = append(args, req.RegionID)
+	}
 	if req.X != nil && req.Y != nil {
 		query += ` AND x=$2 AND y=$3`
 		args = append(args, *req.X, *req.Y)
 	}
-	query += ` ORDER BY x,y`
+	query += ` ORDER BY region_id,x,y`
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc ô boss: " + err.Error()})
@@ -328,18 +336,17 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 	defer rows.Close()
 
 	now := time.Now().UTC()
-	minX, minY, maxX, maxY := monsterPatrolBounds(req.RegionID)
 	created, revived, alive := 0, 0, 0
 	failures := make([]string, 0)
 	for rows.Next() {
 		var spawn monsterSpawnRow
-		spawn.RegionID, spawn.IsBoss = req.RegionID, true
-		if err := rows.Scan(&spawn.X, &spawn.Y, &spawn.MonsterID, &spawn.Rank, &spawn.SubRank, &spawn.RespawnSeconds); err != nil {
+		spawn.IsBoss = true
+		if err := rows.Scan(&spawn.RegionID, &spawn.X, &spawn.Y, &spawn.MonsterID, &spawn.Rank, &spawn.SubRank, &spawn.RespawnSeconds); err != nil {
 			failures = append(failures, "không đọc được một ô boss")
 			continue
 		}
 		if spawn.MonsterID == "" {
-			failures = append(failures, fmt.Sprintf("ô (%d,%d) thiếu content_id", spawn.X, spawn.Y))
+			failures = append(failures, fmt.Sprintf("ô %s (%d,%d) thiếu content_id", spawn.RegionID, spawn.X, spawn.Y))
 			continue
 		}
 		spawn.ID = fmt.Sprintf("mapcell:%s:%d:%d", spawn.RegionID, spawn.X, spawn.Y)
@@ -349,19 +356,20 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 		if spawn.SubRank < 1 {
 			spawn.SubRank = 1
 		}
+		minX, minY, maxX, maxY := monsterPatrolBounds(spawn.RegionID)
 		candidate, err := worldMonsterCandidateForSpawn(spawn, now)
 		if err != nil {
-			failures = append(failures, fmt.Sprintf("ô (%d,%d): %v", spawn.X, spawn.Y, err))
+			failures = append(failures, fmt.Sprintf("%s ô (%d,%d): %v", spawn.RegionID, spawn.X, spawn.Y, err))
 			continue
 		}
 		if err := resetPersistentBossCell(spawn.RegionID, spawn.X, spawn.Y); err != nil {
-			failures = append(failures, fmt.Sprintf("ô (%d,%d): %v", spawn.X, spawn.Y, err))
+			failures = append(failures, fmt.Sprintf("%s ô (%d,%d): %v", spawn.RegionID, spawn.X, spawn.Y, err))
 			continue
 		}
 		bx, by := monsterBucket(spawn.X, spawn.Y)
 		runtime, isNew, err := materializeWorldMonster(c.Request.Context(), candidate, bx, by, monsterTTL(spawn.RespawnSeconds))
 		if err != nil {
-			failures = append(failures, fmt.Sprintf("ô (%d,%d): %v", spawn.X, spawn.Y, err))
+			failures = append(failures, fmt.Sprintf("%s ô (%d,%d): %v", spawn.RegionID, spawn.X, spawn.Y, err))
 			continue
 		}
 		if isNew {
@@ -384,7 +392,7 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 		newBucketX, newBucketY := monsterBucket(int(runtime.X), int(runtime.Y))
 		written, err := casWorldMonster(c.Request.Context(), runtime, runtime, runtime.Revision-1, oldBucketX, oldBucketY, newBucketX, newBucketY, monsterTTL(runtime.RespawnSeconds))
 		if err != nil || !written {
-			failures = append(failures, fmt.Sprintf("ô (%d,%d): không thể hồi sinh", spawn.X, spawn.Y))
+			failures = append(failures, fmt.Sprintf("%s ô (%d,%d): không thể hồi sinh", spawn.RegionID, spawn.X, spawn.Y))
 			continue
 		}
 		revived++
@@ -395,11 +403,15 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 		return
 	}
 	if created+revived+alive == 0 && len(failures) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Khu vực không có ô boss nào đang hoạt động"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không có ô boss nào đang hoạt động"})
 		return
 	}
+	scope := req.RegionID
+	if scope == "" {
+		scope = "Tất cả khu vực"
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("%s: tạo mới %d, hồi sinh %d, đang sống %d", req.RegionID, created, revived, alive),
+		"message": fmt.Sprintf("%s: tạo mới %d, hồi sinh %d, đang sống %d", scope, created, revived, alive),
 		"created": created, "revived": revived, "alive": alive, "errors": failures,
 	})
 }

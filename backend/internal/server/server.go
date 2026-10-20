@@ -149,6 +149,7 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodGet, "/map-drops", "map_drops.read", handlers.AdminListMapGroundDrops, "", "", false, "", false, false, false},
 		{http.MethodPut, "/map-drops/:id", "map_drops.update", handlers.AdminUpdateMapGroundDrop, "admin.update_map_drop", "map_ground_drops", false, "", false, false, false},
 		{http.MethodDelete, "/map-drops/:id", "map_drops.delete", handlers.AdminDeleteMapGroundDrop, "admin.delete_map_drop", "map_ground_drops", true, "path", false, false, true},
+		{http.MethodPost, "/map-drops/:id/return", "map_drops.update", handlers.AdminReturnMapGroundDrop, "admin.return_map_drop", "map_ground_drops", true, "path", false, true, false},
 		{http.MethodPost, "/map-cells", "map_cells.update", handlers.AdminCreateMapCell, "admin.create_map_cell", "map_cell", false, "", false, false, false},
 		{http.MethodPut, "/map-cells/:id", "map_cells.update", handlers.AdminUpdateMapCell, "admin.update_map_cell", "map_cell", false, "", false, false, false},
 		{http.MethodDelete, "/map-cells/:id", "map_cells.delete", handlers.AdminDeleteMapCell, "admin.delete_map_cell", "map_cell", true, "path", false, false, true},

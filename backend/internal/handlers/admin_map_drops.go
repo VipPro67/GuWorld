@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 func AdminListMapGroundDrops(c *gin.Context) {
@@ -174,4 +176,71 @@ func AdminDeleteMapGroundDrop(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa map drop"})
+}
+
+// AdminReturnMapGroundDrop credits an unclaimed/expired drop back to the loser
+// and removes the drop, so death penalties can be compensated.
+func AdminReturnMapGroundDrop(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	dropID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID map drop không hợp lệ"})
+		return
+	}
+	ctx := c.Request.Context()
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	var loserID uuid.UUID
+	var loserName, regionID string
+	var x, y int
+	var lootBytes []byte
+	err = tx.QueryRowContext(ctx, `
+		SELECT loser_id, loser_name, region_id, x, y, loot_data
+		FROM map_ground_drops
+		WHERE id=$1
+		FOR UPDATE`, dropID).Scan(&loserID, &loserName, &regionID, &x, &y, &lootBytes)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy map drop"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc map drop"})
+		}
+		return
+	}
+	var loot GroundLootData
+	if err := json.Unmarshal(lootBytes, &loot); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "loot_data không hợp lệ"})
+		return
+	}
+	logs, err := applyGroundLoot(tx, loserID, loot)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trả chiến lợi phẩm; chưa có thay đổi nào được lưu"})
+		return
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM map_ground_drops WHERE id=$1`, dropID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa map drop"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"})
+		return
+	}
+
+	summary := joinDropList(logs)
+	if summary == "" {
+		summary = "không có tài sản"
+	}
+	notify.Send(db.DB, loserID, "ground_drop_returned", "Chiến lợi phẩm được trả lại",
+		fmt.Sprintf("Quản trị viên đã trả lại chiến lợi phẩm của bạn tại %s (%d, %d): %s.", regionID, x, y, summary))
+	c.JSON(http.StatusOK, gin.H{
+		"message":  fmt.Sprintf("Đã trả chiến lợi phẩm cho %s: %s", loserName, summary),
+		"returned": logs,
+	})
 }

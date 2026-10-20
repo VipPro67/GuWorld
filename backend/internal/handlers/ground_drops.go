@@ -250,93 +250,14 @@ func LootGroundDrop(c *gin.Context) {
 		return
 	}
 
-	var logs []string
-
-	// 1. Primeval & Immortal Stones
-	if loot.PrimevalStones > 0 || loot.ImmortalStones > 0 {
-		player.PrimevalStones += loot.PrimevalStones
-		player.ImmortalStones += loot.ImmortalStones
-		if _, errStones := tx.Exec(`
-			UPDATE players SET
-				primeval_stones = primeval_stones + $1,
-				immortal_stones = immortal_stones + $2
-			WHERE id = $3
-		`, loot.PrimevalStones, loot.ImmortalStones, player.ID); errStones != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add stones"})
-			return
-		}
-		if loot.PrimevalStones > 0 {
-			logs = append(logs, fmt.Sprintf("+%.3f Nguyên Thạch", loot.PrimevalStones))
-		}
-		if loot.ImmortalStones > 0 {
-			logs = append(logs, fmt.Sprintf("+%.3f Tiên Nguyên Thạch", loot.ImmortalStones))
-		}
+	logs, errApply := applyGroundLoot(tx, player.ID, loot)
+	if errApply != nil {
+		logger.S.Errorf("Failed to apply ground drop loot to player %s: %v", player.ID, errApply)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add loot"})
+		return
 	}
-
-	// 2. Materials & Items
-	if len(loot.Items) > 0 {
-		batchEntries := make([]services.ItemBatchEntry, 0, len(loot.Items))
-		for _, item := range loot.Items {
-			batchEntries = append(batchEntries, services.ItemBatchEntry{
-				ItemID:   item.ItemID,
-				Category: item.Category,
-				Quantity: int64(item.Quantity),
-			})
-			itemName := item.ItemID
-			if spec, ok := models.ItemRegistry[item.ItemID]; ok && spec.Name != "" {
-				itemName = spec.Name
-			}
-			logs = append(logs, fmt.Sprintf("%dx %s", item.Quantity, itemName))
-		}
-		if errAdd := InventorySvc.AddItemsBatch(tx, player.ID.String(), batchEntries); errAdd != nil {
-			logger.S.Errorf("Failed to add ground drop items to player %s: %v", player.ID, errAdd)
-		}
-	}
-
-	// 3. Gus
-	if len(loot.Gus) > 0 {
-		newGus := make([]models.GuInstance, 0, len(loot.Gus))
-		for _, g := range loot.Gus {
-			newGu := models.GuInstance{
-				InstanceID: "gu-" + uuid.New().String(),
-				GuID:       g.GuID,
-				Rank:       g.Rank,
-				Hunger:     100,
-				Status:     "ACTIVE",
-				Equipped:   false,
-			}
-			newGus = append(newGus, newGu)
-			guName := g.GuID
-			if spec, ok := models.GetGuAny(g.GuID); ok && spec.Name != "" {
-				guName = spec.Name
-			}
-			logs = append(logs, fmt.Sprintf("Cổ trùng [%s]", guName))
-		}
-		if errGu := db.AddPlayerGusBulk(tx, player.ID.String(), newGus); errGu != nil {
-			logger.S.Errorf("Failed to add looted Gus to player %s: %v", player.ID, errGu)
-		}
-	}
-
-	// 4. Recipes
-	if len(loot.Recipes) > 0 {
-		recipesToUpsert := make([]*services.RecipeProgress, 0, len(loot.Recipes))
-		for _, rID := range loot.Recipes {
-			rec := &services.RecipeProgress{
-				PlayerID:   player.ID.String(),
-				RecipeID:   rID,
-				IsUnlocked: true,
-			}
-			recipesToUpsert = append(recipesToUpsert, rec)
-			recName := rID
-			if guDef, ok := models.GetGuAny(rID); ok && guDef.Name != "" {
-				recName = guDef.Name
-			}
-			logs = append(logs, fmt.Sprintf("Bí phương [%s]", recName))
-		}
-		if errRec := RecipeSvc.UpsertBatch(tx, recipesToUpsert); errRec != nil {
-			logger.S.Errorf("Failed to add looted recipes to player %s: %v", player.ID, errRec)
-		}
-	}
+	player.PrimevalStones += loot.PrimevalStones
+	player.ImmortalStones += loot.ImmortalStones
 
 	// Xóa đống đồ sau khi nhặt
 	if _, errDel := tx.Exec("DELETE FROM map_ground_drops WHERE id = $1", dropUUID); errDel != nil {
@@ -376,4 +297,108 @@ func LootGroundDrop(c *gin.Context) {
 		"primeval_stones":     player.PrimevalStones,
 		"immortal_stones":     player.ImmortalStones,
 	})
+}
+
+// applyGroundLoot credits a map drop's loot to a player and returns human-readable
+// log lines. It is shared by normal looting and admin "return to loser".
+func applyGroundLoot(tx *sql.Tx, playerID uuid.UUID, loot GroundLootData) ([]string, error) {
+	var logs []string
+
+	// 1. Primeval & Immortal Stones
+	if loot.PrimevalStones > 0 || loot.ImmortalStones > 0 {
+		if _, errStones := tx.Exec(`
+			UPDATE players SET
+				primeval_stones = primeval_stones + $1,
+				immortal_stones = immortal_stones + $2
+			WHERE id = $3
+		`, loot.PrimevalStones, loot.ImmortalStones, playerID); errStones != nil {
+			return nil, fmt.Errorf("add stones: %w", errStones)
+		}
+		if loot.PrimevalStones > 0 {
+			logs = append(logs, fmt.Sprintf("+%.3f Nguyên Thạch", loot.PrimevalStones))
+		}
+		if loot.ImmortalStones > 0 {
+			logs = append(logs, fmt.Sprintf("+%.3f Tiên Nguyên Thạch", loot.ImmortalStones))
+		}
+	}
+
+	// 2. Materials & Items
+	if len(loot.Items) > 0 {
+		batchEntries := make([]services.ItemBatchEntry, 0, len(loot.Items))
+		for _, item := range loot.Items {
+			batchEntries = append(batchEntries, services.ItemBatchEntry{
+				ItemID:   item.ItemID,
+				Category: item.Category,
+				Quantity: int64(item.Quantity),
+			})
+			itemName := item.ItemID
+			if spec, ok := models.ItemRegistry[item.ItemID]; ok && spec.Name != "" {
+				itemName = spec.Name
+			}
+			logs = append(logs, fmt.Sprintf("%dx %s", item.Quantity, itemName))
+		}
+		if errAdd := InventorySvc.AddItemsBatch(tx, playerID.String(), batchEntries); errAdd != nil {
+			return nil, fmt.Errorf("add items: %w", errAdd)
+		}
+	}
+
+	// 3. Gus — keep the original instance IDs so history stays linked.
+	if len(loot.Gus) > 0 {
+		newGus := restoreDroppedGus(loot.Gus)
+		for _, g := range newGus {
+			guName := g.GuID
+			if spec, ok := models.GetGuAny(g.GuID); ok && spec.Name != "" {
+				guName = spec.Name
+			}
+			logs = append(logs, fmt.Sprintf("Cổ trùng [%s]", guName))
+		}
+		if errGu := db.AddPlayerGusBulk(tx, playerID.String(), newGus); errGu != nil {
+			return nil, fmt.Errorf("add gus: %w", errGu)
+		}
+	}
+
+	// 4. Recipes
+	if len(loot.Recipes) > 0 {
+		recipesToUpsert := make([]*services.RecipeProgress, 0, len(loot.Recipes))
+		for _, rID := range loot.Recipes {
+			rec := &services.RecipeProgress{
+				PlayerID:   playerID.String(),
+				RecipeID:   rID,
+				IsUnlocked: true,
+			}
+			recipesToUpsert = append(recipesToUpsert, rec)
+			recName := rID
+			if guDef, ok := models.GetGuAny(rID); ok && guDef.Name != "" {
+				recName = guDef.Name
+			}
+			logs = append(logs, fmt.Sprintf("Bí phương [%s]", recName))
+		}
+		if errRec := RecipeSvc.UpsertBatch(tx, recipesToUpsert); errRec != nil {
+			return nil, fmt.Errorf("add recipes: %w", errRec)
+		}
+	}
+
+	return logs, nil
+}
+
+// restoreDroppedGus normalises stored loot Gu so they can be inserted back into
+// player_gu: no equipped/vital state, valid hunger, and an instance ID.
+func restoreDroppedGus(dropped models.GuInventory) []models.GuInstance {
+	restored := make([]models.GuInstance, 0, len(dropped))
+	for _, g := range dropped {
+		if g.InstanceID == "" {
+			g.InstanceID = "gu-" + uuid.New().String()
+		}
+		if g.Hunger <= 0 {
+			g.Hunger = 100
+		}
+		if g.Status == "" {
+			g.Status = "ACTIVE"
+		}
+		g.Equipped = false
+		g.IsVital = false
+		g.EquippedAt = nil
+		restored = append(restored, g)
+	}
+	return restored
 }

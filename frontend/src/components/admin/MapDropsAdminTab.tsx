@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Clock3, Edit3, MapPin, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock3, Edit3, MapPin, RefreshCw, Search, Trash2, Undo2, X } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import { prepareAdminAction } from "./actions";
 
@@ -107,8 +107,25 @@ export const MapDropsAdminTab: React.FC<{
     }
   };
 
-  const beginEdit = (drop: MapDrop) => {
-    setEdit({ ...drop, protected_until: toDateTimeInput(drop.protected_until), expires_at: toDateTimeInput(drop.expires_at) });
+  const returnLoot = async (drop: MapDrop) => {
+    const endpoint = `${BACKEND_URL}/api/admin/map-drops/${drop.id}/return`;
+    const action = prepareAdminAction("returnMapDrop", "trả lại chiến lợi phẩm", `${drop.region_id} (${drop.x}, ${drop.y}) · ${drop.loser_name || drop.id}`);
+    if (!action) return;
+    try {
+      const response = await authFetch(endpoint, {
+        method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": action.idempotencyKey },
+        body: JSON.stringify({ ...action, confirmation_target: new URL(endpoint).pathname }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể trả chiến lợi phẩm");
+      addToast(result.message || "Đã trả chiến lợi phẩm", "success");
+      await load();
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : "Lỗi trả chiến lợi phẩm", "error");
+    }
+  };
+
+  const beginEdit = (drop: MapDrop) => {    setEdit({ ...drop, protected_until: toDateTimeInput(drop.protected_until), expires_at: toDateTimeInput(drop.expires_at) });
     setLootJSON(JSON.stringify(drop.loot_data ?? {}, null, 2));
   };
   const date = (value: unknown) => value ? new Date(String(value)).toLocaleString("vi-VN") : "—";
@@ -121,7 +138,7 @@ export const MapDropsAdminTab: React.FC<{
       {rows.length === 0 ? <tr><td colSpan={7} className="py-10 text-center text-zinc-500">{loading ? "Đang tải…" : "Không có map drop phù hợp"}</td></tr> : rows.map(drop => {
         const loot = drop.loot_data && typeof drop.loot_data === "object" ? drop.loot_data as Record<string, unknown> : {};
         const expired = Boolean(drop.is_expired);
-        return <tr key={String(drop.id)} className="hover:bg-zinc-900/70"><td className="px-3 py-3"><span className="font-semibold text-zinc-200">{String(drop.region_id)} ({String(drop.x)}, {String(drop.y)})</span><span className="mt-0.5 block font-mono text-[9px] text-zinc-600">{String(drop.id)}</span></td><td className="px-3 py-3 text-zinc-300">{String(drop.loser_name || "—")}<span className="mt-0.5 block font-mono text-[9px] text-zinc-600">{String(drop.loser_id)}</span></td><td className="px-3 py-3 text-zinc-400">{String(drop.killer_name || "—")}</td><td className="max-w-64 truncate px-3 py-3 text-zinc-400" title={JSON.stringify(loot)}>{Object.keys(loot).map(key => `${key}: ${Array.isArray(loot[key]) ? loot[key].length : String(loot[key])}`).join(" · ") || "{}"}</td><td className="px-3 py-3"><span className={expired ? "text-zinc-500" : "text-emerald-400"}><Clock3 className="mr-1 inline h-3 w-3" />{expired ? "Hết hạn" : "Còn hạn"}</span><span className="mt-1 block text-[10px] text-zinc-500">Bảo vệ: {date(drop.protected_until)}</span><span className="block text-[10px] text-zinc-500">Hết: {date(drop.expires_at)}</span></td><td className="px-3 py-3 text-zinc-500">{date(drop.created_at)}</td><td className="px-3 py-3 text-right whitespace-nowrap">{canEdit && <button type="button" onClick={() => beginEdit(drop)} title="Sửa toàn bộ field" className="mr-1 rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-amber-400"><Edit3 className="h-3.5 w-3.5" /></button>}{canDelete && <button type="button" onClick={() => void remove(drop)} title="Xóa có lý do và audit" className="rounded p-1.5 text-zinc-400 hover:bg-red-500/10 hover:text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>}</td></tr>;
+        return <tr key={String(drop.id)} className="hover:bg-zinc-900/70"><td className="px-3 py-3"><span className="font-semibold text-zinc-200">{String(drop.region_id)} ({String(drop.x)}, {String(drop.y)})</span><span className="mt-0.5 block font-mono text-[9px] text-zinc-600">{String(drop.id)}</span></td><td className="px-3 py-3 text-zinc-300">{String(drop.loser_name || "—")}<span className="mt-0.5 block font-mono text-[9px] text-zinc-600">{String(drop.loser_id)}</span></td><td className="px-3 py-3 text-zinc-400">{String(drop.killer_name || "—")}</td><td className="max-w-64 truncate px-3 py-3 text-zinc-400" title={JSON.stringify(loot)}>{Object.keys(loot).map(key => `${key}: ${Array.isArray(loot[key]) ? loot[key].length : String(loot[key])}`).join(" · ") || "{}"}</td><td className="px-3 py-3"><span className={expired ? "text-zinc-500" : "text-emerald-400"}><Clock3 className="mr-1 inline h-3 w-3" />{expired ? "Hết hạn" : "Còn hạn"}</span><span className="mt-1 block text-[10px] text-zinc-500">Bảo vệ: {date(drop.protected_until)}</span><span className="block text-[10px] text-zinc-500">Hết: {date(drop.expires_at)}</span></td><td className="px-3 py-3 text-zinc-500">{date(drop.created_at)}</td><td className="px-3 py-3 text-right whitespace-nowrap">{canEdit && <button type="button" onClick={() => void returnLoot(drop)} title="Trả chiến lợi phẩm về người rơi đồ" className="mr-1 rounded p-1.5 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400"><Undo2 className="h-3.5 w-3.5" /></button>}{canEdit && <button type="button" onClick={() => beginEdit(drop)} title="Sửa toàn bộ field" className="mr-1 rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-amber-400"><Edit3 className="h-3.5 w-3.5" /></button>}{canDelete && <button type="button" onClick={() => void remove(drop)} title="Xóa có lý do và audit" className="rounded p-1.5 text-zinc-400 hover:bg-red-500/10 hover:text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>}</td></tr>;
       })}
     </tbody></table></div>
     <div className="flex items-center justify-between text-[10px] text-zinc-500"><span>{total ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} / ${total}` : "0 drop"}</span><div className="flex items-center gap-2"><button type="button" disabled={page <= 1 || loading} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded p-1.5 text-zinc-400 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button><span>Trang {page}/{totalPages}</span><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage(value => Math.min(totalPages, value + 1))} className="rounded p-1.5 text-zinc-400 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button></div></div>

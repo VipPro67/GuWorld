@@ -435,7 +435,7 @@ func TestValidateGuUsablePortalAndIgnoreRange(t *testing.T) {
 
 // TestStoneAperturePetrifiesWithoutManaLoss locks the reworked STONE_APERTURE
 // effect: it raises SubRank to 4 WITHOUT cutting max mana and instead applies
-// the permanent aperture_petrified status.
+// the rank-scaled aperture_petrified status (R3 = 48h).
 func TestStoneAperturePetrifiesWithoutManaLoss(t *testing.T) {
 	p := &models.Player{
 		CultivationState: models.CultivationState{Rank: 3, SubRank: 1},
@@ -455,6 +455,18 @@ func TestStoneAperturePetrifiesWithoutManaLoss(t *testing.T) {
 	}
 	if !p.Statuses.Has("aperture_petrified") {
 		t.Fatal("expected aperture_petrified status to be applied")
+	}
+	var exp *time.Time
+	for _, st := range p.Statuses {
+		if st.ID == "aperture_petrified" {
+			exp = st.ExpiresAt
+		}
+	}
+	if exp == nil {
+		t.Fatal("aperture_petrified phải có thời hạn, không được vĩnh viễn")
+	}
+	if want := 48 * time.Hour; exp.Sub(time.Now()) < want-time.Minute || exp.Sub(time.Now()) > want+time.Minute {
+		t.Fatalf("aperture_petrified rank 3 hết hạn sau %v, muốn ~%v", time.Until(*exp), want)
 	}
 	fx := gamefx.Get(p)
 	if !fx.DisableManaRegen {

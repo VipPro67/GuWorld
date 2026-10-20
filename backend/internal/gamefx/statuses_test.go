@@ -22,6 +22,18 @@ func TestStatusRegistryDefaultsLoaded(t *testing.T) {
 	}
 }
 
+func TestAperturePetrifiedDurationScalesByRank(t *testing.T) {
+	want := map[int]time.Duration{1: 12 * time.Hour, 2: 24 * time.Hour, 3: 48 * time.Hour, 9: 3072 * time.Hour, 0: 12 * time.Hour}
+	for rank, d := range want {
+		if got := AperturePetrifiedDuration(rank); got != d {
+			t.Fatalf("rank %d duration = %v, want %v", rank, got, d)
+		}
+	}
+	if got := StatusDefaultDuration(StatusAperturePetrified); got != 720 {
+		t.Fatalf("default duration = %d, want 720", got)
+	}
+}
+
 func TestGetResolvesStatusEffects(t *testing.T) {
 	p := &models.Player{}
 	p.Race = "human"

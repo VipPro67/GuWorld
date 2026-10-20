@@ -132,16 +132,16 @@ func defaultStatuses() []StatusDef {
 		},
 		{
 			// Không Khiếu Hóa Đá: Thạch Khiếu Cổ đẩy tu vi lên Đỉnh Phong nhưng
-			// vĩnh viễn hóa đá Không Khiếu — không tự hồi Chân Nguyên, không thể
-			// đột phá lên cảnh giới cao hơn.
+			// hóa đá Không Khiếu một thời gian (12h × 2^(rank-1)) — không tự hồi
+			// Chân Nguyên, không thể đột phá lên cảnh giới cao hơn.
 			Key:  StatusAperturePetrified,
 			Name: "Không Khiếu Hóa Đá",
 			Effects: Effects{
 				DisableManaRegen: true,
 			},
-			DefaultDurationMinutes: 0,
+			DefaultDurationMinutes: 720,
 			BlockedActions:         []string{ActionBreakthrough},
-			Description:            "Không Khiếu hóa đá: không thể tự hồi Chân Nguyên và không thể đột phá lên tu vi cao hơn.",
+			Description:            "Không Khiếu hóa đá: không thể tự hồi Chân Nguyên và không thể đột phá lên tu vi cao hơn. Tự hồi phục sau 12 giờ × 2^(rank-1) (R1 12h, R2 24h, R3 48h, ...).",
 		},
 		{
 			// Sinh Khí Tàn: persistent PvP debuff do Sát Sinh Khí Cổ (GU_KILL_ENERGY) gây ra.
@@ -182,6 +182,18 @@ const StatusSinhKhiTan = "sinh_khi_tan"
 // (Thạch Khiếu Cổ và họ Cổ Thổ đạo cùng cơ chế): không tự hồi Chân Nguyên và
 // không thể đột phá lên tu vi cao hơn.
 const StatusAperturePetrified = "aperture_petrified"
+
+// AperturePetrifiedDuration trả thời hạn hóa đá theo rank: R1 12 giờ, mỗi
+// rank sau gấp đôi (R2 24h, R3 48h, ... R9 3072h).
+func AperturePetrifiedDuration(rank int) time.Duration {
+	if rank < 1 {
+		rank = 1
+	}
+	if rank > 9 {
+		rank = 9
+	}
+	return 12 * time.Hour << uint(rank-1)
+}
 
 // SinhKhiTanDuration là thời hạn mỗi lần đánh trúng refresh (tạm 5h, spec gốc 50h).
 const SinhKhiTanDurationMinutes = 300

@@ -31,6 +31,7 @@ export const ADMIN_ACTIONS = {
   deleteResidualTrace: { permission: "regions.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   updateMapDrop: { permission: "map_drops.update", riskLevel: "medium", confirmationRequired: true, reasonRequired: false, reauthenticationRequired: false },
   deleteMapDrop: { permission: "map_drops.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
+  returnMapDrop: { permission: "map_drops.update", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   updateArenaRanking: { permission: "arena_rankings.update", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   updateApertureChild: { permission: "apertures.update", riskLevel: "medium", confirmationRequired: true, reasonRequired: false, reauthenticationRequired: false },
   deleteApertureChild: { permission: "apertures.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },

@@ -526,8 +526,13 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 			return "", fmt.Errorf("%s chỉ dùng được khi rank Cổ trùng với rank bản thân (%s)", spec.Name, models.GetRankName(player.Rank))
 		}
 		player.SubRank = 4
-		player.Statuses.Add(gamefx.StatusAperturePetrified, spec.Name, 0, 0)
-		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá (không tự hồi Chân Nguyên, không thể đột phá lên cảnh giới cao hơn).", spec.Name), nil
+		dur := gamefx.AperturePetrifiedDuration(player.Rank)
+		player.Statuses.Add(gamefx.StatusAperturePetrified, spec.Name, dur, 0)
+		label := fmt.Sprintf("%d giờ", int(dur.Hours()))
+		if hours := int(dur.Hours()); hours%24 == 0 {
+			label = fmt.Sprintf("%d ngày", hours/24)
+		}
+		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá trong %s (không tự hồi Chân Nguyên, không thể đột phá lên cảnh giới cao hơn).", spec.Name, label), nil
 	case "GIVE_STONES":
 		val, _ := params["value"].(float64)
 		amount := val
