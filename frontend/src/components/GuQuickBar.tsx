@@ -2,23 +2,25 @@
 
 import { useMemo, useEffect } from "react";
 import { guSpecFor, useGameStore, type GuInstance, type GuSpec } from "@/store/useGameStore";
-import { canCreatePortal, operationsBy, refinementTier, usesRandomPortal } from "@/lib/effect-blocks";
+import { operationsBy, refinementTier } from "@/lib/effect-blocks";
+import {
+  COMBAT_QUICKBAR_EFFECT_TYPES,
+  classifyGuQuickbarEffect,
+  isFlyingStatus,
+  type GuQuickbarEffectType,
+} from "@/lib/gu-quickbar";
 import { formatManaCost, guManaCost, portalManaCost } from "@/lib/gu-mana";
 import { useWorldStore } from "@/store/useWorldStore";
-import { Sparkles, Heart, Shield, Zap, Flame, Compass, Crosshair, Swords } from "lucide-react";
+import { Sparkles, Heart, Shield, Zap, Flame, Compass, Crosshair, Swords, Feather } from "lucide-react";
 
 interface GuSkillSlot {
   gu: GuInstance;
   spec: GuSpec;
-  effectType: "damage" | "heal" | "mana_regen" | "buff_atk" | "buff_def" | "buff_speed" | "shield" | "teleport" | "utility";
+  effectType: GuQuickbarEffectType;
   label: string;
   isTargeted: boolean;
   cost: number;
 }
-
-// Combat-only effects are cast from the combat screen, not the world-map bar.
-// Keep only special utility effects (heal, mana, teleport, flying, ...).
-const COMBAT_EFFECT_TYPES = new Set<GuSkillSlot["effectType"]>(["damage", "shield", "buff_atk", "buff_def", "buff_speed"]);
 
 export function GuQuickBar() {
   const player = useGameStore((s) => s.player);
@@ -49,53 +51,42 @@ export function GuQuickBar() {
       const spec = guSpecFor(gu.gu_id, gu.rank);
       if (!spec) continue;
 
-      const operations = operationsBy(spec.effects, { trigger: ["ON_ACTION", "ON_USE", "CAPABILITY"] });
-      let type: GuSkillSlot["effectType"] | null = null;
-      let label = "Kích hoạt";
-      let isTargeted = false;
-      const first = operations[0];
-      const damage = operations.find((operation) => operation.op === "DAMAGE");
-      const status = operations.find((operation) => operation.op === "STATUS");
-      if (canCreatePortal(spec.effects) || usesRandomPortal(spec.effects)) {
-        type = "teleport";
-        isTargeted = canCreatePortal(spec.effects);
-        label = isTargeted ? "Dịch Chuyển" : "Dịch Chuyển Ngẫu Nhiên";
-      } else if (damage) {
-        type = "damage";
-        isTargeted = true;
-        label = `${damage.value || ""} Dmg`.trim();
-      } else if (first?.op === "HEAL") {
-        type = first.resource === "MANA" ? "mana_regen" : "heal";
-        label = `${first.resource === "MANA" ? "+" : "Hồi "}${first.value || 0} ${first.resource || "HP"}`;
-      } else if (status?.status_id) {
-        const id = status.status_id.toUpperCase();
-        type = id === "ATK_UP" ? "buff_atk" : id === "DEF_UP" ? "buff_def" : ["HASTE", "SPEED_UP"].includes(id) ? "buff_speed" : id === "REGEN" ? "heal" : "utility";
-        label = id === "FLYING" || id === "PHI_HANH" ? "Phi Hành" : `${id} ${status.value || ""}`.trim();
-      } else if (first?.op === "SHIELD" || first?.op === "BARRIER") {
-        type = "shield"; label = `+${first.value || 0} Khiên`;
-      } else if (first) {
-        type = "utility"; label = first.op === "DAMAGE" ? `${first.value || 0} Dmg` : "Kích hoạt";
-      }
+      const effect = classifyGuQuickbarEffect(spec.effects);
+      if (!effect) continue;
 
       const castable = operationsBy(spec.effects, { trigger: ["ON_ACTION", "ON_USE"] }).length > 0;
-      if (type && !COMBAT_EFFECT_TYPES.has(type) && (castable || type === "teleport")) {
+      if (!COMBAT_QUICKBAR_EFFECT_TYPES.has(effect.type) && (castable || effect.type === "teleport")) {
         const cost =
-          type === "teleport"
+          effect.type === "teleport"
             ? portalManaCost(spec.base_mana_cost, gu.rank, player.rank)
             : guManaCost(spec.base_mana_cost, gu.rank, player.rank, player.sub_rank, refineManaTier);
         slots.push({
           gu,
           spec,
-          effectType: type,
-          label,
-          isTargeted,
+          effectType: effect.type,
+          label: effect.label,
+          isTargeted: effect.isTargeted,
           cost,
         });
       }
     }
 
-    return slots.slice(0, 5); // Limit to top 5 hotbar slots
+    // Flying is the most important map utility: keep it visible even when the
+    // player has more than five usable Gu equipped.
+    return slots
+      .sort((a, b) => Number(b.effectType === "fly") - Number(a.effectType === "fly"))
+      .slice(0, 5);
   }, [player?.gu_inventory, player?.rank, player?.sub_rank, guDictionary]);
+
+  // World-map flying status (lowercase `phi_hanh`, persisted in player.statuses).
+  const playerIsFlying = (() => {
+    if (!player?.statuses || !Array.isArray(player.statuses)) return false;
+    const now = Date.now();
+    return player.statuses.some((st: ApiResponseData) => {
+      if (!isFlyingStatus(st.id)) return false;
+      return !st.expires_at || new Date(st.expires_at).getTime() > now;
+    });
+  })();
 
   // Calculate active cooldowns for Gu
   const getCooldownRemains = (instanceId: string): number => {
@@ -192,6 +183,8 @@ export function GuQuickBar() {
         return <Shield className={`${iconCls} text-purple-400`} />;
       case "teleport":
         return <Compass className={`${iconCls} text-cyan-400`} />;
+      case "fly":
+        return <Feather className={`${iconCls} ${playerIsFlying ? "text-cyan-300" : "text-sky-400"}`} />;
       case "damage":
         return <Swords className={`${iconCls} text-red-400`} />;
       default:
@@ -215,6 +208,8 @@ export function GuQuickBar() {
         {usableSlots.map((slot, index) => {
           const cd = getCooldownRemains(slot.gu.instance_id);
           const isActiveTargeting = targetingGu?.guInstanceId === slot.gu.instance_id;
+          const flyingActive = slot.effectType === "fly" && playerIsFlying;
+          const displayLabel = flyingActive ? "Hạ Cánh" : slot.label;
 
           return (
             <button
@@ -224,11 +219,13 @@ export function GuQuickBar() {
               className={`relative group flex flex-col items-center justify-between w-10 h-12.5 sm:w-14 sm:h-16 p-1 sm:p-1.5 rounded-lg sm:rounded-xl border transition-all cursor-pointer ${
                 isActiveTargeting
                   ? "bg-amber-900/40 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.4)] sm:shadow-[0_0_12px_rgba(245,158,11,0.4)]"
+                  : flyingActive
+                  ? "bg-cyan-900/40 border-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.35)] sm:shadow-[0_0_12px_rgba(34,211,238,0.35)]"
                   : cd > 0
                   ? "bg-zinc-900/60 border-zinc-800 opacity-60 cursor-not-allowed"
                   : "bg-zinc-900/90 border-zinc-700/60 hover:border-emerald-500/60 hover:bg-zinc-800/90"
               }`}
-              title={`${slot.spec.name} (${slot.label}) - Bấm [${index + 1}]`}
+              title={`${slot.spec.name} (${displayLabel}) - Bấm [${index + 1}]`}
             >
               {/* Hotkey badge (desktop only) */}
               <span className="hidden sm:flex absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-zinc-800 border border-zinc-600 text-[9px] font-bold text-zinc-300 items-center justify-center shadow">
