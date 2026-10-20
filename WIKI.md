@@ -1341,6 +1341,8 @@ Không ai được xem trộm hồ sơ từ xa. Muốn biết địch ở đâu,
   hiện/đuổi theo**. Dùng lại kỹ năng để **hạ cánh sớm**. Không áp dụng cho PvP hay du ngoạn vùng.
   Dòng **Phi Hành Cổ** (Phong đạo) có đủ 9 chuyển, từ Sơ Giai Phi Hành Cổ đến Càn Khôn Tiên Cổ;
   một số Cổ bay sẵn có như Cốt Dực Cổ, Phi Yên Cổ, Mộng Dực Cổ cũng được gắn hiệu ứng này.
+  Cổ có Fly luôn xuất hiện trên **quickbar bản đồ** với nút **Phi Hành/Hạ Cánh**, kể cả khi Cổ
+  đó còn có chiêu thức combat khác.
 
 ### Ba trụ điểm (áp cho cả hai phe) — cảnh giới là trụ số một
 

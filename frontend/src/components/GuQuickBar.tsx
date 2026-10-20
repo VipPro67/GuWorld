@@ -239,7 +239,7 @@ export function GuQuickBar() {
 
               {/* Name snippet & cost */}
               <div className="w-full text-center truncate text-[7.5px] sm:text-[9px] font-serif text-zinc-200 mt-0.5 leading-tight">
-                {slot.spec.name}
+                {slot.effectType === "fly" ? displayLabel : slot.spec.name}
               </div>
 
               <div className="text-[7px] sm:text-[8px] font-mono text-zinc-400 leading-tight">
