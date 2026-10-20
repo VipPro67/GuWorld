@@ -21,6 +21,9 @@ func TestShouldRecordCombatHistory(t *testing.T) {
 		{"MONSTER", "Phe Ta", false},
 		{"ELITE", "Phe Ta", false},
 		{"TRIBULATION_MONSTER", "Phe Ta", false},
+		// Sect wars are recorded on both outcomes, for attacker and defenders.
+		{"SECT_WAR", "Phe Ta", true},
+		{"SECT_WAR", "Phe Địch", true},
 	}
 	for _, tc := range cases {
 		if got := shouldRecordCombatHistory(tc.enemyType, tc.winner); got != tc.want {

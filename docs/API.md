@@ -145,7 +145,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/refine/deduce` | Suy diễn recipe. |
 | POST | `/combat/start` | Bắt đầu mô phỏng tự động chiến đấu. Body nhận `loadout` (`GuIds[]`, `KillerMoveIds[]`, `AutoHealHP`, `HealThreshold`, `AutoRestoreMana`, `ManaThreshold`). Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
 | POST | `/combat/practice` | Như `/combat/start`. |
-| GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng), **mọi trận boss** (`BOSS`/`World_Boss`/`TRIBULATION_BOSS`, cả thắng lẫn thua) và các trận PVE **thua**; PVE thường thắng không lưu. Bản ghi PVE/boss cũ hơn 30 ngày bị worker xóa theo lô (PVP giữ vô hạn). |
+| GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng), **mọi trận boss** (`BOSS`/`World_Boss`/`TRIBULATION_BOSS`, cả thắng lẫn thua), **mọi trận Tông Môn Chiến** (`SECT_WAR`, cả thắng lẫn thua, ghi cho cả người tấn công và từng đệ tử trấn thủ tham chiến với góc nhìn đảo phe) và các trận PVE **thua**; PVE thường thắng không lưu. Bản ghi PVE/boss cũ hơn 30 ngày bị worker xóa theo lô (PVP giữ vô hạn). |
 | GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để replay. Log `TURN_END` có snapshot cuối lượt của hai phe (HP, Chân Nguyên, khiên, công/thủ/tốc độ và `statuses[]` gồm loại, giá trị, thời hạn còn lại); các trận lịch sử cũ không có snapshot giữa lượt vẫn đọc được. |
 
 ## Exploration and combat
@@ -463,7 +463,7 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/admin/combat-history` | Phân trang và tìm kiếm lịch sử chiến đấu (PVP, mọi trận boss thắng/thua và PVE thua); `search` khớp cả `enemy_type` nên gõ `boss` để lọc trận boss. Danh sách gọn, không tải logs lớn. |
+| GET | `/admin/combat-history` | Phân trang và tìm kiếm lịch sử chiến đấu (PVP, mọi trận boss thắng/thua, mọi trận Tông Môn Chiến và PVE thua); `search` khớp cả `enemy_type` nên gõ `boss` để lọc trận boss. Danh sách gọn, không tải logs lớn. |
 | GET | `/admin/combat-history/:id` | Chi tiết một bản ghi gồm summary, combatants và logs để replay, cùng snapshot cuối mỗi lượt cho trạng thái và chỉ số hai phe. Chỉ đọc. |
 | GET | `/admin/map-drops` | Phân trang map drops, tìm kiếm và lọc còn hạn/đã hết hạn. |
 | PUT | `/admin/map-drops/:id` | Cập nhật vị trí, người chơi, loot JSON và thời hạn; được audit. |

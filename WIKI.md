@@ -1046,6 +1046,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
   - Sơn môn phòng thủ thành công nhận ngay **4 giờ** Hộ Sơn Đại Trận bảo hộ.
   - Toàn thể đệ tử Trấn Thủ tham chiến nhận thưởng **$+100$ Điểm Cống Hiến**.
   - Phát thông cáo chiến thắng oanh liệt trên kênh chat Tông Môn.
+- **Lịch Sử Chiến Đấu**: cả trận thắng lẫn thua đều được ghi vào Lịch Sử Chiến Đấu — một bản cho người tấn công và một bản cho **từng đệ tử Trấn Thủ đã tham chiến**, với góc nhìn đảo phe (đệ tử thấy mình ở phe Ta).
 
 ---
 

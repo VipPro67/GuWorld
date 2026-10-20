@@ -51,10 +51,10 @@ func isBossCombatType(enemyType string) bool {
 }
 
 // shouldRecordCombatHistory reports whether a finished fight is persisted to
-// combat_history: every boss fight and PVP match counts, other PVE only when the
-// player side lost.
+// combat_history: every boss fight, PVP match and sect war counts, other PVE
+// only when the player side lost.
 func shouldRecordCombatHistory(enemyType, winner string) bool {
-	return isBossCombatType(enemyType) || enemyType == "PVP" || winner == "Phe Địch"
+	return isBossCombatType(enemyType) || enemyType == "PVP" || enemyType == "SECT_WAR" || winner == "Phe Địch"
 }
 
 // SaveCombatHistory persists a completed combat result to the combat_history table.
@@ -130,6 +130,42 @@ func savePVPCombatHistory(attackerIDs, defenderIDs []uuid.UUID, attackerWinner s
 	}
 	for _, playerID := range defenders {
 		SaveCombatHistory(playerID, defenderWinner, logs, summary, defenderCombatants, defenderEnemyName, "PVP", region)
+	}
+}
+
+// saveSectWarDefenderHistory writes one perspective-correct replay row per
+// defending player. A sect war is simulated on the attacker's request, so the
+// defenders appear as enemies in that snapshot; sides and winner are reversed
+// here. One batched INSERT keeps cost flat regardless of defender count.
+func saveSectWarDefenderHistory(defenderIDs []uuid.UUID, attackerWinner string, logs []interface{}, summary CombatSummary, combatants []CombatantInfo, attackerName, region string) {
+	defenders := uniquePlayerIDs(defenderIDs)
+	if db.DB == nil || len(defenders) == 0 {
+		return
+	}
+	defenderWinner := "Phe Ta"
+	if attackerWinner == "Phe Ta" {
+		defenderWinner = "Phe Địch"
+	}
+
+	defenderCombatants := combatantInfoInterfaces(combatants, true)
+	logsJSON, _ := json.Marshal(logs)
+	summaryJSON, _ := json.Marshal(summary)
+	combatantsJSON, _ := json.Marshal(defenderCombatants)
+
+	defenderIDStrings := make([]string, len(defenders))
+	for i, playerID := range defenders {
+		defenderIDStrings[i] = playerID.String()
+	}
+
+	_, err := db.DB.Exec(`
+		INSERT INTO combat_history (player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region)
+		SELECT p.id, $5, $1::jsonb, $2::jsonb, $3::jsonb, $6, 'SECT_WAR', $7
+		FROM unnest($4::uuid[]) AS p(id)
+		JOIN players pl ON pl.id = p.id
+	`, string(logsJSON), string(summaryJSON), string(combatantsJSON), pq.Array(defenderIDStrings),
+		defenderWinner, attackerName, region)
+	if err != nil {
+		fmt.Println("Error saving sect war defender history:", err)
 	}
 }
 

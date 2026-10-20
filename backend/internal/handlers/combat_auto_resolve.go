@@ -331,10 +331,23 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	clearedRegion, clearedX, clearedY := player.CurrentRegion, player.X, player.Y
 	clearedPlayerID := player.ID.String()
 	clearedEnemyName, clearedEnemyTemplateID := "", ""
+	targetSectID := ""
+	var sectDefenderIDs []uuid.UUID
 	if player.ActiveCombat != nil {
 		targetPlayerID = player.ActiveCombat.TargetPlayerID
 		clearedEnemyName = player.ActiveCombat.EnemyName
 		clearedEnemyTemplateID = player.ActiveCombat.EnemyTemplateID
+		targetSectID = player.ActiveCombat.TargetSectID
+		if targetSectID != "" {
+			for _, enemy := range player.ActiveCombat.Enemies {
+				if enemy.Kind != "Player" {
+					continue
+				}
+				if id, parseErr := uuid.Parse(enemy.ID); parseErr == nil && id != player.ID {
+					sectDefenderIDs = append(sectDefenderIDs, id)
+				}
+			}
+		}
 	}
 	historyPlayerID, historyUsername := player.ID, player.Username
 	res := &CombatResolution{
@@ -362,8 +375,12 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 				attackerIDs, defenderIDs := pvpHistoryPlayerIDs(historyPlayerID, simState.Allies, targetPlayerID)
 				savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, enemyName, historyUsername, historyRegion)
 			} else {
-				// PVE defeats only: the replay the player wants to review afterwards.
+				// PVE: boss fights and defeats, plus every sect war so both the
+				// attacker and the defenders can review the run.
 				SaveCombatHistory(historyPlayerID, winner, toInterfaceSlice(logs), summaryStr, combatantInfoInterfaces(combatantInfos, false), enemyName, rawEnemyType, historyRegion)
+				if targetSectID != "" {
+					saveSectWarDefenderHistory(sectDefenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, historyUsername, historyRegion)
+				}
 			}
 		}()
 	}
