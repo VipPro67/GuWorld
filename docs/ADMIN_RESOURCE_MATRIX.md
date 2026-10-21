@@ -107,7 +107,6 @@ ghi bằng domain command nhưng vẫn là `Internal/not exposed` nếu không c
 | trade | `auction` | Internal/not exposed | Economy transaction state. |
 | trade | `trades` | Internal/not exposed | Economy transaction state. |
 | trade | `party_invitations` | Internal/not exposed | Workflow state. |
-| trade | `mine_slots` | Domain command only | List/update/reset specialized commands. |
 | trade | `buyback_orders` | Internal/not exposed | Economy order state. |
 | trade | `trade_offers` | Internal/not exposed | Economy transaction state. |
 | world | `regions` | Full CRUD | Specialized region handlers + Zone registry reload; đồng thời có CSV. |
@@ -158,7 +157,7 @@ entry lệch này để tự động sinh màn hình.
 | `gu_history` | Read-only | `gus.read` | History only. |
 | `data` | Import/export only | `game_data.read` | CSV operations; nested dictionary CRUD vẫn cần permission riêng. |
 | `shop` | Full CRUD | `shop.read` | Caravan shop; arena shop dùng permission riêng cho mutation. |
-| `mines` | Domain command only | `mine_slots.read` | Update/reset mine and sect-mine commands. |
+| `mines` | Domain command only | `sect_mines.read` | Quản lý mỏ Tông Môn. |
 | `gift_codes` | Domain command only | `gift_codes.read` | List/create only. |
 | `topup_wallet` | Read-only | `billing.read` | Payment/order ledger; không mutation. |
 | `logs` | Read-only | `audit.read` | Audit log, append-only. |

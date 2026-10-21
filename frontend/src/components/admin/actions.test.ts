@@ -38,7 +38,7 @@ const rolePermissions: Record<string, readonly string[]> = {
   observer: ADMIN_NAVIGATION.filter((item) => item.permission !== "billing.read").map((item) => item.permission),
   support_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "gus.read", "audit.read"],
   content_admin: ["game_data.read", "game_data.import", "game_data.import_all", "cache.reload"],
-  game_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "sects.read", "apertures.read", "gus.read", "combat_history.read", "map_drops.read", "map_drops.update", "map_drops.delete", "arena_rankings.read", "arena_rankings.update", "shop.read", "mine_slots.read", "gift_codes.read", "audit.read", "monitoring.read", "world_bosses.read", "world_bosses.update", "world_bosses.delete"],
+  game_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "sects.read", "apertures.read", "gus.read", "combat_history.read", "map_drops.read", "map_drops.update", "map_drops.delete", "arena_rankings.read", "arena_rankings.update", "shop.read", "sect_mines.read", "gift_codes.read", "audit.read", "monitoring.read", "world_bosses.read", "world_bosses.update", "world_bosses.delete"],
   finance_viewer: ["billing.read"],
   super_admin: ["admin.*"],
 };

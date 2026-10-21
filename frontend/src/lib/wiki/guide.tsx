@@ -93,7 +93,7 @@ export const guidePages: WikiPage[] = [
                 Tu vi phàm nhân chia làm 5 Cảnh giới (Nhất Chuyển đến Ngũ Chuyển), mỗi Cảnh giới có 4 cấp bậc nhỏ (Sơ Giai, Trung Giai, Cao Giai, Đỉnh Phong). Áp lực vách khiếu tăng theo lượng Chân Nguyên tiêu hao: cứ 10 Chân Nguyên tăng 1 điểm áp lực (tối đa 10 điểm mỗi lần trùng kích), trước khi áp dụng hiệu ứng điều chỉnh.
               </p>
               <ul className="list-disc list-inside pl-2 space-y-1">
-                <li><strong>Khai Thác Mỏ (Mining):</strong> Đào khoáng và Nguyên Thạch dã ngoại. Đôi khi bạn sẽ chạm trán <strong>Quái Mỏ</strong> hung hãn bảo vệ quặng, cần tiêu diệt chúng để tiếp tục khai thác. Mỏ được tái lập mỗi ngày lúc 00:00.</li>
+                <li><strong>Khai Thác Nguyên Tuyền:</strong> Tìm các điểm Nguyên Tuyền (💠) trên bản đồ Ngũ Vực và đứng đúng ô để thu hoạch Nguyên Thạch. Mỗi mỏ tích tối đa 1 ngày sản lượng, tự biến mất sau 30 ngày hoặc khi cạn; ai tới trước thu trước, không cần đánh quái.</li>
                 <li><strong>Thám Hiểm (Exploration):</strong> Di chuyển qua các ô đất sương mù trên bản đồ để nhận khoáng sản quý, thảo dược và gặp gỡ các kỳ ngộ nhận thưởng. Mỗi ngày có <strong>tối đa 20 lượt thám hiểm</strong>.</li>
               </ul>
               <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300">
@@ -260,7 +260,7 @@ export const guidePages: WikiPage[] = [
                   </tr>
                   <tr>
                     <td className="p-3 font-bold text-[var(--text-primary)]">Mỗi ngày (00:00)</td>
-                    <td className="p-3">Làm mới lượt thám hiểm (20 lượt), khiêu chiến Đấu Trường (10 trận), tái lập mỏ khai thác.</td>
+                    <td className="p-3">Làm mới lượt thám hiểm (20 lượt), khiêu chiến Đấu Trường (10 trận), Nguyên Tuyền spawn/hết hạn theo thời gian thực.</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-bold text-[var(--text-primary)]">17:00 Thứ 7 hàng tuần</td>

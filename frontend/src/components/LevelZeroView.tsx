@@ -68,7 +68,7 @@ const STEPS = [
     body: (
       <p>
         Hãy thử <strong className="text-amber-300">đào Nguyên Thạch dã ngoại</strong> và mở bản đồ sương
-        mù để nhặt dược thảo — nhớ canh chừng Quái Mỏ khi dấn thân vùng sâu hơn nhé, chúng mạnh hơn ta
+        mù để nhặt dược thảo — và để ý các điểm Nguyên Tuyền 💠, đứng đúng ô là thu hoạch được Nguyên Thạch
         rất nhiều ở giai đoạn đầu.
       </p>
     ),

@@ -251,7 +251,6 @@ func EngageTribulation(c *gin.Context) {
 		EnemyRank:          enemyRank,
 		EnemySubRank:       enemySubRank,
 		TargetPlayerID:     "",
-		MineSlotID:         0,
 		TribulationEventID: eventIDStr,
 		ApertureHP:         float64(apHP),
 		ApertureMaxHP:      float64(apMaxHP),

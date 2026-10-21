@@ -163,10 +163,6 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/arena-shop", "arena_shop.update", handlers.AdminCreateArenaShopItem, "admin.create_arena_shop_item", "arena_shop_item", false, "", false, false, false},
 		{http.MethodPut, "/arena-shop/:id", "arena_shop.update", handlers.AdminUpdateArenaShopItem, "admin.update_arena_shop_item", "arena_shop_item", false, "", false, false, false},
 		{http.MethodDelete, "/arena-shop/:id", "arena_shop.delete", handlers.AdminDeleteArenaShopItem, "admin.delete_arena_shop_item", "arena_shop_item", true, "path", false, false, true},
-		// mine_slots
-		{http.MethodGet, "/mine-slots", "mine_slots.read", handlers.AdminListMineSlots, "", "", false, "", false, false, false},
-		{http.MethodPut, "/mine-slots/:id", "mine_slots.update", handlers.AdminUpdateMineSlot, "admin.update_mine_slot", "mine_slot", false, "", false, false, false},
-		{http.MethodPost, "/mine-slots/:id/reset", "mine_slots.update", handlers.AdminResetMineSlot, "admin.reset_mine_slot", "mine_slot", false, "", false, false, false},
 		// gu_dictionary
 		{http.MethodGet, "/gu-dictionary", "gu_dictionary.read", handlers.AdminListGuItems, "", "", false, "", false, false, false},
 		{http.MethodPost, "/gu-effects/validate", "gu_dictionary.update", handlers.AdminValidateGuEffects, "admin.validate_gu_effects", "gu_effect", false, "", false, false, false},
@@ -592,17 +588,13 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			player.POST("/beast-betting/bet", handlers.PlaceBeastBet)
 		}
 
-		// Mine — group: 40/min, per player: 25/min
-		mine := api.Group("/mine")
-		mine.Use(middleware.AuthRequired())
-		mine.Use(middleware.RequireOnboarded())
-		mine.Use(middleware.RateLimitByPlayer(25, time.Minute))
+		// Primeval veins — per player: 30/min
+		veins := api.Group("/veins")
+		veins.Use(middleware.AuthRequired())
+		veins.Use(middleware.RequireOnboarded())
+		veins.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
-			mine.GET("/slots", handlers.GetMineSlots)
-			mine.POST("/occupy", handlers.OccupyMineSlot)
-			mine.POST("/claim", handlers.ClaimMineRewards)
-			mine.POST("/abandon", handlers.AbandonMineSlot)
-			mine.POST("/attack", handlers.AttackMineSlot)
+			veins.POST("/:id/harvest", handlers.HarvestVein)
 		}
 
 		// Cultivate — group: 30/min, per player: 20/min

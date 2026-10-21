@@ -10,7 +10,6 @@ import { fetchWithDedupe } from "@/lib/fetch";
 import { BACKEND_URL } from "@/lib/config";
 import { getDictionaryCache, setDictionaryCache } from "@/lib/db-cache";
 import { createNotificationsSlice, type NotificationsSlice } from "@/store/slices/notificationsSlice";
-import { createMineSlice, type MineSlice } from "@/store/slices/mineSlice";
 import { createPartySlice, type PartySlice } from "@/store/slices/partySlice";
 import { createChatSlice, type ChatSlice } from "@/store/slices/chatSlice";
 import { createArenaSlice, type ArenaSlice } from "@/store/slices/arenaSlice";
@@ -117,7 +116,6 @@ export interface CombatState {
   enemy_rank?: number;
   enemy_sub_rank?: number;
   combat_mode?: string;
-  mine_slot_id?: number;
   tribulation_event_id?: string;
   target_sect_id?: string;
   aperture_hp?: number;
@@ -1168,7 +1166,7 @@ export interface WorldConfig {
   hub_y: number;
 }
 
-interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, PvPSlice {
+interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, PvPSlice {
   player: Player | null;
   playerStateRevision: number | null;
   manaSnapshot: ManaSnapshot | null;
@@ -1242,19 +1240,6 @@ interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice
 
 }
 
-export interface MineSlot {
-  id: number;
-  rarity: string;
-  mine_type?: string;
-  occupier_id?: string;
-  occupier_name?: string;
-  monster_id?: string;
-  occupied_at?: string;
-  last_claimed_at?: string;
-  accumulated_stones: number;
-  accumulated_qi: number;
-  accumulated_chests: number;
-}
 
 
 export const AUTHENTICATED_SESSION = "cookie-session";
@@ -1683,7 +1668,6 @@ export const useGameStore = create<GameState>((set, get) => {
 
   return ({
   ...createNotificationsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
-  ...createMineSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createPartySlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createChatSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createArenaSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),

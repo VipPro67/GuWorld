@@ -411,39 +411,39 @@ func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator
 	stonesSpent = 0
 	immortalStonesSpent = 0
 
-		if simPlayer != nil && len(simPlayer.GuUsedCounts) > 0 {
-			beforeGus := append(models.GuInventory(nil), player.GuInventory...)
-			hungerDeducted := false
-			for idx := range player.GuInventory {
-				g := &player.GuInventory[idx]
-				count, used := simPlayer.GuUsedCounts[g.InstanceID]
-				if !used && g.GuID != "" {
-					count, used = simPlayer.GuUsedCounts[g.GuID]
-				}
-				if used && count > 0 {
-					g.Hunger -= count
-					if g.Hunger < 0 {
-						g.Hunger = 0
-					}
-					hungerDeducted = true
-				}
+	if simPlayer != nil && len(simPlayer.GuUsedCounts) > 0 {
+		beforeGus := append(models.GuInventory(nil), player.GuInventory...)
+		hungerDeducted := false
+		for idx := range player.GuInventory {
+			g := &player.GuInventory[idx]
+			count, used := simPlayer.GuUsedCounts[g.InstanceID]
+			if !used && g.GuID != "" {
+				count, used = simPlayer.GuUsedCounts[g.GuID]
 			}
-			if hungerDeducted && tx != nil {
-				if errSync := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); errSync != nil {
-					logger.S.Warnf("Failed to sync player Gu hunger after auto combat: %v", errSync)
+			if used && count > 0 {
+				g.Hunger -= count
+				if g.Hunger < 0 {
+					g.Hunger = 0
 				}
+				hungerDeducted = true
 			}
-			if tx != nil {
-				for moveID, uses := range simPlayer.KillerMoveUsedCounts {
-					if uses <= 0 {
-						continue
-					}
-					if _, err := tx.Exec(`UPDATE player_killer_moves SET mastery_xp=LEAST(5000, mastery_xp+$1),updated_at=NOW() WHERE id=$2 AND player_id=$3`, uses, moveID, player.ID); err != nil {
-						logger.S.Warnf("Failed to update killer move mastery %s: %v", moveID, err)
-					}
+		}
+		if hungerDeducted && tx != nil {
+			if errSync := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); errSync != nil {
+				logger.S.Warnf("Failed to sync player Gu hunger after auto combat: %v", errSync)
+			}
+		}
+		if tx != nil {
+			for moveID, uses := range simPlayer.KillerMoveUsedCounts {
+				if uses <= 0 {
+					continue
+				}
+				if _, err := tx.Exec(`UPDATE player_killer_moves SET mastery_xp=LEAST(5000, mastery_xp+$1),updated_at=NOW() WHERE id=$2 AND player_id=$3`, uses, moveID, player.ID); err != nil {
+					logger.S.Warnf("Failed to update killer move mastery %s: %v", moveID, err)
 				}
 			}
 		}
+	}
 
 	if itemsUsed > 0 {
 		usageLogs = append(usageLogs, simulator.CombatLog{
@@ -490,8 +490,6 @@ func combatTypeLabel(cm *models.CombatState) string {
 		return "Dã ngoại"
 	}
 	switch cm.EnemyType {
-	case "MINE_PVE":
-		return "Mỏ Linh Thạch (Yêu quái)"
 	case "PVP":
 		return "Đấu trường / PVP"
 	case "SECT_WAR":

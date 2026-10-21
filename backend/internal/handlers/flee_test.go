@@ -12,13 +12,6 @@ func TestFleeFreeRetreatNilCombat(t *testing.T) {
 	}
 }
 
-func TestFleeFreeRetreatMine(t *testing.T) {
-	cs := &models.CombatState{EnemyType: "MINE_PVE", MineSlotID: 7}
-	if !fleeFreeRetreat(cs) {
-		t.Fatal("expected mine combat to allow free retreat")
-	}
-}
-
 func TestFleeFreeRetreatPVP(t *testing.T) {
 	cs := &models.CombatState{EnemyType: "PVP", TargetPlayerID: "some-player"}
 	if !fleeFreeRetreat(cs) {

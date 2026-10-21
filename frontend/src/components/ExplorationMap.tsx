@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Compass, Flame, Sparkles, User, DoorOpen, Landmark, ShieldAlert, Footprints } from "lucide-react";
 import { useGameStore, Player } from "@/store/useGameStore";
+import { useWorldStore } from "@/store/useWorldStore";
 import { GamePanel } from "@/components/ui";
 import { usePolling } from "@/lib/usePolling";
 import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
@@ -39,6 +40,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const fetchRegions = useGameStore((state) => state.fetchRegions);
   const fetchGrid = useGameStore((state) => state.fetchGrid);
   const movePlayer = useGameStore((state) => state.movePlayer);
+  const harvestVein = useWorldStore((state) => state.harvestVein);
   const addToast = useGameStore((state) => state.addToast);
   const actionLoading = useGameStore((state) => state.actionLoading);
   const party = useGameStore((state) => state.party);
@@ -70,7 +72,12 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const movementRange = gridData?.stats?.movement || 1;
   const regionName = regions.find((r) => r.id === player.current_region)?.name || "Thế Giới Cổ Sư";
 
-  const handleCellClick = async (x: number, y: number, isMovable: boolean) => {
+  const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell) => {
+    if (cell?.cell_type === "PrimevalVein" && x === player.x && y === player.y) {
+      await harvestVein(cell.content);
+      await loadGrid();
+      return;
+    }
     if (!isMovable || actionLoading || player.active_combat) return;
     if (isMemberNotLeader) {
       addToast("Chỉ có Trưởng nhóm mới có quyền di chuyển trên bản đồ!", "error");
@@ -93,6 +100,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     if (type === "Monster" || type === "Boss") return monsterDictionary[content]?.name || content.split(" ")[0];
     if (type === "Resource") return itemDictionary[content]?.name || content.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
     if (type === "WildGu") return guDictionary[content]?.name || content;
+    if (type === "PrimevalVein") return "Nguyên Tuyền";
     return content;
   };
 
@@ -107,6 +115,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         return <Flame className="w-5 h-5 text-rose-500 animate-pulse" />;
       case "WildGu":
         return <Sparkles className="w-5 h-5 text-amber-400 animate-bounce" />;
+      case "PrimevalVein":
+        return <Sparkles className="w-5 h-5 text-emerald-300 drop-shadow-[0_0_6px_rgba(52,211,153,0.8)]" />;
       case "PVP":
         return <User className="w-5 h-5 text-purple-400" />;
       case "EXIT_PORTAL":
@@ -184,7 +194,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               return (
                 <div
                   key={`${x},${y}`}
-                  onClick={() => handleCellClick(x, y, isMovable)}
+                  onClick={() => handleCellClick(x, y, isMovable, cellData)}
                   className={`aspect-square rounded-xl border flex flex-col justify-center items-center relative transition-all duration-300 ${
                     isPlayerCell
                       ? "bg-emerald-500/10 border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.2)] animate-pulse"

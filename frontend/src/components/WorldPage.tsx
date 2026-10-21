@@ -63,6 +63,7 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
   TeleportArray: { icon: "🌀",  label: "Truyền Tống Trận", color: "text-cyan-300",    borderColor: "border-cyan-500/50",    bgColor: "bg-cyan-950/70" },
   ENTRY_PORTAL:      { icon: "🚪",  label: "Cổng Bí Cảnh",      color: "text-amber-300",   borderColor: "border-amber-500/50",   bgColor: "bg-amber-950/70" },
   INHERITANCE_ALTAR: { icon: "🏛️",  label: "Đài Truyền Thừa",   color: "text-amber-200",   borderColor: "border-amber-400/50",   bgColor: "bg-amber-950/70" },
+  PrimevalVein:  { icon: "💠",  label: "Nguyên Tuyền",     color: "text-emerald-200", borderColor: "border-emerald-400/50", bgColor: "bg-emerald-950/70" },
 };
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 
@@ -89,6 +90,7 @@ export function WorldPage() {
   const loading = useWorldStore((s) => s.loading);
   const selectedObject = useWorldStore((s) => s.selectedObject);
   const selectObject = useWorldStore((s) => s.selectObject);
+  const harvestVein = useWorldStore((s) => s.harvestVein);
   const isMoving = useWorldStore((s) => s.isMoving);
   const setMovementRange = useWorldStore((s) => s.setMovementRange);
   const liveX = useWorldStore((s) => s.liveX);
@@ -232,7 +234,6 @@ export function WorldPage() {
     { id: "leaderboard", label: "Xếp Hạng", icon: Trophy, color: "text-yellow-400" },
     { id: "gacha", label: "Tiên Duyên", icon: Gift, color: "text-fuchsia-400" },
     { id: "achievements", label: "Thành Tựu", icon: Trophy, color: "text-lime-400" },
-    { id: "mine", label: "Khai Khoáng", icon: Gem, color: "text-orange-400" },
     { id: "premium-store", label: "Cửa Hàng", icon: Store, color: "text-sky-400" },
     { id: "topup", label: "Nạp Tiên Ngọc", icon: Coins, color: "text-amber-300" },
     { id: "feedback", label: "Góp Ý", icon: MessageSquare, color: "text-cyan-300" },
@@ -251,7 +252,7 @@ export function WorldPage() {
 
   const menuGroups = [
     { id: "character", label: "Nhân vật", icon: User, itemIds: ["character", "inventory", "inventory-gu", "aperture", "refine", "cultivation", "practice-room"] },
-    { id: "world", label: "Khám phá", icon: Compass, itemIds: ["spatial-realms", "dream-realm", "dungeon", "mine", "teleport", "party", "sect", "world-atlas", "teleport-directory", "teleport-build", "divination"] },
+    { id: "world", label: "Khám phá", icon: Compass, itemIds: ["spatial-realms", "dream-realm", "dungeon", "teleport", "party", "sect", "world-atlas", "teleport-directory", "teleport-build", "divination"] },
     { id: "trade", label: "Giao dịch", icon: Store, itemIds: ["auction", "shop", "premium-store", "topup"] },
     { id: "activities", label: "Hoạt động", icon: Swords, itemIds: ["arena", "death-arena", "martial-arena", "pvp-arena", "leaderboard", "gacha", "achievements", "pets"] },
     { id: "other", label: "Khác", icon: Settings, itemIds: ["feedback", "combat-history", "audit-logs", "activity-log", "general-settings", "utilities", "wiki"] },
@@ -696,6 +697,8 @@ export function WorldPage() {
                     ? `Cổng Vào: ${selectedObject.content_id.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`
                     : selectedObject.cell_type === "INHERITANCE_ALTAR"
                     ? `Đài Truyền Thừa: ${selectedObject.content_id.replace(/^altar_/, "").replace(/_/g, " ")}`
+                    : selectedObject.cell_type === "PrimevalVein"
+                    ? (selectedObject.vein?.vein_type === "immortal" ? "Tiên Nguyên Tuyền" : "Nguyên Tuyền") + ` (${selectedObject.vein?.rarity || ""})`
                     : selectedObject.content_id}
                 </div>
                 <div className="text-[10px] text-zinc-500 font-serif">
@@ -708,6 +711,41 @@ export function WorldPage() {
               <span>X: {selectedObject.x}</span>
               <span>Y: {selectedObject.y}</span>
             </div>
+
+            {selectedObject.cell_type === "PrimevalVein" && (() => {
+              const vein = selectedObject.vein;
+              if (!vein) return null;
+              const isHere = !!gamePlayer && gamePlayer.x === selectedObject.x && gamePlayer.y === selectedObject.y;
+              return (
+                <div className="mb-3 space-y-1.5 text-xs font-serif bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-2.5">
+                  <div className="flex justify-between text-[11px] font-mono text-zinc-300">
+                    <span>Phẩm chất</span>
+                    <strong className="text-emerald-300">{vein.rarity}</strong>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-mono text-zinc-300">
+                    <span>Đã tích</span>
+                    <strong className="text-amber-300">{vein.accumulated_stones.toLocaleString("vi-VN")} / {vein.capacity_stones.toLocaleString("vi-VN")}</strong>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-mono text-zinc-300">
+                    <span>Nhân Khí / Rương</span>
+                    <span>{Math.round(vein.accumulated_qi).toLocaleString("vi-VN")} / {vein.accumulated_chests}</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 font-mono">
+                    Biến mất: {new Date(vein.expires_at).toLocaleString("vi-VN")}
+                  </div>
+                  <button
+                    disabled={!isHere || isMoving}
+                    onClick={async () => {
+                      const ok = await harvestVein(vein.id);
+                      if (ok) selectObject(null);
+                    }}
+                    className="w-full mt-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-all cursor-pointer"
+                  >
+                    {isHere ? "⛏️ Thu hoạch" : "Phải đứng tại Nguyên Tuyền"}
+                  </button>
+                </div>
+              );
+            })()}
 
             {selectedObject.cell_type === "Sect" && (() => {
               const sect = sectMap.find((s: ApiResponseData) => s.id === selectedObject.id || (s.map_x === selectedObject.x && s.map_y === selectedObject.y));

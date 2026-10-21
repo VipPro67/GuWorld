@@ -570,7 +570,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [datasets, setDatasets] = useState<DatasetDescriptor[]>([]);
   const section: AdminModuleKey = initialSection;
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
-  const [minesTab, setMinesTab] = useState<"slots" | "sect_mines">("slots");
 
   // ----- Aperture state -----
   const [apertures, setApertures] = useState<ApiResponseData[]>([]);
@@ -605,12 +604,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [shopSearchLoaded, setShopSearchLoaded] = useState(false);
   const [itemPicker, setItemPicker] = useState<{source: string; tab: "gu" | "item" | "recipe"; query: string} | null>(null);
   const [giftPickerIdx, setGiftPickerIdx] = useState<number | null>(null);
-
-  // ----- Mine state -----
-  const [mineSlots, setMineSlots] = useState<ApiResponseData[]>([]);
-  const [mineLoading, setMineLoading] = useState(false);
-  const [showMineEdit, setShowMineEdit] = useState<number | null>(null);
-  const [mineEditRarity, setMineEditRarity] = useState("");
 
   // ----- Gift codes state -----
   const [giftCodes, setGiftCodes] = useState<ApiResponseData[]>([]);
@@ -896,14 +889,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     } catch {} finally { setArenaShopLoading(false); }
   }, []);
 
-  const fetchMineSlots = useCallback(async () => {
-    setMineLoading(true);
-    try {
-      const res = await authFetch(`${BACKEND_URL}/api/admin/mine-slots`);
-      if (res.ok) setMineSlots(await res.json());
-    } catch {} finally { setMineLoading(false); }
-  }, []);
-
   const fetchOnlinePlayers = useCallback(async () => {
     setOnlineLoading(true);
     try {
@@ -1067,10 +1052,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
       fetchArenaShopItems();
     }
   }, [section, fetchShopItems, fetchArenaShopItems]);
-
-  useEffect(() => {
-    if (section === "mines") fetchMineSlots();
-  }, [section, fetchMineSlots]);
 
   useEffect(() => {
     if (section === "gift_codes") fetchGiftCodes();
@@ -4182,111 +4163,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
           </div>
         </div>
       )}
-      {/* Mines section */}
+      {/* Sect mines section */}
       {section === "mines" && (
         <div className="space-y-4">
-          <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap">
-            <button
-              onClick={() => setMinesTab("slots")}
-              className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${
-                minesTab === "slots" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 inline mr-1.5" />Mỏ Cá Nhân (31 Ô)
-            </button>
-            <button
-              onClick={() => setMinesTab("sect_mines")}
-              className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${
-                minesTab === "sect_mines" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5 inline mr-1.5" />Mỏ Tông Môn (5 Mỏ Lớn)
-            </button>
-          </div>
-
-          {minesTab === "sect_mines" ? (
-            <SectMinesAdminTab addToast={addToast} />
-          ) : (
-            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-              <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-4">
-                <Layers className="w-4 h-4 text-amber-400" />
-                Quản Lý Mỏ Linh Thạch Cá Nhân
-              </h3>
-            {mineLoading ? (
-              <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
-            ) : mineSlots.length === 0 ? (
-              <div className="text-center py-10 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
-                <Layers className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Không có mỏ nào.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                      <th className="px-3 py-2.5 font-semibold">#</th>
-                      <th className="px-3 py-2.5 font-semibold">Loại mỏ</th>
-                      <th className="px-3 py-2.5 font-semibold">Phẩm chất</th>
-                      <th className="px-3 py-2.5 font-semibold">Chủ sở hữu</th>
-                      <th className="px-3 py-2.5 font-semibold">Quái canh</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Cấp Q</th>
-                      <th className="px-3 py-2.5 font-semibold">Chiếm giữ</th>
-                      <th className="px-3 py-2.5 font-semibold"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mineSlots.map((slot: ApiResponseData) => (
-                      <tr key={slot.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                        <td className="px-3 py-2.5 text-zinc-500 font-mono">{slot.id}</td>
-                        <td className="px-3 py-2.5 text-zinc-400">{slot.mine_type || "mortal"}</td>
-                        <td className="px-3 py-2.5 font-semibold">{slot.rarity}</td>
-                        <td className="px-3 py-2.5 text-zinc-300">{slot.occupier_name || <span className="text-zinc-600 italic">Trống</span>}</td>
-                        <td className="px-3 py-2.5 text-zinc-400">{slot.monster_id || <span className="text-zinc-600">—</span>}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{slot.monster_rank > 0 ? `${slot.monster_rank}.${slot.monster_sub_rank}` : "—"}</td>
-                        <td className="px-3 py-2.5 text-[10px] text-zinc-500">{slot.occupied_at ? new Date(slot.occupied_at).toLocaleDateString("vi-VN") : "—"}</td>
-                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                          <button onClick={() => { setMineEditRarity(slot.rarity); setShowMineEdit(slot.id); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                          <button onClick={async () => {
-                            if (!confirm(`Reset mỏ #${slot.id}?`)) return;
-                            const ok = await exec(`${BACKEND_URL}/api/admin/mine-slots/${slot.id}/reset`, "POST");
-                            if (ok) fetchMineSlots();
-                          }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Reset"><RefreshCw className="w-3.5 h-3.5 inline" /></button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-          )}
-        </div>
-      )}
-      {/* Edit Mine Slot Modal */}
-      {showMineEdit !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowMineEdit(null)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Sửa mỏ #{showMineEdit}</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Phẩm chất</label>
-                <select value={mineEditRarity} onChange={e => setMineEditRarity(e.target.value)} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50">
-                  <option value="Siêu Cấp">Siêu Cấp</option>
-                  <option value="Truyền Thuyết">Truyện Thuyết</option>
-                  <option value="Sử Thi">Sử Thi</option>
-                  <option value="Hiếm">Hiếm</option>
-                  <option value="Thường">Thường</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowMineEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
-              <button onClick={async () => {
-                const ok = await exec(`${BACKEND_URL}/api/admin/mine-slots/${showMineEdit}`, "PUT", { rarity: mineEditRarity });
-                if (ok) { setShowMineEdit(null); fetchMineSlots(); }
-              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
-            </div>
-          </div>
+          <SectMinesAdminTab addToast={addToast} />
         </div>
       )}
       {/* Gift Codes section */}

@@ -118,3 +118,8 @@ _Avoid_: Bí cảnh đại trà, mộng cảnh
 ### Quy Tắc Bí Cảnh (Spatial Realm Rules / Realm Rules)
 Tập luật môi trường ràng buộc hành vi của mọi Cổ sư khi hiện diện bên trong một Bí cảnh hoặc Vùng truyền thừa. Bao gồm: Thời lượng đếm ngược (Duration Timer), Cơ chế PK (Vùng An Toàn / Hỗn Chiến Tự Do), Giới hạn cảnh giới tối đa & Áp chế tu vi (Rank Suppression), Quy tắc trừng phạt tử vong (trục xuất về thế giới hoặc hồi sinh tại cổng), và Cấm đoán truyền tống trận.
 
+
+## Nguyên Tuyền (Primeval Vein)
+
+Điểm tài nguyên động trên bản đồ Ngũ Vực, tự spawn/hết hạn và tích lũy nguyên thạch (hoặc tiên nguyên thạch với Tiên Tuyền) vào một bể chung. Ai đứng đúng ô cũng thu hoạch được; thu xong bể reset. Mỏ có trần tích lũy 1 ngày sản lượng và trần sản lượng vòng đời theo phẩm chất.
+_Avoid_: Mine slot, mỏ cá nhân, mỏ cố định

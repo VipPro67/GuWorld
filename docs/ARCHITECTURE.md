@@ -18,7 +18,7 @@ Gameplay rules remain primarily in handlers, but reusable player, inventory, map
 
 1. Loads the first available env file in `.env` → `backend/.env` → `../.env` → `../../.env`.
 2. Connects to PostgreSQL and runs the idempotent schema functions in `internal/db/schema_*.go`.
-3. Seeds only runtime prerequisites (sentinel dictionaries, starting hub, system players, mines and backfills). Gameplay dictionaries are imported from Admin; quest is currently the one CSV exception refreshed during schema initialization.
+3. Seeds only runtime prerequisites (sentinel dictionaries, starting hub, system players and backfills). Gameplay dictionaries are imported from Admin; quest is currently the one CSV exception refreshed during schema initialization.
 4. Connects to required Redis, configures the rate limiter and clears dictionary cache keys.
 5. Loads Gu, item, constitution, race, status, monster, zone, quest and instance registries from PostgreSQL.
 6. Wires shared services, starts background workers, the sharded WebSocket hub and Redis subscribers.
@@ -61,7 +61,7 @@ Gameplay rules remain primarily in handlers, but reusable player, inventory, map
 Workers are cancellable polling/simulation loops, not an external job queue:
 
 - Gu/pet hunger, growth and status expiry/lazy updates.
-- Tribulation, world-index synchronization, mine monsters and midnight mine processing.
+- Tribulation, world-index synchronization and Primeval Vein spawn/cleanup.
 - Arena, auction, beast-betting and Death Arena settlement/round processing.
 - Sect mission, territory and maintenance processing.
 - Batch player persistence, pool watchdog and optional orphaned Redis-key cleanup.
@@ -75,6 +75,6 @@ Schema is split by domain under `backend/internal/db/schema_*.go`. Important gro
 - dictionaries/world: Gu, item, recipe, race, constitution, status, regions, cells, monsters, spawns, loot and map ground drops;
 - combat/social: combat sessions/history, parties/invitations, pets, killer moves, arena/shop, Death Arena, beast betting, trade, marketplace, chat and feedback/comments;
 - aperture: apertures, resource nodes, tribulations, variant-human populations, node workers, refinement queue, settlements, events and NPCs;
-- sect/activities: sect membership, requests, missions, vault/mines, personal mines and instances.
+- sect/activities: sect membership, requests, missions, vault/mines and instances.
 
 Dao marks and several extensible effect/state structures use JSONB. See `docs/GAME_DATA.md` for field and CSV details; the router in `backend/internal/server/server.go` remains the source of truth for endpoints.

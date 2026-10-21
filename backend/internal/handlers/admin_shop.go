@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -56,8 +55,14 @@ func AdminListShopItems(c *gin.Context) {
 		}
 		items = append(items, item)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cửa hàng"}); return }
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cửa hàng"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cửa hàng"})
+		return
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cửa hàng"})
+		return
+	}
 
 	c.JSON(http.StatusOK, items)
 }
@@ -149,7 +154,15 @@ func AdminUpdateShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 		return
 	}
-	updated, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng đã cập nhật"}); return }; if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng cửa hàng"}); return }
+	updated, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng đã cập nhật"})
+		return
+	}
+	if updated == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng cửa hàng"})
+		return
+	}
 
 	auditlog.Logf(db.DB, &adminID, "admin.update_shop_item", "id=%s rank=%d price=%.3f stock=%d is_default=%v", itemID, rank, req.Price, req.Stock, req.IsDefault)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mặt hàng"})
@@ -173,7 +186,15 @@ func AdminDeleteShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
 		return
 	}
-	deleted, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng đã xóa"}); return }; if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng cửa hàng"}); return }
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng đã xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng cửa hàng"})
+		return
+	}
 
 	auditlog.Logf(db.DB, &adminID, "admin.delete_shop_item", "id=%s rank=%d", itemID, rank)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa mặt hàng khỏi shop"})
@@ -221,7 +242,10 @@ func AdminListArenaShopItems(c *gin.Context) {
 		}
 		items = append(items, item)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách Arena Shop"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách Arena Shop"})
+		return
+	}
 
 	c.JSON(http.StatusOK, items)
 }
@@ -296,7 +320,15 @@ func AdminUpdateArenaShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 		return
 	}
-	updated, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng Arena Shop đã cập nhật"}); return }; if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng Arena Shop"}); return }
+	updated, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng Arena Shop đã cập nhật"})
+		return
+	}
+	if updated == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng Arena Shop"})
+		return
+	}
 
 	auditlog.Logf(db.DB, &adminID, "admin.update_arena_shop_item", "id=%s price=%d qty=%d stock=%d is_default=%v", itemID, req.Price, req.Qty, req.Stock, req.IsDefault)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mặt hàng Arena Shop"})
@@ -315,161 +347,16 @@ func AdminDeleteArenaShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
 		return
 	}
-	deleted, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng Arena Shop đã xóa"}); return }; if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng Arena Shop"}); return }
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng Arena Shop đã xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng Arena Shop"})
+		return
+	}
 
 	auditlog.Logf(db.DB, &adminID, "admin.delete_arena_shop_item", "id=%s", itemID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa mặt hàng khỏi Arena Shop"})
-}
-
-// -------- Admin: Mine Slot Management --------
-
-type AdminMineSlot struct {
-	ID             int        `json:"id"`
-	Rarity         string     `json:"rarity"`
-	OccupierID     *string    `json:"occupier_id"`
-	OccupierName   *string    `json:"occupier_name"`
-	MonsterID      *string    `json:"monster_id"`
-	MonsterRank    int        `json:"monster_rank"`
-	MonsterSubRank int        `json:"monster_sub_rank"`
-	MineType       string     `json:"mine_type"`
-	OccupiedAt     *time.Time `json:"occupied_at"`
-	LastClaimedAt  *time.Time `json:"last_claimed_at"`
-	AbandonedAt    *time.Time `json:"abandoned_at"`
-}
-
-func AdminListMineSlots(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
-		return
-	}
-
-	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT m.id, m.rarity, m.occupier_id, COALESCE(p.username, ''), m.monster_id, m.monster_rank, m.monster_sub_rank, m.mine_type,
-			m.occupied_at, m.last_claimed_at, m.abandoned_at
-		FROM mine_slots m
-		LEFT JOIN players p ON m.occupier_id = p.id
-		ORDER BY m.id
-	`)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách mỏ: " + err.Error()})
-		return
-	}
-	defer rows.Close()
-
-	slots := []AdminMineSlot{}
-	for rows.Next() {
-		var s AdminMineSlot
-		var occupierName string
-		if err := rows.Scan(&s.ID, &s.Rarity, &s.OccupierID, &occupierName, &s.MonsterID, &s.MonsterRank, &s.MonsterSubRank, &s.MineType,
-			&s.OccupiedAt, &s.LastClaimedAt, &s.AbandonedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách mỏ"})
-			return
-		}
-		if occupierName != "" {
-			s.OccupierName = &occupierName
-		}
-		slots = append(slots, s)
-	}
-	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách mỏ"})
-		return
-	}
-
-	c.JSON(http.StatusOK, slots)
-}
-
-type AdminUpdateMineSlotRequest struct {
-	Rarity         *string `json:"rarity"`
-	MonsterRank    *int    `json:"monster_rank"`
-	MonsterSubRank *int    `json:"monster_sub_rank"`
-}
-
-func AdminUpdateMineSlot(c *gin.Context) {
-	adminID, ok := requireAdmin(c)
-	if !ok {
-		return
-	}
-
-	slotID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID mỏ không hợp lệ"})
-		return
-	}
-
-	var req AdminUpdateMineSlotRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
-		return
-	}
-
-	sets := []string{}
-	args := []interface{}{}
-	idx := 1
-
-	if req.Rarity != nil {
-		validRarities := map[string]bool{"Siêu Cấp": true, "Thường": true, "Hiếm": true, "Sử Thi": true, "Truyền Thuyết": true}
-		if !validRarities[*req.Rarity] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Phẩm chất không hợp lệ"})
-			return
-		}
-		sets = append(sets, "rarity=$"+strconv.Itoa(idx))
-		args = append(args, *req.Rarity)
-		idx++
-	}
-	if req.MonsterRank != nil {
-		if *req.MonsterRank < 1 || *req.MonsterRank > 9 { c.JSON(http.StatusBadRequest, gin.H{"error":"Cấp quái phải từ 1 đến 9"}); return }
-		sets = append(sets, "monster_rank=$"+strconv.Itoa(idx))
-		args = append(args, *req.MonsterRank)
-		idx++
-	}
-	if req.MonsterSubRank != nil {
-		if *req.MonsterSubRank < 1 || *req.MonsterSubRank > 10 { c.JSON(http.StatusBadRequest, gin.H{"error":"Cấp phụ quái phải từ 1 đến 10"}); return }
-		sets = append(sets, "monster_sub_rank=$"+strconv.Itoa(idx))
-		args = append(args, *req.MonsterSubRank)
-		idx++
-	}
-
-	if len(sets) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu cập nhật"})
-		return
-	}
-
-	args = append(args, slotID)
-	query := `UPDATE mine_slots SET ` + strings.Join(sets, ", ") + ` WHERE id=$` + strconv.Itoa(idx)
-
-	result, err := db.DB.ExecContext(c.Request.Context(), query, args...)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật mỏ: " + err.Error()})
-		return
-	}
-	if n, _ := result.RowsAffected(); n == 0 { c.JSON(http.StatusNotFound, gin.H{"error":"Không tìm thấy mỏ"}); return }
-
-	auditlog.Logf(db.DB, &adminID, "admin.update_mine_slot", "slot=%d rarity=%v rank=%v subRank=%v", slotID, req.Rarity, req.MonsterRank, req.MonsterSubRank)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mỏ thành công"})
-}
-
-func AdminResetMineSlot(c *gin.Context) {
-	adminID, ok := requireAdmin(c)
-	if !ok {
-		return
-	}
-
-	slotID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID mỏ không hợp lệ"})
-		return
-	}
-
-	result, err := db.DB.ExecContext(c.Request.Context(), `
-		UPDATE mine_slots
-		SET occupier_id = NULL, monster_id = NULL, occupied_at = NULL, last_claimed_at = NULL, abandoned_at = NOW()
-		WHERE id = $1
-	`, slotID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể reset mỏ: " + err.Error()})
-		return
-	}
-	if n, _ := result.RowsAffected(); n == 0 { c.JSON(http.StatusNotFound, gin.H{"error":"Không tìm thấy mỏ"}); return }
-
-	auditlog.Logf(db.DB, &adminID, "admin.reset_mine_slot", "slot=%d", slotID)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã reset mỏ thành công"})
 }

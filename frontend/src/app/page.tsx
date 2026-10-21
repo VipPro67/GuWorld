@@ -34,7 +34,6 @@ const BaoHoangMarket = dynamic(() => import("@/components/BaoHoangMarket").then(
 const ArenaView = dynamic(() => import("@/components/ArenaView").then(m => m.ArenaView), { ssr: false });
 const DeathArenaView = dynamic(() => import("@/components/DeathArena/DeathArenaView"), { ssr: false });
 const MartialArenaView = dynamic(() => import("@/components/MartialArena/MartialArenaView"), { ssr: false });
-const MineView = dynamic(() => import("@/components/MineView").then(m => m.MineView), { ssr: false });
 const EntertainmentPanel = dynamic(() => import("@/components/EntertainmentPanel").then(m => m.EntertainmentPanel), { ssr: false });
 const AchievementsPanel = dynamic(() => import("@/components/AchievementsPanel"), { ssr: false });
 const ImmortalApertureView = dynamic(() => import("@/components/ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
@@ -322,7 +321,7 @@ export default function Home() {
     "practice-room": "Phòng tập", cultivation: "Tu luyện", character: "Nhân vật", inventory: "Túi đồ", "inventory-gu": "Cổ trùng", party: "Tổ đội",    refine: "Luyện Cổ", topup: "Nạp", "premium-shop": "Cửa hàng tiên ngọc",
     "premium-store": "Cửa hàng", shop: "Thương hội", auction: "Chợ Tiên",
     arena: "Đấu trường", "death-arena": "Sinh tử đài", "martial-arena": "Đại Hội Võ Thuật", leaderboard: "Bảng xếp hạng",
-    gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân", mine: "Khai khoáng",
+    gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân",
     aperture: "Tiên khiếu", "dream-realm": "Mộng Cảnh", dungeon: "Bí cảnh & Truyền thừa", sect: "Tông môn",
     "combat-history": "Lịch sử chiến đấu", feedback: "Góp ý", "audit-logs": "Nhật ký hệ thống",
     "pvp-arena": "Đấu trường thời gian thực",
@@ -554,8 +553,6 @@ export default function Home() {
               actionLoading={actionLoading}
             />
           </div>
-        ) : currentView === "mine" ? (
-          <MineView />
         ) : currentView === "aperture" ? (
           <div className="w-full">
             <ImmortalApertureView />

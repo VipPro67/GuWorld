@@ -12,6 +12,17 @@ import {
 
 export type { WorldCombatEvent, WorldMonster } from "@/store/worldMonsterReducer";
 
+export interface PrimevalVeinInfo {
+  id: string;
+  vein_type: string;
+  rarity: string;
+  accumulated_stones: number;
+  accumulated_qi: number;
+  accumulated_chests: number;
+  capacity_stones: number;
+  expires_at: string;
+}
+
 export interface WorldObject {
   id?: string;
   region_id: string;
@@ -23,6 +34,7 @@ export interface WorldObject {
   respawn_seconds?: number;
   cleared?: boolean;
   dropData?: GroundDrop;
+  vein?: PrimevalVeinInfo;
 }
 
 export interface NearbyCell {
@@ -33,6 +45,7 @@ export interface NearbyCell {
   rank?: number;
   sub_rank?: number;
   region_id?: string;
+  vein?: PrimevalVeinInfo;
 }
 
 type CellCacheState = {
@@ -247,6 +260,7 @@ interface WorldStoreState {
   setInvestigationRange: (r: number) => void;
   setMoving: (v: boolean) => void;
   selectObject: (obj: WorldObject | null) => void;
+  harvestVein: (veinId: string) => Promise<boolean>;
   setPersistentCellCleared: (region: string, x: number, y: number, cleared: boolean) => void;
   requestCenterCamera: () => void;
   setLivePosition: (x: number, y: number) => void;
@@ -544,6 +558,24 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   setInvestigationRange: (r) => set({ investigationRange: Math.min(Math.max(r, 10), 25) }),
   setMoving: (v) => set({ isMoving: v }),
   selectObject: (obj) => set({ selectedObject: obj }),
+  harvestVein: async (veinId) => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/veins/${veinId}/harvest`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        useGameStore.getState().addToast(data.error || "Thu hoạch Nguyên Tuyền thất bại.", "error");
+        return false;
+      }
+      useGameStore.getState().applyInventoryFromResponse(data);
+      useGameStore.getState().addToast(data.message || "Thu hoạch Nguyên Tuyền thành công!", "success");
+      const p = useGameStore.getState().player;
+      if (p) void get().fetchNearbyCells(p.x, p.y, get().investigationRange);
+      return true;
+    } catch (err) {
+      useGameStore.getState().addToast(err instanceof Error ? err.message : "Thu hoạch Nguyên Tuyền thất bại.", "error");
+      return false;
+    }
+  },
   setPersistentCellCleared: (region, x, y, cleared) => set((s) => {
     let changed = false;
     const hasExactRegionObject = s.objects.some((object) => object.x === x && object.y === y && object.region_id === region);

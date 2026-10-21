@@ -41,6 +41,7 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"random_constitution":         randomConstitutionEffect,
 	"random_race":                 randomRaceEffect,
 	"exit_spatial_realm":          exitSpatialRealmEffect,
+	"spring_egg_hatch":            springEggHatchEffect,
 }
 
 func exitSpatialRealmEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {

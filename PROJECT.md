@@ -72,7 +72,7 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 ### Môn phái, mỏ, arena, feedback
 
 - Môn phái: list/join/leave/create, cấp bậc, đóng góp, kho, nhiệm vụ, thành viên, duyệt đơn, nâng cấp.
-- Mỏ cá nhân: chiếm, claim, bỏ, tấn công; worker gán quái cho mỏ.
+- Nguyên Tuyền ngoài bản đồ: tự spawn/hết hạn, bể sản lượng chung, ai đứng tại ô cũng thu hoạch; trứng Nguyên Tuyền cấy mỏ.
 - Mỏ môn phái: claim/tấn công.
 - Võ đài leaderboard/challenge/shop, Đấu Trường Sinh Tử theo giải, gacha, thành tựu và bảng xếp hạng nhiều hạng mục.
 - Cược linh thú, thông báo, lịch sử chiến đấu và nhật ký hành động.
@@ -84,7 +84,7 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 - `Aperture` cho trạng thái người chơi, tu luyện, quest/thành tựu, hồ sơ, referral và gift code.
 - `GuInventory`, `RefiningFurnace`, `KillerMoveBuilder`.
 - `ExplorationMap`, `ExploreCard`, `CombatScreen`, `DungeonView`.
-- `ImmortalApertureView`, `MineView`, `SectView`, `ArenaView`, `DeathArenaView` và bảng xếp hạng.
+- `ImmortalApertureView`, `SectView`, `ArenaView`, `DeathArenaView` và bảng xếp hạng.
 - `BaoHoangMarket`, `TradeRoomModal`, `CaravanShop`.
 - `PremiumWallet`, `PremiumShopView`, `TopupView`.
 - `FeedbackView`, `PlayerProfileModal`, toast/log UI.

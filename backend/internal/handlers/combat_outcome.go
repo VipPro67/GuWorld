@@ -27,7 +27,6 @@ type CombatOutcome struct {
 	IsVirtual            bool
 	IsTribulation        bool
 	TargetSectID         string
-	MineSlotID           int
 	RawEnemyType         string
 	EnemyName            string
 	EnemyTemplateID      string
@@ -78,7 +77,6 @@ func EvaluateCombatOutcome(input CombatOutcomeInput, initialLogs []simulator.Com
 	enemyName := ""
 	rawEnemyType := ""
 	targetSectID := ""
-	mineSlotID := 0
 	enemyTemplateID := ""
 	enemyRank := 1
 
@@ -86,7 +84,6 @@ func EvaluateCombatOutcome(input CombatOutcomeInput, initialLogs []simulator.Com
 		enemyName = input.ActiveCombat.EnemyName
 		rawEnemyType = input.ActiveCombat.EnemyType
 		targetSectID = input.ActiveCombat.TargetSectID
-		mineSlotID = input.ActiveCombat.MineSlotID
 		enemyTemplateID = input.ActiveCombat.EnemyTemplateID
 		enemyRank = input.ActiveCombat.EnemyRank
 	}
@@ -131,7 +128,6 @@ func EvaluateCombatOutcome(input CombatOutcomeInput, initialLogs []simulator.Com
 		IsVirtual:         input.IsVirtual,
 		IsTribulation:     input.IsTribulation,
 		TargetSectID:      targetSectID,
-		MineSlotID:        mineSlotID,
 		RawEnemyType:      rawEnemyType,
 		EnemyName:         enemyName,
 		EnemyTemplateID:   enemyTemplateID,

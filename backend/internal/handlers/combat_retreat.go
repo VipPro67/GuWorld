@@ -416,7 +416,6 @@ func Flee(c *gin.Context) {
 			turnLogs = append(turnLogs, "=== THẤT BẠI THẢM HẠI ===")
 			isTribulation := player.ActiveCombat.TribulationEventID != "" || player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation"
 			isExploration := player.ActiveCombat.CombatMode != "virtual" && !isTribulation
-			isMine := player.ActiveCombat.MineSlotID > 0
 			if isExploration {
 				deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 				player.HP = 1.0
@@ -425,26 +424,24 @@ func Flee(c *gin.Context) {
 				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng. "+RespawnLocationMessage(deathRegion, player.CurrentRegion, player.X, player.Y))
 
 				// Death penalty applies to real PvE exploration and normal PvP only.
-				// Mine and arena (virtual) defeats never drop items/stones.
-				if !isMine {
-					var winnerID *uuid.UUID
-					if player.ActiveCombat.TargetPlayerID != "" {
-						if winner, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
-							winnerID = &winner
-						}
+				// Arena (virtual) defeats never drop items/stones.
+				var winnerID *uuid.UUID
+				if player.ActiveCombat.TargetPlayerID != "" {
+					if winner, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
+						winnerID = &winner
 					}
-					killerName := ""
-					if winnerID == nil {
-						killerName = enemyName
-					}
-					dropSummary := applyDeathDropRecord(tx, &authID, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: killerName})
-					_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
-					if dropSummary != "" {
-						if winnerID != nil {
-							turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và bị đối thủ cướp đoạt: %s.", dropSummary))
-						} else {
-							turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và rơi rớt mất: %s.", dropSummary))
-						}
+				}
+				killerName := ""
+				if winnerID == nil {
+					killerName = enemyName
+				}
+				dropSummary := applyDeathDropRecord(tx, &authID, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: killerName})
+				_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
+				if dropSummary != "" {
+					if winnerID != nil {
+						turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và bị đối thủ cướp đoạt: %s.", dropSummary))
+					} else {
+						turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và rơi rớt mất: %s.", dropSummary))
 					}
 				}
 			} else {
@@ -505,7 +502,7 @@ func Flee(c *gin.Context) {
 	}
 
 	isTribulation := player.ActiveCombat.TribulationEventID != "" || player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation" || player.ActiveCombat.EnemyType == "TRIBULATION_BOSS" || player.ActiveCombat.EnemyType == "TRIBULATION_MONSTER"
-	isExploration := player.ActiveCombat.CombatMode != "virtual" && !isTribulation && player.ActiveCombat.MineSlotID == 0 && player.ActiveCombat.EnemyType != "PVP"
+	isExploration := player.ActiveCombat.CombatMode != "virtual" && !isTribulation && player.ActiveCombat.EnemyType != "PVP"
 
 	droppedOnFlee := false
 	if isExploration {
@@ -577,7 +574,7 @@ func Flee(c *gin.Context) {
 }
 
 // fleeFreeRetreat reports whether an active combat allows a guaranteed,
-// penalty-free escape (PvP, mine encounters, and tribulation encounters).
+// penalty-free escape (open-world PvP and tribulation encounters).
 func fleeFreeRetreat(cs *models.CombatState) bool {
 	if cs == nil {
 		return false
@@ -586,7 +583,7 @@ func fleeFreeRetreat(cs *models.CombatState) bool {
 		cs.EnemyType == "TRIBULATION_BOSS" || cs.EnemyType == "TRIBULATION_MONSTER" {
 		return true
 	}
-	return cs.EnemyType == "PVP" || cs.MineSlotID > 0
+	return cs.EnemyType == "PVP"
 }
 
 // fleeFailVictory handles the edge case where a failed flee's enemy counterattack
@@ -602,7 +599,7 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 	}
 
 	isPvE := cs.CombatMode != "virtual" && cs.EnemyTemplateID != "monster_heavenly_tribulation" &&
-		cs.MineSlotID == 0 && cs.EnemyType != "PVP"
+		cs.EnemyType != "PVP"
 
 	logs = append(logs, "=== CHIẾN THẮNG BẤT NGỜ ===")
 	logs = append(logs, "Đạo hữu cố gắng bỏ chạy nhưng địch nhân tự chuốc lấy diệt vong!")

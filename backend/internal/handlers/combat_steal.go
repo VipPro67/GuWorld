@@ -13,13 +13,12 @@ import (
 )
 
 // isOpenWorldPvP checks if a combat state qualifies as open-world PvP:
-// EnemyType is PVP, CombatMode is "real" (not virtual arena), MineSlotID is 0 (not mine battle),
-// and TargetPlayerID is non-empty.
+// EnemyType is PVP, CombatMode is "real" (not virtual arena), and TargetPlayerID
+// is non-empty.
 func isOpenWorldPvP(cs *models.CombatState) bool {
 	return cs != nil &&
 		cs.EnemyType == "PVP" &&
 		cs.CombatMode == "real" &&
-		cs.MineSlotID == 0 &&
 		cs.TargetPlayerID != ""
 }
 
@@ -139,9 +138,6 @@ func openWorldSkipReason(combat *models.CombatState) string {
 	}
 	if combat.CombatMode != "real" {
 		return "đấu trường ảo (virtual) không cho cướp Cổ"
-	}
-	if combat.MineSlotID != 0 {
-		return "trận tranh mỏ không cho cướp Cổ"
 	}
 	if combat.TargetPlayerID == "" {
 		return "thiếu mục tiêu người chơi"

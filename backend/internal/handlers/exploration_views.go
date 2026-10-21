@@ -62,13 +62,14 @@ func GetExploreObjects(c *gin.Context) {
 // NearbyCell is a resolved non-empty cell (monster / boss / resource / wild Gu)
 // near the player, for the large world map markers.
 type NearbyCell struct {
-	X       int    `json:"x"`
-	Y       int    `json:"y"`
-	Type    string `json:"cell_type"`
-	Content string `json:"content"`
-	Rank    int    `json:"rank,omitempty"`
-	SubRank int    `json:"sub_rank,omitempty"`
-	Region  string `json:"region_id,omitempty"`
+	X       int       `json:"x"`
+	Y       int       `json:"y"`
+	Type    string    `json:"cell_type"`
+	Content string    `json:"content"`
+	Rank    int       `json:"rank,omitempty"`
+	SubRank int       `json:"sub_rank,omitempty"`
+	Region  string    `json:"region_id,omitempty"`
+	Vein    *VeinInfo `json:"vein,omitempty"`
 }
 
 // ExecuteGetCellsRect resolves non-empty cells inside an explicit rectangle.
@@ -123,6 +124,9 @@ func ExecuteGetCellsRect(playerID uuid.UUID, minX, minY, maxX, maxY int) (int, a
 	out, err := filterClearedCells(candidates)
 	if err != nil {
 		return http.StatusServiceUnavailable, gin.H{"error": "Trạng thái bản đồ tạm thời không khả dụng."}
+	}
+	if !instanceRegion && (!hasScope || entry.MapID == "" || entry.MapID == "world_map") {
+		out = append(out, veinCellsInBounds(minX, minY, maxX, maxY)...)
 	}
 	return http.StatusOK, out
 }

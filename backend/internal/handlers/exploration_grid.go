@@ -117,6 +117,21 @@ func GetGrid(c *gin.Context) {
 		}
 		cells = append(cells, cell)
 	}
+	if worldMapIDForRegion(player.CurrentRegion) == "world_map" {
+		cellIndex := make(map[[2]int]int, len(cells))
+		for i, cell := range cells {
+			cellIndex[[2]int{cell.X, cell.Y}] = i
+		}
+		for _, vc := range veinCellsInBounds(player.X-visualVisionRadius, player.Y-visualVisionRadius, player.X+visualVisionRadius, player.Y+visualVisionRadius) {
+			veinCell := models.Cell{X: vc.X, Y: vc.Y, Type: vc.Type, Content: vc.Content}
+			if i, ok := cellIndex[[2]int{vc.X, vc.Y}]; ok {
+				cells[i] = veinCell
+				continue
+			}
+			cellIndex[[2]int{vc.X, vc.Y}] = len(cells)
+			cells = append(cells, veinCell)
+		}
+	}
 
 	type NearbyPlayer struct {
 		ID        string `json:"id"`

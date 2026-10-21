@@ -368,7 +368,7 @@ func isBossEnemy(cs *models.CombatState) bool {
 	if cs == nil {
 		return false
 	}
-	if strings.EqualFold(cs.EnemyType, "Boss") || strings.EqualFold(cs.EnemyType, "World_Boss") || strings.EqualFold(cs.EnemyType, "Mine_PVE") {
+	if strings.EqualFold(cs.EnemyType, "Boss") || strings.EqualFold(cs.EnemyType, "World_Boss") {
 		return true
 	}
 	for _, e := range cs.Enemies {
@@ -385,7 +385,7 @@ func guDropTier(enemyType string) string {
 	switch strings.ToUpper(strings.TrimSpace(enemyType)) {
 	case "NORMAL", "MONSTER":
 		return "normal"
-	case "BOSS", "WORLD_BOSS", "WORLDBOSS", "WORLD BOSS", "MINE_PVE", "TRIBULATION_BOSS":
+	case "BOSS", "WORLD_BOSS", "WORLDBOSS", "WORLD BOSS", "TRIBULATION_BOSS":
 		return "boss"
 	default:
 		return "elite"

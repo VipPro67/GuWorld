@@ -442,7 +442,6 @@ func AdminClearCache(c *gin.Context) {
 		"arena_shop_items",
 		"topup_packages",
 		"premium_shop_packages",
-		"mine_slots_list",
 		"beast_betting_current_round",
 		"sects_list",
 		"master_refining_recipes",

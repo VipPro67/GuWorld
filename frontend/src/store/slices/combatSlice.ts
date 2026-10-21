@@ -316,11 +316,10 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
 
     // HP quá thấp (< 20% max): bỏ chạy trừ 20% Max HP — gần như chắc chắn ngất
     // xỉu, mất toàn bộ tài nguyên thu thập. Cảnh báo và chặn lại cho đạo hữu cân nhắc.
-    // Mine và PvP được bỏ chạy tự do nên bỏ qua cảnh báo này.
+    // PvP được bỏ chạy tự do nên bỏ qua cảnh báo này.
     const maxHP = player.base_hp || player.hp || 1;
-    const isMine = !!player.active_combat?.mine_slot_id;
     const isPVP = player.active_combat?.enemy_type === "PVP";
-    if (!isMine && !isPVP && player.hp <= 0.2 * maxHP) {
+    if (!isPVP && player.hp <= 0.2 * maxHP) {
 
       const proceed = await showConfirm(
         "HP của đạo hữu đang rất thấp. Bỏ chạy khỏi chiến đấu sẽ khiến đạo hữu chịu thêm 20% sát thương theo HP tối đa — gần như chắc chắn sẽ ngất xỉu, làm rơi mất toàn bộ Nguyên Thạch, Cổ trùng và tài nguyên thu thập. Vẫn muốn bỏ chạy?",
@@ -384,7 +383,6 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       let returnView = useUIStore.getState().currentView;
       if (combat) {
         if (combat.combat_mode === "virtual") returnView = "arena";
-        else if (combat.mine_slot_id) returnView = "mine";
         else if (combat.tribulation_event_id) returnView = "aperture";
       }
       set({ activeCombatReplay: null });

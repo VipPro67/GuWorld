@@ -63,7 +63,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
   const resolveTribulation = useGameStore((state) => state.resolveTribulation);
   const fetchPlayerStatus = useGameStore((state) => state.fetchPlayerStatus);
-  const fetchMineSlots = useGameStore((state) => state.fetchMineSlots);
   const combatSettings = useGameStore((state) => state.combatSettings);
   const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
   const addToast = useGameStore((state) => state.addToast);
@@ -180,14 +179,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         await resolveTribulation(tribulationEventId);
       }
 
-      // Show mine rewards as toast if present
-      if (Array.isArray(result.logs)) {
-        for (const log of result.logs) {
-          if (log.action === "MINE_LOOT" || log.action === "MINE_OCCUPY") {
-            addToast(log.detail, log.action === "MINE_LOOT" ? "success" : "info");
-          }
-        }
-      }
       return true;
     }
     return false;
@@ -272,7 +263,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       return;
     }
     await fetchPlayerStatus(player.id, true);
-    fetchMineSlots();
   };
 
   // ── Recommendation helpers ──

@@ -48,7 +48,6 @@ Nếu biến này không tồn tại, store dùng mặc định `http://localhos
 | `src/components/SectView.tsx` | Môn phái. |
 | `src/components/BaoHoangMarket.tsx` | Marketplace/auction/trade listings. |
 | `src/components/TradeRoomModal.tsx` | Giao dịch P2P. |
-| `src/components/MineView.tsx` | Mỏ cá nhân. |
 | `src/components/ArenaView.tsx` | Arena. |
 | `src/components/PremiumShopView.tsx` / `TopupView.tsx` / `PremiumWallet.tsx` | Ví, premium shop, topup. |
 | `src/components/FeedbackView.tsx` | Feedback board. |

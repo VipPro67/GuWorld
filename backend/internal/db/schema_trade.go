@@ -1,6 +1,6 @@
 package db
 
-// Trading / social economy schema: auction, trades, parties, mine slots.
+// Trading / social economy schema: auction, trades and parties.
 // parties is split into schemaParties (created before players so
 // players.party_id can FK inline); its leader FK is added by schemaPlayers.
 // auction.item_data is polymorphic JSONB (Gu array / Material id / Recipe).
@@ -97,30 +97,6 @@ func schemaTrade() error {
 	}
 	if err := execSchema("party_invitations_invitee_idx", `
 	CREATE INDEX IF NOT EXISTS idx_party_invitations_invitee ON party_invitations (invitee_id, status);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("mine_slots", `
-	CREATE TABLE IF NOT EXISTS mine_slots (
-		id INTEGER PRIMARY KEY,
-		rarity VARCHAR(50) NOT NULL,
-		occupier_id UUID REFERENCES players(id) ON DELETE SET NULL,
-		monster_id VARCHAR(50) REFERENCES monster_templates(id) ON DELETE SET NULL,
-		occupied_at TIMESTAMPTZ NULL,
-		last_claimed_at TIMESTAMPTZ NULL,
-		abandoned_at TIMESTAMPTZ DEFAULT NOW(),
-		monster_rank INT NOT NULL DEFAULT 1,
-		monster_sub_rank INT NOT NULL DEFAULT 1,
-		mine_type VARCHAR(20) NOT NULL DEFAULT 'mortal'
-	);`); err != nil {
-		return err
-	}
-	if err := execSchema("mine_slots_occupier_idx", `
-	CREATE INDEX IF NOT EXISTS idx_mine_slots_occupier ON mine_slots (occupier_id);`); err != nil {
-		return err
-	}
-	if err := execSchema("mine_slots_monster_idx", `
-	CREATE INDEX IF NOT EXISTS idx_mine_slots_monster ON mine_slots (monster_id);`); err != nil {
 		return err
 	}
 

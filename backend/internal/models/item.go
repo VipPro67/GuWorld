@@ -32,6 +32,7 @@ var itemBlockCodeToKey = map[string]string{
 	"SOUL_BOOST":                  "soul_boost",
 	"EXIT_SPATIAL_REALM":          "exit_spatial_realm",
 	"ADD_DAO_MARKS":               "add_dao_marks",
+	"SPRING_EGG_HATCH":            "spring_egg_hatch",
 }
 
 // Scan implements the sql.Scanner interface for ItemEffects
@@ -141,7 +142,7 @@ var itemEffectCodes = map[string]bool{
 	"increase_aperture_area": true, "increase_aperture_time_rate": true,
 	"increase_human_qi": true, "random_constitution": true, "random_race": true,
 	"change_race": true, "hunger": true, "exit_spatial_realm": true,
-	"add_dao_marks": true,
+	"add_dao_marks": true, "spring_egg_hatch": true,
 }
 
 func CompileItemEffects(input ItemEffects) ([]ItemEffectCommand, error) {

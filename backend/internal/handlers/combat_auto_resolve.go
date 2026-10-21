@@ -249,12 +249,6 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 				})
 			}
 
-			mineLogs, mineOccupied := applyAutoCombatMineOccupation(tx, player, player.ActiveCombat, simState.Turn)
-			logs = append(logs, mineLogs...)
-			if mineOccupied {
-				summary["mine_occupied"] = player.ActiveCombat.MineSlotID
-			}
-
 			// Sect War victory. This branch only runs when alliesAlive (outer
 			// branch), and alliesAlive implies every enemy is down, so the
 			// attacker always won here — no log-text matching needed. The

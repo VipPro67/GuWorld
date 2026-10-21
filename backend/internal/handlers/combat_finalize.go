@@ -36,7 +36,7 @@ func isRealPlayerAlly(ally *simulator.CombatantAuto, playerID string) bool {
 // Shared by all auto-combat paths so post-combat state is
 // identical on both paths.
 func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation, alliesAlive bool, updateQuery string, args []interface{}, finalPlayerHP, finalMana float64, before models.GuInventory, logs []simulator.CombatLog) ([]simulator.CombatLog, error) {
-	if alliesAlive && !isVirtual && player.ActiveCombat != nil && player.ActiveCombat.MineSlotID == 0 &&
+	if alliesAlive && !isVirtual && player.ActiveCombat != nil &&
 		player.ActiveCombat.TargetSectID == "" && isPveMonsterType(player.ActiveCombat.EnemyType) {
 		eventID := player.ActiveCombat.CombatID
 		if eventID == "" {

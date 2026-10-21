@@ -66,7 +66,6 @@ func TestIsOpenWorldPvP(t *testing.T) {
 	valid := &models.CombatState{
 		EnemyType:      "PVP",
 		CombatMode:     "real",
-		MineSlotID:     0,
 		TargetPlayerID: "11111111-1111-1111-1111-111111111111",
 	}
 	if !isOpenWorldPvP(valid) {
@@ -77,29 +76,16 @@ func TestIsOpenWorldPvP(t *testing.T) {
 	arena := &models.CombatState{
 		EnemyType:      "PVP",
 		CombatMode:     "virtual",
-		MineSlotID:     0,
 		TargetPlayerID: "11111111-1111-1111-1111-111111111111",
 	}
 	if isOpenWorldPvP(arena) {
 		t.Errorf("expected arena (virtual mode) to be excluded from steal")
 	}
 
-	// Mine PvP should be excluded
-	mine := &models.CombatState{
-		EnemyType:      "PVP",
-		CombatMode:     "real",
-		MineSlotID:     3,
-		TargetPlayerID: "11111111-1111-1111-1111-111111111111",
-	}
-	if isOpenWorldPvP(mine) {
-		t.Errorf("expected mine PvP to be excluded from steal")
-	}
-
 	// PvE monster should be excluded
 	pve := &models.CombatState{
-		EnemyType:      "MINE_PVE",
+		EnemyType:      "Normal",
 		CombatMode:     "real",
-		MineSlotID:     0,
 		TargetPlayerID: "",
 	}
 	if isOpenWorldPvP(pve) {
@@ -182,7 +168,6 @@ func TestStealSkipLoggedInArena(t *testing.T) {
 	combat := &models.CombatState{
 		EnemyType:      "PVP",
 		CombatMode:     "virtual",
-		MineSlotID:     0,
 		TargetPlayerID: "11111111-1111-1111-1111-111111111111",
 		EnemyName:      "Clone Gmail",
 	}

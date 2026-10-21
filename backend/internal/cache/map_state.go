@@ -196,15 +196,3 @@ func BroadcastWildGuCaptured(x, y int, guID string) error {
 	}
 	return PublishEventQuick("world:cell", payload)
 }
-
-// BroadcastMineMonsterKilled publishes a mine monster killed event via Redis pub/sub.
-func BroadcastMineMonsterKilled(x, y int, mineType, rarity string) error {
-	payload := map[string]any{
-		"type":      "mine_monster_killed",
-		"x":         x,
-		"y":         y,
-		"mine_type": mineType,
-		"rarity":    rarity,
-	}
-	return PublishEventQuick("world:cell", payload)
-}

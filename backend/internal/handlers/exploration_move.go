@@ -822,9 +822,6 @@ func MovePlayer(c *gin.Context) {
 				if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
 					logMsg += " " + strings.Join(loot, " ")
 				}
-				if mineOccupied, ok := skipSummary["mine_occupied"].(int); ok && mineOccupied > 0 {
-					logMsg += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
-				}
 			}
 			if _, err := tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3, statuses = $4 WHERE id = $5`, player.CurrentRegion, player.X, player.Y, player.Statuses, player.ID); err != nil {
 				logger.S.Errorf("MovePlayer: failed to persist moved region after auto-combat for player=%s: %v", player.ID, err)
@@ -1152,9 +1149,6 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 			if skipSummary != nil {
 				if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
 					autoLog += " " + strings.Join(loot, " ")
-				}
-				if mineOccupied, ok := skipSummary["mine_occupied"].(int); ok && mineOccupied > 0 {
-					autoLog += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
 				}
 			}
 			eventLogs = append(eventLogs, autoLog)

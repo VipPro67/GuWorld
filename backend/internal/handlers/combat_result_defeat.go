@@ -9,12 +9,11 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
-	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // applyAutoCombatDefeat handles the losing path for auto-combat: virtual arena
-// consolation, mine defender notification, death drop + hub teleport, party
-// cleanup, and the player update query. Shared by AutoCombatStart and
+// consolation, death drop + hub teleport, party cleanup, and the player update
+// query. Shared by AutoCombatStart and
 // ResolveCombat so defeat resolution is identical (including virtual mode).
 func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation bool, finalMana float64) (updateQuery string, args []interface{}, defLogs []simulator.CombatLog) {
 	if isVirtual {
@@ -39,14 +38,6 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 
 	player.HP = 1.0
 	defeatMsg := "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết."
-	if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 && player.ActiveCombat.TargetPlayerID != "" {
-		if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
-			var rarity string
-			_ = tx.QueryRow("SELECT rarity FROM mine_slots WHERE id = $1", player.ActiveCombat.MineSlotID).Scan(&rarity)
-			notify.Send(tx, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
-				fmt.Sprintf("Đạo hữu [%s] đã tấn công Mỏ #%d (%s) của bạn nhưng đã bị lực lượng phòng thủ đánh bại!", player.Username, player.ActiveCombat.MineSlotID, rarity))
-		}
-	}
 	deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 	isPVP := player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP"
 	didRespawn := false
@@ -54,8 +45,6 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 
 	if isTribulation {
 		defeatMsg = "Đạo hữu kiệt sức trước quái tai kiếp! Tiên Khiếu phải gánh chịu phần sát thương còn lại."
-	} else if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
-		defeatMsg = "Thất bại trong trận tranh đoạt Mỏ! May mắn không tổn hại đến bản thể và tài sản."
 	} else if player.ActiveCombat != nil && player.ActiveCombat.TargetSectID != "" {
 		defeatMsg = "Công kích Tông Môn thất bại! Đạo hữu trọng thương lui về an dưỡng."
 		sectDefeatLogs := ApplySectWarDefeat(tx, player, player.ActiveCombat)

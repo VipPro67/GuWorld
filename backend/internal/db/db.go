@@ -185,7 +185,7 @@ func Connect() error {
 
 // InitSchema creates all tables, indexes and foreign keys (defined per domain
 // in schema_*.go), then seeds static runtime data: the reserved system players,
-// default race/constitution dictionaries, the hub region, world mine slots and
+// default race/constitution dictionaries, the hub region and
 // sect mines. Gameplay dictionaries (Item, Gu, Recipe, ...) are NOT auto-seeded
 // here — import them via the Admin panel "Dữ liệu" tab.
 func InitSchema() error {
@@ -311,9 +311,6 @@ func InitSchema() error {
 	}
 	if err := seedSystemPlayers(); err != nil {
 		return fmt.Errorf("seed system players: %w", err)
-	}
-	if err := seedMineSlots(); err != nil {
-		return fmt.Errorf("seed mine slots: %w", err)
 	}
 	// if err := seedSectMines(); err != nil {
 	// 	return fmt.Errorf("seed sect mines: %w", err)
@@ -661,44 +658,6 @@ func seedSystemPlayers() error {
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
 		return err
 	}
-	return nil
-}
-
-// seedMineSlots seeds the 31 world mine slots (1 Siêu Cấp, 3 Truyền Thuyết,
-// 9 Sử Thi, 18 Hiếm) when the table is empty.
-func seedMineSlots() error {
-	var count int
-	if err := schemaDB().QueryRow(`SELECT COUNT(*) FROM mine_slots`).Scan(&count); err != nil {
-		return err
-	}
-	if count >= 62 {
-		return nil
-	}
-	slotRarities := map[int]string{}
-	for i := 1; i <= 31; i++ {
-		switch {
-		case i == 1:
-			slotRarities[i] = "Siêu Cấp"
-		case i <= 4:
-			slotRarities[i] = "Truyền Thuyết"
-		case i <= 13:
-			slotRarities[i] = "Sử Thi"
-		default:
-			slotRarities[i] = "Hiếm"
-		}
-	}
-	for i := 1; i <= 31; i++ {
-		if _, err := schemaDB().Exec("INSERT INTO mine_slots (id, rarity, abandoned_at, mine_type) VALUES ($1, $2, NOW(), 'mortal') ON CONFLICT (id) DO NOTHING", i, slotRarities[i]); err != nil {
-			logger.S.Errorf("Failed to seed mortal mine %d: %v", i, err)
-		}
-	}
-	for i := 101; i <= 131; i++ {
-		idx := i - 100
-		if _, err := schemaDB().Exec("INSERT INTO mine_slots (id, rarity, abandoned_at, mine_type) VALUES ($1, $2, NOW(), 'immortal') ON CONFLICT (id) DO NOTHING", i, slotRarities[idx]); err != nil {
-			logger.S.Errorf("Failed to seed immortal mine %d: %v", i, err)
-		}
-	}
-	logger.S.Info("Seeded world mine slots.")
 	return nil
 }
 

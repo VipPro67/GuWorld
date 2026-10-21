@@ -259,7 +259,7 @@ func TestRoleRouteStatusMatrixAndDirectEndpointEnforcement(t *testing.T) {
 		{"observer direct mutation", true, "observer", "players.update", http.StatusForbidden},
 		{"support mutation", true, "support_admin", "players.update", http.StatusNoContent},
 		{"content import", true, "content_admin", "game_data.import", http.StatusNoContent},
-		{"game operation", true, "game_admin", "mine_slots.update", http.StatusNoContent},
+		{"game operation", true, "game_admin", "arena_rankings.update", http.StatusNoContent},
 		{"finance read", true, "finance_viewer", "billing.read", http.StatusNoContent},
 		{"finance direct player mutation", true, "finance_viewer", "players.update", http.StatusForbidden},
 		{"super wildcard", true, "super_admin", "cache.flush", http.StatusNoContent},

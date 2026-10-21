@@ -1011,12 +1011,14 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           });
         } else if (nearby) {
           s.selectObject({
-            region_id: gamePlayer?.current_region || "",
+            id: nearby.cell_type === "PrimevalVein" ? nearby.content : undefined,
+            region_id: nearby.region_id || gamePlayer?.current_region || "",
             x: tx,
             y: ty,
             cell_type: nearby.cell_type,
             content_id: nearby.content,
             rank: nearby.rank,
+            vein: nearby.vein,
           });
         } else if (persistent) {
           s.selectObject(persistent);
@@ -1730,9 +1732,11 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     const batchMonster = new Graphics();
     const batchResource = new Graphics();
     const batchWild = new Graphics();
+    const batchVein = new Graphics();
     let monsterCount = 0;
     let resourceCount = 0;
     let wildCount = 0;
+    let veinCount = 0;
 
     for (const c of cells) {
       if (c.cell_type === "Monster") {
@@ -1771,6 +1775,10 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
         batchWild.poly([c.x + 0.5, c.y + 0.1, c.x + 0.8, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.2, c.y + 0.5]);
         wildCount++;
+      } else if (c.cell_type === "PrimevalVein") {
+        batchVein.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.1, c.y + 0.5]);
+        batchVein.circle(c.x + 0.5, c.y + 0.5, 0.14);
+        veinCount++;
       } else if (c.cell_type === "Boss") {
         if (legacyMonsterHasRuntimeReplacement(c, useWorldStore.getState().monsters)) continue;
         const texture = monsterTexturesByIdRef.current[c.content] || monsterIconTextureRef.current;
@@ -1807,6 +1815,11 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       batchWild.stroke({ color: 0xb45309, width: 0.05 });
       container.addChild(batchWild);
     } else batchWild.destroy();
+    if (veinCount) {
+      batchVein.fill({ color: 0x34d399, alpha: 0.85 });
+      batchVein.stroke({ color: 0x065f46, width: 0.08 });
+      container.addChild(batchVein);
+    } else batchVein.destroy();
   }, []);
 
   const drawMonsterLabels = useCallback((cells: NearbyCell[]) => {
@@ -1853,6 +1866,9 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       } else if (c.cell_type === "Resource") {
         text = state.itemDictionary[c.content]?.name || c.content;
         fill = 0xd1fae5;
+      } else if (c.cell_type === "PrimevalVein") {
+        text = `Nguyên Tuyền${c.vein?.rarity ? ` · ${c.vein.rarity}` : ""}`;
+        fill = 0xa7f3d0;
       }
       if (!text) continue;
       const label = new Text({

@@ -15,10 +15,10 @@ import (
 )
 
 // partyJoinsCombat reports whether the initiating player's party members join
-// the battle. Mine (PVE/PVP) and Võ Đài (virtual) are individual duels: party
-// members stay out, while pets and variant NPCs still take part.
+// the battle. Võ Đài (virtual) is an individual duel: party members stay out,
+// while pets and variant NPCs still take part.
 func partyJoinsCombat(base *models.CombatState) bool {
-	return base != nil && base.MineSlotID == 0 && base.CombatMode != "virtual"
+	return base != nil && base.CombatMode != "virtual"
 }
 
 func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
@@ -169,7 +169,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		}
 	}
 
-	// Load challenged/defender formation pets into Enemies (PVP: mine, arena, map)
+	// Load challenged/defender formation pets into Enemies (PVP: arena, map)
 	if base.TargetPlayerID != "" && base.TargetPlayerID != "dummy" {
 		defenderPets, defenderSoul, defenderSoulLoaded := loadFormationPetCombatants(tx, base.TargetPlayerID, base.CombatMode == "virtual", base.CombatMode != "virtual")
 		base.Enemies = append(base.Enemies, defenderPets...)
@@ -184,7 +184,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		}
 	}
 
-	if base.TargetPlayerID == "" && base.MineSlotID == 0 && base.TribulationEventID == "" && base.TargetSectID == "" && base.EnemyTemplateID != "monster_heavenly_tribulation" && base.EnemyHP < 1000 {
+	if base.TargetPlayerID == "" && base.TribulationEventID == "" && base.TargetSectID == "" && base.EnemyTemplateID != "monster_heavenly_tribulation" && base.EnemyHP < 1000 {
 		numMinions := rand.Intn(3)
 		for i := 0; i < numMinions; i++ {
 			minion := models.Combatant{
@@ -199,27 +199,6 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 				MaxMana:       base.EnemyMaxMana * 0.4,
 				BaseAttack:    base.EnemyDamage * 0.5,
 				BaseDefense:   base.EnemyDefense * 0.5,
-				AIProfile:     base.AIProfile,
-				StatusEffects: []models.StatusEffect{},
-			}
-			base.Enemies = append(base.Enemies, minion)
-		}
-	}
-
-	if base.EnemyType == "MINE_PVE" || (base.MineSlotID > 0 && base.EnemyType != "PVP") {
-		for i := 0; i < 2; i++ {
-			minion := models.Combatant{
-				ID:            fmt.Sprintf("minion_%d_%s", i, uuid.New().String()),
-				Name:          fmt.Sprintf("Hộ Vệ %s", base.EnemyName),
-				Kind:          "Normal",
-				Rank:          base.EnemyRank,
-				SubRank:       1,
-				HP:            base.EnemyMaxHP * 0.5,
-				MaxHP:         base.EnemyMaxHP * 0.5,
-				CurrentMana:   base.EnemyMana * 0.5,
-				MaxMana:       base.EnemyMaxMana * 0.5,
-				BaseAttack:    base.EnemyDamage * 0.6,
-				BaseDefense:   base.EnemyDefense * 0.6,
 				AIProfile:     base.AIProfile,
 				StatusEffects: []models.StatusEffect{},
 			}

@@ -1050,15 +1050,14 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 
 ---
 
-## 14. Mỏ cá nhân
+## 14. Nguyên Tuyền (mỏ ngoài bản đồ)
 
-- Có danh sách mine slots với rarity và phần thưởng tích lũy.
-- Cổ sư chiếm mỏ, nhận thưởng, bỏ mỏ hoặc tấn công mỏ người khác.
-- Worker có thể gán quái vào mỏ bỏ hoang.
-- **Tích lũy:** mỗi phút chiếm mỏ tự roll một lần, tỉ lệ ra **Rương Mỏ Linh Thạch** tăng theo rarity mỏ (Thường 8% → Siêu Cấp 50%). Nhận rương khi Nhận thưởng / Từ bỏ mỏ; **cướp mỏ chỉ được một nửa** số rương. Quái Dược Dã Thố cũng rơi rương.
-- **Tiên Mạch (Tiên Nguyên Thạch)** nhả **Rương Mỏ Tiên Thạch** thay vì rương thường. Tỉ lệ rương Tiên Mạch **giảm dần theo thời gian tích lũy**: giảm 50% mỗi 2 giờ, sàn 20% tỉ lệ gốc, reset mỗi lần nhận thưởng — khuyến khích nhận thưởng thường xuyên thay vì để tích trữ.
-- **Mở Rương Mỏ Linh Thạch** (dùng trong túi đồ): không ra Nguyên Thạch. Kết quả là **Bí phương (40%)** hoặc **Vật liệu/Cổ lương (60%)**. Bí phương ra được **mọi Chuyển**, Chuyển càng cao càng hiếm; trùng bí phương đã có thì giữ mức hoàn thiện cao hơn. Vật phẩm weight theo rank/rarity (rank cao hiếm hơn).
-- **Mở Rương Mỏ Tiên Thạch:** cùng 40% Bí phương / 60% Vật liệu-Cổ lương, nhưng **bí phương và vật phẩm Chuyển 6-9 (rank >5) được nhân trọng số x5** nên rơi nhiều hơn hẳn so với rương thường.
+- **Nguyên Tuyền** là điểm tài nguyên xuất hiện ngẫu nhiên trên bản đồ Ngũ Vực, hiển thị rõ bằng biểu tượng 💠. Không còn tab "Khai khoáng" hay chiếm mỏ cá nhân.
+- Mỗi Nguyên Tuyền tự tích lũy Nguyên Thạch (hoặc Tiên Nguyên Thạch với Tiên Tuyền) vào **bể chung**, tối đa **1 ngày sản lượng**. Ai đứng đúng ô cũng bấm **Thu hoạch** được; nhận xong bể reset về 0 và tích lại.
+- Mỗi mỏ có **trần sản lượng vòng đời** theo phẩm chất (Thường 7 ngày → Siêu Cấp 30 ngày sản lượng) và **tuổi thọ tối đa 30 ngày**. Hút cạn sớm thì mỏ biến mất; bỏ hoang quá hạn cũng biến mất.
+- Thế giới duy trì tối đa **31 Phàm Tuyền + 5 Tiên Tuyền**, mỗi đại vực khoảng 1/5 cap; worker bù 1 mỏ mỗi loại mỗi 30 phút. Tiên Tuyền chỉ sinh ở vùng rank ≥ 5.
+- **Trứng Nguyên Tuyền** rơi hiếm (1%) từ boss/world boss. Dùng trứng tại chỗ để cấy một Phàm Tuyền ngay dưới chân — ô phải trống và thế giới chưa đủ 31 Phàm Tuyền, nếu không trứng không bị tiêu hao.
+- **Rương Mỏ Linh Thạch / Rương Mỏ Tiên Thạch** vẫn rơi từ Nguyên Tuyền tương ứng; mở rương cho Bí phương (40%) hoặc Vật liệu/Cổ lương (60%), rương tiên boost mạnh vật phẩm rank ≥ 6.
 
 ## 15. Tổ đội và Đấu trường
 
@@ -1237,7 +1236,7 @@ Trang `/wiki` là nơi tra cứu hướng dẫn và bách khoa trong game; nội
 ### Các hoạt động chính:
 1. **Tạo nhân vật & Thức tỉnh Linh Căn:** Chọn tên và thức tỉnh Linh Căn ngẫu nhiên.
 2. **Trùng kích Vách Khiếu:** Đột phá tu vi phàm nhân từ Nhất Chuyển đến Ngũ Chuyển sử dụng Nguyên Thạch.
-3. **Khai thác mỏ & Thám hiểm:** Đào Nguyên Thạch dã ngoại (coi chừng Quái Mỏ) và mở bản đồ sương mù nhặt dược thảo.
+3. **Khai thác Nguyên Tuyền & Thám hiểm:** Tìm Nguyên Tuyền ngoài bản đồ để thu hoạch Nguyên Thạch và mở bản đồ sương mù nhặt dược thảo.
 4. **Lắp ráp Sát Chiêu & Luyện Cổ:** Chế tạo nâng cấp Cổ trùng tại lò luyện và tự do phối hợp Cổ trùng tạo Sát Chiêu độc bản.
 5. **Ải Cốt truyện & Đấu Trường:** Đi ải cốt truyện và khiêu chiến Cổ sư khác kiếm Chiến Công đổi đồ.
 6. **Thương hội & Tông môn:** Đấu giá vật phẩm tự do tại Bảo Hoàng Thiên và các hoạt động quyên góp, giao dịch bảo khố Tông Môn.
@@ -1254,7 +1253,7 @@ Sau khi đăng nhập, đại sảnh chia tính năng thành các nhóm:
 - **Phát triển nhân vật:** Nhân vật, Túi Cổ, Luyện Cổ, Nhiệm vụ & Thành tựu, hồ sơ/referral.
 - **Tiên đạo:** Tiên Khiếu mở từ Lục Chuyển; tại đây quản lý node, dị nhân, khu định cư và kiếp nạn.
 - **Kinh tế:** Cát Bảo Các, Thương Đội/Cửa hàng, Bảo Hoàng Thiên và giao dịch trực tiếp. Tab nạp trong Cát Bảo Các có thể bị tắt; trang nạp riêng nằm tại `/topup` khi hệ thống thanh toán được vận hành.
-- **Chiến đấu/hoạt động:** Nô Thú, Phòng Tập, Võ Đài, Đấu Trường Sinh Tử, Mỏ, Bí–Mộng Cảnh, Giải Trí và Ngũ Vực.
+- **Chiến đấu/hoạt động:** Nô Thú, Phòng Tập, Võ Đài, Đấu Trường Sinh Tử, Nguyên Tuyền (trên bản đồ), Bí–Mộng Cảnh, Giải Trí và Ngũ Vực.
 - **Theo dõi:** Bảng Xếp Hạng, Lịch Sử Chiến Đấu, Ký Sự Tu Hành, thông báo và Feedback.
 
 Ô **Sát Chiêu** trên đại sảnh hiện được đánh dấu đang phát triển/khóa dù backend và màn hình chiến đấu đã có dữ liệu sát chiêu. Hãy coi trạng thái hiển thị trên đại sảnh là nguồn chính xác về khả năng truy cập ở bản build đang chơi.

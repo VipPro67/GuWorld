@@ -12,8 +12,6 @@ func TestPartyJoinsCombat(t *testing.T) {
 		cs   *models.CombatState
 		want bool
 	}{
-		{"mine pve", &models.CombatState{MineSlotID: 5}, false},
-		{"mine pvp", &models.CombatState{MineSlotID: 3, EnemyType: "PVP", CombatMode: "real"}, false},
 		{"arena virtual", &models.CombatState{EnemyType: "PVP", CombatMode: "virtual"}, false},
 		{"open-world pvp", &models.CombatState{EnemyType: "PVP", CombatMode: "real"}, true},
 		{"pve normal", &models.CombatState{EnemyType: "Elite", CombatMode: "real"}, true},

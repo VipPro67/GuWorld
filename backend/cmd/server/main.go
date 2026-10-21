@@ -174,8 +174,7 @@ func main() {
 	handlers.StartWorldIndexSyncWorker(ctx)
 	handlers.StartWorldMonsterWorker(ctx)
 	handlers.StartSpatialRealmExpiryWorker(ctx)
-	handlers.StartMineMonsterWorker(ctx)
-	handlers.StartMidnightMineWorker(ctx)
+	handlers.StartPrimevalVeinWorker(ctx)
 	handlers.StartArenaSettlementWorker(ctx)
 	handlers.StartAuctionSettlementWorker(ctx)
 	go handlers.StartBeastBettingWorker(ctx)
@@ -192,10 +191,10 @@ func main() {
 	// Aperture node output is granted by the harvest endpoints (aperture_collect.go)
 	// alone; the old per-tick variant-production worker was removed so node yield
 	// has a single source of truth.
-	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute)  // Phase 2: society simulation tick
-	worker.StartGuMasterSpawningWorker(ctx, db.DB, 30*time.Minute)  // Phase 3: Gu Master spawning
-	handlers.StartRoamingMerchantWorker(ctx, db.DB, 2*time.Minute)    // Roaming traders on the world map
-	match.StartTickLoop(ctx)                                          // Realtime PvP match simulation (20Hz)
+	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute) // Phase 2: society simulation tick
+	worker.StartGuMasterSpawningWorker(ctx, db.DB, 30*time.Minute) // Phase 3: Gu Master spawning
+	handlers.StartRoamingMerchantWorker(ctx, db.DB, 2*time.Minute) // Roaming traders on the world map
+	match.StartTickLoop(ctx)                                       // Realtime PvP match simulation (20Hz)
 	if cache.Client != nil {
 		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)
 	}

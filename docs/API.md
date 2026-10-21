@@ -155,13 +155,13 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/combat/capture` | Bắt quái vật làm sủng vật. |
 | POST | `/explore` | Du hành tới zone: body `{"player_id","node_id"}` (node_id = id Đại Vực / địa danh / `hub_nam_cuong`). |
 | POST | `/explore/retreat/:id` | |
-| POST | `/explore/flee/:id` | Bỏ chạy khỏi trận đang chiến. **Mỏ & PvP: luôn thành công, không phạt.** Còn lại: 70% thành công (BOSS/Tribulation 40%). Thành công → trừ 20% Max HP nếu là PvE thường (có thể ngất + rơi đồ). Thất bại → địch phản công; trả `flee_success:false` kèm `defeat` / `victory` (địch tự chết → thắng tại chỗ + nhận loot + xoá địch khỏi map) và `logs`. |
+| POST | `/explore/flee/:id` | Bỏ chạy khỏi trận đang chiến. **PvP: luôn thành công, không phạt.** Còn lại: 70% thành công (BOSS/Tribulation 40%). Thành công → trừ 20% Max HP nếu là PvE thường (có thể ngất + rơi đồ). Thất bại → địch phản công; trả `flee_success:false` kèm `defeat` / `victory` (địch tự chết → thắng tại chỗ + nhận loot + xoá địch khỏi map) và `logs`. |
 | GET | `/explore/grid` | Viewport 5×5 quanh player; trả `{x, y, vision_radius, cells, stats (chỉ movement + investigation), players_on_map, ground_drops, world_width, world_height}`. `?stats_only=true` chỉ trả tọa độ, `vision_radius`, movement/investigation và world dimensions; bỏ dựng cell/Redis, players, drops cho màn hình chỉ cần range. |
 | GET | `/explore/regions` | Danh sách zone (id, `world_map_id`, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`, `rules`, `effective_rules`). `rules` là luật khai báo tại khu đó; `effective_rules` là luật sau khi kế thừa theo nhóm từ khu cha. Client dùng luật hiệu lực để hiển thị cấm chế; backend vẫn tự kiểm tra. Xem `docs/GAME_DATA.md` để biết schema. `zone_type`: `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC` — khi chồng lấn, ưu tiên `HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC`. |
 | GET | `/explore/maps` | Danh mục tầng bản đồ (`maps[]`: id, tên, kích thước, rank, rules, trạng thái). `bai_thien` và `hac_thien` hiện được cấu hình nhưng chưa mở cho người chơi cho tới khi luồng tọa độ/hiện diện được scope theo tầng. |
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
 | GET | `/explore/objects` | Các ô persistent (map_cells): village/trạm nghỉ, boss, linh tài — cho bản đồ lớn. Trả `{region_id,x,y,cell_type,content_id,rank,respawn_seconds,cleared}`. |
-| GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / dải phía trước hướng đi. Client cache theo chunk 64×64 và namespace khu vực; trạng thái cleared được đọc theo batch. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id}]`. |
+| GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / dải phía trước hướng đi. Client cache theo chunk 64×64 và namespace khu vực; trạng thái cleared được đọc theo batch. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id,vein?}]`; ô Nguyên Tuyền có `cell_type="PrimevalVein"`, `content` = id mỏ và object `vein` chứa phẩm chất, sản lượng đã tích/trần và hạn. |
 | POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
 | POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Mỗi request tiến **tối đa 150 ô** để commit vị trí mịn (người chơi khác thấy chuyển động gần real-time, đổi hướng/dừng sớm hơn); trả `{player, log, combat_triggered, reached, skip_result?}` (đã tối ưu: loại bỏ `logs` mảng và `stats` thừa, `player` là snapshot cập nhật vị trí/sinh lực/trạng thái tinh gọn, tránh query DB dư thừa); nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
 | POST | `/explore/teleport` | *(Đã vô hiệu hóa)* Dịch chuyển bằng tiền đã bị hủy bỏ. Trả về `400 Bad Request` yêu cầu sử dụng Cổ trùng dịch chuyển (`POST /explore/use_gu`). |
@@ -169,6 +169,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/explore/use_gu` | Dùng Cổ bản đồ (ví dụ mở cổng). Cổ dịch chuyển (`PORTAL_CREATE`/`RANDOM_PORTAL`) bị giới hạn tầm theo rank Cổ hoặc `params.range`; trả `synced_party_members` khi đội trưởng kéo tổ đội theo. |
 | GET | `/world/drops` | Chiến lợi phẩm/hài cốt còn hạn trong viewport; mặc định quanh người chơi (radius 25), hỗ trợ `x`, `y`, `radius` tùy chỉnh (radius tối đa 127). Query theo bounding box tọa độ, không giới hạn theo region của người chơi. |
 | POST | `/world/drops/:id/loot` | Nhặt một ground drop khi đủ điều kiện khóa sở hữu. |
+| POST | `/veins/:id/harvest` | Thu hoạch Nguyên Tuyền khi đang đứng đúng ô. Trả `message`, `materials_inventory`, `primeval_stones`/`immortal_stones`, `human_qi`. |
 
 ## Truyền Tống Trận (Teleportation Arrays)
 
@@ -195,7 +196,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/pets/release` | Thả sủng vật. Body: `{"pet_id": "..."}`. |
 | POST | `/pets/merge` | Gộp sủng vật cùng loại. Body: `{"source_ids": ["..."], "target_id": "..."}`. Giới hạn bầy = `max_soul/10` (chặn toàn bộ khi vượt, trả `merge_limit`). Chỉ số scale sub-linear `base×N^0.65`. |
 
-## Party, arena, mine
+## Party, arena
 
 | Method | Path |
 | --- | --- |
@@ -213,11 +214,6 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/leaderboard/:category` | BXH tổng hợp. category: `rank`, `primeval_stones`, `gu_strongest`, `immortal_stones`, `sat_khi`. Trả về top 50, kèm rank người gọi |
 | POST | `/leaderboard/toggle` | Bật/tắt hiển thị trên BXH |
 | GET | `/leaderboard/settings` | Trạng thái `show_on_leaderboard` hiện tại |
-| GET | `/mine/slots` |
-| POST | `/mine/occupy` |
-| POST | `/mine/claim` |
-| POST | `/mine/abandon` |
-| POST | `/mine/attack` |
 
 ## Đấu trường thời gian thực (Realtime PvP) — Auth
 
@@ -522,7 +518,7 @@ Preflight parse/validate CSV, chạy UPSERT trong transaction rồi rollback và
 | Cổ/pet/history | cập nhật cá thể Cổ; tạo/cập nhật pet; `GET /gu-history`; `GET /batch-metrics`. |
 | Môn phái | list/detail/update/delete sect; thêm/xóa/đặt chưởng môn; CRUD mission; nhập/xóa hàng kho; quản lý sect mine. |
 | Dữ liệu & cache | `GET /data/tables`, workflow preflight/commit import toàn bộ hoặc `/:table`, export và clear application/Redis cache. |
-| World/activity | CRUD region, map cell, monster spawn, dungeon; list/update/reset mine slot. |
+| World/activity | CRUD region, map cell, monster spawn, dungeon; Nguyên Tuyền spawn tự động, không có admin slot. |
 | Dictionary/shop | CRUD shop, arena shop, Gu, item, recipe, monster, loot table, constitution, race, status và quest. |
 | Hệ thống | gift code list/create, upload image, top-up order, wallet transaction và monitoring/traces. |
 

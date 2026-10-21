@@ -180,9 +180,6 @@ func ExploreNode(c *gin.Context) {
 					if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
 						logMsg += " " + strings.Join(loot, " ")
 					}
-					if mineOccupied, ok := skipSummary["mine_occupied"].(int); ok && mineOccupied > 0 {
-						logMsg += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
-					}
 				}
 
 				// Return early with skip result

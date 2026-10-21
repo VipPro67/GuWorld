@@ -73,7 +73,7 @@ Kiểm tra frontend bằng `npm run lint` và `npm run build`.
 - Luyện Cổ, suy diễn công thức, sát chiêu.
 - Shop NPC, Bảo Hoàng Thiên marketplace/auction/trade listing, P2P trade.
 - Môn phái, nhiệm vụ, kho, đơn xin gia nhập/thăng chức, mỏ môn phái.
-- Party, võ đài và shop võ đài, Đấu Trường Sinh Tử, mỏ cá nhân, chat/mail, phó bản, hồn phách.
+- Party, võ đài và shop võ đài, Đấu Trường Sinh Tử, Nguyên Tuyền, chat/mail, phó bản, hồn phách.
 - Gacha, thành tựu/danh hiệu/khung, bảng xếp hạng, cược linh thú, thông báo, gift code, lịch sử chiến đấu và ký sự hoạt động.
 - Ví/nạp tiền, premium shop, feedback và trang quản trị dữ liệu/giám sát.
 

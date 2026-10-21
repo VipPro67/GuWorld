@@ -300,7 +300,6 @@ type CombatState struct {
 	ChargePoints            int                  `json:"charge_points"`
 	TargetPlayerID          string               `json:"target_player_id,omitempty"`
 	TargetSectID            string               `json:"target_sect_id,omitempty"`
-	MineSlotID              int                  `json:"mine_slot_id,omitempty"`
 	EnemyStatusEffects      []StatusEffect       `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects     []StatusEffect       `json:"player_status_effects,omitempty"`
 	// Defender-side character effects for PVP enemies (race/constitution/status).
@@ -660,7 +659,7 @@ func (c *CombatState) IsEmpty() bool {
 	if c == nil {
 		return true
 	}
-	return c.EnemyName == "" && c.EnemyTemplateID == "" && len(c.Enemies) == 0 && c.TargetPlayerID == "" && c.TribulationEventID == "" && c.MineSlotID == 0
+	return c.EnemyName == "" && c.EnemyTemplateID == "" && len(c.Enemies) == 0 && c.TargetPlayerID == "" && c.TribulationEventID == ""
 }
 
 // Scan implements the sql.Scanner interface for CombatState pointer

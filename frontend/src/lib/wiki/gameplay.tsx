@@ -113,7 +113,7 @@ export const gameplayPages: WikiPage[] = [
     keywords: ["hằng ngày", "nhiệm vụ", "võ đài", "mỏ", "thành tựu"],
     content: (
       <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
-        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-emerald-300 mb-2">Mỗi lần đăng nhập</h3><ol className="list-decimal list-inside space-y-1"><li>Đọc thông báo; kiểm tra HP, Chân Nguyên và Hồn Phách.</li><li>Kiểm tra Độ No của Cổ/linh thú và cho ăn trước khi về 0.</li><li>Nhận thưởng nhiệm vụ, thành tựu, mỏ và node Tiên Khiếu.</li><li>Luyện Cổ, cập nhật bộ chiến đấu và thử trong Phòng Tập.</li></ol></section>
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-emerald-300 mb-2">Mỗi lần đăng nhập</h3><ol className="list-decimal list-inside space-y-1"><li>Đọc thông báo; kiểm tra HP, Chân Nguyên và Hồn Phách.</li><li>Kiểm tra Độ No của Cổ/linh thú và cho ăn trước khi về 0.</li><li>Nhận thưởng nhiệm vụ, thành tựu và node Tiên Khiếu.</li><li>Luyện Cổ, cập nhật bộ chiến đấu và thử trong Phòng Tập.</li></ol></section>
         <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-amber-300 mb-2">Theo dõi tiến độ</h3><ul className="list-disc list-inside space-y-1"><li>Lịch Sử Chiến Đấu có kết quả và replay log.</li><li>Ký Sự Tu Hành cho tìm/lọc hành động và biến động tài sản.</li><li>Thành tựu cho nhận thưởng và trang bị danh hiệu/khung.</li><li>BXH gồm Tu Vi, Nguyên Thạch, Cổ mạnh nhất, Tiên Nguyên và Sát Khí.</li></ul></section>
       </div>
     ),
