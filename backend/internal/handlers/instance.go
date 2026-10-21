@@ -340,13 +340,14 @@ func EnterInstance(c *gin.Context) {
 		return
 	}
 
-	enterInstanceWithRequest(c, req)
+	enterInstanceWithRequest(c, req, "")
 }
 
 // enterInstanceWithRequest runs the entry flow for an already-parsed request.
 // Delegating handlers (e.g. Dream Realms) must use this instead of calling
 // EnterInstance again, because the JSON body can only be decoded once.
-func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest) {
+// requiredType, when non-empty, restricts the template type.
+func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, requiredType string) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})

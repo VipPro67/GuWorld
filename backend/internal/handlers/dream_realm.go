@@ -153,39 +153,10 @@ func EnterDreamRealm(c *gin.Context) {
 		return
 	}
 
-	// Validate the requested template is a DREAM_REALM.
-	template, found := getCachedInstanceTemplate(req.InstanceID)
-	if !found {
-		var t InstanceTemplate
-		err := db.DB.QueryRowContext(c.Request.Context(), `
-			SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
-			FROM instance_templates
-			WHERE id = $1
-		`, req.InstanceID).Scan(
-			&t.ID, &t.Name, &t.Type, &t.RequiredRank,
-			&t.EntryItem, &t.Description, &t.Rewards, &t.MapData,
-			&t.CooldownHours,
-		)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mộng cảnh yêu cầu!"})
-			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
-			}
-			return
-		}
-		template = t
-	}
-
-	if template.Type != "DREAM_REALM" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí cảnh không gian dùng API riêng biệt"})
-		return
-	}
-
-	// Delegate to the shared entry flow, reusing the already-parsed request.
+	// Delegate to the shared entry flow, restricted to DREAM_REALM templates.
 	// Calling EnterInstance(c) here would fail because the JSON body has
 	// already been consumed by the binding above.
-	enterInstanceWithRequest(c, req)
+	enterInstanceWithRequest(c, req, "DREAM_REALM")
 }
 
 // ActionDreamRealm processes a player action inside an active DREAM_REALM session.
