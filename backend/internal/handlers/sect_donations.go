@@ -543,7 +543,7 @@ func DonateRecipe(c *gin.Context) {
 
 	progress, err := RecipeSvc.Get(tx, playerID.String(), req.RecipeID)
 	if err != nil || progress == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí phương không tồn tại trong túi đồ!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí phương không còn trong túi đồ (có thể đã quyên góp hoặc mất do tử kiếp)!"})
 		return
 	}
 
@@ -560,17 +560,12 @@ func DonateRecipe(c *gin.Context) {
 		return
 	}
 
-	// Resolve target Gu rank and compute contribution points scaled by completion rate.
-	var targetGuRank int = 1
-	if _, tr, _, err := ParseRecipeID(req.RecipeID); err == nil {
-		targetGuRank = tr
-	} else {
-		_ = tx.QueryRow(`
-			SELECT COALESCE(gd.rank,1)
-			FROM refining_recipes rr
-			JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank
-			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1
-		`, req.RecipeID).Scan(&targetGuRank)
+	// Resolve rank/name from the catalog tuple (target_gu_id, rank, variant)
+	// instead of parsing the id string; parsing is only the legacy fallback.
+	targetGuRank := recipeTargetGuRank(tx, req.RecipeID)
+	recipeName := req.RecipeID
+	if _, _, _, _, catalogName, ok := recipeCatalogInfo(tx, req.RecipeID); ok && catalogName != "" {
+		recipeName = catalogName
 	}
 	requiredSectLevel := (targetGuRank - 1) * 10
 	if sectLevel < requiredSectLevel {
@@ -631,10 +626,7 @@ func DonateRecipe(c *gin.Context) {
 		return
 	}
 
-	itemName := req.RecipeID
-	if spec, ok := models.GetGuAny(req.RecipeID); ok {
-		itemName = spec.Name
-	}
+	itemName := recipeName
 
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: Bí phương %s (x1).", player.Username, itemName))
@@ -644,9 +636,10 @@ func DonateRecipe(c *gin.Context) {
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s (%.0f%%) → %d điểm", itemName, progress.CompletionRate, gainedContribution),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	respondActionWithInventory(c, http.StatusOK, player, gin.H{
+	respondActionWithInventoryDomains(c, http.StatusOK, player, []PlayerEventDomain{RecipesDomain}, gin.H{
 		"message":             fmt.Sprintf("Quyên góp Bí phương thành công! Nhân Khí +%.0f.", qiGained),
 		"contribution_points": m.ContributionPoints,
+		"unlocked_recipes":    loadUnlockedRecipes(playerID.String()),
 	})
 }
 
@@ -656,6 +649,27 @@ type BulkDonateRequest struct {
 	Gus       []DonateGuRequest        `json:"gus"`
 	Recipes   []DonateRecipeRequest    `json:"recipes"`
 	Stones    int64                    `json:"stones"`
+}
+
+// uniqueTrimmedIDs trims ids, drops empty entries and de-duplicates them while
+// preserving first-seen order. Bulk donations may repeat a recipe id (UI
+// selection merged from multiple tabs); processing it twice deletes the row on
+// the first pass and fails the whole transaction on the second.
+func uniqueTrimmedIDs(ids []string) []string {
+	seen := make(map[string]struct{}, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 // aggregateDonateSummary merges duplicate item names into "Tên (xN)" entries,
@@ -978,32 +992,38 @@ func DonateBulk(c *gin.Context) {
 	}
 
 	// 3. Process Recipes
+	var skippedRecipes []string
 	if len(req.Recipes) > 0 {
-		donatedRecipeIDs := make(map[string]bool)
-		for _, r := range req.Recipes {
-			donatedRecipeIDs[r.RecipeID] = true
-		}
-
+		requestedRecipeIDs := make([]string, 0, len(req.Recipes))
 		for _, recipeReq := range req.Recipes {
-			progress, err := RecipeSvc.Get(tx, playerID.String(), recipeReq.RecipeID)
+			requestedRecipeIDs = append(requestedRecipeIDs, recipeReq.RecipeID)
+		}
+		// A bulk selection can contain the same recipe twice (or a stale entry
+		// that was already donated/dropped). Process each id once and skip
+		// entries that no longer belong to the player instead of aborting the
+		// whole donation and rolling back materials/Gus.
+		for _, recipeID := range uniqueTrimmedIDs(requestedRecipeIDs) {
+			progress, err := RecipeSvc.Get(tx, playerID.String(), recipeID)
 			if err != nil || progress == nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bí phương không tồn tại trong túi đồ: %s", recipeReq.RecipeID)})
-				return
+				skippedRecipes = append(skippedRecipes, recipeID)
+				continue
 			}
 
-			var targetGuRank int = 1
-			if _, tr, _, err := ParseRecipeID(recipeReq.RecipeID); err == nil {
+			// Rank/name come from the catalog tuple (target_gu_id, rank,
+			// variant); parsing the id is only the legacy fallback.
+			targetGuRank := 1
+			recipeName := recipeID
+			if _, rank, _, _, catalogName, ok := recipeCatalogInfo(tx, recipeID); ok && rank > 0 {
+				targetGuRank = rank
+				if catalogName != "" {
+					recipeName = catalogName
+				}
+			} else if _, tr, _, parseErr := ParseRecipeID(recipeID); parseErr == nil && tr > 0 {
 				targetGuRank = tr
-			} else {
-				_ = tx.QueryRow(`
-					SELECT COALESCE(gd.rank,1)
-					FROM refining_recipes rr
-					JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank
-				`, recipeReq.RecipeID).Scan(&targetGuRank)
 			}
 			requiredSectLevel := (targetGuRank - 1) * 10
 			if sectLevel < requiredSectLevel {
-				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để thu nạp Bí phương hạng %d: %s (Hiện tại: Cấp %d)", requiredSectLevel, targetGuRank, recipeReq.RecipeID, sectLevel)})
+				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để thu nạp Bí phương hạng %d: %s (Hiện tại: Cấp %d)", requiredSectLevel, targetGuRank, recipeID, sectLevel)})
 				return
 			}
 			basePoints := pricing.RecipeDonatePoints(targetGuRank)
@@ -1016,8 +1036,8 @@ func DonateBulk(c *gin.Context) {
 			}
 			totalGainedContribution += int64(gained)
 
-			if err := RecipeSvc.Delete(tx, playerID.String(), recipeReq.RecipeID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể xóa Bí phương %s", recipeReq.RecipeID)})
+			if err := RecipeSvc.Delete(tx, playerID.String(), recipeID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể xóa Bí phương %s", recipeID)})
 				return
 			}
 
@@ -1027,22 +1047,23 @@ func DonateBulk(c *gin.Context) {
 				ON CONFLICT (sect_id, recipe_id) DO UPDATE SET
 					completion_rate = GREATEST(sect_vault_recipes.completion_rate, EXCLUDED.completion_rate),
 					unlocked_at = NOW()
-			`, m.SectID, recipeReq.RecipeID, progress.CompletionRate)
+			`, m.SectID, recipeID, progress.CompletionRate)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
 				return
 			}
 
-			recipeName := recipeReq.RecipeID
-			if spec, ok := models.GetGuAny(recipeReq.RecipeID); ok {
-				recipeName = spec.Name
-			}
 			addSummary(recipeName, 1)
 		}
 	}
 
 	if totalGainedContribution <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm nào được quyên góp."})
+		errResp := gin.H{"error": "Không có vật phẩm nào được quyên góp.", "unlocked_recipes": loadUnlockedRecipes(playerID.String())}
+		if len(skippedRecipes) > 0 {
+			errResp["error"] = "Bí phương đã chọn không còn trong túi đồ (đã quyên góp hoặc mất do tử kiếp)."
+			errResp["skipped_recipes"] = skippedRecipes
+		}
+		c.JSON(http.StatusBadRequest, errResp)
 		return
 	}
 
@@ -1086,8 +1107,13 @@ func DonateBulk(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 
-	respondActionWithInventory(c, http.StatusOK, player, gin.H{
+	extraResp := gin.H{
 		"message":             fmt.Sprintf("Quyên góp hàng loạt thành công! Nhân Khí +%.0f.", qiGained),
 		"contribution_points": m.ContributionPoints,
-	})
+		"unlocked_recipes":    loadUnlockedRecipes(playerID.String()),
+	}
+	if len(skippedRecipes) > 0 {
+		extraResp["skipped_recipes"] = skippedRecipes
+	}
+	respondActionWithInventoryDomains(c, http.StatusOK, player, []PlayerEventDomain{RecipesDomain}, extraResp)
 }

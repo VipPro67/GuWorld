@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 )
 
 const recipeCatalogCacheKey = "master_refining_recipes"
@@ -76,6 +78,47 @@ func recipeResponseETag(recipes []models.RefiningRecipe, revision uint64) string
 	raw, _ := json.Marshal(recipes)
 	hash := md5.Sum(raw)
 	return fmt.Sprintf(`"recipes-%d-%x"`, revision, hash)
+}
+
+// recipeCatalogInfo resolves a stored recipe id back to its authoritative
+// catalog tuple. recipe_id is only a projection of
+// (target_gu_id, target_rank, variant), so rank, rarity and display name must
+// come from refining_recipes instead of parsing the id string: a Gu id that
+// itself ends with a numeric suffix cannot be told apart from the rank/variant
+// suffix by parsing alone.
+//
+// The boolean result is false when the id is unknown to the catalog (legacy or
+// orphaned recipe row). Callers must decide whether to fall back to
+// ParseRecipeID or to reject the operation.
+func recipeCatalogInfo(q services.QueryRower, recipeID string) (targetGuID string, rank, variant, rarity int, name string, ok bool) {
+	recipeID = strings.TrimSpace(recipeID)
+	if recipeID == "" || q == nil {
+		return "", 0, 0, 0, "", false
+	}
+	err := q.QueryRow(`
+		SELECT rr.target_gu_id, rr.target_rank, rr.variant,
+		       COALESCE(gd.rarity, 0), COALESCE(gd.name, '')
+		FROM refining_recipes rr
+		JOIN gu_dictionary gd ON gd.id = rr.target_gu_id AND gd.rank = rr.target_rank
+		WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text) = $1
+	`, recipeID).Scan(&targetGuID, &rank, &variant, &rarity, &name)
+	if err != nil {
+		return "", 0, 0, 0, "", false
+	}
+	return targetGuID, rank, variant, rarity, name, true
+}
+
+// recipeTargetGuRank resolves the target Gu rank of a recipe id from the
+// catalog tuple, falling back to parsing the id suffix only when the row is not
+// in refining_recipes (legacy/orphaned data). Returns 1 as the safe floor.
+func recipeTargetGuRank(q services.QueryRower, recipeID string) int {
+	if _, rank, _, _, _, ok := recipeCatalogInfo(q, recipeID); ok && rank > 0 {
+		return rank
+	}
+	if _, rank, _, err := ParseRecipeID(recipeID); err == nil && rank > 0 {
+		return rank
+	}
+	return 1
 }
 
 func currentRecipeCatalogRevision() uint64 {

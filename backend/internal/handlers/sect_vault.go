@@ -688,6 +688,7 @@ func BuyFromSectVault(c *gin.Context) {
 	}
 
 	var cost int64
+	learnedRecipe := false
 	if strings.ToLower(req.ItemType) == "gu" {
 		if req.Rank >= 6 && quantity > 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cổ (rank>=6) mỗi lần chỉ rút 1 instance"})
@@ -839,12 +840,8 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		var targetGuRank int = 1
-		if _, tr, _, err := ParseRecipeID(req.ItemID); err == nil {
-			targetGuRank = tr
-		} else {
-			_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1`, req.ItemID).Scan(&targetGuRank)
-		}
+		// Rank from the catalog tuple; parsing the id is the legacy fallback.
+		targetGuRank := recipeTargetGuRank(tx, req.ItemID)
 		baseRecipeCost := pricing.RecipeCostByGuRank(targetGuRank)
 		if targetGuRank >= 6 {
 			baseRecipeCost *= 1000
@@ -865,7 +862,9 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 
 		grantedRate := vrCompletionRate
-		if existing, err := RecipeSvc.Get(tx, player.ID.String(), req.ItemID); err == nil && existing != nil {
+		var existingProgress *services.RecipeProgress
+		if existing, getErr := RecipeSvc.Get(tx, player.ID.String(), req.ItemID); getErr == nil && existing != nil {
+			existingProgress = existing
 			if existing.CompletionRate > grantedRate {
 				grantedRate = existing.CompletionRate
 			}
@@ -873,15 +872,24 @@ func BuyFromSectVault(c *gin.Context) {
 		if grantedRate > 100.0 {
 			grantedRate = 100.0
 		}
-		if err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
+		newProgress := &services.RecipeProgress{
 			PlayerID:       player.ID.String(),
 			RecipeID:       req.ItemID,
 			CompletionRate: grantedRate,
 			IsUnlocked:     true,
-		}); err != nil {
+		}
+		// Keep the player's deduce history/favourite instead of resetting it
+		// when the vault copy only improves the completion rate.
+		if existingProgress != nil {
+			newProgress.DeduceCount = existingProgress.DeduceCount
+			newProgress.LastDeduceAt = existingProgress.LastDeduceAt
+			newProgress.Favorite = existingProgress.Favorite
+		}
+		if err := RecipeSvc.Upsert(tx, newProgress); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể học công thức từ bảo khố"})
 			return
 		}
+		learnedRecipe = true
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại vật phẩm trao đổi không hợp lệ!"})
 		return
@@ -907,13 +915,18 @@ func BuyFromSectVault(c *gin.Context) {
 	}
 
 	itemName := req.ItemID
-	if strings.EqualFold(req.ItemType, "gu") {
+	switch strings.ToLower(req.ItemType) {
+	case "gu":
 		if spec, ok := models.GetGu(req.ItemID, req.Rank); ok && spec.Name != "" {
 			itemName = spec.Name
 		} else if spec, ok := models.GetGuAny(req.ItemID); ok && spec.Name != "" {
 			itemName = spec.Name
 		}
-	} else {
+	case "recipe":
+		if _, _, _, _, catalogName, ok := recipeCatalogInfo(db.DB, req.ItemID); ok && catalogName != "" {
+			itemName = catalogName
+		}
+	default:
 		_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, req.ItemID).Scan(&itemName)
 	}
 	if itemName == "" {
@@ -939,8 +952,16 @@ func BuyFromSectVault(c *gin.Context) {
 			msg += " Cổ đang đói lả (Độ no = 1), hãy cho ăn sớm để tránh chết đói!"
 		}
 	}
-	respondActionWithInventory(c, http.StatusOK, player, gin.H{
+	resp := gin.H{
 		"message": msg,
 		"member":  m,
-	})
+	}
+	if learnedRecipe {
+		// Read after commit so the freshly learned row is visible, and tell
+		// other sessions/tabs to refresh their cached recipe list.
+		resp["unlocked_recipes"] = loadUnlockedRecipes(playerID.String())
+		respondActionWithInventoryDomains(c, http.StatusOK, player, []PlayerEventDomain{RecipesDomain}, resp)
+		return
+	}
+	respondActionWithInventory(c, http.StatusOK, player, resp)
 }

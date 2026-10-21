@@ -405,9 +405,9 @@ Pool hiện có: `da_thuong` (2.000 Nguyên Thạch), `da_vip` (1.000 Tiên Nguy
 | POST | `/sects/donate/stones` |
 | POST | `/sects/donate/materials` |
 | POST | `/sects/donate/gu` | Quyên góp Cổ (giữ nguyên `instance_id`). Tiên Cổ đã tồn tại ở nơi khác → **409**; rút Tiên Cổ mỗi lần 1 instance. |
-| POST | `/sects/donate/recipe` | Quyên góp một Bí phương đã học. Body: `{"recipe_id": "..."}`. Nhận điểm cống hiến theo hạng Cổ trùng mục tiêu.
-| POST | `/sects/donate/bulk` | Quyên góp hàng loạt linh tài, cổ trùng, bí phương và Nguyên Thạch. Body: `{"materials": [{"material_id": "...", "amount": 5}], "gus": [{"gu_instance_id": "..."}], "recipes": [{"recipe_id": "..."}], "stones": 100}`. Chat Tông Môn gộp 1 tin `[Quyên Góp]`.
-| POST | `/sects/vault/buy` | Đổi vật phẩm từ bảo khố. Body: `{"item_type": "gu|material|recipe", "item_id": "...", "quantity": 5}` (`quantity` mặc định 1; recipe chỉ nhận 1).
+| POST | `/sects/donate/recipe` | Quyên góp một Bí phương đã học. Body: `{"recipe_id": "..."}`. Nhận điểm cống hiến theo hạng Cổ trùng mục tiêu (tra `refining_recipes`, không parse id). Response kèm `unlocked_recipes` để client làm mới danh sách.
+| POST | `/sects/donate/bulk` | Quyên góp hàng loạt linh tài, cổ trùng, bí phương và Nguyên Thạch. Body: `{"materials": [{"material_id": "...", "amount": 5}], "gus": [{"gu_instance_id": "..."}], "recipes": [{"recipe_id": "..."}], "stones": 100}`. Chat Tông Môn gộp 1 tin `[Quyên Góp]`. `recipe_id` trùng hoặc không còn trong túi đồ bị bỏ qua (không rollback cả đơn) và trả về `skipped_recipes`; response kèm `unlocked_recipes`.
+| POST | `/sects/vault/buy` | Đổi vật phẩm từ bảo khố. Body: `{"item_type": "gu|material|recipe", "item_id": "...", "quantity": 5}` (`quantity` mặc định 1; recipe chỉ nhận 1). Học bí phương trả kèm `unlocked_recipes` (đọc sau commit) và phát realtime domain `recipes`.
 | GET | `/sects/missions` | Danh sách nhiệm vụ trên bảng (đã lọc nhiệm vụ hết hạn). Trả về `expires_at` mỗi nhiệm vụ. |
 | POST | `/sects/missions/:missionId/accept` | Nhận nhiệm vụ. Copy `expires_at` sang nhiệm vụ cá nhân. |
 | POST | `/sects/missions/:missionId/complete` | Nộp nhiệm vụ. |

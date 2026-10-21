@@ -1032,6 +1032,8 @@ Hai đan dược rơi từ quái tai kiếp (tỉ lệ nhỏ, xem `LootTable.csv
 
 Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy diễn bằng `/api/refine/deduce` trước khi luyện ổn định.
 
+- `recipe_id` (dùng ở `player_recipe_progress`, `sect_vault_recipes`, `aperture_refinement_queue`, shop/trade/marketplace) là khóa dẫn xuất `recipe_<target_gu_id>_<target_rank>_<variant>`. Nguồn chân lý vẫn là bộ ba `(target_gu_id, target_rank, variant)` — khóa chính của `refining_recipes`. Logic gameplay (bậc, rarity, tên, điều kiện tông môn, giá) phải tra `refining_recipes`; không suy ra từ việc parse chuỗi, vì Gu ID có thể kết thúc bằng số. Tiền tố `recipe_` giữ nguyên để phân biệt namespace với Gu/item ID trong các cột ID đa hình.
+- Cột `player_recipe_progress.recipe_id` là `VARCHAR(100)` (đồng bộ với `sect_vault_recipes`), để recipe mới có tên dài không làm fail insert.
 - Cột `required_gus` là JSON map `gu_id → {rank, qty}`. `rank` là bậc Cổ nguyên liệu bắt buộc; `rank = 0` nghĩa là chấp nhận mọi bậc (chỉ dùng cho dữ liệu legacy — mọi recipe import từ CSV đều được chuẩn hóa sang rank cụ thể).
 - Khi import từ CSV (`seedRecipesFromCSV`), `required_gus` được tự chuẩn hóa: value dạng số `N` cũ được chuyển thành `{rank: <base_rank>, qty: N}`, trong đó `base_rank` là bậc nhỏ nhất của Cổ đó trong `gu_dictionary` (fallback `1` nếu Cổ chưa có trong dictionary).
 - Backend chỉ chấp nhận Cổ nguyên liệu khớp cả `gu_id` lẫn `rank` (khi `rank != 0`); frontend (Lò Luyện, Wiki, Admin) hiển thị và chọn Cổ theo đúng bậc yêu cầu.

@@ -58,6 +58,15 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 // realtime updates) and returns a slim payload with only inventory data + extra fields.
 // This eliminates the completed_quests and unlocked_recipes DB queries from every action response.
 func respondActionWithInventory(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	respondActionWithInventoryDomains(c, status, player, nil, extra...)
+}
+
+// respondActionWithInventoryDomains is respondActionWithInventory plus extra
+// realtime invalidation domains. Use it when the action mutated a collection
+// that is intentionally not embedded in the slim response (for example
+// RecipesDomain for player_recipe_progress); connected clients then refresh
+// that collection instead of keeping a stale cached list.
+func respondActionWithInventoryDomains(c *gin.Context, status int, player models.Player, extraDomains []PlayerEventDomain, extra ...gin.H) {
 	refreshActionPlayerState(&player)
 	if player.GuInventory == nil {
 		if player.ID != uuid.Nil && db.DB != nil {
@@ -71,7 +80,9 @@ func respondActionWithInventory(c *gin.Context, status int, player models.Player
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, ItemInventoryDomain, CombatStatsDomain)
+	domains := []PlayerEventDomain{PlayerDomain, GuInventoryDomain, ItemInventoryDomain, CombatStatsDomain}
+	domains = append(domains, extraDomains...)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, domains...)
 	resp := gin.H{
 		"success":             true,
 		"gu_inventory":        player.GuInventory,

@@ -46,6 +46,7 @@ type CombatResolution struct {
 // winner is always derived from the simulation, never from log text.
 func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string) (*CombatResolution, error) {
 	var pendingNotifications []notify.Notification
+	var immortalAnnouncements []immortalGuLootAnnouncement
 	var publishClearedCell bool
 	if player.ActiveCombat == nil {
 		return nil, fmt.Errorf("no active combat")
@@ -228,8 +229,9 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 				}
 			}
 
-			lootDetailLogs, lootNotifications := applyCombatVictoryLoot(tx, player, player.ActiveCombat, partyMembers, isVirtual)
+			lootDetailLogs, lootNotifications, lootAnnouncements := applyCombatVictoryLoot(tx, player, player.ActiveCombat, partyMembers, isVirtual)
 			pendingNotifications = append(pendingNotifications, lootNotifications...)
+			immortalAnnouncements = append(immortalAnnouncements, lootAnnouncements...)
 
 			markBossCleared(tx, player)
 
@@ -365,6 +367,11 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	res.AfterCommit = func() {
 		if publishClearedCell {
 			publishCombatClearedCell(clearedRegion, clearedX, clearedY, clearedPlayerID, clearedEnemyName, clearedEnemyTemplateID)
+		}
+		// Tiên Cổ announcements are published only now: the loot transaction has
+		// committed, so the Gu really exists in the world.
+		for _, a := range immortalAnnouncements {
+			BroadcastImmortalGuLoot(a.PlayerID, a.PlayerName, a.BossName, a.GuID, a.Rank)
 		}
 		if !shouldRecordCombatHistory(rawEnemyType, winner) {
 			return

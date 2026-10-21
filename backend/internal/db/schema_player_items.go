@@ -136,7 +136,7 @@ func schemaPlayerItems() error {
 	if err := execSchema("player_recipe_progress", `
 	CREATE TABLE IF NOT EXISTS player_recipe_progress (
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		recipe_id VARCHAR(50) NOT NULL,
+		recipe_id VARCHAR(100) NOT NULL,
 		completion_rate FLOAT NOT NULL DEFAULT 0,
 		is_unlocked BOOLEAN NOT NULL DEFAULT false,
 		deduce_count INT NOT NULL DEFAULT 0,
@@ -146,6 +146,13 @@ func schemaPlayerItems() error {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		PRIMARY KEY (player_id, recipe_id)
 	);`); err != nil {
+		return err
+	}
+	// recipe_id is a derived key (recipe_<target_gu_id>_<rank>_<variant>) and the
+	// longest seeded id is already 50 chars. Widen existing databases so a new
+	// longer recipe name cannot fail player_recipe_progress inserts.
+	if err := execSchema("player_recipe_progress.recipe_id width", `
+	ALTER TABLE player_recipe_progress ALTER COLUMN recipe_id TYPE VARCHAR(100);`); err != nil {
 		return err
 	}
 

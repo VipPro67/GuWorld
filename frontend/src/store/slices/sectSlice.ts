@@ -316,11 +316,18 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
+      if (!response.ok) {
+        // A recipe selection can be stale (donated twice, lost to a death
+        // penalty, or removed in another tab). Refresh the server list so the
+        // next attempt uses real inventory instead of repeating this error.
+        void get().refreshRecipeProgress();
+        throw new Error(data.error || "Quyên góp Bí phương thất bại.");
+      }
       get().addToast(data.message || "Quyên góp Bí phương thành công!", "success");
       get().addLog(data.message || `Quyên góp Bí phương.`);
       get().applyInventoryFromResponse(data);
       await get().fetchMySectStatus(true);
+      void get().refreshRecipeProgress();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -346,11 +353,20 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Quyên góp hàng loạt thất bại.");
+      if (!response.ok) {
+        // Stale recipe rows are reported per-item by the backend; refresh the
+        // authoritative list before surfacing the error so a retry succeeds.
+        void get().refreshRecipeProgress();
+        throw new Error(data.error || "Quyên góp hàng loạt thất bại.");
+      }
       get().addToast(data.message || "Quyên góp hàng loạt thành công!", "success");
+      if (Array.isArray(data.skipped_recipes) && data.skipped_recipes.length > 0) {
+        get().addToast(`${data.skipped_recipes.length} bí phương đã chọn không còn trong túi đồ nên được bỏ qua.`, "info");
+      }
       get().addLog(data.message || `Quyên góp hàng loạt vật phẩm.`);
       get().applyInventoryFromResponse(data);
       await get().fetchMySectStatus(true);
+      void get().refreshRecipeProgress();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -372,11 +388,15 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Trao đổi vật phẩm thất bại.");
+      if (!response.ok) {
+        if (itemType === "recipe") void get().refreshRecipeProgress();
+        throw new Error(data.error || "Trao đổi vật phẩm thất bại.");
+      }
       get().addToast(data.message || "Trao đổi vật phẩm thành công!", "success");
       get().addLog(data.message || `Đổi ${itemType}: ${itemId} x${quantity} từ bảo khố.`);
       get().applyInventoryFromResponse(data);
       await get().fetchMySectStatus(true);
+      if (itemType === "recipe") void get().refreshRecipeProgress();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

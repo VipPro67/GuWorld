@@ -3,6 +3,7 @@ package handlers
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -151,5 +152,49 @@ func TestRegionMonsterGuPoolInheritance(t *testing.T) {
 func TestRegionMonsterGuPoolEmptyRegion(t *testing.T) {
 	if pool := regionMonsterGuPool(""); pool != nil {
 		t.Errorf("expected nil pool for empty region, got %+v", pool)
+	}
+}
+
+// Looted Tiên Cổ must reach the world announcement queue, while mortal Gu must
+// not. Regression guard for CREATED_LOOT rank 6 being logged with no broadcast.
+func TestQueueImmortalGuLootNotice(t *testing.T) {
+	prev := models.GuRegistry
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"GU_MORTAL_ONLY":    {3: {ID: "GU_MORTAL_ONLY", Rank: 3}},
+		"GU_MIXED_VARIANTS": {5: {ID: "GU_MIXED_VARIANTS", Rank: 5}, 7: {ID: "GU_MIXED_VARIANTS", Rank: 7}},
+	}
+	t.Cleanup(func() { models.GuRegistry = prev })
+
+	playerID := uuid.New()
+	boss := "Thiên Ma"
+
+	// Rolled rank 6 -> queued with the rolled rank.
+	got := queueImmortalGuLootNotice(nil, playerID, "A", boss, "GU_RANK6", 6)
+	if len(got) != 1 {
+		t.Fatalf("rank 6 Gu: got %d announcements, want 1", len(got))
+	}
+	if got[0].Rank != 6 || got[0].GuID != "GU_RANK6" || got[0].PlayerID != playerID || got[0].BossName != boss || got[0].PlayerName != "A" {
+		t.Errorf("rank 6 announcement = %+v, want the looted Gu/player/boss", got[0])
+	}
+
+	// Mortal-only Gu -> never announced.
+	if got = queueImmortalGuLootNotice(nil, playerID, "A", boss, "GU_MORTAL_ONLY", 3); len(got) != 0 {
+		t.Errorf("mortal Gu: got %d announcements, want 0", len(got))
+	}
+
+	// Gu id with both mortal and immortal variants but a mortal rolled rank is
+	// still a Tiên Cổ; announce the immortal rank, not the rolled one.
+	got = queueImmortalGuLootNotice(nil, playerID, "A", boss, "GU_MIXED_VARIANTS", 5)
+	if len(got) != 1 {
+		t.Fatalf("mixed-variant Gu: got %d announcements, want 1", len(got))
+	}
+	if got[0].Rank != 7 {
+		t.Errorf("mixed-variant announcement rank = %d, want 7", got[0].Rank)
+	}
+
+	// A second loot appends instead of replacing.
+	got = queueImmortalGuLootNotice(got, playerID, "B", boss, "GU_RANK6", 6)
+	if len(got) != 2 {
+		t.Errorf("append: got %d announcements, want 2", len(got))
 	}
 }

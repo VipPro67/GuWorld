@@ -122,6 +122,7 @@ export const SectView: React.FC = () => {
   addToast,
   showConfirm,
   recipes,
+  refreshRecipeProgress,
   paySectSalary,
   getRelocationEstimate,
   relocateSect,
@@ -642,6 +643,21 @@ export const SectView: React.FC = () => {
   const getRecipeCost = (targetGuRank: number): number => {
     const p = Math.floor(guRankBasePrice[targetGuRank] / 10);
     return Math.max(20, p);
+  };
+
+  // Vault learn cost mirrors pricing.RecipeCostByGuRank plus the x1000
+  // immortal-stone conversion applied in handlers/sect_vault.go for rank >= 6.
+  const getRecipeVaultCost = (targetGuRank: number): number => {
+    const cost = getRecipeCost(targetGuRank);
+    return targetGuRank >= 6 ? cost * 1000 : cost;
+  };
+
+  // Donation payout mirrors pricing.RecipeDonatePoints (vault cost / 1.5,
+  // floored, minimum 1, x1000 for rank >= 6) scaled by completion rate.
+  const getRecipeDonateValue = (targetGuRank: number, completionRate: number): number => {
+    const base = Math.max(1, Math.floor(getRecipeCost(targetGuRank) / 1.5));
+    const basePoints = targetGuRank >= 6 ? base * 1000 : base;
+    return Math.max(1, Math.floor((basePoints * completionRate) / 100));
   };
 
   // Get material contribution points value (DonateRatio = 50%, x1000 for Rank >= 6)
@@ -2178,8 +2194,14 @@ export const SectView: React.FC = () => {
                     const recipeId = vaultRecipe.recipe_id;
                     const recipeInfo = recipes?.find(r => r.id === recipeId);
                     const targetGuSpec = recipeInfo ? guDictionary[recipeInfo.target_gu_id] : null;
-                    const targetGuName = targetGuSpec?.name || recipeId.replace("recipe_", "").toUpperCase();
-                    const cost = getRecipeCost(targetGuSpec?.rank || 1);
+                    // Mirror the backend: the catalog rank is authoritative, and
+                    // the id suffix (rank_variant) is the fallback for legacy or
+                    // orphaned vault rows so the displayed cost matches the charge.
+                    const targetGuRank = recipeInfo?.target_rank
+                      || targetGuSpec?.rank
+                      || Number(recipeId.match(/_(\d+)_\d+$/)?.[1])
+                      || 1;
+                    const cost = getRecipeVaultCost(targetGuRank);
                     const unaffordable = (member?.contribution_points || 0) < cost;
 
                     const isUnlocked = player?.unlocked_recipes?.some(ur => ur.recipe_id === recipeId) || false;
@@ -2703,8 +2725,10 @@ export const SectView: React.FC = () => {
               .map((ur) => {
                 const info = recipes.find((r) => r.id === ur.recipe_id);
                 const name = formatRecipeName(ur.recipe_id);
-                const rank = info?.target_rank || 1;
-                const value = getRecipeCost(rank);
+                const rank = info?.target_rank
+                  || Number(ur.recipe_id.match(/_(\d+)_\d+$/)?.[1])
+                  || 1;
+                const value = getRecipeDonateValue(rank, ur.completion_rate ?? 100);
                 return {
                   recipe_id: ur.recipe_id,
                   name,
@@ -2858,10 +2882,26 @@ export const SectView: React.FC = () => {
                         </div>
                         <button
                           onClick={async () => {
-                            const recipePayload = Object.values(selectedDonateRecipes).map((r) => ({
-                              recipe_id: r.recipe_id,
-                            }));
-                            if (recipePayload.length === 0) return;
+                            // Drop stale selections: a recipe can disappear from
+                            // the bag after a death penalty, another tab's
+                            // donation, or a previous donation in this session.
+                            const ownedRecipeIds = new Set(
+                              (useGameStore.getState().player?.unlocked_recipes || []).map((r) => r.recipe_id)
+                            );
+                            const selected = Object.values(selectedDonateRecipes);
+                            const recipePayload = selected
+                              .filter((r) => ownedRecipeIds.has(r.recipe_id))
+                              .map((r) => ({ recipe_id: r.recipe_id }));
+                            if (recipePayload.length === 0) {
+                              setSelectedDonateRecipes({});
+                              addToast("Bí phương đã chọn không còn trong túi đồ. Danh sách đã được làm mới.", "info");
+                              void refreshRecipeProgress();
+                              return;
+                            }
+                            if (recipePayload.length < selected.length) {
+                              setSelectedDonateRecipes({});
+                              addToast(`${selected.length - recipePayload.length} bí phương không còn trong túi đồ nên đã bị bỏ chọn.`, "info");
+                            }
 
                             const ok = await donateSectBulk({
                               materials: [],

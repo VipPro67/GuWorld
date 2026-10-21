@@ -14,13 +14,64 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
+// immortalGuLootAnnouncement is a world-chat announcement (Tiên Cổ xuất thế)
+// queued by the loot code and published by the caller only after the
+// surrounding transaction commits.
+type immortalGuLootAnnouncement struct {
+	PlayerID   uuid.UUID
+	PlayerName string
+	BossName   string
+	GuID       string
+	Rank       int
+}
+
+// immortalRankOf returns the rank >= 6 of guID, either the rolled rank or — for
+// Gu ids that also have mortal variants — the highest immortal variant in the
+// registry. Returns 0 when the Gu is not a Tiên Cổ.
+func immortalRankOf(guID string, rank int) int {
+	if rank >= 6 {
+		return rank
+	}
+	if !models.HasImmortalRank(guID) {
+		return 0
+	}
+	best := 0
+	for r := range models.GuRegistry[guID] {
+		if r >= 6 && r > best {
+			best = r
+		}
+	}
+	return best
+}
+
+// queueImmortalGuLootNotice appends a world announcement when the looted Gu is
+// a Tiên Cổ. Broadcasting happens after commit (see CombatResolution.AfterCommit)
+// so a rollback can never announce a Gu that was never actually added.
+func queueImmortalGuLootNotice(out []immortalGuLootAnnouncement, playerID uuid.UUID, playerName, bossName, guID string, rank int) []immortalGuLootAnnouncement {
+	immortalRank := immortalRankOf(guID, rank)
+	if immortalRank == 0 {
+		return out
+	}
+	return append(out, immortalGuLootAnnouncement{
+		PlayerID:   playerID,
+		PlayerName: playerName,
+		BossName:   bossName,
+		GuID:       guID,
+		Rank:       immortalRank,
+	})
+}
+
 // applyCombatVictoryLoot rolls and distributes loot after a won auto-combat.
 //
 // This is the single implementation shared by AutoCombatStart (manual/replay)
 // and ResolveCombat (skip battle), using the AutoCombatStart semantics:
 // PVP drop record + loot-table roll + Gu-drop chance, with random per-item
 // winners when in a party and direct inventory grants when solo.
-func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *models.CombatState, partyMembers []uuid.UUID, isVirtual bool) (lootDetailLogs []string, pendingNotifications []notify.Notification) {
+//
+// Looted Tiên Cổ (Rank >= 6) are returned as announcements instead of being
+// broadcast here: the caller must publish them only once its transaction has
+// committed.
+func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *models.CombatState, partyMembers []uuid.UUID, isVirtual bool) (lootDetailLogs []string, pendingNotifications []notify.Notification, immortalAnnouncements []immortalGuLootAnnouncement) {
 	if activeCombat != nil && activeCombat.EnemyType == "PVP" && !isVirtual {
 		if activeCombat.TargetPlayerID != "" && activeCombat.TargetPlayerID != "dummy" {
 			targetUUID, parseErr := uuid.Parse(activeCombat.TargetPlayerID)
@@ -89,6 +140,12 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 			}
 		}
 
+		// Boss name used by the Tiên Cổ world announcement, mirroring ApplyLoot.
+		lootBossName := "Thái Cổ Yêu Quái"
+		if activeCombat.EnemyName != "" {
+			lootBossName = activeCombat.EnemyName
+		}
+
 		if len(partyMembers) > 1 {
 			lootDetailLogs = append(lootDetailLogs, "=== PHÂN CHIA CHIẾN LỢI PHẨM TỔ ĐỘI ===")
 			stoneQty := loot.Items["primeval_stone"]
@@ -152,6 +209,7 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 				if guSpec.Name != "" {
 					guName = guSpec.Name
 				}
+				winnerName := player.Username
 				newGu := models.GuInstance{
 					InstanceID: uuid.New().String(),
 					GuID:       gID,
@@ -164,8 +222,7 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 					player.GuInventory = append(player.GuInventory, newGu)
 					lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s!", guName))
 				} else {
-					var uname string
-					_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+					_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&winnerName)
 					if err := db.AddPlayerGu(tx, winnerID.String(), newGu); err != nil {
 						if db.IsImmortalConflict(err) {
 							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Tiên Cổ %s đã tồn tại trong thiên hạ, không thể thu phục.", guName))
@@ -174,11 +231,13 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 						logger.S.Errorf("Failed to distribute loot Gu %s to %s: %v", gID, winnerID, err)
 						continue
 					}
-					lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, guName))
+					lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", winnerName, guName))
 				}
 				_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &winnerID, nil,
 					fmt.Sprintf("Thu phục Cổ trùng [%s] R%d sau chiến thắng.", guName, newGu.Rank),
 					map[string]interface{}{"gu_name": guName})
+
+				immortalAnnouncements = queueImmortalGuLootNotice(immortalAnnouncements, winnerID, winnerName, lootBossName, gID, guSpec.Rank)
 			}
 		} else {
 			stoneQty := loot.Items["primeval_stone"]
@@ -198,6 +257,8 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 				_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &player.ID, nil,
 					fmt.Sprintf("Thu phục Cổ trùng [%s] R%d sau chiến thắng.", guSpec.Name, newGu.Rank),
 					map[string]interface{}{"gu_name": guSpec.Name})
+
+				immortalAnnouncements = queueImmortalGuLootNotice(immortalAnnouncements, player.ID, player.Username, lootBossName, guID, guSpec.Rank)
 			}
 
 			var lootParts []string
@@ -231,5 +292,5 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 			}
 		}
 	}
-	return lootDetailLogs, pendingNotifications
+	return lootDetailLogs, pendingNotifications, immortalAnnouncements
 }
