@@ -34,7 +34,7 @@ var teleportTemplates = map[string]models.TeleportTemplate{
 		CostPrimevalStones: 3000,
 		CostImmortalStones: 0,
 		RequiredGu:         []string{},
-		RequiredItems:      map[string]int{"void_shattering_crystal": 20},
+		RequiredItems:      map[string]int{"space_crystal_rank2": 20},
 	},
 	models.TeleportTier2: {
 		Tier:               models.TeleportTier2,
@@ -49,7 +49,7 @@ var teleportTemplates = map[string]models.TeleportTemplate{
 		CostPrimevalStones: 15000,
 		CostImmortalStones: 0,
 		RequiredGu:         []string{},
-		RequiredItems:      map[string]int{"boundless_space_domain_stone": 10, "void_shattering_crystal": 20},
+		RequiredItems:      map[string]int{"space_crystal_rank4": 30},
 	},
 	models.TeleportTier3: {
 		Tier:               models.TeleportTier3,
@@ -64,7 +64,7 @@ var teleportTemplates = map[string]models.TeleportTemplate{
 		CostPrimevalStones: 100000,
 		CostImmortalStones: 50,
 		RequiredGu:         []string{},
-		RequiredItems:      map[string]int{"void_shattering_crystal": 50, "boundless_space_domain_stone": 20, "void_rocks": 10},
+		RequiredItems:      map[string]int{"space_crystal_rank6": 80},
 	},
 }
 
@@ -398,6 +398,35 @@ func BuildTeleportArray(c *gin.Context) {
 			return
 		}
 
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID:       &player.ID,
+			Action:         "teleport.build",
+			EntityType:     "teleport_array",
+			EntityID:       newID.String(),
+			RequestSummary: fmt.Sprintf("Xây dựng Truyền Tống Trận [%s] (%s) tại [%s] (%d, %d) - Tỉ lệ thành công %.1f%%, tiêu hao %.0f Nguyên Thạch và %.0f Tiên Nguyên Thạch", req.Name, tpl.Tier, player.CurrentRegion, player.X, player.Y, successRate, costNT, costTT),
+			Metadata: map[string]interface{}{
+				"array_id":         newID.String(),
+				"tier":             tpl.Tier,
+				"region_id":        player.CurrentRegion,
+				"x":                player.X,
+				"y":                player.Y,
+				"success_rate":     successRate,
+				"discount_percent": discountPercent,
+				"paid_primeval":    costNT,
+				"paid_immortal":    costTT,
+				"mastery_gained":   baseMasteryGain,
+				"formation_level":  level,
+				"direction_type":   req.DirectionType,
+				"access_policy":    req.AccessPolicy,
+				"fee_enabled":      req.FeeEnabled,
+				"fee_currency":     req.FeeCurrency,
+				"fee_amount":       req.FeeAmount,
+				"build_outcome":    "success",
+			},
+			IPAddress: c.ClientIP(),
+			Success:   true,
+		})
+
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
 			return
@@ -463,6 +492,28 @@ func BuildTeleportArray(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &player.ID,
+		Action:         "teleport.build",
+		EntityType:     "teleport_array",
+		EntityID:       "",
+		RequestSummary: fmt.Sprintf("Bố trận Truyền Tống Trận [%s] (%s) tại [%s] (%d, %d) thất bại - Tiêu hao %.0f Nguyên Thạch và %.0f Tiên Nguyên Thạch, nhận +%d Chân Ý Trận Đạo", req.Name, tpl.Tier, player.CurrentRegion, player.X, player.Y, failCostNT, failCostTT, failMasteryGain),
+		Metadata: map[string]interface{}{
+			"tier":            tpl.Tier,
+			"region_id":       player.CurrentRegion,
+			"x":               player.X,
+			"y":               player.Y,
+			"success_rate":    successRate,
+			"paid_primeval":   failCostNT,
+			"paid_immortal":   failCostTT,
+			"mastery_gained":  failMasteryGain,
+			"formation_level": level,
+			"build_outcome":   "failed",
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
@@ -608,11 +659,13 @@ func GetTeleportDirectory(c *gin.Context) {
 
 // evaluateTeleportLink validates connectivity, range, access policy and fee between 2 arrays
 func evaluateTeleportLink(player *models.Player, playerSectID *string, source *models.TeleportArray, dest *models.TeleportArray) models.TeleportDirectoryItem {
+	sourceGreat := greatRegionID(source.RegionID)
+	destGreat := greatRegionID(dest.RegionID)
 	item := models.TeleportDirectoryItem{
 		Array:             *dest,
 		CanUse:            true,
 		FeeCurrency:       dest.FeeCurrency,
-		IsCrossRegionJump: source.RegionID != dest.RegionID,
+		IsCrossRegionJump: sourceGreat != destGreat,
 	}
 
 	// 1. Check Source status
@@ -662,7 +715,10 @@ func evaluateTeleportLink(player *models.Player, playerSectID *string, source *m
 	}
 
 	// 4. Cross-Region & Range validation
-	if source.RegionID != dest.RegionID {
+	// Regions are maps; the teleport tiers are bound to great regions (NGU_VUC).
+	// Compare the containing great region, and measure distance in world cells so
+	// arrays on different maps of the same great region link normally.
+	if sourceGreat != destGreat {
 		if !source.IsCrossRegion {
 			item.CanUse = false
 			item.Reason = "Trận pháp hiện tại không đủ phẩm cấp để truyền tống xuyên Đại Vực"
@@ -670,9 +726,9 @@ func evaluateTeleportLink(player *models.Player, playerSectID *string, source *m
 		}
 		item.Distance = -1 // Cross-region distance
 	} else {
-		dx := math.Abs(float64(source.X - dest.X))
-		dy := math.Abs(float64(source.Y - dest.Y))
-		distance := int(math.Max(dx, dy))
+		srcX, srcY := regionWorldPos(source.RegionID, source.X, source.Y)
+		dstX, dstY := regionWorldPos(dest.RegionID, dest.X, dest.Y)
+		distance := int(math.Max(math.Abs(float64(srcX-dstX)), math.Abs(float64(srcY-dstY))))
 		item.Distance = distance
 
 		if distance > source.MaxRange {
@@ -1092,6 +1148,26 @@ func ManageTeleportArray(c *gin.Context) {
 		return
 	}
 
+	// ponytail: handler has no transaction; audit is written via db.DB after the update.
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "teleport.manage",
+		EntityType:     "teleport_array",
+		EntityID:       arrayUUID.String(),
+		RequestSummary: fmt.Sprintf("Cập nhật cấu hình Truyền Tống Trận [%s]: hướng %s, quyền truy cập %s, phí %v %d %s", currentName, currentDirection, currentPolicy, currentFeeEnabled, currentFeeAmount, currentCurrency),
+		Metadata: map[string]interface{}{
+			"array_id":      arrayUUID.String(),
+			"name":          currentName,
+			"direction":     currentDirection,
+			"access_policy": currentPolicy,
+			"fee_enabled":   currentFeeEnabled,
+			"fee_amount":    currentFeeAmount,
+			"fee_currency":  currentCurrency,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật cấu hình trận pháp thành công!"})
 }
 
@@ -1206,6 +1282,28 @@ func RepairTeleportArray(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &player.ID,
+		Action:         "teleport.repair",
+		EntityType:     "teleport_array",
+		EntityID:       arrayUUID.String(),
+		RequestSummary: fmt.Sprintf("Sửa chữa Truyền Tống Trận %s: +%d độ bền (%d/%d), tiêu hao %.0f Nguyên Thạch, bạo kích: %v", arrayUUID, toRepair, curDur, maxDur, totalCost, isCritical),
+		Metadata: map[string]interface{}{
+			"array_id":           arrayUUID.String(),
+			"tier":               tier,
+			"repaired":           toRepair,
+			"current_durability": curDur,
+			"max_durability":     maxDur,
+			"critical":           isCritical,
+			"critical_bonus":     criticalBonus,
+			"paid_primeval":      totalCost,
+			"mastery_gained":     masteryGain,
+			"discount_percent":   discountPercent,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
 		return
@@ -1304,6 +1402,26 @@ func WithdrawTeleportVault(c *gin.Context) {
 		player.PrimevalStones, player.ImmortalStones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng tiền cho đạo hữu"})
+		return
+	}
+
+	if err := auditlog.LogChecked(tx, auditlog.Entry{
+		PlayerID:       &player.ID,
+		Action:         "teleport.withdraw",
+		EntityType:     "teleport_array",
+		EntityID:       arrayUUID.String(),
+		RequestSummary: fmt.Sprintf("Rút %d %s từ Két Trận Pháp %s (số dư còn %d)", withdrawAmt, currency, arrayUUID, vaultBalance-withdrawAmt),
+		Metadata: map[string]interface{}{
+			"array_id":     arrayUUID.String(),
+			"amount":       withdrawAmt,
+			"currency":     currency,
+			"vault_before": vaultBalance,
+			"vault_after":  vaultBalance - withdrawAmt,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
 		return
 	}
 
@@ -1406,6 +1524,27 @@ func DismantleTeleportArray(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &player.ID,
+		Action:         "teleport.dismantle",
+		EntityType:     "teleport_array",
+		EntityID:       arrayUUID.String(),
+		RequestSummary: fmt.Sprintf("Thu hồi Truyền Tống Trận %s (%s, độ bền %d/%d): hoàn %.0f Nguyên Thạch, %.0f Tiên Nguyên, kết sạch két %d %s", arrayUUID, tier, curDur, maxDur, refundPrimeval, refundImmortal, vaultBalance, currency),
+		Metadata: map[string]interface{}{
+			"array_id":           arrayUUID.String(),
+			"tier":               tier,
+			"current_durability": curDur,
+			"max_durability":     maxDur,
+			"refund_primeval":    refundPrimeval,
+			"refund_immortal":    refundImmortal,
+			"vault_withdrawn":    vaultBalance,
+			"vault_currency":     currency,
+			"durability_ratio":   durRatio,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})

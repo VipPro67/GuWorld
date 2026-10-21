@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type UpgradeBuildingRequest struct {
@@ -155,6 +156,20 @@ func UpgradeSectBuilding(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.upgrade_building", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("Nâng cấp %s lên cấp %d, tiêu %d Quỹ (còn %d)", req.BuildingName, targetLevel, reqFunds, funds-reqFunds),
+		Metadata: map[string]interface{}{
+			"sect_id":      sectID,
+			"building":     req.BuildingName,
+			"new_level":    targetLevel,
+			"cost_funds":   reqFunds,
+			"funds_change": -reqFunds,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})

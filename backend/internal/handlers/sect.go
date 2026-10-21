@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
@@ -403,6 +404,14 @@ func JoinSect(c *gin.Context) {
 			return
 		}
 
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID: &playerID, Action: "sect.join", EntityType: "sect",
+			EntityID:       sectID,
+			RequestSummary: "Gửi yêu cầu gia nhập tông môn " + sectID + " (chờ duyệt)",
+			Metadata:       map[string]interface{}{"sect_id": sectID, "status": "PENDING"},
+			IPAddress:      c.ClientIP(), Success: true,
+		})
+
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 			return
@@ -421,6 +430,14 @@ func JoinSect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to join sect: " + err.Error()})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.join", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("Gia nhập tông môn %s với chức vụ NGOAI_MON", sectID),
+		Metadata:       map[string]interface{}{"sect_id": sectID, "member_rank": "NGOAI_MON"},
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -444,11 +461,23 @@ func CancelSectJoinRequest(c *gin.Context) {
 		return
 	}
 
+	var pendingSectID string
+	_ = db.DB.QueryRow(`SELECT sect_id FROM sect_join_requests WHERE player_id = $1 AND status = 'PENDING' LIMIT 1`, playerID).Scan(&pendingSectID)
+
 	_, err := db.DB.Exec(`DELETE FROM sect_join_requests WHERE player_id = $1 AND status = 'PENDING'`, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel join request: " + err.Error()})
 		return
 	}
+
+	// No transaction here: audit the successful delete directly against the pool.
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.cancel_join_request", EntityType: "sect_join_request",
+		EntityID:       pendingSectID,
+		RequestSummary: fmt.Sprintf("Hủy đơn xin gia nhập tông môn %s", pendingSectID),
+		Metadata:       map[string]interface{}{"sect_id": pendingSectID, "player_id": playerID.String()},
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy đơn xin gia nhập tông môn."})
 }
@@ -493,6 +522,14 @@ func LeaveSect(c *gin.Context) {
 
 	// Delete pending promotion requests
 	_, _ = tx.Exec(`DELETE FROM sect_promotion_requests WHERE player_id = $1 AND sect_id = $2`, playerID, sectID)
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.leave", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("Đạo hữu %s rời tông môn", username),
+		Metadata:       map[string]interface{}{"sect_id": sectID, "username": username},
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -756,6 +793,21 @@ func PromoteSectRank(c *gin.Context) {
 			return
 		}
 
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID: &playerID, Action: "sect.promote_rank", EntityType: "sect_member",
+			EntityID:       m.ID.String(),
+			RequestSummary: fmt.Sprintf("Gửi yêu cầu thăng cấp %s → %s, tiêu %d điểm cống hiến (còn %d)", m.MemberRank, nextRank, costPoints, m.ContributionPoints),
+			Metadata: map[string]interface{}{
+				"sect_id":             m.SectID,
+				"member_id":           m.ID.String(),
+				"current_rank":        m.MemberRank,
+				"target_rank":         nextRank,
+				"cost_points":         costPoints,
+				"contribution_change": -costPoints,
+			},
+			IPAddress: c.ClientIP(), Success: true,
+		})
+
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 			return
@@ -779,6 +831,20 @@ func PromoteSectRank(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update member rank"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.promote_rank", EntityType: "sect_member",
+		EntityID:       m.ID.String(),
+		RequestSummary: fmt.Sprintf("Thăng cấp lên %s, tiêu %d điểm cống hiến (còn %d)", m.MemberRank, costPoints, m.ContributionPoints),
+		Metadata: map[string]interface{}{
+			"sect_id":             m.SectID,
+			"member_id":           m.ID.String(),
+			"new_rank":            m.MemberRank,
+			"cost_points":         costPoints,
+			"contribution_change": -costPoints,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})

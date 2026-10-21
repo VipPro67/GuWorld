@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -516,6 +517,28 @@ func runGachaOpen(c *gin.Context, forced int) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
 		fmt.Println("Error saving player Gu inventory:", err)
+		return
+	}
+
+	if err := auditlog.LogChecked(tx, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "gacha.open",
+		EntityType:     "gacha_pool",
+		EntityID:       req.PoolID,
+		RequestSummary: fmt.Sprintf("Mở thạch %s %d lần, tiêu %.0f %s, nhận: %s", pool.Name, quantity, totalCost, pool.CostType, aggregateGachaRewards(rewards)),
+		Metadata: map[string]interface{}{
+			"pool_id":         req.PoolID,
+			"pool_name":       pool.Name,
+			"quantity":        quantity,
+			"cost_type":       pool.CostType,
+			"total_cost":      totalCost,
+			"discounted":      discounted,
+			"rewards_summary": aggregateGachaRewards(rewards),
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
 		return
 	}
 

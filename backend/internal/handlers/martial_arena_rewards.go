@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -282,6 +283,26 @@ func ClaimMartialReward(c *gin.Context) {
 
 	if _, err = tx.Exec(`UPDATE martial_champion_rewards SET claimed = true, claimed_at = NOW() WHERE id = $1`, rewardUUID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark as claimed"})
+		return
+	}
+
+	if err := auditlog.LogChecked(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "arena.martial_claim_reward",
+		EntityType:     "martial_arena_reward",
+		EntityID:       rewardUUID.String(),
+		RequestSummary: fmt.Sprintf("Nhận thưởng Võ Đấu Trường hạng %d: %d Nguyên Thạch, %d Tiên Thạch, danh hiệu '%s'", r.Placement, r.RewardStones, r.RewardImmortalStones, r.Title),
+		Metadata: map[string]interface{}{
+			"reward_id":       rewardUUID.String(),
+			"placement":       r.Placement,
+			"stones":          r.RewardStones,
+			"immortal_stones": r.RewardImmortalStones,
+			"title":           r.Title,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
 		return
 	}
 

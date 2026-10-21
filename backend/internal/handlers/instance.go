@@ -398,6 +398,12 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest) {
 		}
 	}
 
+	// Enforce the requested instance type, when the caller restricts it.
+	if requiredType != "" && template.Type != requiredType {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không phải mộng cảnh hợp lệ!"})
+		return
+	}
+
 	// 2a. Enforce daily limit per player for DREAM_REALM and SECRET_REALM
 	if template.Type == "DREAM_REALM" || template.Type == "SECRET_REALM" {
 		var dailyEntries int

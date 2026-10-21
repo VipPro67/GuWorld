@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -168,6 +169,21 @@ func CreateSect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register founder record: " + err.Error()})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.create", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("Khai tông lập phái \"%s\" tại %s (%d, %d), chi phí %d Nguyên Thạch", req.Name, currentRegion, player.X, player.Y, cost),
+		Metadata: map[string]interface{}{
+			"sect_name":   req.Name,
+			"region":      currentRegion,
+			"x":           player.X,
+			"y":           player.Y,
+			"cost_stones": cost,
+			"member_rank": "CHUONG_MON",
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit transaction failed"})
@@ -451,6 +467,19 @@ func SetMemberRank(c *gin.Context) {
 		}
 	}
 
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.set_member_rank", EntityType: "sect_member",
+		EntityID:       targetMemberID.String(),
+		RequestSummary: fmt.Sprintf("Đổi chức vụ đệ tử %s: %s → %s", targetMemberID.String(), targetRank, req.Rank),
+		Metadata: map[string]interface{}{
+			"sect_id":   callerSectID,
+			"member_id": targetMemberID.String(),
+			"old_rank":  targetRank,
+			"new_rank":  req.Rank,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
@@ -533,6 +562,23 @@ func KickMember(c *gin.Context) {
 
 	// Delete pending promotion requests
 	_, _ = tx.Exec(`DELETE FROM sect_promotion_requests WHERE player_id = $1 AND sect_id = $2`, targetMemberID, targetSectID)
+
+	kickedLabel := targetUsername
+	if kickedLabel == "" {
+		kickedLabel = targetMemberID.String()
+	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.kick_member", EntityType: "sect_member",
+		EntityID:       targetMemberID.String(),
+		RequestSummary: fmt.Sprintf("Trục xuất đệ tử %s (%s) khỏi tông môn", kickedLabel, targetRank),
+		Metadata: map[string]interface{}{
+			"sect_id":   targetSectID,
+			"member_id": targetMemberID.String(),
+			"username":  targetUsername,
+			"rank":      targetRank,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
@@ -708,6 +754,19 @@ func ClaimSectLeadership(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tấn phong Chưởng Môn: " + err.Error()})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.claim_leadership", EntityType: "sect",
+		EntityID:       callerSectID,
+		RequestSummary: fmt.Sprintf("Đạo hữu %s (%s) kế vị Chưởng Môn, giáng chức %d Chưởng Môn cũ", callerUsername, callerRank, len(leaders)),
+		Metadata: map[string]interface{}{
+			"sect_id":         callerSectID,
+			"previous_rank":   callerRank,
+			"new_rank":        "CHUONG_MON",
+			"demoted_leaders": len(leaders),
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Hoàn tất giao dịch thất bại: " + err.Error()})

@@ -203,7 +203,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/party/status` |
 | POST | `/party/invite` |
 | GET | `/party/invitations` |
-| POST | `/party/invitations/:id/respond` |
+| POST | `/party/invitations/:id/respond` | Body: `{"action": "accept"\|"reject"}`. Accept yêu cầu người nhận cùng bản đồ thế giới và cách đội trưởng ≤ 100 ô, nếu không trả 400. |
 | POST | `/party/leave` |
 | POST | `/party/formation` | Trưởng nhóm xếp đội hình xuất trận. Body: `{"order": [{"kind": "player"\|"pet"\|"npc", "id": "...", "pos": 1-8}]}` (tối đa 8 sau trưởng nhóm; `pos` trùng/0 = tự xếp ô trống; rỗng = về tự động). |
 | GET | `/arena/leaderboard` |

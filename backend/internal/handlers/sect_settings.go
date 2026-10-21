@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // UpgradeSect upgrades the sect's level
@@ -59,6 +60,20 @@ func UpgradeSect(c *gin.Context) {
 	}
 	level := newLevel
 	funds := newFunds
+
+	upgradeSpend := int64(newLevel-1) * int64(newLevel-1) * 5000
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.upgrade", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("Nâng cấp tông môn lên Cấp %d, tiêu %d Quỹ (còn %d)", newLevel, upgradeSpend, newFunds),
+		Metadata: map[string]interface{}{
+			"sect_id":      sectID,
+			"new_level":    newLevel,
+			"cost_funds":   upgradeSpend,
+			"funds_change": -upgradeSpend,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
@@ -126,6 +141,18 @@ func ToggleSectApproval(c *gin.Context) {
 		return
 	}
 
+	toggleWord := "bật"
+	if !req.RequireApproval {
+		toggleWord = "tắt"
+	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.toggle_approval", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("%s duyệt thành viên gia nhập", toggleWord),
+		Metadata:       map[string]interface{}{"sect_id": sectID, "require_approval": req.RequireApproval},
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
@@ -184,6 +211,18 @@ func ToggleSectPromotionApproval(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect setting"})
 		return
 	}
+
+	toggleWord := "bật"
+	if !req.RequirePromotionApproval {
+		toggleWord = "tắt"
+	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.toggle_promotion_approval", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("%s duyệt lên cấp cho đệ tử", toggleWord),
+		Metadata:       map[string]interface{}{"sect_id": sectID, "require_promotion_approval": req.RequirePromotionApproval},
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})

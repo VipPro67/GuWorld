@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/sectmechanics"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 const SectRelocationCooldown = 72 * time.Hour
@@ -398,6 +399,24 @@ func RelocateSect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ để khấu trừ"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.relocate", EntityType: "sect",
+		EntityID:       m.SectID,
+		RequestSummary: fmt.Sprintf("Di dời sơn môn từ %s (%d, %d) đến %s (%d, %d), tiêu %d Quỹ", sectRegion, sectX, sectY, player.CurrentRegion, player.X, player.Y, totalCost),
+		Metadata: map[string]interface{}{
+			"sect_id":      m.SectID,
+			"from_region":  sectRegion,
+			"from_x":       sectX,
+			"from_y":       sectY,
+			"to_region":    player.CurrentRegion,
+			"to_x":         player.X,
+			"to_y":         player.Y,
+			"cost_funds":   totalCost,
+			"funds_change": -totalCost,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn tất giao dịch"})

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"math/rand"
 	"net/http"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // GetTournamentHistory returns past tournaments
@@ -165,6 +167,28 @@ func ClaimReward(c *gin.Context) {
 		rewardUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark as claimed"})
+		return
+	}
+
+	if err := auditlog.LogChecked(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "tournament.claim_reward",
+		EntityType:     "death_arena_reward",
+		EntityID:       rewardUUID.String(),
+		RequestSummary: fmt.Sprintf("Nhận thưởng Tử Chiến Đấu Trường hạng %d: %d Nguyên Thạch, %d Tiên Thạch, danh hiệu '%s'", reward.Placement, reward.RewardStones, reward.RewardImmortalStones, reward.Title),
+		Metadata: map[string]interface{}{
+			"reward_id":       rewardUUID.String(),
+			"placement":       reward.Placement,
+			"stones":          reward.RewardStones,
+			"immortal_stones": reward.RewardImmortalStones,
+			"title":           reward.Title,
+			"reward_gu_id":    reward.RewardGuID,
+			"reward_gu_rank":  reward.RewardGuRank,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
 		return
 	}
 

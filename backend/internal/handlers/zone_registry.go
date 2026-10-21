@@ -362,6 +362,24 @@ func ZoneByID(id string) *models.Region {
 	return zoneReg.byID[id]
 }
 
+// greatRegionID returns the NGU_VUC ancestor of a region. Regions without a
+// known large zone (tests, legacy ids) fall back to themselves.
+func greatRegionID(regionID string) string {
+	if lz := largeZoneForRegion(regionID); lz != nil {
+		return lz.ID
+	}
+	return regionID
+}
+
+// regionWorldPos converts a local map cell into world-map coordinates so maps
+// in the same great region can be compared by real distance.
+func regionWorldPos(regionID string, x, y int) (int, int) {
+	if zone := ZoneByID(regionID); zone != nil {
+		return zone.MinX + x, zone.MinY + y
+	}
+	return x, y
+}
+
 // regionScopeIDs returns a region and its containing regions on the same map.
 // Shared entities assigned to a large parent region can therefore be seen by
 // players whose current region is one of its child areas.

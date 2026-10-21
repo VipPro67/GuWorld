@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -444,6 +445,21 @@ func CompleteQuest(c *gin.Context) {
 	}
 
 	// Removed automatic referral milestone check
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "quest.complete",
+		EntityType:     "quest",
+		EntityID:       quest.ID,
+		RequestSummary: fmt.Sprintf("Hoàn thành nhiệm vụ %s (%s).%s", quest.ID, quest.Title, buildRewardLabel(quest.Rewards)),
+		Metadata: map[string]interface{}{
+			"quest_id":    quest.ID,
+			"quest_title": quest.Title,
+			"rewards":     quest.Rewards,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})

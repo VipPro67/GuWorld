@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -178,6 +179,28 @@ func CleanseDaoMarks(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn trả Đạo Tài"})
 			return
 		}
+	}
+
+	if err := auditlog.LogChecked(tx, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "aperture.cleanse_dao_marks",
+		EntityType:     "immortal_aperture",
+		EntityID:       playerID.String(),
+		RequestSummary: fmt.Sprintf("Thanh Đạo Tẩy Thể: bóc tách %d Đạo Ngân hệ %s, tiêu %d Tiên Nguyên Thạch, hoàn trả %d %s", cleansed, targetPath, stoneCost, refundQty, refundItem),
+		Metadata: map[string]interface{}{
+			"path":         targetPath,
+			"cleansed":     cleansed,
+			"requested":    req.Marks,
+			"stone_cost":   stoneCost,
+			"stones_after": newStones,
+			"refund_item":  refundItem,
+			"refund_qty":   refundQty,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
+		return
 	}
 
 	if err := tx.Commit(); err != nil {

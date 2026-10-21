@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/sectmechanics"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -386,6 +387,24 @@ func DefendSect(c *gin.Context) {
 		return
 	}
 
+	defenderLabel := req.PlayerID
+	if req.DefenderType == "beast" {
+		defenderLabel = req.MonsterID
+	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.defend", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("Bố trí %s phòng thủ tông môn (loại %s)", defenderLabel, req.DefenderType),
+		Metadata: map[string]interface{}{
+			"sect_id":       sectID,
+			"defender_type": req.DefenderType,
+			"player_id":     req.PlayerID,
+			"monster_id":    req.MonsterID,
+			"monster_rank":  req.MonsterRank,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
@@ -438,6 +457,15 @@ func UndefendSect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể rút phòng thủ"})
 		return
 	}
+
+	// No transaction here: audit the successful delete directly against the pool.
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.undefend", EntityType: "sect_defender",
+		EntityID:       did.String(),
+		RequestSummary: fmt.Sprintf("Rút phòng thủ %s khỏi tông môn", did.String()),
+		Metadata:       map[string]interface{}{"sect_id": sectID, "defender_id": did.String()},
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã rút phòng thủ!"})
 }
@@ -494,6 +522,20 @@ func ToggleDefendSect(c *gin.Context) {
 	if newState {
 		msg = "Đã bật Trấn Thủ Tông Môn! Đạo hữu sẽ tham chiến khi Tông Môn bị tấn công."
 	}
+
+	// No transaction here: audit the successful toggle directly against the pool.
+	toggleSummary := "Tắt trạng thái Trấn Thủ Tông Môn"
+	if newState {
+		toggleSummary = "Bật trạng thái Trấn Thủ Tông Môn"
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.toggle_defend", EntityType: "sect_member",
+		EntityID:       playerID.String(),
+		RequestSummary: toggleSummary,
+		Metadata:       map[string]interface{}{"sect_id": sectID, "is_defending": newState},
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+
 	c.JSON(http.StatusOK, gin.H{"message": msg, "is_defending": newState})
 }
 
@@ -590,6 +632,20 @@ func AttackSect(c *gin.Context) {
 			}
 			rows.Close()
 		}
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID: &playerID, Action: "sect.attack", EntityType: "sect",
+			EntityID:       req.TargetSectID,
+			RequestSummary: fmt.Sprintf("Tấn công tông môn %s bị Hộ Sơn Đại Trận chặn", targetName),
+			Metadata: map[string]interface{}{
+				"target_sect_id":   req.TargetSectID,
+				"target_sect_name": targetName,
+				"my_sect_id":       mySectID,
+				"shield_until":     shieldUntil.Format(time.RFC3339),
+				"cooldown_until":   readyAt.Format(time.RFC3339),
+			},
+			IPAddress: c.ClientIP(), Success: true,
+		})
+
 		if err = tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 			return
@@ -696,6 +752,20 @@ func AttackSect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.attack", EntityType: "sect",
+		EntityID:       req.TargetSectID,
+		RequestSummary: fmt.Sprintf("Khiêu chiến tông môn %s (Hộ Sơn Thần Thú R%d, %d đệ tử trấn thủ)", targetName, targetLevel, len(defenderIDs)),
+		Metadata: map[string]interface{}{
+			"target_sect_id":   req.TargetSectID,
+			"target_sect_name": targetName,
+			"my_sect_id":       mySectID,
+			"guardian_rank":    targetLevel,
+			"defender_count":   len(defenderIDs),
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	err = tx.Commit()
 	if err != nil {

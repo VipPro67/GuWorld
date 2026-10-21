@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -87,7 +88,21 @@ func largeZoneForRegion(regionID string) *models.Region {
 	return nil
 }
 
+// RegionalWallSuppressionEnabled reports whether crossing a Great Domain (NGU_VUC)
+// boundary applies the regional_wall_suppression penalty. Defaults to enabled;
+// set REGIONAL_WALL_SUPPRESSION_ENABLED to false/0/off/no to disable it.
+func RegionalWallSuppressionEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("REGIONAL_WALL_SUPPRESSION_ENABLED"))) {
+	case "false", "0", "off", "no":
+		return false
+	}
+	return true
+}
+
 func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Region, q ...notify.Querier) string {
+	if !RegionalWallSuppressionEnabled() {
+		return ""
+	}
 	if oldZone == nil || newZone == nil {
 		return ""
 	}

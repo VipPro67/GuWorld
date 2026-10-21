@@ -589,17 +589,17 @@ Cổ Sư có thể khắc họa trận văn, câu thông thiên địa để xâ
 - **Vi Trận (Tier 1 - Phàm cấp)**:
   - *Tầm phủ sóng:* 1,000 ô (nội bộ tiểu vực/khu vực lân cận).
   - *Yêu cầu:* Tu vi Chuyển 2.
-  - *Chi phí gốc:* 3,000 Nguyên Thạch + 20 Tinh Thể Vỡ Không Gian. Độ bền: 50/50.
+  - *Chi phí gốc:* 3,000 Nguyên Thạch + 20 Linh Không Gian Tinh (`space_crystal_rank2`). Độ bền: 50/50.
   - *Tỉ lệ thành công cơ bản:* 70%.
 - **Đại Vực Trận (Tier 2 - Linh cấp)**:
   - *Tầm phủ sóng:* 10,000 ô (bao quát toàn bộ 1 Đại Vực).
   - *Yêu cầu:* Tu vi Chuyển 4, Trận Đạo tối thiểu **Đại Sư**.
-  - *Chi phí gốc:* 15,000 Nguyên Thạch + 10 Đá Vực Không Gian Vô Tận + 20 Tinh Thể Vỡ Không Gian. Độ bền: 200/200.
+  - *Chi phí gốc:* 15,000 Nguyên Thạch + 30 Địa Không Gian Tinh (`space_crystal_rank4`). Độ bền: 200/200.
   - *Tỉ lệ thành công cơ bản:* 60%.
 - **Tiên Trận Xuyên Vực (Tier 3 - Tiên cấp)**:
   - *Tầm phủ sóng:* Vô hạn (Truyền tống xuyên suốt Ngũ Vực).
   - *Yêu cầu:* Tu vi Chuyển 6 (Cổ Tiên), Trận Đạo tối thiểu **Tông Sư**.
-  - *Chi phí gốc:* 100,000 Nguyên Thạch + 50 Tiên Nguyên Thạch + 50 Tinh Thể Vỡ Không Gian + 20 Đá Vực Không Gian Vô Tận + 10 Hư Không Thạch. Độ bền: 1,000/1,000.
+  - *Chi phí gốc:* 100,000 Nguyên Thạch + 50 Tiên Nguyên Thạch + 80 Tiên Không Gian Tinh (`space_crystal_rank6`). Độ bền: 1,000/1,000.
   - *Tỉ lệ thành công cơ bản:* 45%.
 
 #### 3. Cảnh Giới Trận Đạo, Tỉ Lệ Thành Công & Giảm Giá
@@ -759,7 +759,7 @@ Hệ thống phân định rõ rệt giữa ba cơ chế khám phá:
 
 ### 10.1 Mộng Cảnh (Dream Realm)
 - **Cơ chế:** Thám hiểm ký ức và mộng cảnh của tiền nhân thông qua các lựa chọn tình huống và vấn đáp cốt truyện.
-- **Tiêu hao & Điều kiện:** Tiêu hao Mộng Cảnh Thạch (`dream_path_material`) và Hồn Phách (`soul_hp`). Cooldown 24 giờ/lần.
+- **Tiêu hao & Điều kiện:** Không tốn vật phẩm vào cửa, chỉ tiêu hao Hồn Phách (`soul_hp`). Cooldown 24 giờ/lần, tối đa 5 lượt/ngày.
 - **Phần thưởng:** Tăng Chân Ý (Attainment / cảnh giới lưu phái) cho 49 lưu phái tương ứng (+50 Chân Ý khi hoàn thành mộng cảnh của lưu phái đó).
 
 ### 10.2 Bí Cảnh Không Gian (Spatial Secret Realm)
@@ -1062,7 +1062,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 
 ## 15. Tổ đội và Đấu trường
 
-- Tổ đội: tạo tổ đội, xem trạng thái, mời Cổ sư, rời tổ đội.
+- Tổ đội: tạo tổ đội, xem trạng thái, mời Cổ sư, rời tổ đội. Chỉ có thể mời và **chấp nhận lời mời** khi cả hai ở cùng bản đồ thế giới và cách nhau tối đa 100 ô (Chebyshev); đồng ý khi đã đi xa sẽ thất bại.
 - **Chiến đấu tổ đội:** Các thành viên trong tổ đội ở cùng Đại Vực sẽ cùng tham gia vào trận chiến khi Trưởng nhóm khởi xướng (cả Turn-based lẫn Auto Combat/Simulation). Đồng đội sẽ tự động chiến đấu bằng các Cổ trùng đang trang bị, Sát chiêu và Thiết lập tự động của chính họ. Phần thưởng chiến thắng (Nguyên thạch, Nguyên liệu, Cổ trùng) sẽ được chia đều cho tất cả thành viên tham chiến, và tiêu hao (Sinh lực, Chân Nguyên, Dược phẩm) cũng được cập nhật tương ứng. Đồng đội không nhận điểm Chân Ý từ trận chiến — chỉ người chơi chính (Trưởng nhóm) được ngộ đạo.
   - **Ngoại lệ — đấu cá nhân:** Khi **đánh mỏ** (cả PvE yêu quái lẫn PvP tranh mỏ) hoặc **khiêu chiến Võ Đài**, không phe nào kéo thành viên tổ đội vào trận; chỉ người chơi chính ra tay (sủng vật và NPC biến thể vẫn tham chiến bình thường). Các loại chiến đấu khác (open-world PvP, dã ngoại, tông môn chiến, tai kiếp) vẫn áp dụng tổ đội như trên.
 - **Võ Đài:** tối đa 10 lượt khiêu chiến/ngày; thắng người xếp cao hơn thì đổi vị trí. Thắng nhận 50, thua nhận 1 Đồng Võ Đài; hệ thống chốt thưởng ngày lúc 22:30. Đồng dùng tại tab Bảo Các của Võ Đài. Bảo Các còn bày thêm một nhóm **tài nguyên Tiên cấp (Food/Material rank ≥ 6)** đổi ngẫu nhiên theo khung giờ, đồng giá **99 Xu Đấu Trường**.

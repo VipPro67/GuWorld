@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type AchievementDef struct {
@@ -282,6 +283,23 @@ func ClaimAchievement(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "achievement.claim",
+		EntityType:     "achievement",
+		EntityID:       ach.ID,
+		RequestSummary: fmt.Sprintf("Nhận thành tựu [%s] %s: %s", ach.ID, ach.Name, ach.RewardLabel),
+		Metadata: map[string]interface{}{
+			"achievement_id":   ach.ID,
+			"achievement_name": ach.Name,
+			"reward_type":      ach.RewardType,
+			"reward_id":        ach.RewardID,
+			"reward_val":       ach.RewardVal,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})

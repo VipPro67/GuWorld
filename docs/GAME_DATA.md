@@ -275,7 +275,7 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 - Với `SPATIAL_REALM`, `spatial_region_id` phải trỏ tới region `SECRET_REALM` đang hoạt động; `duration_minutes` là thời lượng của phiên chung (mặc định 120 phút).
 - `cooldown_hours` — số giờ chờ trước khi vào lại phó bản (mặc định 24; `0` = không giới hạn). Cooldown tính từ session gần nhất của player cho instance đó.
 - `rewards` JSONB gồm `attainment` (Chân Ý → `players.path_masteries`), `dao_marks` (Đạo Ngân → `immortal_apertures.dao_marks`), `materials`, `primeval_stones`.
-- Seed (`SeedInstanceTemplates`): truyền thừa `dungeon_flower_wine`, **mộng cảnh data-driven từ `data/DreamRealm.csv`** (gồm `dream_realm_star_constellation` + **49 mộng cảnh** `dream_realm_<path>`, 1 cho mỗi lưu phái, thưởng +50 Chân Ý cho đúng path đó, vào bằng `dream_path_material`, cooldown 24h) và **3 bí cảnh** (`SECRET_REALM`, thưởng Đạo Ngân, cooldown 48h).
+- Seed (`SeedInstanceTemplates`): truyền thừa `dungeon_flower_wine`, **mộng cảnh data-driven từ `data/DreamRealm.csv`** (gồm `dream_realm_star_constellation` + **49 mộng cảnh** `dream_realm_<path>`, 1 cho mỗi lưu phái, thưởng +50 Chân Ý cho đúng path đó, vào cửa tự do (không tốn vật phẩm), cooldown 24h) và **3 bí cảnh** (`SECRET_REALM`, thưởng Đạo Ngân, cooldown 48h).
 - `DreamRealm.csv` — cột `id, name, path, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours`. Cột `path` là key lưu phái (vd `fire`); nếu `map_data` để trống, stage tree sẽ được sinh tự động theo path (`buildDreamRealmMapData`). Muốn viết cốt truyện riêng cho một mộng cảnh, điền `map_data` (JSON array stage, xem format mộng cảnh thủ công `dream_realm_star_constellation` trong file). Import/export qua Admin tab "Dữ liệu" → bảng "Mộng cảnh".
 - `player_instance_sessions` — session đang chạy; index bán phần `player_active_session_idx` đảm bảo 1 phó bản ACTIVE/player.
 
@@ -1426,17 +1426,17 @@ Bảng `teleport_arrays` lưu các thực thể trận pháp do người chơi v
 #### Phân cấp trận pháp:
 - **`TIER_1` (Tiểu Hình Truyền Tống Trận / Vi Trận):**
   - Tu vi tối thiểu: Chuyển 2 (Rank 2).
-  - Chi phí: 2.000 Nguyên Thạch + 2x Không Gian Thạch (`khong_gian_thach`).
+  - Chi phí: 3.000 Nguyên Thạch + 20x Linh Không Gian Tinh (`space_crystal_rank2`).
   - Phạm vi cự ly: Tối đa 1.000 ô trong cùng Đại Vực.
   - Độ bền tối đa: 50 điểm (mỗi lượt nhảy giảm 1 điểm).
 - **`TIER_2` (Đại Vực Truyền Tống Trận):**
   - Tu vi tối thiểu: Chuyển 4 (Rank 4).
-  - Chi phí: 10.000 Nguyên Thạch + 10x Không Gian Thạch (`khong_gian_thach`).
+  - Chi phí: 15.000 Nguyên Thạch + 30x Địa Không Gian Tinh (`space_crystal_rank4`).
   - Phạm vi cự ly: Tối đa 10.000 ô trong cùng Đại Vực.
   - Độ bền tối đa: 100 điểm.
 - **`TIER_3` (Ngũ Vực Tiên Cấp Truyền Tống Trận):**
   - Tu vi tối thiểu: Chuyển 6 (Rank 6 - Tiên Nhân).
-  - Chi phí: 50.000 Nguyên Thạch + 20 Tiên Nguyên Thạch + 50x Không Gian Thạch.
+  - Chi phí: 100.000 Nguyên Thạch + 50 Tiên Nguyên Thạch + 80x Tiên Không Gian Tinh (`space_crystal_rank6`).
   - Phạm vi: Tự do dịch chuyển xuyên tất cả các Đại Vực trong Ngũ Vực (`is_cross_region = true`).
   - Độ bền tối đa: 200 điểm.
   - Phản phệ Giới Vực Bích: Khi nhảy xuyên Đại Vực, người chơi vẫn phải chịu debuff áp chế thuộc tính theo Rank từ `CheckAndApplyRegionalWallDebuff`.

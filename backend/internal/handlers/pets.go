@@ -324,6 +324,19 @@ func ReleasePet(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "pet.release",
+		EntityType:     "player_pet",
+		EntityID:       req.PetID,
+		RequestSummary: fmt.Sprintf("Giải phóng linh thú %s khỏi đội", req.PetID),
+		Metadata: map[string]interface{}{
+			"pet_id": req.PetID,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	c.JSON(http.StatusOK, gin.H{"released": true, "pet_id": req.PetID})
 }
 
@@ -440,6 +453,28 @@ func MergePets(c *gin.Context) {
 	for srcID := range validSources {
 		_, _ = tx.Exec(`DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2`, srcID, authID)
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "pet.merge",
+		EntityType:     "player_pet",
+		EntityID:       targetID,
+		RequestSummary: fmt.Sprintf("Gộp %d linh thú nguồn vào %s: bầy %d → %d cá thể", len(validSources), targetNickname, targetCount, newCount),
+		Metadata: map[string]interface{}{
+			"target_id":    targetID,
+			"pet_name":     targetNickname,
+			"source_count": len(validSources),
+			"added_count":  addedCount,
+			"old_count":    targetCount,
+			"new_count":    newCount,
+			"max_hp":       newMaxHP,
+			"attack":       newAtk,
+			"defense":      newDef,
+			"merge_limit":  mergeLimit,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})

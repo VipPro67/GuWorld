@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -285,6 +287,20 @@ func OccupyMineSlot(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "mine.occupy",
+		EntityType:     "mine_slot",
+		EntityID:       strconv.Itoa(req.SlotID),
+		RequestSummary: fmt.Sprintf("Chiếm giữ mỏ #%d phẩm chất %s", req.SlotID, rarity),
+		Metadata: map[string]interface{}{
+			"slot_id": req.SlotID,
+			"rarity":  rarity,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	err = tx.Commit()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -363,6 +379,24 @@ func ClaimMineRewards(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "mine.claim",
+		EntityType:     "mine_slot",
+		EntityID:       strconv.Itoa(req.SlotID),
+		RequestSummary: fmt.Sprintf("Nhận thưởng mỏ #%d (%s): %d thạch, %.1f Nhân Khí, %d rương", req.SlotID, mineType, stones, qi, chests),
+		Metadata: map[string]interface{}{
+			"slot_id":   req.SlotID,
+			"rarity":    rarity,
+			"mine_type": mineType,
+			"stones":    stones,
+			"qi":        qi,
+			"chests":    chests,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	err = tx.Commit()
 	if err != nil {
@@ -449,6 +483,24 @@ func AbandonMineSlot(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "mine.abandon",
+		EntityType:     "mine_slot",
+		EntityID:       strconv.Itoa(req.SlotID),
+		RequestSummary: fmt.Sprintf("Từ bỏ mỏ #%d (%s): nhận %d thạch, %.1f Nhân Khí, %d rương", req.SlotID, mineType, stones, qi, chests),
+		Metadata: map[string]interface{}{
+			"slot_id":   req.SlotID,
+			"rarity":    rarity,
+			"mine_type": mineType,
+			"stones":    stones,
+			"qi":        qi,
+			"chests":    chests,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	err = tx.Commit()
 	if err != nil {
@@ -620,6 +672,28 @@ func AttackMineSlot(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
 		return
 	}
+
+	enemyType := "PVP"
+	if monsterIDStr != nil {
+		enemyType = "PVE"
+	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "mine.attack",
+		EntityType:     "mine_slot",
+		EntityID:       strconv.Itoa(req.SlotID),
+		RequestSummary: fmt.Sprintf("Tấn công mỏ #%d (%s), mục tiêu %s", req.SlotID, enemyType, pvpCombat.EnemyName),
+		Metadata: map[string]interface{}{
+			"slot_id":           req.SlotID,
+			"enemy_type":        enemyType,
+			"enemy_name":        pvpCombat.EnemyName,
+			"enemy_template_id": pvpCombat.EnemyTemplateID,
+			"qi_gained":         qiGained,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	err = tx.Commit()
 	if err != nil {

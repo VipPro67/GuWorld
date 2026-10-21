@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -190,6 +192,94 @@ func TestEvaluateTeleportLink(t *testing.T) {
 	itemSectDiff := evaluateTeleportLink(guestPlayer, &sect2ID, &sourceArray, &sectArray)
 	if itemSectDiff.CanUse {
 		t.Fatalf("expected different sect member to be blocked from sect array")
+	}
+}
+
+// Maps inside the same great region must link with a Tier 2 (Đại Vực) array,
+// while Tier 1 stays bounded by its 1,000 world-cell radius and different great
+// regions still require Tier 3.
+func TestEvaluateTeleportLinkAcrossGreatRegion(t *testing.T) {
+	zoneReg.mu.Lock()
+	oldZones, oldByID := zoneReg.zones, zoneReg.byID
+	zoneReg.zones = []models.Region{
+		{ID: "test_vuc_a", Name: "Test Đại Vực A", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999},
+		{ID: "test_hub_a", Name: "Test Hub A", ZoneType: ZoneTypeHub, ParentID: "test_vuc_a", MinX: 4900, MinY: 4900, MaxX: 5100, MaxY: 5100},
+		{ID: "test_map_a", Name: "Test Map A", ZoneType: ZoneTypeNamed, ParentID: "test_vuc_a", MinX: 4000, MinY: 6000, MaxX: 6000, MaxY: 8000},
+		{ID: "test_vuc_b", Name: "Test Đại Vực B", ZoneType: ZoneTypeLarge, MinX: 10000, MinY: 0, MaxX: 19999, MaxY: 9999},
+		{ID: "test_map_b", Name: "Test Map B", ZoneType: ZoneTypeNamed, ParentID: "test_vuc_b", MinX: 14000, MinY: 6000, MaxX: 16000, MaxY: 8000},
+	}
+	zoneReg.byID = make(map[string]*models.Region, len(zoneReg.zones))
+	for i := range zoneReg.zones {
+		zoneReg.byID[zoneReg.zones[i].ID] = &zoneReg.zones[i]
+	}
+	zoneReg.mu.Unlock()
+	defer func() {
+		zoneReg.mu.Lock()
+		zoneReg.zones, zoneReg.byID = oldZones, oldByID
+		zoneReg.mu.Unlock()
+	}()
+
+	player := &models.Player{Account: models.Account{ID: uuid.New()}}
+	tier2 := func(regionID string, x, y int) models.TeleportArray {
+		return models.TeleportArray{
+			ID: uuid.New().String(), RegionID: regionID, X: x, Y: y,
+			Tier: models.TeleportTier2, MaxRange: 10000, IsCrossRegion: false,
+			DirectionType: models.TeleportDirectionTwoWay, AccessPolicy: models.TeleportAccessPublic,
+			CurrentDurability: 100, MaxDurability: 100, IsActive: true,
+		}
+	}
+
+	source := tier2("test_hub_a", 50, 50)             // world (4950, 4950)
+	sameGreatRegion := tier2("test_map_a", 500, 500)  // world (4500, 6500), 1550 cells away
+	otherGreatRegion := tier2("test_map_b", 500, 500) // world (14500, 6500)
+
+	if item := evaluateTeleportLink(player, nil, &source, &sameGreatRegion); !item.CanUse {
+		t.Fatalf("expected Tier 2 to link maps in the same great region, got: %s", item.Reason)
+	} else if item.IsCrossRegionJump || item.Distance != 1550 {
+		t.Fatalf("expected same-great-region distance 1550, got %d (cross=%v)", item.Distance, item.IsCrossRegionJump)
+	}
+
+	tier1 := source
+	tier1.Tier, tier1.MaxRange = models.TeleportTier1, 1000
+	if item := evaluateTeleportLink(player, nil, &tier1, &sameGreatRegion); item.CanUse {
+		t.Fatalf("expected Tier 1 to be blocked beyond 1000 world cells")
+	}
+
+	if item := evaluateTeleportLink(player, nil, &source, &otherGreatRegion); item.CanUse {
+		t.Fatalf("expected Tier 2 to be blocked between different great regions")
+	}
+
+	tier3 := source
+	tier3.Tier, tier3.MaxRange, tier3.IsCrossRegion = models.TeleportTier3, 999999, true
+	if item := evaluateTeleportLink(player, nil, &tier3, &otherGreatRegion); !item.CanUse {
+		t.Fatalf("expected Tier 3 to cross great regions, got: %s", item.Reason)
+	}
+}
+
+// Building materials are hard-coded per tier, so guard them against drifting
+// away from the item registry in backend/data/Item.csv.
+func TestTeleportTemplatesRequireExistingItems(t *testing.T) {
+	f, err := os.Open("../../data/Item.csv")
+	if err != nil {
+		t.Fatalf("open Item.csv: %v", err)
+	}
+	defer f.Close()
+
+	rows, err := csv.NewReader(f).ReadAll()
+	if err != nil || len(rows) == 0 {
+		t.Fatalf("read Item.csv: %v", err)
+	}
+	itemIDs := make(map[string]bool, len(rows))
+	for _, row := range rows[1:] {
+		itemIDs[row[0]] = true
+	}
+
+	for tier, tpl := range teleportTemplates {
+		for itemID := range tpl.RequiredItems {
+			if !itemIDs[itemID] {
+				t.Errorf("%s requires unknown item %q (not in Item.csv)", tier, itemID)
+			}
+		}
 	}
 }
 

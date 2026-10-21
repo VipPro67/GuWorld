@@ -618,6 +618,23 @@ func StockSectVaultBulk(c *gin.Context) {
 		}
 	}
 
+	itemSummaries := make([]string, 0, len(lines))
+	for _, line := range lines {
+		itemSummaries = append(itemSummaries, fmt.Sprintf("%s:%s x%d", line.itemType, line.itemID, line.quantity))
+	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.stock_vault_bulk", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("%d mặt hàng | tổng giá %d quỹ tông môn | %s", len(lines), totalCost, strings.Join(itemSummaries, ", ")),
+		Metadata: map[string]interface{}{
+			"item_count":   len(lines),
+			"items":        itemSummaries,
+			"total_cost":   totalCost,
+			"funds_change": -totalCost,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return

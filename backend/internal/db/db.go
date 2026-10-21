@@ -2820,7 +2820,7 @@ var pathMaterialIDs = map[string]bool{
 	"strength": true, "soul": true, "wisdom": true, "emotion": true,
 	"transformation": true, "enslavement": true, "information": true,
 	"blood": true, "poison": true, "bone": true, "human": true,
-	"dream": true, "food": true, "luck": true,
+	"food": true, "luck": true,
 
 	// Vũ khí, Sát phạt & Đặc thù
 	"sword": true, "blade": true, "theft": true, "phantom": true,
@@ -2830,9 +2830,6 @@ var pathMaterialIDs = map[string]bool{
 // pathMaterialID returns the reward material id for a path key, falling back
 // to guts_gu when the path has no dedicated *_path_material item.
 func pathMaterialID(pathKey string) string {
-	if pathKey == "dream" {
-		return "dream_path_material"
-	}
 	if pathMaterialIDs[pathKey] {
 		return pathKey + "_path_material"
 	}

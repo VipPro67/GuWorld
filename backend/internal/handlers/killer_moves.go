@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 const (
@@ -543,6 +544,29 @@ func CreateKillerMove(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu sát chiêu"})
 		return
 	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "killer_move.create",
+		EntityType:     "killer_move",
+		EntityID:       id,
+		RequestSummary: fmt.Sprintf("Sáng tạo sát chiêu [%s] (%s, tổng lực %.2f/%.2f, hài hòa %.2f, tỉ lệ %.0f%%)", name, preview.Path, preview.PowerLoad, preview.PowerBudget, preview.Harmony, preview.SuccessChance*100),
+		Metadata: map[string]interface{}{
+			"killer_move_id":  id,
+			"name":            name,
+			"path":            preview.Path,
+			"main_gu_id":      main.GuID,
+			"main_gu_rank":    main.Rank,
+			"components":      len(preview.Components),
+			"power_load":      preview.PowerLoad,
+			"power_budget":    preview.PowerBudget,
+			"harmony":         preview.Harmony,
+			"complexity":      preview.Complexity,
+			"success_chance":  preview.SuccessChance,
+			"balance_version": killerMoveBalanceVersion,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu sát chiêu"})
 		return
@@ -705,6 +729,24 @@ func EquipKillerMove(c *gin.Context) {
 			}
 		}
 	}
+	equipAction := "trang bị"
+	if equipped {
+		equipAction = "tháo trang bị"
+	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "killer_move.equip",
+		EntityType:     "killer_move",
+		EntityID:       moveID,
+		RequestSummary: fmt.Sprintf("%s sát chiêu %s (%d Cổ thành phần)", equipAction, moveID, len(components)),
+		Metadata: map[string]interface{}{
+			"killer_move_id": moveID,
+			"equipped":       !equipped,
+			"components":     len(components),
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trang bị"})
 		return
@@ -728,6 +770,19 @@ func DeleteKillerMove(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy sát chiêu"})
 		return
 	}
+	// ponytail: handler has no transaction; audit is written via db.DB after the delete.
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "killer_move.delete",
+		EntityType:     "killer_move",
+		EntityID:       moveID,
+		RequestSummary: fmt.Sprintf("Xóa sát chiêu %s", moveID),
+		Metadata: map[string]interface{}{
+			"killer_move_id": moveID,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 	// Clean up from combat_settings if present
 	var rawSettings []byte
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT combat_settings FROM players WHERE id=$1`, playerID).Scan(&rawSettings); err == nil {
@@ -753,12 +808,13 @@ func DeleteKillerMove(c *gin.Context) {
 
 // loadCombatKillerMoves loads the killer moves that should be active for combat.
 // 1. If loadout is provided with explicit KillerMoveIds:
-//    - If empty (len == 0), no killer moves are used (player explicitly selected 0).
-//    - If non-empty, only those specific killer moves are loaded.
+//   - If empty (len == 0), no killer moves are used (player explicitly selected 0).
+//   - If non-empty, only those specific killer moves are loaded.
+//
 // 2. Otherwise (loadout == nil or loadout.KillerMoveIds == nil):
-//    - Fall back to the player's CombatSettings (killer_move_priorities / km_priorities).
-//    - If CombatSettings has no killer moves configured, NO killer moves are loaded (does not auto-cast).
-//    - If CombatSettings has configured killer moves, only those are loaded.
+//   - Fall back to the player's CombatSettings (killer_move_priorities / km_priorities).
+//   - If CombatSettings has no killer moves configured, NO killer moves are loaded (does not auto-cast).
+//   - If CombatSettings has configured killer moves, only those are loaded.
 func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout) ([]storedKillerMove, error) {
 	if tx == nil || player == nil {
 		return nil, nil
@@ -1005,6 +1061,27 @@ func UseKillerMove(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái nhân vật"})
 		return
 	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "killer_move.use",
+		EntityType:     "killer_move",
+		EntityID:       move.ID,
+		RequestSummary: fmt.Sprintf("Thôi động sát chiêu [%s]: %s (mana -%.0f, tỉ lệ %.0f%%, roll %.0f%%)", move.Name, message, cost, chance*100, roll*100),
+		Metadata: map[string]interface{}{
+			"killer_move_id": move.ID,
+			"name":           move.Name,
+			"path":           move.Path,
+			"success":        success,
+			"success_chance": chance,
+			"roll":           roll,
+			"mana_cost":      cost,
+			"hp_after":       player.HP,
+			"mana_after":     player.CurrentMana,
+			"components":     len(move.Components),
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất sát chiêu"})
 		return

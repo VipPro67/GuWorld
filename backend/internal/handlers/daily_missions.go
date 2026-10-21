@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 const dailyMissionTZ = "Asia/Ho_Chi_Minh"
@@ -287,6 +288,26 @@ func ClaimDailyMission(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
 		return
 	}
+	rewardName := "Nguyên Thạch"
+	if rewardType == "immortal_stones" {
+		rewardName = "Tiên Nguyên Thạch"
+	}
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "daily_mission.claim",
+		EntityType:     "daily_mission",
+		EntityID:       req.MissionID,
+		RequestSummary: fmt.Sprintf("Nhận thưởng nhiệm vụ hằng ngày %s ngày %s: +%d %s", req.MissionID, dayKey, reward, rewardName),
+		Metadata: map[string]interface{}{
+			"mission_id":    req.MissionID,
+			"day_key":       dayKey,
+			"reward_type":   rewardType,
+			"reward_amount": reward,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phần thưởng"})
 		return

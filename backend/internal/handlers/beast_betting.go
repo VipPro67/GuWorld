@@ -17,6 +17,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -806,6 +807,24 @@ func PlaceBeastBet(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &userID,
+		Action:         "beast_betting.bet",
+		EntityType:     "beast_betting_session",
+		EntityID:       r.ID,
+		RequestSummary: fmt.Sprintf("Đặt cược Đấu Thú %s: %.0f Nguyên Thạch (tổng cược vòng: %.0f)", req.Team, req.Amount, req.Amount+existingAmount),
+		Metadata: map[string]interface{}{
+			"round_id":        r.ID,
+			"team":            req.Team,
+			"amount":          req.Amount,
+			"total_bet":       req.Amount + existingAmount,
+			"existing_bet_id": existingBetID,
+			"balance_after":   newBalance,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

@@ -415,6 +415,32 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
+	var leaderRegion, leaderMapInstance sql.NullString
+	var leaderX, leaderY int
+	err = tx.QueryRow(`SELECT current_region,x,y,map_instance_id::text FROM players WHERE id=$1`, leaderID).
+		Scan(&leaderRegion, &leaderX, &leaderY, &leaderMapInstance)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra vị trí đội trưởng"})
+		return
+	}
+	if leaderMapInstance.Valid && leaderMapInstance.String != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đội trưởng đang ở bí cảnh; hãy gia nhập tổ đội trước khi vào bí cảnh"})
+		return
+	}
+
+	// Only players standing near the leader may accept: same world map and
+	// within PartyInviteRange cells.
+	if leaderRegion.Valid {
+		if worldMapIDForRegion(player.CurrentRegion) != worldMapIDForRegion(leaderRegion.String) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đội trưởng đang ở bản đồ khác; hãy tới gần để gia nhập tổ đội!"})
+			return
+		}
+		if chebyshevDistance(player.X, player.Y, leaderX, leaderY) > PartyInviteRange {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bạn ở quá xa đội trưởng (cần trong %d ô) để gia nhập tổ đội!", PartyInviteRange)})
+			return
+		}
+	}
+
 	var members []PartyMember
 	json.Unmarshal(membersRaw, &members)
 	if len(members) >= 4 {
@@ -431,18 +457,6 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
-	var leaderRegion, leaderMapInstance sql.NullString
-	var leaderX, leaderY int
-	err = tx.QueryRow(`SELECT current_region,x,y,map_instance_id::text FROM players WHERE id=$1`, leaderID).
-		Scan(&leaderRegion, &leaderX, &leaderY, &leaderMapInstance)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra vị trí đội trưởng"})
-		return
-	}
-	if leaderMapInstance.Valid && leaderMapInstance.String != "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đội trưởng đang ở bí cảnh; hãy gia nhập tổ đội trước khi vào bí cảnh"})
-		return
-	}
 	if leaderRegion.Valid {
 		if player.CurrentRegion != leaderRegion.String {
 			if err := checkRegionEntry(leaderRegion.String, player.Rank, player.GuInventory); err != nil {
@@ -617,7 +631,7 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 		if m.region != leader.CurrentRegion {
 			oldLZ := largeZoneForRegion(m.region)
 			newLZ := largeZoneForRegion(leader.CurrentRegion)
-			if oldLZ != nil && newLZ != nil && oldLZ.ID != newLZ.ID && oldLZ.ZoneType == ZoneTypeLarge && newLZ.ZoneType == ZoneTypeLarge {
+			if oldLZ != nil && newLZ != nil && oldLZ.ID != newLZ.ID && oldLZ.ZoneType == ZoneTypeLarge && newLZ.ZoneType == ZoneTypeLarge && RegionalWallSuppressionEnabled() {
 				debuffPct, duration := GetRegionalWallDebuff(m.rank, m.subRank)
 				sourceLabel := fmt.Sprintf("Giới Vực Bích (%s ➔ %s)", oldLZ.Name, newLZ.Name)
 				m.statuses.Add("regional_wall_suppression", sourceLabel, duration, debuffPct)

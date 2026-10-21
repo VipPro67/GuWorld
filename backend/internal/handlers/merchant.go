@@ -895,6 +895,7 @@ func BuyFromMerchant(c *gin.Context) {
 	}
 
 	before := append(models.GuInventory(nil), player.GuInventory...)
+	beforePrimeval, beforeImmortal := player.PrimevalStones, player.ImmortalStones
 	guBought := false
 	for _, line := range req.Items {
 		var price float64
@@ -980,6 +981,31 @@ func BuyFromMerchant(c *gin.Context) {
 	if _, err := tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2 WHERE id=$3`,
 		player.PrimevalStones, player.ImmortalStones, player.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lưu được giao dịch"})
+		return
+	}
+	spentPrimeval := beforePrimeval - player.PrimevalStones
+	spentImmortal := beforeImmortal - player.ImmortalStones
+	summaryLines := make([]string, 0, len(req.Items))
+	for _, line := range req.Items {
+		summaryLines = append(summaryLines, fmt.Sprintf("%s x%d", line.ItemID, line.Quantity))
+	}
+	if err := auditlog.LogChecked(tx, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "merchant.buy",
+		EntityType:     "merchant",
+		EntityID:       req.MerchantID,
+		RequestSummary: fmt.Sprintf("Mua từ thương nhân %s: %s | Tổng chi: %s", req.MerchantID, strings.Join(summaryLines, ", "), formatGainSummary(-spentPrimeval, -spentImmortal)),
+		Metadata: map[string]interface{}{
+			"merchant_id":    req.MerchantID,
+			"lines":          len(req.Items),
+			"spent_primeval": spentPrimeval,
+			"spent_immortal": spentImmortal,
+			"gu_bought":      guBought,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
 		return
 	}
 	if err := tx.Commit(); err != nil {

@@ -145,7 +145,7 @@ func GetActiveDreamSession(c *gin.Context) {
 }
 
 // EnterDreamRealm creates a new DREAM_REALM session for the player.
-// It delegates to the shared EnterInstance logic but enforces DREAM_REALM type.
+// It delegates to the shared entry flow, restricted to DREAM_REALM templates.
 func EnterDreamRealm(c *gin.Context) {
 	var req EnterInstanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

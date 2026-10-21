@@ -139,6 +139,34 @@ func TestCheckAndApplyRegionalWallDebuffBetween_KhuVucVsNguVuc(t *testing.T) {
 	}
 }
 
+func TestCheckAndApplyRegionalWallDebuff_DisabledBySetting(t *testing.T) {
+	zoneReg.mu.Lock()
+	zoneReg.zones = []models.Region{
+		{ID: "dai_vuc_nam_cuong", Name: "Đại Vực Nam Cương", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999},
+		{ID: "dai_vuc_trung_chau", Name: "Đại Vực Trung Châu", ZoneType: ZoneTypeLarge, MinX: 10000, MinY: 0, MaxX: 19999, MaxY: 9999},
+	}
+	zoneReg.byID = make(map[string]*models.Region)
+	for i := range zoneReg.zones {
+		zoneReg.byID[zoneReg.zones[i].ID] = &zoneReg.zones[i]
+	}
+	zoneReg.mu.Unlock()
+
+	t.Setenv("REGIONAL_WALL_SUPPRESSION_ENABLED", "false")
+
+	p := &models.Player{}
+	p.Rank = 3
+	p.SubRank = 1
+	p.Statuses = models.StatusList{}
+
+	msg := CheckAndApplyRegionalWallDebuff(p, 5000, 5000, 15000, 5000)
+	if msg != "" {
+		t.Errorf("expected no debuff message when setting disabled, got %q", msg)
+	}
+	if p.Statuses.Has("regional_wall_suppression") {
+		t.Fatal("regional_wall_suppression must not be applied when setting disabled")
+	}
+}
+
 func TestFindLargeZoneAt_BorderResolution(t *testing.T) {
 	zoneReg.mu.Lock()
 	zoneReg.zones = []models.Region{
@@ -159,4 +187,3 @@ func TestFindLargeZoneAt_BorderResolution(t *testing.T) {
 		t.Fatalf("expected border point inside phi_hac_son to resolve to dai_vuc_trung_chau, got %v", lz)
 	}
 }
-

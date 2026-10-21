@@ -49,6 +49,11 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
       ? sectDestinations
       : publicDestinations;
 
+  // Usable links first, keeping the server order otherwise.
+  const sortedDestinations = [...filteredDestinations].sort(
+    (a, b) => Number(b.can_use) - Number(a.can_use)
+  );
+
   const handleTravel = async (targetArrayId: string) => {
     const res = await travelTeleport(targetArrayId);
     if (res.success) {
@@ -166,7 +171,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
               <p>Chưa có điểm dịch chuyển nào khác trong tầm phủ sóng.</p>
             </div>
           ) : (
-            filteredDestinations.map(({ array: dest, distance, is_cross_region_jump, can_use, reason, fee_to_pay, fee_currency }) => {
+            sortedDestinations.map(({ array: dest, distance, is_cross_region_jump, can_use, reason, fee_to_pay, fee_currency }) => {
               const isOwner = dest.owner_id === player.id;
               const hasFee = fee_to_pay > 0;
 

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 func getSoulTierLimit(tier string) int {
@@ -96,6 +97,24 @@ func RefineSoul(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player: " + err.Error()})
 		return
 	}
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &player.ID,
+		Action:         "soul.refine",
+		EntityType:     "player_soul",
+		EntityID:       player.ID.String(),
+		RequestSummary: fmt.Sprintf("Luyện Hồn thành công: hồn bậc %s → %s, Soul HP %d → %d, Nhân Khí +%.0f", oldTier, newTier, player.SoulHP+reduction, player.SoulHP, qiGained),
+		Metadata: map[string]interface{}{
+			"old_tier":      oldTier,
+			"new_tier":      newTier,
+			"soul_hp_loss":  reduction,
+			"soul_hp_after": player.SoulHP,
+			"human_qi":      player.HumanQi,
+			"qi_gained":     qiGained,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction: " + err.Error()})
