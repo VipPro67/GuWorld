@@ -4,30 +4,38 @@ import "testing"
 
 func TestShouldRecordCombatHistory(t *testing.T) {
 	cases := []struct {
-		enemyType string
-		winner    string
-		want      bool
+		enemyType         string
+		winner            string
+		immortalGuDropped bool
+		want              bool
 	}{
-		{"PVP", "Phe Ta", true},
-		{"PVP", "Phe Địch", true},
-		{"MONSTER", "Phe Địch", true},
-		{"BOSS", "Phe Địch", true},
+		{"PVP", "Phe Ta", false, true},
+		{"PVP", "Phe Địch", false, true},
+		{"MONSTER", "Phe Địch", false, true},
+		{"BOSS", "Phe Địch", false, true},
 		// Boss fights are recorded even on victory (world boss / tribulation).
-		{"BOSS", "Phe Ta", true},
-		{"Boss", "Phe Ta", true},
-		{"World_Boss", "Phe Ta", true},
-		{"TRIBULATION_BOSS", "Phe Ta", true},
-		{"boss", "Phe Ta", true},
-		{"MONSTER", "Phe Ta", false},
-		{"ELITE", "Phe Ta", false},
-		{"TRIBULATION_MONSTER", "Phe Ta", false},
+		{"BOSS", "Phe Ta", false, true},
+		{"Boss", "Phe Ta", false, true},
+		{"World_Boss", "Phe Ta", false, true},
+		{"TRIBULATION_BOSS", "Phe Ta", false, true},
+		{"boss", "Phe Ta", false, true},
+		{"MONSTER", "Phe Ta", false, false},
+		{"ELITE", "Phe Ta", false, false},
+		{"TRIBULATION_MONSTER", "Phe Ta", false, false},
+		// A PVE victory that drops a Tiên Cổ is recorded so the run can be
+		// replayed, including normal and elite monsters.
+		{"Normal", "Phe Ta", true, true},
+		{"Elite", "Phe Ta", true, true},
+		{"MONSTER", "Phe Ta", true, true},
+		{"ELITE", "Phe Ta", true, true},
+		{"TRIBULATION_MONSTER", "Phe Ta", true, true},
 		// Sect wars are recorded on both outcomes, for attacker and defenders.
-		{"SECT_WAR", "Phe Ta", true},
-		{"SECT_WAR", "Phe Địch", true},
+		{"SECT_WAR", "Phe Ta", false, true},
+		{"SECT_WAR", "Phe Địch", false, true},
 	}
 	for _, tc := range cases {
-		if got := shouldRecordCombatHistory(tc.enemyType, tc.winner); got != tc.want {
-			t.Errorf("shouldRecordCombatHistory(%q, %q) = %v, want %v", tc.enemyType, tc.winner, got, tc.want)
+		if got := shouldRecordCombatHistory(tc.enemyType, tc.winner, tc.immortalGuDropped); got != tc.want {
+			t.Errorf("shouldRecordCombatHistory(%q, %q, %v) = %v, want %v", tc.enemyType, tc.winner, tc.immortalGuDropped, got, tc.want)
 		}
 	}
 }

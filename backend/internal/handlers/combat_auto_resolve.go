@@ -47,6 +47,9 @@ type CombatResolution struct {
 func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string) (*CombatResolution, error) {
 	var pendingNotifications []notify.Notification
 	var immortalAnnouncements []immortalGuLootAnnouncement
+	// immortalGuDropped lets a PVE victory against a normal/elite monster be
+	// recorded in combat history even though ordinary PVE wins are not.
+	var immortalGuDropped bool
 	var publishClearedCell bool
 	if player.ActiveCombat == nil {
 		return nil, fmt.Errorf("no active combat")
@@ -232,6 +235,9 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 			lootDetailLogs, lootNotifications, lootAnnouncements := applyCombatVictoryLoot(tx, player, player.ActiveCombat, partyMembers, isVirtual)
 			pendingNotifications = append(pendingNotifications, lootNotifications...)
 			immortalAnnouncements = append(immortalAnnouncements, lootAnnouncements...)
+			if len(lootAnnouncements) > 0 {
+				immortalGuDropped = true
+			}
 
 			markBossCleared(tx, player)
 
@@ -373,7 +379,7 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		for _, a := range immortalAnnouncements {
 			BroadcastImmortalGuLoot(a.PlayerID, a.PlayerName, a.BossName, a.GuID, a.Rank)
 		}
-		if !shouldRecordCombatHistory(rawEnemyType, winner) {
+		if !shouldRecordCombatHistory(rawEnemyType, winner, immortalGuDropped) {
 			return
 		}
 		go func() {
@@ -382,8 +388,8 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 				attackerIDs, defenderIDs := pvpHistoryPlayerIDs(historyPlayerID, simState.Allies, targetPlayerID)
 				savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, enemyName, historyUsername, historyRegion)
 			} else {
-				// PVE: boss fights and defeats, plus every sect war so both the
-				// attacker and the defenders can review the run.
+				// PVE: boss fights, defeats, Immortal Gu drops, plus every sect
+				// war so both the attacker and the defenders can review the run.
 				SaveCombatHistory(historyPlayerID, winner, toInterfaceSlice(logs), summaryStr, combatantInfoInterfaces(combatantInfos, false), enemyName, rawEnemyType, historyRegion)
 				if targetSectID != "" {
 					saveSectWarDefenderHistory(sectDefenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, historyUsername, historyRegion)

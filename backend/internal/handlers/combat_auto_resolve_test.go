@@ -15,7 +15,7 @@ func TestCombatTypeLabelIsNotARawEnemyType(t *testing.T) {
 	if got := combatTypeLabel(&models.CombatState{EnemyType: "PVP"}); got == "PVP" {
 		t.Fatalf("combatTypeLabel returned the raw enemy type %q", got)
 	}
-	if !shouldRecordCombatHistory("PVP", "Phe Ta") {
+	if !shouldRecordCombatHistory("PVP", "Phe Ta", false) {
 		t.Fatal("PVP wins must be recorded; history decisions need the raw enemy type")
 	}
 }

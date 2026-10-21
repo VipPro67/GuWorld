@@ -52,9 +52,11 @@ func isBossCombatType(enemyType string) bool {
 
 // shouldRecordCombatHistory reports whether a finished fight is persisted to
 // combat_history: every boss fight, PVP match and sect war counts, other PVE
-// only when the player side lost.
-func shouldRecordCombatHistory(enemyType, winner string) bool {
-	return isBossCombatType(enemyType) || enemyType == "PVP" || enemyType == "SECT_WAR" || winner == "Phe Địch"
+// when the player side lost or when the victory dropped an Immortal Gu
+// (Tiên Cổ) — normal/elite monsters included, so a lucky drop can be replayed.
+func shouldRecordCombatHistory(enemyType, winner string, immortalGuDropped bool) bool {
+	return isBossCombatType(enemyType) || enemyType == "PVP" || enemyType == "SECT_WAR" ||
+		winner == "Phe Địch" || immortalGuDropped
 }
 
 // SaveCombatHistory persists a completed combat result to the combat_history table.
