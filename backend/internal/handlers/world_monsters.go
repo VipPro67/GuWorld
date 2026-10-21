@@ -511,9 +511,15 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 	if !ok {
 		return WorldMonster{}, fmt.Errorf("unknown monster template %q", spawn.MonsterID)
 	}
-	maxHP, attack, defense := models.ScaleMonsterStats(template.MaxHP, template.BaseAttack, template.BaseDefense, spawn.Rank, spawn.SubRank, template.Type)
-	aggroRadius, leashRadius := worldMonsterAggroProfile(spawn.Rank)
-	attackRange, speed := 1.5, worldMonsterSpeed(spawn.Rank)
+	// Never trust the stored rank blindly: a stale row (or an admin edit) must
+	// not spawn a rank-8 monster inside a rank 3-5 zone.
+	rank := clampRankToZoneBand(spawn.RegionID, spawn.Rank)
+	if rank < 1 {
+		rank = 1
+	}
+	maxHP, attack, defense := models.ScaleMonsterStats(template.MaxHP, template.BaseAttack, template.BaseDefense, rank, spawn.SubRank, template.Type)
+	aggroRadius, leashRadius := worldMonsterAggroProfile(rank)
+	attackRange, speed := 1.5, worldMonsterSpeed(rank)
 	patrolMinX, patrolMinY, patrolMaxX, patrolMaxY := 0, 0, 0, 0
 	if spawn.IsBoss {
 		// Bosses can pursue players throughout their owning region, but remain
@@ -521,16 +527,16 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 		patrolMinX, patrolMinY, patrolMaxX, patrolMaxY = monsterPatrolBounds(spawn.RegionID)
 		leashRadius = patrolRadius(spawn.X, spawn.Y, patrolMinX, patrolMinY, patrolMaxX, patrolMaxY)
 		aggroRadius = leashRadius
-		attackRange, speed = 2, worldMonsterSpeed(spawn.Rank)+worldMonsterSpecialSpeedBonus
+		attackRange, speed = 2, worldMonsterSpeed(rank)+worldMonsterSpecialSpeedBonus
 	} else if strings.EqualFold(template.Type, "Elite") {
 		// Elite monsters notice and pursue players around their spawn, but stay
 		// inside their owning region instead of using the boss-wide hunt.
 		patrolMinX, patrolMinY, patrolMaxX, patrolMaxY = monsterPatrolBounds(spawn.RegionID)
 		aggroRadius, leashRadius = worldMonsterEliteAggro, worldMonsterEliteLeash
-		speed = worldMonsterSpeed(spawn.Rank) + worldMonsterSpecialSpeedBonus
+		speed = worldMonsterSpeed(rank) + worldMonsterSpecialSpeedBonus
 	}
 	monster := WorldMonster{
-		InstanceID: uuid.NewString(), SpawnID: spawn.ID, MonsterTemplateID: spawn.MonsterID, IsBoss: spawn.IsBoss, IsElite: strings.EqualFold(template.Type, "Elite"), Rank: spawn.Rank, SubRank: spawn.SubRank, RegionID: spawn.RegionID,
+		InstanceID: uuid.NewString(), SpawnID: spawn.ID, MonsterTemplateID: spawn.MonsterID, IsBoss: spawn.IsBoss, IsElite: strings.EqualFold(template.Type, "Elite"), Rank: rank, SubRank: spawn.SubRank, RegionID: spawn.RegionID,
 		X: float64(spawn.X), Y: float64(spawn.Y), SpawnX: float64(spawn.X), SpawnY: float64(spawn.Y),
 		HP: maxHP, MaxHP: maxHP, State: MonsterStateIdle, Revision: 1, LastUpdateAt: now,
 		Statuses: []StatusEffect{}, RespawnSeconds: spawn.RespawnSeconds, AggroRadius: aggroRadius, AttackRange: attackRange,
@@ -578,6 +584,9 @@ func applyWorldMonsterTuning(ctx context.Context, monster *WorldMonster) {
 			monster.Rank = rank
 		}
 	}
+	// Actors restored from Redis may still carry an over-band rank from old
+	// data; cap it at the owning zone so the roaming gate below can hold.
+	monster.Rank = clampRankToZoneBand(monster.RegionID, monster.Rank)
 	effectiveRank := monster.Rank
 	if effectiveRank < 1 {
 		effectiveRank = 1
@@ -1178,6 +1187,12 @@ func moveMonsterToward(monster *WorldMonster, tx, ty, dt float64) {
 		if (!monster.IsBoss && !inWorld(ix, iy)) || outsidePatrol || isWorldMonsterSafeZone(monster.RegionID, ix, iy) {
 			return
 		}
+	}
+	// Never step into a zone whose rank band is below the monster's own rank.
+	// Boss/Elite already stay inside their patrol rect; this closes the same
+	// border for ordinary monsters, which are only leashed to their spawn.
+	if !monsterCanRoamInto(monster.Rank, int(math.Round(nx)), int(math.Round(ny))) {
+		return
 	}
 	if monster.IsBoss || math.Hypot(nx-monster.SpawnX, ny-monster.SpawnY) <= monster.LeashRadius {
 		monster.X, monster.Y = nx, ny

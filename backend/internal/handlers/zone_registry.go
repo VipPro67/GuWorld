@@ -395,6 +395,11 @@ func regionScopeIDs(regionID string) []string {
 	return ids
 }
 
+// isRegionWithinScope reports whether candidateRegion is parentRegion itself or
+// one of its descendant zones. The check is deliberately directional: sibling
+// zones that merely share a large parent are NOT in scope, otherwise a rank-8
+// hunter in a high-rank neighbour could aggro/chase a player standing in a
+// low-rank zone.
 func isRegionWithinScope(parentRegion, candidateRegion string) bool {
 	if parentRegion == "" || candidateRegion == "" {
 		return false
@@ -402,16 +407,35 @@ func isRegionWithinScope(parentRegion, candidateRegion string) bool {
 	if parentRegion == candidateRegion {
 		return true
 	}
-	scope1 := regionScopeIDs(parentRegion)
-	scope2 := regionScopeIDs(candidateRegion)
-	for _, id1 := range scope1 {
-		for _, id2 := range scope2 {
-			if id1 == id2 {
-				return true
-			}
+	for _, id := range regionScopeIDs(candidateRegion) {
+		if id == parentRegion {
+			return true
 		}
 	}
 	return false
+}
+
+// clampRankToZoneBand caps an effective monster rank at the owning zone's max
+// rank, so a stale or mis-authored spawn row can never field a monster stronger
+// than the zone band advertises.
+func clampRankToZoneBand(regionID string, rank int) int {
+	zone := ZoneByID(regionID)
+	if zone == nil || zone.MaxRank <= 0 || rank <= zone.MaxRank {
+		return rank
+	}
+	return zone.MaxRank
+}
+
+// monsterCanRoamInto reports whether a monster of the given rank may occupy
+// (x, y). Ordinary world monsters are only leashed to their spawn point, not to
+// their zone, so without this check a rank-8 hunter can follow a player across
+// a border into a zone whose band never spawns rank-8 monsters.
+func monsterCanRoamInto(rank int, x, y int) bool {
+	zone := FindZoneAt(x, y)
+	if zone == nil || zone.MaxRank <= 0 {
+		return true
+	}
+	return rank <= zone.MaxRank
 }
 
 func activeScopeRegions(minX, minY, maxX, maxY int, mapID, playerRegion string) []string {

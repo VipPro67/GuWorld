@@ -351,7 +351,7 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 		if !ok {
 			return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 		}
-		rank := spawn.MinRank
+		rank := clampRankToZoneBand(zoneID, spawn.MinRank)
 		if rank < 1 {
 			rank = zone.MinRank
 		}
@@ -426,6 +426,16 @@ func findProceduralMonsterCamp(x, y int, zone *models.Region) (proceduralMonster
 			}
 			if maxRank < minRank {
 				maxRank = minRank
+			}
+			// A stale/mis-authored pool must not advertise a rank above the
+			// zone's own band (e.g. rank-8 rows left in a rank 3-5 zone).
+			if zone.MaxRank > 0 {
+				if minRank > zone.MaxRank {
+					minRank = zone.MaxRank
+				}
+				if maxRank > zone.MaxRank {
+					maxRank = zone.MaxRank
+				}
 			}
 			rank := minRank
 			if maxRank > minRank {

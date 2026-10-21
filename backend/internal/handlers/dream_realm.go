@@ -182,9 +182,10 @@ func EnterDreamRealm(c *gin.Context) {
 		return
 	}
 
-	// Delegate to the shared EnterInstance logic (which already handles DREAM_REALM correctly).
-	// We override req in context so EnterInstance uses the validated template.
-	EnterInstance(c)
+	// Delegate to the shared entry flow, reusing the already-parsed request.
+	// Calling EnterInstance(c) here would fail because the JSON body has
+	// already been consumed by the binding above.
+	enterInstanceWithRequest(c, req)
 }
 
 // ActionDreamRealm processes a player action inside an active DREAM_REALM session.
