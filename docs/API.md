@@ -169,7 +169,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/explore/use_gu` | Dùng Cổ bản đồ (ví dụ mở cổng). Cổ dịch chuyển (`PORTAL_CREATE`/`RANDOM_PORTAL`) bị giới hạn tầm theo rank Cổ hoặc `params.range`; trả `synced_party_members` khi đội trưởng kéo tổ đội theo. |
 | GET | `/world/drops` | Chiến lợi phẩm/hài cốt còn hạn trong viewport; mặc định quanh người chơi (radius 25), hỗ trợ `x`, `y`, `radius` tùy chỉnh (radius tối đa 127). Query theo bounding box tọa độ, không giới hạn theo region của người chơi. |
 | POST | `/world/drops/:id/loot` | Nhặt một ground drop khi đủ điều kiện khóa sở hữu. |
-| POST | `/veins/:id/harvest` | Thu hoạch Nguyên Tuyền khi đang đứng đúng ô. Trả `message`, `materials_inventory`, `primeval_stones`/`immortal_stones`, `human_qi`. |
+| POST | `/veins/:id/harvest` | Thu hoạch Nguyên Tuyền khi đứng trong phạm vi 3 ô (Chebyshev) quanh mỏ. Trả `message`, `materials_inventory`, `primeval_stones`/`immortal_stones`, `human_qi`. |
 
 ## Truyền Tống Trận (Teleportation Arrays)
 

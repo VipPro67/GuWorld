@@ -715,7 +715,8 @@ export function WorldPage() {
             {selectedObject.cell_type === "PrimevalVein" && (() => {
               const vein = selectedObject.vein;
               if (!vein) return null;
-              const isHere = !!gamePlayer && gamePlayer.x === selectedObject.x && gamePlayer.y === selectedObject.y;
+              const isHere = !!gamePlayer
+                && Math.max(Math.abs(gamePlayer.x - selectedObject.x), Math.abs(gamePlayer.y - selectedObject.y)) <= 3;
               return (
                 <div className="mb-3 space-y-1.5 text-xs font-serif bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-2.5">
                   <div className="flex justify-between text-[11px] font-mono text-zinc-300">
@@ -741,7 +742,7 @@ export function WorldPage() {
                     }}
                     className="w-full mt-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-all cursor-pointer"
                   >
-                    {isHere ? "⛏️ Thu hoạch" : "Phải đứng tại Nguyên Tuyền"}
+                    {isHere ? "⛏️ Thu hoạch" : "Phải đứng gần Nguyên Tuyền (≤ 3 ô)"}
                   </button>
                 </div>
               );

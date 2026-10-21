@@ -68,3 +68,21 @@ func TestSpringEggHatchRegistered(t *testing.T) {
 		t.Fatalf("CompileItemEffects rejects spring_egg_hatch: %v", err)
 	}
 }
+
+func TestWithinVeinHarvestRange(t *testing.T) {
+	cases := []struct {
+		px, py, vx, vy int
+		want           bool
+	}{
+		{100, 100, 100, 100, true},
+		{103, 97, 100, 100, true},
+		{104, 100, 100, 100, false},
+		{100, 96, 100, 100, false},
+		{97, 103, 100, 100, true},
+	}
+	for _, tc := range cases {
+		if got := withinVeinHarvestRange(tc.px, tc.py, tc.vx, tc.vy); got != tc.want {
+			t.Fatalf("withinVeinHarvestRange(%d,%d,%d,%d) = %v, want %v", tc.px, tc.py, tc.vx, tc.vy, got, tc.want)
+		}
+	}
+}

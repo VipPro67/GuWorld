@@ -73,7 +73,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const regionName = regions.find((r) => r.id === player.current_region)?.name || "Thế Giới Cổ Sư";
 
   const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell) => {
-    if (cell?.cell_type === "PrimevalVein" && x === player.x && y === player.y) {
+    if (cell?.cell_type === "PrimevalVein"
+      && Math.max(Math.abs(x - player.x), Math.abs(y - player.y)) <= 3) {
       await harvestVein(cell.content);
       await loadGrid();
       return;

@@ -1776,8 +1776,8 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         batchWild.poly([c.x + 0.5, c.y + 0.1, c.x + 0.8, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.2, c.y + 0.5]);
         wildCount++;
       } else if (c.cell_type === "PrimevalVein") {
-        batchVein.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.1, c.y + 0.5]);
-        batchVein.circle(c.x + 0.5, c.y + 0.5, 0.14);
+        batchVein.poly([c.x + 0.5, c.y + 0.05, c.x + 0.95, c.y + 0.5, c.x + 0.5, c.y + 0.95, c.x + 0.05, c.y + 0.5]);
+        batchVein.poly([c.x + 0.5, c.y + 0.28, c.x + 0.72, c.y + 0.5, c.x + 0.5, c.y + 0.72, c.x + 0.28, c.y + 0.5]);
         veinCount++;
       } else if (c.cell_type === "Boss") {
         if (legacyMonsterHasRuntimeReplacement(c, useWorldStore.getState().monsters)) continue;

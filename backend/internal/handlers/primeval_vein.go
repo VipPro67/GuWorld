@@ -30,6 +30,7 @@ const (
 	veinMortalCap       = 31
 	veinImmortalCap     = 5
 	veinMinImmortalRank = 5
+	veinHarvestRange    = 3
 )
 
 type veinRarityRate struct {
@@ -213,7 +214,21 @@ func veinCellsInBounds(minX, minY, maxX, maxY int) []NearbyCell {
 	return out
 }
 
-// HarvestVein collects the shared pool. The player must stand on the vein tile.
+// withinVeinHarvestRange allows harvesting from nearby tiles so terrain or a
+// monster on the exact tile cannot make the vein unreachable.
+func withinVeinHarvestRange(px, py, vx, vy int) bool {
+	dx, dy := px-vx, py-vy
+	if dx < 0 {
+		dx = -dx
+	}
+	if dy < 0 {
+		dy = -dy
+	}
+	return dx <= veinHarvestRange && dy <= veinHarvestRange
+}
+
+// HarvestVein collects the shared pool. The player must stand within
+// veinHarvestRange tiles of the vein.
 func HarvestVein(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -268,8 +283,8 @@ func HarvestVein(c *gin.Context) {
 	if zone := FindZoneAt(player.X, player.Y); zone != nil {
 		standZone = zone.ID
 	}
-	if player.X != v.X || player.Y != v.Y || (player.CurrentRegion != v.RegionID && standZone != v.RegionID) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu phải đứng ngay tại Nguyên Tuyền mới thu hoạch được!"})
+	if !withinVeinHarvestRange(player.X, player.Y, v.X, v.Y) || (player.CurrentRegion != v.RegionID && standZone != v.RegionID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu phải đứng trong phạm vi %d ô của Nguyên Tuyền mới thu hoạch được!", veinHarvestRange)})
 		return
 	}
 

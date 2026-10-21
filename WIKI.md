@@ -1053,7 +1053,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 ## 14. Nguyên Tuyền (mỏ ngoài bản đồ)
 
 - **Nguyên Tuyền** là điểm tài nguyên xuất hiện ngẫu nhiên trên bản đồ Ngũ Vực, hiển thị rõ bằng biểu tượng 💠. Không còn tab "Khai khoáng" hay chiếm mỏ cá nhân.
-- Mỗi Nguyên Tuyền tự tích lũy Nguyên Thạch (hoặc Tiên Nguyên Thạch với Tiên Tuyền) vào **bể chung**, tối đa **1 ngày sản lượng**. Ai đứng đúng ô cũng bấm **Thu hoạch** được; nhận xong bể reset về 0 và tích lại.
+- Mỗi Nguyên Tuyền tự tích lũy Nguyên Thạch (hoặc Tiên Nguyên Thạch với Tiên Tuyền) vào **bể chung**, tối đa **1 ngày sản lượng**. Ai đứng trong phạm vi **3 ô** quanh mỏ cũng bấm **Thu hoạch** được; nhận xong bể reset về 0 và tích lại.
 - Mỗi mỏ có **trần sản lượng vòng đời** theo phẩm chất (Thường 7 ngày → Siêu Cấp 30 ngày sản lượng) và **tuổi thọ tối đa 30 ngày**. Hút cạn sớm thì mỏ biến mất; bỏ hoang quá hạn cũng biến mất.
 - Thế giới duy trì tối đa **31 Phàm Tuyền + 5 Tiên Tuyền**, mỗi đại vực khoảng 1/5 cap; worker bù 1 mỏ mỗi loại mỗi 30 phút. Tiên Tuyền chỉ sinh ở vùng rank ≥ 5.
 - **Trứng Nguyên Tuyền** rơi hiếm (1%) từ boss/world boss. Dùng trứng tại chỗ để cấy một Phàm Tuyền ngay dưới chân — ô phải trống và thế giới chưa đủ 31 Phàm Tuyền, nếu không trứng không bị tiêu hao.
