@@ -128,7 +128,7 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 	add("ON_DEATH", DispositionSupported, "combat", "REBORN")
 	add("BEFORE_ENEMY_ATTACK", DispositionSupported, "combat", "FORGET_INTENT_INTERRUPT", "FORGET_WILL_CONFUSE")
 	add("ON_TURN_START", DispositionSupported, "combat", "POEM_INTENT")
-	add("ON_BATTLE_START", DispositionSupported, "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY", "SUMMON_WOLF_FRONTLINE", "SUMMON_MONSTER")
+	add("ON_BATTLE_START", DispositionSupported, "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY", "SUMMON_WOLF_FRONTLINE", "SUMMON_MONSTER", "INSTANT_WIN")
 	add("ON_CAST", DispositionSupported, "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE", "SUMMON_MONSTER")
 	add("ON_HIT", DispositionSupported, "combat", "BYPASS_SHIELD", "GUARANTEED_HIT")
 	add("ON_ACTION", DispositionSupported, "combat", "GUARANTEED_HIT")

@@ -214,6 +214,39 @@ func applyBattleStartSummons(state *CombatState, summonCount *int) []CombatLog {
 	return logs
 }
 
+// applyBattleStartInstantWin resolves ON_BATTLE_START/INSTANT_WIN before the
+// first turn: the carrier's side drops every opposing combatant outright,
+// bypassing shields, damage immunity and Bất Tử. The normal end-of-turn win
+// check then reports the victory.
+func applyBattleStartInstantWin(state *CombatState) []CombatLog {
+	var logs []CombatLog
+	wipe := func(carriers, targets []*CombatantAuto) {
+		for _, c := range carriers {
+			if c == nil || c.HP <= 0 || !hasMechanic(c.Mechanics, "ON_BATTLE_START", "INSTANT_WIN") {
+				continue
+			}
+			logs = append(logs, CombatLog{
+				Turn:      0,
+				ActorId:   c.ID,
+				ActorName: c.Name,
+				Action:    "INSTANT_WIN",
+				Detail:    fmt.Sprintf("[%s] định đoạt chiến cuộc — toàn bộ địch nhân gục ngã!", c.Name),
+			})
+			for _, t := range targets {
+				if t == nil {
+					continue
+				}
+				t.HP = 0
+				t.IsDead = true
+			}
+			return
+		}
+	}
+	wipe(state.Allies, state.Enemies)
+	wipe(state.Enemies, state.Allies)
+	return logs
+}
+
 // lifespanByRank approximates an enemy's thọ nguyên from its rank. Players use
 // their tracked Lifespan; monsters have none, so this is the calibration knob
 // for ON_BATTLE_START/SEIZE_INITIATIVE. Tune here, not per-Gu.
@@ -851,6 +884,7 @@ func Simulate(state *CombatState) []CombatLog {
 	// ON_BATTLE_START summon hooks resolve before the initial snapshot so the
 	// minions are on the field from turn one and survive REBORN rewind.
 	battleStartLogs := applyBattleStartSummons(state, &summonCount)
+	battleStartLogs = append(battleStartLogs, applyBattleStartInstantWin(state)...)
 	initialState := cloneCombatState(state)
 
 	startSnap := buildSnapshot(state)

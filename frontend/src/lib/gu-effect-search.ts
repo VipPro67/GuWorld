@@ -74,6 +74,7 @@ export const UNIQUE_NAMES_VI: Record<string, string> = {
   SWORD_DRAGON_TRANSFORM: "Kiếm Long Biến",
   FULL_SOUL_HEAL: "Đầy Hồn Phục",
   SEIZE_INITIATIVE: "Đoạt Tiên Cơ",
+  INSTANT_WIN: "Chiến Thắng Tuyệt Đối",
   FIRST_TURN_EVADE: "Né Tuyệt Đối Lượt Đầu",
   STEALTH: "Tàng Hình",
   MANA_REGEN: "Hồi Chân Nguyên",

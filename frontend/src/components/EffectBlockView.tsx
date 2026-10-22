@@ -97,6 +97,7 @@ const UNIQUE_NAMES: Record<string, string> = {
   UNRAVEL_RIDDLE: "Giải Đoán Câu Đố",
   CHAOS_GAMBLE: "Hỗn Độn Đánh Cược",
   SEIZE_INITIATIVE: "Đoạt Tiên Cơ (Đánh Trước)",
+  INSTANT_WIN: "Chiến Thắng Tuyệt Đối",
   FIRST_TURN_EVADE: "Né Tuyệt Đối Lượt Đầu",
   FORGET_INTENT_INTERRUPT: "Đoán Ý & Ngắt Chiêu",
   FORGET_WILL_CONFUSE: "Ý Niệm Hỗn Loạn",

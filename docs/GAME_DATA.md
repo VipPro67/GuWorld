@@ -755,6 +755,7 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | `BEFORE_ENEMY_ATTACK` | `FORGET_INTENT_INTERRUPT`, `FORGET_WILL_CONFUSE` | event attacker/targets; probabilities, turns, activation count | simulator; combat state | forget-gu tests + catalog |
 | `ON_TURN_START` | `POEM_INTENT` | self/enemies; hook params | simulator; combat state | effect timing + catalog |
 | `ON_BATTLE_START` | `SEIZE_INITIATIVE`, `SUMMON_WOLF_FRONTLINE`, `SUMMON_MONSTER` | self vs primary enemy / self; lifespan ratio hoặc hook params triệu hồi | simulator; initiative snapshot + triệu hồi một lần ở Lượt 0 | engine + catalog |
+| `ON_BATTLE_START` | `INSTANT_WIN` | self/side; không params; hạ toàn bộ phe địch ngay Lượt 0, bỏ qua khiên, miễn nhiễm và Bất Tử | simulator (`applyBattleStartInstantWin`); combat state | `simulator/instant_win_test.go` + catalog |
 | `ON_CAST` | `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE` | hook-declared combat targets; typed params required | simulator; combat state | engine/effect timing + catalog |
 | `ON_HIT` | `BYPASS_SHIELD`, `GUARANTEED_HIT` | event targets; bool | simulator; hit event (GUARANTEED_HIT bỏ qua Evasion/Blind/First Turn Evade/Forget Will Miss) | engine + catalog |
 | `BEFORE_HIT` | `FIRST_TURN_EVADE` | self; bool/turn gate; Định Tiên Du rank 9 mang (rank 6–8 chỉ `portal_create` + `movement`) | simulator; combat state | engine + catalog |

@@ -426,6 +426,8 @@ Mỗi Cổ instance có:
 
 Khi Cổ chết đói, **Ký Sự Tu Hành** ghi bản rõ: độ no ngay trước khi chết, trạng thái lúc đó (`ACTIVE`/`SLEEPING`/`SEALED` — quyết định tốc độ hao hụt), lần cuối được cho ăn và tổng thời gian không được cho ăn của cá thể đó.
 
+**Huyền Cổ (Thiên Đạo, Rank 10):** khi được trang bị ACTIVE và đã no, mỗi trận đấu kết thúc ngay khi khai chiến — toàn bộ phe địch gục ngã trước Lượt 1, bỏ qua khiên, miễn nhiễm sát thương và Bất Tử. Áp dụng cho cả PvE, PvP và đấu trường; chế độ MOBA thời gian thực không dùng mô phỏng nên không bị ảnh hưởng.
+
 Cổ sư có thể:
 
 - Cho ăn từng Cổ hoặc theo nhóm.

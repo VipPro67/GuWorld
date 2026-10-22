@@ -899,14 +899,15 @@ func combatMechanicsForSpec(spec models.GuDictionaryItem, action bool) []simulat
 	return resolveSummonMonsterMechanics(result)
 }
 
-// battleStartSummonMechanics returns only the ON_BATTLE_START summon hooks of a
-// Gu. Arena builders intentionally do not load passive mechanics, but summoning
-// Gu used to contribute through their per-turn action; this keeps the
-// battle-start summon working there without pulling in unrelated passives.
-func battleStartSummonMechanics(spec models.GuDictionaryItem) []simulator.CombatMechanic {
+// battleStartMechanics returns the ON_BATTLE_START hooks an arena builder must
+// keep when it skips unrelated passives: summons and the INSTANT_WIN hook.
+func battleStartMechanics(spec models.GuDictionaryItem) []simulator.CombatMechanic {
 	var result []simulator.CombatMechanic
 	for _, m := range combatMechanicsForSpec(spec, false) {
-		if m.Trigger == "ON_BATTLE_START" && (m.ActionCode == "SUMMON_MONSTER" || m.ActionCode == "SUMMON_WOLF_FRONTLINE") {
+		if m.Trigger != "ON_BATTLE_START" {
+			continue
+		}
+		if m.ActionCode == "SUMMON_MONSTER" || m.ActionCode == "SUMMON_WOLF_FRONTLINE" || m.ActionCode == "INSTANT_WIN" {
 			result = append(result, m)
 		}
 	}
