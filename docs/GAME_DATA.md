@@ -784,7 +784,7 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | `killer_moves.effects`: `life_steal|lifesteal`, `multi_hit`, `phantom_attack`, `thorns_damage`, `heal`, `bleed`, `poison`, `stun`, `mana_regen`, `heal_hp|regen`, `portal_create`, `random_portal` | hit/cast/world use | percent-vs-ratio legacy, count, flat, bool | manual, auto và world chỉ xử lý các tập con khác nhau; combat/player/world persistence | raw key; simulator chỉ có characterization hạn chế |
 | `aperture_variant_events.effects` | chưa có producer/trigger | chưa xác định | chỉ có JSONB owner event row; **không executor/persistence command** | không UI, không test; mọi payload hiện là no-op |
 
-**Nguyên Tuyền (primeval vein):** bảng `primeval_veins` (`region_id`, `x`, `y`, `vein_type` `mortal`/`immortal`, `rarity`, `accumulated_since`, `produced_minutes`, `expires_at`). Mỗi mỏ có bể chung: ai đứng trong phạm vi 3 ô cũng thu hoạch được, nhận hết phần đã tích rồi bể reset. Trần tích lũy **1 ngày sản lượng**; trần vòng đời theo phẩm chất (Thường 7 / Hiếm 10 / Sử Thi 14 / Truyền Thuyết 21 / Siêu Cấp 30 ngày sản lượng); mỏ sống tối đa **30 ngày**. Phàm Tuyền nhả `mine_chest`; Tiên Tuyền nhả `mine_chest_immortal` (tỉ lệ rương decay 50%/2h, sàn 20% base — `veinChestDecay`, `handlers/primeval_vein.go`). Worker spawn tối đa **31 phàm + 5 tiên** (tiên chỉ ở vùng `min_rank ≥ 5`; mỗi đại vực ~1/5 cap), mỗi 30 phút bù 1 mỏ/loại. Item `spring_egg` (Trứng Nguyên Tuyền) dùng effect `SPRING_EGG_HATCH` để cấy Phàm Tuyền tại chỗ; boss rơi trứng với tỉ lệ 1%.
+**Nguyên Tuyền (primeval vein):** bảng `primeval_veins` (`region_id`, `x`, `y`, `vein_type` `mortal`/`immortal`, `rarity`, `accumulated_since`, `produced_minutes`, `expires_at`). Mỗi mỏ có bể chung: ai đứng trong phạm vi 3 ô cũng thu hoạch được, nhận hết phần đã tích rồi bể reset. Trần tích lũy **1 ngày sản lượng**; trần vòng đời theo phẩm chất (Thường 7 / Hiếm 10 / Sử Thi 14 / Truyền Thuyết 21 / Siêu Cấp 30 ngày sản lượng); mỏ sống tối đa **30 ngày**. Phàm Tuyền nhả `mine_chest`; Tiên Tuyền nhả `mine_chest_immortal` (tỉ lệ rương decay 50%/2h, sàn 20% base — `veinChestDecay`, `handlers/primeval_vein.go`). Worker spawn tối đa **31 phàm + 5 tiên** (tiên chỉ ở vùng `min_rank ≥ 5`; mỗi đại vực ~1/5 cap), mỗi 30 phút bù 1 mỏ/loại. Boss rơi Cổ trùng `GU_SPRING_EGG` (Tuyền Đản Cổ) với tỉ lệ 1%; dùng Cổ này kích hoạt effect `SPRING_EGG_HATCH` để cấy Phàm Tuyền tại chỗ.
 
 Seed fallback trong `schema_dictionaries.go` dùng cùng key với CSV và không tạo
 namespace mới. Khác biệt seed/CSV phải được kiểm tra parity; đáng chú ý
@@ -1031,10 +1031,12 @@ Các effect key đặc biệt của Consumable (resolve trong `backend/internal/
 
 Hai item mẫu trong `Item.csv`: `ITEM_RANDOM_CONSTITUTION` (Hoán Thể Đan) và `ITEM_RANDOM_RACE` (Hoán Huyết Đan), cùng rank 7 / base_price 200.
 
-Hai đan dược rơi từ quái tai kiếp (tỉ lệ nhỏ, xem `LootTable.csv`):
+Hai đan dược rơi từ **boss rank 8–9** (xem `LootTable.csv`):
 
-- `ITEM_APERTURE_EXPANSION_PILL` (Thác Khiếu Đan, rank 6): `INCREASE_APERTURE_AREA` +500.000 diện tích Tiên Khiếu. Rơi 2–10% tùy bảng loot (Địa Tai → Hỗn Độn).
-- `ITEM_APERTURE_TIME_PILL` (Thôi Thời Đan, rank 7): `INCREASE_APERTURE_TIME_RATE` +2 tốc độ thời gian Tiên Khiếu. Rơi 1–5% tùy bảng loot.
+- `ITEM_APERTURE_EXPANSION_PILL` (Thác Khiếu Đan, rank 9): `INCREASE_APERTURE_AREA` +500.000 diện tích Tiên Khiếu.
+- `ITEM_APERTURE_TIME_PILL` (Thôi Thời Đan, rank 9): `INCREASE_APERTURE_TIME_RATE` +2 tốc độ thời gian Tiên Khiếu.
+
+Cả hai gắn entry `rank` bằng đúng rank boss (8 hoặc 9), base chance `0.04` (rank 8) / `0.03` (rank 9). Qua hệ số loot (`gamefx.LootChanceMultiplier` / `LootQuantityMultiplier`) tỉ lệ thực tế là ~10%/12%, số lượng 5 viên (rank 8) hoặc 8 viên (rank 9) mỗi lần rơi. Danh sách bảng: 12 bảng loot của boss rank 8 trong `MapCell.csv` (`loot_monster_*_thai_co_r8r9`, `loot_monster_blood_sword_asura_lord`) và 3 bảng boss rank 9 (`loot_monster_immemorial_refinement_golem`, `loot_monster_tide_dragon_emperor`, `loot_monster_white_light_divine_sovereign`).
 
 ### Recipe
 

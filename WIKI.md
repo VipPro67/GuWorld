@@ -491,7 +491,7 @@ Quái và Cổ trùng **cùng rank là cân bằng** (mất ~3–5 hit để h�
 - Dictionary vật phẩm được Admin import từ `backend/data/Item.csv`.
 - Vật phẩm có type, rarity, Chuyển, path, effects, tags và description.
 - Item effects hiện có gồm hồi Chân Nguyên/Sinh lực, trị liệu/hồi phục sinh lực Tiên Khiếu (`heal_aperture`), mở rộng diện tích Tiên Khiếu (`increase_aperture_area`), tăng tốc độ thời gian Tiên Khiếu (`increase_aperture_time_rate`), soul boost, đạo ngân, xóa trạng thái xấu và điều kiện chỉ phàm nhân/chỉ Cổ Tiên.
-- **Thác Khiếu Đan** (+500.000 diện tích Tiên Khiếu) và **Thôi Thời Đan** (+2 tốc độ thời gian Tiên Khiếu) rơi tỉ lệ nhỏ từ quái tai kiếp (Địa Tai, Thiên Kiếp, Hạo Kiếp, Vạn Kiếp, Hỗn Độn Thần Ma và Kiếp Lực Ma Vật).
+- **Thác Khiếu Đan** (+500.000 diện tích Tiên Khiếu) và **Thôi Thời Đan** (+2 tốc độ thời gian Tiên Khiếu) rơi từ boss rank 8–9 (12 bảng loot boss rank 8 và 3 bảng boss rank 9), tỉ lệ nhỏ.
 
 ## 6. Luyện Cổ và suy diễn công thức
 
@@ -1058,7 +1058,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 - Mỗi Nguyên Tuyền tự tích lũy Nguyên Thạch (hoặc Tiên Nguyên Thạch với Tiên Tuyền) vào **bể chung**, tối đa **1 ngày sản lượng**. Ai đứng trong phạm vi **3 ô** quanh mỏ cũng bấm **Thu hoạch** được; nhận xong bể reset về 0 và tích lại.
 - Mỗi mỏ có **trần sản lượng vòng đời** theo phẩm chất (Thường 7 ngày → Siêu Cấp 30 ngày sản lượng) và **tuổi thọ tối đa 30 ngày**. Hút cạn sớm thì mỏ biến mất; bỏ hoang quá hạn cũng biến mất.
 - Thế giới duy trì tối đa **31 Phàm Tuyền + 5 Tiên Tuyền**, mỗi đại vực khoảng 1/5 cap; worker bù 1 mỏ mỗi loại mỗi 30 phút. Tiên Tuyền chỉ sinh ở vùng rank ≥ 5.
-- **Trứng Nguyên Tuyền** rơi hiếm (1%) từ boss/world boss. Dùng trứng tại chỗ để cấy một Phàm Tuyền ngay dưới chân — ô phải trống và thế giới chưa đủ 31 Phàm Tuyền, nếu không trứng không bị tiêu hao.
+- **Tuyền Đản Cổ** (`GU_SPRING_EGG`) rơi hiếm (1%) từ boss/world boss. Dùng Cổ tại chỗ để cấy một Phàm Tuyền ngay dưới chân — ô phải trống và thế giới chưa đủ 31 Phàm Tuyền, nếu không trứng không bị tiêu hao.
 - **Rương Mỏ Linh Thạch / Rương Mỏ Tiên Thạch** vẫn rơi từ Nguyên Tuyền tương ứng; mở rương cho Bí phương (40%) hoặc Vật liệu/Cổ lương (60%), rương tiên boost mạnh vật phẩm rank ≥ 6.
 
 ## 15. Tổ đội và Đấu trường
