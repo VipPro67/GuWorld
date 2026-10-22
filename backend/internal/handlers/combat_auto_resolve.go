@@ -176,8 +176,6 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		summary[k] = v
 	}
 
-	var updateQuery string
-	var args []interface{}
 	rawEnemyType := outcome.RawEnemyType
 
 	// Capture the battle region before the outcome branch: a defeat respawns the
@@ -217,8 +215,6 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 					}
 				}
 			}
-			updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
-			args = append(args, player.ID)
 			summary["reward"] = "50 Xu Đấu Trường"
 		} else {
 			var partyMembers []uuid.UUID
@@ -276,19 +272,15 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 			// into the jsonb column without a manual marshal.
 
 			player.HP = float64(finalPlayerHP)
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, path_masteries = $5, aptitude_percent = $6, lifespan = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
-			args = append(args, player.HP, finalMana, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.AptitudePercent, player.Lifespan, player.ClearedCells, player.ID)
 
 			summary["loot"] = lootDetailLogs
 		}
 	} else {
-		defUpdateQuery, defArgs, defLogs := applyAutoCombatDefeat(tx, player, simState, isVirtual, isTribulation, finalMana)
-		updateQuery = defUpdateQuery
-		args = append(args, defArgs...)
+		defLogs := applyAutoCombatDefeat(tx, player, simState, isVirtual, isTribulation)
 		logs = append(logs, defLogs...)
 	}
 
-	logs, err = finalizeAutoCombatOutcome(tx, player, simState, isVirtual, isTribulation, alliesAlive, updateQuery, args, finalPlayerHP, finalMana, before, logs)
+	logs, err = finalizeAutoCombatOutcome(tx, player, simState, isVirtual, isTribulation, alliesAlive, finalMana, before, logs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize combat outcome: %w", err)
 	}

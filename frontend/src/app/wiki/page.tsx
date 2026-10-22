@@ -30,6 +30,8 @@ export default async function WikiIndexPage() {
     gameplay: "📜",
     equipment: "🛡️",
     combat: "⚔️",
+    effects: "✨",
+    cultivation: "☯️",
     jobs: "🔧",
     activities: "🗺️",
     beasts: "🐾",

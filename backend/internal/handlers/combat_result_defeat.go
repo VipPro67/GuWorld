@@ -15,10 +15,8 @@ import (
 // consolation, death drop + hub teleport, party cleanup, and the player update
 // query. Shared by AutoCombatStart and
 // ResolveCombat so defeat resolution is identical (including virtual mode).
-func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation bool, finalMana float64) (updateQuery string, args []interface{}, defLogs []simulator.CombatLog) {
+func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation bool) (defLogs []simulator.CombatLog) {
 	if isVirtual {
-		updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
-		args = append(args, player.ID)
 		if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 1); err != nil {
 			logger.S.Errorf("Failed to award arena_coin to %s: %v", player.ID, err)
 		} else {
@@ -127,7 +125,5 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		Detail: defeatMsg,
 	})
 
-	updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, immortal_stones = $9, path_masteries = $10, version = version + 1 WHERE id = $11`
-	args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.ID)
 	return
 }

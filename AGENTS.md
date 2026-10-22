@@ -55,6 +55,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 | Schema/CSV | `docs/GAME_DATA.md` |
 | Startup/commands/env | `docs/DEVELOPMENT.md` + `README.md` |
 | Gameplay (player-visible) | `WIKI.md` |
+| Trigger/op/native hook mới | `docs/GAME_DATA.md` + `frontend/src/lib/wiki/effect-glossary.ts` |
 | Project scope | `PROJECT.md` |
 
 ## Key File Pointers

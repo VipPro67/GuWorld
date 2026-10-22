@@ -27,11 +27,10 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
   fetchInstances: async () => {
     if (fetchInstancesPromise) return fetchInstancesPromise;
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/instance/list`);
-        if (response.status === 401) { logout(); return; }
         if (response.ok) {
           const data = await response.json();
           set({
@@ -51,11 +50,10 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchActiveInstance: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/instance/active`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         if (data.active) {
@@ -77,7 +75,7 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   enterInstance: async (instanceId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("instance")) return false;
     set({ error: null });
     try {
@@ -86,7 +84,6 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instance_id: instanceId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể tiến vào thám hiểm.");
       set({
@@ -106,7 +103,7 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   actionInstance: async (optionIndex: number) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("instance")) return false;
     set({ error: null });
     try {
@@ -115,7 +112,6 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ option_index: optionIndex }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hành động thám hiểm thất bại.");
 

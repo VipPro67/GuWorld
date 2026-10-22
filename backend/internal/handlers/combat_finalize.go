@@ -35,7 +35,7 @@ func isRealPlayerAlly(ally *simulator.CombatantAuto, playerID string) bool {
 //
 // Shared by all auto-combat paths so post-combat state is
 // identical on both paths.
-func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation, alliesAlive bool, updateQuery string, args []interface{}, finalPlayerHP, finalMana float64, before models.GuInventory, logs []simulator.CombatLog) ([]simulator.CombatLog, error) {
+func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation, alliesAlive bool, finalMana float64, before models.GuInventory, logs []simulator.CombatLog) ([]simulator.CombatLog, error) {
 	if alliesAlive && !isVirtual && player.ActiveCombat != nil &&
 		player.ActiveCombat.TargetSectID == "" && isPveMonsterType(player.ActiveCombat.EnemyType) {
 		eventID := player.ActiveCombat.CombatID
@@ -106,21 +106,39 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		}
 	}
 
-	if math.IsNaN(finalPlayerHP) || math.IsInf(finalPlayerHP, 0) {
-		finalPlayerHP = 0
-	}
-	if math.IsNaN(finalMana) || math.IsInf(finalMana, 0) {
+	if math.IsNaN(finalMana) || math.IsInf(finalMana, 0) || finalMana < 0 {
 		finalMana = 0
 	}
-	if math.IsNaN(player.HP) || math.IsInf(player.HP, 0) {
+	if math.IsNaN(player.HP) || math.IsInf(player.HP, 0) || player.HP <= 0 {
 		player.HP = 1.0
 	}
 
-	_, err := tx.Exec(updateQuery, args...)
-	if err != nil {
-		logger.S.Errorf("finalize player outcome update failed for player %s: %v", player.ID, err)
-		return logs, fmt.Errorf("player outcome update: %w", err)
+	if isVirtual {
+		_, err := tx.Exec(`UPDATE players SET active_combat = NULL WHERE id = $1`, player.ID)
+		if err != nil {
+			logger.S.Errorf("finalize virtual player outcome update failed for player %s: %v", player.ID, err)
+			return logs, fmt.Errorf("player outcome update: %w", err)
+		}
+	} else {
+		_, err := tx.Exec(`
+			UPDATE players
+			SET hp = $1, current_mana = $2, active_combat = NULL,
+			    current_region = $3, x = $4, y = $5,
+			    aptitude_percent = $6, lifespan = $7,
+			    primeval_stones = $8, immortal_stones = $9,
+			    path_masteries = $10, cleared_cells = $11,
+			    version = version + 1
+			WHERE id = $12
+		`, player.HP, finalMana, player.CurrentRegion, player.X, player.Y,
+			player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ImmortalStones,
+			player.PathMasteries, player.ClearedCells, player.ID)
+		if err != nil {
+			logger.S.Errorf("finalize player outcome update failed for player %s: %v", player.ID, err)
+			return logs, fmt.Errorf("player outcome update: %w", err)
+		}
+		player.CurrentMana = finalMana
 	}
+	player.ActiveCombat = nil
 
 	// Update simulated allies' database status (HP, Mana, Stones, Items)
 	// NOTE: Pet and VariantNPC allies are persisted by their dedicated blocks

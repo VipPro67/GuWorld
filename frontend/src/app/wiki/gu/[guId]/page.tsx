@@ -211,7 +211,12 @@ function GuPageContent({ gu, itemMap }: { gu: GuDictionaryItem; itemMap: Record<
           </div>
 
           <section className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono mb-4">Hiệu ứng</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono">Hiệu ứng</h2>
+              <Link href="/wiki/effects" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors">
+                Cách đọc hiệu ứng →
+              </Link>
+            </div>
             <EffectEnvelopeView effects={gu.effects} />
           </section>
 

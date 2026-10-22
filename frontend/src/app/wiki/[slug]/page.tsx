@@ -15,6 +15,8 @@ const categoryLabels: Record<string, string> = {
   gameplay: "Game Play",
   equipment: "Trang bị",
   combat: "Chiến đấu",
+  effects: "Hiệu ứng",
+  cultivation: "Tu luyện",
   jobs: "Nghề",
   activities: "Hoạt động",
   beasts: "Linh thú",
@@ -89,7 +91,7 @@ function WikiPageContent({ page }: { page: WikiPage }) {
             <>
               <ChevronRight className="w-3 h-3" />
               <span className="text-[var(--text-muted)]">
-                {page.subCategory.replace("gameplay-", "")}
+                {getWikiPage(page.subCategory)?.title ?? page.subCategory}
               </span>
             </>
           )}

@@ -6,6 +6,7 @@ import { characterPages } from "./character";
 import { cultivationDaoPages } from "./cultivation-dao";
 import { combatPages } from "./combat";
 import { equipmentJobsPages } from "./equipment-jobs";
+import { effectsPages } from "./effects";
 
 export * from "./types";
 export * from "./roadmap";
@@ -15,6 +16,7 @@ export * from "./character";
 export * from "./cultivation-dao";
 export * from "./combat";
 export * from "./equipment-jobs";
+export * from "./effects";
 
 export const wikiPages: WikiPage[] = [
   ...roadmapPages,
@@ -24,6 +26,7 @@ export const wikiPages: WikiPage[] = [
   ...characterPages,
   ...equipmentJobsPages,
   ...combatPages,
+  ...effectsPages,
 ];
 
 export function getWikiPage(slug: string): WikiPage | undefined {

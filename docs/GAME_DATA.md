@@ -668,6 +668,13 @@ Các trường quan trọng trong dictionary:
 
 ### Hiệu ứng Cổ (effects)
 
+> Từ điển hiệu ứng cho người chơi: `/wiki/effects` (nội dung tại
+> `frontend/src/lib/wiki/effects.tsx` + dữ liệu tra cứu
+> `frontend/src/lib/wiki/effect-glossary.ts`). Khi thêm trigger, operation,
+> target, condition hoặc native hook mới, cập nhật `effect-glossary.ts` —
+> `frontend/src/lib/wiki/effects.test.ts` sẽ fail nếu `Gu.csv` chứa mã chưa
+> được giải thích.
+
 ## Đặc tả effect thống nhất v2 (authoritative)
 
 > Mục này là hợp đồng đích đã chốt. Struct `ComposableEffectBlock` và trường
