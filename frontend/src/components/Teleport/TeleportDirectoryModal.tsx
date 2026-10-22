@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
-import { X, Compass, MapPin, Sparkles, AlertCircle, Coins, Shield, ArrowRight, Settings, RefreshCw } from "lucide-react";
+import { X, Compass, MapPin, Sparkles, AlertCircle, Coins, Shield, ArrowRight, Settings, RefreshCw, Search } from "lucide-react";
 import { GameButton } from "@/components/ui";
 
 interface TeleportDirectoryModalProps {
@@ -10,6 +10,10 @@ interface TeleportDirectoryModalProps {
   onClose: () => void;
   onOpenManage?: (arrayId: string) => void;
 }
+
+// Diacritic-insensitive, lower-case text for search matching.
+const normalizeText = (value: string) =>
+  value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
 export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
   player,
@@ -26,6 +30,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
   } = useGameStore();
 
   const [filter, setFilter] = useState<"ALL" | "SECT" | "MINE">("ALL");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchTeleportDirectory();
@@ -36,23 +41,34 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
 
   const mySectId = mySectStatus?.sect?.id;
 
-  const publicDestinations = destinations.filter((dest) => dest.array.access_policy === "PUBLIC");
   const sectDestinations = destinations.filter(
     (dest) => dest.array.access_policy === "SECT" || (dest.array.sect_id && dest.array.sect_id === mySectId)
   );
   const myDestinations = destinations.filter((dest) => dest.array.owner_id === player.id);
 
+  // "Tất Cả" means every accessible array returned by the server, not just
+  // public ones, so the player's own/sect links are not hidden.
   const filteredDestinations =
     filter === "MINE"
       ? myDestinations
       : filter === "SECT"
       ? sectDestinations
-      : publicDestinations;
+      : destinations;
 
-  // Usable links first, keeping the server order otherwise.
-  const sortedDestinations = [...filteredDestinations].sort(
-    (a, b) => Number(b.can_use) - Number(a.can_use)
-  );
+  // Usable links first, then nearest. Cross-great-region links (distance -1)
+  // sort after same-region ones.
+  const sortDistance = (dest: { distance: number }) =>
+    dest.distance < 0 ? Number.MAX_SAFE_INTEGER : dest.distance;
+  const keyword = normalizeText(search.trim());
+  const searchedDestinations = keyword
+    ? filteredDestinations.filter(({ array }) =>
+        normalizeText(`${array.name} ${array.region_name || ""} ${array.region_id}`).includes(keyword)
+      )
+    : filteredDestinations;
+  const sortedDestinations = [...searchedDestinations].sort((a, b) => {
+    if (a.can_use !== b.can_use) return a.can_use ? -1 : 1;
+    return sortDistance(a) - sortDistance(b);
+  });
 
   const handleTravel = async (targetArrayId: string) => {
     const res = await travelTeleport(targetArrayId);
@@ -116,41 +132,63 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="shrink-0 px-4 sm:px-6 pt-3 pb-2 flex items-center gap-2 border-b border-zinc-900/60 bg-zinc-950/40 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => setFilter("ALL")}
-            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer ${
-              filter === "ALL"
-                ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
-                : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
-            }`}
-          >
-            Tất Cả ({publicDestinations.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilter("SECT")}
-            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer ${
-              filter === "SECT"
-                ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
-                : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
-            }`}
-          >
-            Tông Môn ({sectDestinations.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilter("MINE")}
-            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer ${
-              filter === "MINE"
-                ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
-                : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
-            }`}
-          >
-            Của Ta ({myDestinations.length})
-          </button>
+        {/* Search & Filters */}
+        <div className="shrink-0 px-4 sm:px-6 pt-3 pb-2 border-b border-zinc-900/60 bg-zinc-950/40 space-y-2">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm theo tên trận hoặc địa điểm..."
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-8 py-1.5 text-xs font-mono text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/60"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-zinc-500 hover:text-zinc-200 cursor-pointer"
+                title="Xóa tìm kiếm"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setFilter("ALL")}
+              className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer shrink-0 ${
+                filter === "ALL"
+                  ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
+                  : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
+              }`}
+            >
+              Tất Cả ({destinations.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter("SECT")}
+              className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer shrink-0 ${
+                filter === "SECT"
+                  ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
+                  : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
+              }`}
+            >
+              Tông Môn ({sectDestinations.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter("MINE")}
+              className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer shrink-0 ${
+                filter === "MINE"
+                  ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
+                  : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
+              }`}
+            >
+              Của Ta ({myDestinations.length})
+            </button>
+          </div>
         </div>
 
         {/* Content List */}
@@ -165,10 +203,14 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
               <AlertCircle className="w-8 h-8 mx-auto text-amber-500/60" />
               <p>Đạo hữu cần đứng trên một Truyền Tống Trận để kích hoạt danh bạ.</p>
             </div>
-          ) : filteredDestinations.length === 0 ? (
+          ) : sortedDestinations.length === 0 ? (
             <div className="py-12 text-center text-zinc-500 font-mono text-xs space-y-2">
               <MapPin className="w-8 h-8 mx-auto text-zinc-600" />
-              <p>Chưa có điểm dịch chuyển nào khác trong tầm phủ sóng.</p>
+              <p>
+                {search.trim()
+                  ? "Không tìm thấy truyền tống trận nào khớp tên hoặc địa điểm."
+                  : "Chưa có điểm dịch chuyển nào khác trong tầm phủ sóng."}
+              </p>
             </div>
           ) : (
             sortedDestinations.map(({ array: dest, distance, is_cross_region_jump, can_use, reason, fee_to_pay, fee_currency }) => {
