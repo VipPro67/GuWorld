@@ -584,16 +584,11 @@ func StartPrimevalVeinWorker(ctx context.Context) {
 }
 
 // springEggHatchEffect implements SPRING_EGG_HATCH: plant a mortal vein on the
-// player's current tile. Returns an error (and therefore does NOT consume the
-// egg) when the tile is taken, the region is safe, or the global cap is full.
+// player's current tile. Player-planted veins are not bound by the worker's
+// global/per-đại-vực caps; it still fails (and therefore does NOT consume the
+// egg) when the tile is taken, the region is safe, or the player is in a
+// dungeon instance.
 func springEggHatchEffect(tx *sql.Tx, player *models.Player, _ models.ItemSpec, _ float64) (string, error) {
-	count, err := veinTypeCount(tx, "mortal")
-	if err != nil {
-		return "", err
-	}
-	if count >= veinMortalCap {
-		return "", fmt.Errorf("thiên hạ đã đủ %d Nguyên Tuyền, không thể cấy thêm", veinMortalCap)
-	}
 	var instanceID string
 	if err := tx.QueryRow(`SELECT COALESCE(map_instance_id::text, '') FROM players WHERE id = $1`, player.ID).Scan(&instanceID); err != nil {
 		return "", err
@@ -611,13 +606,6 @@ func springEggHatchEffect(tx *sql.Tx, player *models.Player, _ models.ItemSpec, 
 	}
 	if zone := FindZoneAt(player.X, player.Y); zone != nil {
 		regionID = zone.ID
-	}
-	greatCounts, err := veinGreatRegionCounts(tx, "mortal")
-	if err != nil {
-		return "", err
-	}
-	if greatCounts[greatRegionID(regionID)] >= veinGreatRegionCap("mortal") {
-		return "", fmt.Errorf("đại vực này đã đủ Nguyên Tuyền, không thể cấy thêm")
 	}
 	rarity := rollVeinRarity()
 	if err := spawnVeinTx(tx, regionID, player.X, player.Y, "mortal", rarity); err != nil {

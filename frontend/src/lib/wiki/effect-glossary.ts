@@ -328,7 +328,7 @@ export const NATIVE_HOOKS: NativeHookEntry[] = [
   { code: "THIRD_WATCH", label: "Tam Canh", trigger: "ON_CONSUME", status: "legacy", group: "growth", behavior: "Tên cũ của TIME_ACCELERATION: nhân hệ số tốc độ thời gian (mặc định ×3), cộng dồn mỗi lần dùng." },
   { code: "RECORD_MESSAGE", label: "Ghi Lại Hình Ảnh", trigger: "ON_USE", status: "legacy", group: "growth", behavior: "Tên cũ của RECORD: chỉ ghi log mô tả, không lưu dữ liệu hình ảnh/âm thanh." },
   { code: "POISON_VOW", label: "Độc Thệ", trigger: "ON_CONSUME", status: "legacy", group: "growth", behavior: "Tên cũ của CONTRACT_OATH: chỉ ghi log kết khế ước, chưa có cơ chế ràng buộc thực tế." },
-  { code: "SPRING_EGG_HATCH", label: "Trứng Nguyên Tuyền", trigger: "ON_CONSUME", status: "active", group: "growth", behavior: "Cấy một Phàm Tuyền ngay dưới chân; hoạt động cả qua vật phẩm Trứng Nguyên Tuyền và Cổ tiêu hao GU_SPRING_EGG. Không tiêu hao khi ô đã có mỏ, trong bí cảnh hoặc đã đủ cap Nguyên Tuyền." },
+  { code: "SPRING_EGG_HATCH", label: "Trứng Nguyên Tuyền", trigger: "ON_CONSUME", status: "active", group: "growth", behavior: "Cấy một Phàm Tuyền ngay dưới chân; hoạt động cả qua vật phẩm Trứng Nguyên Tuyền và Cổ tiêu hao GU_SPRING_EGG. Không bị giới hạn cap 31 Phàm Tuyền hay cap đại vực; không tiêu hao khi ô đã có địa điểm, vùng an toàn hoặc trong bí cảnh." },
 
   // ── Chỉ số thụ động ───────────────────────────────────────────────────
   { code: "STAT_MODS", label: "Cộng Chỉ Số", trigger: "ALWAYS_ON", status: "partial", group: "stat", behavior: "Bảng tỉ lệ chỉ số (0.1 = +10%). Chỉ đọc từ chủng tộc/thể chất/trạng thái; gắn trên Cổ thì bị bỏ qua — Cổ dùng op STAT_MOD." },

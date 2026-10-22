@@ -1058,7 +1058,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 - Mỗi Nguyên Tuyền tự tích lũy Nguyên Thạch (hoặc Tiên Nguyên Thạch với Tiên Tuyền) vào **bể chung**, tối đa **1 ngày sản lượng**. Ai đứng trong phạm vi **3 ô** quanh mỏ cũng bấm **Thu hoạch** được; nhận xong bể reset về 0 và tích lại.
 - Mỗi mỏ có **trần sản lượng vòng đời** theo phẩm chất (Thường 7 ngày → Siêu Cấp 30 ngày sản lượng) và **tuổi thọ tối đa 30 ngày**. Hút cạn sớm thì mỏ biến mất; bỏ hoang quá hạn cũng biến mất.
 - Thế giới duy trì tối đa **31 Phàm Tuyền + 5 Tiên Tuyền**, mỗi đại vực khoảng 1/5 cap; worker bù 1 mỏ mỗi loại mỗi 30 phút. Tiên Tuyền chỉ sinh ở vùng rank ≥ 5.
-- **Tuyền Đản Cổ** (`GU_SPRING_EGG`) rơi hiếm (1%) từ boss/world boss. Dùng Cổ tại chỗ để cấy một Phàm Tuyền ngay dưới chân — ô phải trống và thế giới chưa đủ 31 Phàm Tuyền, nếu không trứng không bị tiêu hao.
+- **Tuyền Đản Cổ** (`GU_SPRING_EGG`) rơi hiếm (1%) từ boss/world boss. Dùng Cổ tại chỗ để cấy một Phàm Tuyền ngay dưới chân — ô phải trống, không thuộc vùng an toàn/bí cảnh; **không bị giới hạn 31 Phàm Tuyền toàn cục hay cap đại vực** (hai cap này chỉ áp cho worker tự spawn). Cấy thất bại thì trứng không bị tiêu hao.
 - **Rương Mỏ Linh Thạch / Rương Mỏ Tiên Thạch** vẫn rơi từ Nguyên Tuyền tương ứng; mở rương cho Bí phương (40%) hoặc Vật liệu/Cổ lương (60%), rương tiên boost mạnh vật phẩm rank ≥ 6.
 
 ## 15. Tổ đội và Đấu trường
