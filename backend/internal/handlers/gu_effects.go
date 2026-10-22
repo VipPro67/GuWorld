@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -378,6 +379,13 @@ func ApplyPostDamageEffects(ctx *CombatContext, playerAction *Action, enemyActio
 // ── GENERIC EVENT DISPATCHER ─────────────────────────────────────────────
 
 func HandleGuEvent(player *models.Player, specs models.GuDictionaryItem, guInstance models.GuInstance, eventTrigger string) (string, error) {
+	return HandleGuEventTx(nil, player, specs, guInstance, eventTrigger)
+}
+
+// HandleGuEventTx is HandleGuEvent with an optional transaction. Some action
+// codes write to the world (e.g. SPRING_EGG_HATCH plants a primeval vein) and
+// therefore need the caller's tx; handlers without one pass nil.
+func HandleGuEventTx(tx *sql.Tx, player *models.Player, specs models.GuDictionaryItem, guInstance models.GuInstance, eventTrigger string) (string, error) {
 	compiled := models.CompiledGuEffects(specs)
 	if compiled == nil {
 		return "", nil
@@ -386,7 +394,7 @@ func HandleGuEvent(player *models.Player, specs models.GuDictionaryItem, guInsta
 	for _, operation := range compiled.NativeMechanics() {
 		if string(operation.Trigger) == eventTrigger {
 			mechanic := models.SpecialMechanic{EventTrigger: eventTrigger, ActionCode: operation.Code, Params: operation.Params}
-			msg, err := handleActionCode(player, specs, guInstance, mechanic)
+			msg, err := handleActionCodeTx(tx, player, specs, guInstance, mechanic)
 			if err != nil {
 				return "", err
 			}
@@ -402,6 +410,10 @@ func HandleGuEvent(player *models.Player, specs models.GuDictionaryItem, guInsta
 }
 
 func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu models.GuInstance, mechanic models.SpecialMechanic) (string, error) {
+	return handleActionCodeTx(nil, player, spec, gu, mechanic)
+}
+
+func handleActionCodeTx(tx *sql.Tx, player *models.Player, spec models.GuDictionaryItem, gu models.GuInstance, mechanic models.SpecialMechanic) (string, error) {
 	var params map[string]interface{}
 	if len(mechanic.Params) > 0 {
 		_ = json.Unmarshal(mechanic.Params, &params)
@@ -711,6 +723,11 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 			player.TimeSpeedMultiplier = 0.1
 		}
 		return fmt.Sprintf("%s hòa tan vào không khiếu, dòng thời gian vĩnh viễn giảm -%.2f!", spec.Name, val), nil
+	case "SPRING_EGG_HATCH":
+		if tx == nil {
+			return "", fmt.Errorf("%s chỉ có thể cấy Nguyên Tuyền khi tiêu hao trực tiếp", spec.Name)
+		}
+		return springEggHatchEffect(tx, player, models.ItemSpec{Name: spec.Name}, 0)
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}

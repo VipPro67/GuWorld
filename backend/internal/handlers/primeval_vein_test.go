@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +67,22 @@ func TestSpringEggHatchRegistered(t *testing.T) {
 	}
 	if _, err := models.CompileItemEffects(models.ItemEffects{"spring_egg_hatch": 0}); err != nil {
 		t.Fatalf("CompileItemEffects rejects spring_egg_hatch: %v", err)
+	}
+}
+
+// GU_SPRING_EGG (Tuyền Đản Cổ) dùng effect SPRING_EGG_HATCH qua đường tiêu hao
+// Cổ trùng. Không có tx thì phải báo "dùng trực tiếp", không được rơi vào
+// default "Chưa hỗ trợ action code".
+func TestGuSpringEggHatchDispatch(t *testing.T) {
+	player := &models.Player{}
+	spec := models.GuDictionaryItem{ID: "GU_SPRING_EGG", Name: "Tuyền Đản Cổ", Rank: 5}
+	gu := models.GuInstance{InstanceID: "inst_spring", GuID: "GU_SPRING_EGG"}
+	_, err := HandleConsumeEvent(player, gu, spec, models.SpecialMechanic{
+		EventTrigger: "ON_CONSUME",
+		ActionCode:   "SPRING_EGG_HATCH",
+	})
+	if err == nil || strings.Contains(err.Error(), "Chưa hỗ trợ") {
+		t.Fatalf("SPRING_EGG_HATCH chưa được dispatch: %v", err)
 	}
 }
 

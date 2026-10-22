@@ -101,7 +101,7 @@ func UseConsumableGu(c *gin.Context) {
 	// work through this endpoint instead of 400ing.
 	var logs []string
 	for _, trigger := range []string{"ON_CONSUME", "ON_USE"} {
-		consumeMsg, err := HandleGuEvent(&player, specs, targetGuCopy, trigger)
+		consumeMsg, err := HandleGuEventTx(tx, &player, specs, targetGuCopy, trigger)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
