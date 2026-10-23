@@ -174,6 +174,10 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
+	if rejectVaultMutationIfShielded(c, tx, m.SectID) {
+		return
+	}
+
 	// Calculate value dynamically from item_dictionary.base_price + rank (via pricing package)
 	var dbBasePrice float64
 	var matRank int
@@ -353,6 +357,10 @@ func DonateGu(c *gin.Context) {
 	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints, &sectLevel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
+	if rejectVaultMutationIfShielded(c, tx, m.SectID) {
 		return
 	}
 
@@ -560,6 +568,10 @@ func DonateRecipe(c *gin.Context) {
 		return
 	}
 
+	if rejectVaultMutationIfShielded(c, tx, m.SectID) {
+		return
+	}
+
 	// Resolve rank/name from the catalog tuple (target_gu_id, rank, variant)
 	// instead of parsing the id string; parsing is only the legacy fallback.
 	targetGuRank := recipeTargetGuRank(tx, req.RecipeID)
@@ -733,6 +745,10 @@ func DonateBulk(c *gin.Context) {
 	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints, &sectLevel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
+	if (len(req.Materials) > 0 || len(req.Gus) > 0 || len(req.Recipes) > 0) && rejectVaultMutationIfShielded(c, tx, m.SectID) {
 		return
 	}
 

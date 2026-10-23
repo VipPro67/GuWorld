@@ -138,7 +138,10 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		}
 		player.CurrentMana = finalMana
 	}
-	player.ActiveCombat = nil
+	// Keep player.ActiveCombat populated: the pet/NPC persistence blocks below
+	// and the caller's post-combat bookkeeping (PVP/sect history, cleared cell)
+	// still read EnemyName/TargetPlayerID. The DB column was already cleared
+	// above; the caller nils the in-memory state when it is done.
 
 	// Update simulated allies' database status (HP, Mana, Stones, Items)
 	// NOTE: Pet and VariantNPC allies are persisted by their dedicated blocks

@@ -1108,7 +1108,7 @@ func ExecuteDivineGu(c *gin.Context) {
 	// 4b. Sect Vaults (sect_vault_gu)
 	querySects := `
 		SELECT s.id, s.name, s.region, COALESCE(s.map_x, 0), COALESCE(s.map_y, 0), s.level,
-		       vg.gu_id, vg.rank, vg.quantity, vg.cost
+		       vg.gu_id, vg.rank, vg.quantity
 		FROM sect_vault_gu vg
 		JOIN sects s ON s.id = vg.sect_id
 		WHERE (LOWER(vg.gu_id) = LOWER($1) OR vg.gu_id = ANY($3))
@@ -1126,8 +1126,8 @@ func ExecuteDivineGu(c *gin.Context) {
 		defer sRows.Close()
 		for sRows.Next() {
 			var sID, sName, sRegion, guID string
-			var sMapX, sMapY, sLevel, guRank, qty, cost int
-			if err := sRows.Scan(&sID, &sName, &sRegion, &sMapX, &sMapY, &sLevel, &guID, &guRank, &qty, &cost); err != nil {
+			var sMapX, sMapY, sLevel, guRank, qty int
+			if err := sRows.Scan(&sID, &sName, &sRegion, &sMapX, &sMapY, &sLevel, &guID, &guRank, &qty); err != nil {
 				if logger.S != nil {
 					logger.S.Errorf("scouting: ExecuteDivineGu sect scan error: %v", err)
 				}
@@ -1148,7 +1148,7 @@ func ExecuteDivineGu(c *gin.Context) {
 				hasCoords:     sMapX != 0 || sMapY != 0,
 				state:         "sect_vault",
 				quantity:      qty,
-				priceInfo:     fmt.Sprintf("Cống hiến đổi: %d điểm", cost),
+				priceInfo:     fmt.Sprintf("Cống hiến đổi: %d điểm", sectVaultGuCost(guID, guRank)),
 				activeConceal: false,
 				defense:       sectDef,
 			})

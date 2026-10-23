@@ -43,6 +43,21 @@ type VaultGuDeductionPlan struct {
 	InstID string
 }
 
+// rejectVaultMutationIfShielded seals the sect vault while the Hộ Sơn Đại
+// Trận is up: no stocking, donating, buying or destroying items. Returns true
+// when the caller must stop (response already written).
+func rejectVaultMutationIfShielded(c *gin.Context, tx *sql.Tx, sectID string) bool {
+	var active bool
+	if err := tx.QueryRow(`SELECT COALESCE(shield_until > NOW(), false) FROM sects WHERE id = $1`, sectID).Scan(&active); err != nil {
+		return false
+	}
+	if !active {
+		return false
+	}
+	c.JSON(http.StatusConflict, gin.H{"error": "Hộ Sơn Đại Trận đang kích hoạt — bảo khố tông môn bị phong tỏa, không thể nhập hoặc rút vật phẩm!"})
+	return true
+}
+
 func planVaultGuDeductions(matchedRows []VaultGuRow, quantity int64) ([]VaultGuDeductionPlan, int64, error) {
 	if quantity <= 0 {
 		return nil, 0, fmt.Errorf("Số lượng phải lớn hơn 0")
@@ -229,6 +244,10 @@ func StockSectVault(c *gin.Context) {
 		return
 	}
 
+	if rejectVaultMutationIfShielded(c, tx, sectID) {
+		return
+	}
+
 	unitCost, effectiveRank, code, msg := stockItemUnitCost(tx, s.Level, req.ItemType, req.ItemID)
 	if code != http.StatusOK {
 		c.JSON(code, gin.H{"error": msg})
@@ -407,6 +426,10 @@ func DestroySectVaultItem(c *gin.Context) {
 		return
 	}
 
+	if rejectVaultMutationIfShielded(c, tx, sectID) {
+		return
+	}
+
 	var affected int64
 	switch strings.ToLower(req.ItemType) {
 	case "gu":
@@ -515,6 +538,10 @@ func StockSectVaultBulk(c *gin.Context) {
 	err = tx.QueryRow(`SELECT id, funds, level FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&s.ID, &s.Funds, &s.Level)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details: " + err.Error()})
+		return
+	}
+
+	if rejectVaultMutationIfShielded(c, tx, sectID) {
 		return
 	}
 
@@ -701,6 +728,10 @@ func BuyFromSectVault(c *gin.Context) {
 	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
+	if rejectVaultMutationIfShielded(c, tx, m.SectID) {
 		return
 	}
 

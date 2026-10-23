@@ -944,6 +944,8 @@ Hệ thống môn phái chia thành 7 cấp bậc rõ rệt:
 
 Bảo khố tông môn gồm 3 khoang riêng biệt: **Cổ Trùng (`sect_vault_gu`)**, **Linh Tài (`sect_vault_materials`)** và **Bí Phương (`sect_vault_recipes`)**.
 
+- **Phong tỏa khi Hộ Sơn Đại Trận kích hoạt**: Trong thời gian `shield_until > now`, bảo khố bị niêm phong — **không thể quyên góp, nhập hàng, rút/mua hay tiêu huỷ** vật phẩm. Chỉ quyên góp Nguyên Thạch (không đụng bảo khố) vẫn được phép.
+
 #### Quy Tắc Quyên Góp (Nhận Điểm Cống Hiến):
 - **Nguyên Thạch**: 1 Nguyên Thạch $\to$ 1 Điểm cống hiến + 1 Quỹ tông môn.
 - **Linh Tài**: Nhận Điểm cống hiến $= \text{BasePrice} \times 50\%$ (tối thiểu 1 điểm). Linh tài được lưu trữ vào kho nguyên liệu.
