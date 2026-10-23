@@ -419,9 +419,10 @@ func Flee(c *gin.Context) {
 			if isExploration {
 				deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 				player.HP = 1.0
-				player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, deathRegion, deathX, deathY)
+				respawn := ResolveDeathRespawn(tx, authID, deathRegion, deathX, deathY)
+				player.CurrentRegion, player.X, player.Y = respawn.Region, respawn.X, respawn.Y
 
-				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng. "+RespawnLocationMessage(deathRegion, player.CurrentRegion, player.X, player.Y))
+				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng. "+respawn.Message())
 
 				// Death penalty applies to real PvE exploration and normal PvP only.
 				// Arena (virtual) defeats never drop items/stones.
@@ -514,7 +515,8 @@ func Flee(c *gin.Context) {
 			deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 			player.HP = 1.0
 			dropSummary := applyDeathDropRecord(tx, &authID, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: enemyName})
-			player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, deathRegion, deathX, deathY)
+			respawn := ResolveDeathRespawn(tx, authID, deathRegion, deathX, deathY)
+			player.CurrentRegion, player.X, player.Y = respawn.Region, respawn.X, respawn.Y
 			droppedOnFlee = true
 			_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
 
@@ -523,7 +525,7 @@ func Flee(c *gin.Context) {
 			} else {
 				logMsg = fmt.Sprintf("Đạo hữu cố gắng bỏ chạy khỏi %s nhưng bị thương nặng ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng.", enemyName)
 			}
-			logMsg += " " + RespawnLocationMessage(deathRegion, player.CurrentRegion, player.X, player.Y)
+			logMsg += " " + respawn.Message()
 		} else {
 			logMsg = fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s. Chịu thương tổn %.0f HP.", enemyName, damage)
 		}
