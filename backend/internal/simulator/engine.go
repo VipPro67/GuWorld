@@ -2529,7 +2529,10 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 			// Merge action logs into a single consolidated log entry for this Gu/Action
-			if len(turnLogs) > actionStartIndex {
+			// Fast path: when the action produced a single log it already is its own
+			// consolidated entry (the merge would only re-assign the same value back),
+			// so skip the slice copy + consolidation scan for the common case.
+			if len(turnLogs)-actionStartIndex > 1 {
 				logs := make([]CombatLog, len(turnLogs)-actionStartIndex)
 				copy(logs, turnLogs[actionStartIndex:])
 
