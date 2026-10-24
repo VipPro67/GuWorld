@@ -1070,12 +1070,14 @@ func selectMonsterTarget(monster WorldMonster, candidates []WorldPosEntry, activ
 		}
 		valid = append(valid, ranked{monsterTickTarget{p.ID, float64(p.X), float64(p.Y)}, d})
 	}
-	sort.Slice(valid, func(i, j int) bool {
-		if valid[i].d == valid[j].d {
-			return valid[i].ID < valid[j].ID
-		}
-		return valid[i].d < valid[j].d
-	})
+	if len(valid) > 1 {
+		sort.Slice(valid, func(i, j int) bool {
+			if valid[i].d == valid[j].d {
+				return valid[i].ID < valid[j].ID
+			}
+			return valid[i].d < valid[j].d
+		})
+	}
 	if len(valid) == 0 {
 		return monsterTickTarget{}, false
 	}

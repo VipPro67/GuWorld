@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compass, Flame, Sparkles, User, DoorOpen, Landmark, ShieldAlert, Footprints } from "lucide-react";
 import { useGameStore, Player } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
@@ -137,13 +137,25 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const worldW = gridData?.world_width || 30000;
   const worldH = gridData?.world_height || 20000;
 
+  // Viewport lookup is bounded (≤ 5x5 cells), but build an O(1) key map instead of
+  // scanning the full cells array per rendered cell.
+  const gridCellLookup = useMemo(() => {
+    const lookup = new Map<string, GridCell>();
+    if (gridData?.cells) {
+      for (const c of gridData.cells) {
+        lookup.set(`${c.x},${c.y}`, c);
+      }
+    }
+    return lookup;
+  }, [gridData]);
+
   const gridCells: { x: number; y: number; isOutOfBounds: boolean; cellData: GridCell }[] = [];
   if (gridData) {
     for (let dy = -visionRadius; dy <= visionRadius; dy++) {
       for (let dx = -visionRadius; dx <= visionRadius; dx++) {
         const cx = player.x + dx;
         const cy = player.y + dy;
-        const existingCell = gridData.cells.find((c) => c.x === cx && c.y === cy);
+        const existingCell = gridCellLookup.get(`${cx},${cy}`);
         gridCells.push({
           x: cx,
           y: cy,
