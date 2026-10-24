@@ -419,7 +419,7 @@ func Flee(c *gin.Context) {
 			if isExploration {
 				deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 				player.HP = 1.0
-				respawn := ResolveDeathRespawn(tx, authID, deathRegion, deathX, deathY)
+				respawn := ResolveDeathRespawn(deathRegion, deathX, deathY)
 				player.CurrentRegion, player.X, player.Y = respawn.Region, respawn.X, respawn.Y
 
 				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng. "+respawn.Message())
@@ -515,7 +515,7 @@ func Flee(c *gin.Context) {
 			deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 			player.HP = 1.0
 			dropSummary := applyDeathDropRecord(tx, &authID, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: enemyName})
-			respawn := ResolveDeathRespawn(tx, authID, deathRegion, deathX, deathY)
+			respawn := ResolveDeathRespawn(deathRegion, deathX, deathY)
 			player.CurrentRegion, player.X, player.Y = respawn.Region, respawn.X, respawn.Y
 			droppedOnFlee = true
 			_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)

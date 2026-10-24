@@ -670,7 +670,7 @@ export default function Home() {
                   <span className="text-lg shrink-0 mt-0.5">🏰</span>
                   <div>
                     <span className="font-bold text-purple-300">Hồi Sinh Ngũ Vực & Tông Môn Chiến</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Khi tử đạo, Cổ Sư từ Ngũ Chuyển trở lên có tông môn có 50% tỉ lệ hồi sinh về sơn môn (không kèm Miễn Chiến), 50% còn lại văng ngẫu nhiên trong Khu Vực hiện tại (giữ nguyên Region). Rank dưới Ngũ Chuyển hồi sinh tại HUB/SAFE_ZONE gần nhất; rank cao không có tông môn văng ngẫu nhiên trong Khu Vực hiện tại. Tán tu không tông có thể phát động Tông Môn Chiến (khi thắng: Cổ/item/bí phương chia đều, Quỹ cướp được sẽ đi vào hư vô; khi thua: toàn đội bị tử đạo rơi đồ). Đặc biệt: <strong>Khi Tông Môn đang trong trạng thái Hộ Sơn bảo hộ (shield_until), người chơi bên trong sẽ không được lãnh địa che chở và vẫn có thể bị tấn công</strong>.</p>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Khi tử đạo, đạo hữu sẽ hồi sinh tại HUB/SAFE_ZONE an toàn gần nhất (ưu tiên HUB, fallback SAFE ZONE) trong Đại Vực tử vong; khi không có HUB/SAFE ZONE hợp lệ trên tầng đó thì hồi sinh tại vị trí tử vong. Sau khi hồi sinh, nạn nhân PvP nhận Miễn Chiến 10 phút (chủ động khai chiến sẽ mất buff). Tán tu không tông có thể phát động Tông Môn Chiến (khi thắng: Cổ/item/bí phương chia đều, Quỹ cướp được sẽ đi vào hư vô; khi thua: toàn đội bị tử đạo rơi đồ). Đặc biệt: <strong>Khi Tông Môn đang trong trạng thái Hộ Sơn bảo hộ (shield_until), người chơi bên trong sẽ không được lãnh địa che chở và vẫn có thể bị tấn công</strong>.</p>
                   </div>
                 </div>
               </div>

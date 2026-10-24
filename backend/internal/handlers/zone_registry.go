@@ -575,46 +575,6 @@ func NearestRespawnPointOnMap(x, y int, mapID string) (string, int, int, bool) {
 	return "", 0, 0, false
 }
 
-// RandomRespawnPointInKhuVuc returns a random coordinate inside the KHU_VUC
-// containing the death position. It is scoped to the same map layer.
-func RandomRespawnPointInKhuVuc(currentRegion string, x, y int, mapID string) (string, int, int, bool) {
-	zoneReg.mu.RLock()
-	defer zoneReg.mu.RUnlock()
-
-	var khuVuc *models.Region
-	seen := make(map[string]struct{}, 4)
-	for current := currentRegion; current != ""; {
-		if _, exists := seen[current]; exists {
-			break
-		}
-		seen[current] = struct{}{}
-		zone := zoneReg.byID[current]
-		if zone == nil {
-			break
-		}
-		if zone.ZoneType == ZoneTypeNamed && zoneContains(zone, x, y) && (mapID == "" || zoneWorldMapIDLocked(zone) == mapID) {
-			khuVuc = zone
-			break
-		}
-		current = zone.ParentID
-	}
-	if khuVuc == nil {
-		for i := range zoneReg.zones {
-			zone := &zoneReg.zones[i]
-			if zone.ZoneType == ZoneTypeNamed && zoneContains(zone, x, y) && (mapID == "" || zoneWorldMapIDLocked(zone) == mapID) {
-				khuVuc = zone
-				break
-			}
-		}
-	}
-	if khuVuc == nil || khuVuc.MaxX < khuVuc.MinX || khuVuc.MaxY < khuVuc.MinY {
-		return "", 0, 0, false
-	}
-	return khuVuc.ID,
-		khuVuc.MinX + rand.Intn(khuVuc.MaxX-khuVuc.MinX+1),
-		khuVuc.MinY + rand.Intn(khuVuc.MaxY-khuVuc.MinY+1), true
-}
-
 func zoneWorldMapIDLocked(zone *models.Region) string {
 	if zone == nil {
 		return ""

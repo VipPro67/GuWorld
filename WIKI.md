@@ -649,7 +649,7 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - **Túi đồ khi khám phá là túi thật:** nguyên liệu/Cổ/tiền nhặt được trong chuyến đi vào thẳng túi đồ (không còn "túi tạm"). Khi về trấn an toàn không có bước "thu hoạch" — đồ đã nằm sẵn trong túi.
 - **Chết thì rơi đồ:** khi bại trận dã ngoại, bỏ chạy ngất xỉu hay thua PvP, đạo hữu có thể rơi một phần thạch, nguyên liệu, Cổ không trang bị/không phải Bản Mệnh và Bí phương. Tài sản tạo thành ground drop/hài cốt trên bản đồ thay vì biến mất hoặc chuyển thẳng vào túi người thắng; quyền nhặt tuân theo thời gian khóa mô tả ở mục bản đồ.
 - **Công phá Tông Môn cướp kho:** thắng khiêu chiến Tông Môn sẽ cướp một phần Quỹ, linh tài, Cổ trùng và Bí phương trong bảo khố chia cho đội tấn công. Tuy nhiên **Thiên Đạo cũng tiêu hủy vĩnh viễn ~40% chiến lợi phẩm** (giống cơ chế rơi đồ khi tử đạo: mất đúng 1 đơn vị thì 50% cơ hội bị chấn nát, ngược lại luôn giữ lại ít nhất 1 đơn vị cho đội); tông môn thất thủ được Hộ Sơn Đại Trận bảo hộ.
-- **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu và hồi sinh theo đúng quy tắc hồi sinh sau tử đạo (HUB/SAFE_ZONE gần nhất với rank thấp; random KHU_VUC hoặc sơn môn với rank ≥ 5), đồng thời chịu hình phạt rơi đồ như trên. Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
+- **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu và hồi sinh theo đúng quy tắc hồi sinh sau tử đạo (hồi sinh tại HUB/SAFE_ZONE gần nhất), đồng thời chịu hình phạt rơi đồ như trên. Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
 - Khi hệ thống quá tải (tranh chấp khoá dữ liệu do nhiều thao tác cùng lúc), các thao tác chiến đấu (bỏ chạy/rút lui/bắt sủng…) trả về thông báo **bận và yêu cầu thử lại** thay vì treo vô hạn.
 
 ### Kháng hiệu ứng và Tenacity (đọc theo effect)
@@ -1408,9 +1408,8 @@ Sau mỗi lần suy diễn, bảng **điểm của chính đạo hữu** (Cổ /
 
 Quái thường nay là thực thể sống riêng biệt: mỗi lần sinh có ID, HP, vị trí và trạng thái riêng. Sát thương không chí mạng được giữ lại và đồng bộ cho người chơi gần đó. Quái có thể phát hiện, đuổi, vào tầm đánh và quay lại điểm sinh khi mất mục tiêu hoặc vượt dây cương; quái không chọn mục tiêu ở khu an toàn hay vùng khác. Sau khi bị hạ, quái sinh lại bằng instance ID mới sau thời gian hồi sinh của điểm spawn; nếu `respawn_seconds` nhỏ hơn 1, thời gian mặc định là 300 giây. Client chỉ dự đoán hiệu ứng hình ảnh; HP, tử vong và phần thưởng luôn do server quyết định.
 
-Hồi sinh sau khi tử đạo trong combat phụ thuộc cảnh giới (rank):
-- **Rank < 5 (dưới Ngũ Chuyển):** hồi sinh tại HUB/SAFE_ZONE an toàn gần nhất **trong Đại Vực hiện tại** (không bị kéo sang Đại Vực khác), fallback random trong KHU_VUC rồi tại chỗ tử vong.
-- **Rank ≥ 5 (từ Ngũ Chuyển) không có tông môn:** hồi sinh ngẫu nhiên trong KHU_VUC hiện tại (giữ nguyên Region), fallback HUB/SAFE_ZONE gần nhất rồi tại chỗ tử vong.
-- **Rank ≥ 5 có tông môn:** 50% hồi sinh về đúng sơn môn (region + `map_x`/`map_y`, có thể khác Đại Vực), 50% hồi sinh ngẫu nhiên trong KHU_VUC hiện tại. Hồi sinh về tông môn **không** nhận trạng thái Miễn Chiến PvP; nạn nhân PvP hồi sinh ở nơi khác vẫn nhận Miễn Chiến 10 phút như cũ.
+Hồi sinh sau khi tử đạo trong combat:
+- Đạo hữu tử đạo sẽ hồi sinh tại **HUB/SAFE_ZONE an toàn gần nhất** (ưu tiên HUB, fallback SAFE ZONE) **trong Đại Vực tử vong** (không bị kéo sang Đại Vực khác); khi không có HUB/SAFE ZONE hợp lệ trên tầng đó thì hồi sinh tại **vị trí tử vong**.
+- Sau khi hồi sinh, nạn nhân PvP nhận trạng thái **Miễn Chiến PvP 10 phút** (chủ động khai chiến sẽ phá vỡ).
 
 Sau khi phần thưởng combat đã lưu, máy chủ vẫn hoàn tất việc đánh dấu quái bị hạ với context riêng có timeout ngắn, kể cả khi kết nối HTTP của người chơi đã ngắt.

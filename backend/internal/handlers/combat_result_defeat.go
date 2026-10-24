@@ -55,7 +55,7 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 			})
 		}
 		dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
-		respawn = ResolveDeathRespawn(tx, player.ID, deathRegion, deathX, deathY)
+		respawn = ResolveDeathRespawn(deathRegion, deathX, deathY)
 		player.CurrentRegion, player.X, player.Y = respawn.Region, respawn.X, respawn.Y
 		didRespawn = true
 		if dropSummary != "" {
@@ -72,7 +72,7 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 			killerName = player.ActiveCombat.EnemyName
 		}
 		dropSummary := applyDeathDrop(tx, player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: killerName})
-		respawn = ResolveDeathRespawn(tx, player.ID, deathRegion, deathX, deathY)
+		respawn = ResolveDeathRespawn(deathRegion, deathX, deathY)
 		player.CurrentRegion, player.X, player.Y = respawn.Region, respawn.X, respawn.Y
 		didRespawn = true
 		setWorldPosFromPlayer(player)
@@ -93,7 +93,7 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 			if isPVP || (player.ActiveCombat != nil && player.ActiveCombat.TargetSectID != "") {
 				// All party members suffer death drop and respawn in PvP / Sect War defeat
 				_ = applyDeathDropRecord(tx, &allyUUID, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
-				allyRespawn := ResolveDeathRespawn(tx, allyUUID, deathRegion, deathX, deathY)
+				allyRespawn := ResolveDeathRespawn(deathRegion, deathX, deathY)
 				aReg, aX, aY := allyRespawn.Region, allyRespawn.X, allyRespawn.Y
 				worldPosIndex.Set(WorldPosEntry{
 					ID:        allyUUID.String(),

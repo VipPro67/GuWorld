@@ -85,11 +85,9 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 						targetHP = 10.0
 					}
 					dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, true, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
-					respawn := ResolveDeathRespawn(tx, targetUUID, targetRegion, targetX, targetY)
+					respawn := ResolveDeathRespawn(targetRegion, targetX, targetY)
 					hubRegion, hubX, hubY := respawn.Region, respawn.X, respawn.Y
-					if respawn.Kind != RespawnSect {
-						GrantPvpImmunity(tx, targetUUID, 10*time.Minute)
-					}
+					GrantPvpImmunity(tx, targetUUID, 10*time.Minute)
 					worldPosIndex.Set(WorldPosEntry{
 						ID:     targetUUID.String(),
 						X:      hubX,
