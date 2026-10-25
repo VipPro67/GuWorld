@@ -33,7 +33,12 @@ func schemaWorld() error {
 	VALUES
 		('world_map', 'WorldMap', 'Năm đại vực của thế giới hiện tại.', 'WORLD', 30000, 20000, 1, 9, TRUE),
 		('bai_thien', 'Bạch Thiên · Tầng 2', 'Đại vực tầng 2; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 6, 9, FALSE),
-		('hac_thien', 'Hắc Thiên · Tầng 3', 'Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 8, 9, FALSE)
+		('hac_thien', 'Hắc Thiên · Tầng 3', 'Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 8, 9, FALSE),
+		('realtime_preview', 'MMO Preview', 'Map thử nghiệm Phaser realtime 64×48.', 'WORLD', 64, 48, 1, 9, TRUE),
+		('misty_forest', 'Rừng Sương Mù', 'Map MMO Alpha PvE 64×48.', 'WORLD', 64, 48, 1, 9, TRUE),
+		('bone_crypt', 'Hầm Xương', 'Map MMO Alpha PvE 64×48.', 'WORLD', 64, 48, 1, 9, TRUE),
+		('crimson_ravine', 'Hẻm Núi Đỏ', 'Map MMO Alpha PvP 64×48.', 'WORLD', 64, 48, 1, 9, TRUE),
+		('emerald_grotto', 'Hang Ngọc Lục Bảo', 'Map MMO Alpha Safe 64×48.', 'WORLD', 64, 48, 1, 9, TRUE)
 	ON CONFLICT (id) DO NOTHING;
 	UPDATE world_maps SET name='Bạch Thiên · Tầng 2', description='Đại vực tầng 2; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.' WHERE id='bai_thien';
 	UPDATE world_maps SET name='Hắc Thiên · Tầng 3', description='Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.' WHERE id='hac_thien';
@@ -251,6 +256,35 @@ func schemaWorld() error {
 	ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS rules JSONB NOT NULL DEFAULT '{}';`); err != nil {
 		return err
 	}
+	if err := execSchema("region_loot_tables", `
+	CREATE TABLE IF NOT EXISTS region_loot_tables (
+		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+		loot_table_id VARCHAR(50) NOT NULL REFERENCES loot_tables(id) ON DELETE CASCADE,
+		monster_type VARCHAR(50) NOT NULL,
+		min_rank INT NOT NULL DEFAULT 1,
+		max_rank INT NOT NULL DEFAULT 9,
+		chance DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		PRIMARY KEY (region_id, loot_table_id, monster_type)
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("region_loot_tables_lookup_idx", `
+	CREATE INDEX IF NOT EXISTS idx_region_loot_lookup
+		ON region_loot_tables(region_id, monster_type, is_active);`); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Shared spatial instances reference players/parties, so create them after
+// schemaPlayers and schemaParties. They used to live in schemaWorld, which
+// runs before players — that broke fresh database initialization.
+func schemaSharedSpatialInstances() error {
 	if err := execSchema("shared_spatial_instances", `
 	CREATE TABLE IF NOT EXISTS shared_spatial_instances (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -283,29 +317,6 @@ func schemaWorld() error {
 	`); err != nil {
 		return err
 	}
-
-	if err := execSchema("region_loot_tables", `
-	CREATE TABLE IF NOT EXISTS region_loot_tables (
-		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
-		loot_table_id VARCHAR(50) NOT NULL REFERENCES loot_tables(id) ON DELETE CASCADE,
-		monster_type VARCHAR(50) NOT NULL,
-		min_rank INT NOT NULL DEFAULT 1,
-		max_rank INT NOT NULL DEFAULT 9,
-		chance DOUBLE PRECISION NOT NULL DEFAULT 1.0,
-		is_active BOOLEAN NOT NULL DEFAULT TRUE,
-		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-		updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-		PRIMARY KEY (region_id, loot_table_id, monster_type)
-	);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("region_loot_tables_lookup_idx", `
-	CREATE INDEX IF NOT EXISTS idx_region_loot_lookup
-		ON region_loot_tables(region_id, monster_type, is_active);`); err != nil {
-		return err
-	}
-
 	return nil
 }
 

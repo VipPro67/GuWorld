@@ -220,13 +220,13 @@ func formatChangedFields(sets []string, args []interface{}) string {
 						"luck":           "Vận đạo",
 
 						// Vũ khí, Sát phạt & Đặc thù
-						"sword":       "Kiếm đạo",
-						"blade":       "Đao đạo",
-						"theft":       "Thâu đạo",
-						"phantom":     "Huyễn đạo",
-						"painting":    "Họa đạo",
-						"killing":     "Sát đạo",
-						"kill":        "Sát đạo",
+						"sword":    "Kiếm đạo",
+						"blade":    "Đao đạo",
+						"theft":    "Thâu đạo",
+						"phantom":  "Huyễn đạo",
+						"painting": "Họa đạo",
+						"killing":  "Sát đạo",
+						"kill":     "Sát đạo",
 					}
 					parts := []string{}
 					for k, v := range m {

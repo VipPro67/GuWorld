@@ -68,7 +68,7 @@ func StartPracticeMatch(c *gin.Context) {
 		HP: maxHP, MaxHP: maxHP,
 		Mana: match.MaxMana, MaxMana: match.MaxMana,
 		Attack: stats["attack"], Defense: stats["defense"], Speed: stats["speed"],
-		Kit:    append([]match.Skill{match.BasicAttackSkill(stats["attack"])}, buildPlayerKit(&player)...),
+		Kit: append([]match.Skill{match.BasicAttackSkill(stats["attack"])}, buildPlayerKit(&player)...),
 	})
 	arena.AddParticipant(match.NewDummy(uuid.New(), match.ArenaWidth-6, match.ArenaHeight/2))
 

@@ -74,13 +74,13 @@ func GetRegions(c *gin.Context) {
 }
 
 type RegionMonsterDetail struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Type         string  `json:"type"` // Normal, Elite, Boss
-	MinRank      int     `json:"min_rank"`
-	MaxRank      int     `json:"max_rank"`
-	IsBoss       bool    `json:"is_boss"`
-	IsCapturable bool    `json:"is_capturable"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Type         string `json:"type"` // Normal, Elite, Boss
+	MinRank      int    `json:"min_rank"`
+	MaxRank      int    `json:"max_rank"`
+	IsBoss       bool   `json:"is_boss"`
+	IsCapturable bool   `json:"is_capturable"`
 	// MaxHP/BaseAttack/BaseDefense are the template stats scaled to MinRank;
 	// the *Max fields are the same stats at MaxRank. They differ only when a
 	// spawn row spans a rank range.

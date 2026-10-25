@@ -183,4 +183,3 @@ func FindValidExileCoordinates(q dbQueryRunner, region string, radius int, exclu
 
 	return 0, 0, fmt.Errorf("Không tìm thấy vị trí thích hợp trong đại vực để hạ trại sơn môn")
 }
-

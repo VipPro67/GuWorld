@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -382,6 +383,39 @@ func TestWorldMonsterTickSkipsRegionWithoutOnlinePlayers(t *testing.T) {
 	processWorldMonsterTick(context.Background(), now)
 	if len(*queried) != 0 {
 		t.Fatalf("queried %d buckets for an offline region: %#v", len(*queried), *queried)
+	}
+}
+
+func TestWorldMonsterTickExcludesIsolatedRealtimeInstance(t *testing.T) {
+	now := time.Now()
+	legacyID, realtimeID := uuid.New(), uuid.New()
+	queried := installMonsterWorkerTestState(t, []WorldPosEntry{
+		{ID: legacyID.String(), Region: "legacy", MapID: "world_map", X: 16, Y: 16, TS: now.UnixMilli()},
+		{ID: realtimeID.String(), Region: "realtime", MapID: "world_map", InstanceID: "realtime-preview", X: 32, Y: 32, TS: now.UnixMilli()},
+	}, map[uuid.UUID]bool{legacyID: true, realtimeID: true})
+
+	processWorldMonsterTick(context.Background(), now)
+	if len(*queried) == 0 {
+		t.Fatal("legacy world player should continue activating legacy monsters")
+	}
+	for _, bucket := range *queried {
+		if bucket.Region != "legacy" {
+			t.Fatalf("legacy worker queried isolated realtime region %q", bucket.Region)
+		}
+	}
+}
+
+func TestLegacyMonsterFilterExcludesRealtimeOwnedDefaultMapPlayer(t *testing.T) {
+	playerID := uuid.New()
+	middleware.SetRealtimeOwnershipChecker(func(id uuid.UUID) bool { return id == playerID })
+	t.Cleanup(func() { middleware.SetRealtimeOwnershipChecker(nil) })
+	entry := WorldPosEntry{ID: playerID.String(), Region: "legacy", MapID: "world_map"}
+	if isLegacyWorldMonsterPlayer(entry) {
+		t.Fatal("legacy monster worker accepted a realtime-owned player without a DB instance marker")
+	}
+	entry.ID = uuid.NewString()
+	if !isLegacyWorldMonsterPlayer(entry) {
+		t.Fatal("unowned legacy player should continue activating legacy monsters")
 	}
 }
 

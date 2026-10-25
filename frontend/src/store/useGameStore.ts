@@ -349,6 +349,13 @@ export interface AutoCombatConfig {
   killer_move_priorities?: GuTactic[];
   km_priorities?: GuTactic[];
   skip_battle: boolean;
+  realtime_left_click_slot?: number;
+  realtime_right_click_action?: "attack" | "skill";
+  realtime_right_click_slot?: number;
+  realtime_auto_farm?: boolean;
+  realtime_farm_range?: number;
+  realtime_farm_stop_hp_percent?: number;
+  realtime_farm_use_skills?: boolean;
 }
 
 export interface ManaSnapshot {
@@ -805,6 +812,9 @@ export interface MonsterSpec {
   is_capturable?: boolean;
   capture_chance?: number;
   pet_hunger_per_hour?: number;
+  path_masteries?: Record<string, number>;
+  gu_pool?: Array<{ gu_id: string; rank: number; weight: number }>;
+  gu_inventory?: Array<{ gu_id: string; rank: number; name?: string }>;
 }
 
 
@@ -1740,7 +1750,7 @@ export const useGameStore = create<GameState>((set, get) => {
     races: false,
     statuses: false,
   },
-  currentView: "dashboard",
+  currentView: "mmo-world",
 
   fetchGuDictionary: () => fetchDictionaryPart("gus"),
   fetchItemDictionary: () => fetchDictionaryPart("items"),

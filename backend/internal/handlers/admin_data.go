@@ -128,6 +128,8 @@ func reloadImportedData() []string {
 	reload("Quest registry", LoadQuestRegistry)
 	reload("Zone registry", func() error { return LoadZoneRegistry(db.DB) })
 	reload("Instance cache", InitInstanceCache)
+	reload("Loot registry", func() error { return models.LoadLootRegistry(db.DB) })
+	reload("Recipe registry", func() error { return models.LoadRecipeRegistry(db.DB) })
 	InvalidateDictionaryMemoryCache()
 	invalidateRecipeCatalog()
 	invalidateCachedDictionaryPart("explore_regions_v2")
@@ -245,6 +247,8 @@ func applyDatasetRuntimeBehavior(datasets []db.Dataset) []string {
 	reload("quest", LoadQuestRegistry)
 	reload("zone", func() error { return LoadZoneRegistry(db.DB) })
 	reload("instance", InitInstanceCache)
+	reload("loot", func() error { return models.LoadLootRegistry(db.DB) })
+	reload("recipe", func() error { return models.LoadRecipeRegistry(db.DB) })
 
 	if caches["dictionary"] {
 		cache.Delete(dictionaryCacheKeys...)
@@ -415,6 +419,12 @@ func AdminClearCache(c *gin.Context) {
 	}
 	if err := InitInstanceCache(); err != nil {
 		logger.S.Warnf("failed to reload Instance cache: %v", err)
+	}
+	if err := models.LoadLootRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Loot registry: %v", err)
+	}
+	if err := models.LoadRecipeRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Recipe registry: %v", err)
 	}
 
 	// Gacha pools are derived from the Gu/Item/recipe registries — force a rebuild.

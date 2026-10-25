@@ -20,6 +20,60 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var startingRegionToTanThuCoc = map[string]string{
+	"tan_thu_coc_nam_cuong":  "tan_thu_coc_nam_cuong",
+	"tan_thu_coc_trung_chau": "tan_thu_coc_trung_chau",
+	"tan_thu_coc_bac_nguyen": "tan_thu_coc_bac_nguyen",
+	"tan_thu_coc_tay_mac":    "tan_thu_coc_tay_mac",
+	"tan_thu_coc_dong_hai":   "tan_thu_coc_dong_hai",
+
+	"hub_nam_cuong":          "tan_thu_coc_nam_cuong",
+	"hub_thuong_gia_thanh":   "tan_thu_coc_nam_cuong",
+	"hub_trung_chau":         "tan_thu_coc_trung_chau",
+	"hub_bac_nguyen":         "tan_thu_coc_bac_nguyen",
+	"hub_tay_mac":            "tan_thu_coc_tay_mac",
+	"hub_dong_hai":           "tan_thu_coc_dong_hai",
+
+	"dai_vuc_nam_cuong":      "tan_thu_coc_nam_cuong",
+	"dai_vuc_trung_chau":     "tan_thu_coc_trung_chau",
+	"dai_vuc_bac_nguyen":     "tan_thu_coc_bac_nguyen",
+	"dai_vuc_tay_mac":        "tan_thu_coc_tay_mac",
+	"dai_vuc_dong_hai":       "tan_thu_coc_dong_hai",
+
+	"nam_cuong":              "tan_thu_coc_nam_cuong",
+	"trung_chau":             "tan_thu_coc_trung_chau",
+	"bac_nguyen":             "tan_thu_coc_bac_nguyen",
+	"tay_mac":                "tan_thu_coc_tay_mac",
+	"dong_hai":               "tan_thu_coc_dong_hai",
+}
+
+var tanThuCocEntryPoints = map[string][2]int{
+	"tan_thu_coc_nam_cuong":  {5000, 3000},
+	"tan_thu_coc_trung_chau": {13000, 3000},
+	"tan_thu_coc_bac_nguyen": {23000, 3000},
+	"tan_thu_coc_tay_mac":    {5000, 13000},
+	"tan_thu_coc_dong_hai":   {15000, 13000},
+}
+
+func resolveStartingRegion(region string) (string, int, int, bool) {
+	region = strings.ToLower(strings.TrimSpace(region))
+	if region == "" {
+		region = "tan_thu_coc_nam_cuong"
+	}
+	targetRegion, ok := startingRegionToTanThuCoc[region]
+	if !ok {
+		return "", 0, 0, false
+	}
+	x, y := 5000, 3000
+	if coords, found := tanThuCocEntryPoints[targetRegion]; found {
+		x, y = coords[0], coords[1]
+	}
+	if zone := ZoneByID(targetRegion); zone != nil && zone.EntryX != 0 && zone.EntryY != 0 {
+		x, y = zone.EntryX, zone.EntryY
+	}
+	return targetRegion, x, y, true
+}
+
 // RegisterPlayer handles registering a new player, hashing password, and rolling their aptitude
 func RegisterPlayer(c *gin.Context) {
 	var req CreatePlayerRequest
@@ -38,20 +92,12 @@ func RegisterPlayer(c *gin.Context) {
 		return
 	}
 
-	validRegions := map[string]bool{
-		"hub_nam_cuong":  true,
-		"hub_trung_chau": true,
-		"hub_bac_nguyen": true,
-		"hub_tay_mac":    true,
-		"hub_dong_hai":   true,
-	}
-	if req.StartingRegion == "" {
-		req.StartingRegion = "hub_nam_cuong"
-	}
-	if !validRegions[req.StartingRegion] {
+	startingRegion, spawnX, spawnY, ok := resolveStartingRegion(req.StartingRegion)
+	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
 		return
 	}
+	req.StartingRegion = startingRegion
 
 	// Chủng tộc luôn mặc định Nhân Tộc khi tạo tài khoản —
 	// các chủng tộc khác nhận được qua hoạt động/sự kiện trong game.
@@ -285,8 +331,7 @@ func RegisterPlayer(c *gin.Context) {
 	`
 
 	var activeCombatBytes []byte
-	hx, hy := hubEntryPoint()
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, hx, hy, constitution, strings.TrimSpace(req.Fingerprint), c.ClientIP()).Scan(
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, spawnX, spawnY, constitution, strings.TrimSpace(req.Fingerprint), c.ClientIP()).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
@@ -469,27 +514,10 @@ func CompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	validRegions := map[string]bool{
-		"hub_nam_cuong":  true,
-		"hub_trung_chau": true,
-		"hub_bac_nguyen": true,
-		"hub_tay_mac":    true,
-		"hub_dong_hai":   true,
-	}
-	if !validRegions[req.StartingRegion] {
+	startingRegion, spawnX, spawnY, ok := resolveStartingRegion(req.StartingRegion)
+	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
 		return
-	}
-
-	startingHubID := req.StartingRegion
-	if startingHubID == "" {
-		startingHubID = "hub_nam_cuong"
-	}
-	spawnX, spawnY := hubEntryPoint()
-	if hub := ZoneByID(startingHubID); hub != nil && hub.EntryX != 0 && hub.EntryY != 0 {
-		spawnX, spawnY = hub.EntryX, hub.EntryY
-	} else {
-		startingHubID = HubRegionID
 	}
 
 	if req.AttackGuID == "" {
@@ -574,7 +602,7 @@ func CompleteOnboarding(c *gin.Context) {
 		UPDATE players
 		SET needs_onboarding = false, current_region = $1, x = $2, y = $3, equipped_gus = $4, primeval_stones = $5, immortal_stones = $6
 		WHERE id = $7
-	`, startingHubID, spawnX, spawnY, equippedGus, player.PrimevalStones, player.ImmortalStones, playerID)
+	`, startingRegion, spawnX, spawnY, equippedGus, player.PrimevalStones, player.ImmortalStones, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save onboarding: " + err.Error()})
 		return
@@ -591,12 +619,12 @@ func CompleteOnboarding(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "player.onboarding",
-		RequestSummary: fmt.Sprintf("region=%s attack=%s defense=%s vital=%s", req.StartingRegion, req.AttackGuID, req.DefenseGuID, req.VitalGuChoice),
+		RequestSummary: fmt.Sprintf("region=%s attack=%s defense=%s vital=%s", startingRegion, req.AttackGuID, req.DefenseGuID, req.VitalGuChoice),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	player.NeedsOnboarding = false
-	player.CurrentRegion = startingHubID
+	player.CurrentRegion = startingRegion
 	player.X = spawnX
 	player.Y = spawnY
 	player.GuInventory = newGu

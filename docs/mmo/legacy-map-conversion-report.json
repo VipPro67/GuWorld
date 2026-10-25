@@ -1,0 +1,14 @@
+{
+  "source_regions": 134,
+  "region_boundaries": 134,
+  "map_cells": 136,
+  "monster_spawn_rows": 704,
+  "monster_spawns_exported": 500,
+  "monster_spawns_omitted_runtime_cap": 204,
+  "spawn_positions_approximated": 704,
+  "collision_source": "none; only outer world boundary is blocked",
+  "monster_spawn_edge_margin_world_units": 2.0,
+  "world_map": "1200x800",
+  "legacy_units_per_world_unit": 25,
+  "artifact_bytes": 4076831
+}

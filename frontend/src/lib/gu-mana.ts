@@ -52,6 +52,8 @@ export function portalManaCost(baseManaCost: number, guRank: number, playerRank:
 /** Short display form: "10", "2.5", "1.25". */
 export function formatManaCost(cost: number): string {
   if (!Number.isFinite(cost)) return "∞";
-  if (Number.isInteger(cost)) return String(cost);
-  return Number(cost.toFixed(2)).toString();
+  if (Number.isInteger(cost)) return cost.toLocaleString("vi-VN");
+  return cost > 0 && cost < 0.01
+    ? Number(cost.toPrecision(3)).toString()
+    : Number(cost.toFixed(2)).toString();
 }

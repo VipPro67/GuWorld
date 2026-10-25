@@ -94,11 +94,16 @@ export function canPerformAdminAction(permissions: readonly string[], action: Ad
 export type PreparedAdminAction = { reason?: string; confirmation_target?: string; reauth_password?: string; idempotencyKey: string };
 
 /** Enforces the declared client-side safety ceremony immediately before execution. */
-export function prepareAdminAction(actionKey: AdminActionKey, label: string, target: string): PreparedAdminAction | null {
+export function prepareAdminAction(
+  actionKey: AdminActionKey,
+  label: string,
+  target: string,
+  supplied?: { reason?: string; confirmed?: boolean },
+): PreparedAdminAction | null {
   const policy = ADMIN_ACTIONS[actionKey];
   let reason: string | undefined;
   if (policy.reasonRequired) {
-    reason = window.prompt(`Lý do ${label}:`)?.trim();
+    reason = supplied?.reason?.trim() ?? window.prompt(`Lý do ${label}:`)?.trim();
     if (!reason) return null;
   }
   if (policy.reauthenticationRequired) {
@@ -109,7 +114,7 @@ export function prepareAdminAction(actionKey: AdminActionKey, label: string, tar
   }
   if (policy.confirmationRequired) {
     const warning = policy.riskLevel === "destructive" ? " Đây là thao tác phá hủy và có thể không hoàn tác được." : "";
-	if (!window.confirm(`Xác nhận ${label} trên target “${target}”?${warning}`)) return null;
+	if (supplied?.confirmed !== true && !window.confirm(`Xác nhận ${label} trên target “${target}”?${warning}`)) return null;
   }
 	return { reason, confirmation_target: target, idempotencyKey: crypto.randomUUID() };
 }

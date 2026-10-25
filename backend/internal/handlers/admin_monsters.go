@@ -392,6 +392,7 @@ func AdminCreateLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_loot_table", "id=%s name=%s", req.ID, req.Name)
+	_ = models.LoadLootRegistry(db.DB)
 	cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo bảng loot"})
 }
@@ -426,6 +427,7 @@ func AdminUpdateLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_loot_table", "id=%s", tableID)
+	_ = models.LoadLootRegistry(db.DB)
 	cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật bảng loot"})
 }
@@ -451,6 +453,7 @@ func AdminDeleteLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_loot_table", "id=%s", tableID)
+	_ = models.LoadLootRegistry(db.DB)
 	cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa bảng loot"})
 }

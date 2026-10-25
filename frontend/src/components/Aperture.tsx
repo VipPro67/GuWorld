@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { estimateManaFromSnapshot, estimateHPFromSnapshot, guSpecFor, GuInstance, GuSpec, Player, ImmortalAperture, PlayerStatusInstance, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
@@ -20,21 +20,20 @@ import {
   ChevronDown,
   User,
   Camera,
-  Swords,
-  WandSparkles,
   Gift,
   Ticket,
   Check,
   TrendingUp,
   Leaf,
   RefreshCw,
+  Settings2,
   UserPlus,
   AlertTriangle,
   Trash2,
 } from "lucide-react";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { formatNumber, statusRemainLabel, calculateTribulationProgress } from "@/lib/utils";
-import { combatCategory as combatCategoryBlock, disguiseLevel, growthConfig, hasCapability, isCombatEligible } from "@/lib/effect-blocks";
+import { disguiseLevel, growthConfig, hasCapability } from "@/lib/effect-blocks";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 import { getRenameCost, getImmortalPenaltyRates } from "@/lib/balance";
@@ -49,9 +48,14 @@ function formatStat(val: number): string {
     : (val % 1 === 0 ? val.toString() : val.toFixed(2));
 }
 
+export type ApertureTab = "aperture" | "growth" | "referrals" | "settings";
+
 interface ApertureProps {
   player: Player;
   guDictionary: Record<string, GuSpec>;
+  initialTab?: ApertureTab;
+  expandMmoSettings?: boolean;
+  onRealtimeHotbarSaved?: () => void;
 }
 
 const RANK_NAMES: Record<number, string> = {
@@ -201,6 +205,9 @@ const formatGuName = (name: string) => {
 export const Aperture: React.FC<ApertureProps> = ({
   player,
   guDictionary,
+  initialTab = "aperture",
+  expandMmoSettings = false,
+  onRealtimeHotbarSaved,
 }) => {
   const store = useGameStore();
   const constitutionDictionary = store.constitutionDictionary;
@@ -242,10 +249,6 @@ export const Aperture: React.FC<ApertureProps> = ({
   const rank = player.rank;
   const subRank = player.sub_rank;
   const guInventory = player.gu_inventory || [];
-  const eligibleGusForCombat = guInventory.filter((g) => {
-    const spec = guSpecFor(g.gu_id, g.rank);
-    return g.status === "ACTIVE" && g.equipped && Boolean(spec && isCombatEligible(spec));
-  });
   const percent = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
   const rankName = RANK_NAMES[rank] ?? `Rank ${rank}`;
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
@@ -268,7 +271,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   const dashOffset = CIRC * (1 - percent / 100);
 
-  const [activeTab, setActiveTab] = useState<"aperture" | "growth" | "referrals" | "settings">("aperture");
+  const [activeTab, setActiveTab] = useState<ApertureTab>(initialTab);
   const [isGrowthCoreExpanded, setIsGrowthCoreExpanded] = useState(true);
   const [isPassiveStatsExpanded, setIsPassiveStatsExpanded] = useState(true);
   const [isActiveGrowthExpanded, setIsActiveGrowthExpanded] = useState(true);
@@ -302,45 +305,6 @@ export const Aperture: React.FC<ApertureProps> = ({
     setSettingsUsername(player.username || "");
   }, [player.username]);
 
-  // Auto combat settings state
-  const defaults = { auto_heal_hp: false, heal_threshold: 30, auto_restore_mana: false, mana_threshold: 30, gu_priorities: [], killer_move_priorities: [], km_priorities: [], skip_battle: false };
-  const saved = player.combat_settings || store.combatSettings || defaults;
-  const [csAutoHealHP, setCsAutoHealHP] = useState(saved.auto_heal_hp);
-  const [csHealThreshold, setCsHealThreshold] = useState(saved.heal_threshold);
-  const [csAutoRestoreMana, setCsAutoRestoreMana] = useState(saved.auto_restore_mana);
-  const [csManaThreshold, setCsManaThreshold] = useState(saved.mana_threshold);
-  const [csGuPriorities, setCsGuPriorities] = useState(saved.gu_priorities || []);
-  const [csKmPriorities, setCsKmPriorities] = useState(saved.killer_move_priorities || saved.km_priorities || []);
-  const [csSkipBattle, setCsSkipBattle] = useState(saved.skip_battle);
-  const [combatCategoryTab, setCombatCategoryTab] = useState<"all" | "damage" | "heal" | "shield" | "other">("all");
-  const [combatSettingsLoaded, setCombatSettingsLoaded] = useState(false);
-
-  React.useEffect(() => {
-    if (activeTab === "settings") {
-      if (!combatSettingsLoaded && !store.combatSettingsLoading) {
-        store.fetchCombatSettings().then(() => {
-          setCombatSettingsLoaded(true);
-        });
-      }
-      if (store.killerMoves.length === 0 && !store.killerMovesLoading) {
-        void store.fetchKillerMoves();
-      }
-    }
-  }, [activeTab, combatSettingsLoaded]);
-
-  React.useEffect(() => {
-    const cs = store.combatSettings || saved;
-    if (combatSettingsLoaded && cs) {
-      setCsAutoHealHP(cs.auto_heal_hp);
-      setCsHealThreshold(cs.heal_threshold);
-      setCsAutoRestoreMana(cs.auto_restore_mana);
-      setCsManaThreshold(cs.mana_threshold);
-      setCsSkipBattle(cs.skip_battle);
-      setCsGuPriorities(cs.gu_priorities || []);
-      setCsKmPriorities(cs.killer_move_priorities || cs.km_priorities || []);
-    }
-  }, [store.combatSettings, combatSettingsLoaded]);
-
   React.useEffect(() => {
     if (activeTab === "referrals") {
       void store.fetchReferrals();
@@ -357,9 +321,6 @@ export const Aperture: React.FC<ApertureProps> = ({
     const promises: Promise<ApiResponseData>[] = [store.fetchReferrals()];
     if (isImmortal) {
       promises.push(store.fetchAperture(), store.fetchDaoMarks(), store.fetchActiveTribulation());
-    }
-    if (activeTab === "settings") {
-      promises.push(store.fetchCombatSettings());
     }
     await Promise.all(promises);
     setIsReloading(false);
@@ -525,10 +486,10 @@ export const Aperture: React.FC<ApertureProps> = ({
               { id: "aperture", label: "Không Khiếu", disabled: false },
               { id: "growth", label: "Bản Thân", disabled: false },
               { id: "referrals", label: "Phúc Lợi", disabled: false },
-              { id: "settings", label: "Cài Đặt", disabled: false },
+              { id: "settings", label: "Hồ Sơ", disabled: false },
             ]}
             activeId={activeTab}
-            onChange={(id) => setActiveTab(id as ApiResponseData)}
+            onChange={(id) => setActiveTab(id as ApertureTab)}
             variant="pills"
             size="sm"
             scrollable={true}
@@ -1666,306 +1627,6 @@ export const Aperture: React.FC<ApertureProps> = ({
                   )}
                 </div>
 
-                {/* Cài Đặt Chiến Đấu Tự Động */}
-                <div className="flex flex-col gap-4 border-t border-zinc-900/60 pt-4 mt-2">
-                  <div className="flex items-center gap-2">
-                    <Swords className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs font-mono font-bold text-zinc-200 uppercase tracking-wider">Cài Đặt Chiến Thuật Tự Động</span>
-                  </div>
-
-                  {/* Auto Heal HP */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={csAutoHealHP}
-                          onChange={e => setCsAutoHealHP(e.target.checked)} />
-                        <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-emerald-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
-                      </label>
-                      <span className="text-xs text-zinc-300">Tự dùng dược liệu hồi HP</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-zinc-500">HP ≤</span>
-                      <input type="range" min="10" max="80" value={csHealThreshold}
-                        onChange={e => setCsHealThreshold(Number(e.target.value))}
-                        disabled={!csAutoHealHP} className="w-20 h-1 accent-emerald-500" />
-                      <span className="text-xs text-zinc-300 w-8">{csHealThreshold}%</span>
-                    </div>
-                  </div>
-
-                  {/* Auto Restore Mana */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={csAutoRestoreMana}
-                          onChange={e => setCsAutoRestoreMana(e.target.checked)} />
-                        <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-cyan-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
-                      </label>
-                      <span className="text-xs text-zinc-300">Tự dùng Nguyên Thạch hồi Chân nguyên</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-zinc-500">Chân nguyên ≤</span>
-                      <input type="range" min="10" max="80" value={csManaThreshold}
-                        onChange={e => setCsManaThreshold(Number(e.target.value))}
-                        disabled={!csAutoRestoreMana} className="w-20 h-1 accent-cyan-500" />
-                      <span className="text-xs text-zinc-300 w-8">{csManaThreshold}%</span>
-                    </div>
-                  </div>
-
-                  {/* Skip Battle */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={csSkipBattle}
-                          onChange={e => setCsSkipBattle(e.target.checked)} />
-                        <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-amber-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
-                      </label>
-                      <span className="text-xs text-zinc-300">Tự động bỏ qua chiến thắng</span>
-                    </div>
-                    <span className="text-[10px] text-zinc-500">(Chỉ áp dụng khi khám phá bản đồ)</span>
-                  </div>
-
-                  {/* Gu Loadout */}
-                  <div className="border-t border-zinc-900/30 pt-3">
-                    <div className="text-[10px] text-zinc-400 font-bold mb-1">Bộ Cổ Chiến Đấu</div>
-                    <p className="text-[9px] text-zinc-600 italic mb-2">Chọn cổ mang theo và sắp xếp thứ tự thi triển (từ trên xuống dưới). Bỏ trống = dùng tất cả cổ đang trang bị theo thứ tự mặc định.</p>
-
-                    {/* Category Filter Tabs */}
-                    <div className="flex flex-wrap gap-1 mb-2 border-b border-zinc-900/50 pb-1.5">
-                      {[
-                        { key: "all", label: "Tất cả" },
-                        { key: "damage", label: "⚔️ DMG" },
-                        { key: "heal", label: "💖 Hồi máu" },
-                        { key: "shield", label: "🛡️ Khiên" },
-                        { key: "other", label: "✨ Khác" },
-                      ].map((tab) => (
-                        <button
-                          key={tab.key}
-                          type="button"
-                          onClick={() => setCombatCategoryTab(tab.key as ApiResponseData)}
-                          className={`text-[10px] px-2 py-0.5 rounded transition-all ${
-                            combatCategoryTab === tab.key
-                              ? "bg-amber-600/30 border border-amber-500/40 text-amber-200 font-bold"
-                              : "bg-zinc-950/40 border border-zinc-900 text-zinc-400 hover:text-zinc-200"
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {eligibleGusForCombat.length === 0 ? (
-                      <p className="text-[10px] text-zinc-600 italic">Chưa có cổ trùng nào được trang bị.</p>
-                    ) : (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {eligibleGusForCombat
-                          .filter((gu) => {
-                            if (combatCategoryTab === "all") return true;
-                            const spec = guSpecFor(gu.gu_id, gu.rank);
-                            if (!spec) return combatCategoryTab === "other";
-                            const cat = combatCategoryBlock(spec.effects);
-                            if (combatCategoryTab === "shield") return cat === "defense";
-                            if (combatCategoryTab === "heal") return cat === "support";
-                            if (combatCategoryTab === "damage") return cat === "attack";
-                            return cat === "other";
-                          })
-                          .map((gu) => {
-                          const spec = guSpecFor(gu.gu_id, gu.rank);
-                          const idx = csGuPriorities.findIndex(t => t.gu_id === gu.gu_id);
-                          const inLoadout = idx !== -1;
-                          const tactic = inLoadout ? csGuPriorities[idx] : null;
-                          const condition = tactic?.use_condition || "always";
-                          const condVal = tactic?.condition_value || 30;
-                          const reorder = (dir: number) => {
-                            const list = [...csGuPriorities];
-                            const i = list.findIndex(t => t.gu_id === gu.gu_id);
-                            const j = i + dir;
-                            if (i < 0 || j < 0 || j >= list.length) return;
-                            const tmp = list[i];
-                            list[i] = list[j];
-                            list[j] = tmp;
-                            setCsGuPriorities(list.map((t, k) => ({ ...t, priority: k + 1 })));
-                          };
-                          return (
-                            <div key={gu.instance_id} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${inLoadout ? "bg-zinc-950/50 border-zinc-800" : "bg-zinc-950/20 border-zinc-900 opacity-60"}`}>
-                              <input type="checkbox" checked={inLoadout}
-                                onChange={e => {
-                                  if (e.target.checked) {
-                                    setCsGuPriorities([...csGuPriorities, { gu_id: gu.gu_id, priority: csGuPriorities.length + 1, use_condition: "always", condition_value: 30 }]);
-                                  } else {
-                                    setCsGuPriorities(csGuPriorities.filter(t => t.gu_id !== gu.gu_id));
-                                  }
-                                }}
-                                className="accent-emerald-500 w-3 h-3 cursor-pointer shrink-0" />
-                              {inLoadout && <span className="text-[10px] text-zinc-500 font-mono w-4">{idx + 1}</span>}
-                              <span className="text-[11px] text-zinc-200 flex-1 truncate">{spec?.name || gu.gu_id}</span>
-                              {inLoadout && (
-                                <>
-                                  <select value={condition}
-                                    onChange={e => setCsGuPriorities(csGuPriorities.map(t => t.gu_id === gu.gu_id ? { ...t, use_condition: e.target.value } : t))}
-                                    className="bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono"
-                                  >
-                                    <option value="always">Luôn</option>
-                                    <option value="hp_below">HP &lt; %</option>
-                                    <option value="mana_above">Chân nguyên &gt; %</option>
-                                    <option value="enemy_hp_below">Máu địch &lt; %</option>
-                                  </select>
-                                  {condition !== "always" && (
-                                    <input type="number" min="1" max="99" value={condVal}
-                                      onChange={e => setCsGuPriorities(csGuPriorities.map(t => t.gu_id === gu.gu_id ? { ...t, condition_value: Number(e.target.value) } : t))}
-                                      className="w-12 bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono text-center"
-                                    />
-                                  )}
-                                  <div className="flex gap-0.5">
-                                    <button type="button" onClick={() => reorder(-1)} disabled={idx === 0}
-                                      className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▲</button>
-                                    <button type="button" onClick={() => reorder(1)} disabled={idx === csGuPriorities.length - 1}
-                                      className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▼</button>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Killer Moves Tactics Section */}
-                  <div className="bg-zinc-950/40 border border-zinc-850 rounded-xl p-3 flex flex-col gap-2">
-                    <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <WandSparkles className="w-3.5 h-3.5 text-amber-400" />
-                        <span className="text-[11px] font-mono font-bold text-zinc-300 uppercase tracking-wider">
-                          Chiến Thuật Sát Chiêu
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        {csKmPriorities.length}/4 đã trang bị
-                      </span>
-                    </div>
-
-                    <p className="text-[10px] text-zinc-400">
-                      Chọn sát chiêu sẽ kích hoạt trong chiến đấu. Sát chiêu không được trang bị ở đây sẽ không tự xuất chiêu.
-                    </p>
-
-                    {store.killerMoves.length === 0 ? (
-                      <p className="text-[10px] text-zinc-600 italic py-2">
-                        Chưa có sát chiêu nào được sáng tạo. Hãy vào mục Sát Chiêu để sáng tạo trước.
-                      </p>
-                    ) : (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {store.killerMoves.map((km) => {
-                          const idx = csKmPriorities.findIndex(t => t.gu_id === km.id);
-                          const inLoadout = idx !== -1;
-                          const tactic = inLoadout ? csKmPriorities[idx] : null;
-                          const condition = tactic?.use_condition || "always";
-                          const condVal = tactic?.condition_value || 30;
-                          const reorder = (dir: number) => {
-                            const list = [...csKmPriorities];
-                            const i = list.findIndex(t => t.gu_id === km.id);
-                            const j = i + dir;
-                            if (i < 0 || j < 0 || j >= list.length) return;
-                            const tmp = list[i];
-                            list[i] = list[j];
-                            list[j] = tmp;
-                            setCsKmPriorities(list.map((t, k) => ({ ...t, priority: k + 1 })));
-                          };
-                          return (
-                            <div key={km.id} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${inLoadout ? "bg-amber-950/20 border-amber-900/40" : "bg-zinc-950/20 border-zinc-900 opacity-60"}`}>
-                              <input type="checkbox" checked={inLoadout}
-                                onChange={e => {
-                                  if (e.target.checked) {
-                                    if (csKmPriorities.length >= 4) {
-                                      store.addToast("Chỉ có thể trang bị tối đa 4 sát chiêu!", "error");
-                                      return;
-                                    }
-                                    setCsKmPriorities([...csKmPriorities, { gu_id: km.id, priority: csKmPriorities.length + 1, use_condition: "always", condition_value: 30 }]);
-                                  } else {
-                                    setCsKmPriorities(csKmPriorities.filter(t => t.gu_id !== km.id));
-                                  }
-                                }}
-                                className="accent-amber-500 w-3 h-3 cursor-pointer shrink-0" />
-                              {inLoadout && <span className="text-[10px] text-amber-500 font-mono w-4">{idx + 1}</span>}
-                              <div className="flex-1 min-w-0">
-                                <div className="text-[11px] text-zinc-200 font-bold truncate flex items-center gap-1.5">
-                                  <span>{km.name}</span>
-                                  <span className="text-[9px] px-1 py-0.2 bg-zinc-800 text-zinc-400 rounded">Bậc {km.main_gu_rank}</span>
-                                  {!km.available && <span className="text-[9px] text-rose-400 font-normal">(Thiếu Cổ)</span>}
-                                </div>
-                                <div className="text-[9px] text-zinc-500">
-                                  Tỉ lệ: {Math.round(km.success_chance * 100)}% · Hòa hợp: {Math.round(km.harmony * 100)}%
-                                </div>
-                              </div>
-                              {inLoadout && (
-                                <>
-                                  <select value={condition}
-                                    onChange={e => setCsKmPriorities(csKmPriorities.map(t => t.gu_id === km.id ? { ...t, use_condition: e.target.value } : t))}
-                                    className="bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono"
-                                  >
-                                    <option value="always">Luôn</option>
-                                    <option value="hp_below">HP &lt; %</option>
-                                    <option value="mana_above">Chân nguyên &gt; %</option>
-                                    <option value="enemy_hp_below">Máu địch &lt; %</option>
-                                  </select>
-                                  {condition !== "always" && (
-                                    <input type="number" min="1" max="99" value={condVal}
-                                      onChange={e => setCsKmPriorities(csKmPriorities.map(t => t.gu_id === km.id ? { ...t, condition_value: Number(e.target.value) } : t))}
-                                      className="w-12 bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono text-center"
-                                    />
-                                  )}
-                                  <div className="flex gap-0.5">
-                                    <button type="button" onClick={() => reorder(-1)} disabled={idx === 0}
-                                      className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▲</button>
-                                    <button type="button" onClick={() => reorder(1)} disabled={idx === csKmPriorities.length - 1}
-                                      className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▼</button>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Save Combat Settings */}
-                  <button
-                    type="button"
-                    disabled={store.actionLoading}
-                    onClick={async () => {
-                      const success = await store.saveCombatSettings({
-                        auto_heal_hp: csAutoHealHP,
-                        heal_threshold: csHealThreshold,
-                        auto_restore_mana: csAutoRestoreMana,
-                        mana_threshold: csManaThreshold,
-                        gu_priorities: csGuPriorities,
-                        killer_move_priorities: csKmPriorities,
-                        km_priorities: csKmPriorities,
-                        skip_battle: csSkipBattle,
-                      });
-                      if (success) {
-                        store.addLog("Đã lưu cài đặt chiến thuật tự động.");
-                        store.addToast("Đã lưu cài đặt chiến thuật tự động thành công!", "success");
-                      } else {
-                        store.addToast("Lưu cài đặt chiến thuật tự động thất bại!", "error");
-                      }
-                    }}
-                    className="w-full bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 disabled:from-zinc-900 disabled:to-zinc-900 disabled:opacity-40 border border-emerald-500/20 text-white rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 shadow-md"
-                  >
-                    {store.actionLoading ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Đang lưu...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Swords className="w-3.5 h-3.5" />
-                        <span>Lưu Chiến Thuật</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
                 {/* Submit button */}
                 <button
                   type="submit"
@@ -1978,7 +1639,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       <span>Đang lưu...</span>
                     </>
                   ) : (
-                    <span>Lưu Cài Đặt Hồ Sơ</span>
+                    <span>Lưu Hồ Sơ</span>
                   )}
                 </button>
               </form>

@@ -482,3 +482,79 @@ func TestBuildSimCombatant_StatusFactorScalesSkillDamage(t *testing.T) {
 		t.Fatalf("basic attack = clean %v / suppressed %v, want 30 / 15", cleanBasic, supBasic)
 	}
 }
+
+// TestGetPassiveStatsIgnoresDaoMarksAndMastery locks in that additive Gu
+// passives are raw values: dao marks and path mastery must not scale passive
+// ATK/DEF/HP/SPEED.
+func TestGetPassiveStatsIgnoresDaoMarksAndMastery(t *testing.T) {
+	previous := models.GuRegistry
+	t.Cleanup(func() { models.GuRegistry = previous })
+
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":20},{"op":"STAT_MOD","stat":"DEFENSE","sub_type":"ADD_FLAT","value":100},{"op":"STAT_MOD","stat":"HP","sub_type":"ADD_FLAT","value":200},{"op":"STAT_MOD","stat":"SPEED","sub_type":"ADD_FLAT","value":7}]}]`
+	var effects models.GuEffects
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan effects: %v", err)
+	}
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"GU_RAW_PASSIVE": {
+			4: {
+				ID:      "GU_RAW_PASSIVE",
+				Name:    "Thô Bạo Cổ",
+				Rank:    4,
+				Path:    []string{"Strength Path"},
+				Effects: effects,
+			},
+		},
+	}
+
+	base := &models.Player{
+		CultivationState: models.CultivationState{Rank: 4, SubRank: 1},
+		BodyState:        models.BodyState{BaseHP: 1000, HP: 1000},
+	}
+	boosted := &models.Player{
+		CultivationState: models.CultivationState{Rank: 4, SubRank: 1},
+		BodyState:        models.BodyState{BaseHP: 1000, HP: 1000},
+		DaoState: models.DaoState{
+			PathMasteries: models.PathMasteriesMap{"strength": 1_200_000},
+			DaoMarks:      models.DaoMarksMap{"strength": 2_500_000},
+		},
+		GuInventory: models.GuInventory{
+			{InstanceID: "raw", GuID: "GU_RAW_PASSIVE", Rank: 4, Status: "ACTIVE", Equipped: true},
+		},
+	}
+
+	baseStats := GetPassiveStats(base).Stats
+	stats := GetPassiveStats(boosted).Stats
+
+	if got := stats["attack"] - baseStats["attack"]; got != 20 {
+		t.Errorf("attack delta = %v, want raw 20", got)
+	}
+	if got := stats["defense"] - baseStats["defense"]; got != 100 {
+		t.Errorf("defense delta = %v, want raw 100", got)
+	}
+	if got := stats["hp"]; got != 200 {
+		t.Errorf("hp = %v, want raw 200", got)
+	}
+	if got := stats["speed"] - baseStats["speed"]; got != 7 {
+		t.Errorf("speed delta = %v, want raw 7", got)
+	}
+}
+
+// TestBaseAttackIgnoresStrengthDaoMarks verifies base attack is derived from
+// rank/sub-rank only; strength dao marks no longer add flat attack.
+func TestBaseAttackIgnoresStrengthDaoMarks(t *testing.T) {
+	player := &models.Player{
+		CultivationState: models.CultivationState{Rank: 8, SubRank: 1},
+		DaoState:         models.DaoState{DaoMarks: models.DaoMarksMap{"strength": 2_560_300}},
+	}
+
+	stats := GetPassiveStats(player).Stats
+	// 10 + (8-1)*10 + (1-1)*2 = 80
+	if stats["attack"] != 80 {
+		t.Fatalf("attack = %v, want 80 (rank-derived only)", stats["attack"])
+	}
+	// 5 + (8-1)*5 + (1-1)*1 = 40
+	if stats["defense"] != 40 {
+		t.Fatalf("defense = %v, want 40 (rank-derived only)", stats["defense"])
+	}
+}

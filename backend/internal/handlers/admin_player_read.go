@@ -372,12 +372,12 @@ func AdminListPlayerItems(c *gin.Context) {
 			rank = spec.Rank
 		}
 		data = append(data, gin.H{
-			"item_id":   itemID,
-			"name":      name,
-			"item_type": itemType,
-			"rank":      rank,
-			"category":  category,
-			"quantity":  quantity,
+			"item_id":    itemID,
+			"name":       name,
+			"item_type":  itemType,
+			"rank":       rank,
+			"category":   category,
+			"quantity":   quantity,
 			"created_at": createdAt,
 			"updated_at": updatedAt,
 		})
@@ -490,19 +490,44 @@ func AdminListPlayerGus(c *gin.Context) {
 			return
 		}
 		name := guID
-		if spec, ok := models.GetGu(guID, rank); ok { name = spec.Name } else if spec, ok := models.GetGuAny(guID); ok { name = spec.Name }
+		if spec, ok := models.GetGu(guID, rank); ok {
+			name = spec.Name
+		} else if spec, ok := models.GetGuAny(guID); ok {
+			name = spec.Name
+		}
 		_ = guRank // returned separately because both rank columns are persisted
 		all = append(all, gin.H{"instance_id": id, "gu_id": guID, "name": name, "gu_rank": guRank, "rank": rank, "level": level, "hunger": hunger, "status": state, "location": location, "is_locked": locked, "equipped": equipped, "is_vital": vital, "integration_time": integrationTime, "equipped_at": equippedAt, "growth_hours": growthHours, "created_at": createdAt, "updated_at": updatedAt, "last_fed_at": lastFedAt})
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})
+		return
+	}
 	if search != "" {
 		lower := strings.ToLower(search)
 		ids := models.GuIDsByName(search)
 		filtered := make([]gin.H, 0, len(all))
-		for _, row := range all { guID := row["gu_id"].(string); instanceID := row["instance_id"].(string); matched := strings.Contains(strings.ToLower(guID), lower) || strings.Contains(strings.ToLower(instanceID), lower); for _, id := range ids { if guID == id { matched = true; break } }; if matched { filtered = append(filtered, row) } }
+		for _, row := range all {
+			guID := row["gu_id"].(string)
+			instanceID := row["instance_id"].(string)
+			matched := strings.Contains(strings.ToLower(guID), lower) || strings.Contains(strings.ToLower(instanceID), lower)
+			for _, id := range ids {
+				if guID == id {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				filtered = append(filtered, row)
+			}
+		}
 		all = filtered
 	}
-	if start > len(all) { start = len(all) }; if end > len(all) { end = len(all) }
+	if start > len(all) {
+		start = len(all)
+	}
+	if end > len(all) {
+		end = len(all)
+	}
 	c.JSON(http.StatusOK, gin.H{"data": all[start:end], "total": len(all)})
 }
 

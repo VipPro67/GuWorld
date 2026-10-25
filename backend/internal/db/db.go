@@ -260,6 +260,7 @@ func InitSchema() error {
 		{"merchants", schemaMerchants},
 		{"parties", schemaParties},
 		{"players", schemaPlayers},
+		{"spatial_instances", schemaSharedSpatialInstances},
 		{"daily_missions", schemaDailyMissions},
 		{"world_drops", schemaMapGroundDrops},
 		{"admin_roles", schemaAdminRoles},
@@ -268,6 +269,7 @@ func InitSchema() error {
 		{"player_extras", schemaPlayerExtras},
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},
+		{"realtime", schemaRealtime},
 		{"aperture", schemaAperture},
 		{"actors", schemaActors},
 		{"combat", schemaCombat},
@@ -519,16 +521,29 @@ func isRetryableSchemaError(err error) bool {
 }
 
 // seedHubRegion seeds the default spawn region so the players.current_region FK
-// (default 'Southern_Border') is satisfied on a fresh database before the admin
+// (default 'hub_nam_cuong') is satisfied on a fresh database before the admin
 // imports Region.csv. The CSV import overwrites/extends this row.
+//
+// The parent region ('dai_vuc_nam_cuong') only exists after the CSV import, so
+// the FK target is resolved with a subquery instead of a literal: setting the
+// literal on a fresh database violates regions_parent_id_fkey and aborts boot.
 func seedHubRegion() error {
 	if _, err := schemaDB().Exec(`
 	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at, parent_id)
-	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 201, 201, 1, 9, true, 'HUB', 4900, 4900, 5100, 5100, 5000, 5000, '{"cell_type_weights":{"Empty":100}}', NOW(), 'dai_vuc_nam_cuong')
-	ON CONFLICT (id) DO UPDATE SET parent_id = 'dai_vuc_nam_cuong' WHERE regions.parent_id IS NULL OR regions.parent_id = '';`); err != nil {
+	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 201, 201, 1, 9, true, 'HUB', 4900, 4900, 5100, 5100, 5000, 5000, '{"cell_type_weights":{"Empty":100}}', NOW(), (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong'))
+	ON CONFLICT (id) DO UPDATE SET parent_id = (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong') WHERE regions.parent_id IS NULL OR regions.parent_id = '';`); err != nil {
 		return err
 	}
 	if _, err := schemaDB().Exec(`INSERT INTO region_world_maps (region_id, world_map_id) VALUES ('hub_nam_cuong', 'world_map') ON CONFLICT (region_id) DO NOTHING`); err != nil {
+		return err
+	}
+	if _, err := schemaDB().Exec(`
+	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at, parent_id)
+	VALUES ('tan_thu_coc_nam_cuong', 'Tân Thủ Cốc Nam Cương', 'Thung lũng khởi đầu thanh bình cho các tân thủ Cổ Sư học tập luyện cổ và chiến đấu.', 2000, 2000, 1, 2, true, 'SAFE_ZONE', 4000, 2000, 6000, 4000, 5000, 3000, '{"cell_type_weights":{"Empty":60,"Monster":60,"Resource":1}}', NOW(), (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong'))
+	ON CONFLICT (id) DO UPDATE SET parent_id = (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong') WHERE regions.parent_id IS NULL OR regions.parent_id = '';`); err != nil {
+		return err
+	}
+	if _, err := schemaDB().Exec(`INSERT INTO region_world_maps (region_id, world_map_id) VALUES ('tan_thu_coc_nam_cuong', 'world_map') ON CONFLICT (region_id) DO NOTHING`); err != nil {
 		return err
 	}
 	return nil
@@ -601,12 +616,6 @@ func seedStarterSpatialRealm() error {
 	_, err := schemaDB().Exec(`
 		INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
 		VALUES
-		-- World Map Entry Portals
-		('thanh_mao_son',3050,5050,'ENTRY_PORTAL','spatial_realm_hoa_tuu','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_hoa_tuu","label":"Cổng vào: Hoa Tửu Mật Đạo"}'::jsonb,0,TRUE),
-		('bach_cot_son',7050,3050,'ENTRY_PORTAL','spatial_realm_bach_cot','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_bach_cot","label":"Cổng vào: Bạch Cốt Động"}'::jsonb,0,TRUE),
-		('three_kings_mountain',9050,3050,'ENTRY_PORTAL','spatial_realm_three_kings','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_three_kings","label":"Cổng vào: Tam Vương Phúc Địa"}'::jsonb,0,TRUE),
-		('hu_tien_phuc_dia',17050,5050,'ENTRY_PORTAL','spatial_realm_dang_hon','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_dang_hon","label":"Cổng vào: Đãng Hồn Sơn"}'::jsonb,0,TRUE),
-
 		-- Starter Realm (Thanh Mộc Cốc)
 		('realm_qingmu_valley',1001,1000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về"}'::jsonb,0,TRUE),
 		('realm_qingmu_valley',1002,1000,'Monster','monster_wild_boar','{"rank":1}'::jsonb,60,TRUE),
@@ -640,6 +649,28 @@ func seedStarterSpatialRealm() error {
 		('realm_dang_hon_summit',4025,4025,'Monster','monster_immemorial_soul_beast','{"rank":7,"name":"Thái Cổ Đãng Hồn Thú Hoàng"}'::jsonb,300,TRUE),
 		('realm_dang_hon_summit',4025,4026,'INHERITANCE_ALTAR','altar_hu_immortal','{"altar_name":"Đài Chân Truyền Tiên Cấp: Hồ Tiên - Đãng Hồn Sơn","path":"Soul Path","tier":"IMMORTAL","guardian_coord":{"x":4025,"y":4025},"req_rank":6,"req_dao_marks":{"Soul Path":100},"rewards":{"gus":["GU_GUTS","GU_GUTS_GU"],"recipes":[],"primeval_stones":0,"immortal_stones":500,"materials":{},"dao_marks":{"Soul Path":500},"legacy_text":"Đãng Hồn Sơn rung động, Can Đảm Cổ vô song! Hồ Tiên ta lưu lại phúc địa cho Cổ Tiên hữu duyên chấp chưởng thiên địa bí cảnh, tráng đại thần hồn vạn trượng!"}}'::jsonb,0,TRUE)
 		ON CONFLICT (region_id,x,y) DO NOTHING`)
+	if err != nil {
+		return err
+	}
+	return seedSpatialRealmEntryPortals(schemaDB())
+}
+
+// seedSpatialRealmEntryPortals places the shared spatial-realm entrances on the
+// world map. Their host regions come from Region.csv, which may not be imported
+// yet on a fresh database; the EXISTS guard skips the rows until it is, and
+// seedRegionsFromCSV calls this again after the import.
+func seedSpatialRealmEntryPortals(exec csvImportExecutor) error {
+	_, err := exec.Exec(`
+	INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
+	SELECT v.region_id, v.x, v.y, 'ENTRY_PORTAL', v.content_id, v.metadata::jsonb, 0, TRUE
+	FROM (VALUES
+		('thanh_mao_son',3050,5050,'spatial_realm_hoa_tuu','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_hoa_tuu","label":"Cổng vào: Hoa Tửu Mật Đạo"}'),
+		('bach_cot_son',7050,3050,'spatial_realm_bach_cot','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_bach_cot","label":"Cổng vào: Bạch Cốt Động"}'),
+		('three_kings_mountain',9050,3050,'spatial_realm_three_kings','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_three_kings","label":"Cổng vào: Tam Vương Phúc Địa"}'),
+		('hu_tien_phuc_dia',17050,5050,'spatial_realm_dang_hon','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_dang_hon","label":"Cổng vào: Đãng Hồn Sơn"}')
+	) AS v(region_id, x, y, content_id, metadata)
+	WHERE EXISTS (SELECT 1 FROM regions r WHERE r.id = v.region_id)
+	ON CONFLICT (region_id,x,y) DO NOTHING`)
 	return err
 }
 
@@ -2032,6 +2063,14 @@ func seedRegionsFromCSV(filename string) error {
 			return fmt.Errorf("upsert region %s (pass 1): %w", item.id, err)
 		}
 		if item.worldMapID != "" {
+			// Region-local MMO maps are generated artifacts. Register their catalogue
+			// rows before assigning the FK so importing Region.csv is sufficient to
+			// activate the KHU_VUC/SAFE_ZONE map bindings.
+			if item.worldMapID == item.id && (item.zoneType == "KHU_VUC" || item.zoneType == "SAFE_ZONE") {
+				if err := registerGeneratedRegionMap(item.id, item.name, item.minRank, item.maxRank); err != nil {
+					return fmt.Errorf("register realtime map for region %s: %w", item.id, err)
+				}
+			}
 			var mapIsActive bool
 			if err := activeCSVImportDB().QueryRow(`SELECT COALESCE((SELECT is_active FROM world_maps WHERE id=$1), FALSE)`, item.worldMapID).Scan(&mapIsActive); err != nil {
 				return fmt.Errorf("validate map %s for region %s: %w", item.worldMapID, item.id, err)
@@ -2061,9 +2100,40 @@ func seedRegionsFromCSV(filename string) error {
 	if err := seedHacBaiSpatialRealms(); err != nil {
 		return fmt.Errorf("seed Hắc/Bạch Thiên shared spatial realms: %w", err)
 	}
+	if err := seedSpatialRealmEntryPortals(activeCSVImportDB()); err != nil {
+		return fmt.Errorf("seed spatial realm entry portals: %w", err)
+	}
 
 	logger.S.Infof("Regions seeded from %s (%d seeded)", filename, seeded)
 	return nil
+}
+
+func registerGeneratedRegionMap(id, name string, minRank, maxRank int) error {
+	path := csvPath(filepath.Join("mmo", "maps", id+".json"))
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read map artifact %s: %w", path, err)
+	}
+	var artifact struct {
+		ID      string `json:"map_id"`
+		Width   int    `json:"width"`
+		Height  int    `json:"height"`
+		Version string `json:"map_version"`
+	}
+	if err := json.Unmarshal(raw, &artifact); err != nil {
+		return fmt.Errorf("decode map artifact: %w", err)
+	}
+	if artifact.ID != id || artifact.Width < 8 || artifact.Height < 8 || artifact.Version == "" {
+		return fmt.Errorf("map artifact identity or dimensions are invalid")
+	}
+	_, err = activeCSVImportDB().Exec(`
+		INSERT INTO world_maps (id, name, description, map_type, width, height, min_rank, max_rank, is_active)
+		VALUES ($1,$2,$3,'WORLD',$4,$5,$6,$7,TRUE)
+		ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
+		width=EXCLUDED.width, height=EXCLUDED.height, min_rank=EXCLUDED.min_rank,
+		max_rank=EXCLUDED.max_rank, is_active=TRUE, updated_at=NOW()
+	`, id, name, "Realtime map generated from Region.csv.", artifact.Width, artifact.Height, minRank, maxRank)
+	return err
 }
 
 // migrateFiveDomainWorldMapLayout moves existing Đông Hải data into the

@@ -114,9 +114,9 @@ func GetCurrentMartialTournament(c *gin.Context) {
 func GetMartialBracket(c *gin.Context) {
 	var cached struct {
 		Tournaments []struct {
-			Rank        int               `json:"rank"`
-			Tournament  MartialTournament `json:"tournament"`
-			Matches     []MartialMatch    `json:"matches"`
+			Rank       int               `json:"rank"`
+			Tournament MartialTournament `json:"tournament"`
+			Matches    []MartialMatch    `json:"matches"`
 		} `json:"tournaments"`
 	}
 	if err := cache.GetJSON("martial_arena:bracket:current", &cached); err == nil && len(cached.Tournaments) > 0 {
@@ -269,8 +269,8 @@ func GetMartialMatchCombatLog(c *gin.Context) {
 
 	cacheKey := fmt.Sprintf("martial_arena:match_log:%s", matchID)
 	var cached struct {
-		Match     MartialMatch   `json:"match"`
-		CombatLog []interface{}  `json:"combat_log"`
+		Match     MartialMatch  `json:"match"`
+		CombatLog []interface{} `json:"combat_log"`
 	}
 	if err := cache.GetJSON(cacheKey, &cached); err == nil && cached.Match.ID != "" {
 		c.JSON(http.StatusOK, cached)

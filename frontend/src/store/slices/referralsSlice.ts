@@ -10,7 +10,7 @@ export interface ReferralsSlice {
     has_referrer?: boolean;
     can_bind_ref?: boolean;
   } | null;
-  passiveStats: { stats: Record<string, number>; details: { key: string; total: number; sources: { source: string; name: string; value: number; mult: number; dao: number; final: number }[] }[] } | null;
+  passiveStats: { stats: Record<string, number>; details: { key: string; total: number; sources: { source: string; name: string; value: number; final: number }[] }[] } | null;
   fetchReferrals: () => Promise<void>;
   claimReferralReward: (refereeId: string, milestone: number) => Promise<{success: boolean; message?: string}>;
   bindReferralCode: (refCode: string) => Promise<{success: boolean; message?: string}>;

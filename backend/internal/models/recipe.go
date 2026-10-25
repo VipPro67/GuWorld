@@ -2,10 +2,14 @@ package models
 
 import (
 	"bytes"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
+
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // RequiredGuItem describes one material Gu required by a refining recipe.
@@ -194,3 +198,93 @@ func ParseRecipeID(recipeID string) (string, int, int, error) {
 	}
 	return targetGuID, rank, variant, nil
 }
+
+var (
+	recipeMu       sync.RWMutex
+	RecipeRegistry = make(map[string]RefiningRecipe)
+	RecipeByTarget = make(map[string]map[int][]RefiningRecipe)
+	recipeList     = make([]RefiningRecipe, 0)
+)
+
+// LoadRecipeRegistry loads all refining_recipes from the database into memory cache.
+func LoadRecipeRegistry(db *sql.DB) error {
+	if db == nil {
+		return nil
+	}
+	rows, err := db.Query(`
+		SELECT target_gu_id, target_rank, variant, required_gus, required_materials,
+		       success_rate, primeval_stones_cost, immortal_essence_stones_cost
+		FROM refining_recipes
+		ORDER BY target_gu_id, target_rank, variant`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	newRegistry := make(map[string]RefiningRecipe)
+	newByTarget := make(map[string]map[int][]RefiningRecipe)
+	newList := make([]RefiningRecipe, 0)
+
+	for rows.Next() {
+		var r RefiningRecipe
+		if err := rows.Scan(&r.TargetGuID, &r.TargetRank, &r.Variant,
+			&r.RequiredGus, &r.RequiredMaterials, &r.SuccessRate,
+			&r.PrimevalStonesCost, &r.ImmortalEssenceStonesCost); err != nil {
+			return err
+		}
+		r.ID = fmt.Sprintf("recipe_%s_%d_%d", r.TargetGuID, r.TargetRank, r.Variant)
+		newRegistry[r.ID] = r
+
+		if _, ok := newByTarget[r.TargetGuID]; !ok {
+			newByTarget[r.TargetGuID] = make(map[int][]RefiningRecipe)
+		}
+		newByTarget[r.TargetGuID][r.TargetRank] = append(newByTarget[r.TargetGuID][r.TargetRank], r)
+		newList = append(newList, r)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	recipeMu.Lock()
+	RecipeRegistry = newRegistry
+	RecipeByTarget = newByTarget
+	recipeList = newList
+	recipeMu.Unlock()
+
+	logger.S.Infof("LoadRecipeRegistry: loaded %d refining recipes into memory", len(newRegistry))
+	return nil
+}
+
+// GetRecipe returns a recipe by recipe_id from memory cache.
+func GetRecipe(recipeID string) (RefiningRecipe, bool) {
+	recipeMu.RLock()
+	defer recipeMu.RUnlock()
+	r, ok := RecipeRegistry[recipeID]
+	return r, ok
+}
+
+// GetRecipeByTarget returns the recipe for targetGuID, targetRank, and variant from memory cache.
+func GetRecipeByTarget(targetGuID string, targetRank, variant int) (RefiningRecipe, bool) {
+	recipeMu.RLock()
+	defer recipeMu.RUnlock()
+	if variants, ok := RecipeByTarget[targetGuID]; ok {
+		if list, ok := variants[targetRank]; ok {
+			for _, r := range list {
+				if r.Variant == variant {
+					return r, true
+				}
+			}
+		}
+	}
+	return RefiningRecipe{}, false
+}
+
+// GetAllRecipes returns a copy of all recipes from memory cache.
+func GetAllRecipes() []RefiningRecipe {
+	recipeMu.RLock()
+	defer recipeMu.RUnlock()
+	res := make([]RefiningRecipe, len(recipeList))
+	copy(res, recipeList)
+	return res
+}
+

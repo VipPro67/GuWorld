@@ -32,6 +32,9 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 	if !middleware.AllowPlayer(playerID, limit, time.Minute) {
 		return http.StatusTooManyRequests, json.RawMessage(`{"error":"Đạo hữu thao tác quá nhanh. Vui lòng đợi rồi thử lại!"}`)
 	}
+	if (command == "world.move_path" || command == "match.input") && middleware.IsRealtimeWorldOwned(playerID) {
+		return http.StatusConflict, json.RawMessage(`{"code":"realtime_world_owns_character","error":"Character is controlled by the realtime world"}`)
+	}
 
 	var status int
 	var result any

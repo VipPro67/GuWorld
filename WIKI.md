@@ -78,6 +78,7 @@ Quy tắc áp dụng trạng thái:
 
 - `stat_mods` là **phần trăm trên tổng chỉ số** (cộng dồn sau toàn bộ nguồn khác: cơ bản, Cổ, buff,	Hộ Sơn…). Nếu tổng chỉ số trước đó bằng 0 thì mod không có tác dụng; chỉ số vật lý (**tấn công / phòng thủ / tốc độ / HP**) luôn **sàn ở 0** — áp chế nặng không thể đẩy chỉ số xuống âm.
 - Trạng thái mang **giá trị cường độ âm** (`Value < 0`, VD Áp Chế Giới Vực tính theo rank) sẽ **thay toàn bộ** `%` trong `stat_mods` bằng cường độ đó; cột hiệu ứng trong CSV chỉ là giá trị mặc định hiển thị.
+- Chỉ số cộng thẳng từ Cổ (`PASSIVE_STATS` / `STAT_MOD` `ADD_FLAT`: công / thủ / máu / tốc) là **giá trị raw** trong data — **không** nhân Đạo Cấp (path mastery) lẫn Đạo Ngân. Đạo Cấp và Đạo Ngân chỉ khuếch đại sát thương / khiên / hồi máu và các cơ chế triệu hồi, bắt thú, luyện cổ.
 
 **Thể chất (10 Thập Tuyệt Thể + Thuần Mộng Cầu Chân Thể):**
 
@@ -562,6 +563,16 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - Sát chiêu đã lưu có thể cast trong combat và có thể bị xóa.
 
 ## 8. Khám phá bản đồ
+
+> **Trạng thái gameplay hiện tại:** bề mặt thế giới sau onboarding dùng Phaser realtime. Di chuyển là
+> WASD hoặc click-to-move và server xác nhận vị trí; client không mở chạm trán theo lượt khi đi qua ô.
+> Các mô tả lưới ô/Pixi phía dưới ghi lại gameplay legacy và không còn là luồng thế giới đang chạy.
+
+> **Chiến đấu realtime (dev):** hotbar **1–6** là sáu Cổ được gán trong **Tu luyện → Bản Thân → Cài đặt MMO → Gán Cổ vào hotbar realtime**. Mỗi phím cast Cổ tương ứng; trong **Tu luyện → Bản Thân → Cài đặt MMO → Điều khiển chuột & phím**, có thể gán chuột trái cho một nút cố định hoặc để dùng Cổ đang chọn (nếu chưa chọn thì click đất để đi), và gán chuột phải cho đòn thường hoặc một Cổ. **Tự farm quái realtime** sẽ tự tìm quái trong bán kính đã chọn, áp sát và đánh; tùy chọn dùng Cổ theo thứ tự hotbar. Farm tạm dừng khi HP xuống ngưỡng an toàn, khi mở bảng MMO hoặc khi người chơi tự thao tác; chỉ chạy khi tab game đang mở. **Esc** bỏ chọn/aim/target. Cổ chưa có profile realtime hiện tên nhưng không thể cast, và không thay bằng kỹ năng mặc định. Đánh thường lấy công từ chỉ số nhân vật. Chiêu Cổ dùng giá mana theo chuyển/cảnh giới, luyện hóa và xung đột đạo ngân; sát thương lấy nền MMO rồi nhân cảnh giới lưu phái, đạo ngân và bonus hệ. Phòng thủ và kháng hệ giảm sát thương nhận. Cổ vượt chuyển phản phệ HP. Mana tiêu được ghi định kỳ và khi rời map; hồi phục thụ động được tính khi tải lại hồ sơ. Một số hiệu ứng Cổ đặc biệt vẫn chưa có profile realtime. Cài đặt chiến thuật tự động turn-base đã được gỡ khỏi UI.
+
+> Quái trên map realtime hiển thị tên và ảnh đúng theo mẫu; khi truy đuổi hoặc tấn công người chơi, thanh máu chuyển đỏ. Bảng mục tiêu có ảnh quái và HP. Số sát thương nổi là lượng HP thực mất sau khi trừ khiên; “chặn” chỉ xuất hiện khi khiên hấp thụ toàn bộ đòn đánh.
+
+> **HUD MMO:** góc trái hiển thị nhân vật, sinh mệnh/chân nguyên realtime, nguyên thạch và nhiệm vụ ngày. Radar góc phải đặt nhân vật ở tâm, chấm đỏ là quái và chấm xanh là người chơi trong tầm đang chọn; nút +/− đổi tầm quan sát. Thanh cuối màn hình dùng để đánh và dùng Cổ. Dock nhỏ mở Bản đồ, Túi đồ, Tu luyện, Cửa hàng và **Danh mục**; trong Danh mục có Tiên khiếu, Luyện Cổ, Chợ Tiên, Tông môn, Thiên Cơ Các cùng các giao diện cũ còn sử dụng. **Bản đồ Cổ Giới** cho xem 5 Đại Vực, chọn khu vực con, xem yêu thú và vật phẩm rơi; ô tìm kiếm nhận tên khu vực, quái, vật phẩm hoặc Cổ (có thể gõ không dấu) và mở khu vực từ kết quả. Bản đồ hiện dùng để tra cứu; chuyển map qua cổng chưa hoạt động. World Map/Exploration cũ và chiến trường realtime cũ đã được gỡ khỏi điều hướng. Phím **F3** bật/tắt thông tin gỡ lỗi của map.
 
 - **Bản đồ thế giới tầng 1** rộng 30.000 × 20.000 ô và được phủ kín bởi 5 Đại Vực: Nam Cương, Trung Châu, Bắc Nguyên nằm thành ba vùng ở phía bắc; Tây Mạc và Đông Hải chia đôi phía nam. Mỗi Đại Vực có HUB, vùng an toàn và các KHU_VUC con; Tây Mạc có thêm 6 KHU_VUC ở phía đông, Đông Hải thêm 3 KHU_VUC ở rìa đông. Bạch Thiên thuộc tầng 2, Hắc Thiên thuộc tầng 3; lối lên hai tầng đang được chuẩn bị và chưa mở. Các địa danh con của Bạch Thiên/Hắc Thiên xuất hiện dưới dạng **Bí Cảnh Bản Đồ dùng chung toàn server**: người chơi cùng vào một bí cảnh sẽ gặp nhau trong cùng một bản đồ riêng, tách khỏi tọa độ thế giới. Mỗi bí cảnh có cổng cố định được đánh dấu trên bản đồ tầng 1; Cổ Sư phải đi tới đúng cổng mới tiến vào được. Mỗi Đại Vực tầng 1 có HUB khởi đầu riêng; khi hoàn tất thiết lập ban đầu, Cổ Sư được đưa vào HUB theo vùng đăng ký.
 - Mỗi Đại Vực chia thành **tiểu vực** 1.000 × 1.000. Trong Đại Vực có các **địa danh có tên** (Thanh Mao Sơn, Tam Vương Truyền Thừa, Sa Mạc Thanh Quỷ...) với độ khó cố định theo vùng.

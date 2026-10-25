@@ -73,21 +73,21 @@ type DictionaryResponse struct {
 }
 
 // PublicMonsterView is the client-facing projection of a MonsterTemplate.
-// Internal combat/loot data (gu_inventory, gu_pool, item_inventory, dao_marks,
-// path_masteries, ai_profile) stays server-side; the admin panel uses
-// /api/admin/monsters for full details.
 type PublicMonsterView struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	Type             string  `json:"type"`
-	MaxHP            float64 `json:"max_hp"`
-	BaseAttack       float64 `json:"base_attack"`
-	BaseDefense      float64 `json:"base_defense"`
-	LootTableID      string  `json:"loot_table_id"`
-	Description      string  `json:"description"`
-	IsCapturable     bool    `json:"is_capturable"`
-	CaptureChance    float64 `json:"capture_chance"`
-	PetHungerPerHour float64 `json:"pet_hunger_per_hour"`
+	ID               string               `json:"id"`
+	Name             string               `json:"name"`
+	Type             string               `json:"type"`
+	MaxHP            float64              `json:"max_hp"`
+	BaseAttack       float64              `json:"base_attack"`
+	BaseDefense      float64              `json:"base_defense"`
+	LootTableID      string               `json:"loot_table_id"`
+	Description      string               `json:"description"`
+	IsCapturable     bool                 `json:"is_capturable"`
+	CaptureChance    float64              `json:"capture_chance"`
+	PetHungerPerHour float64              `json:"pet_hunger_per_hour"`
+	PathMasteries    map[string]int       `json:"path_masteries,omitempty"`
+	GuPool           []models.GuPoolEntry `json:"gu_pool,omitempty"`
+	GuInventory      []models.GuInstance  `json:"gu_inventory,omitempty"`
 }
 
 // publicMonsterDictionary projects the full monster registry down to the
@@ -107,6 +107,9 @@ func publicMonsterDictionary() map[string]PublicMonsterView {
 			IsCapturable:     m.IsCapturable,
 			CaptureChance:    m.CaptureChance,
 			PetHungerPerHour: m.PetHungerPerHour,
+			PathMasteries:    m.PathMasteries,
+			GuPool:           m.GuPool,
+			GuInventory:      m.GuInventory,
 		}
 	}
 	return out
@@ -336,9 +339,12 @@ func GetDictionary(c *gin.Context) {
 	})
 }
 
-// loadAllLootTables queries every loot table from the database and returns
-// them as parsed models.LootTable (with entries unmarshalled).
+// loadAllLootTables returns every loot table, preferring the in-memory cache.
 func loadAllLootTables(c *gin.Context) []models.LootTable {
+	if cached := models.AllLootTables(); len(cached) > 0 {
+		return cached
+	}
+
 	rows, err := db.DB.QueryContext(c.Request.Context(),
 		`SELECT id, name, COALESCE(entries,'[]'::jsonb) FROM loot_tables ORDER BY name`)
 	if err != nil {
@@ -558,4 +564,3 @@ func loadAllRegionLoot(c *gin.Context) []WikiRegionLoot {
 	}
 	return list
 }
-

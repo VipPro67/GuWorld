@@ -170,11 +170,16 @@ func schemaDictionaries() error {
 
 // seedDefaultRaceConstitutionRows pre-seeds the empty-key sentinel rows.
 // The empty keys keep the players.race / players.constitution foreign keys
-// satisfied for the '' value before CSV seed or when unassigned.
+// satisfied for the ” value before CSV seed or when unassigned.
 // All gameplay race and constitution records are seeded from CSV directly
 // into the database during InitSchema (seedConstitutionsFromCSV / seedRacesFromCSV).
 func seedDefaultRaceConstitutionRows() error {
 	if _, err := schemaDB().Exec(`INSERT INTO race_dictionary (key, name, effects) VALUES ('', '(Không)', '{}'::jsonb) ON CONFLICT (key) DO NOTHING`); err != nil {
+		return err
+	}
+	// players.race defaults to 'human', so it must exist before seedSystemPlayers
+	// runs on a fresh database (Race.csv import upserts the real effects later).
+	if _, err := schemaDB().Exec(`INSERT INTO race_dictionary (key, name, effects) VALUES ('human', 'Nhân Tộc', '[]'::jsonb) ON CONFLICT (key) DO NOTHING`); err != nil {
 		return err
 	}
 	if _, err := schemaDB().Exec(`INSERT INTO constitution_dictionary (key, name, effects, tier) VALUES ('', '(Không)', '{}'::jsonb, 0) ON CONFLICT (key) DO NOTHING`); err != nil {

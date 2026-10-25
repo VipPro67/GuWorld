@@ -159,7 +159,7 @@ export const DivinationModal: React.FC = () => {
   };
 
   const handleLocateTarget = (_target?: { current_region?: string; x?: number; y?: number }) => {
-    setView("world-map");
+    setView("mmo-world");
     closeDivinationModal();
   };
 

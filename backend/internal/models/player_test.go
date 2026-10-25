@@ -58,6 +58,23 @@ func TestCombatState_Value(t *testing.T) {
 	}
 }
 
+func TestAutoCombatConfigNormalizesRealtimeControls(t *testing.T) {
+	settings := AutoCombatConfig{
+		RealtimeLeftClickSlot:    8,
+		RealtimeRightClickAction: "unknown",
+		RealtimeRightClickSlot:   9,
+		RealtimeFarmRange:        100,
+		RealtimeFarmStopHP:       120,
+	}
+	settings.NormalizeRealtimeSettings()
+	if settings.RealtimeLeftClickSlot != 0 || settings.RealtimeRightClickAction != "attack" || settings.RealtimeRightClickSlot != 0 {
+		t.Fatalf("invalid click bindings were not normalized: %+v", settings)
+	}
+	if settings.RealtimeFarmRange != 32 || settings.RealtimeFarmStopHP != 90 {
+		t.Fatalf("farm limits were not clamped: range=%v stopHP=%v", settings.RealtimeFarmRange, settings.RealtimeFarmStopHP)
+	}
+}
+
 func TestTruncateJSON(t *testing.T) {
 	tests := []struct {
 		name     string

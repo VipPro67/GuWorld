@@ -1,0 +1,1263 @@
+{
+  "ngu_vuc_outer_maps": 5,
+  "khu_vuc_maps": 115,
+  "safe_zone_maps": 10,
+  "secret_realms_left_on_world_map": 4,
+  "total_region_maps": 125,
+  "monster_spawn_rows_assigned": 33756,
+  "map_version": "regions-v1",
+  "content_version": "region-content-v1",
+  "collision_source": "Region.csv has no terrain; generated maps have a safe outer wall only",
+  "maps": [
+    {
+      "id": "nc_am_hon_coc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "am_luu_cu_hac",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nam_cuong_gioi_bich_bac",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nc_thap_van_thu_son",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nc_phong_bao_dinh",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "nc_hac_am_hap",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "thiet_gia_thanh",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "tan_thu_coc_nam_cuong",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "bach_cot_son",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 2,
+      "portals": 4
+    },
+    {
+      "id": "three_kings_mountain",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 2,
+      "portals": 3
+    },
+    {
+      "id": "nam_cuong_gioi_bich_tay",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "thanh_mao_son",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 304,
+      "pois": 2,
+      "portals": 4
+    },
+    {
+      "id": "hub_thuong_gia_thanh",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "linh_diep_coc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "nc_gioi_bich_dong",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nc_hu_doc_chieu",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nghe_hoan_trach",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "van_hoa_coc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "van_xa_goc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "nc_loi_dinh_nhai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "huyet_hai_co_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "vu_son_hien_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nam_cuong_gioi_bich_nam",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nc_am_duong_coc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nam_cuong_cuc_nam",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_nam_cuong",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "phi_hac_son",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "luyen_co_dong",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "vo_bien_thu_lam",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "bat_bai_coc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tc_gioi_bich_bac",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "linh_duyen_trai_canh",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tan_thu_coc_trung_chau",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "hub_trung_chau",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "dan_qing_hoa_canh",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "thien_de_son",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "trung_chau_gioi_bich_tay",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "linh_nhi_ho",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "tc_than_tieu_phuc_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "hu_tien_phuc_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 2,
+      "portals": 4
+    },
+    {
+      "id": "trung_chau_gioi_bich_dong",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tc_van_kiem_nhai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "lac_thien_coc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "trung_chau_dia_cau",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "tc_thien_tri_son",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "tc_gioi_bich_nam",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tc_ta_ma_quyet",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "tc_thai_co_di_tich",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tc_kiem_minh_hai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tc_tien_co_truong",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "thien_dinh_ngoai_vi",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_trung_chau",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "cat_xuyen_thao_nguyen",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "han_bang_tuyet_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tuyet_nguyen_nhan_tuyet",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "bn_tuyet_quai_coc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "bac_nguyen_gioi_bich_dong",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "azure_ghost_desert",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tan_thu_coc_bac_nguyen",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "hub_bac_nguyen",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "gu_luan_slope",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "vuong_dinh_phuc_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "bn_gioi_bich_tay",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "phuc_hi_thao_nguyen",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "thanh_thao_hai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "nguyet_nhi_ho",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "hac_gia_trai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "bn_diet_than_truong",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "ma_to_phuc_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "phong_hoa_thao_nguyen",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "lau_lan_co_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "hung_lang_nguyen",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "bn_gioi_bich_nam",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "hoa_co_dinh",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "man_hoang_mieu",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "bat_thap_bat_gac_dai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "bang_phong_hac_uyen",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_bac_nguyen",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "tm_gioi_bich_bac",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "bach_sa_nguyen",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "luc_bao_oc_dao",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "thien_xa_quat",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tm_gioi_bich_dong",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "kim_phong_khau",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tieu_gia_tran",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "tan_thu_coc_tay_mac",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "xich_nhiem_sa_hai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "phi_sa_hac",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tm_gioi_bich_tay",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "am_hon_sa_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "hub_tay_mac",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "lac_da_thung_lung",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "huyen_canh_sa_hai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "cuu_cung_sa_uyen",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "dong_gia_bao",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "mac_gia_thanh",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "u_minh_sa_huyet",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "phong_van_hoang_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tm_gioi_bich_nam",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "dao_tac_phuc_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "vo_vong_sa_hai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "thien_khanh_dia_hac",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tay_mac_cuc_nam",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_tay_mac",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "dh_gioi_bich_tay_bac",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "song_gia_thuy_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "hoa_hai_dao",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "thap_am_tieu_dao",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "dh_gioi_bich_dong_bac",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "bach_kinh_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "tham_gia_dao",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "tan_thu_coc_dong_hai",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "thai_gia_cang",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "thien_luu_hai_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "dh_gioi_bich_tay",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "nhan_ngu_thanh",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "hub_dong_hai",
+      "type": "SAFE_ZONE",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 0,
+      "pois": 0,
+      "portals": 4
+    },
+    {
+      "id": "luu_ly_hai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "cu_lang_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "dong_hai_hai_nhan",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "am_tieu_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "bong_lai_phuc_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "quy_hon_hai_vuc",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 298,
+      "pois": 1,
+      "portals": 4
+    },
+    {
+      "id": "kim_tinh_hai",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "dh_gioi_bich_nam",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    },
+    {
+      "id": "van_truong_hai_cau",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "khi_hai_phuc_dia",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "long_cung_di_tich",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 293,
+      "pois": 1,
+      "portals": 3
+    },
+    {
+      "id": "dong_hai_cuc_dong",
+      "type": "KHU_VUC",
+      "parent_id": "dai_vuc_dong_hai",
+      "width": 2000,
+      "height": 2000,
+      "monster_spawns": 287,
+      "pois": 1,
+      "portals": 2
+    }
+  ]
+}

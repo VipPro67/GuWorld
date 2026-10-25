@@ -33,7 +33,9 @@ func validateDictionaryIdentity(c *gin.Context, key, name string) bool {
 }
 
 func validateBlockedActions(c *gin.Context, raw *json.RawMessage) bool {
-	if len(*raw) == 0 { *raw = json.RawMessage(`[]`) }
+	if len(*raw) == 0 {
+		*raw = json.RawMessage(`[]`)
+	}
 	var actions []string
 	if json.Unmarshal(*raw, &actions) != nil || actions == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Hành động bị chặn phải là mảng chuỗi JSON"})
@@ -72,7 +74,10 @@ func AdminListConstitutions(c *gin.Context) {
 		}
 		list = append(list, r)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc từ điển thể chất"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc từ điển thể chất"})
+		return
+	}
 	c.JSON(http.StatusOK, list)
 }
 
@@ -83,7 +88,9 @@ func AdminCreateConstitution(c *gin.Context) {
 	}
 	var req ConstitutionRow
 	if err := c.ShouldBindJSON(&req); err != nil || !validateDictionaryIdentity(c, req.Key, req.Name) {
-		if err != nil { c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu thể chất không hợp lệ"}) }
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu thể chất không hợp lệ"})
+		}
 		return
 	}
 	if len(req.Effects) == 0 {
@@ -101,7 +108,10 @@ func AdminCreateConstitution(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển thể chất: " + err.Error()}); return }
+	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển thể chất: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_constitution", "key=%s", req.Key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo thể chất mới"})
 }
@@ -117,10 +127,20 @@ func AdminUpdateConstitution(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Key != "" && req.Key != key { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi key thể chất"}); return }
-	if !validateDictionaryIdentity(c, key, req.Name) { return }
-	if len(req.Effects) == 0 { req.Effects = append(json.RawMessage(nil), emptyBlockEffects...) }
-	if req.Tier < 1 { c.JSON(http.StatusBadRequest, gin.H{"error": "Tier phải từ 1 trở lên"}); return }
+	if req.Key != "" && req.Key != key {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi key thể chất"})
+		return
+	}
+	if !validateDictionaryIdentity(c, key, req.Name) {
+		return
+	}
+	if len(req.Effects) == 0 {
+		req.Effects = append(json.RawMessage(nil), emptyBlockEffects...)
+	}
+	if req.Tier < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tier phải từ 1 trở lên"})
+		return
+	}
 	if !validateDictionaryEffects(c, "constitution", key, req.Effects) {
 		return
 	}
@@ -130,8 +150,19 @@ func AdminUpdateConstitution(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	updated, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận thể chất đã cập nhật"}); return }; if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thể chất"}); return }
-	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển thể chất: " + err.Error()}); return }
+	updated, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận thể chất đã cập nhật"})
+		return
+	}
+	if updated == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thể chất"})
+		return
+	}
+	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển thể chất: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_constitution", "key=%s", key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật thể chất"})
 }
@@ -147,8 +178,19 @@ func AdminDeleteConstitution(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	deleted, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận thể chất đã xóa"}); return }; if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thể chất"}); return }
-	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa nhưng không thể tải lại từ điển thể chất: " + err.Error()}); return }
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận thể chất đã xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thể chất"})
+		return
+	}
+	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa nhưng không thể tải lại từ điển thể chất: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_constitution", "key=%s", key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa thể chất"})
 }
@@ -182,7 +224,10 @@ func AdminListRaces(c *gin.Context) {
 		}
 		list = append(list, r)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc từ điển chủng tộc"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc từ điển chủng tộc"})
+		return
+	}
 	c.JSON(http.StatusOK, list)
 }
 
@@ -211,7 +256,10 @@ func AdminCreateRace(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if err := gamefx.LoadRaceRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển chủng tộc: " + err.Error()}); return }
+	if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển chủng tộc: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_race", "key=%s", req.Key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo chủng tộc mới"})
 }
@@ -227,9 +275,16 @@ func AdminUpdateRace(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Key != "" && req.Key != key { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi key chủng tộc"}); return }
-	if !validateDictionaryIdentity(c, key, req.Name) { return }
-	if len(req.Effects) == 0 { req.Effects = append(json.RawMessage(nil), emptyBlockEffects...) }
+	if req.Key != "" && req.Key != key {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi key chủng tộc"})
+		return
+	}
+	if !validateDictionaryIdentity(c, key, req.Name) {
+		return
+	}
+	if len(req.Effects) == 0 {
+		req.Effects = append(json.RawMessage(nil), emptyBlockEffects...)
+	}
 	if !validateDictionaryEffects(c, "race", key, req.Effects) {
 		return
 	}
@@ -239,8 +294,19 @@ func AdminUpdateRace(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	updated, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận chủng tộc đã cập nhật"}); return }; if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy chủng tộc"}); return }
-	if err := gamefx.LoadRaceRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển chủng tộc: " + err.Error()}); return }
+	updated, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận chủng tộc đã cập nhật"})
+		return
+	}
+	if updated == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy chủng tộc"})
+		return
+	}
+	if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển chủng tộc: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_race", "key=%s", key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật chủng tộc"})
 }
@@ -256,8 +322,19 @@ func AdminDeleteRace(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	deleted, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận chủng tộc đã xóa"}); return }; if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy chủng tộc"}); return }
-	if err := gamefx.LoadRaceRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa nhưng không thể tải lại từ điển chủng tộc: " + err.Error()}); return }
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận chủng tộc đã xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy chủng tộc"})
+		return
+	}
+	if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa nhưng không thể tải lại từ điển chủng tộc: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_race", "key=%s", key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa chủng tộc"})
 }
@@ -293,7 +370,10 @@ func AdminListStatuses(c *gin.Context) {
 		}
 		list = append(list, r)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc từ điển trạng thái"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc từ điển trạng thái"})
+		return
+	}
 	c.JSON(http.StatusOK, list)
 }
 
@@ -310,21 +390,29 @@ func AdminCreateStatus(c *gin.Context) {
 	if !validateDictionaryIdentity(c, req.Key, req.Name) {
 		return
 	}
-	if req.DefaultDurationMinutes < 0 { c.JSON(http.StatusBadRequest, gin.H{"error": "Thời gian trạng thái không được âm"}); return }
+	if req.DefaultDurationMinutes < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thời gian trạng thái không được âm"})
+		return
+	}
 	if len(req.Effects) == 0 {
 		req.Effects = append(json.RawMessage(nil), emptyBlockEffects...)
 	}
 	if !validateDictionaryEffects(c, "status", req.Key, req.Effects) {
 		return
 	}
-	if !validateBlockedActions(c, &req.BlockedActions) { return }
+	if !validateBlockedActions(c, &req.BlockedActions) {
+		return
+	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `INSERT INTO status_dictionary (key, name, description, effects, default_duration_minutes, blocked_actions) VALUES ($1, $2, $3, $4, $5, $6)`,
 		req.Key, req.Name, req.Description, req.Effects, req.DefaultDurationMinutes, req.BlockedActions)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if err := gamefx.LoadStatusRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển trạng thái: " + err.Error()}); return }
+	if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển trạng thái: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_status", "key=%s", req.Key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo trạng thái mới"})
 }
@@ -340,22 +428,45 @@ func AdminUpdateStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Key != "" && req.Key != key { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi key trạng thái"}); return }
-	if !validateDictionaryIdentity(c, key, req.Name) { return }
-	if req.DefaultDurationMinutes < 0 { c.JSON(http.StatusBadRequest, gin.H{"error": "Thời gian trạng thái không được âm"}); return }
-	if len(req.Effects) == 0 { req.Effects = append(json.RawMessage(nil), emptyBlockEffects...) }
+	if req.Key != "" && req.Key != key {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi key trạng thái"})
+		return
+	}
+	if !validateDictionaryIdentity(c, key, req.Name) {
+		return
+	}
+	if req.DefaultDurationMinutes < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thời gian trạng thái không được âm"})
+		return
+	}
+	if len(req.Effects) == 0 {
+		req.Effects = append(json.RawMessage(nil), emptyBlockEffects...)
+	}
 	if !validateDictionaryEffects(c, "status", key, req.Effects) {
 		return
 	}
-	if !validateBlockedActions(c, &req.BlockedActions) { return }
+	if !validateBlockedActions(c, &req.BlockedActions) {
+		return
+	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE status_dictionary SET name = $1, description = $2, effects = $3, default_duration_minutes = $4, blocked_actions = $5 WHERE key = $6`,
 		req.Name, req.Description, req.Effects, req.DefaultDurationMinutes, req.BlockedActions, key)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	updated, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận trạng thái đã cập nhật"}); return }; if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy trạng thái"}); return }
-	if err := gamefx.LoadStatusRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển trạng thái: " + err.Error()}); return }
+	updated, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận trạng thái đã cập nhật"})
+		return
+	}
+	if updated == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy trạng thái"})
+		return
+	}
+	if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhưng không thể tải lại từ điển trạng thái: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_status", "key=%s", key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật trạng thái"})
 }
@@ -371,8 +482,19 @@ func AdminDeleteStatus(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	deleted, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận trạng thái đã xóa"}); return }; if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy trạng thái"}); return }
-	if err := gamefx.LoadStatusRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa nhưng không thể tải lại từ điển trạng thái: " + err.Error()}); return }
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận trạng thái đã xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy trạng thái"})
+		return
+	}
+	if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa nhưng không thể tải lại từ điển trạng thái: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_status", "key=%s", key)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa trạng thái"})
 }

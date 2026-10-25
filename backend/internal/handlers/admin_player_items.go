@@ -20,39 +20,89 @@ import (
 )
 
 type AdminItemRequest struct {
-	ItemID   string `json:"item_id"`
-	Quantity int64  `json:"quantity"`
-	Category string `json:"category"`
-	Reason string `json:"reason"`
+	ItemID             string `json:"item_id"`
+	Quantity           int64  `json:"quantity"`
+	Category           string `json:"category"`
+	Reason             string `json:"reason"`
 	ConfirmationTarget string `json:"confirmation_target"`
 }
 
 type AdminUpdateInventoryItemRequest struct {
-	Quantity int64 `json:"quantity"`
+	Quantity int64  `json:"quantity"`
 	Category string `json:"category"`
 }
 
 func AdminUpdatePlayerInventoryItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
-	playerID, err := uuid.Parse(c.Param("id")); if err != nil { c.JSON(http.StatusBadRequest, gin.H{"error":"ID người chơi không hợp lệ"}); return }
-	itemID := strings.TrimSpace(c.Param("item_id")); oldCategory := adminInventoryCategory(c.Param("category"))
-	if itemID == "" || oldCategory == "" || oldCategory == "recipe" { c.JSON(http.StatusBadRequest, gin.H{"error":"Định danh vật phẩm không hợp lệ"}); return }
-	if _, exists := models.ItemRegistry[itemID]; !exists { c.JSON(http.StatusBadRequest, gin.H{"error":"Vật phẩm không tồn tại trong từ điển"}); return }
-	var req AdminUpdateInventoryItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.Quantity < 0 || req.Category == "" { c.JSON(http.StatusBadRequest, gin.H{"error":"Số lượng phải không âm và nhóm vật phẩm phải hợp lệ"}); return }
-	newCategory := adminInventoryCategory(req.Category); if newCategory == "" || newCategory == "recipe" { c.JSON(http.StatusBadRequest, gin.H{"error":"Nhóm vật phẩm không hợp lệ"}); return }
-	tx, err := db.DB.BeginTx(c.Request.Context(), nil); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error":"Lỗi database"}); return }; defer tx.Rollback()
-	var current int64
-	if err := tx.QueryRowContext(c.Request.Context(), `SELECT quantity FROM player_inventory_items WHERE player_id=$1 AND item_id=$2 AND category=$3 FOR UPDATE`, playerID, itemID, oldCategory).Scan(&current); err != nil { if errors.Is(err, sql.ErrNoRows) { c.JSON(http.StatusNotFound, gin.H{"error":"Không tìm thấy dòng vật phẩm"}) } else { c.JSON(http.StatusInternalServerError, gin.H{"error":"Không thể đọc vật phẩm"}) }; return }
-	if req.Quantity == 0 { if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM player_inventory_items WHERE player_id=$1 AND item_id=$2 AND category=$3`, playerID, itemID, oldCategory); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error":"Không thể xóa vật phẩm"}); return } } else if newCategory == oldCategory {
-		if _, err := tx.ExecContext(c.Request.Context(), `UPDATE player_inventory_items SET quantity=$4, updated_at=NOW() WHERE player_id=$1 AND item_id=$2 AND category=$3`, playerID, itemID, oldCategory, req.Quantity); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error":"Không thể cập nhật vật phẩm"}); return }
-	} else {
-		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM player_inventory_items WHERE player_id=$1 AND item_id=$2 AND category=$3`, playerID, itemID, oldCategory); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error":"Không thể chuyển nhóm vật phẩm"}); return }
-		if _, err := tx.ExecContext(c.Request.Context(), `INSERT INTO player_inventory_items(player_id,item_id,category,quantity) VALUES($1,$2,$3,$4) ON CONFLICT(player_id,item_id,category) DO UPDATE SET quantity=player_inventory_items.quantity+EXCLUDED.quantity,updated_at=NOW()`, playerID, itemID, newCategory, req.Quantity); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error":"Không thể chuyển nhóm vật phẩm"}); return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
 	}
-	if err := tx.Commit(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error":"Không thể lưu thay đổi"}); return }
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID:&adminID,Action:"admin.update_player_inventory_item",EntityType:"player_inventory_items",EntityID:playerID.String()+":"+itemID+":"+oldCategory,RequestSummary:fmt.Sprintf("quantity=%d category=%s->%s",req.Quantity,oldCategory,newCategory),IPAddress:c.ClientIP(),Success:true})
-	c.JSON(http.StatusOK,gin.H{"message":"Đã cập nhật vật phẩm","quantity":req.Quantity,"category":newCategory})
+	playerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID người chơi không hợp lệ"})
+		return
+	}
+	itemID := strings.TrimSpace(c.Param("item_id"))
+	oldCategory := adminInventoryCategory(c.Param("category"))
+	if itemID == "" || oldCategory == "" || oldCategory == "recipe" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Định danh vật phẩm không hợp lệ"})
+		return
+	}
+	if _, exists := models.ItemRegistry[itemID]; !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong từ điển"})
+		return
+	}
+	var req AdminUpdateInventoryItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.Quantity < 0 || req.Category == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng phải không âm và nhóm vật phẩm phải hợp lệ"})
+		return
+	}
+	newCategory := adminInventoryCategory(req.Category)
+	if newCategory == "" || newCategory == "recipe" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nhóm vật phẩm không hợp lệ"})
+		return
+	}
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		return
+	}
+	defer tx.Rollback()
+	var current int64
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT quantity FROM player_inventory_items WHERE player_id=$1 AND item_id=$2 AND category=$3 FOR UPDATE`, playerID, itemID, oldCategory).Scan(&current); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy dòng vật phẩm"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc vật phẩm"})
+		}
+		return
+	}
+	if req.Quantity == 0 {
+		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM player_inventory_items WHERE player_id=$1 AND item_id=$2 AND category=$3`, playerID, itemID, oldCategory); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm"})
+			return
+		}
+	} else if newCategory == oldCategory {
+		if _, err := tx.ExecContext(c.Request.Context(), `UPDATE player_inventory_items SET quantity=$4, updated_at=NOW() WHERE player_id=$1 AND item_id=$2 AND category=$3`, playerID, itemID, oldCategory, req.Quantity); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật vật phẩm"})
+			return
+		}
+	} else {
+		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM player_inventory_items WHERE player_id=$1 AND item_id=$2 AND category=$3`, playerID, itemID, oldCategory); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển nhóm vật phẩm"})
+			return
+		}
+		if _, err := tx.ExecContext(c.Request.Context(), `INSERT INTO player_inventory_items(player_id,item_id,category,quantity) VALUES($1,$2,$3,$4) ON CONFLICT(player_id,item_id,category) DO UPDATE SET quantity=player_inventory_items.quantity+EXCLUDED.quantity,updated_at=NOW()`, playerID, itemID, newCategory, req.Quantity); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển nhóm vật phẩm"})
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"})
+		return
+	}
+	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_inventory_item", EntityType: "player_inventory_items", EntityID: playerID.String() + ":" + itemID + ":" + oldCategory, RequestSummary: fmt.Sprintf("quantity=%d category=%s->%s", req.Quantity, oldCategory, newCategory), IPAddress: c.ClientIP(), Success: true})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật vật phẩm", "quantity": req.Quantity, "category": newCategory})
 }
 
 type AdminRecipeProgressRequest struct {
@@ -204,7 +254,10 @@ func AdminRemovePlayerItems(c *gin.Context) {
 	if kind == "recipe" {
 		category = "recipe"
 	}
-	if strings.TrimSpace(req.Reason) == "" || strings.TrimSpace(req.ConfirmationTarget) != c.Request.URL.Path { c.JSON(http.StatusBadRequest, gin.H{"error":"Cần lý do và xác nhận đúng vật phẩm cần thu hồi"}); return }
+	if strings.TrimSpace(req.Reason) == "" || strings.TrimSpace(req.ConfirmationTarget) != c.Request.URL.Path {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cần lý do và xác nhận đúng vật phẩm cần thu hồi"})
+		return
+	}
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -406,7 +459,10 @@ func AdminRemovePlayerGu(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Instance ID không hợp lệ"})
 		return
 	}
-	var adminAction struct { Reason string `json:"reason"`; ConfirmationTarget string `json:"confirmation_target"` }
+	var adminAction struct {
+		Reason             string `json:"reason"`
+		ConfirmationTarget string `json:"confirmation_target"`
+	}
 	if err := c.ShouldBindJSON(&adminAction); err != nil || strings.TrimSpace(adminAction.Reason) == "" || strings.TrimSpace(adminAction.ConfirmationTarget) != c.Request.URL.Path {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cần lý do và xác nhận mục tiêu để thu hồi Cổ trùng"})
 		return
@@ -437,9 +493,15 @@ func AdminRemovePlayerGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật cổ trùng"})
 		return
 	}
-	if affected, _ := deleteResult.RowsAffected(); affected != 1 { c.JSON(http.StatusConflict, gin.H{"error": "Cổ trùng không thuộc túi người chơi hoặc đang được nhân vật khác sử dụng"}); return }
+	if affected, _ := deleteResult.RowsAffected(); affected != 1 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cổ trùng không thuộc túi người chơi hoặc đang được nhân vật khác sử dụng"})
+		return
+	}
 
-	if err := tx.Commit(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"}); return }
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"})
+		return
+	}
 
 	guName := removedGuID
 	if spec, ok := models.GetGuAny(removedGuID); ok {
@@ -497,12 +559,22 @@ func AdminUpdatePlayerGu(c *gin.Context) {
 	if req.Rank != nil {
 		var guID string
 		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT gu_id FROM player_gu WHERE id=$1 AND player_id=$2`, instanceID, playerID.String()).Scan(&guID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Gu instance này"}) } else { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Gu instance"}) }
+			if errors.Is(err, sql.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Gu instance này"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Gu instance"})
+			}
 			return
 		}
 		var rankExists bool
-		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, guID, *req.Rank).Scan(&rankExists); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh bậc Cổ trùng"}); return }
-		if !rankExists { c.JSON(http.StatusBadRequest, gin.H{"error": "Bậc này không tồn tại trong từ điển Cổ trùng"}); return }
+		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, guID, *req.Rank).Scan(&rankExists); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh bậc Cổ trùng"})
+			return
+		}
+		if !rankExists {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Bậc này không tồn tại trong từ điển Cổ trùng"})
+			return
+		}
 	}
 	if req.Level != nil && *req.Level < 1 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cấp Cổ trùng phải lớn hơn 0"})
@@ -554,7 +626,11 @@ func AdminUpdatePlayerGu(c *gin.Context) {
 		args = append(args, *req.Equipped)
 		argIdx++
 	}
-	if req.IsVital != nil { sets = append(sets, "is_vital=$"+strconv.Itoa(argIdx)); args = append(args, *req.IsVital); argIdx++ }
+	if req.IsVital != nil {
+		sets = append(sets, "is_vital=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.IsVital)
+		argIdx++
+	}
 	if req.IsLocked != nil {
 		sets = append(sets, "is_locked=$"+strconv.Itoa(argIdx))
 		args = append(args, *req.IsLocked)
@@ -577,23 +653,43 @@ func AdminUpdatePlayerGu(c *gin.Context) {
 	// Keep vital Gu semantics consistent with the player-facing equip flow and
 	// refuse mutations when this instance is currently assigned to an actor.
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		return
+	}
 	defer tx.Rollback()
 	var location string
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT location FROM player_gu WHERE id=$1 AND player_id=$2 FOR UPDATE`, instanceID, playerID.String()).Scan(&location); err != nil {
-		if errors.Is(err, sql.ErrNoRows) { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Gu instance này"}) } else { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Gu instance"}) }; return
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Gu instance này"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Gu instance"})
+		}
+		return
 	}
 	var actorOwned bool
-	if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM actor_gu_equipment WHERE player_gu_id=$1)`, instanceID).Scan(&actorOwned); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác định chủ sở hữu Cổ trùng"}); return }
-	if location == "ACTOR" || actorOwned { c.JSON(http.StatusConflict, gin.H{"error": "Cổ trùng đang thuộc trang bị của nhân vật khác, không thể sửa tại hồ sơ người chơi"}); return }
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM actor_gu_equipment WHERE player_gu_id=$1)`, instanceID).Scan(&actorOwned); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác định chủ sở hữu Cổ trùng"})
+		return
+	}
+	if location == "ACTOR" || actorOwned {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cổ trùng đang thuộc trang bị của nhân vật khác, không thể sửa tại hồ sơ người chơi"})
+		return
+	}
 	if req.IsVital != nil && *req.IsVital {
 		sets = append(sets, "state='ACTIVE'", "equipped=true")
-		if _, err := tx.ExecContext(c.Request.Context(), `UPDATE player_gu SET is_vital=false WHERE player_id=$1 AND id<>$2 AND location <> 'ACTOR'`, playerID.String(), instanceID); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Cổ trùng bản mệnh"}); return }
+		if _, err := tx.ExecContext(c.Request.Context(), `UPDATE player_gu SET is_vital=false WHERE player_id=$1 AND id<>$2 AND location <> 'ACTOR'`, playerID.String(), instanceID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Cổ trùng bản mệnh"})
+			return
+		}
 	}
 	query := fmt.Sprintf(`UPDATE player_gu SET %s WHERE id=$%d AND player_id=$%d`, strings.Join(sets, ", "), argIdx, argIdx+1)
 	res, err := tx.ExecContext(c.Request.Context(), query, args...)
 	if err != nil {
-		if strings.Contains(err.Error(), "uq_player_gu_immortal") { c.JSON(http.StatusConflict, gin.H{"error": "Cổ trùng Tiên cấp này đã tồn tại trong hệ thống"}); return }
+		if strings.Contains(err.Error(), "uq_player_gu_immortal") {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cổ trùng Tiên cấp này đã tồn tại trong hệ thống"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Gu: " + err.Error()})
 		return
 	}
@@ -602,7 +698,10 @@ func AdminUpdatePlayerGu(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Gu instance này"})
 		return
 	}
-	if err := tx.Commit(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"}); return }
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"})
+		return
+	}
 
 	auditlog.Logf(db.DB, &adminID, "admin.update_gu_instance", "instance_id=%s, player_id=%s", instanceID, playerID.String())
 	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật Gu instance thành công"})

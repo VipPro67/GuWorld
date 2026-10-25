@@ -100,7 +100,7 @@ export const Registration: React.FC<RegistrationProps> = ({
         usernameValue,
         password,
         emailValue,
-        "hub_nam_cuong",
+        "tan_thu_coc_nam_cuong",
         true,
         referralCode,
         "GU_MOONLIGHT",

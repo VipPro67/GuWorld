@@ -38,7 +38,7 @@ const formatRelativeTime = (createdAtStr: string): string => {
   return `${diffDay} ngày trước`;
 };
 
-export const GlobalChatOverlay: React.FC = () => {
+export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({ placement = "default" }) => {
   const {
     player,
     baoHoangMessages,
@@ -202,28 +202,35 @@ export const GlobalChatOverlay: React.FC = () => {
     lg: "h-[560px] sm:h-[680px] md:h-[760px] lg:h-[860px]",
   }[chatHeight];
 
-  const chatPosition = "bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] right-[calc(env(safe-area-inset-right)+0.75rem)] sm:bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:right-[calc(env(safe-area-inset-right)+1.5rem)]";
+  const chatPosition = placement === "mmo"
+    ? "bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] left-[calc(env(safe-area-inset-left)+0.5rem)] md:bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] md:left-[calc(env(safe-area-inset-left)+0.75rem)]"
+    : "bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] right-[calc(env(safe-area-inset-right)+0.75rem)] sm:bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:right-[calc(env(safe-area-inset-right)+1.5rem)]";
+
+  const togglePosition = placement === "mmo"
+    ? "bottom-[168px] left-[calc(env(safe-area-inset-left)+0.75rem)] md:bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] md:left-[calc(env(safe-area-inset-left)+0.75rem)]"
+    : chatPosition;
 
   return (
     <>
       {/* Toggle Button */}
       {!chatOpen && (
-        <div className={`fixed ${chatPosition} z-[70]`}>
+        <div className={`fixed ${togglePosition} z-[70]`}>
           <button
             onClick={() => {
               setChatOpen(true);
               subscribeAllBaoHoangMessages();
               fetchBaoHoangMessages(activeChannel);
             }}
-            className="w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 border relative bg-gradient-to-br from-emerald-600 to-teal-700 border-emerald-500/30 text-white hover:scale-105 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 cursor-pointer"
+            aria-label="Mở kênh trò chuyện"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-all duration-300 border relative bg-gradient-to-br from-[#4a321f] via-[#2c1d12] to-[#17120d] border-[#b89a66]/70 text-[#f6d99f] hover:border-[#f4d894] hover:text-white hover:scale-105 hover:shadow-[0_0_18px_rgba(202,163,91,0.45)] active:scale-95 cursor-pointer backdrop-blur-md"
           >
-            <MessageSquare className="w-5 h-5" />
+            <MessageSquare className="w-5 h-5 text-[#f6d99f]" />
 
             {/* Red dot notification */}
             {(unreadChannels.world || unreadChannels.general || unreadChannels.sect || unreadChannels.region || unreadChannels.private) && (
-              <span className="absolute top-0.5 right-0.5 flex h-3 w-3">
+              <span className="absolute top-0 right-0 flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border border-[#17120d]"></span>
               </span>
             )}
           </button>

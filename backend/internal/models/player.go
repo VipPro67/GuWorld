@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -182,15 +183,52 @@ type GuTactic struct {
 
 // AutoCombatConfig holds a player's persistent auto-combat settings.
 type AutoCombatConfig struct {
-	AutoHealHP           bool       `json:"auto_heal_hp"`
-	HealThreshold        float64    `json:"heal_threshold"`
-	AutoRestoreMana      bool       `json:"auto_restore_mana"`
-	ManaThreshold        float64    `json:"mana_threshold"`
-	CategoryPriorities   []string   `json:"category_priorities"`
-	GuPriorities         []GuTactic `json:"gu_priorities"`
-	KillerMovePriorities []GuTactic `json:"killer_move_priorities"`
-	KmPriorities         []GuTactic `json:"km_priorities,omitempty"`
-	SkipBattle           bool       `json:"skip_battle"`
+	AutoHealHP               bool       `json:"auto_heal_hp"`
+	HealThreshold            float64    `json:"heal_threshold"`
+	AutoRestoreMana          bool       `json:"auto_restore_mana"`
+	ManaThreshold            float64    `json:"mana_threshold"`
+	CategoryPriorities       []string   `json:"category_priorities"`
+	GuPriorities             []GuTactic `json:"gu_priorities"`
+	KillerMovePriorities     []GuTactic `json:"killer_move_priorities"`
+	KmPriorities             []GuTactic `json:"km_priorities,omitempty"`
+	SkipBattle               bool       `json:"skip_battle"`
+	RealtimeLeftClickSlot    int        `json:"realtime_left_click_slot"`
+	RealtimeRightClickAction string     `json:"realtime_right_click_action"`
+	RealtimeRightClickSlot   int        `json:"realtime_right_click_slot"`
+	RealtimeAutoFarm         bool       `json:"realtime_auto_farm"`
+	RealtimeFarmRange        float64    `json:"realtime_farm_range"`
+	RealtimeFarmStopHP       float64    `json:"realtime_farm_stop_hp_percent"`
+	RealtimeFarmUseSkills    bool       `json:"realtime_farm_use_skills"`
+}
+
+func (c *AutoCombatConfig) NormalizeRealtimeSettings() {
+	if c.RealtimeLeftClickSlot < 0 || c.RealtimeLeftClickSlot > 6 {
+		c.RealtimeLeftClickSlot = 0
+	}
+	if c.RealtimeRightClickAction != "attack" && c.RealtimeRightClickAction != "skill" {
+		c.RealtimeRightClickAction = "attack"
+	}
+	if c.RealtimeRightClickSlot < 1 || c.RealtimeRightClickSlot > 6 {
+		c.RealtimeRightClickSlot = 0
+		if c.RealtimeRightClickAction == "skill" {
+			c.RealtimeRightClickAction = "attack"
+		}
+	}
+	if math.IsNaN(c.RealtimeFarmRange) || math.IsInf(c.RealtimeFarmRange, 0) || c.RealtimeFarmRange <= 0 {
+		c.RealtimeFarmRange = 14
+	}
+	if c.RealtimeFarmRange < 4 {
+		c.RealtimeFarmRange = 4
+	}
+	if c.RealtimeFarmRange > 32 {
+		c.RealtimeFarmRange = 32
+	}
+	if math.IsNaN(c.RealtimeFarmStopHP) || math.IsInf(c.RealtimeFarmStopHP, 0) || c.RealtimeFarmStopHP <= 0 {
+		c.RealtimeFarmStopHP = 25
+	}
+	if c.RealtimeFarmStopHP > 90 {
+		c.RealtimeFarmStopHP = 90
+	}
 }
 
 func scanBytes(value interface{}) ([]byte, bool) {
@@ -233,6 +271,7 @@ func (c *AutoCombatConfig) Scan(value interface{}) error {
 		} else if len(c.KmPriorities) == 0 && len(c.KillerMovePriorities) > 0 {
 			c.KmPriorities = c.KillerMovePriorities
 		}
+		c.NormalizeRealtimeSettings()
 	}
 	return err
 }
@@ -249,15 +288,18 @@ func (c AutoCombatConfig) Value() (driver.Value, error) {
 // DefaultAutoCombatConfig returns sensible defaults.
 func DefaultAutoCombatConfig() AutoCombatConfig {
 	return AutoCombatConfig{
-		AutoHealHP:           false,
-		HealThreshold:        30,
-		AutoRestoreMana:      false,
-		ManaThreshold:        30,
-		CategoryPriorities:   []string{"other", "shield", "heal", "damage"},
-		GuPriorities:         []GuTactic{},
-		KillerMovePriorities: []GuTactic{},
-		KmPriorities:         []GuTactic{},
-		SkipBattle:           false,
+		AutoHealHP:               false,
+		HealThreshold:            30,
+		AutoRestoreMana:          false,
+		ManaThreshold:            30,
+		CategoryPriorities:       []string{"other", "shield", "heal", "damage"},
+		GuPriorities:             []GuTactic{},
+		KillerMovePriorities:     []GuTactic{},
+		KmPriorities:             []GuTactic{},
+		SkipBattle:               false,
+		RealtimeRightClickAction: "attack",
+		RealtimeFarmRange:        14,
+		RealtimeFarmStopHP:       25,
 	}
 }
 

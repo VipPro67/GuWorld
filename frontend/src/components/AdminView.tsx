@@ -210,8 +210,6 @@ interface PassiveStatSource {
   source: string;
   name: string;
   value: number;
-  mult: number;
-  dao: number;
   final: number;
 }
 
@@ -551,6 +549,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [addGuId, setAddGuId] = useState("");
   const [addGuRank, setAddGuRank] = useState("");
   const [addGuQty, setAddGuQty] = useState(1);
+  const [addGuReason, setAddGuReason] = useState("");
+  const [addGuConfirmed, setAddGuConfirmed] = useState(false);
   const [showGuEditor, setShowGuEditor] = useState<PlayerGuRow | null>(null);
   const [guEditForm, setGuEditForm] = useState({ rank: "1", level: "1", hunger: "100", status: "ACTIVE", equipped: false, is_vital: false, is_locked: false, integration_time: "0" });
 
@@ -1613,7 +1613,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <button onClick={() => { setPlayerGusPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
                     <Search className="w-3.5 h-3.5" /> Tìm
                   </button>
-                  {canAdminAction("grantPlayerInventory") && <button onClick={() => { setAddGuId(""); setAddGuRank(""); setAddGuQty(1); setShowAddGu(true); ensureShopSearchLoaded(); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
+                  {canAdminAction("grantPlayerInventory") && <button onClick={() => { setAddGuId(""); setAddGuRank(""); setAddGuQty(1); setAddGuReason(""); setAddGuConfirmed(false); setShowAddGu(true); ensureShopSearchLoaded(); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
                   </button>}
                 </div>
@@ -2584,10 +2584,18 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lượng</label>
                 <input type="number" min={1} value={addGuQty} onChange={e => setAddGuQty(Math.max(1, parseInt(e.target.value) || 1))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
               </div>
+              <div>
+                <label className="text-[11px] font-bold text-zinc-500 font-mono">Lý do cấp (bắt buộc)</label>
+                <input value={addGuReason} onChange={e => setAddGuReason(e.target.value)} placeholder="Ví dụ: kiểm thử MMO realtime" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+              </div>
+              <label className="flex items-start gap-2 text-[11px] text-zinc-400">
+                <input type="checkbox" checked={addGuConfirmed} onChange={e => setAddGuConfirmed(e.target.checked)} className="mt-0.5 accent-emerald-500" />
+                <span>Xác nhận cấp Cổ trùng này cho tài khoản đang chọn.</span>
+              </label>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddGu(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
-                <button disabled={actionLoading || !addGuId || rankRequired} onClick={async () => {
-				  const prepared = prepareAdminAction("grantPlayerInventory", "cấp Cổ trùng cho người chơi", detail?.username || selectedId || "player");
+                <button disabled={actionLoading || !addGuId || rankRequired || !addGuReason.trim() || !addGuConfirmed} onClick={async () => {
+				  const prepared = prepareAdminAction("grantPlayerInventory", "cấp Cổ trùng cho người chơi", detail?.username || selectedId || "player", { reason: addGuReason, confirmed: addGuConfirmed });
                   if (!prepared) return;
                   const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus`, "POST", { gu_id: addGuId, quantity: addGuQty, ...(submitRank ? { rank: submitRank } : {}), ...prepared });
                   if (ok) setShowAddGu(false);

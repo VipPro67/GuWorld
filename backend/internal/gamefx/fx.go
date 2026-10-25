@@ -639,31 +639,10 @@ func EffectiveMaxMana(p *models.Player) float64 {
 	return p.MaxMana * (1.0 + MaxManaBonus(p))
 }
 
-// GuStatMultipliers returns the two multipliers a Gu passive's stat values are
-// scaled by: the highest path-mastery attainment multiplier across the Gu's
-// paths, and the dao-mark amplification (1 + marks/100 of the best-marked
-// path). Shared by the handlers' stat pipeline and PassiveHPBonus so every Gu
-// stat source scales identically.
-func GuStatMultipliers(pathMasteries map[string]int, daoMarks map[string]int64, paths []string) (masteryMult, daoMult float64) {
-	masteryMult = PathMasteryMultiplier(pathMasteries, paths)
-	daoMult = 1.0
-	if daoMarks != nil {
-		for _, path := range paths {
-			clean := CleanPath(path)
-			if amt, ok := daoMarks[clean]; ok && amt > 0 {
-				if pm := DaoAmplification(amt); pm > daoMult {
-					daoMult = pm
-				}
-			}
-		}
-	}
-	return masteryMult, daoMult
-}
-
 // PassiveHPBonus returns the total flat HP granted by equipped ACTIVE Gus
-// (passive.stat_base_hp), scaled by path mastery and dao marks exactly like
-// the "hp" key of the handlers' stat pipeline (GetPassiveStats), so
-// EffectiveMaxHP always matches the MaxHP combat uses.
+// (passive.stat_base_hp). Additive Gu passive stats are never scaled by path
+// mastery or dao marks — matching the "hp" key of the handlers' stat pipeline
+// (GetPassiveStats) — so EffectiveMaxHP always equals the MaxHP combat uses.
 func PassiveHPBonus(p *models.Player) float64 {
 	if p == nil {
 		return 0
@@ -695,8 +674,7 @@ func PassiveHPBonus(p *models.Player) float64 {
 		if baseHP <= 0 {
 			continue
 		}
-		masteryMult, daoMult := GuStatMultipliers(p.PathMasteries, p.DaoMarks, spec.Path)
-		total += baseHP * masteryMult * daoMult
+		total += baseHP
 	}
 	return total
 }

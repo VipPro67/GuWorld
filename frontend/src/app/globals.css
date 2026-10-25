@@ -116,6 +116,65 @@
   --rarity-mythic: #f43f5e;
 }
 
+/* Keep legacy feature views readable inside the parchment MMO HUD. */
+.mmo-panel-theme {
+  --th-zinc-950: #130e0a;
+  --th-zinc-900: #211810;
+  --th-zinc-800: #302318;
+  --th-zinc-700: #4b3827;
+  --th-zinc-600: #756047;
+  --th-zinc-500: #9f8969;
+  --th-zinc-400: #bea987;
+  --th-zinc-300: #dcc8a4;
+  --th-zinc-200: #ebd9b5;
+  --th-zinc-100: #f4e8cb;
+  --th-zinc-50: #fff3d8;
+  --bg-primary: #150f0b;
+  --bg-surface: #241a12;
+  --bg-elevated: #352618;
+  --text-primary: #f4e8cb;
+  --text-secondary: #dcc8a4;
+  --text-muted: #ad9878;
+  --border-default: #70573a;
+  --border-hover: #a88952;
+  --brand-primary: #e4b96c;
+  --brand-dim: #47341f;
+  --surface: var(--bg-surface);
+  --bg-card: var(--bg-surface);
+  --border: var(--border-default);
+  --color-cyan-950: #352518;
+  --color-cyan-900: #49331d;
+  --color-cyan-800: #654622;
+  --color-cyan-700: #87612e;
+  --color-cyan-500: #b8873e;
+  --color-cyan-400: #d9ab5b;
+  --color-cyan-300: #e9c77d;
+  --color-cyan-200: #f1dca7;
+  --color-cyan-100: #f8e8c4;
+  --color-cyan-50: #fff2d5;
+  --color-emerald-950: #292418;
+  --color-emerald-900: #383321;
+  --color-emerald-800: #554626;
+  --color-emerald-700: #745b2e;
+  --color-emerald-600: #94743a;
+  --color-emerald-500: #9c9255;
+  --color-emerald-400: #bdb271;
+  --color-emerald-300: #dbd19a;
+  --color-emerald-200: #ece3bd;
+  --color-emerald-100: #f3e8cb;
+  --color-emerald-50: #f7efd5;
+  --color-teal-950: #302318;
+  --color-teal-900: #49331d;
+  --color-teal-800: #654622;
+  --color-teal-700: #87612e;
+  --color-teal-600: #a97837;
+  --color-teal-500: #c2944d;
+  --color-teal-400: #d9ab5b;
+  --color-teal-300: #e9c77d;
+  --color-teal-200: #f1dca7;
+  --color-teal-100: #f8e8c4;
+}
+
 html {
   /* Keep rem-based typography and spacing at a compact desktop scale. */
   font-size: 16px;

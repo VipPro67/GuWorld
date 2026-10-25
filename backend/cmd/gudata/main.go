@@ -5,6 +5,8 @@
 // Subcommands:
 //
 //	gudata check-effects  validate Gu/Item effect blocks against effectcatalog
+//	gudata audit-realtime classify Gu blocks for the realtime zone runtime
+//	gudata compile-realtime-gu compile authored realtime Gu profiles
 //	gudata balance        compare each Gu's power vs its rank peers (band + tol)
 //	gudata match-food     audit/remap Gu food_types against Item.csv
 //	gudata gen-recipe     generate missing refinement recipes (configurable)
@@ -29,6 +31,12 @@ func main() {
 	switch os.Args[1] {
 	case "check-effects":
 		err = cmdCheckEffects(os.Args[2:])
+	case "audit-realtime":
+		err = cmdAuditRealtime(os.Args[2:])
+	case "compile-realtime-gu":
+		err = cmdCompileRealtimeGu(os.Args[2:])
+	case "transpile-realtime-gu":
+		err = cmdTranspileRealtimeGu(os.Args[2:])
 	case "balance":
 		err = cmdBalance(os.Args[2:])
 	case "match-food":
@@ -46,7 +54,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `usage: gudata <check-effects|balance|match-food|gen-recipe> [flags]`)
+	fmt.Fprintln(os.Stderr, `usage: gudata <check-effects|audit-realtime|compile-realtime-gu|transpile-realtime-gu|balance|match-food|gen-recipe> [flags]`)
 }
 
 // dataDir returns the -data flag value defaulting to "data".

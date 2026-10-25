@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ADMIN_ACTIONS, canPerformAdminAction } from "./actions.ts";
+import { ADMIN_ACTIONS, canPerformAdminAction, prepareAdminAction } from "./actions.ts";
 import { ADMIN_NAVIGATION } from "./navigation.ts";
 
 test("every admin action explicitly declares the complete safety policy", () => {
@@ -24,6 +24,14 @@ test("known sensitive actions have the expected policies", () => {
 	assert.equal(ADMIN_ACTIONS.assignPlayerRoles.permission, "admin_roles.assign");
   assert.equal(ADMIN_ACTIONS.mutatePayment.permission, "billing.mutate");
   assert.deepEqual(ADMIN_ACTIONS.updateArenaRanking, { permission: "arena_rankings.update", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false });
+});
+
+test("admin actions accept an explicit reason and confirmation from an in-app form", () => {
+  assert.equal(prepareAdminAction("grantPlayerInventory", "cấp Cổ", "admin", { reason: "  ", confirmed: true }), null);
+  const prepared = prepareAdminAction("grantPlayerInventory", "cấp Cổ", "admin", { reason: "MMO test", confirmed: true });
+  assert.equal(prepared?.reason, "MMO test");
+  assert.equal(prepared?.confirmation_target, "admin");
+  assert.ok(prepared?.idempotencyKey);
 });
 
 test("visibility accepts exact permissions and the admin wildcard", () => {

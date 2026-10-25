@@ -19,16 +19,16 @@ var WorldPosBroadcaster func(channel string, payload []byte, targets map[uuid.UU
 // WorldPosInterestRadius of the mover, so traffic scales with local density
 // instead of the total number of connected clients.
 type WorldPosEvent struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	AvatarURL string `json:"avatar_url"`
-	X         int    `json:"x"`
-	Y         int    `json:"y"`
-	Region    string `json:"region_id"`
-	MapID     string `json:"world_map_id"`
-	InstanceID string `json:"map_instance_id,omitempty"`
-	TS        int64  `json:"ts"`
-	ScopeResolved bool `json:"-"`
+	ID            string `json:"id"`
+	Username      string `json:"username"`
+	AvatarURL     string `json:"avatar_url"`
+	X             int    `json:"x"`
+	Y             int    `json:"y"`
+	Region        string `json:"region_id"`
+	MapID         string `json:"world_map_id"`
+	InstanceID    string `json:"map_instance_id,omitempty"`
+	TS            int64  `json:"ts"`
+	ScopeResolved bool   `json:"-"`
 }
 
 var worldPosHub = struct {
@@ -75,15 +75,15 @@ func broadcastWorldPos(payload WorldPosEvent) {
 	}
 
 	worldPosIndex.Set(WorldPosEntry{
-		ID:        payload.ID,
-		Username:  payload.Username,
-		AvatarURL: payload.AvatarURL,
-		X:         payload.X,
-		Y:         payload.Y,
-		Region:    payload.Region,
-		MapID:     payload.MapID,
+		ID:         payload.ID,
+		Username:   payload.Username,
+		AvatarURL:  payload.AvatarURL,
+		X:          payload.X,
+		Y:          payload.Y,
+		Region:     payload.Region,
+		MapID:      payload.MapID,
 		InstanceID: payload.InstanceID,
-		TS:        payload.TS,
+		TS:         payload.TS,
 	})
 
 	nearby := worldPosIndex.NearbyInScope(payload.X, payload.Y, WorldPosInterestRadius, payload.ID, payload.MapID, payload.InstanceID)

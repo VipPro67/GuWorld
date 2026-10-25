@@ -165,4 +165,3 @@ func TestVitalGuPathForAscension(t *testing.T) {
 		t.Fatalf("vitalGuPathForAscension with no vital Gu = %q, should not be heaven or empty", got)
 	}
 }
-

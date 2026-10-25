@@ -25,7 +25,6 @@ import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliatio
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
 const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
 const RefiningFurnace = dynamic(() => import("@/components/RefiningFurnace").then(m => m.RefiningFurnace), { ssr: false });
-const WorldPage = dynamic(() => import("@/components/WorldPage").then(m => m.WorldPage), { ssr: false });
 const CombatScreen = dynamic(() => import("@/components/CombatScreen").then(m => m.CombatScreen), { ssr: false });
 const CaravanShop = dynamic(() => import("@/components/CaravanShop").then(m => m.CaravanShop), { ssr: false });
 const MerchantTradeView = dynamic(() => import("@/components/MerchantTradeView").then(m => m.MerchantTradeView), { ssr: false });
@@ -47,8 +46,8 @@ const FeedbackView = dynamic(() => import("@/components/FeedbackView").then(m =>
 const AuditLogsView = dynamic(() => import("@/components/AuditLogsView").then(m => m.AuditLogsView), { ssr: false });
 const LeaderboardView = dynamic(() => import("@/components/LeaderboardView").then(m => m.LeaderboardView), { ssr: false });
 const TrainingRoom = dynamic(() => import("@/components/TrainingRoom").then(m => m.TrainingRoom), { ssr: false });
-const PvPArenaView = dynamic(() => import("@/components/PvPArena/PvPArenaView").then(m => m.PvPArenaView), { ssr: false });
 const UtilitiesView = dynamic(() => import("@/components/UtilitiesView").then(m => m.UtilitiesView), { ssr: false });
+const PhaserWorldHost = dynamic(() => import("@/components/game/PhaserWorldHost").then(m => m.PhaserWorldHost), { ssr: false });
 
 export default function Home() {
   const router = useRouter();
@@ -73,7 +72,6 @@ export default function Home() {
     itemDictionary,
     fetchDictionary,
     refineGu,
-    exploreNode,
     fleeCombat,
     activeCombatReplay,
     buyShopItem,
@@ -129,7 +127,6 @@ export default function Home() {
       state.itemDictionary,
       state.fetchDictionary,
       state.refineGu,
-      state.exploreNode,
       state.fleeCombat,
       state.activeCombatReplay,
       state.buyShopItem,
@@ -311,11 +308,13 @@ export default function Home() {
     );
   }
 
-  // The map is the persistent game surface. `dashboard` remains a compatible
-  // home route, but no longer replaces the world after login.
-  const isWorldMapView = Boolean(player && !player.needs_onboarding && !inCombat);
+  // Phaser is the only persistent gameplay world. Old view IDs remain aliases
+  // for navigation compatibility and never open a legacy map surface.
+  const isGameWorldView = Boolean(player && !player.needs_onboarding && !inCombat);
+  const isGameWorldSurface = ["dashboard", "mmo-world"].includes(currentView);
   // Full-bleed modes take the whole surface instead of the side drawer.
-  const isFullBleedView = currentView === "practice-room" || currentView === "pvp-arena";
+  const isFullBleedView = currentView === "practice-room" || isGameWorldSurface;
+  const isWideFeatureView = ["aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "death-arena", "martial-arena"].includes(currentView);
 
   const viewTitles: Record<string, string> = {
     "practice-room": "Phòng tập", cultivation: "Tu luyện", character: "Nhân vật", inventory: "Túi đồ", "inventory-gu": "Cổ trùng", party: "Tổ đội",    refine: "Luyện Cổ", topup: "Nạp", "premium-shop": "Cửa hàng tiên ngọc",
@@ -324,14 +323,14 @@ export default function Home() {
     gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân",
     aperture: "Tiên khiếu", "dream-realm": "Mộng Cảnh", dungeon: "Bí cảnh & Truyền thừa", sect: "Tông môn",
     "combat-history": "Lịch sử chiến đấu", feedback: "Góp ý", "audit-logs": "Nhật ký hệ thống",
-    "pvp-arena": "Đấu trường thời gian thực",
+    "mmo-world": "Thế giới Realtime",
     utilities: "Tiện ích",
   };
 
   return (
-    <div className={`${isWorldMapView ? "h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0" : "min-h-screen flex flex-col py-2 sm:py-8 px-1 sm:px-6 lg:px-8"} relative`}>
+    <div className={`${isGameWorldView ? "h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0" : "min-h-screen flex flex-col py-2 sm:py-8 px-1 sm:px-6 lg:px-8"} relative`}>
       {/* Top Header Navigation */}
-      {!isWorldMapView && <header className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto pb-4 border-b border-[var(--border-default)] mb-4 flex justify-between items-center">
+      {!isGameWorldView && <header className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto pb-4 border-b border-[var(--border-default)] mb-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <div
             onClick={() => {
@@ -355,14 +354,8 @@ export default function Home() {
           {player && !inCombat && <NotificationBell />}
         </div>
       </header>}
-      {isWorldMapView && player && !inCombat && (currentView === "dashboard" || currentView === "world-map") && (
-        <div className="absolute right-2 top-2 z-50">
-          <NotificationBell />
-        </div>
-      )}
-
       {/* Main Content Area */}
-      <main className={`w-full ${isWorldMapView ? "flex-1 min-h-0 max-w-none px-0 mx-0 overflow-hidden flex flex-col" : "flex-grow flex items-start justify-center max-w-[1600px] px-2 sm:px-8 mx-auto"}`}>
+      <main className={`w-full ${isGameWorldView ? "flex-1 min-h-0 max-w-none px-0 mx-0 overflow-hidden flex flex-col" : "flex-grow flex items-start justify-center max-w-[1600px] px-2 sm:px-8 mx-auto"}`}>
         {!player ? (
           <div className="py-12 w-full flex justify-center">
             <Registration
@@ -394,30 +387,29 @@ export default function Home() {
           </div>
         ) : (
           <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
-            <div className="absolute inset-0 min-h-0">
-              <WorldPage />
-            </div>
-            {currentView !== "dashboard" && currentView !== "world-map" && (
+            <PhaserWorldHost worldActive={isGameWorldSurface} onExit={() => setView("character")} />
+            {!isGameWorldSurface && (
               <section
                 role="dialog"
                 aria-label={viewTitles[currentView] || "Chức năng"}
-                className={`absolute z-40 flex flex-col overflow-hidden border border-emerald-200/10 bg-[#09130ff2] text-[var(--text-primary)] shadow-[0_24px_80px_rgba(0,0,0,.55)] backdrop-blur-xl ${
+                className={`mmo-panel-theme absolute z-40 flex flex-col overflow-hidden border border-[#a88952]/60 bg-[#150f0bf2] text-[#f4e8cb] shadow-[0_24px_80px_rgba(0,0,0,.55)] backdrop-blur-xl ${
                   isFullBleedView
                     ? "inset-0"
-                    : "inset-x-0 inset-y-0 md:inset-y-3 md:left-auto md:right-3 md:top-3 md:w-[min(54vw,780px)] md:rounded-2xl"                }`}
+                    : `inset-x-0 inset-y-0 md:inset-y-3 md:left-auto md:right-3 md:top-3 md:rounded-2xl ${isWideFeatureView ? "md:w-[min(58vw,760px)]" : "md:w-[min(46vw,560px)]"}`
+                }`}
               >
                 {!isFullBleedView && (
-                  <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/20 px-4 sm:px-5">
+                  <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[#a88952]/35 bg-[#2b2017]/70 px-4 sm:px-5">
                     <div className="min-w-0">
-                      <div className="truncate font-serif text-base font-semibold text-emerald-50">{viewTitles[currentView] || "Chức năng"}</div>
-                      <div className="hidden text-[10px] uppercase tracking-[.2em] text-emerald-200/45 sm:block">Cổ Giới · Bảng điều khiển</div>
+                      <div className="truncate font-serif text-base font-semibold text-[#f4e8cb]">{viewTitles[currentView] || "Chức năng"}</div>
+                      <div className="hidden text-[10px] uppercase tracking-[.2em] text-[#d8b979]/70 sm:block">Cổ Giới · Bảng điều khiển</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {player && !inCombat && <NotificationBell />}
                       <button
-                        onClick={() => setView("world-map")}
+                        onClick={() => setView("mmo-world")}
                         aria-label="Đóng bảng điều khiển"
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#a88952]/40 bg-[#3a291d] text-[#ead6ad] transition hover:bg-[#624329] hover:text-white"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -428,10 +420,6 @@ export default function Home() {
         {currentView === "practice-room" ? (
           <div className="w-full">
             <TrainingRoom onClose={() => setView("dashboard")} />
-          </div>
-        ) : currentView === "pvp-arena" ? (
-          <div className="w-full">
-            <PvPArenaView onClose={() => setView("world-map")} />
           </div>
         ) : currentView === "character" || currentView === "cultivation" ? (
           <div className="w-full">
@@ -563,7 +551,7 @@ export default function Home() {
           </div>
         ) : currentView === "dungeon" ? (
           <div className="w-full">
-            <DreamRealmView />
+            <DungeonView />
           </div>
         ) : currentView === "sect" ? (
           <div className="w-full">
@@ -600,7 +588,7 @@ export default function Home() {
       </main>
 
       {/* Footer Details */}
-      {!isWorldMapView && (
+      {!isGameWorldView && (
         <footer className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-primary flex flex-col items-center gap-2">
           <div className="flex items-center gap-3">
             <a href="https://www.facebook.com/profile.php?id=61587628762458" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all">
@@ -890,7 +878,7 @@ export default function Home() {
       )}
 
       {/* Global Floating Chat Box */}
-      {player && <GlobalChatOverlay />}
+      {player && !isGameWorldSurface && <GlobalChatOverlay />}
     </div>
   );
 }

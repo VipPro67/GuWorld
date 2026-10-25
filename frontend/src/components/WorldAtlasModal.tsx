@@ -64,8 +64,12 @@ export interface RegionDetailsData {
 
 const WORLD_SIZE = 30_000;
 const REGION_COLORS = [
-  "#0f766e", "#155e75", "#365314", "#854d0e", "#6b21a8", "#9f1239", "#1d4ed8",
+  "#355a50", "#5b442b", "#475635", "#70502b", "#594467", "#713f43", "#3e536b",
 ];
+
+function normalizeSearch(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLocaleLowerCase("vi-VN");
+}
 
 // Rank-scaled monster stats get very large (rank 5 = x100, rank 6 = x10^4,
 // rank 7 = x10^6 ...). Format with thousands separators, and collapse to a
@@ -181,21 +185,46 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
     : null;
 
   // Search filter
-  const cleanSearch = searchQuery.trim().toLowerCase();
-  const isRegionMatch = useCallback((r: Region) => {
-    if (!cleanSearch) return true;
-    if (r.name.toLowerCase().includes(cleanSearch) || r.id.toLowerCase().includes(cleanSearch)) {
+  const cleanSearch = normalizeSearch(searchQuery.trim());
+  const matchesContent = useCallback((r: Region) => {
+    if (normalizeSearch(`${r.name} ${r.id}`).includes(cleanSearch)) {
       return true;
     }
     const cached = detailsCache[r.id] || getRegionDetailsFromCache(r.id, regions);
     if (cached) {
-      if (cached.monsters?.some((m) => m.name.toLowerCase().includes(cleanSearch))) return true;
-      if (cached.drops?.some((d) => d.name.toLowerCase().includes(cleanSearch))) return true;
-      if (cached.wild_gus?.some((g) => g.name.toLowerCase().includes(cleanSearch))) return true;
-      if (cached.resources?.some((res) => res.name.toLowerCase().includes(cleanSearch))) return true;
+      if (cached.monsters?.some((m) => normalizeSearch(m.name).includes(cleanSearch))) return true;
+      if (cached.drops?.some((d) => normalizeSearch(d.name).includes(cleanSearch))) return true;
+      if (cached.wild_gus?.some((g) => normalizeSearch(g.name).includes(cleanSearch))) return true;
+      if (cached.resources?.some((res) => normalizeSearch(res.name).includes(cleanSearch))) return true;
     }
     return false;
   }, [cleanSearch, detailsCache, regions]);
+
+  const searchResults = useMemo(() => cleanSearch
+    ? regions.filter((region) => region.is_active && matchesContent(region))
+    : [], [cleanSearch, matchesContent, regions]);
+
+  const isRegionMatch = useCallback((region: Region) => {
+    if (!cleanSearch) return true;
+    return searchResults.some((result) => result.id === region.id || result.parent_id === region.id);
+  }, [cleanSearch, searchResults]);
+
+  const selectSearchResult = (region: Region) => {
+    const majorId = region.zone_type === "NGU_VUC" ? region.id : region.parent_id;
+    if (majorId) {
+      setSelectedMajorRegionId(majorId);
+      setZoomedRegionId(majorId);
+    }
+    const inspectedId = region.zone_type === "NGU_VUC"
+      ? regions.find((child) => child.parent_id === region.id && child.is_active)?.id ?? region.id
+      : region.id;
+    setInspectedSubRegionId(inspectedId);
+    const details = getRegionDetailsFromCache(inspectedId, regions);
+    if (details?.monsters.some((monster) => normalizeSearch(monster.name).includes(cleanSearch))) setActiveTab("monsters");
+    else if (details?.drops.some((drop) => normalizeSearch(drop.name).includes(cleanSearch)) || details?.wild_gus.some((gu) => normalizeSearch(gu.name).includes(cleanSearch)) || details?.resources.some((resource) => normalizeSearch(resource.name).includes(cleanSearch))) setActiveTab("drops");
+    else setActiveTab(region.zone_type === "NGU_VUC" ? "list" : "monsters");
+    setSearchQuery("");
+  };
 
   if (!mounted) return null;
 
@@ -210,7 +239,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
         role="dialog"
         aria-modal="true"
         aria-labelledby="world-atlas-title"
-        className="flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-cyan-800/50 bg-[#061017] text-zinc-100 shadow-2xl shadow-cyan-950/40"
+        className="mmo-panel-theme flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#a88952]/60 bg-[#150f0b] text-[#f4e8cb] shadow-2xl shadow-black/60"
       >
         {/* Header */}
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
@@ -235,9 +264,10 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
               <input
                 type="text"
                 placeholder="Tìm quái, item, Cổ..."
+                aria-label="Tìm khu vực, quái, vật phẩm hoặc Cổ"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-8 w-36 sm:w-44 lg:w-56 rounded-lg border border-cyan-900/60 bg-[#091b24] pl-8 pr-7 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-cyan-400 focus:outline-none"
+                className="h-8 w-36 sm:w-44 lg:w-56 rounded-lg border border-cyan-900/60 bg-[#302318] pl-8 pr-7 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-cyan-400 focus:outline-none"
               />
               {searchQuery && (
                 <button
@@ -247,6 +277,13 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                   <X className="h-3 w-3" />
                 </button>
               )}
+              {cleanSearch && <div className="absolute right-0 top-full z-30 mt-1 max-h-64 w-[min(80vw,340px)] overflow-y-auto rounded-lg border border-[#a88952]/60 bg-[#211a12] p-1 shadow-xl">
+                <div className="px-2 py-1 text-[10px] text-[#b9a584]">{searchResults.length} khu vực phù hợp</div>
+                {searchResults.slice(0, 40).map((region) => <button key={region.id} type="button" onClick={() => selectSearchResult(region)} className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-[#f1dfb8] hover:bg-[#665033]/70">
+                  <span className="truncate">{region.name}</span><span className="shrink-0 text-[9px] text-[#b9a584]">C{region.min_rank}–C{region.max_rank}</span>
+                </button>)}
+                {searchResults.length > 40 && <div className="px-2 py-1 text-[10px] text-[#b9a584]">Nhập cụ thể hơn để xem thêm kết quả.</div>}
+              </div>}
             </div>
 
             <button
@@ -289,12 +326,12 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
             </div>
 
             {/* SVG Map Container */}
-            <div className="relative mx-auto flex w-full max-w-[340px] sm:max-w-[460px] lg:max-w-[560px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-cyan-950/80 bg-[#05131a] shadow-inner">
+            <div className="relative mx-auto flex w-full max-w-[340px] sm:max-w-[460px] lg:max-w-[560px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-cyan-950/80 bg-[#201a12] shadow-inner">
               <div
                 className="pointer-events-none absolute inset-0 opacity-25"
                 style={{
                   backgroundImage:
-                    "radial-gradient(circle at 50% 50%, rgba(34,211,238,.15), transparent 70%), linear-gradient(rgba(34,211,238,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,.07) 1px, transparent 1px)",
+                    "radial-gradient(circle at 50% 50%, rgba(222,180,104,.17), transparent 70%), linear-gradient(rgba(222,180,104,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(222,180,104,.08) 1px, transparent 1px)",
                   backgroundSize: "auto, 32px 32px, 32px 32px",
                 }}
               />
@@ -325,6 +362,15 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                         onClick={() => {
                           setSelectedMajorRegionId(region.id);
                           setZoomedRegionId(region.id);
+                          setInspectedSubRegionId(regions.find((child) => child.parent_id === region.id && child.is_active)?.id ?? region.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedMajorRegionId(region.id);
+                            setZoomedRegionId(region.id);
+                            setInspectedSubRegionId(regions.find((child) => child.parent_id === region.id && child.is_active)?.id ?? region.id);
+                          }
                         }}
                         className={`cursor-pointer transition duration-200 hover:brightness-110 ${!isMatched ? "opacity-30" : "opacity-100"}`}
                       >
@@ -336,7 +382,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                           rx="480"
                           fill={REGION_COLORS[index % REGION_COLORS.length]}
                           fillOpacity={isSelected ? 0.72 : 0.42}
-                          stroke={isSelected ? "#38bdf8" : isCurrent ? "#fbbf24" : "#0e7490"}
+                          stroke={isSelected ? "#e9bd6c" : isCurrent ? "#fbbf24" : "#9b7644"}
                           strokeOpacity={isSelected || isCurrent ? 0.95 : 0.4}
                           strokeWidth={isSelected ? 120 : 60}
                         />
@@ -345,7 +391,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                           y={minY + height / 2 - 80}
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          fill="#f0fdfa"
+                          fill="#fff0cf"
                           fontSize="520"
                           fontWeight="700"
                           className="pointer-events-none select-none"
@@ -356,7 +402,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                           x={minX + width / 2}
                           y={minY + height / 2 + 380}
                           textAnchor="middle"
-                          fill="#67e8f9"
+                          fill="#e9c77d"
                           fontSize="260"
                           fontWeight="600"
                           className="pointer-events-none select-none"
@@ -419,6 +465,12 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                         onClick={() => {
                           setInspectedSubRegionId(region.id);
                         }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setInspectedSubRegionId(region.id);
+                          }
+                        }}
                         className={`cursor-pointer transition duration-150 hover:brightness-125 ${!isMatched ? "opacity-25" : "opacity-100"}`}
                       >
                         <title>{`${region.name} (C${region.min_rank}-C${region.max_rank})`}</title>
@@ -430,7 +482,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                           rx="90"
                           fill={REGION_COLORS[index % REGION_COLORS.length]}
                           fillOpacity={isInspected ? 0.8 : 0.45}
-                          stroke={isInspected ? "#38bdf8" : isCurrent ? "#fb7185" : hasBoss ? "#f59e0b" : "#0e7490"}
+                          stroke={isInspected ? "#e9bd6c" : isCurrent ? "#fb7185" : hasBoss ? "#f59e0b" : "#9b7644"}
                           strokeOpacity={isInspected || isCurrent ? 1 : 0.6}
                           strokeWidth={isInspected ? 65 : isCurrent ? 45 : 24}
                         />
@@ -455,7 +507,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                           y={secondLine ? centerY - 75 : centerY}
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          fill={isInspected ? "#ffffff" : isCurrent ? "#fff1f2" : "#ecfeff"}
+                          fill={isInspected ? "#fff3d8" : isCurrent ? "#fff1f2" : "#f4e8cb"}
                           fontSize={fontSize}
                           fontWeight="700"
                         >
@@ -468,7 +520,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                           x={centerX}
                           y={minY + height - 85}
                           textAnchor="middle"
-                          fill={isInspected ? "#7dd3fc" : "#94a3b8"}
+                          fill={isInspected ? "#e9c77d" : "#b9a584"}
                           fontSize="140"
                           fontWeight="600"
                         >
@@ -517,7 +569,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
           </div>
 
           {/* Right Column: Detailed Info Panel */}
-          <aside className="flex flex-col shrink-0 lg:shrink lg:min-h-0 lg:flex-1 bg-[#07141d]/70 p-3 sm:p-4 pb-12 sm:pb-6 lg:pb-4">
+          <aside className="flex flex-col shrink-0 lg:shrink lg:min-h-0 lg:flex-1 bg-[#241a12]/70 p-3 sm:p-4 pb-12 sm:pb-6 lg:pb-4">
             {/* 1. Current Player Region Badge */}
             <div className="mb-2.5 rounded-xl border border-rose-500/25 bg-rose-500/[0.07] px-3 py-2 shrink-0">
               <div className="flex items-center justify-between">

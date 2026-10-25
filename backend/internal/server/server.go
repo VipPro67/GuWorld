@@ -48,6 +48,7 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodGet, "/monitor/system", "monitoring.read", handlers.AdminGetSystemStats, "", "", false, "", false, false, false},
 		{http.MethodGet, "/monitor/requests/summary", "monitoring.read", handlers.AdminGetRequestSummary, "", "", false, "", false, false, false},
 		{http.MethodGet, "/monitor/admin-operations", "monitoring.read", handlers.AdminGetOperationMetrics, "", "", false, "", false, false, false},
+		{http.MethodGet, "/monitor/realtime", "monitoring.read", handlers.AdminGetRealtimeStats, "", "", false, "", false, false, false},
 		{http.MethodGet, "/monitor/requests/traces", "monitoring.read", handlers.AdminGetRequestTraces, "", "", false, "", false, false, false},
 		{http.MethodGet, "/monitor/requests/traces/:id", "monitoring.read", handlers.AdminGetRequestTraceDetail, "", "", false, "", false, false, false},
 		{http.MethodPost, "/monitor/requests/reset", "monitoring.reset", handlers.AdminResetRequestMetrics, "admin.reset_request_metrics", "request_metrics", false, "", false, false, false},
@@ -368,7 +369,11 @@ func requestLogging() gin.HandlerFunc {
 }
 
 // SetupRouter initializes the Gin router with middlewares and routes
-func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
+func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmission) *gin.Engine {
+	var worldAdmission ws.RealtimeWorldAdmission
+	if len(realtimeAdmission) > 0 {
+		worldAdmission = realtimeAdmission[0]
+	}
 	if shub != nil {
 		handlers.SetWSStatsProvider(shub.GetStats)
 		handlers.SetWSConnectedProvider(shub.IsConnected)
@@ -471,7 +476,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 				c.JSON(http.StatusTooManyRequests, gin.H{"error": "Quá nhiều kết nối WebSocket. Vui lòng đóng các tab khác và thử lại!"})
 				return
 			}
-			ws.ServeWs(shub, c.Writer, c.Request, playerID, ip)
+			ws.ServeWs(shub, c.Writer, c.Request, playerID, ip, worldAdmission)
 		})
 
 		// Public endpoints — per IP
@@ -559,7 +564,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			player.GET("/inventory/gus", handlers.GetPlayerInventoryGus)
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
 			player.GET("/passive-stats", handlers.GetPassiveStatsHandler)
-			player.POST("/explore/:id", handlers.Explore)
+			player.POST("/explore/:id", middleware.RequireLegacyWorldMode(), handlers.Explore)
 			player.POST("/use-item", handlers.UseItem)
 			player.POST("/use-items", handlers.UseItems)
 			player.POST("/recharge", handlers.RechargeWithStones)
@@ -659,7 +664,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		{
 			party.POST("/create", handlers.CreateParty)
 			party.GET("/status", handlers.GetPartyStatus)
-			party.POST("/invite", handlers.InvitePlayer)
+			party.POST("/invite", middleware.RequireLegacyWorldMode(), handlers.InvitePlayer)
 			party.POST("/leave", handlers.LeaveParty)
 			party.GET("/invitations", handlers.GetPendingInvitations)
 			party.POST("/invitations/:id/respond", handlers.RespondToInvitation)
@@ -672,6 +677,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		inventory.Use(middleware.RequireOnboarded())
 		inventory.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
+			inventory.POST("/realtime-hotbar", handlers.UpdateRealtimeHotbarOrder)
 			inventory.POST("/feed", handlers.FeedGu)
 			inventory.POST("/feed-group", handlers.FeedGroup)
 			inventory.POST("/feed-all", handlers.FeedAll)
@@ -701,13 +707,13 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		scouting.Use(middleware.RequireOnboarded())
 		scouting.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
-			scouting.POST("/inspect", handlers.InspectLocalPlayer)
-			scouting.POST("/divine", handlers.ExecuteDivination)
-			scouting.POST("/divine-gu", handlers.ExecuteDivineGu)
-			scouting.POST("/apply-mark", handlers.ApplyTrackingMark)
-			scouting.GET("/tracked-targets", handlers.GetTrackedTargets)
-			scouting.POST("/sever-clues", handlers.SeverClues)
-			scouting.POST("/resonance-scan", handlers.ResonanceScan)
+			scouting.POST("/inspect", middleware.RequireLegacyWorldMode(), handlers.InspectLocalPlayer)
+			scouting.POST("/divine", middleware.RequireLegacyWorldMode(), handlers.ExecuteDivination)
+			scouting.POST("/divine-gu", middleware.RequireLegacyWorldMode(), handlers.ExecuteDivineGu)
+			scouting.POST("/apply-mark", middleware.RequireLegacyWorldMode(), handlers.ApplyTrackingMark)
+			scouting.GET("/tracked-targets", middleware.RequireLegacyWorldMode(), handlers.GetTrackedTargets)
+			scouting.POST("/sever-clues", middleware.RequireLegacyWorldMode(), handlers.SeverClues)
+			scouting.POST("/resonance-scan", middleware.RequireLegacyWorldMode(), handlers.ResonanceScan)
 		}
 
 		// Pets — group: 30/min, per player: 20/min
@@ -741,9 +747,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		combat.Use(middleware.RequireOnboarded())
 		combat.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
-			combat.POST("/start", handlers.AutoCombatStart)
-			combat.POST("/practice", handlers.PracticeCombatStart)
-			combat.POST("/capture", handlers.CaptureMonster)
+			combat.POST("/start", middleware.RequireLegacyWorldMode(), handlers.AutoCombatStart)
+			combat.POST("/practice", middleware.RequireLegacyWorldMode(), handlers.PracticeCombatStart)
+			combat.POST("/capture", middleware.RequireLegacyWorldMode(), handlers.CaptureMonster)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}
@@ -756,7 +762,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		pvp.Use(middleware.RequireOnboarded())
 		pvp.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
-			pvp.POST("/match/practice", handlers.StartPracticeMatch)
+			pvp.POST("/match/practice", middleware.RequireLegacyWorldMode(), handlers.StartPracticeMatch)
 		}
 
 		// Player-created killer moves use Gu components from player_gu and are
@@ -850,7 +856,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		arena.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			arena.GET("/leaderboard", handlers.GetArenaLeaderboard)
-			arena.POST("/challenge", handlers.ChallengeArena)
+			arena.POST("/challenge", middleware.RequireLegacyWorldMode(), handlers.ChallengeArena)
 			arena.GET("/shop", handlers.GetArenaShop)
 			arena.POST("/shop/buy", handlers.BuyArenaShopItem)
 		}
@@ -912,9 +918,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		}
 
 		// Explore — per player: 25/min
-		api.POST("/explore", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.ExploreNode)
-		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Retreat)
-		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
+		api.POST("/explore", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.ExploreNode)
+		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Retreat)
+		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
 		api.GET("/explore/grid", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/regions/:id/details", middleware.AuthRequired(), handlers.GetRegionDetails)
@@ -924,14 +930,14 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/explore/players", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyPlayers)
 		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)
-		api.POST("/explore/move", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
-		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
-		api.POST("/explore/teleport", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.TeleportToRegion)
-		api.POST("/explore/use_gu", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseGuOnMap)
+		api.POST("/explore/move", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
+		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
+		api.POST("/explore/teleport", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.TeleportToRegion)
+		api.POST("/explore/use_gu", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseGuOnMap)
 
 		// Ground drops / Chiến lợi phẩm trên bản đồ
 		api.GET("/world/drops", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetTileGroundDrops)
-		api.POST("/world/drops/:id/loot", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.LootGroundDrop)
+		api.POST("/world/drops/:id/loot", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.LootGroundDrop)
 
 		// Teleportation Arrays / Truyền Tống Trận
 		teleport := api.Group("/teleport")
@@ -943,7 +949,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			teleport.GET("/mine", handlers.GetMyTeleportArrays)
 			teleport.POST("/build", handlers.BuildTeleportArray)
 			teleport.GET("/directory", handlers.GetTeleportDirectory)
-			teleport.POST("/travel", handlers.TravelTeleport)
+			teleport.POST("/travel", middleware.RequireLegacyWorldMode(), handlers.TravelTeleport)
 			teleport.POST("/manage", handlers.ManageTeleportArray)
 			teleport.POST("/repair", handlers.RepairTeleportArray)
 			teleport.POST("/withdraw", handlers.WithdrawTeleportVault)
@@ -990,10 +996,10 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		merchant.Use(middleware.RequireOnboarded())
 		merchant.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
-			merchant.GET("/map", handlers.GetMerchantMap)
-			merchant.POST("/quote", handlers.QuoteMerchant)
-			merchant.POST("/sell", handlers.SellToMerchant)
-			merchant.POST("/buy", handlers.BuyFromMerchant)
+			merchant.GET("/map", middleware.RequireLegacyWorldMode(), handlers.GetMerchantMap)
+			merchant.POST("/quote", middleware.RequireLegacyWorldMode(), handlers.QuoteMerchant)
+			merchant.POST("/sell", middleware.RequireLegacyWorldMode(), handlers.SellToMerchant)
+			merchant.POST("/buy", middleware.RequireLegacyWorldMode(), handlers.BuyFromMerchant)
 		}
 
 		// Trade — group: 25/min, per player: 8/min
@@ -1034,8 +1040,8 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			instance.POST("/action", handlers.ActionInstance)
 			instance.GET("/spatial", handlers.ListSpatialRealms)
 			instance.GET("/spatial/active", handlers.GetActiveSpatialRealm)
-			instance.POST("/spatial/enter", handlers.EnterSpatialRealm)
-			instance.POST("/spatial/exit", handlers.ExitSpatialRealm)
+			instance.POST("/spatial/enter", middleware.RequireLegacyWorldMode(), handlers.EnterSpatialRealm)
+			instance.POST("/spatial/exit", middleware.RequireLegacyWorldMode(), handlers.ExitSpatialRealm)
 		}
 
 		// Dream Realms — dedicated API for Mộng Cảnh (scenario Q&A system)
@@ -1060,9 +1066,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			spatialRealms.GET("", handlers.ListSpatialRealms)
 			spatialRealms.GET("/active", handlers.GetActiveSpatialRealm)
 			spatialRealms.GET("/altar-info", handlers.GetInheritanceAltarInfo)
-			spatialRealms.POST("/enter", handlers.EnterSpatialRealm)
-			spatialRealms.POST("/exit", handlers.ExitSpatialRealm)
-			spatialRealms.POST("/claim-altar", handlers.ClaimInheritanceAltar)
+			spatialRealms.POST("/enter", middleware.RequireLegacyWorldMode(), handlers.EnterSpatialRealm)
+			spatialRealms.POST("/exit", middleware.RequireLegacyWorldMode(), handlers.ExitSpatialRealm)
+			spatialRealms.POST("/claim-altar", middleware.RequireLegacyWorldMode(), handlers.ClaimInheritanceAltar)
 		}
 
 		// Sect — group: 40/min, per player: 25/min
@@ -1106,10 +1112,10 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			sect.POST("/promotion-requests/:requestId/action", handlers.ActionPromotionRequest)
 			// Sect Warfare & Territories
 			sect.GET("/map", handlers.GetSectsMap)
-			sect.POST("/defend", handlers.DefendSect)
-			sect.POST("/undefend", handlers.UndefendSect)
-			sect.POST("/toggle-defend", handlers.ToggleDefendSect)
-			sect.POST("/attack", handlers.AttackSect)
+			sect.POST("/defend", middleware.RequireLegacyWorldMode(), handlers.DefendSect)
+			sect.POST("/undefend", middleware.RequireLegacyWorldMode(), handlers.UndefendSect)
+			sect.POST("/toggle-defend", middleware.RequireLegacyWorldMode(), handlers.ToggleDefendSect)
+			sect.POST("/attack", middleware.RequireLegacyWorldMode(), handlers.AttackSect)
 			sect.POST("/building/upgrade", handlers.UpgradeSectBuilding)
 			sect.GET("/relocate/estimate", handlers.GetSectRelocationEstimate)
 			sect.POST("/relocate", handlers.RelocateSect)

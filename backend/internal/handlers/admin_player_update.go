@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -77,6 +78,10 @@ func AdminUpdatePlayer(c *gin.Context) {
 	var req AdminUpdatePlayerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+	if (req.CurrentRegion != nil || req.X != nil || req.Y != nil) && middleware.IsRealtimeWorldOwned(playerID) {
+		c.JSON(http.StatusConflict, gin.H{"code": "realtime_world_owns_character", "error": "Nhân vật đang ở thế giới MMO; chưa thể sửa vị trí cũ"})
 		return
 	}
 

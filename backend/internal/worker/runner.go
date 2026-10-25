@@ -11,8 +11,10 @@ import (
 // RunEvery starts a goroutine that calls fn on every tick until ctx is
 // cancelled. A panic inside fn is logged and the loop keeps running instead of
 // taking the whole process down with it.
-func RunEvery(ctx context.Context, interval time.Duration, name string, fn func(context.Context)) {
+func RunEvery(ctx context.Context, interval time.Duration, name string, fn func(context.Context)) <-chan struct{} {
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		logger.S.Infof("%s started (every %v)", name, interval)
@@ -26,6 +28,7 @@ func RunEvery(ctx context.Context, interval time.Duration, name string, fn func(
 			}
 		}
 	}()
+	return done
 }
 
 // SafeRun calls fn, turning a panic into a logged error. Use it for work that

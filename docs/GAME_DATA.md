@@ -1,5 +1,15 @@
 # Game Data
 
+## MMO location preparation
+
+`player_world_location` is defined in `schema_realtime.go` after `regions` and
+`players` exist. It has one row per player, with `region_id` (FK), `zone_id`,
+`instance_id`, MMO `x/y`, safe spawn coordinates, HP/shield checkpoint,
+map/content versions, revision and update time. It indexes zone plus instance
+and logical region. Schema creation does not backfill the table or make it the
+active location source; the staged cutover is tracked in
+`docs/mmo/location-audit.md` and `docs/plans/MMO_SINGLE_LOCATION_SOURCE.md`.
+
 ## Daily missions
 
 Daily mission progress is stored in `player_daily_missions`; `player_daily_mission_events`
@@ -264,6 +274,8 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 | 4 | Supreme Grandmaster (Vô Thượng Đại Tông Sư) | ×1.5 | ≥ 10.000.000 |
 
 Điểm nhận từ: dùng Cổ (theo bảng rank bên dưới), sát chiêu thành công, luyện Cổ thành công (theo rank Cổ đích), và thưởng Chân Ý phó bản (cộng thẳng `amount`). Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
+
+> **Hệ số Đạo Cấp chỉ dùng trong combat.** Uy lực/khiên/hồi máu của Cổ và sát chiêu nhân hệ số trên; còn **chỉ số bị động** (ATK/DEF/HP/SPEED cộng thẳng từ `ALWAYS_ON` / `PASSIVE_STATS`) là **giá trị raw** — không nhân Đạo Cấp lẫn Đạo Ngân (`handlers/player_stats.go`, `gamefx.PassiveHPBonus`).
 
 **Giới hạn điểm Chân Ý mỗi trận:** các nguồn trong trận chiến thường từ Cổ phàm và Sát chiêu phàm (đánh tay, đánh tự động/Simulator, sát chiêu phàm) bị chặn ở `gamefx.PathMasteryBattleGainLimit(rank)` = **Rank × 10 điểm/trận**. Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** không bị giới hạn tối đa trong trận chiến, thỏa sức ngộ đạo (uncapped). Counter lưu trong `players.active_combat.path_mastery_gained`, tự reset khi trận mới bắt đầu. Thưởng từ phó bản (attainment) và luyện cổ không tính vào giới hạn này.
 
@@ -803,6 +815,13 @@ Contract đích hiện tại là contract phẳng đang được validator, comp
 
 Vocabulary authoritative nằm tại `backend/internal/effectcatalog/block_manifest.go`. Endpoint `GET /api/admin/effect-catalog/metadata` sinh trực tiếp trigger, selector, condition field/operator, operation/subtype, stat, resource, unit, stack policy và native hook param schema từ catalog đó. Validator và compiler cùng đọc catalog; frontend không duy trì enum riêng.
 
+Bản đồ chuyển đổi sang realtime MMO nằm ở `docs/mmo/gu-coverage.csv` (sinh bởi
+`go run ./cmd/gudata audit-realtime`). Mỗi block có trạng thái
+`SUPPORTED`/`NEEDS_REAUTHOR`/`UNSUPPORTED`/`NOT_ACTIVE` và lý do; skill chưa
+audit **không** được cast như skill mất hiệu ứng. Sáu Gu MVP và quy tắc phân
+loại nằm trong `docs/mmo/gu-coverage.md`; schema profile/compiler realtime nằm
+trong `docs/mmo/gu-realtime-schema.md`.
+
 Root chỉ có `schema_version` và `blocks`:
 
 ```json
@@ -1128,7 +1147,7 @@ NPC `MINER` và `FARMER` tăng sản lượng node phù hợp; NPC `REFINER` tă
 
 `WorldMap` tầng 1 phủ kín tọa độ 30.000 × 20.000 bằng 5 Đại Vực: hàng trên là Nam Cương (x=0–9.999), Trung Châu (10.000–19.999), Bắc Nguyên (20.000–29.999); hàng dưới là Tây Mạc (x=0–14.999) và Đông Hải (15.000–29.999). Tây Mạc và Đông Hải đều kéo dài từ y=10.000 đến 19.999. Các `SAFE_ZONE`, `HUB` và `KHU_VUC` con phủ bên trong ranh giới Đại Vực; Tây Mạc có thêm 6 KHU_VUC ở nửa phía đông, Đông Hải có thêm 3 KHU_VUC ở dải phía đông. Vùng kỹ thuật cũ `ngoai_vuc_tang_nhat` được giữ inactive để tương thích dữ liệu cũ. Khi nhập Region.csv, migration `world_map_five_domains_layout_v1` dịch tọa độ Đông Hải đã lưu, chuyển người chơi/điểm quay về khỏi vùng cũ và vô hiệu hóa cổng cũ; sau đó nhập MapCell.csv và MonsterSpawn.csv để đồng bộ dữ liệu tĩnh, rồi restart backend. Bạch Thiên là tầng 2 (`bai_thien`), Hắc Thiên là tầng 3 (`hac_thien`); hai tầng và region Đại Vực tương ứng hiện được seed ở trạng thái khóa để chờ luồng lên tầng. Mười Khu Vực con cũ của hai Đại Vực được chuyển thành `SECRET_REALM` trên tầng 1; mỗi vùng có một template `SPATIAL_REALM`, một instance đang hoạt động dùng chung cho toàn server, một cổng vào cố định trên bản đồ thế giới và một cổng thoát trong bí cảnh. `Region.csv` import tự seed template và hai loại cổng. Backend chỉ cho vào khi người chơi đứng đúng ô `ENTRY_PORTAL` gắn với template; UI hiển thị vị trí cổng và khóa nút vào ở nơi khác. Tọa độ của mỗi bí cảnh là cục bộ trong bản đồ instance, không chiếm vùng tọa độ của thế giới. Mỗi Đại Vực tầng 1 chia số học thành tiểu vực 1.000 × 1.000. Ngoài `Southern_Border` (HUB mặc định), có HUB khởi đầu riêng (`hub_thuong_gia_thanh`, `hub_trung_chau`, `hub_bac_nguyen`, `hub_tay_mac`, `hub_dong_hai`). Khi hoàn tất onboarding (`complete-onboarding`), người chơi được đặt vào HUB theo vùng đăng ký (xem `startingRegionHubs` trong `player.go`), không sinh quái trong HUB.
 
-**`world_maps` và `region_world_maps`** là danh mục tầng và liên kết region với tầng. Ba bản ghi được seed theo thứ tự `world_map` (tầng 1), `bai_thien` (tầng 2), `hac_thien` (tầng 3). Hai tầng trên vẫn khóa; khi gán region vào tầng khóa, region phải có `is_active=false`. `Region.csv` export có thêm `world_map_id`; import cho phép cấu hình region inactive trên tầng khóa nhưng từ chối region active. Admin Create/Update cũng áp dụng điều kiện này. API `/api/explore/maps` đọc danh mục tầng. Nút lên tầng chưa được triển khai.
+**`world_maps` và `region_world_maps`** là danh mục tầng và liên kết region với tầng. Ba bản ghi tầng được seed theo thứ tự `world_map` (tầng 1), `bai_thien` (tầng 2), `hac_thien` (tầng 3); năm ID map realtime (`realtime_preview`, `misty_forest`, `bone_crypt`, `crimson_ravine`, `emerald_grotto`) cũng được seed để Admin có thể gán region vào zone MMO. Các map realtime dùng kích thước artifact 64×48 và việc thêm vào catalog **không** tự chuyển region hay bật admission. Hai tầng trên vẫn khóa; khi gán region vào tầng khóa, region phải có `is_active=false`. `Region.csv` export có thêm `world_map_id`; import cho phép cấu hình region inactive trên tầng khóa nhưng từ chối region active. Admin Create/Update cũng áp dụng điều kiện này. API `/api/explore/maps` đọc danh mục tầng. Nút lên tầng chưa được triển khai.
 
 Các bí cảnh bản đồ dùng chung có `regions.zone_type='SECRET_REALM'` và một `instance_templates.type='SPATIAL_REALM'` trỏ qua `spatial_region_id`. Chỉ số liệu về tọa độ region được import từ `Region.csv`; sau import, `seedHacBaiSpatialRealms` tạo template dùng chung, `ENTRY_PORTAL` trên tầng 1 và `EXIT_PORTAL` cho mười bí cảnh Hắc/Bạch. Instance isolation dựa trên `players.map_instance_id`; backend kiểm tra đúng region và tọa độ cổng vào trước khi tham gia phiên chung, còn vị trí quay về được lưu theo từng thành viên.
 
@@ -1180,6 +1199,8 @@ Zone type không nhận diện fallback về priority của `KHU_VUC`. `FindLarg
 - Boss / tài nguyên cấp cao / làng → ô **persistent** trong `map_cells`, nạp vào index bộ nhớ lúc start, có respawn dùng chung. Boss world map chạy thành actor Redis dùng chung, đuổi người chơi trong toàn bộ bounds của region đã gán và không vào `HUB`/`SAFE_ZONE`. Khi chuyển spawn trong `MapCell.csv`, giữ ô cũ dưới dạng `is_active=false` để lần import cập nhật/tắt record cũ; restart backend sau import để nạp ZoneRegistry.
 
 Import/Export qua Admin tab "Dữ liệu": bảng `region` (Region.csv), `map_cell` (MapCell.csv), `monster_spawn` (MonsterSpawn.csv). Admin quản lý region cũng có thể xem tầng hiện gán. Sau khi import **restart backend** để nạp ZoneRegistry. Bí cảnh dạng bản đồ dùng một phiên toàn server cho mỗi template: `shared_spatial_instances` giữ lifecycle/expiry, `shared_spatial_instance_members` giữ người tham gia và điểm quay về từng người. `POST /api/instance/spatial/exit` chỉ hoạt động tại portal persistent (`EXIT_PORTAL`, `PORTAL_EXIT` hoặc metadata action `EXIT_SPATIAL_REALM`); item effect `exit_spatial_realm` dùng cùng dữ liệu điểm quay về.
+
+**Map MMO realtime dùng chung cho các region cũ (dev):** chạy `python3 scripts/convert_legacy_regions_to_mmo.py` sau khi sửa CSV để sinh cùng artifact `world_map.json` cho backend và Phaser. Map giữ tọa độ vùng cũ theo tỉ lệ 25 legacy units = 1 MMO world unit; join đổi tọa độ nhân vật cũ, checkpoint MMO giữ trực tiếp đơn vị mới. Converter xuất outline/tên 134 region và marker MapCell. MonsterSpawn hiện thiếu tọa độ nên converter đặt điểm spawn ổn định theo region; giới hạn zone là 500 quái, phần vượt giới hạn được ghi tại `docs/mmo/legacy-map-conversion-report.json`. CSV không có dữ liệu collision/terrain nên map chỉ chặn mép ngoài; PvP/safe-zone và portal transfer theo từng region chưa được chuyển.
 
 Backend tự tạo dữ liệu mẫu idempotent cho `spatial_realm_qingmu_valley` (Thanh Mộc Cốc) khi khởi động: vùng SECRET_REALM 20×20 tại tọa độ 1000–1019, điểm vào (1000,1000), cổng ra (1001,1000), dã trư, Nhân sâm và Ngọc Thạch. Bí cảnh dùng chung một phiên toàn server, mở khi người đầu tiên vào và hết hạn sau 60 phút. Các bản ghi chỉ được thêm nếu chưa tồn tại để giữ thay đổi của admin; Admin có thể quản lý vùng, map cells, monster spawn/dictionary và template như các dữ liệu khác. MapCell.csv dùng khóa `(region_id,x,y)` để các tầng/vùng có thể trùng tọa độ.
 

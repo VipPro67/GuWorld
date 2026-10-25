@@ -17,9 +17,12 @@ import (
 )
 
 var (
-	serverStartTime = time.Now()
-	wsStatsMu       sync.RWMutex
-	wsStatsFn       func() (clients int, channels int)
+	serverStartTime  = time.Now()
+	wsStatsMu        sync.RWMutex
+	wsStatsFn        func() (clients int, channels int)
+	realtimeStatsMu  sync.RWMutex
+	realtimeStatsFn  func() any
+	realtimeStatsErr string
 )
 
 // SetWSStatsProvider sets the provider function for WebSocket statistics.
@@ -37,6 +40,40 @@ func getWSStats() (int, int) {
 		return 0, 0
 	}
 	return fn()
+}
+
+// SetRealtimeStatsProvider exposes per-zone realtime telemetry to the admin
+// monitor endpoint. It is set once during startup.
+func SetRealtimeStatsProvider(fn func() any) {
+	realtimeStatsMu.Lock()
+	defer realtimeStatsMu.Unlock()
+	realtimeStatsFn = fn
+}
+
+// SetRealtimeRuntimeError records why startup did not install the realtime
+// manager. The admin monitor can then distinguish a disabled rollout from a
+// map/configuration startup failure without exposing this detail to players.
+func SetRealtimeRuntimeError(reason string) {
+	realtimeStatsMu.Lock()
+	defer realtimeStatsMu.Unlock()
+	realtimeStatsErr = reason
+}
+
+// AdminGetRealtimeStats returns per-zone tick/entity/player/subscriber stats.
+func AdminGetRealtimeStats(c *gin.Context) {
+	realtimeStatsMu.RLock()
+	fn := realtimeStatsFn
+	reason := realtimeStatsErr
+	realtimeStatsMu.RUnlock()
+	if fn == nil {
+		response := gin.H{"error": "realtime runtime is not configured"}
+		if reason != "" {
+			response["reason"] = reason
+		}
+		c.JSON(http.StatusServiceUnavailable, response)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"zones": fn()})
 }
 
 // DBStatsResponse represents database connection pool diagnostics.

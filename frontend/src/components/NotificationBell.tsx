@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, CheckCheck, Package, Skull, ShoppingBag, Gavel, Coins, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Bell, CheckCheck, Package, Skull, ShoppingBag, Gavel, Coins, Info, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useGameStore, type PlayerNotification } from "@/store/useGameStore";
 
 const TYPE_ICONS: Record<string, { icon: React.ReactNode; color: string }> = {
@@ -97,10 +98,16 @@ const NotificationItem: React.FC<{ notification: PlayerNotification }> = ({ noti
   );
 };
 
-export const NotificationBell: React.FC = () => {
+export const NotificationBell: React.FC<{ size?: "sm" | "md" }> = ({ size = "md" }) => {
   const { notifications, unreadNotifications, fetchNotifications, fetchUnreadNotificationsCount, markAllNotificationsRead } = useGameStore();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -111,50 +118,90 @@ export const NotificationBell: React.FC = () => {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        ref.current &&
+        !ref.current.contains(target) &&
+        modalRef.current &&
+        !modalRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  const isSmall = size === "sm";
+
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative w-9 h-9 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-zinc-400 hover:text-zinc-200 transition-colors border border-[var(--border-default)] flex items-center justify-center cursor-pointer"
+        className={`relative rounded-xl bg-[#1e1712]/90 hover:bg-[#2c2016] text-[#e8d7b3] hover:text-[#fff0cd] transition-colors border border-[#a88952]/60 flex items-center justify-center cursor-pointer shadow-md backdrop-blur-md ${
+          isSmall ? "w-7 h-7 sm:w-8 sm:h-8" : "w-9 h-9"
+        }`}
         aria-label="Thông báo"
+        title="Thông báo"
       >
-        <Bell className="w-4 h-4" />
+        <Bell className={`${isSmall ? "w-3.5 h-3.5" : "w-4 h-4"} text-amber-300`} />
         {unreadNotifications > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+          <span
+            className={`absolute -top-1 -right-1 rounded-full bg-red-600 text-white font-bold flex items-center justify-center shadow leading-none ${
+              isSmall ? "min-w-[15px] h-[15px] px-0.5 text-[8.5px]" : "min-w-[18px] h-[18px] px-1 text-[10px]"
+            }`}
+          >
             {unreadNotifications > 99 ? "99+" : unreadNotifications}
           </span>
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full z-[70] mt-2 flex max-h-[70dvh] w-[calc(100vw-2rem)] max-w-[380px] flex-col rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-2xl">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)]">
-            <span className="text-sm font-semibold text-[var(--text-primary)]">Thông báo</span>
-            <button
-              onClick={markAllNotificationsRead}
-              className="inline-flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer"
-            >
-              <CheckCheck className="w-3.5 h-3.5" />
-              Đánh dấu đã đọc
-            </button>
-          </div>
+      {open && mounted && createPortal(
+        <div className="fixed inset-0 z-[9999] pointer-events-none">
+          <div
+            className="pointer-events-auto absolute inset-0 bg-black/40 sm:bg-transparent"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            ref={modalRef}
+            className="pointer-events-auto fixed top-14 left-4 right-4 sm:left-4 sm:right-auto sm:w-[380px] max-w-[calc(100vw-2rem)] max-h-[75dvh] flex flex-col rounded-2xl border border-[#a88952]/80 bg-[#16100bfd] text-[#f4e8cb] shadow-[0_20px_50px_rgba(0,0,0,.9)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-serif"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#a88952]/30 bg-[#251a13]/90 rounded-t-2xl">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-300" />
+                <span className="text-sm font-serif font-bold text-[#ffeac0]">Thông báo ({notifications.length})</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={markAllNotificationsRead}
+                  className="inline-flex items-center gap-1 text-xs font-serif text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  Đã đọc hết
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="p-1 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+                  title="Đóng bảng thông báo"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-zinc-500">Chưa có thông báo nào.</div>
-            ) : (
-              notifications.map((n: PlayerNotification) => (
-                <NotificationItem key={n.id} notification={n} />
-              ))
-            )}
+            <div className="flex-1 overflow-y-auto divide-y divide-[#a88952]/15 custom-scrollbar">
+              {notifications.length === 0 ? (
+                <div className="px-4 py-8 text-center text-xs text-zinc-400 font-serif italic">Chưa có thông báo nào.</div>
+              ) : (
+                notifications.map((n: PlayerNotification) => (
+                  <NotificationItem key={n.id} notification={n} />
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

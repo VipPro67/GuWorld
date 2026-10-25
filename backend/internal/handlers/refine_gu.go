@@ -78,21 +78,25 @@ func RefineGu(c *gin.Context) {
 	}
 
 	var recipe models.RefiningRecipe
-	err = tx.QueryRow(`
-		SELECT target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
-		FROM refining_recipes 
-		WHERE target_gu_id = $1 AND target_rank = $2 AND variant = $3`, targetGuID, targetRank, variant).Scan(
-		&recipe.TargetGuID, &recipe.TargetRank, &recipe.Variant, &recipe.RequiredGus,
-		&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
-		&recipe.ImmortalEssenceStonesCost,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Refining recipe not found"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch recipe"})
+	if rec, found := models.GetRecipeByTarget(targetGuID, targetRank, variant); found {
+		recipe = rec
+	} else {
+		err = tx.QueryRow(`
+			SELECT target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
+			FROM refining_recipes 
+			WHERE target_gu_id = $1 AND target_rank = $2 AND variant = $3`, targetGuID, targetRank, variant).Scan(
+			&recipe.TargetGuID, &recipe.TargetRank, &recipe.Variant, &recipe.RequiredGus,
+			&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
+			&recipe.ImmortalEssenceStonesCost,
+		)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Refining recipe not found"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch recipe"})
+			}
+			return
 		}
-		return
 	}
 	recipe.ID = req.RecipeID
 

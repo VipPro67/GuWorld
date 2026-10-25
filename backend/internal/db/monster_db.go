@@ -123,8 +123,13 @@ func PickRandomMonsterFromRegion(tx *sql.Tx, regionID string) (string, int, int,
 	return monsterID, minRank, maxRank, nil
 }
 
-// LoadLootTable loads a loot table from DB by ID
+// LoadLootTable loads a loot table by ID, preferring the in-memory cache
+// and falling back to a DB query when the cache is cold or in uninitialized tests.
 func LoadLootTable(tx *sql.Tx, id string) (models.LootTable, error) {
+	if lt, ok := models.GetLootTable(id); ok {
+		return lt, nil
+	}
+
 	var lt models.LootTable
 	var entriesRaw []byte
 

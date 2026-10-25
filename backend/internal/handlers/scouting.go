@@ -114,6 +114,10 @@ func InspectLocalPlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn mục tiêu: " + err.Error()})
 		return
 	}
+	if middleware.IsRealtimeWorldOwned(target.ID) {
+		c.JSON(http.StatusConflict, gin.H{"code": "realtime_world_owns_character", "error": "Mục tiêu đang ở thế giới MMO; chưa thể trinh sát bằng vị trí cũ"})
+		return
+	}
 
 	_ = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT sm.sect_id::text, s.name 
@@ -668,7 +672,9 @@ func GetTrackedTargets(c *gin.Context) {
 			&tm.ID, &tm.TrackerID, &tm.TargetID, &tm.MarkType, &tm.Power, &tm.ExpiresAt, &tm.CreatedAt,
 			&tm.TargetUsername, &tm.TargetAvatar, &tm.CurrentRegion, &tm.X, &tm.Y,
 		); err == nil {
-			targets = append(targets, tm)
+			if !middleware.IsRealtimeWorldOwned(tm.TargetID) {
+				targets = append(targets, tm)
+			}
 		}
 	}
 
@@ -838,6 +844,9 @@ func ResonanceScan(c *gin.Context) {
 			var pX, pY int
 			var pGus models.GuInventory
 			if err := rows.Scan(&pID, &pX, &pY, &pGus); err == nil {
+				if middleware.IsRealtimeWorldOwned(pID) {
+					continue
+				}
 				dist := math.Hypot(float64(viewer.X-pX), float64(viewer.Y-pY))
 				if !isCrossRegion && dist > scanRadius {
 					continue
@@ -1055,6 +1064,9 @@ func ExecuteDivineGu(c *gin.Context) {
 				}
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng trong túi người chơi không hợp lệ"})
 				return
+			}
+			if middleware.IsRealtimeWorldOwned(pID) {
+				continue
 			}
 			targetPlayer := models.Player{
 				Account:          models.Account{ID: pID, Username: pUsername, IsDisguised: pDisguised},

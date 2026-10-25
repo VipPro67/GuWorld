@@ -2,6 +2,13 @@
 
 Base path: `/api`.
 
+During the MMO location transition, legacy party invitations and acceptance (rejection remains available),
+merchant map/trade, scouting, spatial realm mutations and sect defense/attack
+routes return HTTP 409 with `code: "realtime_world_owns_character"` when the
+current process owns the actor in MMO. The admin player editor also returns
+that code for coordinate edits targeting an MMO-owned player. See
+`docs/mmo/location-audit.md` for remaining guard limitations.
+
 Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequired()` trừ khi ghi public.
 
 ## Diagnostics
@@ -59,7 +66,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/player/passive-stats` | Detailed passive stats breakdown with per-source attribution. Không còn trả `evasion`/`accuracy` (né tránh giờ là status `EVASION` trong combat). |
 | POST | `/player/explore/:id` |
 | POST | `/player/complete-tutorial` | Hoàn tất giai đoạn Tân Thủ (lv0): chuyển rank 0 → Nhất Chuyển (rank 1). Idempotent với player đã rank ≥ 1 sẽ trả 400. |
-| POST | `/player/complete-onboarding` | Hoàn tất thiết lập ban đầu. Body: `{"starting_region","attack_gu_id","defense_gu_id","vital_gu_choice"}`. `starting_region` gồm `hub_nam_cuong`/`hub_trung_chau`/`hub_bac_nguyen`/`hub_tay_mac`/`hub_dong_hai`; người chơi được đặt vào HUB tương ứng của Đại Vực đã chọn. |
+| POST | `/player/complete-onboarding` | Hoàn tất thiết lập ban đầu. Body: `{"starting_region","attack_gu_id","defense_gu_id","vital_gu_choice"}`. `starting_region` gồm `tan_thu_coc_nam_cuong`/`tan_thu_coc_trung_chau`/`tan_thu_coc_bac_nguyen`/`tan_thu_coc_tay_mac`/`tan_thu_coc_dong_hai` (tự động chuẩn hóa từ các mã vùng hoặc `hub_*` tương ứng); người chơi được đặt vào Tân Thủ Cốc tương ứng của Đại Vực đã chọn. |
 | POST | `/player/use-item` |
 | POST | `/player/use-items` |
 | POST | `/player/recharge` |
@@ -127,6 +134,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/feed-group` |
 | POST | `/inventory/feed-all` | Cho ăn toàn bộ Cổ trùng. Nhận body JSON tùy chọn `{ "scope": "equipped" \| "rest" \| "unequipped" \| "all" }` hoặc `{ "equipped": true \| false }` để lọc theo Cổ trùng đang xuất trận hoặc trong túi. |
 | POST | `/inventory/equip` |
+| POST | `/inventory/realtime-hotbar` | Gán thứ tự tối đa 6 Cổ đã trang bị vào nút realtime 1–6. Body `{ "gu_instance_ids": ["instance-id", ...] }`; thứ tự mảng là thứ tự phím. Không trang bị/tháo Cổ. Áp dụng sau khi world kết nối lại. |
 | POST | `/inventory/unequip-all` |
 | POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |
 | POST | `/inventory/set-vital` |

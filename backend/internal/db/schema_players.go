@@ -30,7 +30,7 @@ func schemaPlayers() error {
 		immortal_stones NUMERIC(30,3) NOT NULL DEFAULT 0,
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		base_hp DOUBLE PRECISION NOT NULL DEFAULT 100,
-		current_region VARCHAR(50) NOT NULL DEFAULT 'hub_nam_cuong' REFERENCES regions(id),
+		current_region VARCHAR(50) NOT NULL DEFAULT 'tan_thu_coc_nam_cuong' REFERENCES regions(id),
 		map_instance_id UUID,
 		x INTEGER NOT NULL DEFAULT 50,
 		y INTEGER NOT NULL DEFAULT 50,

@@ -167,6 +167,10 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
+	if middleware.IsRealtimeWorldOwned(targetPlayer.ID) {
+		c.JSON(http.StatusConflict, gin.H{"code": "realtime_world_owns_character", "error": "Mục tiêu đang ở thế giới MMO; chưa thể mời bằng vị trí cũ"})
+		return
+	}
 	if targetPartyID.Valid && targetPartyID.String != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Người chơi này đã có tổ đội rồi!"})
 		return
@@ -387,6 +391,10 @@ func RespondToInvitation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Hành động không hợp lệ"})
 		return
 	}
+	if middleware.IsRealtimeWorldOwned(authID) {
+		c.JSON(http.StatusConflict, gin.H{"code": "realtime_world_owns_character", "error": "Nhân vật đang ở thế giới MMO; chưa thể đồng bộ vị trí tổ đội"})
+		return
+	}
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
@@ -412,6 +420,10 @@ func RespondToInvitation(c *gin.Context) {
 	err = tx.QueryRow("SELECT leader_id, members FROM parties WHERE id = $1 FOR UPDATE", partyID).Scan(&leaderID, &membersRaw)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tổ đội"})
+		return
+	}
+	if leaderUUID, parseErr := uuid.Parse(leaderID); parseErr != nil || middleware.IsRealtimeWorldOwned(leaderUUID) {
+		c.JSON(http.StatusConflict, gin.H{"code": "realtime_world_owns_character", "error": "Đội trưởng đang ở thế giới MMO; chưa thể đồng bộ vị trí tổ đội"})
 		return
 	}
 
@@ -581,6 +593,9 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 	if leader.PartyID == nil {
 		return nil
 	}
+	if middleware.IsRealtimeWorldOwned(leader.ID) {
+		return nil
+	}
 	var leaderMapInstance sql.NullString
 	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, leader.ID).Scan(&leaderMapInstance); err != nil {
 		return nil
@@ -617,6 +632,9 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 
 	var synced []SyncedPartyMember
 	for _, m := range members {
+		if middleware.IsRealtimeWorldOwned(m.id) {
+			continue
+		}
 		// Party following cannot move someone across the boundary into a
 		// restricted region or between the overworld and a spatial instance.
 		if leaderMapInstance.Valid != m.instance.Valid || (leaderMapInstance.Valid && leaderMapInstance.String != m.instance.String) {

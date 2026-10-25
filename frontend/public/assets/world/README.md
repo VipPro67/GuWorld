@@ -9,6 +9,6 @@ These original game art assets were generated for Cổ Giới and converted to W
 - `items/`: representative resource sprites used on both maps: `crystal.svg` for materials/minerals, `food.svg` for food, and `gourd.svg` for wine and consumables. Herb resources reuse `spirit-herb.webp`.
 - `great-regions-atlas.png`: generated terrain panels in this order: Nam Cương, Trung Châu, Bắc Nguyên, Tây Mạc, Đông Hải, Hắc Thiên, Bạch Thiên. The map renderer crops and places them inside their matching `NGU_VUC` bounds.
 - `monster-atlas-common.png`: first generated 4×4 monster batch, covering the 16 most frequently spawned templates in current data.
-- `monsters/monster-atlas-batch-01.webp` through `monster-atlas-batch-12.webp`: generated transparent 4×4 sprite atlases for the remaining monster templates. `monster-atlas-batch-13.webp` contains the final template. Their row-major ID mapping is kept in `frontend/src/components/monsterAtlasManifest.ts`.
+- `monsters/monster-atlas-batch-01.webp` through `monster-atlas-batch-32.webp`: generated transparent sprite atlases covering all 507 templates in `backend/data/Monster.csv`. Most sheets use a 4×4 grid; batch 13 has one frame and batch 32 has ten frames in a 4×3 grid. Their row-major ID mapping is kept in `frontend/src/game/assets/monsterAtlasManifest.ts`. Phaser requests a sheet when a visible monster needs it and caches its cropped texture by template ID.
 
 The map renderer keeps its vector markers as a fallback when a sprite cannot be loaded.

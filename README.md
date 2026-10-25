@@ -63,6 +63,38 @@ Frontend mặc định gọi backend qua `NEXT_PUBLIC_BACKEND_URL` hoặc `http:
 
 Kiểm tra frontend bằng `npm run lint` và `npm run build`.
 
+### MMO realtime headless (đang phát triển)
+
+```bash
+cd backend
+go run ./cmd/mmo_headless -ticks 10000
+```
+
+Lệnh chạy mô phỏng zone 20 Hz với 2 người chơi và 10 quái, in checksum của
+snapshot cuối; không cần PostgreSQL, Redis hoặc frontend.
+
+Smoke vertical slice (5 player + 10 quái, di chuyển/cast/death/metrics):
+`cd backend && go run ./cmd/mmo_slice -players 5 -mobs 10 -ticks 400`.
+Synthetic load: `go run ./cmd/mmo_bench -players 100 -mobs 50 -ticks 1000`.
+Checklist Gate B: `docs/mmo/vertical-slice.md`; benchmark: `docs/mmo/benchmark.md`.
+
+Phía client, bật đồng thời `NEXT_PUBLIC_REALTIME_WORLD_ENABLED` và
+`NEXT_PUBLIC_PHASER_WORLD_CLIENT_ENABLED`, cấu hình
+`MAP_VERSION`/`CONTENT_VERSION` khớp backend; sau đăng nhập client tự chọn map
+theo `current_region` của nhân vật (hoặc dùng `NEXT_PUBLIC_MMO_ZONE_ID` làm zone
+dự phòng khi preview). Client gửi `world.join`, render snapshot AOI và
+dự phòng WASD/click-to-move; server vẫn xác nhận vị trí, HP, collision tĩnh, monster AI và
+combat preview (phím 1–6, projectile/AoE/shield) với animation placeholder và VFX pool. Map preview
+dùng chung JSON cho server/client; ngoài `realtime_preview` có pack Alpha 4 map liên kết
+(`misty_forest`/`bone_crypt`/`crimson_ravine`/`emerald_grotto`, gồm boss/PvP/safe hub; xem
+`docs/mmo/map-format.md`). Catalog Gu realtime gồm 6 MVP + 40 Alpha profile (xem
+`docs/mmo/gu-realtime-schema.md`); art manifest và quy trình thay asset ở `docs/mmo/assets.md`.
+Loot/checkpoint/reconnect đã có một phần; xem `docs/mmo/protocol-v1.md` và `docs/mmo/rollout.md`.
+Trước khi beta, chạy `scripts/mmo-release-gate.sh` và điền evidence/sign-off trong
+`docs/mmo/release-checklist.md`; SLO/capacity candidate ở `docs/mmo/slo.md`, roadmap ở
+`docs/mmo/roadmap.md`. Automated subset pass không đồng nghĩa Gate D pass.
+Tổng hợp giới hạn còn lại của PR-01…PR-36: `docs/mmo/remaining-limitations.md`.
+
 ## Module gameplay hiện có
 
 - Đăng ký/đăng nhập, Google OAuth, hồ sơ, avatar, referral.

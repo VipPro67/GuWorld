@@ -123,3 +123,18 @@ func TestSelectMaterialsPrefersPathAndRank(t *testing.T) {
 		t.Fatalf("expected 2 materials, got %d: %v", len(got), got)
 	}
 }
+
+func TestTranspileRealtimeGuCanProcessCatalog(t *testing.T) {
+	outPath := t.TempDir() + "/transpiled.json"
+	reportPath := t.TempDir() + "/compiled.json"
+	err := cmdTranspileRealtimeGu([]string{
+		"-data", "../../data",
+		"-overrides", "",
+		"-output", outPath,
+		"-compile-report", reportPath,
+		"-stats=false",
+	})
+	if err != nil {
+		t.Fatalf("transpile failed: %v", err)
+	}
+}

@@ -29,6 +29,11 @@ func init() {
 }
 
 func loadMasterRecipes() ([]models.RefiningRecipe, error) {
+	// 1. Prefer in-memory registry
+	if all := models.GetAllRecipes(); len(all) > 0 {
+		return all, nil
+	}
+
 	revision := currentRecipeCatalogRevision()
 	recipeCatalogMu.RLock()
 	if recipeCatalogMemory != nil && recipeMemoryRevision == revision {
@@ -92,9 +97,29 @@ func recipeResponseETag(recipes []models.RefiningRecipe, revision uint64) string
 // ParseRecipeID or to reject the operation.
 func recipeCatalogInfo(q services.QueryRower, recipeID string) (targetGuID string, rank, variant, rarity int, name string, ok bool) {
 	recipeID = strings.TrimSpace(recipeID)
-	if recipeID == "" || q == nil {
+	if recipeID == "" {
 		return "", 0, 0, 0, "", false
 	}
+
+	// 1. Check in-memory RecipeRegistry and GuRegistry first (0 DB queries)
+	if rec, found := models.GetRecipe(recipeID); found {
+		targetGuID = rec.TargetGuID
+		rank = rec.TargetRank
+		variant = rec.Variant
+		if ranks, hasGu := models.GuRegistry[rec.TargetGuID]; hasGu {
+			if gu, hasRank := ranks[rec.TargetRank]; hasRank {
+				rarity = gu.Rarity
+				name = gu.Name
+			}
+		}
+		return targetGuID, rank, variant, rarity, name, true
+	}
+
+	if q == nil {
+		return "", 0, 0, 0, "", false
+	}
+
+	// 2. Fallback to SQL query if cache cold
 	err := q.QueryRow(`
 		SELECT rr.target_gu_id, rr.target_rank, rr.variant,
 		       COALESCE(gd.rarity, 0), COALESCE(gd.name, '')
@@ -133,6 +158,7 @@ func currentRecipeCatalogRevision() uint64 {
 }
 
 func invalidateRecipeCatalog() uint64 {
+	_ = models.LoadRecipeRegistry(db.DB)
 	oldRevision := currentRecipeCatalogRevision()
 	recipeCatalogMu.Lock()
 	recipeCatalogMemory = nil

@@ -1,14 +1,18 @@
-name: Backend quality checks
+name: Quality checks
 
 on:
   pull_request:
     paths:
       - "backend/**"
+      - "frontend/**"
+      - "docs/**"
       - ".github/workflows/ci.yml"
   push:
     branches: [deploy]
     paths:
       - "backend/**"
+      - "frontend/**"
+      - "docs/**"
       - ".github/workflows/ci.yml"
 
 permissions:
@@ -23,9 +27,46 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
-      - name: Test
+      - name: Format (realtime surface)
         working-directory: backend
-        run: go test ./...
+        run: test -z "$(gofmt -l internal/realtime internal/ws internal/handlers/monitor.go internal/server/server.go cmd/server cmd/mmo_slice cmd/mmo_bench cmd/gudata internal/db/schema_realtime.go)"
       - name: Vet
         working-directory: backend
         run: go vet ./...
+      - name: Test
+        working-directory: backend
+        run: go test ./...
+      - name: Race (realtime/ws)
+        working-directory: backend
+        run: go test -race ./internal/realtime/... ./internal/ws/...
+      - name: Realtime Gu coverage (strict)
+        working-directory: backend
+        run: go run ./cmd/gudata audit-realtime -data data -strict -csv /tmp/gu-coverage.csv
+      - name: Realtime Gu compile
+        working-directory: backend
+        run: go run ./cmd/gudata compile-realtime-gu -data data -profiles data/mmo/gu/transpiled_profiles.json -report /tmp/gu-compiled.json
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test
+      - name: Build
+        working-directory: frontend
+        run: npm run build

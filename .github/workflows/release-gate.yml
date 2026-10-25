@@ -1,0 +1,45 @@
+name: MMO release gate
+
+# Manual only: this gate is intentionally not run on every PR (the normal CI
+# workflow already covers the same unit/build checks). Use it to attach a
+# reproducible automated-subset log to a release/QA ticket. It never marks
+# Gate D passed by itself; see docs/mmo/release-checklist.md.
+on:
+  workflow_dispatch:
+    inputs:
+      soak_seconds:
+        description: "Reconnect soak smoke duration in seconds (1-60)"
+        required: false
+        default: "10"
+      skip_frontend:
+        description: "Skip frontend lint/typecheck/test/build"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        if: ${{ !inputs.skip_frontend }}
+        working-directory: frontend
+        run: npm ci
+      - name: Run automated release gate
+        env:
+          MMO_RELEASE_SOAK_SECONDS: ${{ inputs.soak_seconds }}
+          MMO_RELEASE_SKIP_FRONTEND: ${{ inputs.skip_frontend && '1' || '0' }}
+        run: scripts/mmo-release-gate.sh

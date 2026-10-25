@@ -104,10 +104,8 @@ func PlayerDisguiseLevel(player *models.Player) float64 {
 type PassiveStatSource struct {
 	Source string  `json:"source"` // e.g. "base", "growth", "gu:GU_JADE_SKIN"
 	Name   string  `json:"name"`   // human-readable label
-	Value  float64 `json:"value"`  // raw contribution before multipliers
-	Mult   float64 `json:"mult"`   // path mastery multiplier applied
-	Dao    float64 `json:"dao"`    // dao mark multiplier applied
-	Final  float64 `json:"final"`  // actual contribution = value * mult * dao
+	Value  float64 `json:"value"`  // contribution added to the stat total
+	Final  float64 `json:"final"`  // actual contribution (equal to Value)
 }
 
 // PassiveStatDetail holds the breakdown for one stat key.
@@ -130,49 +128,44 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 }
 
 func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo) PassiveStatsResult {
-	strengthMarks := int64(0)
-	if player.DaoMarks != nil {
-		strengthMarks = player.DaoMarks["strength"]
-	}
-
 	// ── Base stats from Rank / SubRank ──
-	baseAttack := 10.0 + float64(player.Rank-1)*10.0 + float64(player.SubRank-1)*2.0 + float64(strengthMarks)/10.0
+	baseAttack := 10.0 + float64(player.Rank-1)*10.0 + float64(player.SubRank-1)*2.0
 	baseDefense := 5.0 + float64(player.Rank-1)*5.0 + float64(player.SubRank-1)*1.0
 	baseSpeed := 10.0 + float64(player.Rank-1)*2.0 + float64(player.SubRank-1)*0.5
 
 	// Accumulator: key -> []PassiveStatSource
 	acc := map[string][]PassiveStatSource{}
-	addSrc := func(key, source, name string, value, mult, dao float64) {
-		final := value * mult * dao
-		if final == 0 && value == 0 {
+	addSrc := func(key, source, name string, value float64) {
+		if value == 0 {
 			return
 		}
 		acc[key] = append(acc[key], PassiveStatSource{
-			Source: source, Name: name, Value: value, Mult: mult, Dao: dao, Final: final,
+			Source: source, Name: name, Value: value, Final: value,
 		})
 	}
 
 	// Base sources
-	addSrc("attack", "base", "Cơ bản (Cấp bậc)", baseAttack, 1, 1)
-	addSrc("defense", "base", "Cơ bản (Cấp bậc)", baseDefense, 1, 1)
-	addSrc("speed", "base", "Cơ bản (Cấp bậc)", baseSpeed, 1, 1)
-	addSrc("movement", "base", "Cơ bản", 1.0, 1, 1)
-	addSrc("investigation", "base", "Cơ bản", 1.0, 1, 1)
-	addSrc("storage", "base", "Cơ bản", 100.0, 1, 1)
+	addSrc("attack", "base", "Cơ bản (Cấp bậc)", baseAttack)
+	addSrc("defense", "base", "Cơ bản (Cấp bậc)", baseDefense)
+	addSrc("speed", "base", "Cơ bản (Cấp bậc)", baseSpeed)
+	addSrc("movement", "base", "Cơ bản", 1.0)
+	addSrc("investigation", "base", "Cơ bản", 1.0)
+	addSrc("storage", "base", "Cơ bản", 100.0)
 
 	// Growth boosts
 	if player.GrowthData.Boosts.Attack > 0 {
-		addSrc("attack", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Attack, 1, 1)
+		addSrc("attack", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Attack)
 	}
 	if player.GrowthData.Boosts.Defense > 0 {
-		addSrc("defense", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Defense, 1, 1)
+		addSrc("defense", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Defense)
 	}
 	if player.GrowthData.Boosts.Speed > 0 {
-		addSrc("speed", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Speed, 1, 1)
+		addSrc("speed", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Speed)
 	}
 
 	// Equipped active Gu passives — each GuID contributes only its highest rank,
-	// applied exactly once (duplicates never stack).
+	// applied exactly once (duplicates never stack). Additive Gu stats are raw
+	// values: path mastery and dao marks never scale passive stats.
 	guBestRank := map[string]int{}
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
@@ -189,28 +182,27 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 			if !ok {
 				continue
 			}
-			mult, daoMult := gamefx.GuStatMultipliers(player.PathMasteries, player.DaoMarks, spec.Path)
 
 			srcID := "gu:" + gu.GuID
 			if value := models.GuStatValue(spec, "ATTACK"); value != 0 {
-				addSrc("attack", srcID, spec.Name, value, mult, daoMult)
+				addSrc("attack", srcID, spec.Name, value)
 			}
 			if value := models.GuStatValue(spec, "DEFENSE"); value != 0 {
-				addSrc("defense", srcID, spec.Name, value, mult, daoMult)
+				addSrc("defense", srcID, spec.Name, value)
 			}
 			if value := models.GuStatValue(spec, "SPEED"); value != 0 {
-				addSrc("speed", srcID, spec.Name, value, mult, 1)
+				addSrc("speed", srcID, spec.Name, value)
 			}
 			if value := models.GuStatValue(spec, "HP"); value != 0 {
-				addSrc("hp", srcID, spec.Name, value, mult, daoMult)
+				addSrc("hp", srcID, spec.Name, value)
 			}
 			if value := models.GuStatValueBySubtype(spec, "DAMAGE_DEALT", "MULTIPLY_PERCENT"); value > 0 && player.BaseHP > 0 {
 				missingHpRate := 1.0 - player.HP/player.BaseHP
-				addSrc("damage_multiplier", srcID, spec.Name, missingHpRate*value, 1, 1)
+				addSrc("damage_multiplier", srcID, spec.Name, missingHpRate*value)
 			}
 			for _, entry := range []struct{ stat, key string }{{"SOUL_REFINEMENT", "soul"}, {"STORAGE", "storage"}, {"MOVEMENT", "movement"}, {"INVESTIGATION", "investigation"}, {"HEARING", "hearing"}, {"CLEANSING_POWER", "cleansing_power"}, {"LUCK", "luck"}} {
 				if value := models.GuStatValue(spec, entry.stat); value != 0 {
-					addSrc(entry.key, srcID, spec.Name, value, 1, 1)
+					addSrc(entry.key, srcID, spec.Name, value)
 				}
 			}
 		}
@@ -219,13 +211,13 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 	// Active statuses (World Map buffs)
 	for _, st := range player.Statuses.Active() {
 		if st.ID == "buff_atk" {
-			addSrc("attack", "status:"+st.ID, st.Source, st.Value, 1, 1)
+			addSrc("attack", "status:"+st.ID, st.Source, st.Value)
 		}
 		if st.ID == "buff_def" {
-			addSrc("defense", "status:"+st.ID, st.Source, st.Value, 1, 1)
+			addSrc("defense", "status:"+st.ID, st.Source, st.Value)
 		}
 		if st.ID == "buff_speed" {
-			addSrc("speed", "status:"+st.ID, st.Source, st.Value, 1, 1)
+			addSrc("speed", "status:"+st.ID, st.Source, st.Value)
 		}
 	}
 
@@ -240,8 +232,8 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 		// Player is inside their sect's territory!
 		// Give +10% base attack/defense buff, plus 2% per main hall level.
 		buffMult := 0.10 + float64(territory.MainHallLvl)*0.02
-		addSrc("attack", "sect_territory", "Hộ Sơn", baseAttack*buffMult, 1, 1)
-		addSrc("defense", "sect_territory", "Hộ Sơn", baseDefense*buffMult, 1, 1)
+		addSrc("attack", "sect_territory", "Hộ Sơn", baseAttack*buffMult)
+		addSrc("defense", "sect_territory", "Hộ Sơn", baseDefense*buffMult)
 	}
 
 	// Build totals and details
@@ -271,7 +263,7 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 		for i := range details {
 			if details[i].Key == "storage" {
 				details[i].Sources = append(details[i].Sources, PassiveStatSource{
-					Source: "dynamic", Name: "Lực tấn công (×0.5)", Value: storageBonus, Mult: 1, Dao: 1, Final: storageBonus,
+					Source: "dynamic", Name: "Lực tấn công (×0.5)", Value: storageBonus, Final: storageBonus,
 				})
 				details[i].Total += storageBonus
 				break
@@ -308,7 +300,7 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 					for i := range details {
 						if details[i].Key == key {
 							details[i].Sources = append(details[i].Sources, PassiveStatSource{
-								Source: "gu:active", Name: "All Stats Buff", Value: delta, Mult: 1, Dao: 1, Final: delta,
+								Source: "gu:active", Name: "All Stats Buff", Value: delta, Final: delta,
 							})
 							details[i].Total += delta
 							found = true
@@ -317,7 +309,7 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 					}
 					if !found {
 						details = append(details, PassiveStatDetail{Key: key, Total: delta, Sources: []PassiveStatSource{{
-							Source: "gu:active", Name: "All Stats Buff", Value: delta, Mult: 1, Dao: 1, Final: delta,
+							Source: "gu:active", Name: "All Stats Buff", Value: delta, Final: delta,
 						}}})
 					}
 				}
@@ -345,7 +337,7 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 			for i := range details {
 				if details[i].Key == key {
 					details[i].Sources = append(details[i].Sources, PassiveStatSource{
-						Source: sourceID, Name: sourceName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+						Source: sourceID, Name: sourceName, Value: delta, Final: delta,
 					})
 					details[i].Total += delta
 					found = true
@@ -354,7 +346,7 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 			}
 			if !found {
 				details = append(details, PassiveStatDetail{Key: key, Total: stats[key], Sources: []PassiveStatSource{{
-					Source: sourceID, Name: sourceName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+					Source: sourceID, Name: sourceName, Value: delta, Final: delta,
 				}}})
 			}
 		}
@@ -394,7 +386,7 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 		}
 		delta := -cur
 		stats[key] = 0
-		clampSrc := PassiveStatSource{Source: "floor", Name: "Giới hạn dưới (0)", Value: -delta, Mult: 1, Dao: 1, Final: -delta}
+		clampSrc := PassiveStatSource{Source: "floor", Name: "Giới hạn dưới (0)", Value: -delta, Final: -delta}
 		found := false
 		for i := range details {
 			if details[i].Key == key {
@@ -420,14 +412,14 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 		delta := charFX.SoulDefenseBonus * 100.0
 		stats["soul_defense"] += delta
 		details = append(details, PassiveStatDetail{Key: "soul_defense", Total: delta, Sources: []PassiveStatSource{{
-			Source: "constitution:" + player.Constitution, Name: constitutionName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+			Source: "constitution:" + player.Constitution, Name: constitutionName, Value: delta, Final: delta,
 		}}})
 	}
 	if charFX.MentalResistanceBonus > 0 {
 		delta := charFX.MentalResistanceBonus * 100.0
 		stats["mental_resistance"] += delta
 		details = append(details, PassiveStatDetail{Key: "mental_resistance", Total: delta, Sources: []PassiveStatSource{{
-			Source: "constitution:" + player.Constitution, Name: constitutionName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+			Source: "constitution:" + player.Constitution, Name: constitutionName, Value: delta, Final: delta,
 		}}})
 	}
 
@@ -441,13 +433,13 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 		key := path + "_resistance"
 		stats[key] += delta
 		details = append(details, PassiveStatDetail{Key: key, Total: delta, Sources: []PassiveStatSource{{
-			Source: "race:" + player.Race, Name: raceName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+			Source: "race:" + player.Race, Name: raceName, Value: delta, Final: delta,
 		}}})
 	}
 	if charFX.LuckBonus > 0 {
 		stats["luck"] += charFX.LuckBonus
 		details = append(details, PassiveStatDetail{Key: "luck", Total: charFX.LuckBonus, Sources: []PassiveStatSource{{
-			Source: "race:" + player.Race, Name: raceName, Value: charFX.LuckBonus, Mult: 1, Dao: 1, Final: charFX.LuckBonus,
+			Source: "race:" + player.Race, Name: raceName, Value: charFX.LuckBonus, Final: charFX.LuckBonus,
 		}}})
 	}
 

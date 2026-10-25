@@ -1030,6 +1030,12 @@ func MovePlayerPath(c *gin.Context) {
 // ExecuteMovePlayerPath moves the player along a straight path from its current cell
 // to the requested cell, decoupled from HTTP gin.Context.
 func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
+	if middleware.IsRealtimeWorldOwned(authID) {
+		return http.StatusConflict, gin.H{
+			"code":  "realtime_world_owns_character",
+			"error": "Character is controlled by the realtime world",
+		}
+	}
 	if req.X < 0 || req.X >= WorldWidth || req.Y < 0 || req.Y >= WorldHeight {
 		return http.StatusBadRequest, gin.H{"error": "Tọa độ vượt ra ngoài ranh giới bản đồ."}
 	}

@@ -230,7 +230,9 @@ func AdminCreateQuest(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID và tiêu đề nhiệm vụ là bắt buộc"})
 		return
 	}
-	if !validateQuestRewards(c, &req.Rewards) { return }
+	if !validateQuestRewards(c, &req.Rewards) {
+		return
+	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `INSERT INTO quests (id, title, description, req_desc, message, rewards) VALUES ($1, $2, $3, $4, $5, $6)`,
 		req.ID, req.Title, req.Description, req.ReqDesc, req.Message, req.Rewards)
 	if err != nil {
@@ -260,8 +262,13 @@ func AdminUpdateQuest(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID nhiệm vụ"})
 		return
 	}
-	if req.Title == "" { c.JSON(http.StatusBadRequest, gin.H{"error": "Tiêu đề nhiệm vụ là bắt buộc"}); return }
-	if !validateQuestRewards(c, &req.Rewards) { return }
+	if req.Title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiêu đề nhiệm vụ là bắt buộc"})
+		return
+	}
+	if !validateQuestRewards(c, &req.Rewards) {
+		return
+	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE quests SET title=$1, description=$2, req_desc=$3, message=$4, rewards=$5 WHERE id=$6`,
 		req.Title, req.Description, req.ReqDesc, req.Message, req.Rewards, id)
 	if err != nil {
@@ -269,8 +276,14 @@ func AdminUpdateQuest(c *gin.Context) {
 		return
 	}
 	updated, err := result.RowsAffected()
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận nhiệm vụ đã cập nhật"}); return }
-	if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhiệm vụ"}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận nhiệm vụ đã cập nhật"})
+		return
+	}
+	if updated == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhiệm vụ"})
+		return
+	}
 	if err := LoadQuestRegistry(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu nhiệm vụ nhưng không thể tải lại catalog: " + err.Error()})
 		return
@@ -291,8 +304,14 @@ func AdminDeleteQuest(c *gin.Context) {
 		return
 	}
 	deleted, err := result.RowsAffected()
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận nhiệm vụ đã xóa"}); return }
-	if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhiệm vụ"}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận nhiệm vụ đã xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhiệm vụ"})
+		return
+	}
 	if err := LoadQuestRegistry(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa nhiệm vụ nhưng không thể tải lại catalog: " + err.Error()})
 		return
@@ -304,17 +323,17 @@ func AdminDeleteQuest(c *gin.Context) {
 // --- Dungeons / Instance Templates Handlers ---
 
 type InstanceTemplateRow struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	Type          string          `json:"type"`
-	RequiredRank  int             `json:"required_rank"`
-	EntryItem     string          `json:"entry_item"`
-	Description   string          `json:"description"`
-	Rewards       json.RawMessage `json:"rewards"`
-	MapData       json.RawMessage `json:"map_data"`
-	CooldownHours int             `json:"cooldown_hours"`
-	SpatialRegionID string        `json:"spatial_region_id"`
-	DurationMinutes int           `json:"duration_minutes"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Type            string          `json:"type"`
+	RequiredRank    int             `json:"required_rank"`
+	EntryItem       string          `json:"entry_item"`
+	Description     string          `json:"description"`
+	Rewards         json.RawMessage `json:"rewards"`
+	MapData         json.RawMessage `json:"map_data"`
+	CooldownHours   int             `json:"cooldown_hours"`
+	SpatialRegionID string          `json:"spatial_region_id"`
+	DurationMinutes int             `json:"duration_minutes"`
 }
 
 func AdminListDungeons(c *gin.Context) {
@@ -337,7 +356,10 @@ func AdminListDungeons(c *gin.Context) {
 		}
 		list = append(list, r)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách phụ bản"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách phụ bản"})
+		return
+	}
 	c.JSON(http.StatusOK, list)
 }
 
@@ -355,19 +377,26 @@ func AdminCreateDungeon(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại, rank hoặc thời gian hồi phụ bản không hợp lệ"})
 		return
 	}
-	if strings.EqualFold(req.Type,"SPATIAL_REALM") && (req.SpatialRegionID == "" || req.DurationMinutes < 1) { c.JSON(http.StatusBadRequest,gin.H{"error":"Bí cảnh bản đồ cần vùng bản đồ và thời hạn lớn hơn 0"}); return }
-	if strings.EqualFold(req.Type,"SPATIAL_REALM") {
+	if strings.EqualFold(req.Type, "SPATIAL_REALM") && (req.SpatialRegionID == "" || req.DurationMinutes < 1) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí cảnh bản đồ cần vùng bản đồ và thời hạn lớn hơn 0"})
+		return
+	}
+	if strings.EqualFold(req.Type, "SPATIAL_REALM") {
 		var valid bool
 		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM regions WHERE id=$1 AND is_active=TRUE AND UPPER(zone_type)='SECRET_REALM')`, req.SpatialRegionID).Scan(&valid); err != nil || !valid {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Region bí cảnh phải tồn tại, đang hoạt động và có zone_type SECRET_REALM"})
 			return
 		}
 	}
-	if req.DurationMinutes == 0 { req.DurationMinutes = 120 }
+	if req.DurationMinutes == 0 {
+		req.DurationMinutes = 120
+	}
 	if len(req.Rewards) == 0 {
 		req.Rewards = json.RawMessage(`{}`)
 	}
-	if len(req.MapData) == 0 { req.MapData = json.RawMessage(`[]`) }
+	if len(req.MapData) == 0 {
+		req.MapData = json.RawMessage(`[]`)
+	}
 	var rewards map[string]json.RawMessage
 	var stages []json.RawMessage
 	if json.Unmarshal(req.Rewards, &rewards) != nil || rewards == nil || json.Unmarshal(req.MapData, &stages) != nil || stages == nil {
@@ -380,7 +409,10 @@ func AdminCreateDungeon(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if err := InitInstanceCache(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã tạo phụ bản nhưng không thể tải lại catalog: " + err.Error()}); return }
+	if err := InitInstanceCache(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã tạo phụ bản nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_dungeon", "id=%s", req.ID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo phụ bản mới"})
 }
@@ -396,22 +428,34 @@ func AdminUpdateDungeon(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.ID != "" && req.ID != id { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID phụ bản"}); return }
+	if req.ID != "" && req.ID != id {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID phụ bản"})
+		return
+	}
 	if req.Name == "" || req.Type == "" || req.RequiredRank < 1 || req.CooldownHours < 0 || req.DurationMinutes < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tên, loại, rank hoặc thời gian hồi phụ bản không hợp lệ"})
 		return
 	}
-	if strings.EqualFold(req.Type,"SPATIAL_REALM") && (req.SpatialRegionID == "" || req.DurationMinutes < 1) { c.JSON(http.StatusBadRequest,gin.H{"error":"Bí cảnh bản đồ cần vùng bản đồ và thời hạn lớn hơn 0"}); return }
-	if strings.EqualFold(req.Type,"SPATIAL_REALM") {
+	if strings.EqualFold(req.Type, "SPATIAL_REALM") && (req.SpatialRegionID == "" || req.DurationMinutes < 1) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí cảnh bản đồ cần vùng bản đồ và thời hạn lớn hơn 0"})
+		return
+	}
+	if strings.EqualFold(req.Type, "SPATIAL_REALM") {
 		var valid bool
 		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM regions WHERE id=$1 AND is_active=TRUE AND UPPER(zone_type)='SECRET_REALM')`, req.SpatialRegionID).Scan(&valid); err != nil || !valid {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Region bí cảnh phải tồn tại, đang hoạt động và có zone_type SECRET_REALM"})
 			return
 		}
 	}
-	if req.DurationMinutes == 0 { req.DurationMinutes = 120 }
-	if len(req.Rewards) == 0 { req.Rewards = json.RawMessage(`{}`) }
-	if len(req.MapData) == 0 { req.MapData = json.RawMessage(`[]`) }
+	if req.DurationMinutes == 0 {
+		req.DurationMinutes = 120
+	}
+	if len(req.Rewards) == 0 {
+		req.Rewards = json.RawMessage(`{}`)
+	}
+	if len(req.MapData) == 0 {
+		req.MapData = json.RawMessage(`[]`)
+	}
 	var rewards map[string]json.RawMessage
 	var stages []json.RawMessage
 	if json.Unmarshal(req.Rewards, &rewards) != nil || rewards == nil || json.Unmarshal(req.MapData, &stages) != nil || stages == nil {
@@ -425,9 +469,18 @@ func AdminUpdateDungeon(c *gin.Context) {
 		return
 	}
 	updated, err := result.RowsAffected()
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận phụ bản đã cập nhật"}); return }
-	if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phụ bản"}); return }
-	if err := InitInstanceCache(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu phụ bản nhưng không thể tải lại catalog: " + err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận phụ bản đã cập nhật"})
+		return
+	}
+	if updated == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phụ bản"})
+		return
+	}
+	if err := InitInstanceCache(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu phụ bản nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_dungeon", "id=%s", id)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật phụ bản"})
 }
@@ -444,9 +497,18 @@ func AdminDeleteDungeon(c *gin.Context) {
 		return
 	}
 	deleted, err := result.RowsAffected()
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận phụ bản đã xóa"}); return }
-	if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phụ bản"}); return }
-	if err := InitInstanceCache(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa phụ bản nhưng không thể tải lại catalog: " + err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận phụ bản đã xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phụ bản"})
+		return
+	}
+	if err := InitInstanceCache(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa phụ bản nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_dungeon", "id=%s", id)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa phụ bản"})
 }
@@ -507,11 +569,11 @@ func AdminUpdateSectMine(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var req struct {
-		OccupierSectID string `json:"occupier_sect_id"`
-		Rarity         string `json:"rarity"`
-		PendingFunds   int64  `json:"pending_funds"`
+		OccupierSectID   string          `json:"occupier_sect_id"`
+		Rarity           string          `json:"rarity"`
+		PendingFunds     int64           `json:"pending_funds"`
 		PendingMaterials json.RawMessage `json:"pending_materials"`
-		ShieldUntil *string `json:"shield_until"`
+		ShieldUntil      *string         `json:"shield_until"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -556,35 +618,35 @@ func AdminUpdateSectMine(c *gin.Context) {
 // --- Aperture Sub-entities (Nodes & Variant Humans) ---
 
 type ApertureNodeRow struct {
-	ID                      string  `json:"id"`
-	ApertureID              string  `json:"aperture_id"`
-	NodeType                string  `json:"node_type"`
-	Name                    string  `json:"name"`
-	Path                    string  `json:"path"`
-	Level                   int     `json:"level"`
-	HP                      int     `json:"hp"`
-	MaxHP                   int     `json:"max_hp"`
-	X                       int     `json:"x"`
-	Y                       int     `json:"y"`
-	ProductionType          string  `json:"production_type"`
-	ProductionAmount        int64   `json:"production_amount"`
-	ProductionIntervalHours int     `json:"production_interval_hours"`
-	IsDestroyed             bool    `json:"is_destroyed"`
-	NodeCategory            string  `json:"node_category"`
-	DefensePower            int     `json:"defense_power"`
-	AttackRange             int     `json:"attack_range"`
-	HPBonus                 int     `json:"hp_bonus"`
-	DamageReduction         int     `json:"damage_reduction"`
-	BlocksMovement          bool    `json:"blocks_movement"`
-	RequiredGuID            string  `json:"required_gu_id"`
-	RequiredGuRank          int     `json:"required_gu_rank"`
-	ZoneType                string  `json:"zone_type"`
-	FoodPath                string  `json:"food_path"`
-	ItemTier                string  `json:"item_tier"`
-	ProductionKey           string  `json:"production_key"`
+	ID                      string     `json:"id"`
+	ApertureID              string     `json:"aperture_id"`
+	NodeType                string     `json:"node_type"`
+	Name                    string     `json:"name"`
+	Path                    string     `json:"path"`
+	Level                   int        `json:"level"`
+	HP                      int        `json:"hp"`
+	MaxHP                   int        `json:"max_hp"`
+	X                       int        `json:"x"`
+	Y                       int        `json:"y"`
+	ProductionType          string     `json:"production_type"`
+	ProductionAmount        int64      `json:"production_amount"`
+	ProductionIntervalHours int        `json:"production_interval_hours"`
+	IsDestroyed             bool       `json:"is_destroyed"`
+	NodeCategory            string     `json:"node_category"`
+	DefensePower            int        `json:"defense_power"`
+	AttackRange             int        `json:"attack_range"`
+	HPBonus                 int        `json:"hp_bonus"`
+	DamageReduction         int        `json:"damage_reduction"`
+	BlocksMovement          bool       `json:"blocks_movement"`
+	RequiredGuID            string     `json:"required_gu_id"`
+	RequiredGuRank          int        `json:"required_gu_rank"`
+	ZoneType                string     `json:"zone_type"`
+	FoodPath                string     `json:"food_path"`
+	ItemTier                string     `json:"item_tier"`
+	ProductionKey           string     `json:"production_key"`
 	LastCollectedAt         *time.Time `json:"last_collected_at"`
-	CreatedAt               time.Time `json:"created_at"`
-	UpdatedAt               time.Time `json:"updated_at"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
 }
 
 func AdminListApertureNodes(c *gin.Context) {
@@ -610,7 +672,10 @@ func AdminListApertureNodes(c *gin.Context) {
 		}
 		list = append(list, r)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error":"Không thể đọc danh sách điểm tài nguyên"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách điểm tài nguyên"})
+		return
+	}
 	c.JSON(http.StatusOK, list)
 }
 
@@ -625,7 +690,10 @@ func AdminCreateApertureNode(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tên và loại điểm tài nguyên là bắt buộc"})
 		return
 	}
-	if err := validateApertureNode(req); err != "" { c.JSON(http.StatusBadRequest, gin.H{"error":err}); return }
+	if err := validateApertureNode(req); err != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		return
+	}
 	if req.MaxHP <= 0 {
 		req.MaxHP = 100
 	}
@@ -645,20 +713,44 @@ func AdminCreateApertureNode(c *gin.Context) {
 }
 
 func validateApertureNode(r ApertureNodeRow) string {
-	if len(r.NodeType)>50 || len(r.Name)>100 || len(r.Path)>50 || len(r.ProductionType)>50 || len(r.NodeCategory)>20 || len(r.RequiredGuID)>50 || len(r.ZoneType)>50 || len(r.FoodPath)>50 || len(r.ItemTier)>10 || len(r.ProductionKey)>100 { return "Một hoặc nhiều trường văn bản vượt giới hạn độ dài" }
-	if r.Level<1 || r.MaxHP<1 || r.HP<0 || r.HP>r.MaxHP || r.ProductionAmount<0 || r.ProductionIntervalHours<0 || r.DefensePower<0 || r.AttackRange<0 || r.HPBonus<0 || r.DamageReduction<0 || r.RequiredGuRank<0 { return "Thông số điểm tài nguyên không hợp lệ" }
+	if len(r.NodeType) > 50 || len(r.Name) > 100 || len(r.Path) > 50 || len(r.ProductionType) > 50 || len(r.NodeCategory) > 20 || len(r.RequiredGuID) > 50 || len(r.ZoneType) > 50 || len(r.FoodPath) > 50 || len(r.ItemTier) > 10 || len(r.ProductionKey) > 100 {
+		return "Một hoặc nhiều trường văn bản vượt giới hạn độ dài"
+	}
+	if r.Level < 1 || r.MaxHP < 1 || r.HP < 0 || r.HP > r.MaxHP || r.ProductionAmount < 0 || r.ProductionIntervalHours < 0 || r.DefensePower < 0 || r.AttackRange < 0 || r.HPBonus < 0 || r.DamageReduction < 0 || r.RequiredGuRank < 0 {
+		return "Thông số điểm tài nguyên không hợp lệ"
+	}
 	return ""
 }
 
 func AdminUpdateApertureNode(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	var req ApertureNodeRow
-	if err:=c.ShouldBindJSON(&req); err!=nil { c.JSON(http.StatusBadRequest,gin.H{"error":"Dữ liệu điểm tài nguyên không hợp lệ"}); return }
-	if strings.TrimSpace(req.Name)=="" || strings.TrimSpace(req.NodeType)=="" { c.JSON(http.StatusBadRequest,gin.H{"error":"Tên và loại điểm tài nguyên là bắt buộc"}); return }
-	if message:=validateApertureNode(req); message!="" { c.JSON(http.StatusBadRequest,gin.H{"error":message}); return }
-	result,err:=db.DB.ExecContext(c.Request.Context(),`UPDATE aperture_resource_nodes SET node_type=$1,name=$2,path=NULLIF($3,''),level=$4,hp=$5,max_hp=$6,x=$7,y=$8,production_type=NULLIF($9,''),production_amount=$10,production_interval_hours=$11,is_destroyed=$12,node_category=$13,defense_power=$14,attack_range=$15,hp_bonus=$16,damage_reduction=$17,blocks_movement=$18,required_gu_id=NULLIF($19,''),required_gu_rank=$20,zone_type=NULLIF($21,''),food_path=NULLIF($22,''),item_tier=NULLIF($23,''),production_key=NULLIF($24,''),updated_at=NOW() WHERE id=$25 AND aperture_id=$26`,req.NodeType,req.Name,req.Path,req.Level,req.HP,req.MaxHP,req.X,req.Y,req.ProductionType,req.ProductionAmount,req.ProductionIntervalHours,req.IsDestroyed,req.NodeCategory,req.DefensePower,req.AttackRange,req.HPBonus,req.DamageReduction,req.BlocksMovement,req.RequiredGuID,req.RequiredGuRank,req.ZoneType,req.FoodPath,req.ItemTier,req.ProductionKey,c.Param("node_id"),c.Param("id"))
-	if err!=nil { c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể cập nhật điểm tài nguyên: "+err.Error()}); return }; if n,_:=result.RowsAffected();n==0 { c.JSON(http.StatusNotFound,gin.H{"error":"Không tìm thấy điểm tài nguyên"}); return }
-	auditlog.Logf(db.DB,&adminID,"admin.update_aperture_node","node_id=%s",c.Param("node_id")); c.JSON(http.StatusOK,gin.H{"message":"Đã cập nhật điểm tài nguyên"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu điểm tài nguyên không hợp lệ"})
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.NodeType) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tên và loại điểm tài nguyên là bắt buộc"})
+		return
+	}
+	if message := validateApertureNode(req); message != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": message})
+		return
+	}
+	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE aperture_resource_nodes SET node_type=$1,name=$2,path=NULLIF($3,''),level=$4,hp=$5,max_hp=$6,x=$7,y=$8,production_type=NULLIF($9,''),production_amount=$10,production_interval_hours=$11,is_destroyed=$12,node_category=$13,defense_power=$14,attack_range=$15,hp_bonus=$16,damage_reduction=$17,blocks_movement=$18,required_gu_id=NULLIF($19,''),required_gu_rank=$20,zone_type=NULLIF($21,''),food_path=NULLIF($22,''),item_tier=NULLIF($23,''),production_key=NULLIF($24,''),updated_at=NOW() WHERE id=$25 AND aperture_id=$26`, req.NodeType, req.Name, req.Path, req.Level, req.HP, req.MaxHP, req.X, req.Y, req.ProductionType, req.ProductionAmount, req.ProductionIntervalHours, req.IsDestroyed, req.NodeCategory, req.DefensePower, req.AttackRange, req.HPBonus, req.DamageReduction, req.BlocksMovement, req.RequiredGuID, req.RequiredGuRank, req.ZoneType, req.FoodPath, req.ItemTier, req.ProductionKey, c.Param("node_id"), c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật điểm tài nguyên: " + err.Error()})
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy điểm tài nguyên"})
+		return
+	}
+	auditlog.Logf(db.DB, &adminID, "admin.update_aperture_node", "node_id=%s", c.Param("node_id"))
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật điểm tài nguyên"})
 }
 
 func AdminDeleteApertureNode(c *gin.Context) {
@@ -672,29 +764,32 @@ func AdminDeleteApertureNode(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if n,_:=result.RowsAffected();n==0 { c.JSON(http.StatusNotFound,gin.H{"error":"Không tìm thấy điểm tài nguyên"});return }
+	if n, _ := result.RowsAffected(); n == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy điểm tài nguyên"})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_aperture_node", "node_id=%s", nodeID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa điểm tài nguyên"})
 }
 
 type VariantHumanRow struct {
-	ID             string  `json:"id"`
-	ApertureID     string  `json:"aperture_id"`
-	Race           string  `json:"race"`
-	Population     int     `json:"population"`
-	Happiness      float64 `json:"happiness"`
-	Oppression     float64 `json:"oppression"`
-	RebellionRate  float64 `json:"rebellion_rate"`
-	LaborIntensity string  `json:"labor_intensity"`
-	Prosperity float64 `json:"prosperity"`
-	GuMasterCount int `json:"gu_master_count"`
-	GuImmortalCount int `json:"gu_immortal_count"`
-	FoodStored float64 `json:"food_stored"`
-	FoodPerCapita float64 `json:"food_per_capita"`
-	PopulationGrowthRate float64 `json:"population_growth_rate"`
-	MortalityRate float64 `json:"mortality_rate"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                   string    `json:"id"`
+	ApertureID           string    `json:"aperture_id"`
+	Race                 string    `json:"race"`
+	Population           int       `json:"population"`
+	Happiness            float64   `json:"happiness"`
+	Oppression           float64   `json:"oppression"`
+	RebellionRate        float64   `json:"rebellion_rate"`
+	LaborIntensity       string    `json:"labor_intensity"`
+	Prosperity           float64   `json:"prosperity"`
+	GuMasterCount        int       `json:"gu_master_count"`
+	GuImmortalCount      int       `json:"gu_immortal_count"`
+	FoodStored           float64   `json:"food_stored"`
+	FoodPerCapita        float64   `json:"food_per_capita"`
+	PopulationGrowthRate float64   `json:"population_growth_rate"`
+	MortalityRate        float64   `json:"mortality_rate"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 func AdminListApertureVariantHumans(c *gin.Context) {
@@ -714,12 +809,16 @@ func AdminListApertureVariantHumans(c *gin.Context) {
 	list := []VariantHumanRow{}
 	for rows.Next() {
 		var r VariantHumanRow
-		if err := rows.Scan(&r.ID, &r.ApertureID, &r.Race, &r.Population, &r.Happiness, &r.Oppression, &r.RebellionRate, &r.LaborIntensity,&r.Prosperity,&r.GuMasterCount,&r.GuImmortalCount,&r.FoodStored,&r.FoodPerCapita,&r.PopulationGrowthRate,&r.MortalityRate,&r.CreatedAt,&r.UpdatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể đọc dữ liệu chủng tộc tiên khiếu"});return
+		if err := rows.Scan(&r.ID, &r.ApertureID, &r.Race, &r.Population, &r.Happiness, &r.Oppression, &r.RebellionRate, &r.LaborIntensity, &r.Prosperity, &r.GuMasterCount, &r.GuImmortalCount, &r.FoodStored, &r.FoodPerCapita, &r.PopulationGrowthRate, &r.MortalityRate, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu chủng tộc tiên khiếu"})
+			return
 		}
 		list = append(list, r)
 	}
-	if err:=rows.Err();err!=nil { c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể đọc danh sách chủng tộc tiên khiếu"});return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách chủng tộc tiên khiếu"})
+		return
+	}
 	c.JSON(http.StatusOK, list)
 }
 
@@ -734,11 +833,14 @@ func AdminCreateApertureVariantHuman(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chủng tộc là bắt buộc"})
 		return
 	}
-	if message:=validateVariantHuman(req);message!="" { c.JSON(http.StatusBadRequest,gin.H{"error":message});return }
+	if message := validateVariantHuman(req); message != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": message})
+		return
+	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `
 		INSERT INTO aperture_variant_humans (aperture_id,race,population,happiness,oppression,rebellion_rate,labor_intensity,prosperity,gu_master_count,gu_immortal_count,food_stored,food_per_capita,population_growth_rate,mortality_rate)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-		apertureID, req.Race, req.Population, req.Happiness, req.Oppression, req.RebellionRate, req.LaborIntensity,req.Prosperity,req.GuMasterCount,req.GuImmortalCount,req.FoodStored,req.FoodPerCapita,req.PopulationGrowthRate,req.MortalityRate)
+		apertureID, req.Race, req.Population, req.Happiness, req.Oppression, req.RebellionRate, req.LaborIntensity, req.Prosperity, req.GuMasterCount, req.GuImmortalCount, req.FoodStored, req.FoodPerCapita, req.PopulationGrowthRate, req.MortalityRate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -748,23 +850,55 @@ func AdminCreateApertureVariantHuman(c *gin.Context) {
 }
 
 func validateVariantHuman(r VariantHumanRow) string {
-	if len(strings.TrimSpace(r.Race))==0 || len(r.Race)>50 || len(r.LaborIntensity)>20 { return "Chủng tộc hoặc cường độ lao động không hợp lệ" }
-	values:=[]float64{r.Happiness,r.Oppression,r.RebellionRate,r.Prosperity,r.FoodStored,r.FoodPerCapita,r.PopulationGrowthRate,r.MortalityRate}
-	for _,v:=range values { if math.IsNaN(v)||math.IsInf(v,0) { return "Thông số dân cư phải là số hữu hạn" } }
-	if r.Population<0 || r.Happiness<0 || r.Happiness>100 || r.Oppression<0 || r.Oppression>100 || r.RebellionRate<0 || r.RebellionRate>100 || r.Prosperity<0 || r.Prosperity>100 || r.GuMasterCount<0 || r.GuImmortalCount<0 || r.FoodStored<0 || r.FoodPerCapita<0 || r.PopulationGrowthRate<0 || r.MortalityRate<0 { return "Thông số dân cư ngoài phạm vi cho phép" }
+	if len(strings.TrimSpace(r.Race)) == 0 || len(r.Race) > 50 || len(r.LaborIntensity) > 20 {
+		return "Chủng tộc hoặc cường độ lao động không hợp lệ"
+	}
+	values := []float64{r.Happiness, r.Oppression, r.RebellionRate, r.Prosperity, r.FoodStored, r.FoodPerCapita, r.PopulationGrowthRate, r.MortalityRate}
+	for _, v := range values {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return "Thông số dân cư phải là số hữu hạn"
+		}
+	}
+	if r.Population < 0 || r.Happiness < 0 || r.Happiness > 100 || r.Oppression < 0 || r.Oppression > 100 || r.RebellionRate < 0 || r.RebellionRate > 100 || r.Prosperity < 0 || r.Prosperity > 100 || r.GuMasterCount < 0 || r.GuImmortalCount < 0 || r.FoodStored < 0 || r.FoodPerCapita < 0 || r.PopulationGrowthRate < 0 || r.MortalityRate < 0 {
+		return "Thông số dân cư ngoài phạm vi cho phép"
+	}
 	return ""
 }
 
 func AdminUpdateApertureVariantHuman(c *gin.Context) {
-	adminID,ok:=requireAdmin(c);if !ok{return};var req VariantHumanRow
-	if err:=c.ShouldBindJSON(&req);err!=nil { c.JSON(http.StatusBadRequest,gin.H{"error":"Dữ liệu dân cư không hợp lệ"});return }
-	if message:=validateVariantHuman(req);message!="" { c.JSON(http.StatusBadRequest,gin.H{"error":message});return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+	var req VariantHumanRow
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu dân cư không hợp lệ"})
+		return
+	}
+	if message := validateVariantHuman(req); message != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": message})
+		return
+	}
 	var assignedPopulation int
-	if err:=db.DB.QueryRowContext(c.Request.Context(),`SELECT COALESCE(SUM(assigned_population),0) FROM aperture_node_workers WHERE variant_human_id=$1`,c.Param("vh_id")).Scan(&assignedPopulation);err!=nil { c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể kiểm tra lao động đã phân công"});return }
-	if assignedPopulation>req.Population { c.JSON(http.StatusBadRequest,gin.H{"error":"Dân số mới thấp hơn số lao động đang phân công"});return }
-	result,err:=db.DB.ExecContext(c.Request.Context(),`UPDATE aperture_variant_humans SET race=$1,population=$2,happiness=$3,oppression=$4,rebellion_rate=$5,labor_intensity=$6,prosperity=$7,gu_master_count=$8,gu_immortal_count=$9,food_stored=$10,food_per_capita=$11,population_growth_rate=$12,mortality_rate=$13,updated_at=NOW() WHERE id=$14 AND aperture_id=$15`,strings.TrimSpace(req.Race),req.Population,req.Happiness,req.Oppression,req.RebellionRate,req.LaborIntensity,req.Prosperity,req.GuMasterCount,req.GuImmortalCount,req.FoodStored,req.FoodPerCapita,req.PopulationGrowthRate,req.MortalityRate,c.Param("vh_id"),c.Param("id"))
-	if err!=nil { c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể cập nhật dữ liệu dân cư: "+err.Error()});return };if n,_:=result.RowsAffected();n==0{c.JSON(http.StatusNotFound,gin.H{"error":"Không tìm thấy nhóm dân cư"});return}
-	auditlog.Logf(db.DB,&adminID,"admin.update_variant_human","id=%s",c.Param("vh_id"));c.JSON(http.StatusOK,gin.H{"message":"Đã cập nhật nhóm dân cư"})
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(SUM(assigned_population),0) FROM aperture_node_workers WHERE variant_human_id=$1`, c.Param("vh_id")).Scan(&assignedPopulation); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra lao động đã phân công"})
+		return
+	}
+	if assignedPopulation > req.Population {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dân số mới thấp hơn số lao động đang phân công"})
+		return
+	}
+	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE aperture_variant_humans SET race=$1,population=$2,happiness=$3,oppression=$4,rebellion_rate=$5,labor_intensity=$6,prosperity=$7,gu_master_count=$8,gu_immortal_count=$9,food_stored=$10,food_per_capita=$11,population_growth_rate=$12,mortality_rate=$13,updated_at=NOW() WHERE id=$14 AND aperture_id=$15`, strings.TrimSpace(req.Race), req.Population, req.Happiness, req.Oppression, req.RebellionRate, req.LaborIntensity, req.Prosperity, req.GuMasterCount, req.GuImmortalCount, req.FoodStored, req.FoodPerCapita, req.PopulationGrowthRate, req.MortalityRate, c.Param("vh_id"), c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật dữ liệu dân cư: " + err.Error()})
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhóm dân cư"})
+		return
+	}
+	auditlog.Logf(db.DB, &adminID, "admin.update_variant_human", "id=%s", c.Param("vh_id"))
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật nhóm dân cư"})
 }
 
 func AdminDeleteApertureVariantHuman(c *gin.Context) {
@@ -778,39 +912,115 @@ func AdminDeleteApertureVariantHuman(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if n,_:=result.RowsAffected();n==0 { c.JSON(http.StatusNotFound,gin.H{"error":"Không tìm thấy nhóm dân cư"});return }
+	if n, _ := result.RowsAffected(); n == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhóm dân cư"})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_variant_human", "id=%s", vhID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa nhóm dị nhân"})
 }
 
 type AdminApertureWorker struct {
-	ID string `json:"id"`
-	NodeID string `json:"node_id"`
-	VariantHumanID string `json:"variant_human_id"`
-	Race string `json:"race"`
-	Population int `json:"population"`
-	AssignedPopulation int `json:"assigned_population"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                 string    `json:"id"`
+	NodeID             string    `json:"node_id"`
+	VariantHumanID     string    `json:"variant_human_id"`
+	Race               string    `json:"race"`
+	Population         int       `json:"population"`
+	AssignedPopulation int       `json:"assigned_population"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 func AdminListApertureNodeWorkers(c *gin.Context) {
-	if _,ok:=requireAdmin(c);!ok{return}
-	rows,err:=db.DB.QueryContext(c.Request.Context(),`SELECT w.id,w.node_id,w.variant_human_id,v.race,v.population,w.assigned_population,w.created_at,w.updated_at FROM aperture_node_workers w JOIN aperture_resource_nodes n ON n.id=w.node_id JOIN aperture_variant_humans v ON v.id=w.variant_human_id WHERE n.id=$1 AND n.aperture_id=$2 ORDER BY v.race`,c.Param("node_id"),c.Param("id"))
-	if err!=nil{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể tải phân công lao động"});return};defer rows.Close();list:=make([]AdminApertureWorker,0)
-	for rows.Next(){var w AdminApertureWorker;if err:=rows.Scan(&w.ID,&w.NodeID,&w.VariantHumanID,&w.Race,&w.Population,&w.AssignedPopulation,&w.CreatedAt,&w.UpdatedAt);err!=nil{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể đọc phân công lao động"});return};list=append(list,w)}
-	if err:=rows.Err();err!=nil{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể đọc phân công lao động"});return};c.JSON(http.StatusOK,list)
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT w.id,w.node_id,w.variant_human_id,v.race,v.population,w.assigned_population,w.created_at,w.updated_at FROM aperture_node_workers w JOIN aperture_resource_nodes n ON n.id=w.node_id JOIN aperture_variant_humans v ON v.id=w.variant_human_id WHERE n.id=$1 AND n.aperture_id=$2 ORDER BY v.race`, c.Param("node_id"), c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải phân công lao động"})
+		return
+	}
+	defer rows.Close()
+	list := make([]AdminApertureWorker, 0)
+	for rows.Next() {
+		var w AdminApertureWorker
+		if err := rows.Scan(&w.ID, &w.NodeID, &w.VariantHumanID, &w.Race, &w.Population, &w.AssignedPopulation, &w.CreatedAt, &w.UpdatedAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc phân công lao động"})
+			return
+		}
+		list = append(list, w)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc phân công lao động"})
+		return
+	}
+	c.JSON(http.StatusOK, list)
 }
 
 func AdminUpsertApertureNodeWorker(c *gin.Context) {
-	adminID,ok:=requireAdmin(c);if !ok{return};var req struct{VariantHumanID string `json:"variant_human_id"`;AssignedPopulation int `json:"assigned_population"`}
-	if err:=c.ShouldBindJSON(&req);err!=nil||strings.TrimSpace(req.VariantHumanID)==""||req.AssignedPopulation<0{c.JSON(http.StatusBadRequest,gin.H{"error":"Nhóm dân cư và số lao động hợp lệ là bắt buộc"});return}
-	tx,err:=db.DB.BeginTx(c.Request.Context(),nil);if err!=nil{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể bắt đầu cập nhật phân công"});return};defer tx.Rollback()
-	var population int;if err:=tx.QueryRowContext(c.Request.Context(),`SELECT v.population FROM aperture_variant_humans v JOIN aperture_resource_nodes n ON n.aperture_id=v.aperture_id WHERE v.id=$1 AND n.id=$2 AND n.aperture_id=$3 FOR UPDATE OF v`,req.VariantHumanID,c.Param("node_id"),c.Param("id")).Scan(&population);err!=nil{if err==sql.ErrNoRows{c.JSON(http.StatusNotFound,gin.H{"error":"Không tìm thấy nhóm dân cư phù hợp với tiên khiếu và node"})}else{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể xác thực dân số"})};return}
-	var elsewhere int;if err:=tx.QueryRowContext(c.Request.Context(),`SELECT COALESCE(SUM(assigned_population),0) FROM aperture_node_workers WHERE variant_human_id=$1 AND node_id<>$2`,req.VariantHumanID,c.Param("node_id")).Scan(&elsewhere);err!=nil{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể tính lao động đã phân công"});return};if elsewhere+req.AssignedPopulation>population{c.JSON(http.StatusBadRequest,gin.H{"error":"Số lượng lao động vượt quá dân số chưa được phân công"});return}
-	_,err=tx.ExecContext(c.Request.Context(),`INSERT INTO aperture_node_workers(node_id,variant_human_id,assigned_population) VALUES($1,$2,$3) ON CONFLICT(node_id,variant_human_id) DO UPDATE SET assigned_population=EXCLUDED.assigned_population,updated_at=NOW()`,c.Param("node_id"),req.VariantHumanID,req.AssignedPopulation);if err!=nil{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể lưu phân công lao động: "+err.Error()});return};if err:=tx.Commit();err!=nil{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể xác nhận phân công đã lưu"});return};auditlog.Logf(db.DB,&adminID,"admin.upsert_aperture_node_worker","node=%s variant_human=%s population=%d",c.Param("node_id"),req.VariantHumanID,req.AssignedPopulation);c.JSON(http.StatusOK,gin.H{"message":"Đã lưu phân công lao động"})
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		VariantHumanID     string `json:"variant_human_id"`
+		AssignedPopulation int    `json:"assigned_population"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.VariantHumanID) == "" || req.AssignedPopulation < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nhóm dân cư và số lao động hợp lệ là bắt buộc"})
+		return
+	}
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu cập nhật phân công"})
+		return
+	}
+	defer tx.Rollback()
+	var population int
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT v.population FROM aperture_variant_humans v JOIN aperture_resource_nodes n ON n.aperture_id=v.aperture_id WHERE v.id=$1 AND n.id=$2 AND n.aperture_id=$3 FOR UPDATE OF v`, req.VariantHumanID, c.Param("node_id"), c.Param("id")).Scan(&population); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhóm dân cư phù hợp với tiên khiếu và node"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác thực dân số"})
+		}
+		return
+	}
+	var elsewhere int
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(SUM(assigned_population),0) FROM aperture_node_workers WHERE variant_human_id=$1 AND node_id<>$2`, req.VariantHumanID, c.Param("node_id")).Scan(&elsewhere); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tính lao động đã phân công"})
+		return
+	}
+	if elsewhere+req.AssignedPopulation > population {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng lao động vượt quá dân số chưa được phân công"})
+		return
+	}
+	_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO aperture_node_workers(node_id,variant_human_id,assigned_population) VALUES($1,$2,$3) ON CONFLICT(node_id,variant_human_id) DO UPDATE SET assigned_population=EXCLUDED.assigned_population,updated_at=NOW()`, c.Param("node_id"), req.VariantHumanID, req.AssignedPopulation)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phân công lao động: " + err.Error()})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận phân công đã lưu"})
+		return
+	}
+	auditlog.Logf(db.DB, &adminID, "admin.upsert_aperture_node_worker", "node=%s variant_human=%s population=%d", c.Param("node_id"), req.VariantHumanID, req.AssignedPopulation)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã lưu phân công lao động"})
 }
 
 func AdminDeleteApertureNodeWorker(c *gin.Context) {
-	adminID,ok:=requireAdmin(c);if !ok{return};result,err:=db.DB.ExecContext(c.Request.Context(),`DELETE FROM aperture_node_workers w USING aperture_resource_nodes n WHERE w.id=$1 AND w.node_id=n.id AND w.node_id=$2 AND n.aperture_id=$3`,c.Param("worker_id"),c.Param("node_id"),c.Param("id"));if err!=nil{c.JSON(http.StatusInternalServerError,gin.H{"error":"Không thể xóa phân công lao động"});return};if n,_:=result.RowsAffected();n==0{c.JSON(http.StatusNotFound,gin.H{"error":"Không tìm thấy phân công lao động"});return};auditlog.Logf(db.DB,&adminID,"admin.delete_aperture_node_worker","worker=%s node=%s",c.Param("worker_id"),c.Param("node_id"));c.JSON(http.StatusOK,gin.H{"message":"Đã gỡ phân công lao động"})
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM aperture_node_workers w USING aperture_resource_nodes n WHERE w.id=$1 AND w.node_id=n.id AND w.node_id=$2 AND n.aperture_id=$3`, c.Param("worker_id"), c.Param("node_id"), c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa phân công lao động"})
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phân công lao động"})
+		return
+	}
+	auditlog.Logf(db.DB, &adminID, "admin.delete_aperture_node_worker", "worker=%s node=%s", c.Param("worker_id"), c.Param("node_id"))
+	c.JSON(http.StatusOK, gin.H{"message": "Đã gỡ phân công lao động"})
 }

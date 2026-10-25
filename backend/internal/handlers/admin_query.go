@@ -83,4 +83,3 @@ func fastCountTable(c *gin.Context, tableName string, cacheKey string, cacheTTL 
 	}
 	return total, nil
 }
-

@@ -222,12 +222,10 @@ func loadWorldCombatPlayerSnapshots(ctx context.Context, ids []uuid.UUID) (map[u
 
 // calculateWorldPlayerAttack mirrors the query-free portions of passive stat
 // calculation. World ticks batch-load all required data and must not issue a
-// territory query for every nearby player.
+// territory query for every nearby player. Additive Gu stats are raw values:
+// path mastery and dao marks never scale passive stats.
 func calculateWorldPlayerAttack(p *models.Player) float64 {
 	attack := 10 + float64(p.Rank-1)*10 + float64(p.SubRank-1)*2 + p.GrowthData.Boosts.Attack
-	if p.DaoMarks != nil {
-		attack += float64(p.DaoMarks["strength"]) / 10
-	}
 	best := map[string]models.GuInstance{}
 	for _, gu := range p.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
@@ -242,8 +240,7 @@ func calculateWorldPlayerAttack(p *models.Player) float64 {
 		if !ok {
 			continue
 		}
-		mastery, dao := gamefx.GuStatMultipliers(p.PathMasteries, p.DaoMarks, spec.Path)
-		attack += models.GuStatValue(spec, "ATTACK") * mastery * dao
+		attack += models.GuStatValue(spec, "ATTACK")
 		if compiled := models.CompiledGuEffects(spec); compiled != nil {
 			allPct += compiled.StatValue(gameplayeffects.TriggerOnAction, "ALL", "MULTIPLY_PERCENT")
 		}
@@ -274,8 +271,7 @@ func calculateWorldPlayerDefense(p *models.Player) float64 {
 		if !ok {
 			continue
 		}
-		mastery, dao := gamefx.GuStatMultipliers(p.PathMasteries, p.DaoMarks, spec.Path)
-		defense += models.GuStatValue(spec, "DEFENSE") * mastery * dao
+		defense += models.GuStatValue(spec, "DEFENSE")
 		if compiled := models.CompiledGuEffects(spec); compiled != nil {
 			allPct += compiled.StatValue(gameplayeffects.TriggerOnAction, "ALL", "MULTIPLY_PERCENT")
 		}
@@ -1273,11 +1269,7 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 			return false
 		}
 		playerID, err := uuid.Parse(entry.ID)
-		mapID := entry.MapID
-		if mapID == "" {
-			mapID = worldMapIDForRegion(entry.Region)
-		}
-		if err != nil || mapID != "world_map" || entry.InstanceID != "" || !isWSConnected(playerID) {
+		if err != nil || !isLegacyWorldMonsterPlayer(entry) || !isWSConnected(playerID) {
 			return false
 		}
 		return checkRegionAction(entry.Region, "combat") == nil && checkRegionAction(entry.Region, "monster_combat") == nil
@@ -1407,4 +1399,19 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 		}
 	}
 	worldMonsterMetrics.processed.Add(uint64(processed))
+}
+
+// isLegacyWorldMonsterPlayer keeps the shared monster worker scoped to the
+// default legacy world. Non-empty instance IDs and process-local realtime
+// leases belong to isolated runtimes and must never activate legacy AI.
+func isLegacyWorldMonsterPlayer(entry WorldPosEntry) bool {
+	mapID := entry.MapID
+	if mapID == "" {
+		mapID = worldMapIDForRegion(entry.Region)
+	}
+	if mapID != "world_map" || entry.InstanceID != "" {
+		return false
+	}
+	playerID, err := uuid.Parse(entry.ID)
+	return err == nil && !middleware.IsRealtimeWorldOwned(playerID)
 }

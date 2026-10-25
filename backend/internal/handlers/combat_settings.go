@@ -226,6 +226,7 @@ func UpdateCombatSettings(c *gin.Context) {
 		}
 	}
 	req.CombatSettings.CategoryPriorities = cleanCats
+	req.CombatSettings.NormalizeRealtimeSettings()
 
 	settingsJSON, _ := json.Marshal(req.CombatSettings)
 	_, err = tx.Exec(`UPDATE players SET combat_settings = $1 WHERE id = $2`, settingsJSON, authID)

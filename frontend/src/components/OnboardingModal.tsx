@@ -77,11 +77,11 @@ const STARTING_DEFENSE_GUS = [
 ];
 
 const REGIONS = [
-  { id: "hub_nam_cuong", name: "Nam Cương", desc: "Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân." },
-  { id: "hub_trung_chau", name: "Trung Châu", desc: "Kinh đô phồn hoa của Trung Châu, khu vực cấm tranh đấu tuyệt đối, nơi tụ hội của Thập Đại Cổ Phái." },
-  { id: "hub_bac_nguyen", name: "Bắc Nguyên", desc: "Trấn an toàn giữa thảo nguyên mênh mông Bắc Nguyên, nơi các bộ lạc Hoàng Kim dừng chân." },
-  { id: "hub_tay_mac", name: "Tây Mạc", desc: "Ốc đảo an toàn giữa sa mạc Tây Mạc, trạm dừng chân của các thương đội." },
-  { id: "hub_dong_hai", name: "Đông Hải", desc: "Cảng an toàn bên bờ Đông Hải, cửa ngõ giao thương đường biển của tộc Giao Nhân." },
+  { id: "tan_thu_coc_nam_cuong", name: "Nam Cương", desc: "Tân Thủ Cốc Nam Cương — Thung lũng thanh bình giữa đại sơn cho tân thủ Cổ Sư học tập luyện cổ và chiến đấu." },
+  { id: "tan_thu_coc_trung_chau", name: "Trung Châu", desc: "Tân Thủ Cốc Trung Châu — Sơn cốc bách hoa tươi đẹp đào tạo đệ tử sơ nhập môn phái Trung Châu." },
+  { id: "tan_thu_coc_bac_nguyen", name: "Bắc Nguyên", desc: "Tân Thủ Cốc Bắc Nguyên — Thảo nguyên xanh êm đềm bồi dưỡng dũng khí cưỡi ngựa bắn cung cho thanh niên Bắc Nguyên." },
+  { id: "tan_thu_coc_tay_mac", name: "Tây Mạc", desc: "Tân Thủ Cốc Tây Mạc — Khu ốc đảo thanh bình an toàn dành cho các cổ sư mới bắt đầu tu luyện và chế ngự cổ trùng." },
+  { id: "tan_thu_coc_dong_hai", name: "Đông Hải", desc: "Tân Thủ Đảo Đông Hải — Hòn đảo tiên thanh bình ven bờ ngọc bích đào tạo tân thủ cổ sư làm quen sóng gió biển cả." },
 ];
 
 interface OnboardingModalProps {
@@ -94,7 +94,7 @@ interface OnboardingModalProps {
 }
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
-  const [selectedRegion, setSelectedRegion] = useState("hub_nam_cuong");
+  const [selectedRegion, setSelectedRegion] = useState("tan_thu_coc_nam_cuong");
   const [selectedAttackGu, setSelectedAttackGu] = useState("GU_MOONLIGHT");
   const [selectedDefenseGu, setSelectedDefenseGu] = useState("GU_STONE_SKIN");
   const [selectedVital, setSelectedVital] = useState("ATTACK");

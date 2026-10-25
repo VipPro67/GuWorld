@@ -104,6 +104,28 @@ func RollRegionLoot(tx *sql.Tx, regionID string, monsterType string, rank int) R
 		return rolled
 	}
 
+	// 1. Try in-memory registry first (0 DB queries, instant resolution)
+	if rules := models.GetRegionLootRules(regionID, monsterType, rank); len(rules) > 0 {
+		for _, r := range rules {
+			if rand.Float64() > r.Chance {
+				continue
+			}
+			if lt, ok := models.GetLootTable(r.LootTableID); ok {
+				regionLoot := rollRegionLootTable(lt, rank)
+				for k, v := range regionLoot.Items {
+					rolled.Items[k] += v
+				}
+				rolled.Gus = append(rolled.Gus, regionLoot.Gus...)
+			}
+		}
+		return rolled
+	}
+
+	if tx == nil {
+		return rolled
+	}
+
+	// 2. Fallback to SQL query if registry has no rules for this region
 	scope := regionLootScope(tx, regionID)
 	rows, err := tx.Query(`
 		SELECT loot_table_id, chance FROM region_loot_tables
