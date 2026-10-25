@@ -236,7 +236,9 @@ func TestJoinRateLimitExpiresAfterOneMinute(t *testing.T) {
 
 func startTestManager(t *testing.T, key sim.ZoneKey, capacity int) *realtimeworld.Manager {
 	t.Helper()
-	manager, err := realtimeworld.NewManagerWithCapacity([]sim.ZoneKey{key}, 8, capacity)
+	// Exercise the production lazy lifecycle: the world is created by the
+	// claim/attach path rather than eagerly at manager construction.
+	manager, err := realtimeworld.NewLazyManagerWithMaps([]sim.ZoneKey{key}, 8, capacity, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

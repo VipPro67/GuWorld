@@ -160,6 +160,8 @@ Impact: cross-process double ownership remains a release blocker.
 **Status:** IN PROGRESS.
 
 - Lease persistence/expiry and cross-process fencing are absent.
+- Worlds and their runners are created lazily per instance and released after
+  five idle minutes; process-local only, so a crash cannot recover a lease.
 - Full stats/equipment/progression projection from canonical character services
   is incomplete (HP/position + equipped Gu are loaded).
 - Every remaining legacy state mutation path is not audited.
@@ -445,6 +447,9 @@ Impact: cross-process double ownership remains a release blocker.
 **Status:** IN PROGRESS.
 
 - All zone instances are goroutines in one process; no dedicated workers.
+- Idle instances release their world/runner after five minutes without a lease,
+  subscriber, projectile or pending event, and share one immutable map artifact
+  per map. Load tests for many simultaneously active instances are still absent.
 - No cross-process lease registry/fencing, gateway routing or session directory.
 - Per-zone graceful drain, transfer storms and worker-crash recovery are missing.
 - No autoscaling policy or multi-zone load test.

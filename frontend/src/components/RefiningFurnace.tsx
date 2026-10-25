@@ -6,6 +6,7 @@ import { GamePanel, GameCard } from "@/components/ui";
 // UI migrated to shared components
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor, RefineRateBreakdown } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
+import { getItemIconUrl } from "@/lib/item-icons";
 import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search, Brain, ShieldCheck, Clock, TrendingUp, Award } from "lucide-react";
 
 interface RefiningFurnaceProps {
@@ -1041,11 +1042,20 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             key={matId}
                             className="flex items-center justify-between text-xs bg-zinc-950/50 border border-zinc-900/60 px-3 py-1.5 rounded-lg"
                           >
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2 min-w-0">
                               {isMasked ? (
                                 <span className="text-zinc-500 font-mono italic">??? (Phụ phẩm ẩn)</span>
                               ) : (
-                                <span className={matDetails.colorClass}>{matDetails.name}</span>
+                                <>
+                                  <img
+                                    src={getItemIconUrl(itemDictionary[matId] ?? { id: matId, name: matDetails.name, item_type: "Material" })}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-4 h-4 rounded object-contain bg-zinc-900 border border-zinc-800 shrink-0"
+                                  />
+                                  <span className={`${matDetails.colorClass} truncate`}>{matDetails.name}</span>
+                                </>
                               )}
                             </div>
                             <div className="flex items-center gap-1.5 font-mono">

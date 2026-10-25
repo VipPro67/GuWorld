@@ -35,6 +35,24 @@ updated_at
 - A crash can lose at most the interval since the last checkpoint/leave; it does
   not create a duplicate entity or lease in the process-local preview.
 
+## Legacy HP bridge
+
+Inventory panels stay on the legacy HTTP paths while a character is in the
+realtime zone. HP-changing items and support/consumable Gu therefore do not read
+or write `players.hp` blindly:
+
+- Before applying effects, the handler seeds `player.HP` from the live zone
+  entity through `middleware.RealtimePlayerHP`.
+- After the database transaction commits, the resulting HP delta is applied back
+  to the zone entity (`Manager.ApplyHPDelta` → `sim.World.QueueHPDelta`) on the
+  zone tick. The zone remains authoritative and its next checkpoint writes the
+  healed value.
+
+Active Gu heals are separate: every cast mode (TARGET, DIRECTION, GROUND and
+SELF) now resolves `HEAL`/`SHIELD` on the caster, matching the turn simulator,
+so a targeted recovery Gu heals while still damaging its target. Dead zone
+entities are ignored by the bridge; item use cannot revive a character.
+
 ## Safe spawn
 
 `Manager.SafeSpawn` validates the preferred position against the shared map

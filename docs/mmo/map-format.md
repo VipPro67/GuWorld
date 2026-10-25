@@ -49,6 +49,12 @@ The file is a small Tiled-compatible subset:
   sparse mode, outer boundary borders are automatically solid and all interior
   cells are walkable. This allows massive 2000×2000 child region maps (matching
   Region.csv 1:1) to serialize in < 5 KB instead of 23 MB JSON files.
+- The server compiles sparse collision to a `BorderCollision` that stores only
+  width/height, and authored layers to a packed one-bit-per-tile
+  `PackedCollision`. Both preserve the legacy `Blocked` result and the SHA-256
+  tile stream exposed as `world.welcome.map_hash`; the client JSON/hash contract
+  is unchanged. One immutable map artifact is loaded and validated per map at
+  startup, then shared by every instance of that map.
 - `ground.data` is optional (empty array `[]` defaults to 0). `1` is the base tile and `2` renders as a path tint.
 - Spawn objects live in the `spawns` object group. `type` is required
   (`player`, `monster`, `npc`, `portal`, `boss`, ...); `x`/`y` are world units
@@ -121,7 +127,8 @@ the collision bitmap (`nav.Map.Hash`). The hash is logged at startup and sent
 as `world.welcome.map_hash`; the client recomputes it from the downloaded JSON
 and shows `LỆCH HASH` in the HUD when it differs. The golden tests pin both
 implementations to the same digest and also require the two JSON copies to be
-byte-identical.
+byte-identical. The compact collision types still hash the same byte stream as
+the old dense grid, so changing them must not change any existing map hash.
 
 ## Out of scope in v1
 

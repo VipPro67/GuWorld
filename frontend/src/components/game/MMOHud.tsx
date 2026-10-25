@@ -6,13 +6,14 @@ import type { WorldSkillInfo } from "@/game/network/Protocol";
 import type { RuntimeEntity } from "@/game/core/WorldRuntime";
 import { getMonsterArt } from "@/game/assets/MonsterArt";
 import { formatManaCost } from "@/lib/gu-mana";
-import { useGameStore, type Player } from "@/store/useGameStore";
+import { useGameStore, guSpecFor, type Player } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 import { translatePath } from "@/lib/translate";
 import { NotificationBell } from "@/components/NotificationBell";
 import { VirtualJoystick } from "./VirtualJoystick";
 import { TeleportDirectoryModal } from "@/components/Teleport/TeleportDirectoryModal";
 import type { MMOPanel } from "./MMOBusinessPanels";
+import type { MapPortal } from "@/game/world/MapLoader";
 import { useQuickActionIds, QUICK_ACTIONS_MAP } from "@/lib/mmo-quick-actions";
 import { QuickActionCustomizer } from "./QuickActionCustomizer";
 
@@ -61,6 +62,8 @@ export interface MMOHudProps {
   onMoveJoystick?: (vector: { x: number; y: number }) => void;
   onZoomIn?: () => number;
   onZoomOut?: () => number;
+  mapPortals?: MapPortal[];
+  onPortalTransfer?: (targetZoneId: string, targetX: number, targetY: number) => void;
 }
 
 const MODE_LABEL: Record<WorldSkillInfo["mode"], string> = {
@@ -323,11 +326,25 @@ export function MMOHud(props: MMOHudProps) {
   // Nearby Primeval Veins
   const nearbyVeins = nearbyCells.filter((c) => c.cell_type === "PrimevalVein" || !!c.vein);
 
-  // Nearby Teleport Arrays
+  // Nearby Teleport Arrays (filtered by current zone to avoid cross-region coordinate collision)
   const nearbyTeleports = [
-    ...(myTeleportArrays || []).map((t) => ({ x: t.x, y: t.y, name: t.name || "Truyền Tống Trận", id: t.id })),
+    ...(myTeleportArrays || []).filter((t) => t.region_id === props.zoneId).map((t) => ({ x: t.x, y: t.y, name: t.name || "Truyền Tống Trận", id: t.id })),
     ...nearbyCells.filter((c) => c.cell_type === "TeleportArray" || c.cell_type === "ENTRY_PORTAL").map((c) => ({ x: c.x, y: c.y, name: c.content || "Truyền Tống Trận", id: c.content })),
   ];
+
+  // Nearby Sects
+  const sectMap = useGameStore((state) => state.sectMap);
+  const fetchSectsMap = useGameStore((state) => state.fetchSectsMap);
+  const mySectStatus = useGameStore((state) => state.mySectStatus);
+  const attackSect = useGameStore((state) => state.attackSect);
+
+  useEffect(() => {
+    if (props.connected) void fetchSectsMap();
+  }, [props.connected, fetchSectsMap]);
+
+  const nearbySects = (sectMap || []).filter(
+    (s) => s.region === props.zoneId && typeof s.map_x === "number" && typeof s.map_y === "number"
+  );
 
   // Proximity items (within interaction range)
   let closestDrop: (typeof groundDrops)[0] | null = null;
@@ -357,6 +374,26 @@ export function MMOHud(props: MMOHudProps) {
     if (dist <= 3.0 && dist < closestTpDist) {
       closestTp = tp;
       closestTpDist = dist;
+    }
+  }
+
+  let closestPortal: MapPortal | null = null;
+  let closestPortalDist = Infinity;
+  for (const portal of props.mapPortals || []) {
+    const dist = Math.hypot(portal.x - props.position.x, portal.y - props.position.y);
+    if (dist <= 3.2 && dist < closestPortalDist) {
+      closestPortal = portal;
+      closestPortalDist = dist;
+    }
+  }
+
+  let closestSect: (typeof nearbySects)[0] | null = null;
+  let closestSectDist = Infinity;
+  for (const s of nearbySects) {
+    const dist = Math.hypot(s.map_x - props.position.x, s.map_y - props.position.y);
+    if (dist <= 4.0 && dist < closestSectDist) {
+      closestSect = s;
+      closestSectDist = dist;
     }
   }
 
@@ -1149,6 +1186,39 @@ export function MMOHud(props: MMOHudProps) {
                   />
                 );
               })}
+
+              {/* Map Portals on Radar */}
+              {props.mapPortals?.map((p, idx) => {
+                const dx = p.x - props.position.x;
+                const dy = p.y - props.position.y;
+                if (Math.abs(dx) > radarRange || Math.abs(dy) > radarRange) return null;
+                return (
+                  <div
+                    key={`map-portal-${idx}`}
+                    className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400 border border-white shadow-[0_0_8px_#38bdf8] animate-pulse"
+                    style={{ left: `${50 + (dx / radarRange) * 46}%`, top: `${50 + (dy / radarRange) * 46}%` }}
+                    title={`Cổng: Đến ${p.name || p.targetZoneId}: ${Math.hypot(dx, dy).toFixed(1)} ô`}
+                  />
+                );
+              })}
+
+              {/* Sects on Radar */}
+              {nearbySects.map((s, idx) => {
+                const dx = s.map_x - props.position.x;
+                const dy = s.map_y - props.position.y;
+                if (Math.abs(dx) > radarRange || Math.abs(dy) > radarRange) return null;
+                const isMySect = s.id === mySectStatus?.sect?.id;
+                return (
+                  <div
+                    key={`sect-${idx}`}
+                    className={`absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded ${isMySect ? "bg-blue-600 border-blue-200 shadow-[0_0_8px_#3b82f6]" : "bg-amber-600 border-amber-200 shadow-[0_0_8px_#f59e0b]"} border flex items-center justify-center text-[8px]`}
+                    style={{ left: `${50 + (dx / radarRange) * 46}%`, top: `${50 + (dy / radarRange) * 46}%` }}
+                    title={`Tông Môn: ${s.name} (Cấp ${s.level || 1}): ${Math.hypot(dx, dy).toFixed(1)} ô`}
+                  >
+                    🏯
+                  </div>
+                );
+              })}
               <span className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#f3cd76] shadow-[0_0_8px_#ffda77]" />
               <span className="absolute left-1/2 top-1 -translate-x-1/2 font-sans text-[9px] text-[#ead7a8]">B</span>
             </div>
@@ -1199,9 +1269,88 @@ export function MMOHud(props: MMOHudProps) {
       {props.statusText && <div className="absolute bottom-[125px] left-1/2 -translate-x-1/2 rounded border border-violet-300/30 bg-black/75 px-3 py-1 font-sans text-[11px] text-violet-100 sm:bottom-[140px] md:bottom-36 shadow-lg z-20">{props.statusText}</div>}
       {props.castProgress !== null && <div className="absolute bottom-[90px] left-1/2 w-[min(90vw,320px)] -translate-x-1/2 sm:bottom-[105px] md:bottom-28 z-20"><div className="mb-1 text-center text-xs text-amber-100">{props.castName}</div><div className="h-2 overflow-hidden rounded bg-black/70 shadow-inner"><div className="h-full bg-amber-400" style={{ width: `${pct(props.castProgress, 1)}%` }} /></div></div>}
 
-      {/* Proximity Interaction Prompts (Nguyên Tuyền, Tiên Tuyền, Chiến Lợi Phẩm, Truyền Tống Trận) */}
-      {(closestDrop || closestVein || closestTp) && (
+      {/* Proximity Interaction Prompts (Nguyên Tuyền, Tiên Tuyền, Chiến Lợi Phẩm, Truyền Tống Trận, Cổng Vùng, Tông Môn) */}
+      {(closestDrop || closestVein || closestTp || closestPortal || closestSect) && (
         <div className="pointer-events-auto absolute bottom-[145px] left-1/2 -translate-x-1/2 sm:bottom-[160px] md:bottom-44 flex flex-col items-center gap-1.5 z-20 max-w-[min(94vw,360px)]">
+          {closestPortal && (
+            <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-blue-500/70 bg-[#082032e6] px-3.5 py-1.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 w-full">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/20 border border-blue-400/40 text-blue-300">
+                  <Compass className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-serif font-bold text-blue-200 truncate">
+                    🌀 {closestPortal.name?.trim() || `Đến: ${closestPortal.targetZoneId.replaceAll("_", " ")}`}
+                  </div>
+                  <div className="text-[10px] text-blue-300/80 truncate">
+                    Cổng chuyển vùng ({closestPortalDist.toFixed(1)} ô)
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (closestPortal) {
+                    props.onPortalTransfer?.(closestPortal.targetZoneId, closestPortal.targetX, closestPortal.targetY);
+                  }
+                }}
+                className="shrink-0 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 border border-blue-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
+              >
+                Bước Vào
+              </button>
+            </div>
+          )}
+
+          {closestSect && (() => {
+            const isMySect = closestSect.id === mySectStatus?.sect?.id;
+            const isShielded = Boolean(closestSect.shield_until && new Date(closestSect.shield_until).getTime() > Date.now());
+
+            return (
+              <div className={`flex items-center justify-between gap-2.5 rounded-2xl border ${isMySect ? "border-blue-500/70 bg-[#0d1f35e6]" : "border-amber-500/70 bg-[#251608e6]"} px-3.5 py-1.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 w-full`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isMySect ? "bg-blue-500/20 border-blue-400/40 text-blue-300" : "bg-amber-500/20 border-amber-400/40 text-amber-300"} border`}>
+                    <Crown className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-xs font-serif font-bold text-amber-200 truncate">
+                      <span>{closestSect.name}</span>
+                      <span className="rounded bg-black/60 border border-amber-500/30 px-1 text-[9px] text-amber-300">
+                        Cấp {closestSect.level || 1}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-zinc-300 truncate">
+                      {isMySect ? "Trụ sở môn phái" : isShielded ? "🛡️ Đang trong thời gian bảo hộ" : `Cự ly: ${closestSectDist.toFixed(1)} ô`}
+                    </div>
+                  </div>
+                </div>
+                {isMySect ? (
+                  <button
+                    type="button"
+                    onClick={() => props.onOpenView("sect")}
+                    className="shrink-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border border-blue-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
+                  >
+                    Trụ Sở
+                  </button>
+                ) : isShielded ? (
+                  <span className="shrink-0 rounded-xl bg-zinc-800/80 border border-zinc-700 px-2.5 py-1 text-[11px] font-serif text-zinc-400">
+                    Bảo Hộ
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (closestSect) {
+                        await attackSect(closestSect.id);
+                      }
+                    }}
+                    className="shrink-0 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 border border-rose-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
+                  >
+                    Khiêu Chiến
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {closestDrop && (
             <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-amber-500/70 bg-[#1e150ee6] px-3.5 py-1.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 w-full">
               <div className="flex items-center gap-2 min-w-0">
@@ -1308,7 +1457,13 @@ export function MMOHud(props: MMOHudProps) {
                 type="button"
                 disabled={!skill}
                 onClick={() => skill && props.onCast(slot)}
-                title={skill ? `${guSlot?.name ?? skill.name} (${formatManaCost(skill.mana_cost)})` : "Trống"}
+                title={
+                  skill
+                    ? `${guSlot?.name ?? skill.name} (${formatManaCost(skill.mana_cost)})`
+                    : guSlot?.name
+                      ? `${guSlot.name} · Chưa có chiêu realtime có thể thi triển`
+                      : "Trống"
+                }
                 className={`relative flex h-11 w-11 flex-col justify-between overflow-hidden rounded-lg border p-1 text-center transition active:scale-90 ${
                   isToggled
                     ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70"
@@ -1384,6 +1539,12 @@ export function MMOHud(props: MMOHudProps) {
                 (typeof st === "string" ? st : st.id) === skill.id ||
                 (typeof st === "string" ? st : st.id) === guSlot?.guId,
             );
+          const spec = guSlot?.guId ? guSpecFor(guSlot.guId, guSlot.rank ?? undefined) : undefined;
+          const isPassive = !skill && !!guSlot?.guId && (
+            spec?.gu_type === "Passive" ||
+            spec?.gu_type === "Buff" ||
+            !spec?.effects?.blocks?.some((b) => b.trigger === "ON_ACTION")
+          );
           return (
             <button
               key={slot}
@@ -1393,9 +1554,11 @@ export function MMOHud(props: MMOHudProps) {
               title={
                 skill
                   ? `${guSlot?.name ?? skill.name} · Phím [${slot}] · ${MODE_LABEL[skill.mode]} · ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()}${isToggled ? " · (ĐANG DUY TRÌ)" : ""}`
-                  : guSlot?.name
-                    ? `${guSlot.name} · Chưa hỗ trợ realtime`
-                    : `Ô ${slot} chưa gán Cổ`
+                  : isPassive
+                    ? `${guSlot?.name} · Cổ bị động (tự động kích hoạt hiệu ứng)`
+                    : guSlot?.name
+                      ? `${guSlot.name} · Chưa hỗ trợ realtime`
+                      : `Ô ${slot} chưa gán Cổ`
               }
               className={`relative flex h-12 min-w-[46px] flex-col justify-between overflow-hidden rounded-lg border px-1 pt-3 pb-0.5 text-center transition shadow sm:h-16 sm:w-20 sm:pt-4 sm:pb-1 md:h-20 md:w-24 shrink-0 ${
                 isToggled
@@ -1419,7 +1582,7 @@ export function MMOHud(props: MMOHudProps) {
                 </span>
               </div>
               <span className="font-mono text-[7px] sm:text-[9.5px] md:text-[10px] text-cyan-200/90 truncate tracking-tighter">
-                {skill ? `${formatManaCost(skill.mana_cost)} nguyên` : guSlot?.guId ? "Chưa hỗ trợ" : "Cổ trùng"}
+                {skill ? `${formatManaCost(skill.mana_cost)} nguyên` : isPassive ? "Bị động" : guSlot?.guId ? "Chưa hỗ trợ" : "Cổ trùng"}
               </span>
               {remaining > 0.05 && (
                 <span className="absolute inset-0 z-20 grid place-items-center bg-black/75 font-sans font-bold text-xs sm:text-base md:text-lg text-amber-200 backdrop-blur-[1px]">

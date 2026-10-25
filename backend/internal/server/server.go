@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
-	"github.com/vippro67/GuWorld/backend/internal/match"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
@@ -386,9 +385,6 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		handlers.WorldCombatBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
 			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
-		match.Broadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
-		}
 	}
 	worker.PlayerEventPublisher = func(playerID uuid.UUID, eventType string, domains ...string) {
 		typedDomains := make([]handlers.PlayerEventDomain, 0, len(domains))
@@ -664,7 +660,7 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		{
 			party.POST("/create", handlers.CreateParty)
 			party.GET("/status", handlers.GetPartyStatus)
-			party.POST("/invite", middleware.RequireLegacyWorldMode(), handlers.InvitePlayer)
+			party.POST("/invite", handlers.InvitePlayer)
 			party.POST("/leave", handlers.LeaveParty)
 			party.GET("/invitations", handlers.GetPendingInvitations)
 			party.POST("/invitations/:id/respond", handlers.RespondToInvitation)
@@ -707,13 +703,13 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		scouting.Use(middleware.RequireOnboarded())
 		scouting.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
-			scouting.POST("/inspect", middleware.RequireLegacyWorldMode(), handlers.InspectLocalPlayer)
-			scouting.POST("/divine", middleware.RequireLegacyWorldMode(), handlers.ExecuteDivination)
-			scouting.POST("/divine-gu", middleware.RequireLegacyWorldMode(), handlers.ExecuteDivineGu)
-			scouting.POST("/apply-mark", middleware.RequireLegacyWorldMode(), handlers.ApplyTrackingMark)
-			scouting.GET("/tracked-targets", middleware.RequireLegacyWorldMode(), handlers.GetTrackedTargets)
-			scouting.POST("/sever-clues", middleware.RequireLegacyWorldMode(), handlers.SeverClues)
-			scouting.POST("/resonance-scan", middleware.RequireLegacyWorldMode(), handlers.ResonanceScan)
+			scouting.POST("/inspect", handlers.InspectLocalPlayer)
+			scouting.POST("/divine", handlers.ExecuteDivination)
+			scouting.POST("/divine-gu", handlers.ExecuteDivineGu)
+			scouting.POST("/apply-mark", handlers.ApplyTrackingMark)
+			scouting.GET("/tracked-targets", handlers.GetTrackedTargets)
+			scouting.POST("/sever-clues", handlers.SeverClues)
+			scouting.POST("/resonance-scan", handlers.ResonanceScan)
 		}
 
 		// Pets — group: 30/min, per player: 20/min
@@ -748,21 +744,10 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		combat.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			combat.POST("/start", middleware.RequireLegacyWorldMode(), handlers.AutoCombatStart)
-			combat.POST("/practice", middleware.RequireLegacyWorldMode(), handlers.PracticeCombatStart)
+			combat.POST("/practice", handlers.PracticeCombatStart)
 			combat.POST("/capture", middleware.RequireLegacyWorldMode(), handlers.CaptureMonster)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
-		}
-
-		// Realtime PvP (MOBA-style). This only creates the match; input frames
-		// arrive over the WebSocket command channel and per-tick state is pushed
-		// on the match:<id> channel.
-		pvp := api.Group("/pvp")
-		pvp.Use(middleware.AuthRequired())
-		pvp.Use(middleware.RequireOnboarded())
-		pvp.Use(middleware.RateLimitByPlayer(20, time.Minute))
-		{
-			pvp.POST("/match/practice", middleware.RequireLegacyWorldMode(), handlers.StartPracticeMatch)
 		}
 
 		// Player-created killer moves use Gu components from player_gu and are
@@ -856,7 +841,7 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		arena.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			arena.GET("/leaderboard", handlers.GetArenaLeaderboard)
-			arena.POST("/challenge", middleware.RequireLegacyWorldMode(), handlers.ChallengeArena)
+			arena.POST("/challenge", handlers.ChallengeArena)
 			arena.GET("/shop", handlers.GetArenaShop)
 			arena.POST("/shop/buy", handlers.BuyArenaShopItem)
 		}
@@ -917,27 +902,19 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			chat.GET("/bao-hoang/messages", middleware.RateLimitByPlayer(60, time.Minute), handlers.GetBaoHoangMessages)
 		}
 
-		// Explore — per player: 25/min
-		api.POST("/explore", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.ExploreNode)
-		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Retreat)
-		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
-		api.GET("/explore/grid", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetGrid)
+		// World & Exploration
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/regions/:id/details", middleware.AuthRequired(), handlers.GetRegionDetails)
 		api.GET("/explore/maps", middleware.AuthRequired(), handlers.GetWorldMaps)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
-		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/explore/players", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyPlayers)
 		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)
-		api.POST("/explore/move", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
-		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
-		api.POST("/explore/teleport", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.TeleportToRegion)
-		api.POST("/explore/use_gu", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseGuOnMap)
+		api.POST("/world/portal/transfer", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.PortalTransfer)
 
 		// Ground drops / Chiến lợi phẩm trên bản đồ
 		api.GET("/world/drops", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetTileGroundDrops)
-		api.POST("/world/drops/:id/loot", middleware.AuthRequired(), middleware.RequireLegacyWorldMode(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.LootGroundDrop)
+		api.POST("/world/drops/:id/loot", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.LootGroundDrop)
 
 		// Teleportation Arrays / Truyền Tống Trận
 		teleport := api.Group("/teleport")
@@ -949,7 +926,7 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			teleport.GET("/mine", handlers.GetMyTeleportArrays)
 			teleport.POST("/build", handlers.BuildTeleportArray)
 			teleport.GET("/directory", handlers.GetTeleportDirectory)
-			teleport.POST("/travel", middleware.RequireLegacyWorldMode(), handlers.TravelTeleport)
+			teleport.POST("/travel", handlers.TravelTeleport)
 			teleport.POST("/manage", handlers.ManageTeleportArray)
 			teleport.POST("/repair", handlers.RepairTeleportArray)
 			teleport.POST("/withdraw", handlers.WithdrawTeleportVault)
@@ -1112,10 +1089,10 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			sect.POST("/promotion-requests/:requestId/action", handlers.ActionPromotionRequest)
 			// Sect Warfare & Territories
 			sect.GET("/map", handlers.GetSectsMap)
-			sect.POST("/defend", middleware.RequireLegacyWorldMode(), handlers.DefendSect)
-			sect.POST("/undefend", middleware.RequireLegacyWorldMode(), handlers.UndefendSect)
-			sect.POST("/toggle-defend", middleware.RequireLegacyWorldMode(), handlers.ToggleDefendSect)
-			sect.POST("/attack", middleware.RequireLegacyWorldMode(), handlers.AttackSect)
+			sect.POST("/defend", handlers.DefendSect)
+			sect.POST("/undefend", handlers.UndefendSect)
+			sect.POST("/toggle-defend", handlers.ToggleDefendSect)
+			sect.POST("/attack", handlers.AttackSect)
 			sect.POST("/building/upgrade", handlers.UpgradeSectBuilding)
 			sect.GET("/relocate/estimate", handlers.GetSectRelocationEstimate)
 			sect.POST("/relocate", handlers.RelocateSect)

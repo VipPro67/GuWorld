@@ -18,6 +18,7 @@ type rawTranspileBlock struct {
 	ID         string             `json:"id"`
 	Trigger    string             `json:"trigger"`
 	Target     rawTranspileTarget `json:"target"`
+	Conditions []json.RawMessage  `json:"conditions"`
 	Operations []rawTranspileOp   `json:"operations"`
 }
 
@@ -26,15 +27,12 @@ type rawTranspileTarget struct {
 }
 
 type rawTranspileOp struct {
-	Op       string  `json:"op"`
-	SubType  string  `json:"sub_type"`
-	Stat     string  `json:"stat"`
-	Resource string  `json:"resource"`
-	StatusID string  `json:"status_id"`
-	Code     string  `json:"code"`
-	Turns    int     `json:"turns"`
-	Chance   float64 `json:"chance"`
-	Value    float64 `json:"value"`
+	Op       string              `json:"op"`
+	SubType  string              `json:"sub_type"`
+	Stat     string              `json:"stat"`
+	Resource string              `json:"resource"`
+	Target   *rawTranspileTarget `json:"target"`
+	Value    float64             `json:"value"`
 }
 
 type TranspileStats struct {
@@ -89,7 +87,7 @@ func cmdTranspileRealtimeGu(args []string) error {
 		Profiles:      make([]realtimeeffects.GuProfile, 0, len(t.rows)),
 	}
 
-	for _, row := range t.rows {
+	for rowIndex, row := range t.rows {
 		guID := t.get(row, "id")
 		rank, _ := strconv.Atoi(t.get(row, "rank"))
 		if guID == "" || rank < 1 {
@@ -127,22 +125,9 @@ func cmdTranspileRealtimeGu(args []string) error {
 		baseMana, _ := strconv.ParseFloat(t.get(row, "base_mana_cost"), 64)
 		effectsJSON := t.get(row, "effects")
 
-		var blocks []rawTranspileBlock
-		if effectsJSON != "" {
-			_ = json.Unmarshal([]byte(effectsJSON), &blocks)
-		}
-
-		// Check for world-only/not-active triggers
-		isNotActive := false
-		for _, b := range blocks {
-			if b.Trigger == "CAPABILITY" || b.Trigger == "ON_CONSUME" || b.Trigger == "ON_USE" {
-				isNotActive = true
-				break
-			}
-		}
-		if isNotActive {
-			stats.NotActiveSkipped++
-			continue
+		blocks, err := decodeTranspileBlocks(effectsJSON)
+		if err != nil {
+			return fmt.Errorf("Gu.csv line %d (%s rank %d): decode effects: %w", rowIndex+2, guID, rank, err)
 		}
 
 		profile := transpileGuProfile(guID, rank, pathStr, primaryRole, baseMana, blocks)
@@ -161,8 +146,10 @@ func cmdTranspileRealtimeGu(args []string) error {
 			if profile.Active.Shape != "" {
 				stats.ShapesCount[string(profile.Active.Shape)]++
 			}
-		} else {
+		} else if len(profile.Passives) > 0 {
 			stats.PassivesGenerated++
+		} else {
+			stats.NotActiveSkipped++
 		}
 
 		catalog.Profiles = append(catalog.Profiles, profile)
@@ -232,6 +219,23 @@ func cmdTranspileRealtimeGu(args []string) error {
 	return nil
 }
 
+func decodeTranspileBlocks(raw string) ([]rawTranspileBlock, error) {
+	if strings.TrimSpace(raw) == "" || strings.TrimSpace(raw) == "null" {
+		return nil, nil
+	}
+	var blocks []rawTranspileBlock
+	if err := json.Unmarshal([]byte(raw), &blocks); err == nil {
+		return blocks, nil
+	}
+	var object struct {
+		Blocks []rawTranspileBlock `json:"blocks"`
+	}
+	if err := json.Unmarshal([]byte(raw), &object); err != nil {
+		return nil, err
+	}
+	return object.Blocks, nil
+}
+
 func transpileGuProfile(guID string, rank int, pathStr, primaryRole string, baseMana float64, blocks []rawTranspileBlock) realtimeeffects.GuProfile {
 	profile := realtimeeffects.GuProfile{
 		GUID:    guID,
@@ -240,46 +244,43 @@ func transpileGuProfile(guID string, rank int, pathStr, primaryRole string, base
 		Visuals: inferVisuals(pathStr, guID),
 	}
 
-	// Check if this Gu has passive blocks only
-	hasActiveTrigger := false
+	// Only directly castable action blocks become a hotbar skill. World/domain
+	// hooks can coexist with an active combat block and must not discard it.
+	actionBlocks := make([]rawTranspileBlock, 0, len(blocks))
 	for _, b := range blocks {
-		switch b.Trigger {
-		case "ON_ACTION", "ON_CAST", "ON_HIT", "BEFORE_HIT", "ON_TURN_START", "ON_BATTLE_START", "BEFORE_ENEMY_ATTACK", "ON_TICK", "ON_DEATH":
-			hasActiveTrigger = true
+		if strings.EqualFold(strings.TrimSpace(b.Trigger), "ON_ACTION") {
+			actionBlocks = append(actionBlocks, b)
 		}
 	}
+	allActionsSupported := realtimeCastBlocksSupported(actionBlocks)
+	activeBlocks := []rawTranspileBlock(nil)
+	if allActionsSupported {
+		activeBlocks = actionBlocks
+	}
 
-	if !hasActiveTrigger {
-		// Pure passive Gu
+	if len(activeBlocks) == 0 {
+		// Passive projections use only always-on blocks. Do not turn unrelated
+		// world actions or unknown effects into a made-up attack/shield.
 		var passiveEffects []realtimeeffects.EffectProfile
 		for _, b := range blocks {
+			if b.Trigger != "ALWAYS_ON" && b.Trigger != "PASSIVE" && b.Trigger != "COMBAT_PASSIVE" {
+				continue
+			}
 			for _, op := range b.Operations {
 				if op.Op == "STAT_MOD" && op.Stat != "" {
-					val := op.Value
-					if val == 0 {
-						val = float64(rank * 2)
-					}
 					passiveEffects = append(passiveEffects, realtimeeffects.EffectProfile{
 						Type:  "STAT_MOD",
 						Stat:  op.Stat,
-						Value: val,
+						Value: op.Value,
 					})
 				}
 			}
 		}
-		if len(passiveEffects) == 0 {
-			// Fallback stat boost if no explicit op
-			passiveEffects = append(passiveEffects, realtimeeffects.EffectProfile{
-				Type:  "STAT_MOD",
-				Stat:  "ATTACK",
-				Value: float64(rank * 2),
-			})
-		}
-		profile.Passives = []realtimeeffects.PassiveProfile{
-			{
+		if len(passiveEffects) > 0 {
+			profile.Passives = []realtimeeffects.PassiveProfile{{
 				Trigger: "ALWAYS_ON",
 				Effects: passiveEffects,
-			},
+			}}
 		}
 		return profile
 	}
@@ -288,13 +289,7 @@ func transpileGuProfile(guID string, rank int, pathStr, primaryRole string, base
 	windupMS, recoveryMS, cooldownMS, manaCost := calculatePacing(rank, baseMana)
 
 	// Determine dominant target selector
-	selector := "TARGET"
-	for _, b := range blocks {
-		if b.Target.Selector != "" {
-			selector = b.Target.Selector
-			break
-		}
-	}
+	selector := realtimeCastSelector(activeBlocks)
 
 	mode, shape, rangeUnits, radiusUnits, angleDeg, lengthUnits, widthUnits, maxTargets, isProj := calculateRangeAndMode(selector, primaryRole, pathStr, rank)
 
@@ -328,98 +323,182 @@ func transpileGuProfile(guID string, rank int, pathStr, primaryRole string, base
 	// Translate operations into realtime effects
 	var effects []realtimeeffects.EffectProfile
 	hasDamage := false
-	hasHeal := false
-	hasShield := false
-	hasStatus := false
 
-	for _, b := range blocks {
+	for _, b := range activeBlocks {
 		for _, op := range b.Operations {
 			switch op.Op {
 			case "DAMAGE":
+				if op.Target != nil {
+					continue
+				}
 				val := scaleMMODamage(op.Value, rank)
+				if strings.EqualFold(op.SubType, "MULTIPLIER") {
+					if hasDamage {
+						for index := range effects {
+							if effects[index].Type == "DAMAGE" {
+								effects[index].Value *= op.Value
+							}
+						}
+						continue
+					}
+					continue
+				}
 				effects = append(effects, realtimeeffects.EffectProfile{
 					Type:  "DAMAGE",
 					Value: val,
 				})
 				hasDamage = true
 			case "SHIELD":
+				if op.Target != nil && !strings.EqualFold(op.Target.Selector, "SELF") {
+					continue
+				}
 				val := scaleMMODamage(op.Value, rank)
 				effects = append(effects, realtimeeffects.EffectProfile{
 					Type:  "SHIELD",
 					Value: val,
 				})
-				hasShield = true
 			case "HEAL", "DIRECT_HP":
+				if op.Target != nil && !strings.EqualFold(op.Target.Selector, "SELF") ||
+					op.Resource != "" && !strings.EqualFold(op.Resource, "HP") ||
+					op.SubType != "" && !strings.EqualFold(op.SubType, "FLAT") {
+					continue
+				}
 				val := scaleMMODamage(op.Value, rank)
 				effects = append(effects, realtimeeffects.EffectProfile{
 					Type:  "HEAL",
 					Value: val,
 				})
-				hasHeal = true
 			case "CLEANSE":
 				effects = append(effects, realtimeeffects.EffectProfile{
 					Type: "CLEANSE",
 				})
-			case "STATUS":
-				if op.StatusID != "" && !hasStatus {
-					eff := mapStatusEffect(op.StatusID, op.Turns, op.Value, rank)
-					effects = append(effects, eff)
-					hasStatus = true
-				}
 			}
 		}
 	}
+	for index := range effects {
+		if effects[index].Type == "DAMAGE" {
+			effects[index].Value = scaleMMODamage(effects[index].Value, rank)
+		}
+	}
 
-	// Ensure active skill has at least one valid payload
+	// Unknown/non-combat operations are intentionally not converted into damage.
+	// If no meaningful payload remains, expose this Gu as non-castable.
 	if len(effects) == 0 {
-		if mode == combat.ModeSelf {
-			effects = append(effects, realtimeeffects.EffectProfile{
-				Type:  "SHIELD",
-				Value: float64(rank * 30),
-			})
-			hasShield = true
-		} else {
-			effects = append(effects, realtimeeffects.EffectProfile{
-				Type:  "DAMAGE",
-				Value: float64(rank * 25),
-			})
-			hasDamage = true
-		}
-	} else if mode == combat.ModeSelf && !hasHeal && !hasShield {
-		// Self skill must have heal, shield, status, or cleanse
-		hasStatusOrCleanse := false
-		for _, e := range effects {
-			if e.Type == "STATUS" || e.Type == "CLEANSE" {
-				hasStatusOrCleanse = true
-				break
-			}
-		}
-		if !hasStatusOrCleanse {
-			effects = append(effects, realtimeeffects.EffectProfile{
-				Type:  "SHIELD",
-				Value: float64(rank * 30),
-			})
-		}
-	} else if mode != combat.ModeSelf && !hasDamage {
-		// Non-self skill must have damage or status
-		hasStatus := false
-		for _, e := range effects {
-			if e.Type == "STATUS" {
-				hasStatus = true
-				break
-			}
-		}
-		if !hasStatus {
-			effects = append(effects, realtimeeffects.EffectProfile{
-				Type:  "DAMAGE",
-				Value: float64(rank * 25),
-			})
-		}
+		profile.Passives = nil
+		return profile
 	}
 
 	active.Effects = effects
 	profile.Active = active
 	return profile
+}
+
+func realtimeCastBlockSupported(block rawTranspileBlock) bool {
+	if len(block.Conditions) > 0 || len(block.Operations) == 0 {
+		return false
+	}
+	hasFlatDamage := false
+	hasDamageMultiplier := false
+	for _, operation := range block.Operations {
+		switch strings.ToUpper(strings.TrimSpace(operation.Op)) {
+		case "DAMAGE":
+			if operation.Target != nil || !realtimeDamageTargetSupported(block.Target.Selector) ||
+				operation.SubType != "" && !strings.EqualFold(operation.SubType, "FLAT") && !strings.EqualFold(operation.SubType, "MULTIPLIER") {
+				return false
+			}
+			if strings.EqualFold(operation.SubType, "MULTIPLIER") {
+				if operation.Value <= 0 {
+					return false
+				}
+				hasDamageMultiplier = true
+			} else if operation.Value <= 0 {
+				return false
+			} else {
+				hasFlatDamage = true
+			}
+		case "SHIELD":
+			if !realtimeOperationTargetsSelf(block, operation) ||
+				operation.SubType != "" && !strings.EqualFold(operation.SubType, "FLAT") || operation.Value <= 0 {
+				return false
+			}
+		case "HEAL", "DIRECT_HP":
+			if !realtimeOperationTargetsSelf(block, operation) ||
+				operation.Resource != "" && !strings.EqualFold(operation.Resource, "HP") ||
+				operation.SubType != "" && !strings.EqualFold(operation.SubType, "FLAT") || operation.Value <= 0 {
+				return false
+			}
+		case "CLEANSE":
+			if !realtimeOperationTargetsSelf(block, operation) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return !hasDamageMultiplier || hasFlatDamage
+}
+
+func realtimeCastBlocksSupported(blocks []rawTranspileBlock) bool {
+	if len(blocks) == 0 {
+		return false
+	}
+	damageSelector := ""
+	for _, block := range blocks {
+		if !realtimeCastBlockSupported(block) {
+			return false
+		}
+		blockHasDamage := false
+		for _, operation := range block.Operations {
+			if strings.EqualFold(operation.Op, "DAMAGE") {
+				blockHasDamage = true
+				break
+			}
+		}
+		if !blockHasDamage {
+			continue
+		}
+		selector := strings.ToUpper(strings.TrimSpace(block.Target.Selector))
+		if selector == "" {
+			selector = "TARGET"
+		}
+		if damageSelector != "" && damageSelector != selector {
+			return false
+		}
+		damageSelector = selector
+	}
+	return true
+}
+
+func realtimeDamageTargetSupported(selector string) bool {
+	switch strings.ToUpper(strings.TrimSpace(selector)) {
+	case "", "TARGET", "ROW", "COL", "ALL_ENEMIES":
+		return true
+	default:
+		return false
+	}
+}
+
+func realtimeOperationTargetsSelf(block rawTranspileBlock, operation rawTranspileOp) bool {
+	target := block.Target.Selector
+	if operation.Target != nil {
+		target = operation.Target.Selector
+	}
+	return strings.EqualFold(target, "SELF")
+}
+
+func realtimeCastSelector(blocks []rawTranspileBlock) string {
+	for _, block := range blocks {
+		for _, operation := range block.Operations {
+			if strings.EqualFold(operation.Op, "DAMAGE") {
+				selector := strings.TrimSpace(block.Target.Selector)
+				if selector == "" {
+					return "TARGET"
+				}
+				return selector
+			}
+		}
+	}
+	return "SELF"
 }
 
 func calculatePacing(rank int, baseMana float64) (windupMS, recoveryMS, cooldownMS uint64, manaCost float64) {
@@ -505,96 +584,6 @@ func scaleMMODamage(val float64, rank int) float64 {
 		return cap
 	}
 	return val
-}
-
-func mapStatusEffect(statusID string, turns int, val float64, rank int) realtimeeffects.EffectProfile {
-	id := strings.ToUpper(strings.TrimSpace(statusID))
-	t := turns
-	if t <= 0 {
-		t = 2
-	}
-	if t > 5 {
-		t = 5
-	}
-
-	eff := realtimeeffects.EffectProfile{
-		Type:        "STATUS",
-		StatusID:    id,
-		MaxStacks:   1,
-		StackPolicy: "REFRESH",
-	}
-
-	debuffTrue := true
-	debuffFalse := false
-
-	switch id {
-	case "FREEZE", "STUN", "SLEEP", "CHARM", "CONFUSE", "FEAR":
-		dur := uint64(t * 1000)
-		if dur > 2500 {
-			dur = 2500
-		}
-		if dur < 1000 {
-			dur = 1000
-		}
-		eff.DurationMS = dur
-		eff.Debuff = &debuffTrue
-		eff.PvPDrCategory = "HARD_CC"
-		zero := 0.0
-		eff.MoveMultiplier = &zero
-
-	case "BIND":
-		dur := uint64(t * 1200)
-		if dur > 3000 {
-			dur = 3000
-		}
-		eff.DurationMS = dur
-		eff.Debuff = &debuffTrue
-		eff.PvPDrCategory = "ROOT"
-		zero := 0.0
-		eff.MoveMultiplier = &zero
-
-	case "SLOW", "SLOW1":
-		dur := uint64(t * 1500)
-		eff.DurationMS = dur
-		eff.Debuff = &debuffTrue
-		eff.PvPDrCategory = "SLOW"
-		mult := 0.6
-		eff.MoveMultiplier = &mult
-
-	case "POISON", "BLEED", "BURN", "SOUL_WOUND":
-		dur := uint64(t * 1500)
-		eff.DurationMS = dur
-		eff.PeriodMS = 500
-		tick := val / float64(2*t)
-		if tick <= 0 {
-			tick = float64(rank * 5)
-		}
-		eff.TickValue = tick
-		eff.Debuff = &debuffTrue
-		eff.PvPDrCategory = "DOT"
-
-	case "HASTE":
-		eff.DurationMS = uint64(t * 2000)
-		hasteMult := 1.35
-		eff.MoveMultiplier = &hasteMult
-		eff.Debuff = &debuffFalse
-		eff.PvPDrCategory = "BUFF"
-
-	case "ATK_UP", "DAMAGE_REDUCTION_UP", "EVASION", "INVINCIBLE", "LAST_STAND", "STEALTH", "FLYING":
-		eff.DurationMS = uint64(t * 2000)
-		eff.Debuff = &debuffFalse
-		eff.PvPDrCategory = "BUFF"
-
-	default: // SILENCE, GU_SEAL, ARMOR_BREAK, WEAK, BLIND, etc.
-		dur := uint64(t * 1500)
-		if dur < 1000 {
-			dur = 1000
-		}
-		eff.DurationMS = dur
-		eff.Debuff = &debuffTrue
-		eff.PvPDrCategory = "DEBUFF"
-	}
-	return eff
 }
 
 func inferVisuals(pathStr, guID string) realtimeeffects.VisualProfile {

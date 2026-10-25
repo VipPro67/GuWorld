@@ -2,7 +2,11 @@ package nav
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +15,56 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
 )
+
+func TestEveryMapHashMatchesLegacyTileStream(t *testing.T) {
+	entries, err := os.ReadDir("../../../data/mmo/maps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join("../../../data/mmo/maps", entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var raw TiledMapJSON
+		if err := json.Unmarshal(data, &raw); err != nil {
+			t.Fatal(err)
+		}
+		loaded, err := Build(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		legacy := make([]byte, raw.Width*raw.Height)
+		for _, layer := range raw.Layers {
+			if layer.Type != "tilelayer" || layer.Name != "collision" {
+				continue
+			}
+			if len(layer.Data) == len(legacy) {
+				for i, value := range layer.Data {
+					legacy[i] = byte(value)
+				}
+			} else {
+				clear(legacy)
+				for y := 0; y < raw.Height; y++ {
+					for x := 0; x < raw.Width; x++ {
+						if x == 0 || y == 0 || x == raw.Width-1 || y == raw.Height-1 {
+							legacy[y*raw.Width+x] = 1
+						}
+					}
+				}
+			}
+		}
+		h := sha256.New()
+		_, _ = fmt.Fprintf(h, "%s\x00%s\x00%d\x00%d\x00", raw.MapID, raw.MapVersion, raw.Width, raw.Height)
+		_, _ = h.Write(legacy)
+		if want := hex.EncodeToString(h.Sum(nil)); loaded.Hash != want {
+			t.Fatalf("%s: hash %s, legacy %s", entry.Name(), loaded.Hash, want)
+		}
+	}
+}
 
 func TestSparseMapRetainedMemory(t *testing.T) {
 	runtime.GC()

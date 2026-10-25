@@ -19,6 +19,7 @@ distinct `-output` path (never overwrites source). Reports are JSON on stdout.
 | --- | --- |
 | `check-effects` | Validate `Gu.csv` (full catalog + Block-v2 + unclassified-key) and `Item.csv` (Block-v2). Exits non-zero on errors. |
 | `audit-realtime` | Classify every Gu block for the realtime zone (`SUPPORTED`/`NEEDS_REAUTHOR`/`UNSUPPORTED`/`NOT_ACTIVE`), emit coverage CSV/JSON and MVP check. `-strict` fails on unclassified operations or missing MVP. |
+| `transpile-realtime-gu` | Generate the catalog-only MMO hotbar profiles from `Gu.csv`, preserving explicitly authored profiles from the selected override catalog; actions are emitted only when every cast effect is represented by the current realtime contract. |
 | `compile-realtime-gu` | Compile authored realtime Gu profiles against `Gu.csv` + combat contract, fail closed on invalid timing/mode/effect, optionally write the immutable compiled artifact. |
 | `balance` | Score each Gu's flat combat power vs its rank peers (median band ± `tol`) and flag outliers. `-write` scales the flagged Gu's `DAMAGE`/`SHIELD`/`HEAL`/`DIRECT_HP` FLAT values toward the band edge. Tune via `-config` (`balance.tol`, `min_score_frac`, `weights`). |
 | `rebalance` | Clamp supported combat, DoT, and base-stat values to documented rank anchors (±35% by default). Other numeric effects use their same-rank median when at least 5 distinct Gu definitions share the effect; otherwise they are listed in `unanchored_effects` and left unchanged. Dry-run reports JSON; `-write -output` writes a separate candidate CSV; explicit `-in-place` replaces `Gu.csv` after creating `Gu.csv.bak` (refuses to overwrite an existing backup). |
@@ -37,6 +38,7 @@ Example config (optional, `{}` falls back to defaults):
 ```bash
 go run ./cmd/gudata check-effects -data data
 go run ./cmd/gudata audit-realtime -data data -csv ../docs/mmo/gu-coverage.csv -strict
+go run ./cmd/gudata transpile-realtime-gu -data data -overrides data/mmo/gu/authored_overrides.json -output data/mmo/gu/transpiled_profiles.json -compile-report /tmp/gu-compiled-profiles.json
 go run ./cmd/gudata compile-realtime-gu -data data -profiles data/mmo/gu/transpiled_profiles.json -report ../docs/mmo/gu-compiled.json
 go run ./cmd/gudata balance -data data
 go run ./cmd/gudata balance -data data -config data/gudata.json -write -output /tmp/Gu.bal.csv
@@ -85,13 +87,13 @@ Các biến thường dùng:
 | `GRAFANA_URL`, `GRAFANA_API_KEY`, `GRAFANA_USER`, `GRAFANA_SERVICE_NAME` | Cấu hình log shipping tới Grafana Cloud qua OpenTelemetry OTLP HTTP (`/otlp/v1/logs`). |
 | `AUTO_BAN_FINGERPRINT_LIMIT`, `AUTO_BAN_REFERRAL_LIMIT`, `AUTO_BAN_DURATION_HOURS`, `AUTO_BAN_BLOCK_DEVICE` | Auto-ban chống lạm dụng: ngưỡng số tài khoản/thiết bị (mặc định 5), ngưỡng referral đáng ngờ (mặc định 5), thời hạn ban giờ (mặc định 72, ≤0 = vĩnh viễn), và có chặn device kèm hay không (mặc định true). Đặt 0 để tắt rule tương ứng. |
 | `REGIONAL_WALL_SUPPRESSION_ENABLED` | Bật/tắt phạt [Áp Chế Giới Vực] (`regional_wall_suppression`) khi người chơi (hoặc thành viên tổ đội theo đội trưởng) vượt Giới Vực Bích giữa các Đại Vực. Mặc định bật; đặt `false`/`0`/`off`/`no` để tắt hoàn toàn việc gắn status. Cần restart backend sau khi đổi. |
-| `REALTIME_WORLD_ENABLED` | Cờ backend cho world realtime; mặc định `false`. Khi bật cùng danh sách zone, server chạy zone 20 Hz và cho phép admission nếu các gate còn lại hợp lệ. |
+| `REALTIME_WORLD_ENABLED` | Cờ backend cho world realtime; mặc định `false`. Khi bật cùng danh sách zone, server chạy zone 20 Hz khi instance có người và cho phép admission nếu các gate còn lại hợp lệ. |
 | `MMO_ZONE_IDS` | Danh sách map/zone được cấu hình, phân tách bằng dấu phẩy. Dev regional pack hiện dùng 125 KHU_VUC/SAFE_ZONE; manager hỗ trợ tối đa 256 zone instances/process; rỗng thì runtime không khởi chạy. |
 | `MMO_ALLOWLIST` | Danh sách player ID được phép thử nghiệm, phân tách bằng dấu phẩy. Hỗ trợ `*` hoặc `all` để mở cho tất cả người chơi. Rỗng sẽ từ chối mọi lượt join. |
 | `MMO_MAX_PLAYERS_PER_ZONE` | Giới hạn admission mỗi zone; mặc định `5`, cho phép `1`–`100`. |
-| `MMO_INSTANCES_PER_ZONE` | Số instance của mỗi map trong process; mặc định `1`, cho phép `1`–`8`. Join được route tới instance ít người nhất còn capacity. |
+| `MMO_INSTANCES_PER_ZONE` | Số instance của mỗi map trong process; mặc định `1`, cho phép `1`–`8`. Join được route tới instance ít người nhất còn capacity. Mỗi map được đọc/kiểm tra một lần lúc startup và dùng chung artifact collision/spawn giữa các instance; world, quái và runner 20 Hz chỉ được tạo khi instance có lease đầu tiên và bị giải phóng sau 5 phút không còn lease/subscriber/projectile/event chờ. |
 | `MMO_MAP_VERSION`, `MMO_CONTENT_VERSION` | Version phải khớp `world.join` protocol v1; thiếu hoặc không khớp sẽ từ chối admission. |
-| `MMO_MAP_DIR` | Thư mục map JSON server đọc lúc startup; mặc định `data/mmo/maps`. Mỗi zone đọc `<map_id>.json`; thiếu/sai map hoặc lệch map/content version thì manager không khởi chạy và admission fail closed. |
+| `MMO_MAP_DIR` | Thư mục map JSON server đọc lúc startup; mặc định `data/mmo/maps`. Mỗi map đọc `<map_id>.json`; thiếu/sai map hoặc lệch map/content version thì manager không khởi chạy và admission fail closed. Việc kiểm tra vẫn chạy đủ cho mọi map cấu hình kể cả khi chưa có instance nào hoạt động. |
 | `MMO_GU_PROFILES` | Danh sách catalog profile Gu realtime, phân tách bằng dấu phẩy; mặc định `data/mmo/gu/transpiled_profiles.json`. Compile/validate lúc startup khi realtime bật; đường dẫn tương đối được dò từ thư mục đang chạy lên các thư mục cha (hỗ trợ `backend/cmd/server`). Lỗi sẽ log và hotbar realtime fail-closed, không có chiêu mẫu thay thế. |
 | `MMO_ADMISSION_PAUSED` | Chặn join MMO mới nhưng để session hiện tại chạy tiếp; dùng cho cutover/rollback. `Admission.Drain` cũng bật cờ này, checkpoint và release mọi lease. |
 | `PHASER_WORLD_CLIENT_ENABLED` | Cờ backend rollout client Phaser; mặc định `false`. Cả cờ này và backend flag, allowlist/version đều phải cho phép join. |
@@ -117,7 +119,7 @@ không quay lại world cũ. Vùng khởi đầu lưu trong `current_region` v�
 nhận map mà nhân vật được phép vào.
 Map collision dùng chung một JSON ở `backend/data/mmo/maps/` và `frontend/public/game/maps/`;
 format và quy trình copy nằm trong `docs/mmo/map-format.md`. Monster spawn khai báo trong map
-được tạo ở zone startup từ `monster_templates` và chạy AI server-owned. Combat preview dùng phím
+được tạo lại mỗi khi instance được kích hoạt từ `monster_templates` và chạy AI server-owned. Combat preview dùng phím
 1–6 (`TARGET`/`DIRECTION`/`GROUND`/`SELF`), damage/projectile/AoE do server tính; PR-19 thêm
 status tick/DoT/HoT/stack/cleanse, freeze chặn di chuyển/cast và hidden passive preview
 (HP thấp + 3 hit → shield, ICD). HUD React lấy hotbar/mana/cooldown/cast từ snapshot; aim DIRECTION/GROUND

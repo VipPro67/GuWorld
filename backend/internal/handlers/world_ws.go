@@ -21,8 +21,6 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 		limit = 240
 	case "world.objects":
 		limit = 30
-	case "match.input":
-		limit = matchInputRateLimit
 	case "chat.send":
 		limit = 30
 	default:
@@ -32,7 +30,7 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 	if !middleware.AllowPlayer(playerID, limit, time.Minute) {
 		return http.StatusTooManyRequests, json.RawMessage(`{"error":"Đạo hữu thao tác quá nhanh. Vui lòng đợi rồi thử lại!"}`)
 	}
-	if (command == "world.move_path" || command == "match.input") && middleware.IsRealtimeWorldOwned(playerID) {
+	if command == "world.move_path" && middleware.IsRealtimeWorldOwned(playerID) {
 		return http.StatusConflict, json.RawMessage(`{"code":"realtime_world_owns_character","error":"Character is controlled by the realtime world"}`)
 	}
 
@@ -69,8 +67,6 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 	case "world.objects":
 		status, result = ExecuteGetExploreObjects()
 
-	case "match.input":
-		status, result = ExecuteMatchInput(playerID, payload)
 	}
 
 	data, err := json.Marshal(result)

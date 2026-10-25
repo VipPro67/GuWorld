@@ -21,6 +21,8 @@ import {
   type WorldPoint,
 } from "../world/WorldUnits.ts";
 import { PREVIEW_WORLD_HEIGHT, PREVIEW_WORLD_WIDTH, WORLD_RUNTIME_KEY } from "../bootstrap/constants.ts";
+import { useGameStore } from "@/store/useGameStore";
+import { useWorldStore } from "@/store/useWorldStore";
 
 interface ActorView {
   container: Phaser.GameObjects.Container;
@@ -68,6 +70,10 @@ export class WorldScene extends Phaser.Scene {
   private terrain!: Phaser.GameObjects.Graphics;
   private legacyOverlay!: Phaser.GameObjects.Graphics;
   private legacyLabels: Phaser.GameObjects.Text[] = [];
+  private dynamicWorldObjects!: Phaser.GameObjects.Graphics;
+  private dynamicWorldLabels: Phaser.GameObjects.Text[] = [];
+  private lastWorldObjectsSyncAt = 0;
+  private lastPortalCheckAt = 0;
   private map: LoadedWorldMap | null = null;
   private mapHash: string | null = null;
   private mapStatus: "idle" | "loading" | "ready" | "error" = "idle";
@@ -209,6 +215,7 @@ export class WorldScene extends Phaser.Scene {
     this.legacyOverlay = this.add.graphics().setDepth(-9_400);
     this.boundary = this.add.graphics().setDepth(-9_000);
     this.drawBoundary(PREVIEW_WORLD_WIDTH, PREVIEW_WORLD_HEIGHT);
+    this.dynamicWorldObjects = this.add.graphics().setDepth(-9_100);
 
     this.marker = this.add.graphics().setDepth(-8_000);
 
@@ -321,6 +328,8 @@ export class WorldScene extends Phaser.Scene {
     this.drawTargetIndicator(entities);
     this.drawAimTelegraph(entities);
     this.projectileView.sync(this.runtime.getProjectiles());
+    this.syncDynamicWorldObjects();
+    this.checkPortalProximity();
     this.debugHud?.update();
     this.updateHud(true);
   }
@@ -816,6 +825,7 @@ export class WorldScene extends Phaser.Scene {
       this.mapStatus = "ready";
       this.mapError = "";
       this.applyMap(loaded);
+      this.runtime?.setMapPortals(loaded.portals);
       void computeWorldMapHash(loaded).then((hash) => {
         if (this.map === loaded) this.mapHash = hash;
       });
@@ -858,12 +868,20 @@ export class WorldScene extends Phaser.Scene {
     }
     for (const portal of map.portals) {
       const pixel = worldToPixels({ x: portal.x, y: portal.y });
-      this.terrain.fillStyle(0x60a5fa, 0.18);
-      this.terrain.fillCircle(pixel.x, pixel.y - 6, 22);
-      this.terrain.lineStyle(2, 0x93c5fd, 0.85);
-      this.terrain.strokeCircle(pixel.x, pixel.y - 6, 22);
-      this.terrain.fillStyle(0xbfdbfe, 0.9);
-      this.terrain.fillCircle(pixel.x, pixel.y - 6, 4);
+      this.terrain.fillStyle(0x0284c7, 0.22);
+      this.terrain.fillCircle(pixel.x, pixel.y - 6, 26);
+      this.terrain.lineStyle(2, 0x38bdf8, 0.9);
+      this.terrain.strokeCircle(pixel.x, pixel.y - 6, 26);
+      this.terrain.lineStyle(1, 0xbae6fd, 0.6);
+      this.terrain.strokeCircle(pixel.x, pixel.y - 6, 30);
+      this.terrain.fillStyle(0x38bdf8, 0.95);
+      this.terrain.fillCircle(pixel.x, pixel.y - 6, 5);
+
+      const destName = portal.name?.trim() || portal.targetZoneId.replaceAll("_", " ");
+      this.legacyLabels.push(this.add.text(pixel.x, pixel.y - 36, `🌀 Đến: ${destName}`, {
+        fontFamily: "sans-serif", fontSize: "11px", fontStyle: "bold",
+        color: "#e0f2fe", backgroundColor: "#0369a1dd", padding: { x: 5, y: 3 },
+      }).setOrigin(0.5, 0.5).setDepth(-8_950));
     }
     for (const region of map.legacyRegions) {
       const x = region.x * PIXELS_PER_UNIT;
@@ -905,6 +923,146 @@ export class WorldScene extends Phaser.Scene {
   private notice(message: string): void {
     this.mapNotice = message;
     this.mapNoticeUntil = this.time.now + 2_000;
+  }
+
+  private syncDynamicWorldObjects(): void {
+    const now = this.time.now;
+    if (now - this.lastWorldObjectsSyncAt < 800) return;
+    this.lastWorldObjectsSyncAt = now;
+
+    this.dynamicWorldObjects.clear();
+    for (const label of this.dynamicWorldLabels) label.destroy();
+    this.dynamicWorldLabels = [];
+
+    const zoneId = this.runtime?.getWelcome()?.zone_id?.split("#")[0] ?? "";
+    const gs = useGameStore.getState();
+    const ws = useWorldStore.getState();
+
+    // 1. Primeval Veins (Nguyên Tuyền / Tiên Tuyền)
+    const nearbyVeins = ws.nearbyCells.filter((c) => c.cell_type === "PrimevalVein" || Boolean(c.vein));
+    for (const cell of nearbyVeins) {
+      const px = cell.x * PIXELS_PER_UNIT;
+      const py = cell.y * PIXELS_PER_UNIT;
+      const immortal = cell.vein?.vein_type === "immortal";
+
+      this.dynamicWorldObjects.fillStyle(immortal ? 0xf59e0b : 0x10b981, 0.22);
+      this.dynamicWorldObjects.fillCircle(px, py - 6, 22);
+      this.dynamicWorldObjects.lineStyle(2, immortal ? 0xfde047 : 0x34d399, 0.9);
+      this.dynamicWorldObjects.strokeCircle(px, py - 6, 18);
+      this.dynamicWorldObjects.fillStyle(immortal ? 0xfef08a : 0xa7f3d0, 0.95);
+      this.dynamicWorldObjects.fillCircle(px, py - 6, 5);
+
+      const vName = immortal ? "Tiên Tuyền" : "Nguyên Tuyền";
+      const rarity = cell.vein?.rarity || "Thường";
+      const stones = cell.vein?.accumulated_stones?.toLocaleString("vi-VN") ?? 0;
+      const label = this.add.text(px, py - 32, `💠 ${vName} (${rarity})\n${stones} NT`, {
+        fontFamily: "sans-serif", fontSize: "10px", fontStyle: "bold", align: "center",
+        color: immortal ? "#fef08a" : "#a7f3d0", backgroundColor: "#064e3bdd", padding: { x: 4, y: 2 },
+      }).setOrigin(0.5, 0.5).setDepth(-8_950);
+      this.dynamicWorldLabels.push(label);
+    }
+
+    // 2. Sect Bases & Territory (Tông Môn)
+    const sectsInZone = (gs.sectMap || []).filter((s) => s.region === zoneId && typeof s.map_x === "number" && typeof s.map_y === "number");
+    const mySectId = gs.mySectStatus?.sect?.id;
+    for (const sect of sectsInZone) {
+      const sx = sect.map_x * PIXELS_PER_UNIT;
+      const sy = sect.map_y * PIXELS_PER_UNIT;
+      const isMySect = sect.id === mySectId;
+      const mainHallLvl = (sect.buildings as Record<string, number> | undefined)?.main_hall || sect.level || 1;
+      const territoryRadius = (5 + mainHallLvl) * PIXELS_PER_UNIT;
+      const isShielded = Boolean(sect.shield_until && new Date(sect.shield_until).getTime() > Date.now());
+
+      // Territory square
+      this.dynamicWorldObjects.fillStyle(isMySect ? 0x3b82f6 : 0xd97706, 0.08);
+      this.dynamicWorldObjects.fillRect(sx - territoryRadius, sy - territoryRadius, territoryRadius * 2, territoryRadius * 2);
+      this.dynamicWorldObjects.lineStyle(2, isMySect ? 0x60a5fa : 0xf59e0b, 0.45);
+      this.dynamicWorldObjects.strokeRect(sx - territoryRadius, sy - territoryRadius, territoryRadius * 2, territoryRadius * 2);
+
+      // Pagoda fortress building
+      const size = 30;
+      this.dynamicWorldObjects.fillStyle(isMySect ? 0x2563eb : 0xd97706, 0.28);
+      this.dynamicWorldObjects.fillCircle(sx, sy - 8, size + 8);
+
+      // Base
+      this.dynamicWorldObjects.fillStyle(0x18181b, 0.95);
+      this.dynamicWorldObjects.fillRect(sx - size / 2, sy - size / 4, size, size * 0.75);
+      this.dynamicWorldObjects.lineStyle(2, isMySect ? 0x3b82f6 : 0xf59e0b, 0.9);
+      this.dynamicWorldObjects.strokeRect(sx - size / 2, sy - size / 4, size, size * 0.75);
+
+      // Roof 1
+      this.dynamicWorldObjects.fillStyle(isMySect ? 0x1d4ed8 : 0xb45309, 0.95);
+      this.dynamicWorldObjects.fillTriangle(sx, sy - size * 0.75, sx - size * 0.8, sy - size * 0.25, sx + size * 0.8, sy - size * 0.25);
+      // Roof 2
+      this.dynamicWorldObjects.fillStyle(isMySect ? 0x2563eb : 0xd97706, 0.95);
+      this.dynamicWorldObjects.fillTriangle(sx, sy - size * 1.25, sx - size * 0.55, sy - size * 0.7, sx + size * 0.55, sy - size * 0.7);
+      // Spire
+      this.dynamicWorldObjects.fillStyle(0xfde047, 1);
+      this.dynamicWorldObjects.fillCircle(sx, sy - size * 1.35, 4);
+
+      if (isShielded) {
+        this.dynamicWorldObjects.lineStyle(3, 0xf43f5e, 0.85);
+        this.dynamicWorldObjects.strokeCircle(sx, sy - 8, size + 14);
+      }
+
+      const label = this.add.text(sx, sy - size * 1.6, `🏯 ${sect.name} (Cấp ${sect.level || 1})${isShielded ? " 🛡️" : ""}`, {
+        fontFamily: "sans-serif", fontSize: "11px", fontStyle: "bold",
+        color: isMySect ? "#bfdbfe" : "#fde68a", backgroundColor: isMySect ? "#1e3a8add" : "#451a03dd", padding: { x: 5, y: 3 },
+      }).setOrigin(0.5, 0.5).setDepth(-8_950);
+      this.dynamicWorldLabels.push(label);
+    }
+
+    // 3. Ground Drops (Chiến Lợi Phẩm)
+    for (const drop of gs.groundDrops || []) {
+      const dx = drop.x * PIXELS_PER_UNIT;
+      const dy = drop.y * PIXELS_PER_UNIT;
+      this.dynamicWorldObjects.fillStyle(0xb45309, 0.85);
+      this.dynamicWorldObjects.fillCircle(dx, dy - 4, 8);
+      this.dynamicWorldObjects.fillStyle(0xfde047, 1);
+      this.dynamicWorldObjects.fillCircle(dx, dy - 8, 3);
+      this.dynamicWorldObjects.lineStyle(1, 0xfef08a, 0.9);
+      this.dynamicWorldObjects.strokeCircle(dx, dy - 4, 8);
+
+      const label = this.add.text(dx, dy - 20, `🎁 ${drop.killer_name || "Rơi đồ"}`, {
+        fontFamily: "sans-serif", fontSize: "9px", fontStyle: "bold",
+        color: "#fef08a", backgroundColor: "#78350fdd", padding: { x: 3, y: 2 },
+      }).setOrigin(0.5, 0.5).setDepth(-8_950);
+      this.dynamicWorldLabels.push(label);
+    }
+
+    // 4. Player-built Teleport Arrays in this zone
+    const myTeleportsInZone = (gs.myTeleportArrays || []).filter((t) => t.region_id === zoneId);
+    for (const tp of myTeleportsInZone) {
+      const tx = tp.x * PIXELS_PER_UNIT;
+      const ty = tp.y * PIXELS_PER_UNIT;
+      this.dynamicWorldObjects.fillStyle(0x0284c7, 0.2);
+      this.dynamicWorldObjects.fillCircle(tx, ty - 4, 22);
+      this.dynamicWorldObjects.lineStyle(2, 0x38bdf8, 0.85);
+      this.dynamicWorldObjects.strokeCircle(tx, ty - 4, 18);
+      this.dynamicWorldObjects.fillStyle(0xbae6fd, 0.9);
+      this.dynamicWorldObjects.fillCircle(tx, ty - 4, 4);
+
+      const label = this.add.text(tx, ty - 28, `🌀 ${tp.name || "Truyền Tống Trận"}`, {
+        fontFamily: "sans-serif", fontSize: "10px", fontStyle: "bold",
+        color: "#e0f2fe", backgroundColor: "#0369a1dd", padding: { x: 4, y: 2 },
+      }).setOrigin(0.5, 0.5).setDepth(-8_950);
+      this.dynamicWorldLabels.push(label);
+    }
+  }
+
+  private checkPortalProximity(): void {
+    const now = this.time.now;
+    if (now - this.lastPortalCheckAt < 1200) return;
+    this.lastPortalCheckAt = now;
+    const self = this.runtime?.getSelfEntity();
+    if (!self || !this.map?.portals) return;
+
+    for (const portal of this.map.portals) {
+      if (Math.hypot(self.x - portal.x, self.y - portal.y) <= 1.4) {
+        window.dispatchEvent(new CustomEvent("mmo_portal_step", { detail: portal }));
+        break;
+      }
+    }
   }
 
   private syncActors(entities: ReturnType<WorldRuntime["getEntities"]>): void {

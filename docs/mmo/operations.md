@@ -52,6 +52,10 @@ staging-canary and on-call evidence.
   stale versions.
 - `world.welcome.map_hash` is the SHA-256 of the server collision artifact; the
   client recomputes the same hash from its downloaded JSON and shows `LỆCH HASH`.
+  Compact border/packed collision must produce the identical tile stream.
+- Startup still reads and validates every configured map (and map-backed
+  monster spawn) so bad data fails admission early. Each map is loaded once and
+  its immutable artifact is shared by all of that map's instances.
 - The compiled Gu catalog hash is logged at startup and pinned by the compiler
   test. Changing a profile requires regenerating `docs/mmo/gu-compiled.json` and
   updating the baseline intentionally.
@@ -60,13 +64,22 @@ staging-canary and on-call evidence.
 
 ## Observability
 
-- `GET /api/admin/monitor/realtime` (permission `monitoring.read`) returns
-  per-zone `{tick, entities, players, subscribers, last_step_ms}` from
-  `Manager.Stats`.
+- `GET /api/admin/monitor/realtime` (permission `monitoring.read`) returns one
+  entry per configured instance from `Manager.Stats`. `map_loaded` means the
+  startup map artifact was validated; `running` means a World and its 20 Hz
+  runner currently exist; `evicting` marks an idle world in teardown. Tick,
+  entity, player, subscriber and last-step values are zero/empty while idle.
+- Worlds are created lazily on `ClaimCharacter`/`JoinCharacter`/
+  `TransferCharacter` and released per instance after 5 minutes without a
+  lease, subscriber, projectile or pending snapshot event (the idle sweep runs
+  once a minute, so teardown may happen up to ~1 minute later). A pending claim
+  that is still loading character state keeps the instance alive. Watch
+  `running` and process RSS to confirm idle maps are released.
 - Existing admin monitor endpoints cover system/request traces and WebSocket
   stats.
 - Client **F3** debug HUD shows tick/FPS/network counters/prediction correction.
-- Startup logs record map hash, monster count and compiled Gu profile hash.
+- Startup logs record map hash, monster count, instance count and compiled Gu
+  profile hash.
 
 Still missing:
 - Prometheus/OpenTelemetry metrics and dashboard provisioning by zone/player/

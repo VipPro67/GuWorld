@@ -279,6 +279,10 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	loadout := realtimeeffects.BuildLoadout(compiled, equipped)
 	skills := make([]combat.Skill, 0, len(loadout.Skills))
 	for _, skill := range loadout.Skills {
+		if skill.Slot < 1 || skill.Slot > len(state.EquippedGu) {
+			skills = append(skills, skill)
+			continue
+		}
 		entry := state.EquippedGu[skill.Slot-1]
 		// Test/demo loaders without a character projection retain their authored
 		// profile values; live DB admission always provides a ranked player.

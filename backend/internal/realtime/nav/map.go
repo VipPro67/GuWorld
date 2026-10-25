@@ -86,7 +86,7 @@ type Map struct {
 	LegacyOriginY  float64
 	LegacyScale    float64
 
-	collision *sim.GridCollision
+	collision sim.TileCollision
 }
 
 type Spawn struct {
@@ -147,35 +147,29 @@ func Build(raw TiledMapJSON) (*Map, error) {
 		return nil, fmt.Errorf("%w: map_id and map_version are required", ErrInvalidMap)
 	}
 
-	solid := make([]bool, raw.Width*raw.Height)
+	var collision sim.TileCollision
 	hasCollision := false
 	var spawns []Spawn
 	var portals []Portal
 	for _, layer := range raw.Layers {
 		switch layer.Type {
 		case "tilelayer":
-			if len(layer.Data) != 0 && len(layer.Data) != len(solid) {
-				return nil, fmt.Errorf("%w: layer %q data must be %d cells", ErrInvalidMap, layer.Name, len(solid))
+			if len(layer.Data) != 0 && len(layer.Data) != raw.Width*raw.Height {
+				return nil, fmt.Errorf("%w: layer %q data must be %d cells", ErrInvalidMap, layer.Name, raw.Width*raw.Height)
 			}
 			switch layer.Name {
 			case "collision":
 				hasCollision = true
-				if len(layer.Data) == len(solid) {
-					for index, value := range layer.Data {
-						if value != 0 && value != 1 {
-							return nil, fmt.Errorf("%w: collision cells must be 0 or 1", ErrInvalidMap)
-						}
-						solid[index] = value == 1
+				var err error
+				if len(layer.Data) != 0 {
+					collision, err = sim.NewPackedCollision(raw.Width, raw.Height, layer.Data)
+					if err != nil {
+						return nil, fmt.Errorf("%w: collision cells must be 0 or 1", ErrInvalidMap)
 					}
 				} else {
-					// Sparse / Procedural border collision: borders are solid, interior is walkable
-					for x := 0; x < raw.Width; x++ {
-						solid[x] = true
-						solid[(raw.Height-1)*raw.Width+x] = true
-					}
-					for y := 0; y < raw.Height; y++ {
-						solid[y*raw.Width] = true
-						solid[y*raw.Width+raw.Width-1] = true
+					collision, err = sim.NewBorderCollision(raw.Width, raw.Height)
+					if err != nil {
+						return nil, fmt.Errorf("%w: %v", ErrInvalidMap, err)
 					}
 				}
 			}
@@ -191,7 +185,7 @@ func Build(raw TiledMapJSON) (*Map, error) {
 					if object.X < 0 || object.Y < 0 || object.X >= float64(raw.Width) || object.Y >= float64(raw.Height) {
 						return nil, fmt.Errorf("%w: portal %q is outside the map", ErrInvalidMap, object.Name)
 					}
-					if solid[int(math.Floor(object.Y))*raw.Width+int(math.Floor(object.X))] {
+					if collision != nil && collision.SolidTile(int(math.Floor(object.X)), int(math.Floor(object.Y))) {
 						return nil, fmt.Errorf("%w: portal %q is inside a solid tile", ErrInvalidMap, object.Name)
 					}
 					portals = append(portals, Portal{
@@ -215,7 +209,7 @@ func Build(raw TiledMapJSON) (*Map, error) {
 				if object.X < 0 || object.Y < 0 || object.X >= float64(raw.Width) || object.Y >= float64(raw.Height) {
 					return nil, fmt.Errorf("%w: spawn %q is outside the map", ErrInvalidMap, object.Name)
 				}
-				if solid[int(math.Floor(object.Y))*raw.Width+int(math.Floor(object.X))] {
+				if collision != nil && collision.SolidTile(int(math.Floor(object.X)), int(math.Floor(object.Y))) {
 					return nil, fmt.Errorf("%w: spawn %q is inside a solid tile", ErrInvalidMap, object.Name)
 				}
 				monsterID := propertyString(object.Properties, "monster_id")
@@ -228,10 +222,6 @@ func Build(raw TiledMapJSON) (*Map, error) {
 	}
 	if !hasCollision {
 		return nil, fmt.Errorf("%w: collision layer is required", ErrInvalidMap)
-	}
-	collision, err := sim.NewGridCollision(raw.Width, raw.Height, solid)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidMap, err)
 	}
 	ruleset := strings.ToLower(propertyString(raw.Properties, "ruleset"))
 	legacyOriginX, _ := propertyFloat(raw.Properties, "legacy_origin_x")
@@ -246,7 +236,7 @@ func Build(raw TiledMapJSON) (*Map, error) {
 	if ruleset != "pve" && ruleset != "pvp" && ruleset != "safe" {
 		return nil, fmt.Errorf("%w: ruleset must be pve/pvp/safe", ErrInvalidMap)
 	}
-	hash := hashMap(raw, solid)
+	hash := hashMap(raw, collision)
 	return &Map{
 		ID: raw.MapID, Version: raw.MapVersion, ContentVersion: raw.ContentVersion, Ruleset: ruleset,
 		Width: raw.Width, Height: raw.Height, TileWidth: raw.TileWidth, TileHeight: raw.TileHeight,
@@ -296,16 +286,26 @@ func (m *Map) SafeSpawn(preferred sim.Vec2, radius float64) (sim.Vec2, bool) {
 	return preferred, false
 }
 
-func hashMap(raw TiledMapJSON, solid []bool) string {
+func hashMap(raw TiledMapJSON, collision sim.TileCollision) string {
 	hash := sha256.New()
 	_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%d\x00%d\x00", raw.MapID, raw.MapVersion, raw.Width, raw.Height)
-	for _, blocked := range solid {
-		if blocked {
-			_, _ = hash.Write([]byte{1})
-		} else {
-			_, _ = hash.Write([]byte{0})
+	var chunk [8192]byte
+	used := 0
+	for y := 0; y < raw.Height; y++ {
+		for x := 0; x < raw.Width; x++ {
+			if collision.SolidTile(x, y) {
+				chunk[used] = 1
+			} else {
+				chunk[used] = 0
+			}
+			used++
+			if used == len(chunk) {
+				_, _ = hash.Write(chunk[:])
+				used = 0
+			}
 		}
 	}
+	_, _ = hash.Write(chunk[:used])
 	return hex.EncodeToString(hash.Sum(nil))
 }
 

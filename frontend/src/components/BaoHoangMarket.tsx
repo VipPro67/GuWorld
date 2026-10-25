@@ -27,6 +27,7 @@ import {
 import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge, SearchableSelect } from "@/components/ui";
 import { TradeAssetPickerModal, type AssetTab } from "./TradeAssetPickerModal";
 import { buildBuyOrderExecution, reconcileGuSelection, toggleGuSelection } from "./marketplaceGuSelection";
+import { getItemIconUrl } from "@/lib/item-icons";
 
 interface RecipeData {
   recipe_id: string;
@@ -834,7 +835,14 @@ export function BaoHoangMarket({
                           {offer.offered.primeval_stones > 0 && <div>• {offer.offered.primeval_stones} Nguyên Thạch</div>}
                           {offer.offered.immortal_stones > 0 && <div>• {offer.offered.immortal_stones} Tiên Nguyên</div>}
                           {Object.entries(offer.offered.materials || {}).map(([k, v]) => (
-                            <div key={k}>• {v}x {itemDictionary[k]?.name || k}</div>
+                            <div key={k} className="flex items-center gap-1.5 min-w-0">
+                              <img
+                                src={getItemIconUrl(itemDictionary[k] ?? { id: k, name: k, item_type: "Material" })}
+                                alt=""
+                                className="w-3.5 h-3.5 rounded object-contain shrink-0"
+                              />
+                              <span className="truncate">• {v}x {itemDictionary[k]?.name || k}</span>
+                            </div>
                           ))}
                           {offer.offered_gu_details && offer.offered_gu_details.length > 0 ? (
                             offer.offered_gu_details.map((g) => (
@@ -883,10 +891,17 @@ export function BaoHoangMarket({
                             const owned = player.materials_inventory?.[k] || 0;
                             const ok = owned >= v;
                             return (
-                              <div key={k} className="flex items-center justify-between">
-                                <span>• {v}x {itemDictionary[k]?.name || k}</span>
+                              <div key={k} className="flex items-center justify-between gap-1">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <img
+                                    src={getItemIconUrl(itemDictionary[k] ?? { id: k, name: k, item_type: "Material" })}
+                                    alt=""
+                                    className="w-3.5 h-3.5 rounded object-contain shrink-0"
+                                  />
+                                  <span className="truncate">• {v}x {itemDictionary[k]?.name || k}</span>
+                                </div>
                                 {!isMine && (
-                                  <span className={ok ? "text-emerald-400 font-bold text-[10px]" : "text-red-400 font-bold text-[10px]"}>
+                                  <span className={ok ? "text-emerald-400 font-bold text-[10px] shrink-0" : "text-red-400 font-bold text-[10px] shrink-0"}>
                                     {ok ? `✓ (${owned})` : `✗ (${owned}/${v})`}
                                   </span>
                                 )}
@@ -1480,8 +1495,13 @@ export function BaoHoangMarket({
                                   return (
                                     <div
                                       key={matId}
-                                      className="inline-flex items-center gap-2 bg-zinc-900 border border-emerald-500/40 rounded-xl px-2.5 py-1 text-xs text-emerald-200"
+                                      className="inline-flex items-center gap-1.5 bg-zinc-900 border border-emerald-500/40 rounded-xl px-2.5 py-1 text-xs text-emerald-200"
                                     >
+                                      <img
+                                        src={getItemIconUrl(itemDictionary[matId] ?? { id: matId, name: matId, item_type: "Material" })}
+                                        alt=""
+                                        className="w-4 h-4 rounded object-contain shrink-0"
+                                      />
                                       <span className="font-semibold text-white">{qty}×</span>
                                       <span className="truncate max-w-[140px]">{itemDictionary[matId]?.name || matId}</span>
                                       <div className="flex items-center gap-1 border-l border-zinc-800 pl-1.5 ml-0.5">
@@ -1755,8 +1775,13 @@ export function BaoHoangMarket({
                                 {Object.entries(requestedMats).map(([matId, qty]) => (
                                   <div
                                     key={matId}
-                                    className="inline-flex items-center gap-2 bg-zinc-900 border border-amber-500/40 rounded-xl px-2.5 py-1 text-xs text-amber-200"
+                                    className="inline-flex items-center gap-1.5 bg-zinc-900 border border-amber-500/40 rounded-xl px-2.5 py-1 text-xs text-amber-200"
                                   >
+                                    <img
+                                      src={getItemIconUrl(itemDictionary[matId] ?? { id: matId, name: matId, item_type: "Material" })}
+                                      alt=""
+                                      className="w-4 h-4 rounded object-contain shrink-0"
+                                    />
                                     <span className="font-semibold text-white">{qty}×</span>
                                     <span className="truncate max-w-[140px]">{itemDictionary[matId]?.name || matId}</span>
                                     <div className="flex items-center gap-1 border-l border-zinc-800 pl-1.5 ml-0.5">

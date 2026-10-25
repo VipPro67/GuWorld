@@ -44,6 +44,7 @@ func UseConsumableGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
 	}
+	realtimeBaseHP, realtimeActive := seedRealtimeHP(authID, &player)
 
 	targetIdx := -1
 	for idx, gu := range player.GuInventory {
@@ -196,6 +197,7 @@ func UseConsumableGu(c *gin.Context) {
 		return
 	}
 
+	applyRealtimeHPDelta(authID, realtimeBaseHP, realtimeActive, &player)
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, CombatStatsDomain)
 
@@ -252,6 +254,7 @@ func UseSupportGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
 	}
+	realtimeBaseHP, realtimeActive := seedRealtimeHP(authID, &player)
 
 	targetIdx := -1
 	for idx, gu := range player.GuInventory {
@@ -374,6 +377,7 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
+	applyRealtimeHPDelta(authID, realtimeBaseHP, realtimeActive, &player)
 	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})

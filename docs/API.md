@@ -161,20 +161,12 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | Method | Path | Ghi chú |
 | --- | --- | --- |
 | POST | `/combat/capture` | Bắt quái vật làm sủng vật. |
-| POST | `/explore` | Du hành tới zone: body `{"player_id","node_id"}` (node_id = id Đại Vực / địa danh / `hub_nam_cuong`). |
-| POST | `/explore/retreat/:id` | |
-| POST | `/explore/flee/:id` | Bỏ chạy khỏi trận đang chiến. **PvP: luôn thành công, không phạt.** Còn lại: 70% thành công (BOSS/Tribulation 40%). Thành công → trừ 20% Max HP nếu là PvE thường (có thể ngất + rơi đồ). Thất bại → địch phản công; trả `flee_success:false` kèm `defeat` / `victory` (địch tự chết → thắng tại chỗ + nhận loot + xoá địch khỏi map) và `logs`. |
-| GET | `/explore/grid` | Viewport 5×5 quanh player; trả `{x, y, vision_radius, cells, stats (chỉ movement + investigation), players_on_map, ground_drops, world_width, world_height}`. `?stats_only=true` chỉ trả tọa độ, `vision_radius`, movement/investigation và world dimensions; bỏ dựng cell/Redis, players, drops cho màn hình chỉ cần range. |
 | GET | `/explore/regions` | Danh sách zone (id, `world_map_id`, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`, `rules`, `effective_rules`). `rules` là luật khai báo tại khu đó; `effective_rules` là luật sau khi kế thừa theo nhóm từ khu cha. Client dùng luật hiệu lực để hiển thị cấm chế; backend vẫn tự kiểm tra. Xem `docs/GAME_DATA.md` để biết schema. `zone_type`: `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC` — khi chồng lấn, ưu tiên `HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC`. |
 | GET | `/explore/maps` | Danh mục tầng bản đồ (`maps[]`: id, tên, kích thước, rank, rules, trạng thái). `bai_thien` và `hac_thien` hiện được cấu hình nhưng chưa mở cho người chơi cho tới khi luồng tọa độ/hiện diện được scope theo tầng. |
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
-| GET | `/explore/objects` | Các ô persistent (map_cells): village/trạm nghỉ, boss, linh tài — cho bản đồ lớn. Trả `{region_id,x,y,cell_type,content_id,rank,respawn_seconds,cleared}`. |
-| GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / dải phía trước hướng đi. Client cache theo chunk 64×64 và namespace khu vực; trạng thái cleared được đọc theo batch. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id,vein?}]`; ô Nguyên Tuyền có `cell_type="PrimevalVein"`, `content` = id mỏ và object `vein` chứa phẩm chất, sản lượng đã tích/trần và hạn. |
-| POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
-| POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Mỗi request tiến **tối đa 150 ô** để commit vị trí mịn (người chơi khác thấy chuyển động gần real-time, đổi hướng/dừng sớm hơn); trả `{player, log, combat_triggered, reached, skip_result?}` (đã tối ưu: loại bỏ `logs` mảng và `stats` thừa, `player` là snapshot cập nhật vị trí/sinh lực/trạng thái tinh gọn, tránh query DB dư thừa); nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
-| POST | `/explore/teleport` | *(Đã vô hiệu hóa)* Dịch chuyển bằng tiền đã bị hủy bỏ. Trả về `400 Bad Request` yêu cầu sử dụng Cổ trùng dịch chuyển (`POST /explore/use_gu`). |
+| GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / radar MMO. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id,vein?}]`; ô Nguyên Tuyền có `cell_type="PrimevalVein"`, `content` = id mỏ và object `vein` chứa phẩm chất, sản lượng đã tích/trần và hạn. |
 | GET | `/explore/players` | Người chơi ở gần để hiển thị/tương tác trên bản đồ. |
-| POST | `/explore/use_gu` | Dùng Cổ bản đồ (ví dụ mở cổng). Cổ dịch chuyển (`PORTAL_CREATE`/`RANDOM_PORTAL`) bị giới hạn tầm theo rank Cổ hoặc `params.range`; trả `synced_party_members` khi đội trưởng kéo tổ đội theo. |
+| POST | `/world/portal/transfer` | Chuyển vùng qua cổng map tĩnh (`map.portals`): body `{"target_zone_id","target_x","target_y"}`. Cập nhật `current_region` và tọa độ, kiểm tra giới hạn khu vực và áp dụng debuff giới bích nếu vượt biên giới. |
 | GET | `/world/drops` | Chiến lợi phẩm/hài cốt còn hạn trong viewport; mặc định quanh người chơi (radius 25), hỗ trợ `x`, `y`, `radius` tùy chỉnh (radius tối đa 127). Query theo bounding box tọa độ, không giới hạn theo region của người chơi. |
 | POST | `/world/drops/:id/loot` | Nhặt một ground drop khi đủ điều kiện khóa sở hữu. |
 | POST | `/veins/:id/harvest` | Thu hoạch Nguyên Tuyền khi đứng trong phạm vi 3 ô (Chebyshev) quanh mỏ. Trả `message`, `materials_inventory`, `primeval_stones`/`immortal_stones`, `human_qi`. |
@@ -222,33 +214,6 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/leaderboard/:category` | BXH tổng hợp. category: `rank`, `primeval_stones`, `gu_strongest`, `immortal_stones`, `sat_khi`. Trả về top 50, kèm rank người gọi |
 | POST | `/leaderboard/toggle` | Bật/tắt hiển thị trên BXH |
 | GET | `/leaderboard/settings` | Trạng thái `show_on_leaderboard` hiện tại |
-
-## Đấu trường thời gian thực (Realtime PvP) — Auth
-
-Chế độ PvP mô phỏng theo thời gian thực (kiểu MOBA): nhân vật di chuyển tự do
-trong đấu trường, cổ trùng được dùng như chiêu thức có hướng/vùng, né đòn được.
-Server là chủ sở hữu trạng thái (authoritative) và chạy vòng lặp tick 20Hz.
-
-| Method | Path | Mô tả |
-| --- | --- | --- |
-| POST | `/pvp/match/practice` | Tạo trận luyện tập 1 người vs Hình Nhân Gỗ. Trả `Setup` (đấu trường, đội hình, kit chiêu, hằng số di chuyển). |
-
-Trạng thái trực tiếp không trả qua HTTP: client đăng ký kênh `match:<match_id>`
-và nhận `frame` mỗi tick, gửi ý định điều khiển bằng lệnh WebSocket `match.input`.
-
-- `Setup.tick_ms` = 50; `Setup.speed_to_tiles_per_tick` và `Setup.actor_radius`
-  là hằng số di chuyển server dùng, client dùng lại để dự đoán vị trí (không
-  hard-code, tránh lệch).
-- `frame.events` là danh sách one-shot (`cast_start`, `cast_end`, `hit`,
-  `shield_absorb`, `shield`, `blink`, `death`, `match_end`) để client phát hiệu ứng.
-- `frame.participants[].cast` là **vùng ngắm (telegraph)** của chiêu đang niệm, gửi
-  cho mọi người trong trận: `start_tick`, `ends_tick`, `cast_mode`, `shape`,
-  `radius`, `length`, `width`, `angle_deg`, `move_distance`, `aim_x`, `aim_y`,
-  `target_id`. Nhờ vậy đối thủ vẽ được đúng vùng mình sắp ăn đòn. `target_id` có
-  nghĩa là đòn chọn mục tiêu (không né được) — client đánh dấu nạn nhân thay vì vẽ
-  vùng. Vùng ngắm vẽ bằng cùng hình học mà server dùng để resolve.
-- Server kiểm tra lại mọi ý định: mode khớp `cast_mode`, hồi chiêu, mana,
-  thời gian niệm, tầm chiêu và tốc độ di chuyển. Client chỉ gửi ý định.
 
 ## Immortal aperture, dao marks and tribulations
 
@@ -553,6 +518,7 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 | Method | Path | Ghi chú |
 | --- | --- | --- |
 | GET | `/admin/monitor/system` | Báo cáo chi tiết hệ thống: CPU % (process & system), NumCPU, Goroutines, CgoCalls, Go MemStats (Alloc, Heap, Stack, GC pause), DB Connection Pool, Redis health & latency, WebSocket clients/channels, Process Uptime. |
+| GET | `/admin/monitor/realtime` | Telemetry từng instance realtime (permission `monitoring.read`): `map_loaded` (map đã kiểm tra lúc startup), `running` (world/runner đang tồn tại), `evicting` (đang teardown vì idle), tick/entity/player/subscriber, `last_step_ms`, kích thước/hash map và số monster spawn. Instance rỗng vẫn xuất hiện với `running=false`; world được tạo lazy khi có lease đầu tiên và giải phóng sau 5 phút idle. |
 | GET | `/admin/monitor/requests/summary` | Thống kê request toàn diện: Tổng số request, in-flight requests, RPS (cửa sổ trượt 60s), phân bố mã trạng thái (2xx/3xx/4xx/5xx), độ trễ (min/max/avg/p50/p90/p99), top endpoint được gọi nhiều nhất và top endpoint chậm nhất. |
 | GET | `/admin/monitor/admin-operations` | Counter trong memory cho vận hành admin: 403 theo permission, mutation lỗi theo action, destructive action, import failure, audit write failure, legacy `is_admin` fallback và permission resolution error. Yêu cầu `monitoring.read`; counter reset khi process restart hoặc gọi endpoint reset. |
 | GET | `/admin/monitor/requests/traces` | Tra cứu server-side các request gần nhất (Ring Buffer 500 requests). Hỗ trợ `page`, `page_size`, allowlisted `sort`, `direction`, `method`, `status` (`200`, `500`, hoặc `errors`), `path`, `min_duration_ms`, `search`; trả `{data,traces,total,page,page_size}` (`traces` là alias tương thích). |

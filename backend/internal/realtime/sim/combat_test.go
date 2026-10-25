@@ -334,6 +334,104 @@ func TestSelfShieldAbsorbsDamageAndCastingIsInterrupted(t *testing.T) {
 	}
 }
 
+func TestTargetModeHealAppliesToCaster(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{X: 0, Y: 0})
+	player.Vitals = Vitals{HP: 50, MaxHP: 100}
+	player.Combat.Skills[1] = combat.Skill{
+		ID: "GU_HEAL_TARGET", Slot: 1, Mode: combat.ModeTarget, Name: "Blade Heal",
+		Range: 9, WindupTicks: 3, CooldownTicks: 30, Damage: 10, Heal: 40,
+		MaxTargets: 1, RequiresEnemyTarget: true,
+	}
+	monster := newTargetMonster("mob", Vec2{X: 3, Y: 0})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 6)
+	if !hasEvent(events, combat.EventHealApplied) {
+		t.Fatalf("target-mode heal did not emit a heal event: %+v", events)
+	}
+	if hp := entityHP(t, w, "player"); hp != 90 {
+		t.Fatalf("player hp=%v, want 90 after target-mode heal", hp)
+	}
+	if hp := entityHP(t, w, "mob"); hp != 90 {
+		t.Fatalf("monster hp=%v, want 90 after damage", hp)
+	}
+}
+
+func TestGroundModeHealAndShieldApplyToCaster(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{X: 0, Y: 0})
+	player.Vitals = Vitals{HP: 30, MaxHP: 100}
+	player.Combat.Skills[1] = combat.Skill{
+		ID: "GU_HEAL_GROUND", Slot: 1, Mode: combat.ModeGround, Name: "Rain",
+		Range: 10, WindupTicks: 2, CooldownTicks: 30, Damage: 5, Heal: 25, Shield: 15,
+		Radius: 2.5, MaxTargets: 5, RequiresEnemyTarget: true,
+	}
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeGround, Point: Vec2{X: 1, Y: 0}}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 4)
+	if !hasEvent(events, combat.EventHealApplied) || !hasEvent(events, combat.EventShieldApplied) {
+		t.Fatalf("ground-mode self support missing: %+v", events)
+	}
+	entity := w.entities["player"]
+	if entity.Vitals.HP != 55 || entity.Vitals.Shield != 15 {
+		t.Fatalf("player hp/shield=%v/%v, want 55/15", entity.Vitals.HP, entity.Vitals.Shield)
+	}
+}
+
+func TestQueueHPDeltaHealsAndClamps(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	player.Vitals = Vitals{HP: 50, MaxHP: 100}
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	result, err := w.QueueHPDelta("player", 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if hp := entityHP(t, w, "player"); hp != 75 {
+		t.Fatalf("hp=%v, want 75", hp)
+	}
+	result, err = w.QueueHPDelta("player", 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if hp := entityHP(t, w, "player"); hp != 100 {
+		t.Fatalf("hp=%v, want capped 100", hp)
+	}
+	result, err = w.QueueHPDelta("player", -500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if hp := entityHP(t, w, "player"); hp != 0 {
+		t.Fatalf("hp=%v, want clamped 0", hp)
+	}
+}
+
 func TestDamageEventAmountMatchesHealthLost(t *testing.T) {
 	for _, tc := range []struct {
 		name       string

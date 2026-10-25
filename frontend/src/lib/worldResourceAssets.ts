@@ -1,8 +1,8 @@
 export const WORLD_RESOURCE_ASSETS = {
   herb: "/assets/world/spirit-herb.webp",
-  crystal: "/assets/world/items/crystal.svg",
-  food: "/assets/world/items/food.svg",
-  gourd: "/assets/world/items/gourd.svg",
+  crystal: "/assets/items/icons/crystal.webp",
+  food: "/assets/items/icons/food.webp",
+  gourd: "/assets/items/icons/gourd.webp",
 } as const;
 
 export function getWorldResourceGroup(itemId: string, itemType = ""): keyof typeof WORLD_RESOURCE_ASSETS {

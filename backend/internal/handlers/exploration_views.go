@@ -125,8 +125,8 @@ func ExecuteGetCellsRect(playerID uuid.UUID, minX, minY, maxX, maxY int) (int, a
 	if err != nil {
 		return http.StatusServiceUnavailable, gin.H{"error": "Trạng thái bản đồ tạm thời không khả dụng."}
 	}
-	if !instanceRegion && (!hasScope || entry.MapID == "" || entry.MapID == "world_map") {
-		out = append(out, veinCellsInBounds(minX, minY, maxX, maxY)...)
+	if !instanceRegion {
+		out = append(out, veinCellsForRegionOrBounds(entry.Region, minX, minY, maxX, maxY)...)
 	}
 	return http.StatusOK, out
 }

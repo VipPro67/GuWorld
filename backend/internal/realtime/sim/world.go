@@ -321,6 +321,59 @@ func (w *World) AddEntity(entity Entity) error {
 	return w.addEntityLocked(entity)
 }
 
+// AddEntities adds setup entities as one atomic batch before the zone runner
+// starts. Every entity is validated before any is installed, and the initial
+// snapshot is published once. Running zones must use QueueAddEntity instead.
+func (w *World) AddEntities(entities []Entity) error {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	if err := validateSetupEntities(w.collision, entities, w.entities); err != nil {
+		return err
+	}
+	for _, entity := range entities {
+		copy := entity
+		copy.moveIntent = Vec2{}
+		if copy.Kind == EntityPlayer {
+			w.activePlayers++
+		}
+		w.entities[entity.ID] = &copy
+	}
+	if len(entities) > 0 {
+		w.publish()
+	}
+	return nil
+}
+
+// ValidateSetupEntities applies the same validation AddEntities performs before
+// installing a setup batch. Lazy zone managers use it at startup to fail early
+// on invalid monster spawns without allocating a World.
+func ValidateSetupEntities(collision Collision, entities []Entity) error {
+	return validateSetupEntities(collision, entities, nil)
+}
+
+func validateSetupEntities(collision Collision, entities []Entity, existing map[EntityID]*Entity) error {
+	if len(entities) == 0 {
+		return nil
+	}
+	seen := make(map[EntityID]struct{}, len(entities))
+	for _, entity := range entities {
+		if err := validateEntity(entity); err != nil {
+			return err
+		}
+		if collision != nil && collision.Blocked(entity.Transform.Position, entity.Radius) {
+			return fmt.Errorf("%w: spawn intersects static collision", ErrInvalidEntity)
+		}
+		if _, exists := existing[entity.ID]; exists {
+			return fmt.Errorf("%w: duplicate id %q", ErrInvalidEntity, entity.ID)
+		}
+		if _, exists := seen[entity.ID]; exists {
+			return fmt.Errorf("%w: duplicate id %q", ErrInvalidEntity, entity.ID)
+		}
+		seen[entity.ID] = struct{}{}
+	}
+	return nil
+}
+
 func (w *World) addEntityLocked(entity Entity) error {
 	if err := validateEntity(entity); err != nil {
 		return err
@@ -620,6 +673,17 @@ func (w *World) Snapshot() Snapshot {
 	copy.Projectiles = append([]ProjectileState(nil), snapshot.Projectiles...)
 	copy.Events = append([]combat.Event(nil), snapshot.Events...)
 	return copy
+}
+
+// HasPendingActivity reports whether the latest published snapshot still has
+// projectiles or events. It is a cheap, allocation-free check for lifecycle
+// eviction; the published snapshot is immutable after publication.
+func (w *World) HasPendingActivity() bool {
+	snapshot := w.published.Load()
+	if snapshot == nil {
+		return false
+	}
+	return len(snapshot.Projectiles) > 0 || len(snapshot.Events) > 0
 }
 
 // publish runs only on the zone actor.

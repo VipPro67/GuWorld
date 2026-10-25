@@ -19,18 +19,21 @@ func TestCompileCommittedProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(compiled.Profiles) != 4255 || len(compiled.DefaultSkills) != 5 {
-		t.Fatalf("profiles=%d actives=%d, want 4255/5", len(compiled.Profiles), len(compiled.DefaultSkills))
+	if len(compiled.Profiles) != 4427 || len(compiled.DefaultSkills) != 5 {
+		t.Fatalf("profiles=%d actives=%d, want 4427/5", len(compiled.Profiles), len(compiled.DefaultSkills))
 	}
 	if compiled.Hash == "" {
 		t.Fatal("compiled catalog hash is empty")
 	}
-	if compiled.Hash != "e50d8b51e2ee09f2ecaeac34a9f115fcc4bc63d598b43fa0e30ed93246770372" {
+	if compiled.Hash != "01fd0c696c92c93a6c1c3285bbaa211e9a7ab52fabd16dac79b692ceb12afc41" {
 		t.Fatalf("compiled catalog drifted; update this baseline: %s", compiled.Hash)
 	}
 	arrow, ok := compiled.Profile("GU_WATER_ARROW", 1)
 	if !ok || arrow.Active == nil {
 		t.Fatal("water arrow profile missing")
+	}
+	if _, ok := compiled.Profile("GU_WATER_ARROW", 9); ok {
+		t.Fatal("missing rank must not inherit another rank's realtime profile")
 	}
 	if arrow.Active.Skill.Mode != combat.ModeDirection || arrow.Active.Skill.ProjectileSpeed != 18 || arrow.Active.Skill.WindupTicks != 4 {
 		t.Fatalf("unexpected water arrow compile: %+v", arrow.Active.Skill)

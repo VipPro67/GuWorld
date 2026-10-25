@@ -18,7 +18,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
-	"github.com/vippro67/GuWorld/backend/internal/match"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	realtimeai "github.com/vippro67/GuWorld/backend/internal/realtime/ai"
@@ -260,57 +259,65 @@ func main() {
 			logger.S.Infof("Realtime Gu profiles compiled: profiles=%d actives=%d hash=%s", len(compiled.Profiles), len(compiled.DefaultSkills), compiled.Hash)
 		}
 		zoneMaps := make(map[sim.ZoneKey]realtimeworld.ZoneMap, len(zoneKeys))
+		mapArtifacts := make(map[string]realtimeworld.ZoneMap, len(realtimeConfig.ZoneIDs))
 		var mapLoadErr error
 		for _, key := range zoneKeys {
-			mapPath := resolveRealtimeMapPath(realtimeConfig.MapDir, key.MapID)
-			loaded, mapErr := nav.LoadFile(mapPath)
-			if mapErr != nil {
-				if errors.Is(mapErr, os.ErrNotExist) {
-					mapLoadErr = fmt.Errorf("configured realtime map %q not found at %s", key.MapID, mapPath)
-				} else {
-					mapLoadErr = fmt.Errorf("configured realtime map %q is invalid at %s: %w", key.MapID, mapPath, mapErr)
-				}
-				break
-			}
-			if realtimeConfig.MapVersion != "" && loaded.Version != realtimeConfig.MapVersion {
-				mapLoadErr = fmt.Errorf("configured realtime map %q has version %q; MMO_MAP_VERSION requires %q", key.MapID, loaded.Version, realtimeConfig.MapVersion)
-				break
-			}
-			if realtimeConfig.ContentVersion != "" && loaded.ContentVersion != realtimeConfig.ContentVersion {
-				mapLoadErr = fmt.Errorf("configured realtime map %q has content version %q; MMO_CONTENT_VERSION requires %q", key.MapID, loaded.ContentVersion, realtimeConfig.ContentVersion)
-				break
-			}
-			spawns := make([]sim.Vec2, 0, len(loaded.Spawns))
-			monsters := make([]realtimeworld.MonsterSpawn, 0)
-			for _, spawn := range loaded.Spawns {
-				switch spawn.Kind {
-				case "player":
-					spawns = append(spawns, sim.Vec2{X: spawn.X, Y: spawn.Y})
-				case "monster":
-					template, ok := models.MonsterRegistry[spawn.MonsterID]
-					if !ok {
-						logger.S.Warnf("Realtime map %q monster spawn %q references unknown monster_id %q", key.MapID, spawn.Name, spawn.MonsterID)
-						continue
+			// Instances of the same map share one immutable collision/spawn
+			// artifact; only their world state and runners differ.
+			artifact, loaded := mapArtifacts[key.MapID]
+			if !loaded {
+				mapPath := resolveRealtimeMapPath(realtimeConfig.MapDir, key.MapID)
+				loadedMap, mapErr := nav.LoadFile(mapPath)
+				if mapErr != nil {
+					if errors.Is(mapErr, os.ErrNotExist) {
+						mapLoadErr = fmt.Errorf("configured realtime map %q not found at %s", key.MapID, mapPath)
+					} else {
+						mapLoadErr = fmt.Errorf("configured realtime map %q is invalid at %s: %w", key.MapID, mapPath, mapErr)
 					}
-					stats := realtimeai.DefaultStats(template.Type)
-					monsters = append(monsters, realtimeworld.MonsterSpawn{
-						TemplateID: template.ID, Name: template.Name, X: spawn.X, Y: spawn.Y,
-						MaxHP: template.MaxHP, AttackDamage: template.BaseAttack, Defense: template.BaseDefense,
-						Speed: stats.Speed, Radius: stats.Radius,
-						AggroRadius: stats.AggroRadius, LeashRadius: stats.LeashRadius,
-						AttackRange: stats.AttackRange, PatrolRadius: stats.PatrolRadius,
-						AttackCooldownTicks: stats.AttackCooldownTicks, RespawnTicks: stats.RespawnTicks,
-						SplashRadius: stats.SplashRadius, SplashDamage: stats.SplashDamage,
-					})
+					break
 				}
+				if realtimeConfig.MapVersion != "" && loadedMap.Version != realtimeConfig.MapVersion {
+					mapLoadErr = fmt.Errorf("configured realtime map %q has version %q; MMO_MAP_VERSION requires %q", key.MapID, loadedMap.Version, realtimeConfig.MapVersion)
+					break
+				}
+				if realtimeConfig.ContentVersion != "" && loadedMap.ContentVersion != realtimeConfig.ContentVersion {
+					mapLoadErr = fmt.Errorf("configured realtime map %q has content version %q; MMO_CONTENT_VERSION requires %q", key.MapID, loadedMap.ContentVersion, realtimeConfig.ContentVersion)
+					break
+				}
+				spawns := make([]sim.Vec2, 0, len(loadedMap.Spawns))
+				monsters := make([]realtimeworld.MonsterSpawn, 0)
+				for _, spawn := range loadedMap.Spawns {
+					switch spawn.Kind {
+					case "player":
+						spawns = append(spawns, sim.Vec2{X: spawn.X, Y: spawn.Y})
+					case "monster":
+						template, ok := models.MonsterRegistry[spawn.MonsterID]
+						if !ok {
+							logger.S.Warnf("Realtime map %q monster spawn %q references unknown monster_id %q", key.MapID, spawn.Name, spawn.MonsterID)
+							continue
+						}
+						stats := realtimeai.DefaultStats(template.Type)
+						monsters = append(monsters, realtimeworld.MonsterSpawn{
+							TemplateID: template.ID, Name: template.Name, X: spawn.X, Y: spawn.Y,
+							MaxHP: template.MaxHP, AttackDamage: template.BaseAttack, Defense: template.BaseDefense,
+							Speed: stats.Speed, Radius: stats.Radius,
+							AggroRadius: stats.AggroRadius, LeashRadius: stats.LeashRadius,
+							AttackRange: stats.AttackRange, PatrolRadius: stats.PatrolRadius,
+							AttackCooldownTicks: stats.AttackCooldownTicks, RespawnTicks: stats.RespawnTicks,
+							SplashRadius: stats.SplashRadius, SplashDamage: stats.SplashDamage,
+						})
+					}
+				}
+				artifact = realtimeworld.ZoneMap{
+					Collision: loadedMap.Collision(), Spawns: spawns, Monsters: monsters,
+					PvP: loadedMap.Ruleset == "pvp", Hash: loadedMap.Hash, SafeSpawn: loadedMap.SafeSpawn,
+					LegacyOriginX: loadedMap.LegacyOriginX, LegacyOriginY: loadedMap.LegacyOriginY, LegacyScale: loadedMap.LegacyScale,
+					Width: loadedMap.Width, Height: loadedMap.Height,
+				}
+				mapArtifacts[key.MapID] = artifact
+				logger.S.Infof("Realtime map %q loaded (%dx%d, %d monsters, hash %s, %d instance(s))", key.MapID, loadedMap.Width, loadedMap.Height, len(monsters), loadedMap.Hash, instances)
 			}
-			zoneMaps[key] = realtimeworld.ZoneMap{
-				Collision: loaded.Collision(), Spawns: spawns, Monsters: monsters,
-				PvP: loaded.Ruleset == "pvp", Hash: loaded.Hash, SafeSpawn: loaded.SafeSpawn,
-				LegacyOriginX: loaded.LegacyOriginX, LegacyOriginY: loaded.LegacyOriginY, LegacyScale: loaded.LegacyScale,
-				Width: loaded.Width, Height: loaded.Height,
-			}
-			logger.S.Infof("Realtime map %q loaded (%dx%d, %d monsters, hash %s)", key.MapID, loaded.Width, loaded.Height, len(monsters), loaded.Hash)
+			zoneMaps[key] = artifact
 		}
 		realtimeStateStore = persistence.NewService(db.DB)
 		var manager *realtimeworld.Manager
@@ -318,7 +325,7 @@ func main() {
 		if mapLoadErr != nil {
 			managerErr = mapLoadErr
 		} else {
-			manager, managerErr = realtimeworld.NewManagerWithMaps(zoneKeys, sim.DefaultQueueSize, realtimeConfig.MaxPlayersPerZone, zoneMaps)
+			manager, managerErr = realtimeworld.NewLazyManagerWithMaps(zoneKeys, sim.DefaultQueueSize, realtimeConfig.MaxPlayersPerZone, zoneMaps)
 		}
 		if managerErr == nil {
 			inventorySvc := handlers.InventorySvc
@@ -332,7 +339,7 @@ func main() {
 					return
 				}
 				result, grantErr := lootSvc.GrantKill(callCtx, realloot.GrantKey{
-					ZoneID: death.ZoneKey.MapID, DeathID: fmt.Sprintf("%d:%s", death.EventID, death.TargetID),
+					ZoneID: death.ZoneKey.MapID, DeathID: fmt.Sprintf("%s:%d:%s", death.Generation, death.EventID, death.TargetID),
 					RecipientID: recipient, TemplateID: death.TemplateID, RewardVersion: realloot.RewardVersion,
 				})
 				if grantErr != nil {
@@ -377,7 +384,7 @@ func main() {
 		} else {
 			realtimeStartupError = ""
 			realtimeWorldManager = manager
-			logger.S.Infof("Realtime world manager started with %d configured zones; WebSocket join is guarded by allowlist and version gates", len(zoneKeys))
+			logger.S.Infof("Realtime world manager started with %d configured zones across %d checked maps (lazy worlds, 5m idle eviction); WebSocket join is guarded by allowlist and version gates", len(zoneKeys), len(mapArtifacts))
 		}
 	}
 	handlers.SetRealtimeRuntimeError(realtimeStartupError)
@@ -385,8 +392,17 @@ func main() {
 		middleware.SetRealtimeOwnershipChecker(func(playerID uuid.UUID) bool {
 			return realtimeWorldManager.OwnsCharacter(sim.CharacterID(playerID.String()))
 		})
+		middleware.SetRealtimeVitalsBridge(
+			func(playerID uuid.UUID) (hp, maxHP float64, ok bool) {
+				return realtimeWorldManager.PlayerVitals(sim.CharacterID(playerID.String()))
+			},
+			func(playerID uuid.UUID, delta float64) bool {
+				return realtimeWorldManager.ApplyHPDelta(sim.CharacterID(playerID.String()), delta) == nil
+			},
+		)
 	} else {
 		middleware.SetRealtimeOwnershipChecker(nil)
+		middleware.SetRealtimeVitalsBridge(nil, nil)
 	}
 
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
@@ -416,7 +432,6 @@ func main() {
 	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute) // Phase 2: society simulation tick
 	worker.StartGuMasterSpawningWorker(ctx, db.DB, 30*time.Minute) // Phase 3: Gu Master spawning
 	handlers.StartRoamingMerchantWorker(ctx, db.DB, 2*time.Minute) // Roaming traders on the world map
-	match.StartTickLoop(ctx)                                       // Realtime PvP match simulation (20Hz)
 	if cache.Client != nil {
 		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)
 	}

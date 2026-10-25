@@ -128,6 +128,9 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	for i := range state.EquippedGu {
 		entry := &state.EquippedGu[i]
 		spec, ok := models.GetGu(entry.GuID, entry.Rank)
+		if !ok {
+			spec, ok = models.GetGuAny(entry.GuID)
+		}
 		if !ok || !gamefx.CanUseGuWithMana(player.Rank, &spec) {
 			continue
 		}

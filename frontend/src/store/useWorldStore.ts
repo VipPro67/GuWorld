@@ -1,40 +1,22 @@
 "use client";
 
 import { create } from "zustand";
-import { useGameStore, type Player, type GroundDrop } from "@/store/useGameStore";
-import { useUIStore } from "@/store/useUIStore";
-import { wsManager } from "@/lib/websocket";
-import {
-  reduceWorldCombatEvent,
-  type WorldCombatEvent,
-  type WorldMonster,
-} from "@/store/worldMonsterReducer";
+import { BACKEND_URL } from "@/lib/config";
+import { authFetch } from "@/lib/auth";
+import { useGameStore } from "@/store/useGameStore";
 
-export type { WorldCombatEvent, WorldMonster } from "@/store/worldMonsterReducer";
-
-export interface PrimevalVeinInfo {
+export interface NearbyVeinInfo {
   id: string;
-  vein_type: string;
-  rarity: string;
-  accumulated_stones: number;
-  accumulated_qi: number;
-  accumulated_chests: number;
-  capacity_stones: number;
-  expires_at: string;
-}
-
-export interface WorldObject {
-  id?: string;
   region_id: string;
   x: number;
   y: number;
-  cell_type: string;
-  content_id: string;
-  rank?: number;
-  respawn_seconds?: number;
-  cleared?: boolean;
-  dropData?: GroundDrop;
-  vein?: PrimevalVeinInfo;
+  vein_type: string;
+  rarity: string;
+  accumulated_stones: number;
+  capacity_stones: number;
+  accumulated_qi: number;
+  accumulated_chests: number;
+  expires_at: string;
 }
 
 export interface NearbyCell {
@@ -45,520 +27,57 @@ export interface NearbyCell {
   rank?: number;
   sub_rank?: number;
   region_id?: string;
-  vein?: PrimevalVeinInfo;
+  vein?: NearbyVeinInfo;
 }
-
-type CellCacheState = {
-  cellChunks: Record<string, CellChunk>;
-  nearbyCells: NearbyCell[];
-  nearbyWindow: { x: number; y: number; r: number } | null;
-  cellRegion: string;
-  cellInvalidations: Record<string, number>;
-};
-
-export type CellChunk = {
-  cells: Record<string, NearbyCell>;
-  touchedAt: number;
-  version?: number;
-};
-
-export const CELL_CHUNK_SIZE = 64;
-const MAX_DEFEATED_MONSTER_SPAWN_TOMBSTONES = 10_000;
-const MAX_CELL_CHUNKS = 512;
-
-const currentCellRegion = () => useGameStore.getState().player?.current_region ?? "";
-let monsterSnapshotRequest = 0;
-let lastMonsterSnapshotAt = 0;
-let cellMutationVersion = 0;
-const MONSTER_SNAPSHOT_MIN_INTERVAL_MS = 5000;
-const chunkKey = (region: string, x: number, y: number) =>
-  `${region}:${Math.floor(x / CELL_CHUNK_SIZE)},${Math.floor(y / CELL_CHUNK_SIZE)}`;
-const cellKey = (x: number, y: number) => `${x},${y}`;
-
-function visibleCells(chunks: Record<string, CellChunk>, region: string, w: CellCacheState["nearbyWindow"]): NearbyCell[] {
-  if (!w) return [];
-  const visible: NearbyCell[] = [];
-  const minChunkX = Math.floor((w.x - w.r) / CELL_CHUNK_SIZE);
-  const maxChunkX = Math.floor((w.x + w.r) / CELL_CHUNK_SIZE);
-  const minChunkY = Math.floor((w.y - w.r) / CELL_CHUNK_SIZE);
-  const maxChunkY = Math.floor((w.y + w.r) / CELL_CHUNK_SIZE);
-  for (let cx = minChunkX; cx <= maxChunkX; cx++) {
-    for (let cy = minChunkY; cy <= maxChunkY; cy++) {
-      const chunk = chunks[`${region}:${cx},${cy}`];
-      if (!chunk) continue;
-      for (const cell of Object.values(chunk.cells)) {
-        if (cell.x >= w.x - w.r && cell.x <= w.x + w.r && cell.y >= w.y - w.r && cell.y <= w.y + w.r) visible.push(cell);
-      }
-    }
-  }
-  return visible;
-}
-
-// Copy only chunks touched by this response. A flat cache used to clone and scan
-// up to 150k entries for every websocket delta.
-function mergeCellCache(
-  s: CellCacheState,
-  cells: NearbyCell[],
-  version?: number,
-  coverage?: { minX: number; minY: number; maxX: number; maxY: number; region: string; requestedVersion?: number },
-): Partial<CellCacheState> {
-  const region = coverage?.region ?? currentCellRegion();
-  const chunks = s.cellRegion === region ? { ...s.cellChunks } : {};
-  const changed = new Map<string, CellChunk>();
-  const now = Date.now();
-  // A rectangle response is an authoritative snapshot of its covered area.
-  // Remove cached cells omitted by the server so missed realtime events heal on
-  // the next reconciliation poll.
-  if (coverage) {
-    const minChunkX = Math.floor(coverage.minX / CELL_CHUNK_SIZE);
-    const maxChunkX = Math.floor(coverage.maxX / CELL_CHUNK_SIZE);
-    const minChunkY = Math.floor(coverage.minY / CELL_CHUNK_SIZE);
-    const maxChunkY = Math.floor(coverage.maxY / CELL_CHUNK_SIZE);
-    for (let cx = minChunkX; cx <= maxChunkX; cx++) {
-      for (let cy = minChunkY; cy <= maxChunkY; cy++) {
-        const key = `${region}:${cx},${cy}`;
-        const oldChunk = chunks[key];
-        if (!oldChunk) continue;
-        const nextCells = { ...oldChunk.cells };
-        for (const [key, cell] of Object.entries(nextCells)) {
-          if (cell.x >= coverage.minX && cell.x <= coverage.maxX && cell.y >= coverage.minY && cell.y <= coverage.maxY) delete nextCells[key];
-        }
-        chunks[key] = { ...oldChunk, cells: nextCells, touchedAt: now, version };
-        changed.set(key, chunks[key]);
-      }
-    }
-  }
-  for (const c of cells) {
-    const invalidationKey = `${region}:${cellKey(c.x, c.y)}`;
-    if (coverage?.requestedVersion !== undefined
-      && (s.cellInvalidations[invalidationKey] ?? 0) > coverage.requestedVersion) continue;
-    const key = chunkKey(region, c.x, c.y);
-    let chunk = changed.get(key);
-    if (!chunk) {
-      chunk = { cells: { ...(chunks[key]?.cells ?? {}) }, touchedAt: now, version };
-      changed.set(key, chunk);
-      chunks[key] = chunk;
-    }
-    chunk.cells[cellKey(c.x, c.y)] = c;
-  }
-  const keys = Object.keys(chunks);
-  if (keys.length > MAX_CELL_CHUNKS) {
-    keys.sort((a, b) => chunks[a].touchedAt - chunks[b].touchedAt);
-    for (let i = 0; i < keys.length - MAX_CELL_CHUNKS; i++) delete chunks[keys[i]];
-  }
-  return { cellChunks: chunks, cellRegion: region, nearbyCells: visibleCells(chunks, region, s.nearbyWindow) };
-}
-
-export interface NearbyPlayer {
-  id: string;
-  username: string;
-  avatar_url: string;
-  x: number;
-  y: number;
-  region_id?: string;
-}
-
-export interface WorldPlayer {
-  x: number;
-  y: number;
-  current_region: string;
-}
-
-export interface TeleportResponse {
-  player: Player;
-  x: number;
-  y: number;
-  region: string;
-  cost: number;
-  currency: string;
-  message: string;
-}
-
-export interface SkillFxEvent {
-  id: string;
-  type: string;
-  value?: number;
-  text: string;
-  x: number;
-  y: number;
-  timestamp: number;
-}
-
-export interface SelectedTarget {
-  instanceId?: string;
-  x: number;
-  y: number;
-  cellType: string;
-  contentId: string;
-  name: string;
-  rank?: number;
-  hp: number;
-  maxHp: number;
-}
-
-import { BACKEND_URL } from "@/lib/config";
-import { authFetch } from "@/lib/auth";
 
 interface WorldStoreState {
-  monsters: Record<string, WorldMonster>;
-  removedMonsterRevisions: Record<string, number>;
-  defeatedMonsterSpawns: Record<string, number>;
-  hasMonsterSnapshot: boolean;
-  monsterSnapshotRegion: string;
-  seenCombatEvents: string[];
-  objects: WorldObject[];
   nearbyCells: NearbyCell[];
-  cellChunks: Record<string, CellChunk>;
-  cellRegion: string;
-  cellInvalidations: Record<string, number>;
-  nearbyWindow: { x: number; y: number; r: number } | null;
-  playerPositions: Record<string, NearbyPlayer & { ts: number }>;
-  nearbyPlayers: NearbyPlayer[];
-  exploredSubZones: Set<string>;
-  movementRange: number;
-  investigationRange: number;
-  selectedObject: WorldObject | null;
-  selectedTarget: SelectedTarget | null;
-  targetingGu: { guInstanceId: string; guId: string; name: string; mode: "monster" | "position" } | null;
-  skillFxEvents: SkillFxEvent[];
-  isMoving: boolean;
   loading: boolean;
   error: string | null;
-  worldLogs: { id: string; text: string; timestamp: number }[];
-  cameraCenterRequest: number;
-  liveX: number;
-  liveY: number;
-  cameraScale: number;
-  cameraX: number;
-  cameraY: number;
-  fetchObjects: () => Promise<void>;
-  fetchNearbyCells: (x: number, y: number, r: number) => Promise<boolean>;
-  fetchCellsRect: (minX: number, minY: number, maxX: number, maxY: number) => Promise<boolean>;
-  getCachedCell: (x: number, y: number) => NearbyCell | undefined;
-  invalidateCell: (x: number, y: number) => void;
-  mergeWSCells: (cells: NearbyCell[]) => void;
-  fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
-  fetchMonsterSnapshot: (r?: number, force?: boolean) => Promise<boolean>;
-  applyCombatEvent: (event: WorldCombatEvent) => void;
-  upsertPlayerPosition: (p: NearbyPlayer) => void;
-  pruneStalePlayers: () => void;
-  movePath: (x: number, y: number) => Promise<{
-    player: Partial<Player> & Pick<Player, "x" | "y">;
-    synced_party_members?: Array<{ id: string; username: string; avatar_url: string; region: string; x: number; y: number }>;
-    log: string;
-    combat_triggered: boolean;
-    reached: boolean;
-    skip_result?: unknown;
-  } | null>;
-  useGuOnMap: (guInstanceId: string, targetX: number, targetY: number, targetMonsterId?: string) => Promise<{ message: string; logs: string[]; effect_type?: string; effect_value?: number; damage_dealt?: number; target_defeated?: boolean; target_hp?: number; target_max_hp?: number } | null>;
-  setTargetingGu: (gu: { guInstanceId: string; guId: string; name: string; mode: "monster" | "position" } | null) => void;
-  selectTarget: (target: SelectedTarget | null) => void;
-  triggerSkillFx: (type: string, value: number, text: string, x: number, y: number) => void;
-  clearSkillFx: (id: string) => void;
-  setExploredSubZones: (keys: string[]) => void;
-  setMovementRange: (r: number) => void;
-  setInvestigationRange: (r: number) => void;
-  setMoving: (v: boolean) => void;
-  selectObject: (obj: WorldObject | null) => void;
+
+  fetchNearbyCells: (x: number, y: number, radius: number) => Promise<boolean>;
   harvestVein: (veinId: string) => Promise<boolean>;
-  setPersistentCellCleared: (region: string, x: number, y: number, cleared: boolean) => void;
-  requestCenterCamera: () => void;
-  setLivePosition: (x: number, y: number) => void;
-  setCamera: (scale: number, x: number, y: number) => void;
-  addWorldLog: (text: string) => void;
 }
 
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
-  monsters: {},
-  removedMonsterRevisions: {},
-  defeatedMonsterSpawns: {},
-  hasMonsterSnapshot: false,
-  monsterSnapshotRegion: "",
-  seenCombatEvents: [],
-  objects: [],
   nearbyCells: [],
-  cellChunks: {},
-  cellRegion: "",
-  cellInvalidations: {},
-  nearbyWindow: null,
-  playerPositions: {},
-  nearbyPlayers: [],
-  exploredSubZones: new Set<string>(),
-  movementRange: 1,
-  investigationRange: 10,
-  selectedObject: null,
-  selectedTarget: null,
-  targetingGu: null,
-  skillFxEvents: [],
-  isMoving: false,
   loading: false,
   error: null,
-  worldLogs: [],
-  cameraCenterRequest: 0,
-  liveX: 0,
-  liveY: 0,
-  cameraScale: 0,
-  cameraX: 0,
-  cameraY: 0,
 
-  setTargetingGu: (gu) => set({ targetingGu: gu }),
-  selectTarget: (target) => set({ selectedTarget: target }),
-  triggerSkillFx: (type, value, text, x, y) =>
-    set((s) => ({
-      skillFxEvents: [
-        ...s.skillFxEvents,
-        { id: Math.random().toString(36).substring(2, 9), type, value, text, x, y, timestamp: Date.now() },
-      ].slice(-20),
-    })),
-  clearSkillFx: (id) => set((s) => ({ skillFxEvents: s.skillFxEvents.filter((e) => e.id !== id) })),
+  fetchNearbyCells: async (x: number, y: number, radius: number) => {
+    const boundedRadius = Math.min(Math.max(Math.round(radius), 1), 127);
+    const minX = Math.round(x - boundedRadius);
+    const minY = Math.round(y - boundedRadius);
+    const maxX = Math.round(x + boundedRadius);
+    const maxY = Math.round(y + boundedRadius);
 
-  requestCenterCamera: () => set((s) => ({ cameraCenterRequest: s.cameraCenterRequest + 1 })),
-  addWorldLog: (text: string) =>
-    set((s) => ({
-      worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text, timestamp: Date.now() }].slice(-50),
-    })),
-
-  fetchObjects: async () => {
-    set({ loading: true, error: null });
     try {
-      if (wsManager.isConnected()) {
-        const data = await wsManager.request<WorldObject[]>("world.objects", {}, 15000);
-        set({ objects: Array.isArray(data) ? data : [], loading: false });
-        return;
-      }
-      const res = await authFetch(`${BACKEND_URL}/api/explore/objects`);
-      if (!res.ok) throw new Error("Không thể tải các điểm trên bản đồ");
+      const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${minX}&min_y=${minY}&max_x=${maxX}&max_y=${maxY}`;
+      const res = await authFetch(url);
+      if (!res.ok) return false;
       const data = await res.json();
-      set({ objects: Array.isArray(data) ? data : [], loading: false });
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err), loading: false });
-    }
-  },
+      if (!Array.isArray(data)) return false;
 
-  movePath: async (x: number, y: number) => {
-    // WorldCanvas owns the complete visual walk lifecycle. A transport request
-    // finishing is not the same as the chained movement finishing.
-    set({ error: null });
-    try {
-      if (wsManager.isConnected()) {
-        return await wsManager.request<{
-          player: Partial<Player> & Pick<Player, "x" | "y">;
-          synced_party_members?: Array<{ id: string; username: string; avatar_url: string; region: string; x: number; y: number }>;
-          log: string;
-          combat_triggered: boolean;
-          reached: boolean;
-          skip_result?: unknown;
-        }>("world.move_path", { x: Math.round(x), y: Math.round(y) }, 60000);
-      }
-      const res = await authFetch(`${BACKEND_URL}/api/explore/move-path`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ x: Math.round(x), y: Math.round(y) }),
-      });
-      const body = await res.text();
-      if (!res.ok) {
-        let msg = `Di chuyển thất bại: ${res.status}`;
-        try {
-          const errData = JSON.parse(body);
-          if (errData.error) msg = errData.error;
-        } catch {
-          /* ignore */
-        }
-        useUIStore.getState().addToast(msg, "error");
-        set((s) => ({
-          error: null,
-          worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
-        }));
-        return null;
-      }
-      const data = JSON.parse(body);
-      return data;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      useGameStore.getState().addToast(msg, "error");
-      set((s) => ({
-        error: null,
-        worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
+      const cells: NearbyCell[] = data.map((item: Record<string, unknown>) => ({
+        x: typeof item.x === "number" ? item.x : 0,
+        y: typeof item.y === "number" ? item.y : 0,
+        cell_type: typeof item.cell_type === "string" ? item.cell_type : (item.type as string) || "Empty",
+        content: typeof item.content === "string" ? item.content : "",
+        rank: typeof item.rank === "number" ? item.rank : undefined,
+        sub_rank: typeof item.sub_rank === "number" ? item.sub_rank : undefined,
+        region_id: typeof item.region === "string" ? item.region : (item.region_id as string) || undefined,
+        vein: item.vein as NearbyVeinInfo | undefined,
       }));
-      return null;
-    }
-  },
 
-  useGuOnMap: async (guInstanceId: string, targetX: number, targetY: number, targetMonsterId?: string) => {
-    set({ loading: true, error: null });
-    try {
-      const curTarget = get().selectedTarget;
-      const tx = targetX ?? (curTarget ? curTarget.x : 0);
-      const ty = targetY ?? (curTarget ? curTarget.y : 0);
-
-      const res = await authFetch(`${BACKEND_URL}/api/explore/use_gu`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          command_id: crypto.randomUUID(),
-          gu_instance_id: guInstanceId,
-          target_x: tx,
-          target_y: ty,
-          ...(targetMonsterId ? { target: { kind: "monster", id: targetMonsterId } } : {}),
-        }),
-      });
-      const body = await res.text();
-      let data;
-      try {
-        data = JSON.parse(body);
-      } catch {
-        throw new Error(body || "Invalid response");
-      }
-      if (!res.ok) {
-        const msg = data?.error || data?.message || "Failed to use Gu on map";
-        useUIStore.getState().addToast(msg, "error");
-        set((s) => ({
-          error: null,
-          loading: false,
-          worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
-        }));
-        return null;
-      }
-      if (data.player) {
-        useGameStore.getState().setPlayerFromServer(data.player);
-      } else {
-        useGameStore.getState().applyInventoryFromResponse(data);
-      }
-      const playerObj = data.player || useGameStore.getState().player;
-      if (playerObj) {
-        const cellRadius = get().investigationRange;
-        get().fetchNearbyCells(playerObj.x, playerObj.y, cellRadius);
-        if (data.target_defeated && (Math.abs(tx - playerObj.x) > cellRadius || Math.abs(ty - playerObj.y) > cellRadius)) {
-          get().fetchCellsRect(tx, ty, tx, ty);
-        }
-        get().fetchNearbyPlayers(playerObj.x, playerObj.y, 300);
-
-        if (data.damage_dealt && data.damage_dealt > 0) {
-          const fxX = data.target_x || tx || playerObj.x;
-          const fxY = data.target_y || ty || playerObj.y;
-          get().triggerSkillFx(
-            "damage",
-            data.damage_dealt,
-            `-${Math.round(data.damage_dealt)}`,
-            fxX,
-            fxY
-          );
-
-          if (data.target_defeated) {
-            useUIStore.getState().addToast(`Tiêu diệt thành công ${data.target_name || "quái vật"}!`, "success");
-            set({ selectedTarget: null });
-          }
-        } else if (data.effect_type) {
-          get().triggerSkillFx(
-            data.effect_type,
-            data.effect_value || 0,
-            data.message || "Kích hoạt Cổ trùng!",
-            playerObj.x,
-            playerObj.y
-          );
-        }
-
-        if (data.logs && Array.isArray(data.logs) && data.logs.length > 0) {
-          for (const logText of data.logs) {
-            get().addWorldLog(logText);
-            useGameStore.getState().addLog(logText);
-          }
-        } else if (data.message) {
-          get().addWorldLog(data.message);
-          useGameStore.getState().addLog(data.message);
-        }
-      }
-      set({ loading: false, targetingGu: null });
-      return data;
+      set({ nearbyCells: cells });
+      return true;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error";
-      useGameStore.getState().addToast(msg, "error");
-      set((s) => ({
-        error: null,
-        loading: false,
-        worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
-      }));
-      return null;
+      console.warn("fetchNearbyCells failed:", err);
+      return false;
     }
   },
 
-  teleportToRegion: async (regionId: string) => {
-    set({ loading: true, error: null });
-    try {
-      const res = await authFetch(`${BACKEND_URL}/api/explore/teleport`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ region_id: regionId }),
-      });
-      const body = await res.text();
-      if (!res.ok) {
-        let msg = `Di Chuyển thất bại: ${res.status}`;
-        try {
-          const errData = JSON.parse(body);
-          if (errData.error) msg = errData.error;
-        } catch {
-          /* ignore */
-        }
-        useUIStore.getState().addToast(msg, "error");
-        set((s) => ({
-          loading: false,
-          error: null,
-          worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
-        }));
-        return null;
-      }
-      const data = JSON.parse(body);
-      const nextX = data.x ?? data.player?.x;
-      const nextY = data.y ?? data.player?.y;
-      const nextRegion = data.region ?? data.player?.current_region;
-      // Update local position immediately for smooth UX
-      if (nextX !== undefined && nextY !== undefined) {
-        set({ liveX: nextX, liveY: nextY });
-        // Also update game store player position
-        if (typeof window !== "undefined") {
-          const { useGameStore } = await import("@/store/useGameStore");
-          const currentPlayer = useGameStore.getState().player;
-          if (currentPlayer) {
-            useGameStore.getState().setPlayerFromServer({
-              ...currentPlayer,
-              x: nextX,
-              y: nextY,
-              current_region: nextRegion ?? currentPlayer.current_region,
-              primeval_stones: data.player?.primeval_stones ?? currentPlayer.primeval_stones,
-              immortal_stones: data.player?.immortal_stones ?? currentPlayer.immortal_stones,
-            });
-          }
-        }
-      }
-      // Refetch nearby cells for new position
-      setTimeout(() => {
-        const world = useWorldStore.getState();
-        const targetX = nextX ?? world.liveX;
-        const targetY = nextY ?? world.liveY;
-        world.fetchNearbyCells(targetX, targetY, world.investigationRange);
-        useWorldStore.getState().fetchNearbyPlayers(targetX, targetY, 300);
-      }, 100);
-      return data;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      useGameStore.getState().addToast(msg, "error");
-      set((s) => ({
-        error: null,
-        loading: false,
-        worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
-      }));
-      return null;
-    } finally {
-      set({ loading: false });
-    }
-  },
-
-  setExploredSubZones: (keys) => set({ exploredSubZones: new Set<string>(keys) }),
-  setMovementRange: (r) => set({ movementRange: r > 0 ? r : 1 }),
-  setInvestigationRange: (r) => set({ investigationRange: Math.min(Math.max(r, 10), 25) }),
-  setMoving: (v) => set({ isMoving: v }),
-  selectObject: (obj) => set({ selectedObject: obj }),
-  harvestVein: async (veinId) => {
+  harvestVein: async (veinId: string) => {
     try {
       const res = await authFetch(`${BACKEND_URL}/api/veins/${veinId}/harvest`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
@@ -569,261 +88,11 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       useGameStore.getState().applyInventoryFromResponse(data);
       useGameStore.getState().addToast(data.message || "Thu hoạch Nguyên Tuyền thành công!", "success");
       const p = useGameStore.getState().player;
-      if (p) void get().fetchNearbyCells(p.x, p.y, get().investigationRange);
+      if (p) void get().fetchNearbyCells(p.x, p.y, 28);
       return true;
     } catch (err) {
       useGameStore.getState().addToast(err instanceof Error ? err.message : "Thu hoạch Nguyên Tuyền thất bại.", "error");
       return false;
     }
-  },
-  setPersistentCellCleared: (region, x, y, cleared) => set((s) => {
-    let changed = false;
-    const hasExactRegionObject = s.objects.some((object) => object.x === x && object.y === y && object.region_id === region);
-    const objects = s.objects.map((object) => {
-      const regionMatches = !region || object.region_id === region || !hasExactRegionObject;
-      if (object.x !== x || object.y !== y || !regionMatches || object.cleared === cleared) return object;
-      changed = true;
-      return { ...object, cleared };
-    });
-    const selectedObject = cleared && s.selectedObject?.x === x && s.selectedObject?.y === y
-      && (!region || s.selectedObject.region_id === region || !hasExactRegionObject) ? null : s.selectedObject;
-    return changed || selectedObject !== s.selectedObject ? { objects, selectedObject } : {};
-  }),
-  setLivePosition: (x, y) => set({ liveX: x, liveY: y }),
-  setCamera: (scale, x, y) => set({ cameraScale: scale, cameraX: x, cameraY: y }),
-
-  fetchCellsRect: async (minX, minY, maxX, maxY) => {
-    const requestRegion = currentCellRegion();
-    const requestedVersion = cellMutationVersion;
-    const rounded = {
-      minX: Math.round(minX), minY: Math.round(minY), maxX: Math.round(maxX), maxY: Math.round(maxY),
-    };
-    try {
-      let data: unknown;
-      if (wsManager.isConnected()) {
-        data = await wsManager.request<NearbyCell[]>("world.cells_rect", {
-          min_x: rounded.minX, min_y: rounded.minY, max_x: rounded.maxX, max_y: rounded.maxY,
-        }, 30000);
-      } else {
-        const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${rounded.minX}&min_y=${rounded.minY}&max_x=${rounded.maxX}&max_y=${rounded.maxY}`;
-        const res = await authFetch(url);
-        if (!res.ok) throw new Error("Không thể tải dữ liệu bản đồ");
-        data = await res.json();
-      }
-      if (currentCellRegion() !== requestRegion) return false;
-      const cells: NearbyCell[] = Array.isArray(data) ? data : [];
-      set((s) => mergeCellCache(s, cells, undefined, { ...rounded, region: requestRegion, requestedVersion }));
-      return true;
-    } catch (err) {
-      console.error("fetchCellsRect error:", err instanceof Error ? err.message : err);
-      return false;
-    }
-  },
-
-  fetchNearbyCells: async (x, y, r) => {
-    // Keep the request within the backend's 256x256 work bound while retaining
-    // the player at the center. Larger areas are progressively loaded by the
-    // existing 150-cell viewport prefetch tiles.
-    const boundedRadius = Math.min(Math.max(Math.round(r), 1), 127);
-    set({ nearbyWindow: { x, y, r: boundedRadius } });
-    return get().fetchCellsRect(x - boundedRadius, y - boundedRadius, x + boundedRadius, y + boundedRadius);
-  },
-
-  getCachedCell: (x, y) => {
-    const region = currentCellRegion();
-    return get().cellChunks[chunkKey(region, x, y)]?.cells[cellKey(x, y)];
-  },
-
-  invalidateCell: (x, y) => {
-    set((s) => {
-      const region = currentCellRegion();
-      const invalidationVersion = ++cellMutationVersion;
-      const cellInvalidations = { ...s.cellInvalidations, [`${region}:${cellKey(x, y)}`]: invalidationVersion };
-      const staleInvalidations = Object.entries(cellInvalidations)
-        .sort((a, b) => a[1] - b[1])
-        .slice(0, Math.max(0, Object.keys(cellInvalidations).length - 1000))
-        .map(([key]) => key);
-      for (const key of staleInvalidations) delete cellInvalidations[key];
-      const key = chunkKey(region, x, y);
-      const oldChunk = s.cellChunks[key];
-      if (!oldChunk?.cells[cellKey(x, y)]) return { cellInvalidations };
-      const cells = { ...oldChunk.cells };
-      delete cells[cellKey(x, y)];
-      const cellChunks = { ...s.cellChunks, [key]: { ...oldChunk, cells, touchedAt: Date.now() } };
-      return { cellInvalidations, cellChunks, nearbyCells: s.nearbyCells.filter((c) => c.x !== x || c.y !== y) };
-    });
-  },
-
-  mergeWSCells: (cells: NearbyCell[]) => {
-    set((s) => mergeCellCache(s, cells));
-  },
-
-  fetchNearbyPlayers: async (x, y, r) => {
-    try {
-      const url = `${BACKEND_URL}/api/explore/players?x=${Math.round(x)}&y=${Math.round(y)}&r=${Math.round(r)}`;
-      const res = await authFetch(url);
-      if (!res.ok) throw new Error("Không thể tải người chơi trên bản đồ");
-      const data = await res.json();
-      const players: NearbyPlayer[] = Array.isArray(data) ? data : [];
-      set((s) => {
-        const positions = { ...s.playerPositions };
-        const now = Date.now();
-        for (const p of players) {
-          const prev = positions[p.id];
-          if (!prev || prev.ts <= now) {
-            positions[p.id] = { ...p, ts: now };
-          } else {
-            // Keep the freshest data but refresh presence so stale pruning keeps them.
-            positions[p.id] = { ...p, ts: prev.ts };
-          }
-        }
-        // Player presence has its own AOI. Do not overwrite nearbyWindow: that
-        // window belongs to the bounded cell cache and may use a smaller radius.
-        const w = { x, y, r };
-        let nearbyPlayers = s.nearbyPlayers;
-        nearbyPlayers = Object.keys(positions)
-          .map((id) => positions[id])
-          .filter((p2) => p2.x >= w.x - w.r && p2.x <= w.x + w.r && p2.y >= w.y - w.r && p2.y <= w.y + w.r);
-        return { playerPositions: positions, nearbyPlayers };
-      });
-    } catch (err) {
-      console.error("fetchNearbyPlayers error:", err instanceof Error ? err.message : err);
-    }
-  },
-
-  fetchMonsterSnapshot: async (r = 25, force = false) => {
-    // Movement-threshold effect and WS spawn events can fire many times per
-    // second while walking; coalesce into at most one snapshot per interval.
-    const now = Date.now();
-    if (!force && now - lastMonsterSnapshotAt < MONSTER_SNAPSHOT_MIN_INTERVAL_MS) return true;
-    lastMonsterSnapshotAt = now;
-    const requestID = ++monsterSnapshotRequest;
-    const requestedRegion = currentCellRegion();
-    set((s) => s.monsterSnapshotRegion === requestedRegion
-      ? {}
-      : {
-          monsters: {},
-          defeatedMonsterSpawns: {},
-          hasMonsterSnapshot: false,
-          monsterSnapshotRegion: requestedRegion,
-          selectedTarget: null,
-          targetingGu: null,
-        });
-    try {
-      const res = await authFetch(`${BACKEND_URL}/api/world/monsters?r=${Math.min(25, Math.max(1, Math.round(r)))}`);
-      if (!res.ok) throw new Error("Không thể tải trạng thái quái vật");
-      const data = await res.json();
-      const list: WorldMonster[] = Array.isArray(data?.monsters) ? data.monsters : [];
-      const snapshotTime = Date.parse(typeof data?.server_time === "string" ? data.server_time : "");
-      set((s) => {
-        if (requestID !== monsterSnapshotRequest || currentCellRegion() !== requestedRegion) return {};
-        const monsters: Record<string, WorldMonster> = {};
-        const defeatedMonsterSpawns = { ...s.defeatedMonsterSpawns };
-        for (const incoming of list) {
-          if (Object.prototype.hasOwnProperty.call(s.removedMonsterRevisions, incoming.instance_id)) continue;
-          // The endpoint already applies the player's map, instance, AOI, and
-          // parent-region scope. Filtering to an exact region here discarded
-          // actors from shared parent regions even though their AI could still
-          // target this player.
-          const defeatedAt = defeatedMonsterSpawns[incoming.spawn_id];
-          const actorUpdatedAt = Date.parse(incoming.last_update_at);
-          if (defeatedAt && (!Number.isFinite(actorUpdatedAt) || actorUpdatedAt <= defeatedAt)) continue;
-          if (defeatedAt) delete defeatedMonsterSpawns[incoming.spawn_id];
-          const current = s.monsters[incoming.instance_id];
-          monsters[incoming.instance_id] = current && current.revision > incoming.revision ? current : incoming;
-        }
-        // Events received after this snapshot was taken win even when a
-        // respawn changed the instance ID (per-instance revisions restart).
-        // Shared actors may belong to a parent region, so freshness is the
-        // relevant boundary; exact-region equality would snap them backwards.
-        for (const current of Object.values(s.monsters)) {
-          if (!(Date.parse(current.last_update_at) > snapshotTime)) continue;
-          for (const [id, candidate] of Object.entries(monsters)) {
-            if (candidate.spawn_id === current.spawn_id && id !== current.instance_id) delete monsters[id];
-          }
-          monsters[current.instance_id] = current;
-        }
-        // A radius-limited snapshot may temporarily omit a moving target. Only
-        // authoritative defeated/despawned events should cancel an armed cast.
-        return {
-          monsters,
-          defeatedMonsterSpawns,
-          hasMonsterSnapshot: true,
-          monsterSnapshotRegion: requestedRegion,
-          selectedTarget: s.selectedTarget,
-          targetingGu: s.targetingGu,
-        };
-      });
-      return requestID === monsterSnapshotRequest && currentCellRegion() === requestedRegion;
-    } catch (err) {
-      console.error("fetchMonsterSnapshot error:", err instanceof Error ? err.message : err);
-      return false;
-    }
-  },
-
-  applyCombatEvent: (event) => {
-    set((s) => {
-      const reduced = reduceWorldCombatEvent(s, event);
-      if (reduced === s) return {};
-      if (event.event_type !== "monster_defeated") return reduced;
-      const entity = event.payload?.entity;
-      const spawnID = entity && typeof entity === "object" && "spawn_id" in entity && typeof entity.spawn_id === "string"
-        ? entity.spawn_id
-        : s.monsters[event.entity_id]?.spawn_id;
-      if (!spawnID) return reduced;
-      const defeatedAt = Date.parse(event.server_time);
-      const nextDefeatedAt = Number.isFinite(defeatedAt) ? defeatedAt : Date.now();
-      const defeatedMonsterSpawns = {
-        ...s.defeatedMonsterSpawns,
-        [spawnID]: Math.max(s.defeatedMonsterSpawns[spawnID] ?? 0, nextDefeatedAt),
-      };
-      const staleSpawnIDs = Object.entries(defeatedMonsterSpawns)
-        .sort((a, b) => a[1] - b[1])
-        .slice(0, Math.max(0, Object.keys(defeatedMonsterSpawns).length - MAX_DEFEATED_MONSTER_SPAWN_TOMBSTONES))
-        .map(([id]) => id);
-      for (const id of staleSpawnIDs) delete defeatedMonsterSpawns[id];
-      return {
-        ...reduced,
-        defeatedMonsterSpawns,
-      };
-    });
-    const after = get();
-    if ((event.event_type === "monster_spawned" || event.event_type === "monster_respawned") && !after.monsters[event.entity_id]) {
-      void after.fetchMonsterSnapshot();
-    }
-  },
-
-  upsertPlayerPosition: (p) => {
-    set((s) => {
-      const now = Date.now();
-      const updated = { ...s.playerPositions, [p.id]: { ...p, ts: now } };
-      const w = s.nearbyWindow;
-      let nearby: NearbyPlayer[];
-      if (s.nearbyPlayers.some((p2) => p2.id === p.id)) {
-        nearby = s.nearbyPlayers.map((p2) => (p2.id === p.id ? { ...p2, ...p } : p2));
-      } else if (!w || (p.x >= w.x - w.r && p.x <= w.x + w.r && p.y >= w.y - w.r && p.y <= w.y + w.r)) {
-        nearby = [...s.nearbyPlayers, p];
-      } else {
-        nearby = s.nearbyPlayers;
-      }
-      return { playerPositions: updated, nearbyPlayers: nearby };
-    });
-  },
-
-  pruneStalePlayers: () => {
-    set((s) => {
-      const cutoff = Date.now() - 60_000;
-      let changed = false;
-      const updated: Record<string, NearbyPlayer & { ts: number }> = {};
-      for (const id of Object.keys(s.playerPositions)) {
-        if (s.playerPositions[id].ts >= cutoff) {
-          updated[id] = s.playerPositions[id];
-        } else {
-          changed = true;
-        }
-      }
-      if (!changed) return {};
-      return { playerPositions: updated, nearbyPlayers: s.nearbyPlayers.filter((p) => !!updated[p.id]) };
-    });
   },
 }));

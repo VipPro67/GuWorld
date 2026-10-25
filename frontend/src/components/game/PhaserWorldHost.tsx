@@ -11,6 +11,9 @@ import { MMOBusinessPanels, type MMOPanel } from "./MMOBusinessPanels";
 import type { WorldSkillInfo } from "@/game/network/Protocol";
 import { useGameStore, guSpecFor, type AutoCombatConfig, type Player } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
+import type { MapPortal } from "@/game/world/MapLoader";
+import { authFetch } from "@/lib/auth";
+import { BACKEND_URL } from "@/lib/config";
 
 const GlobalChatOverlay = dynamic(
   () => import("@/components/GlobalChatOverlay").then((m) => m.GlobalChatOverlay),
@@ -37,6 +40,7 @@ interface HudData {
   statusText: string;
   position: { x: number; y: number };
   nearby: RuntimeEntity[];
+  mapPortals: MapPortal[];
 }
 
 function buildHud(runtime: WorldRuntime, player: Player | null): HudData | null {
@@ -88,6 +92,7 @@ function buildHud(runtime: WorldRuntime, player: Player | null): HudData | null 
     statusText: runtime.getCombatNotice(),
     position: runtime.getSelfPosition(),
     nearby: runtime.getEntities(),
+    mapPortals: runtime.getMapPortals(),
   };
 }
 
@@ -171,8 +176,73 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   }, [runtimeStatus]);
 
   useEffect(() => {
-    if (!worldActive) setMenuOpen(false);
+    if (!worldActive) {
+      setMenuOpen(false);
+      setPanel(null);
+      if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "connecting")) {
+        runtimeRef.current.disconnect();
+      }
+    } else {
+      if (runtimeRef.current && (runtimeRef.current.getStatus() === "closed" || runtimeRef.current.getStatus() === "idle")) {
+        void runtimeRef.current.reconnect();
+      }
+    }
   }, [worldActive]);
+
+  const lastEquippedGusRef = useRef<string>(JSON.stringify(player?.equipped_gus ?? []));
+  useEffect(() => {
+    const currentSerialized = JSON.stringify(player?.equipped_gus ?? []);
+    if (lastEquippedGusRef.current !== currentSerialized) {
+      lastEquippedGusRef.current = currentSerialized;
+      if (worldActive && runtimeRef.current && runtimeRef.current.getStatus() === "joined") {
+        void runtimeRef.current.reconnect();
+      }
+    }
+  }, [player?.equipped_gus, worldActive]);
+
+  const lastRegionRef = useRef<string>(player?.current_region ?? "");
+  useEffect(() => {
+    const region = player?.current_region ?? "";
+    if (lastRegionRef.current !== region) {
+      lastRegionRef.current = region;
+      if (worldActive && runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
+        void runtimeRef.current.reconnect();
+      }
+    }
+  }, [player?.current_region, worldActive]);
+
+  const handlePortalTransfer = useCallback(async (targetZoneId: string, targetX: number, targetY: number) => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/world/portal/transfer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_zone_id: targetZoneId, target_x: targetX, target_y: targetY }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        useGameStore.getState().addToast(err.error || "Không thể chuyển vùng", "error");
+        return;
+      }
+      const data = await res.json();
+      if (data.player) {
+        useGameStore.getState().setPlayerFromServer(data.player);
+        useGameStore.getState().addToast(data.message || `Đã tiến vào ${targetZoneId}`, "success");
+      }
+    } catch (err) {
+      console.error("Portal transfer failed:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onPortalStep = (e: Event) => {
+      const custom = e as CustomEvent<{ targetZoneId: string; targetX: number; targetY: number }>;
+      if (custom.detail) {
+        void handlePortalTransfer(custom.detail.targetZoneId, custom.detail.targetX, custom.detail.targetY);
+      }
+    };
+    window.addEventListener("mmo_portal_step", onPortalStep);
+    return () => window.removeEventListener("mmo_portal_step", onPortalStep);
+  }, [handlePortalTransfer]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -328,6 +398,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
             onCloseMenu={() => setMenuOpen(false)}
             onOpenPanel={(next) => { setMenuOpen(false); setPanel((current) => current === next ? null : next); }}
             onOpenView={(view) => { setMenuOpen(false); setPanel(null); setView(view); }}
+            onPortalTransfer={handlePortalTransfer}
             onCast={(slot) => {
               const game = gameRef.current;
               if (!game) return;
@@ -376,10 +447,17 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
         {panel && (
           <MMOBusinessPanels
             panel={panel}
-            onClose={() => setPanel(null)}
+            onClose={() => {
+              setPanel(null);
+              if (worldActive && runtimeRef.current && runtimeRef.current.getStatus() === "joined") {
+                void runtimeRef.current.reconnect();
+              }
+            }}
             onLoadoutSaved={() => {
               setPanel(null);
-              void runtimeRef.current?.reconnect();
+              if (worldActive && runtimeRef.current && runtimeRef.current.getStatus() === "joined") {
+                void runtimeRef.current.reconnect();
+              }
             }}
           />
         )}

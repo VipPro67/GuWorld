@@ -20,6 +20,7 @@ import {
   normalizeWorldVector,
   type WorldPoint,
 } from "../world/WorldUnits.ts";
+import type { MapPortal } from "../world/MapLoader.ts";
 
 export type WorldRuntimeStatus =
   | "idle"
@@ -124,6 +125,7 @@ export class WorldRuntime {
 
   private status: WorldRuntimeStatus = "idle";
   private welcome: WorldWelcomePayload | null = null;
+  private mapPortals: MapPortal[] = [];
   private snapshot: BufferedWorldState | null = null;
   private selfId: string | null = null;
   private selfHp = 0;
@@ -322,6 +324,15 @@ export class WorldRuntime {
 
   public getWelcome(): WorldWelcomePayload | null {
     return this.welcome;
+  }
+
+  public setMapPortals(portals: MapPortal[]): void {
+    this.mapPortals = [...portals];
+    this.emit();
+  }
+
+  public getMapPortals(): MapPortal[] {
+    return this.mapPortals;
   }
 
   public getSnapshot(): BufferedWorldState | null {

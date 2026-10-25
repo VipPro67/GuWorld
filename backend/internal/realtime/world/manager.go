@@ -18,6 +18,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/spatial"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 )
 
 var (
@@ -38,6 +39,7 @@ var (
 // It is delivered off the zone tick to the loot service.
 type DeathEvent struct {
 	ZoneKey    sim.ZoneKey
+	Generation string
 	EventID    uint64
 	Tick       uint64
 	SourceID   sim.EntityID
@@ -57,6 +59,10 @@ const (
 
 type managedZone struct {
 	world          *sim.World
+	cancel         context.CancelFunc
+	generation     string
+	idleSince      time.Time
+	evicting       bool
 	done           <-chan struct{}
 	snapshots      chan sim.Snapshot
 	broadcastDone  <-chan struct{}
@@ -151,6 +157,7 @@ const MaxMonstersPerZone = 500
 // Authentication and loading trusted player state remain gateway responsibilities.
 type Manager struct {
 	mu                sync.Mutex
+	cond              *sync.Cond
 	zones             map[sim.ZoneKey]*managedZone
 	maps              map[sim.ZoneKey]ZoneMap
 	keys              []sim.ZoneKey
@@ -162,6 +169,12 @@ type Manager struct {
 	deathHandler      func(context.Context, DeathEvent)
 	deathQueue        chan DeathEvent
 	deathDone         chan struct{}
+	runCtx            context.Context
+	lazy              bool
+	queueSize         int
+	idleTimeout       time.Duration
+	idleDone          <-chan struct{}
+	evictWG           sync.WaitGroup
 }
 
 func NewManager(keys []sim.ZoneKey, queueSize int) (*Manager, error) {
@@ -176,6 +189,16 @@ func NewManagerWithCapacity(keys []sim.ZoneKey, queueSize, maxPlayersPerZone int
 // artifacts. A nil or missing map keeps the previous no-collision behavior for
 // isolated tests and staged zones that have not authored a map yet.
 func NewManagerWithMaps(keys []sim.ZoneKey, queueSize, maxPlayersPerZone int, maps map[sim.ZoneKey]ZoneMap) (*Manager, error) {
+	return newManagerWithMaps(keys, queueSize, maxPlayersPerZone, maps, false)
+}
+
+// NewLazyManagerWithMaps validates all configured zones at startup, but only
+// keeps a World and its runners while an instance is in use.
+func NewLazyManagerWithMaps(keys []sim.ZoneKey, queueSize, maxPlayersPerZone int, maps map[sim.ZoneKey]ZoneMap) (*Manager, error) {
+	return newManagerWithMaps(keys, queueSize, maxPlayersPerZone, maps, true)
+}
+
+func newManagerWithMaps(keys []sim.ZoneKey, queueSize, maxPlayersPerZone int, maps map[sim.ZoneKey]ZoneMap, lazy bool) (*Manager, error) {
 	if len(keys) == 0 {
 		return nil, ErrNoZones
 	}
@@ -188,44 +211,107 @@ func NewManagerWithMaps(keys []sim.ZoneKey, queueSize, maxPlayersPerZone int, ma
 	ordered := append([]sim.ZoneKey(nil), keys...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].String() < ordered[j].String() })
 
-	zones := make(map[sim.ZoneKey]*managedZone, len(ordered))
+	manager := &Manager{
+		zones: make(map[sim.ZoneKey]*managedZone), maps: maps, keys: ordered,
+		owners:            make(map[sim.CharacterID]OwnershipLease),
+		maxPlayersPerZone: maxPlayersPerZone, deathQueue: make(chan DeathEvent, 256),
+		lazy: lazy, queueSize: queueSize, idleTimeout: 5 * time.Minute,
+	}
+	manager.cond = sync.NewCond(&manager.mu)
+
+	seen := make(map[sim.ZoneKey]struct{}, len(ordered))
+	validatedMaps := make(map[zoneValidationKey]struct{}, len(ordered))
 	for _, key := range ordered {
-		if _, exists := zones[key]; exists {
+		if _, exists := seen[key]; exists {
 			return nil, fmt.Errorf("%w: %s", ErrDuplicateZone, key.String())
 		}
-		var collision sim.Collision
-		var monsters []MonsterSpawn
-		var pvp bool
-		if zoneMap, ok := maps[key]; ok {
-			collision = zoneMap.Collision
-			monsters = zoneMap.Monsters
-			pvp = zoneMap.PvP
+		seen[key] = struct{}{}
+		if err := key.Validate(); err != nil {
+			return nil, fmt.Errorf("validate zone %s: %w", key.String(), err)
 		}
-		if len(monsters) > MaxMonstersPerZone {
-			return nil, fmt.Errorf("zone %s has %d monsters, maximum is %d", key.String(), len(monsters), MaxMonstersPerZone)
+		if lazy {
+			// Validate map-backed spawns now so a bad artifact fails rollout
+			// startup, but do not allocate a World, monster entities, or runners.
+			// Instances of one map share the artifact, so validate it once.
+			zoneMap := maps[key]
+			validationKey := zoneValidationKey{MapID: key.MapID, Hash: zoneMap.Hash, Monsters: len(zoneMap.Monsters)}
+			if validationKey.Hash != "" {
+				if _, validated := validatedMaps[validationKey]; validated {
+					continue
+				}
+			}
+			if err := validateZoneMap(key, zoneMap); err != nil {
+				return nil, err
+			}
+			if validationKey.Hash != "" {
+				validatedMaps[validationKey] = struct{}{}
+			}
+			continue
 		}
-		zone, err := sim.NewWorldForKeyWithCollision(key, queueSize, collision)
+		zone, err := buildManagedZone(key, queueSize, maps[key])
 		if err != nil {
-			return nil, fmt.Errorf("create zone %s: %w", key.String(), err)
+			return nil, err
 		}
-		zone.SetPvPEnabled(pvp)
-		zone.SetDormantWhenEmpty(true)
-		for index, spawn := range monsters {
-			entity, spawnErr := monsterEntity(index, spawn)
-			if spawnErr != nil {
-				return nil, fmt.Errorf("spawn monster %d in zone %s: %w", index, key.String(), spawnErr)
-			}
-			if spawnErr = zone.AddEntity(entity); spawnErr != nil {
-				return nil, fmt.Errorf("add monster %d in zone %s: %w", index, key.String(), spawnErr)
-			}
-		}
-		zones[key] = &managedZone{
-			world: zone, snapshots: make(chan sim.Snapshot, 1), subscribers: make(map[uint64]snapshotSubscriber),
-		}
+		manager.zones[key] = zone
 	}
-	return &Manager{
-		zones: zones, maps: maps, keys: ordered, owners: make(map[sim.CharacterID]OwnershipLease),
-		maxPlayersPerZone: maxPlayersPerZone, deathQueue: make(chan DeathEvent, 256),
+	return manager, nil
+}
+
+type zoneValidationKey struct {
+	MapID    string
+	Hash     string
+	Monsters int
+}
+
+// validateZoneMap applies the setup validation that a lazy world would perform
+// on its first activation without allocating simulation state.
+func validateZoneMap(key sim.ZoneKey, zoneMap ZoneMap) error {
+	entities, err := monsterEntities(key, zoneMap)
+	if err != nil {
+		return err
+	}
+	if err := sim.ValidateSetupEntities(zoneMap.Collision, entities); err != nil {
+		return fmt.Errorf("validate zone %s monsters: %w", key.String(), err)
+	}
+	return nil
+}
+
+func monsterEntities(key sim.ZoneKey, zoneMap ZoneMap) ([]sim.Entity, error) {
+	if len(zoneMap.Monsters) > MaxMonstersPerZone {
+		return nil, fmt.Errorf("zone %s has %d monsters, maximum is %d", key.String(), len(zoneMap.Monsters), MaxMonstersPerZone)
+	}
+	entities := make([]sim.Entity, 0, len(zoneMap.Monsters))
+	for index, spawn := range zoneMap.Monsters {
+		entity, err := monsterEntity(index, spawn)
+		if err != nil {
+			return nil, fmt.Errorf("spawn monster %d in zone %s: %w", index, key.String(), err)
+		}
+		entities = append(entities, entity)
+	}
+	return entities, nil
+}
+
+func buildManagedZone(key sim.ZoneKey, queueSize int, zoneMap ZoneMap) (*managedZone, error) {
+	entities, err := monsterEntities(key, zoneMap)
+	if err != nil {
+		return nil, err
+	}
+	world, err := sim.NewWorldForKeyWithCollision(key, queueSize, zoneMap.Collision)
+	if err != nil {
+		return nil, fmt.Errorf("create zone %s: %w", key.String(), err)
+	}
+	world.SetPvPEnabled(zoneMap.PvP)
+	world.SetDormantWhenEmpty(true)
+	if err := world.AddEntities(entities); err != nil {
+		return nil, fmt.Errorf("add monsters in zone %s: %w", key.String(), err)
+	}
+	generation, err := newZoneGeneration()
+	if err != nil {
+		return nil, err
+	}
+	return &managedZone{
+		world: world, generation: generation, idleSince: time.Now(),
+		snapshots: make(chan sim.Snapshot, 1), subscribers: make(map[uint64]snapshotSubscriber),
 	}, nil
 }
 
@@ -297,8 +383,10 @@ func (m *Manager) SetDeathHandler(handler func(context.Context, DeathEvent)) {
 	}
 }
 
-// Start begins one fixed-step runner for each configured zone. It does not
-// import legacy world state; JoinCharacter accepts only server-constructed entities.
+// Start begins the death worker and, for eager managers, one fixed-step runner
+// per configured zone. Lazy managers start a zone only when a lease needs it.
+// It does not import legacy world state; JoinCharacter accepts only
+// server-constructed entities.
 func (m *Manager) Start(parent context.Context) error {
 	if parent == nil {
 		return errors.New("realtime world manager requires a context")
@@ -313,17 +401,173 @@ func (m *Manager) Start(parent context.Context) error {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	m.cancel = cancel
+	m.runCtx = ctx
 	m.started = true
 	m.deathDone = make(chan struct{})
 	go m.deathWorker(ctx)
-	for _, key := range m.keys {
-		zone := m.zones[key]
-		zone.done = sim.Run(ctx, zone.world, zone.snapshots)
-		broadcastDone := make(chan struct{})
-		zone.broadcastDone = broadcastDone
-		go m.broadcastSnapshots(ctx, zone, broadcastDone)
+	if m.lazy {
+		m.idleDone = worker.RunEvery(ctx, time.Minute, "Realtime Zone Idle Cleanup", func(context.Context) {
+			m.evictIdle(time.Now())
+		})
+	} else {
+		for _, key := range m.keys {
+			m.startZoneLocked(m.zones[key])
+		}
 	}
 	return nil
+}
+
+// startZoneLocked starts the tick runner and broadcaster for a world that is
+// already installed in the zone catalog. It is called only while m.mu is held.
+func (m *Manager) startZoneLocked(zone *managedZone) {
+	zoneCtx, cancel := context.WithCancel(m.runCtx)
+	zone.cancel = cancel
+	zone.done = sim.Run(zoneCtx, zone.world, zone.snapshots)
+	broadcastDone := make(chan struct{})
+	zone.broadcastDone = broadcastDone
+	go m.broadcastSnapshots(zoneCtx, zone, broadcastDone)
+}
+
+// configuredKeyLocked reports whether key belongs to the immutable startup
+// catalog. It is called with m.mu held.
+func (m *Manager) configuredKeyLocked(key sim.ZoneKey) bool {
+	for _, candidate := range m.keys {
+		if candidate == key {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureZoneLocked returns the live world for key, creating and starting it on
+// first use. If the previous generation is still shutting down, it waits for
+// that same transition before creating the next world. It may release m.mu
+// while waiting but never holds it while a goroutine stops.
+func (m *Manager) ensureZoneLocked(key sim.ZoneKey) (*managedZone, error) {
+	for {
+		if m.runCtx == nil || m.runCtx.Err() != nil || !m.started || m.closed {
+			return nil, ErrManagerNotRunning
+		}
+		if zone := m.zones[key]; zone != nil {
+			if zone.evicting {
+				m.cond.Wait()
+				continue
+			}
+			return zone, nil
+		}
+		if !m.configuredKeyLocked(key) {
+			return nil, ErrUnknownZone
+		}
+		zone, err := buildManagedZone(key, m.queueSize, m.maps[key])
+		if err != nil {
+			return nil, err
+		}
+		m.zones[key] = zone
+		m.startZoneLocked(zone)
+		return zone, nil
+	}
+}
+
+// markZoneActiveLocked cancels a pending idle countdown because the instance
+// has a lease or subscriber again. It is called with m.mu held.
+func (m *Manager) markZoneActiveLocked(zone *managedZone) {
+	zone.idleSince = time.Time{}
+}
+
+// markZoneIdleLocked starts the idle countdown once the last lease and
+// subscriber are gone. Projectiles and pending events are checked again when
+// the countdown expires. It is called with m.mu held.
+func (m *Manager) markZoneIdleLocked(key sim.ZoneKey, zone *managedZone) {
+	if m.ownedPlayerCountLocked(key) > 0 || len(zone.subscribers) > 0 {
+		return
+	}
+	if zone.idleSince.IsZero() {
+		zone.idleSince = time.Now()
+	}
+}
+
+// evictIdle tears down instances that have had no lease, subscriber,
+// projectile, or pending snapshot event for at least idleTimeout.
+func (m *Manager) evictIdle(now time.Time) {
+	type victim struct {
+		key  sim.ZoneKey
+		zone *managedZone
+	}
+	m.mu.Lock()
+	if !m.started || m.closed {
+		m.mu.Unlock()
+		return
+	}
+	var victims []victim
+	for key, zone := range m.zones {
+		if zone == nil || zone.evicting {
+			continue
+		}
+		if m.ownedPlayerCountLocked(key) > 0 || len(zone.subscribers) > 0 {
+			zone.idleSince = time.Time{}
+			continue
+		}
+		if zone.idleSince.IsZero() {
+			zone.idleSince = now
+			continue
+		}
+		if now.Sub(zone.idleSince) < m.idleTimeout {
+			continue
+		}
+		if zone.world.HasPendingActivity() || len(zone.snapshots) > 0 {
+			continue
+		}
+		zone.evicting = true
+		victims = append(victims, victim{key: key, zone: zone})
+	}
+	for range victims {
+		m.evictWG.Add(1)
+	}
+	m.mu.Unlock()
+
+	for _, current := range victims {
+		go func(current victim) {
+			defer m.evictWG.Done()
+			m.stopZone(current.key, current.zone)
+		}(current)
+	}
+}
+
+// stopZone stops one idle world without holding the manager lock, then removes
+// it from the catalog and wakes joins that were waiting for the transition.
+func (m *Manager) stopZone(key sim.ZoneKey, zone *managedZone) {
+	if zone.cancel != nil {
+		zone.cancel()
+	}
+	if zone.done != nil {
+		<-zone.done
+	}
+	if zone.broadcastDone != nil {
+		<-zone.broadcastDone
+	}
+	// The runner and broadcaster are stopped, so any final published snapshot
+	// is stable and its death events must be queued before the world is dropped.
+	m.drainSnapshots(zone)
+	m.mu.Lock()
+	if m.zones[key] == zone {
+		delete(m.zones, key)
+	}
+	zone.evicting = false
+	m.cond.Broadcast()
+	m.mu.Unlock()
+}
+
+// drainSnapshots moves deaths from any buffered snapshot into the death queue
+// without blocking. It is called only after the zone runner has stopped.
+func (m *Manager) drainSnapshots(zone *managedZone) {
+	for {
+		select {
+		case snapshot := <-zone.snapshots:
+			m.enqueueDeaths(zone, snapshot)
+		default:
+			return
+		}
+	}
 }
 
 // Stop cancels all zone loops and waits for each owner goroutine to exit.
@@ -339,16 +583,25 @@ func (m *Manager) Stop(ctx context.Context) error {
 		return nil
 	}
 	cancel := m.cancel
-	done := make([]<-chan struct{}, 0, len(m.keys)+1)
-	for _, key := range m.keys {
-		done = append(done, m.zones[key].done, m.zones[key].broadcastDone)
+	done := make([]<-chan struct{}, 0, 2*len(m.zones)+2)
+	for _, zone := range m.zones {
+		if zone.done != nil {
+			done = append(done, zone.done)
+		}
+		if zone.broadcastDone != nil {
+			done = append(done, zone.broadcastDone)
+		}
 	}
 	if m.deathDone != nil {
 		done = append(done, m.deathDone)
 	}
+	if m.idleDone != nil {
+		done = append(done, m.idleDone)
+	}
 	// Close admission before releasing the lock so a concurrent join cannot
 	// succeed after shutdown has begun but before the runner exits.
 	m.closed = true
+	m.cond.Broadcast()
 	m.mu.Unlock()
 
 	cancel()
@@ -359,11 +612,15 @@ func (m *Manager) Stop(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
+	// Eviction goroutines only wait for the runners above; let them finish
+	// before the manager forgets the zone catalog and wakes waiters.
+	m.evictWG.Wait()
 
 	m.mu.Lock()
 	m.started = false
 	clear(m.owners)
 	m.closeAllSubscribersLocked()
+	m.cond.Broadcast()
 	m.mu.Unlock()
 	return nil
 }
@@ -382,6 +639,8 @@ type ZoneStats struct {
 	Subscribers   int
 	LastStep      time.Duration
 	MapLoaded     bool    `json:"map_loaded"`
+	Running       bool    `json:"running"`
+	Evicting      bool    `json:"evicting,omitempty"`
 	MapHash       string  `json:"map_hash"`
 	MapWidth      int     `json:"map_width"`
 	MapHeight     int     `json:"map_height"`
@@ -394,28 +653,34 @@ type ZoneStats struct {
 func (m *Manager) Stats() []ZoneStats {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Every configured map stays visible even when its instance is idle. This
+	// distinguishes "map artifact checked at startup" from "world running now".
 	stats := make([]ZoneStats, 0, len(m.keys))
 	for _, key := range m.keys {
-		zone := m.zones[key]
-		if zone == nil {
-			continue
-		}
-		snapshot := zone.world.Snapshot()
-		players := 0
-		for _, entity := range snapshot.Entities {
-			if entity.Kind == sim.EntityPlayer {
-				players++
-			}
-		}
 		zoneMap, mapLoaded := m.maps[key]
-		stats = append(stats, ZoneStats{
-			Key: key, Tick: snapshot.Tick, Entities: len(snapshot.Entities),
-			Players: players, Subscribers: len(zone.subscribers),
-			LastStep: zone.world.LastStepDuration(), MapLoaded: mapLoaded,
+		entry := ZoneStats{
+			Key: key, MapLoaded: mapLoaded,
 			MapHash: zoneMap.Hash, MapWidth: zoneMap.Width, MapHeight: zoneMap.Height,
 			LegacyOriginX: zoneMap.LegacyOriginX, LegacyOriginY: zoneMap.LegacyOriginY,
 			LegacyScale: zoneMap.LegacyScale, MonsterSpawns: len(zoneMap.Monsters),
-		})
+		}
+		if zone := m.zones[key]; zone != nil {
+			snapshot := zone.world.Snapshot()
+			players := 0
+			for _, entity := range snapshot.Entities {
+				if entity.Kind == sim.EntityPlayer {
+					players++
+				}
+			}
+			entry.Tick = snapshot.Tick
+			entry.Entities = len(snapshot.Entities)
+			entry.Players = players
+			entry.Subscribers = len(zone.subscribers)
+			entry.LastStep = zone.world.LastStepDuration()
+			entry.Running = m.started && !m.closed && !zone.evicting
+			entry.Evicting = zone.evicting
+		}
+		stats = append(stats, entry)
 	}
 	return stats
 }
@@ -426,7 +691,7 @@ func (m *Manager) Stats() []ZoneStats {
 func (m *Manager) ZoneKeyForMapWithCapacity(mapID string) (sim.ZoneKey, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var best sim.ZoneKey
+	var best, transitioning sim.ZoneKey
 	bestLoad := m.maxPlayersPerZone + 1
 	found := false
 	for _, key := range m.keys {
@@ -434,6 +699,15 @@ func (m *Manager) ZoneKeyForMapWithCapacity(mapID string) (sim.ZoneKey, error) {
 			continue
 		}
 		found = true
+		// Prefer a live instance. A key that is already tearing down can only
+		// be selected when no other instance of the map is available; the
+		// claim then waits for that same transition instead of racing it.
+		if zone := m.zones[key]; zone != nil && zone.evicting {
+			if transitioning.MapID == "" {
+				transitioning = key
+			}
+			continue
+		}
 		load := m.ownedPlayerCountLocked(key)
 		if load < m.maxPlayersPerZone && load < bestLoad {
 			best = key
@@ -444,6 +718,9 @@ func (m *Manager) ZoneKeyForMapWithCapacity(mapID string) (sim.ZoneKey, error) {
 		return sim.ZoneKey{}, ErrUnknownZone
 	}
 	if best.MapID == "" {
+		if transitioning.MapID != "" {
+			return transitioning, nil
+		}
 		return sim.ZoneKey{}, ErrZoneFull
 	}
 	return best, nil
@@ -467,6 +744,8 @@ func (m *Manager) ZoneKeyForMap(mapID string) (sim.ZoneKey, error) {
 }
 
 func (m *Manager) Snapshot(key sim.ZoneKey) (sim.Snapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	zone := m.zones[key]
 	if zone == nil {
 		return sim.Snapshot{}, ErrUnknownZone
@@ -513,6 +792,7 @@ func (m *Manager) SubscribeSnapshots(lease OwnershipLease) (<-chan sim.Snapshot,
 		m.mu.Unlock()
 		return nil, nil, ErrUnknownZone
 	}
+	zoneKey := active.ZoneKey
 	if len(zone.subscribers) >= m.maxPlayersPerZone {
 		m.mu.Unlock()
 		return nil, nil, ErrSnapshotSubscribersFull
@@ -529,6 +809,7 @@ func (m *Manager) SubscribeSnapshots(lease OwnershipLease) (<-chan sim.Snapshot,
 		feed: feed, minTick: initial.Tick, characterID: lease.CharacterID, viewRadius: AOIViewRadius,
 		leaseToken: lease.Token,
 	}
+	m.markZoneActiveLocked(zone)
 	feed <- initial
 	m.mu.Unlock()
 	var once sync.Once
@@ -536,6 +817,7 @@ func (m *Manager) SubscribeSnapshots(lease OwnershipLease) (<-chan sim.Snapshot,
 		once.Do(func() {
 			m.mu.Lock()
 			delete(zone.subscribers, subscriberID)
+			m.markZoneIdleLocked(zoneKey, zone)
 			m.mu.Unlock()
 		})
 	}
@@ -558,9 +840,13 @@ func (m *Manager) broadcastSnapshots(ctx context.Context, zone *managedZone, don
 	for {
 		select {
 		case <-ctx.Done():
+			// Drain snapshots published before cancellation so pending deaths
+			// still reach the death worker. stopZone performs one final drain
+			// after the runner exits.
+			m.drainSnapshots(zone)
 			return
 		case snapshot := <-zone.snapshots:
-			m.enqueueDeaths(snapshot)
+			m.enqueueDeaths(zone, snapshot)
 			m.mu.Lock()
 			if len(zone.subscribers) == 0 {
 				m.mu.Unlock()
@@ -596,13 +882,14 @@ func (m *Manager) broadcastSnapshots(ctx context.Context, zone *managedZone, don
 	}
 }
 
-func (m *Manager) enqueueDeaths(snapshot sim.Snapshot) {
+func (m *Manager) enqueueDeaths(zone *managedZone, snapshot sim.Snapshot) {
 	for _, event := range snapshot.Events {
 		if event.Type != "ENTITY_DIED" || event.TemplateID == "" || event.SourceID == "" {
 			continue
 		}
 		death := DeathEvent{
-			ZoneKey: snapshot.ZoneKey, EventID: event.ID, Tick: event.Tick,
+			ZoneKey: snapshot.ZoneKey, Generation: zone.generation,
+			EventID: event.ID, Tick: event.Tick,
 			SourceID: sim.EntityID(event.SourceID), TargetID: sim.EntityID(event.TargetID), TemplateID: event.TemplateID,
 		}
 		select {
@@ -678,9 +965,21 @@ func (m *Manager) TransferCharacter(lease OwnershipLease, targetKey sim.ZoneKey,
 	if active.ZoneKey == targetKey {
 		return active, nil
 	}
+	target, err := m.ensureZoneLocked(targetKey)
+	if err != nil {
+		return OwnershipLease{}, err
+	}
+	// ensureZoneLocked may have waited for a previous generation to stop; the
+	// source lease could have been released or replaced in the meantime.
+	active, exists = m.owners[lease.CharacterID]
+	if !exists || !active.HasEntity || active.ZoneKey != lease.ZoneKey || active.ControllerID != lease.ControllerID || subtle.ConstantTimeCompare([]byte(active.Token), []byte(lease.Token)) != 1 {
+		return OwnershipLease{}, ErrInvalidLease
+	}
+	if active.ZoneKey == targetKey {
+		return active, nil
+	}
 	source := m.zones[active.ZoneKey]
-	target := m.zones[targetKey]
-	if source == nil || target == nil {
+	if source == nil {
 		return OwnershipLease{}, ErrUnknownZone
 	}
 	if m.ownedPlayerCountLocked(targetKey) >= m.maxPlayersPerZone {
@@ -710,8 +1009,11 @@ func (m *Manager) TransferCharacter(lease OwnershipLease, targetKey sim.ZoneKey,
 		_ = waitForZoneMutation(source, restoreResult)
 		return OwnershipLease{}, err
 	}
+	sourceKey := active.ZoneKey
 	active.ZoneKey = targetKey
 	m.owners[lease.CharacterID] = active
+	m.markZoneActiveLocked(target)
+	m.markZoneIdleLocked(sourceKey, source)
 	return active, nil
 }
 
@@ -778,9 +1080,12 @@ func (m *Manager) JoinCharacter(characterID sim.CharacterID, controllerID string
 	if !m.started || m.closed {
 		return OwnershipLease{}, ErrManagerNotRunning
 	}
-	zone := m.zones[key]
-	if zone == nil {
-		return OwnershipLease{}, ErrUnknownZone
+	if _, exists := m.owners[characterID]; exists {
+		return OwnershipLease{}, ErrCharacterOwned
+	}
+	zone, err := m.ensureZoneLocked(key)
+	if err != nil {
+		return OwnershipLease{}, err
 	}
 	if _, exists := m.owners[characterID]; exists {
 		return OwnershipLease{}, ErrCharacterOwned
@@ -791,13 +1096,16 @@ func (m *Manager) JoinCharacter(characterID sim.CharacterID, controllerID string
 	lease := OwnershipLease{CharacterID: characterID, ZoneKey: key, ControllerID: controllerID, HasEntity: true, Token: token}
 	entity.LeaseToken = token
 	m.owners[characterID] = lease
+	m.markZoneActiveLocked(zone)
 	result, queueErr := zone.world.QueueAddEntity(entity)
 	if queueErr != nil {
 		delete(m.owners, characterID)
+		m.markZoneIdleLocked(key, zone)
 		return OwnershipLease{}, queueErr
 	}
 	if err = waitForZoneMutation(zone, result); err != nil {
 		delete(m.owners, characterID)
+		m.markZoneIdleLocked(key, zone)
 		return OwnershipLease{}, err
 	}
 	return lease, nil
@@ -835,6 +1143,7 @@ func (m *Manager) AttachCharacterEntity(lease OwnershipLease, entity sim.Entity)
 	}
 	active.HasEntity = true
 	m.owners[lease.CharacterID] = active
+	m.markZoneActiveLocked(zone)
 	return active, nil
 }
 
@@ -864,8 +1173,12 @@ func (m *Manager) ClaimCharacter(characterID sim.CharacterID, controllerID strin
 	if !m.started || m.closed {
 		return OwnershipLease{}, ErrManagerNotRunning
 	}
-	if m.zones[key] == nil {
-		return OwnershipLease{}, ErrUnknownZone
+	if _, exists := m.owners[characterID]; exists {
+		return OwnershipLease{}, ErrCharacterOwned
+	}
+	zone, err := m.ensureZoneLocked(key)
+	if err != nil {
+		return OwnershipLease{}, err
 	}
 	if _, exists := m.owners[characterID]; exists {
 		return OwnershipLease{}, ErrCharacterOwned
@@ -875,6 +1188,7 @@ func (m *Manager) ClaimCharacter(characterID sim.CharacterID, controllerID strin
 	}
 	lease := OwnershipLease{CharacterID: characterID, ZoneKey: key, ControllerID: controllerID, Token: token}
 	m.owners[characterID] = lease
+	m.markZoneActiveLocked(zone)
 	return lease, nil
 }
 
@@ -951,8 +1265,8 @@ func (m *Manager) releaseCharacterLocked(lease OwnershipLease) bool {
 	if !exists || active.ZoneKey != lease.ZoneKey || subtle.ConstantTimeCompare([]byte(active.Token), []byte(lease.Token)) != 1 {
 		return false
 	}
+	zone := m.zones[active.ZoneKey]
 	if active.HasEntity && m.started && !m.closed {
-		zone := m.zones[active.ZoneKey]
 		if zone == nil {
 			return false
 		}
@@ -960,12 +1274,15 @@ func (m *Manager) releaseCharacterLocked(lease OwnershipLease) bool {
 			return false
 		}
 	} else if active.HasEntity {
-		if zone := m.zones[active.ZoneKey]; zone != nil {
+		if zone != nil {
 			zone.world.RemoveEntity(sim.EntityID(lease.CharacterID))
 		}
 	}
 	m.removeLeaseSubscribersLocked(active)
 	delete(m.owners, lease.CharacterID)
+	if zone != nil {
+		m.markZoneIdleLocked(active.ZoneKey, zone)
+	}
 	return true
 }
 
@@ -1034,6 +1351,48 @@ func (m *Manager) OwnsCharacter(characterID sim.CharacterID) bool {
 	return exists
 }
 
+// PlayerVitals reads the live zone HP for a character currently owned by this
+// manager. ok is false when the character has no attached entity.
+func (m *Manager) PlayerVitals(characterID sim.CharacterID) (hp, maxHP float64, ok bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	active, exists := m.owners[characterID]
+	if !exists || !active.HasEntity {
+		return 0, 0, false
+	}
+	zone := m.zones[active.ZoneKey]
+	if zone == nil {
+		return 0, 0, false
+	}
+	return zone.world.PlayerVitals(sim.EntityID(characterID))
+}
+
+// ApplyHPDelta applies a trusted HP change from a legacy HTTP action to the
+// owned zone entity. It waits for the next zone tick to apply the delta so the
+// caller's response and the HUD agree.
+func (m *Manager) ApplyHPDelta(characterID sim.CharacterID, delta float64) error {
+	if !finite(delta) || delta == 0 {
+		return nil
+	}
+	m.mu.Lock()
+	active, exists := m.owners[characterID]
+	if !exists || !active.HasEntity {
+		m.mu.Unlock()
+		return ErrInvalidLease
+	}
+	zone := m.zones[active.ZoneKey]
+	if zone == nil {
+		m.mu.Unlock()
+		return ErrUnknownZone
+	}
+	m.mu.Unlock()
+	result, err := zone.world.QueueHPDelta(sim.EntityID(characterID), delta)
+	if err != nil {
+		return err
+	}
+	return waitForZoneMutation(zone, result)
+}
+
 func validOwnerID(value string) bool {
 	return value != "" && len(value) <= sim.MaxEntityIDLength && strings.TrimSpace(value) == value
 }
@@ -1044,6 +1403,17 @@ func newLeaseToken() (string, error) {
 		return "", fmt.Errorf("generate realtime ownership token: %w", err)
 	}
 	return hex.EncodeToString(token[:]), nil
+}
+
+// newZoneGeneration identifies one World lifetime. Death/loot identifiers
+// include it so event IDs that restart at 1 after reactivation cannot collide
+// with rewards from a previous generation or another process.
+func newZoneGeneration() (string, error) {
+	var generation [16]byte
+	if _, err := cryptorand.Read(generation[:]); err != nil {
+		return "", fmt.Errorf("generate realtime zone generation: %w", err)
+	}
+	return hex.EncodeToString(generation[:]), nil
 }
 
 func finite(value float64) bool {

@@ -214,6 +214,56 @@ func veinCellsInBounds(minX, minY, maxX, maxY int) []NearbyCell {
 	return out
 }
 
+// veinCellsForRegionOrBounds queries veins for the player's current region and local coordinate window.
+func veinCellsForRegionOrBounds(regionID string, minX, minY, maxX, maxY int) []NearbyCell {
+	zone := ZoneByID(regionID)
+	originX := 0
+	originY := 0
+	if zone != nil && zone.WorldMapID != "world_map" {
+		originX = zone.MinX
+		originY = zone.MinY
+	}
+
+	worldMinX := minX + originX
+	worldMaxX := maxX + originX
+	worldMinY := minY + originY
+	worldMaxY := maxY + originY
+
+	query := `
+		SELECT v.id::text, v.region_id, v.x, v.y, v.vein_type, v.rarity, v.accumulated_since, v.produced_minutes, v.expires_at
+		FROM primeval_veins v
+		WHERE v.expires_at > NOW()
+		  AND (v.region_id = $1 OR $1 = '')
+		  AND v.x BETWEEN $2 AND $3
+		  AND v.y BETWEEN $4 AND $5`
+	rows, err := db.DB.Query(query, regionID, worldMinX, worldMaxX, worldMinY, worldMaxY)
+	if err != nil {
+		logger.S.Warnf("Failed to load primeval veins for region %s: %v", regionID, err)
+		return nil
+	}
+	defer rows.Close()
+
+	now := time.Now()
+	out := make([]NearbyCell, 0)
+	for rows.Next() {
+		v, errScan := scanVeinRow(rows.Scan)
+		if errScan != nil {
+			continue
+		}
+		info := veinInfo(v, now)
+		out = append(out, NearbyCell{
+			X:       v.X - originX,
+			Y:       v.Y - originY,
+			Type:    "PrimevalVein",
+			Content: v.ID,
+			Rank:    1,
+			Region:  v.RegionID,
+			Vein:    &info,
+		})
+	}
+	return out
+}
+
 // withinVeinHarvestRange allows harvesting from nearby tiles so terrain or a
 // monster on the exact tile cannot make the vein unreachable.
 func withinVeinHarvestRange(px, py, vx, vy int) bool {
@@ -283,7 +333,14 @@ func HarvestVein(c *gin.Context) {
 	if zone := FindZoneAt(player.X, player.Y); zone != nil {
 		standZone = zone.ID
 	}
-	if !withinVeinHarvestRange(player.X, player.Y, v.X, v.Y) || (player.CurrentRegion != v.RegionID && standZone != v.RegionID) {
+	originX := 0
+	originY := 0
+	if pz := ZoneByID(player.CurrentRegion); pz != nil && pz.WorldMapID != "world_map" {
+		originX = pz.MinX
+		originY = pz.MinY
+	}
+	inRange := withinVeinHarvestRange(player.X, player.Y, v.X, v.Y) || withinVeinHarvestRange(player.X+originX, player.Y+originY, v.X, v.Y)
+	if !inRange || (player.CurrentRegion != v.RegionID && standZone != v.RegionID) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu phải đứng trong phạm vi %d ô của Nguyên Tuyền mới thu hoạch được!", veinHarvestRange)})
 		return
 	}

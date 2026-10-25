@@ -135,7 +135,7 @@ type CompiledCatalog struct {
 
 func (c *CompiledCatalog) Profile(guID string, rank int) (CompiledProfile, bool) {
 	for _, profile := range c.Profiles {
-		if profile.GUID == guID && profile.Rank == rank {
+		if strings.EqualFold(profile.GUID, guID) && profile.Rank == rank {
 			return profile, true
 		}
 	}

@@ -8,8 +8,10 @@ events into a bounded death queue and a worker calls the loot service.
 
 1. `sim.applyDamageLocked` attributes the killing source and emits
    `ENTITY_DIED` with `SourceID` (killer), `TargetID`, and monster `TemplateID`.
-2. `Manager.broadcastSnapshots` enqueues a `DeathEvent` (queue 256, non-blocking).
-3. `loot.Service.GrantKill`:
+2. `Manager.broadcastSnapshots` enqueues a `DeathEvent` carrying the world
+   generation (queue 256, non-blocking).
+3. The server builds `death_id = generation:eventID:targetID` and
+   `loot.Service.GrantKill`:
    - validates zone/death/recipient/template/version;
    - builds `idempotency_key = zone:death:recipient:rewardVersion`;
    - `INSERT ... ON CONFLICT DO NOTHING` into `realtime_loot_grants`;
@@ -40,9 +42,11 @@ re-rolling existing death keys.
   entities, TTL, F interaction, distance/LOS pickup checks and party loot rules
   are not implemented yet.
 - No client loot toast/snapshot yet; open the bag to see granted items/Gu.
-- `death_id` is derived from the process-local zone event ID
-  (`eventID:targetID`). It is idempotent within a running zone/redeploy replay but
-  is not yet a durable death nonce across a full process crash (PR-26).
+- `death_id` is `generation:eventID:targetID`, where generation is a random
+  identifier created for each world activation. It is idempotent for replaying
+  the same death, and an event ID that restarts after idle eviction or another
+  instance cannot collide with older rewards. It is still process-local and not
+  a durable death nonce across a full process crash (PR-26).
 - Gu drops use `uuid.NewString` DB instances, skip unknown/invalid templates and
   skip a second immortal-rank (`rank >= 6`) instance of the same Gu.
 - Item/Gu roll uses the server RNG; no audit replay seed is stored yet.

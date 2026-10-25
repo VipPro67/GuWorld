@@ -67,6 +67,7 @@ func UseItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
+	realtimeBaseHP, realtimeActive := seedRealtimeHP(authID, &player)
 
 	item, ok := models.ItemRegistry[req.ItemID]
 	if !ok {
@@ -175,6 +176,7 @@ func UseItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	applyRealtimeHPDelta(authID, realtimeBaseHP, realtimeActive, &player)
 	if item.HasEffect("exit_spatial_realm") {
 		syncSpatialPlayer(authID, player.CurrentRegion, player.X, player.Y, uuid.Nil)
 	}
@@ -232,6 +234,7 @@ func UseItems(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
+	realtimeBaseHP, realtimeActive := seedRealtimeHP(authID, &player)
 	initialHP := player.HP
 	initialMana := player.CurrentMana
 	initialLifespan := player.Lifespan
@@ -351,6 +354,7 @@ func UseItems(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	applyRealtimeHPDelta(authID, realtimeBaseHP, realtimeActive, &player)
 	for _, usedID := range req.ItemIDs {
 		if item, ok := models.ItemRegistry[usedID]; ok && item.HasEffect("exit_spatial_realm") {
 			syncSpatialPlayer(authID, player.CurrentRegion, player.X, player.Y, uuid.Nil)

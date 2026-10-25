@@ -32,6 +32,25 @@ high (~1.1MB/tick at 100 players) because snapshots/events allocate per tick.
 That is the next optimization target before claiming 100-player capacity. The
 snapshot JSON shown is the whole zone, not per-client AOI bytes.
 
+## Zone lifecycle measurement (2026-10-26)
+
+A local probe loaded all 131 maps in `backend/data/mmo/maps` (34,270 monster
+spawns, one instance per map), built the manager, started it, then performed one
+cold claim/attach. "Eager" builds every world at startup; "lazy" validates maps
+and builds only the claimed instance. Heap/RSS are sampled after `runtime.GC`.
+
+| Mode | Manager build | Heap after build | Peak RSS | Running after start | Cold claim+attach |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Eager (old lifecycle) | 107 ms | 251.8 MB | 342.8 MB | 131 | 25 ms |
+| Lazy (new lifecycle) | 26 ms | 11.3 MB | 85.8 MB | 0 | 52 ms |
+
+Map parsing/validation itself took ~1.6 s and 11.3 MB in both modes; it still
+runs for every configured map at startup. The lazy mode removes the per-world
+monster/snapshot memory and 20 Hz runners while idle and pays one world build on
+the first join. This is a development-machine measurement, not a production
+capacity claim; re-run with the deployed map pack and real traffic before
+setting memory alerts.
+
 ## Client debug HUD
 
 Press **F3** in the MMO scene to show:

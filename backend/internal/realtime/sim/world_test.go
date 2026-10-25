@@ -14,6 +14,80 @@ func newPlayer(id string) Entity {
 	return Entity{ID: EntityID(id), Kind: EntityPlayer, Vitals: Vitals{HP: 100, MaxHP: 100}, Speed: 4, Radius: 0.4}
 }
 
+func TestAddEntitiesMatchesIndividualSetup(t *testing.T) {
+	individual, _ := NewWorldForKeyWithSeed(ZoneKey{MapID: "demo", InstanceID: "default", RulesetVersion: "v1"}, 8, 1)
+	batched, _ := NewWorldForKeyWithSeed(ZoneKey{MapID: "demo", InstanceID: "default", RulesetVersion: "v1"}, 8, 1)
+	entities := []Entity{newPlayer("b"), newPlayer("a")}
+	for _, entity := range entities {
+		if err := individual.AddEntity(entity); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := batched.AddEntities(entities); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := batched.Snapshot(), individual.Snapshot(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("batch snapshot differs from individual setup: got %+v, want %+v", got, want)
+	}
+	if batched.activePlayers != individual.activePlayers {
+		t.Fatalf("active players: got %d, want %d", batched.activePlayers, individual.activePlayers)
+	}
+}
+
+func TestAddEntitiesRejectsWholeInvalidBatch(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		entities []Entity
+	}{
+		{name: "duplicate within batch", entities: []Entity{newPlayer("a"), newPlayer("a")}},
+		{name: "invalid entity", entities: []Entity{newPlayer("a"), Entity{ID: "invalid"}}},
+		{name: "duplicate existing", entities: []Entity{newPlayer("a"), newPlayer("existing")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			w, _ := NewWorld("demo", 8)
+			if err := w.AddEntity(newPlayer("existing")); err != nil {
+				t.Fatal(err)
+			}
+			before := w.Snapshot()
+			if err := w.AddEntities(test.entities); !errors.Is(err, ErrInvalidEntity) {
+				t.Fatalf("expected invalid entity, got %v", err)
+			}
+			if got := w.Snapshot(); !reflect.DeepEqual(got, before) {
+				t.Fatalf("failed batch changed snapshot: got %+v, want %+v", got, before)
+			}
+			if w.activePlayers != 1 {
+				t.Fatalf("failed batch changed player count: %d", w.activePlayers)
+			}
+		})
+	}
+}
+
+func TestAddEntitiesRejectsCollisionWithoutPartialInstall(t *testing.T) {
+	grid, err := NewGridCollision(4, 4, []bool{
+		false, false, false, false,
+		false, false, false, false,
+		false, false, true, false,
+		false, false, false, false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := NewWorldWithCollision("demo", 8, grid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := newPlayer("first")
+	first.Transform.Position = Vec2{X: 1.5, Y: 1.5}
+	blocked := newPlayer("blocked")
+	blocked.Transform.Position = Vec2{X: 2.5, Y: 2.5}
+	if err := w.AddEntities([]Entity{first, blocked}); !errors.Is(err, ErrInvalidEntity) {
+		t.Fatalf("expected collision failure, got %v", err)
+	}
+	if len(w.Snapshot().Entities) != 0 || w.activePlayers != 0 {
+		t.Fatal("collision failure partially installed batch")
+	}
+}
+
 func TestConcurrentSnapshotReads(t *testing.T) {
 	w, _ := NewWorld("demo", 8)
 	if err := w.AddEntity(newPlayer("a")); err != nil {
@@ -314,6 +388,53 @@ func TestGridCollisionTreatsMapBoundsAsSolidAndCopiesTiles(t *testing.T) {
 	}
 	if _, err := NewGridCollision(MaxCollisionTiles+1, 1, nil); !errors.Is(err, ErrInvalidCollisionMap) {
 		t.Fatalf("oversized map: %v", err)
+	}
+}
+
+func TestCompactCollisionMatchesGridAtEdgesAndRadii(t *testing.T) {
+	for _, size := range [][2]int{{1, 1}, {2, 5}, {7, 6}} {
+		width, height := size[0], size[1]
+		borderTiles := make([]bool, width*height)
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				borderTiles[y*width+x] = x == 0 || y == 0 || x == width-1 || y == height-1
+			}
+		}
+		grid, _ := NewGridCollision(width, height, borderTiles)
+		border, err := NewBorderCollision(width, height)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dense := make([]int, len(borderTiles))
+		for i, solid := range borderTiles {
+			if solid || i%7 == 0 {
+				dense[i] = 1
+			}
+		}
+		packed, err := NewPackedCollision(width, height, dense)
+		if err != nil {
+			t.Fatal(err)
+		}
+		denseGridTiles := make([]bool, len(dense))
+		for i, value := range dense {
+			denseGridTiles[i] = value == 1
+		}
+		denseGrid, _ := NewGridCollision(width, height, denseGridTiles)
+		// Include exact tile edges, corners, outside coordinates and radii
+		// that reach neighboring tiles only by touching their boundary.
+		for _, radius := range []float64{0, 0.1, 0.5, 1, 2, float64(width + height), math.NaN()} {
+			for y := -1.0; y <= float64(height)+1; y += 0.5 {
+				for x := -1.0; x <= float64(width)+1; x += 0.5 {
+					position := Vec2{X: x, Y: y}
+					if got, want := border.Blocked(position, radius), grid.Blocked(position, radius); got != want {
+						t.Fatalf("border %dx%d at %+v radius %v: got %v want %v", width, height, position, radius, got, want)
+					}
+					if got, want := packed.Blocked(position, radius), denseGrid.Blocked(position, radius); got != want {
+						t.Fatalf("packed %dx%d at %+v radius %v: got %v want %v", width, height, position, radius, got, want)
+					}
+				}
+			}
+		}
 	}
 }
 

@@ -15,7 +15,7 @@ JSON report can be generated on demand with `-report <path>`; it is not
 committed to keep the repository small. See `docs/mmo/gu-realtime-schema.md` for
 the authored profile schema and compiled MVP artifact.
 
-## Snapshot (2026-10-25)
+## Effect audit snapshot (2026-10-25)
 
 | Status | Entries |
 | --- | ---: |
@@ -30,6 +30,42 @@ the authored profile schema and compiled MVP artifact.
 - `UNSUPPORTED = 0` at block level because every current block passes the strict
   Block v2 validator. Unknown/removed operations would fail this check instead
   of being silently skipped.
+
+## Realtime cast-profile snapshot (2026-10-26)
+
+`audit-realtime` classifies effect vocabulary; it does **not** mean an entry is
+already usable on the MMO hotbar. The transpiler only emits an active profile
+when every `ON_ACTION` block is fully representable by the current realtime
+cast contract. It supports flat damage, flat self shield/heal, self cleanse,
+and explicitly authored profile overrides. It does not infer durations from
+turn-based status effects, drop conditional or mixed operations, or invent a
+fallback attack. Domain/world hooks can remain beside a supported combat
+action without hiding that action.
+
+Current catalog: 4,427 profile records, 2,423 active profiles, 1,294
+passive-only profiles, and 710 entries without a castable hotbar skill. The
+Eight authored overrides preserve the five preview hotbar profiles and the
+three MMO profiles documented below.
+The active-profile coverage test checks every `ON_ACTION` entry in `Gu.csv`
+against the transpiler rules.
+
+Regenerate and compile the catalog with:
+
+```bash
+cd backend
+go run ./cmd/gudata transpile-realtime-gu \
+  -data data \
+  -overrides data/mmo/gu/authored_overrides.json \
+  -output data/mmo/gu/transpiled_profiles.json \
+  -compile-report /tmp/gu-compiled-profiles.json
+go run ./cmd/gudata compile-realtime-gu \
+  -data data \
+  -profiles data/mmo/gu/transpiled_profiles.json
+```
+
+Entries without a cast profile remain visible in inventory but cannot be cast;
+this is intentional until their status timing, conditional logic, buff stat
+semantics, or native hook has an explicit realtime implementation.
 
 ## Six MVP Gu
 

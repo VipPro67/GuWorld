@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -136,5 +137,107 @@ func TestTranspileRealtimeGuCanProcessCatalog(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("transpile failed: %v", err)
+	}
+}
+
+func TestTranspileGuProfileKeepsCastableEffectBesideWorldHook(t *testing.T) {
+	profile := transpileGuProfile("GU_MIXED", 2, "Water Path", "Attack", 5, []rawTranspileBlock{
+		{ID: "ACTIVE_SKILL", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{{Op: "DAMAGE", SubType: "FLAT", Value: 60}}},
+		{ID: "PORTAL", Trigger: "CAPABILITY", Operations: []rawTranspileOp{{Op: "UNIQUE"}}},
+	})
+	if profile.Active == nil || len(profile.Active.Effects) != 1 || profile.Active.Effects[0].Type != "DAMAGE" {
+		t.Fatalf("castable action was lost beside domain hook: %+v", profile)
+	}
+}
+
+func TestTranspileGuProfileDoesNotInventCombatPayload(t *testing.T) {
+	profile := transpileGuProfile("GU_UNSUPPORTED_ACTION", 3, "Fire Path", "Attack", 5, []rawTranspileBlock{
+		{ID: "ACTIVE_SKILL", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{{Op: "STAT_MOD", Stat: "ATTACK", Value: 100}}},
+	})
+	if profile.Active != nil {
+		t.Fatalf("unsupported stat action became a castable skill: %+v", profile.Active)
+	}
+
+	profile = transpileGuProfile("GU_WORLD_ONLY", 3, "Fire Path", "Attack", 5, []rawTranspileBlock{
+		{ID: "PORTAL", Trigger: "CAPABILITY", Operations: []rawTranspileOp{{Op: "UNIQUE"}}},
+	})
+	if profile.Active != nil || len(profile.Passives) != 0 {
+		t.Fatalf("world-only Gu became a synthetic combat skill: %+v", profile)
+	}
+
+	profile = transpileGuProfile("GU_UNAUTHORED_STATUS", 3, "Ice Path", "Attack", 5, []rawTranspileBlock{
+		{ID: "ACTIVE_SKILL", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{{Op: "STATUS"}}},
+	})
+	if profile.Active != nil {
+		t.Fatalf("turn-based status without realtime duration became a castable skill: %+v", profile.Active)
+	}
+
+	profile = transpileGuProfile("GU_PARTIAL_ACTION", 3, "Fire Path", "Attack", 5, []rawTranspileBlock{
+		{ID: "ACTIVE_DAMAGE", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{{Op: "DAMAGE", Value: 50, SubType: "FLAT"}}},
+		{ID: "ACTIVE_BUFF", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "ALL_ALLIES"}, Operations: []rawTranspileOp{{Op: "STAT_MOD", Stat: "ATTACK", Value: 5, SubType: "ADD_FLAT"}}},
+	})
+	if profile.Active != nil {
+		t.Fatalf("partially modeled action was exposed as a castable skill: %+v", profile.Active)
+	}
+}
+
+func TestTranspileGuProfileAppliesDamageMultiplier(t *testing.T) {
+	profile := transpileGuProfile("GU_MULTIPLIER", 2, "Strength Path", "Attack", 5, []rawTranspileBlock{
+		{ID: "ACTIVE_SKILL", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{
+			{Op: "DAMAGE", SubType: "FLAT", Value: 60},
+			{Op: "DAMAGE", SubType: "MULTIPLIER", Value: 3},
+		}},
+	})
+	if profile.Active == nil || len(profile.Active.Effects) != 1 || profile.Active.Effects[0].Value != 75 {
+		t.Fatalf("damage multiplier was not folded into base damage: %+v", profile.Active)
+	}
+}
+
+func TestRealtimeCastBlockRejectsEffectsWithUnsupportedTargets(t *testing.T) {
+	cases := []rawTranspileBlock{
+		{ID: "SELF_DAMAGE", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "SELF"}, Operations: []rawTranspileOp{{Op: "DAMAGE", SubType: "FLAT", Value: 10}}},
+		{ID: "TARGET_SHIELD", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{{Op: "SHIELD", SubType: "FLAT", Value: 10}}},
+		{ID: "ALL_ALLIES_HEAL", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "ALL_ALLIES"}, Operations: []rawTranspileOp{{Op: "HEAL", SubType: "FLAT", Resource: "HP", Value: 10}}},
+		{ID: "MULTIPLIER_ONLY", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{{Op: "DAMAGE", SubType: "MULTIPLIER", Value: 2}}},
+	}
+	for _, block := range cases {
+		if realtimeCastBlockSupported(block) {
+			t.Errorf("unsupported target was accepted: %+v", block)
+		}
+	}
+	if realtimeCastBlocksSupported([]rawTranspileBlock{
+		{ID: "SINGLE", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{{Op: "DAMAGE", SubType: "FLAT", Value: 10}}},
+		{ID: "AREA", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "ALL_ENEMIES"}, Operations: []rawTranspileOp{{Op: "DAMAGE", SubType: "FLAT", Value: 10}}},
+	}) {
+		t.Fatal("one cast with incompatible damage targeting modes was accepted")
+	}
+}
+
+func TestTranspileRealtimeProfilesCoverEveryFullyModeledAction(t *testing.T) {
+	data, err := readCSV("../../data/Gu.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range data.rows {
+		blocks, err := decodeTranspileBlocks(data.get(row, "effects"))
+		if err != nil {
+			t.Fatalf("decode %s: %v", data.get(row, "id"), err)
+		}
+		var actionBlocks []rawTranspileBlock
+		for _, block := range blocks {
+			if strings.EqualFold(strings.TrimSpace(block.Trigger), "ON_ACTION") {
+				actionBlocks = append(actionBlocks, block)
+			}
+		}
+		if len(actionBlocks) == 0 {
+			continue
+		}
+		allSupported := realtimeCastBlocksSupported(actionBlocks)
+		profile := transpileGuProfile(
+			data.get(row, "id"), 1, data.get(row, "path"), data.get(row, "primary_role"), 1, blocks,
+		)
+		if got := profile.Active != nil; got != allSupported {
+			t.Errorf("%s: active profile=%t, fully modeled ON_ACTION=%t", profile.GUID, got, allSupported)
+		}
 	}
 }

@@ -422,21 +422,34 @@ func (w *World) resolveCastLocked(caster *Entity) {
 			}
 		}
 	case combat.ModeSelf:
-		if skill.Heal > 0 && caster.Vitals.HP > 0 {
-			before := caster.Vitals.HP
-			caster.Vitals.HP = math.Min(caster.Vitals.MaxHP, caster.Vitals.HP+skill.Heal)
-			caster.Revision++
-			w.emitEvent(combat.Event{Type: combat.EventHealApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: caster.Vitals.HP - before, HP: caster.Vitals.HP})
-		}
-		if skill.Shield > 0 && caster.Vitals.HP > 0 {
-			caster.Vitals.Shield += skill.Shield
-			caster.Revision++
-			w.emitEvent(combat.Event{Type: combat.EventShieldApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: skill.Shield, Shield: caster.Vitals.Shield, HP: caster.Vitals.HP})
-		}
 		w.applyStatusLocked(caster, caster, skill)
 		if skill.Cleanse {
 			w.cleanseDebuffsLocked(caster)
 		}
+	}
+	// Heal and shield always resolve on the caster, matching the legacy
+	// simulator where HEAL/SHIELD operations land on the acting character even
+	// when the Gu's target mode is TARGET, DIRECTION or GROUND.
+	w.applySelfSupportLocked(caster, skill)
+}
+
+// applySelfSupportLocked is the single out-of-target healing/shield path for
+// every cast mode. It runs after damage/status resolution so a failed target
+// validation never heals the caster.
+func (w *World) applySelfSupportLocked(caster *Entity, skill combat.Skill) {
+	if caster == nil || caster.Vitals.HP <= 0 {
+		return
+	}
+	if skill.Heal > 0 {
+		before := caster.Vitals.HP
+		caster.Vitals.HP = math.Min(caster.Vitals.MaxHP, caster.Vitals.HP+skill.Heal)
+		caster.Revision++
+		w.emitEvent(combat.Event{Type: combat.EventHealApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: caster.Vitals.HP - before, HP: caster.Vitals.HP})
+	}
+	if skill.Shield > 0 {
+		caster.Vitals.Shield += skill.Shield
+		caster.Revision++
+		w.emitEvent(combat.Event{Type: combat.EventShieldApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: skill.Shield, Shield: caster.Vitals.Shield, HP: caster.Vitals.HP})
 	}
 }
 
@@ -577,6 +590,66 @@ func isInsideGroundArea(casterPos, groundPoint, aim Vec2, targetPos Vec2, target
 
 	default:
 		return distance(targetPos, groundPoint) <= skill.Radius+targetRadius
+	}
+}
+
+// PlayerVitals returns the authoritative HP pool for one zone player. It is a
+// read-only lookup for trusted adapters (legacy inventory/item usage).
+func (w *World) PlayerVitals(target EntityID) (hp, maxHP float64, ok bool) {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	entity := w.entities[target]
+	if entity == nil || entity.Kind != EntityPlayer {
+		return 0, 0, false
+	}
+	return entity.Vitals.HP, entity.Vitals.MaxHP, true
+}
+
+// QueueHPDelta applies a trusted out-of-band HP change on the zone tick owner.
+// Legacy HTTP actions (consumables and support Gu) use it so the authoritative
+// MMO entity, HUD and checkpoint all observe the same result. Clients cannot
+// reach this path directly. A negative delta is clamped at 0; a positive delta
+// is capped at MaxHP.
+func (w *World) QueueHPDelta(target EntityID, delta float64) (<-chan error, error) {
+	if !finite(delta) || delta == 0 {
+		return nil, ErrInvalidInput
+	}
+	request := lifecycleCommand{apply: func() error {
+		entity := w.entities[target]
+		if entity == nil || entity.Kind != EntityPlayer || entity.Vitals.HP <= 0 {
+			return ErrInvalidEntity
+		}
+		before := entity.Vitals.HP
+		next := before + delta
+		if next < 0 {
+			next = 0
+		}
+		if entity.Vitals.MaxHP > 0 && next > entity.Vitals.MaxHP {
+			next = entity.Vitals.MaxHP
+		}
+		if next == before {
+			return nil
+		}
+		entity.Vitals.HP = next
+		entity.Revision++
+		if next > before {
+			w.emitEvent(combat.Event{
+				Type: combat.EventHealApplied, SourceID: string(entity.ID), TargetID: string(entity.ID),
+				SkillID: "ITEM_USE", Amount: next - before, HP: next, Shield: entity.Vitals.Shield,
+			})
+		} else {
+			w.emitEvent(combat.Event{
+				Type: combat.EventDamageApplied, TargetID: string(entity.ID),
+				SkillID: "ITEM_USE", Amount: before - next, HP: next, Shield: entity.Vitals.Shield,
+			})
+		}
+		return nil
+	}, result: make(chan error, 1)}
+	select {
+	case w.lifecycleInbox <- request:
+		return request.result, nil
+	default:
+		return nil, ErrLifecycleQueueFull
 	}
 }
 

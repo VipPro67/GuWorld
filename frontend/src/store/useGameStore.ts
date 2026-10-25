@@ -37,7 +37,6 @@ import { createCombatSlice, type CombatSlice } from "@/store/slices/combatSlice"
 import { createTeleportSlice, type TeleportSlice } from "@/store/slices/teleportSlice";
 import { createScoutingSlice, type ScoutingSlice } from "@/store/slices/scoutingSlice";
 import { createKillerMovesSlice, type KillerMovesSlice } from "@/store/slices/killerMovesSlice";
-import { createPvPSlice, type PvPSlice } from "@/store/slices/pvpSlice";
 import { shouldApplyPlayerRevision } from "@/store/playerRevision";
 import { acquirePendingAction, releasePendingAction, type PendingActions } from "@/store/pendingActions";
 
@@ -1176,7 +1175,7 @@ export interface WorldConfig {
   hub_y: number;
 }
 
-interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, PvPSlice {
+interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice {
   player: Player | null;
   playerStateRevision: number | null;
   manaSnapshot: ManaSnapshot | null;
@@ -1704,7 +1703,6 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createTeleportSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createScoutingSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createKillerMovesSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
-  ...createPvPSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   applyInventoryFromResponse,
   player: null,
   playerStateRevision: null,

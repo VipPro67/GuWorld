@@ -34,8 +34,6 @@ export interface InventorySlice {
   useGus: (instanceIds: string[]) => Promise<boolean>;
   useItem: (itemId: string) => Promise<void>;
   useItems: (itemIds: string[]) => Promise<boolean>;
-  movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
-  fetchGrid: (statsOnly?: boolean) => Promise<{ x: number; y: number; vision_radius: number; cells?: ApiResponseData[]; stats: ApiResponseData; players_on_map?: ApiResponseData[]; ground_drops?: ApiResponseData[]; world_width?: number; world_height?: number } | null>;
   groundDrops: GroundDrop[];
   fetchGroundDrops: (viewport?: GroundDropViewport) => Promise<void>;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
@@ -871,94 +869,6 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
     return successCount > 0 && failedCount === 0;
   },
 
-  movePlayer: async (x, y, attackTargetId?) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:inventory")) return null;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/explore/move`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          x: x,
-          y: y,
-          attack_target_id: attackTargetId,
-        }),
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Di chuyển thất bại.");
-      }
-
-      get().applyInventoryFromResponse(data.player || data);
-      get().addLog(data.log || "Di chuyển thành công.");
-
-      // Handle skip battle result
-      if (data.skip_result) {
-        const skipResult = data.skip_result;
-        const allies = Array.isArray(skipResult.allies) ? skipResult.allies.slice(1) : [];
-        const allyText = allies.length > 0 ? ` Cùng ${allies.map((a: { name: string }) => a.name).join(", ")} xuất trận.` : " Một mình xuất trận.";
-        if (skipResult.winner === "Phe Ta") {
-          get().addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!${allyText}`, "success");
-          if (skipResult.mine_occupied) {
-            get().addToast(`Đã chiếm mỏ ${skipResult.mine_occupied}!`, "info");
-          }
-        } else {
-          get().addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
-        }
-      }
-
-      return data;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Di chuyển thất bại: ${err.message}`);
-      return null;
-    } finally {
-      get().endAction("player:inventory");
-    }
-  },
-
-  fetchGrid: async (statsOnly = false) => {
-    const { token, logout } = get();
-    if (!token) return null;
-
-    try {
-      const query = statsOnly ? "?stats_only=true" : "";
-      const response = await authFetch(`${BACKEND_URL}/api/explore/grid${query}`, {
-        headers: {
-        },
-      });
-
-      if (response.status === 401) {
-        logout();
-        return null;
-      }
-
-      if (!response.ok) {
-        throw new Error("Failed to load map grid viewport");
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      console.error("Grid fetch failed:", err.message);
-      get().addToast("Lỗi tải bản đồ.", "error");
-      return null;
-    }
-  },
-
   fetchGroundDrops: async (viewport) => {
     const requestRevision = ++groundDropRequestRevision;
     try {
@@ -994,17 +904,6 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
 
       // Immediately remove the looted drop from state so map UI updates instantly
       set({ groundDrops: get().groundDrops.filter((d: ApiResponseData) => d.id !== dropId) });
-
-      try {
-        const { useWorldStore } = await import("@/store/useWorldStore");
-        const ws = useWorldStore.getState();
-        if (ws.selectedObject?.id === dropId) {
-          ws.selectObject(null);
-        }
-        if (ws.addWorldLog) {
-          ws.addWorldLog(msg);
-        }
-      } catch (e) {}
 
       return { success: true, message: data.message, looted: data.looted };
     } catch (caught: unknown) {

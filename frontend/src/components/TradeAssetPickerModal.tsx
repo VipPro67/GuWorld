@@ -17,6 +17,7 @@ import { GameButton } from "@/components/ui/GameButton";
 import { GameBadge } from "@/components/ui/GameBadge";
 import type { Player, GuInstance, GuSpec, ItemSpec, RefiningRecipe } from "@/store/useGameStore";
 import { guSpecFor } from "@/store/useGameStore";
+import { getItemIconUrl } from "@/lib/item-icons";
 
 export type AssetTab = "material" | "gu" | "recipe";
 
@@ -464,9 +465,13 @@ export function TradeAssetPickerModal({
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0 text-zinc-300">
-                          <Package className="w-4 h-4 text-zinc-400" />
-                        </div>
+                        <img
+                          src={getItemIconUrl(itemDictionary[mat.id] ?? { id: mat.id, name: mat.name, item_type: mat.type })}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="w-8 h-8 rounded-lg bg-zinc-950/60 object-contain p-0.5 border border-zinc-800 shrink-0"
+                        />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-zinc-200 truncate">
                             {mat.name}
@@ -654,8 +659,13 @@ export function TradeAssetPickerModal({
         {activeTab === "material" && activeMat && (
           <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-300 font-medium">
-                Số lượng: <strong className="text-white">{activeMat.name}</strong>
+              <span className="text-xs text-zinc-300 font-medium flex items-center gap-2">
+                <img
+                  src={getItemIconUrl(itemDictionary[activeMat.id] ?? { id: activeMat.id, name: activeMat.name, item_type: activeMat.type })}
+                  alt=""
+                  className="w-5 h-5 rounded object-contain bg-zinc-900 border border-zinc-800"
+                />
+                <span>Số lượng: <strong className="text-white">{activeMat.name}</strong></span>
               </span>
               {isOffer && "avail" in activeMat && (
                 <span className="text-[11px] text-zinc-500 font-mono">

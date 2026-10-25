@@ -207,12 +207,6 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
 
       get().addToast(data.message || "Truyền tống thành công!", "success");
       get().addLog(data.message || "Truyền tống thành công!");
-      try {
-        const { useWorldStore } = await import("@/store/useWorldStore");
-        useWorldStore.getState().addWorldLog(data.message || "Truyền tống thành công!");
-      } catch {
-        /* ignore */
-      }
       if (data.player) {
         get().setPlayerFromServer(data.player);
       }

@@ -29,6 +29,23 @@ func TestGrantKeyValidationAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestGenerationScopedDeathIDsKeepLootKeysDistinct(t *testing.T) {
+	base := GrantKey{
+		ZoneID: "forest", DeathID: "generation-a:1:m:0",
+		RecipientID: uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+		TemplateID:  "mob", RewardVersion: 1,
+	}
+	nextGeneration := base
+	nextGeneration.DeathID = "generation-b:1:m:0"
+	if base.IdempotencyKey() == nextGeneration.IdempotencyKey() {
+		t.Fatal("different world generations reused a loot idempotency key")
+	}
+	replayed := base
+	if base.IdempotencyKey() != replayed.IdempotencyKey() {
+		t.Fatal("replaying the same death changed its idempotency key")
+	}
+}
+
 func TestRollFiltersChanceRankAndMissingCatalog(t *testing.T) {
 	oldItem, hadItem := models.ItemRegistry["test_item"]
 	models.ItemRegistry["test_item"] = models.ItemSpec{ID: "test_item", Type: "Material"}

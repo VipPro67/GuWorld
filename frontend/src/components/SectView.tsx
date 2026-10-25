@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useGameStore, Sect, SectMission, GuInstance, SectMine, SectVaultGuItem, formatRecipeName, guSpecFor, SectRelocationEstimate } from "@/store/useGameStore";
 import { translatePath, parsePaths } from "@/lib/translate";
+import { getItemIconUrl } from "@/lib/item-icons";
 import {
   Shield,
   Activity,
@@ -2132,22 +2133,31 @@ export const SectView: React.FC = () => {
                         key={matId}
                         className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300"
                       >
-                        <div className="flex flex-col min-w-0">
-                          <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
-                            {spec?.name || matId}
-                          </h4>
-                          <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                            Còn lại bảo khố: {qty}x
-                            {player && (
-                              <>
-                                {" | "}
-                                Bạn có: <span className="text-emerald-500 font-semibold">{ownedCount}x</span>
-                              </>
-                            )}
-                          </span>
-                          <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
-                            {spec?.description || "Nguyên liệu chế tác / luyện cổ trùng..."}
-                          </p>
+                        <div className="flex items-start gap-3 min-w-0">
+                          <img
+                            src={getItemIconUrl(spec ?? { id: matId, name: matId, item_type: "Material" })}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className="w-10 h-10 rounded-xl bg-zinc-950/60 object-contain p-1 border border-zinc-800 shrink-0"
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
+                              {spec?.name || matId}
+                            </h4>
+                            <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                              Còn lại bảo khố: {qty}x
+                              {player && (
+                                <>
+                                  {" | "}
+                                  Bạn có: <span className="text-emerald-500 font-semibold">{ownedCount}x</span>
+                                </>
+                              )}
+                            </span>
+                            <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
+                              {spec?.description || "Nguyên liệu chế tác / luyện cổ trùng..."}
+                            </p>
+                          </div>
                         </div>
 
                         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
@@ -2608,6 +2618,14 @@ export const SectView: React.FC = () => {
                               }`}>
                                 {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3px]" />}
                               </div>
+
+                              <img
+                                src={getItemIconUrl(spec ?? { id: matId, name: matId, item_type: "Material" })}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                className="w-8 h-8 rounded-lg bg-zinc-900/60 object-contain p-0.5 border border-zinc-800 shrink-0 mt-0.5"
+                              />
 
                               <div className="min-w-0">
                                 <h5 className="text-xs font-bold text-zinc-200 truncate">{spec?.name || matId}</h5>

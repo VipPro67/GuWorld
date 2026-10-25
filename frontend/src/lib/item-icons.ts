@@ -22,11 +22,11 @@ export function resolveItemIconKey(item: ItemIconSource): string {
   if (id === "item_blood_ginseng" || has("sâm")) return "root";
 
   // Prefer the named physical object over its element or cultivation path.
-  if (has("bì", "da", "mao")) return "pelt";
-  if (has("nanh", "răng")) return "fang";
-  if (has("trảo", "vuốt")) return "claw";
+  if (has("bì", "da", "mao", "nhĩ")) return "pelt";
+  if (has("nanh", "răng", "nha")) return "fang";
+  if (has("trảo", "vuốt", "chưởng")) return "claw";
   if (has("lân", "vảy")) return "scale";
-  if (has("cốt", "xương")) return "bone";
+  if (has("cốt", "xương", "hài")) return "bone";
   if (has("giác", "sừng")) return "horn";
   if (has("giáp", "xác", "mai", "vỏ")) return "shell";
   if (has("nhãn", "mắt", "đồng")) return "eye";
@@ -43,9 +43,17 @@ export function resolveItemIconKey(item: ItemIconSource): string {
   if (has("ngư", "cá")) return "fish";
   if (has("châu", "trân")) return "pearl";
   if (has("sa", "cát")) return "sand";
-  if (has("thiết", "khoáng", "quặng")) return "ore";
+  if (has("thiết", "khoáng", "quặng", "sắt")) return "ore";
   if (has("thỏi")) return "ingot";
   if (has("mộc", "gỗ", "trúc", "thụ")) return "wood";
+
+  // Specialized physical object groups:
+  if (has("tơ", "ti", "chỉ")) return "silk";
+  if (has("nang", "bao", "vị")) return "pouch";
+  if (has("toái", "mảnh", "phiến", "kiếp")) return "shard";
+  if (has("nê") || (has("thổ") && !has("thạch"))) return "clay";
+  if (has("trận", "kỳ", "bàn")) return "formation";
+  if (has("hạch")) return "core";
 
   // For essence and stone names, the element is the strongest visual cue.
   if (has("huyết")) return "blood";
@@ -66,7 +74,7 @@ export function resolveItemIconKey(item: ItemIconSource): string {
   if (has("khôi") && has("lỗi")) return "gear";
   if (has("kiếm", "đao", "nhận")) return "blade";
   if (has("ngọc", "bội")) return "jade";
-  if (has("tủy", "hồn", "phách")) return "vial";
+  if (has("tủy", "hồn", "phách", "khí")) return "vial";
   if (has("tinh", "thạch", "bảo")) return "crystal";
   return item.item_type?.toLowerCase() === "consumable" ? "potion" : "stone";
 }
