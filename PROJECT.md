@@ -14,6 +14,8 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 - `backend/internal/models`: struct domain cho player, Cổ, item, recipe, combat, aperture, monster, cell, feedback, killer move.
 - `backend/internal/handlers`: điều phối HTTP và phần lớn luật gameplay theo từng domain.
 - `backend/internal/services`: các module dùng chung đã được tách cho player, inventory, map, combat session, recipe, quest, achievement và đạo ngân; không phải mọi handler đều đi qua service.
+- `backend/internal/playerstate`: shape đọc chuẩn của bảng `players` (column list, revision bộ sưu tập, Gu/vật phẩm, repair, not-found); `PlayerService` chỉ còn phần time projection.
+- `backend/internal/handlers/movement.go`: chuỗi kiểm tra/ghi đích/phát sự kiện dùng chung cho đi bộ, cổng chuyển vùng, truyền tống trận, Cổ dịch chuyển, bí cảnh và vào tổ đội.
 - `backend/internal/worker`: polling/batch worker cho đói/tăng trưởng, persistence, môn phái và mô phỏng xã hội tiên khiếu.
 - `backend/internal/cache`: Redis client (bắt buộc).
 - `frontend/src/app`: Next.js App Router pages/layout.

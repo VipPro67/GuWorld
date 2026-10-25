@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -755,6 +754,9 @@ func TravelTeleport(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	if rejectRealtimeOwned(c, authID) {
+		return
+	}
 
 	var req models.TravelTeleportReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -860,12 +862,14 @@ func TravelTeleport(c *gin.Context) {
 	if dSectID.Valid {
 		dest.SectID = &dSectID.String
 	}
-	if err := checkRegionAction(dest.RegionID, "teleport"); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if err := checkRegionEntry(dest.RegionID, player.Rank, player.GuInventory); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if errMove := checkMovement(tx, &player, movementSpec{
+		kind:         movementTeleport,
+		targetRegion: dest.RegionID,
+	}); errMove != nil {
+		if respondMovementError(c, errMove) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
 		return
 	}
 	if player.PartyID != nil {
@@ -962,51 +966,13 @@ func TravelTeleport(c *gin.Context) {
 		)
 	`, dest.ID, player.ID, source.RegionID, source.X, source.Y, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
 
-	// 7. Update Player Position & Check Regional Wall Debuff
-	oldRegion := player.CurrentRegion
-
-	player.CurrentRegion = dest.RegionID
-	player.X = dest.X
-	player.Y = dest.Y
-
-	if oldRegion != dest.RegionID {
-		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, dest.RegionID, tx)
-		if debuffMsg != "" {
-			logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
-			logMsg += " " + debuffMsg
-			_, _ = tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3, primeval_stones = $4, immortal_stones = $5, statuses = $6 WHERE id = $7`, player.CurrentRegion, player.X, player.Y, player.PrimevalStones, player.ImmortalStones, player.Statuses, player.ID)
-			syncedMembers := SyncPartyMembersLocation(tx, &player)
-			if err := tx.Commit(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận truyền tống"})
-				return
-			}
-			broadcastWorldPos(WorldPosEvent{
-				ID:        player.ID.String(),
-				Username:  player.Username,
-				AvatarURL: player.AvatarURL,
-				X:         player.X,
-				Y:         player.Y,
-				Region:    player.CurrentRegion,
-				TS:        time.Now().UnixMilli(),
-			})
-			for _, sm := range syncedMembers {
-				broadcastWorldPos(WorldPosEvent{
-					ID:        sm.ID.String(),
-					Username:  sm.Username,
-					AvatarURL: sm.AvatarURL,
-					X:         sm.X,
-					Y:         sm.Y,
-					Region:    sm.Region,
-					TS:        time.Now().UnixMilli(),
-				})
-				PublishPlayerRealtimeEvent(sm.ID, PlayerEventUpdated)
-			}
-			c.JSON(http.StatusOK, gin.H{"message": logMsg, "player": player})
-			return
-		}
-	}
+	// 7. Move the player and apply the regional wall debuff.
+	debuffMsg := applyDestination(tx, &player, dest.RegionID, dest.X, dest.Y)
 
 	logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
+	if debuffMsg != "" {
+		logMsg += " " + debuffMsg
+	}
 
 	logger.S.Infof("[Pháp Trận] Người chơi %s (ID: %s) truyền tống qua pháp trận từ [%s] (%s: %d, %d) đến [%s] (%s: %d, %d) - Tiêu hao: %d %s", player.Username, player.ID, source.Name, source.RegionID, source.X, source.Y, dest.Name, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
 
@@ -1051,27 +1017,8 @@ func TravelTeleport(c *gin.Context) {
 		return
 	}
 
-	broadcastWorldPos(WorldPosEvent{
-		ID:        player.ID.String(),
-		Username:  player.Username,
-		AvatarURL: player.AvatarURL,
-		X:         player.X,
-		Y:         player.Y,
-		Region:    player.CurrentRegion,
-		TS:        time.Now().UnixMilli(),
-	})
-	for _, sm := range syncedMembers {
-		broadcastWorldPos(WorldPosEvent{
-			ID:        sm.ID.String(),
-			Username:  sm.Username,
-			AvatarURL: sm.AvatarURL,
-			X:         sm.X,
-			Y:         sm.Y,
-			Region:    sm.Region,
-			TS:        time.Now().UnixMilli(),
-		})
-		PublishPlayerRealtimeEvent(sm.ID, PlayerEventUpdated)
-	}
+	broadcastPlayerWorldPos(&player)
+	publishPartyMovement(syncedMembers, publishPartyRealtimeEvent)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": logMsg,

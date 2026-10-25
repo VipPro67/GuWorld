@@ -12,6 +12,8 @@ Browser / Next.js UI
 
 Gameplay rules remain primarily in handlers, but reusable player, inventory, map, combat-session, recipe, quest, achievement and dao operations now live in `internal/services`. This is an incremental split, not a universal service/repository layer.
 
+The durable shape of a player read lives in `internal/playerstate`: one column projection, one collection-revision expression, one Gu/materials attachment policy and one not-found rule. `internal/services.PlayerService` adds the time projection on top of that snapshot. Player-initiated cell changes go through the movement chain in `internal/handlers/movement.go`, so ownership, alive/combat checks, region policy, the destination write, the regional-wall debuff and post-commit publication do not drift between walking, portals, teleport arrays, Gu teleports, spatial realms and party joins.
+
 ## Backend startup
 
 `backend/cmd/server/main.go` performs these steps:
@@ -33,7 +35,8 @@ Gameplay rules remain primarily in handlers, but reusable player, inventory, map
 | `backend/internal/db` | Connection, domain schema, static seeds and Admin CSV import/export helpers. |
 | `backend/internal/models` | Domain structs, JSON scanners and runtime registries. |
 | `backend/internal/handlers` | HTTP orchestration and domain gameplay rules. |
-| `backend/internal/services` | Shared player/inventory/map/combat/recipe/quest/achievement/dao operations. |
+| `backend/internal/services` | Shared player/inventory/map/combat/recipe/quest/achievement/dao operations and time projection. |
+| `backend/internal/playerstate` | Canonical player row projection, snapshot views, collection revision and lazy repairs. |
 | `backend/internal/middleware` | Authentication, rate limits and request context. |
 | `backend/internal/cache`, `backend/internal/ws` | Redis and realtime WebSocket infrastructure. |
 | `backend/internal/worker` | Polling, simulation and batch persistence loops. |
@@ -56,6 +59,12 @@ Gameplay rules remain primarily in handlers, but reusable player, inventory, map
 - World-map queries remain HTTP for snapshots, rectangular cell fetches and actions; WebSocket events keep nearby state fresh between snapshots.
 - The Zustand root composes domain slices for inventory, combat, exploration, aperture, marketplace, sect, party, notifications, achievements, pets, gacha, betting and other systems.
 
+## Player state and movement
+
+- `playerstate.Load` is the only reader of the full `players` row. Callers choose what to attach (`Gu`, `Materials`, `Repair`) and receive `sql.ErrNoRows` for a missing player; `playerstate.RevisionExpr` is the only collection-revision definition.
+- `handlers/movement.go` is the one movement chain. Callers pass a `movementSpec` (kind + destination); the per-kind `movementPolicies` table decides party-leader, region-entry and region-action checks plus their status codes, so a new entrance cannot quietly skip a guard. Every entrance maps a guard failure through the same JSON shape, writes its own extra columns inside its transaction, then publishes through the shared helpers.
+- Server-driven placements (respawn, realm returns) use `placePlayerAt` and deliberately skip the guard chain.
+
 ## Background workers
 
 Workers are cancellable polling/simulation loops, not an external job queue:
@@ -77,4 +86,4 @@ Schema is split by domain under `backend/internal/db/schema_*.go`. Important gro
 - aperture: apertures, resource nodes, tribulations, variant-human populations, node workers, refinement queue, settlements, events and NPCs;
 - sect/activities: sect membership, requests, missions, vault/mines and instances.
 
-Dao marks and several extensible effect/state structures use JSONB. See `docs/GAME_DATA.md` for field and CSV details; the router in `backend/internal/server/server.go` remains the source of truth for endpoints.
+Dao marks and several extensible effect/state structures use JSONB. Player row reads go through `internal/playerstate`; full-row scans elsewhere are considered debt. See `docs/GAME_DATA.md` for field and CSV details; the router in `backend/internal/server/server.go` remains the source of truth for endpoints.

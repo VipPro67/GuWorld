@@ -123,3 +123,13 @@ Tập luật môi trường ràng buộc hành vi của mọi Cổ sư khi hiệ
 
 Điểm tài nguyên động trên bản đồ Ngũ Vực, tự spawn/hết hạn và tích lũy nguyên thạch (hoặc tiên nguyên thạch với Tiên Tuyền) vào một bể chung. Ai đứng đúng ô cũng thu hoạch được; thu xong bể reset. Mỏ có trần tích lũy 1 ngày sản lượng và trần sản lượng vòng đời theo phẩm chất.
 _Avoid_: Mine slot, mỏ cá nhân, mỏ cố định
+
+## Trạng Thái Người Chơi & Di Chuyển (Player State & Movement)
+
+### Ảnh Chụp Người Chơi (Player Snapshot)
+Bản đọc nhất quán của hàng `players` cùng các tập con được chọn (toàn bộ Gu, Gu đang trang bị, vật phẩm, đạo ngân) và revision bộ sưu tập; thứ tự cột, cách gắn tập con và lỗi không tìm thấy chỉ được định nghĩa ở một module.
+_Avoid_: player DTO, player object
+
+### Chuỗi Di Chuyển (Movement Chain)
+Chuỗi kiểm tra và ghi đích dùng chung cho mọi cách người chơi đổi ô: quyền điều khiển realtime → biên giới → sống/chết → chiến đấu → trưởng tổ đội → chính sách vùng → đích → áp chế giới vực → ghi vị trí → kéo tổ đội → phát sự kiện.
+_Avoid_: move handler, teleport logic

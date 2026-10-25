@@ -5,6 +5,7 @@
 **Mục tiêu:** lưu đúng và đủ dữ liệu, không để snapshot cũ ghi đè trạng thái mới, giảm thời gian giữ row lock và loại bỏ phần lớn `55P03`/`40P01` mà không tăng `lock_timeout` để che vấn đề.
 
 **Tiến độ triển khai:** Batch đầu tiên đã chuyển movement/runtime stats sang commit đồng bộ trong transaction nghiệp vụ; legacy Redis payload vẫn được xử lý trong cửa sổ tương thích bằng version/timestamp guard và compare-and-ACK. Growth đã thống nhất lock `players -> player_gu`, passive-stats dùng projection read-only và full player loader không còn lấy connection DB thứ hai trong transaction. Các hạng mục domain table/CAS đầy đủ, idempotency/outbox và refactor combat vẫn theo backlog bên dưới.
+**Cập nhật 2026-10-26:** `internal/playerstate` đã gom shape đọc của `players` (column list, revision, Gu/materials, repair, not-found) và `services.PlayerService` chỉ còn phần time projection. Phần ghi/unit-of-work và phân quyền field vẫn nằm trong backlog của kế hoạch này.
 
 ## 1. Kết luận điều hành
 

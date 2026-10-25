@@ -16,7 +16,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
-	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -698,228 +697,6 @@ func hpTooLowForExplore(player *models.Player, destX, destY int) bool {
 	return DeriveRegionAt(destX, destY) != HubRegionID
 }
 
-// MovePlayer moves the player on the shared world grid and triggers cell actions
-func MovePlayer(c *gin.Context) {
-	var req MoveRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if req.X < 0 || req.X >= WorldWidth || req.Y < 0 || req.Y >= WorldHeight {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ vượt ra ngoài ranh giới bản đồ."})
-		return
-	}
-
-	authID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTx(tx, authID)
-	if err != nil {
-		logger.S.Errorf("MovePlayer: failed to evaluate mana for player=%s: %v", authID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)})
-		return
-	}
-	if gamefx.IsDeadState(&player) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể di chuyển!"})
-		return
-	}
-	before := append(models.GuInventory(nil), player.GuInventory...)
-
-	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
-		return
-	}
-
-	cleanupExpiredClearedCells(&player, clearedCellCooldown)
-
-	if player.HP <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"})
-		return
-	}
-
-	if player.ActiveCombat != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."})
-		return
-	}
-
-	stats := CalculatePlayerStats(&player)
-	// Toc chay map = MOVEMENT (so o). SPEED chi dung thu tu danh combat, khong anh huong di chuyen.
-	movementRange := int(stats["movement"])
-	if movementRange < 1 {
-		movementRange = 1
-	}
-
-	// Calculate Chebyshev distance
-	dx := math.Abs(float64(req.X - player.X))
-	dy := math.Abs(float64(req.Y - player.Y))
-	dist := int(math.Max(dx, dy))
-
-	if dist == 0 && req.AttackTargetID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang ở vị trí này rồi."})
-		return
-	}
-
-	hasFixedImmortalTravel := models.InventoryHasGuCapability(player.GuInventory, "IGNORE_MOVEMENT_RANGE", true)
-
-	if dist > movementRange && !hasFixedImmortalTravel {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vị trí quá xa! Thân pháp hiện tại chỉ di chuyển tối đa %d ô.", movementRange)})
-		return
-	}
-
-	// Movement no longer consumes mana
-	logMsg, combatTriggered, errArrival := resolveCellArrival(tx, &player, req.X, req.Y, req.AttackTargetID, true)
-	if errArrival != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
-		return
-	}
-	regionWarning := ""
-	if warningAt := strings.Index(logMsg, "⚠️"); warningAt >= 0 {
-		regionWarning = logMsg[warningAt:]
-	}
-
-	// Auto-resolve combat if skip_battle is enabled
-	var pendingNotifications []notify.Notification
-	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
-		res, err := ResolveCombat(tx, &player, nil, nil)
-		if err != nil {
-			logger.S.Errorf("Auto-resolve combat failed during move: %v", err)
-			_ = tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
-			return
-		} else {
-			winner, skipSummary := res.Winner, res.Summary
-			afterCombatCommit := res.AfterCommit
-			pendingNotifications = res.Notifications
-			combatTriggered = false // Combat was auto-resolved
-			enemyName := "kẻ thù"
-			if e, ok := skipSummary["enemy_name"].(string); ok {
-				enemyName = e
-			}
-			if winner == "Phe Ta" {
-				qiGained := 0.0
-				if v, ok := skipSummary["human_qi_gained"].(float64); ok {
-					qiGained = v
-				}
-				logMsg = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)! Nhân Khí +%.0f.", enemyName, player.X, player.Y, qiGained)
-			} else {
-				logMsg = fmt.Sprintf("Tự động chiến đấu với %s tại (%d, %d) thất bại! Đạo hữu bị truyền tống về an toàn.", enemyName, player.X, player.Y)
-			}
-			if regionWarning != "" {
-				logMsg += " " + regionWarning
-			}
-			if skipSummary != nil {
-				if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
-					logMsg += " " + strings.Join(loot, " ")
-				}
-			}
-			if _, err := tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3, statuses = $4 WHERE id = $5`, player.CurrentRegion, player.X, player.Y, player.Statuses, player.ID); err != nil {
-				logger.S.Errorf("MovePlayer: failed to persist moved region after auto-combat for player=%s: %v", player.ID, err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu khu vực sau khi tự động chiến đấu"})
-				return
-			}
-			if err := tx.Commit(); err != nil {
-				logger.S.Errorf("MovePlayer: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()})
-				return
-			}
-			if afterCombatCommit != nil {
-				afterCombatCommit()
-			}
-			for _, notification := range pendingNotifications {
-				notify.Publish(notification)
-			}
-			ClearPendingPlayerQueues(player.ID.String())
-			PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
-			// Include skip summary in response
-			respondActionWithInventory(c, http.StatusOK, player, gin.H{
-				"log":              logMsg,
-				"combat_triggered": false,
-				"skip_result":      skipSummary,
-				"stats":            CalculatePlayerStats(&player),
-			})
-			return
-		}
-	}
-
-	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-		logger.S.Errorf("MovePlayer: failed to sync Gu inventory for player=%s: %v", player.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
-		return
-	}
-	var combatJSON any
-	if player.ActiveCombat != nil {
-		b, err := json.Marshal(player.ActiveCombat)
-		if err != nil {
-			logger.S.Errorf("MovePlayer: failed to marshal active combat for player=%s: %v", player.ID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
-			return
-		}
-		combatJSON = string(b)
-	}
-	if err := savePlayerMovement(tx, &player, combatJSON); err != nil {
-		logger.S.Errorf("MovePlayer: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
-		return
-	}
-
-	syncedMembers := SyncPartyMembersLocation(tx, &player)
-
-	if err := tx.Commit(); err != nil {
-		logger.S.Errorf("MovePlayer: tx.Commit failed for player=%s: %v", player.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure: " + err.Error()})
-		return
-	}
-
-	syncPlayerFlying(&player)
-
-	broadcastWorldPos(WorldPosEvent{
-		ID:        player.ID.String(),
-		Username:  player.Username,
-		AvatarURL: player.AvatarURL,
-		X:         player.X,
-		Y:         player.Y,
-		Region:    player.CurrentRegion,
-		TS:        time.Now().UnixMilli(),
-	})
-	for _, sm := range syncedMembers {
-		broadcastWorldPos(WorldPosEvent{
-			ID:        sm.ID.String(),
-			Username:  sm.Username,
-			AvatarURL: sm.AvatarURL,
-			X:         sm.X,
-			Y:         sm.Y,
-			Region:    sm.Region,
-			TS:        time.Now().UnixMilli(),
-		})
-		PublishPlayerPositionDelta(sm.ID, sm.X, sm.Y)
-	}
-
-	if combatTriggered {
-		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
-	}
-
-	// Calculate fresh stats
-	newStats := CalculatePlayerStats(&player)
-
-	respondActionWithInventory(c, http.StatusOK, player, gin.H{
-		"log":                  logMsg,
-		"combat_triggered":     combatTriggered,
-		"stats":                newStats,
-		"synced_party_members": syncedMembers,
-	})
-}
-
 // lineCells returns the cells on a straight line from (x0,y0) to (x1,y1)
 // using Bresenham's algorithm, including the target cell and excluding the
 // starting cell.
@@ -1006,38 +783,13 @@ func buildMovePathPlayerUpdate(player *models.Player, beforeGus models.GuInvento
 	return update
 }
 
-// MovePlayerPath moves the player along a straight path from its current cell
-// to the requested cell, triggering the normal cell action on every traversed
-// cell. Movement is still bounded by the player's movement stat (base +
-// passive movement). The walk stops early if a fight is triggered on the way.
-func MovePlayerPath(c *gin.Context) {
-	var req MoveRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	authID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	code, res := ExecuteMovePlayerPath(authID, req)
-	c.JSON(code, res)
-}
-
 // ExecuteMovePlayerPath moves the player along a straight path from its current cell
 // to the requested cell, decoupled from HTTP gin.Context.
 func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
-	if middleware.IsRealtimeWorldOwned(authID) {
-		return http.StatusConflict, gin.H{
-			"code":  "realtime_world_owns_character",
-			"error": "Character is controlled by the realtime world",
-		}
-	}
-	if req.X < 0 || req.X >= WorldWidth || req.Y < 0 || req.Y >= WorldHeight {
-		return http.StatusBadRequest, gin.H{"error": "Tọa độ vượt ra ngoài ranh giới bản đồ."}
+	spec := movementSpec{kind: movementWalk, x: req.X, y: req.Y, hasTarget: true}
+	if err := validateMovementTarget(spec); err != nil {
+		status, payload, _ := movementErrorPayload(err)
+		return status, payload
 	}
 
 	tx, err := db.DB.Begin()
@@ -1051,31 +803,16 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 		logger.S.Errorf("MovePlayerPath: failed to evaluate mana for player=%s: %v", authID, err)
 		return http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)}
 	}
-	if gamefx.IsDeadState(&player) {
-		return http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể di chuyển!"}
-	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
-	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
-		return http.StatusBadRequest, gin.H{"error": errLeader.Error()}
+	if errMove := checkMovement(tx, &player, spec); errMove != nil {
+		if status, payload, ok := movementErrorPayload(errMove); ok {
+			return status, payload
+		}
+		return http.StatusInternalServerError, gin.H{"error": errMove.Error()}
 	}
 
 	cleanupExpiredClearedCells(&player, clearedCellCooldown)
-
-	if player.HP <= 0 {
-		return http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"}
-	}
-
-	if player.ActiveCombat != nil {
-		return http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."}
-	}
-
-	stats := CalculatePlayerStats(&player)
-	// Toc chay map = MOVEMENT (so o). SPEED chi dung thu tu danh combat, khong anh huong di chuyen.
-	movementRange := int(stats["movement"])
-	if movementRange < 1 {
-		movementRange = 1
-	}
 
 	// Calculate Chebyshev distance
 	dx := math.Abs(float64(req.X - player.X))
@@ -1208,28 +945,8 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 	}
 
 	syncPlayerFlying(&player)
-
-	broadcastWorldPos(WorldPosEvent{
-		ID:        player.ID.String(),
-		Username:  player.Username,
-		AvatarURL: player.AvatarURL,
-		X:         player.X,
-		Y:         player.Y,
-		Region:    player.CurrentRegion,
-		TS:        time.Now().UnixMilli(),
-	})
-	for _, sm := range syncedMembers {
-		broadcastWorldPos(WorldPosEvent{
-			ID:        sm.ID.String(),
-			Username:  sm.Username,
-			AvatarURL: sm.AvatarURL,
-			X:         sm.X,
-			Y:         sm.Y,
-			Region:    sm.Region,
-			TS:        time.Now().UnixMilli(),
-		})
-		PublishPlayerPositionDelta(sm.ID, sm.X, sm.Y)
-	}
+	broadcastPlayerWorldPos(&player)
+	publishPartyMovement(syncedMembers, publishPartyPositionDelta)
 
 	if combatTriggered {
 		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)

@@ -24,6 +24,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 
 ## Backend Conventions (agent would likely miss)
 
+- **Player reads are centralized.** `internal/playerstate` owns the `players` column list, scan order, revision expression, Gu/materials attachments and not-found behavior. Add player row reads through `playerstate.Load`/`Scan`, not a new hand-written SELECT. Player-initiated cell changes go through `handlers/movement.go` (`checkMovement` + `applyDestination` + the shared publish helpers); don't add a new prologue that re-checks a subset.
 - **Handlers are fat, and load-bearing services sit behind them.** Gameplay logic lives in `backend/internal/handlers/`, split per domain (e.g. `player_auth.go`, `player_inventory.go`, `player_stats.go`, `player_explore.go`, `player_daongan.go`, `player_profile.go`, `combat.go`). A small service layer exists for shared persistence/state and **is** wired in: `backend/internal/services/` (`PlayerService`, `InventoryService`, `QuestService`, `RecipeService`, `AchievementService`) exposed to handlers via the `PlayerSvc` / `InventorySvc` globals in `handlers/services.go`. Reuse those instead of pasting new player-row SQL; a real seam exists, so keep reads/writes routed through it.
 - **No migrations.** Schema is split per domain in `backend/internal/db/schema_*.go` (each table a `CREATE TABLE IF NOT EXISTS` with all columns inline, plus indexes and FK). `InitSchema()` in `backend/internal/db/db.go` calls them in FK order and seeds static runtime data (system players, hub region `Southern_Border`, default race/constitution rows + `''` sentinel keys, 31 mine slots, 5 sect mines, wallet/leaderboard backfills). When adding **new columns**, declare them inline in the `CREATE TABLE` of the matching `schema_*.go` file (fresh init; no ALTER patches). Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` (`player_auth.go`) maps each registration region to its hub and falls back to `Southern_Border`.
 - **DB reset note:** `players.race`, `players.constitution`, `players.current_region` have FKs. `InitSchema` pre-seeds the `''` race/constitution keys and the `Southern_Border` region so registration works before CSV import; race/constitution registry loaders filter out `''` keys.
@@ -65,6 +66,8 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 - `backend/internal/db/db.go` — `Connect` + `InitSchema` orchestrator + CSV seed/export logic
 - `backend/internal/db/schema_*.go` — per-domain table DDL (columns, indexes, FK)
 - `backend/internal/handlers/*.go` — all feature logic
+- `backend/internal/playerstate/snapshot.go` — canonical `players` row projection, snapshot views, collection revision, lazy repairs
+- `backend/internal/handlers/movement.go` — one guard/destination/publish chain for walk, portal, teleport, Gu teleport, realm and party join
 - `backend/internal/services/*.go` — shared player/inventory/quest persistence (see `handlers/services.go`)
 - `backend/internal/simulator/engine.go` — deterministic auto-battle loop, combat log format
 - `frontend/src/store/useGameStore.ts` — Zustand root store composing domain slices in `frontend/src/store/slices/` + shared SSE wiring

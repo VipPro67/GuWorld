@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -352,25 +353,12 @@ func GoogleCallback(c *gin.Context) {
 		queryInsert := `
 			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
 			VALUES ($1, '', 0, 1, $2, $3, $4, $5, $6, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $11, $12, $10, '{}'::jsonb, '[]'::jsonb, 'tan_thu_coc_nam_cuong', '{}'::jsonb, NULL, 100.0, 1.0, $7, $8, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $9, true, 'human', 'male')
-			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding, race, gender, constitution, statuses
+			RETURNING id
 		`
 
-		var activeCombatBytes []byte
+		var newPlayerID uuid.UUID
 		_, hx, hy, _ := resolveStartingRegion("tan_thu_coc_nam_cuong")
-		err = tx.QueryRowContext(c.Request.Context(), queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, googleUser.Email, googleUser.ID, refCode, equippedGus, hx, hy).Scan(
-			&player.ID, &player.Username, &player.Rank, &player.SubRank,
-			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
-			&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
-			&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
-			&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-			&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
-			&player.LastManaUpdate, &player.CreatedAt,
-			&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-			&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
-			&player.ApertureStress, &player.LastCultivateTime,
-			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
-		)
+		err = tx.QueryRowContext(c.Request.Context(), queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, googleUser.Email, googleUser.ID, refCode, equippedGus, hx, hy).Scan(&newPlayerID)
 		if err != nil {
 			if isUsernameUniqueViolation(err) {
 				c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu vừa được đăng ký bởi người khác, vui lòng thử đăng nhập lại"})
@@ -379,12 +367,10 @@ func GoogleCallback(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new player record: " + err.Error()})
 			return
 		}
-
-		if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
-			var cs models.CombatState
-			if json.Unmarshal(activeCombatBytes, &cs) == nil {
-				player.ActiveCombat = &cs
-			}
+		player, err = playerstate.Load(tx, newPlayerID, playerstate.Options{Gu: playerstate.GuNone})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load new player record: " + err.Error()})
+			return
 		}
 
 		// Persist starter Gus in the player_gu table (the gu_inventory column is gone).

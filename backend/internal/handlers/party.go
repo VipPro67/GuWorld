@@ -401,6 +401,13 @@ func RespondToInvitation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
 		return
 	}
+	if errMove := checkMovement(tx, &player, movementSpec{kind: movementPartyJoin}); errMove != nil {
+		if respondMovementError(c, errMove) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+		return
+	}
 	if player.PartyID != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đã có tổ đội rồi!"})
 		return
@@ -488,18 +495,14 @@ func RespondToInvitation(c *gin.Context) {
 		}
 	}
 
-	_, err = tx.Exec("UPDATE players SET party_id = $1, current_region = $2, x = $3, y = $4 WHERE id = $5", partyID, leaderRegion, leaderX, leaderY, player.ID)
+	regionalWarning := ""
+	if leaderRegion.Valid {
+		regionalWarning = applyDestination(tx, &player, leaderRegion.String, leaderX, leaderY)
+	}
+	_, err = tx.Exec("UPDATE players SET party_id = $1, current_region = $2, x = $3, y = $4, statuses = $5 WHERE id = $6", partyID, player.CurrentRegion, player.X, player.Y, player.Statuses, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin nhân vật"})
 		return
-	}
-
-	regionalWarning := ""
-	if leaderRegion.Valid && player.CurrentRegion != leaderRegion.String {
-		regionalWarning = CheckAndApplyRegionalWallDebuffBetween(&player, player.CurrentRegion, leaderRegion.String, tx)
-		if regionalWarning != "" {
-			_, _ = tx.Exec("UPDATE players SET statuses = $1 WHERE id = $2", player.Statuses, player.ID)
-		}
 	}
 
 	// Update invitation status to ACCEPTED and clean up other pending ones
@@ -515,6 +518,9 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
+	if leaderRegion.Valid {
+		broadcastPlayerWorldPos(&player)
+	}
 	AddHumanQi(&player, 2.0)
 
 	message := "Đã chấp nhận lời mời tham gia tổ đội! Nhân Khí +2."

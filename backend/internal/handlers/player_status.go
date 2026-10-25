@@ -82,12 +82,8 @@ func writeTrimmedPlayerStatus(c *gin.Context, player models.Player) {
 // GetPlayerInventoryGus returns the full Gu inventory of the authenticated player.
 // Uses a lightweight query against player_gu directly instead of loading the full player row.
 
-type playerQueryRower interface {
-	QueryRow(query string, args ...any) *sql.Row
-}
-
 // loadPlayerForStatus delegates to the service layer.
-func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
+func loadPlayerForStatus(q db.Queryer, id uuid.UUID, forUpdate bool) (models.Player, error) {
 	return PlayerSvc.Load(q, id, forUpdate)
 }
 
@@ -106,7 +102,7 @@ func setDefaultPlayerStatusFields(player *models.Player) {
 }
 
 // projectPlayerStatusTx delegates to the service layer.
-func projectPlayerStatusTx(q playerQueryRower, id uuid.UUID) (models.Player, error) {
+func projectPlayerStatusTx(q db.Queryer, id uuid.UUID) (models.Player, error) {
 	return PlayerSvc.ProjectStatus(q, id)
 }
 

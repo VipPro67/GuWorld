@@ -175,6 +175,9 @@ func EnterSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	if rejectRealtimeOwned(c, playerID) {
+		return
+	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu giao dịch"})
@@ -414,6 +417,9 @@ func ExitSpatialRealm(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if rejectRealtimeOwned(c, playerID) {
 		return
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)

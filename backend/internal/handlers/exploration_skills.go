@@ -131,6 +131,9 @@ func UseGuOnMap(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	if rejectRealtimeOwned(c, playerID) {
+		return
+	}
 	var req UseGuOnMapRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -268,17 +271,21 @@ func UseGuOnMap(c *gin.Context) {
 			oldY := player.Y
 			oldRegion := player.CurrentRegion
 			targetRegion := DeriveRegionAtOnMap(req.TargetX, req.TargetY, worldMapIDForRegion(player.CurrentRegion))
-			if targetRegion != oldRegion {
-				if err := checkRegionEntry(targetRegion, player.Rank, player.GuInventory); err != nil {
-					c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			if errMove := checkMovement(tx, &player, movementSpec{
+				kind:         movementGuTeleport,
+				x:            req.TargetX,
+				y:            req.TargetY,
+				hasTarget:    true,
+				targetRegion: targetRegion,
+			}); errMove != nil {
+				if respondMovementError(c, errMove) {
 					return
 				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+				return
 			}
-			player.X = req.TargetX
-			player.Y = req.TargetY
-			player.CurrentRegion = targetRegion
+			debuffMsg := applyDestination(tx, &player, targetRegion, req.TargetX, req.TargetY)
 			teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
-			debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion, tx)
 			if debuffMsg != "" {
 				teleportMsg += " " + debuffMsg
 			}
@@ -304,17 +311,21 @@ func UseGuOnMap(c *gin.Context) {
 		oldRegion := player.CurrentRegion
 		targetX, targetY := randomTeleportTarget(player.X, player.Y, teleportRange)
 		targetRegion := DeriveRegionAtOnMap(targetX, targetY, worldMapIDForRegion(player.CurrentRegion))
-		if targetRegion != oldRegion {
-			if err := checkRegionEntry(targetRegion, player.Rank, player.GuInventory); err != nil {
-				c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		if errMove := checkMovement(tx, &player, movementSpec{
+			kind:         movementGuTeleport,
+			x:            targetX,
+			y:            targetY,
+			hasTarget:    true,
+			targetRegion: targetRegion,
+		}); errMove != nil {
+			if respondMovementError(c, errMove) {
 				return
 			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+			return
 		}
-		player.X = targetX
-		player.Y = targetY
-		player.CurrentRegion = targetRegion
+		debuffMsg := applyDestination(tx, &player, targetRegion, targetX, targetY)
 		teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
-		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, targetRegion, tx)
 		if debuffMsg != "" {
 			teleportMsg += " " + debuffMsg
 		}
@@ -667,27 +678,8 @@ func UseGuOnMap(c *gin.Context) {
 	syncPlayerFlying(&player)
 
 	if teleported {
-		broadcastWorldPos(WorldPosEvent{
-			ID:        player.ID.String(),
-			Username:  player.Username,
-			AvatarURL: player.AvatarURL,
-			X:         player.X,
-			Y:         player.Y,
-			Region:    player.CurrentRegion,
-			TS:        time.Now().UnixMilli(),
-		})
-		for _, sm := range syncedMembers {
-			broadcastWorldPos(WorldPosEvent{
-				ID:        sm.ID.String(),
-				Username:  sm.Username,
-				AvatarURL: sm.AvatarURL,
-				X:         sm.X,
-				Y:         sm.Y,
-				Region:    sm.Region,
-				TS:        time.Now().UnixMilli(),
-			})
-			PublishPlayerPositionDelta(sm.ID, sm.X, sm.Y)
-		}
+		broadcastPlayerWorldPos(&player)
+		publishPartyMovement(syncedMembers, publishPartyPositionDelta)
 	}
 
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{

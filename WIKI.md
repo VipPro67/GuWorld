@@ -593,6 +593,7 @@ Cổ Sư có thể khắc họa trận văn, câu thông thiên địa để xâ
 
 #### 1. Nguyên Lý Hoạt Động & Hướng Kết Nối
 - Cần tối thiểu **2 điểm truyền tống** trong tầm phủ sóng để tạo liên kết không gian.
+- **Điều kiện kích hoạt:** đạo hữu phải còn sống (HP > 0), không ở trạng thái Cõi Chết, không đang trong trận chiến và nhân vật không bị thế giới realtime điều khiển. Cổng chuyển vùng, Cổ dịch chuyển và lời mời tổ đội áp dụng cùng bộ điều kiện.
 - **Hướng Kết Nối**:
   - **Hai Chiều (`TWO_WAY`)**: Vừa phát tín hiệu truyền tống đi, vừa tiếp nhận Cổ Sư từ nơi khác đến.
   - **Một Chiều Gửi (`ONE_WAY_SEND`)**: Chỉ cho phép truyền tống rời khỏi điểm này (không thể dùng làm điểm đến).

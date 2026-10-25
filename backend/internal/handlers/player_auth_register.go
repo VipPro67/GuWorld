@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -27,24 +27,24 @@ var startingRegionToTanThuCoc = map[string]string{
 	"tan_thu_coc_tay_mac":    "tan_thu_coc_tay_mac",
 	"tan_thu_coc_dong_hai":   "tan_thu_coc_dong_hai",
 
-	"hub_nam_cuong":          "tan_thu_coc_nam_cuong",
-	"hub_thuong_gia_thanh":   "tan_thu_coc_nam_cuong",
-	"hub_trung_chau":         "tan_thu_coc_trung_chau",
-	"hub_bac_nguyen":         "tan_thu_coc_bac_nguyen",
-	"hub_tay_mac":            "tan_thu_coc_tay_mac",
-	"hub_dong_hai":           "tan_thu_coc_dong_hai",
+	"hub_nam_cuong":        "tan_thu_coc_nam_cuong",
+	"hub_thuong_gia_thanh": "tan_thu_coc_nam_cuong",
+	"hub_trung_chau":       "tan_thu_coc_trung_chau",
+	"hub_bac_nguyen":       "tan_thu_coc_bac_nguyen",
+	"hub_tay_mac":          "tan_thu_coc_tay_mac",
+	"hub_dong_hai":         "tan_thu_coc_dong_hai",
 
-	"dai_vuc_nam_cuong":      "tan_thu_coc_nam_cuong",
-	"dai_vuc_trung_chau":     "tan_thu_coc_trung_chau",
-	"dai_vuc_bac_nguyen":     "tan_thu_coc_bac_nguyen",
-	"dai_vuc_tay_mac":        "tan_thu_coc_tay_mac",
-	"dai_vuc_dong_hai":       "tan_thu_coc_dong_hai",
+	"dai_vuc_nam_cuong":  "tan_thu_coc_nam_cuong",
+	"dai_vuc_trung_chau": "tan_thu_coc_trung_chau",
+	"dai_vuc_bac_nguyen": "tan_thu_coc_bac_nguyen",
+	"dai_vuc_tay_mac":    "tan_thu_coc_tay_mac",
+	"dai_vuc_dong_hai":   "tan_thu_coc_dong_hai",
 
-	"nam_cuong":              "tan_thu_coc_nam_cuong",
-	"trung_chau":             "tan_thu_coc_trung_chau",
-	"bac_nguyen":             "tan_thu_coc_bac_nguyen",
-	"tay_mac":                "tan_thu_coc_tay_mac",
-	"dong_hai":               "tan_thu_coc_dong_hai",
+	"nam_cuong":  "tan_thu_coc_nam_cuong",
+	"trung_chau": "tan_thu_coc_trung_chau",
+	"bac_nguyen": "tan_thu_coc_bac_nguyen",
+	"tay_mac":    "tan_thu_coc_tay_mac",
+	"dong_hai":   "tan_thu_coc_dong_hai",
 }
 
 var tanThuCocEntryPoints = map[string][2]int{
@@ -327,30 +327,22 @@ func RegisterPlayer(c *gin.Context) {
 	query := `
 		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender, constitution, register_fingerprint, register_ip)
 		VALUES ($1, $2, 0, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13, $16, $17, $18)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding, race, gender, constitution, statuses
+		RETURNING id
 	`
 
-	var activeCombatBytes []byte
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, spawnX, spawnY, constitution, strings.TrimSpace(req.Fingerprint), c.ClientIP()).Scan(
-		&player.ID, &player.Username, &player.Rank, &player.SubRank,
-		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
-		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
-		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
-		&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-		&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
-		&player.LastManaUpdate, &player.CreatedAt,
-		&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
-		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
-	)
+	var newPlayerID uuid.UUID
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, spawnX, spawnY, constitution, strings.TrimSpace(req.Fingerprint), c.ClientIP()).Scan(&newPlayerID)
 	if err != nil {
 		if isUsernameUniqueViolation(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu này đã tồn tại (không phân biệt chữ hoa/thường)!"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create player: " + err.Error()})
+		return
+	}
+	player, err = playerstate.Load(tx, newPlayerID, playerstate.Options{Gu: playerstate.GuNone})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load created player: " + err.Error()})
 		return
 	}
 
@@ -365,13 +357,6 @@ func RegisterPlayer(c *gin.Context) {
 	InventorySvc.AddItem(tx, player.ID.String(), "moon_orchid_petal", "materials", 5)
 	InventorySvc.AddItem(tx, player.ID.String(), "green_bamboo_wine", "materials", 2)
 	InventorySvc.AddItem(tx, player.ID.String(), "jade_stone", "materials", 1)
-
-	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
-		var cs models.CombatState
-		if json.Unmarshal(activeCombatBytes, &cs) == nil {
-			player.ActiveCombat = &cs
-		}
-	}
 
 	// 3.5 Handle referral code logic
 	var referralBanTarget uuid.UUID

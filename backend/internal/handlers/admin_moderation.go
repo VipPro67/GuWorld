@@ -103,7 +103,7 @@ func notifyPlayerBanned(playerID uuid.UUID, reason string) {
 }
 
 // playerBanStatus reads the current ban state for a login attempt.
-func playerBanStatus(q playerQueryRower, playerID uuid.UUID) (bool, string, sql.NullTime, error) {
+func playerBanStatus(q db.Queryer, playerID uuid.UUID) (bool, string, sql.NullTime, error) {
 	var banned bool
 	var reason string
 	var until sql.NullTime
@@ -112,7 +112,7 @@ func playerBanStatus(q playerQueryRower, playerID uuid.UUID) (bool, string, sql.
 }
 
 // deviceBlocked reports whether an IP/fingerprint is blocked from registering.
-func deviceBlocked(q playerQueryRower, ip, fingerprint string) (bool, error) {
+func deviceBlocked(q db.Queryer, ip, fingerprint string) (bool, error) {
 	ip = strings.TrimSpace(ip)
 	fingerprint = strings.TrimSpace(fingerprint)
 	if ip == "" && fingerprint == "" {
@@ -129,7 +129,7 @@ func deviceBlocked(q playerQueryRower, ip, fingerprint string) (bool, error) {
 }
 
 // playerChatMuted reports whether the player is currently muted.
-func playerChatMuted(q playerQueryRower, playerID uuid.UUID) (bool, error) {
+func playerChatMuted(q db.Queryer, playerID uuid.UUID) (bool, error) {
 	var muted bool
 	var until sql.NullTime
 	if err := q.QueryRow(`SELECT is_chat_muted, chat_muted_until FROM players WHERE id=$1`, playerID).Scan(&muted, &until); err != nil {

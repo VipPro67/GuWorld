@@ -67,7 +67,7 @@ func exitSpatialRealmEffect(tx *sql.Tx, player *models.Player, item models.ItemS
 	if _, err := tx.Exec(`UPDATE shared_spatial_instance_members SET exited_at=NOW(),exit_reason='GU_EFFECT' WHERE player_id=$1 AND instance_id=$2 AND exited_at IS NULL`, player.ID, instanceID); err != nil {
 		return "", err
 	}
-	player.CurrentRegion, player.X, player.Y = region, x, y
+	placePlayerAt(player, region, x, y)
 	player.ActiveCombat = nil
 	return fmt.Sprintf("Đạo hữu sử dụng %s để thoát khỏi bí cảnh.", item.Name), nil
 }

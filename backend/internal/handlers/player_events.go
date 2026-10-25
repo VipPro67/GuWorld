@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -286,7 +287,7 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 			p.time_speed_multiplier, p.active_combat, p.aperture_stress, p.hp, p.base_hp,
 			p.primeval_stones, p.immortal_stones, p.wall_progress, p.human_qi,
 			p.lifespan, p.x, p.y, p.current_region, p.path_masteries,
-			p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0),
+			`+playerstate.RevisionExpr+`,
 			COALESCE(p.version, 0),
 			`+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
 		FROM players p
@@ -340,7 +341,7 @@ func loadAuthoritativePlayerMarker(q interface {
 }, playerID uuid.UUID) (*models.CombatState, int64, error) {
 	var raw []byte
 	var revision int64
-	if err := q.QueryRow(`SELECT p.active_combat, p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0) FROM players p WHERE p.id = $1`, playerID).Scan(&raw, &revision); err != nil {
+	if err := q.QueryRow("SELECT p.active_combat, "+playerstate.RevisionExpr+" FROM players p WHERE p.id = $1", playerID).Scan(&raw, &revision); err != nil {
 		return nil, 0, err
 	}
 	combat, err := decodeActiveCombat(raw)
@@ -351,7 +352,7 @@ func loadPlayerStateRevision(q interface {
 	QueryRow(query string, args ...any) *sql.Row
 }, playerID uuid.UUID) (int64, error) {
 	var revision int64
-	err := q.QueryRow(`SELECT p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0) FROM players p WHERE p.id = $1`, playerID).Scan(&revision)
+	err := q.QueryRow("SELECT "+playerstate.RevisionExpr+" FROM players p WHERE p.id = $1", playerID).Scan(&revision)
 	return revision, err
 }
 

@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -23,6 +22,9 @@ func PortalTransfer(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if rejectRealtimeOwned(c, authID) {
 		return
 	}
 
@@ -56,18 +58,6 @@ func PortalTransfer(c *gin.Context) {
 		return
 	}
 
-	// Check region rank and inventory restrictions if entering a gated region
-	inventory, err := db.LoadPlayerGus(tx, authID.String(), false)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ trùng nhân vật"})
-		return
-	}
-	if err := checkRegionEntry(req.TargetZoneID, player.Rank, inventory); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Chưa đủ điều kiện tiến vào %s: %v", targetName, err)})
-		return
-	}
-
-	oldRegion := player.CurrentRegion
 	newX := int(req.TargetX)
 	newY := int(req.TargetY)
 
@@ -88,14 +78,21 @@ func PortalTransfer(c *gin.Context) {
 		newY = 1000
 	}
 
-	player.CurrentRegion = req.TargetZoneID
-	player.X = newX
-	player.Y = newY
-
-	debuffMsg := ""
-	if oldRegion != req.TargetZoneID {
-		debuffMsg = CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, req.TargetZoneID, tx)
+	if errMove := checkMovement(tx, &player, movementSpec{
+		kind:         movementPortal,
+		x:            newX,
+		y:            newY,
+		hasTarget:    true,
+		targetRegion: req.TargetZoneID,
+	}); errMove != nil {
+		if respondMovementError(c, errMove) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+		return
 	}
+
+	debuffMsg := applyDestination(tx, &player, req.TargetZoneID, newX, newY)
 
 	_, err = tx.Exec(`
 		UPDATE players
@@ -119,29 +116,9 @@ func PortalTransfer(c *gin.Context) {
 		logMsg += " " + debuffMsg
 	}
 
-	broadcastWorldPos(WorldPosEvent{
-		ID:        player.ID.String(),
-		Username:  player.Username,
-		AvatarURL: player.AvatarURL,
-		X:         player.X,
-		Y:         player.Y,
-		Region:    player.CurrentRegion,
-		TS:        time.Now().UnixMilli(),
-	})
+	broadcastPlayerWorldPos(&player)
 	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
-
-	for _, sm := range syncedMembers {
-		broadcastWorldPos(WorldPosEvent{
-			ID:        sm.ID.String(),
-			Username:  sm.Username,
-			AvatarURL: sm.AvatarURL,
-			X:         sm.X,
-			Y:         sm.Y,
-			Region:    sm.Region,
-			TS:        time.Now().UnixMilli(),
-		})
-		PublishPlayerRealtimeEvent(sm.ID, PlayerEventUpdated)
-	}
+	publishPartyMovement(syncedMembers, publishPartyRealtimeEvent)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

@@ -2,7 +2,6 @@ package services
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -13,9 +12,9 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 	"github.com/vippro67/GuWorld/backend/internal/util"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // QueryRower is satisfied by *sql.DB and *sql.Tx for read-only queries.
@@ -23,11 +22,8 @@ type QueryRower interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-type execer interface {
-	Exec(query string, args ...any) (sql.Result, error)
-}
-
-// PlayerService handles player persistence and state management.
+// PlayerService owns player persistence and time projection. The durable row
+// shape lives in playerstate; this type adds the gameplay projection on top.
 type PlayerService struct {
 	db *sql.DB
 }
@@ -41,29 +37,10 @@ func (s *PlayerService) DB() *sql.DB {
 	return s.db
 }
 
-// Load reads a full player row from the database.
-func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
-	player, err := s.loadRow(q, id, forUpdate)
-	if err != nil {
-		return player, err
-	}
-	if s.cleanExpiredStatuses(q, &player) {
-		_ = q.QueryRow(`SELECT p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0) FROM players p WHERE p.id = $1`, id).Scan(&player.StateRevision)
-	}
-
-	if s.db != nil {
-		var qy db.Queryer
-		if tx, ok := q.(db.Queryer); ok {
-			qy = tx
-		} else {
-			qy = s.db
-		}
-		inv, err := db.LoadPlayerGus(qy, id.String(), false)
-		if err == nil {
-			player.GuInventory = inv
-		}
-	}
-	return player, nil
+// Load reads the full player snapshot: canonical row, all Gu, materials and
+// the lazy repair.
+func (s *PlayerService) Load(q db.Queryer, id uuid.UUID, forUpdate bool) (models.Player, error) {
+	return playerstate.Load(q, id, playerstate.Options{ForUpdate: forUpdate, Gu: playerstate.GuFull})
 }
 
 // LoadForUpdate loads a player with a row-level lock for mutation flows.
@@ -74,198 +51,18 @@ func (s *PlayerService) LoadForUpdate(tx *sql.Tx, id uuid.UUID) (models.Player, 
 // LoadForUpdateEquipped is like LoadForUpdate but only loads equipped/vital Gus
 // (used by light mana evaluation paths where full inventory is not needed).
 func (s *PlayerService) LoadForUpdateEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
-	player, err := s.loadRow(tx, id, true)
-	if err != nil {
-		return player, err
-	}
-	if s.cleanExpiredStatuses(tx, &player) {
-		_ = tx.QueryRow(`SELECT p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0) FROM players p WHERE p.id = $1`, id).Scan(&player.StateRevision)
-	}
-	if s.db != nil {
-		if inv, errR := db.LoadPlayerGus(tx, id.String(), true); errR == nil {
-			player.GuInventory = inv
-		}
-	}
-	return player, nil
+	return s.loadEquipped(tx, id, true)
 }
 
 // LoadEquipped loads a player with only equipped/vital Gus populated in
 // GuInventory. Used for lightweight read-only status snapshots where the full
 // inventory is not needed (the dedicated inventory endpoint serves full data).
-func (s *PlayerService) LoadEquipped(q QueryRower, id uuid.UUID) (models.Player, error) {
-	player, err := s.loadRow(q, id, false)
-	if err != nil {
-		return player, err
-	}
-	if s.cleanExpiredStatuses(q, &player) {
-		_ = q.QueryRow(`SELECT p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0) FROM players p WHERE p.id = $1`, id).Scan(&player.StateRevision)
-	}
-	if s.db != nil {
-		var qy db.Queryer
-		if tx, ok := q.(db.Queryer); ok {
-			qy = tx
-		} else {
-			qy = s.db
-		}
-		if inv, err := db.LoadPlayerGus(qy, id.String(), true); err == nil {
-			player.GuInventory = inv
-		}
-	}
-	return player, nil
+func (s *PlayerService) LoadEquipped(q db.Queryer, id uuid.UUID) (models.Player, error) {
+	return s.loadEquipped(q, id, false)
 }
 
-// cleanExpiredStatuses lazily persists status cleanup for players that are
-// actually loaded by a request. The original JSON condition prevents a stale
-// read from overwriting a status granted concurrently.
-func (s *PlayerService) cleanExpiredStatuses(q QueryRower, player *models.Player) bool {
-	exec, ok := q.(execer)
-	if !ok {
-		return false
-	}
-	original, err := player.Statuses.Value()
-	if err != nil || !player.Statuses.Expire(time.Now()) {
-		return false
-	}
-
-	cleaned, err := player.Statuses.Value()
-	if err != nil {
-		logger.S.Warnf("Failed to serialize expired statuses for player %s: %v", player.ID, err)
-		return false
-	}
-	_, err = exec.Exec(`
-		UPDATE players
-		SET statuses = $1
-		WHERE id = $2 AND statuses = $3
-	`, cleaned, player.ID, original)
-	if err != nil {
-		logger.S.Warnf("Failed to lazily clean expired statuses for player %s: %v", player.ID, err)
-		return false
-	}
-	return true
-}
-
-// loadRow loads the player row, active combat state and materials inventory,
-// but not the Gu inventory (callers decide equipped-only vs full).
-func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
-	var player models.Player
-
-	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade,
-		       current_mana, max_mana, primeval_stones, immortal_stones,
-		       wall_progress, human_qi, next_tribulation_time,
-		       hp, base_hp, body_mods, x, y,
-		       equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries,
-		       active_combat, last_mana_update, COALESCE(last_hunger_tick_at, created_at, NOW()), created_at, lifespan, time_speed_multiplier,
-		       party_id, arena_rank, COALESCE(email, ''), google_id,
-		       explore_count, last_explore_reset, aperture_stress,
-		       last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine,
-		       COALESCE(bio, ''), COALESCE(fake_rank, 1),
-		       COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''),
-		       COALESCE(is_disguised, false), COALESCE(is_admin, false),
-		       COALESCE(ref_code, ''), COALESCE(avatar_url, ''), combat_settings,
-		       COALESCE(needs_onboarding, false),
-		       COALESCE(current_thought, 100.0), COALESCE(max_thought, 100.0), COALESCE(thought_regen_rate, 1.0),
-   COALESCE(immortal_state, '{}'), growth_data,
-		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses,
-		       COALESCE(p.version, 0), COALESCE(p.state_revision, 0) + COALESCE((
-		           SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id
-		       ), 0)
-FROM players p
-		WHERE id = $1
-	`
-	if forUpdate {
-		query += " FOR UPDATE"
-	}
-
-	var activeCombatBytes []byte
-	err := q.QueryRow(query, id).Scan(
-		&player.ID, &player.Username, &player.Rank, &player.SubRank,
-		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones,
-		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
-		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
-		&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-		&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
-		&player.LastManaUpdate, &player.LastHungerTickAt, &player.CreatedAt, &player.Lifespan, &player.TimeSpeedMultiplier,
-		&player.PartyID, &player.ArenaRank, &player.Email, &player.GoogleID,
-		&player.ExploreCount, &player.LastExploreReset,
-		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine,
-		&player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL,
-		&player.CombatSettings,
-		&player.NeedsOnboarding,
-		&player.CurrentThought, &player.MaxThought, &player.RegenRate,
-		&player.ImmortalState,
-		&player.GrowthData,
-		&player.Race, &player.Gender, &player.Constitution, &player.Statuses,
-		&player.Version, &player.StateRevision,
-	)
-	if err != nil {
-		return player, err
-	}
-
-	if player.Rank >= 6 {
-		var daoMarks models.DaoMarksMap
-		errDao := q.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&daoMarks)
-		if errDao == nil {
-			player.DaoMarks = daoMarks
-		} else {
-			player.DaoMarks = models.DaoMarksMap{"strength": 0}
-		}
-	} else {
-		player.DaoMarks = models.DaoMarksMap{"strength": 0}
-	}
-
-	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
-		var cs models.CombatState
-		if errU := json.Unmarshal(activeCombatBytes, &cs); errU == nil {
-			if !cs.IsEmpty() {
-				if player.PartyID != nil {
-					var leaderID string
-					errL := q.QueryRow(`SELECT leader_id FROM parties WHERE id = $1`, player.PartyID).Scan(&leaderID)
-					if errL == nil && leaderID != player.ID.String() {
-						player.ActiveCombat = nil
-						if execer, ok := q.(interface {
-							Exec(query string, args ...any) (sql.Result, error)
-						}); ok {
-							_, _ = execer.Exec(`UPDATE players SET active_combat = NULL WHERE id = $1`, player.ID)
-						}
-					} else {
-						player.ActiveCombat = &cs
-					}
-				} else {
-					player.ActiveCombat = &cs
-				}
-			}
-		} else {
-			logger.S.Warnf("LoadForUpdate: failed to unmarshal active_combat for player=%s: %v", player.ID, errU)
-		}
-	}
-
-	var inventoryQuery db.Queryer
-	if qy, ok := q.(db.Queryer); ok {
-		inventoryQuery = qy
-	} else {
-		inventoryQuery = s.db
-	}
-	if inventoryQuery != nil {
-		invRows, err := inventoryQuery.Query(`
-			SELECT item_id, quantity FROM player_inventory_items WHERE player_id = $1
-		`, id.String())
-		if err == nil {
-			defer invRows.Close()
-			mi := make(models.MaterialsInventory)
-			for invRows.Next() {
-				var itemID string
-				var qty int64
-				if invRows.Scan(&itemID, &qty) == nil {
-					mi[itemID] += qty
-				}
-			}
-			player.MaterialsInventory = mi
-		}
-	}
-	return player, nil
+func (s *PlayerService) loadEquipped(q db.Queryer, id uuid.UUID, forUpdate bool) (models.Player, error) {
+	return playerstate.Load(q, id, playerstate.Options{ForUpdate: forUpdate, Gu: playerstate.GuEquipped})
 }
 
 // setDefaults initializes default values for empty fields.
@@ -281,7 +78,7 @@ func (s *PlayerService) setDefaults(player *models.Player) {
 // applyApertureProjection returns immortal aperture time rate and essence production for Rank >= 6.
 // Equipped Gu reductions attenuate the Dao purity penalty, while a permanent
 // sovereign body mod removes that penalty entirely.
-func (s *PlayerService) applyApertureProjection(q QueryRower, player *models.Player) (timeRate float64, essenceProd int) {
+func (s *PlayerService) applyApertureProjection(q db.Queryer, player *models.Player) (timeRate float64, essenceProd int) {
 	timeRate = 1.0
 	essenceProd = 10
 	if player.Rank < 6 {
@@ -508,7 +305,7 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 }
 
 // ProjectStatus computes the read-only projected status for UI refreshes.
-func (s *PlayerService) ProjectStatus(q QueryRower, id uuid.UUID) (models.Player, error) {
+func (s *PlayerService) ProjectStatus(q db.Queryer, id uuid.UUID) (models.Player, error) {
 	player, err := s.LoadEquipped(q, id)
 	if err != nil {
 		return player, err
@@ -649,7 +446,7 @@ func (s *PlayerService) ProjectAndPersistBestEffort(id uuid.UUID, equippedOnly b
 }
 
 // ProjectStatusEquipped is the equipped-only counterpart of ProjectStatus.
-func (s *PlayerService) ProjectStatusEquipped(q QueryRower, id uuid.UUID) (models.Player, error) {
+func (s *PlayerService) ProjectStatusEquipped(q db.Queryer, id uuid.UUID) (models.Player, error) {
 	player, err := s.LoadEquipped(q, id)
 	if err != nil {
 		return player, err

@@ -8,6 +8,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 )
 
 func refreshActionPlayerState(player *models.Player) {
@@ -16,20 +17,7 @@ func refreshActionPlayerState(player *models.Player) {
 	}
 	// Read the response fields and their revision from one MVCC snapshot. Never
 	// attach a newer revision to values retained in a pre-commit Go model.
-	_ = db.DB.QueryRow(`
-		SELECT p.state_revision + COALESCE((
-			SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id
-		), 0), p.primeval_stones, p.immortal_stones, p.human_qi,
-		p.hp, p.base_hp, p.current_mana, p.max_mana, p.current_thought, p.soul_hp, p.lifespan,
-		p.aptitude_percent, p.sub_rank, p.rank, p.wall_progress
-		FROM players p WHERE p.id = $1
-	`, player.ID).Scan(
-		&player.StateRevision, &player.PrimevalStones,
-		&player.ImmortalStones, &player.HumanQi,
-		&player.HP, &player.BaseHP, &player.CurrentMana, &player.MaxMana,
-		&player.CurrentThought, &player.SoulHP, &player.Lifespan,
-		&player.AptitudePercent, &player.SubRank, &player.Rank, &player.WallProgress,
-	)
+	_ = playerstate.RefreshResponse(db.DB, player)
 }
 
 // responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory and CompletedQuests are populated.

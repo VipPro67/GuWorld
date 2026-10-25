@@ -56,7 +56,7 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		}
 		dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
 		respawn = ResolveDeathRespawn(deathRegion, deathX, deathY)
-		player.CurrentRegion, player.X, player.Y = respawn.Region, respawn.X, respawn.Y
+		placePlayerAt(player, respawn.Region, respawn.X, respawn.Y)
 		didRespawn = true
 		if dropSummary != "" {
 			defeatMsg = fmt.Sprintf("Công kích Tông Môn thất bại! Đạo hữu trọng thương và rơi rớt mất: %s.", dropSummary)
@@ -73,7 +73,7 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		}
 		dropSummary := applyDeathDrop(tx, player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: killerName})
 		respawn = ResolveDeathRespawn(deathRegion, deathX, deathY)
-		player.CurrentRegion, player.X, player.Y = respawn.Region, respawn.X, respawn.Y
+		placePlayerAt(player, respawn.Region, respawn.X, respawn.Y)
 		didRespawn = true
 		setWorldPosFromPlayer(player)
 		if dropSummary != "" {
