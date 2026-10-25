@@ -169,6 +169,16 @@ const knownTypes = new Set<WorldMessageType>([
   "world.resync",
 ]);
 
+/**
+ * The legacy hub multiplexes chat/trade/presence frames (`event`, `pong`,
+ * `response`, ...) on the same `/api/ws` socket as the realtime world
+ * protocol. Only `world.*` frames belong to this protocol; callers must skip
+ * everything else instead of treating it as a protocol error.
+ */
+export function isWorldProtocolMessage(value: unknown): boolean {
+  return isRecord(value) && typeof value.type === "string" && value.type.startsWith("world.");
+}
+
 /** Validates only the envelope; callers must validate the payload for its type. */
 export function decodeWorldEnvelope(input: string): WorldEnvelope {
   if (new TextEncoder().encode(input).byteLength > WORLD_MAX_MESSAGE_BYTES) {

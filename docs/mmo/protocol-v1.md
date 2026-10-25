@@ -12,6 +12,12 @@ Messages larger than 16 KiB, unsupported versions, unknown message types,
 unknown Go fields, malformed JSON, or non-finite numbers are rejected before
 they reach a zone inbox.
 
+The realtime runtime shares the `/api/ws` socket with the legacy hub, which
+pushes channel traffic (`event`, `pong`, `command` responses, chat/trade/player
+snapshots) on every connection. Only frames whose `type` starts with `world.`
+belong to this protocol; clients must skip the rest instead of treating them as
+a version mismatch.
+
 ```json
 {"v":1,"type":"world.input","request_id":"c-17","payload":{"seq":17,"move":{"x":0.7071,"y":0.7071}}}
 ```

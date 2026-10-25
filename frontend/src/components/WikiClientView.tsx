@@ -25,6 +25,7 @@ import { indexGus, guAt } from "@/lib/gu-index";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
 import { translatePath } from "@/lib/translate";
+import { getItemIconUrl } from "@/lib/item-icons";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import {
   EFFECT_CATEGORIES,
@@ -1508,17 +1509,13 @@ export default function WikiClientView({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3 min-w-0">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url}
-                            alt={item.name}
-                            className="w-10 h-10 rounded-lg object-cover bg-zinc-950 border border-zinc-800 shrink-0"
-                          />
-                        ) : (
-                          <span className="text-xl shrink-0 p-1.5 rounded-lg bg-zinc-950/50 border border-zinc-800/40">
-                            📦
-                          </span>
-                        )}
+                        <img
+                          src={getItemIconUrl(item)}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="w-10 h-10 rounded-lg object-contain bg-zinc-950 border border-zinc-800 shrink-0"
+                        />
                         <div className="min-w-0">
                           <h3 className="text-xs font-serif font-bold text-[var(--text-primary)] truncate">
                             {item.name}

@@ -180,6 +180,8 @@ và session, không chứa role hoặc permission.
 
 Không ghi số dòng cố định trong tài liệu vì dataset thay đổi thường xuyên. Các helper tìm file ở `data/` trước rồi mới thử đường dẫn legacy. Chỉ sửa CSV chưa làm đổi dictionary trong DB: phải import dataset tương ứng. Workflow Admin luôn parse/validate và dry-run trước, hiển thị row count/diff (`inserts`, `updates`, `unchanged`) rồi mới cho xác nhận commit transaction. Preflight có lỗi nghiêm trọng không ghi database. Sau commit server tự reload registry/invalidate cache; UI sẽ cảnh báo rõ nếu dataset hoặc lỗi reload vẫn yêu cầu restart. Với hai file package đọc trực tiếp, cần chờ cache 24 giờ hoặc xóa cache/restart để thấy thay đổi ngay.
 
+Icon vật phẩm ở túi đồ, danh mục và Thương Đội dùng bộ WebP nhỏ tại `frontend/public/assets/items/icons/`. `frontend/src/lib/item-icons.ts` chọn hình theo tên/dáng vật và chỉ dùng `Item.image_url` khi đó là URL hợp lệ. Bộ icon chạy trực tiếp trên frontend; cập nhật riêng icon không cần import lại `Item.csv`. Xem `frontend/public/assets/items/README.md`.
+
 `python3 scripts/adjust_game_prices.py` chuẩn hóa `Item.csv.base_price` và `Gu.csv.base_price` theo bảng giá trong script, dùng bậc hiệu lực `max(rank, rarity)` (rarity `0` tiếp tục định giá theo rank). Vì vậy món có rarity cao hơn rank sẽ nhận giá của bậc rarity đó. Có thể scale phí recipe riêng bằng `--recipe-primeval 1.2` và/hoặc `--recipe-immortal 0.8`; hệ số này giữ nguyên chênh lệch giữa từng recipe. Lệnh mặc định chỉ xem trước; thêm `--apply` để ghi CSV. Sau đó import các dataset tương ứng trong Admin để cập nhật database.
 
 ## Registry runtime

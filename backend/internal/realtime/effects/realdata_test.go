@@ -3,11 +3,7 @@ package effects
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/csv"
 	"encoding/hex"
-	"encoding/json"
-	"os"
-	"strconv"
 	"testing"
 )
 
@@ -72,34 +68,5 @@ func TestRealGuCatalogHasExplicitRealtimeStatus(t *testing.T) {
 }
 
 func loadGuCSV(path string) ([]GuEntry, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	reader := csv.NewReader(file)
-	reader.FieldsPerRecord = -1
-	header, err := reader.Read()
-	if err != nil {
-		return nil, err
-	}
-	columns := map[string]int{}
-	for index, name := range header {
-		columns[name] = index
-	}
-	rows, err := reader.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-	entries := make([]GuEntry, 0, len(rows))
-	for _, row := range rows {
-		rank, _ := strconv.Atoi(row[columns["rank"]])
-		mana, _ := strconv.ParseFloat(row[columns["base_mana_cost"]], 64)
-		entries = append(entries, GuEntry{
-			ID: row[columns["id"]], Name: row[columns["name"]], Rank: rank, Type: row[columns["gu_type"]],
-			PrimaryRole: row[columns["primary_role"]], ManaCost: mana,
-			Effects: json.RawMessage(row[columns["effects"]]),
-		})
-	}
-	return entries, nil
+	return LoadGuCSV(path)
 }

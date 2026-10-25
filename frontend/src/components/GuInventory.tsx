@@ -10,6 +10,7 @@ import { GamePanel } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { hasOperation } from "@/lib/effect-blocks";
 import { KillerMovesPanel } from "@/components/KillerMovesPanel";
+import { getItemIconUrl } from "@/lib/item-icons";
 
 interface GuInventoryProps {
   player: Player;
@@ -308,9 +309,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     if (!(await useGameStore.getState().showConfirm(confirmMsg))) return;
 
     const itemIds = Array(useMultipleItemQty).fill(useMultipleItemId);
-    await onUseItems(itemIds);
-    setUseMultipleItemId(null);
-    setUseMultipleItemQty(1);
+    if (await onUseItems(itemIds)) {
+      setUseMultipleItemId(null);
+      setUseMultipleItemQty(1);
+    }
   };
 
   const handleBatchDrop = async () => {
@@ -777,7 +779,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               <span className="mt-1 text-[10px] text-zinc-600">Vật phẩm thu thập được sẽ xuất hiện tại đây.</span>
             </div>
           ) : (
-            <div className="grid grid-cols-2 items-start gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
+            <div className="grid items-start gap-2.5 sm:gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 12rem), 1fr))" }}>
               {visibleMaterials.map(({ key, spec, qty }) => {
                 const isConsumable = isConsumableItem(spec);
                 const isUsing = usingId === key;
@@ -788,11 +790,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     key={key}
                     className={`group flex min-w-0 flex-col overflow-hidden rounded-xl border transition-colors ${rarityStyle}`}
                   >
-                    <div className="flex min-h-11 w-full items-start justify-between gap-2 px-3 py-2 text-left">
-                      <span className="min-w-0 flex-1 whitespace-normal break-words text-[11px] font-semibold leading-snug">{spec.name}</span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="rounded-md bg-black/20 px-1.5 py-0.5 text-[10px] font-bold">×{qty}</span>
-                      </span>
+                    <div className="flex min-h-[4.25rem] w-full items-start gap-2 px-3 py-2 text-left">
+                      <img src={getItemIconUrl(spec)} alt="" loading="lazy" decoding="async" className="h-10 w-10 shrink-0 rounded-lg bg-black/25 object-contain p-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <span className="block whitespace-normal break-words text-[11px] font-semibold leading-snug">{spec.name}</span>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="rounded-md bg-black/20 px-1.5 py-0.5 text-[10px] font-bold">×{qty}</span>
+                          {isConsumable && <span className="text-[9px] font-medium text-emerald-300/80">Tiêu hao</span>}
+                        </div>
+                      </div>
                     </div>
                     {isConsumable && useMultipleItemId !== key && (onUseItem || (onUseItems && qty > 1)) && (
                       <div className="grid grid-cols-2 gap-1.5 px-2 pb-2">
@@ -801,9 +807,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             type="button"
                             onClick={() => handleUseItemClick(key)}
                             disabled={actionLoading || isUsing}
-                            className={`min-h-9 rounded-lg border border-emerald-700/40 bg-emerald-600/90 px-2 text-[10px] font-bold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 ${qty === 1 ? "col-span-2" : ""}`}
+                            aria-label={"Dùng 1 " + spec.name}
+                            className={`min-h-9 rounded-lg border border-emerald-700/40 bg-emerald-600/90 px-2 text-[10px] font-bold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 ${qty === 1 || !onUseItems ? "col-span-2" : ""}`}
                           >
-                            {isUsing ? "Đang dùng…" : "Dùng"}
+                            {isUsing ? "Đang dùng…" : qty > 1 ? "Dùng 1" : "Dùng"}
                           </button>
                         )}
                         {onUseItems && qty > 1 && (
@@ -813,7 +820,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               setUseMultipleItemId(key);
                               setUseMultipleItemQty(1);
                             }}
-                            className="min-h-9 rounded-lg border border-amber-800/40 bg-amber-950/30 px-2 text-[9px] font-bold text-amber-300 transition-colors hover:bg-amber-900/40"
+                            aria-label={"Dùng nhiều " + spec.name}
+                            className={`min-h-9 rounded-lg border border-amber-800/40 bg-amber-950/30 px-2 text-[9px] font-bold text-amber-300 transition-colors hover:bg-amber-900/40 ${!onUseItem ? "col-span-2" : ""}`}
                           >
                             Dùng nhiều
                           </button>

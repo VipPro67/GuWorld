@@ -233,13 +233,21 @@ func main() {
 				})
 			}
 		}
-		guEntries := make([]realtimeeffects.GuEntry, 0, len(models.GuRegistry))
-		for id, ranks := range models.GuRegistry {
-			for rank, item := range ranks {
-				guEntries = append(guEntries, realtimeeffects.GuEntry{
-					ID: id, Name: item.Name, Rank: rank, Type: item.Type, PrimaryRole: item.PrimaryRole,
-					ManaCost: item.BaseManaCost,
-				})
+		var guEntries []realtimeeffects.GuEntry
+		if csvPath := resolveGuCSVPath(); csvPath != "" {
+			if loaded, err := realtimeeffects.LoadGuCSV(csvPath); err == nil && len(loaded) > 0 {
+				guEntries = loaded
+			}
+		}
+		if len(guEntries) == 0 {
+			// Fallback to in-memory database registry if CSV is unavailable
+			for id, ranks := range models.GuRegistry {
+				for rank, item := range ranks {
+					guEntries = append(guEntries, realtimeeffects.GuEntry{
+						ID: id, Name: item.Name, Rank: rank, Type: item.Type, PrimaryRole: item.PrimaryRole,
+						ManaCost: item.BaseManaCost,
+					})
+				}
 			}
 		}
 		profilePaths := resolveRealtimeProfilePaths(realtimeConfig.GuProfiles)
@@ -542,4 +550,22 @@ func resolveRealtimeProfilePaths(rawPaths string) string {
 		resolved = append(resolved, found)
 	}
 	return strings.Join(resolved, ",")
+}
+
+func resolveGuCSVPath() string {
+	cwd, _ := os.Getwd()
+	for current := cwd; current != ""; {
+		for _, sub := range []string{"data/Gu.csv", "backend/data/Gu.csv"} {
+			candidate := filepath.Join(current, sub)
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				return candidate
+			}
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	return "data/Gu.csv"
 }

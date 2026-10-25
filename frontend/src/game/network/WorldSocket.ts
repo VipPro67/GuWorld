@@ -3,6 +3,7 @@ import { SnapshotBuffer, type BufferedWorldState, type SnapshotApplyResult } fro
 import {
   WORLD_PROTOCOL_VERSION,
   decodeWorldEnvelope,
+  isWorldProtocolMessage,
   parseWorldEventBatch,
   parseWorldSnapshotPayload,
   parseWorldWelcomePayload,
@@ -279,6 +280,17 @@ export class WorldSocket {
     for (const line of data.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (error) {
+        this.notifyError(asError(error, "invalid_envelope"));
+        continue;
+      }
+      // Legacy chat/trade/presence frames share this socket; they are not
+      // world-protocol envelopes and must be ignored, not reported as
+      // "Unsupported realtime world protocol version".
+      if (!isWorldProtocolMessage(parsed)) continue;
       let envelope: WorldEnvelope;
       try {
         envelope = decodeWorldEnvelope(trimmed);

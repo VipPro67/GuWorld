@@ -20,6 +20,10 @@ class FakeSocket {
     this.onmessage?.({ data: JSON.stringify(message) } as MessageEvent<unknown>);
   }
 
+  receiveRaw(message: string): void {
+    this.onmessage?.({ data: message } as MessageEvent<unknown>);
+  }
+
   send(data: string): void {
     this.sent.push(data);
   }
@@ -147,3 +151,74 @@ test("WorldSocket rejects a join cancelled before the server welcomes it", async
   client.disconnect();
   await assert.rejects(pending, /cancelled/);
 });
+
+function ownerWelcome(requestId: string) {
+  return {
+    v: 1,
+    type: "world.welcome",
+    request_id: requestId,
+    payload: {
+      session_id: "session-1",
+      zone_id: "starter#realtime-preview",
+      map_version: "map-1",
+      content_version: "content-1",
+      tick_rate: 20,
+      server_tick: 10,
+      entity_id: "player-1",
+      entity_revision: 0,
+      baseline_id: 1,
+      snapshot: {
+        tick: 10, ack_seq: 0, baseline_id: 1, base_tick: 10, is_baseline: true,
+        entities: [{ entity_id: "player-1", entity_revision: 0, kind: "player", x: 0, y: 0, hp: 100 }],
+      },
+    },
+  };
+}
+
+test("WorldSocket ignores legacy hub frames on the shared socket", async () => {
+  const fake = new FakeSocket();
+  const client = new WorldSocket({
+    url: "wss://api.example/api/ws",
+    getToken: () => "token-value",
+    createSocket: () => fake as unknown as ReturnType<NonNullable<WorldSocketOptions["createSocket"]>>,
+  });
+  const errors: string[] = [];
+  client.onError((error) => errors.push(error.message));
+
+  const pending = client.connect(join);
+  fake.open();
+  const request = JSON.parse(fake.sent[0]) as { request_id: string };
+
+  // `/api/ws` also carries legacy channel traffic (player snapshot, chat,
+  // pong). It is not world-protocol traffic and must be skipped silently.
+  fake.receive({ type: "event", channel: "player", data: { id: "player-1", padding: "x".repeat(20_000) } });
+  fake.receiveRaw([JSON.stringify({ type: "pong" }), JSON.stringify(ownerWelcome(request.request_id))].join("\n"));
+
+  const welcome = await pending;
+  assert.equal(welcome.zone_id, "starter#realtime-preview");
+  assert.equal(client.isJoined(), true);
+
+  fake.receive({ type: "event", channel: "chat:world", data: { content: "hello" } });
+  assert.deepEqual(errors, []);
+});
+
+test("WorldSocket still reports unsupported versions for world frames", async () => {
+  const fake = new FakeSocket();
+  const client = new WorldSocket({
+    url: "wss://api.example/api/ws",
+    getToken: () => "token-value",
+    createSocket: () => fake as unknown as ReturnType<NonNullable<WorldSocketOptions["createSocket"]>>,
+  });
+  const errors: string[] = [];
+  client.onError((error) => errors.push(error.message));
+
+  const pending = client.connect(join);
+  fake.open();
+  const request = JSON.parse(fake.sent[0]) as { request_id: string };
+  fake.receive({ v: 2, type: "world.welcome", request_id: request.request_id, payload: {} });
+
+  assert.deepEqual(errors, ["Unsupported realtime world protocol version"]);
+  client.disconnect();
+  await assert.rejects(pending, /cancelled/);
+});
+

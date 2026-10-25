@@ -7,6 +7,7 @@ import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight
 import { translatePath } from "@/lib/translate";
 import { GamePanel, GameButton, GameTabs, GameCard, GameInput, GameSelect } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
+import { getItemIconUrl } from "@/lib/item-icons";
 // UI migrated to shared components
 
 interface ShopItem {
@@ -800,9 +801,12 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                         <span className="text-[9px] text-zinc-500 font-normal">{itemTier === "immortal" ? "Tiên Nguyên Thạch" : ""}</span>
                       </span>
                     </div>
-                    <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-amber-400 transition-colors">
-                      {item.name}
-                    </h4>
+                    <div className="flex items-center gap-2">
+                      {item.type !== "Gu" && <img src={getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type })} alt="" loading="lazy" decoding="async" className="h-10 w-10 shrink-0 rounded-lg bg-zinc-900/60 object-contain" />}
+                      <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-amber-400 transition-colors">
+                        {item.name}
+                      </h4>
+                    </div>
                     <details className="mt-1">
                       <summary className="text-[10px] text-zinc-500 hover:text-amber-500 cursor-pointer select-none list-none font-mono outline-none inline-flex items-center gap-1 transition-colors">
                         [+] Xem mô tả
@@ -904,9 +908,12 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                       <Check className="w-3.5 h-3.5 text-zinc-950 font-bold" />
                     </button>
 
-                    <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-rose-400 transition-colors">
-                      {item.name}
-                    </h4>
+                    <div className="flex items-center gap-2">
+                      {item.type === "Material" && <img src={getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type })} alt="" loading="lazy" decoding="async" className="h-10 w-10 shrink-0 rounded-lg bg-zinc-900/60 object-contain" />}
+                      <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-rose-400 transition-colors">
+                        {item.name}
+                      </h4>
+                    </div>
                     <details className="mt-1" onClick={(e) => e.stopPropagation()}>
                       <summary className="text-[10px] text-zinc-500 hover:text-rose-405 cursor-pointer select-none list-none font-mono outline-none inline-flex items-center gap-1 transition-colors">
                         [+] Xem mô tả

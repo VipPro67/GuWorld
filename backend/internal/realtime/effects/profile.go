@@ -3,6 +3,7 @@ package effects
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
@@ -140,6 +142,41 @@ func (c *CompiledCatalog) Profile(guID string, rank int) (CompiledProfile, bool)
 	return CompiledProfile{}, false
 }
 
+// LoadGuCSV loads the canonical entries from Gu.csv so the realtime compiler
+// can validate profiles directly against the primary CSV without depending on DB state.
+func LoadGuCSV(path string) ([]GuEntry, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	reader := csv.NewReader(file)
+	reader.FieldsPerRecord = -1
+	header, err := reader.Read()
+	if err != nil {
+		return nil, err
+	}
+	columns := map[string]int{}
+	for index, name := range header {
+		columns[name] = index
+	}
+	rows, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]GuEntry, 0, len(rows))
+	for _, row := range rows {
+		rank, _ := strconv.Atoi(row[columns["rank"]])
+		mana, _ := strconv.ParseFloat(row[columns["base_mana_cost"]], 64)
+		entries = append(entries, GuEntry{
+			ID: row[columns["id"]], Name: row[columns["name"]], Rank: rank, Type: row[columns["gu_type"]],
+			PrimaryRole: row[columns["primary_role"]], ManaCost: mana,
+			Effects: json.RawMessage(row[columns["effects"]]),
+		})
+	}
+	return entries, nil
+}
+
 func LoadProfiles(path string) (ProfileCatalog, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -223,7 +260,7 @@ func CompileCatalog(catalog ProfileCatalog, entries []GuEntry, requiredMVP []Ent
 		provided[key] = true
 		entry, exists := entryIndex[key]
 		if len(entries) > 0 && !exists {
-			return nil, fmt.Errorf("%s: %s rank %d does not exist in Gu.csv", path, profile.GUID, profile.Rank)
+			return nil, fmt.Errorf("%s: %s rank %d does not exist in loaded Gu registry (database gu_dictionary or Gu.csv)", path, profile.GUID, profile.Rank)
 		}
 		if profile.Slot != 0 {
 			if profile.Slot < 1 || profile.Slot > 6 {
