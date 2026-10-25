@@ -179,37 +179,29 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     if (!worldActive) {
       setMenuOpen(false);
       setPanel(null);
-      if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "connecting")) {
-        runtimeRef.current.disconnect();
-      }
-    } else {
-      if (runtimeRef.current && (runtimeRef.current.getStatus() === "closed" || runtimeRef.current.getStatus() === "idle")) {
-        void runtimeRef.current.reconnect();
-      }
     }
   }, [worldActive]);
 
   const lastEquippedGusRef = useRef<string>(JSON.stringify(player?.equipped_gus ?? []));
-  useEffect(() => {
-    const currentSerialized = JSON.stringify(player?.equipped_gus ?? []);
-    if (lastEquippedGusRef.current !== currentSerialized) {
-      lastEquippedGusRef.current = currentSerialized;
-      if (worldActive && runtimeRef.current && runtimeRef.current.getStatus() === "joined") {
-        void runtimeRef.current.reconnect();
-      }
-    }
-  }, [player?.equipped_gus, worldActive]);
-
   const lastRegionRef = useRef<string>(player?.current_region ?? "");
   useEffect(() => {
+    if (!worldActive) return;
+
+    const currentSerialized = JSON.stringify(player?.equipped_gus ?? []);
     const region = player?.current_region ?? "";
-    if (lastRegionRef.current !== region) {
-      lastRegionRef.current = region;
-      if (worldActive && runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
+
+    const regionChanged = lastRegionRef.current !== "" && lastRegionRef.current !== region;
+    const gusChanged = lastEquippedGusRef.current !== currentSerialized;
+
+    lastRegionRef.current = region;
+    lastEquippedGusRef.current = currentSerialized;
+
+    if (regionChanged || gusChanged) {
+      if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
         void runtimeRef.current.reconnect();
       }
     }
-  }, [player?.current_region, worldActive]);
+  }, [player?.equipped_gus, player?.current_region, worldActive]);
 
   const handlePortalTransfer = useCallback(async (targetZoneId: string, targetX: number, targetY: number) => {
     try {

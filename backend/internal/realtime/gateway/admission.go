@@ -24,7 +24,7 @@ import (
 
 const (
 	joinReadTimeout       = 5 * time.Second
-	joinLimitPerMinute    = 6
+	joinLimitPerMinute    = 15
 	maxTrackedJoinPlayers = 10_000
 	playerSpeed           = 4.0
 	playerRadius          = 0.4
