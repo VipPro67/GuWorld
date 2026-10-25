@@ -79,8 +79,6 @@ type Map struct {
 	Height         int
 	TileWidth      int
 	TileHeight     int
-	Ground         []int
-	Solid          []bool
 	Spawns         []Spawn
 	Portals        []Portal
 	Hash           string
@@ -149,7 +147,6 @@ func Build(raw TiledMapJSON) (*Map, error) {
 		return nil, fmt.Errorf("%w: map_id and map_version are required", ErrInvalidMap)
 	}
 
-	ground := make([]int, raw.Width*raw.Height)
 	solid := make([]bool, raw.Width*raw.Height)
 	hasCollision := false
 	var spawns []Spawn
@@ -180,10 +177,6 @@ func Build(raw TiledMapJSON) (*Map, error) {
 						solid[y*raw.Width] = true
 						solid[y*raw.Width+raw.Width-1] = true
 					}
-				}
-			case "ground":
-				if len(layer.Data) == len(ground) {
-					copy(ground, layer.Data)
 				}
 			}
 		case "objectgroup":
@@ -257,7 +250,7 @@ func Build(raw TiledMapJSON) (*Map, error) {
 	return &Map{
 		ID: raw.MapID, Version: raw.MapVersion, ContentVersion: raw.ContentVersion, Ruleset: ruleset,
 		Width: raw.Width, Height: raw.Height, TileWidth: raw.TileWidth, TileHeight: raw.TileHeight,
-		Ground: ground, Solid: solid, Spawns: spawns, Portals: portals, Hash: hash, collision: collision,
+		Spawns: spawns, Portals: portals, Hash: hash, collision: collision,
 		LegacyOriginX: legacyOriginX, LegacyOriginY: legacyOriginY, LegacyScale: legacyScale,
 	}, nil
 }

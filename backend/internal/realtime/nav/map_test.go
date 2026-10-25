@@ -5,11 +5,32 @@ import (
 	"encoding/csv"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
 )
+
+func TestSparseMapRetainedMemory(t *testing.T) {
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+
+	loaded, err := LoadFile("../../../data/mmo/maps/am_tieu_vuc.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime.GC()
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+	runtime.KeepAlive(loaded)
+
+	const maxRetained = 16 << 20 // Collision and spawn metadata, with room for runtime overhead.
+	if after.HeapAlloc > before.HeapAlloc+maxRetained {
+		t.Fatalf("sparse map retained %d bytes, expected at most %d", after.HeapAlloc-before.HeapAlloc, maxRetained)
+	}
+}
 
 const (
 	canonicalMapPath = "../../../data/mmo/maps/realtime_preview.json"
