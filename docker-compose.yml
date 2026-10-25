@@ -27,28 +27,28 @@ services:
     volumes:
       - redis_data:/data
 
-  # backend:
-  #   image: ${BACKEND_IMAGE:-ghcr.io/vippro67/guworld-backend:latest}
-  #   container_name: guworld-backend
-  #   restart: always
-  #   ports:
-  #     - "127.0.0.1:8080:8080"
-  #   env_file:
-  #     - ./backend/.env
-  #   environment:
-  #     - PORT=8080
-  #     - GIN_MODE=release
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - REDIS_SSL=false
-  #     - CORS_ALLOWED_ORIGINS=https://www.cogioi.io.vn,https://cogioi.io.vn,http://localhost:3000
-  #     - AUTH_COOKIE_DOMAIN=.cogioi.io.vn
-  #     - AUTH_COOKIE_SECURE=true
-  #     - AUTH_COOKIE_SAMESITE=none
-  #     - WS_ALLOWED_ORIGINS=http://localhost:3000,https://cogioi.io.vn,https://www.cogioi.io.vn,https://api.cogioi.io.vn
-  #   depends_on:
-  #     redis:
-  #       condition: service_started
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/vippro67/guworld-backend:latest}
+    container_name: guworld-backend
+    restart: always
+    ports:
+      - "127.0.0.1:8080:8080"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8080
+      - GIN_MODE=release
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_SSL=false
+      - CORS_ALLOWED_ORIGINS=https://www.cogioi.io.vn,https://cogioi.io.vn,http://localhost:3000
+      - AUTH_COOKIE_DOMAIN=.cogioi.io.vn
+      - AUTH_COOKIE_SECURE=true
+      - AUTH_COOKIE_SAMESITE=none
+      - WS_ALLOWED_ORIGINS=http://localhost:3000,https://cogioi.io.vn,https://www.cogioi.io.vn,https://api.cogioi.io.vn
+    depends_on:
+      redis:
+        condition: service_started
 
   # caddy:
   #   image: caddy:2-alpine
