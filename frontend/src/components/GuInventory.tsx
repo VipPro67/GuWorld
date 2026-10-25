@@ -297,6 +297,17 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const handleUseMultipleItem = async () => {
     if (!useMultipleItemId || useMultipleItemQty < 1) return;
+    const availableQty = Math.max(0, Number(materials[useMultipleItemId]) || 0);
+    if (availableQty === 0) {
+      setUseMultipleItemId(null);
+      setUseMultipleItemQty(1);
+      return;
+    }
+    if (useMultipleItemQty > availableQty) {
+      setUseMultipleItemQty(availableQty);
+      useGameStore.getState().addToast("Số lượng muốn dùng vượt quá vật phẩm hiện có", "info");
+      return;
+    }
     if (useMultipleItemQty > 100) {
       useGameStore.getState().addToast("Chỉ có thể sử dụng tối đa 100 vật phẩm một lúc", "info");
       return;
@@ -820,8 +831,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               setUseMultipleItemId(key);
                               setUseMultipleItemQty(1);
                             }}
+                            disabled={actionLoading}
                             aria-label={"Dùng nhiều " + spec.name}
-                            className={`min-h-9 rounded-lg border border-amber-800/40 bg-amber-950/30 px-2 text-[9px] font-bold text-amber-300 transition-colors hover:bg-amber-900/40 ${!onUseItem ? "col-span-2" : ""}`}
+                            className={`min-h-9 rounded-lg border border-amber-800/40 bg-amber-950/30 px-2 text-[9px] font-bold text-amber-300 transition-colors hover:bg-amber-900/40 disabled:opacity-50 ${!onUseItem ? "col-span-2" : ""}`}
                           >
                             Dùng nhiều
                           </button>
@@ -834,6 +846,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         <span className="text-[9px] text-emerald-400 font-mono font-bold whitespace-nowrap">SL</span>
                         <input
                           type="number"
+                          aria-label={"Số lượng " + spec.name + " muốn dùng"}
                           min={1}
                           max={Math.min(qty, 100)}
                           value={useMultipleItemQty}

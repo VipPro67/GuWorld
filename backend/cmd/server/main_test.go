@@ -59,8 +59,8 @@ func TestResolveRealtimeProfilePathsFromNestedServerDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not load profile catalogs from nested server directory: %v", err)
 	}
-	if len(catalog.Profiles) != 4254 {
-		t.Fatalf("loaded profile count=%d, want 4254", len(catalog.Profiles))
+	if len(catalog.Profiles) != 4255 {
+		t.Fatalf("loaded profile count=%d, want 4255", len(catalog.Profiles))
 	}
 }
 
