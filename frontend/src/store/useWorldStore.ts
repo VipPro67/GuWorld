@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { BACKEND_URL } from "@/lib/config";
 import { authFetch } from "@/lib/auth";
 import { useGameStore } from "@/store/useGameStore";
+import { wsManager } from "@/lib/websocket";
 
 export interface NearbyVeinInfo {
   id: string;
@@ -52,10 +53,22 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     const maxY = Math.round(y + boundedRadius);
 
     try {
-      const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${minX}&min_y=${minY}&max_x=${maxX}&max_y=${maxY}`;
-      const res = await authFetch(url);
-      if (!res.ok) return false;
-      const data = await res.json();
+      const fetchHttp = async () => {
+        const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${minX}&min_y=${minY}&max_x=${maxX}&max_y=${maxY}`;
+        const res = await authFetch(url);
+        if (!res.ok) throw new Error("Could not fetch nearby cells");
+        return res.json();
+      };
+      let data: unknown;
+      if (wsManager.isConnected()) {
+        try {
+          data = await wsManager.request<unknown>("world.cells_rect", { min_x: minX, min_y: minY, max_x: maxX, max_y: maxY });
+        } catch {
+          data = await fetchHttp();
+        }
+      } else {
+        data = await fetchHttp();
+      }
       if (!Array.isArray(data)) return false;
 
       const cells: NearbyCell[] = data.map((item: Record<string, unknown>) => ({

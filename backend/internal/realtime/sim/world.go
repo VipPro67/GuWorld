@@ -36,6 +36,11 @@ const (
 	MaxMoveTargetDistance       = 64.0
 	MaxMoveTargetTicks          = TickRate * 30 // 30 seconds per click-to-move request.
 	MoveTargetArriveEpsilon     = 0.15
+	MonsterSpawnCellSize        = 64.0
+	MonsterSpawnRadius          = 64.0
+	MonsterDespawnRadius        = 96.0
+	MonsterDespawnGraceTicks    = TickRate * 10
+	MaxMonsterSpawnCatalog      = 1200
 )
 
 var (
@@ -139,6 +144,11 @@ type lifecycleCommand struct {
 	result chan error
 }
 
+type lifecycleResult struct {
+	result chan error
+	err    error
+}
+
 type Snapshot struct {
 	ZoneKey     ZoneKey           `json:"zone_key"`
 	Tick        uint64            `json:"tick"`
@@ -160,11 +170,19 @@ type World struct {
 
 	// The tick owner mutates entities; setup-only direct methods also take
 	// stateMu, while running lifecycle changes enter through lifecycleInbox.
-	entities       map[EntityID]*Entity
-	inbox          chan InputCommand
-	lifecycleInbox chan lifecycleCommand
-	rng            *rand.Rand
-	published      atomic.Pointer[Snapshot]
+	entities                 map[EntityID]*Entity
+	monsterCatalogConfigured bool
+	monsterSpawns            []monsterSpawnSlot
+	monsterCells             map[monsterSpawnCell][]int
+	activeMonsters           map[int]struct{}
+	spawnCandidateMarks      []uint64
+	spawnCandidateEpoch      uint64
+	spawnCandidateScratch    []int
+	spawnPlayerScratch       []Vec2
+	inbox                    chan InputCommand
+	lifecycleInbox           chan lifecycleCommand
+	rng                      *rand.Rand
+	published                atomic.Pointer[Snapshot]
 
 	projectiles      []*projectile
 	nextProjectileID uint64
@@ -173,8 +191,62 @@ type World struct {
 	lastStepNanos    atomic.Int64
 }
 
+type monsterSpawnCell struct{ x, y int64 }
+
+type monsterSpawnSlot struct {
+	prototype        Entity
+	outsideSinceTick uint64
+	respawnTick      uint64
+}
+
 func NewWorld(zoneID string, queueSize int) (*World, error) {
 	return NewWorldForKey(ZoneKey{MapID: zoneID, InstanceID: "default", RulesetVersion: "v1"}, queueSize)
+}
+
+// ConfigureMonsterSpawns installs the immutable server-authored spawn catalog.
+// Only monsters near a living player are materialized as entities. Configure
+// this before the zone runner starts and before any entities are added.
+func (w *World) ConfigureMonsterSpawns(spawns []Entity) error {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	if len(w.entities) != 0 || w.monsterCatalogConfigured {
+		return ErrMonsterSpawnCatalogAlreadyConfigured
+	}
+	if len(spawns) > MaxMonsterSpawnCatalog {
+		return fmt.Errorf("%w: catalog has %d entries, maximum is %d", ErrInvalidEntity, len(spawns), MaxMonsterSpawnCatalog)
+	}
+	for _, spawn := range spawns {
+		if spawn.Kind != EntityMonster || !spawn.AI.Active {
+			return fmt.Errorf("%w: spawn catalog entries must be AI monsters", ErrInvalidEntity)
+		}
+	}
+	if err := validateSetupEntities(w.collision, spawns, nil); err != nil {
+		return err
+	}
+	w.monsterSpawns = make([]monsterSpawnSlot, len(spawns))
+	w.monsterCells = make(map[monsterSpawnCell][]int)
+	w.activeMonsters = make(map[int]struct{})
+	w.spawnCandidateMarks = make([]uint64, len(spawns))
+	w.spawnCandidateScratch = make([]int, 0, len(spawns))
+	w.spawnPlayerScratch = make([]Vec2, 0, 16)
+	for index, spawn := range spawns {
+		copy := spawn
+		copy.moveIntent = Vec2{}
+		copy.AI.ThreatTable = nil
+		copy.AI.Threat = ""
+		copy.AI.PatrolTarget = nil
+		w.monsterSpawns[index] = monsterSpawnSlot{prototype: copy}
+		cell := monsterSpawnCellFor(copy.AI.Home)
+		w.monsterCells[cell] = append(w.monsterCells[cell], index)
+	}
+	w.monsterCatalogConfigured = true
+	return nil
+}
+
+var ErrMonsterSpawnCatalogAlreadyConfigured = errors.New("monster spawn catalog is already configured or zone contains entities")
+
+func monsterSpawnCellFor(position Vec2) monsterSpawnCell {
+	return monsterSpawnCell{x: int64(math.Floor(position.X / MonsterSpawnCellSize)), y: int64(math.Floor(position.Y / MonsterSpawnCellSize))}
 }
 
 // NewWorldWithCollision creates a zone with an immutable static collision
@@ -501,11 +573,19 @@ func (w *World) Step() Snapshot {
 	defer func() { w.lastStepNanos.Store(time.Since(started).Nanoseconds()) }()
 	w.stateMu.Lock()
 	defer w.stateMu.Unlock()
-	w.processLifecycleCommands()
+	lifecycleResults := w.processLifecycleCommands()
 	w.tick++
+	monsterMembershipChanged := w.updateMonsterSpawnsLocked()
 
 	if w.dormantWhenEmpty && w.activePlayers == 0 && len(w.projectiles) == 0 && len(w.events) == 0 {
-		return w.publishDormant()
+		if monsterMembershipChanged || len(lifecycleResults) > 0 {
+			snapshot := w.publish()
+			w.completeLifecycleCommands(lifecycleResults)
+			return snapshot
+		}
+		snapshot := w.publishDormant()
+		w.completeLifecycleCommands(lifecycleResults)
+		return snapshot
 	}
 
 	commands := w.collectCommands()
@@ -644,17 +724,141 @@ func (w *World) Step() Snapshot {
 		}
 	}
 
-	return w.publish()
+	snapshot := w.publish()
+	w.completeLifecycleCommands(lifecycleResults)
+	return snapshot
 }
 
-func (w *World) processLifecycleCommands() {
+func (w *World) updateMonsterSpawnsLocked() bool {
+	if len(w.monsterSpawns) == 0 {
+		return false
+	}
+	changed := false
+	players := w.spawnPlayerScratch[:0]
+	for _, entity := range w.entities {
+		if entity.Kind == EntityPlayer && entity.Vitals.HP > 0 {
+			players = append(players, entity.Transform.Position)
+		}
+	}
+	w.spawnPlayerScratch = players
+
+	candidates := w.spawnCandidateScratch[:0]
+	if len(players) > 0 {
+		w.spawnCandidateEpoch++
+		if w.spawnCandidateEpoch == 0 {
+			clear(w.spawnCandidateMarks)
+			w.spawnCandidateEpoch = 1
+		}
+		for _, player := range players {
+			cell := monsterSpawnCellFor(player)
+			for x := cell.x - 1; x <= cell.x+1; x++ {
+				for y := cell.y - 1; y <= cell.y+1; y++ {
+					for _, index := range w.monsterCells[monsterSpawnCell{x: x, y: y}] {
+						spawn := w.monsterSpawns[index].prototype.AI.Home
+						dx, dy := spawn.X-player.X, spawn.Y-player.Y
+						if dx*dx+dy*dy <= MonsterSpawnRadius*MonsterSpawnRadius {
+							if w.spawnCandidateMarks[index] != w.spawnCandidateEpoch {
+								w.spawnCandidateMarks[index] = w.spawnCandidateEpoch
+								candidates = append(candidates, index)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	sort.Ints(candidates)
+	w.spawnCandidateScratch = candidates
+	for _, index := range candidates {
+		if _, active := w.activeMonsters[index]; active {
+			continue
+		}
+		slot := &w.monsterSpawns[index]
+		if slot.respawnTick > w.tick {
+			continue
+		}
+		entity := slot.prototype
+		entity.Vitals.HP = entity.Vitals.MaxHP
+		entity.Transform.Position = entity.AI.Home
+		entity.AI.State = AIIdle
+		entity.AI.RespawnTick = 0
+		entity.AI.NextThinkTick = 0
+		entity.AI.NextAttackTick = 0
+		entity.AI.Threat = ""
+		entity.AI.ThreatTable = nil
+		entity.AI.PatrolTarget = nil
+		entity.Combat = CombatState{}
+		entity.moveIntent = Vec2{}
+		entity.moveTarget = nil
+		copy := entity
+		w.entities[entity.ID] = &copy
+		w.activeMonsters[index] = struct{}{}
+		slot.outsideSinceTick = 0
+		slot.respawnTick = 0
+		changed = true
+	}
+
+	for index := range w.activeMonsters {
+		slot := &w.monsterSpawns[index]
+		entity := w.entities[slot.prototype.ID]
+		if entity == nil {
+			delete(w.activeMonsters, index)
+			continue
+		}
+		nearby := false
+		for _, player := range players {
+			dx, dy := slot.prototype.AI.Home.X-player.X, slot.prototype.AI.Home.Y-player.Y
+			if dx*dx+dy*dy <= MonsterDespawnRadius*MonsterDespawnRadius {
+				nearby = true
+				break
+			}
+		}
+		if nearby {
+			slot.outsideSinceTick = 0
+			continue
+		}
+		if slot.outsideSinceTick == 0 {
+			slot.outsideSinceTick = w.tick
+			continue
+		}
+		if w.tick-slot.outsideSinceTick < MonsterDespawnGraceTicks {
+			continue
+		}
+		// Keep engaged monsters alive while a player still exists in the zone.
+		// An empty zone cannot continue a fight, so its entities may be safely
+		// reset and unloaded after the same grace period.
+		if len(players) > 0 && (entity.AI.Threat != "" || entity.Combat.Pending != nil) {
+			continue
+		}
+		if entity.Vitals.HP <= 0 {
+			slot.respawnTick = entity.AI.RespawnTick
+		} else {
+			slot.respawnTick = 0
+		}
+		delete(w.entities, entity.ID)
+		delete(w.activeMonsters, index)
+		slot.outsideSinceTick = 0
+		changed = true
+	}
+	return changed
+}
+
+func (w *World) processLifecycleCommands() []lifecycleResult {
+	var results []lifecycleResult
 	for count := 0; count < MaxLifecycleCommandsPerTick; count++ {
 		select {
 		case request := <-w.lifecycleInbox:
-			request.result <- request.apply()
+			results = append(results, lifecycleResult{result: request.result, err: request.apply()})
 		default:
-			return
+			return results
 		}
+	}
+	return results
+}
+
+func (w *World) completeLifecycleCommands(results []lifecycleResult) {
+	for _, result := range results {
+		result.result <- result.err
 	}
 }
 
@@ -676,14 +880,26 @@ func (w *World) Snapshot() Snapshot {
 }
 
 // HasPendingActivity reports whether the latest published snapshot still has
-// projectiles or events. It is a cheap, allocation-free check for lifecycle
-// eviction; the published snapshot is immutable after publication.
+// projectiles or events, or whether a monster respawn cooldown must continue
+// advancing before the zone can be evicted.
 func (w *World) HasPendingActivity() bool {
 	snapshot := w.published.Load()
-	if snapshot == nil {
-		return false
+	if snapshot != nil && (len(snapshot.Projectiles) > 0 || len(snapshot.Events) > 0) {
+		return true
 	}
-	return len(snapshot.Projectiles) > 0 || len(snapshot.Events) > 0
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	for _, slot := range w.monsterSpawns {
+		if slot.respawnTick > w.tick {
+			return true
+		}
+	}
+	for _, entity := range w.entities {
+		if entity.Kind == EntityMonster && entity.Vitals.HP <= 0 && entity.AI.RespawnTick > w.tick {
+			return true
+		}
+	}
+	return false
 }
 
 // publish runs only on the zone actor.

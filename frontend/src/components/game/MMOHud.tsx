@@ -30,6 +30,7 @@ export interface HudTarget {
 
 export interface MMOHudProps {
   connected: boolean;
+  worldActive?: boolean;
   tickRate: number;
   mana: number;
   maxMana: number;
@@ -294,7 +295,7 @@ export function MMOHud(props: MMOHudProps) {
     positionRef.current = props.position;
   }, [props.position]);
   useEffect(() => {
-    if (!props.connected || !props.player) return;
+    if (!props.connected || props.worldActive === false || !props.player) return;
     const fetchDrops = () => {
       const { x, y } = positionRef.current;
       const px = Math.round(x);
@@ -307,13 +308,13 @@ export function MMOHud(props: MMOHudProps) {
     };
     fetchDrops();
     fetchCells();
-    const dropsTimer = window.setInterval(fetchDrops, 4000);
-    const cellsTimer = window.setInterval(fetchCells, 15000);
+    const dropsTimer = window.setInterval(fetchDrops, 8000);
+    const cellsTimer = window.setInterval(fetchCells, 30000);
     return () => {
       window.clearInterval(dropsTimer);
       window.clearInterval(cellsTimer);
     };
-  }, [props.connected, props.player?.id, fetchGroundDrops, fetchNearbyCells]);
+  }, [props.connected, props.worldActive, props.player?.id, fetchGroundDrops, fetchNearbyCells]);
 
   const handleInvitePlayer = async (username: string) => {
     let party = useGameStore.getState().party;

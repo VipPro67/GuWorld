@@ -334,7 +334,7 @@ type MonsterSpawn struct {
 // MaxMonstersPerZone bounds one zone's monster entities. Region maps seed
 // density from Region.csv cell_type_weights; the largest authored map is close
 // to 1100.
-const MaxMonstersPerZone = 1200
+const MaxMonstersPerZone = sim.MaxMonsterSpawnCatalog
 
 // Manager is a process-local owner for configured zones and their player leases.
 // Authentication and loading trusted player state remain gateway responsibilities.
@@ -485,8 +485,8 @@ func buildManagedZone(key sim.ZoneKey, queueSize int, zoneMap ZoneMap) (*managed
 	}
 	world.SetPvPEnabled(zoneMap.PvP)
 	world.SetDormantWhenEmpty(true)
-	if err := world.AddEntities(entities); err != nil {
-		return nil, fmt.Errorf("add monsters in zone %s: %w", key.String(), err)
+	if err := world.ConfigureMonsterSpawns(entities); err != nil {
+		return nil, fmt.Errorf("configure monster spawns in zone %s: %w", key.String(), err)
 	}
 	generation, err := newZoneGeneration()
 	if err != nil {
@@ -815,22 +815,23 @@ func (m *Manager) ZoneKeys() []sim.ZoneKey {
 // ZoneStats is the minimal per-zone telemetry needed for the debug endpoints
 // and load reports. It does not expose player identities.
 type ZoneStats struct {
-	Key           sim.ZoneKey
-	Tick          uint64
-	Entities      int
-	Players       int
-	Subscribers   int
-	LastStep      time.Duration
-	MapLoaded     bool    `json:"map_loaded"`
-	Running       bool    `json:"running"`
-	Evicting      bool    `json:"evicting,omitempty"`
-	MapHash       string  `json:"map_hash"`
-	MapWidth      int     `json:"map_width"`
-	MapHeight     int     `json:"map_height"`
-	LegacyOriginX float64 `json:"legacy_origin_x"`
-	LegacyOriginY float64 `json:"legacy_origin_y"`
-	LegacyScale   float64 `json:"legacy_scale"`
-	MonsterSpawns int     `json:"monster_spawns"`
+	Key            sim.ZoneKey
+	Tick           uint64
+	Entities       int
+	ActiveMonsters int `json:"active_monsters"`
+	Players        int
+	Subscribers    int
+	LastStep       time.Duration
+	MapLoaded      bool    `json:"map_loaded"`
+	Running        bool    `json:"running"`
+	Evicting       bool    `json:"evicting,omitempty"`
+	MapHash        string  `json:"map_hash"`
+	MapWidth       int     `json:"map_width"`
+	MapHeight      int     `json:"map_height"`
+	LegacyOriginX  float64 `json:"legacy_origin_x"`
+	LegacyOriginY  float64 `json:"legacy_origin_y"`
+	LegacyScale    float64 `json:"legacy_scale"`
+	MonsterSpawns  int     `json:"monster_spawns"`
 }
 
 func (m *Manager) Stats() []ZoneStats {
@@ -850,13 +851,17 @@ func (m *Manager) Stats() []ZoneStats {
 		if zone := m.zones[key]; zone != nil {
 			snapshot := zone.world.Snapshot()
 			players := 0
+			monsters := 0
 			for _, entity := range snapshot.Entities {
 				if entity.Kind == sim.EntityPlayer {
 					players++
+				} else if entity.Kind == sim.EntityMonster {
+					monsters++
 				}
 			}
 			entry.Tick = snapshot.Tick
 			entry.Entities = len(snapshot.Entities)
+			entry.ActiveMonsters = monsters
 			entry.Players = players
 			entry.Subscribers = len(zone.subscribers)
 			entry.LastStep = zone.world.LastStepDuration()

@@ -132,7 +132,7 @@ func ApplyRealtimeRegionTransfer(ctx context.Context, req RealtimeRegionTransfer
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players
 		SET current_region = $1, x = $2, y = $3, hp = $4, statuses = $5,
-		    map_instance_id = NULL, updated_at = NOW()
+		    map_instance_id = NULL
 		WHERE id = $6
 	`, loaded.CurrentRegion, loaded.X, loaded.Y, hp, loaded.Statuses, loaded.ID); err != nil {
 		return PlayerTransferResult{}, err

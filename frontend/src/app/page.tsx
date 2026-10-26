@@ -170,6 +170,7 @@ export default function Home() {
   const fetchMerchantMarkers = useGameStore((s) => s.fetchMerchantMarkers);
 
   const currentView = useUIStore((s) => s.currentView);
+  const isGameWorldSurface = ["dashboard", "mmo-world"].includes(currentView);
   const setView = useUIStore((s) => s.setView);
   const showChangelog = useUIStore((s) => s.showChangelog);
   const setShowChangelog = useUIStore((s) => s.setShowChangelog);
@@ -232,10 +233,9 @@ export default function Home() {
 
   }, [isPlayerReady]);
 
-  // Merchant + marker polling: the trade panel is only mounted when adjacent, so
-  // fetch here to gate the UI and feed the map markers.
+  // Merchant proximity and roaming markers only need refresh while the world is open.
   useEffect(() => {
-    if (!playerId) return;
+    if (!playerId || !isGameWorldSurface) return;
     void fetchMerchants();
     void fetchMerchantMarkers();
     const interval = setInterval(() => {
@@ -243,9 +243,9 @@ export default function Home() {
         void fetchMerchants();
         void fetchMerchantMarkers();
       }
-    }, 15000);
+    }, 30000);
     return () => clearInterval(interval);
-  }, [playerId, player?.current_region, fetchMerchants, fetchMerchantMarkers]);
+  }, [playerId, player?.current_region, isGameWorldSurface, fetchMerchants, fetchMerchantMarkers]);
 
   const isPartyMemberNotLeader = Boolean(player?.party_id) && party !== null && party.leader_id !== player?.id;
   // Force combat view if player is actively in combat (and is leader or solo) or if we have an active replay with logs
@@ -311,7 +311,6 @@ export default function Home() {
   // Phaser is the only persistent gameplay world. Old view IDs remain aliases
   // for navigation compatibility and never open a legacy map surface.
   const isGameWorldView = Boolean(player && !player.needs_onboarding && !inCombat);
-  const isGameWorldSurface = ["dashboard", "mmo-world"].includes(currentView);
   // Full-bleed modes take the whole surface instead of the side drawer.
   const isFullBleedView = currentView === "practice-room" || isGameWorldSurface;
   const isWideFeatureView = ["aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "death-arena", "martial-arena"].includes(currentView);

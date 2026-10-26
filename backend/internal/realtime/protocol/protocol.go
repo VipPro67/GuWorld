@@ -174,7 +174,7 @@ type Snapshot struct {
 	Tick        uint64            `json:"tick"`
 	AckSeq      uint64            `json:"ack_seq"`
 	BaselineID  uint64            `json:"baseline_id"`
-	BaseTick    uint64            `json:"base_tick,omitempty"`
+	BaseTick    uint64            `json:"base_tick"`
 	IsBaseline  bool              `json:"is_baseline"`
 	Entities    []EntityState     `json:"entities"`
 	Removed     []string          `json:"removed,omitempty"`

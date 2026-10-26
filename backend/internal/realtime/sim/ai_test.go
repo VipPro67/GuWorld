@@ -187,6 +187,165 @@ func TestMonsterDamageDeathAndRespawn(t *testing.T) {
 	}
 }
 
+func TestMonsterSpawnsActivateOnlyNearPlayersAndShareAcrossPlayers(t *testing.T) {
+	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "spawn-radius", RulesetVersion: "v1"}, 8, 13)
+	if err != nil {
+		t.Fatal(err)
+	}
+	near := newAIMonster("m:0", Vec2{X: 64, Y: 0})
+	far := newAIMonster("m:1", Vec2{X: 100, Y: 0})
+	if err := w.ConfigureMonsterSpawns([]Entity{near, far}); err != nil {
+		t.Fatal(err)
+	}
+	first := newPlayer("first")
+	first.Transform.Position = Vec2{X: 0, Y: 0}
+	second := newPlayer("second")
+	second.Transform.Position = Vec2{X: 20, Y: 0}
+	if err := w.AddEntities([]Entity{first, second}); err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	if !containsEntity(w.Snapshot(), "m:0") || containsEntity(w.Snapshot(), "m:1") {
+		t.Fatalf("spawn radius activation mismatch: %+v", w.Snapshot().Entities)
+	}
+
+	w.stateMu.Lock()
+	w.entities["first"].Transform.Position = Vec2{X: 500, Y: 500}
+	w.stateMu.Unlock()
+	w.Step()
+	if !containsEntity(w.Snapshot(), "m:0") {
+		t.Fatal("monster unloaded while a second player remained nearby")
+	}
+}
+
+func TestMonsterSpawnDespawnsAfterGraceAndResetsWhenReactivated(t *testing.T) {
+	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "spawn-grace", RulesetVersion: "v1"}, 8, 17)
+	if err != nil {
+		t.Fatal(err)
+	}
+	monster := newAIMonster("m:0", Vec2{X: 0, Y: 0})
+	if err := w.ConfigureMonsterSpawns([]Entity{monster}); err != nil {
+		t.Fatal(err)
+	}
+	player := newPlayer("player")
+	player.Transform.Position = Vec2{X: 0, Y: 0}
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	if !containsEntity(w.Snapshot(), "m:0") {
+		t.Fatal("nearby monster did not activate")
+	}
+	w.stateMu.Lock()
+	w.entities["m:0"].Vitals.HP = 1
+	w.entities["player"].Transform.Position = Vec2{X: 200, Y: 0}
+	w.stateMu.Unlock()
+
+	for i := uint64(0); i < MonsterDespawnGraceTicks+1; i++ {
+		w.Step()
+	}
+	if containsEntity(w.Snapshot(), "m:0") {
+		t.Fatal("monster remained active after grace period with no nearby player")
+	}
+
+	w.stateMu.Lock()
+	w.entities["player"].Transform.Position = Vec2{X: 0, Y: 0}
+	w.stateMu.Unlock()
+	w.Step()
+	if !containsEntity(w.Snapshot(), "m:0") {
+		t.Fatal("monster did not reactivate when player returned")
+	}
+	if hp := entityHP(t, w, "m:0"); hp != monster.Vitals.MaxHP {
+		t.Fatalf("reactivated monster HP=%v, want reset HP=%v", hp, monster.Vitals.MaxHP)
+	}
+}
+
+func TestMonsterSpawnKeepsRespawnCooldownWhileDormant(t *testing.T) {
+	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "spawn-cooldown", RulesetVersion: "v1"}, 8, 19)
+	if err != nil {
+		t.Fatal(err)
+	}
+	monster := newAIMonster("m:0", Vec2{X: 0, Y: 0})
+	monster.AI.RespawnTicks = MonsterDespawnGraceTicks + 100
+	if err := w.ConfigureMonsterSpawns([]Entity{monster}); err != nil {
+		t.Fatal(err)
+	}
+	player := newPlayer("player")
+	player.Transform.Position = Vec2{X: 0, Y: 0}
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	result, err := w.QueueDamage("m:0", 999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	w.stateMu.Lock()
+	w.entities["player"].Transform.Position = Vec2{X: 200, Y: 0}
+	w.stateMu.Unlock()
+	for i := uint64(0); i < MonsterDespawnGraceTicks+1; i++ {
+		w.Step()
+	}
+	if containsEntity(w.Snapshot(), "m:0") {
+		t.Fatal("dormant dead monster should not have materialized")
+	}
+	w.stateMu.Lock()
+	w.entities["player"].Transform.Position = Vec2{X: 0, Y: 0}
+	w.stateMu.Unlock()
+	w.Step()
+	if containsEntity(w.Snapshot(), "m:0") {
+		t.Fatal("monster reappeared before its original respawn cooldown")
+	}
+	for i := 0; i < 100; i++ {
+		w.Step()
+	}
+	if !containsEntity(w.Snapshot(), "m:0") {
+		t.Fatal("monster did not materialize after its respawn cooldown")
+	}
+}
+
+func TestMonsterSpawnCannotUnloadWhileEngaged(t *testing.T) {
+	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "spawn-engaged", RulesetVersion: "v1"}, 8, 23)
+	if err != nil {
+		t.Fatal(err)
+	}
+	monster := newAIMonster("m:0", Vec2{X: 0, Y: 0})
+	monster.AI.LeashRadius = 120
+	if err := w.ConfigureMonsterSpawns([]Entity{monster}); err != nil {
+		t.Fatal(err)
+	}
+	player := newPlayer("player")
+	player.Transform.Position = Vec2{X: 0, Y: 0}
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	w.stateMu.Lock()
+	w.entities["m:0"].AI.Threat = "player"
+	w.entities["m:0"].AI.ThreatTable = map[EntityID]float64{"player": 1}
+	w.entities["player"].Transform.Position = Vec2{X: 100, Y: 0}
+	w.stateMu.Unlock()
+	for i := uint64(0); i < MonsterDespawnGraceTicks+5; i++ {
+		w.Step()
+	}
+	if !containsEntity(w.Snapshot(), "m:0") {
+		t.Fatal("engaged monster unloaded before disengaging")
+	}
+}
+
+func containsEntity(snapshot Snapshot, id EntityID) bool {
+	for _, entity := range snapshot.Entities {
+		if entity.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func entityHP(t *testing.T, w *World, id EntityID) float64 {
 	t.Helper()
 	for _, entity := range w.Snapshot().Entities {

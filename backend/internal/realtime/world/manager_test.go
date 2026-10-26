@@ -624,10 +624,10 @@ func TestManagerSpawnsServerOwnedMonstersWithAI(t *testing.T) {
 				player = &snapshot.Entities[index]
 			}
 		}
-		if monster == nil || monster.AI.TemplateID != "monster_stone_ape" {
-			t.Fatalf("monster was not spawned with AI: %+v", monster)
+		if monster != nil && monster.AI.TemplateID != "monster_stone_ape" {
+			t.Fatalf("monster spawned with wrong AI template: %+v", monster)
 		}
-		if player != nil && player.Vitals.HP < 100 {
+		if monster != nil && player != nil && player.Vitals.HP < 100 {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -983,10 +983,37 @@ func TestLazyManagerValidatesMapsWithoutStartingWorlds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.Entities) != 1 || snapshot.Entities[0].Kind != sim.EntityMonster || snapshot.Entities[0].Vitals.HP != 20 {
-		t.Fatalf("first activation did not spawn monsters from the map: %+v", snapshot.Entities)
+	if len(snapshot.Entities) != 0 {
+		t.Fatalf("lazy zone materialized monsters before a player entity joined: %+v", snapshot.Entities)
 	}
-	if stats := manager.Stats(); !stats[0].Running || stats[0].Evicting {
+	if _, err := manager.AttachCharacterEntity(lease, lazyPlayerEntity("lazy-character", 5.5, 5.5, nil)); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		snapshot, err = manager.Snapshot(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, entity := range snapshot.Entities {
+			found = found || entity.Kind == sim.EntityMonster
+		}
+		if found {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	monsterActivated := false
+	for _, entity := range snapshot.Entities {
+		if entity.Kind == sim.EntityMonster && entity.ID == "m:0" && entity.Vitals.HP == 20 {
+			monsterActivated = true
+		}
+	}
+	if len(snapshot.Entities) != 2 || !monsterActivated {
+		t.Fatalf("nearby player did not activate map monsters: %+v", snapshot.Entities)
+	}
+	if stats := manager.Stats(); !stats[0].Running || stats[0].Evicting || stats[0].ActiveMonsters != 1 {
 		t.Fatalf("active instance telemetry=%+v", stats[0])
 	}
 
@@ -1009,8 +1036,10 @@ func TestLazyManagerValidatesMapsWithoutStartingWorlds(t *testing.T) {
 
 func TestLazyManagerEvictsOnlyAfterIdleTimeoutAndRespawnsMonsters(t *testing.T) {
 	key := sim.ZoneKey{MapID: "lazy", InstanceID: "idle", RulesetVersion: "v1"}
+	monsterSpawn := lazyMonsterSpawn(5.5, 5.5, 10)
+	monsterSpawn.RespawnTicks = 10
 	manager, err := NewLazyManagerWithMaps([]sim.ZoneKey{key}, 8, 2, map[sim.ZoneKey]ZoneMap{
-		key: {Monsters: []MonsterSpawn{lazyMonsterSpawn(5.5, 5.5, 10)}},
+		key: {Monsters: []MonsterSpawn{monsterSpawn}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1067,6 +1096,10 @@ func TestLazyManagerEvictsOnlyAfterIdleTimeoutAndRespawnsMonsters(t *testing.T) 
 	if !manager.LeaveCharacter(lease) {
 		t.Fatal("could not release idle test lease")
 	}
+	manager.evictIdle(time.Now().Add(10 * time.Minute))
+	if stats := manager.Stats(); !stats[0].Running {
+		t.Fatal("pending monster respawn cooldown did not keep the idle world alive")
+	}
 
 	// Four minutes after the last lease is still inside the five-minute window.
 	manager.evictIdle(time.Now().Add(4 * time.Minute))
@@ -1090,7 +1123,8 @@ func TestLazyManagerEvictsOnlyAfterIdleTimeoutAndRespawnsMonsters(t *testing.T) 
 		t.Fatal("could not release pending lease")
 	}
 
-	// Past the timeout with no lease, subscriber, projectile, or pending event.
+	// The pending respawn cooldown keeps the idle world alive until simulation
+	// time advances past the deadline, after which normal idle eviction resumes.
 	deadline = time.Now().Add(5 * time.Second)
 	for {
 		manager.evictIdle(time.Now().Add(10 * time.Minute))
@@ -1119,9 +1153,23 @@ func TestLazyManagerEvictsOnlyAfterIdleTimeoutAndRespawnsMonsters(t *testing.T) 
 	if secondGeneration == firstGeneration {
 		t.Fatal("reactivated world reused the previous generation")
 	}
-	snapshot, err := manager.Snapshot(key)
-	if err != nil {
-		t.Fatal(err)
+	deadline = time.Now().Add(time.Second)
+	var snapshot sim.Snapshot
+	for time.Now().Before(deadline) {
+		snapshot, err = manager.Snapshot(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		monsters := 0
+		for _, entity := range snapshot.Entities {
+			if entity.Kind == sim.EntityMonster {
+				monsters++
+			}
+		}
+		if monsters == 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 	monsters := 0
 	for _, entity := range snapshot.Entities {

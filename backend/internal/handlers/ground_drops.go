@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -45,59 +46,69 @@ func GetTileGroundDrops(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	var x, y, radius *int
+	if c.Query("x") != "" || c.Query("y") != "" || c.Query("radius") != "" {
+		if c.Query("x") == "" || c.Query("y") == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "x and y must be provided together"})
+			return
+		}
+		parsedX, errX := strconv.Atoi(c.Query("x"))
+		parsedY, errY := strconv.Atoi(c.Query("y"))
+		parsedRadius := 0
+		var errRadius error
+		if c.Query("radius") != "" {
+			parsedRadius, errRadius = strconv.Atoi(c.Query("radius"))
+		}
+		if errX != nil || errY != nil || errRadius != nil || parsedRadius < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid drop viewport"})
+			return
+		}
+		x, y, radius = &parsedX, &parsedY, &parsedRadius
+	}
+	status, result := ExecuteGetTileGroundDrops(c.Request.Context(), authID, x, y, radius)
+	c.JSON(status, result)
+}
+
+// ExecuteGetTileGroundDrops returns the player's visible unexpired drops. A
+// nil viewport uses the persisted player position; explicit coordinates are
+// used by the realtime world client and the legacy HTTP route.
+func ExecuteGetTileGroundDrops(ctx context.Context, authID uuid.UUID, x, y, radius *int) (int, any) {
 
 	var currentRegion sql.NullString
 	var playerX, playerY int
 	var partyID sql.NullString
-	err := db.DB.QueryRowContext(c.Request.Context(), `
+	err := db.DB.QueryRowContext(ctx, `
 		SELECT current_region, x, y, party_id FROM players WHERE id = $1
 	`, authID).Scan(&currentRegion, &playerX, &playerY, &partyID)
 	if err != nil || !currentRegion.Valid || currentRegion.String == "" {
-		c.JSON(http.StatusOK, gin.H{"drops": []GroundDropResponse{}})
-		return
+		return http.StatusOK, gin.H{"drops": []GroundDropResponse{}}
 	}
 
-	qX := c.Query("x")
-	qY := c.Query("y")
-	qRadius := c.Query("radius")
-
 	var rows *sql.Rows
-	if qX != "" || qY != "" || qRadius != "" {
-		if qX == "" || qY == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "x and y must be provided together"})
-			return
+	if x != nil && y != nil {
+		boundedRadius := 0
+		if radius != nil {
+			boundedRadius = *radius
 		}
-		targetX, errX := strconv.Atoi(qX)
-		targetY, errY := strconv.Atoi(qY)
-		radius := 0
-		var errRadius error
-		if qRadius != "" {
-			radius, errRadius = strconv.Atoi(qRadius)
+		if boundedRadius > maxGroundDropQueryRadius {
+			boundedRadius = maxGroundDropQueryRadius
 		}
-		if errX != nil || errY != nil || errRadius != nil || radius < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid drop viewport"})
-			return
+		if *x < -maxGroundDropQueryRadius || *x > WorldWidth-1+maxGroundDropQueryRadius ||
+			*y < -maxGroundDropQueryRadius || *y > WorldHeight-1+maxGroundDropQueryRadius ||
+			*x+boundedRadius < 0 || *x-boundedRadius >= WorldWidth ||
+			*y+boundedRadius < 0 || *y-boundedRadius >= WorldHeight {
+			return http.StatusOK, gin.H{"drops": []GroundDropResponse{}}
 		}
-		if radius > maxGroundDropQueryRadius {
-			radius = maxGroundDropQueryRadius
-		}
-		if targetX < -maxGroundDropQueryRadius || targetX > WorldWidth-1+maxGroundDropQueryRadius ||
-			targetY < -maxGroundDropQueryRadius || targetY > WorldHeight-1+maxGroundDropQueryRadius ||
-			targetX+radius < 0 || targetX-radius >= WorldWidth ||
-			targetY+radius < 0 || targetY-radius >= WorldHeight {
-			c.JSON(http.StatusOK, gin.H{"drops": []GroundDropResponse{}})
-			return
-		}
-		rows, err = db.DB.QueryContext(c.Request.Context(), `
+		rows, err = db.DB.QueryContext(ctx, `
 			SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
 			       loot_data, protected_until, expires_at, created_at
 			FROM map_ground_drops
 			WHERE x BETWEEN $1 AND $2 AND y BETWEEN $3 AND $4
 			  AND expires_at > NOW()
 			ORDER BY created_at DESC
-		`, targetX-radius, targetX+radius, targetY-radius, targetY+radius)
+		`, *x-boundedRadius, *x+boundedRadius, *y-boundedRadius, *y+boundedRadius)
 	} else {
-		rows, err = db.DB.QueryContext(c.Request.Context(), `
+		rows, err = db.DB.QueryContext(ctx, `
 			SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
 			       loot_data, protected_until, expires_at, created_at
 			FROM map_ground_drops
@@ -109,8 +120,7 @@ func GetTileGroundDrops(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch ground drops"})
-		return
+		return http.StatusInternalServerError, gin.H{"error": "Failed to fetch ground drops"}
 	}
 	defer rows.Close()
 
@@ -159,7 +169,7 @@ func GetTileGroundDrops(c *gin.Context) {
 		drops = append(drops, d)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"drops": drops})
+	return http.StatusOK, gin.H{"drops": drops}
 }
 
 // LootGroundDrop picks up the specified ground drop if player is at the same location and allowed.

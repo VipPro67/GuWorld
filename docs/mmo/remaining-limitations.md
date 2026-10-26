@@ -191,7 +191,11 @@ Impact: cross-process double ownership remains a release blocker.
 - A configured realtime zone now fails closed if its server map artifact is
   missing/invalid or its map/content version differs from the rollout config.
   `/api/admin/monitor/realtime` includes map dimensions/hash, legacy transform,
-  and monster spawn count so a zone cannot appear healthy while running empty.
+  total monster spawn count, and currently active monster entities. The map
+  keeps spawn definitions in a spatial catalog and materializes entities within
+  64 units of a living player; entities unload after 10 seconds with no player
+  within 96 units. Pending respawn cooldowns keep an idle zone alive until they
+  expire, so zone eviction cannot shorten a monster's cooldown.
   Relative map paths are resolved up the current working-directory tree, which
   also covers launching the server from a nested `backend/cmd/server` folder.
 - Legacy CSVs contain no terrain/collision source, so the converted world is

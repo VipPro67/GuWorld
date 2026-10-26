@@ -19,6 +19,8 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 		limit = 120
 	case "world.cells_rect":
 		limit = 240
+	case "world.drops":
+		limit = 60
 	case "world.objects":
 		limit = 30
 	case "chat.send":
@@ -63,6 +65,17 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 			return http.StatusBadRequest, json.RawMessage(`{"error":"Invalid cells rectangle"}`)
 		}
 		status, result = ExecuteGetCellsRect(playerID, req.MinX, req.MinY, req.MaxX, req.MaxY)
+
+	case "world.drops":
+		var req struct {
+			X      int `json:"x"`
+			Y      int `json:"y"`
+			Radius int `json:"radius"`
+		}
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return http.StatusBadRequest, json.RawMessage(`{"error":"Invalid drop viewport"}`)
+		}
+		status, result = ExecuteGetTileGroundDrops(context.Background(), playerID, &req.X, &req.Y, &req.Radius)
 
 	case "world.objects":
 		status, result = ExecuteGetExploreObjects()

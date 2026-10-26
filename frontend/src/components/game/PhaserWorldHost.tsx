@@ -246,6 +246,10 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     });
     const transferUnsubscribe = runtime?.onTransfer((transfer) => {
       const state = useGameStore.getState();
+      // This handler owns the reconnect for server handoffs. Prevent the
+      // current_region effect below from starting a second reconnect when the
+      // player store update renders.
+      lastRegionRef.current = transfer.to_zone_id;
       // legacy_x/legacy_y are the players.x/y projection; target_x/target_y
       // are map cells and must never be written to the player store.
       state.setPlayerFromServer({
@@ -255,6 +259,12 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
         hp: transfer.hp,
       });
       state.addToast(`Đã vượt rìa sang ${transfer.to_zone_id.replaceAll("_", " ")}`, "success");
+      // The server has already released the source-zone lease. Rejoin using
+      // the destination zone or the socket's normal reconnect would replay the
+      // old zone_id and leave the character stuck at the border.
+      setErrorMessage("");
+      setRuntimeStatus("connecting");
+      void runtimeRef.current?.reconnectTo(transfer.to_zone_id);
     });
 
     let cancelled = false;
@@ -330,40 +340,98 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     void runtime.reconnect();
   }, [retry]);
 
-  const showRuntimeError =
-    runtimeStatus === "error" && status === "ready" && !!errorMessage;
+  const connectionFailed = status === "error" || runtimeStatus === "error" || runtimeStatus === "closed";
+  const showConnectionOverlay = !hud && (status !== "ready" || canJoinMMOZone || connectionFailed);
+  const connectionLabel = status === "loading"
+    ? "Đang chuẩn bị bản đồ"
+    : runtimeStatus === "connecting"
+      ? "Đang kết nối máy chủ realtime"
+      : runtimeStatus === "joined"
+        ? "Đang đồng bộ dữ liệu thế giới"
+        : runtimeStatus === "closed"
+          ? "Kết nối realtime đã đóng"
+        : canJoinMMOZone
+          ? "Đang khởi tạo kết nối"
+          : "Chế độ xem trước";
+  const connectionRegion = zoneId || player?.current_region || mmoClientConfig.zoneId;
 
   return (
     <MMOErrorBoundary>
       <div className="relative h-full w-full overflow-hidden bg-[#07110d]">
         <div ref={hostRef} id="guworld-phaser-host" className="absolute inset-0" />
 
-        {status === "loading" && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-[#07110d]">
-            <div className="text-center">
-              <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-300" />
-              <div className="font-serif text-sm text-emerald-100">
-                Đang tải thế giới Phaser…
-              </div>
+        {showConnectionOverlay && (
+          <div
+            className="absolute inset-0 z-20 grid place-items-center overflow-y-auto bg-[#06100c]/85 px-4 py-8 backdrop-blur-sm"
+            role={connectionFailed ? "alert" : "status"}
+            aria-live={connectionFailed ? "assertive" : "polite"}
+          >
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div className="absolute left-1/2 top-1/2 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/[0.07] blur-3xl" />
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/30 to-transparent" />
             </div>
+            <section className="relative w-full max-w-md rounded-2xl border border-emerald-200/15 bg-[#0c1712]/95 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.55)] sm:p-8">
+              <div className="mb-6 flex items-center gap-3">
+                <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${connectionFailed ? "border-red-300/20 bg-red-400/10" : "border-emerald-200/20 bg-emerald-300/[0.08]"}`}>
+                  {connectionFailed ? (
+                    <span className="text-lg text-red-200">!</span>
+                  ) : (
+                    <span className="relative grid h-5 w-5 place-items-center">
+                      <span className="absolute h-5 w-5 animate-ping rounded-full bg-emerald-300/25" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_16px_rgba(110,231,183,0.75)]" />
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-200/55">Cổ Giới · Thế giới realtime</p>
+                  <h2 className="mt-1 truncate font-serif text-lg text-emerald-50">
+                    {connectionFailed
+                      ? status === "error" ? "Không thể tải thế giới" : "Mất kết nối realtime"
+                      : connectionLabel}
+                  </h2>
+                </div>
+              </div>
+
+              {connectionFailed ? (
+                <>
+                  <p className="max-h-28 overflow-auto break-words rounded-lg border border-red-200/10 bg-red-950/25 px-3 py-2.5 text-sm leading-relaxed text-red-100/75">
+                    {errorMessage || "Kết nối thế giới chưa sẵn sàng. Hãy thử kết nối lại."}
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <button type="button" onClick={status === "error" ? retry : reconnect} className="rounded-lg border border-emerald-200/25 bg-emerald-300/10 px-4 py-2 text-sm font-medium text-emerald-50 transition hover:border-emerald-200/40 hover:bg-emerald-300/15">
+                      Kết nối lại
+                    </button>
+                    {onExit && <button type="button" onClick={() => onExitRef.current?.()} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/[0.06]">Bảng nhân vật</button>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm leading-relaxed text-zinc-300/75">
+                    {runtimeStatus === "joined"
+                      ? "Đã vào máy chủ. Đang nhận trạng thái nhân vật và bản đồ…"
+                      : canJoinMMOZone
+                        ? "Đang xác thực nhân vật và đồng bộ trạng thái với máy chủ."
+                        : "Máy chủ realtime chưa được cấu hình cho khu vực này."}
+                  </p>
+                  <div className="mt-6 flex items-center gap-1.5" aria-hidden="true">
+                    {[0, 1, 2].map((step) => (
+                      <span key={step} className={`h-1 flex-1 rounded-full ${step === 0 ? "bg-emerald-300/80" : "bg-emerald-300/20"} ${runtimeStatus === "connecting" && step === 0 ? "animate-pulse" : ""}`} />
+                    ))}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-zinc-400">
+                    <span className="truncate">Khu vực: {connectionRegion ? connectionRegion.replaceAll("_", " ") : "đang xác định…"}</span>
+                    <span className="shrink-0 text-emerald-200/70">{runtimeStatus === "connecting" ? "Đang kết nối" : status === "loading" ? "Đang tải" : "Đang chờ"}</span>
+                  </div>
+                  {onExit && <button type="button" onClick={() => onExitRef.current?.()} className="mt-6 w-full rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/[0.06]">Về bảng nhân vật</button>}
+                </>
+              )}
+            </section>
           </div>
         )}
 
-        {status === "error" && (
-          <div className="absolute inset-0 grid place-items-center bg-[#07110d] p-6">
-            <div className="max-w-md text-center">
-              <div className="font-serif text-lg text-red-200">
-                Không thể khởi động thế giới realtime
-              </div>
-              <p className="mt-2 text-sm text-zinc-400">{errorMessage}</p>
-              <button
-                type="button"
-                onClick={retry}
-                className="mt-4 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/20"
-              >
-                Thử lại
-              </button>
-            </div>
+        {!hud && !showConnectionOverlay && (
+          <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[11px] uppercase tracking-[.16em] text-emerald-200/80 backdrop-blur">
+            MMO Preview · chưa cấu hình zone
           </div>
         )}
 
@@ -371,6 +439,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
           <MMOHud
             {...hud}
             player={player}
+            worldActive={worldActive && panel === null && !menuOpen && !isDivinationModalOpen}
             zoneId={zoneId}
             activePanel={panel}
             menuOpen={menuOpen}
@@ -428,9 +497,6 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
             panel={panel}
             onClose={() => {
               setPanel(null);
-              if (worldActive && runtimeRef.current && runtimeRef.current.getStatus() === "joined") {
-                void runtimeRef.current.reconnect();
-              }
             }}
             onLoadoutSaved={() => {
               setPanel(null);
@@ -443,48 +509,6 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
 
         {hud && panel === null && worldActive && <GlobalChatOverlay placement="mmo" />}
 
-        {!hud && <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[11px] uppercase tracking-[.18em] text-emerald-200/80 backdrop-blur">
-          <span
-            className={`h-2 w-2 rounded-full ${
-              runtimeStatus === "joined"
-                ? "bg-emerald-400"
-                : runtimeStatus === "error"
-                  ? "bg-red-400"
-                  : "animate-pulse bg-amber-300"
-            }`}
-          />
-          {runtimeStatus === "joined"
-            ? `MMO · ${zoneId || "joined"}`
-            : canJoinMMOZone
-              ? `MMO · ${runtimeStatus}`
-              : "MMO Preview · chưa cấu hình zone"}
-        </div>}
-
-        {showRuntimeError && (
-          <div className="absolute left-1/2 top-16 z-20 w-[min(92vw,520px)] -translate-x-1/2 rounded-xl border border-red-300/25 bg-red-950/85 p-4 text-sm text-red-100 shadow-xl backdrop-blur">
-            <div className="font-semibold">Không thể vào world realtime</div>
-            <p className="mt-1 break-words text-red-200/80">{errorMessage}</p>
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={reconnect}
-                className="rounded-lg border border-red-200/30 bg-red-200/10 px-3 py-1.5 text-xs text-red-50 transition hover:bg-red-200/20"
-              >
-                Kết nối lại
-              </button>
-            </div>
-          </div>
-        )}
-
-        {onExit && !hud && (
-          <button
-            type="button"
-            onClick={() => onExitRef.current?.()}
-            className="absolute right-3 top-3 z-10 rounded-lg border border-white/15 bg-black/55 px-3 py-1.5 text-xs text-emerald-100 backdrop-blur transition hover:bg-black/75"
-          >
-            Bảng nhân vật
-          </button>
-        )}
       </div>
     </MMOErrorBoundary>
   );

@@ -1,6 +1,7 @@
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
+import { wsManager } from "@/lib/websocket";
 import type { GuInstance, GroundDrop, Player, FeedResponse } from "@/store/useGameStore";
 import { LatestRequestGate } from "@/lib/player-reconciliation";
 
@@ -875,12 +876,31 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       const query = viewport
         ? `?x=${Math.floor(viewport.x)}&y=${Math.floor(viewport.y)}&radius=${Math.max(0, Math.floor(viewport.radius))}`
         : "";
-      const response = await authFetch(`${BACKEND_URL}/api/world/drops${query}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (requestRevision === groundDropRequestRevision) {
-          set({ groundDrops: data.drops || [] });
+      let data: { drops?: GroundDrop[] };
+      const fetchHttp = async () => {
+        const response = await authFetch(`${BACKEND_URL}/api/world/drops${query}`);
+        if (!response.ok) return;
+        return response.json() as Promise<{ drops?: GroundDrop[] }>;
+      };
+      if (viewport && wsManager.isConnected()) {
+        try {
+          data = await wsManager.request<{ drops?: GroundDrop[] }>("world.drops", {
+            x: Math.floor(viewport.x),
+            y: Math.floor(viewport.y),
+            radius: Math.max(0, Math.floor(viewport.radius)),
+          });
+        } catch {
+          const fallback = await fetchHttp();
+          if (!fallback) return;
+          data = fallback;
         }
+      } else {
+        const fallback = await fetchHttp();
+        if (!fallback) return;
+        data = fallback;
+      }
+      if (requestRevision === groundDropRequestRevision) {
+        set({ groundDrops: data.drops || [] });
       }
     } catch (e) {
       console.error("fetchGroundDrops error:", e);
