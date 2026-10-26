@@ -59,6 +59,15 @@ func SetRealtimeRuntimeError(reason string) {
 	realtimeStatsErr = reason
 }
 
+// RealtimeRuntimeError returns the startup reason recorded by main when the
+// realtime manager could not be installed. Admission includes it in the join
+// rejection so a config/map failure is distinguishable from a disabled rollout.
+func RealtimeRuntimeError() string {
+	realtimeStatsMu.RLock()
+	defer realtimeStatsMu.RUnlock()
+	return realtimeStatsErr
+}
+
 // AdminGetRealtimeStats returns per-zone tick/entity/player/subscriber stats.
 func AdminGetRealtimeStats(c *gin.Context) {
 	realtimeStatsMu.RLock()

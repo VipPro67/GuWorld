@@ -189,8 +189,18 @@ func (a *Admission) CheckpointActive() {
 }
 
 func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, request protocol.JoinRequest) (any, error) {
-	if a.manager == nil || !a.config.Enabled || !a.config.PhaserClientEnabled {
-		return nil, admissionError(503, "realtime_world_unavailable", "Realtime world admission is unavailable")
+	if a.manager == nil {
+		reason := handlers.RealtimeRuntimeError()
+		if reason == "" {
+			reason = "realtime manager was not installed (check REALTIME_WORLD_ENABLED, MMO_ZONE_IDS and startup logs)"
+		}
+		return nil, admissionError(503, "realtime_manager_unavailable", "Realtime world manager is unavailable: "+reason)
+	}
+	if !a.config.Enabled {
+		return nil, admissionError(503, "realtime_disabled", "Realtime world is disabled: REALTIME_WORLD_ENABLED=false")
+	}
+	if !a.config.PhaserClientEnabled {
+		return nil, admissionError(503, "realtime_client_disabled", "Realtime world is disabled: PHASER_WORLD_CLIENT_ENABLED=false")
 	}
 	if a.paused.Load() {
 		return nil, admissionError(503, "realtime_admission_paused", "Realtime world admission is paused for cutover/rollback")

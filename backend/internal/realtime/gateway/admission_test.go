@@ -186,8 +186,20 @@ func TestAdmissionRequiresBothServerAndClientFlags(t *testing.T) {
 		t.Fatal("disabled admission must not load player state")
 		return handlers.RealtimeJoinState{}, errors.New("unreachable")
 	})
-	if _, err := admission.Join(context.Background(), playerID, uuid.New(), protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); admissionErrorCode(err) != "realtime_world_unavailable" {
+	if _, err := admission.Join(context.Background(), playerID, uuid.New(), protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); admissionErrorCode(err) != "realtime_client_disabled" {
 		t.Fatalf("client flag disabled join error: %v", err)
+	}
+
+	cfg.PhaserClientEnabled = true
+	cfg.Enabled = false
+	serverDisabled := NewAdmission(cfg, manager, nil)
+	if _, err := serverDisabled.Join(context.Background(), playerID, uuid.New(), protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); admissionErrorCode(err) != "realtime_disabled" {
+		t.Fatalf("server flag disabled join error: %v", err)
+	}
+
+	managerUnavailable := NewAdmission(testConfig(playerID), nil, nil)
+	if _, err := managerUnavailable.Join(context.Background(), playerID, uuid.New(), protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); admissionErrorCode(err) != "realtime_manager_unavailable" {
+		t.Fatalf("nil manager join error: %v", err)
 	}
 }
 

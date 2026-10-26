@@ -221,7 +221,11 @@ func main() {
 			instances = 1
 		}
 		zoneIDs := expandRealtimeZoneIDs(realtimeConfig.ZoneIDs, realtimeConfig.MapDir, realtimeConfig.MapVersion, realtimeConfig.ContentVersion)
-		logger.S.Infof("Realtime world maps enabled: %d", len(zoneIDs))
+		logger.S.Infof("Realtime world maps enabled: %d (phaser_client=%v, map_version=%q, content_version=%q)",
+			len(zoneIDs), realtimeConfig.PhaserClientEnabled, realtimeConfig.MapVersion, realtimeConfig.ContentVersion)
+		if len(zoneIDs) == 0 {
+			logger.S.Errorf("MMO_ZONE_IDS expanded to 0 maps: check MMO_ZONE_IDS, MMO_MAP_DIR and that MMO_MAP_VERSION/MMO_CONTENT_VERSION match the JSON map headers")
+		}
 		zoneKeys := make([]sim.ZoneKey, 0, len(zoneIDs)*instances)
 		for mapID := range zoneIDs {
 			for index := 0; index < instances; index++ {
