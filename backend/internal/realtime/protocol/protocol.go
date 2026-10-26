@@ -190,10 +190,19 @@ type ProjectileState struct {
 	Radius   float64 `json:"radius"`
 }
 
+// Transfer is the server-to-client region handoff notice. TargetX/TargetY are
+// map-local (MMO) coordinates; LegacyX/LegacyY are the same point projected
+// back into the players.x/y world space. The client only persists/display the
+// legacy pair and reconnects to ToZoneID.
 type Transfer struct {
-	FromZoneID string `json:"from_zone_id,omitempty"`
-	ToZoneID   string `json:"to_zone_id"`
-	TransferID string `json:"transfer_id,omitempty"`
+	FromZoneID string  `json:"from_zone_id,omitempty"`
+	ToZoneID   string  `json:"to_zone_id"`
+	TransferID string  `json:"transfer_id,omitempty"`
+	TargetX    float64 `json:"target_x"`
+	TargetY    float64 `json:"target_y"`
+	LegacyX    int     `json:"legacy_x"`
+	LegacyY    int     `json:"legacy_y"`
+	HP         float64 `json:"hp"`
 }
 
 type Resync struct {

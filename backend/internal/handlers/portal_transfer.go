@@ -58,10 +58,12 @@ func PortalTransfer(c *gin.Context) {
 		return
 	}
 
+	// Portal metadata is authored in map-local cells (0..width/height). Persist
+	// the legacy world projection so realtime admission converts it back to the
+	// same local cell instead of falling back to a safe spawn.
 	newX := int(req.TargetX)
 	newY := int(req.TargetY)
 
-	// Fallback to entry coordinates if target coords are not specified or <= 0
 	if newX <= 0 && newY <= 0 && targetZone != nil {
 		if targetZone.EntryX > 0 && targetZone.EntryY > 0 {
 			newX = targetZone.EntryX
@@ -70,6 +72,9 @@ func PortalTransfer(c *gin.Context) {
 			newX = targetZone.Width / 2
 			newY = targetZone.Height / 2
 		}
+	}
+	if targetZone != nil && (req.TargetX > 0 || req.TargetY > 0) {
+		newX, newY = LegacyPortalDestination(targetZone, int(req.TargetX), int(req.TargetY))
 	}
 	if newX <= 0 {
 		newX = 1000

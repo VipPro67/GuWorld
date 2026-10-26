@@ -18,6 +18,12 @@ MAP_VERSION = "regions-v1"
 CONTENT_VERSION = "region-content-v1"
 EDGE = 1
 SPAWN_MARGIN = 2.0
+# Realtime spawn budget per 4,000,000 units^2 at the reference Monster weight
+# (KHU_VUC default 30/100). Region.csv pool_weights scale this up or down.
+BASE_PACKS = 150
+REFERENCE_MONSTER_WEIGHT = 30
+# MaxMonstersPerZone in backend/internal/realtime/world/manager.go is 1200.
+TOTAL_SPAWNS_CAP = 1100
 
 
 def read_csv(name):
@@ -38,6 +44,54 @@ def number(row, key, default=0):
 
 def prop(name, value):
     return {"name": name, "value": value}
+
+
+def cell_weights(row):
+    """Region.csv pool_weights.cell_type_weights, with legacy-safe defaults."""
+    raw = row.get("pool_weights") or ""
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    weights = parsed.get("cell_type_weights") or {}
+    return {str(key): int(value) for key, value in weights.items() if isinstance(value, (int, float))}
+
+
+def monster_density(row):
+    """Relative monster density vs the KHU_VUC reference weight of 30/100."""
+    weights = cell_weights(row)
+    monster = weights.get("Monster", 0)
+    total = sum(max(0, value) for value in weights.values())
+    if monster <= 0 or total <= 0:
+        return 0.0
+    share = monster / total
+    reference = REFERENCE_MONSTER_WEIGHT / 100.0
+    return share / reference
+
+
+def weighted_archetype(archetypes, seed):
+    """Deterministic pick weighted by MonsterSpawn.chance (default 0.5)."""
+    if not archetypes:
+        return None
+    total = 0.0
+    weights = []
+    for spawn in archetypes:
+        try:
+            chance = float(spawn.get("chance") or 0.5)
+        except (TypeError, ValueError):
+            chance = 0.5
+        chance = max(0.01, chance)
+        weights.append(chance)
+        total += chance
+    roll = (int.from_bytes(hashlib.sha256(seed.encode()).digest()[:4], "big") / 0xFFFFFFFF) * total
+    cursor = 0.0
+    for spawn, weight in zip(archetypes, weights):
+        cursor += weight
+        if roll <= cursor:
+            return spawn
+    return archetypes[-1]
 
 
 def stable_spawn(region_id, row, index, width, height):
@@ -178,37 +232,56 @@ def main():
                 ],
             })
 
-        # 2. Spawn archetype packs from MonsterSpawn.csv across camps & sectors
-        # Monsters spawn in tight herds/packs (đàn 5-6 con cùng chủng loại)
-        TOTAL_SPAWNS_CAP = 350  # MaxMonstersPerZone = 500
+        # 2. Spawn archetype packs from MonsterSpawn.csv, weighted by Region.csv
+        # cell_type_weights. Every child map (including SAFE_ZONE) honours its
+        # authored Monster ratio; SAFE_ZONE monsters are made passive at runtime.
         region_archetypes = [s for _, s in monster_spawns.get(region_id, []) if s.get("monster_id")]
-        
-        if region_archetypes and row.get("zone_type") != "SAFE_ZONE":
-            camp_centers = [
-                (entry_x, entry_y),  # Hub / main entry
-            ]
-            # Add camps near each regional portal (entrance/exit points)
-            for target, s_xy, _ in region["portals"]:
-                camp_centers.append((s_xy[0], s_xy[1]))
+        region_min_rank = number(row, "min_rank", 1)
+        region_max_rank = number(row, "max_rank", 9)
+        in_band = [
+            s for s in region_archetypes
+            if number(s, "min_rank", region_min_rank) <= region_max_rank
+            and number(s, "max_rank", region_max_rank) >= region_min_rank
+        ]
+        if in_band:
+            region_archetypes = in_band
 
-            # Add specific camp at northern sector (x: 418, y: 63) for thanh_mao_son exploration corridor
-            if region_id == "thanh_mao_son":
-                camp_centers.append((418.0, 63.0))
+        density = monster_density(row)
+        area_scale = (width * height) / 4_000_000
+        pack_count = 0
+        if region_archetypes and density > 0:
+            pack_count = max(1, round(BASE_PACKS * density * area_scale))
 
-            # Add 7x7 grid of regional camps across the entire 2000x2000 territory
-            grid_n = 7
+        if pack_count > 0:
+            grid_n = max(1, math.ceil(math.sqrt(pack_count)))
             step_w = width / grid_n
             step_h = height / grid_n
-            for gx in range(grid_n):
-                for gy in range(grid_n):
-                    cx = (gx + 0.5) * step_w
-                    cy = (gy + 0.5) * step_h
-                    camp_centers.append((cx, cy))
+            reserved = len(spawns)
+            for c_idx in range(pack_count):
+                if len(spawns) >= TOTAL_SPAWNS_CAP - reserved:
+                    break
+                gx = c_idx % grid_n
+                gy = c_idx // grid_n
+                jitter = hashlib.sha256(f"{region_id}:camp:{c_idx}".encode()).digest()
+                jx = int.from_bytes(jitter[:4], "big") / 0xFFFFFFFF
+                jy = int.from_bytes(jitter[4:8], "big") / 0xFFFFFFFF
+                cx = (gx + 0.15 + 0.7 * jx) * step_w
+                cy = (gy + 0.15 + 0.7 * jy) * step_h
 
-            for c_idx, (cx, cy) in enumerate(camp_centers):
-                # 1 đàn gồm 5 đến 6 con cùng chủng loại
-                pack_size = 6 if (c_idx % 2 == 0) else 5
-                pack_tmpl = region_archetypes[c_idx % len(region_archetypes)]
+                # Keep one pack visible from the authored entry point so a fresh
+                # arrival immediately sees the region's Monster ratio.
+                if c_idx == 0:
+                    angle = (int.from_bytes(jitter[8:12], "big") % 360) * (math.pi / 180)
+                    cx = entry_x + math.cos(angle) * 14.0
+                    cy = entry_y + math.sin(angle) * 14.0
+                cx = min(width - SPAWN_MARGIN, max(SPAWN_MARGIN, cx))
+                cy = min(height - SPAWN_MARGIN, max(SPAWN_MARGIN, cy))
+
+                # 1 đàn gồm 4-6 con cùng chủng loại, chọn theo MonsterSpawn.chance
+                pack_size = 4 + (int.from_bytes(jitter[12:16], "big") % 3)
+                pack_tmpl = weighted_archetype(region_archetypes, f"{region_id}:pack:{c_idx}")
+                if pack_tmpl is None:
+                    continue
                 mid = pack_tmpl.get("monster_id", "")
                 mode = pack_tmpl.get("spawn_mode", "Roaming")
                 is_boss = truth(pack_tmpl.get("is_boss_spawn", "false"))
@@ -222,20 +295,13 @@ def main():
                     val_a = int.from_bytes(digest[:4], "big")
                     val_b = int.from_bytes(digest[4:8], "big")
 
-                    # Con đầu đàn đứng tại tâm, các con cùng đàn đứng quây quần trong bán kính 1.5 - 5.5 ô
                     if m_offset == 0:
-                        x = cx
-                        y = cy
+                        x, y = cx, cy
                     else:
                         angle = (val_a % 360) * (math.pi / 180)
                         dist = 1.5 + (val_b % 40) / 10.0
                         x = min(width - SPAWN_MARGIN, max(SPAWN_MARGIN, cx + dist * math.cos(angle)))
                         y = min(height - SPAWN_MARGIN, max(SPAWN_MARGIN, cy + dist * math.sin(angle)))
-
-                    # Tránh spawn đè trực tiếp lên điểm vào khu vực
-                    if math.hypot(x - entry_x, y - entry_y) < 6:
-                        x = min(width - SPAWN_MARGIN, max(SPAWN_MARGIN, entry_x + 9))
-                        y = min(height - SPAWN_MARGIN, max(SPAWN_MARGIN, entry_y + 9))
 
                     spawns.append({
                         "name": f"{region_id}_{mid}_c{c_idx}_{m_offset}",
@@ -250,6 +316,7 @@ def main():
                             prop("is_boss_spawn", is_boss and m_offset == 0),
                             prop("pack_id", f"{region_id}_pack_{c_idx}"),
                             prop("is_pack_leader", m_offset == 0),
+                            prop("passive", row.get("zone_type") == "SAFE_ZONE"),
                         ],
                     })
 
@@ -265,13 +332,24 @@ def main():
                 "properties": [prop("region_id", region_id), prop("content_id", cell.get("content_id", ""))],
             })
 
+        def portal_side(x, y):
+            if x <= 2:
+                return "west"
+            if x >= width - 2:
+                return "east"
+            if y <= 2:
+                return "north"
+            return "south"
+
         portals = []
         for target, source_xy, target_xy in region["portals"]:
+            side = portal_side(source_xy[0], source_xy[1])
             portals.append({
                 "name": f"to_{target['row']['id']}", "type": "portal", "x": source_xy[0], "y": source_xy[1],
                 "properties": [
                     prop("target_zone_id", target["row"]["id"]),
                     prop("target_x", target_xy[0]), prop("target_y", target_xy[1]),
+                    prop("edge", side),
                 ],
             })
 
@@ -299,9 +377,11 @@ def main():
         encoded = json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n"
         for directory in out_dirs:
             (directory / f"{region_id}.json").write_text(encoded, encoding="utf-8")
+        monster_count = sum(1 for spawn in spawns if spawn["type"] == "monster")
         artifact_report.append({
             "id": region_id, "type": row["zone_type"], "parent_id": row.get("parent_id", ""),
-            "width": width, "height": height, "monster_spawns": len(spawns) - 1,
+            "width": width, "height": height, "monster_spawns": monster_count,
+            "monster_density": round(density, 4), "monster_packs": pack_count,
             "pois": len(pois), "portals": len(portals),
         })
 
@@ -333,7 +413,7 @@ def main():
         "safe_zone_maps": sum(1 for row in active if row.get("zone_type") == "SAFE_ZONE"),
         "secret_realms_left_on_world_map": sum(1 for row in all_regions if row.get("zone_type") == "SECRET_REALM"),
         "total_region_maps": len(artifact_report),
-        "monster_spawn_rows_assigned": sum(item["monster_spawns"] for item in artifact_report),
+        "monster_spawns_total": sum(item["monster_spawns"] for item in artifact_report),
         "map_version": MAP_VERSION, "content_version": CONTENT_VERSION,
         "collision_source": "Region.csv has no terrain; generated maps have a safe outer wall only",
         "maps": artifact_report,

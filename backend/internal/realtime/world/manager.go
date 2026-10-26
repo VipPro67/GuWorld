@@ -89,12 +89,62 @@ type OwnershipLease struct {
 	Token        string `json:"-"`
 }
 
+// EdgeSide is one authored map border that can hand off to a neighbouring
+// region. Child region maps are 2000x2000 and carry at most one portal per
+// side, so every point on a side routes to the same target region.
+type EdgeSide string
+
+const (
+	EdgeNorth EdgeSide = "north"
+	EdgeEast  EdgeSide = "east"
+	EdgeSouth EdgeSide = "south"
+	EdgeWest  EdgeSide = "west"
+)
+
+// Portal is the map-authoritative edge handoff metadata. Coordinates are map
+// units (0..width/height); legacy world coordinates are derived at transfer
+// time with the destination ZoneMap transform.
+type Portal struct {
+	Side         EdgeSide
+	TargetZoneID string
+	TargetX      float64
+	TargetY      float64
+}
+
+// EdgeCrossing resolves one authoritative border step into the destination
+// zone key and map-local arrival point.
+type EdgeCrossing struct {
+	FromKey       sim.ZoneKey
+	TargetKey     sim.ZoneKey
+	ToZoneID      string
+	LocalX        float64
+	LocalY        float64
+	LegacyX       float64
+	LegacyY       float64
+	LegacyOriginX float64
+	LegacyOriginY float64
+	LegacyScale   float64
+	TriggerPos    sim.Vec2
+}
+
+const (
+	// EdgeTriggerMargin is measured from the inner face of the border wall.
+	// The player collision radius keeps their center >= 1.4 units from the wall,
+	// so the band must be wider than that or a 20 Hz tick can step over it.
+	EdgeTriggerMargin = 2.5
+	// EdgeArrivalInset keeps the arrival point away from the opposite border so
+	// a held movement key cannot immediately bounce the player back.
+	EdgeArrivalInset = 4.0
+)
+
 // ZoneMap carries the immutable map artifact used by one configured zone.
 type ZoneMap struct {
 	Collision     sim.Collision
 	Spawns        []sim.Vec2
 	Monsters      []MonsterSpawn
+	Portals       []Portal
 	PvP           bool
+	Safe          bool
 	Hash          string
 	Width         int
 	Height        int
@@ -128,6 +178,133 @@ func (m *Manager) ContainsPosition(key sim.ZoneKey, point sim.Vec2) bool {
 	return finite(point.X) && finite(point.Y) && point.X >= 0 && point.Y >= 0 && point.X < float64(zoneMap.Width) && point.Y < float64(zoneMap.Height)
 }
 
+// LocalToLegacy converts a zone-local map position back into the legacy world
+// coordinate space persisted in players.x/y. The transform is the inverse of
+// LegacyPosition and must stay that way.
+func (m *Manager) LocalToLegacy(key sim.ZoneKey, point sim.Vec2) (float64, float64, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	zoneMap, ok := m.maps[key]
+	if !ok {
+		return 0, 0, false
+	}
+	scale := zoneMap.LegacyScale
+	if scale <= 0 {
+		scale = 1
+	}
+	return zoneMap.LegacyOriginX + point.X*scale, zoneMap.LegacyOriginY + point.Y*scale, true
+}
+
+// ResolveEdgeForLease turns one authoritative border position into a destination
+// zone and arrival point. Only the current lease holder can use it.
+func (m *Manager) ResolveEdgeForLease(lease OwnershipLease, position sim.Vec2) (EdgeCrossing, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current, ok := m.owners[lease.CharacterID]
+	if !ok || current.Token != lease.Token || current.ZoneKey != lease.ZoneKey {
+		return EdgeCrossing{}, false
+	}
+	source, ok := m.maps[lease.ZoneKey]
+	if !ok || source.Width <= 0 || source.Height <= 0 {
+		return EdgeCrossing{}, false
+	}
+	if !finite(position.X) || !finite(position.Y) {
+		return EdgeCrossing{}, false
+	}
+
+	type candidate struct {
+		side     EdgeSide
+		distance float64
+	}
+	candidates := []candidate{
+		{side: EdgeNorth, distance: position.Y},
+		{side: EdgeEast, distance: float64(source.Width) - position.X},
+		{side: EdgeSouth, distance: float64(source.Height) - position.Y},
+		{side: EdgeWest, distance: position.X},
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].distance < candidates[j].distance })
+
+	for _, option := range candidates {
+		if option.distance > EdgeTriggerMargin {
+			continue
+		}
+		portal, found := portalOnSide(source.Portals, option.side)
+		if !found {
+			continue
+		}
+		targetKey, target, found := m.mapForIDLocked(portal.TargetZoneID, lease.ZoneKey.InstanceID)
+		if !found || target.Width <= 0 || target.Height <= 0 {
+			continue
+		}
+		inset := EdgeArrivalInset
+		local := sim.Vec2{X: position.X, Y: position.Y}
+		switch option.side {
+		case EdgeWest:
+			local.X = float64(target.Width) - inset
+			local.Y = clampFloat(position.Y, inset, float64(target.Height)-inset)
+		case EdgeEast:
+			local.X = inset
+			local.Y = clampFloat(position.Y, inset, float64(target.Height)-inset)
+		case EdgeNorth:
+			local.Y = float64(target.Height) - inset
+			local.X = clampFloat(position.X, inset, float64(target.Width)-inset)
+		case EdgeSouth:
+			local.Y = inset
+			local.X = clampFloat(position.X, inset, float64(target.Width)-inset)
+		}
+		scale := target.LegacyScale
+		if scale <= 0 {
+			scale = 1
+		}
+		return EdgeCrossing{
+			FromKey: lease.ZoneKey, TargetKey: targetKey, ToZoneID: portal.TargetZoneID,
+			LocalX: local.X, LocalY: local.Y,
+			LegacyX: target.LegacyOriginX + local.X*scale, LegacyY: target.LegacyOriginY + local.Y*scale,
+			LegacyOriginX: target.LegacyOriginX, LegacyOriginY: target.LegacyOriginY, LegacyScale: scale,
+			TriggerPos: position,
+		}, true
+	}
+	return EdgeCrossing{}, false
+}
+
+// ZoneMapFor returns the configured artifact for a zone.
+func (m *Manager) ZoneMapFor(key sim.ZoneKey) (ZoneMap, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	zoneMap, ok := m.maps[key]
+	return zoneMap, ok
+}
+
+func (m *Manager) mapForIDLocked(mapID, preferredInstance string) (sim.ZoneKey, ZoneMap, bool) {
+	preferred := sim.ZoneKey{MapID: mapID, InstanceID: preferredInstance, RulesetVersion: "v1"}
+	if zoneMap, ok := m.maps[preferred]; ok {
+		return preferred, zoneMap, true
+	}
+	for _, key := range m.keys {
+		if key.MapID != mapID {
+			continue
+		}
+		return key, m.maps[key], true
+	}
+	return sim.ZoneKey{}, ZoneMap{}, false
+}
+
+func portalOnSide(portals []Portal, side EdgeSide) (Portal, bool) {
+	for _, portal := range portals {
+		if portal.Side == side {
+			return portal, true
+		}
+	}
+	return Portal{}, false
+}
+
+func clampFloat(value, minimum, maximum float64) float64 {
+	if maximum < minimum {
+		return minimum
+	}
+	return math.Max(minimum, math.Min(maximum, value))
+}
+
 // MonsterSpawn is a server-constructed monster instance. Template values are
 // resolved by the process bootstrap from the monster registry; clients never
 // supply them.
@@ -149,9 +326,15 @@ type MonsterSpawn struct {
 	RespawnTicks        uint32
 	SplashRadius        float64
 	SplashDamage        float64
+	// Passive monsters (SAFE_ZONE content) never initiate combat. They keep
+	// their retaliation table so a player can opt into a training fight.
+	Passive bool
 }
 
-const MaxMonstersPerZone = 500
+// MaxMonstersPerZone bounds one zone's monster entities. Region maps seed
+// density from Region.csv cell_type_weights; the largest authored map is close
+// to 1100.
+const MaxMonstersPerZone = 1200
 
 // Manager is a process-local owner for configured zones and their player leases.
 // Authentication and loading trusted player state remain gateway responsibilities.
@@ -322,6 +505,10 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 	if !finite(spawn.X) || !finite(spawn.Y) || spawn.MaxHP <= 0 {
 		return sim.Entity{}, ErrInvalidMonsterSpawn
 	}
+	aggroRadius := spawn.AggroRadius
+	if spawn.Passive {
+		aggroRadius = 0
+	}
 	return sim.Entity{
 		ID:        sim.EntityID(fmt.Sprintf("m:%d", index)),
 		Kind:      sim.EntityMonster,
@@ -334,7 +521,7 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 		AI: sim.AIState{
 			Active: true, TemplateID: spawn.TemplateID, Name: spawn.Name, State: sim.AIIdle,
 			Home:        sim.Vec2{X: spawn.X, Y: spawn.Y},
-			AggroRadius: spawn.AggroRadius, LeashRadius: spawn.LeashRadius,
+			AggroRadius: aggroRadius, LeashRadius: spawn.LeashRadius,
 			AttackRange: spawn.AttackRange, PatrolRadius: spawn.PatrolRadius,
 			AttackDamage: spawn.AttackDamage, AttackCooldownTicks: spawn.AttackCooldownTicks,
 			RespawnTicks: spawn.RespawnTicks, ThinkTicks: 5,

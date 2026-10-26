@@ -53,17 +53,26 @@ type Admission struct {
 }
 
 type session struct {
-	playerID        uuid.UUID
-	lease           realtimeworld.OwnershipLease
-	mapVersion      string
-	contentVersion  string
-	skills          []combat.Skill
-	loadoutRevision string
-	mana            *manaSettlement
-	closing         bool
-	safeX           float64
-	safeY           float64
+	playerID          uuid.UUID
+	lease             realtimeworld.OwnershipLease
+	mapVersion        string
+	contentVersion    string
+	skills            []combat.Skill
+	loadoutRevision   string
+	mana              *manaSettlement
+	closing           bool
+	transferring      bool
+	lastTransferAt    time.Time
+	transferBlockedAt time.Time
+	safeX             float64
+	safeY             float64
+	mapWidth          float64
+	mapHeight         float64
 }
+
+// edgeTransferCooldown prevents border ping-pong when a player holds movement
+// into the wall while the client reconnects into the neighbouring zone.
+const edgeTransferCooldown = 2 * time.Second
 
 type manaSettlement struct {
 	mu   sync.Mutex
@@ -119,6 +128,9 @@ func (a *Admission) Drain() int {
 	a.mu.Unlock()
 	drained := 0
 	for controllerID, current := range active {
+		if current.transferring {
+			continue
+		}
 		if err := a.flushState(current); err != nil {
 			logger.S.Errorf("Realtime drain checkpoint failed for %s: %v", current.playerID, err)
 			a.mu.Lock()
@@ -160,6 +172,9 @@ func (a *Admission) CheckpointActive() {
 	}
 	a.mu.Unlock()
 	for controllerID, current := range active {
+		if current.transferring {
+			continue
+		}
 		if err := a.flushState(current); err != nil {
 			logger.S.Errorf("Realtime periodic checkpoint failed for %s: %v", current.playerID, err)
 			continue
@@ -329,11 +344,13 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		return nil, mapManagerError(err)
 	}
 	attached = true
+	zoneMap, _ := a.manager.ZoneMapFor(key)
 	active := session{
 		playerID: playerID, lease: lease, mapVersion: request.MapVersion, contentVersion: request.ContentVersion,
 		skills: skills, loadoutRevision: loadoutRevision,
 		mana:  &manaSettlement{last: playerCombat.Mana},
 		safeX: safeSpawn.X, safeY: safeSpawn.Y,
+		mapWidth: float64(zoneMap.Width), mapHeight: float64(zoneMap.Height),
 	}
 	a.mu.Lock()
 	a.sessions[controllerID] = active
@@ -435,6 +452,181 @@ func (a *Admission) MoveTarget(playerID, controllerID uuid.UUID, target protocol
 	})
 }
 
+// TransferAtEdge performs the authoritative border handoff for one owned
+// character. The destination zone and map-local arrival are resolved from the
+// source map's authored edge portal; the caller only supplies the authoritative
+// entity position from its snapshot.
+func (a *Admission) TransferAtEdge(playerID, controllerID uuid.UUID, position sim.Vec2) (protocol.Transfer, bool, error) {
+	a.mu.Lock()
+	active, exists := a.sessions[controllerID]
+	if !exists || active.playerID != playerID {
+		a.mu.Unlock()
+		return protocol.Transfer{}, false, admissionError(409, "realtime_session_not_joined", "This connection has no active realtime session")
+	}
+	if active.closing || time.Since(active.lastTransferAt) < edgeTransferCooldown || time.Now().Before(active.transferBlockedAt) {
+		a.mu.Unlock()
+		return protocol.Transfer{}, false, nil
+	}
+	margin := realtimeworld.EdgeTriggerMargin
+	if active.mapWidth > margin && active.mapHeight > margin &&
+		position.X > margin && position.X < active.mapWidth-margin &&
+		position.Y > margin && position.Y < active.mapHeight-margin {
+		a.mu.Unlock()
+		return protocol.Transfer{}, false, nil
+	}
+	a.mu.Unlock()
+
+	crossing, ok := a.manager.ResolveEdgeForLease(active.lease, position)
+	if !ok {
+		return protocol.Transfer{}, false, nil
+	}
+	a.markTransferAttempt(controllerID, active.lease.Token)
+
+	validateCtx, cancelValidate := context.WithTimeout(context.Background(), 3*time.Second)
+	validateErr := handlers.ValidateRealtimeRegionTransfer(validateCtx, playerID, crossing.ToZoneID)
+	cancelValidate()
+	if validateErr != nil {
+		if errors.Is(validateErr, handlers.ErrRealtimeRegionTransferDenied) {
+			a.blockTransfer(controllerID, active.lease.Token, 10*time.Second)
+			return protocol.Transfer{}, false, admissionError(403, "realtime_transfer_denied", validateErr.Error())
+		}
+		return protocol.Transfer{}, false, admissionError(503, "realtime_transfer_unavailable", "Could not validate the region handoff")
+	}
+
+	hp := 0.0
+	if snapshot, err := a.manager.SnapshotForLease(active.lease); err == nil {
+		for _, entity := range snapshot.Entities {
+			if entity.CharacterID == active.lease.CharacterID {
+				hp = entity.Vitals.HP
+				break
+			}
+		}
+	}
+
+	if !a.beginTransfer(controllerID, active.lease.Token) {
+		return protocol.Transfer{}, false, nil
+	}
+	if err := a.flushState(active); err != nil {
+		a.finishFailedTransfer(active, controllerID)
+		return protocol.Transfer{}, false, admissionError(503, "realtime_checkpoint_unavailable", "Could not save character before crossing the border")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	result, err := handlers.ApplyRealtimeRegionTransfer(ctx, handlers.RealtimeRegionTransfer{
+		PlayerID:      active.playerID,
+		TargetRegion:  crossing.ToZoneID,
+		LocalX:        crossing.LocalX,
+		LocalY:        crossing.LocalY,
+		LegacyOriginX: crossing.LegacyOriginX,
+		LegacyOriginY: crossing.LegacyOriginY,
+		LegacyScale:   crossing.LegacyScale,
+		HP:            hp,
+	})
+	if err != nil {
+		a.finishFailedTransfer(active, controllerID)
+		if errors.Is(err, handlers.ErrRealtimeRegionTransferDenied) {
+			a.blockTransfer(controllerID, active.lease.Token, 10*time.Second)
+			return protocol.Transfer{}, false, admissionError(403, "realtime_transfer_denied", err.Error())
+		}
+		logger.S.Errorf("Realtime edge transfer failed for %s -> %s: %v", playerID, crossing.ToZoneID, err)
+		return protocol.Transfer{}, false, admissionError(503, "realtime_transfer_unavailable", "Could not persist the region handoff")
+	}
+
+	if !a.manager.LeaveCharacter(active.lease) {
+		logger.S.Warnf("Realtime edge transfer left a stale lease for %s; disconnect will retry release", playerID)
+	}
+	if a.states != nil {
+		if deleter, ok := a.states.(interface {
+			DeleteCheckpoint(context.Context, uuid.UUID, string) error
+		}); ok {
+			if err := deleter.DeleteCheckpoint(context.Background(), active.playerID, active.lease.ZoneKey.MapID); err != nil {
+				logger.S.Warnf("Realtime edge transfer could not clear %s checkpoint for %s: %v", active.lease.ZoneKey.MapID, playerID, err)
+			}
+		}
+	}
+	// Drop the session before publishing: the SSE/publish can make the client
+	// reconnect instantly, and the old socket's Disconnect must become a no-op
+	// instead of trying to flush a lease that no longer exists.
+	a.mu.Lock()
+	delete(a.sessions, controllerID)
+	a.mu.Unlock()
+	handlers.PublishRegionTransfer(result)
+
+	return protocol.Transfer{
+		FromZoneID: active.lease.ZoneKey.MapID,
+		ToZoneID:   crossing.ToZoneID,
+		TransferID: uuid.NewString(),
+		TargetX:    crossing.LocalX,
+		TargetY:    crossing.LocalY,
+		LegacyX:    result.Player.X,
+		LegacyY:    result.Player.Y,
+		HP:         result.Player.HP,
+	}, true, nil
+}
+
+// beginTransfer marks the session as being handed off. Periodic checkpoints and
+// drain skip it so a concurrent flush cannot rewrite players.x/y back to the
+// source-zone edge after the destination projection was committed.
+func (a *Admission) beginTransfer(controllerID uuid.UUID, leaseToken string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	active, ok := a.sessions[controllerID]
+	if !ok || active.lease.Token != leaseToken {
+		return false
+	}
+	active.transferring = true
+	active.lastTransferAt = time.Now()
+	a.sessions[controllerID] = active
+	return true
+}
+
+// blockTransfer rate-limits a denied border (rank/Gu gate) so a player resting
+// against the edge does not trigger a repeated DB validation every tick.
+func (a *Admission) blockTransfer(controllerID uuid.UUID, leaseToken string, delay time.Duration) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if active, ok := a.sessions[controllerID]; ok && active.lease.Token == leaseToken {
+		active.transferBlockedAt = time.Now().Add(delay)
+		a.sessions[controllerID] = active
+	}
+}
+
+// finishFailedTransfer clears the transferring flag and, if the socket closed
+// while the handoff was in flight, releases the lease and removes the session.
+func (a *Admission) finishFailedTransfer(active session, controllerID uuid.UUID) {
+	a.mu.Lock()
+	held, ok := a.sessions[controllerID]
+	if !ok || held.lease.Token != active.lease.Token {
+		a.mu.Unlock()
+		return
+	}
+	held.transferring = false
+	held.lastTransferAt = time.Now()
+	closing := held.closing
+	a.sessions[controllerID] = held
+	a.mu.Unlock()
+	if !closing {
+		return
+	}
+	if err := a.flushState(held); err != nil {
+		logger.S.Errorf("Realtime transfer cleanup checkpoint failed for %s: %v", active.playerID, err)
+	}
+	a.manager.LeaveCharacter(held.lease)
+	a.mu.Lock()
+	delete(a.sessions, controllerID)
+	a.mu.Unlock()
+}
+
+func (a *Admission) markTransferAttempt(controllerID uuid.UUID, leaseToken string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if held, ok := a.sessions[controllerID]; ok && held.lease.Token == leaseToken {
+		held.lastTransferAt = time.Now()
+		a.sessions[controllerID] = held
+	}
+}
+
 // Cast forwards a validated cast intent. Skill mode, range, resources and
 // cooldowns are revalidated by the zone tick; the client never sends damage.
 func (a *Admission) Cast(playerID, controllerID uuid.UUID, cast protocol.Cast) error {
@@ -520,6 +712,17 @@ func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 	if !exists || active.playerID != playerID {
 		return
 	}
+	if active.transferring {
+		// The edge-transfer goroutine owns the lease now. Mark closing so a
+		// failed handoff cleans the session up instead of leaking it.
+		a.mu.Lock()
+		if held, ok := a.sessions[controllerID]; ok && held.lease.Token == active.lease.Token {
+			held.closing = true
+			a.sessions[controllerID] = held
+		}
+		a.mu.Unlock()
+		return
+	}
 	if err := a.flushState(active); err != nil {
 		logger.S.Errorf("Realtime disconnect checkpoint failed for %s: %v", active.playerID, err)
 		a.mu.Lock()
@@ -554,6 +757,7 @@ func (a *Admission) flushState(active session) error {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
+		legacyX, legacyY, legacyOK := a.manager.LocalToLegacy(active.lease.ZoneKey, entity.Transform.Position)
 		checkpoint := persistence.State{
 			PlayerID: active.playerID, ZoneID: active.lease.ZoneKey.MapID,
 			InstanceID: active.lease.ZoneKey.InstanceID,
@@ -561,6 +765,7 @@ func (a *Admission) flushState(active session) error {
 			HP: entity.Vitals.HP, Shield: entity.Vitals.Shield,
 			SafeX: active.safeX, SafeY: active.safeY,
 			MapVersion: active.mapVersion, ContentVersion: active.contentVersion,
+			LegacyX: int(math.Round(legacyX)), LegacyY: int(math.Round(legacyY)), SyncLegacy: legacyOK,
 		}
 		delta := 0.0
 		if active.mana != nil {

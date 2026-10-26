@@ -6,6 +6,7 @@ import {
   isWorldProtocolMessage,
   parseWorldEventBatch,
   parseWorldSnapshotPayload,
+  parseWorldTransferPayload,
   parseWorldWelcomePayload,
   type CastPayload,
   type BasicAttackPayload,
@@ -16,6 +17,7 @@ import {
   type WorldJoinPayload,
   type WorldRejectPayload,
   type WorldSnapshotPayload,
+  type WorldTransferPayload,
   type WorldWelcomePayload,
 } from "./Protocol.ts";
 
@@ -60,6 +62,7 @@ export class WorldSocket {
   private snapshotListeners = new Set<(state: BufferedWorldState) => void>();
   private eventListeners = new Set<(event: WorldEvent) => void>();
   private rejectListeners = new Set<(reject: WorldRejectPayload) => void>();
+  private transferListeners = new Set<(transfer: WorldTransferPayload) => void>();
   private resyncListeners = new Set<(reason: string) => void>();
   private errorListeners = new Set<(error: Error) => void>();
   private messageCount = 0;
@@ -245,6 +248,11 @@ export class WorldSocket {
     return () => this.rejectListeners.delete(callback);
   }
 
+  public onTransfer(callback: (transfer: WorldTransferPayload) => void): () => void {
+    this.transferListeners.add(callback);
+    return () => this.transferListeners.delete(callback);
+  }
+
   public onResyncRequired(callback: (reason: string) => void): () => void {
     this.resyncListeners.add(callback);
     return () => this.resyncListeners.delete(callback);
@@ -330,6 +338,15 @@ export class WorldSocket {
       }
       this.snapshotCount += 1;
       this.emitSnapshot(this.buffer.apply(payload));
+      return;
+    }
+    if (envelope.type === "world.transfer") {
+      try {
+        const transfer = parseWorldTransferPayload(envelope.payload);
+        this.transferListeners.forEach((listener) => listener(transfer));
+      } catch (error) {
+        this.notifyError(asError(error, "invalid_transfer"));
+      }
       return;
     }
     if (envelope.type === "world.events") {

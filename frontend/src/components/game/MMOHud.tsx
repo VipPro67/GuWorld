@@ -63,7 +63,6 @@ export interface MMOHudProps {
   onZoomIn?: () => number;
   onZoomOut?: () => number;
   mapPortals?: MapPortal[];
-  onPortalTransfer?: (targetZoneId: string, targetX: number, targetY: number) => void;
 }
 
 const MODE_LABEL: Record<WorldSkillInfo["mode"], string> = {
@@ -374,16 +373,6 @@ export function MMOHud(props: MMOHudProps) {
     if (dist <= 3.0 && dist < closestTpDist) {
       closestTp = tp;
       closestTpDist = dist;
-    }
-  }
-
-  let closestPortal: MapPortal | null = null;
-  let closestPortalDist = Infinity;
-  for (const portal of props.mapPortals || []) {
-    const dist = Math.hypot(portal.x - props.position.x, portal.y - props.position.y);
-    if (dist <= 3.2 && dist < closestPortalDist) {
-      closestPortal = portal;
-      closestPortalDist = dist;
     }
   }
 
@@ -1269,38 +1258,9 @@ export function MMOHud(props: MMOHudProps) {
       {props.statusText && <div className="absolute bottom-[125px] left-1/2 -translate-x-1/2 rounded border border-violet-300/30 bg-black/75 px-3 py-1 font-sans text-[11px] text-violet-100 sm:bottom-[140px] md:bottom-36 shadow-lg z-20">{props.statusText}</div>}
       {props.castProgress !== null && <div className="absolute bottom-[90px] left-1/2 w-[min(90vw,320px)] -translate-x-1/2 sm:bottom-[105px] md:bottom-28 z-20"><div className="mb-1 text-center text-xs text-amber-100">{props.castName}</div><div className="h-2 overflow-hidden rounded bg-black/70 shadow-inner"><div className="h-full bg-amber-400" style={{ width: `${pct(props.castProgress, 1)}%` }} /></div></div>}
 
-      {/* Proximity Interaction Prompts (Nguyên Tuyền, Tiên Tuyền, Chiến Lợi Phẩm, Truyền Tống Trận, Cổng Vùng, Tông Môn) */}
-      {(closestDrop || closestVein || closestTp || closestPortal || closestSect) && (
+      {/* Proximity Interaction Prompts (Nguyên Tuyền, Tiên Tuyền, Chiến Lợi Phẩm, Truyền Tống Trận, Tông Môn) */}
+      {(closestDrop || closestVein || closestTp || closestSect) && (
         <div className="pointer-events-auto absolute bottom-[145px] left-1/2 -translate-x-1/2 sm:bottom-[160px] md:bottom-44 flex flex-col items-center gap-1.5 z-20 max-w-[min(94vw,360px)]">
-          {closestPortal && (
-            <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-blue-500/70 bg-[#082032e6] px-3.5 py-1.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 w-full">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/20 border border-blue-400/40 text-blue-300">
-                  <Compass className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-serif font-bold text-blue-200 truncate">
-                    🌀 {closestPortal.name?.trim() || `Đến: ${closestPortal.targetZoneId.replaceAll("_", " ")}`}
-                  </div>
-                  <div className="text-[10px] text-blue-300/80 truncate">
-                    Cổng chuyển vùng ({closestPortalDist.toFixed(1)} ô)
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (closestPortal) {
-                    props.onPortalTransfer?.(closestPortal.targetZoneId, closestPortal.targetX, closestPortal.targetY);
-                  }
-                }}
-                className="shrink-0 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 border border-blue-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
-              >
-                Bước Vào
-              </button>
-            </div>
-          )}
-
           {closestSect && (() => {
             const isMySect = closestSect.id === mySectStatus?.sect?.id;
             const isShielded = Boolean(closestSect.shield_until && new Date(closestSect.shield_until).getTime() > Date.now());

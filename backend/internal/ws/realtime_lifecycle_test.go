@@ -63,6 +63,10 @@ func (f *fakeRealtimeAdmission) BasicAttack(_, _ uuid.UUID, _ protocol.Attack) e
 	return nil
 }
 
+func (f *fakeRealtimeAdmission) TransferAtEdge(_, _ uuid.UUID, _ sim.Vec2) (protocol.Transfer, bool, error) {
+	return protocol.Transfer{}, false, nil
+}
+
 func (f *fakeRealtimeAdmission) SubscribeSnapshots(_, _ uuid.UUID) (<-chan sim.Snapshot, func(), error) {
 	return make(chan sim.Snapshot), func() {}, nil
 }

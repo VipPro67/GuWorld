@@ -46,6 +46,7 @@ type RealtimeWorldAdmission interface {
 	Cast(playerID, controllerID uuid.UUID, cast protocol.Cast) error
 	BasicAttack(playerID, controllerID uuid.UUID, attack protocol.Attack) error
 	SubscribeSnapshots(playerID, controllerID uuid.UUID) (<-chan sim.Snapshot, func(), error)
+	TransferAtEdge(playerID, controllerID uuid.UUID, position sim.Vec2) (protocol.Transfer, bool, error)
 	Leave(playerID, controllerID uuid.UUID) error
 	Disconnect(playerID, controllerID uuid.UUID)
 }

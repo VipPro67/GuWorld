@@ -35,6 +35,36 @@ func TestResolveRealtimeMapPathFromNestedServerDirectory(t *testing.T) {
 	}
 }
 
+func TestExpandRealtimeZoneIDsFiltersMismatchedMapVersions(t *testing.T) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not locate server source directory")
+	}
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(originalWD) })
+	if err := os.Chdir(filepath.Dir(sourceFile)); err != nil {
+		t.Fatal(err)
+	}
+
+	expanded := expandRealtimeZoneIDs(map[string]struct{}{"*": {}}, "data/mmo/maps", "regions-v1", "region-content-v1")
+	if len(expanded) != 125 {
+		t.Fatalf("expanded zone count=%d, want the 125 region maps", len(expanded))
+	}
+	for _, regionID := range []string{"thanh_mao_son", "tan_thu_coc_nam_cuong", "hub_thuong_gia_thanh"} {
+		if _, ok := expanded[regionID]; !ok {
+			t.Fatalf("expanded zones missing region map %q", regionID)
+		}
+	}
+	for _, mismatched := range []string{"world_map", "realtime_preview", "misty_forest"} {
+		if _, ok := expanded[mismatched]; ok {
+			t.Fatalf("expanded zones included version-mismatched map %q", mismatched)
+		}
+	}
+}
+
 func TestResolveRealtimeProfilePathsFromNestedServerDirectory(t *testing.T) {
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {

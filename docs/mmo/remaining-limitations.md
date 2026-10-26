@@ -195,15 +195,18 @@ Impact: cross-process double ownership remains a release blocker.
   Relative map paths are resolved up the current working-directory tree, which
   also covers launching the server from a nested `backend/cmd/server` folder.
 - Legacy CSVs contain no terrain/collision source, so the converted world is
-  open terrain with only an outer boundary. All 704 active monster rows lack
-  coordinates; deterministic approximate points are generated, and the
-  runtime currently exports 500 due to its per-zone monster cap (204 omitted).
-  Monster centers are kept 2 world units from the outer wall and the nav test
-  checks the largest current AI radius, preventing a spawn circle from
-  overlapping the boundary collision.
-- Region outlines, labels and MapCell POI markers render in Phaser. PvP/safe
-  zone rules and legacy portal transfers are not region-aware in this shared
-  world yet; current runtime ruleset remains PvE.
+  open terrain with only an outer boundary. Monster packs are generated from
+  each region's `MonsterSpawn.csv` archetypes, weighted by `chance`, with pack
+  count derived from `Region.csv.pool_weights.cell_type_weights.Monster`
+  (`BASE_PACKS=150` at the 30/100 reference, scaled by map area). The runtime
+  cap is 1200 monsters per zone; the largest generated map is ~1100 (starter
+  safe zones use their authored Monster 60 weight). SAFE_ZONE monsters are
+  passive (`AggroRadius=0`) but retaliate if attacked. Monster centers stay 2
+  world units from the outer wall and the nav test checks the largest current
+  AI radius.
+- Region outlines, labels and MapCell POI markers render in Phaser. Border
+  handoffs are now region-aware (whole-side trigger, server-side destination);
+  safe-zone rules still only disable PvP and make monsters passive.
 - AOI/region/streaming layers are not in the map subset.
 - No server nav/A* artifact or pathfinding budget; client A* is preview-only.
 - Runtime destination-map portal spawn validation is absent (the nav test
@@ -385,14 +388,15 @@ Impact: cross-process double ownership remains a release blocker.
   backend, import Region.csv once to register the generated map catalogue rows.
   Admission now resolves KHU_VUC/SAFE_ZONE directly to their child map IDs even
   if an older `region_world_maps` row still points at `world_map`.
-- Portal contact does not automatically trigger a transfer.
-- No DB region/map-instance update or cross-zone admission path.
-- `world.transfer` request/response and client GameSession loading overlay/scene
-  swap are absent.
-- Target-zone snapshot subscription restart and destination-map spawn validation
-  are missing.
-- Party follow/late join/retry handling and multi-process fencing are absent.
-- Only the process-local `Manager.TransferCharacter` primitive is tested.
+- Border-band contact (anywhere on a side with an authored portal) now triggers
+  a server-owned handoff; the portal marker is visual only. The client removes
+  its old 1.4-cell proximity trigger.
+- `Admission.TransferAtEdge` persists `current_region`, `x/y` (legacy
+  projection), HP and clears `map_instance_id`; it then sends `world.transfer`
+  and the client reconnects with the new zone.
+- Still missing: party follow across a border, a dedicated loading overlay
+  (the reconnect path is reused), destination-map spawn validation absent from
+  the parser, multi-process lease fencing, and crash-safe transfer rollback.
 
 ### PR-28 — Party, Boss, PvP ruleset/arena world
 

@@ -744,6 +744,69 @@ func TestManagerTransfersCharacterWithSingleOwner(t *testing.T) {
 	}
 }
 
+func TestManagerResolvesEdgePortalIntoLegacyCoordinates(t *testing.T) {
+	west := sim.ZoneKey{MapID: "west-region", InstanceID: "edge", RulesetVersion: "v1"}
+	east := sim.ZoneKey{MapID: "east-region", InstanceID: "edge", RulesetVersion: "v1"}
+	manager, err := NewManagerWithMaps([]sim.ZoneKey{west, east}, 8, 2, map[sim.ZoneKey]ZoneMap{
+		west: {
+			Width: 2000, Height: 2000, LegacyOriginX: 0, LegacyOriginY: 0, LegacyScale: 1,
+			Portals: []Portal{{Side: EdgeEast, TargetZoneID: "east-region", TargetX: 4, TargetY: 1000}},
+		},
+		east: {
+			Width: 2000, Height: 2000, LegacyOriginX: 2000, LegacyOriginY: 4000, LegacyScale: 1,
+			Portals: []Portal{{Side: EdgeWest, TargetZoneID: "west-region", TargetX: 1996, TargetY: 1000}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := manager.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		shutdown, done := context.WithTimeout(context.Background(), time.Second)
+		defer done()
+		_ = manager.Stop(shutdown)
+	})
+
+	characterID := sim.CharacterID("77777777-7777-7777-7777-777777777777")
+	lease, err := manager.JoinCharacter(characterID, "controller", west, sim.Entity{
+		ID: sim.EntityID(characterID), CharacterID: characterID, Kind: sim.EntityPlayer,
+		Transform: sim.Transform{Position: sim.Vec2{X: 1998, Y: 1234}},
+		Vitals:    sim.Vitals{HP: 100, MaxHP: 100}, Speed: 4, Radius: 0.4,
+		Combat: sim.NewPlayerCombat(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	crossing, ok := manager.ResolveEdgeForLease(lease, sim.Vec2{X: 1999, Y: 1234})
+	if !ok {
+		t.Fatal("east border did not resolve to the authored neighbour")
+	}
+	if crossing.ToZoneID != "east-region" || crossing.TargetKey != east {
+		t.Fatalf("unexpected crossing target: %+v", crossing)
+	}
+	// Exit east -> arrive 4 cells inside the target west border, preserving Y.
+	if crossing.LocalX != EdgeArrivalInset || crossing.LocalY != 1234 {
+		t.Fatalf("unexpected local arrival: %.2f,%.2f", crossing.LocalX, crossing.LocalY)
+	}
+	// players.x/y must be the destination legacy projection, not the map cell.
+	if crossing.LegacyX != 2004 || crossing.LegacyY != 5234 {
+		t.Fatalf("unexpected legacy arrival: %.2f,%.2f", crossing.LegacyX, crossing.LegacyY)
+	}
+	if legacyX, legacyY, ok := manager.LocalToLegacy(east, sim.Vec2{X: crossing.LocalX, Y: crossing.LocalY}); !ok || legacyX != crossing.LegacyX || legacyY != crossing.LegacyY {
+		t.Fatalf("LocalToLegacy is not the inverse projection: %.2f,%.2f ok=%v", legacyX, legacyY, ok)
+	}
+
+	// The same position must not cross a side without an authored portal.
+	if _, ok := manager.ResolveEdgeForLease(lease, sim.Vec2{X: 1000, Y: 20}); ok {
+		t.Fatal("north border without a portal produced a crossing")
+	}
+}
+
 func TestManagerAllocatesMapInstancesByCapacity(t *testing.T) {
 	first := sim.ZoneKey{MapID: "map", InstanceID: "a", RulesetVersion: "v1"}
 	second := sim.ZoneKey{MapID: "map", InstanceID: "b", RulesetVersion: "v1"}

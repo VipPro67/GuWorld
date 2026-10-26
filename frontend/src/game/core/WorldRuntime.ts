@@ -10,6 +10,7 @@ import type {
   WorldProjectileState,
   WorldRejectPayload,
   WorldSkillInfo,
+  WorldTransferPayload,
   WorldWelcomePayload,
 } from "../network/Protocol.ts";
 import { SelfPredictor } from "../network/Prediction.ts";
@@ -116,6 +117,7 @@ export class WorldRuntime {
   private readonly listeners = new Set<() => void>();
   private readonly combatListeners = new Set<(event: WorldEvent) => void>();
   private readonly castRequestListeners = new Set<(slot: number) => void>();
+  private readonly transferListeners = new Set<(transfer: WorldTransferPayload) => void>();
   private readonly unsubscribers: Array<() => void> = [];
   private selectedTargetId: string | null = null;
   private combatNotice = "";
@@ -177,6 +179,17 @@ export class WorldRuntime {
     this.socket = new WorldSocket(this.socketOptions);
     this.bindSocket();
     return this.connect(join);
+  }
+
+  /**
+   * Reconnect into a different region map after a server-owned border handoff.
+   * `reconnect()` alone would replay the previous zone_id and be rejected by
+   * admission.
+   */
+  public async reconnectTo(zoneId: string): Promise<WorldWelcomePayload | null> {
+    if (!this.lastJoin || !zoneId) return null;
+    this.lastJoin = { ...this.lastJoin, zone_id: zoneId };
+    return this.reconnect();
   }
 
   public disconnect(): void {
@@ -494,6 +507,11 @@ export class WorldRuntime {
     return this.socket.onError(listener);
   }
 
+  public onTransfer(listener: (transfer: WorldTransferPayload) => void): () => void {
+    this.transferListeners.add(listener);
+    return () => this.transferListeners.delete(listener);
+  }
+
   public onCombatEvents(listener: (event: WorldEvent) => void): () => void {
     this.combatListeners.add(listener);
     return () => this.combatListeners.delete(listener);
@@ -520,6 +538,11 @@ export class WorldRuntime {
       this.socket.onError((error) => {
         this.errorMessage = error.message;
         this.emit();
+      }),
+      this.socket.onTransfer((transfer) => {
+        this.combatNotice = `Đang chuyển vùng: ${transfer.to_zone_id}`;
+        this.emit();
+        for (const listener of this.transferListeners) listener(transfer);
       }),
       this.socket.onEvents((event) => {
         if (event.type === "CAST_REJECTED") {

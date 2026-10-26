@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseWorldSnapshotPayload, parseWorldWelcomePayload } from "./Protocol.ts";
+import { parseWorldSnapshotPayload, parseWorldTransferPayload, parseWorldWelcomePayload } from "./Protocol.ts";
 
 test("parseWorldSnapshotPayload accepts floating-point mana and max_mana", () => {
   const payload = {
@@ -30,6 +30,23 @@ test("parseWorldSnapshotPayload accepts floating-point mana and max_mana", () =>
   assert.equal(parsed.entities[0].mana, 562.1754027627987);
   assert.equal(parsed.entities[0].max_mana, 99999999999.0);
   assert.equal(parsed.entities[0].shield, 50.5);
+});
+
+test("parseWorldTransferPayload keeps map-local and legacy coordinates separate", () => {
+  const parsed = parseWorldTransferPayload({
+    from_zone_id: "thanh_mao_son",
+    to_zone_id: "thiet_gia_thanh",
+    target_x: 4,
+    target_y: 1234,
+    legacy_x: 2004,
+    legacy_y: 5234,
+    hp: 87.5,
+  });
+  assert.equal(parsed.to_zone_id, "thiet_gia_thanh");
+  assert.equal(parsed.target_x, 4);
+  assert.equal(parsed.legacy_x, 2004);
+  assert.equal(parsed.hp, 87.5);
+  assert.throws(() => parseWorldTransferPayload({ to_zone_id: "x", target_x: 1, target_y: 1, legacy_x: -1, legacy_y: 1, hp: 1 }));
 });
 
 test("parseWorldWelcomePayload validates matching owner baseline and float mana", () => {

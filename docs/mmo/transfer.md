@@ -27,9 +27,9 @@ Tiled object layer `portals`:
 - target coordinates finite/non-negative;
 - portal position inside the map and not inside a solid tile.
 
-The client parses the same metadata (`MapLoader`) and renders portal markers. The
-sample map includes one marker targeting the same preview map; it is visual only
-until the trigger/handoff wiring below is complete.
+The client parses the same metadata (`MapLoader`) and renders portal markers.
+On generated region maps the marker labels the side; the actual trigger is the
+whole border band and is resolved server-side (see below).
 
 ## Atomic process-local handoff
 
@@ -46,18 +46,38 @@ The old zone lease immediately rejects input because its `ZoneKey` no longer
 matches. Tests assert no duplicate entity across zones, old-lease rejection,
 target-lease movement and unknown-target errors.
 
+## Edge-triggered region handoff (KHU_VUC/SAFE_ZONE)
+
+Every generated child map is 2000×2000 and carries at most one portal per side.
+The whole border band (not just the portal marker) is a crossing:
+
+- The zone snapshot loop checks the owned player's authoritative position.
+  `EdgeTriggerMargin = 2.5` units from a side with an authored portal resolves
+  the destination zone from that side's portal.
+- The arrival point is inset `EdgeArrivalInset = 4` units from the opposite
+  border; the cross axis is preserved, so crossing near a corner keeps the
+  player near the same corner.
+- `Admission.TransferAtEdge` validates region entry (rank/Gu), flushes the source
+  checkpoint/mana, writes `players.current_region`, clears `map_instance_id`,
+  and persists `players.x/y` as the **legacy projection** of the destination
+  map (`legacy_origin + local × legacy_units_per_world_unit`).
+- It then releases the lease, deletes the source-zone checkpoint (so a later
+  re-admission cannot restore the exact edge cell), and sends `world.transfer`
+  with both coordinate pairs. The client reconnects with the new `zone_id`;
+  `world.welcome` loads the destination map.
+- Sides without an authored portal (Đại Vực rim) remain a wall.
+- `MMO_ZONE_IDS=all` (or `*`) expands to every map in `MMO_MAP_DIR` whose
+  `map_version`/`content_version` match the rollout config, so all leg targets
+  are admittable without listing 125 ids. Preview/Alpha/legacy artifacts in the
+  same directory are skipped.
+
+`MapPortal` metadata (`portals` object group, property `edge`) stays the
+authoritative adjacency source; the server never accepts a client-supplied
+destination region.
+
 ## Still missing before PR-27 can be accepted
 
-- Automatic portal contact trigger and route selection.
-- DB region/map-instance update and cross-zone admission (current admission
-  requires the character's DB map to equal the requested zone).
-- Gateway `world.transfer` request/response, client GameSession loading overlay
-  and scene/map swap without creating a second Game/WS.
-- Restarting snapshot subscriptions on the target zone (current subscription is
-  bound to the source manager zone feed).
 - Multi-process ownership/lease fencing and transfer rollback on target crash.
-- Portal target spawn validation against the destination map (only source map is
-  loaded at parse time).
-
-This PR is intentionally **partial**: the authoritative single-process handoff
-primitive exists, but portal-triggered end-to-end transfers are not enabled.
+- Party follow across a border (the handoff is leader-only).
+- Client loading overlay (the existing reconnect path swaps the map from
+  `world.welcome` without creating a second Phaser Game).

@@ -34,7 +34,7 @@ a version mismatch.
 | `world.attack` | client → server | Monotonic `seq` and `target_id` for a basic melee attack; J or the HUD button sends intent only. |
 | `world.events` | server → client | Reliable gameplay events with event IDs and server tick (`DAMAGE_APPLIED`, `CAST_ACCEPTED`, `CAST_REJECTED`, `ENTITY_DIED`, ...). |
 | `world.snapshot` | server → client | Baseline/delta state, tick, acknowledged sequence and entity revisions; each entity carries `kind` and `max_hp`. Monsters also carry `template_id`, `name`, `ai_state` and `aggro_target_id` for combat presentation. |
-| `world.transfer` | both | Zone handoff request or server-confirmed transfer details. |
+| `world.transfer` | server → client | Server-owned border handoff: `from_zone_id`, `to_zone_id`, `target_x/target_y` (map-local cells) and `legacy_x/legacy_y` (players.x/y world projection), plus carried `hp`. The client updates its durable position from the legacy pair and reconnects with the new `zone_id`. Client-initiated transfers are not accepted. |
 | `world.reject` | server → client | Stable error code and optional retry guidance. |
 | `world.resync` | both | Client requests or server initiates a full baseline after a gap. |
 

@@ -24,6 +24,12 @@ type State struct {
 	SafeY          float64
 	MapVersion     string
 	ContentVersion string
+	// LegacyX/LegacyY are the players.x/y projection of X/Y. The gateway sets
+	// SyncLegacy when it can resolve the map transform, so legacy readers do
+	// not see a stale position while the character is MMO-owned.
+	LegacyX    int
+	LegacyY    int
+	SyncLegacy bool
 }
 
 var ErrInvalidState = errors.New("invalid realtime world state")
@@ -70,6 +76,14 @@ func (s *Service) Load(ctx context.Context, playerID uuid.UUID) (State, bool, er
 		return State{}, false, err
 	}
 	return state, true, nil
+}
+
+// DeleteCheckpoint removes the source-zone checkpoint after a region handoff.
+// Leaving it behind would let a later admission into the old zone restore the
+// exact edge cell and immediately trigger another crossing.
+func (s *Service) DeleteCheckpoint(ctx context.Context, playerID uuid.UUID, zoneID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM player_world_state_v2 WHERE player_id = $1 AND zone_id = $2`, playerID, zoneID)
+	return err
 }
 
 func (s *Service) Save(ctx context.Context, state State) error {
@@ -177,6 +191,12 @@ func upsert(ctx context.Context, exec execer, state State) error {
 		state.SafeX, state.SafeY, state.MapVersion, state.ContentVersion)
 	if err != nil {
 		return fmt.Errorf("save realtime world state: %w", err)
+	}
+	if state.SyncLegacy {
+		if _, err := exec.ExecContext(ctx, `UPDATE players SET x = $1, y = $2 WHERE id = $3`,
+			state.LegacyX, state.LegacyY, state.PlayerID); err != nil {
+			return fmt.Errorf("sync legacy world position: %w", err)
+		}
 	}
 	return nil
 }

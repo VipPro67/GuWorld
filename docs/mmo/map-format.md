@@ -66,6 +66,13 @@ The file is a small Tiled-compatible subset:
 - The converted `world_map` reserves a 2-unit margin from the outer wall for
   monster spawn centers; the map test checks every spawn using the largest
   current monster radius (0.8), since a walkable center alone is insufficient.
+- Region maps add an `edge` property to each `portals` object (`north`, `east`,
+  `south`, `west`). The server treats the whole side as a crossing and derives
+  the destination from that portal, so the entire border band transfers.
+- Monster pack density follows `Region.csv` `pool_weights.cell_type_weights`:
+  the Monster share is compared to the 30/100 KHU_VUC reference and scaled by
+  map area; each pack picks its archetype from `MonsterSpawn.csv` weighted by
+  `chance`. `SAFE_ZONE` packs carry `passive=true` at runtime (no auto-aggro).
 - The sample `realtime_preview` map is 64×48 with border walls, obstacle blocks,
   player/monster/NPC spawns and a vertical path.
 

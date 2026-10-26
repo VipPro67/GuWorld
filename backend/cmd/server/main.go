@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -218,8 +220,10 @@ func main() {
 		if instances < 1 {
 			instances = 1
 		}
-		zoneKeys := make([]sim.ZoneKey, 0, len(realtimeConfig.ZoneIDs)*instances)
-		for mapID := range realtimeConfig.ZoneIDs {
+		zoneIDs := expandRealtimeZoneIDs(realtimeConfig.ZoneIDs, realtimeConfig.MapDir, realtimeConfig.MapVersion, realtimeConfig.ContentVersion)
+		logger.S.Infof("Realtime world maps enabled: %d", len(zoneIDs))
+		zoneKeys := make([]sim.ZoneKey, 0, len(zoneIDs)*instances)
+		for mapID := range zoneIDs {
 			for index := 0; index < instances; index++ {
 				instanceID := "realtime-preview"
 				if index > 0 {
@@ -259,7 +263,7 @@ func main() {
 			logger.S.Infof("Realtime Gu profiles compiled: profiles=%d actives=%d hash=%s", len(compiled.Profiles), len(compiled.DefaultSkills), compiled.Hash)
 		}
 		zoneMaps := make(map[sim.ZoneKey]realtimeworld.ZoneMap, len(zoneKeys))
-		mapArtifacts := make(map[string]realtimeworld.ZoneMap, len(realtimeConfig.ZoneIDs))
+		mapArtifacts := make(map[string]realtimeworld.ZoneMap, len(zoneIDs))
 		var mapLoadErr error
 		for _, key := range zoneKeys {
 			// Instances of the same map share one immutable collision/spawn
@@ -305,12 +309,27 @@ func main() {
 							AttackRange: stats.AttackRange, PatrolRadius: stats.PatrolRadius,
 							AttackCooldownTicks: stats.AttackCooldownTicks, RespawnTicks: stats.RespawnTicks,
 							SplashRadius: stats.SplashRadius, SplashDamage: stats.SplashDamage,
+							Passive: loadedMap.Ruleset == "safe",
 						})
 					}
 				}
+				portals := make([]realtimeworld.Portal, 0, len(loadedMap.Portals))
+				for _, portal := range loadedMap.Portals {
+					side, onEdge := edgeSide(portal.X, portal.Y, loadedMap.Width, loadedMap.Height)
+					if !onEdge {
+						continue
+					}
+					portals = append(portals, realtimeworld.Portal{
+						Side:         side,
+						TargetZoneID: portal.TargetZoneID,
+						TargetX:      portal.TargetX,
+						TargetY:      portal.TargetY,
+					})
+				}
 				artifact = realtimeworld.ZoneMap{
-					Collision: loadedMap.Collision(), Spawns: spawns, Monsters: monsters,
-					PvP: loadedMap.Ruleset == "pvp", Hash: loadedMap.Hash, SafeSpawn: loadedMap.SafeSpawn,
+					Collision: loadedMap.Collision(), Spawns: spawns, Monsters: monsters, Portals: portals,
+					PvP: loadedMap.Ruleset == "pvp", Safe: loadedMap.Ruleset == "safe",
+					Hash: loadedMap.Hash, SafeSpawn: loadedMap.SafeSpawn,
 					LegacyOriginX: loadedMap.LegacyOriginX, LegacyOriginY: loadedMap.LegacyOriginY, LegacyScale: loadedMap.LegacyScale,
 					Width: loadedMap.Width, Height: loadedMap.Height,
 				}
@@ -528,6 +547,108 @@ func resolveRealtimeMapPath(mapDir, mapID string) string {
 		}
 	}
 	return filepath.Join(mapDir, mapID+".json")
+}
+
+// edgeSide classifies an authored portal position onto one map border. Region
+// map art always places side portals 2 units from the outer wall.
+func edgeSide(x, y float64, width, height int) (realtimeworld.EdgeSide, bool) {
+	switch {
+	case x <= 2:
+		return realtimeworld.EdgeWest, true
+	case x >= float64(width)-2:
+		return realtimeworld.EdgeEast, true
+	case y <= 2:
+		return realtimeworld.EdgeNorth, true
+	case y >= float64(height)-2:
+		return realtimeworld.EdgeSouth, true
+	default:
+		return "", false
+	}
+}
+
+// expandRealtimeZoneIDs turns MMO_ZONE_IDS=* / all into the actual map
+// catalogue. Region maps are one JSON file per KHU_VUC/SAFE_ZONE; loading the
+// whole directory keeps every authored edge target admittable.
+func expandRealtimeZoneIDs(configured map[string]struct{}, mapDir, mapVersion, contentVersion string) map[string]struct{} {
+	_, wildcardStar := configured["*"]
+	_, wildcardAll := configured["all"]
+	if !wildcardStar && !wildcardAll {
+		return configured
+	}
+	directory := resolveRealtimeMapDir(mapDir)
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		logger.S.Errorf("MMO_ZONE_IDS=all could not read map directory %s: %v", directory, err)
+		return configured
+	}
+	expanded := make(map[string]struct{}, len(entries))
+	ids := make([]string, 0, len(entries))
+	skipped := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		id := strings.TrimSuffix(entry.Name(), ".json")
+		// Preview/Alpha/legacy artifacts share the directory but not the
+		// rollout version. Loading one of them would fail startup, so `all`
+		// expands only the maps matching the configured versions.
+		header, err := readRealtimeMapHeader(filepath.Join(directory, entry.Name()))
+		if err != nil {
+			logger.S.Warnf("MMO_ZONE_IDS=all skipped %s: %v", entry.Name(), err)
+			skipped++
+			continue
+		}
+		if (mapVersion != "" && header.Version != mapVersion) || (contentVersion != "" && header.ContentVersion != contentVersion) {
+			skipped++
+			continue
+		}
+		expanded[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	logger.S.Infof("MMO_ZONE_IDS=all expanded to %d maps from %s (%d version-mismatched skipped, version=%q content=%q)",
+		len(ids), directory, skipped, mapVersion, contentVersion)
+	return expanded
+}
+
+type realtimeMapHeader struct {
+	Version        string `json:"map_version"`
+	ContentVersion string `json:"content_version"`
+}
+
+func readRealtimeMapHeader(path string) (realtimeMapHeader, error) {
+	var header realtimeMapHeader
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return header, err
+	}
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return header, err
+	}
+	if header.Version == "" {
+		return header, errors.New("map_version is empty")
+	}
+	return header, nil
+}
+
+// resolveRealtimeMapDir mirrors resolveRealtimeMapPath for directory scans.
+func resolveRealtimeMapDir(mapDir string) string {
+	if filepath.IsAbs(mapDir) {
+		return mapDir
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		for current := cwd; ; current = filepath.Dir(current) {
+			candidate := filepath.Join(current, mapDir)
+			if info, statErr := os.Stat(candidate); statErr == nil && info.IsDir() {
+				return candidate
+			}
+			parent := filepath.Dir(current)
+			if parent == current {
+				break
+			}
+		}
+	}
+	return mapDir
 }
 
 // resolveRealtimeProfilePaths supports comma-separated catalogs when the

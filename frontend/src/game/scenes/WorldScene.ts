@@ -73,7 +73,6 @@ export class WorldScene extends Phaser.Scene {
   private dynamicWorldObjects!: Phaser.GameObjects.Graphics;
   private dynamicWorldLabels: Phaser.GameObjects.Text[] = [];
   private lastWorldObjectsSyncAt = 0;
-  private lastPortalCheckAt = 0;
   private map: LoadedWorldMap | null = null;
   private mapHash: string | null = null;
   private mapStatus: "idle" | "loading" | "ready" | "error" = "idle";
@@ -329,7 +328,6 @@ export class WorldScene extends Phaser.Scene {
     this.drawAimTelegraph(entities);
     this.projectileView.sync(this.runtime.getProjectiles());
     this.syncDynamicWorldObjects();
-    this.checkPortalProximity();
     this.debugHud?.update();
     this.updateHud(true);
   }
@@ -878,7 +876,7 @@ export class WorldScene extends Phaser.Scene {
       this.terrain.fillCircle(pixel.x, pixel.y - 6, 5);
 
       const destName = portal.name?.trim() || portal.targetZoneId.replaceAll("_", " ");
-      this.legacyLabels.push(this.add.text(pixel.x, pixel.y - 36, `🌀 Đến: ${destName}`, {
+      this.legacyLabels.push(this.add.text(pixel.x, pixel.y - 36, `🌀 Rìa → ${destName}`, {
         fontFamily: "sans-serif", fontSize: "11px", fontStyle: "bold",
         color: "#e0f2fe", backgroundColor: "#0369a1dd", padding: { x: 5, y: 3 },
       }).setOrigin(0.5, 0.5).setDepth(-8_950));
@@ -1047,21 +1045,6 @@ export class WorldScene extends Phaser.Scene {
         color: "#e0f2fe", backgroundColor: "#0369a1dd", padding: { x: 4, y: 2 },
       }).setOrigin(0.5, 0.5).setDepth(-8_950);
       this.dynamicWorldLabels.push(label);
-    }
-  }
-
-  private checkPortalProximity(): void {
-    const now = this.time.now;
-    if (now - this.lastPortalCheckAt < 1200) return;
-    this.lastPortalCheckAt = now;
-    const self = this.runtime?.getSelfEntity();
-    if (!self || !this.map?.portals) return;
-
-    for (const portal of this.map.portals) {
-      if (Math.hypot(self.x - portal.x, self.y - portal.y) <= 1.4) {
-        window.dispatchEvent(new CustomEvent("mmo_portal_step", { detail: portal }));
-        break;
-      }
     }
   }
 

@@ -155,6 +155,22 @@ export interface WorldRejectPayload {
   retryable?: boolean;
 }
 
+/**
+ * Server-owned border handoff. target_x/target_y are MMO map-local cells;
+ * legacy_x/legacy_y are the same point projected into the players.x/y world
+ * space. Callers must persist the legacy pair, never the map-local one.
+ */
+export interface WorldTransferPayload {
+  from_zone_id?: string;
+  to_zone_id: string;
+  transfer_id?: string;
+  target_x: number;
+  target_y: number;
+  legacy_x: number;
+  legacy_y: number;
+  hp: number;
+}
+
 const knownTypes = new Set<WorldMessageType>([
   "world.join",
   "world.welcome",
@@ -317,6 +333,35 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
     skills,
     loadout_revision: value.loadout_revision as string | undefined,
     snapshot,
+  };
+}
+
+export function parseWorldTransferPayload(value: unknown): WorldTransferPayload {
+  if (!isRecord(value)) throw new Error("World transfer payload must be an object");
+  if (typeof value.to_zone_id !== "string" || value.to_zone_id.length === 0 || value.to_zone_id.length > 80 || value.to_zone_id.trim() !== value.to_zone_id) {
+    throw new Error("World transfer destination is invalid");
+  }
+  if (value.from_zone_id !== undefined && (typeof value.from_zone_id !== "string" || value.from_zone_id.length > 80)) {
+    throw new Error("World transfer source is invalid");
+  }
+  if (value.transfer_id !== undefined && (typeof value.transfer_id !== "string" || value.transfer_id.length > 80)) {
+    throw new Error("World transfer id is invalid");
+  }
+  for (const field of [value.target_x, value.target_y, value.hp]) {
+    if (!isFiniteNumber(field) || field < 0) throw new Error("World transfer coordinate or hp is invalid");
+  }
+  for (const field of [value.legacy_x, value.legacy_y]) {
+    if (!isSafeNonNegativeInteger(field)) throw new Error("World transfer legacy coordinate is invalid");
+  }
+  return {
+    from_zone_id: value.from_zone_id as string | undefined,
+    to_zone_id: value.to_zone_id,
+    transfer_id: value.transfer_id as string | undefined,
+    target_x: value.target_x as number,
+    target_y: value.target_y as number,
+    legacy_x: value.legacy_x as number,
+    legacy_y: value.legacy_y as number,
+    hp: value.hp as number,
   };
 }
 

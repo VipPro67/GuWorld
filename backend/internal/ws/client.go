@@ -93,6 +93,7 @@ type Client struct {
 	snapshotSeen        map[string]struct{}
 	controllerID        uuid.UUID
 	realtimeAdmission   RealtimeWorldAdmission
+	lastTransferReject  atomic.Int64
 
 	mu            sync.Mutex
 	realtimeMu    sync.Mutex
@@ -580,11 +581,44 @@ func (c *Client) startRealtimeSnapshotStream(welcome protocol.Welcome) error {
 					return
 				default:
 				}
+				if self, ok := snapshotSelf(snapshot, sim.CharacterID(c.playerID.String())); ok {
+					transfer, crossing, transferErr := c.realtimeAdmission.TransferAtEdge(c.playerID, c.controllerID, self.Transform.Position)
+					if transferErr != nil {
+						if coded, ok := transferErr.(interface{ ErrorCode() string }); ok && coded.ErrorCode() == "realtime_transfer_denied" {
+							now := time.Now().UnixNano()
+							if now-c.lastTransferReject.Load() > int64(10*time.Second) {
+								c.lastTransferReject.Store(now)
+								c.sendWorldReject("", coded.ErrorCode(), transferErr.Error(), false)
+							}
+						}
+					} else if crossing {
+						payload, marshalErr := json.Marshal(transfer)
+						if marshalErr == nil {
+							c.sendWorldEnvelope(protocol.TypeTransfer, "", payload)
+							logger.S.Infof("Realtime edge transfer %s: %s -> %s (local %.1f,%.1f legacy %d,%d)",
+								c.playerID, transfer.FromZoneID, transfer.ToZoneID,
+								transfer.TargetX, transfer.TargetY, transfer.LegacyX, transfer.LegacyY)
+							// Give the write pump time to flush world.transfer; the
+							// client normally closes this socket and reconnects.
+							time.AfterFunc(2*time.Second, c.Close)
+						}
+						return
+					}
+				}
 				c.sendWorldSnapshotGeneration(snapshot, generation)
 			}
 		}
 	}()
 	return nil
+}
+
+func snapshotSelf(snapshot sim.Snapshot, characterID sim.CharacterID) (sim.Entity, bool) {
+	for _, entity := range snapshot.Entities {
+		if entity.CharacterID == characterID {
+			return entity, true
+		}
+	}
+	return sim.Entity{}, false
 }
 
 func (c *Client) stopRealtimeSnapshotStream() {
