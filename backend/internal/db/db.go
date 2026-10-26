@@ -255,7 +255,6 @@ func InitSchema() error {
 		fn   func() error
 	}{
 		{"dictionaries", schemaDictionaries},
-		{"moba", schemaMoba},
 		{"world", schemaWorld},
 		{"merchants", schemaMerchants},
 		{"parties", schemaParties},
@@ -1144,6 +1143,7 @@ func seedGusFromCSV(filename string) error {
 	supportTagsIdx := col("support_tags")
 	basePriceIdx := col("base_price")
 	imageURLIdx := col("image_url")
+	skillIdx := col("skill_profile")
 	targetTypeIdx := col("target_type")
 
 	if idIdx < 0 || nameIdx < 0 || rankIdx < 0 {
@@ -1153,6 +1153,7 @@ func seedGusFromCSV(filename string) error {
 	type guRow struct {
 		fields            []string
 		normalizedEffects string
+		skillProfile      string
 		line              int
 	}
 	type guKey struct{ id, rank string }
@@ -1202,6 +1203,19 @@ func seedGusFromCSV(filename string) error {
 			return err
 		}
 		entry.normalizedEffects = normalized
+		entry.skillProfile = get(entry.fields, skillIdx)
+		if entry.skillProfile != "" {
+			var skill models.GuSkillProfile
+			if err := json.Unmarshal([]byte(entry.skillProfile), &skill); err != nil {
+				return fmt.Errorf("Gu.csv line %d, %s rank %s skill_profile: %w", entry.line, key.id, key.rank, err)
+			}
+			if skill.CastMode != models.SkillCastTarget && skill.CastMode != models.SkillCastDirection && skill.CastMode != models.SkillCastGround && skill.CastMode != models.SkillCastSelf {
+				return fmt.Errorf("Gu.csv line %d: invalid skill_profile.cast_mode %q", entry.line, skill.CastMode)
+			}
+			if skill.Shape != "" && skill.Shape != models.SkillShapeSingle && skill.Shape != models.SkillShapeLine && skill.Shape != models.SkillShapeCircle && skill.Shape != models.SkillShapeCone && skill.Shape != models.SkillShapeRectangle && skill.Shape != models.SkillShapeDonut && skill.Shape != models.SkillShapeCross && skill.Shape != models.SkillShapeWall {
+				return fmt.Errorf("Gu.csv line %d: invalid skill_profile.shape %q", entry.line, skill.Shape)
+			}
+		}
 		seen[key] = entry
 		warningCount += len(report.Warnings())
 	}
@@ -1219,7 +1233,7 @@ func seedGusFromCSV(filename string) error {
 		if len(batchValues) == 0 {
 			return nil
 		}
-		query := "INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url) VALUES " +
+		query := "INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url, skill_profile) VALUES " +
 			strings.Join(batchValues, ",") +
 			` ON CONFLICT (id, rank) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
@@ -1228,7 +1242,8 @@ func seedGusFromCSV(filename string) error {
 			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, primary_role=EXCLUDED.primary_role,
 			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags,
 			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE gu_dictionary.base_price END,
-			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END`
+			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END,
+			    skill_profile=EXCLUDED.skill_profile`
 		if _, err := activeCSVImportDB().Exec(query, batchArgs...); err != nil {
 			return err
 		}
@@ -1321,9 +1336,9 @@ func seedGusFromCSV(filename string) error {
 
 		n := len(batchArgs)
 		batchValues = append(batchValues, fmt.Sprintf(
-			"($%d,$%d,$%d,$%d::jsonb,$%d,$%d,$%d::jsonb,$%d,$%d::jsonb,$%d,$%d,$%d,$%d,$%d,$%d::jsonb,$%d::jsonb,$%d::jsonb,$%d,$%d)",
-			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12, n+13, n+14, n+15, n+16, n+17, n+18, n+19))
-		batchArgs = append(batchArgs, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
+			"($%d,$%d,$%d,$%d::jsonb,$%d,$%d,$%d::jsonb,$%d,$%d::jsonb,$%d,$%d,$%d,$%d,$%d,$%d::jsonb,$%d::jsonb,$%d::jsonb,$%d,$%d,NULLIF($%d,'')::jsonb)",
+			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12, n+13, n+14, n+15, n+16, n+17, n+18, n+19, n+20))
+		batchArgs = append(batchArgs, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL, seen[key].skillProfile)
 		if len(batchValues) >= guImportBatchSize {
 			if err := flushGuBatch(); err != nil {
 				return fmt.Errorf("upsert gu %s rank %s: %w", id, rankStr, err)
@@ -3524,13 +3539,8 @@ var individualExportDefs = map[string]exportDef{
 	},
 	"gu": {
 		filename: "Gu.csv",
-		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
-	},
-	"gu_moba": {
-		filename: "GuMoba.csv",
-		columns:  []string{"gu_id", "rank", "cast_mode", "shape", "radius", "length", "width", "angle_deg", "cast_range", "cast_time_ms", "recovery_ms", "cooldown_ms", "projectile_speed", "pierce", "max_targets", "move_distance"},
-		query:    `SELECT gu_id, rank, cast_mode, shape, radius, length, width, angle_deg, cast_range, cast_time_ms, recovery_ms, cooldown_ms, projectile_speed, pierce, max_targets, move_distance FROM gu_moba_profiles ORDER BY gu_id, rank`,
+		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url", "skill_profile"},
+		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,''), COALESCE(skill_profile::text,'') FROM gu_dictionary ORDER BY id`,
 	},
 	"constitution": {
 		filename: "Constitution.csv",

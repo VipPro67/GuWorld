@@ -41,13 +41,13 @@ export class RealtimeDebugHUD {
     if (!force && now - this.lastUpdate < 250) return;
     this.lastUpdate = now;
     const stats = this.runtime.getDebugStats();
-    const age = stats.network.lastMessageAt > 0 ? `${Date.now() - stats.network.lastMessageAt}ms` : "—";
+    const age = stats.network.lastSnapshotAt > 0 ? `${Date.now() - stats.network.lastSnapshotAt}ms` : "—";
     const kb = stats.network.bytes / 1024;
     this.text.setText([
       `F3 DEBUG · ${stats.status.toUpperCase()}`,
       `tick ${stats.tick} @ ${stats.tickRate}Hz · entities ${stats.entities} · projectiles ${stats.projectiles}`,
       `self ${stats.selfX.toFixed(2)}, ${stats.selfY.toFixed(2)} · correction ${stats.lastCorrection.toFixed(2)}u`,
-      `net msgs ${stats.network.messages} · snapshots ${stats.network.snapshots} · ${kb.toFixed(1)}KB · last ${age}`,
+      `net msgs ${stats.network.messages} · snapshots ${stats.network.snapshots} · ${kb.toFixed(1)}KB · snap ${age}`,
       `fps ${Math.round(this.scene.game.loop.actualFps)}`,
     ].join("\n"));
   }

@@ -165,7 +165,6 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/explore/maps` | Danh mục tầng bản đồ (`maps[]`: id, tên, kích thước, rank, rules, trạng thái). `bai_thien` và `hac_thien` hiện được cấu hình nhưng chưa mở cho người chơi cho tới khi luồng tọa độ/hiện diện được scope theo tầng. |
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
 | GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / radar MMO. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id,vein?}]`; ô Nguyên Tuyền có `cell_type="PrimevalVein"`, `content` = id mỏ và object `vein` chứa phẩm chất, sản lượng đã tích/trần và hạn. |
-| GET | `/explore/players` | Người chơi ở gần để hiển thị/tương tác trên bản đồ. |
 | POST | `/world/portal/transfer` | Chuyển vùng legacy (không dùng khi nhân vật đang do realtime world sở hữu): body `{"target_zone_id","target_x","target_y"}`. `target_x/target_y` là **toạ độ ô của map MMO đích** (0..width/height), server cộng `regions.min_x/min_y` để ghi `players.x/y` legacy; kiểm tra giới hạn khu vực và áp dụng debuff giới bích. Chuyển vùng trong MMO đi qua rìa map và do server tự xử lý (`world.transfer`). |
 | GET | `/world/drops` | Chiến lợi phẩm/hài cốt còn hạn trong viewport; mặc định quanh người chơi (radius 25), hỗ trợ `x`, `y`, `radius` tùy chỉnh (radius tối đa 127). Query theo bounding box tọa độ, không giới hạn theo region của người chơi. |
 | POST | `/world/drops/:id/loot` | Nhặt một ground drop khi đủ điều kiện khóa sở hữu. |
@@ -292,12 +291,11 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/trade/unlock/:id` | Mở khóa ưu đãi để chỉnh sửa lại vật phẩm/đá, tự động hủy xác nhận của cả hai bên để đảm bảo an toàn. |
 | POST | `/trade/confirm/:id` |
 | GET | `/merchant` | Thương nhân đứng cạnh (roaming, ≤ 2 ô) + cờ `at_village` (region HUB/SAFE_ZONE) để UI tự bật/tắt. Trả `{region, zone_type, at_village, merchants}`. |
-| GET | `/merchant/map` | Toàn bộ roaming trong region (không lọc khoảng cách) để vẽ marker trên bản đồ. |
 | POST | `/merchant/quote` | Body `{merchant_id, items:[{item_id,item_type,rank,quantity}]}` → `{items:[{item_id,rank,accepted,unit_price,quota_left}]}`. |
 | POST | `/merchant/sell` | Bán cho thương nhân: giá động theo nhu cầu + quota toàn server. Body như quote. Hỗ trợ Cổ/Item/cổ phương. |
 | POST | `/merchant/buy` | Mua từ `merchant_stock`. Body `{merchant_id, items:[{item_id,rank,quantity}]}`. Hỗ trợ Cổ/Item/cổ phương (mua cổ phương = mở khóa). |
 
-**Thương nhân (2 loại + gating):** (1) **Cố định** tại HUB/SAFE_ZONE = Caravan/Thương Hội: bán random theo giờ, mua tất cả 1/10 (`village_general`, quota vô hạn) — **UI chỉ mở khi `at_village`**. (2) **Lang thang**: mỗi con có bể mua/bể bán riêng (allow-list + giá + quota riêng), mua/bán cả Cổ/Item/cổ phương, **UI chỉ mở khi đứng cạnh (≤ 2 ô)**, marker 🪙 hiện trên bản đồ qua `/merchant/map`. `/shop/sell` + `/sell-bulk` delegate sang `village_general`. Chi tiết: `docs/GAME_DATA.md` §"Thương nhân".
+**Thương nhân (2 loại + gating):** (1) **Cố định** tại HUB/SAFE_ZONE = Caravan/Thương Hội: bán random theo giờ, mua tất cả 1/10 (`village_general`, quota vô hạn) — **UI chỉ mở khi `at_village`**. (2) **Lang thang**: mỗi con có bể mua/bể bán riêng (allow-list + giá + quota riêng), mua/bán cả Cổ/Item/cổ phương, **UI chỉ mở khi đứng cạnh (≤ 2 ô)**. `/shop/sell` + `/sell-bulk` delegate sang `village_general`. Chi tiết: `docs/GAME_DATA.md` §"Thương nhân".
 
 **Quy định phí & thời gian Bảo Hoàng Thiên:**
 - **Cửa hàng (`MARKET`):** Phí Upfront thu ngay lập tức khi đăng lên kệ = **4% giá trị niêm yết** (`price * quantity`), khấu trừ theo loại tiền tệ của đơn hàng (Nguyên Thạch / Tiên Nguyên Thạch). Phí hoa hồng khi bán thành công = **6%** doanh thu.

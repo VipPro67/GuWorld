@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
 	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 )
@@ -131,6 +132,13 @@ func cmdTranspileRealtimeGu(args []string) error {
 		}
 
 		profile := transpileGuProfile(guID, rank, pathStr, primaryRole, baseMana, blocks)
+		skillProfileJSON := strings.TrimSpace(t.get(row, "skill_profile"))
+		if skillProfileJSON != "" && profile.Active != nil {
+			var custom models.GuSkillProfile
+			if err := json.Unmarshal([]byte(skillProfileJSON), &custom); err == nil {
+				applyCustomSkillProfile(profile.Active, custom)
+			}
+		}
 		if profile.Active != nil {
 			stats.ActivesGenerated++
 			switch profile.Active.Mode {
@@ -611,5 +619,75 @@ func inferVisuals(pathStr, guID string) realtimeeffects.VisualProfile {
 		return realtimeeffects.VisualProfile{Icon: "gu/wind", CastVFX: "cast/wind", ProjectileVFX: "projectiles/wind_blade", ImpactVFX: "impact/wind_slash"}
 	default:
 		return realtimeeffects.VisualProfile{Icon: "gu/placeholder", CastVFX: "cast/placeholder", ProjectileVFX: "projectiles/water_arrow", ImpactVFX: "impact/placeholder"}
+	}
+}
+
+func applyCustomSkillProfile(active *realtimeeffects.ActiveProfile, custom models.GuSkillProfile) {
+	if custom.CastMode != "" {
+		active.Mode = combat.Mode(custom.CastMode)
+	}
+	if custom.Shape != "" {
+		switch custom.Shape {
+		case models.SkillShapeSingle:
+			active.Shape = combat.ShapeCircle
+		case models.SkillShapeLine:
+			active.Shape = combat.ShapeRectangle
+		default:
+			active.Shape = combat.Shape(custom.Shape)
+		}
+	}
+	if custom.CastRange > 0 {
+		active.RangeUnits = custom.CastRange
+	}
+	if custom.Radius > 0 {
+		active.RadiusUnits = custom.Radius
+	}
+	if custom.Length > 0 {
+		active.LengthUnits = custom.Length
+	}
+	if custom.Width > 0 {
+		active.WidthUnits = custom.Width
+	}
+	if custom.AngleDeg > 0 {
+		active.AngleDeg = custom.AngleDeg
+	}
+	if custom.CastTimeMs > 0 {
+		active.WindupMS = uint64(custom.CastTimeMs)
+	}
+	if custom.RecoveryMs > 0 {
+		active.RecoveryMS = uint64(custom.RecoveryMs)
+	}
+	if custom.CooldownMs > 0 {
+		active.CooldownMS = uint64(custom.CooldownMs)
+	}
+	if custom.MaxTargets > 0 {
+		active.MaxTargets = custom.MaxTargets
+	}
+	if custom.MoveDistance > 0 {
+		active.MoveDistance = custom.MoveDistance
+	}
+	if custom.KnockbackDist > 0 {
+		active.KnockbackDistance = custom.KnockbackDist
+	}
+	if custom.PlayerAtkRatio > 0 {
+		active.PlayerAtkRatio = custom.PlayerAtkRatio
+	}
+	if custom.GuPowerRatio > 0 {
+		active.GuPowerRatio = custom.GuPowerRatio
+	}
+	if custom.ProjectileSpeed > 0 || custom.Pierce {
+		if active.Projectile == nil {
+			active.Projectile = &realtimeeffects.ProjectileProfile{
+				SpeedUnitsPerSec: 18.0,
+				RadiusUnits:      0.35,
+				LifetimeTicks:    40,
+			}
+		}
+		if custom.ProjectileSpeed > 0 {
+			active.Projectile.SpeedUnitsPerSec = custom.ProjectileSpeed
+		}
+		if custom.Pierce {
+			active.Projectile.PierceCount = 3
+		}
 	}
 }

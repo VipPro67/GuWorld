@@ -316,7 +316,15 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 				continue
 			}
 			skill.ManaCost = entry.ManaCost
-			skill.Damage *= entry.DamageScale
+			guRatio := 1.0
+			if skill.GuPowerRatio > 0 {
+				guRatio = skill.GuPowerRatio
+			}
+			baseDmg := skill.Damage * guRatio
+			if skill.PlayerAtkRatio > 0 && state.BaseAttack > 0 {
+				baseDmg += state.BaseAttack * skill.PlayerAtkRatio
+			}
+			skill.Damage = baseDmg * entry.DamageScale
 			skill.BacklashPct = entry.BacklashPct
 			skill.Path = entry.Path
 		}

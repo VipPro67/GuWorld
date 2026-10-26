@@ -7380,13 +7380,15 @@
       "rank": 3,
       "active": {
         "mode": "SELF",
-        "windup_ms": 300,
+        "windup_ms": 200,
         "recovery_ms": 200,
         "cooldown_ms": 8000,
         "range_units": 0,
         "mana_cost": 10,
         "movement_policy": "SLOW",
         "max_targets": 1,
+        "player_atk_ratio": 0.3,
+        "gu_power_ratio": 1.2,
         "effects": [
           {
             "type": "HEAL",
@@ -64899,14 +64901,25 @@
       "gu_id": "GU_MOONLIGHT",
       "rank": 1,
       "active": {
-        "mode": "TARGET",
+        "mode": "DIRECTION",
+        "shape": "RECTANGLE",
+        "length_units": 15,
+        "width_units": 1.5,
         "windup_ms": 150,
         "recovery_ms": 150,
-        "cooldown_ms": 4000,
-        "range_units": 9,
+        "cooldown_ms": 3000,
+        "range_units": 15,
         "mana_cost": 10,
         "movement_policy": "SLOW",
         "max_targets": 1,
+        "player_atk_ratio": 0.8,
+        "gu_power_ratio": 1,
+        "projectile": {
+          "speed_units_per_sec": 22,
+          "radius_units": 0.35,
+          "lifetime_ticks": 40,
+          "pierce_count": 3
+        },
         "effects": [
           {
             "type": "DAMAGE",

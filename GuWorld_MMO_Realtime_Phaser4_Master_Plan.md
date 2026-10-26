@@ -81,7 +81,7 @@
 | `backend/internal/match/effects.go` | `extractPayload` chỉ xử lý subset; `StatusTicksPerTurn=40` | Không dùng làm runtime toàn bộ Cổ Trùng; chuyển sang semantic compiler mới | PR-18, PR-19 |
 | `backend/internal/gameplay/effects/{contract.go,runtime.go,executor.go,registries.go}` | Definitions typed: `DAMAGE`, `SHIELD`, `HEAL`, `DIRECT_HP`, `STAT_MOD`, `STATUS`, `BARRIER`, `CLEANSE`, `UNIQUE`... | Giữ registry/data DTO; viết realtime translator, semantic audit và applicator | PR-17–19 |
 | `backend/internal/simulator/*` | Turn-based combat | Chỉ chạy legacy và làm oracle cho công thức thuần; không đưa vào MMO tick loop | PR-19, PR-31 |
-| `backend/data/{Gu.csv,GuMoba.csv,Status.csv}` | Gu quy mô lớn, profile realtime mẫu, durations cũ | Giữ raw data; thêm catalog `gu_realtime` có version và status migration | PR-17, PR-18 |
+| `backend/data/{Gu.csv,Status.csv}` | Gu quy mô lớn, durations cũ | Lưu metadata chiêu trong `Gu.csv.skill_profile`; giữ effects làm nguồn payload | PR-17, PR-18 |
 | `backend/data/{Region.csv,MapCell.csv,Monster.csv,MonsterSpawn.csv}` | Metadata vùng, cell, monster và spawn cũ | Viết script kiểm định/chuyển đổi sang Tiled/map metadata; chưa coi old cells là collision đúng | PR-12, PR-15 |
 | `backend/internal/models/*`, `backend/internal/services/*` | Player, inventory, registry, services | Giữ API nghiệp vụ; thêm snapshot/adapter/service commands; không gọi trực tiếp DB từ tick | PR-23, PR-26 |
 | `frontend/public/assets/world/*` | Một phần ảnh world/monster/item | Audit rights/size, tạo manifest và atlas; asset thiếu dùng placeholder hợp pháp | PR-11, PR-21 |
@@ -707,7 +707,7 @@ Các đường dẫn `backend/internal/realtime/*` và `frontend/src/game/*` ban
 ## PR-17 — Complete Gu effect data inventory/audit  
 **Milestone:** M2 · **Phụ thuộc:** 01,16 · **Trạng thái:** IN PROGRESS (deterministic realtime audit CLI + generated coverage CSV + six MVP selection landed; hidden passive authoring and VFX/asset validation pending)
 
-**Đường dẫn:** `backend/cmd/gudata/*` (existing), `backend/internal/gameplay/effects/*` (existing), `backend/data/{Gu.csv,GuMoba.csv,Status.csv}` (existing), `docs/mmo/gu-coverage.csv` (generated)
+**Đường dẫn:** `backend/cmd/gudata/*` (existing), `backend/internal/gameplay/effects/*` (existing), `backend/data/{Gu.csv,Status.csv}` (existing), `docs/mmo/gu-coverage.csv` (generated)
 
 **Các task:**
 - [x] Enumerate `(gu_id,rank,block_id,trigger,operation,selector,condition)` and rank coverage; detect unknown/unhandled ops. (`audit-realtime`, unclassified=0.)

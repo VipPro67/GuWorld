@@ -64,6 +64,9 @@ export interface MMOHudProps {
   onZoomIn?: () => number;
   onZoomOut?: () => number;
   mapPortals?: MapPortal[];
+  aimingSlot?: number | null;
+  onCancelAim?: () => void;
+  onHoverSkill?: (slot: number | null) => void;
 }
 
 const MODE_LABEL: Record<WorldSkillInfo["mode"], string> = {
@@ -71,6 +74,44 @@ const MODE_LABEL: Record<WorldSkillInfo["mode"], string> = {
   DIRECTION: "Định hướng",
   GROUND: "Diện rộng",
   SELF: "Bản thân",
+};
+
+const MODE_BADGE: Record<
+  WorldSkillInfo["mode"],
+  { label: string; shortLabel: string; icon: string; color: string; bg: string; border: string }
+> = {
+  TARGET: {
+    label: "Đơn thể",
+    shortLabel: "Đơn",
+    icon: "🎯",
+    color: "text-sky-300",
+    bg: "bg-sky-950/90",
+    border: "border-sky-500/70",
+  },
+  DIRECTION: {
+    label: "Định hướng",
+    shortLabel: "Hướng",
+    icon: "🏹",
+    color: "text-cyan-300",
+    bg: "bg-cyan-950/90",
+    border: "border-cyan-500/70",
+  },
+  GROUND: {
+    label: "Vùng đất",
+    shortLabel: "Vùng",
+    icon: "💥",
+    color: "text-amber-300",
+    bg: "bg-amber-950/90",
+    border: "border-amber-500/70",
+  },
+  SELF: {
+    label: "Bản thân",
+    shortLabel: "Tự",
+    icon: "🛡️",
+    color: "text-emerald-300",
+    bg: "bg-emerald-950/90",
+    border: "border-emerald-500/70",
+  },
 };
 
 const frame = "border border-[#a88952]/65 bg-[#150f0bd9] text-[#f4e8cb] shadow-[0_8px_28px_rgba(0,0,0,.48)] backdrop-blur-sm";
@@ -1419,6 +1460,7 @@ export function MMOHud(props: MMOHudProps) {
             const skill = props.skills.find((entry) => entry.slot === slot);
             const guSlot = props.guSlots.find((entry) => entry.slot === slot);
             const remaining = props.cooldownRemaining[slot] ?? 0;
+            const isAimingThis = props.aimingSlot === slot;
             const isToggled =
               skill?.is_toggle &&
               playerStatuses.some(
@@ -1426,6 +1468,12 @@ export function MMOHud(props: MMOHudProps) {
                   (typeof st === "string" ? st : st.id) === skill.id ||
                   (typeof st === "string" ? st : st.id) === guSlot?.guId,
               );
+            const spec = guSlot?.guId ? guSpecFor(guSlot.guId, guSlot.rank ?? undefined) : undefined;
+            const isPassive = !skill && !!guSlot?.guId && (
+              spec?.gu_type === "Passive" ||
+              spec?.gu_type === "Buff" ||
+              !spec?.effects?.blocks?.some((b) => b.trigger === "ON_ACTION")
+            );
             return (
               <button
                 key={slot}
@@ -1434,34 +1482,48 @@ export function MMOHud(props: MMOHudProps) {
                 onClick={() => skill && props.onCast(slot)}
                 title={
                   skill
-                    ? `${guSlot?.name ?? skill.name} (${formatManaCost(skill.mana_cost)})`
-                    : guSlot?.name
-                      ? `${guSlot.name} · Chưa có chiêu realtime có thể thi triển`
-                      : "Trống"
+                    ? `${guSlot?.name ?? skill.name} · ${MODE_LABEL[skill.mode]} · Tầm: ${skill.range}m · (${formatManaCost(skill.mana_cost)} nguyên)`
+                    : isPassive
+                      ? `${guSlot?.name} · Bị động`
+                      : guSlot?.name
+                        ? `${guSlot.name} · Chưa có chiêu realtime`
+                        : "Trống"
                 }
                 className={`relative flex h-11 w-11 flex-col justify-between overflow-hidden rounded-lg border p-1 text-center transition active:scale-90 ${
-                  isToggled
-                    ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70"
-                    : skill
-                      ? "border-[#9d865b] bg-gradient-to-b from-[#254636] to-[#162d22] text-[#f9e9c8] active:border-[#dfc382]"
-                      : "border-[#544b3b]/60 bg-gradient-to-b from-[#242019]/90 to-[#151310]/90 text-[#867d6c] opacity-70"
+                  isAimingThis
+                    ? "border-amber-400 bg-gradient-to-b from-[#4a3512] to-[#241a08] text-amber-100 ring-2 ring-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)] scale-105 z-20 animate-pulse"
+                    : isToggled
+                      ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70"
+                      : skill
+                        ? "border-[#9d865b] bg-gradient-to-b from-[#254636] to-[#162d22] text-[#f9e9c8] active:border-[#dfc382]"
+                        : "border-[#544b3b]/60 bg-gradient-to-b from-[#242019]/90 to-[#151310]/90 text-[#867d6c] opacity-70"
                 }`}
               >
                 <span className="absolute left-0 top-0 rounded-br bg-black/85 px-1 py-0.2 font-mono text-[8px] font-bold text-[#f4d695] border-r border-b border-[#8f6d40]/50 leading-none z-10">
                   {slot}
                 </span>
-                {isToggled && (
+                {isToggled ? (
                   <span className="absolute right-0 top-0 rounded-bl bg-emerald-700 px-1 py-0.2 font-sans text-[7px] font-bold text-white z-10 animate-pulse">
                     ON
                   </span>
-                )}
+                ) : skill ? (
+                  <span
+                    className={`absolute right-0 top-0 rounded-bl px-1 py-0.2 font-sans text-[7.5px] font-bold leading-none z-10 border-l border-b ${MODE_BADGE[skill.mode].bg} ${MODE_BADGE[skill.mode].border} ${MODE_BADGE[skill.mode].color}`}
+                  >
+                    {MODE_BADGE[skill.mode].icon}
+                  </span>
+                ) : isPassive ? (
+                  <span className="absolute right-0 top-0 rounded-bl bg-purple-950/90 border-l border-b border-purple-500/70 px-1 py-0.2 font-sans text-[7px] text-purple-300 leading-none z-10">
+                    ⚡
+                  </span>
+                ) : null}
                 <div className="flex-1 flex items-center justify-center w-full mt-1 px-0.5">
                   <span className="line-clamp-2 text-[8px] font-semibold leading-tight tracking-tight">
                     {guSlot?.name ?? (skill?.name || "Trống")}
                   </span>
                 </div>
                 <span className="font-mono text-[7px] text-cyan-200/90 truncate tracking-tighter">
-                  {skill ? `${formatManaCost(skill.mana_cost)}` : guSlot?.guId ? "—" : ""}
+                  {skill ? `${formatManaCost(skill.mana_cost)}` : isPassive ? "Bị động" : guSlot?.guId ? "—" : ""}
                 </span>
                 {remaining > 0.05 && (
                   <span className="absolute inset-0 z-20 grid place-items-center bg-black/80 font-sans font-bold text-xs text-amber-200 backdrop-blur-[1px]">
@@ -1487,6 +1549,29 @@ export function MMOHud(props: MMOHudProps) {
         </button>
       </div>
 
+      {/* Aiming Status Pill (Hiện khi đang ngắm chiêu trên cả PC và Mobile) */}
+      {props.aimingSlot && (
+        <div className="pointer-events-auto absolute bottom-20 sm:bottom-24 md:bottom-28 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full border border-amber-400/90 bg-[#140e0ae6] px-3.5 py-1.5 shadow-[0_0_18px_rgba(251,191,36,0.6)] backdrop-blur-md text-xs text-amber-200">
+          <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+          <span className="font-semibold text-amber-100">
+            {(() => {
+              const s = props.skills.find((entry) => entry.slot === props.aimingSlot);
+              const g = props.guSlots.find((entry) => entry.slot === props.aimingSlot);
+              return `${g?.name ?? s?.name ?? `Ô ${props.aimingSlot}`}: Nhấp chọn ${s?.mode === "TARGET" ? "mục tiêu" : s?.mode === "DIRECTION" ? "hướng" : "vị trí"}`;
+            })()}
+          </span>
+          <button
+            type="button"
+            onClick={props.onCancelAim}
+            className="ml-1 flex items-center gap-1 rounded-full bg-red-600/90 hover:bg-red-500 px-2.5 py-0.5 text-[10px] font-bold text-white transition shadow cursor-pointer active:scale-95"
+            title="Hủy ngắm chiêu (Esc)"
+          >
+            <X className="h-3 w-3" />
+            <span>Hủy (Esc)</span>
+          </button>
+        </div>
+      )}
+
       {/* Desktop Hotbar (Thanh ngang tiêu chuẩn cho PC / Tablet) */}
       <div className={`pointer-events-auto absolute bottom-2 left-1/2 hidden md:flex max-w-[min(98vw,480px)] -translate-x-1/2 items-center gap-1 sm:gap-1.5 md:gap-2 overflow-x-auto rounded-xl p-1 sm:p-1.5 md:p-2 sm:max-w-none sm:w-auto shadow-2xl ${frame}`}>
         <button
@@ -1507,6 +1592,7 @@ export function MMOHud(props: MMOHudProps) {
           const skill = props.skills.find((entry) => entry.slot === slot);
           const guSlot = props.guSlots.find((entry) => entry.slot === slot);
           const remaining = props.cooldownRemaining[slot] ?? 0;
+          const isAimingThis = props.aimingSlot === slot;
           const isToggled =
             skill?.is_toggle &&
             playerStatuses.some(
@@ -1526,9 +1612,14 @@ export function MMOHud(props: MMOHudProps) {
               type="button"
               disabled={!skill}
               onClick={() => skill && props.onCast(slot)}
+              onMouseEnter={() => props.onHoverSkill?.(slot)}
+              onMouseLeave={() => props.onHoverSkill?.(null)}
               title={
                 skill
-                  ? `${guSlot?.name ?? skill.name} · Phím [${slot}] · ${MODE_LABEL[skill.mode]} · ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()}${isToggled ? " · (ĐANG DUY TRÌ)" : ""}`
+                  ? `${guSlot?.name ?? skill.name} · Phím [${slot}]
+Cơ chế: ${MODE_BADGE[skill.mode].icon} ${MODE_BADGE[skill.mode].label}
+Tầm xa: ${skill.range.toFixed(1)} ô${skill.radius_units ? ` · Bán kính: ${skill.radius_units} ô` : ""}${skill.shape ? ` · Dạng: ${skill.shape}` : ""}
+Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi: ${(skill.cooldown_ticks / 20).toFixed(1)}s${isToggled ? " · (ĐANG DUY TRÌ)" : ""}`
                   : isPassive
                     ? `${guSlot?.name} · Cổ bị động (tự động kích hoạt hiệu ứng)`
                     : guSlot?.name
@@ -1536,21 +1627,35 @@ export function MMOHud(props: MMOHudProps) {
                       : `Ô ${slot} chưa gán Cổ`
               }
               className={`relative flex h-12 min-w-[46px] flex-col justify-between overflow-hidden rounded-lg border px-1 pt-3 pb-0.5 text-center transition shadow sm:h-16 sm:w-20 sm:pt-4 sm:pb-1 md:h-20 md:w-24 shrink-0 ${
-                isToggled
-                  ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70 shadow-[0_0_12px_rgba(52,211,153,0.4)]"
-                  : skill
-                    ? "border-[#9d865b] bg-gradient-to-b from-[#254636] to-[#162d22] text-[#f9e9c8] hover:border-[#dfc382] hover:brightness-110 active:scale-95"
-                    : "border-[#544b3b] bg-gradient-to-b from-[#242019] to-[#151310] text-[#867d6c] opacity-80"
+                isAimingThis
+                  ? "border-amber-400 bg-gradient-to-b from-[#4a3512] to-[#241a08] text-amber-100 ring-2 ring-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.8)] scale-105 z-20 animate-pulse"
+                  : isToggled
+                    ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70 shadow-[0_0_12px_rgba(52,211,153,0.4)]"
+                    : skill
+                      ? "border-[#9d865b] bg-gradient-to-b from-[#254636] to-[#162d22] text-[#f9e9c8] hover:border-[#dfc382] hover:brightness-110 active:scale-95"
+                      : "border-[#544b3b] bg-gradient-to-b from-[#242019] to-[#151310] text-[#867d6c] opacity-80"
               }`}
             >
               <span className="absolute left-0 top-0 rounded-br bg-black/85 px-1.5 py-0.5 font-mono text-[9px] sm:text-[11px] md:text-xs font-bold text-[#f4d695] border-r border-b border-[#8f6d40]/50 leading-none z-10">
                 {slot}
               </span>
-              {isToggled && (
+              {isToggled ? (
                 <span className="absolute right-0 top-0 rounded-bl bg-emerald-700 px-1 py-0.5 font-sans text-[7px] sm:text-[9px] font-bold text-white border-l border-b border-emerald-400 z-10 animate-pulse">
                   ON
                 </span>
-              )}
+              ) : skill ? (
+                <span
+                  className={`absolute right-0 top-0 rounded-bl px-1 py-0.5 font-sans text-[7px] sm:text-[8.5px] font-bold border-l border-b leading-tight z-10 flex items-center gap-0.5 ${MODE_BADGE[skill.mode].bg} ${MODE_BADGE[skill.mode].border} ${MODE_BADGE[skill.mode].color}`}
+                >
+                  <span>{MODE_BADGE[skill.mode].icon}</span>
+                  <span className="hidden sm:inline">{MODE_BADGE[skill.mode].label}</span>
+                  <span className="sm:hidden">{MODE_BADGE[skill.mode].shortLabel}</span>
+                </span>
+              ) : isPassive ? (
+                <span className="absolute right-0 top-0 rounded-bl px-1 py-0.5 font-sans text-[7px] sm:text-[8.5px] font-bold border-l border-b leading-tight z-10 bg-purple-950/85 border-purple-500/70 text-purple-300">
+                  ⚡ Bị động
+                </span>
+              ) : null}
               <div className="flex-1 flex items-center justify-center w-full px-0.5">
                 <span className="line-clamp-2 text-[8px] sm:text-[11px] md:text-xs font-semibold leading-tight tracking-tight">
                   {guSlot?.name ?? "Chưa gán"}

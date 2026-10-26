@@ -446,3 +446,209 @@ func TestInvincibleAndLastStandAndEvasion(t *testing.T) {
 		t.Fatalf("expected EventEntityDied after LAST_STAND removed: %+v", events)
 	}
 }
+
+func TestRootStopsMovementAllowsCast(t *testing.T) {
+	w, _ := NewWorld("arena", 8)
+	player := newCombatPlayer("player", Vec2{X: 0, Y: 0})
+	monster := newTargetMonster("mob", Vec2{X: 3, Y: 0})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+
+	root := testStatusSkill("ROOT", 0, 0, 10, 0)
+	root.StatusMoveMultiplier = 0
+	root.StatusDebuff = true
+	w.applyStatusLocked(worldEntity(t, w, "player"), worldEntity(t, w, "player"), root)
+
+	// Step world so tickStatuses processes moveMultiplier = 0
+	w.Step()
+
+	// Verify player cannot move
+	worldEntity(t, w, "player").moveIntent = Vec2{X: 1, Y: 0}
+	before := worldEntity(t, w, "player").Transform.Position
+	w.Step()
+	if after := entityPosition(t, w, "player"); after != before {
+		t.Fatalf("rooted player moved: before=%+v after=%+v", before, after)
+	}
+
+	// Verify player CAN still cast skills (ROOT is not hard stun)
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 6)
+	if !hasEvent(events, combat.EventCastAccepted) || !hasEvent(events, combat.EventDamageApplied) {
+		t.Fatalf("rooted player should be able to cast skills, got events: %+v", events)
+	}
+}
+
+func TestSilenceBlocksCasting(t *testing.T) {
+	w, _ := NewWorld("arena", 8)
+	player := newCombatPlayer("player", Vec2{X: 0, Y: 0})
+	monster := newTargetMonster("mob", Vec2{X: 3, Y: 0})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+
+	silence := testStatusSkill("SILENCE", 0, 0, 10, 0)
+	silence.StatusDebuff = true
+	w.applyStatusLocked(worldEntity(t, w, "mob"), worldEntity(t, w, "player"), silence)
+
+	// Attempt cast
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 2)
+	var rejected bool
+	for _, ev := range events {
+		if ev.Type == combat.EventCastRejected && ev.Reason == "silenced" {
+			rejected = true
+			break
+		}
+	}
+	if !rejected {
+		t.Fatalf("expected cast to be rejected due to silence: %+v", events)
+	}
+}
+
+func TestBlindCausesAttackMiss(t *testing.T) {
+	w, _ := NewWorld("arena", 8)
+	player := newCombatPlayer("player", Vec2{X: 0, Y: 0})
+	monster := newTargetMonster("mob", Vec2{X: 1, Y: 0})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+
+	blind := testStatusSkill("BLIND", 0, 0, 10, 0)
+	blind.StatusDebuff = true
+	w.applyStatusLocked(worldEntity(t, w, "mob"), worldEntity(t, w, "player"), blind)
+
+	// Player attempts basic attack
+	if err := w.SubmitBasicAttack(AttackCommand{EntityID: "player", Seq: 1, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 1)
+
+	foundBlind := false
+	for _, ev := range events {
+		if ev.Type == combat.EventDamageApplied && ev.Reason == "blind" && ev.Amount == 0 {
+			foundBlind = true
+			break
+		}
+	}
+	if !foundBlind {
+		t.Fatalf("expected basic attack to miss with reason 'blind': %+v", events)
+	}
+}
+
+func TestThornsReflectsDamage(t *testing.T) {
+	w, _ := NewWorld("arena", 8)
+	attacker := newCombatPlayer("attacker", Vec2{X: 0, Y: 0})
+	defender := newCombatPlayer("defender", Vec2{X: 2, Y: 0})
+	attacker.Vitals.HP = 100
+	defender.Vitals.HP = 100
+	if err := w.AddEntity(attacker); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(defender); err != nil {
+		t.Fatal(err)
+	}
+
+	thorns := testStatusSkill("THORNS", 0, 0, 20, 0)
+	thorns.StatusDebuff = false
+	atkEnt := worldEntity(t, w, "attacker")
+	defEnt := worldEntity(t, w, "defender")
+	w.applyStatusLocked(defEnt, defEnt, thorns)
+
+	// Attacker deals 100 damage to defender
+	w.applyDamageLocked(atkEnt, defEnt, 100, "SLASH")
+
+	// Defender took damage
+	if defEnt.Vitals.HP >= 100 {
+		t.Fatalf("defender did not take damage: HP=%v", defEnt.Vitals.HP)
+	}
+	// Attacker took reflected thorns damage (35% of 100 = 35)
+	if atkEnt.Vitals.HP >= 100 {
+		t.Fatalf("attacker was not hit by thorns: HP=%v", atkEnt.Vitals.HP)
+	}
+	if atkEnt.Vitals.HP != 65 {
+		t.Fatalf("expected attacker HP=65 after thorns reflection, got %v", atkEnt.Vitals.HP)
+	}
+}
+
+func TestBurnReducesHealing(t *testing.T) {
+	w, _ := NewWorld("arena", 8)
+	player := newCombatPlayer("player", Vec2{X: 0, Y: 0})
+	player.Vitals.HP = 20
+	player.Vitals.MaxHP = 100
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+
+	burn := testStatusSkill("BURN", 0, 0, 20, 0)
+	burn.StatusDebuff = true
+	ent := worldEntity(t, w, "player")
+	w.applyStatusLocked(ent, ent, burn)
+
+	healSkill := combat.Skill{
+		ID: "HEAL", Slot: 1, Mode: combat.ModeSelf, Name: "Heal",
+		Heal: 50,
+	}
+	w.applySelfSupportLocked(ent, healSkill)
+
+	// Without burn, heal is 50 -> HP = 70. With burn (50% cut), heal is 25 -> HP = 45.
+	if ent.Vitals.HP != 45 {
+		t.Fatalf("expected HP=45 after 50%% reduced heal from BURN, got %v", ent.Vitals.HP)
+	}
+}
+
+func TestSkillDashAndKnockback(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("caster", Vec2{X: 2, Y: 2})
+	dashAndKnockSkill := combat.Skill{
+		ID: "DASH_KNOCK", Slot: 1, Mode: combat.ModeTarget, Name: "Charge",
+		Range: 10, MoveDistance: 2.0, KnockbackDistance: 3.0, Damage: 20,
+	}
+	player.Combat.Skills[1] = dashAndKnockSkill
+	target := newTargetMonster("target", Vec2{X: 5, Y: 2})
+
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(target); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cast toward target
+	cmd := CastCommand{
+		EntityID: "caster", Seq: 1, Slot: 1, Mode: combat.ModeTarget,
+		TargetID: "target",
+	}
+	if err := w.SubmitCast(cmd); err != nil {
+		t.Fatal(err)
+	}
+
+	// Step world to complete cast windup
+	collectEvents(t, w, 5)
+
+	// Check caster dashed forward by ~2 units: from X:2 -> ~X:4
+	casterPos := entityPosition(t, w, "caster")
+	if casterPos.X < 3.8 || casterPos.X > 4.2 {
+		t.Fatalf("caster dash failed: pos=%+v, want X ~ 4.0", casterPos)
+	}
+
+	// Check target got knocked back by ~3 units: from X:5 -> ~X:8
+	targetPos := entityPosition(t, w, "target")
+	if targetPos.X < 7.8 || targetPos.X > 8.2 {
+		t.Fatalf("target knockback failed: pos=%+v, want X ~ 8.0", targetPos)
+	}
+}
+

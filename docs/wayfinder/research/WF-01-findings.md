@@ -1,5 +1,7 @@
 # WF-01 Research Report: Worldmap Presence, FOV, Profile Access, and Dao/Scouting Mechanics
 
+> Khảo sát lịch sử của luồng legacy. `GET /api/explore/players` và consumer `WorldCanvas.tsx` được mô tả bên dưới đã bị gỡ khỏi code hiện hành; Phaser MMO dùng realtime WebSocket/AOI.
+
 ## 1. Worldmap Presence & FOV Logic
 
 ### 1.1 Coordinates & Persistence

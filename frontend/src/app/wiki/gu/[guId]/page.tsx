@@ -2,7 +2,7 @@ export const revalidate = 3600;
 export const dynamicParams = true;
 import type { Metadata } from "next";
 import Link from "next/link";
-import { fetchAllGus, fetchGuById, fetchAllItems, type GuDictionaryItem, type ItemSpec } from "@/lib/gu-dict";
+import { fetchAllGus, fetchGuById, fetchAllItems, type GuDictionaryItem, type GuSkillProfile, type ItemSpec } from "@/lib/gu-dict";
 import { notFound } from "next/navigation";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { translatePath } from "@/lib/translate";
@@ -167,6 +167,8 @@ function GuPageContent({ gu, itemMap }: { gu: GuDictionaryItem; itemMap: Record<
             <p className="text-sm text-[var(--text-primary)] leading-relaxed">{gu.description}</p>
           </section>
 
+          {gu.skill_profile && <GuSkillCard skill={gu.skill_profile} />}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <section className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono mb-3">Chỉ số cơ bản</h2>
@@ -293,6 +295,49 @@ function GuPageContent({ gu, itemMap }: { gu: GuDictionaryItem; itemMap: Record<
       </div>
     </div>
   );
+}
+
+function GuSkillCard({ skill }: { skill: GuSkillProfile }) {
+  const range = Math.max(skill.cast_range, 1);
+  const scale = 68 / range;
+  const targetX = skill.cast_mode === "SELF" ? 90 : 90 + Math.min(skill.cast_range * scale * 0.65, 58);
+  const targetY = 90;
+  const radius = Math.min(skill.radius * scale, 48);
+  const shape = skill.shape === "LINE"
+    ? <rect x={targetX} y={targetY - Math.max(3, skill.width * scale / 2)} width={Math.min(70, skill.length * scale)} height={Math.max(6, skill.width * scale)} rx="3" />
+    : skill.shape === "CONE"
+      ? <path d={`M ${targetX} ${targetY} L ${Math.min(176, targetX + skill.length * scale)} ${Math.max(0, targetY - skill.length * scale * Math.tan((skill.angle_deg || 60) * Math.PI / 360))} A ${Math.min(70, skill.length * scale)} ${Math.min(70, skill.length * scale)} 0 0 1 ${Math.min(176, targetX + skill.length * scale)} ${Math.min(180, targetY + skill.length * scale * Math.tan((skill.angle_deg || 60) * Math.PI / 360))} Z`} />
+      : skill.shape === "CIRCLE"
+        ? <circle cx={targetX} cy={targetY} r={Math.max(4, radius)} />
+        : <circle cx={targetX} cy={targetY} r="7" />;
+  const modeLabels = { TARGET: "Chọn mục tiêu", DIRECTION: "Chọn hướng", GROUND: "Chọn điểm", SELF: "Tự thân" };
+  return <section className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
+    <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono mb-3">Thông tin chiêu</h2>
+    <div className="grid md:grid-cols-[180px_1fr] gap-5 items-center">
+      <svg viewBox="0 0 180 180" role="img" aria-label={`Minh họa vùng chiêu ${skill.shape}, tầm ${skill.cast_range}`} className="w-44 h-44 rounded-xl bg-slate-950/70 border border-[var(--border)]">
+        <circle cx="90" cy="90" r="68" fill="none" stroke="#475569" strokeDasharray="3 4" />
+        <line x1="90" y1="90" x2={targetX} y2={targetY} stroke="#64748b" strokeDasharray="3 3" />
+        <g fill="rgba(16,185,129,.28)" stroke="#34d399" strokeWidth="2">{shape}</g>
+        <circle cx="90" cy="90" r="5" fill="#60a5fa" stroke="#bfdbfe" />
+        <text x="90" y="172" textAnchor="middle" fill="#94a3b8" fontSize="9">Tầm tối đa</text>
+      </svg>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <SkillStat label="Cách ngắm" value={modeLabels[skill.cast_mode]} />
+        <SkillStat label="Vùng tác dụng" value={skill.shape} />
+        <SkillStat label="Tầm dùng" value={`${skill.cast_range} ô`} />
+        <SkillStat label="Bán kính" value={skill.radius ? `${skill.radius} ô` : "—"} />
+        <SkillStat label="Niệm chiêu" value={`${(skill.cast_time_ms / 1000).toFixed(1)} giây`} />
+        <SkillStat label="Hồi chiêu" value={`${(skill.cooldown_ms / 1000).toFixed(1)} giây`} />
+        <SkillStat label="Hậu động tác" value={`${(skill.recovery_ms / 1000).toFixed(1)} giây`} />
+        <SkillStat label="Mục tiêu tối đa" value={String(skill.max_targets)} />
+      </div>
+    </div>
+    <p className="mt-3 text-[10px] text-[var(--text-muted)]">Sơ đồ minh họa theo dữ liệu vùng đánh; tâm xanh là người dùng, vòng nét đứt là tầm thi triển.</p>
+  </section>;
+}
+
+function SkillStat({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg bg-[var(--surface)] px-3 py-2"><div className="text-[var(--text-muted)]">{label}</div><div className="mt-1 font-mono text-[var(--text-primary)]">{value}</div></div>;
 }
 
 export async function generateStaticParams() {

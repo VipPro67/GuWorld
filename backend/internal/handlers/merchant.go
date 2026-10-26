@@ -379,9 +379,8 @@ func (r merchantRowData) toDTO(px, py int) (merchantDTO, bool) {
 	return m, true
 }
 
-// The merchant set of a region is global (not per-player), so both /merchant and
-// /merchant/map can serve from the same short-TTL cache keyed by region instead
-// of re-running the join on every 15s client poll.
+// The merchant set of a region is global (not per-player), so /merchant serves
+// from the same short-TTL cache keyed by region instead of re-running the join.
 type merchantRegionCacheEntry struct {
 	rows     []merchantRowData
 	zoneType string
@@ -466,38 +465,6 @@ func loadRegionMerchantCache(region string) (merchantRegionCacheEntry, error) {
 	merchantRegionCache[region] = entry
 	merchantRegionCacheMu.Unlock()
 	return entry, nil
-}
-
-type merchantMarker struct {
-	ID   string `json:"id"`
-	X    int    `json:"x"`
-	Y    int    `json:"y"`
-	Name string `json:"name"`
-}
-
-// GetMerchantMap returns every active roaming merchant in the player's region so
-// the world map can render markers (not just the ones within trade range).
-func GetMerchantMap(c *gin.Context) {
-	playerID, ok := middleware.GetPlayerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-	var region string
-	if err := db.DB.QueryRow(`SELECT current_region FROM players WHERE id=$1`, playerID).Scan(&region); err != nil || region == "" {
-		c.JSON(http.StatusOK, gin.H{"region": "", "merchants": []merchantMarker{}})
-		return
-	}
-	entry, err := loadRegionMerchantCache(region)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải bản đồ thương nhân"})
-		return
-	}
-	out := make([]merchantMarker, 0, len(entry.rows))
-	for _, r := range entry.rows {
-		out = append(out, merchantMarker{ID: r.ID, X: r.X, Y: r.Y, Name: r.Name})
-	}
-	c.JSON(http.StatusOK, gin.H{"region": region, "merchants": out})
 }
 
 // ---------------------------------------------------------------------------

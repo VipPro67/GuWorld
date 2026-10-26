@@ -88,6 +88,10 @@ type Skill struct {
 	ManaDrainPerTick     float64 `json:"mana_drain_per_tick,omitempty"`
 	ThoughtDrainPerTick  float64 `json:"thought_drain_per_tick,omitempty"`
 	IsToggle             bool    `json:"is_toggle,omitempty"`
+	MoveDistance         float64 `json:"move_distance,omitempty"`
+	KnockbackDistance    float64 `json:"knockback_distance,omitempty"`
+	PlayerAtkRatio       float64 `json:"player_atk_ratio,omitempty"`
+	GuPowerRatio         float64 `json:"gu_power_ratio,omitempty"`
 }
 
 // DefaultLoadout returns the six preview slots. Replacing this with a compiled

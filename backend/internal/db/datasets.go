@@ -55,7 +55,7 @@ var knownDatasetCacheBehaviors = map[string]bool{
 }
 
 var knownDatasetRegistryReloads = map[string]bool{
-	"none": true, "item": true, "gu": true, "gu_moba": true, "constitution": true,
+	"none": true, "item": true, "gu": true, "constitution": true,
 	"race": true, "status": true, "monster": true, "zone": true,
 	"quest": true, "instance": true,
 }
@@ -104,7 +104,6 @@ func Datasets() []Dataset {
 	return []Dataset{
 		dataset("item", "Vật phẩm", "Item.csv", func() error { return seedItemsFromCSV("Item.csv") }, individualExportDefs["item"], effectPreflight("item", "Item.csv", "id"), dictionary, []string{"item"}),
 		dataset("gu", "Cổ trùng", "Gu.csv", func() error { return seedGusFromCSV("Gu.csv") }, individualExportDefs["gu"], effectPreflight("gu", "Gu.csv", "id"), dictionary, []string{"gu"}),
-		dataset("gu_moba", "Cổ trùng (PvP thời gian thực)", "GuMoba.csv", func() error { return seedMobaProfilesFromCSV("GuMoba.csv") }, individualExportDefs["gu_moba"], noDatasetPreflight, dictionary, []string{"gu_moba"}),
 		dataset("constitution", "Thể chất", "Constitution.csv", func() error { return seedConstitutionsFromCSV("Constitution.csv") }, individualExportDefs["constitution"], effectPreflight("constitution", "Constitution.csv", "key"), dictionary, []string{"constitution"}),
 		dataset("race", "Chủng tộc", "Race.csv", func() error { return seedRacesFromCSV("Race.csv") }, individualExportDefs["race"], effectPreflight("race", "Race.csv", "key"), dictionary, []string{"race"}),
 		dataset("status", "Trạng thái", "Status.csv", func() error { return seedStatusesFromCSV("Status.csv") }, individualExportDefs["status"], effectPreflight("status", "Status.csv", "key"), dictionary, []string{"status"}),

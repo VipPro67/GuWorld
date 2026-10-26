@@ -83,6 +83,13 @@ func (w *World) startBasicAttackLocked(attacker *Entity, command AttackCommand) 
 		reject("stunned")
 		return
 	}
+	if w.hasStatus(attacker, "BLIND") {
+		attacker.Combat.BasicAttackCooldownUntil = w.tick + combat.BasicAttackCooldownTicks
+		attacker.Revision++
+		w.emitEvent(combat.Event{Type: combat.EventBasicAttack, SourceID: string(attacker.ID), TargetID: string(command.TargetID), SkillID: "BASIC_ATTACK", DurationTicks: 2})
+		w.emitEvent(combat.Event{Type: combat.EventDamageApplied, SourceID: string(attacker.ID), TargetID: string(command.TargetID), SkillID: "BASIC_ATTACK", X: attacker.Transform.Position.X, Y: attacker.Transform.Position.Y, Amount: 0, HP: attacker.Vitals.HP, Shield: attacker.Vitals.Shield, Reason: "blind"})
+		return
+	}
 	target := w.entities[command.TargetID]
 	if !w.canHarm(attacker, target) {
 		reject("invalid_target")
@@ -205,6 +212,10 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 	}
 	if w.isStunned(caster) {
 		reject("stunned")
+		return
+	}
+	if w.hasStatus(caster, "SILENCE") || w.hasStatus(caster, "GU_SEAL") || w.hasStatus(caster, "FORGET_EGO") {
+		reject("silenced")
 		return
 	}
 	skill := caster.Combat.Skills[command.Slot]
@@ -342,6 +353,9 @@ func (w *World) resolveCastLocked(caster *Entity) {
 			if skill.Cleanse {
 				w.cleanseDebuffsLocked(target)
 			}
+			if skill.KnockbackDistance > 0 && target.ID != caster.ID {
+				w.applyKnockbackLocked(caster, target, skill.KnockbackDistance)
+			}
 		}
 	case combat.ModeDirection:
 		length := math.Hypot(pending.Aim.X, pending.Aim.Y)
@@ -419,12 +433,35 @@ func (w *World) resolveCastLocked(caster *Entity) {
 				if skill.Cleanse {
 					w.cleanseDebuffsLocked(hit.entity)
 				}
+				if skill.KnockbackDistance > 0 && hit.entity.ID != caster.ID {
+					w.applyKnockbackLocked(caster, hit.entity, skill.KnockbackDistance)
+				}
 			}
 		}
 	case combat.ModeSelf:
 		w.applyStatusLocked(caster, caster, skill)
 		if skill.Cleanse {
 			w.cleanseDebuffsLocked(caster)
+		}
+	}
+	if skill.MoveDistance > 0 && caster != nil && caster.Vitals.HP > 0 {
+		var dir Vec2
+		if skill.Mode == combat.ModeDirection && math.Hypot(pending.Aim.X, pending.Aim.Y) > 0.01 {
+			aimLen := math.Hypot(pending.Aim.X, pending.Aim.Y)
+			dir = Vec2{X: pending.Aim.X / aimLen, Y: pending.Aim.Y / aimLen}
+		} else if skill.Mode == combat.ModeGround && distance(caster.Transform.Position, pending.Point) > 0.01 {
+			pDist := distance(caster.Transform.Position, pending.Point)
+			dir = Vec2{X: (pending.Point.X - caster.Transform.Position.X) / pDist, Y: (pending.Point.Y - caster.Transform.Position.Y) / pDist}
+		} else {
+			dir = Vec2{X: 1, Y: 0}
+		}
+		dest := Vec2{
+			X: caster.Transform.Position.X + dir.X*skill.MoveDistance,
+			Y: caster.Transform.Position.Y + dir.Y*skill.MoveDistance,
+		}
+		if !w.blocked(dest, caster.Radius) {
+			caster.Transform.Position = dest
+			caster.Revision++
 		}
 	}
 	// Heal and shield always resolve on the caster, matching the legacy
@@ -441,8 +478,12 @@ func (w *World) applySelfSupportLocked(caster *Entity, skill combat.Skill) {
 		return
 	}
 	if skill.Heal > 0 {
+		healVal := skill.Heal
+		if w.hasStatus(caster, "BURN") {
+			healVal *= 0.5
+		}
 		before := caster.Vitals.HP
-		caster.Vitals.HP = math.Min(caster.Vitals.MaxHP, caster.Vitals.HP+skill.Heal)
+		caster.Vitals.HP = math.Min(caster.Vitals.MaxHP, caster.Vitals.HP+healVal)
 		caster.Revision++
 		w.emitEvent(combat.Event{Type: combat.EventHealApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: caster.Vitals.HP - before, HP: caster.Vitals.HP})
 	}
@@ -491,6 +532,9 @@ func (w *World) updateProjectilesLocked() {
 					w.applyStatusLocked(source, target, projectile.Skill)
 					if projectile.Skill.Cleanse {
 						w.cleanseDebuffsLocked(target)
+					}
+					if projectile.Skill.KnockbackDistance > 0 && target.ID != source.ID {
+						w.applyKnockbackLocked(source, target, projectile.Skill.KnockbackDistance)
 					}
 				}
 				if projectile.PierceRemaining > 0 {
@@ -744,6 +788,10 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 	if source != nil && target.Kind == EntityMonster {
 		w.recordThreatLocked(target, source, shieldAbsorbed+hpDamage)
 	}
+	if w.hasStatus(target, "THORNS") && source != nil && source.ID != target.ID && skillID != "THORNS" && hpDamage > 0 {
+		thornsDmg := math.Max(1, hpDamage*0.35)
+		w.applyDamageLocked(target, source, thornsDmg, "THORNS")
+	}
 	if target.Vitals.HP > 0 {
 		w.tryHiddenPassiveLocked(target)
 	}
@@ -831,4 +879,26 @@ func segmentDistance(from, to, point Vec2) float64 {
 	t = math.Max(0, math.Min(1, t))
 	closestX, closestY := from.X+t*dx, from.Y+t*dy
 	return math.Hypot(point.X-closestX, point.Y-closestY)
+}
+
+func (w *World) applyKnockbackLocked(source, target *Entity, dist float64) {
+	if source == nil || target == nil || target.Vitals.HP <= 0 || dist <= 0 {
+		return
+	}
+	dx := target.Transform.Position.X - source.Transform.Position.X
+	dy := target.Transform.Position.Y - source.Transform.Position.Y
+	l := math.Hypot(dx, dy)
+	if l <= 0.01 {
+		dx = 1
+		dy = 0
+		l = 1
+	}
+	dest := Vec2{
+		X: target.Transform.Position.X + (dx/l)*dist,
+		Y: target.Transform.Position.Y + (dy/l)*dist,
+	}
+	if !w.blocked(dest, target.Radius) {
+		target.Transform.Position = dest
+		target.Revision++
+	}
 }

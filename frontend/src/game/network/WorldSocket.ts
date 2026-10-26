@@ -38,6 +38,8 @@ export interface WorldSocketOptions {
   createSocket?: (url: string) => SocketLike;
 }
 
+const WORLD_JOIN_TIMEOUT_MS = 10_000;
+
 export class WorldSocketError extends Error {
   public readonly code: string;
 
@@ -55,6 +57,7 @@ export class WorldSocket {
   private socket: SocketLike | null = null;
   private connecting: Promise<WorldWelcomePayload> | null = null;
   private pendingJoinReject: ((error: Error) => void) | null = null;
+  private joinTimeout: ReturnType<typeof setTimeout> | null = null;
   private joinRequestId = "";
   private welcome: WorldWelcomePayload | null = null;
   private nextInputSeq = 0;
@@ -69,6 +72,7 @@ export class WorldSocket {
   private byteCount = 0;
   private snapshotCount = 0;
   private lastMessageAt = 0;
+  private lastSnapshotAt = 0;
 
   constructor(options: WorldSocketOptions = {}) {
     this.options = options;
@@ -96,6 +100,14 @@ export class WorldSocket {
     });
     this.connecting = pending;
     this.pendingJoinReject = rejectJoin;
+    this.joinTimeout = setTimeout(() => {
+      this.failJoin(
+        rejectJoin,
+        new WorldSocketError("Máy chủ không phản hồi yêu cầu vào world", "join_timeout"),
+        "join_timeout",
+      );
+      this.socket?.close(4003, "world join timeout");
+    }, WORLD_JOIN_TIMEOUT_MS);
 
     try {
       const socket = createSocket(buildSocketURL(this.options.url, token, this.options.getTabId?.() ?? readStorage("sessionStorage", "gu_gameplay_tab_id")));
@@ -229,12 +241,13 @@ export class WorldSocket {
     return () => this.eventListeners.delete(callback);
   }
 
-  public getMetrics(): { messages: number; bytes: number; snapshots: number; lastMessageAt: number } {
+  public getMetrics(): { messages: number; bytes: number; snapshots: number; lastMessageAt: number; lastSnapshotAt: number } {
     return {
       messages: this.messageCount,
       bytes: this.byteCount,
       snapshots: this.snapshotCount,
       lastMessageAt: this.lastMessageAt,
+      lastSnapshotAt: this.lastSnapshotAt,
     };
   }
 
@@ -273,6 +286,7 @@ export class WorldSocket {
     this.connecting = null;
     this.welcome = null;
     this.joinRequestId = "";
+    this.clearJoinTimeout();
     this.buffer.reset();
     if (socket && socket.readyState < socketClosingState) socket.close(1000, "world client disconnected");
   }
@@ -317,7 +331,9 @@ export class WorldSocket {
         const welcome = parseWorldWelcomePayload(envelope.payload);
         const applied = this.buffer.apply(welcome.snapshot);
         if (applied.status !== "applied") throw new Error("Welcome baseline could not be applied");
+        this.lastSnapshotAt = Date.now();
         this.welcome = welcome;
+        this.clearJoinTimeout();
         this.connecting = null;
         this.pendingJoinReject = null;
         this.emitSnapshot(applied);
@@ -337,6 +353,7 @@ export class WorldSocket {
         return;
       }
       this.snapshotCount += 1;
+      this.lastSnapshotAt = Date.now();
       this.emitSnapshot(this.buffer.apply(payload));
       return;
     }
@@ -383,10 +400,17 @@ export class WorldSocket {
   private failJoin(reject: (error: Error) => void, error: unknown, code: string): void {
     if (!this.connecting) return;
     const failure = asError(error, code);
+    this.clearJoinTimeout();
     this.connecting = null;
     this.pendingJoinReject = null;
     reject(failure);
     this.notifyError(failure);
+  }
+
+  private clearJoinTimeout(): void {
+    if (this.joinTimeout === null) return;
+    clearTimeout(this.joinTimeout);
+    this.joinTimeout = null;
   }
 
   private notifyError(error: Error): void {

@@ -57,11 +57,15 @@ type ActiveProfile struct {
 	RangeUnits     float64            `json:"range_units"`
 	ManaCost       float64            `json:"mana_cost"`
 	MovementPolicy string             `json:"movement_policy"`
-	RadiusUnits    float64            `json:"radius_units,omitempty"`
-	MaxTargets     int                `json:"max_targets,omitempty"`
-	IsToggle       bool               `json:"is_toggle,omitempty"`
-	Projectile     *ProjectileProfile `json:"projectile,omitempty"`
-	Effects        []EffectProfile    `json:"effects"`
+	RadiusUnits       float64            `json:"radius_units,omitempty"`
+	MaxTargets        int                `json:"max_targets,omitempty"`
+	IsToggle          bool               `json:"is_toggle,omitempty"`
+	MoveDistance      float64            `json:"move_distance,omitempty"`
+	KnockbackDistance float64            `json:"knockback_distance,omitempty"`
+	PlayerAtkRatio    float64            `json:"player_atk_ratio,omitempty"`
+	GuPowerRatio      float64            `json:"gu_power_ratio,omitempty"`
+	Projectile        *ProjectileProfile `json:"projectile,omitempty"`
+	Effects           []EffectProfile    `json:"effects"`
 }
 
 type ProjectileProfile struct {
@@ -362,6 +366,8 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 		WidthUnits: active.WidthUnits, InnerRadius: active.InnerRadius,
 		ManaCost: active.ManaCost, Range: active.RangeUnits,
 		WindupTicks: msToTicks(active.WindupMS), CooldownTicks: msToTicks(active.CooldownMS),
+		MoveDistance: active.MoveDistance, KnockbackDistance: active.KnockbackDistance,
+		PlayerAtkRatio: active.PlayerAtkRatio, GuPowerRatio: active.GuPowerRatio,
 	}
 	compiled := &CompiledActive{
 		RecoveryTicks: msToTicks(active.RecoveryMS), MovementPolicy: active.MovementPolicy,

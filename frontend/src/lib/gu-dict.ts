@@ -20,6 +20,24 @@ export interface GuDictionaryItem {
   combat_tags: string[];
   support_tags: string[];
   target_type?: string;
+  skill_profile?: GuSkillProfile;
+}
+
+export interface GuSkillProfile {
+  cast_mode: "TARGET" | "DIRECTION" | "GROUND" | "SELF";
+  shape: "SINGLE" | "LINE" | "CIRCLE" | "CONE";
+  radius: number;
+  length: number;
+  width: number;
+  angle_deg: number;
+  cast_range: number;
+  cast_time_ms: number;
+  recovery_ms: number;
+  cooldown_ms: number;
+  projectile_speed: number;
+  pierce: boolean;
+  max_targets: number;
+  move_distance: number;
 }
 
 import { INTERNAL_BACKEND_URL as BACKEND_URL } from "./config";

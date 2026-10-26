@@ -908,7 +908,6 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		api.GET("/explore/maps", middleware.AuthRequired(), handlers.GetWorldMaps)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
-		api.GET("/explore/players", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyPlayers)
 		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)
 		api.POST("/world/portal/transfer", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.PortalTransfer)
 
@@ -973,7 +972,6 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		merchant.Use(middleware.RequireOnboarded())
 		merchant.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
-			merchant.GET("/map", middleware.RequireLegacyWorldMode(), handlers.GetMerchantMap)
 			merchant.POST("/quote", middleware.RequireLegacyWorldMode(), handlers.QuoteMerchant)
 			merchant.POST("/sell", middleware.RequireLegacyWorldMode(), handlers.SellToMerchant)
 			merchant.POST("/buy", middleware.RequireLegacyWorldMode(), handlers.BuyFromMerchant)

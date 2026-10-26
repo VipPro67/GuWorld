@@ -39,6 +39,7 @@ interface HudData {
   position: { x: number; y: number };
   nearby: RuntimeEntity[];
   mapPortals: MapPortal[];
+  aimingSlot: number | null;
 }
 
 function buildHud(runtime: WorldRuntime, player: Player | null): HudData | null {
@@ -91,6 +92,7 @@ function buildHud(runtime: WorldRuntime, player: Player | null): HudData | null 
     position: runtime.getSelfPosition(),
     nearby: runtime.getEntities(),
     mapPortals: runtime.getMapPortals(),
+    aimingSlot: runtime.getAimingSlot(),
   };
 }
 
@@ -454,6 +456,22 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
                 activateHotbarSlot?: (selectedSlot: number) => void;
               };
               scene.activateHotbarSlot?.(slot);
+            }}
+            onCancelAim={() => {
+              const game = gameRef.current;
+              if (!game) return;
+              const scene = game.scene.getScene("WorldScene") as unknown as {
+                cancelAim?: () => void;
+              };
+              scene.cancelAim?.();
+            }}
+            onHoverSkill={(slot) => {
+              const game = gameRef.current;
+              if (!game) return;
+              const scene = game.scene.getScene("WorldScene") as unknown as {
+                setHoveredSkillSlot?: (s: number | null) => void;
+              };
+              scene.setHoveredSkillSlot?.(slot);
             }}
             onAttack={() => {
               const game = gameRef.current;

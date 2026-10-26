@@ -165,7 +165,6 @@ và session, không chứa role hoặc permission.
 | File | Nội dung |
 | --- | --- |
 | `backend/data/Gu.csv` | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, targeting, rarity, role/tags. |
-| `backend/data/GuMoba.csv` | Thẻ chiêu dùng cho chế độ PvP thời gian thực (kiểu MOBA): cách ngắm, hình dạng vùng đánh, thời gian niệm/hồi chiêu. Không lặp lại sát thương — phần đó vẫn lấy từ `Gu.csv` effects. |
 | `backend/data/Item.csv` | Vật phẩm, nguyên liệu, tiền tệ, consumable và effect. |
 | `backend/data/Recipe.csv` | Công thức luyện Cổ, nguyên liệu, tỉ lệ và chi phí. |
 | `backend/data/Monster.csv`, `LootTable.csv`, `MonsterSpawn.csv`, `RegionLootTables.csv` | Template quái, bảng loot, quy tắc spawn và loot theo vùng. |
@@ -187,7 +186,7 @@ Icon vật phẩm ở túi đồ, danh mục và Thương Đội dùng bộ WebP
 ## Registry runtime
 
 - `models.LoadGuRegistry(db.DB)` load `gu_dictionary` vào `models.GuRegistry` khi server start.
-- `models.LoadMobaProfiles(db.DB)` load `gu_moba_profiles` vào cache trong bộ nhớ. Bảng thiếu/không có dòng không chặn khởi động: Cổ chưa author sẽ dùng mặc định `TARGET`/`SINGLE`, tầm 8, không hồi chiêu.
+- API `/api/dictionary/gus` trả trường `skill_profile` cùng định nghĩa Cổ; trang `/wiki/gu/:id?rank=` dùng profile này để vẽ sơ đồ vùng đánh và hiển thị cách ngắm, tầm, bán kính, niệm chiêu, hồi chiêu, hậu động tác và số mục tiêu.
 - `models.LoadItemRegistry(db.DB)` load `item_dictionary` vào `models.ItemRegistry` khi server start.
 - Runtime gameplay không đọc trực tiếp các namespace authoring `active`, `passive`,
   `growth`, `other` trong các domain derived stats, scouting/profile/refinement
@@ -489,20 +488,15 @@ Danh sách hiện tại:
   - `blood_fiend_body` (Huyết Ma Sát Thể): Huyết Đạo đạo ngân +25%, +15% attack, +20% hồi phục nhận, +35% áp lực không khiếu, -10% tỉ lệ luyện cổ
   - `dream_phantom_body` (Huyễn Mộng Linh Thể): Mộng Đạo đạo ngân +20%, +5% sát thương Mộng Đạo, -15% kháng tâm lý, -10% kháng CC
 
-### Thẻ chiêu PvP thời gian thực — bảng `gu_moba_profiles`
+### Hồ sơ chiêu của Cổ
 
-`Gu.csv` mô tả một Cổ đánh vào **ai** (target selector theo lưới 3×3) và gây gì
-(effects Block v2). Chế độ PvP thời gian thực cần thêm một lớp khác: Cổ được
-**ngắm thế nào** và **vùng đánh hình gì**. Lớp đó nằm ở `gu_moba_profiles`,
-author bằng `backend/data/GuMoba.csv` (dataset Admin "Cổ trùng (PvP thời gian thực)").
-
-Bảng này **không lặp lại sát thương**: payload (DAMAGE / STATUS / SHIELD) vẫn đọc
-từ `gu_dictionary.effects`. Cổ không có dòng trong bảng vẫn dùng được, rơi về mặc
-định `TARGET` + `SINGLE`, tầm 8, không hồi chiêu.
+`Gu.csv.skill_profile` là object tùy chọn trên đúng dòng `(id, rank)` của Cổ. Nó
+lưu cách ngắm, hình vùng đánh và thông số thời gian để gameplay realtime và wiki
+cùng đọc một nguồn. Hiệu ứng DAMAGE/STATUS/SHIELD tiếp tục nằm trong `effects`,
+không bị lặp trong hồ sơ chiêu. Để trống trường này nếu Cổ chưa có chiêu realtime.
 
 | Cột | Kiểu | Ý nghĩa |
 | --- | --- | --- |
-| `gu_id`, `rank` | PK, FK | → `gu_dictionary(id, rank)` ON UPDATE CASCADE / ON DELETE CASCADE |
 | `cast_mode` | VARCHAR(20) | `TARGET` (chọn unit) · `DIRECTION` (hướng) · `GROUND` (điểm đất) · `SELF` |
 | `shape` | VARCHAR(20) | `SINGLE` · `LINE` (dài × rộng) · `CIRCLE` (bán kính) · `CONE` (dài × góc) |
 | `radius` | DOUBLE | Bán kính vùng tròn |
@@ -517,6 +511,9 @@ từ `gu_dictionary.effects`. Cổ không có dòng trong bảng vẫn dùng đ�
 | `pierce` | BOOL | Đạn/tia xuyên qua nhiều mục tiêu |
 | `max_targets` | INT | Số mục tiêu tối đa mỗi lần trúng |
 | `move_distance` | DOUBLE | Lướt/dịch chuyển tức thời (ô); 0 = không |
+| `knockback_distance` | DOUBLE | Đẩy lùi mục tiêu khi trúng đòn (ô); 0 = không |
+| `player_atk_ratio` | DOUBLE | Tỷ lệ hưởng theo công kích nhân vật (% Base Attack, mặc định 0.5) |
+| `gu_power_ratio` | DOUBLE | Tỷ lệ hưởng theo uy lực Cổ (% Base Gu Damage, mặc định 1.0) |
 
 Quy ước chọn mode theo hình:
 
@@ -526,6 +523,14 @@ Quy ước chọn mode theo hình:
 - `DIRECTION` + `CONE` → sóng/quạt.
 - `GROUND` + `SINGLE` + `move_distance` > 0 → lướt tới điểm.
 - `SELF` → tự buff (khiên/hồi), bắn ngay không cần ngắm.
+
+Cơ chế hiệu ứng thế giới mở (Realtime Status Effects):
+- **Câm lặng (`SILENCE`, `GU_SEAL`, `FORGET_EGO`)**: Khóa tung chiêu Cổ, nhân vật vẫn có thể di chuyển và đánh thường.
+- **Mù lòa (`BLIND`)**: Đòn đánh thường bị trượt (miss với 0 damage).
+- **Phản sát thương (`THORNS`)**: Phản lại 35% sát thương nhận trực tiếp ngược về kẻ tấn công.
+- **Vết thương thiêu đốt (`BURN`)**: Giảm 50% lượng máu hồi phục từ các chiêu thức hỗ trợ (`HEAL`).
+- **Trói chân (`ROOT`, `BIND`) vs Choáng cứng (`STUN`, `FREEZE`, `PETRIFY`)**: `ROOT` giảm tốc độ di chuyển về 0 nhưng vẫn cho phép quay hướng và tung chiêu; Hard CC khóa cả di chuyển lẫn dùng kỹ năng.
+- **Tỉ lệ sát thương lai (Hybrid Scaling)**: Sát thương chiêu realtime được tính kết hợp giữa công kích nhân vật và uy lực Cổ: `(Damage * gu_power_ratio + BaseAttack * player_atk_ratio) * DamageScale`.
 
 `cooldown_ms` và mana dùng chung `gu_dictionary.base_mana_cost`; mana trong trận là
 pool riêng (100, hồi 6/giây) nên không tiêu hao mana thật của nhân vật.
@@ -1421,7 +1426,7 @@ Có **2 loại** thương nhân; cả hai dùng profile data-driven + quota toà
 
 Worker `StartRoamingMerchantWorker` (2', package `handlers`) duy trì tối đa **20** con ở region `zone_type NOT IN ('HUB','SAFE_ZONE','SECRET_REALM')`: vòng đời 10–30', hết hạn thì xóa (cascade stock/demand) và spawn con mới. **Ưu tiên vùng đang có người chơi:** mỗi lượt spawn, worker tải danh sách vùng kèm số người chơi hoạt động trong **15' gần nhất** (`players.last_activity`, batch flush 2') và số trader vùng đó đang có; **75%** (`roamingPlayerZoneChance`) rút thăm chỉ trong nhóm vùng có người chơi, 25% còn lại rút trên toàn bản đồ ⇒ vùng vắng vẫn có trader. Trọng số rút thăm: `(1 + players) / (1 + traders)` ở nhóm có người (khuyến khích vùng đông, rải đều khi 1 vùng đã có nhiều trader), `1 / (1 + traders)` ở nhóm toàn bản đồ. Toạ độ vẫn random trong bbox vùng (không nhắm sát người chơi). Mỗi spawn **thông báo ở kênh khu vực (`region`) của vùng spawn** kèm tên vùng + toạ độ (chỉ người trong vùng đó thấy).
 
-**Giao dịch & hiển thị:** merchant mua/bán được cả **Cổ, Item, cổ phương** (bán cổ phương = `RecipeSvc.Delete`, mua = `RecipeSvc.Upsert` unlocked). `GET /api/merchant` chỉ trả roaming **trong bán kính ≤ 2 ô** (đứng cạnh) + cờ `at_village` (region HUB/SAFE_ZONE) để UI tự bật/tắt: **Caravan/Thương Đội chỉ mở tại làng**. `GET /api/merchant/map` trả toàn bộ roaming trong region (không lọc khoảng cách) để WorldCanvas vẽ marker 🪙.
+**Giao dịch & hiển thị:** merchant mua/bán được cả **Cổ, Item, cổ phương** (bán cổ phương = `RecipeSvc.Delete`, mua = `RecipeSvc.Upsert` unlocked). `GET /api/merchant` chỉ trả roaming **trong bán kính ≤ 2 ô** (đứng cạnh) + cờ `at_village` (region HUB/SAFE_ZONE) để UI tự bật/tắt: **Caravan/Thương Đội chỉ mở tại làng**. Luồng marker toàn vùng đã gỡ cùng legacy map endpoint; Phaser dùng dữ liệu thương nhân trong phạm vi tương tác.
 
 | Bảng | Vai trò |
 | --- | --- |

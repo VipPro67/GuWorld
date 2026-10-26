@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
 	"time"
@@ -168,92 +167,6 @@ func filterClearedCells(cells []NearbyCell) ([]NearbyCell, error) {
 		}
 	}
 	return out, nil
-}
-
-// GetNearbyPlayers returns a list of other active players within a given radius
-func GetNearbyPlayers(c *gin.Context) {
-	authID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	var x, y, r int
-	fmt.Sscanf(c.Query("x"), "%d", &x)
-	fmt.Sscanf(c.Query("y"), "%d", &y)
-	fmt.Sscanf(c.Query("r"), "%d", &r)
-
-	if r <= 0 {
-		r = 300
-	}
-	if r > 300 {
-		r = 300
-	}
-
-	// AOI is always centered on the authoritative server position. Query
-	// coordinates are accepted for backward compatibility but never trusted to
-	// inspect an arbitrary part of the current region.
-	region := ""
-	mapID := "world_map"
-	instanceID := mapInstanceIDForPlayer(authID.String())
-	if entry, ok := worldPosIndex.Get(authID.String()); ok {
-		x, y, region = entry.X, entry.Y, entry.Region
-		mapID, instanceID = entry.MapID, entry.InstanceID
-	}
-	if region == "" {
-		var xLoc, yLoc int
-		var regLoc string
-		var mapInst sql.NullString
-		var uname, avatar string
-		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT x, y, COALESCE(current_region, ''), map_instance_id::text, username, COALESCE(avatar_url, '') FROM players WHERE id=$1`, authID).Scan(&xLoc, &yLoc, &regLoc, &mapInst, &uname, &avatar); err == nil {
-			x, y, region = xLoc, yLoc, regLoc
-			mapID = worldMapIDForRegion(regLoc)
-			if mapInst.Valid && mapInst.String != "" {
-				instanceID = mapInst.String
-			}
-			worldPosIndex.Set(WorldPosEntry{
-				ID:         authID.String(),
-				Username:   uname,
-				AvatarURL:  avatar,
-				X:          xLoc,
-				Y:          yLoc,
-				Region:     regLoc,
-				MapID:      mapID,
-				InstanceID: instanceID,
-				TS:         time.Now().UnixMilli(),
-			})
-		}
-	}
-	TouchPlayerActivity(authID)
-
-	type NearbyPlayer struct {
-		ID        string `json:"id"`
-		Username  string `json:"username"`
-		AvatarURL string `json:"avatar_url"`
-		X         int    `json:"x"`
-		Y         int    `json:"y"`
-	}
-
-	// Fast path: serve from the in-memory position index. Fall back to SQL only
-	// while the index is still cold (e.g. very early startup before the first
-	// sync worker reconcile).
-	entries := worldPosIndex.NearbyInScope(x, y, r, authID.String(), mapID, instanceID)
-	if worldPosIndex.Len() == 0 {
-		entries = queryNearbyPlayersSQL(c, authID, x, y, r, mapID, instanceID)
-	}
-
-	nearbyPlayers := make([]NearbyPlayer, 0, len(entries))
-	for _, e := range entries {
-		nearbyPlayers = append(nearbyPlayers, NearbyPlayer{
-			ID:        e.ID,
-			Username:  e.Username,
-			AvatarURL: e.AvatarURL,
-			X:         e.X,
-			Y:         e.Y,
-		})
-	}
-
-	c.JSON(http.StatusOK, nearbyPlayers)
 }
 
 // queryNearbyPlayersSQL is the legacy SQL path for nearby players, kept as a

@@ -1,7 +1,0 @@
-gu_id,rank,cast_mode,shape,radius,length,width,angle_deg,cast_range,cast_time_ms,recovery_ms,cooldown_ms,projectile_speed,pierce,max_targets,move_distance
-GU_BLADE_AURA_1,1,TARGET,SINGLE,0,0,0,0,8,150,200,3000,0,false,1,0
-GU_WATER_ARROW,1,DIRECTION,LINE,0,16,1.2,0,16,250,250,6000,14,true,3,0
-GU_STAR_FALL_1,1,GROUND,CIRCLE,3,0,0,0,14,700,300,9000,0,false,5,0
-GU_SOUNDWAVE,3,DIRECTION,CONE,0,9,0,70,9,400,350,10000,0,false,5,0
-GU_SPACE_DOOR_1,1,GROUND,SINGLE,0,0,0,0,10,100,150,12000,0,false,1,8
-GU_LAW_SHIELD_2,2,SELF,SINGLE,0,0,0,0,0,200,200,14000,0,false,1,0

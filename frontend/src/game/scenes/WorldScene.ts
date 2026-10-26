@@ -538,7 +538,18 @@ export class WorldScene extends Phaser.Scene {
       if (this.aimingSlot !== slot) {
         this.aimingSlot = slot;
         this.router.setAiming(true);
+        this.runtime?.setAimingSlot(slot);
         this.notice(`${skill.name}: chọn hướng/điểm rồi click để cast · Esc hủy`);
+        return;
+      }
+    }
+    if (!fromPointer && skill.mode === "TARGET") {
+      const candidate = this.findTargetNear(pointer) ?? (this.selectedTargetId ? this.monsters().find((m) => m.id === this.selectedTargetId) : null);
+      if (!candidate && this.aimingSlot !== slot) {
+        this.aimingSlot = slot;
+        this.router.setAiming(true);
+        this.runtime?.setAimingSlot(slot);
+        this.notice(`${skill.name}: nhấp vào mục tiêu để cast · Esc hủy`);
         return;
       }
     }
@@ -658,25 +669,55 @@ export class WorldScene extends Phaser.Scene {
     return this.runtime.getSkills().find((skill) => skill.slot === slot) ?? null;
   }
 
-  private cancelAim(): void {
+  private hoveredSkillSlot: number | null = null;
+
+  public setHoveredSkillSlot(slot: number | null): void {
+    this.hoveredSkillSlot = slot;
+    if (slot === null && this.aimingSlot === null) {
+      this.telegraph.clear();
+    }
+  }
+
+  public cancelAim(): void {
     if (this.aimingSlot === null) return;
     this.aimingSlot = null;
     this.router.setAiming(false);
+    this.runtime?.setAimingSlot(null);
     this.telegraph.clear();
   }
 
   private drawAimTelegraph(entities: RuntimeEntity[]): void {
-    if (!this.runtime || this.aimingSlot === null) {
+    if (!this.runtime) {
       this.telegraph.clear();
       return;
     }
-    const skill = this.skillForSlot(this.aimingSlot);
     const self = entities.find((entity) => entity.isSelf);
-    if (!skill || !self) {
+    if (!self) {
       this.telegraph.clear();
       return;
     }
-    this.telegraph.draw(skill, { x: self.x, y: self.y }, this.pointerWorld());
+
+    if (this.aimingSlot !== null) {
+      const skill = this.skillForSlot(this.aimingSlot);
+      if (!skill) {
+        this.telegraph.clear();
+        return;
+      }
+      this.telegraph.draw(skill, { x: self.x, y: self.y }, this.pointerWorld());
+      return;
+    }
+
+    if (this.hoveredSkillSlot !== null) {
+      const skill = this.skillForSlot(this.hoveredSkillSlot);
+      if (!skill) {
+        this.telegraph.clear();
+        return;
+      }
+      this.telegraph.drawPreview(skill, { x: self.x, y: self.y });
+      return;
+    }
+
+    this.telegraph.clear();
   }
 
   private handleCombatEvent(event: WorldEvent): void {

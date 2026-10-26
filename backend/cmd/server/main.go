@@ -122,13 +122,6 @@ func main() {
 		logger.S.Info("Gu registry loaded successfully")
 	}
 
-	err = models.LoadMobaProfiles(db.DB)
-	if err != nil {
-		logger.S.Warnf("Failed to load MOBA Gu profiles: %v (realtime mode falls back to defaults)", err)
-	} else {
-		logger.S.Info("MOBA Gu profiles loaded successfully")
-	}
-
 	err = models.LoadItemRegistry(db.DB)
 	if err != nil {
 		logger.S.Warnf("Failed to load Item registry: %v (data may need import)", err)

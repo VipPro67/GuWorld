@@ -1,5 +1,7 @@
 # WorldMap Realtime — Thiết kế & Lộ trình
 
+> **Tài liệu thiết kế lịch sử.** Các bảng và đoạn dưới đây ghi lại baseline/thời điểm viết, không mô tả luồng đang chạy. Phaser authoritative MMO hiện dùng realtime WebSocket/AOI; route polling `GET /api/explore/players` đã được gỡ vì không còn consumer.
+
 Mục tiêu: WorldMap gần như realtime cho **200–2000 player online** trên **một server**
 (Golang + Gin + PostgreSQL), đồng thời dựng nền tảng dễ mở rộng cho **combat thủ công**
 thay thế auto combat sau này — mà **không phá vỡ auto combat hiện tại**.
@@ -12,7 +14,7 @@ thay thế auto combat sau này — mà **không phá vỡ auto combat hiện t�
 | Persistent cells | `map_cells` nạp 1 lần vào RAM (`zoneReg.persistent`) | rẻ |
 | Vị trí player | DB `players.x/y`, ghi khi di chuyển | ổn |
 | SSE vị trí | `broadcastWorldPos` gửi tới **mọi** client (O(N²)) | **nút thắt** |
-| Player gần | `GET /api/explore/players` query SQL mỗi 2s/client | **nút thắt** |
+| Player gần (baseline cũ) | `GET /api/explore/players` query SQL mỗi 2s/client | Đã gỡ; Phaser realtime dùng AOI/WebSocket |
 | Presence | `EvaluateAndPersistMana` ghi `last_mana_update` mọi request | **nút thắt** |
 | Cells | `cells/rect` tính lại mỗi request dù deterministic | CPU dư thừa |
 | Respawn persistent | không reset live (chỉ reset khi restart) | bug tươi bản đồ |

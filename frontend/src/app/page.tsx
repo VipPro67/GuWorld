@@ -167,7 +167,6 @@ export default function Home() {
   const merchantAtVillage = useGameStore((s) => s.merchantAtVillage);
   const nearbyMerchants = useGameStore((s) => s.merchants);
   const fetchMerchants = useGameStore((s) => s.fetchMerchants);
-  const fetchMerchantMarkers = useGameStore((s) => s.fetchMerchantMarkers);
 
   const currentView = useUIStore((s) => s.currentView);
   const isGameWorldSurface = ["dashboard", "mmo-world"].includes(currentView);
@@ -233,19 +232,17 @@ export default function Home() {
 
   }, [isPlayerReady]);
 
-  // Merchant proximity and roaming markers only need refresh while the world is open.
+  // Merchant proximity only needs refresh while the world is open.
   useEffect(() => {
     if (!playerId || !isGameWorldSurface) return;
     void fetchMerchants();
-    void fetchMerchantMarkers();
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
         void fetchMerchants();
-        void fetchMerchantMarkers();
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [playerId, player?.current_region, isGameWorldSurface, fetchMerchants, fetchMerchantMarkers]);
+  }, [playerId, player?.current_region, isGameWorldSurface, fetchMerchants]);
 
   const isPartyMemberNotLeader = Boolean(player?.party_id) && party !== null && party.leader_id !== player?.id;
   // Force combat view if player is actively in combat (and is leader or solo) or if we have an active replay with logs

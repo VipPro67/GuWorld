@@ -152,8 +152,12 @@ func (w *World) tickStatuses() {
 					w.applyDamageLocked(source, entity, status.DamagePerTick*float64(stacks), status.ID)
 				}
 				if status.HealPerTick > 0 {
+					healVal := status.HealPerTick * float64(stacks)
+					if w.hasStatus(entity, "BURN") {
+						healVal *= 0.5
+					}
 					before := entity.Vitals.HP
-					entity.Vitals.HP = math.Min(entity.Vitals.MaxHP, entity.Vitals.HP+status.HealPerTick*float64(stacks))
+					entity.Vitals.HP = math.Min(entity.Vitals.MaxHP, entity.Vitals.HP+healVal)
 					entity.Revision++
 					w.emitEvent(combat.Event{
 						Type: combat.EventHealApplied, SourceID: string(status.SourceID), TargetID: string(entity.ID),
@@ -252,7 +256,7 @@ func (w *World) moveMultiplier(entity *Entity) float64 {
 	slow := 1.0
 	haste := 1.0
 	for _, status := range entity.Combat.Statuses {
-		if status.MoveMultiplier == 0 {
+		if status.MoveMultiplier == 0 || status.ID == "ROOT" || status.ID == "BIND" {
 			return 0
 		}
 		if status.MoveMultiplier < 1.0 && status.MoveMultiplier < slow {
@@ -272,7 +276,10 @@ func (w *World) moveMultiplier(entity *Entity) float64 {
 
 func (w *World) isStunned(entity *Entity) bool {
 	for _, status := range entity.Combat.Statuses {
-		if status.Debuff && status.MoveMultiplier == 0 {
+		if status.Debuff && (status.ID == "STUN" || status.ID == "FREEZE" || status.ID == "PETRIFY" || status.ID == "FEAR" || status.ID == "SLEEP") {
+			return true
+		}
+		if status.Debuff && status.MoveMultiplier == 0 && status.ID != "ROOT" && status.ID != "BIND" {
 			return true
 		}
 	}

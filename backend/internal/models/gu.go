@@ -369,24 +369,25 @@ func mergeEffectBlocks(authored, legacy []gameplayeffects.Block) []gameplayeffec
 }
 
 type GuDictionaryItem struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Rank         int       `json:"rank"`
-	Path         []string  `json:"path"`
-	Type         string    `json:"gu_type"`
-	BaseManaCost float64   `json:"base_mana_cost"`
-	Effects      GuEffects `json:"effects"`
-	FoodTypes    []string  `json:"food_types"`
-	HungerRate   int       `json:"hunger_rate"`
-	MaxHunger    int       `json:"max_hunger"`
-	Description  string    `json:"description"`
-	Rarity       int       `json:"rarity"`
-	PrimaryRole  string    `json:"primary_role"`
-	CombatRoles  []string  `json:"combat_roles"`
-	CombatTags   []string  `json:"combat_tags"`
-	SupportTags  []string  `json:"support_tags"`
-	BasePrice    float64   `json:"base_price"`
-	ImageURL     string    `json:"image_url"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Rank          int             `json:"rank"`
+	Path          []string        `json:"path"`
+	Type          string          `json:"gu_type"`
+	BaseManaCost  float64         `json:"base_mana_cost"`
+	Effects       GuEffects       `json:"effects"`
+	FoodTypes     []string        `json:"food_types"`
+	HungerRate    int             `json:"hunger_rate"`
+	MaxHunger     int             `json:"max_hunger"`
+	Description   string          `json:"description"`
+	Rarity        int             `json:"rarity"`
+	PrimaryRole   string          `json:"primary_role"`
+	CombatRoles   []string        `json:"combat_roles"`
+	CombatTags    []string        `json:"combat_tags"`
+	SupportTags   []string        `json:"support_tags"`
+	BasePrice     float64         `json:"base_price"`
+	ImageURL      string          `json:"image_url"`
+	SkillProfile *GuSkillProfile `json:"skill_profile,omitempty"`
 }
 
 type Gu = GuDictionaryItem
@@ -1146,7 +1147,7 @@ func HasImmortalRank(id string) bool {
 
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
+		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, ''), COALESCE(skill_profile::text, '')
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -1160,6 +1161,7 @@ func LoadGuRegistry(db *sql.DB) error {
 	for rows.Next() {
 		var item GuDictionaryItem
 		var pathRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw []byte
+		var skillRaw string
 		var targetTypeRaw []byte
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Rank, &pathRaw,
@@ -1169,7 +1171,7 @@ func LoadGuRegistry(db *sql.DB) error {
 			&targetTypeRaw, &item.Rarity,
 			&item.PrimaryRole,
 			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw, &item.BasePrice,
-			&item.ImageURL,
+			&item.ImageURL, &skillRaw,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to scan Gu spec row: %w", err)
@@ -1177,6 +1179,12 @@ func LoadGuRegistry(db *sql.DB) error {
 
 		if err := json.Unmarshal(pathRaw, &item.Path); err != nil {
 			item.Path = []string{string(pathRaw)}
+		}
+		if skillRaw != "" && skillRaw != "null" {
+			item.SkillProfile = &GuSkillProfile{}
+			if err := json.Unmarshal([]byte(skillRaw), item.SkillProfile); err != nil {
+				return fmt.Errorf("decode Gu realtime skill %s rank %d: %w", item.ID, item.Rank, err)
+			}
 		}
 		_ = json.Unmarshal(foodTypesRaw, &item.FoodTypes)
 		_ = json.Unmarshal(combatRolesRaw, &item.CombatRoles)

@@ -1091,6 +1091,8 @@ vùng đánh, và **né đòn được**. Mở từ menu **Hoạt động → Đ
 (hoặc mục *Đấu Trường Realtime* trong hotbar). Bản hiện tại là **luyện tập 1
 người vs Hình Nhân Gỗ**.
 
+Hồ sơ chiêu tùy chọn được author ngay trên dòng Cổ tương ứng trong `Gu.csv`. Trang wiki của Cổ hiển thị sơ đồ kiểu ngắm/vùng đánh, tầm dùng, thời gian niệm, hồi chiêu và hậu động tác từ dữ liệu này; hiệu ứng của chiêu vẫn lấy từ trường `effects`.
+
 **Điều khiển**
 
 **Điều khiển & Giao diện MOBA (PC & Mobile)**

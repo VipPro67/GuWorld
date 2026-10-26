@@ -23,6 +23,11 @@ import {
 } from "../world/WorldUnits.ts";
 import type { MapPortal } from "../world/MapLoader.ts";
 
+// Active realtime zones publish snapshots at 20Hz. A few seconds without any
+// protocol message indicates a half-open socket, not ordinary snapshot jitter.
+const STALE_WORLD_CONNECTION_MS = 3_000;
+const STALE_WORLD_RECONNECT_COOLDOWN_MS = 5_000;
+
 export type WorldRuntimeStatus =
   | "idle"
   | "connecting"
@@ -122,6 +127,7 @@ export class WorldRuntime {
   private selectedTargetId: string | null = null;
   private combatNotice = "";
   private uiModal = false;
+  private aimingSlot: number | null = null;
   private lastCorrection = 0;
   private realtimeSettings: RealtimeControlSettings = { ...DEFAULT_REALTIME_CONTROL_SETTINGS, guPriorities: [] };
 
@@ -139,6 +145,7 @@ export class WorldRuntime {
   private localTarget: WorldPoint | null = null;
   private inputAccumulator = 0;
   private sendAccumulator = 0;
+  private lastStaleReconnectAt = 0;
 
   constructor(options: WorldRuntimeOptions = {}) {
     this.socketOptions = options.socketOptions;
@@ -251,6 +258,23 @@ export class WorldRuntime {
   public update(dtSeconds: number): void {
     if (!Number.isFinite(dtSeconds) || dtSeconds <= 0) return;
     const dt = Math.min(dtSeconds, 0.1);
+
+    if (this.status === "joined") {
+      const lastSnapshotAt = this.socket.getMetrics().lastSnapshotAt;
+      const now = Date.now();
+      if (
+        lastSnapshotAt > 0 &&
+        now - lastSnapshotAt > STALE_WORLD_CONNECTION_MS &&
+        now - this.lastStaleReconnectAt > STALE_WORLD_RECONNECT_COOLDOWN_MS
+      ) {
+        // WebSockets can remain OPEN after a proxy/server path silently dies.
+        // Rejoin with a bounded retry rate; if admission fails, the existing
+        // connection error UI lets the player retry rather than leaving
+        // movement falsely JOINED.
+        this.lastStaleReconnectAt = now;
+        void this.reconnect();
+      }
+    }
 
     if (this.localTarget) {
       const position = this.predictor.getPosition();
@@ -396,6 +420,16 @@ export class WorldRuntime {
     return this.combatNotice;
   }
 
+  public getAimingSlot(): number | null {
+    return this.aimingSlot;
+  }
+
+  public setAimingSlot(slot: number | null): void {
+    if (this.aimingSlot === slot) return;
+    this.aimingSlot = slot;
+    this.emit();
+  }
+
   /** React business panels set this to block movement/hotkeys in Phaser. */
   public setUiModal(open: boolean): void {
     if (this.uiModal === open) return;
@@ -420,7 +454,7 @@ export class WorldRuntime {
     selfX: number;
     selfY: number;
     lastCorrection: number;
-    network: { messages: number; bytes: number; snapshots: number; lastMessageAt: number };
+    network: { messages: number; bytes: number; snapshots: number; lastMessageAt: number; lastSnapshotAt: number };
   } {
     const self = this.getSelfPosition();
     return {
