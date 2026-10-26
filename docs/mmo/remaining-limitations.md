@@ -200,10 +200,11 @@ Impact: cross-process double ownership remains a release blocker.
   count derived from `Region.csv.pool_weights.cell_type_weights.Monster`
   (`BASE_PACKS=150` at the 30/100 reference, scaled by map area). The runtime
   cap is 1200 monsters per zone; the largest generated map is ~1100 (starter
-  safe zones use their authored Monster 60 weight). SAFE_ZONE monsters are
-  passive (`AggroRadius=0`) but retaliate if attacked. Monster centers stay 2
-  world units from the outer wall and the nav test checks the largest current
-  AI radius.
+  safe zones use their authored Monster 60 weight). SAFE_ZONE monsters set
+  `sim.AIState.Passive`: they never acquire a proximity target, keep valid AI
+  stats (positive aggro/attack ranges), and retaliate only through the threat
+  table after a player attacks first. Monster centers stay 2 world units from
+  the outer wall and the nav test checks the largest current AI radius.
 - Region outlines, labels and MapCell POI markers render in Phaser. Border
   handoffs are now region-aware (whole-side trigger, server-side destination);
   safe-zone rules still only disable PvP and make monsters passive.

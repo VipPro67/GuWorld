@@ -505,10 +505,6 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 	if !finite(spawn.X) || !finite(spawn.Y) || spawn.MaxHP <= 0 {
 		return sim.Entity{}, ErrInvalidMonsterSpawn
 	}
-	aggroRadius := spawn.AggroRadius
-	if spawn.Passive {
-		aggroRadius = 0
-	}
 	return sim.Entity{
 		ID:        sim.EntityID(fmt.Sprintf("m:%d", index)),
 		Kind:      sim.EntityMonster,
@@ -519,9 +515,9 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 		Radius:    spawn.Radius,
 		Faction:   "monster",
 		AI: sim.AIState{
-			Active: true, TemplateID: spawn.TemplateID, Name: spawn.Name, State: sim.AIIdle,
+			Active: true, Passive: spawn.Passive, TemplateID: spawn.TemplateID, Name: spawn.Name, State: sim.AIIdle,
 			Home:        sim.Vec2{X: spawn.X, Y: spawn.Y},
-			AggroRadius: aggroRadius, LeashRadius: spawn.LeashRadius,
+			AggroRadius: spawn.AggroRadius, LeashRadius: spawn.LeashRadius,
 			AttackRange: spawn.AttackRange, PatrolRadius: spawn.PatrolRadius,
 			AttackDamage: spawn.AttackDamage, AttackCooldownTicks: spawn.AttackCooldownTicks,
 			RespawnTicks: spawn.RespawnTicks, ThinkTicks: 5,

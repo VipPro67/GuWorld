@@ -807,6 +807,28 @@ func TestManagerResolvesEdgePortalIntoLegacyCoordinates(t *testing.T) {
 	}
 }
 
+func TestPassiveMonsterSpawnKeepsValidAIStats(t *testing.T) {
+	spawn := MonsterSpawn{
+		TemplateID: "monster_test", Name: "Test", X: 10, Y: 10, MaxHP: 100,
+		AttackDamage: 5, Defense: 1, Speed: 3, Radius: 0.5,
+		AggroRadius: 6, LeashRadius: 10, AttackRange: 1.2, Passive: true,
+	}
+	entity, err := monsterEntity(0, spawn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !entity.AI.Passive || entity.AI.AggroRadius <= 0 || entity.AI.AttackRange <= 0 {
+		t.Fatalf("passive spawn lost valid AI stats: %+v", entity.AI)
+	}
+	world, err := sim.NewWorld("passive-spawn", 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := world.AddEntity(entity); err != nil {
+		t.Fatalf("passive monster entity failed validation: %v", err)
+	}
+}
+
 func TestManagerAllocatesMapInstancesByCapacity(t *testing.T) {
 	first := sim.ZoneKey{MapID: "map", InstanceID: "a", RulesetVersion: "v1"}
 	second := sim.ZoneKey{MapID: "map", InstanceID: "b", RulesetVersion: "v1"}

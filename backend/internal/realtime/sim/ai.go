@@ -28,7 +28,10 @@ const (
 // AIState is server-owned monster behavior. All timers are zone ticks, never
 // wall clock. Threat is an entity ID and is revalidated every tick.
 type AIState struct {
-	Active              bool
+	Active bool
+	// Passive monsters never acquire a target by proximity. They still use the
+	// threat table, so a player who attacks first can opt into the fight.
+	Passive             bool
 	TemplateID          string
 	Name                string
 	State               AIStateKind
@@ -245,6 +248,9 @@ func (w *World) selectMonsterTargetLocked(monster *Entity) *Entity {
 	}
 	if best != nil {
 		return best
+	}
+	if monster.AI.Passive {
+		return nil
 	}
 	var nearest *Entity
 	var nearestDistance float64

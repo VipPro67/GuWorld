@@ -58,6 +58,56 @@ func TestMonsterAIAggroChaseAndAttack(t *testing.T) {
 	}
 }
 
+func TestPassiveMonsterIgnoresProximityButRetaliates(t *testing.T) {
+	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "passive", RulesetVersion: "v1"}, 8, 11)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player := newPlayer("player")
+	player.Transform.Position = Vec2{X: 0, Y: 0}
+	monster := newAIMonster("mob", Vec2{X: 2, Y: 0})
+	monster.AI.Passive = true
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 30; i++ {
+		w.Step()
+	}
+	for _, entity := range w.Snapshot().Entities {
+		if entity.ID == "player" && entity.Vitals.HP < 100 {
+			t.Fatalf("passive monster initiated combat: %+v", entity.Vitals)
+		}
+		if entity.ID == "mob" && entity.AI.Threat != "" {
+			t.Fatalf("passive monster acquired a proximity target: %q", entity.AI.Threat)
+		}
+	}
+
+	// A threat entry (player attacked first) still opts into retaliation.
+	retaliating, _ := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "passive-revenge", RulesetVersion: "v1"}, 8, 11)
+	player = newPlayer("player")
+	player.Transform.Position = Vec2{X: 0, Y: 0}
+	monster = newAIMonster("mob", Vec2{X: 2, Y: 0})
+	monster.AI.Passive = true
+	monster.AI.ThreatTable = map[EntityID]float64{player.ID: 1}
+	if err := retaliating.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := retaliating.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 40; i++ {
+		retaliating.Step()
+	}
+	for _, entity := range retaliating.Snapshot().Entities {
+		if entity.ID == "player" && entity.Vitals.HP >= 100 {
+			t.Fatal("passive monster did not retaliate against a threat target")
+		}
+	}
+}
+
 func TestMonsterAILeashesBackToHome(t *testing.T) {
 	w, _ := NewWorld("arena", 8)
 	player := newPlayer("player")
