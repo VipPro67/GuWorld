@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpen, Compass, Crown, Flame, Gem, History, MapPin, Menu, Minus, Package, PawPrint, Plus, ScrollText, Settings2, ShoppingBag, Sparkles, Store, Swords, Trophy, Users, X, Eye, EyeOff, ChevronDown, ChevronUp, Shield, Crosshair, Pickaxe, Gift } from "lucide-react";
 import type { WorldSkillInfo } from "@/game/network/Protocol";
 import type { RuntimeEntity } from "@/game/core/WorldRuntime";
@@ -286,20 +286,34 @@ export function MMOHud(props: MMOHudProps) {
   const [showQuickActionModal, setShowQuickActionModal] = useState(false);
   const { ids: quickActionIds } = useQuickActionIds();
 
-  // Poll drops and cells around player in MMO map
+  // Poll world state without restarting the timers every time the player moves.
+  // Drops are time-sensitive; cells change much less often and are fetched on
+  // a slower cadence to avoid repeating the large rectangle query.
+  const positionRef = useRef(props.position);
+  useEffect(() => {
+    positionRef.current = props.position;
+  }, [props.position]);
   useEffect(() => {
     if (!props.connected || !props.player) return;
-    const px = Math.round(props.position.x);
-    const py = Math.round(props.position.y);
-    void fetchGroundDrops({ x: px, y: py, radius: 28 });
-    void fetchNearbyCells(px, py, 28);
-
-    const timer = setInterval(() => {
+    const fetchDrops = () => {
+      const { x, y } = positionRef.current;
+      const px = Math.round(x);
+      const py = Math.round(y);
       void fetchGroundDrops({ x: px, y: py, radius: 28 });
-      void fetchNearbyCells(px, py, 28);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [props.connected, props.player?.id, Math.floor(props.position.x / 6), Math.floor(props.position.y / 6), fetchGroundDrops, fetchNearbyCells]);
+    };
+    const fetchCells = () => {
+      const { x, y } = positionRef.current;
+      void fetchNearbyCells(Math.round(x), Math.round(y), 28);
+    };
+    fetchDrops();
+    fetchCells();
+    const dropsTimer = window.setInterval(fetchDrops, 4000);
+    const cellsTimer = window.setInterval(fetchCells, 15000);
+    return () => {
+      window.clearInterval(dropsTimer);
+      window.clearInterval(cellsTimer);
+    };
+  }, [props.connected, props.player?.id, fetchGroundDrops, fetchNearbyCells]);
 
   const handleInvitePlayer = async (username: string) => {
     let party = useGameStore.getState().party;

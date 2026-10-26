@@ -194,10 +194,21 @@ export function parseWorldMap(raw: unknown): LoadedWorldMap {
   });
 }
 
-export async function loadWorldMap(url: string, fetcher: typeof fetch = fetch): Promise<LoadedWorldMap> {
-  const response = await fetcher(url, { cache: "no-cache" });
-  if (!response.ok) throw new Error(`Map asset ${url} returned ${response.status}`);
-  return parseWorldMap(await response.json());
+const loadedMaps = new Map<string, Promise<LoadedWorldMap>>();
+
+export function loadWorldMap(url: string, fetcher: typeof fetch = fetch): Promise<LoadedWorldMap> {
+  const cached = fetcher === fetch ? loadedMaps.get(url) : undefined;
+  if (cached) return cached;
+  const loading = (async () => {
+    const response = await fetcher(url, { cache: "force-cache" });
+    if (!response.ok) throw new Error(`Map asset ${url} returned ${response.status}`);
+    return parseWorldMap(await response.json());
+  })();
+  if (fetcher === fetch) {
+    loadedMaps.set(url, loading);
+    void loading.catch(() => loadedMaps.delete(url));
+  }
+  return loading;
 }
 
 /**
