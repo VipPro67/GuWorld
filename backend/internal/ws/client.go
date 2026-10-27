@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -96,10 +95,7 @@ type Client struct {
 	snapshotUnsubscribe func()
 	snapshotGeneration  atomic.Uint64
 	snapshotStateMu     sync.Mutex
-	snapshotBaselineID  uint64
-	snapshotBaseTick    uint64
-	snapshotBaseline    map[string]protocol.EntityState
-	snapshotSeen        map[string]struct{}
+	deltaTracker        *SnapshotDeltaTracker
 	controllerID        uuid.UUID
 	realtimeAdmission   RealtimeWorldAdmission
 	lastTransferReject  atomic.Int64
@@ -162,6 +158,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 		shard:             shub,
 		commands:          make(chan WSMessage, 16),
 		worldInputs:       make(chan WSMessage, realtimeInputQueueSize),
+		deltaTracker:      NewSnapshotDeltaTracker(),
 	}
 
 	client.hub.register <- client
@@ -192,6 +189,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 
 	go client.writePump()
 	go client.commandPump()
+	go client.realtimeInputPump()
 	go client.readPump()
 
 	// Send initial snapshot
@@ -654,6 +652,17 @@ func (c *Client) commandPump() {
 			duration := time.Since(start)
 			c.logWSCommand(msg, status, data, duration)
 			c.sendCommandResponse(msg, status, data)
+		}
+	}
+}
+
+// realtimeInputPump drains movement and combat actions on an isolated loop
+// so slow transactional database RPCs in commandPump do not induce input lag.
+func (c *Client) realtimeInputPump() {
+	for {
+		select {
+		case <-c.done:
+			return
 		case msg := <-c.worldInputs:
 			start := time.Now()
 			status, data := c.handleRealtimeInput(msg)
@@ -814,6 +823,9 @@ func snapshotSelf(snapshot sim.Snapshot, characterID sim.CharacterID) (sim.Entit
 func (c *Client) stopRealtimeSnapshotStream() {
 	c.snapshotStateMu.Lock()
 	c.snapshotGeneration.Add(1)
+	if c.deltaTracker != nil {
+		c.deltaTracker.Reset()
+	}
 	c.snapshotStateMu.Unlock()
 	c.snapshotMu.Lock()
 	cancel, unsubscribe := c.snapshotCancel, c.snapshotUnsubscribe
@@ -977,24 +989,17 @@ func protocolProjectiles(projectiles []sim.ProjectileState) []protocol.Projectil
 	return result
 }
 
+func (c *Client) trackerLocked() *SnapshotDeltaTracker {
+	if c.deltaTracker == nil {
+		c.deltaTracker = NewSnapshotDeltaTracker()
+	}
+	return c.deltaTracker
+}
+
 func (c *Client) initializeSnapshotBaseline(welcome protocol.Welcome) error {
-	var baseline protocol.Snapshot
-	if err := json.Unmarshal(welcome.Snapshot, &baseline); err != nil {
-		return errors.New("welcome snapshot is invalid")
-	}
-	if !baseline.IsBaseline || baseline.BaselineID == 0 || baseline.BaselineID != welcome.BaselineID || baseline.Tick != welcome.ServerTick || (baseline.BaseTick != 0 && baseline.BaseTick != baseline.Tick) {
-		return errors.New("welcome snapshot baseline does not match handshake")
-	}
 	c.snapshotStateMu.Lock()
-	c.snapshotBaselineID = baseline.BaselineID
-	c.snapshotBaseTick = baseline.Tick
-	c.snapshotBaseline = make(map[string]protocol.EntityState, len(baseline.Entities))
-	for _, entity := range baseline.Entities {
-		c.snapshotBaseline[entity.EntityID] = entity
-	}
-	c.snapshotSeen = make(map[string]struct{})
-	c.snapshotStateMu.Unlock()
-	return nil
+	defer c.snapshotStateMu.Unlock()
+	return c.trackerLocked().Initialize(welcome)
 }
 
 func (c *Client) buildSnapshotDelta(snapshot sim.Snapshot) protocol.Snapshot {
@@ -1004,75 +1009,7 @@ func (c *Client) buildSnapshotDelta(snapshot sim.Snapshot) protocol.Snapshot {
 }
 
 func (c *Client) buildSnapshotDeltaLocked(snapshot sim.Snapshot) protocol.Snapshot {
-	current := make(map[string]protocol.EntityState, len(snapshot.Entities))
-	var ackSeq uint64
-	var clientPartyID string
-	for _, entity := range snapshot.Entities {
-		if string(entity.CharacterID) == c.playerID.String() {
-			clientPartyID = entity.PartyID
-			break
-		}
-	}
-	for _, entity := range snapshot.Entities {
-		state := protocolEntityState(entity)
-		if state.Stealthed {
-			isSelf := state.EntityID == c.playerID.String()
-			isPartyMember := clientPartyID != "" && state.PartyID != "" && state.PartyID == clientPartyID
-			if !isSelf && !isPartyMember {
-				continue
-			}
-		}
-		current[state.EntityID] = state
-		if string(entity.CharacterID) == c.playerID.String() {
-			ackSeq = entity.AckSeq
-		}
-	}
-	baselineDue := c.snapshotBaselineID == 0 || snapshot.Tick >= c.snapshotBaseTick+snapshotBaselineTicks
-	messageSnapshot := protocol.Snapshot{
-		Tick: snapshot.Tick, AckSeq: ackSeq, Entities: make([]protocol.EntityState, 0, len(current)),
-		Projectiles: protocolProjectiles(snapshot.Projectiles),
-	}
-	if baselineDue {
-		c.snapshotBaselineID++
-		c.snapshotBaseTick = snapshot.Tick
-		c.snapshotBaseline = current
-		c.snapshotSeen = make(map[string]struct{})
-		messageSnapshot.BaselineID = c.snapshotBaselineID
-		messageSnapshot.BaseTick = snapshot.Tick
-		messageSnapshot.IsBaseline = true
-		for _, entity := range snapshot.Entities {
-			messageSnapshot.Entities = append(messageSnapshot.Entities, current[string(entity.ID)])
-		}
-		return messageSnapshot
-	}
-
-	messageSnapshot.BaselineID = c.snapshotBaselineID
-	messageSnapshot.BaseTick = c.snapshotBaseTick
-	for _, entity := range snapshot.Entities {
-		state := current[string(entity.ID)]
-		baseState, existedAtBaseline := c.snapshotBaseline[state.EntityID]
-		_, previouslySent := c.snapshotSeen[state.EntityID]
-		if !existedAtBaseline || !reflect.DeepEqual(state, baseState) || previouslySent {
-			messageSnapshot.Entities = append(messageSnapshot.Entities, state)
-			c.snapshotSeen[state.EntityID] = struct{}{}
-		}
-	}
-	removed := make(map[string]struct{})
-	for entityID := range c.snapshotBaseline {
-		if _, stillVisible := current[entityID]; !stillVisible {
-			removed[entityID] = struct{}{}
-		}
-	}
-	for entityID := range c.snapshotSeen {
-		if _, stillVisible := current[entityID]; !stillVisible {
-			removed[entityID] = struct{}{}
-		}
-	}
-	for entityID := range removed {
-		messageSnapshot.Removed = append(messageSnapshot.Removed, entityID)
-	}
-	sort.Strings(messageSnapshot.Removed)
-	return messageSnapshot
+	return c.trackerLocked().BuildDelta(snapshot, c.playerID.String())
 }
 
 func (c *Client) handleRealtimeLifecycle(msg WSMessage) (int, json.RawMessage) {
