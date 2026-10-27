@@ -12,6 +12,7 @@ import { translatePath } from "@/lib/translate";
 import { NotificationBell } from "@/components/NotificationBell";
 import { VirtualJoystick } from "./VirtualJoystick";
 import { TeleportDirectoryModal } from "@/components/Teleport/TeleportDirectoryModal";
+import { TeleportBuildModal } from "@/components/Teleport/TeleportBuildModal";
 import type { MMOPanel } from "./MMOBusinessPanels";
 import type { MapPortal } from "@/game/world/MapLoader";
 import { useQuickActionIds, QUICK_ACTIONS_MAP } from "@/lib/mmo-quick-actions";
@@ -116,10 +117,11 @@ const MODE_BADGE: Record<
 
 const frame = "border border-[#a88952]/65 bg-[#150f0bd9] text-[#f4e8cb] shadow-[0_8px_28px_rgba(0,0,0,.48)] backdrop-blur-sm";
 
-const menuGroups: Array<{ title: string; items: Array<{ label: string; icon: typeof Package; view?: string; panel?: Exclude<MMOPanel, null>; special?: "divination" | "quick-actions" | "teleport-directory"; minRank?: number }> }> = [
+const menuGroups: Array<{ title: string; items: Array<{ label: string; icon: typeof Package; view?: string; panel?: Exclude<MMOPanel, null>; special?: "divination" | "quick-actions" | "teleport-directory" | "teleport-build"; minRank?: number }> }> = [
   { title: "Thế giới", items: [
     { label: "Danh sách map", icon: Compass, panel: "maps" },
     { label: "Truyền Tống Trận", icon: Compass, special: "teleport-directory" },
+    { label: "Bố trí Truyền Tống Trận", icon: Plus, special: "teleport-build" },
     { label: "Tiên khiếu", icon: Sparkles, view: "aperture", minRank: 6 },
     { label: "Bí cảnh", icon: Gem, view: "dungeon" },
     { label: "Mộng cảnh", icon: Compass, view: "dream-realm" },
@@ -326,6 +328,7 @@ export function MMOHud(props: MMOHudProps) {
   const harvestVein = useWorldStore((state) => state.harvestVein);
 
   const [showTeleportDirectory, setShowTeleportDirectory] = useState(false);
+  const [showTeleportBuild, setShowTeleportBuild] = useState(false);
   const [showQuickActionModal, setShowQuickActionModal] = useState(false);
   const { ids: quickActionIds } = useQuickActionIds();
 
@@ -1738,6 +1741,9 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
                           } else if (item.special === "teleport-directory") {
                             props.onCloseMenu();
                             setShowTeleportDirectory(true);
+                          } else if (item.special === "teleport-build") {
+                            props.onCloseMenu();
+                            setShowTeleportBuild(true);
                           }
                         }}
                         className="flex min-h-9 items-center gap-2 rounded-md border border-[#8f6d40]/45 bg-[#3a291d]/70 px-2 text-left text-[11px] text-[#ead8b6] hover:bg-[#624329] disabled:cursor-not-allowed disabled:opacity-40"
@@ -1809,6 +1815,12 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
         <TeleportDirectoryModal
           player={props.player}
           onClose={() => setShowTeleportDirectory(false)}
+        />
+      )}
+      {showTeleportBuild && props.player && (
+        <TeleportBuildModal
+          player={props.player}
+          onClose={() => setShowTeleportBuild(false)}
         />
       )}
     </div>
