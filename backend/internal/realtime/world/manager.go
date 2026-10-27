@@ -1025,6 +1025,7 @@ func filterSnapshotForOwner(snapshot sim.Snapshot, characterID sim.CharacterID) 
 
 func (m *Manager) broadcastSnapshots(ctx context.Context, zone *managedZone, done chan<- struct{}) {
 	defer close(done)
+	spatialIndex := spatial.NewIndex(AOICellSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -1040,18 +1041,17 @@ func (m *Manager) broadcastSnapshots(ctx context.Context, zone *managedZone, don
 				m.mu.Unlock()
 				continue
 			}
-			index := spatial.NewIndex(AOICellSize)
-			index.Rebuild(snapshot.Entities)
+			spatialIndex.Rebuild(snapshot.Entities)
 			for _, subscriber := range zone.subscribers {
 				if snapshot.Tick < subscriber.minTick {
 					continue
 				}
-				owner, exists := index.Entity(sim.EntityID(subscriber.characterID))
+				owner, exists := spatialIndex.Entity(sim.EntityID(subscriber.characterID))
 				if !exists {
 					continue
 				}
 				visible := snapshot
-				visible.Entities = index.Query(owner.Transform.Position, subscriber.viewRadius, owner.ID)
+				visible.Entities = spatialIndex.Query(owner.Transform.Position, subscriber.viewRadius, owner.ID)
 				select {
 				case subscriber.feed <- visible:
 				default:

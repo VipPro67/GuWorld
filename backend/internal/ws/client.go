@@ -165,26 +165,30 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	handlers.TouchPlayerActivity(client.playerID)
 	handlers.EnsureWorldPosLoaded(client.playerID.String())
 
-	// Auto-subscribe to player-specific and global channels
-	shub.Subscribe(client, ChannelName("player:"+playerID.String()))
-	shub.Subscribe(client, ChannelName("trade:"+playerID.String()))
-	shub.Subscribe(client, ChannelName("notif:"+playerID.String()))
-	shub.Subscribe(client, ChannelName("combat:"+playerID.String()))
-	shub.Subscribe(client, ChannelName("world:pos"))
-	shub.Subscribe(client, ChannelName("world:cell"))
-	shub.Subscribe(client, ChannelName("world:combat"))
-	shub.Subscribe(client, ChannelName("world:cells:"+playerID.String()))
-	shub.Subscribe(client, ChannelName("chat:world"))
-	shub.Subscribe(client, ChannelName("chat:private:"+playerID.String()))
-	shub.Subscribe(client, ChannelName("death_arena"))
-	shub.Subscribe(client, ChannelName("martial_arena"))
-	shub.Subscribe(client, ChannelName("catalog"))
+	isWorldOnly := r != nil && r.URL.Query().Get("purpose") == "world"
 
-	// Check Sect membership
-	var sectID string
-	err = db.DB.QueryRow("SELECT sect_id FROM sect_members WHERE player_id = $1", playerID).Scan(&sectID)
-	if err == nil && sectID != "" {
-		shub.Subscribe(client, ChannelName("chat:sect:"+sectID))
+	if !isWorldOnly {
+		// Auto-subscribe to player-specific and global channels for web UI
+		shub.Subscribe(client, ChannelName("player:"+playerID.String()))
+		shub.Subscribe(client, ChannelName("trade:"+playerID.String()))
+		shub.Subscribe(client, ChannelName("notif:"+playerID.String()))
+		shub.Subscribe(client, ChannelName("combat:"+playerID.String()))
+		shub.Subscribe(client, ChannelName("world:pos"))
+		shub.Subscribe(client, ChannelName("world:cell"))
+		shub.Subscribe(client, ChannelName("world:combat"))
+		shub.Subscribe(client, ChannelName("world:cells:"+playerID.String()))
+		shub.Subscribe(client, ChannelName("chat:world"))
+		shub.Subscribe(client, ChannelName("chat:private:"+playerID.String()))
+		shub.Subscribe(client, ChannelName("death_arena"))
+		shub.Subscribe(client, ChannelName("martial_arena"))
+		shub.Subscribe(client, ChannelName("catalog"))
+
+		// Check Sect membership
+		var sectID string
+		err = db.DB.QueryRow("SELECT sect_id FROM sect_members WHERE player_id = $1", playerID).Scan(&sectID)
+		if err == nil && sectID != "" {
+			shub.Subscribe(client, ChannelName("chat:sect:"+sectID))
+		}
 	}
 
 	go client.writePump()
@@ -192,42 +196,44 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	go client.realtimeInputPump()
 	go client.readPump()
 
-	// Send initial snapshot
-	go func() {
-		snapshot, err := handlers.LoadPlayerRealtimeSnapshot(playerID)
-		if err == nil {
-			msg, _ := json.Marshal(struct {
-				Type    string                          `json:"type"`
-				Channel string                          `json:"channel"`
-				Data    handlers.PlayerRealtimeSnapshot `json:"data"`
-			}{
-				Type:    "event",
-				Channel: "player",
-				Data:    snapshot,
-			})
-			select {
-			case client.send <- msg:
-			default:
+	if !isWorldOnly {
+		// Send initial snapshot to web UI store
+		go func() {
+			snapshot, err := handlers.LoadPlayerRealtimeSnapshot(playerID)
+			if err == nil {
+				msg, _ := json.Marshal(struct {
+					Type    string                          `json:"type"`
+					Channel string                          `json:"channel"`
+					Data    handlers.PlayerRealtimeSnapshot `json:"data"`
+				}{
+					Type:    "event",
+					Channel: "player",
+					Data:    snapshot,
+				})
+				select {
+				case client.send <- msg:
+				default:
+				}
 			}
-		}
 
-		trade, err := handlers.LoadActiveTrade(playerID)
-		if err == nil && trade != nil {
-			msg, _ := json.Marshal(struct {
-				Type    string `json:"type"`
-				Channel string `json:"channel"`
-				Data    any    `json:"data"`
-			}{
-				Type:    "event",
-				Channel: "trade",
-				Data:    map[string]any{"trade": trade},
-			})
-			select {
-			case client.send <- msg:
-			default:
+			trade, err := handlers.LoadActiveTrade(playerID)
+			if err == nil && trade != nil {
+				msg, _ := json.Marshal(struct {
+					Type    string `json:"type"`
+					Channel string `json:"channel"`
+					Data    any    `json:"data"`
+				}{
+					Type:    "event",
+					Channel: "trade",
+					Data:    map[string]any{"trade": trade},
+				})
+				select {
+				case client.send <- msg:
+				default:
+				}
 			}
-		}
-	}()
+		}()
+	}
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -846,6 +852,43 @@ func (c *Client) stopRealtimeSnapshotStream() {
 	}
 }
 
+type worldSnapshotEnvelope struct {
+	Version int               `json:"v"`
+	Type    string            `json:"type"`
+	Payload protocol.Snapshot `json:"payload"`
+}
+
+type worldEventPayload struct {
+	SkillID       string  `json:"skill_id,omitempty"`
+	X             float64 `json:"x,omitempty"`
+	Y             float64 `json:"y,omitempty"`
+	Amount        float64 `json:"amount,omitempty"`
+	HP            float64 `json:"hp,omitempty"`
+	Shield        float64 `json:"shield,omitempty"`
+	DurationTicks uint64  `json:"duration_ticks,omitempty"`
+	Reason        string  `json:"reason,omitempty"`
+}
+
+type typedWorldEvent struct {
+	EventID  uint64             `json:"event_id"`
+	Tick     uint64             `json:"tick"`
+	Type     string             `json:"type"`
+	SourceID string             `json:"source_id,omitempty"`
+	TargetID string             `json:"target_id,omitempty"`
+	Payload  *worldEventPayload `json:"payload,omitempty"`
+}
+
+type typedWorldEventBatch struct {
+	FromEventID uint64            `json:"from_event_id"`
+	Events      []typedWorldEvent `json:"events"`
+}
+
+type worldEventsEnvelope struct {
+	Version int                  `json:"v"`
+	Type    string               `json:"type"`
+	Payload typedWorldEventBatch `json:"payload"`
+}
+
 func (c *Client) sendWorldSnapshot(snapshot sim.Snapshot) {
 	c.sendWorldSnapshotGeneration(snapshot, c.snapshotGeneration.Load())
 }
@@ -858,11 +901,11 @@ func (c *Client) sendWorldSnapshotGeneration(snapshot sim.Snapshot, generation u
 		return
 	}
 	messageSnapshot := c.buildSnapshotDeltaLocked(snapshot)
-	payload, err := json.Marshal(messageSnapshot)
-	if err != nil {
-		return
-	}
-	message, err := json.Marshal(protocol.Envelope{Version: protocol.Version, Type: protocol.TypeSnapshot, Payload: payload})
+	message, err := json.Marshal(worldSnapshotEnvelope{
+		Version: protocol.Version,
+		Type:    protocol.TypeSnapshot,
+		Payload: messageSnapshot,
+	})
 	if err != nil {
 		return
 	}
@@ -892,7 +935,10 @@ func (c *Client) sendWorldEvents(events []combat.Event, generation uint64) {
 	if len(events) == 0 || generation != c.snapshotGeneration.Load() {
 		return
 	}
-	batch := protocol.EventBatch{FromEventID: events[0].ID, Events: make([]protocol.Event, 0, len(events))}
+	batch := typedWorldEventBatch{
+		FromEventID: events[0].ID,
+		Events:      make([]typedWorldEvent, 0, len(events)),
+	}
 	for _, event := range events {
 		if event.SourceID == c.playerID.String() {
 			switch event.Type {
@@ -906,24 +952,30 @@ func (c *Client) sendWorldEvents(events []combat.Event, generation uint64) {
 				c.recordWSGameplayRejection("world.move_to", event.Reason)
 			}
 		}
-		payload, err := json.Marshal(map[string]any{
-			"skill_id": event.SkillID, "x": event.X, "y": event.Y,
-			"amount": event.Amount, "hp": event.HP, "shield": event.Shield,
-			"duration_ticks": event.DurationTicks, "reason": event.Reason,
-		})
-		if err != nil {
-			continue
+		payload := &worldEventPayload{
+			SkillID:       event.SkillID,
+			X:             event.X,
+			Y:             event.Y,
+			Amount:        event.Amount,
+			HP:            event.HP,
+			Shield:        event.Shield,
+			DurationTicks: event.DurationTicks,
+			Reason:        event.Reason,
 		}
-		batch.Events = append(batch.Events, protocol.Event{
-			EventID: event.ID, Tick: event.Tick, Type: string(event.Type),
-			SourceID: event.SourceID, TargetID: event.TargetID, Payload: payload,
+		batch.Events = append(batch.Events, typedWorldEvent{
+			EventID:  event.ID,
+			Tick:     event.Tick,
+			Type:     string(event.Type),
+			SourceID: event.SourceID,
+			TargetID: event.TargetID,
+			Payload:  payload,
 		})
 	}
-	payload, err := json.Marshal(batch)
-	if err != nil {
-		return
-	}
-	message, err := json.Marshal(protocol.Envelope{Version: protocol.Version, Type: protocol.TypeEvents, Payload: payload})
+	message, err := json.Marshal(worldEventsEnvelope{
+		Version: protocol.Version,
+		Type:    protocol.TypeEvents,
+		Payload: batch,
+	})
 	if err != nil {
 		return
 	}

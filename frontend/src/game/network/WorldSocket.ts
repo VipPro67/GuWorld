@@ -430,6 +430,7 @@ function buildSocketURL(baseURL: string | undefined, token: string, tabId: strin
   const defaultURL = `${BACKEND_URL.replace(/^http/, "ws")}/api/ws`;
   const url = new URL(baseURL ?? defaultURL);
   url.searchParams.set("token", token);
+  url.searchParams.set("purpose", "world");
   if (tabId) url.searchParams.set("tab_id", tabId);
   return url.toString();
 }
