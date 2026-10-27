@@ -21,14 +21,17 @@ var ErrRealtimeRegionTransferDenied = errors.New("realtime region transfer denie
 // world manager. LocalX/LocalY are map units; the origin/scale pair is the
 // destination map transform and is the only supported way to write players.x/y.
 type RealtimeRegionTransfer struct {
-	PlayerID      uuid.UUID
-	TargetRegion  string
-	LocalX        float64
-	LocalY        float64
-	LegacyOriginX float64
-	LegacyOriginY float64
-	LegacyScale   float64
-	HP            float64
+	PlayerID         uuid.UUID
+	TargetRegion     string
+	TargetZoneID     string
+	TargetInstanceID string
+	LocationRevision int64
+	LocalX           float64
+	LocalY           float64
+	LegacyOriginX    float64
+	LegacyOriginY    float64
+	LegacyScale      float64
+	HP               float64
 }
 
 // PlayerTransferResult carries the persisted row and the optional wall debuff
@@ -110,6 +113,13 @@ func ApplyRealtimeRegionTransfer(ctx context.Context, req RealtimeRegionTransfer
 	if err := checkRegionEntry(target.ID, loaded.Rank, loaded.GuInventory); err != nil {
 		return PlayerTransferResult{}, fmt.Errorf("%w: %v", ErrRealtimeRegionTransferDenied, err)
 	}
+	var locationRevision int64
+	if err := tx.QueryRowContext(ctx, `SELECT world_location_revision FROM players WHERE id=$1`, req.PlayerID).Scan(&locationRevision); err != nil {
+		return PlayerTransferResult{}, err
+	}
+	if locationRevision != req.LocationRevision {
+		return PlayerTransferResult{}, fmt.Errorf("realtime location changed before transfer: expected revision %d, found %d", req.LocationRevision, locationRevision)
+	}
 
 	scale := req.LegacyScale
 	if scale <= 0 {
@@ -129,13 +139,22 @@ func ApplyRealtimeRegionTransfer(ctx context.Context, req RealtimeRegionTransfer
 	if hp <= 0 {
 		hp = 1
 	}
-	if _, err := tx.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 		UPDATE players
 		SET current_region = $1, x = $2, y = $3, hp = $4, statuses = $5,
-		    map_instance_id = NULL
-		WHERE id = $6
-	`, loaded.CurrentRegion, loaded.X, loaded.Y, hp, loaded.Statuses, loaded.ID); err != nil {
+		    map_instance_id = NULL, world_zone_id = $6, world_instance_id = $7,
+		    world_x = $8, world_y = $9, world_safe_x = $8, world_safe_y = $9,
+		    world_location_revision = world_location_revision + 1
+		WHERE id = $10 AND world_location_revision = $11
+	`, loaded.CurrentRegion, loaded.X, loaded.Y, hp, loaded.Statuses, req.TargetZoneID,
+		req.TargetInstanceID, req.LocalX, req.LocalY, loaded.ID, req.LocationRevision)
+	if err != nil {
 		return PlayerTransferResult{}, err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return PlayerTransferResult{}, err
+	} else if affected != 1 {
+		return PlayerTransferResult{}, fmt.Errorf("realtime location changed before transfer commit")
 	}
 	syncedMembers := SyncPartyMembersLocation(tx, &loaded)
 	if err := tx.Commit(); err != nil {

@@ -34,6 +34,13 @@ func schemaPlayers() error {
 		map_instance_id UUID,
 		x INTEGER NOT NULL DEFAULT 50,
 		y INTEGER NOT NULL DEFAULT 50,
+		world_zone_id VARCHAR(80) NOT NULL DEFAULT '',
+		world_instance_id VARCHAR(80) NOT NULL DEFAULT '',
+		world_x DOUBLE PRECISION NOT NULL DEFAULT 0,
+		world_y DOUBLE PRECISION NOT NULL DEFAULT 0,
+		world_safe_x DOUBLE PRECISION NOT NULL DEFAULT 0,
+		world_safe_y DOUBLE PRECISION NOT NULL DEFAULT 0,
+		world_location_revision BIGINT NOT NULL DEFAULT 0,
 		race VARCHAR(50) NOT NULL DEFAULT 'human' REFERENCES race_dictionary(key),
 		gender VARCHAR(20) NOT NULL DEFAULT '',
 		constitution VARCHAR(100) NOT NULL DEFAULT '' REFERENCES constitution_dictionary(key),
@@ -112,6 +119,9 @@ func schemaPlayers() error {
 	if err := execSchema("players_map_instance_idx", `CREATE INDEX IF NOT EXISTS idx_players_map_instance_location ON players (map_instance_id, current_region, x, y);`); err != nil {
 		return err
 	}
+	if err := execSchema("players_world_location_idx", `CREATE INDEX IF NOT EXISTS idx_players_world_location ON players (world_zone_id, world_instance_id) WHERE world_zone_id <> '';`); err != nil {
+		return err
+	}
 
 	// Player-row writes serialize on the row itself, so this counter is ordered
 	// by commit visibility for those writes.
@@ -127,6 +137,31 @@ func schemaPlayers() error {
 	CREATE TRIGGER trg_players_state_revision
 		BEFORE UPDATE ON players
 		FOR EACH ROW EXECUTE FUNCTION bump_player_row_state_revision();`); err != nil {
+		return err
+	}
+	if err := execSchema("players_world_location_legacy_invalidation", `
+	CREATE OR REPLACE FUNCTION invalidate_world_location_after_legacy_move()
+	RETURNS trigger LANGUAGE plpgsql AS $$
+	BEGIN
+		IF (NEW.current_region IS DISTINCT FROM OLD.current_region OR
+		    NEW.map_instance_id IS DISTINCT FROM OLD.map_instance_id OR
+		    NEW.x IS DISTINCT FROM OLD.x OR NEW.y IS DISTINCT FROM OLD.y) AND
+		   NEW.world_zone_id IS NOT DISTINCT FROM OLD.world_zone_id AND
+		   NEW.world_instance_id IS NOT DISTINCT FROM OLD.world_instance_id AND
+		   NEW.world_x IS NOT DISTINCT FROM OLD.world_x AND
+		   NEW.world_y IS NOT DISTINCT FROM OLD.world_y AND
+		   NEW.world_location_revision IS NOT DISTINCT FROM OLD.world_location_revision THEN
+			NEW.world_zone_id := '';
+			NEW.world_instance_id := '';
+			NEW.world_location_revision := OLD.world_location_revision + 1;
+		END IF;
+		RETURN NEW;
+	END;
+	$$;
+	DROP TRIGGER IF EXISTS trg_players_world_location_legacy_invalidation ON players;
+	CREATE TRIGGER trg_players_world_location_legacy_invalidation
+		BEFORE UPDATE OF current_region, map_instance_id, x, y ON players
+		FOR EACH ROW EXECUTE FUNCTION invalidate_world_location_after_legacy_move();`); err != nil {
 		return err
 	}
 

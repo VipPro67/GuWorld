@@ -13,23 +13,23 @@ import (
 )
 
 type State struct {
-	PlayerID       uuid.UUID
-	ZoneID         string
-	InstanceID     string
-	X              float64
-	Y              float64
-	HP             float64
-	Shield         float64
-	SafeX          float64
-	SafeY          float64
-	MapVersion     string
-	ContentVersion string
-	// LegacyX/LegacyY are the players.x/y projection of X/Y. The gateway sets
-	// SyncLegacy when it can resolve the map transform, so legacy readers do
-	// not see a stale position while the character is MMO-owned.
-	LegacyX    int
-	LegacyY    int
-	SyncLegacy bool
+	PlayerID            uuid.UUID
+	RegionID            string
+	ZoneID              string
+	InstanceID          string
+	X                   float64
+	Y                   float64
+	HP                  float64
+	Shield              float64
+	SafeX               float64
+	SafeY               float64
+	MapVersion          string
+	ContentVersion      string
+	LegacyX             int
+	LegacyY             int
+	SyncLegacy          bool
+	LocationRevision    int64
+	HasLocationRevision bool
 }
 
 var ErrInvalidState = errors.New("invalid realtime world state")
@@ -46,6 +46,9 @@ func (s State) Validate() error {
 	if s.HP < 0 || s.Shield < 0 {
 		return ErrInvalidState
 	}
+	if s.HasLocationRevision && s.LocationRevision < 0 {
+		return ErrInvalidState
+	}
 	return nil
 }
 
@@ -60,14 +63,19 @@ func NewService(db *sql.DB) *Service {
 func (s *Service) Load(ctx context.Context, playerID uuid.UUID) (State, bool, error) {
 	var state State
 	err := s.db.QueryRowContext(ctx, `
-		SELECT player_id, zone_id, instance_id, x, y, hp, shield, safe_x, safe_y,
-		       map_version, content_version
-		FROM player_world_state_v2
-		WHERE player_id = $1
+		SELECT p.id, p.current_region, p.world_zone_id, p.world_instance_id,
+		       p.world_x, p.world_y, p.world_safe_x, p.world_safe_y,
+		       COALESCE(c.hp, 0), COALESCE(c.shield, 0),
+		       COALESCE(c.map_version, ''), COALESCE(c.content_version, ''),
+	       p.world_location_revision
+		FROM players p
+		LEFT JOIN player_world_state_v2 c ON c.player_id = p.id
+		WHERE p.id = $1 AND p.world_zone_id <> ''
 	`, playerID).Scan(
-		&state.PlayerID, &state.ZoneID, &state.InstanceID, &state.X, &state.Y,
-		&state.HP, &state.Shield, &state.SafeX, &state.SafeY,
-		&state.MapVersion, &state.ContentVersion,
+		&state.PlayerID, &state.RegionID, &state.ZoneID, &state.InstanceID,
+		&state.X, &state.Y, &state.SafeX, &state.SafeY,
+		&state.HP, &state.Shield, &state.MapVersion, &state.ContentVersion,
+		&state.LocationRevision,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return State{}, false, nil
@@ -75,47 +83,68 @@ func (s *Service) Load(ctx context.Context, playerID uuid.UUID) (State, bool, er
 	if err != nil {
 		return State{}, false, err
 	}
+	state.HasLocationRevision = true
 	return state, true, nil
 }
 
-// DeleteCheckpoint removes the source-zone checkpoint after a region handoff.
-// Leaving it behind would let a later admission into the old zone restore the
-// exact edge cell and immediately trigger another crossing.
-func (s *Service) DeleteCheckpoint(ctx context.Context, playerID uuid.UUID, zoneID string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM player_world_state_v2 WHERE player_id = $1 AND zone_id = $2`, playerID, zoneID)
+func (s *Service) Save(ctx context.Context, state State) error {
+	_, err := s.SaveRevision(ctx, state)
 	return err
 }
 
-func (s *Service) Save(ctx context.Context, state State) error {
+// SaveRevision commits the player location only if no newer owner has written
+// it. The returned revision becomes the caller's next compare-and-swap token.
+func (s *Service) SaveRevision(ctx context.Context, state State) (int64, error) {
 	if err := state.Validate(); err != nil {
-		return err
+		return 0, err
 	}
-	return upsert(ctx, s.db, state)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	revision, err := upsert(ctx, tx, state)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return revision, nil
 }
 
 // SaveAndApplyManaDelta commits position/HP and the zone's newly spent mana
 // together. A failed write leaves both unchanged for the next checkpoint.
 func (s *Service) SaveAndApplyManaDelta(ctx context.Context, state State, delta float64) error {
+	_, err := s.SaveAndApplyManaDeltaRevision(ctx, state, delta)
+	return err
+}
+
+func (s *Service) SaveAndApplyManaDeltaRevision(ctx context.Context, state State, delta float64) (int64, error) {
 	if err := state.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 	if !finiteManaDelta(delta) {
-		return ErrInvalidState
+		return 0, ErrInvalidState
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := upsert(ctx, tx, state); err != nil {
-		return err
+	revision, err := upsert(ctx, tx, state)
+	if err != nil {
+		return 0, err
 	}
 	if delta != 0 {
 		if err := applyManaDelta(ctx, tx, state.PlayerID, delta); err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return revision, nil
 }
 
 // ApplyManaDelta settles the zone-owned mana change against the player row.
@@ -165,7 +194,7 @@ func (s *Service) SaveBatch(ctx context.Context, states []State) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, state := range states {
-		if err := upsert(ctx, tx, state); err != nil {
+		if _, err := upsert(ctx, tx, state); err != nil {
 			return err
 		}
 	}
@@ -176,27 +205,58 @@ type execer interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
-func upsert(ctx context.Context, exec execer, state State) error {
-	_, err := exec.ExecContext(ctx, `
-		INSERT INTO player_world_state_v2
-			(player_id, zone_id, instance_id, x, y, hp, shield, safe_x, safe_y, map_version, content_version, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
-		ON CONFLICT (player_id) DO UPDATE SET
-			zone_id=EXCLUDED.zone_id, instance_id=EXCLUDED.instance_id,
-			x=EXCLUDED.x, y=EXCLUDED.y, hp=EXCLUDED.hp, shield=EXCLUDED.shield,
-			safe_x=EXCLUDED.safe_x, safe_y=EXCLUDED.safe_y,
-			map_version=EXCLUDED.map_version, content_version=EXCLUDED.content_version,
-			updated_at=NOW()
-	`, state.PlayerID, state.ZoneID, state.InstanceID, state.X, state.Y, state.HP, state.Shield,
-		state.SafeX, state.SafeY, state.MapVersion, state.ContentVersion)
+type queryRower interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func upsert(ctx context.Context, exec interface {
+	execer
+	queryRower
+}, state State) (int64, error) {
+	var revision int64
+	query := `
+		UPDATE players SET current_region = COALESCE(NULLIF($1, ''), current_region),
+			world_zone_id = $2, world_instance_id = $3, world_x = $4, world_y = $5,
+			world_safe_x = $6, world_safe_y = $7,
+			x = CASE WHEN $8 THEN $9 ELSE x END, y = CASE WHEN $8 THEN $10 ELSE y END,
+			world_location_revision = world_location_revision + 1
+		WHERE id = $11 AND world_location_revision = $12
+		RETURNING world_location_revision
+	`
+	if !state.HasLocationRevision {
+		query = `
+			UPDATE players SET current_region = COALESCE(NULLIF($1, ''), current_region),
+				world_zone_id = $2, world_instance_id = $3, world_x = $4, world_y = $5,
+				world_safe_x = $6, world_safe_y = $7,
+				x = CASE WHEN $8 THEN $9 ELSE x END, y = CASE WHEN $8 THEN $10 ELSE y END,
+				world_location_revision = world_location_revision + 1
+			WHERE id = $11 AND world_zone_id = '' AND world_location_revision = 0
+			RETURNING world_location_revision
+		`
+	}
+	args := []any{
+		state.RegionID, state.ZoneID, state.InstanceID, state.X, state.Y,
+		state.SafeX, state.SafeY, state.SyncLegacy, state.LegacyX, state.LegacyY,
+		state.PlayerID,
+	}
+	if state.HasLocationRevision {
+		args = append(args, state.LocationRevision)
+	}
+	err := exec.QueryRowContext(ctx, query, args...).Scan(&revision)
 	if err != nil {
-		return fmt.Errorf("save realtime world state: %w", err)
-	}
-	if state.SyncLegacy {
-		if _, err := exec.ExecContext(ctx, `UPDATE players SET x = $1, y = $2 WHERE id = $3`,
-			state.LegacyX, state.LegacyY, state.PlayerID); err != nil {
-			return fmt.Errorf("sync legacy world position: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("save realtime world state: location revision is stale or missing for player %s", state.PlayerID)
 		}
+		return 0, fmt.Errorf("save realtime player location: %w", err)
 	}
-	return nil
+	_, err = exec.ExecContext(ctx, `
+		INSERT INTO player_world_state_v2 (player_id, hp, shield, map_version, content_version, updated_at)
+		VALUES ($1,$2,$3,$4,$5,NOW())
+		ON CONFLICT (player_id) DO UPDATE SET hp=EXCLUDED.hp, shield=EXCLUDED.shield,
+			map_version=EXCLUDED.map_version, content_version=EXCLUDED.content_version, updated_at=NOW()
+	`, state.PlayerID, state.HP, state.Shield, state.MapVersion, state.ContentVersion)
+	if err != nil {
+		return 0, fmt.Errorf("save realtime vitals checkpoint: %w", err)
+	}
+	return revision, nil
 }

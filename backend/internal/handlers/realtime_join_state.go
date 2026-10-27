@@ -30,26 +30,34 @@ type RealtimeEquippedGu struct {
 // RealtimeJoinState is loaded from the primary database for admission. It is
 // deliberately separate from the cached UI snapshot used by the legacy client.
 type RealtimeJoinState struct {
-	Username           string
-	MapID              string
-	RegionID           string
-	MapInstanceID      string
-	X                  int
-	Y                  int
-	HP                 float64
-	BaseHP             float64
-	CurrentMana        float64
-	MaxMana            float64
-	ManaRegenPerSecond float64
-	BaseAttack         float64
-	Defense            float64
-	DaoProfile         *gamefx.DaoCombatProfile
-	PathResistance     map[string]float64
-	Rank               int
-	HasActiveCombat    bool
-	NeedsOnboarding    bool
-	PartyID            string
-	EquippedGu         []RealtimeEquippedGu
+	Username                 string
+	MapID                    string
+	RegionID                 string
+	MapInstanceID            string
+	X                        int
+	Y                        int
+	WorldX                   float64
+	WorldY                   float64
+	WorldSafeX               float64
+	WorldSafeY               float64
+	WorldInstanceID          string
+	WorldLocationRevision    int64
+	HasWorldLocation         bool
+	HasWorldLocationRevision bool
+	HP                       float64
+	BaseHP                   float64
+	CurrentMana              float64
+	MaxMana                  float64
+	ManaRegenPerSecond       float64
+	BaseAttack               float64
+	Defense                  float64
+	DaoProfile               *gamefx.DaoCombatProfile
+	PathResistance           map[string]float64
+	Rank                     int
+	HasActiveCombat          bool
+	NeedsOnboarding          bool
+	PartyID                  string
+	EquippedGu               []RealtimeEquippedGu
 }
 
 func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoinState, error) {
@@ -60,9 +68,11 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	var equippedOrder models.EquippedGusList
 	var regionType string
 	err := db.DB.QueryRowContext(ctx, `
-		SELECT COALESCE(rwm.world_map_id, 'world_map'), COALESCE(p.current_region, ''),
+		SELECT COALESCE(NULLIF(p.world_zone_id, ''), rwm.world_map_id, 'world_map'), COALESCE(p.current_region, ''),
 			COALESCE(r.zone_type, ''),
-			COALESCE(p.map_instance_id::text, ''), p.x, p.y, p.hp, p.base_hp,
+			COALESCE(p.map_instance_id::text, ''), p.x, p.y,
+			p.world_x, p.world_y, p.world_safe_x, p.world_safe_y,
+			p.world_instance_id, p.world_location_revision, p.world_zone_id <> '', p.hp, p.base_hp,
 			(p.active_combat IS NOT NULL AND p.active_combat <> 'null'::jsonb),
 			p.needs_onboarding, COALESCE(p.party_id::text, ''), COALESCE(p.equipped_gus, '[]'::jsonb),
 			COALESCE(p.username, '')
@@ -72,13 +82,18 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		WHERE p.id = $1
 	`, playerID).Scan(
 		&state.MapID, &state.RegionID, &regionType, &state.MapInstanceID, &state.X, &state.Y,
+		&state.WorldX, &state.WorldY, &state.WorldSafeX, &state.WorldSafeY,
+		&state.WorldInstanceID, &state.WorldLocationRevision, &state.HasWorldLocation,
 		&state.HP, &state.BaseHP, &state.HasActiveCombat, &state.NeedsOnboarding, &state.PartyID, &equippedOrder,
 		&state.Username,
 	)
 	if err != nil {
 		return RealtimeJoinState{}, err
 	}
-	state.MapID = realtimeMapID(state.RegionID, regionType, state.MapID)
+	state.HasWorldLocationRevision = true
+	if !state.HasWorldLocation {
+		state.MapID = realtimeMapID(state.RegionID, regionType, state.MapID)
+	}
 	equipped, err := loadRealtimeEquipped(ctx, db.DB, playerID, equippedOrder)
 	if err != nil {
 		return RealtimeJoinState{}, err

@@ -53,21 +53,24 @@ type Admission struct {
 }
 
 type session struct {
-	playerID          uuid.UUID
-	lease             realtimeworld.OwnershipLease
-	mapVersion        string
-	contentVersion    string
-	skills            []combat.Skill
-	loadoutRevision   string
-	mana              *manaSettlement
-	closing           bool
-	transferring      bool
-	lastTransferAt    time.Time
-	transferBlockedAt time.Time
-	safeX             float64
-	safeY             float64
-	mapWidth          float64
-	mapHeight         float64
+	playerID            uuid.UUID
+	regionID            string
+	lease               realtimeworld.OwnershipLease
+	mapVersion          string
+	contentVersion      string
+	skills              []combat.Skill
+	loadoutRevision     string
+	mana                *manaSettlement
+	locationRevision    *atomic.Int64
+	hasLocationRevision bool
+	closing             bool
+	transferring        bool
+	lastTransferAt      time.Time
+	transferBlockedAt   time.Time
+	safeX               float64
+	safeY               float64
+	mapWidth            float64
+	mapHeight           float64
 }
 
 // edgeTransferCooldown prevents border ping-pong when a player holds movement
@@ -270,28 +273,39 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	if math.IsNaN(state.HP) || math.IsInf(state.HP, 0) || math.IsNaN(state.BaseHP) || math.IsInf(state.BaseHP, 0) || state.HP <= 0 || state.BaseHP <= 0 {
 		return nil, admissionError(409, "realtime_character_invalid", "Character vitals are invalid for admission")
 	}
-	baseX := float64(state.X)
-	baseY := float64(state.Y)
-	position := a.manager.LegacyPosition(key, baseX, baseY)
-	baseHP := state.HP
-	baseShield := 0.0
 	a.mu.Lock()
 	compiled := a.compiled
 	stateStore := a.states
 	a.mu.Unlock()
+	baseX := float64(state.X)
+	baseY := float64(state.Y)
+	position := a.manager.LegacyPosition(key, baseX, baseY)
+	locationRevision := &atomic.Int64{}
+	locationRevision.Store(state.WorldLocationRevision)
+	hasLocationRevision := state.HasWorldLocationRevision
+	if stateStore == nil && state.HasWorldLocation && state.MapID == request.ZoneID {
+		baseX, baseY = state.WorldX, state.WorldY
+		position = sim.Vec2{X: baseX, Y: baseY}
+	}
+	baseHP := state.HP
+	baseShield := 0.0
 	if stateStore != nil {
 		durable, ok, loadErr := stateStore.Load(ctx, playerID)
 		if loadErr != nil {
 			return nil, admissionError(503, "realtime_checkpoint_unavailable", "Could not load the realtime world checkpoint")
 		}
-		if ok && durable.ZoneID == request.ZoneID && durable.MapVersion == request.MapVersion && durable.ContentVersion == request.ContentVersion &&
+		if ok && durable.ZoneID == request.ZoneID &&
 			a.manager.ContainsPosition(key, sim.Vec2{X: durable.X, Y: durable.Y}) {
-			baseX, baseY = durable.X, durable.Y
-			position = sim.Vec2{X: baseX, Y: baseY}
-			if durable.HP > 0 {
-				baseHP = durable.HP
+			locationRevision.Store(durable.LocationRevision)
+			hasLocationRevision = true
+			if durable.MapVersion == request.MapVersion && durable.ContentVersion == request.ContentVersion {
+				baseX, baseY = durable.X, durable.Y
+				position = sim.Vec2{X: baseX, Y: baseY}
+				if durable.HP > 0 {
+					baseHP = durable.HP
+				}
+				baseShield = durable.Shield
 			}
-			baseShield = durable.Shield
 		}
 	}
 	maxHP := math.Max(math.Max(state.HP, state.BaseHP), baseHP)
@@ -364,9 +378,10 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	attached = true
 	zoneMap, _ := a.manager.ZoneMapFor(key)
 	active := session{
-		playerID: playerID, lease: lease, mapVersion: request.MapVersion, contentVersion: request.ContentVersion,
+		playerID: playerID, regionID: state.RegionID, lease: lease, mapVersion: request.MapVersion, contentVersion: request.ContentVersion,
 		skills: skills, loadoutRevision: loadoutRevision,
-		mana:  &manaSettlement{last: playerCombat.Mana},
+		mana:             &manaSettlement{last: playerCombat.Mana},
+		locationRevision: locationRevision, hasLocationRevision: hasLocationRevision,
 		safeX: safeSpawn.X, safeY: safeSpawn.Y,
 		mapWidth: float64(zoneMap.Width), mapHeight: float64(zoneMap.Height),
 	}
@@ -532,14 +547,16 @@ func (a *Admission) TransferAtEdge(playerID, controllerID uuid.UUID, position si
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	result, err := handlers.ApplyRealtimeRegionTransfer(ctx, handlers.RealtimeRegionTransfer{
-		PlayerID:      active.playerID,
-		TargetRegion:  crossing.ToZoneID,
-		LocalX:        crossing.LocalX,
-		LocalY:        crossing.LocalY,
-		LegacyOriginX: crossing.LegacyOriginX,
-		LegacyOriginY: crossing.LegacyOriginY,
-		LegacyScale:   crossing.LegacyScale,
-		HP:            hp,
+		PlayerID:     active.playerID,
+		TargetRegion: crossing.ToZoneID,
+		TargetZoneID: crossing.TargetKey.MapID, TargetInstanceID: crossing.TargetKey.InstanceID,
+		LocationRevision: active.locationRevision.Load(),
+		LocalX:           crossing.LocalX,
+		LocalY:           crossing.LocalY,
+		LegacyOriginX:    crossing.LegacyOriginX,
+		LegacyOriginY:    crossing.LegacyOriginY,
+		LegacyScale:      crossing.LegacyScale,
+		HP:               hp,
 	})
 	if err != nil {
 		a.finishFailedTransfer(active, controllerID)
@@ -553,15 +570,6 @@ func (a *Admission) TransferAtEdge(playerID, controllerID uuid.UUID, position si
 
 	if !a.manager.LeaveCharacter(active.lease) {
 		logger.S.Warnf("Realtime edge transfer left a stale lease for %s; disconnect will retry release", playerID)
-	}
-	if a.states != nil {
-		if deleter, ok := a.states.(interface {
-			DeleteCheckpoint(context.Context, uuid.UUID, string) error
-		}); ok {
-			if err := deleter.DeleteCheckpoint(context.Background(), active.playerID, active.lease.ZoneKey.MapID); err != nil {
-				logger.S.Warnf("Realtime edge transfer could not clear %s checkpoint for %s: %v", active.lease.ZoneKey.MapID, playerID, err)
-			}
-		}
 	}
 	// Drop the session before publishing: the SSE/publish can make the client
 	// reconnect instantly, and the old socket's Disconnect must become a no-op
@@ -777,33 +785,61 @@ func (a *Admission) flushState(active session) error {
 		defer cancel()
 		legacyX, legacyY, legacyOK := a.manager.LocalToLegacy(active.lease.ZoneKey, entity.Transform.Position)
 		checkpoint := persistence.State{
-			PlayerID: active.playerID, ZoneID: active.lease.ZoneKey.MapID,
+			PlayerID: active.playerID, RegionID: active.regionID, ZoneID: active.lease.ZoneKey.MapID,
 			InstanceID: active.lease.ZoneKey.InstanceID,
 			X:          entity.Transform.Position.X, Y: entity.Transform.Position.Y,
 			HP: entity.Vitals.HP, Shield: entity.Vitals.Shield,
 			SafeX: active.safeX, SafeY: active.safeY,
 			MapVersion: active.mapVersion, ContentVersion: active.contentVersion,
-			LegacyX: int(math.Round(legacyX)), LegacyY: int(math.Round(legacyY)), SyncLegacy: legacyOK,
+			LegacyX: int(math.Round(legacyX)), LegacyY: int(math.Round(legacyY)),
+			SyncLegacy:          legacyOK,
+			HasLocationRevision: active.hasLocationRevision,
+		}
+		if active.locationRevision != nil {
+			checkpoint.LocationRevision = active.locationRevision.Load()
 		}
 		delta := 0.0
 		if active.mana != nil {
 			delta = entity.Combat.Mana - active.mana.last
 		}
+		var revision int64
+		manaApplied := false
 		if atomicStore, ok := a.states.(interface {
+			SaveAndApplyManaDeltaRevision(context.Context, persistence.State, float64) (int64, error)
+		}); ok {
+			var saveErr error
+			revision, saveErr = atomicStore.SaveAndApplyManaDeltaRevision(ctx, checkpoint, delta)
+			if saveErr != nil {
+				return saveErr
+			}
+			active.mana.last = entity.Combat.Mana
+			manaApplied = true
+		} else if atomicStore, ok := a.states.(interface {
 			SaveAndApplyManaDelta(context.Context, persistence.State, float64) error
 		}); ok {
 			if err := atomicStore.SaveAndApplyManaDelta(ctx, checkpoint, delta); err != nil {
 				return err
 			}
 			active.mana.last = entity.Combat.Mana
-			return nil
-		}
-		if err := a.states.Save(ctx, checkpoint); err != nil {
+			manaApplied = true
+		} else if revisionStore, ok := a.states.(interface {
+			SaveRevision(context.Context, persistence.State) (int64, error)
+		}); ok {
+			var saveErr error
+			revision, saveErr = revisionStore.SaveRevision(ctx, checkpoint)
+			if saveErr != nil {
+				return saveErr
+			}
+		} else if err := a.states.Save(ctx, checkpoint); err != nil {
 			return err
+		}
+		if active.locationRevision != nil && revision > 0 {
+			active.locationRevision.Store(revision)
+			active.hasLocationRevision = true
 		}
 		if manaStore, ok := a.states.(interface {
 			ApplyManaDelta(context.Context, uuid.UUID, float64) error
-		}); ok && active.mana != nil {
+		}); ok && active.mana != nil && !manaApplied {
 			if err := manaStore.ApplyManaDelta(ctx, active.playerID, delta); err != nil {
 				return err
 			}

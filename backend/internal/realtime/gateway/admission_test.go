@@ -509,6 +509,63 @@ type fakeStateStore struct {
 	settleErr  error
 }
 
+type revisionStateStore struct {
+	state    persistence.State
+	revision int64
+	saved    []persistence.State
+}
+
+func (f *revisionStateStore) Load(context.Context, uuid.UUID) (persistence.State, bool, error) {
+	return f.state, true, nil
+}
+
+func (f *revisionStateStore) Save(ctx context.Context, state persistence.State) error {
+	_, err := f.SaveRevision(ctx, state)
+	return err
+}
+
+func (f *revisionStateStore) SaveRevision(_ context.Context, state persistence.State) (int64, error) {
+	if state.LocationRevision != f.revision {
+		return 0, persistence.ErrInvalidState
+	}
+	f.revision++
+	f.saved = append(f.saved, state)
+	return f.revision, nil
+}
+
+func (f *revisionStateStore) SaveAndApplyManaDeltaRevision(ctx context.Context, state persistence.State, _ float64) (int64, error) {
+	return f.SaveRevision(ctx, state)
+}
+
+func TestLateCheckpointCannotOverwriteNewerPlayerLocation(t *testing.T) {
+	playerID, controllerID := uuid.New(), uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
+	manager := startTestManager(t, key, 1)
+	store := &revisionStateStore{
+		revision: 8,
+		state: persistence.State{
+			PlayerID: playerID, RegionID: "forest", ZoneID: "forest", InstanceID: "old-instance",
+			X: 4, Y: 5, HP: 70, SafeX: 4, SafeY: 5,
+			MapVersion: "map-1", ContentVersion: "content-1", LocationRevision: 8, HasLocationRevision: true,
+		},
+	}
+	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", HP: 70, BaseHP: 100, HasWorldLocationRevision: true, WorldLocationRevision: 8}, nil
+	})
+	admission.SetStateStore(store)
+	if _, err := admission.Join(context.Background(), playerID, controllerID, protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); err != nil {
+		t.Fatal(err)
+	}
+	// A region transfer or a legacy movement commits after the session snapshot.
+	store.revision++
+	if err := admission.Leave(playerID, controllerID); admissionErrorCode(err) != "realtime_checkpoint_unavailable" {
+		t.Fatalf("late checkpoint error = %v, want stale checkpoint rejection", err)
+	}
+	if len(store.saved) != 0 {
+		t.Fatalf("stale checkpoint wrote location: %+v", store.saved)
+	}
+}
+
 func (f *fakeStateStore) Load(context.Context, uuid.UUID) (persistence.State, bool, error) {
 	return f.state, f.ok, f.loadErr
 }

@@ -1,33 +1,34 @@
 # Reconnect, checkpoint & recovery (PR-26)
 
-Realtime positions/HP are durable but **never written per tick**. The legacy
-`players.x/y/hp` rows remain the fallback for players outside the MMO cohort.
+Realtime position is checkpointed in `players` and is **never written per
+tick**. `players.x/y` remain an integer compatibility projection for legacy
+gameplay; `players.world_x/world_y` are the authoritative MMO-local coordinates.
 
 ## Durable state
 
-`player_world_state_v2` (`backend/internal/db/schema_realtime.go`):
+`players` (`backend/internal/db/schema_players.go`):
 
 ```text
-player_id PK -> players(id)
-zone_id, instance_id, x, y, hp, shield
-safe_x, safe_y
-map_version, content_version
-updated_at
+current_region, world_zone_id, world_instance_id
+world_x, world_y, world_safe_x, world_safe_y, world_location_revision
 ```
 
-- `zone_id` is the world map ID, `instance_id` is the zone instance.
-- `safe_x/y` is the entry safe spawn used as the fallback.
-- Map/content versions prevent resuming a stale artifact.
+`player_world_state_v2` now stores only HP/shield and map/content versions.
+Location writes compare `world_location_revision`, so a late checkpoint cannot
+overwrite a newer legacy move or zone transfer. The legacy-move trigger clears
+the realtime zone marker and advances the revision when an old movement path
+changes location.
 
 ## Join / leave
 
-- **Join**: the gateway loads the checkpoint best-effort. It is used only when
-  `zone_id`, `map_version` and `content_version` match the join request. HP 0
-  checkpoints fall back to the legacy HP; blocked/out-of-map coordinates go
-  through `Manager.SafeSpawn`. A configured store read failure denies join with
+- **Join**: the gateway loads location from `players`. Map/content versions in
+  the vitals checkpoint gate restoration of checkpoint HP/shield; legacy
+  coordinates are transformed only when no realtime location has been committed.
+  Blocked/out-of-map coordinates go through `Manager.SafeSpawn`. A configured
+  store read failure denies join with
   `realtime_checkpoint_unavailable` rather than guessing.
 - **Leave/disconnect**: the gateway snapshots the owned entity, persists
-  x/y/hp/shield + safe entry before releasing the lease. Reconnect creates a
+  MMO position to `players` and HP/shield + versions to the checkpoint before releasing the lease. Reconnect creates a
   fresh entity and receives a full `world.welcome` baseline; input ack resets.
 - **Periodic checkpoint**: the server runs a coarse 10s worker that batches all
   live player entities per zone through one transaction. It never runs inside

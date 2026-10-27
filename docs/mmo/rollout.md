@@ -65,10 +65,11 @@ preview zone loops do not own player or monster entities.
   Replays return `AlreadyGranted`; crash/failure rolls back the claim and rewards.
   Rewards are currently auto-granted; corpse/ground drop, F interaction, party
   loot and client loot toast remain pending.
-- PR-26 adds `player_world_state_v2` checkpoints: join resumes x/y/HP/shield
-  when zone + map/content versions match, leave/disconnect flushes the owned
-  entity before releasing the lease, and a 10s worker batches live player
-  checkpoints outside the zone tick. Safe spawn validation is reused; session
+- PR-26 checkpoints realtime-local position in `players` with a location
+  revision; `player_world_state_v2` keeps HP/shield and map/content versions.
+  Join restores only matching-version vitals, leave/disconnect flushes the owned
+  entity before releasing the lease, and a 10s worker checkpoints outside the
+  zone tick. Safe spawn validation is reused; session
   resume token, death nonce, combat-logout policy and outbox replay remain
   pending.
 - PR-27 lands portal metadata validation/rendering and a process-local atomic

@@ -1,14 +1,15 @@
 # Game Data
 
-## MMO location preparation
+## MMO player location
 
-`player_world_location` is defined in `schema_realtime.go` after `regions` and
-`players` exist. It has one row per player, with `region_id` (FK), `zone_id`,
-`instance_id`, MMO `x/y`, safe spawn coordinates, HP/shield checkpoint,
-map/content versions, revision and update time. It indexes zone plus instance
-and logical region. Schema creation does not backfill the table or make it the
-active location source; the staged cutover is tracked in
-`docs/mmo/location-audit.md` and `docs/plans/MMO_SINGLE_LOCATION_SOURCE.md`.
+The `players` row owns durable location. `current_region` is the logical
+gameplay region; `world_zone_id`, `world_instance_id`, `world_x/world_y`,
+`world_safe_x/world_safe_y`, and `world_location_revision` hold the realtime
+map location and its compare-and-swap revision. Integer `players.x/y` remain a
+legacy projection for older gameplay handlers. `player_world_state_v2` stores
+only HP/shield and map/content versions. Existing databases require the
+explicit maintenance script `backend/scripts/migrate_player_world_location.sql`;
+it is not run during startup. See `docs/mmo/recovery.md`.
 
 ## Daily missions
 

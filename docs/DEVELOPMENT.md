@@ -98,6 +98,8 @@ Các biến thường dùng:
 | `MMO_ADMISSION_PAUSED` | Chặn join MMO mới nhưng để session hiện tại chạy tiếp; dùng cho cutover/rollback. `Admission.Drain` cũng bật cờ này, checkpoint và release mọi lease. |
 | `PHASER_WORLD_CLIENT_ENABLED` | Cờ backend rollout client Phaser; mặc định `false`. Cả cờ này và backend flag, allowlist/version đều phải cho phép join. |
 
+DB đã khởi tạo trước khi thêm các cột `world_*` cần backup, drain realtime/movement, rồi chạy thủ công `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/scripts/migrate_player_world_location.sql` trước khi nâng backend. Không chạy script khi server cũ còn nhận movement hoặc checkpoint.
+
 Authenticated WS protocol v1 nhận `world.input` sau khi client chờ `world.welcome`: server xác thực sequence/vector, giới hạn 30 input/giây mỗi kết nối, xếp qua queue riêng tối đa 64 lệnh rồi mới gửi vào queue mô phỏng có giới hạn. Input không kèm player ID; identity lấy từ phiên đăng nhập và controller lease. Snapshot preview 20 Hz chỉ chứa entity trong AOI tròn bán kính 32 world units, có delta từ baseline định kỳ, `removed` và `ack_seq`; queue per-session coalesce trạng thái mới nhất. Client interpolation/resync và budget byte chưa làm xong.
 
 Frontend:
@@ -131,8 +133,9 @@ Camera có deadzone/zoom/shake + chỉ báo mục tiêu ngoài màn hình. Loado
 `players.equipped_gus` + `player_gu` đang equipped/ACTIVE, match profile realtime đã compile và
 re-slot 1–6; Gu chưa compile bị bỏ qua, fallback preview nếu không có Gu nào. View MMO có drawer
 Túi/Tu luyện/Tổ đội/Cài đặt + chat overlay; mở panel đặt UI-modal chặn input Phaser nhưng server
-không dừng zone. Loot auto-grant idempotent qua `realtime_loot_grants`; checkpoint world state ở
-`player_world_state_v2` (join resume, leave/disconnect flush, worker 10s), xem `docs/mmo/recovery.md`.
+không dừng zone. Loot auto-grant idempotent qua `realtime_loot_grants`; vị trí MMO được checkpoint
+trong `players` (join resume, leave/disconnect flush, worker 10s), còn
+`player_world_state_v2` chỉ giữ HP/shield và phiên bản map, xem `docs/mmo/recovery.md`.
 Portal metadata được parse/render và `Manager.TransferCharacter` handoff atomic trong process, nhưng
 chưa tự trigger portal/update DB/scene swap; xem `docs/mmo/transfer.md`. Ruleset map `pve/pvp/safe`, party-aware
 harm rules, boss threat + splash và nhãn/tint party trong snapshot; xem `docs/mmo/pvp-party.md`.

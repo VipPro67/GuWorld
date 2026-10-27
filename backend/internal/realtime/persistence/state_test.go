@@ -26,4 +26,10 @@ func TestStateValidation(t *testing.T) {
 	if err := state.Validate(); err == nil {
 		t.Fatal("nil player accepted")
 	}
+	state.PlayerID = uuid.New()
+	state.HasLocationRevision = true
+	state.LocationRevision = -1
+	if err := state.Validate(); err == nil {
+		t.Fatal("negative location revision accepted")
+	}
 }

@@ -46,7 +46,7 @@ the operational view of the same cohort plan.
 2. Call the admission drain path (`Admission.Drain`, also invoked during graceful
    server shutdown):
    - pauses admission;
-   - checkpoints every active session to `player_world_state_v2`;
+   - checkpoints location to `players` and vitals/map versions to `player_world_state_v2`;
    - releases every process-local lease;
    - clients receive no more snapshots and reconnect to the legacy world.
 3. Keep pending loot/ledger rows; the loot grant transaction is idempotent. Do
