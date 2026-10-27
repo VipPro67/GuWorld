@@ -832,6 +832,9 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			tribulations.GET("/active", handlers.GetActiveTribulation)
 			tribulations.POST("/:eventId/engage", handlers.EngageTribulation)
 			tribulations.POST("/:eventId/resolve", handlers.ResolveTribulation)
+			tribulations.POST("/:eventId/realtime-engage", handlers.RealtimeEngageTribulation)
+			tribulations.POST("/:eventId/realtime-victory", handlers.RealtimeResolveTribulationVictory)
+			tribulations.POST("/:eventId/realtime-escape", handlers.RealtimeEscapeTribulation)
 		}
 
 		// Arena — group: 40/min, per player: 25/min

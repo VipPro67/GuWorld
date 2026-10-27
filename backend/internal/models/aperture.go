@@ -27,6 +27,14 @@ type ImmortalAperture struct {
 	ChaosCalamityCount       int         `json:"chaos_calamity_count"`
 	State                    string      `json:"state"` // 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED'
 	DaoMarks                 DaoMarksMap `json:"dao_marks"`
+	IsPlaced                 bool        `json:"is_placed"`
+	PlacedRegion             *string     `json:"placed_region,omitempty"`
+	PlacedX                  *float64    `json:"placed_x,omitempty"`
+	PlacedY                  *float64    `json:"placed_y,omitempty"`
+	PlacedAt                 *time.Time  `json:"placed_at,omitempty"`
+	ReturnRegion             *string     `json:"return_region,omitempty"`
+	ReturnX                  *float64    `json:"return_x,omitempty"`
+	ReturnY                  *float64    `json:"return_y,omitempty"`
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
 	Temperature              float64     `json:"temperature,omitempty"`

@@ -563,7 +563,8 @@ func seedStarterSpatialRealm() error {
 			('realm_hoa_tuu_cave','Hoa Tửu Mật Đạo','Mật đạo sâu trong lòng đất Thanh Mao Sơn do Hoa Tửu Hành Giả lưu lại, cất giấu Tửu Trùng và cơ quan bẫy rập.',30,30,1,2,TRUE,'SECRET_REALM',1100,1100,1129,1129,1100,1100,'{"cell_type_weights":{"Monster":30,"Resource":20,"Empty":50},"resources":["ginseng"],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":2,"pvp_mode":"SAFE_ZONE","allow_teleport":false,"max_players":1,"lifetime_seconds":7200,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
 			('realm_bach_cot_hall','Bạch Cốt Động','Động phủ cất giấu truyền thừa Bạch Cốt Chân Nhân, rải rác vạn bộ hài cốt và gai xương ma đạo.',30,30,3,4,TRUE,'SECRET_REALM',2000,2000,2029,2029,2000,2000,'{"cell_type_weights":{"Monster":40,"Resource":10,"Empty":50},"resources":["jade_stone"],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":4,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":4,"lifetime_seconds":10800,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
 			('realm_three_kings_sanctum','Tam Vương Phúc Địa','Phúc địa thượng cổ của Tam Vương (Bá Vương, Khốc Vu, Cừu Cửu). Tranh đoạt cơ duyên chính ma khốc liệt.',40,40,4,5,TRUE,'SECRET_REALM',3000,3000,3039,3039,3000,3000,'{"cell_type_weights":{"Monster":30,"Resource":20,"Empty":50},"resources":[],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":5,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":30,"lifetime_seconds":14400,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
-			('realm_dang_hon_summit','Đãng Hồn Sơn','Thiên địa bí cảnh đệ nhất Hồn Đạo trong Hồ Tiên Phúc Địa, gió Đãng Hồn vù vù thổi, Can Đảm Cổ sinh sôi nảy nở.',40,40,6,9,TRUE,'SECRET_REALM',4000,4000,4039,4039,4000,4000,'{"cell_type_weights":{"Monster":40,"Resource":20,"Empty":40},"resources":[],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":9,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":20,"lifetime_seconds":21600,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb)
+			('realm_dang_hon_summit','Đãng Hồn Sơn','Thiên địa bí cảnh đệ nhất Hồn Đạo trong Hồ Tiên Phúc Địa, gió Đãng Hồn vù vù thổi, Can Đảm Cổ sinh sôi nảy nở.',40,40,6,9,TRUE,'SECRET_REALM',4000,4000,4039,4039,4000,4000,'{"cell_type_weights":{"Monster":40,"Resource":20,"Empty":40},"resources":[],"wild_gus":[]}'::jsonb,'[]'::jsonb,'{"max_allowed_rank":9,"pvp_mode":"FREE_PK","allow_teleport":false,"max_players":20,"lifetime_seconds":21600,"death_penalty":"EXPEL_TO_ENTRANCE"}'::jsonb),
+			('aperture_tribulation','Tiên Khiếu Độ Kiếp','Bản đồ Tiên Khiếu nơi Cổ Tiên nghênh tiếp thiên kiếp địa tai thời gian thực.',20,20,6,9,TRUE,'TRIBULATION',0,0,20,20,10,10,'{}'::jsonb,'[]'::jsonb,'{"pvp_mode":"SAFE_ZONE"}'::jsonb)
 			ON CONFLICT (id) DO NOTHING`, nil},
 
 		// 2. Map linkages
@@ -573,7 +574,8 @@ func seedStarterSpatialRealm() error {
 			('realm_hoa_tuu_cave','world_map'),
 			('realm_bach_cot_hall','world_map'),
 			('realm_three_kings_sanctum','world_map'),
-			('realm_dang_hon_summit','world_map')
+			('realm_dang_hon_summit','world_map'),
+			('aperture_tribulation','world_map')
 			ON CONFLICT (region_id) DO NOTHING`, nil},
 
 		// 3. Items & Monster templates

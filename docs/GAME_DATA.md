@@ -533,8 +533,10 @@ Cơ chế hiệu ứng thế giới mở (Realtime Status Effects):
 - **Trói chân (`ROOT`, `BIND`) vs Choáng cứng (`STUN`, `FREEZE`, `PETRIFY`)**: `ROOT` giảm tốc độ di chuyển về 0 nhưng vẫn cho phép quay hướng và tung chiêu; Hard CC khóa cả di chuyển lẫn dùng kỹ năng.
 - **Tỉ lệ sát thương lai (Hybrid Scaling)**: Sát thương chiêu realtime được tính kết hợp giữa công kích nhân vật và uy lực Cổ: `(Damage * gu_power_ratio + BaseAttack * player_atk_ratio) * DamageScale`.
 
-`cooldown_ms` và mana dùng chung `gu_dictionary.base_mana_cost`; mana trong trận là
-pool riêng (100, hồi 6/giây) nên không tiêu hao mana thật của nhân vật.
+`cooldown_ms` dùng thời gian thực. Khi vào map, chi phí dùng Cổ được tính từ
+`gamefx.EnergyCost` theo chuyển/cảnh giới và thuế xung đột Đạo Ngân. Zone giữ
+pool Chân Nguyên của nhân vật và ghi delta tiêu hao về `players.current_mana`
+cùng checkpoint; không dùng pool combat mặc định 100 cho nhân vật thật.
 
 ### Cổ của người chơi — bảng `player_gu`
 
@@ -559,6 +561,20 @@ Cột `players.gu_inventory` (JSONB) đã được **thay thế hoàn toàn** b�
 | `growth_hours` | DOUBLE PRECISION | |
 | `last_fed_at` | TIMESTAMPTZ | Lần cuối được cho ăn. Chỉ các feed handler (`gu.feed`/`feed_group`/`feed_all`) ghi trực tiếp; không nằm trong đường sync bulk. Dùng cho audit log chết đói (thời gian không được cho ăn). |
 | `created_at` / `updated_at` | TIMESTAMPTZ | |
+
+Trong combat realtime, mỗi slot hotbar gắn với một `player_gu.id` cụ thể. Một
+lần thử cast hợp lệ trừ 1 `hunger` của instance đó trước khi kiểm tra thiếu
+Chân Nguyên, giống thứ tự turn-based. Zone chặn cast khi độ no dưới 1; checkpoint
+trừ tổng lượt dùng theo delta trong cùng transaction ghi vị trí/HP/mana.
+
+`movement_policy` của profile được áp trong windup và recovery: `SLOW` còn 50%
+tốc độ chạy, `ROOT` dừng di chuyển, `FREE`/bỏ trống giữ nguyên tốc độ. `recovery_ms`
+khóa cast kế tiếp và đánh thường sau khi chiêu kết thúc, kể cả khi GCD đã hết;
+chiêu bị ngắt không tạo recovery. Cooldown, status có thời hạn và bộ đếm hidden
+passive được ghi vào `player_world_state_combat` trong cùng transaction checkpoint,
+theo số tick còn lại, nên rejoin hoặc chuyển vùng không reset để né debuff.
+Cooldown chỉ khôi phục nếu đúng Cổ đó vẫn nằm ở slot cũ; nhân vật chết xóa trạng
+thái combat có thể khôi phục.
 
 - Migration `migrate_player_gu_from_inventory` (chạy một lần khi còn cột `gu_inventory`) copy toàn bộ dữ liệu cũ sang `player_gu`, sau đó `DROP COLUMN IF EXISTS gu_inventory` loại bỏ cột. An toàn chạy lặp lại.
 - Cổ đang trang bị/Bản Mệnh vẫn được mirror trong cột JSONB `players.equipped_gus` (danh sách `instance_id`) để các truy vấn nhẹ (status) không cần join.

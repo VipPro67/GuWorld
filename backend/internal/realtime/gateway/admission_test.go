@@ -456,12 +456,14 @@ func TestAdmissionBuildsOwnedGuLoadoutAndCastsRealtimeSkill(t *testing.T) {
 		return handlers.RealtimeJoinState{
 			MapID: "forest", RegionID: "forest", X: 0, Y: 0, HP: 100, BaseHP: 100, Rank: 3, CurrentMana: 20, MaxMana: 80, BaseAttack: 30,
 			EquippedGu: []handlers.RealtimeEquippedGu{
-				{InstanceID: "inst-frost", GuID: "GU_WHITE_FROST", Rank: 3, Usable: true, ManaCost: 2.5, DamageScale: 1.5},
-				{InstanceID: "inst-arrow", GuID: "GU_WATER_ARROW", Rank: 1, Usable: true, ManaCost: 0.25, DamageScale: 2},
+				{InstanceID: "inst-frost", GuID: "GU_WHITE_FROST", Rank: 3, Hunger: 10, Usable: true, ManaCost: 2.5, DamageScale: 1.5},
+				{InstanceID: "inst-arrow", GuID: "GU_WATER_ARROW", Rank: 1, Hunger: 10, Usable: true, ManaCost: 0.25, DamageScale: 2},
 			},
 		}, nil
 	})
 	admission.SetLoadoutCatalog(compiled)
+	store := &fakeStateStore{}
+	admission.SetStateStore(store)
 	result, err := admission.Join(context.Background(), playerID, controllerID, protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"})
 	if err != nil {
 		t.Fatal(err)
@@ -493,6 +495,18 @@ func TestAdmissionBuildsOwnedGuLoadoutAndCastsRealtimeSkill(t *testing.T) {
 			if entity.Kind == sim.EntityMonster {
 				for _, status := range entity.Combat.Statuses {
 					if status.ID == "FREEZE" {
+						admission.CheckpointActive()
+						admission.CheckpointActive()
+						if len(store.guUseDeltas) != 2 || store.guUseDeltas[0]["inst-frost"] != 1 || len(store.guUseDeltas[1]) != 0 {
+							t.Fatalf("Gu usage was not settled once: %+v", store.guUseDeltas)
+						}
+						if len(store.saved) == 0 || store.saved[len(store.saved)-1].Combat == nil {
+							t.Fatalf("checkpoint did not persist combat state: %+v", store.saved)
+						}
+						combat := store.saved[len(store.saved)-1].Combat
+						if combat.CooldownRemainingTicks[1] == 0 || combat.CooldownSkillIDs[1] != "GU_WHITE_FROST" {
+							t.Fatalf("checkpoint did not persist the hotbar cooldown: %+v", combat)
+						}
 						return
 					}
 				}
@@ -504,12 +518,13 @@ func TestAdmissionBuildsOwnedGuLoadoutAndCastsRealtimeSkill(t *testing.T) {
 }
 
 type fakeStateStore struct {
-	state      persistence.State
-	ok         bool
-	saved      []persistence.State
-	manaDeltas []float64
-	loadErr    error
-	settleErr  error
+	state       persistence.State
+	ok          bool
+	saved       []persistence.State
+	manaDeltas  []float64
+	guUseDeltas []map[string]uint64
+	loadErr     error
+	settleErr   error
 }
 
 type revisionStateStore struct {
@@ -587,6 +602,18 @@ func (f *fakeStateStore) SaveAndApplyManaDelta(ctx context.Context, state persis
 	}
 	f.manaDeltas = append(f.manaDeltas, delta)
 	return nil
+}
+
+func (f *fakeStateStore) SaveAndApplyCombatDeltaRevision(ctx context.Context, state persistence.State, delta float64, uses map[string]uint64) (int64, error) {
+	if err := f.SaveAndApplyManaDelta(ctx, state, delta); err != nil {
+		return 0, err
+	}
+	copyUses := make(map[string]uint64, len(uses))
+	for id, count := range uses {
+		copyUses[id] = count
+	}
+	f.guUseDeltas = append(f.guUseDeltas, copyUses)
+	return 0, nil
 }
 
 func TestAdmissionCheckpointSettlesManaOnceAndRetriesFailure(t *testing.T) {
@@ -710,6 +737,72 @@ func TestAdmissionPauseAndDrainForRollback(t *testing.T) {
 	}
 	if len(store.saved) != 1 {
 		t.Fatalf("drain did not checkpoint session: %+v", store.saved)
+	}
+}
+
+func TestAdmissionRestoresDurableCombatStateOnJoin(t *testing.T) {
+	playerID, controllerID := uuid.New(), uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
+	manager := startTestManager(t, key, 1)
+	profiles, err := realtimeeffects.LoadProfiles("../../../data/mmo/gu/transpiled_profiles.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := realtimeeffects.CompileCatalog(profiles, nil, realtimeeffects.DefaultMVP())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &fakeStateStore{ok: true, state: persistence.State{
+		PlayerID: playerID, RegionID: "forest", ZoneID: "forest", InstanceID: key.InstanceID,
+		X: 17, Y: 29, HP: 90, SafeX: 17, SafeY: 29,
+		MapVersion: "map-1", ContentVersion: "content-1",
+		Combat: &persistence.CombatState{
+			Version: persistence.CombatStateVersion, GCDRemainingTicks: 5,
+			CooldownRemainingTicks: [7]uint64{0, 100}, CooldownSkillIDs: [7]string{"", "GU_WHITE_FROST"},
+			RecoveryRemainingTicks: 4, RecoveryPolicy: "SLOW",
+			Statuses: []persistence.StatusState{{
+				ID: "FREEZE", RemainingTicks: 30, DurationTicks: 30, MoveMultiplier: 0,
+				Debuff: true, PvPDrCategory: "HARD_CC",
+			}},
+		},
+	}}
+	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{
+			MapID: "forest", RegionID: "forest", X: 10, Y: 10, HP: 100, BaseHP: 100, Rank: 3, CurrentMana: 20, MaxMana: 80, BaseAttack: 30,
+			EquippedGu: []handlers.RealtimeEquippedGu{
+				{InstanceID: "inst-frost", GuID: "GU_WHITE_FROST", Rank: 3, Hunger: 10, Usable: true, ManaCost: 2.5, DamageScale: 1.5},
+			},
+		}, nil
+	})
+	admission.SetLoadoutCatalog(compiled)
+	admission.SetStateStore(store)
+	result, err := admission.Join(context.Background(), playerID, controllerID, protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	welcome, ok := result.(protocol.Welcome)
+	if !ok {
+		t.Fatalf("unexpected join result: %#v", result)
+	}
+	var snapshot protocol.Snapshot
+	if err := json.Unmarshal(welcome.Snapshot, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Entities) != 1 {
+		t.Fatalf("join snapshot entities=%d, want 1", len(snapshot.Entities))
+	}
+	entity := snapshot.Entities[0]
+	if len(entity.Cooldowns) != 7 || entity.Cooldowns[1] == 0 {
+		t.Fatalf("durable cooldown was not restored: %+v", entity.Cooldowns)
+	}
+	foundFreeze := false
+	for _, status := range entity.Statuses {
+		if status == "FREEZE" {
+			foundFreeze = true
+		}
+	}
+	if !foundFreeze {
+		t.Fatalf("durable status was not restored: %+v", entity.Statuses)
 	}
 }
 

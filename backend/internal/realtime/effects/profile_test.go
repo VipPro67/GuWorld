@@ -25,7 +25,7 @@ func TestCompileCommittedProfiles(t *testing.T) {
 	if compiled.Hash == "" {
 		t.Fatal("compiled catalog hash is empty")
 	}
-	if compiled.Hash != "377977365de022f3a00f6e74d16b68a2f7827d0c10a5392fff2a84c0b129800c" {
+	if compiled.Hash != "68826df06d723a2d756b009a26edb11e0b9ed9da7f0a97a1f9a622c867813b94" {
 		t.Fatalf("compiled catalog drifted; update this baseline: %s", compiled.Hash)
 	}
 	arrow, ok := compiled.Profile("GU_WATER_ARROW", 1)
@@ -125,6 +125,10 @@ func TestCompilerRejectsBrokenProfiles(t *testing.T) {
 		"windup":        func(c *ProfileCatalog) { c.Profiles[0].Active.WindupMS = MaxWindupMS + 1 },
 		"no projectile": func(c *ProfileCatalog) { c.Profiles[0].Active.Projectile = nil },
 		"bad effect":    func(c *ProfileCatalog) { c.Profiles[0].Active.Effects = []EffectProfile{{Type: "UNIQUE"}} },
+		"active stat_mod": func(c *ProfileCatalog) {
+			c.Profiles[0].Active.Effects = []EffectProfile{{Type: "STAT_MOD", Stat: "attack", Value: 5}}
+		},
+		"movement policy": func(c *ProfileCatalog) { c.Profiles[0].Active.MovementPolicy = "SPRINT" },
 		"status duration": func(c *ProfileCatalog) {
 			c.Profiles[0].Active.Effects = []EffectProfile{{Type: "STATUS", StatusID: "FREEZE", PvPDrCategory: "HARD_CC"}}
 		},

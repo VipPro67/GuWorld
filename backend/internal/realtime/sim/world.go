@@ -184,11 +184,12 @@ type World struct {
 	rng                      *rand.Rand
 	published                atomic.Pointer[Snapshot]
 
-	projectiles      []*projectile
-	nextProjectileID uint64
-	events           []combat.Event
-	nextEventID      uint64
-	lastStepNanos    atomic.Int64
+	projectiles        []*projectile
+	nextProjectileID   uint64
+	events             []combat.Event
+	nextEventID        uint64
+	lastStepNanos      atomic.Int64
+	tribulationHazards []TribulationHazard
 }
 
 type monsterSpawnCell struct{ x, y int64 }
@@ -640,12 +641,14 @@ func (w *World) Step() Snapshot {
 
 	w.stepMonsterAI()
 	w.tickCombat()
+	w.tickTribulationHazardsLocked()
 
 	for _, entity := range w.entities {
 		if entity.Kind == EntityPlayer && w.tick-entity.lastInputTick >= InputLeaseTicks {
 			entity.moveIntent = Vec2{}
 		}
-		if entity.Combat.Pending != nil {
+		castMultiplier := w.castMovementMultiplier(entity)
+		if castMultiplier <= 0 {
 			entity.moveIntent = Vec2{}
 			entity.moveTarget = nil
 			continue
@@ -680,7 +683,7 @@ func (w *World) Step() Snapshot {
 		}
 		movingToTarget := entity.moveTarget != nil
 		before := entity.Transform.Position
-		moveDistance := entity.Speed * w.step * w.moveMultiplier(entity)
+		moveDistance := entity.Speed * w.step * w.moveMultiplier(entity) * castMultiplier
 		if movingToTarget {
 			remaining := math.Hypot(entity.moveTarget.X-before.X, entity.moveTarget.Y-before.Y)
 			if remaining < moveDistance {
@@ -867,6 +870,14 @@ func (w *World) blocked(position Vec2, radius float64) bool {
 }
 
 // Snapshot returns a detached copy that is safe to read from gateway goroutines.
+// Tick returns the current simulation tick. It is a read-only lookup used by
+// the gateway to translate durable tick deadlines on rejoin.
+func (w *World) Tick() uint64 {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	return w.tick
+}
+
 func (w *World) Snapshot() Snapshot {
 	snapshot := w.published.Load()
 	if snapshot == nil {

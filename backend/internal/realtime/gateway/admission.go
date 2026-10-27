@@ -86,8 +86,9 @@ type session struct {
 const edgeTransferCooldown = 2 * time.Second
 
 type manaSettlement struct {
-	mu   sync.Mutex
-	last float64
+	mu       sync.Mutex
+	last     float64
+	lastUses [7]uint64
 }
 
 type Error struct {
@@ -297,6 +298,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	}
 	baseHP := state.HP
 	baseShield := 0.0
+	var durableCombat *persistence.CombatState
 	if stateStore != nil {
 		durable, ok, loadErr := stateStore.Load(ctx, playerID)
 		if loadErr != nil {
@@ -314,6 +316,12 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 				}
 				baseShield = durable.Shield
 			}
+		}
+		// Cooldowns, statuses and hidden-proc counters follow the character
+		// across zones and map revisions. Only the content (rules) version must
+		// match so a re-authored skill cannot inherit a stale timer.
+		if ok && durable.ContentVersion == request.ContentVersion {
+			durableCombat = durable.Combat
 		}
 	}
 	maxHP := math.Max(math.Max(state.HP, state.BaseHP), baseHP)
@@ -337,6 +345,8 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 			if !entry.Usable {
 				continue
 			}
+			skill.GuInstanceID = entry.InstanceID
+			skill.GuHunger = entry.Hunger
 			skill.ManaCost = entry.ManaCost
 			guRatio := 1.0
 			if skill.GuPowerRatio > 0 {
@@ -347,6 +357,9 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 				baseDmg += state.BaseAttack * skill.PlayerAtkRatio
 			}
 			skill.Damage = baseDmg * entry.DamageScale
+			if entry.ShieldScale > 0 {
+				skill.Shield *= entry.ShieldScale
+			}
 			skill.BacklashPct = entry.BacklashPct
 			skill.Path = entry.Path
 		}
@@ -364,6 +377,11 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		playerCombat.MaxMana = state.MaxMana
 		playerCombat.ManaRegenPerSecond = state.ManaRegenPerSecond
 		playerCombat.BasicAttackDamage = state.BaseAttack
+	}
+	if durableCombat != nil {
+		if zoneTick, ok := a.manager.ZoneTick(key); ok {
+			restoreCombat(&playerCombat, *durableCombat, zoneTick)
+		}
 	}
 	moveSpeed := realtimePlayerSpeed(state.MovementSpeed)
 	entity := sim.Entity{
@@ -466,9 +484,17 @@ func (a *Admission) Leave(playerID, controllerID uuid.UUID) error {
 	active, exists := a.sessions[controllerID]
 	a.mu.Unlock()
 	if !exists || active.playerID != playerID {
+		// A retried checkpoint may have already released the lease. Leave is
+		// idempotent in that case so the client can finish disconnecting.
+		if !a.manager.OwnsCharacter(sim.CharacterID(playerID.String())) {
+			return nil
+		}
 		return admissionError(409, "realtime_session_not_joined", "This connection has no active realtime session")
 	}
 	if err := a.flushState(active); err != nil {
+		// Keep the lease owned and let the periodic checkpoint retry instead of
+		// dropping unsettled mana/hunger or releasing a dirty character.
+		a.markClosing(controllerID, active.lease.Token)
 		return admissionError(503, "realtime_checkpoint_unavailable", "Could not save character combat resources")
 	}
 	if !a.manager.LeaveCharacter(active.lease) {
@@ -600,6 +626,18 @@ func (a *Admission) TransferAtEdge(playerID, controllerID uuid.UUID, position si
 	}, true, nil
 }
 
+// markClosing keeps the session and its lease owned after a failed final
+// checkpoint. The periodic worker retries flushState and releases the lease
+// once the database recovers.
+func (a *Admission) markClosing(controllerID uuid.UUID, leaseToken string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if held, ok := a.sessions[controllerID]; ok && held.lease.Token == leaseToken {
+		held.closing = true
+		a.sessions[controllerID] = held
+	}
+}
+
 // beginTransfer marks the session as being handed off. Periodic checkpoints and
 // drain skip it so a concurrent flush cannot rewrite players.x/y back to the
 // source-zone edge after the destination projection was committed.
@@ -645,7 +683,10 @@ func (a *Admission) finishFailedTransfer(active session, controllerID uuid.UUID)
 		return
 	}
 	if err := a.flushState(held); err != nil {
+		// Keep the session owned so the periodic checkpoint can retry; a
+		// database outage must not silently drop position/mana/hunger.
 		logger.S.Errorf("Realtime transfer cleanup checkpoint failed for %s: %v", active.playerID, err)
+		return
 	}
 	a.manager.LeaveCharacter(held.lease)
 	a.mu.Lock()
@@ -775,8 +816,21 @@ func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 }
 
 func (a *Admission) flushState(active session) error {
+	publishInventory, err := a.flushStateLocked(active)
+	if publishInventory {
+		// Do not hold the per-session mana settlement lock while loading and
+		// broadcasting the authoritative inventory snapshot.
+		handlers.PublishPlayerRealtimeEvent(active.playerID, handlers.PlayerEventUpdated, handlers.GuInventoryDomain)
+	}
+	return err
+}
+
+// flushStateLocked serializes the mana/hunger settlement for one session and
+// reports whether the committed Gu usage changed the inventory the client
+// should refetch.
+func (a *Admission) flushStateLocked(active session) (bool, error) {
 	if a.states == nil {
-		return nil
+		return false, nil
 	}
 	if active.mana != nil {
 		active.mana.mu.Lock()
@@ -784,7 +838,7 @@ func (a *Admission) flushState(active session) error {
 	}
 	snapshot, err := a.manager.SnapshotForLease(active.lease)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, entity := range snapshot.Entities {
 		if entity.CharacterID != active.lease.CharacterID {
@@ -803,23 +857,51 @@ func (a *Admission) flushState(active session) error {
 			LegacyX: int(math.Round(legacyX)), LegacyY: int(math.Round(legacyY)),
 			SyncLegacy:          legacyOK,
 			HasLocationRevision: active.hasLocationRevision,
+			Combat:              combatCheckpoint(entity.Combat, snapshot.Tick, entity.Vitals.HP),
 		}
 		if active.locationRevision != nil {
 			checkpoint.LocationRevision = active.locationRevision.Load()
 		}
 		delta := 0.0
+		guUses := make(map[string]uint64)
 		if active.mana != nil {
 			delta = entity.Combat.Mana - active.mana.last
+			for slot := 1; slot <= 6; slot++ {
+				uses := entity.Combat.GuUses[slot]
+				if uses < active.mana.lastUses[slot] {
+					return false, fmt.Errorf("realtime Gu usage counter went backwards for slot %d", slot)
+				}
+				if spent := uses - active.mana.lastUses[slot]; spent > 0 {
+					instanceID := entity.Combat.Skills[slot].GuInstanceID
+					if instanceID == "" {
+						return false, fmt.Errorf("realtime Gu usage has no instance for slot %d", slot)
+					}
+					guUses[instanceID] += spent
+				}
+			}
 		}
 		var revision int64
 		manaApplied := false
 		if atomicStore, ok := a.states.(interface {
+			SaveAndApplyCombatDeltaRevision(context.Context, persistence.State, float64, map[string]uint64) (int64, error)
+		}); ok {
+			var saveErr error
+			revision, saveErr = atomicStore.SaveAndApplyCombatDeltaRevision(ctx, checkpoint, delta, guUses)
+			if saveErr != nil {
+				return false, saveErr
+			}
+			active.mana.last = entity.Combat.Mana
+			active.mana.lastUses = entity.Combat.GuUses
+			manaApplied = true
+		} else if len(guUses) > 0 {
+			return false, fmt.Errorf("realtime state store cannot atomically settle Gu usage")
+		} else if atomicStore, ok := a.states.(interface {
 			SaveAndApplyManaDeltaRevision(context.Context, persistence.State, float64) (int64, error)
 		}); ok {
 			var saveErr error
 			revision, saveErr = atomicStore.SaveAndApplyManaDeltaRevision(ctx, checkpoint, delta)
 			if saveErr != nil {
-				return saveErr
+				return false, saveErr
 			}
 			active.mana.last = entity.Combat.Mana
 			manaApplied = true
@@ -827,7 +909,7 @@ func (a *Admission) flushState(active session) error {
 			SaveAndApplyManaDelta(context.Context, persistence.State, float64) error
 		}); ok {
 			if err := atomicStore.SaveAndApplyManaDelta(ctx, checkpoint, delta); err != nil {
-				return err
+				return false, err
 			}
 			active.mana.last = entity.Combat.Mana
 			manaApplied = true
@@ -837,10 +919,10 @@ func (a *Admission) flushState(active session) error {
 			var saveErr error
 			revision, saveErr = revisionStore.SaveRevision(ctx, checkpoint)
 			if saveErr != nil {
-				return saveErr
+				return false, saveErr
 			}
 		} else if err := a.states.Save(ctx, checkpoint); err != nil {
-			return err
+			return false, err
 		}
 		if active.locationRevision != nil && revision > 0 {
 			active.locationRevision.Store(revision)
@@ -850,13 +932,16 @@ func (a *Admission) flushState(active session) error {
 			ApplyManaDelta(context.Context, uuid.UUID, float64) error
 		}); ok && active.mana != nil && !manaApplied {
 			if err := manaStore.ApplyManaDelta(ctx, active.playerID, delta); err != nil {
-				return err
+				return false, err
 			}
 			active.mana.last = entity.Combat.Mana
 		}
-		return nil
+		// The zone decrements the local hunger counters while casting; the caller
+		// asks the client to refetch the committed Gu inventory so the UI cannot
+		// show a stale hunger value after a checkpoint, disconnect or transfer.
+		return len(guUses) > 0, nil
 	}
-	return fmt.Errorf("realtime character %s missing from checkpoint snapshot", active.playerID)
+	return false, fmt.Errorf("realtime character %s missing from checkpoint snapshot", active.playerID)
 }
 
 func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protocol.Welcome, error) {

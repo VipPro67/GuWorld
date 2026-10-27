@@ -332,6 +332,11 @@ export function MMOHud(props: MMOHudProps) {
   const [showQuickActionModal, setShowQuickActionModal] = useState(false);
   const { ids: quickActionIds } = useQuickActionIds();
 
+  const activeTribulation = useGameStore((state) => state.activeTribulation);
+  const realtimeResolveTribulationVictory = useGameStore((state) => state.realtimeResolveTribulationVictory);
+  const realtimeEscapeTribulation = useGameStore((state) => state.realtimeEscapeTribulation);
+  const [tribulationActionLoading, setTribulationActionLoading] = useState(false);
+
   // Poll world state without restarting the timers every time the player moves.
   // Drops are time-sensitive; cells change much less often and are fetched on
   // a slower cadence to avoid repeating the large rectangle query.
@@ -670,9 +675,15 @@ export function MMOHud(props: MMOHudProps) {
                 />
               )}
               <span className="absolute inset-0 grid place-items-center font-semibold text-white drop-shadow-md">
-                HP {Math.round(props.hp)}/{Math.round(props.maxHp)} {props.shield > 0 ? `(+${Math.round(props.shield)})` : ""}
+                HP {Math.round(props.hp)}/{Math.round(props.maxHp)}
               </span>
             </div>
+            {props.shield > 0 && (
+              <div className="flex items-center justify-center gap-1 rounded border border-sky-300/50 bg-sky-950/80 px-1.5 py-0.5 text-[9px] font-bold text-sky-200">
+                <Shield className="h-2.5 w-2.5" />
+                Khiên {Math.round(props.shield)}
+              </div>
+            )}
 
             {/* 2. Chân Nguyên (Mana) */}
             <div className="relative h-3.5 overflow-hidden rounded-full border border-[#6b896f] bg-[#10231d]">
@@ -737,14 +748,73 @@ export function MMOHud(props: MMOHudProps) {
         </div>
       )}
 
-      <div className={`pointer-events-auto absolute left-2 ${questBoxTop} hidden w-[min(88vw,250px)] rounded-xl md:block z-10 transition-all ${frame}`}>
-        <button type="button" onClick={() => setQuestsOpen((open) => !open)} className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-bold text-[#edce91]">
-          <span className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5" /> Nhiệm vụ hôm nay</span><span>{questsOpen ? "−" : "+"}</span>
-        </button>
-        {questsOpen && <button type="button" onClick={() => props.onOpenView("achievements")} className="w-full border-t border-[#b89a66]/25 px-3 py-2 text-left text-[11px] text-[#e9dec3] hover:bg-[#f3d194]/10">
-          {mission ? <><div className="font-semibold text-amber-100">{mission.title ?? "Nhiệm vụ"}</div><div className="mt-1 line-clamp-2 text-[#c6b99d]">{mission.description ?? "Xem tiến độ nhiệm vụ"}</div><div className="mt-1 font-sans text-[10px] text-[#d9bd82]">{mission.claimable ? "Có thể nhận thưởng" : `${mission.progress ?? 0}/${mission.target ?? 0}`} · Mở nhiệm vụ</div></> : "Xem nhiệm vụ và thành tựu"}
-        </button>}
-      </div>
+      {props.zoneId === "aperture_tribulation" ? (
+        <div className={`pointer-events-auto absolute left-2 ${questBoxTop} w-[min(92vw,280px)] rounded-2xl p-3 z-20 border border-amber-500/50 bg-[#16100bf2] text-[#f4e8cb] shadow-[0_8px_32px_rgba(0,0,0,.6)] backdrop-blur-md space-y-2.5`}>
+          <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
+            <span className="flex items-center gap-1.5 font-serif font-bold text-xs text-amber-300">
+              <Sparkles className="h-4 w-4 text-amber-400 animate-pulse" />
+              Kiếp Nạn Tiên Khiếu (20×20)
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-950/80 border border-rose-500/50 text-rose-300 font-mono">
+              {props.nearby.filter((e) => e.kind === "monster").length} Quái / Boss Kiếp
+            </span>
+          </div>
+
+          <p className="text-[10px] text-[#cdbb9b] leading-relaxed">
+            Dùng <strong className="text-amber-200">WASD / Chuột</strong> di chuyển và phím <strong className="text-amber-200">Q / W / E / R</strong> tung chiêu Cổ đánh bại Boss Kiếp Nạn!
+          </p>
+
+          <div className="flex flex-col gap-2 pt-1">
+            <button
+              type="button"
+              disabled={tribulationActionLoading}
+              onClick={async () => {
+                if (!activeTribulation) {
+                  useGameStore.getState().addToast("Không tìm thấy đợt tai kiếp khả dụng", "error");
+                  return;
+                }
+                setTribulationActionLoading(true);
+                try {
+                  await realtimeResolveTribulationVictory(activeTribulation.event.id, {});
+                } finally {
+                  setTribulationActionLoading(false);
+                }
+              }}
+              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-emerald-100 font-bold text-xs shadow-md border border-emerald-500/50 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
+            >
+              <Trophy className="h-3.5 w-3.5 text-amber-300" />
+              {tribulationActionLoading ? "Đang kết toán..." : "Hoàn Tất & Kết Toán Vượt Kiếp"}
+            </button>
+
+            <button
+              type="button"
+              disabled={tribulationActionLoading}
+              onClick={async () => {
+                if (!activeTribulation) return;
+                setTribulationActionLoading(true);
+                try {
+                  await realtimeEscapeTribulation(activeTribulation.event.id);
+                } finally {
+                  setTribulationActionLoading(false);
+                }
+              }}
+              className="w-full py-1.5 px-3 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-[11px] border border-slate-700/80 flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5 text-rose-400" />
+              Rút Lui (Trở Về Vị Trí Cũ)
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={`pointer-events-auto absolute left-2 ${questBoxTop} hidden w-[min(88vw,250px)] rounded-xl md:block z-10 transition-all ${frame}`}>
+          <button type="button" onClick={() => setQuestsOpen((open) => !open)} className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-bold text-[#edce91]">
+            <span className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5" /> Nhiệm vụ hôm nay</span><span>{questsOpen ? "−" : "+"}</span>
+          </button>
+          {questsOpen && <button type="button" onClick={() => props.onOpenView("achievements")} className="w-full border-t border-[#b89a66]/25 px-3 py-2 text-left text-[11px] text-[#e9dec3] hover:bg-[#f3d194]/10">
+            {mission ? <><div className="font-semibold text-amber-100">{mission.title ?? "Nhiệm vụ"}</div><div className="mt-1 line-clamp-2 text-[#c6b99d]">{mission.description ?? "Xem tiến độ nhiệm vụ"}</div><div className="mt-1 font-sans text-[10px] text-[#d9bd82]">{mission.claimable ? "Có thể nhận thưởng" : `${mission.progress ?? 0}/${mission.target ?? 0}`} · Mở nhiệm vụ</div></> : "Xem nhiệm vụ và thành tựu"}
+          </button>}
+        </div>
+      )}
 
       {/* Target Frame: Minimized (Ẩn luôn / Thu nhỏ) */}
       {props.target && targetViewMode === "minimized" && (
@@ -1134,7 +1204,11 @@ export function MMOHud(props: MMOHudProps) {
         <div className="flex items-center justify-between gap-1 px-1 text-[11px] text-[#f3ddac]">
           <span className="flex min-w-0 items-center gap-1 truncate" title={props.zoneId}>
             <MapPin className="h-3 w-3 shrink-0 text-amber-400" />
-            <span className="truncate">{props.zoneId.replaceAll("_", " ") || "Khu vực"}</span>
+            <span className="truncate">
+              {props.zoneId === "aperture_tribulation"
+                ? "⚡ Tiên Khiếu (20×20)"
+                : props.zoneId.replaceAll("_", " ") || "Khu vực"}
+            </span>
           </span>
           <div className="flex items-center gap-0.5 shrink-0">
             <span className="flex items-center gap-0.5 text-[9px] font-sans font-semibold text-emerald-400" title="Chỉ số Trinh Sát / Thần Thức hiện tại">

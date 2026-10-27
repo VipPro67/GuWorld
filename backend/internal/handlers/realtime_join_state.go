@@ -20,8 +20,10 @@ type RealtimeEquippedGu struct {
 	InstanceID  string
 	GuID        string
 	Rank        int
+	Hunger      float64
 	ManaCost    float64
 	DamageScale float64
+	ShieldScale float64
 	BacklashPct float64
 	Path        string
 	Usable      bool
@@ -92,14 +94,9 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		return RealtimeJoinState{}, err
 	}
 	state.HasWorldLocationRevision = true
-	if !state.HasWorldLocation {
+	if !state.HasWorldLocation || state.RegionID == "aperture_tribulation" {
 		state.MapID = realtimeMapID(state.RegionID, regionType, state.MapID)
 	}
-	equipped, err := loadRealtimeEquipped(ctx, db.DB, playerID, equippedOrder)
-	if err != nil {
-		return RealtimeJoinState{}, err
-	}
-	state.EquippedGu = equipped
 	// Project the same player resources and passive combat stats used by the
 	// turn simulator. The equipped-only service keeps large inventories out of
 	// realtime admission while preserving mana and Gu effect rules.
@@ -112,6 +109,11 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	if err != nil {
 		return RealtimeJoinState{}, err
 	}
+	equipped, err := loadRealtimeEquipped(ctx, tx, playerID, equippedOrder)
+	if err != nil {
+		return RealtimeJoinState{}, err
+	}
+	state.EquippedGu = equipped
 	if err := tx.Commit(); err != nil {
 		return RealtimeJoinState{}, err
 	}
@@ -148,7 +150,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		if !ok {
 			spec, ok = models.GetGuAny(entry.GuID)
 		}
-		if !ok || !gamefx.CanUseGuWithMana(player.Rank, &spec) {
+		if !ok || entry.Hunger < 1 || !gamefx.CanUseGuWithMana(player.Rank, &spec) {
 			continue
 		}
 		entry.Usable = true
@@ -197,6 +199,15 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		if entry.DamageScale <= 0 {
 			entry.DamageScale = 1
 		}
+		// Match turn-based self-shield scaling: apply path attainment and the
+		// conflict-adjusted Dao bonus. Conflict cannot reduce the base shield;
+		// it only reduces the additional Dao amplification. Path damage bonuses
+		// remain damage-only.
+		shieldDaoMult := (1 + (amp-1)*efficiency) * conflict
+		if shieldDaoMult < 1 {
+			shieldDaoMult = 1
+		}
+		entry.ShieldScale = gamefx.PathMasteryMultiplier(player.PathMasteries, spec.Path) * shieldDaoMult
 	}
 	return state, nil
 }
@@ -212,13 +223,13 @@ func RealtimeMovementSpeed(movement float64) float64 {
 	return 4 * (1 + bonus*0.05)
 }
 
-// realtimeMapID makes detailed KHU_VUC/SAFE_ZONE maps authoritative for MMO
+// realtimeMapID makes detailed KHU_VUC/SAFE_ZONE/TRIBULATION maps authoritative for MMO
 // admission even while an older region_world_maps assignment still points at
 // the outer NGU_VUC world map. Parent and special regions keep their explicit
 // map assignment.
 func realtimeMapID(regionID, zoneType, assignedMapID string) string {
 	switch zoneType {
-	case "KHU_VUC", "SAFE_ZONE":
+	case "KHU_VUC", "SAFE_ZONE", "TRIBULATION":
 		if regionID != "" {
 			return regionID
 		}
@@ -233,7 +244,7 @@ func loadRealtimeEquipped(ctx context.Context, queryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, playerID uuid.UUID, order models.EquippedGusList) ([]RealtimeEquippedGu, error) {
 	rows, err := queryer.QueryContext(ctx, `
-		SELECT id, gu_id, COALESCE(NULLIF(gu_rank, 0), rank, 1)
+			SELECT id, gu_id, COALESCE(NULLIF(gu_rank, 0), rank, 1), hunger
 		FROM player_gu
 		WHERE player_id = $1 AND equipped = true AND state = 'ACTIVE'
 	`, playerID)
@@ -244,7 +255,7 @@ func loadRealtimeEquipped(ctx context.Context, queryer interface {
 	byID := map[string]RealtimeEquippedGu{}
 	for rows.Next() {
 		var entry RealtimeEquippedGu
-		if err := rows.Scan(&entry.InstanceID, &entry.GuID, &entry.Rank); err != nil {
+		if err := rows.Scan(&entry.InstanceID, &entry.GuID, &entry.Rank, &entry.Hunger); err != nil {
 			return nil, err
 		}
 		byID[entry.InstanceID] = entry

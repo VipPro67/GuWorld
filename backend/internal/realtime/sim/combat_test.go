@@ -82,6 +82,200 @@ func TestLiveEmptyHotbarDoesNotFallBackToPreviewSkills(t *testing.T) {
 	}
 }
 
+func TestLiveLoadoutDoesNotGrantPreviewHiddenPassive(t *testing.T) {
+	state := NewPlayerCombatWithLoadout(combat.DefaultLoadout())
+	if state.Hidden.ID != "" {
+		t.Fatalf("live loadout received demo passive %q", state.Hidden.ID)
+	}
+	if preview := NewPlayerCombat(); preview.Hidden.ID == "" {
+		t.Fatal("preview world lost its explicit demo passive")
+	}
+}
+
+func TestSlowMovementPolicyMovesAtHalfSpeedDuringWindup(t *testing.T) {
+	skill := combat.Skill{
+		ID: "SLOW_CAST", Slot: 1, Mode: combat.ModeTarget, Name: "slow cast",
+		Range: 20, WindupTicks: 20, MovementPolicy: combat.MovementSlow,
+		Damage: 1, MaxTargets: 1, RequiresEnemyTarget: true,
+	}
+	casting, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	player.Combat = NewPlayerCombatWithLoadout([]combat.Skill{skill})
+	if err := casting.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := casting.AddEntity(newTargetMonster("mob", Vec2{X: 10})); err != nil {
+		t.Fatal(err)
+	}
+	if err := casting.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	collectEvents(t, casting, 1)
+
+	free, _ := NewWorld("arena", 16)
+	if err := free.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	const steps = 5
+	for seq := uint64(2); seq < 2+steps; seq++ {
+		if err := casting.SubmitInput(InputCommand{EntityID: "player", Seq: seq, Move: Vec2{X: 1}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := free.SubmitInput(InputCommand{EntityID: "player", Seq: seq, Move: Vec2{X: 1}}); err != nil {
+			t.Fatal(err)
+		}
+		casting.Step()
+		free.Step()
+	}
+	if casting.entities["player"].Combat.Pending == nil {
+		t.Fatal("test cast resolved before movement was measured")
+	}
+	slowDistance := casting.entities["player"].Transform.Position.X
+	freeDistance := free.entities["player"].Transform.Position.X
+	if freeDistance <= 0 {
+		t.Fatalf("control player did not move: %v", freeDistance)
+	}
+	if ratio := slowDistance / freeDistance; ratio < 0.49 || ratio > 0.51 {
+		t.Fatalf("SLOW windup moved at %.2f of free speed (slow=%v free=%v)", ratio, slowDistance, freeDistance)
+	}
+}
+
+func TestRootMovementPolicyStopsGroundMovementDuringWindup(t *testing.T) {
+	skill := combat.Skill{
+		ID: "ROOT_CAST", Slot: 1, Mode: combat.ModeTarget, Name: "root cast",
+		Range: 20, WindupTicks: 20, MovementPolicy: combat.MovementRoot,
+		Damage: 1, MaxTargets: 1, RequiresEnemyTarget: true,
+	}
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	player.Combat = NewPlayerCombatWithLoadout([]combat.Skill{skill})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("mob", Vec2{X: 10})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	collectEvents(t, w, 1)
+	for seq := uint64(2); seq < 5; seq++ {
+		if err := w.SubmitInput(InputCommand{EntityID: "player", Seq: seq, Move: Vec2{X: 1}}); err != nil {
+			t.Fatal(err)
+		}
+		w.Step()
+	}
+	if got := w.entities["player"].Transform.Position.X; got != 0 {
+		t.Fatalf("ROOT windup moved the caster: %v", got)
+	}
+}
+
+func TestRecoveryBlocksNextCastAfterGCDExpires(t *testing.T) {
+	skill := combat.Skill{
+		ID: "RECOVERY_CAST", Slot: 1, Mode: combat.ModeTarget, Name: "recovery cast",
+		Range: 20, WindupTicks: 1, RecoveryTicks: 12, MovementPolicy: combat.MovementSlow,
+		Damage: 1, MaxTargets: 1, RequiresEnemyTarget: true,
+	}
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	player.Combat = NewPlayerCombatWithLoadout([]combat.Skill{skill})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("mob", Vec2{X: 1})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	collectEvents(t, w, 2)
+	if w.entities["player"].Combat.Pending != nil || w.entities["player"].Combat.RecoveryUntil == 0 {
+		t.Fatalf("cast did not resolve into recovery: %+v", w.entities["player"].Combat)
+	}
+	cast := CastCommand{EntityID: "player", Seq: 2, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}
+	if err := w.SubmitCast(cast); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventCastRejected) || hasEvent(events, combat.EventCastAccepted) {
+		t.Fatalf("recovery did not block the next cast: %+v", events)
+	}
+	// Step past the authored recovery window; GCD expired many ticks earlier.
+	collectEvents(t, w, 11)
+	cast.Seq = 13
+	if err := w.SubmitCast(cast); err != nil {
+		t.Fatal(err)
+	}
+	events = collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventCastAccepted) {
+		t.Fatalf("cast still blocked after recovery: %+v", events)
+	}
+}
+
+func TestBasicAttackCannotInterruptOwnGuWindup(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	monster := newTargetMonster("mob", Vec2{X: 1.5})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	if events := collectEvents(t, w, 1); !hasEvent(events, combat.EventCastAccepted) {
+		t.Fatalf("cast not accepted: %+v", events)
+	}
+	if err := w.SubmitBasicAttack(AttackCommand{EntityID: "player", Seq: 2, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventCastRejected) || hasEvent(events, combat.EventBasicAttack) {
+		t.Fatalf("basic attack bypassed windup: %+v", events)
+	}
+	if hp := entityHP(t, w, "mob"); hp != 100 {
+		t.Fatalf("basic attack damaged target during windup: hp=%v", hp)
+	}
+}
+
+func TestOwnedGuHungerIsChargedByInstanceOnAttempt(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	player.Combat.Skills[1].GuInstanceID = "instance-a"
+	player.Combat.Skills[2].GuInstanceID = "instance-b"
+	player.Combat.GuHunger[1] = 1
+	player.Combat.GuHunger[2] = 4
+	player.Combat.Mana = 0
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("mob", Vec2{X: 1})); err != nil {
+		t.Fatal(err)
+	}
+	cast := CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}
+	if err := w.SubmitCast(cast); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventCastRejected) {
+		t.Fatalf("insufficient mana attempt was not rejected: %+v", events)
+	}
+	state := w.entities["player"].Combat
+	if state.GuHunger[1] != 0 || state.GuUses[1] != 1 || state.GuHunger[2] != 4 || state.GuUses[2] != 0 {
+		t.Fatalf("wrong instance was charged: hunger=%v uses=%v", state.GuHunger, state.GuUses)
+	}
+	cast.Seq = 2
+	if err := w.SubmitCast(cast); err != nil {
+		t.Fatal(err)
+	}
+	events = collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventCastRejected) || w.entities["player"].Combat.GuUses[1] != 1 {
+		t.Fatalf("exhausted Gu was charged again: %+v", events)
+	}
+}
+
 func TestBasicAttackIsServerAuthoritativeAndCooldownLimited(t *testing.T) {
 	w, _ := NewWorld("arena", 16)
 	player := newCombatPlayer("player", Vec2{})

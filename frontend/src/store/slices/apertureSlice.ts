@@ -69,6 +69,9 @@ export interface ApertureSlice {
   fetchActiveTribulation: (forceRefresh?: boolean) => Promise<void>;
   engageTribulationCombat: (eventId: string) => Promise<boolean>;
   resolveTribulation: (eventId: string) => Promise<boolean>;
+  realtimeEngageTribulation: (eventId: string) => Promise<Record<string, unknown> | null>;
+  realtimeResolveTribulationVictory: (eventId: string, nodeHP: Record<string, number>) => Promise<Record<string, unknown> | null>;
+  realtimeEscapeTribulation: (eventId: string) => Promise<boolean>;
   nodeWorkers: ApertureNodeWorker[];
   refinementQueue: ApertureRefinementJob[];
   settlements: ApertureSettlement[];
@@ -1067,6 +1070,111 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       await get().fetchAperture(true);
       await get().fetchDaoMarks(true);
       set({ activeTribulation: null });
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  realtimeEngageTribulation: async (eventId: string) => {
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return null;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/realtime-engage`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Khởi động độ kiếp thất bại");
+      }
+      get().addLog(`[Tiên Khiếu] Kiếp vân bao phủ! Sẵn sàng nghênh chiến ${data.tribulation_type || "tai kiếp"}.`);
+      return data;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return null;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  realtimeResolveTribulationVictory: async (eventId: string, nodeHP: Record<string, number>) => {
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return null;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/realtime-victory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ node_hp: nodeHP }),
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Kết toán độ kiếp realtime thất bại");
+      }
+      get().addToast(data.message || "Vượt kiếp thành công!", "success");
+      get().addLog(data.message || "Vượt kiếp thành công.");
+      await get().fetchAperture(true);
+      await get().fetchDaoMarks(true);
+      await get().fetchApertureNodes(true);
+      set({ activeTribulation: null });
+      if (get().player) {
+        get().setPlayerFromServer({
+          current_region: (data.return_region as string) || "hub_nam_cuong",
+          x: typeof data.return_x === "number" ? data.return_x : 500,
+          y: typeof data.return_y === "number" ? data.return_y : 500,
+        });
+      }
+      return data;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return null;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  realtimeEscapeTribulation: async (eventId: string) => {
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/realtime-escape`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Rút lui khỏi Tiên Khiếu thất bại");
+      }
+      get().addToast(data.message || "Đã rút lui an toàn về thế giới thực!", "info");
+      if (get().player) {
+        get().setPlayerFromServer({
+          current_region: (data.return_region as string) || "hub_nam_cuong",
+          x: typeof data.return_x === "number" ? data.return_x : 500,
+          y: typeof data.return_y === "number" ? data.return_y : 500,
+        });
+      }
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

@@ -58,6 +58,65 @@ func TestMonsterAIAggroChaseAndAttack(t *testing.T) {
 	}
 }
 
+func TestMonsterAttacksApertureResourceNodeAndSwitchesToPlayerOnThreat(t *testing.T) {
+	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "aperture_test", RulesetVersion: "v1"}, 8, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Player is far away (at 15, 0)
+	player := newPlayer("player")
+	player.Transform.Position = Vec2{X: 15, Y: 0}
+
+	// Resource node (stationary plant/mine) at (2, 0) with player faction
+	node := Entity{
+		ID:        "node_moon_orchid",
+		Kind:      EntityMonster,
+		Name:      "Ruộng Lan Nguyệt",
+		Transform: Transform{Position: Vec2{X: 2, Y: 0}},
+		Vitals:    Vitals{HP: 500, MaxHP: 500},
+		Speed:     0,
+		Radius:    0.8,
+		Faction:   "player",
+		AI:        AIState{Active: false},
+	}
+
+	// Tribulation monster at (4, 0)
+	monster := newAIMonster("trib_beast", Vec2{X: 4, Y: 0})
+	monster.AI.Home = Vec2{X: 4, Y: 0}
+	monster.AI.LeashRadius = 20
+
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(node); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+
+	// Step simulation: monster should approach and attack the resource node
+	for i := 0; i < 30; i++ {
+		w.Step()
+	}
+
+	nodeEntity := w.entities["node_moon_orchid"]
+	if nodeEntity == nil || nodeEntity.Vitals.HP >= 500 {
+		t.Fatalf("tribulation monster did not damage the resource node: %+v", nodeEntity.Vitals)
+	}
+
+	// Now player deals heavy threat to the monster
+	w.recordThreatLocked(w.entities["trib_beast"], w.entities["player"], 1000)
+	for i := 0; i < 5; i++ {
+		w.Step()
+	}
+
+	mobEntity := w.entities["trib_beast"]
+	if mobEntity.AI.Threat != "player" {
+		t.Fatalf("tribulation monster failed to switch threat to player, threat=%s", mobEntity.AI.Threat)
+	}
+}
+
 func TestPassiveMonsterIgnoresProximityButRetaliates(t *testing.T) {
 	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "passive", RulesetVersion: "v1"}, 8, 11)
 	if err != nil {

@@ -160,7 +160,7 @@ func (w *World) actMonsterLocked(monster *Entity) {
 
 	if monster.AI.Threat != "" {
 		target := w.entities[monster.AI.Threat]
-		if target == nil || target.Kind != EntityPlayer || target.Vitals.HP <= 0 || w.hasStatus(target, "STEALTH") {
+		if target == nil || target.Vitals.HP <= 0 || w.hasStatus(target, "STEALTH") || !w.canHarm(monster, target) {
 			monster.AI.Threat = ""
 			monster.AI.State = AIPatrol
 		} else {
@@ -181,7 +181,7 @@ func (w *World) actMonsterLocked(monster *Entity) {
 							splash = monster.AI.AttackDamage * 0.5
 						}
 						for _, other := range w.entities {
-							if other.Kind != EntityPlayer || other.ID == target.ID || other.Vitals.HP <= 0 || w.hasStatus(other, "STEALTH") {
+							if other.ID == target.ID || other.Vitals.HP <= 0 || w.hasStatus(other, "STEALTH") || !w.canHarm(monster, other) {
 								continue
 							}
 							if math.Hypot(other.Transform.Position.X-target.Transform.Position.X, other.Transform.Position.Y-target.Transform.Position.Y) <= monster.AI.SplashRadius {
@@ -234,7 +234,7 @@ func (w *World) selectMonsterTargetLocked(monster *Entity) *Entity {
 	bestThreat := 0.0
 	for candidateID, threat := range monster.AI.ThreatTable {
 		candidate := w.entities[candidateID]
-		if candidate == nil || candidate.Kind != EntityPlayer || candidate.Vitals.HP <= 0 || w.hasStatus(candidate, "STEALTH") {
+		if candidate == nil || candidate.Vitals.HP <= 0 || w.hasStatus(candidate, "STEALTH") || !w.canHarm(monster, candidate) {
 			delete(monster.AI.ThreatTable, candidateID)
 			continue
 		}
@@ -255,16 +255,20 @@ func (w *World) selectMonsterTargetLocked(monster *Entity) *Entity {
 	var nearest *Entity
 	var nearestDistance float64
 	for _, candidate := range w.entities {
-		if candidate.Kind != EntityPlayer || candidate.Vitals.HP <= 0 || w.hasStatus(candidate, "STEALTH") {
+		if candidate.ID == monster.ID || candidate.Vitals.HP <= 0 || w.hasStatus(candidate, "STEALTH") || !w.canHarm(monster, candidate) {
 			continue
 		}
 		distance := math.Hypot(candidate.Transform.Position.X-monster.Transform.Position.X, candidate.Transform.Position.Y-monster.Transform.Position.Y)
 		if distance > monster.AI.AggroRadius {
 			continue
 		}
-		if nearest == nil || distance < nearestDistance || (distance == nearestDistance && candidate.ID < nearest.ID) {
+		effectiveDistance := distance
+		if candidate.Kind != EntityPlayer {
+			effectiveDistance += 2.0 // small bias towards players so players can pull aggro
+		}
+		if nearest == nil || effectiveDistance < nearestDistance || (effectiveDistance == nearestDistance && candidate.ID < nearest.ID) {
 			nearest = candidate
-			nearestDistance = distance
+			nearestDistance = effectiveDistance
 		}
 	}
 	return nearest

@@ -130,6 +130,9 @@ func PublishPlayerSnapshot(player *models.Player, eventType string, domains ...P
 
 // PublishPlayerRealtimeEvent publishes a player realtime snapshot to Redis for WebSocket broadcast.
 func PublishPlayerRealtimeEvent(playerID uuid.UUID, eventType string, domains ...PlayerEventDomain) {
+	if db.DB == nil {
+		return
+	}
 	ClearPendingPlayerQueues(playerID.String())
 	snapshot, err := LoadPlayerRealtimeSnapshot(playerID)
 	if err != nil {

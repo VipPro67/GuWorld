@@ -108,10 +108,8 @@ type VisualProfile struct {
 }
 
 type CompiledActive struct {
-	Skill          combat.Skill
-	RecoveryTicks  uint64
-	MovementPolicy string
-	Effects        []EffectProfile
+	Skill   combat.Skill
+	Effects []EffectProfile
 }
 
 type CompiledPassive struct {
@@ -351,6 +349,9 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 	if active.ManaCost < 0 || !finiteFloat(active.ManaCost) || !finiteFloat(active.RangeUnits) {
 		return nil, fmt.Errorf("%s: mana/range must be finite and non-negative", path)
 	}
+	if !combat.ValidMovementPolicy(active.MovementPolicy) {
+		return nil, fmt.Errorf("%s: unsupported movement_policy %q", path, active.MovementPolicy)
+	}
 	if active.RangeUnits > combat.MaxCastRangeUnits {
 		return nil, fmt.Errorf("%s: range exceeds %v world units", path, combat.MaxCastRangeUnits)
 	}
@@ -365,13 +366,12 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 		Shape: active.Shape, AngleDeg: active.AngleDeg, LengthUnits: active.LengthUnits,
 		WidthUnits: active.WidthUnits, InnerRadius: active.InnerRadius,
 		ManaCost: active.ManaCost, Range: active.RangeUnits,
-		WindupTicks: msToTicks(active.WindupMS), CooldownTicks: msToTicks(active.CooldownMS),
+		WindupTicks: msToTicks(active.WindupMS), RecoveryTicks: msToTicks(active.RecoveryMS),
+		MovementPolicy: active.MovementPolicy, CooldownTicks: msToTicks(active.CooldownMS),
 		MoveDistance: active.MoveDistance, KnockbackDistance: active.KnockbackDistance,
 		PlayerAtkRatio: active.PlayerAtkRatio, GuPowerRatio: active.GuPowerRatio,
 	}
-	compiled := &CompiledActive{
-		RecoveryTicks: msToTicks(active.RecoveryMS), MovementPolicy: active.MovementPolicy,
-	}
+	compiled := &CompiledActive{}
 	if skill.Name == "" {
 		skill.Name = guID
 	}
@@ -437,8 +437,10 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 		case "CLEANSE":
 			skill.Cleanse = true
 		case "STAT_MOD":
-			// Active stat mods are authored but not applied by the PR-16 preview
-			// runtime; the compiler still keeps the payload for PR-19.
+			// Active stat mods need a timed buff runtime. Silently accepting
+			// them would let the hotbar advertise a skill whose payload never
+			// applies, so the compiler rejects the profile instead.
+			return nil, fmt.Errorf("%s: active STAT_MOD has no realtime runtime yet; reauthor it as a passive or status", effectPath)
 		default:
 			return nil, fmt.Errorf("%s: effect type %q is not supported by the realtime compiler", effectPath, effect.Type)
 		}

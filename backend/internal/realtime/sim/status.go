@@ -252,6 +252,22 @@ func (w *World) removeStatusLocked(entity *Entity, id string) bool {
 	return removed
 }
 
+// castMovementMultiplier is the authored cast-time movement factor. It applies
+// during windup (from the pending skill) and during the post-cast recovery
+// window. Status effects compose on top of it through moveMultiplier.
+func (w *World) castMovementMultiplier(entity *Entity) float64 {
+	if entity == nil {
+		return 1
+	}
+	if entity.Combat.Pending != nil {
+		return entity.Combat.Pending.Skill.MovementMultiplier()
+	}
+	if w.tick < entity.Combat.RecoveryUntil {
+		return (combat.Skill{MovementPolicy: entity.Combat.RecoveryPolicy}).MovementMultiplier()
+	}
+	return 1
+}
+
 func (w *World) moveMultiplier(entity *Entity) float64 {
 	slow := 1.0
 	haste := 1.0

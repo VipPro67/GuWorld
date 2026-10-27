@@ -941,6 +941,19 @@ func (m *Manager) Snapshot(key sim.ZoneKey) (sim.Snapshot, error) {
 	return zone.world.Snapshot(), nil
 }
 
+// ZoneTick returns the current tick of one configured zone. Admission uses it
+// to translate durable combat deadlines against the zone that will own the
+// character, before the entity is queued into that zone.
+func (m *Manager) ZoneTick(key sim.ZoneKey) (uint64, bool) {
+	m.mu.Lock()
+	zone := m.zones[key]
+	m.mu.Unlock()
+	if zone == nil {
+		return 0, false
+	}
+	return zone.world.Tick(), true
+}
+
 func (m *Manager) SnapshotForLease(lease OwnershipLease) (sim.Snapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

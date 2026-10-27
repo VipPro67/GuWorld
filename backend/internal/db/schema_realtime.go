@@ -31,6 +31,16 @@ func schemaRealtime() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("player_world_state_combat", `
+	CREATE TABLE IF NOT EXISTS player_world_state_combat (
+		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+		zone_id VARCHAR(120) NOT NULL DEFAULT '',
+		instance_id VARCHAR(120) NOT NULL DEFAULT '',
+		combat_state JSONB NOT NULL DEFAULT '{}'::jsonb,
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
 	if err := execSchema("realtime_loot_grants_death_idx", `
 	CREATE INDEX IF NOT EXISTS idx_realtime_loot_grants_death
 	ON realtime_loot_grants (zone_id, death_id);`); err != nil {

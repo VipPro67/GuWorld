@@ -8,6 +8,7 @@ func TestRealtimeMapIDPrefersDetailedChildRegion(t *testing.T) {
 	}{
 		{"KHU_VUC overrides stale outer binding", "thanh_mao_son", "KHU_VUC", "world_map", "thanh_mao_son"},
 		{"SAFE_ZONE overrides stale outer binding", "hub_dong_hai", "SAFE_ZONE", "world_map", "hub_dong_hai"},
+		{"TRIBULATION uses region map directly", "aperture_tribulation", "TRIBULATION", "world_map", "aperture_tribulation"},
 		{"NGU_VUC keeps outer map", "dai_vuc_dong_hai", "NGU_VUC", "world_map", "world_map"},
 		{"special region keeps explicit assignment", "secret_realm", "SECRET_REALM", "realm_map", "realm_map"},
 		{"missing assignment falls back to world map", "", "", "", "world_map"},

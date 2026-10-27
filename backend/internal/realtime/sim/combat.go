@@ -48,9 +48,13 @@ type CombatState struct {
 	ThoughtRegenPerSecond    float64
 	BasicAttackDamage        float64
 	GCDUntil                 uint64
+	RecoveryUntil            uint64
+	RecoveryPolicy           string
 	BasicAttackCooldownUntil uint64
 	Cooldowns                [7]uint64
 	Skills                   [7]combat.Skill
+	GuHunger                 [7]float64
+	GuUses                   [7]uint64
 	Pending                  *PendingCast
 	Statuses                 []StatusEffect
 	Hidden                   combat.HiddenPassive
@@ -81,6 +85,18 @@ func (w *World) startBasicAttackLocked(attacker *Entity, command AttackCommand) 
 	}
 	if w.isStunned(attacker) {
 		reject("stunned")
+		return
+	}
+	if attacker.Combat.Pending != nil {
+		reject("already_casting")
+		return
+	}
+	if w.tick < attacker.Combat.RecoveryUntil {
+		reject("recovering")
+		return
+	}
+	if w.tick < attacker.Combat.GCDUntil {
+		reject("global_cooldown")
 		return
 	}
 	if w.hasStatus(attacker, "BLIND") {
@@ -128,7 +144,11 @@ func NewPlayerCombat(loadout ...combat.Skill) CombatState {
 // NewPlayerCombatWithLoadout keeps an empty player hotbar empty. Live admission
 // uses this so missing realtime Gu profiles cannot turn into generic skills.
 func NewPlayerCombatWithLoadout(loadout []combat.Skill) CombatState {
-	return newPlayerCombat(loadout)
+	state := newPlayerCombat(loadout)
+	// The preview proc is demo content, not an innate player ability. Authored
+	// Gu hidden passives must be attached explicitly when their runtime exists.
+	state.Hidden = combat.HiddenPassive{}
+	return state
 }
 
 func newPlayerCombat(loadout []combat.Skill) CombatState {
@@ -141,6 +161,7 @@ func newPlayerCombat(loadout []combat.Skill) CombatState {
 	for _, skill := range loadout {
 		if skill.Slot >= 1 && skill.Slot <= 6 && skill.ID != "" {
 			state.Skills[skill.Slot] = skill
+			state.GuHunger[skill.Slot] = skill.GuHunger
 		}
 	}
 	return state
@@ -232,6 +253,10 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 		reject("wrong_target_mode")
 		return
 	}
+	if w.tick < caster.Combat.RecoveryUntil {
+		reject("recovering")
+		return
+	}
 	if w.tick < caster.Combat.GCDUntil {
 		reject("global_cooldown")
 		return
@@ -269,6 +294,18 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 			reject("invalid_aim")
 			return
 		}
+	}
+	if skill.GuInstanceID != "" && caster.Combat.GuHunger[skill.Slot] < 1 {
+		reject("gu_exhausted")
+		return
+	}
+	// Turn combat consumes one hunger from the exact Gu instance on an attempt,
+	// before backlash and the mana check. The zone keeps the balance until the
+	// next atomic player checkpoint settles its per-instance usage delta.
+	if skill.GuInstanceID != "" {
+		caster.Combat.GuHunger[skill.Slot]--
+		caster.Combat.GuUses[skill.Slot]++
+		caster.Revision++
 	}
 	if skill.BacklashPct > 0 {
 		backlash := caster.Vitals.MaxHP * skill.BacklashPct
@@ -339,6 +376,12 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		return
 	}
 	skill := pending.Skill
+	// Recovery runs after the cast resolves. It gates the next cast/basic
+	// attack and scales ground movement according to the authored policy.
+	if skill.RecoveryTicks > 0 || skill.MovementPolicy != "" {
+		caster.Combat.RecoveryUntil = w.tick + skill.RecoveryTicks
+		caster.Combat.RecoveryPolicy = skill.MovementPolicy
+	}
 	switch skill.Mode {
 	case combat.ModeTarget:
 		target := w.entities[pending.TargetID]

@@ -288,8 +288,11 @@ export const ImmortalApertureView: React.FC = () => {
     fetchActiveTribulation,
     engageTribulationCombat,
     resolveTribulation,
+    realtimeEngageTribulation,
+    realtimeResolveTribulationVictory,
     useItems: consumeItems,
     setView,
+    setPlayerFromServer,
     showConfirm,
     addToast,
     fetchDictionary,
@@ -615,6 +618,25 @@ export const ImmortalApertureView: React.FC = () => {
         setSelectedCell(null);
         setSelectedNode(null);
       }
+    }
+  };
+
+  const handleStartRealtimeTribulation = async () => {
+    if (!activeTribulation) return;
+    const data = await realtimeEngageTribulation(activeTribulation.event.id);
+    if (data) {
+      if (player) {
+        setPlayerFromServer({
+          current_region: "aperture_tribulation",
+          x: 10,
+          y: 10,
+        });
+      }
+      setView("mmo-world");
+      addToast(
+        "⚡ Đã tiến vào bản đồ Tiên Khiếu 20×20! Dùng WASD hoặc chuột để di chuyển, phím Q/W/E/R tung chiêu diệt Quái Kiếp!",
+        "info"
+      );
     }
   };
 
@@ -1378,18 +1400,36 @@ return (
                         ))}
                       </div>
 
-                      <p className="text-[11px] text-amber-500 font-semibold leading-relaxed">
-                        Xuất trận sẽ mở giao diện chiến đấu thông thường. Giáp và máu của đạo hữu tiêu hao trước; sát thương tràn qua mới làm tổn hại Tiên Khiếu.
-                      </p>
+                      <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/30 text-[11px] text-amber-200/90 leading-relaxed space-y-1.5">
+                        <p className="font-bold text-amber-300 flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-amber-400" />
+                          Chiến Trường Tiên Khiếu Realtime (Bản đồ 20×20):
+                        </p>
+                        <p>
+                          Khi vào trận, Đạo hữu sẽ được chuyển thẳng tới bản đồ Tiên Khiếu (canvas Phaser MMO). 
+                          Tại đây, có thể tự do dùng phím <span className="text-amber-300 font-mono font-bold">W / A / S / D</span> hoặc chuột để di chuyển, 
+                          phím <span className="text-amber-300 font-mono font-bold">Q / W / E / R / T / Y</span> để thi triển các chiêu thức Cổ đã trang bị để tiêu diệt Boss Kiếp Nạn và bảo vệ các cứ điểm tài nguyên!
+                        </p>
+                      </div>
 
-                      <button
-                        onClick={handleEngage}
-                        disabled={actionLoading}
-                        className="w-full py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
-                      >
-                        <Sword className="w-4 h-4" />
-                        {actionLoading ? "Đang xuất trận..." : "Xuất Trận Chiến Đấu"}
-                      </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          onClick={handleStartRealtimeTribulation}
+                          disabled={actionLoading}
+                          className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-rose-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg ring-1 ring-amber-400/40"
+                        >
+                          <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                          Vào Tiên Khiếu Nghênh Kiếp (Bản Đồ Realtime 20×20)
+                        </button>
+                        <button
+                          onClick={handleEngage}
+                          disabled={actionLoading}
+                          className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-slate-700"
+                        >
+                          <Sword className="w-4 h-4" />
+                          {actionLoading ? "Đang xuất trận..." : "Xuất Trận Tự Động (Turn-based Cũ)"}
+                        </button>
+                      </div>
                     </div>
                   </div>
 

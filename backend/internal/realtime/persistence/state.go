@@ -5,6 +5,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -30,6 +31,9 @@ type State struct {
 	SyncLegacy          bool
 	LocationRevision    int64
 	HasLocationRevision bool
+	// Combat is the restorable zone combat state (cooldowns, statuses, hidden
+	// proc counters). Nil means "no durable combat state to restore".
+	Combat *CombatState
 }
 
 var ErrInvalidState = errors.New("invalid realtime world state")
@@ -62,20 +66,23 @@ func NewService(db *sql.DB) *Service {
 
 func (s *Service) Load(ctx context.Context, playerID uuid.UUID) (State, bool, error) {
 	var state State
+	var combatJSON []byte
 	err := s.db.QueryRowContext(ctx, `
 		SELECT p.id, p.current_region, p.world_zone_id, p.world_instance_id,
 		       p.world_x, p.world_y, p.world_safe_x, p.world_safe_y,
 		       COALESCE(c.hp, 0), COALESCE(c.shield, 0),
 		       COALESCE(c.map_version, ''), COALESCE(c.content_version, ''),
-	       p.world_location_revision
+		       p.world_location_revision,
+		       COALESCE(cc.combat_state, '{}'::jsonb)
 		FROM players p
 		LEFT JOIN player_world_state_v2 c ON c.player_id = p.id
+		LEFT JOIN player_world_state_combat cc ON cc.player_id = p.id
 		WHERE p.id = $1 AND p.world_zone_id <> ''
 	`, playerID).Scan(
 		&state.PlayerID, &state.RegionID, &state.ZoneID, &state.InstanceID,
 		&state.X, &state.Y, &state.SafeX, &state.SafeY,
 		&state.HP, &state.Shield, &state.MapVersion, &state.ContentVersion,
-		&state.LocationRevision,
+		&state.LocationRevision, &combatJSON,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return State{}, false, nil
@@ -84,6 +91,15 @@ func (s *Service) Load(ctx context.Context, playerID uuid.UUID) (State, bool, er
 		return State{}, false, err
 	}
 	state.HasLocationRevision = true
+	if len(combatJSON) > 0 {
+		var combat CombatState
+		if err := json.Unmarshal(combatJSON, &combat); err != nil {
+			return State{}, false, fmt.Errorf("decode realtime combat state: %w", err)
+		}
+		if combat.Version == CombatStateVersion {
+			state.Combat = &combat
+		}
+	}
 	return state, true, nil
 }
 
@@ -121,6 +137,13 @@ func (s *Service) SaveAndApplyManaDelta(ctx context.Context, state State, delta 
 }
 
 func (s *Service) SaveAndApplyManaDeltaRevision(ctx context.Context, state State, delta float64) (int64, error) {
+	return s.SaveAndApplyCombatDeltaRevision(ctx, state, delta, nil)
+}
+
+// SaveAndApplyCombatDeltaRevision atomically settles the zone's mana and Gu
+// usage with the location/vitals checkpoint. Usage is additive so feeding or
+// passive hunger decay during the session cannot be overwritten by a snapshot.
+func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state State, delta float64, guUses map[string]uint64) (int64, error) {
 	if err := state.Validate(); err != nil {
 		return 0, err
 	}
@@ -139,6 +162,25 @@ func (s *Service) SaveAndApplyManaDeltaRevision(ctx context.Context, state State
 	if delta != 0 {
 		if err := applyManaDelta(ctx, tx, state.PlayerID, delta); err != nil {
 			return 0, err
+		}
+	}
+	for instanceID, uses := range guUses {
+		if instanceID == "" || uses == 0 || uses > 1_000_000 {
+			return 0, ErrInvalidState
+		}
+		result, err := tx.ExecContext(ctx, `
+			UPDATE player_gu SET hunger = GREATEST(0, hunger - $1), updated_at = NOW()
+			WHERE id = $2 AND player_id = $3
+		`, uses, instanceID, state.PlayerID)
+		if err != nil {
+			return 0, fmt.Errorf("settle Gu hunger for %s: %w", instanceID, err)
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		if rows != 1 {
+			return 0, fmt.Errorf("settle Gu hunger: instance %s not found for player %s", instanceID, state.PlayerID)
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -257,6 +299,23 @@ func upsert(ctx context.Context, exec interface {
 	`, state.PlayerID, state.HP, state.Shield, state.MapVersion, state.ContentVersion)
 	if err != nil {
 		return 0, fmt.Errorf("save realtime vitals checkpoint: %w", err)
+	}
+	combatJSON := []byte("{}")
+	if state.Combat != nil {
+		encoded, err := json.Marshal(state.Combat)
+		if err != nil {
+			return 0, fmt.Errorf("encode realtime combat state: %w", err)
+		}
+		combatJSON = encoded
+	}
+	_, err = exec.ExecContext(ctx, `
+		INSERT INTO player_world_state_combat (player_id, zone_id, instance_id, combat_state, updated_at)
+		VALUES ($1,$2,$3,$4::jsonb,NOW())
+		ON CONFLICT (player_id) DO UPDATE SET zone_id=EXCLUDED.zone_id,
+			instance_id=EXCLUDED.instance_id, combat_state=EXCLUDED.combat_state, updated_at=NOW()
+	`, state.PlayerID, state.ZoneID, state.InstanceID, combatJSON)
+	if err != nil {
+		return 0, fmt.Errorf("save realtime combat checkpoint: %w", err)
 	}
 	return revision, nil
 }

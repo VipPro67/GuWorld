@@ -14,6 +14,29 @@ settlement share one database transaction; a failed disconnect remains owned
 for a later retry. A database outage lasting through process shutdown is
 logged as an unsettled session.
 
+Live hotbar slots also carry the owned `player_gu.id` and its admission-time
+hunger. Each valid cast attempt spends one hunger before backlash and mana
+validation, matching the turn simulator; an exhausted instance cannot cast.
+The zone counts uses per slot, and the same checkpoint transaction subtracts
+the per-instance usage delta from `player_gu.hunger`. A failed checkpoint keeps
+the session and its unsettled counters for retry. The preview hidden passive is
+restricted to preview combat states and is not granted to live characters.
+
+Cooldowns, timed statuses and hidden-passive counters are checkpointed in
+`player_world_state_combat` by the same transaction that writes position, HP,
+mana and hunger. Remaining durations are stored in zone ticks, so a rejoin or
+border transfer continues the exact timer instead of resetting it. Cooldowns are
+only restored when the same authored skill still occupies the hotbar slot; a
+dead character clears its restorable combat state. After a checkpoint that
+spent hunger, the server publishes a `gu_inventory` player event so the client
+refetches the committed inventory.
+
+`movement_policy` runs during windup and recovery: `SLOW` halves ground speed,
+`ROOT` stops it, and `FREE` (or the empty legacy default) leaves it unchanged.
+`recovery_ms` blocks the next cast and basic attack after the cast resolves,
+even if the global cooldown has already expired. Interrupted casts do not enter
+recovery.
+
 Source profile catalog: `backend/data/mmo/gu/transpiled_profiles.json` (unified catalog covering all Gu, with hand-authored MVP and Alpha profiles integrated). Compiled artifact:
 `docs/mmo/gu-compiled.json` (regenerate, do not hand-edit).
 
@@ -61,12 +84,17 @@ and reason; they are never loaded as a “skill without effects”.
 - `mode`: `TARGET`, `DIRECTION`, `GROUND`, `SELF`.
 - `windup_ms`/`recovery_ms` ≤ 5,000 ms; `cooldown_ms` ≤ 120,000 ms. Durations
   are converted to ticks with ceiling at 20 Hz (`ms*20/1000`, minimum 1 tick).
+- `movement_policy`: `SLOW` (half ground speed), `ROOT` (no ground movement) or
+  `FREE`; an omitted value keeps legacy unrestricted movement. The zone applies
+  it during windup and recovery, never as a turn conversion.
 - `range_units` uses world units (1 cell = 1 unit). `DIRECTION`/`GROUND`/
   `TARGET` need range > 0; `SELF` uses 0.
 - `projectile` is required for `DIRECTION`: speed > 0, radius > 0,
   lifetime 1–120 ticks.
 - `GROUND` needs `radius_units` and `max_targets` 1–100.
-- Active effects: `DAMAGE`, `SHIELD`, `HEAL`, `STATUS`, `STAT_MOD`, `CLEANSE`.
+- Active effects: `DAMAGE`, `SHIELD`, `HEAL`, `STATUS`, `CLEANSE`.
+  - `STAT_MOD` is accepted on passives only; an active `STAT_MOD` is rejected
+    until a timed-buff runtime exists, rather than advertising a no-op skill.
   - `STATUS` needs `status_id`, `duration_ms` 100–30,000 and
     `pvp_dr_category`; turns are **not** accepted or auto-converted.
   - Optional STATUS fields: `period_ms` (DoT/HoT interval, 100–10,000),

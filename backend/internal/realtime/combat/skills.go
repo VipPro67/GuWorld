@@ -25,6 +25,19 @@ const (
 	ShapeWall      Shape = "WALL"
 )
 
+// MovementPolicy controls how fast the caster may move during windup and
+// recovery. The authored profile decides the policy; the zone never infers it
+// from the skill mode.
+const (
+	MovementFree = "FREE"
+	MovementSlow = "SLOW"
+	MovementRoot = "ROOT"
+)
+
+// SlowMovementMultiplier is the ground speed factor for SLOW casts. It is a
+// gameplay balance value, not a conversion from turn-based turns.
+const SlowMovementMultiplier = 0.5
+
 const (
 	PreviewBoltID            = "PREVIEW_BOLT"
 	PreviewWaterID           = "PREVIEW_WATER_ARROW"
@@ -42,12 +55,16 @@ const (
 	BasicAttackRange         = 2.2
 	BasicAttackDamage        = 12
 	BasicAttackCooldownTicks = 10
+	MaxWindupTicks           = 100 // 5s at 20 Hz
+	MaxRecoveryTicks         = 100 // 5s at 20 Hz
 )
 
 // Skill is one active slot for the preview loadout. Numeric values are balance
 // placeholders; they are not derived from Gu.csv yet.
 type Skill struct {
 	ID                   string
+	GuInstanceID         string  `json:"-"` // owned instance charged for live casts
+	GuHunger             float64 `json:"-"` // admission snapshot; zone decrements per attempt
 	Slot                 int
 	Mode                 Mode
 	Name                 string
@@ -56,6 +73,8 @@ type Skill struct {
 	Path                 string  `json:"-"` // admission-only legacy combat projection
 	Range                float64
 	WindupTicks          uint64
+	RecoveryTicks        uint64
+	MovementPolicy       string
 	CooldownTicks        uint64
 	Damage               float64
 	Shield               float64
@@ -147,6 +166,12 @@ func (skill Skill) Valid() bool {
 	if skill.ID == "" || skill.Slot < 1 || skill.Slot > 6 || !finite(skill.ManaCost) || skill.ManaCost < 0 || !finite(skill.BacklashPct) || skill.BacklashPct < 0 {
 		return false
 	}
+	if !ValidMovementPolicy(skill.MovementPolicy) {
+		return false
+	}
+	if skill.WindupTicks > MaxWindupTicks || skill.RecoveryTicks > MaxRecoveryTicks {
+		return false
+	}
 	if !finite(skill.Range) || skill.Range < 0 || skill.Range > MaxCastRangeUnits {
 		return false
 	}
@@ -183,4 +208,31 @@ func (skill Skill) Valid() bool {
 
 func finite(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+// ValidMovementPolicy accepts the authored spell-cast movement policies plus
+// the empty legacy default. An empty policy is treated as FREE so skills
+// authored before the field existed keep their previous unrestricted
+// behaviour instead of silently becoming roots.
+func ValidMovementPolicy(policy string) bool {
+	switch policy {
+	case "", MovementFree, MovementSlow, MovementRoot:
+		return true
+	default:
+		return false
+	}
+}
+
+// MovementMultiplier is the ground-speed factor applied during windup and
+// recovery. ROOT stops ground movement; SLOW halves it; FREE and the empty
+// legacy default leave it unchanged.
+func (skill Skill) MovementMultiplier() float64 {
+	switch skill.MovementPolicy {
+	case MovementRoot:
+		return 0
+	case MovementSlow:
+		return SlowMovementMultiplier
+	default:
+		return 1
+	}
 }
