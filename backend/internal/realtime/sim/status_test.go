@@ -651,4 +651,3 @@ func TestSkillDashAndKnockback(t *testing.T) {
 		t.Fatalf("target knockback failed: pos=%+v, want X ~ 8.0", targetPos)
 	}
 }
-

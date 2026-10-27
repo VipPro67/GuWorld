@@ -45,18 +45,18 @@ type GuProfile struct {
 }
 
 type ActiveProfile struct {
-	Mode           combat.Mode        `json:"mode"`
-	Shape          combat.Shape       `json:"shape,omitempty"`
-	AngleDeg       float64            `json:"angle_deg,omitempty"`
-	LengthUnits    float64            `json:"length_units,omitempty"`
-	WidthUnits     float64            `json:"width_units,omitempty"`
-	InnerRadius    float64            `json:"inner_radius,omitempty"`
-	WindupMS       uint64             `json:"windup_ms"`
-	RecoveryMS     uint64             `json:"recovery_ms"`
-	CooldownMS     uint64             `json:"cooldown_ms"`
-	RangeUnits     float64            `json:"range_units"`
-	ManaCost       float64            `json:"mana_cost"`
-	MovementPolicy string             `json:"movement_policy"`
+	Mode              combat.Mode        `json:"mode"`
+	Shape             combat.Shape       `json:"shape,omitempty"`
+	AngleDeg          float64            `json:"angle_deg,omitempty"`
+	LengthUnits       float64            `json:"length_units,omitempty"`
+	WidthUnits        float64            `json:"width_units,omitempty"`
+	InnerRadius       float64            `json:"inner_radius,omitempty"`
+	WindupMS          uint64             `json:"windup_ms"`
+	RecoveryMS        uint64             `json:"recovery_ms"`
+	CooldownMS        uint64             `json:"cooldown_ms"`
+	RangeUnits        float64            `json:"range_units"`
+	ManaCost          float64            `json:"mana_cost"`
+	MovementPolicy    string             `json:"movement_policy"`
 	RadiusUnits       float64            `json:"radius_units,omitempty"`
 	MaxTargets        int                `json:"max_targets,omitempty"`
 	IsToggle          bool               `json:"is_toggle,omitempty"`
