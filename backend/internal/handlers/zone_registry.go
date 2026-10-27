@@ -94,7 +94,8 @@ func LoadZoneRegistry(db *sql.DB) error {
 		       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'),
 		       COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0),
 		       COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}'), COALESCE(rules::text,'{}'),
-		       COALESCE(safe_zone_x,0), COALESCE(safe_zone_y,0), COALESCE(rwm.world_map_id,'world_map')
+		       COALESCE(safe_zone_x,0), COALESCE(safe_zone_y,0), COALESCE(rwm.world_map_id,'world_map'),
+		       COALESCE(r.atlas_x,0), COALESCE(r.atlas_y,0)
 		FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id = r.id
 		WHERE is_active = TRUE
 	`)
@@ -112,7 +113,8 @@ func LoadZoneRegistry(db *sql.DB) error {
 			&z.MinRank, &z.MaxRank, &active,
 			&z.ParentID, &z.ZoneType,
 			&z.MinX, &z.MinY, &z.MaxX, &z.MaxY,
-			&z.EntryX, &z.EntryY, &poolRaw, &rulesRaw, &safeX, &safeY, &z.WorldMapID); err != nil {
+			&z.EntryX, &z.EntryY, &poolRaw, &rulesRaw, &safeX, &safeY, &z.WorldMapID,
+			&z.AtlasX, &z.AtlasY); err != nil {
 
 			logger.S.Warnf("zone registry scan: %v", err)
 			continue

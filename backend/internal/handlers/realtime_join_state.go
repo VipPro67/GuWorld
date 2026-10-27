@@ -51,6 +51,7 @@ type RealtimeJoinState struct {
 	ManaRegenPerSecond       float64
 	BaseAttack               float64
 	Defense                  float64
+	MovementSpeed            float64
 	DaoProfile               *gamefx.DaoCombatProfile
 	PathResistance           map[string]float64
 	Rank                     int
@@ -124,6 +125,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	stats := CalculatePlayerStats(&player)
 	state.BaseAttack = stats["attack"]
 	state.Defense = stats["defense"]
+	state.MovementSpeed = RealtimeMovementSpeed(stats["movement"])
 	fx := gamefx.Get(&player)
 	dao := gamefx.BuildDaoCombatProfileWithReduction(player.DaoMarks, player.PathMasteries, fx.NonConflictingDaoMarks, fx.DaoConflictReductionPct, fx.DaoNganBonus)
 	basicAmp, basicEfficiency, basicConflict := dao.GetOffensiveFactors("strength")
@@ -197,6 +199,17 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		}
 	}
 	return state, nil
+}
+
+// RealtimeMovementSpeed converts the passive movement stat into authoritative
+// world units per second. Movement has a baseline of 1; each point above it
+// adds five percent to the normal realtime player speed.
+func RealtimeMovementSpeed(movement float64) float64 {
+	bonus := movement - 1
+	if bonus < 0 {
+		bonus = 0
+	}
+	return 4 * (1 + bonus*0.05)
 }
 
 // realtimeMapID makes detailed KHU_VUC/SAFE_ZONE maps authoritative for MMO

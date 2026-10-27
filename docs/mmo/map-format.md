@@ -47,7 +47,7 @@ The file is a small Tiled-compatible subset:
 - `collision.data` can contain either `width * height` values of `0` (walkable)
   or `1` (solid) row-major, OR an empty array `[]` (sparse/procedural mode). In
   sparse mode, outer boundary borders are automatically solid and all interior
-  cells are walkable. This allows massive 2000×2000 child region maps (matching
+  cells are walkable. This allows massive 1000×1000 child region maps (matching
   Region.csv 1:1) to serialize in < 5 KB instead of 23 MB JSON files.
 - The server compiles sparse collision to a `BorderCollision` that stores only
   width/height, and authored layers to a packed one-bit-per-tile

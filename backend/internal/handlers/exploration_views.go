@@ -103,14 +103,14 @@ func ExecuteGetCellsRect(playerID uuid.UUID, minX, minY, maxX, maxY int) (int, a
 
 	instanceRegion := hasScope && entry.InstanceID != ""
 	var zones []models.Region
-	if !instanceRegion {
+	if !instanceRegion && entry.Region == "" {
 		zones = rectZoneCandidates(minX, minY, maxX, maxY, entry.MapID)
 	}
 	candidates := []NearbyCell{}
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
 			regionID := entry.Region
-			if !instanceRegion {
+			if regionID == "" {
 				regionID = regionAtFromRectZones(x, y, zones)
 			}
 			cell := ResolveCellInRegion(regionID, x, y)

@@ -178,7 +178,15 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 
 	destinationRegion := player.CurrentRegion
 	if !instanceID.Valid {
-		destinationRegion = DeriveRegionAtOnMap(x, y, mapID)
+		currentZone := ZoneByID(player.CurrentRegion)
+		if currentZone != nil && zoneContains(currentZone, x, y) {
+			destinationRegion = player.CurrentRegion
+		} else {
+			derived := DeriveRegionAtOnMap(x, y, mapID)
+			if derived != "" && derived != HubRegionID {
+				destinationRegion = derived
+			}
+		}
 	}
 	if destinationRegion != player.CurrentRegion {
 		if err := checkRegionEntry(destinationRegion, player.Rank, player.GuInventory); err != nil {

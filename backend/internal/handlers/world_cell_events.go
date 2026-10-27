@@ -50,7 +50,7 @@ func PushCellsToPlayer(playerID uuid.UUID, cx, cy, halfRange int) {
 		return
 	}
 	EnsureWorldPosLoaded(playerID.String())
-	entry, hasScope := worldPosIndex.Get(playerID.String())
+	entry, _ := worldPosIndex.Get(playerID.String())
 
 	minX := cx - halfRange
 	minY := cy - halfRange
@@ -85,9 +85,9 @@ func PushCellsToPlayer(playerID uuid.UUID, cx, cy, halfRange int) {
 	cells := make([]NearbyCell, 0, 64)
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
-			regionID := DeriveRegionAtOnMap(x, y, entry.MapID)
-			if hasScope && entry.InstanceID != "" {
-				regionID = entry.Region
+			regionID := entry.Region
+			if regionID == "" {
+				regionID = DeriveRegionAtOnMap(x, y, entry.MapID)
 			}
 			cell := ResolveCellInRegion(regionID, x, y)
 			if cell.Type == "Empty" {

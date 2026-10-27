@@ -18,9 +18,9 @@ MAP_VERSION = "regions-v1"
 CONTENT_VERSION = "region-content-v1"
 EDGE = 1
 SPAWN_MARGIN = 2.0
-# Realtime spawn budget per 4,000,000 units^2 at the reference Monster weight
+# Realtime spawn budget per 1,000,000 units^2 at the reference Monster weight
 # (KHU_VUC default 30/100). Region.csv pool_weights scale this up or down.
-BASE_PACKS = 150
+BASE_PACKS = 38
 REFERENCE_MONSTER_WEIGHT = 30
 # MaxMonstersPerZone in backend/internal/realtime/world/manager.go is 1200.
 TOTAL_SPAWNS_CAP = 1100
@@ -104,16 +104,17 @@ def stable_spawn(region_id, row, index, width, height):
     )
 
 
-def bounds(row):
-    x, y = number(row, "min_x"), number(row, "min_y")
-    right = number(row, "max_x", x + number(row, "width"))
-    bottom = number(row, "max_y", y + number(row, "height"))
-    return x, y, right, bottom
+def atlas_bounds(row):
+    ax = number(row, "atlas_x", number(row, "min_x"))
+    ay = number(row, "atlas_y", number(row, "min_y"))
+    w = number(row, "width", 1000)
+    h = number(row, "height", 1000)
+    return ax, ay, ax + w, ay + h
 
 
 def overlaps_edge(a, b):
-    ax0, ay0, ax1, ay1 = a["bounds"]
-    bx0, by0, bx1, by1 = b["bounds"]
+    ax0, ay0, ax1, ay1 = a["atlas_bounds"]
+    bx0, by0, bx1, by1 = b["atlas_bounds"]
     epsilon = 1e-6
     if abs(ax1 - bx0) < epsilon or abs(bx1 - ax0) < epsilon:
         start, end = max(ay0, by0), min(ay1, by1)
@@ -127,11 +128,9 @@ def overlaps_edge(a, b):
 
 
 def portal_pair(source, target, source_side, target_side, start, end):
-    along_legacy = (start + end) / 2
-    along_source = (along_legacy - (source["bounds"][1] if source_side in ("east", "west") else source["bounds"][0])) / SCALE
-    along_target = (along_legacy - (target["bounds"][1] if target_side in ("east", "west") else target["bounds"][0])) / SCALE
-    sx0, sy0, sx1, sy1 = source["bounds"]
-    tx0, ty0, tx1, ty1 = target["bounds"]
+    along_atlas = (start + end) / 2
+    along_source = (along_atlas - (source["atlas_bounds"][1] if source_side in ("east", "west") else source["atlas_bounds"][0])) / SCALE
+    along_target = (along_atlas - (target["atlas_bounds"][1] if target_side in ("east", "west") else target["atlas_bounds"][0])) / SCALE
     sw, sh = source["width"], source["height"]
     tw, th = target["width"], target["height"]
     if source_side == "east":
@@ -154,12 +153,18 @@ def main():
     active = [row for row in all_regions if row.get("zone_type") in {"KHU_VUC", "SAFE_ZONE"}]
     regions = {}
     for row in active:
-        x0, y0, x1, y1 = bounds(row)
-        width = math.ceil((x1 - x0) / SCALE)
-        height = math.ceil((y1 - y0) / SCALE)
+        width = int(number(row, "width", 1000))
+        height = int(number(row, "height", 1000))
         if width < 8 or height < 8:
             raise ValueError(f"region {row['id']} is too small for collision-safe map: {width}x{height}")
-        regions[row["id"]] = {"row": row, "bounds": (x0, y0, x1, y1), "width": width, "height": height, "portals": []}
+        regions[row["id"]] = {
+            "row": row,
+            "bounds": (0, 0, width, height),
+            "atlas_bounds": atlas_bounds(row),
+            "width": width,
+            "height": height,
+            "portals": [],
+        }
 
     # Every neighboring child region receives a reciprocal walk-through portal.
     for index, source in enumerate(regions.values()):
@@ -191,10 +196,10 @@ def main():
     for region_id, region in regions.items():
         row = region["row"]
         width, height = region["width"], region["height"]
-        origin_x, origin_y, _, _ = region["bounds"]
+        origin_x, origin_y = 0.0, 0.0
 
-        entry_x = (number(row, "entry_x", (origin_x + region["bounds"][2]) / 2) - origin_x) / SCALE
-        entry_y = (number(row, "entry_y", (origin_y + region["bounds"][3]) / 2) - origin_y) / SCALE
+        entry_x = number(row, "entry_x", width / 2)
+        entry_y = number(row, "entry_y", height / 2)
         player_spawn = {
             "name": "entry_" + region_id, "type": "player",
             "x": round(min(width - 2, max(2, entry_x)), 2),
@@ -210,8 +215,8 @@ def main():
             cid = cell.get("content_id", "")
             if ctype not in ("Boss", "Monster") or not cid:
                 continue
-            cx = (number(cell, "x") - origin_x) / SCALE
-            cy = (number(cell, "y") - origin_y) / SCALE
+            cx = number(cell, "x")
+            cy = number(cell, "y")
             # If cell is too close to player entry, offset slightly so player isn't spawn-camped
             if math.hypot(cx - entry_x, cy - entry_y) < 25:
                 cx += 35
@@ -322,8 +327,8 @@ def main():
 
         pois = []
         for index, cell in cells.get(region_id, []):
-            x = (number(cell, "x") - origin_x) / SCALE
-            y = (number(cell, "y") - origin_y) / SCALE
+            x = number(cell, "x")
+            y = number(cell, "y")
             if not (0 <= x < width and 0 <= y < height):
                 continue
             pois.append({

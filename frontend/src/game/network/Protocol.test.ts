@@ -56,6 +56,7 @@ test("parseWorldWelcomePayload validates matching owner baseline and float mana"
     map_version: "v1",
     content_version: "v1",
     tick_rate: 20,
+    movement_speed: 5.6,
     server_tick: 50,
     entity_id: "player-admin",
     entity_revision: 2,
@@ -83,5 +84,6 @@ test("parseWorldWelcomePayload validates matching owner baseline and float mana"
 
   const parsed = parseWorldWelcomePayload(welcome);
   assert.equal(parsed.entity_id, "player-admin");
+  assert.equal(parsed.movement_speed, 5.6);
   assert.equal(parsed.snapshot.entities[0].mana, 42.123);
 });

@@ -408,9 +408,15 @@ func findProceduralMonsterCamp(x, y int, zone *models.Region) (proceduralMonster
 			if distance > monsterCampRadius || (found && distance >= best.distance) {
 				continue
 			}
-			centerZone := FindZoneAt(cx, cy)
-			if centerZone == nil || centerZone.ID != zone.ID {
-				continue
+			if zone.ZoneType == ZoneTypeLarge {
+				centerZone := FindZoneAt(cx, cy)
+				if centerZone == nil || centerZone.ID != zone.ID {
+					continue
+				}
+			} else {
+				if cx < 0 || cy < 0 || (zone.Width > 0 && cx > zone.Width) || (zone.Height > 0 && cy > zone.Height) {
+					continue
+				}
 			}
 			spawn, ok := pickMonsterFromPool(zone.ID, rng, false)
 			if !ok {

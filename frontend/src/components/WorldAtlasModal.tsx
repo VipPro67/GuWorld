@@ -62,7 +62,8 @@ export interface RegionDetailsData {
   monster_count: number;
 }
 
-const WORLD_SIZE = 30_000;
+const WORLD_WIDTH = 15_000;
+const WORLD_HEIGHT = 10_000;
 const REGION_COLORS = [
   "#355a50", "#5b442b", "#475635", "#70502b", "#594467", "#713f43", "#3e536b",
 ];
@@ -119,13 +120,12 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
   const subRegions = useMemo(() => {
     return regions
       .filter((region) => region.parent_id === (mapRegion?.id ?? selectedMajorRegion?.id) && region.is_active)
-      .sort((a, b) => (a.min_y ?? 0) - (b.min_y ?? 0) || (a.min_x ?? 0) - (b.min_x ?? 0));
+      .sort((a, b) => ((a.atlas_y ?? a.min_y ?? 0) - (b.atlas_y ?? b.min_y ?? 0)) || ((a.atlas_x ?? a.min_x ?? 0) - (b.atlas_x ?? b.min_x ?? 0)));
   }, [regions, mapRegion?.id, selectedMajorRegion?.id]);
 
   const mapSubRegions = useMemo(() => {
     return mapRegion
-      ? regions.filter((region) => region.parent_id === mapRegion.id && region.zone_type !== "HUB" && region.is_active
-        && region.min_x !== undefined && region.min_y !== undefined && region.max_x !== undefined && region.max_y !== undefined)
+      ? regions.filter((region) => region.parent_id === mapRegion.id && region.zone_type !== "HUB" && region.is_active)
       : [];
   }, [regions, mapRegion]);
 
@@ -135,14 +135,26 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
       : [];
   }, [regions, mapRegion]);
 
-  const mapViewBox = mapRegion
-    ? `${mapRegion.min_x ?? 0} ${mapRegion.min_y ?? 0} ${Math.max(1, (mapRegion.max_x ?? 0) - (mapRegion.min_x ?? 0) + 1)} ${Math.max(1, (mapRegion.max_y ?? 0) - (mapRegion.min_y ?? 0) + 1)}`
-    : `0 0 ${WORLD_SIZE} ${WORLD_SIZE}`;
+  const mapViewBox = useMemo(() => {
+    if (!mapRegion) {
+      return `0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`;
+    }
+    const mx = mapRegion.atlas_x ?? mapRegion.min_x ?? 0;
+    const my = mapRegion.atlas_y ?? mapRegion.min_y ?? 0;
+    const mw = mapRegion.width || 5000;
+    const mh = mapRegion.height || 5000;
+    return `${mx} ${my} ${mw} ${mh}`;
+  }, [mapRegion]);
 
-  const hasPlayerPosition = x >= 0 && x <= WORLD_SIZE && y >= 0 && y <= WORLD_SIZE;
+  const playerAtlasX = currentRegion?.atlas_x !== undefined ? currentRegion.atlas_x + x : x;
+  const playerAtlasY = currentRegion?.atlas_y !== undefined ? currentRegion.atlas_y + y : y;
+
+  const hasPlayerPosition = playerAtlasX >= 0 && playerAtlasX <= WORLD_WIDTH && playerAtlasY >= 0 && playerAtlasY <= WORLD_HEIGHT;
   const playerInZoomedRegion = !!mapRegion
-    && x >= (mapRegion.min_x ?? Infinity) && x <= (mapRegion.max_x ?? -Infinity)
-    && y >= (mapRegion.min_y ?? Infinity) && y <= (mapRegion.max_y ?? -Infinity);
+    && playerAtlasX >= (mapRegion.atlas_x ?? mapRegion.min_x ?? 0)
+    && playerAtlasX <= (mapRegion.atlas_x ?? mapRegion.min_x ?? 0) + (mapRegion.width || 5000)
+    && playerAtlasY >= (mapRegion.atlas_y ?? mapRegion.min_y ?? 0)
+    && playerAtlasY <= (mapRegion.atlas_y ?? mapRegion.min_y ?? 0) + (mapRegion.height || 5000);
 
   const inspectedRegion = useMemo(() => {
     return regions.find((r) => r.id === inspectedSubRegionId) || currentRegion || subRegions[0];
@@ -344,10 +356,10 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                 {/* 1. Large 5 Major Regions view */}
                 {!mapRegion &&
                   majorRegions.map((region, index) => {
-                    const minX = region.min_x ?? 0;
-                    const minY = region.min_y ?? 0;
-                    const width = (region.max_x ?? minX) - minX + 1;
-                    const height = (region.max_y ?? minY) - minY + 1;
+                    const minX = region.atlas_x ?? region.min_x ?? 0;
+                    const minY = region.atlas_y ?? region.min_y ?? 0;
+                    const width = region.width || 5000;
+                    const height = region.height || 5000;
                     const isSelected = selectedMajorRegionId === region.id;
                     const isCurrent = currentMajorRegion?.id === region.id;
                     const label = region.name.replace(/^Đại Vực\s*/i, "");
@@ -375,24 +387,24 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                         className={`cursor-pointer transition duration-200 hover:brightness-110 ${!isMatched ? "opacity-30" : "opacity-100"}`}
                       >
                         <rect
-                          x={minX + 90}
-                          y={minY + 90}
-                          width={Math.max(0, width - 180)}
-                          height={Math.max(0, height - 180)}
-                          rx="480"
+                          x={minX + 50}
+                          y={minY + 50}
+                          width={Math.max(0, width - 100)}
+                          height={Math.max(0, height - 100)}
+                          rx="240"
                           fill={REGION_COLORS[index % REGION_COLORS.length]}
                           fillOpacity={isSelected ? 0.72 : 0.42}
                           stroke={isSelected ? "#e9bd6c" : isCurrent ? "#fbbf24" : "#9b7644"}
                           strokeOpacity={isSelected || isCurrent ? 0.95 : 0.4}
-                          strokeWidth={isSelected ? 120 : 60}
+                          strokeWidth={isSelected ? 60 : 30}
                         />
                         <text
                           x={minX + width / 2}
-                          y={minY + height / 2 - 80}
+                          y={minY + height / 2 - 40}
                           textAnchor="middle"
                           dominantBaseline="middle"
                           fill="#fff0cf"
-                          fontSize="520"
+                          fontSize="280"
                           fontWeight="700"
                           className="pointer-events-none select-none"
                         >
@@ -400,10 +412,10 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                         </text>
                         <text
                           x={minX + width / 2}
-                          y={minY + height / 2 + 380}
+                          y={minY + height / 2 + 200}
                           textAnchor="middle"
                           fill="#e9c77d"
-                          fontSize="260"
+                          fontSize="150"
                           fontWeight="600"
                           className="pointer-events-none select-none"
                         >
@@ -412,10 +424,10 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                         {isCurrent && (
                           <text
                             x={minX + width / 2}
-                            y={minY + height / 2 + 750}
+                            y={minY + height / 2 + 400}
                             textAnchor="middle"
                             fill="#fcd34d"
-                            fontSize="280"
+                            fontSize="160"
                             fontWeight="700"
                             className="pointer-events-none select-none"
                           >
@@ -429,10 +441,10 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                 {/* 2. Sub-regions grid view */}
                 {mapRegion &&
                   mapSubRegions.map((region, index) => {
-                    const minX = region.min_x ?? 0;
-                    const minY = region.min_y ?? 0;
-                    const width = (region.max_x ?? minX) - minX + 1;
-                    const height = (region.max_y ?? minY) - minY + 1;
+                    const minX = region.atlas_x ?? region.min_x ?? 0;
+                    const minY = region.atlas_y ?? region.min_y ?? 0;
+                    const width = region.width || 1000;
+                    const height = region.height || 1000;
                     const centerX = minX + width / 2;
                     const centerY = minY + height / 2;
 
@@ -454,7 +466,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                       secondLine = words.slice(2).join(" ");
                     }
 
-                    const fontSize = firstLine.length > 14 ? 175 : 210;
+                    const fontSize = firstLine.length > 14 ? 90 : 110;
 
                     return (
                       <g
@@ -475,27 +487,27 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                       >
                         <title>{`${region.name} (C${region.min_rank}-C${region.max_rank})`}</title>
                         <rect
-                          x={minX + 35}
-                          y={minY + 35}
-                          width={Math.max(1, width - 70)}
-                          height={Math.max(1, height - 70)}
-                          rx="90"
+                          x={minX + 20}
+                          y={minY + 20}
+                          width={Math.max(1, width - 40)}
+                          height={Math.max(1, height - 40)}
+                          rx="50"
                           fill={REGION_COLORS[index % REGION_COLORS.length]}
                           fillOpacity={isInspected ? 0.8 : 0.45}
                           stroke={isInspected ? "#e9bd6c" : isCurrent ? "#fb7185" : hasBoss ? "#f59e0b" : "#9b7644"}
                           strokeOpacity={isInspected || isCurrent ? 1 : 0.6}
-                          strokeWidth={isInspected ? 65 : isCurrent ? 45 : 24}
+                          strokeWidth={isInspected ? 35 : isCurrent ? 25 : 12}
                         />
 
                         {/* Badges on corner */}
                         {hasBoss && (
-                          <g transform={`translate(${minX + width - 160}, ${minY + 60}) scale(0.65)`}>
+                          <g transform={`translate(${minX + width - 90}, ${minY + 30}) scale(0.35)`}>
                             <rect width="180" height="180" rx="40" fill="#78350f" fillOpacity="0.8" />
                             <text x="90" y="125" textAnchor="middle" fontSize="110">👑</text>
                           </g>
                         )}
                         {isSafe && (
-                          <g transform={`translate(${minX + 60}, ${minY + 60}) scale(0.65)`}>
+                          <g transform={`translate(${minX + 30}, ${minY + 30}) scale(0.35)`}>
                             <rect width="180" height="180" rx="40" fill="#065f46" fillOpacity="0.8" />
                             <text x="90" y="125" textAnchor="middle" fontSize="110">🛡️</text>
                           </g>
@@ -504,7 +516,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                         {/* Name text */}
                         <text
                           x={centerX}
-                          y={secondLine ? centerY - 75 : centerY}
+                          y={secondLine ? centerY - 40 : centerY}
                           textAnchor="middle"
                           dominantBaseline="middle"
                           fill={isInspected ? "#fff3d8" : isCurrent ? "#fff1f2" : "#f4e8cb"}
@@ -518,10 +530,10 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                         {/* Rank indicator at bottom of cell */}
                         <text
                           x={centerX}
-                          y={minY + height - 85}
+                          y={minY + height - 45}
                           textAnchor="middle"
                           fill={isInspected ? "#e9c77d" : "#b9a584"}
-                          fontSize="140"
+                          fontSize="70"
                           fontWeight="600"
                         >
                           C{region.min_rank}–C{region.max_rank}
@@ -532,8 +544,8 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
 
                 {/* 3. Hubs */}
                 {mapHubs.map((hub) => {
-                  const hubX = hub.entry_x ?? ((hub.min_x ?? 0) + (hub.max_x ?? 0)) / 2;
-                  const hubY = hub.entry_y ?? ((hub.min_y ?? 0) + (hub.max_y ?? 0)) / 2;
+                  const hubX = hub.atlas_x !== undefined ? hub.atlas_x + (hub.width || 1000) / 2 : hub.entry_x ?? ((hub.min_x ?? 0) + (hub.max_x ?? 0)) / 2;
+                  const hubY = hub.atlas_y !== undefined ? hub.atlas_y + (hub.height || 1000) / 2 : hub.entry_y ?? ((hub.min_y ?? 0) + (hub.max_y ?? 0)) / 2;
                   const isInspected = inspectedRegion?.id === hub.id;
                   return (
                     <g
@@ -542,8 +554,8 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                       className="cursor-pointer transition hover:scale-105"
                     >
                       <title>{hub.name}</title>
-                      <circle cx={hubX} cy={hubY} r="250" fill="#eab308" stroke="#fef08a" strokeWidth={isInspected ? 70 : 40} />
-                      <text x={hubX} y={hubY + 500} textAnchor="middle" fill="#fef08a" fontSize="230" fontWeight="700">
+                      <circle cx={hubX} cy={hubY} r="125" fill="#eab308" stroke="#fef08a" strokeWidth={isInspected ? 35 : 20} />
+                      <text x={hubX} y={hubY + 250} textAnchor="middle" fill="#fef08a" fontSize="120" fontWeight="700">
                         {hub.name}
                       </text>
                     </g>
@@ -553,9 +565,9 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                 {/* 4. Player Pointer */}
                 {hasPlayerPosition && (!mapRegion || playerInZoomedRegion) && (
                   <g className="pointer-events-none">
-                    <circle cx={x} cy={y} r="520" fill="#f43f5e" fillOpacity="0.25" />
-                    <circle cx={x} cy={y} r="210" fill="#f43f5e" stroke="#fff1f2" strokeWidth="80" />
-                    <path d={`M ${x} ${y - 750} L ${x - 170} ${y - 140} L ${x + 170} ${y - 140} Z`} fill="#fff1f2" />
+                    <circle cx={playerAtlasX} cy={playerAtlasY} r={mapRegion ? 120 : 260} fill="#f43f5e" fillOpacity="0.25" />
+                    <circle cx={playerAtlasX} cy={playerAtlasY} r={mapRegion ? 50 : 100} fill="#f43f5e" stroke="#fff1f2" strokeWidth={mapRegion ? 20 : 40} />
+                    <path d={`M ${playerAtlasX} ${playerAtlasY - (mapRegion ? 180 : 360)} L ${playerAtlasX - (mapRegion ? 40 : 80)} ${playerAtlasY - (mapRegion ? 35 : 70)} L ${playerAtlasX + (mapRegion ? 40 : 80)} ${playerAtlasY - (mapRegion ? 35 : 70)} Z`} fill="#fff1f2" />
                   </g>
                 )}
               </svg>

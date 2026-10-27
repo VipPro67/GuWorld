@@ -65,6 +65,7 @@ type Welcome struct {
 	MapVersion      string          `json:"map_version"`
 	ContentVersion  string          `json:"content_version"`
 	TickRate        uint16          `json:"tick_rate"`
+	MovementSpeed   float64         `json:"movement_speed"`
 	ServerTick      uint64          `json:"server_tick"`
 	EntityID        string          `json:"entity_id"`
 	EntityRevision  uint64          `json:"entity_revision"`

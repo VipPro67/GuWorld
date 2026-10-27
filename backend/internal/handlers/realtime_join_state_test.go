@@ -20,3 +20,20 @@ func TestRealtimeMapIDPrefersDetailedChildRegion(t *testing.T) {
 		})
 	}
 }
+
+func TestRealtimeMovementSpeedUsesPassiveMovementAboveBaseline(t *testing.T) {
+	tests := []struct {
+		movement float64
+		want     float64
+	}{
+		{movement: 1, want: 4},
+		{movement: 2, want: 4.2},
+		{movement: 9, want: 5.6},
+		{movement: 0, want: 4},
+	}
+	for _, test := range tests {
+		if got := RealtimeMovementSpeed(test.movement); got != test.want {
+			t.Errorf("RealtimeMovementSpeed(%v) = %v, want %v", test.movement, got, test.want)
+		}
+	}
+}

@@ -70,7 +70,7 @@ export interface SelfCombatView {
 
 export interface WorldRuntimeOptions {
   socketOptions?: WorldSocketOptions;
-  /** Server speed in world units per second. Mirrors admission defaults for prediction. */
+  /** Fallback speed in world units per second for servers without movement_speed. */
   speed?: number;
 }
 
@@ -115,7 +115,7 @@ const INPUT_KEEPALIVE_INTERVAL = 0.15;
 export class WorldRuntime {
   private socket: WorldSocket;
   private readonly socketOptions: WorldSocketOptions | undefined;
-  private readonly speed: number;
+  private speed: number;
   private readonly clock = new WorldClock();
   private readonly predictor = new SelfPredictor();
   private readonly interpolator = new RemoteInterpolator();
@@ -165,6 +165,8 @@ export class WorldRuntime {
     try {
       const welcome = await this.socket.connect(join);
       this.welcome = welcome;
+      this.speed = welcome.movement_speed ?? this.speed;
+      this.predictor.setSpeed(this.speed);
       this.selfId = welcome.entity_id;
       this.clock.sync(welcome.server_tick, welcome.tick_rate);
       this.applySnapshot(this.socket.getSnapshot());

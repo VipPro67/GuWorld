@@ -30,6 +30,13 @@ const (
 	playerRadius          = 0.4
 )
 
+func realtimePlayerSpeed(speed float64) float64 {
+	if speed <= 0 {
+		return playerSpeed
+	}
+	return speed
+}
+
 type JoinStateLoader func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error)
 
 // WorldStateStore is the durable checkpoint adapter used on join/leave and by
@@ -60,6 +67,7 @@ type session struct {
 	contentVersion      string
 	skills              []combat.Skill
 	loadoutRevision     string
+	movementSpeed       float64
 	mana                *manaSettlement
 	locationRevision    *atomic.Int64
 	hasLocationRevision bool
@@ -357,6 +365,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		playerCombat.ManaRegenPerSecond = state.ManaRegenPerSecond
 		playerCombat.BasicAttackDamage = state.BaseAttack
 	}
+	moveSpeed := realtimePlayerSpeed(state.MovementSpeed)
 	entity := sim.Entity{
 		ID: sim.EntityID(playerID.String()), CharacterID: sim.CharacterID(playerID.String()), Kind: sim.EntityPlayer,
 		Name:           state.Username,
@@ -365,7 +374,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		Defense:        state.Defense,
 		DaoProfile:     state.DaoProfile,
 		PathResistance: state.PathResistance,
-		Speed:          playerSpeed,
+		Speed:          moveSpeed,
 		Radius:         playerRadius,
 		Faction:        "player",
 		PartyID:        state.PartyID,
@@ -379,7 +388,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	zoneMap, _ := a.manager.ZoneMapFor(key)
 	active := session{
 		playerID: playerID, regionID: state.RegionID, lease: lease, mapVersion: request.MapVersion, contentVersion: request.ContentVersion,
-		skills: skills, loadoutRevision: loadoutRevision,
+		skills: skills, loadoutRevision: loadoutRevision, movementSpeed: moveSpeed,
 		mana:             &manaSettlement{last: playerCombat.Mana},
 		locationRevision: locationRevision, hasLocationRevision: hasLocationRevision,
 		safeX: safeSpawn.X, safeY: safeSpawn.Y,
@@ -916,7 +925,7 @@ func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protoc
 	return protocol.Welcome{
 		SessionID: controllerID.String(), ZoneID: active.lease.ZoneKey.MapID + "#" + active.lease.ZoneKey.InstanceID,
 		MapVersion: active.mapVersion, ContentVersion: active.contentVersion,
-		TickRate: sim.TickRate, ServerTick: snapshot.Tick, EntityID: string(active.lease.CharacterID),
+		TickRate: sim.TickRate, MovementSpeed: active.movementSpeed, ServerTick: snapshot.Tick, EntityID: string(active.lease.CharacterID),
 		EntityRevision: entityRevision, BaselineID: 1, MapHash: a.manager.MapHash(active.lease.ZoneKey),
 		Skills: skillInfos(active.skills), LoadoutRevision: active.loadoutRevision, Snapshot: snapshotJSON,
 	}, nil

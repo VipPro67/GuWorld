@@ -116,9 +116,10 @@ const MODE_BADGE: Record<
 
 const frame = "border border-[#a88952]/65 bg-[#150f0bd9] text-[#f4e8cb] shadow-[0_8px_28px_rgba(0,0,0,.48)] backdrop-blur-sm";
 
-const menuGroups: Array<{ title: string; items: Array<{ label: string; icon: typeof Package; view?: string; panel?: Exclude<MMOPanel, null>; special?: "divination" | "quick-actions"; minRank?: number }> }> = [
+const menuGroups: Array<{ title: string; items: Array<{ label: string; icon: typeof Package; view?: string; panel?: Exclude<MMOPanel, null>; special?: "divination" | "quick-actions" | "teleport-directory"; minRank?: number }> }> = [
   { title: "Thế giới", items: [
     { label: "Danh sách map", icon: Compass, panel: "maps" },
+    { label: "Truyền Tống Trận", icon: Compass, special: "teleport-directory" },
     { label: "Tiên khiếu", icon: Sparkles, view: "aperture", minRank: 6 },
     { label: "Bí cảnh", icon: Gem, view: "dungeon" },
     { label: "Mộng cảnh", icon: Compass, view: "dream-realm" },
@@ -1734,6 +1735,9 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
                           } else if (item.special === "quick-actions") {
                             props.onCloseMenu();
                             setShowQuickActionModal(true);
+                          } else if (item.special === "teleport-directory") {
+                            props.onCloseMenu();
+                            setShowTeleportDirectory(true);
                           }
                         }}
                         className="flex min-h-9 items-center gap-2 rounded-md border border-[#8f6d40]/45 bg-[#3a291d]/70 px-2 text-left text-[11px] text-[#ead8b6] hover:bg-[#624329] disabled:cursor-not-allowed disabled:opacity-40"

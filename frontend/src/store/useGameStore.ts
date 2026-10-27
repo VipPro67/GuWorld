@@ -1153,6 +1153,8 @@ export interface Region {
   max_y?: number;
   entry_x?: number;
   entry_y?: number;
+  atlas_x?: number;
+  atlas_y?: number;
   rules?: {
     rank?: { min?: number; max?: number };
     paths?: { allow?: string[]; deny?: string[] };

@@ -484,7 +484,7 @@ func TestSpawnMaterializationUsesAuthoritativePlayerRadius(t *testing.T) {
 }
 
 func TestProceduralMonsterCellBecomesRuntimeSpawn(t *testing.T) {
-	entry := WorldPosEntry{Region: "dang_hon_son", X: 24798, Y: 13261}
+	entry := WorldPosEntry{Region: "dang_hon_son", X: 500, Y: 500}
 	previousCell, previousRegion, previousCleared := resolveWorldMonsterCell, deriveWorldMonsterRegion, worldMonsterCellsCleared
 	resolveWorldMonsterCell = func(x, y int) models.Cell {
 		if x == entry.X && y == entry.Y {
@@ -504,7 +504,7 @@ func TestProceduralMonsterCellBecomesRuntimeSpawn(t *testing.T) {
 	found := false
 	for _, spawn := range spawns {
 		if spawn.X == entry.X && spawn.Y == entry.Y {
-			found = spawn.MonsterID == cell.Content && spawn.ID == "procedural:dang_hon_son:24798:13261"
+			found = spawn.MonsterID == cell.Content && spawn.ID == "procedural:dang_hon_son:500:500"
 		}
 	}
 	if !found {
@@ -523,8 +523,8 @@ func TestProceduralMonsterCellBecomesRuntimeSpawn(t *testing.T) {
 }
 
 func TestProceduralMonsterSpawnIdentityRoundTripsToCell(t *testing.T) {
-	region, x, y, ok := proceduralMonsterCell("procedural:dang_hon_son:24798:13261")
-	if !ok || region != "dang_hon_son" || x != 24798 || y != 13261 {
+	region, x, y, ok := proceduralMonsterCell("procedural:dang_hon_son:500:500")
+	if !ok || region != "dang_hon_son" || x != 500 || y != 500 {
 		t.Fatalf("round trip=(%q,%d,%d,%v)", region, x, y, ok)
 	}
 	if _, _, _, ok := proceduralMonsterCell("fixed-spawn-id"); ok {

@@ -8,9 +8,9 @@ package handlers
 // (tiểu vực) of SubZoneSize x SubZoneSize, which drive deterministic content
 // generation and nearby-query batching.
 const (
-	WorldWidth    = 30000
-	WorldHeight   = 20000
-	LargeZoneSize = 10000
+	WorldWidth    = 15000
+	WorldHeight   = 10000
+	LargeZoneSize = 5000
 	LargeZoneCols = 3
 	LargeZoneRows = 2
 	SubZoneSize   = 1000
@@ -21,7 +21,7 @@ const HubRegionID = "hub_nam_cuong"
 
 // HubEntryPoint is the default spawn / retreat coordinates when the hub zone
 // geometry is not yet loaded.
-var HubEntryPoint = struct{ X, Y int }{X: 15000, Y: 10000}
+var HubEntryPoint = struct{ X, Y int }{X: 500, Y: 500}
 
 // worldBounds returns the inclusive world bounds.
 func worldBounds() (int, int, int, int) {

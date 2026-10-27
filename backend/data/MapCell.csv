@@ -1,137 +1,137 @@
 region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active
-am_hon_sa_vuc,3000,15000,Boss,monster_immemorial_soul_beast,"{""rank"": 5}",600,true
-am_luu_cu_hac,3100,1100,Boss,monster_ancient_desert_ghost_king,"{""rank"": 6}",600,true
-am_tieu_vuc,13000,17000,Boss,monster_abyssal_ghost_scorpion,"{""rank"": 6}",600,true
-azure_ghost_desert,21100,3100,Boss,monster_desolate_formation_golem,"{""rank"": 5}",600,true
-bac_nguyen_gioi_bich_dong,29000,1000,Boss,monster_wind_thai_co_r8r9,"{""rank"": 8}",600,true
-bach_cot_son,7100,3100,Boss,monster_bone_marrow_golem,"{""rank"": 5}",600,true
-bach_kinh_vuc,11000,13000,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
-bach_sa_nguyen,3000,11000,Boss,monster_desolate_formation_golem,"{""rank"": 5}",600,true
-bang_phong_hac_uyen,29000,9000,Boss,monster_ice_thai_co_r8r9,"{""rank"": 8}",600,true
-bat_bai_coc,17100,1100,Boss,monster_refinement_tier3_elite,"{""rank"": 6}",600,true
-bat_thap_bat_gac_dai,27000,9000,Boss,monster_strength_thai_co_r8r9,"{""rank"": 8}",600,true
-bn_diet_than_truong,21000,7000,Boss,monster_bone_tier3_elite,"{""rank"": 6}",600,true
-bn_gioi_bich_nam,21000,9000,Boss,monster_wind_tier3_elite,"{""rank"": 7}",600,true
-bn_gioi_bich_tay,21000,5000,Boss,monster_wind_thai_co_r8r9,"{""rank"": 8}",600,true
-bn_tuyet_quai_coc,27000,1000,Boss,monster_night_mist_lord,"{""rank"": 5}",600,true
-bong_lai_phuc_dia,15000,17000,Boss,monster_dream_mist_fox,"{""rank"": 6}",600,true
-cat_xuyen_thao_nguyen,21000,1000,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
-cu_lang_vuc,19000,15000,Boss,monster_ancient_myriad_beast_king,"{""rank"": 7}",600,true
-cuu_cung_sa_uyen,1000,17000,Boss,monster_wind_tier3_elite,"{""rank"": 7}",600,true
-dan_qing_hoa_canh,17000,3000,Boss,monster_qi_tier2_elite,"{""rank"": 4}",600,true
-dao_tac_phuc_dia,3000,19000,Boss,monster_earth_trench_centipede,"{""rank"": 7}",600,true
-dh_gioi_bich_dong_bac,19000,11000,Boss,monster_water_tier3_elite,"{""rank"": 6}",600,true
-dh_gioi_bich_nam,11000,19000,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
-dh_gioi_bich_tay,11000,15000,Boss,monster_water_tier3_elite,"{""rank"": 6}",600,true
-dh_gioi_bich_tay_bac,11000,11000,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
-dong_gia_bao,3000,17000,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
-dong_hai_cuc_dong,19000,19000,Boss,monster_immemorial_refinement_golem,"{""rank"": 9}",600,true
-dong_hai_hai_nhan,11000,17000,Boss,monster_water_tier3_elite,"{""rank"": 6}",600,true
-gu_luan_slope,27100,3100,Boss,monster_dream_tier1_elite,"{""rank"": 2}",600,true
-hac_gia_trai,29000,5000,Boss,monster_dark_tier3_elite,"{""rank"": 6}",600,true
-han_bang_tuyet_vuc,23000,1000,Boss,monster_ancient_nine_nether_ice_dragon,"{""rank"": 5}",600,true
-hoa_co_dinh,23000,9000,Boss,monster_ancient_lava_python,"{""rank"": 7}",600,true
-hoa_hai_dao,15000,11000,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
-hu_tien_phuc_dia,17100,5100,Boss,monster_soul_gate_godfiend,"{""rank"": 6}",600,true
-hung_lang_nguyen,29000,7000,Boss,monster_ancient_desert_ghost_king,"{""rank"": 6}",600,true
-huyen_canh_sa_hai,9000,15000,Boss,monster_desolate_dream_tapir,"{""rank"": 6}",600,true
-huyet_hai_co_vuc,1000,9000,Boss,monster_blood_thai_co_r8r9,"{""rank"": 8}",600,true
-khi_hai_phuc_dia,15000,19000,Boss,monster_qi_thai_co_r8r9,"{""rank"": 8}",600,true
-kim_phong_khau,1000,13000,Boss,monster_wind_tier2_elite,"{""rank"": 4}",600,true
-kim_tinh_hai,19000,17000,Boss,monster_dream_mist_fox,"{""rank"": 6}",600,true
-lac_da_thung_lung,7000,15000,Boss,monster_bone_general,"{""rank"": 3}",600,true
-lac_thien_coc,13100,7100,Boss,monster_blood_sword_asura_lord,"{""rank"": 8}",600,true
-lau_lan_co_dia,27000,7000,Boss,monster_desert_ghost_boss,"{""rank"": 4}",600,true
-linh_diep_coc,7000,5000,Boss,monster_elite_storm_phoenix,"{""rank"": 3}",600,true
-linh_duyen_trai_canh,11000,3000,Boss,monster_east_sea_dragonfish,"{""rank"": 4}",600,true
-linh_nhi_ho,13000,5000,Boss,monster_light_tier2_elite,"{""rank"": 4}",600,true
-long_cung_di_tich,17000,19000,Boss,monster_tide_dragon_emperor,"{""rank"": 9}",600,true
-luc_bao_oc_dao,5000,11000,Boss,monster_dream_tier1_elite,"{""rank"": 2}",600,true
-luu_ly_hai,17000,15000,Boss,monster_cloud_di_bien_r4r5,"{""rank"": 4}",600,true
-luyen_co_dong,13100,1100,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
-ma_to_phuc_dia,23000,7000,Boss,monster_ancient_creation_womb_titan,"{""rank"": 7}",600,true
-mac_gia_thanh,5000,17000,Boss,monster_desolate_frost_mammoth,"{""rank"": 5}",600,true
-man_hoang_mieu,25000,9000,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
-nam_cuong_cuc_nam,9000,9000,Boss,monster_enslavement_thai_co_r8r9,"{""rank"": 8}",600,true
-nam_cuong_gioi_bich_bac,5000,1000,Boss,monster_desolate_death_hydra,"{""rank"": 6}",600,true
-nam_cuong_gioi_bich_nam,5000,9000,Boss,monster_abyssal_ghost_scorpion,"{""rank"": 6}",600,true
-nam_cuong_gioi_bich_tay,1000,5000,Boss,monster_desolate_death_hydra,"{""rank"": 6}",600,true
-nc_am_duong_coc,7000,9000,Boss,monster_desolate_hairy_man_chieftain,"{""rank"": 7}",600,true
-nc_am_hon_coc,1000,1000,Boss,monster_soul_thai_co_r8r9,"{""rank"": 8}",600,true
-nc_gioi_bich_dong,9000,5000,Boss,monster_abyssal_ghost_scorpion,"{""rank"": 6}",600,true
-nc_hac_am_hap,1000,3000,Boss,monster_ancient_nether_reaper,"{""rank"": 5}",600,true
-nc_hu_doc_chieu,1000,7000,Boss,monster_desolate_death_hydra,"{""rank"": 6}",600,true
-nc_loi_dinh_nhai,9000,7000,Boss,monster_lightning_eel,"{""rank"": 7}",600,true
-nc_phong_bao_dinh,9000,1000,Boss,monster_lightning_thai_co_r8r9,"{""rank"": 8}",600,true
-nc_thap_van_thu_son,7000,1000,Boss,monster_enslavement_tier3_elite,"{""rank"": 6}",600,true
-nghe_hoan_trach,3000,7000,Boss,monster_poison_tier2_elite,"{""rank"": 4}",600,true
-nguyet_nhi_ho,27000,5000,Boss,monster_blood_spider,"{""rank"": 4}",600,true
-nhan_ngu_thanh,13000,15000,Boss,monster_gourmet_toad,"{""rank"": 4}",600,true
-phi_hac_son,11000,1000,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
-phi_sa_hac,9000,13000,Boss,monster_water_tier3_elite,"{""rank"": 6}",600,true
-phong_hoa_thao_nguyen,25000,7000,Boss,monster_desolate_dream_tapir,"{""rank"": 6}",600,true
-phong_van_hoang_dia,9000,17000,Boss,monster_immemorial_chaos_ice_beast,"{""rank"": 6}",600,true
-phuc_hi_thao_nguyen,23000,5000,Boss,monster_dream_tier1_elite,"{""rank"": 2}",600,true
-quy_hon_hai_vuc,17000,17000,Boss,monster_soul_tier3_elite,"{""rank"": 6}",600,true
-song_gia_thuy_vuc,13000,11000,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
-tay_mac_cuc_nam,9000,19000,Boss,monster_metal_thai_co_r8r9,"{""rank"": 8}",600,true
-tc_gioi_bich_bac,19000,1000,Boss,monster_primordial_qi_dragon,"{""rank"": 6}",600,true
-tc_gioi_bich_nam,19000,7000,Boss,monster_qi_thai_co_r8r9,"{""rank"": 8}",600,true
-tc_kiem_minh_hai,15000,9000,Boss,monster_immemorial_sword_emperor,"{""rank"": 7}",600,true
-tc_ta_ma_quyet,11000,9000,Boss,monster_ice_thai_co_r8r9,"{""rank"": 8}",600,true
-tc_thai_co_di_tich,13000,9000,Boss,monster_ice_thai_co_r8r9,"{""rank"": 8}",600,true
-tc_than_tieu_phuc_dia,15000,5000,Boss,monster_earth_calamity_boss,"{""rank"": 3}",600,true
-tc_thien_tri_son,17000,7000,Boss,monster_dream_mist_fox,"{""rank"": 6}",600,true
-tc_tien_co_truong,17000,9000,Boss,monster_dream_thai_co_r8r9,"{""rank"": 8}",600,true
-tc_van_kiem_nhai,11000,7000,Boss,monster_ancient_flying_sword_dragon,"{""rank"": 7}",600,true
-thai_gia_cang,17000,13000,Boss,monster_boar_king,"{""rank"": 4}",600,true
-tham_gia_dao,13000,13000,Boss,monster_dream_tier1_elite,"{""rank"": 2}",600,true
-thanh_mao_son,3000,5000,Boss,monster_jade_golem,"{""rank"": 3}",600,true
-thanh_thao_hai,25000,5000,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
-thap_am_tieu_dao,17000,11000,Boss,monster_grand_calamity_boss,"{""rank"": 5}",600,true
-thien_de_son,19100,3100,Boss,monster_cloud_hoang_thu_r6r7,"{""rank"": 6}",600,true
-thien_dinh_ngoai_vi,19000,9000,Boss,monster_white_light_divine_sovereign,"{""rank"": 9}",600,true
-thien_khanh_dia_hac,7000,19000,Boss,monster_fire_thai_co_r8r9,"{""rank"": 8}",600,true
-thien_luu_hai_vuc,19000,13000,Boss,monster_dark_tier3_elite,"{""rank"": 6}",600,true
-thien_xa_quat,7000,11000,Boss,monster_meditation_stone_golem,"{""rank"": 3}",600,true
-thiet_gia_thanh,3000,3000,Boss,monster_fortune_frost_beast,"{""rank"": 4}",600,true
-three_kings_mountain,9100,3100,Boss,monster_wind_tier2_elite,"{""rank"": 4}",600,true
-tieu_gia_tran,3000,13000,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
-tm_gioi_bich_bac,1000,11000,Boss,monster_wind_thai_co_r8r9,"{""rank"": 8}",600,true
-tm_gioi_bich_dong,9000,11000,Boss,monster_wind_tier3_elite,"{""rank"": 7}",600,true
-tm_gioi_bich_nam,1000,19000,Boss,monster_wind_thai_co_r8r9,"{""rank"": 8}",600,true
-tm_gioi_bich_tay,1000,15000,Boss,monster_earth_trench_centipede,"{""rank"": 7}",600,true
-trung_chau_dia_cau,15000,7000,Boss,monster_ancient_creation_womb_titan,"{""rank"": 7}",600,true
-trung_chau_gioi_bich_dong,19000,5000,Boss,monster_qi_tier3_elite,"{""rank"": 6}",600,true
-trung_chau_gioi_bich_tay,11000,5000,Boss,monster_primordial_qi_dragon,"{""rank"": 6}",600,true
-tuyet_nguyen_nhan_tuyet,25100,1100,Boss,monster_night_mist_lord,"{""rank"": 5}",600,true
-u_minh_sa_huyet,7000,17000,Boss,monster_ancient_desert_ghost_king,"{""rank"": 6}",600,true
-van_hoa_coc,5000,7000,Boss,monster_elite_storm_phoenix,"{""rank"": 3}",600,true
-van_truong_hai_cau,13000,19000,Boss,monster_enslavement_thai_co_r8r9,"{""rank"": 8}",600,true
-van_xa_goc,7000,7000,Boss,monster_ghost_scorpion,"{""rank"": 3}",600,true
-vo_bien_thu_lam,15000,1000,Boss,monster_desolate_creation_spring_turtle,"{""rank"": 5}",600,true
-vo_vong_sa_hai,5000,19000,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
-vu_son_hien_dia,3000,9000,Boss,monster_immemorial_chaos_ice_beast,"{""rank"": 6}",600,true
-vuong_dinh_phuc_dia,29100,3100,Boss,monster_metal_hoang_thu_r6r7,"{""rank"": 6}",600,true
-xich_nhiem_sa_hai,7000,13000,Boss,monster_ancient_calamity_destroyer,"{""rank"": 5}",600,true
-thanh_mao_son,3050,5050,ENTRY_PORTAL,spatial_realm_hoa_tuu,"{""action"": ""ENTER_SPATIAL_REALM"", ""template_id"": ""spatial_realm_hoa_tuu"", ""label"": ""Cổng vào: Hoa Tửu Mật Đạo""}",0,true
-bach_cot_son,7050,3050,ENTRY_PORTAL,spatial_realm_bach_cot,"{""action"": ""ENTER_SPATIAL_REALM"", ""template_id"": ""spatial_realm_bach_cot"", ""label"": ""Cổng vào: Bạch Cốt Động""}",0,true
-three_kings_mountain,9050,3050,ENTRY_PORTAL,spatial_realm_three_kings,"{""action"": ""ENTER_SPATIAL_REALM"", ""template_id"": ""spatial_realm_three_kings"", ""label"": ""Cổng vào: Tam Vương Phúc Địa""}",0,true
-hu_tien_phuc_dia,17050,5050,ENTRY_PORTAL,spatial_realm_dang_hon,"{""action"": ""ENTER_SPATIAL_REALM"", ""template_id"": ""spatial_realm_dang_hon"", ""label"": ""Cổng vào: Đãng Hồn Sơn""}",0,true
-realm_hoa_tuu_cave,1101,1100,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SPATIAL_REALM"", ""label"": ""Cổng trở về Thanh Mao Sơn""}",0,true
-realm_hoa_tuu_cave,1105,1105,Monster,monster_cave_centipede,"{""rank"": 1}",60,true
-realm_hoa_tuu_cave,1110,1110,Monster,monster_cave_centipede,"{""rank"": 2, ""name"": ""Thạch Khống Bách Túc Vương""}",120,true
-realm_hoa_tuu_cave,1110,1111,INHERITANCE_ALTAR,altar_hoa_tuu,"{""altar_name"": ""Đài Truyền Thừa: Hoa Tửu Hành Giả"", ""path"": ""Food Path"", ""tier"": ""MORTAL"", ""guardian_coord"": {""x"": 1110, ""y"": 1110}, ""req_rank"": 1, ""req_dao_marks"": {}, ""rewards"": {""gus"": [""GU_FOOD_WINE_CAPACITY_2"", ""GU_BLADE_AURA_1""], ""recipes"": [], ""primeval_stones"": 5000, ""materials"": {""ginseng"": 10}, ""legacy_text"": ""Cổ Nguyệt nhất tộc tự xưng chính đạo, giả nhân giả nghĩa ép bản tọa vào tuyệt lộ. Hậu bối hữu duyên nếu mở được mật thất này, hãy nhận lấy Tửu Cổ, đột phá gông xiềng mà san bằng Thanh Mao Sơn!""}}",0,true
-realm_bach_cot_hall,2001,2000,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SPATIAL_REALM"", ""label"": ""Cổng trở về Bạch Cốt Sơn""}",0,true
-realm_bach_cot_hall,2008,2008,Monster,monster_bone_dog,"{""rank"": 3}",60,true
-realm_bach_cot_hall,2015,2015,Monster,monster_bone_general,"{""rank"": 4, ""name"": ""Bạch Cốt Tướng Quân""}",180,true
-realm_bach_cot_hall,2015,2016,INHERITANCE_ALTAR,altar_bach_cot,"{""altar_name"": ""Đài Truyền Thừa: Bạch Cốt Chân Nhân"", ""path"": ""Bone Path"", ""tier"": ""MORTAL"", ""guardian_coord"": {""x"": 2015, ""y"": 2015}, ""req_rank"": 3, ""req_dao_marks"": {""Bone Path"": 20}, ""rewards"": {""gus"": [""GU_SHARP_DECISION_2"", ""GU_WIND_DECISION_1""], ""recipes"": [], ""primeval_stones"": 20000, ""dao_marks"": {""Bone Path"": 50}, ""legacy_text"": ""Cốt nhục tương liên, ma đạo bất diệt! Luyện hóa cốt tủy đúc thành ma thân, đạp bằng xương trắng vấn đỉnh thương khung!""}}",0,true
-realm_three_kings_sanctum,3001,3000,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SPATIAL_REALM"", ""label"": ""Cổng trở về Tam Vương Sơn""}",0,true
-realm_three_kings_sanctum,3010,3010,Monster,monster_boar_king,"{""rank"": 4}",60,true
-realm_three_kings_sanctum,3020,3020,Monster,monster_three_kings_boss,"{""rank"": 5, ""name"": ""Tam Vương Cơ Quan Khôi Lỗi""}",240,true
-realm_three_kings_sanctum,3020,3021,INHERITANCE_ALTAR,altar_three_kings_ba_tu,"{""altar_name"": ""Đài Truyền Thừa: Bá Vương Thiết Bá Tú"", ""path"": ""Strength Path"", ""tier"": ""MORTAL"", ""guardian_coord"": {""x"": 3020, ""y"": 3020}, ""req_rank"": 4, ""req_dao_marks"": {}, ""rewards"": {""gus"": [""GU_SHARP_DECISION_2""], ""recipes"": [], ""primeval_stones"": 50000, ""dao_marks"": {""Strength Path"": 100}, ""legacy_text"": ""Lực đạo bất hủ! Nhất lực hàng thập hội, đập vỡ thiên địa càn khôn!""}}",0,true
-realm_three_kings_sanctum,3025,3020,INHERITANCE_ALTAR,altar_three_kings_khoc_vu,"{""altar_name"": ""Đài Truyền Thừa: Khốc Vu Lão Nhân"", ""path"": ""Soul Path"", ""tier"": ""MORTAL"", ""guardian_coord"": {""x"": 3020, ""y"": 3020}, ""req_rank"": 4, ""req_dao_marks"": {}, ""rewards"": {""gus"": [], ""recipes"": [], ""primeval_stones"": 50000, ""dao_marks"": {""Soul Path"": 100}, ""legacy_text"": ""Hồn phách gào khóc, âm phong thấu cốt! Vạn quỷ nghe lệnh, chấp chưởng u minh!""}}",0,true
-realm_dang_hon_summit,4001,4000,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SPATIAL_REALM"", ""label"": ""Cổng trở về Hồ Tiên Phúc Địa""}",0,true
-realm_dang_hon_summit,4015,4015,Monster,monster_immemorial_soul_beast,"{""rank"": 6}",120,true
-realm_dang_hon_summit,4025,4025,Monster,monster_immemorial_soul_beast,"{""rank"": 7, ""name"": ""Thái Cổ Đãng Hồn Thú Hoàng""}",300,true
-realm_dang_hon_summit,4025,4026,INHERITANCE_ALTAR,altar_hu_immortal,"{""altar_name"": ""Đài Chân Truyền Tiên Cấp: Hồ Tiên - Đãng Hồn Sơn"", ""path"": ""Soul Path"", ""tier"": ""IMMORTAL"", ""guardian_coord"": {""x"": 4025, ""y"": 4025}, ""req_rank"": 6, ""req_dao_marks"": {""Soul Path"": 100}, ""rewards"": {""gus"": [""GU_GUTS""], ""recipes"": [], ""immortal_stones"": 500, ""dao_marks"": {""Soul Path"": 500}, ""legacy_text"": ""Đãng Hồn Sơn rung động, Can Đảm Cổ vô song! Hồ Tiên ta lưu lại phúc địa cho Cổ Tiên hữu duyên chấp chưởng thiên địa bí cảnh, tráng đại thần hồn vạn trượng!""}}",0,true
+am_hon_sa_vuc,500,500,Boss,monster_immemorial_soul_beast,"{""rank"": 5}",600,true
+am_luu_cu_hac,550,550,Boss,monster_ancient_desert_ghost_king,"{""rank"": 6}",600,true
+am_tieu_vuc,500,500,Boss,monster_abyssal_ghost_scorpion,"{""rank"": 6}",600,true
+azure_ghost_desert,550,550,Boss,monster_desolate_formation_golem,"{""rank"": 5}",600,true
+bac_nguyen_gioi_bich_dong,500,500,Boss,monster_wind_thai_co_r8r9,"{""rank"": 8}",600,true
+bach_cot_son,550,550,Boss,monster_bone_marrow_golem,"{""rank"": 5}",600,true
+bach_kinh_vuc,500,500,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
+bach_sa_nguyen,500,500,Boss,monster_desolate_formation_golem,"{""rank"": 5}",600,true
+bang_phong_hac_uyen,500,500,Boss,monster_ice_thai_co_r8r9,"{""rank"": 8}",600,true
+bat_bai_coc,550,550,Boss,monster_refinement_tier3_elite,"{""rank"": 6}",600,true
+bat_thap_bat_gac_dai,500,500,Boss,monster_strength_thai_co_r8r9,"{""rank"": 8}",600,true
+bn_diet_than_truong,500,500,Boss,monster_bone_tier3_elite,"{""rank"": 6}",600,true
+bn_gioi_bich_nam,500,500,Boss,monster_wind_tier3_elite,"{""rank"": 7}",600,true
+bn_gioi_bich_tay,500,500,Boss,monster_wind_thai_co_r8r9,"{""rank"": 8}",600,true
+bn_tuyet_quai_coc,500,500,Boss,monster_night_mist_lord,"{""rank"": 5}",600,true
+bong_lai_phuc_dia,500,500,Boss,monster_dream_mist_fox,"{""rank"": 6}",600,true
+cat_xuyen_thao_nguyen,500,500,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
+cu_lang_vuc,500,500,Boss,monster_ancient_myriad_beast_king,"{""rank"": 7}",600,true
+cuu_cung_sa_uyen,500,500,Boss,monster_wind_tier3_elite,"{""rank"": 7}",600,true
+dan_qing_hoa_canh,500,500,Boss,monster_qi_tier2_elite,"{""rank"": 4}",600,true
+dao_tac_phuc_dia,500,500,Boss,monster_earth_trench_centipede,"{""rank"": 7}",600,true
+dh_gioi_bich_dong_bac,500,500,Boss,monster_water_tier3_elite,"{""rank"": 6}",600,true
+dh_gioi_bich_nam,500,500,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
+dh_gioi_bich_tay,500,500,Boss,monster_water_tier3_elite,"{""rank"": 6}",600,true
+dh_gioi_bich_tay_bac,500,500,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
+dong_gia_bao,500,500,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
+dong_hai_cuc_dong,500,500,Boss,monster_immemorial_refinement_golem,"{""rank"": 9}",600,true
+dong_hai_hai_nhan,500,500,Boss,monster_water_tier3_elite,"{""rank"": 6}",600,true
+gu_luan_slope,550,550,Boss,monster_dream_tier1_elite,"{""rank"": 2}",600,true
+hac_gia_trai,500,500,Boss,monster_dark_tier3_elite,"{""rank"": 6}",600,true
+han_bang_tuyet_vuc,500,500,Boss,monster_ancient_nine_nether_ice_dragon,"{""rank"": 5}",600,true
+hoa_co_dinh,500,500,Boss,monster_ancient_lava_python,"{""rank"": 7}",600,true
+hoa_hai_dao,500,500,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
+hu_tien_phuc_dia,550,550,Boss,monster_soul_gate_godfiend,"{""rank"": 6}",600,true
+hung_lang_nguyen,500,500,Boss,monster_ancient_desert_ghost_king,"{""rank"": 6}",600,true
+huyen_canh_sa_hai,500,500,Boss,monster_desolate_dream_tapir,"{""rank"": 6}",600,true
+huyet_hai_co_vuc,500,500,Boss,monster_blood_thai_co_r8r9,"{""rank"": 8}",600,true
+khi_hai_phuc_dia,500,500,Boss,monster_qi_thai_co_r8r9,"{""rank"": 8}",600,true
+kim_phong_khau,500,500,Boss,monster_wind_tier2_elite,"{""rank"": 4}",600,true
+kim_tinh_hai,500,500,Boss,monster_dream_mist_fox,"{""rank"": 6}",600,true
+lac_da_thung_lung,500,500,Boss,monster_bone_general,"{""rank"": 3}",600,true
+lac_thien_coc,550,550,Boss,monster_blood_sword_asura_lord,"{""rank"": 8}",600,true
+lau_lan_co_dia,500,500,Boss,monster_desert_ghost_boss,"{""rank"": 4}",600,true
+linh_diep_coc,500,500,Boss,monster_elite_storm_phoenix,"{""rank"": 3}",600,true
+linh_duyen_trai_canh,500,500,Boss,monster_east_sea_dragonfish,"{""rank"": 4}",600,true
+linh_nhi_ho,500,500,Boss,monster_light_tier2_elite,"{""rank"": 4}",600,true
+long_cung_di_tich,500,500,Boss,monster_tide_dragon_emperor,"{""rank"": 9}",600,true
+luc_bao_oc_dao,500,500,Boss,monster_dream_tier1_elite,"{""rank"": 2}",600,true
+luu_ly_hai,500,500,Boss,monster_cloud_di_bien_r4r5,"{""rank"": 4}",600,true
+luyen_co_dong,550,550,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
+ma_to_phuc_dia,500,500,Boss,monster_ancient_creation_womb_titan,"{""rank"": 7}",600,true
+mac_gia_thanh,500,500,Boss,monster_desolate_frost_mammoth,"{""rank"": 5}",600,true
+man_hoang_mieu,500,500,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
+nam_cuong_cuc_nam,500,500,Boss,monster_enslavement_thai_co_r8r9,"{""rank"": 8}",600,true
+nam_cuong_gioi_bich_bac,500,500,Boss,monster_desolate_death_hydra,"{""rank"": 6}",600,true
+nam_cuong_gioi_bich_nam,500,500,Boss,monster_abyssal_ghost_scorpion,"{""rank"": 6}",600,true
+nam_cuong_gioi_bich_tay,500,500,Boss,monster_desolate_death_hydra,"{""rank"": 6}",600,true
+nc_am_duong_coc,500,500,Boss,monster_desolate_hairy_man_chieftain,"{""rank"": 7}",600,true
+nc_am_hon_coc,500,500,Boss,monster_soul_thai_co_r8r9,"{""rank"": 8}",600,true
+nc_gioi_bich_dong,500,500,Boss,monster_abyssal_ghost_scorpion,"{""rank"": 6}",600,true
+nc_hac_am_hap,500,500,Boss,monster_ancient_nether_reaper,"{""rank"": 5}",600,true
+nc_hu_doc_chieu,500,500,Boss,monster_desolate_death_hydra,"{""rank"": 6}",600,true
+nc_loi_dinh_nhai,500,500,Boss,monster_lightning_eel,"{""rank"": 7}",600,true
+nc_phong_bao_dinh,500,500,Boss,monster_lightning_thai_co_r8r9,"{""rank"": 8}",600,true
+nc_thap_van_thu_son,500,500,Boss,monster_enslavement_tier3_elite,"{""rank"": 6}",600,true
+nghe_hoan_trach,500,500,Boss,monster_poison_tier2_elite,"{""rank"": 4}",600,true
+nguyet_nhi_ho,500,500,Boss,monster_blood_spider,"{""rank"": 4}",600,true
+nhan_ngu_thanh,500,500,Boss,monster_gourmet_toad,"{""rank"": 4}",600,true
+phi_hac_son,500,500,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
+phi_sa_hac,500,500,Boss,monster_water_tier3_elite,"{""rank"": 6}",600,true
+phong_hoa_thao_nguyen,500,500,Boss,monster_desolate_dream_tapir,"{""rank"": 6}",600,true
+phong_van_hoang_dia,500,500,Boss,monster_immemorial_chaos_ice_beast,"{""rank"": 6}",600,true
+phuc_hi_thao_nguyen,500,500,Boss,monster_dream_tier1_elite,"{""rank"": 2}",600,true
+quy_hon_hai_vuc,500,500,Boss,monster_soul_tier3_elite,"{""rank"": 6}",600,true
+song_gia_thuy_vuc,500,500,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
+tay_mac_cuc_nam,500,500,Boss,monster_metal_thai_co_r8r9,"{""rank"": 8}",600,true
+tc_gioi_bich_bac,500,500,Boss,monster_primordial_qi_dragon,"{""rank"": 6}",600,true
+tc_gioi_bich_nam,500,500,Boss,monster_qi_thai_co_r8r9,"{""rank"": 8}",600,true
+tc_kiem_minh_hai,500,500,Boss,monster_immemorial_sword_emperor,"{""rank"": 7}",600,true
+tc_ta_ma_quyet,500,500,Boss,monster_ice_thai_co_r8r9,"{""rank"": 8}",600,true
+tc_thai_co_di_tich,500,500,Boss,monster_ice_thai_co_r8r9,"{""rank"": 8}",600,true
+tc_than_tieu_phuc_dia,500,500,Boss,monster_earth_calamity_boss,"{""rank"": 3}",600,true
+tc_thien_tri_son,500,500,Boss,monster_dream_mist_fox,"{""rank"": 6}",600,true
+tc_tien_co_truong,500,500,Boss,monster_dream_thai_co_r8r9,"{""rank"": 8}",600,true
+tc_van_kiem_nhai,500,500,Boss,monster_ancient_flying_sword_dragon,"{""rank"": 7}",600,true
+thai_gia_cang,500,500,Boss,monster_boar_king,"{""rank"": 4}",600,true
+tham_gia_dao,500,500,Boss,monster_dream_tier1_elite,"{""rank"": 2}",600,true
+thanh_mao_son,500,500,Boss,monster_jade_golem,"{""rank"": 3}",600,true
+thanh_thao_hai,500,500,Boss,monster_dream_tier2_elite,"{""rank"": 4}",600,true
+thap_am_tieu_dao,500,500,Boss,monster_grand_calamity_boss,"{""rank"": 5}",600,true
+thien_de_son,550,550,Boss,monster_cloud_hoang_thu_r6r7,"{""rank"": 6}",600,true
+thien_dinh_ngoai_vi,500,500,Boss,monster_white_light_divine_sovereign,"{""rank"": 9}",600,true
+thien_khanh_dia_hac,500,500,Boss,monster_fire_thai_co_r8r9,"{""rank"": 8}",600,true
+thien_luu_hai_vuc,500,500,Boss,monster_dark_tier3_elite,"{""rank"": 6}",600,true
+thien_xa_quat,500,500,Boss,monster_meditation_stone_golem,"{""rank"": 3}",600,true
+thiet_gia_thanh,500,500,Boss,monster_fortune_frost_beast,"{""rank"": 4}",600,true
+three_kings_mountain,550,550,Boss,monster_wind_tier2_elite,"{""rank"": 4}",600,true
+tieu_gia_tran,500,500,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
+tm_gioi_bich_bac,500,500,Boss,monster_wind_thai_co_r8r9,"{""rank"": 8}",600,true
+tm_gioi_bich_dong,500,500,Boss,monster_wind_tier3_elite,"{""rank"": 7}",600,true
+tm_gioi_bich_nam,500,500,Boss,monster_wind_thai_co_r8r9,"{""rank"": 8}",600,true
+tm_gioi_bich_tay,500,500,Boss,monster_earth_trench_centipede,"{""rank"": 7}",600,true
+trung_chau_dia_cau,500,500,Boss,monster_ancient_creation_womb_titan,"{""rank"": 7}",600,true
+trung_chau_gioi_bich_dong,500,500,Boss,monster_qi_tier3_elite,"{""rank"": 6}",600,true
+trung_chau_gioi_bich_tay,500,500,Boss,monster_primordial_qi_dragon,"{""rank"": 6}",600,true
+tuyet_nguyen_nhan_tuyet,550,550,Boss,monster_night_mist_lord,"{""rank"": 5}",600,true
+u_minh_sa_huyet,500,500,Boss,monster_ancient_desert_ghost_king,"{""rank"": 6}",600,true
+van_hoa_coc,500,500,Boss,monster_elite_storm_phoenix,"{""rank"": 3}",600,true
+van_truong_hai_cau,500,500,Boss,monster_enslavement_thai_co_r8r9,"{""rank"": 8}",600,true
+van_xa_goc,500,500,Boss,monster_ghost_scorpion,"{""rank"": 3}",600,true
+vo_bien_thu_lam,500,500,Boss,monster_desolate_creation_spring_turtle,"{""rank"": 5}",600,true
+vo_vong_sa_hai,500,500,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
+vu_son_hien_dia,500,500,Boss,monster_immemorial_chaos_ice_beast,"{""rank"": 6}",600,true
+vuong_dinh_phuc_dia,550,550,Boss,monster_metal_hoang_thu_r6r7,"{""rank"": 6}",600,true
+xich_nhiem_sa_hai,500,500,Boss,monster_ancient_calamity_destroyer,"{""rank"": 5}",600,true
+thanh_mao_son,525,525,ENTRY_PORTAL,spatial_realm_hoa_tuu,"{""action"": ""ENTER_SPATIAL_REALM"", ""template_id"": ""spatial_realm_hoa_tuu"", ""label"": ""Cổng vào: Hoa Tửu Mật Đạo""}",0,true
+bach_cot_son,525,525,ENTRY_PORTAL,spatial_realm_bach_cot,"{""action"": ""ENTER_SPATIAL_REALM"", ""template_id"": ""spatial_realm_bach_cot"", ""label"": ""Cổng vào: Bạch Cốt Động""}",0,true
+three_kings_mountain,525,525,ENTRY_PORTAL,spatial_realm_three_kings,"{""action"": ""ENTER_SPATIAL_REALM"", ""template_id"": ""spatial_realm_three_kings"", ""label"": ""Cổng vào: Tam Vương Phúc Địa""}",0,true
+hu_tien_phuc_dia,525,525,ENTRY_PORTAL,spatial_realm_dang_hon,"{""action"": ""ENTER_SPATIAL_REALM"", ""template_id"": ""spatial_realm_dang_hon"", ""label"": ""Cổng vào: Đãng Hồn Sơn""}",0,true
+realm_hoa_tuu_cave,1,1,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SPATIAL_REALM"", ""label"": ""Cổng trở về Thanh Mao Sơn""}",0,true
+realm_hoa_tuu_cave,5,5,Monster,monster_cave_centipede,"{""rank"": 1}",60,true
+realm_hoa_tuu_cave,10,10,Monster,monster_cave_centipede,"{""rank"": 2, ""name"": ""Thạch Khống Bách Túc Vương""}",120,true
+realm_hoa_tuu_cave,10,11,INHERITANCE_ALTAR,altar_hoa_tuu,"{""altar_name"": ""Đài Truyền Thừa: Hoa Tửu Hành Giả"", ""path"": ""Food Path"", ""tier"": ""MORTAL"", ""guardian_coord"": {""x"": 10, ""y"": 10}, ""req_rank"": 1, ""req_dao_marks"": {}, ""rewards"": {""gus"": [""GU_FOOD_WINE_CAPACITY_2"", ""GU_BLADE_AURA_1""], ""recipes"": [], ""primeval_stones"": 5000, ""materials"": {""ginseng"": 10}, ""legacy_text"": ""Cổ Nguyệt nhất tộc tự xưng chính đạo, giả nhân giả nghĩa ép bản tọa vào tuyệt lộ. Hậu bối hữu duyên nếu mở được mật thất này, hãy nhận lấy Tửu Cổ, đột phá gông xiềng mà san bằng Thanh Mao Sơn!""}}",0,true
+realm_bach_cot_hall,1,1,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SPATIAL_REALM"", ""label"": ""Cổng trở về Bạch Cốt Sơn""}",0,true
+realm_bach_cot_hall,8,8,Monster,monster_bone_dog,"{""rank"": 3}",60,true
+realm_bach_cot_hall,15,15,Monster,monster_bone_general,"{""rank"": 4, ""name"": ""Bạch Cốt Tướng Quân""}",180,true
+realm_bach_cot_hall,15,16,INHERITANCE_ALTAR,altar_bach_cot,"{""altar_name"": ""Đài Truyền Thừa: Bạch Cốt Chân Nhân"", ""path"": ""Bone Path"", ""tier"": ""MORTAL"", ""guardian_coord"": {""x"": 15, ""y"": 15}, ""req_rank"": 3, ""req_dao_marks"": {""Bone Path"": 20}, ""rewards"": {""gus"": [""GU_SHARP_DECISION_2"", ""GU_WIND_DECISION_1""], ""recipes"": [], ""primeval_stones"": 20000, ""dao_marks"": {""Bone Path"": 50}, ""legacy_text"": ""Cốt nhục tương liên, ma đạo bất diệt! Luyện hóa cốt tủy đúc thành ma thân, đạp bằng xương trắng vấn đỉnh thương khung!""}}",0,true
+realm_three_kings_sanctum,1,1,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SPATIAL_REALM"", ""label"": ""Cổng trở về Tam Vương Sơn""}",0,true
+realm_three_kings_sanctum,10,10,Monster,monster_boar_king,"{""rank"": 4}",60,true
+realm_three_kings_sanctum,20,20,Monster,monster_three_kings_boss,"{""rank"": 5, ""name"": ""Tam Vương Cơ Quan Khôi Lỗi""}",240,true
+realm_three_kings_sanctum,20,21,INHERITANCE_ALTAR,altar_three_kings_ba_tu,"{""altar_name"": ""Đài Truyền Thừa: Bá Vương Thiết Bá Tú"", ""path"": ""Strength Path"", ""tier"": ""MORTAL"", ""guardian_coord"": {""x"": 20, ""y"": 20}, ""req_rank"": 4, ""req_dao_marks"": {}, ""rewards"": {""gus"": [""GU_SHARP_DECISION_2""], ""recipes"": [], ""primeval_stones"": 50000, ""dao_marks"": {""Strength Path"": 100}, ""legacy_text"": ""Lực đạo bất hủ! Nhất lực hàng thập hội, đập vỡ thiên địa càn khôn!""}}",0,true
+realm_three_kings_sanctum,25,20,INHERITANCE_ALTAR,altar_three_kings_khoc_vu,"{""altar_name"": ""Đài Truyền Thừa: Khốc Vu Lão Nhân"", ""path"": ""Soul Path"", ""tier"": ""MORTAL"", ""guardian_coord"": {""x"": 20, ""y"": 20}, ""req_rank"": 4, ""req_dao_marks"": {}, ""rewards"": {""gus"": [], ""recipes"": [], ""primeval_stones"": 50000, ""dao_marks"": {""Soul Path"": 100}, ""legacy_text"": ""Hồn phách gào khóc, âm phong thấu cốt! Vạn quỷ nghe lệnh, chấp chưởng u minh!""}}",0,true
+realm_dang_hon_summit,1,1,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SPATIAL_REALM"", ""label"": ""Cổng trở về Hồ Tiên Phúc Địa""}",0,true
+realm_dang_hon_summit,15,15,Monster,monster_immemorial_soul_beast,"{""rank"": 6}",120,true
+realm_dang_hon_summit,25,25,Monster,monster_immemorial_soul_beast,"{""rank"": 7, ""name"": ""Thái Cổ Đãng Hồn Thú Hoàng""}",300,true
+realm_dang_hon_summit,25,26,INHERITANCE_ALTAR,altar_hu_immortal,"{""altar_name"": ""Đài Chân Truyền Tiên Cấp: Hồ Tiên - Đãng Hồn Sơn"", ""path"": ""Soul Path"", ""tier"": ""IMMORTAL"", ""guardian_coord"": {""x"": 25, ""y"": 25}, ""req_rank"": 6, ""req_dao_marks"": {""Soul Path"": 100}, ""rewards"": {""gus"": [""GU_GUTS""], ""recipes"": [], ""immortal_stones"": 500, ""dao_marks"": {""Soul Path"": 500}, ""legacy_text"": ""Đãng Hồn Sơn rung động, Can Đảm Cổ vô song! Hồ Tiên ta lưu lại phúc địa cho Cổ Tiên hữu duyên chấp chưởng thiên địa bí cảnh, tráng đại thần hồn vạn trượng!""}}",0,true

@@ -71,7 +71,9 @@ func schemaWorld() error {
 		paths JSONB NOT NULL DEFAULT '[]',
 		rules JSONB NOT NULL DEFAULT '{}',
 		safe_zone_x INT,
-		safe_zone_y INT
+		safe_zone_y INT,
+		atlas_x INT NOT NULL DEFAULT 0,
+		atlas_y INT NOT NULL DEFAULT 0
 	);`); err != nil {
 		return err
 	}

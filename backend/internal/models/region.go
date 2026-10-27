@@ -41,6 +41,8 @@ type Region struct {
 	MaxY           int             `json:"max_y"`
 	EntryX         int             `json:"entry_x"`
 	EntryY         int             `json:"entry_y"`
+	AtlasX         int             `json:"atlas_x"`
+	AtlasY         int             `json:"atlas_y"`
 	PoolWeights    ZonePools       `json:"pool_weights"`
 	Paths          []string        `json:"paths"`
 	Rules          json.RawMessage `json:"rules"`

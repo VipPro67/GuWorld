@@ -133,6 +133,7 @@ export interface WorldWelcomePayload {
   map_version: string;
   content_version: string;
   tick_rate: number;
+  movement_speed?: number;
   server_tick: number;
   entity_id: string;
   entity_revision: number;
@@ -278,6 +279,9 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
   if (!isSafePositiveInteger(value.tick_rate) || !isSafeNonNegativeInteger(value.server_tick) || !isSafeNonNegativeInteger(value.entity_revision) || !isSafePositiveInteger(value.baseline_id)) {
     throw new Error("World welcome timing or baseline is invalid");
   }
+  if (value.movement_speed !== undefined && (!isFiniteNumber(value.movement_speed) || value.movement_speed <= 0)) {
+    throw new Error("World welcome movement speed is invalid");
+  }
   const snapshot = parseWorldSnapshotPayload(value.snapshot);
   if (!snapshot.is_baseline || snapshot.baseline_id !== value.baseline_id || snapshot.tick !== value.server_tick || !snapshot.entities.some((entity) => entity.entity_id === value.entity_id)) {
     throw new Error("World welcome does not contain a matching owner baseline");
@@ -325,6 +329,7 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
     map_version: value.map_version as string,
     content_version: value.content_version as string,
     tick_rate: value.tick_rate,
+    movement_speed: value.movement_speed as number | undefined,
     server_tick: value.server_tick,
     entity_id: value.entity_id as string,
     entity_revision: value.entity_revision,

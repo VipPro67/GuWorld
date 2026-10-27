@@ -48,7 +48,7 @@ target-lease movement and unknown-target errors.
 
 ## Edge-triggered region handoff (KHU_VUC/SAFE_ZONE)
 
-Every generated child map is 2000×2000 and carries at most one portal per side.
+Every generated child map is 1000×1000 and carries at most one portal per side.
 The whole border band (not just the portal marker) is a crossing:
 
 - The zone snapshot loop checks the owned player's authoritative position.

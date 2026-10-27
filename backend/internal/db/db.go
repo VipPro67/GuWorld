@@ -528,8 +528,8 @@ func isRetryableSchemaError(err error) bool {
 // literal on a fresh database violates regions_parent_id_fkey and aborts boot.
 func seedHubRegion() error {
 	if _, err := schemaDB().Exec(`
-	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at, parent_id)
-	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 201, 201, 1, 9, true, 'HUB', 4900, 4900, 5100, 5100, 5000, 5000, '{"cell_type_weights":{"Empty":100}}', NOW(), (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong'))
+	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, atlas_x, atlas_y, updated_at, parent_id)
+	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 1000, 1000, 1, 9, true, 'HUB', 0, 0, 1000, 1000, 500, 500, '{"cell_type_weights":{"Empty":100}}', 2000, 2000, NOW(), (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong'))
 	ON CONFLICT (id) DO UPDATE SET parent_id = (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong') WHERE regions.parent_id IS NULL OR regions.parent_id = '';`); err != nil {
 		return err
 	}
@@ -537,8 +537,8 @@ func seedHubRegion() error {
 		return err
 	}
 	if _, err := schemaDB().Exec(`
-	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at, parent_id)
-	VALUES ('tan_thu_coc_nam_cuong', 'Tân Thủ Cốc Nam Cương', 'Thung lũng khởi đầu thanh bình cho các tân thủ Cổ Sư học tập luyện cổ và chiến đấu.', 2000, 2000, 1, 2, true, 'SAFE_ZONE', 4000, 2000, 6000, 4000, 5000, 3000, '{"cell_type_weights":{"Empty":60,"Monster":60,"Resource":1}}', NOW(), (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong'))
+	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, atlas_x, atlas_y, updated_at, parent_id)
+	VALUES ('tan_thu_coc_nam_cuong', 'Tân Thủ Cốc Nam Cương', 'Thung lũng khởi đầu thanh bình cho các tân thủ Cổ Sư học tập luyện cổ và chiến đấu.', 1000, 1000, 1, 2, true, 'SAFE_ZONE', 0, 0, 1000, 1000, 500, 500, '{"cell_type_weights":{"Empty":60,"Monster":60,"Resource":1}}', 2000, 1000, NOW(), (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong'))
 	ON CONFLICT (id) DO UPDATE SET parent_id = (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong') WHERE regions.parent_id IS NULL OR regions.parent_id = '';`); err != nil {
 		return err
 	}
@@ -616,37 +616,37 @@ func seedStarterSpatialRealm() error {
 		INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
 		VALUES
 		-- Starter Realm (Thanh Mộc Cốc)
-		('realm_qingmu_valley',1001,1000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về"}'::jsonb,0,TRUE),
-		('realm_qingmu_valley',1002,1000,'Monster','monster_wild_boar','{"rank":1}'::jsonb,60,TRUE),
-		('realm_qingmu_valley',1000,1001,'Resource','ginseng','{}'::jsonb,600,TRUE),
-		('realm_qingmu_valley',1002,1001,'Resource','jade_stone','{}'::jsonb,600,TRUE),
-		('realm_qingmu_valley',1005,1005,'Monster','monster_wild_boar','{"rank":1,"name":"Thủ Hộ Dã Trư Vương"}'::jsonb,120,TRUE),
-		('realm_qingmu_valley',1005,1006,'INHERITANCE_ALTAR','altar_qingmu_elder','{"altar_name":"Đài Truyền Thừa: Thanh Mộc Lão Nhân","path":"Wood Path","tier":"MORTAL","guardian_coord":{"x":1005,"y":1005},"req_rank":1,"req_dao_marks":{},"rewards":{"gus":["GU_BLADE_AURA_1"],"recipes":[],"primeval_stones":1000,"materials":{"ginseng":5},"legacy_text":"Lão phu lưu lại truyền thừa này cho hậu bối hữu duyên bước chân vào Thanh Mộc Cốc..."}}'::jsonb,0,TRUE),
+		('realm_qingmu_valley',1,1,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về"}'::jsonb,0,TRUE),
+		('realm_qingmu_valley',2,1,'Monster','monster_wild_boar','{"rank":1}'::jsonb,60,TRUE),
+		('realm_qingmu_valley',1,2,'Resource','ginseng','{}'::jsonb,600,TRUE),
+		('realm_qingmu_valley',2,2,'Resource','jade_stone','{}'::jsonb,600,TRUE),
+		('realm_qingmu_valley',5,5,'Monster','monster_wild_boar','{"rank":1,"name":"Thủ Hộ Dã Trư Vương"}'::jsonb,120,TRUE),
+		('realm_qingmu_valley',5,6,'INHERITANCE_ALTAR','altar_qingmu_elder','{"altar_name":"Đài Truyền Thừa: Thanh Mộc Lão Nhân","path":"Wood Path","tier":"MORTAL","guardian_coord":{"x":5,"y":5},"req_rank":1,"req_dao_marks":{},"rewards":{"gus":["GU_BLADE_AURA_1"],"recipes":[],"primeval_stones":1000,"materials":{"ginseng":5},"legacy_text":"Lão phu lưu lại truyền thừa này cho hậu bối hữu duyên bước chân vào Thanh Mộc Cốc..."}}'::jsonb,0,TRUE),
 
 		-- Realm 1: Hoa Tửu Mật Đạo
-		('realm_hoa_tuu_cave',1101,1100,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Thanh Mao Sơn"}'::jsonb,0,TRUE),
-		('realm_hoa_tuu_cave',1105,1105,'Monster','monster_cave_centipede','{"rank":1}'::jsonb,60,TRUE),
-		('realm_hoa_tuu_cave',1110,1110,'Monster','monster_cave_centipede','{"rank":2,"name":"Thạch Khống Bách Túc Vương"}'::jsonb,120,TRUE),
-		('realm_hoa_tuu_cave',1110,1111,'INHERITANCE_ALTAR','altar_hoa_tuu','{"altar_name":"Đài Truyền Thừa: Hoa Tửu Hành Giả","path":"Food Path","tier":"MORTAL","guardian_coord":{"x":1110,"y":1110},"req_rank":1,"req_dao_marks":{},"rewards":{"gus":["GU_FOOD_WINE_CAPACITY_2","GU_BLADE_AURA_1"],"recipes":[],"primeval_stones":5000,"materials":{"ginseng":10},"legacy_text":"Cổ Nguyệt nhất tộc tự xưng chính đạo, giả nhân giả nghĩa ép bản tọa vào tuyệt lộ. Hậu bối hữu duyên nếu mở được mật thất này, hãy nhận lấy Tửu Cổ, đột phá gông xiềng mà san bằng Thanh Mao Sơn!"}}'::jsonb,0,TRUE),
+		('realm_hoa_tuu_cave',1,1,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Thanh Mao Sơn"}'::jsonb,0,TRUE),
+		('realm_hoa_tuu_cave',5,5,'Monster','monster_cave_centipede','{"rank":1}'::jsonb,60,TRUE),
+		('realm_hoa_tuu_cave',10,10,'Monster','monster_cave_centipede','{"rank":2,"name":"Thạch Khống Bách Túc Vương"}'::jsonb,120,TRUE),
+		('realm_hoa_tuu_cave',10,11,'INHERITANCE_ALTAR','altar_hoa_tuu','{"altar_name":"Đài Truyền Thừa: Hoa Tửu Hành Giả","path":"Food Path","tier":"MORTAL","guardian_coord":{"x":10,"y":10},"req_rank":1,"req_dao_marks":{},"rewards":{"gus":["GU_FOOD_WINE_CAPACITY_2","GU_BLADE_AURA_1"],"recipes":[],"primeval_stones":5000,"materials":{"ginseng":10},"legacy_text":"Cổ Nguyệt nhất tộc tự xưng chính đạo, giả nhân giả nghĩa ép bản tọa vào tuyệt lộ. Hậu bối hữu duyên nếu mở được mật thất này, hãy nhận lấy Tửu Cổ, đột phá gông xiềng mà san bằng Thanh Mao Sơn!"}}'::jsonb,0,TRUE),
 
 		-- Realm 2: Bạch Cốt Động
-		('realm_bach_cot_hall',2001,2000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Bạch Cốt Sơn"}'::jsonb,0,TRUE),
-		('realm_bach_cot_hall',2008,2008,'Monster','monster_bone_dog','{"rank":3}'::jsonb,60,TRUE),
-		('realm_bach_cot_hall',2015,2015,'Monster','monster_bone_general','{"rank":4,"name":"Bạch Cốt Tướng Quân"}'::jsonb,180,TRUE),
-		('realm_bach_cot_hall',2015,2016,'INHERITANCE_ALTAR','altar_bach_cot','{"altar_name":"Đài Truyền Thừa: Bạch Cốt Chân Nhân","path":"Bone Path","tier":"MORTAL","guardian_coord":{"x":2015,"y":2015},"req_rank":3,"req_dao_marks":{"Bone Path":20},"rewards":{"gus":["GU_SHARP_DECISION_2","GU_WIND_DECISION_1"],"recipes":[],"primeval_stones":20000,"materials":{},"dao_marks":{"Bone Path":50},"legacy_text":"Cốt nhục tương liên, ma đạo bất diệt! Luyện hóa cốt tủy đúc thành ma thân, đạp bằng xương trắng vấn đỉnh thương khung!"}}'::jsonb,0,TRUE),
+		('realm_bach_cot_hall',1,1,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Bạch Cốt Sơn"}'::jsonb,0,TRUE),
+		('realm_bach_cot_hall',8,8,'Monster','monster_bone_dog','{"rank":3}'::jsonb,60,TRUE),
+		('realm_bach_cot_hall',15,15,'Monster','monster_bone_general','{"rank":4,"name":"Bạch Cốt Tướng Quân"}'::jsonb,180,TRUE),
+		('realm_bach_cot_hall',15,16,'INHERITANCE_ALTAR','altar_bach_cot','{"altar_name":"Đài Truyền Thừa: Bạch Cốt Chân Nhân","path":"Bone Path","tier":"MORTAL","guardian_coord":{"x":15,"y":15},"req_rank":3,"req_dao_marks":{"Bone Path":20},"rewards":{"gus":["GU_SHARP_DECISION_2","GU_WIND_DECISION_1"],"recipes":[],"primeval_stones":20000,"materials":{},"dao_marks":{"Bone Path":50},"legacy_text":"Cốt nhục tương liên, ma đạo bất diệt! Luyện hóa cốt tủy đúc thành ma thân, đạp bằng xương trắng vấn đỉnh thương khung!"}}'::jsonb,0,TRUE),
 
 		-- Realm 3: Tam Vương Phúc Địa
-		('realm_three_kings_sanctum',3001,3000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Tam Vương Sơn"}'::jsonb,0,TRUE),
-		('realm_three_kings_sanctum',3010,3010,'Monster','monster_boar_king','{"rank":4}'::jsonb,60,TRUE),
-		('realm_three_kings_sanctum',3020,3020,'Monster','monster_three_kings_boss','{"rank":5,"name":"Tam Vương Cơ Quan Khôi Lỗi"}'::jsonb,240,TRUE),
-		('realm_three_kings_sanctum',3020,3021,'INHERITANCE_ALTAR','altar_three_kings_ba_tu','{"altar_name":"Đài Truyền Thừa: Bá Vương Thiết Bá Tú","path":"Strength Path","tier":"MORTAL","guardian_coord":{"x":3020,"y":3020},"req_rank":4,"req_dao_marks":{},"rewards":{"gus":["GU_SHARP_DECISION_2"],"recipes":[],"primeval_stones":50000,"materials":{},"dao_marks":{"Strength Path":100},"legacy_text":"Lực đạo bất hủ! Nhất lực hàng thập hội, đập vỡ thiên địa càn khôn!"}}'::jsonb,0,TRUE),
-		('realm_three_kings_sanctum',3025,3020,'INHERITANCE_ALTAR','altar_three_kings_khoc_vu','{"altar_name":"Đài Truyền Thừa: Khốc Vu Lão Nhân","path":"Soul Path","tier":"MORTAL","guardian_coord":{"x":3020,"y":3020},"req_rank":4,"req_dao_marks":{},"rewards":{"gus":["GU_GUTS_GU"],"recipes":[],"primeval_stones":50000,"materials":{},"dao_marks":{"Soul Path":100},"legacy_text":"Hồn phách gào khóc, âm phong thấu cốt! Vạn quỷ nghe lệnh, chấp chưởng u minh!"}}'::jsonb,0,TRUE),
+		('realm_three_kings_sanctum',1,1,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Tam Vương Sơn"}'::jsonb,0,TRUE),
+		('realm_three_kings_sanctum',10,10,'Monster','monster_boar_king','{"rank":4}'::jsonb,60,TRUE),
+		('realm_three_kings_sanctum',20,20,'Monster','monster_three_kings_boss','{"rank":5,"name":"Tam Vương Cơ Quan Khôi Lỗi"}'::jsonb,240,TRUE),
+		('realm_three_kings_sanctum',20,21,'INHERITANCE_ALTAR','altar_three_kings_ba_tu','{"altar_name":"Đài Truyền Thừa: Bá Vương Thiết Bá Tú","path":"Strength Path","tier":"MORTAL","guardian_coord":{"x":20,"y":20},"req_rank":4,"req_dao_marks":{},"rewards":{"gus":["GU_SHARP_DECISION_2"],"recipes":[],"primeval_stones":50000,"materials":{},"dao_marks":{"Strength Path":100},"legacy_text":"Lực đạo bất hủ! Nhất lực hàng thập hội, đập vỡ thiên địa càn khôn!"}}'::jsonb,0,TRUE),
+		('realm_three_kings_sanctum',25,20,'INHERITANCE_ALTAR','altar_three_kings_khoc_vu','{"altar_name":"Đài Truyền Thừa: Khốc Vu Lão Nhân","path":"Soul Path","tier":"MORTAL","guardian_coord":{"x":20,"y":20},"req_rank":4,"req_dao_marks":{},"rewards":{"gus":["GU_GUTS_GU"],"recipes":[],"primeval_stones":50000,"materials":{},"dao_marks":{"Soul Path":100},"legacy_text":"Hồn phách gào khóc, âm phong thấu cốt! Vạn quỷ nghe lệnh, chấp chưởng u minh!"}}'::jsonb,0,TRUE),
 
 		-- Realm 4: Đãng Hồn Sơn - Hồ Tiên
-		('realm_dang_hon_summit',4001,4000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Hồ Tiên Phúc Địa"}'::jsonb,0,TRUE),
-		('realm_dang_hon_summit',4015,4015,'Monster','monster_immemorial_soul_beast','{"rank":6}'::jsonb,120,TRUE),
-		('realm_dang_hon_summit',4025,4025,'Monster','monster_immemorial_soul_beast','{"rank":7,"name":"Thái Cổ Đãng Hồn Thú Hoàng"}'::jsonb,300,TRUE),
-		('realm_dang_hon_summit',4025,4026,'INHERITANCE_ALTAR','altar_hu_immortal','{"altar_name":"Đài Chân Truyền Tiên Cấp: Hồ Tiên - Đãng Hồn Sơn","path":"Soul Path","tier":"IMMORTAL","guardian_coord":{"x":4025,"y":4025},"req_rank":6,"req_dao_marks":{"Soul Path":100},"rewards":{"gus":["GU_GUTS","GU_GUTS_GU"],"recipes":[],"primeval_stones":0,"immortal_stones":500,"materials":{},"dao_marks":{"Soul Path":500},"legacy_text":"Đãng Hồn Sơn rung động, Can Đảm Cổ vô song! Hồ Tiên ta lưu lại phúc địa cho Cổ Tiên hữu duyên chấp chưởng thiên địa bí cảnh, tráng đại thần hồn vạn trượng!"}}'::jsonb,0,TRUE)
+		('realm_dang_hon_summit',1,1,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về Hồ Tiên Phúc Địa"}'::jsonb,0,TRUE),
+		('realm_dang_hon_summit',15,15,'Monster','monster_immemorial_soul_beast','{"rank":6}'::jsonb,120,TRUE),
+		('realm_dang_hon_summit',25,25,'Monster','monster_immemorial_soul_beast','{"rank":7,"name":"Thái Cổ Đãng Hồn Thú Hoàng"}'::jsonb,300,TRUE),
+		('realm_dang_hon_summit',25,26,'INHERITANCE_ALTAR','altar_hu_immortal','{"altar_name":"Đài Chân Truyền Tiên Cấp: Hồ Tiên - Đãng Hồn Sơn","path":"Soul Path","tier":"IMMORTAL","guardian_coord":{"x":25,"y":25},"req_rank":6,"req_dao_marks":{"Soul Path":100},"rewards":{"gus":["GU_GUTS","GU_GUTS_GU"],"recipes":[],"primeval_stones":0,"immortal_stones":500,"materials":{},"dao_marks":{"Soul Path":500},"legacy_text":"Đãng Hồn Sơn rung động, Can Đảm Cổ vô song! Hồ Tiên ta lưu lại phúc địa cho Cổ Tiên hữu duyên chấp chưởng thiên địa bí cảnh, tráng đại thần hồn vạn trượng!"}}'::jsonb,0,TRUE)
 		ON CONFLICT (region_id,x,y) DO NOTHING`)
 	if err != nil {
 		return err
@@ -663,10 +663,10 @@ func seedSpatialRealmEntryPortals(exec csvImportExecutor) error {
 	INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
 	SELECT v.region_id, v.x, v.y, 'ENTRY_PORTAL', v.content_id, v.metadata::jsonb, 0, TRUE
 	FROM (VALUES
-		('thanh_mao_son',3050,5050,'spatial_realm_hoa_tuu','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_hoa_tuu","label":"Cổng vào: Hoa Tửu Mật Đạo"}'),
-		('bach_cot_son',7050,3050,'spatial_realm_bach_cot','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_bach_cot","label":"Cổng vào: Bạch Cốt Động"}'),
-		('three_kings_mountain',9050,3050,'spatial_realm_three_kings','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_three_kings","label":"Cổng vào: Tam Vương Phúc Địa"}'),
-		('hu_tien_phuc_dia',17050,5050,'spatial_realm_dang_hon','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_dang_hon","label":"Cổng vào: Đãng Hồn Sơn"}')
+		('thanh_mao_son',525,525,'spatial_realm_hoa_tuu','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_hoa_tuu","label":"Cổng vào: Hoa Tửu Mật Đạo"}'),
+		('bach_cot_son',525,525,'spatial_realm_bach_cot','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_bach_cot","label":"Cổng vào: Bạch Cốt Động"}'),
+		('three_kings_mountain',525,525,'spatial_realm_three_kings','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_three_kings","label":"Cổng vào: Tam Vương Phúc Địa"}'),
+		('hu_tien_phuc_dia',525,525,'spatial_realm_dang_hon','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_dang_hon","label":"Cổng vào: Đãng Hồn Sơn"}')
 	) AS v(region_id, x, y, content_id, metadata)
 	WHERE EXISTS (SELECT 1 FROM regions r WHERE r.id = v.region_id)
 	ON CONFLICT (region_id,x,y) DO NOTHING`)
@@ -1978,6 +1978,7 @@ func seedRegionsFromCSV(filename string) error {
 	descIdx, widthIdx, heightIdx, minRankIdx, maxRankIdx, activeIdx := col("description"), col("width"), col("height"), col("min_rank"), col("max_rank"), col("is_active")
 	parentIdx, typeIdx, worldMapIdx := col("parent_id"), col("zone_type"), col("world_map_id")
 	minXIdx, minYIdx, maxXIdx, maxYIdx, entryXIdx, entryYIdx, poolIdx, safeXIdx, safeYIdx, rulesIdx := col("min_x"), col("min_y"), col("max_x"), col("max_y"), col("entry_x"), col("entry_y"), col("pool_weights"), col("safe_zone_x"), col("safe_zone_y"), col("rules")
+	atlasXIdx, atlasYIdx := col("atlas_x"), col("atlas_y")
 	if idIdx < 0 || nameIdx < 0 {
 		return fmt.Errorf("Region.csv missing required columns (id, name)")
 	}
@@ -2003,6 +2004,7 @@ func seedRegionsFromCSV(filename string) error {
 		parentID                                          interface{}
 		minX, minY, maxX, maxY                            int
 		entryX, entryY, safeX, safeY                      int
+		atlasX, atlasY                                    int
 	}
 
 	var rowsToInsert []regionRow
@@ -2050,6 +2052,8 @@ func seedRegionsFromCSV(filename string) error {
 		if p := get(row, parentIdx); p != "" {
 			parentID = p
 		}
+		atlasX := parseInt(row, atlasXIdx, minX)
+		atlasY := parseInt(row, atlasYIdx, minY)
 		rowsToInsert = append(rowsToInsert, regionRow{
 			id: id, name: get(row, nameIdx), desc: get(row, descIdx),
 			worldMapID: get(row, worldMapIdx),
@@ -2057,6 +2061,7 @@ func seedRegionsFromCSV(filename string) error {
 			active: active, parentID: parentID, zoneType: zoneType,
 			minX: minX, minY: minY, maxX: maxX, maxY: maxY,
 			entryX: entryX, entryY: entryY, safeX: safeX, safeY: safeY,
+			atlasX: atlasX, atlasY: atlasY,
 			poolWeights: poolWeights, rules: rulesValue,
 		})
 	}
@@ -2065,15 +2070,17 @@ func seedRegionsFromCSV(filename string) error {
 	seeded := 0
 	for _, item := range rowsToInsert {
 		_, err = activeCSVImportDB().Exec(`
-			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, rules, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,COALESCE($19::jsonb,'{}'::jsonb),NOW())
+			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, rules, atlas_x, atlas_y, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,COALESCE($19::jsonb,'{}'::jsonb),$20,$21,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
 			width=EXCLUDED.width, height=EXCLUDED.height, min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank,
 			is_active=EXCLUDED.is_active, zone_type=EXCLUDED.zone_type,
 			min_x=EXCLUDED.min_x, min_y=EXCLUDED.min_y, max_x=EXCLUDED.max_x, max_y=EXCLUDED.max_y,
-			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, safe_zone_x=EXCLUDED.safe_zone_x, safe_zone_y=EXCLUDED.safe_zone_y, pool_weights=EXCLUDED.pool_weights, rules=COALESCE($19::jsonb,regions.rules), updated_at=NOW()
+			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, safe_zone_x=EXCLUDED.safe_zone_x, safe_zone_y=EXCLUDED.safe_zone_y,
+			atlas_x=EXCLUDED.atlas_x, atlas_y=EXCLUDED.atlas_y,
+			pool_weights=EXCLUDED.pool_weights, rules=COALESCE($19::jsonb,regions.rules), updated_at=NOW()
 		`, item.id, item.name, item.desc, item.width, item.height, item.minRank, item.maxRank, item.active,
-			item.zoneType, item.minX, item.minY, item.maxX, item.maxY, item.entryX, item.entryY, item.safeX, item.safeY, item.poolWeights, item.rules)
+			item.zoneType, item.minX, item.minY, item.maxX, item.maxY, item.entryX, item.entryY, item.safeX, item.safeY, item.poolWeights, item.rules, item.atlasX, item.atlasY)
 		if err != nil {
 			return fmt.Errorf("upsert region %s (pass 1): %w", item.id, err)
 		}
@@ -3574,8 +3581,8 @@ var individualExportDefs = map[string]exportDef{
 	},
 	"region": {
 		filename: "Region.csv",
-		columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights", "rules", "world_map_id"},
-		query:    `SELECT r.id, r.name, COALESCE(r.description,''), COALESCE(r.width,100), COALESCE(r.height,100), COALESCE(r.min_rank,1), COALESCE(r.max_rank,5), COALESCE(r.is_active,true), COALESCE(r.parent_id,''), COALESCE(r.zone_type,'KHU_VUC'), COALESCE(r.min_x,0), COALESCE(r.min_y,0), COALESCE(r.max_x,0), COALESCE(r.max_y,0), COALESCE(r.entry_x,0), COALESCE(r.entry_y,0), COALESCE(r.pool_weights::text,'{}'), COALESCE(r.rules::text,'{}'), COALESCE(rwm.world_map_id,'world_map') FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id=r.id ORDER BY r.id`,
+		columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights", "rules", "world_map_id", "atlas_x", "atlas_y"},
+		query:    `SELECT r.id, r.name, COALESCE(r.description,''), COALESCE(r.width,100), COALESCE(r.height,100), COALESCE(r.min_rank,1), COALESCE(r.max_rank,5), COALESCE(r.is_active,true), COALESCE(r.parent_id,''), COALESCE(r.zone_type,'KHU_VUC'), COALESCE(r.min_x,0), COALESCE(r.min_y,0), COALESCE(r.max_x,0), COALESCE(r.max_y,0), COALESCE(r.entry_x,0), COALESCE(r.entry_y,0), COALESCE(r.pool_weights::text,'{}'), COALESCE(r.rules::text,'{}'), COALESCE(rwm.world_map_id,'world_map'), COALESCE(r.atlas_x,0), COALESCE(r.atlas_y,0) FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id=r.id ORDER BY r.id`,
 	},
 	"loot_table": {
 		filename: "LootTable.csv",

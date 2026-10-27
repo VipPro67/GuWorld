@@ -329,18 +329,8 @@ func HarvestVein(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Nguyên Tuyền đã cạn và biến mất"})
 		return
 	}
-	standZone := ""
-	if zone := FindZoneAt(player.X, player.Y); zone != nil {
-		standZone = zone.ID
-	}
-	originX := 0
-	originY := 0
-	if pz := ZoneByID(player.CurrentRegion); pz != nil && pz.WorldMapID != "world_map" {
-		originX = pz.MinX
-		originY = pz.MinY
-	}
-	inRange := withinVeinHarvestRange(player.X, player.Y, v.X, v.Y) || withinVeinHarvestRange(player.X+originX, player.Y+originY, v.X, v.Y)
-	if !inRange || (player.CurrentRegion != v.RegionID && standZone != v.RegionID) {
+	inRange := withinVeinHarvestRange(player.X, player.Y, v.X, v.Y)
+	if !inRange || player.CurrentRegion != v.RegionID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu phải đứng trong phạm vi %d ô của Nguyên Tuyền mới thu hoạch được!", veinHarvestRange)})
 		return
 	}
@@ -659,9 +649,6 @@ func springEggHatchEffect(tx *sql.Tx, player *models.Player, _ models.ItemSpec, 
 		if zone == nil {
 			return "", fmt.Errorf("không xác định được vùng hiện tại")
 		}
-		regionID = zone.ID
-	}
-	if zone := FindZoneAt(player.X, player.Y); zone != nil {
 		regionID = zone.ID
 	}
 	rarity := rollVeinRarity()

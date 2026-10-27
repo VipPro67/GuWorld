@@ -528,6 +528,8 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 
 WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa phiên bản phục vụ mở rộng horizontal. Kết nối yêu cầu token qua header `Authorization: Bearer <token>` hoặc query parameter `?token=<token>`.
 
+Welcome của realtime world (`world.welcome`) có `movement_speed` (đơn vị map/giây), tốc độ authoritative đã tính từ passive `movement`. Client dùng giá trị này cho local prediction; client cũ có thể bỏ qua trường này.
+
 ### Các kênh hỗ trợ (Channels):
 | Channel | Direction | Mục đích |
 | --- | --- | --- |

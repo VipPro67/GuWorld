@@ -39,6 +39,7 @@ const welcome = (requestId: string, tick = 10, playerX = 10) => ({
     map_version: "map-1",
     content_version: "content-1",
     tick_rate: 20,
+    movement_speed: 5.6,
     server_tick: tick,
     entity_id: "player-1",
     entity_revision: 0,
@@ -91,8 +92,8 @@ test("WorldRuntime joins, predicts movement and handles click targets", async ()
   assert.equal(runtime.getSelfCombat().cooldowns[2], 5);
 
   runtime.setMoveVector({ x: 1, y: 0 });
-  runtime.update(0.5);
-  assert.ok(runtime.getSelfPosition().x > 10);
+  runtime.update(0.1);
+  assert.ok(Math.abs(runtime.getSelfPosition().x - 10.56) < 1e-9);
   const sentInput = fake.sent
     .map((line) => JSON.parse(line) as { type: string })
     .filter((message) => message.type === "world.input");

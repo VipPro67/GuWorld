@@ -644,8 +644,14 @@ func spawnWithinPlayerRadius(spawn monsterSpawnRow, player WorldPosEntry, radius
 
 func proceduralMonsterSpawns(player WorldPosEntry, radius int) []monsterSpawnRow {
 	spawns := make([]monsterSpawnRow, 0, 64)
-	minX, maxX := max(0, player.X-radius), min(WorldWidth-1, player.X+radius)
-	minY, maxY := max(0, player.Y-radius), min(WorldHeight-1, player.Y+radius)
+	maxXLimit := WorldWidth - 1
+	maxYLimit := WorldHeight - 1
+	if zone := ZoneByID(player.Region); zone != nil && zone.Width > 0 && zone.Height > 0 {
+		maxXLimit = zone.Width
+		maxYLimit = zone.Height
+	}
+	minX, maxX := max(0, player.X-radius), min(maxXLimit, player.X+radius)
+	minY, maxY := max(0, player.Y-radius), min(maxYLimit, player.Y+radius)
 
 	// Phase 1: resolve procedural cells (pure in-memory, no Redis).
 	type cellCandidate struct {

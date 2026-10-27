@@ -31,7 +31,7 @@ func TestAdmissionJoinUsesServerStateAndLeaveReleasesMembership(t *testing.T) {
 	loaderCalls := 0
 	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
 		loaderCalls++
-		return handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest-clearing", X: 17, Y: 29, HP: 70, BaseHP: 100, Rank: 3, CurrentMana: 42, MaxMana: 500, BaseAttack: 36, Defense: 7}, nil
+		return handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest-clearing", X: 17, Y: 29, HP: 70, BaseHP: 100, Rank: 3, CurrentMana: 42, MaxMana: 500, BaseAttack: 36, Defense: 7, MovementSpeed: 5.6}, nil
 	})
 
 	request := protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}
@@ -42,6 +42,9 @@ func TestAdmissionJoinUsesServerStateAndLeaveReleasesMembership(t *testing.T) {
 	welcome, ok := result.(protocol.Welcome)
 	if !ok || welcome.ZoneID != "forest#realtime-preview" || welcome.MapVersion != "map-1" {
 		t.Fatalf("unexpected welcome response: %#v", result)
+	}
+	if welcome.MovementSpeed != 5.6 {
+		t.Fatalf("welcome movement speed = %v, want 5.6", welcome.MovementSpeed)
 	}
 	var initialSnapshot protocol.Snapshot
 	if err := json.Unmarshal(welcome.Snapshot, &initialSnapshot); err != nil {

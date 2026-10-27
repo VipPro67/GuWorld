@@ -270,7 +270,12 @@ func UseGuOnMap(c *gin.Context) {
 			oldX := player.X
 			oldY := player.Y
 			oldRegion := player.CurrentRegion
-			targetRegion := DeriveRegionAtOnMap(req.TargetX, req.TargetY, worldMapIDForRegion(player.CurrentRegion))
+			targetRegion := player.CurrentRegion
+			if currentZone := ZoneByID(player.CurrentRegion); currentZone == nil || !zoneContains(currentZone, req.TargetX, req.TargetY) {
+				if derived := DeriveRegionAtOnMap(req.TargetX, req.TargetY, worldMapIDForRegion(player.CurrentRegion)); derived != "" && derived != HubRegionID {
+					targetRegion = derived
+				}
+			}
 			if errMove := checkMovement(tx, &player, movementSpec{
 				kind:         movementGuTeleport,
 				x:            req.TargetX,
@@ -310,7 +315,12 @@ func UseGuOnMap(c *gin.Context) {
 		oldY := player.Y
 		oldRegion := player.CurrentRegion
 		targetX, targetY := randomTeleportTarget(player.X, player.Y, teleportRange)
-		targetRegion := DeriveRegionAtOnMap(targetX, targetY, worldMapIDForRegion(player.CurrentRegion))
+		targetRegion := player.CurrentRegion
+		if currentZone := ZoneByID(player.CurrentRegion); currentZone == nil || !zoneContains(currentZone, targetX, targetY) {
+			if derived := DeriveRegionAtOnMap(targetX, targetY, worldMapIDForRegion(player.CurrentRegion)); derived != "" && derived != HubRegionID {
+				targetRegion = derived
+			}
+		}
 		if errMove := checkMovement(tx, &player, movementSpec{
 			kind:         movementGuTeleport,
 			x:            targetX,
