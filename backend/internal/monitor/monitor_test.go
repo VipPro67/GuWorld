@@ -120,6 +120,30 @@ func TestRequestTracker_RecordAndSummary(t *testing.T) {
 	}
 }
 
+func TestRecordTraceOnlyDoesNotAffectHTTPMetrics(t *testing.T) {
+	tracker := NewRequestTracker()
+	tracker.RecordTraceOnly(RequestTrace{
+		ID: "ws-1", Timestamp: time.Now(), Method: "WS", Path: "/api/ws",
+		Status: 101, DurationMs: 42_000, WSMessagesIn: 12, WSMessagesOut: 24,
+		WSBytesIn: 500, WSBytesOut: 900, WSCloseCode: 1006, WSCloseReason: "abnormal closure", Error: "abnormal closure",
+	})
+
+	if summary := tracker.GetSummary(); summary.TotalRequests != 0 || summary.Status2xx != 0 {
+		t.Fatalf("WebSocket session polluted HTTP metrics: %+v", summary)
+	}
+	result := tracker.FilterTraces(FilterOptions{Method: "WS", Limit: 10})
+	if result.Total != 1 || len(result.Traces) != 1 {
+		t.Fatalf("expected WebSocket session trace, got %+v", result)
+	}
+	trace := result.Traces[0]
+	if trace.WSMessagesIn != 12 || trace.WSMessagesOut != 24 || trace.WSCloseCode != 1006 || trace.WSCloseReason != "abnormal closure" {
+		t.Fatalf("WebSocket session details were not retained: %+v", trace)
+	}
+	if failures := tracker.FilterTraces(FilterOptions{Status: -1, Limit: 10}); failures.Total != 1 {
+		t.Fatalf("abnormal WebSocket close should appear in error traces: %+v", failures)
+	}
+}
+
 func TestRequestTracker_FilterTraces(t *testing.T) {
 	tracker := NewRequestTracker()
 

@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/protocol"
@@ -11,13 +12,15 @@ import (
 
 // WSMessage is the envelope for all WebSocket messages.
 type WSMessage struct {
-	Type      string          `json:"type"`
-	Channel   string          `json:"channel,omitempty"`
-	Payload   json.RawMessage `json:"payload,omitempty"`
-	Raw       []byte          `json:"-"`
-	Version   int             `json:"version,omitempty"`
-	RequestID string          `json:"request_id,omitempty"`
-	V         int             `json:"v,omitempty"`
+	Type       string          `json:"type"`
+	Channel    string          `json:"channel,omitempty"`
+	Payload    json.RawMessage `json:"payload,omitempty"`
+	Raw        []byte          `json:"-"`
+	Version    int             `json:"version,omitempty"`
+	RequestID  string          `json:"request_id,omitempty"`
+	V          int             `json:"v,omitempty"`
+	Action     string          `json:"-"`
+	ReceivedAt time.Time       `json:"-"`
 }
 
 // SubscribeMsg is sent by the client to subscribe to a channel.

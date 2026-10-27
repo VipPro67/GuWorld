@@ -1,10 +1,12 @@
 package monitor
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -38,6 +40,7 @@ type loggingResponseWriter struct {
 	gin.ResponseWriter
 	body          *bytes.Buffer
 	bodyTruncated bool
+	hijacked      bool
 }
 
 func newLoggingResponseWriter(w gin.ResponseWriter) *loggingResponseWriter {
@@ -80,6 +83,18 @@ func (w *loggingResponseWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+func (w *loggingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, rw, err := w.ResponseWriter.Hijack()
+	if err == nil {
+		w.hijacked = true
+	}
+	return conn, rw, err
+}
+
+func (w *loggingResponseWriter) Hijacked() bool {
+	return w.hijacked
+}
+
 func (w *loggingResponseWriter) Body() string {
 	return w.body.String()
 }
@@ -113,26 +128,48 @@ func (w *loggingResponseWriter) ErrorMessage() string {
 
 // RequestTrace stores individual request execution details for diagnosis.
 type RequestTrace struct {
-	ID                    string      `json:"id"`
-	Timestamp             time.Time   `json:"timestamp"`
-	Method                string      `json:"method"`
-	Path                  string      `json:"path"`
-	Route                 string      `json:"route,omitempty"`
-	Query                 string      `json:"query,omitempty"`
-	RequestBody           interface{} `json:"request_body,omitempty"`
-	BodyTruncated         bool        `json:"body_truncated,omitempty"`
-	ContentLength         int64       `json:"content_length,omitempty"`
-	ResponseBytes         int         `json:"response_bytes"`
-	Status                int         `json:"status"`
-	DurationMs            float64     `json:"duration_ms"`
-	ClientIP              string      `json:"client_ip"`
-	PlayerID              string      `json:"player_id,omitempty"`
-	Username              string      `json:"username,omitempty"`
-	UserAgent             string      `json:"user_agent,omitempty"`
-	Error                 string      `json:"error,omitempty"`
-	ResponseBody          string      `json:"response_body,omitempty"`
-	ResponseBodyTruncated bool        `json:"response_body_truncated,omitempty"`
-	ErrorMessage          string      `json:"error_message,omitempty"`
+	ID                    string           `json:"id"`
+	Timestamp             time.Time        `json:"timestamp"`
+	Method                string           `json:"method"`
+	Path                  string           `json:"path"`
+	Route                 string           `json:"route,omitempty"`
+	Query                 string           `json:"query,omitempty"`
+	RequestBody           interface{}      `json:"request_body,omitempty"`
+	BodyTruncated         bool             `json:"body_truncated,omitempty"`
+	ContentLength         int64            `json:"content_length,omitempty"`
+	ResponseBytes         int              `json:"response_bytes"`
+	Status                int              `json:"status"`
+	DurationMs            float64          `json:"duration_ms"`
+	ClientIP              string           `json:"client_ip"`
+	PlayerID              string           `json:"player_id,omitempty"`
+	Username              string           `json:"username,omitempty"`
+	UserAgent             string           `json:"user_agent,omitempty"`
+	Error                 string           `json:"error,omitempty"`
+	ResponseBody          string           `json:"response_body,omitempty"`
+	ResponseBodyTruncated bool             `json:"response_body_truncated,omitempty"`
+	ErrorMessage          string           `json:"error_message,omitempty"`
+	WSMessagesIn          int64            `json:"ws_messages_in,omitempty"`
+	WSMessagesOut         int64            `json:"ws_messages_out,omitempty"`
+	WSBytesIn             int64            `json:"ws_bytes_in,omitempty"`
+	WSBytesOut            int64            `json:"ws_bytes_out,omitempty"`
+	WSCloseCode           int              `json:"ws_close_code,omitempty"`
+	WSCloseReason         string           `json:"ws_close_reason,omitempty"`
+	WSActions             []WSActionMetric `json:"ws_actions,omitempty"`
+}
+
+// WSActionMetric summarizes one client action type within a WebSocket session.
+type WSActionMetric struct {
+	Action             string  `json:"action"`
+	Received           int64   `json:"received"`
+	Accepted           int64   `json:"accepted"`
+	Rejected           int64   `json:"rejected"`
+	Errors             int64   `json:"errors"`
+	AvgDurationMs      float64 `json:"avg_duration_ms"`
+	MaxDurationMs      float64 `json:"max_duration_ms"`
+	LastStatus         int     `json:"last_status,omitempty"`
+	LastErrorCode      string  `json:"last_error_code,omitempty"`
+	GameplayRejections int64   `json:"gameplay_rejections,omitempty"`
+	LastGameplayReason string  `json:"last_gameplay_reason,omitempty"`
 }
 
 var sensitiveKeys = map[string]struct{}{
@@ -397,7 +434,16 @@ func (t *RequestTracker) RecordCompleted(trace RequestTrace) {
 	}
 	t.endpointsMu.Unlock()
 
-	// Circular ring buffer insertion
+	t.RecordTraceOnly(trace)
+}
+
+// RecordTraceOnly adds a diagnostic event to the recent trace ring without
+// changing HTTP request totals, status counts, latency percentiles or endpoint
+// aggregates. Long-lived WebSocket sessions use this when they close.
+func (t *RequestTracker) RecordTraceOnly(trace RequestTrace) {
+	if trace.ID == "" {
+		trace.ID = generateTraceID()
+	}
 	t.tracesMu.Lock()
 	t.tracesRing[t.traceHead] = trace
 	t.traceHead = (t.traceHead + 1) % maxTraces
@@ -551,7 +597,7 @@ func (t *RequestTracker) FilterTraces(opts FilterOptions) FilterResult {
 			continue
 		}
 		if opts.Status == -1 {
-			if trace.Status < 400 {
+			if trace.Status < 400 && trace.Error == "" {
 				continue
 			}
 		} else if opts.Status > 0 && trace.Status != opts.Status {
@@ -700,6 +746,9 @@ func Middleware() gin.HandlerFunc {
 		route := c.FullPath()
 		query := sanitizeQuery(c.Request.URL.RawQuery)
 		status := c.Writer.Status()
+		if rw.Hijacked() {
+			status = http.StatusSwitchingProtocols
+		}
 		clientIP := c.ClientIP()
 		userAgent := c.Request.UserAgent()
 

@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/protocol"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
@@ -77,6 +78,14 @@ type Client struct {
 	hub                 *Hub
 	shard               *ShardedHub
 	clientIP            string
+	userAgent           string
+	connectedAt         time.Time
+	wsMessagesIn        atomic.Int64
+	wsMessagesOut       atomic.Int64
+	wsBytesIn           atomic.Int64
+	wsBytesOut          atomic.Int64
+	wsActionMu          sync.Mutex
+	wsActions           map[string]*wsActionAccumulator
 	commands            chan WSMessage
 	worldInputs         chan WSMessage
 	inputRateMu         sync.Mutex
@@ -101,6 +110,12 @@ type Client struct {
 
 	closeOnce sync.Once
 	closeErr  error
+}
+
+type wsActionAccumulator struct {
+	metric          monitor.WSActionMetric
+	totalDurationMs float64
+	durationSamples int64
 }
 
 // ServeWs handles websocket requests from the peer.
@@ -142,6 +157,8 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 		hub:               shub.GetClientShard(playerID),
 		subscriptions:     make(map[string]struct{}),
 		clientIP:          clientIP,
+		userAgent:         r.UserAgent(),
+		connectedAt:       time.Now(),
 		shard:             shub,
 		commands:          make(chan WSMessage, 16),
 		worldInputs:       make(chan WSMessage, realtimeInputQueueSize),
@@ -217,7 +234,9 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 
 // readPump pumps messages from the websocket connection to the hub.
 func (c *Client) readPump() {
+	var closeErr error
 	defer func() {
+		c.recordWebSocketSession(closeErr)
 		c.shard.Unregister(c)
 	}()
 
@@ -232,11 +251,14 @@ func (c *Client) readPump() {
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
+			closeErr = err
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
 				logger.S.Warnf("Unexpected close error for %s: %v", c.playerID, err)
 			}
 			break
 		}
+		c.wsMessagesIn.Add(1)
+		c.wsBytesIn.Add(int64(len(message)))
 
 		var wsMsg WSMessage
 		if err := json.Unmarshal(message, &wsMsg); err != nil {
@@ -244,9 +266,164 @@ func (c *Client) readPump() {
 			continue
 		}
 		wsMsg.Raw = append([]byte(nil), message...)
+		c.beginWSAction(&wsMsg)
 
 		c.handleMessage(wsMsg)
 	}
+}
+
+func (c *Client) recordWebSocketSession(closeErr error) {
+	closeCode := websocket.CloseAbnormalClosure
+	closeReason := "connection ended without a WebSocket close frame"
+	if closeErr != nil {
+		var wsCloseErr *websocket.CloseError
+		if errors.As(closeErr, &wsCloseErr) {
+			closeCode = wsCloseErr.Code
+			closeReason = wsCloseErr.Text
+		} else {
+			closeReason = closeErr.Error()
+		}
+	}
+	trace := monitor.RequestTrace{
+		Timestamp:     c.connectedAt,
+		Method:        "WS",
+		Path:          "/api/ws",
+		Status:        http.StatusSwitchingProtocols,
+		DurationMs:    roundDurationMs(time.Since(c.connectedAt)),
+		ClientIP:      c.clientIP,
+		PlayerID:      c.playerID.String(),
+		UserAgent:     c.userAgent,
+		WSMessagesIn:  c.wsMessagesIn.Load(),
+		WSMessagesOut: c.wsMessagesOut.Load(),
+		WSBytesIn:     c.wsBytesIn.Load(),
+		WSBytesOut:    c.wsBytesOut.Load(),
+		WSCloseCode:   closeCode,
+		WSCloseReason: closeReason,
+		WSActions:     c.snapshotWSActions(),
+	}
+	if closeCode != websocket.CloseNormalClosure && closeCode != websocket.CloseGoingAway {
+		trace.Error = closeReason
+	}
+	monitor.GlobalTracker.RecordTraceOnly(trace)
+}
+
+func (c *Client) beginWSAction(msg *WSMessage) {
+	action := wsActionName(*msg)
+	if action == "" {
+		return
+	}
+	msg.Action = action
+	msg.ReceivedAt = time.Now()
+	c.wsActionMu.Lock()
+	if c.wsActions == nil {
+		c.wsActions = make(map[string]*wsActionAccumulator)
+	}
+	entry := c.wsActions[action]
+	if entry == nil {
+		entry = &wsActionAccumulator{metric: monitor.WSActionMetric{Action: action}}
+		c.wsActions[action] = entry
+	}
+	entry.metric.Received++
+	c.wsActionMu.Unlock()
+}
+
+func wsActionName(msg WSMessage) string {
+	switch msg.Type {
+	case "command":
+		switch msg.Channel {
+		case "world.leave", "world.move_path", "world.cells_rect", "world.drops", "world.objects", "match.input", "chat.send":
+			return "command:" + msg.Channel
+		default:
+			return "command:unknown"
+		}
+	case protocol.TypeJoin:
+		return "world.join"
+	case protocol.TypeInput:
+		return "world.input"
+	case protocol.TypeMoveTo:
+		return "world.move_to"
+	case protocol.TypeCast:
+		return "world.cast"
+	case protocol.TypeAttack:
+		return "world.attack"
+	case "subscribe", "unsubscribe", "ping":
+		return msg.Type
+	default:
+		if strings.HasPrefix(msg.Type, "world.") {
+			return "world.unsupported"
+		}
+		return ""
+	}
+}
+
+func (c *Client) completeWSAction(msg WSMessage, status int, duration time.Duration, data json.RawMessage) {
+	if msg.Action == "" {
+		return
+	}
+	if !msg.ReceivedAt.IsZero() {
+		duration = time.Since(msg.ReceivedAt)
+	}
+	var response struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(data, &response)
+	durationMs := roundDurationMs(duration)
+	c.wsActionMu.Lock()
+	defer c.wsActionMu.Unlock()
+	entry := c.wsActions[msg.Action]
+	if entry == nil {
+		return
+	}
+	entry.metric.LastStatus = status
+	if status >= 500 {
+		entry.metric.Errors++
+	} else if status >= 400 {
+		entry.metric.Rejected++
+	} else {
+		entry.metric.Accepted++
+	}
+	if status >= 400 && response.Code != "" {
+		entry.metric.LastErrorCode = response.Code
+	}
+	entry.totalDurationMs += durationMs
+	entry.durationSamples++
+	entry.metric.AvgDurationMs = entry.totalDurationMs / float64(entry.durationSamples)
+	if durationMs > entry.metric.MaxDurationMs {
+		entry.metric.MaxDurationMs = durationMs
+	}
+}
+
+func (c *Client) snapshotWSActions() []monitor.WSActionMetric {
+	c.wsActionMu.Lock()
+	defer c.wsActionMu.Unlock()
+	if len(c.wsActions) == 0 {
+		return nil
+	}
+	actions := make([]monitor.WSActionMetric, 0, len(c.wsActions))
+	for _, entry := range c.wsActions {
+		actions = append(actions, entry.metric)
+	}
+	sort.Slice(actions, func(i, j int) bool { return actions[i].Action < actions[j].Action })
+	return actions
+}
+
+func (c *Client) recordWSGameplayRejection(action, reason string) {
+	c.wsActionMu.Lock()
+	defer c.wsActionMu.Unlock()
+	if c.wsActions == nil {
+		c.wsActions = make(map[string]*wsActionAccumulator)
+	}
+	entry := c.wsActions[action]
+	if entry == nil {
+		entry = &wsActionAccumulator{metric: monitor.WSActionMetric{Action: action}}
+		c.wsActions[action] = entry
+	}
+	entry.metric.GameplayRejections++
+	entry.metric.LastGameplayReason = reason
+}
+
+func roundDurationMs(duration time.Duration) float64 {
+	return float64(duration.Microseconds()) / 1000
 }
 
 // handleMessage processes incoming messages from the client.
@@ -257,6 +434,7 @@ func (c *Client) handleMessage(msg WSMessage) {
 		var sub SubscribeMsg
 		if err := json.Unmarshal(msg.Payload, &sub); err != nil {
 			logger.S.Warnf("Invalid subscribe payload from %s: %v", c.playerID, err)
+			c.completeWSAction(msg, http.StatusBadRequest, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"invalid_subscription"}`))
 			return
 		}
 		if strings.HasPrefix(sub.Channel, "chat:sect:") {
@@ -265,6 +443,7 @@ func (c *Client) handleMessage(msg WSMessage) {
 			err := db.DB.QueryRow("SELECT sect_id FROM sect_members WHERE player_id = $1", c.playerID).Scan(&memberSectID)
 			if err != nil || requestedSectID == "" || requestedSectID != memberSectID {
 				logger.S.Warnf("Rejected sect chat subscription for %s to %s", c.playerID, requestedSectID)
+				c.completeWSAction(msg, http.StatusForbidden, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"subscription_forbidden"}`))
 				return
 			}
 		}
@@ -273,29 +452,37 @@ func (c *Client) handleMessage(msg WSMessage) {
 			currentScope, err := handlers.CurrentRegionChatScope(c.playerID.String())
 			if err != nil || requestedScope != "region:"+currentScope {
 				logger.S.Warnf("Rejected region chat subscription for %s to %s", c.playerID, requestedScope)
+				c.completeWSAction(msg, http.StatusForbidden, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"subscription_forbidden"}`))
 				return
 			}
 		}
 		if strings.HasPrefix(sub.Channel, "chat:private:") && strings.TrimPrefix(sub.Channel, "chat:private:") != c.playerID.String() {
 			logger.S.Warnf("Rejected private chat subscription for %s to %s", c.playerID, sub.Channel)
+			c.completeWSAction(msg, http.StatusForbidden, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"subscription_forbidden"}`))
 			return
 		}
 		c.shard.Subscribe(c, ChannelName(sub.Channel))
+		c.completeWSAction(msg, http.StatusOK, time.Since(msg.ReceivedAt), nil)
 	case "unsubscribe":
 		var sub SubscribeMsg
 		if err := json.Unmarshal(msg.Payload, &sub); err != nil || sub.Channel == "" {
+			c.completeWSAction(msg, http.StatusBadRequest, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"invalid_unsubscription"}`))
 			return
 		}
 		c.shard.Unsubscribe(c, ChannelName(sub.Channel))
+		c.completeWSAction(msg, http.StatusOK, time.Since(msg.ReceivedAt), nil)
 	case "ping":
 		// handled by pong handler/ping loop, but if client sends application-level ping:
 		pong, _ := json.Marshal(WSMessage{Type: "pong"})
 		select {
 		case c.send <- pong:
+			c.completeWSAction(msg, http.StatusOK, time.Since(msg.ReceivedAt), nil)
 		default:
+			c.completeWSAction(msg, http.StatusTooManyRequests, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"websocket_send_queue_full"}`))
 		}
 	case "command":
 		if msg.RequestID == "" {
+			c.completeWSAction(msg, http.StatusBadRequest, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"request_id_required"}`))
 			c.sendCommandResponse(msg, http.StatusBadRequest, json.RawMessage(`{"error":"request_id is required"}`))
 			return
 		}
@@ -304,24 +491,27 @@ func (c *Client) handleMessage(msg WSMessage) {
 			select {
 			case c.commands <- msg:
 			default:
+				c.completeWSAction(msg, http.StatusTooManyRequests, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"command_queue_full"}`))
 				c.sendCommandResponse(msg, http.StatusTooManyRequests, json.RawMessage(`{"error":"WebSocket command queue is full"}`))
 			}
 		default:
+			c.completeWSAction(msg, http.StatusNotFound, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"unknown_command"}`))
 			c.sendCommandResponse(msg, http.StatusNotFound, json.RawMessage(`{"error":"Unknown command"}`))
 		}
 	case protocol.TypeJoin:
 		if msg.RequestID == "" {
+			c.completeWSAction(msg, http.StatusBadRequest, time.Since(msg.ReceivedAt), json.RawMessage(`{"code":"request_id_required"}`))
 			c.sendWorldReject("", "request_id_required", "request_id is required", false)
 			return
 		}
 		_, decoded, err := protocol.DecodeClientMessage(msg.Raw)
 		if err != nil {
-			c.sendWorldReject(msg.RequestID, "invalid_world_join", err.Error(), false)
+			c.rejectWorldAction(msg, "invalid_world_join", err.Error(), false)
 			return
 		}
 		joinRequest, ok := decoded.(protocol.JoinRequest)
 		if !ok {
-			c.sendWorldReject(msg.RequestID, "invalid_world_join", "Invalid join request", false)
+			c.rejectWorldAction(msg, "invalid_world_join", "Invalid join request", false)
 			return
 		}
 		payload, _ := json.Marshal(joinRequest)
@@ -330,92 +520,92 @@ func (c *Client) handleMessage(msg WSMessage) {
 		select {
 		case c.commands <- msg:
 		default:
-			c.sendWorldReject(msg.RequestID, "world_command_queue_full", "WebSocket command queue is full", true)
+			c.rejectWorldAction(msg, "world_command_queue_full", "WebSocket command queue is full", true)
 		}
 	case protocol.TypeInput:
 		_, decoded, err := protocol.DecodeClientMessage(msg.Raw)
 		if err != nil {
-			c.sendWorldReject(msg.RequestID, "invalid_world_input", err.Error(), false)
+			c.rejectWorldAction(msg, "invalid_world_input", err.Error(), false)
 			return
 		}
 		_, ok := decoded.(protocol.Input)
 		if !ok {
-			c.sendWorldReject(msg.RequestID, "invalid_world_input", "Invalid movement input", false)
+			c.rejectWorldAction(msg, "invalid_world_input", "Invalid movement input", false)
 			return
 		}
 		msg.Channel = protocol.TypeInput
 		if !c.allowRealtimeInput(time.Now()) {
-			c.sendWorldReject(msg.RequestID, "realtime_input_rate_limited", "Movement input rate exceeded", true)
+			c.rejectWorldAction(msg, "realtime_input_rate_limited", "Movement input rate exceeded", true)
 			return
 		}
 		select {
 		case c.worldInputs <- msg:
 		default:
-			c.sendWorldReject(msg.RequestID, "realtime_input_queue_full", "Realtime input queue is full", true)
+			c.rejectWorldAction(msg, "realtime_input_queue_full", "Realtime input queue is full", true)
 		}
 	case protocol.TypeMoveTo:
 		_, decoded, err := protocol.DecodeClientMessage(msg.Raw)
 		if err != nil {
-			c.sendWorldReject(msg.RequestID, "invalid_world_move_target", err.Error(), false)
+			c.rejectWorldAction(msg, "invalid_world_move_target", err.Error(), false)
 			return
 		}
 		if _, ok := decoded.(protocol.MoveTarget); !ok {
-			c.sendWorldReject(msg.RequestID, "invalid_world_move_target", "Invalid move target", false)
+			c.rejectWorldAction(msg, "invalid_world_move_target", "Invalid move target", false)
 			return
 		}
 		msg.Channel = protocol.TypeMoveTo
 		if !c.allowRealtimeInput(time.Now()) {
-			c.sendWorldReject(msg.RequestID, "realtime_input_rate_limited", "Movement input rate exceeded", true)
+			c.rejectWorldAction(msg, "realtime_input_rate_limited", "Movement input rate exceeded", true)
 			return
 		}
 		select {
 		case c.worldInputs <- msg:
 		default:
-			c.sendWorldReject(msg.RequestID, "realtime_input_queue_full", "Realtime input queue is full", true)
+			c.rejectWorldAction(msg, "realtime_input_queue_full", "Realtime input queue is full", true)
 		}
 	case protocol.TypeCast:
 		_, decoded, err := protocol.DecodeClientMessage(msg.Raw)
 		if err != nil {
-			c.sendWorldReject(msg.RequestID, "invalid_world_cast", err.Error(), false)
+			c.rejectWorldAction(msg, "invalid_world_cast", err.Error(), false)
 			return
 		}
 		if _, ok := decoded.(protocol.Cast); !ok {
-			c.sendWorldReject(msg.RequestID, "invalid_world_cast", "Invalid cast", false)
+			c.rejectWorldAction(msg, "invalid_world_cast", "Invalid cast", false)
 			return
 		}
 		msg.Channel = protocol.TypeCast
 		if !c.allowRealtimeInput(time.Now()) {
-			c.sendWorldReject(msg.RequestID, "realtime_input_rate_limited", "Movement input rate exceeded", true)
+			c.rejectWorldAction(msg, "realtime_input_rate_limited", "Movement input rate exceeded", true)
 			return
 		}
 		select {
 		case c.worldInputs <- msg:
 		default:
-			c.sendWorldReject(msg.RequestID, "realtime_input_queue_full", "Realtime input queue is full", true)
+			c.rejectWorldAction(msg, "realtime_input_queue_full", "Realtime input queue is full", true)
 		}
 	case protocol.TypeAttack:
 		_, decoded, err := protocol.DecodeClientMessage(msg.Raw)
 		if err != nil {
-			c.sendWorldReject(msg.RequestID, "invalid_world_attack", err.Error(), false)
+			c.rejectWorldAction(msg, "invalid_world_attack", err.Error(), false)
 			return
 		}
 		if _, ok := decoded.(protocol.Attack); !ok {
-			c.sendWorldReject(msg.RequestID, "invalid_world_attack", "Invalid basic attack", false)
+			c.rejectWorldAction(msg, "invalid_world_attack", "Invalid basic attack", false)
 			return
 		}
 		msg.Channel = protocol.TypeAttack
 		if !c.allowRealtimeInput(time.Now()) {
-			c.sendWorldReject(msg.RequestID, "realtime_input_rate_limited", "Combat input rate exceeded", true)
+			c.rejectWorldAction(msg, "realtime_input_rate_limited", "Combat input rate exceeded", true)
 			return
 		}
 		select {
 		case c.worldInputs <- msg:
 		default:
-			c.sendWorldReject(msg.RequestID, "realtime_input_queue_full", "Realtime input queue is full", true)
+			c.rejectWorldAction(msg, "realtime_input_queue_full", "Realtime input queue is full", true)
 		}
 	default:
 		if strings.HasPrefix(msg.Type, "world.") {
-			c.sendWorldReject(msg.RequestID, "world_message_not_supported", "Realtime world message is not supported yet", false)
+			c.rejectWorldAction(msg, "world_message_not_supported", "Realtime world message is not supported yet", false)
 		}
 	}
 }
@@ -692,6 +882,18 @@ func (c *Client) sendWorldEvents(events []combat.Event, generation uint64) {
 	}
 	batch := protocol.EventBatch{FromEventID: events[0].ID, Events: make([]protocol.Event, 0, len(events))}
 	for _, event := range events {
+		if event.SourceID == c.playerID.String() {
+			switch event.Type {
+			case combat.EventCastRejected:
+				action := "world.cast"
+				if event.SkillID == "BASIC_ATTACK" {
+					action = "world.attack"
+				}
+				c.recordWSGameplayRejection(action, event.Reason)
+			case combat.EventMoveRejected:
+				c.recordWSGameplayRejection("world.move_to", event.Reason)
+			}
+		}
 		payload, err := json.Marshal(map[string]any{
 			"skill_id": event.SkillID, "x": event.X, "y": event.Y,
 			"amount": event.Amount, "hp": event.HP, "shield": event.Shield,
@@ -944,6 +1146,16 @@ func (c *Client) sendWorldReject(requestID, code, message string, retryable bool
 	c.sendWorldEnvelope(protocol.TypeReject, requestID, payload)
 }
 
+func (c *Client) rejectWorldAction(msg WSMessage, code, message string, retryable bool) {
+	status := http.StatusBadRequest
+	if retryable {
+		status = http.StatusTooManyRequests
+	}
+	data, _ := json.Marshal(map[string]string{"code": code})
+	c.completeWSAction(msg, status, time.Since(msg.ReceivedAt), data)
+	c.sendWorldReject(msg.RequestID, code, message, retryable)
+}
+
 func (c *Client) sendWorldEnvelope(messageType, requestID string, payload json.RawMessage) {
 	message, err := json.Marshal(protocol.Envelope{Version: protocol.Version, Type: messageType, RequestID: requestID, Payload: payload})
 	if err != nil {
@@ -957,6 +1169,7 @@ func (c *Client) sendWorldEnvelope(messageType, requestID string, payload json.R
 }
 
 func (c *Client) logWSCommand(msg WSMessage, status int, data json.RawMessage, duration time.Duration) {
+	c.completeWSAction(msg, status, duration, data)
 	level := zapcore.InfoLevel
 	switch {
 	case status >= 500:
@@ -1070,6 +1283,10 @@ func (c *Client) writePump() {
 			batch = batch[:0]
 			return err
 		}
+		c.wsMessagesOut.Add(int64(len(batch)))
+		for _, msg := range batch {
+			c.wsBytesOut.Add(int64(len(msg)))
+		}
 		batch = batch[:0]
 		return nil
 	}
@@ -1124,6 +1341,8 @@ func (c *Client) writePump() {
 			if err := c.conn.WriteMessage(websocket.TextMessage, snapshot); err != nil {
 				return
 			}
+			c.wsMessagesOut.Add(1)
+			c.wsBytesOut.Add(int64(len(snapshot)))
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
