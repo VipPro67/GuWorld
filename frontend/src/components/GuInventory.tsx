@@ -215,10 +215,14 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   };
 
   const handleUseGu = async (instanceId: string) => {
-    if (!onUseGu) return;
+    if (!onUseGu && !onUseGus) return;
     setUsingGuId(instanceId);
     try {
-      await onUseGu(instanceId);
+      if (onUseGu) {
+        await onUseGu(instanceId);
+      } else if (onUseGus) {
+        await onUseGus([instanceId]);
+      }
     } finally {
       setUsingGuId(null);
     }
@@ -1211,7 +1215,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             )}
 
                             {/* Per-group "Use Multiple" button for Consumable Gu */}
-                            {spec.gu_type === "Consumable" && onUseGus && instances.filter(isEligibleForUse).length > 1 && useMultipleGuGroupKey !== groupKey && (
+                            {spec.gu_type === "Consumable" && (onUseGus || onUseGu) && instances.filter(isEligibleForUse).length > 1 && useMultipleGuGroupKey !== groupKey && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1221,6 +1225,21 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 font-mono transition-all cursor-pointer"
                               >
                                 ✨ Sử dụng nhiều
+                              </button>
+                            )}
+
+                            {/* Group has multiple items but only 1 eligible to use */}
+                            {spec.gu_type === "Consumable" && (onUseGu || onUseGus) && totalCount > 1 && instances.filter(isEligibleForUse).length === 1 && (
+                              <button
+                                type="button"
+                                disabled={actionLoading || (usingGuId !== null && instances.some(g => g.instance_id === usingGuId))}
+                                onClick={() => {
+                                  const eligible = instances.find(isEligibleForUse);
+                                  if (eligible) void handleUseGu(eligible.instance_id);
+                                }}
+                                className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/30 text-amber-300 border border-amber-900/40 hover:bg-amber-950/50 font-mono disabled:opacity-50"
+                              >
+                                {usingGuId && instances.some(g => g.instance_id === usingGuId) ? "..." : "Sử Dụng"}
                               </button>
                             )}
 
@@ -1240,10 +1259,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       {equippingId === singleGu.instance_id ? "..." : singleGu.equipped ? "Tháo" : "Trang Bị"}
                                     </button>
                                   )}
-                                  {spec.gu_type === "Consumable" && onUseGu && (
+                                  {spec.gu_type === "Consumable" && (onUseGu || onUseGus) && (
                                     <button
                                       type="button"
-                                      disabled={actionLoading || usingGuId === singleGu.instance_id}
+                                      disabled={actionLoading || usingGuId === singleGu.instance_id || !canAct}
                                       onClick={() => handleUseGu(singleGu.instance_id)}
                                       className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/30 text-amber-300 border border-amber-900/40 hover:bg-amber-950/50 font-mono disabled:opacity-50"
                                     >
@@ -1530,12 +1549,12 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     )}
 
                                     {/* Use consumable */}
-                                    {spec.gu_type === "Consumable" && onUseGu && (
+                                    {spec.gu_type === "Consumable" && (onUseGu || onUseGus) && (
                                       <button
                                         type="button"
-                                        disabled={actionLoading || usingGuId === gu.instance_id}
+                                        disabled={actionLoading || usingGuId === gu.instance_id || isDead || status === "SEALED"}
                                         onClick={() => handleUseGu(gu.instance_id)}
-                                        className="text-[9px] font-bold py-1 px-2.5 bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50 rounded font-mono cursor-pointer"
+                                        className="text-[9px] font-bold py-1 px-2.5 bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50 rounded font-mono cursor-pointer disabled:opacity-50"
                                       >
                                         {usingGuId === gu.instance_id ? "..." : "Sử Dụng"}
                                       </button>

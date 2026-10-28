@@ -383,7 +383,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
-            <PhaserWorldHost worldActive={isGameWorldSurface} onExit={() => setView("character")} />
+            <PhaserWorldHost worldActive={isGameWorldSurface || currentView === "practice-room"} onExit={() => setView("character")} />
             {!isGameWorldSurface && (
               <section
                 role="dialog"

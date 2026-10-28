@@ -5,7 +5,7 @@ import "testing"
 func TestComputeApertureYield(t *testing.T) {
 	base := ApertureYieldInputs{
 		Level: 1, AreaSize: 0,
-		DaoMult: 1, ConflictMult: 1, EcologyMult: 1, EcoMult: 1, LaborMult: 1, PopBonus: 1,
+		DaoMult: 1, ConflictMult: 1, EcologyMult: 1, LaborMult: 1, PopBonus: 1,
 	}
 
 	tests := []struct {
@@ -34,7 +34,6 @@ func TestComputeApertureYield(t *testing.T) {
 		{"debuffed node keeps the 10 floor", func(in *ApertureYieldInputs) {
 			in.ConflictMult = 0.55
 			in.EcologyMult = 0.25
-			in.EcoMult = 0.2
 		}, 10, false, false},
 	}
 
@@ -57,7 +56,7 @@ func TestComputeApertureYield(t *testing.T) {
 			if got.Bonus > ApertureYieldTotalCap {
 				t.Errorf("Bonus %v exceeds total cap %v", got.Bonus, ApertureYieldTotalCap)
 			}
-			if len(got.Parts) != 8 {
+			if len(got.Parts) != 7 {
 				t.Errorf("expected 8 breakdown parts, got %d", len(got.Parts))
 			}
 		})
@@ -69,7 +68,7 @@ func TestComputeApertureYield(t *testing.T) {
 func TestComputeApertureYieldRepaysSeedWithinTenHarvests(t *testing.T) {
 	got := ComputeApertureYield(ApertureYieldInputs{
 		Level: 1, AreaSize: 0,
-		DaoMult: 1, ConflictMult: 1, EcologyMult: 1, EcoMult: 1, LaborMult: 1, PopBonus: 1,
+		DaoMult: 1, ConflictMult: 1, EcologyMult: 1, LaborMult: 1, PopBonus: 1,
 	})
 	if got.Count*ApertureSeedRepayHarvests < 100 {
 		t.Errorf("plain node yields %v/harvest, %v over %d harvests < 100 seed",

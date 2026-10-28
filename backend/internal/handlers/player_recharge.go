@@ -168,5 +168,3 @@ func RechargeWithStones(c *gin.Context) {
 		"message": fmt.Sprintf("Nạp %d nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
 	})
 }
-
-// ExploreResponse represents the action of exploring

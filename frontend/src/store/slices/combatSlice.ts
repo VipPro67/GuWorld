@@ -3,18 +3,15 @@ import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { useUIStore } from "@/store/useUIStore";
 import type {
-  Player,
   CombatState,
   CombatHistoryEntry,
   AutoCombatConfig,
-  ExploreResponse,
 } from "@/store/useGameStore";
 
 export interface CombatSlice {
-  explore: () => Promise<void>;
-  exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
   executeAutoCombat: (loadout: ApiResponseData) => Promise<{ logs: ApiResponseData[]; winner: string; combatants?: ApiResponseData[] } | null>;
-  executePracticeCombat: (loadout: ApiResponseData, dummyConfig: ApiResponseData) => Promise<{ logs: ApiResponseData[]; winner: string; combatants?: ApiResponseData[], player_won?: boolean } | null>;
+  executePracticeCombat: (loadout: ApiResponseData, dummyConfig: ApiResponseData) => Promise<{ instance_id: string; zone_id: string; origin_zone_id: string; is_practice: true } | null>;
+  exitPracticeCombat: () => Promise<{ zone_id: string } | null>;
   combatHistory: CombatHistoryEntry[];
   combatHistoryLoading: boolean;
   fetchCombatHistory: () => Promise<void>;
@@ -34,96 +31,6 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   combatSettingsLoading: false,
   combatHistory: [],
   combatHistoryLoading: false,
-
-  explore: async () => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:combat")) return;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/player/explore/${player.id}`, {
-        method: "POST",
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Khám phá thất bại.");
-      }
-
-      const data: ExploreResponse = await response.json();
-      get().applyInventoryFromResponse(data);
-      get().addLog(data.log);
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Khám phá thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-    } finally {
-      get().endAction("player:combat");
-    }
-  },
-
-  exploreNode: async (nodeId) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:combat")) return null;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/explore`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          player_id: player.id,
-          node_id: nodeId,
-        }),
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Khám phá thất bại.");
-      }
-
-      get().applyInventoryFromResponse(data);
-      get().addLog(data.log);
-
-      // Handle skip battle result from explore
-      if (data.skip_result) {
-        const skipResult = data.skip_result;
-        const allies = Array.isArray(skipResult.allies) ? skipResult.allies.slice(1) : [];
-        const allyText = allies.length > 0 ? ` Cùng ${allies.map((a: { name: string }) => a.name).join(", ")} xuất trận.` : " Một mình xuất trận.";
-        if (skipResult.winner === "Phe Ta") {
-          get().addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!${allyText}`, "success");
-          if (skipResult.mine_occupied) {
-            get().addToast(`Đã chiếm mỏ ${skipResult.mine_occupied}!`, "info");
-          }
-        } else {
-          get().addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
-        }
-      }
-
-      return data;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Khám phá thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-      return null;
-    } finally {
-      get().endAction("player:combat");
-    }
-  },
 
   fetchCombatSettings: async () => {
     const { token, logout } = get();
@@ -230,7 +137,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
     }
   },
 
-  executePracticeCombat: async (loadout: ApiResponseData, dummyConfig: ApiResponseData) => {
+  executePracticeCombat: async (_loadout: ApiResponseData, dummyConfig: ApiResponseData) => {
     const { player, token, logout } = get();
     if (!player || !token || !get().beginAction("player:combat")) return null;
 
@@ -242,7 +149,6 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          loadout,
           dummy_hp: parseInt(dummyConfig.dummyHP as ApiResponseData) || 100,
           dummy_shield: parseInt(dummyConfig.dummyShield as ApiResponseData) || 0,
           dummy_atk: parseInt(dummyConfig.dummyAtk as ApiResponseData) || 10,
@@ -258,18 +164,34 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Bắt đầu mô phỏng thất bại.");
+        throw new Error(data.error || "Bắt đầu phiên tập luyện thất bại.");
       }
-
+      get().setPlayerFromServer({ world_zone_id: data.zone_id });
       return data;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Mô phỏng thất bại: ${err.message}`);
+      get().addLog(`Không thể vào phòng tập: ${err.message}`);
       return null;
     } finally {
       get().endAction("player:combat");
+    }
+  },
+
+  exitPracticeCombat: async () => {
+    const { token } = get();
+    if (!token) return null;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/practice/exit`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Kết thúc tập luyện thất bại.");
+      get().setPlayerFromServer({ world_zone_id: data.zone_id });
+      return data;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      get().addToast(err.message, "error");
+      return null;
     }
   },
 

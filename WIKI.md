@@ -251,7 +251,6 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - Chế độ **Chọn nhiều node** trên bản đồ cho phép sửa chữa, nâng cấp hoặc san phẳng nhiều node cùng lúc; tổng phí sửa/nâng cấp được kiểm tra trước khi áp dụng.
 - **Thu hoạch tất cả** các mỏ đã đủ thời gian tích tụ cùng lúc; sản lượng giảm **20%** và Nhân Khí nhận được giảm còn **+1/mỏ** (so với thu hoạch từng mỏ).
 - **Sửa chữa tất cả** các công trình còn tồn tại nhưng bị hư tổn cùng lúc; phí sửa mỗi công trình tăng **30%**. Công trình bị phá hủy hoàn toàn sẽ mất vĩnh viễn và phải xây lại.
-- Hệ sinh thái vẫn kiểm tra cân bằng trồng trọt, chăn nuôi và thú ăn thịt.
 - Dị nhân trong tiên khiếu có population, happiness, oppression, rebellion rate và labor intensity.
 
 ### Công Trình Phòng Thủ

@@ -7,7 +7,7 @@ import type { Region } from "@/store/useGameStore";
 import { getRegionDetailsFromCache, getStaticRegions } from "@/lib/atlas";
 
 interface WorldAtlasModalProps {
-  regions: Region[];
+  regions?: Region[];
   currentRegionId: string;
   x: number;
   y: number;
@@ -84,10 +84,17 @@ function formatMonsterStat(min: number, max: number): string {
 }
 
 export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, onClose }: WorldAtlasModalProps) {
-  const regions = useMemo(
-    () => (propRegions && propRegions.length > 0 ? propRegions : getStaticRegions()),
-    [propRegions]
-  );
+  // Lấy dữ liệu build sẵn trực tiếp từ Region.csv (build-wiki-cache)
+  // Bản đồ mở tức thì (0ms), toạ độ chuẩn xác 100%, không cần query database/API.
+  const staticRegions = useMemo(() => getStaticRegions(), []);
+
+  const regions = useMemo(() => {
+    if (staticRegions && staticRegions.length > 0) {
+      return staticRegions;
+    }
+    return propRegions || [];
+  }, [staticRegions, propRegions]);
+
   const majorRegions = useMemo(
     () => regions.filter((region) => region.zone_type === "NGU_VUC" && region.is_active),
     [regions],
@@ -131,30 +138,31 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
 
   const mapHubs = useMemo(() => {
     return mapRegion
-      ? regions.filter((region) => region.parent_id === mapRegion.id && (region.zone_type === "HUB" || region.zone_type === "SAFE_ZONE") && region.is_active)
+      ? regions.filter((region) => region.parent_id === mapRegion.id && region.zone_type === "HUB" && region.is_active)
       : [];
   }, [regions, mapRegion]);
+
+  const mapRegionX = mapRegion?.atlas_x !== undefined && mapRegion?.atlas_x !== null ? mapRegion.atlas_x : (mapRegion?.min_x ?? 0);
+  const mapRegionY = mapRegion?.atlas_y !== undefined && mapRegion?.atlas_y !== null ? mapRegion.atlas_y : (mapRegion?.min_y ?? 0);
+  const mapRegionW = mapRegion?.width || 5000;
+  const mapRegionH = mapRegion?.height || 5000;
 
   const mapViewBox = useMemo(() => {
     if (!mapRegion) {
       return `0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`;
     }
-    const mx = mapRegion.atlas_x ?? mapRegion.min_x ?? 0;
-    const my = mapRegion.atlas_y ?? mapRegion.min_y ?? 0;
-    const mw = mapRegion.width || 5000;
-    const mh = mapRegion.height || 5000;
-    return `${mx} ${my} ${mw} ${mh}`;
-  }, [mapRegion]);
+    return `${mapRegionX} ${mapRegionY} ${mapRegionW} ${mapRegionH}`;
+  }, [mapRegion, mapRegionX, mapRegionY, mapRegionW, mapRegionH]);
 
-  const playerAtlasX = currentRegion?.atlas_x !== undefined ? currentRegion.atlas_x + x : x;
-  const playerAtlasY = currentRegion?.atlas_y !== undefined ? currentRegion.atlas_y + y : y;
+  const playerAtlasX = currentRegion?.atlas_x !== undefined ? currentRegion.atlas_x + x : (currentRegion?.min_x !== undefined ? currentRegion.min_x + x : x);
+  const playerAtlasY = currentRegion?.atlas_y !== undefined ? currentRegion.atlas_y + y : (currentRegion?.min_y !== undefined ? currentRegion.min_y + y : y);
 
   const hasPlayerPosition = playerAtlasX >= 0 && playerAtlasX <= WORLD_WIDTH && playerAtlasY >= 0 && playerAtlasY <= WORLD_HEIGHT;
   const playerInZoomedRegion = !!mapRegion
-    && playerAtlasX >= (mapRegion.atlas_x ?? mapRegion.min_x ?? 0)
-    && playerAtlasX <= (mapRegion.atlas_x ?? mapRegion.min_x ?? 0) + (mapRegion.width || 5000)
-    && playerAtlasY >= (mapRegion.atlas_y ?? mapRegion.min_y ?? 0)
-    && playerAtlasY <= (mapRegion.atlas_y ?? mapRegion.min_y ?? 0) + (mapRegion.height || 5000);
+    && playerAtlasX >= mapRegionX
+    && playerAtlasX <= mapRegionX + mapRegionW
+    && playerAtlasY >= mapRegionY
+    && playerAtlasY <= mapRegionY + mapRegionH;
 
   const inspectedRegion = useMemo(() => {
     return regions.find((r) => r.id === inspectedSubRegionId) || currentRegion || subRegions[0];
@@ -350,14 +358,14 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
 
               <svg
                 viewBox={mapViewBox}
-                className="relative block aspect-square w-full"
+                className={`relative block w-full ${mapRegion ? "aspect-square" : "aspect-[3/2]"}`}
                 aria-label={mapRegion ? `Bản đồ ${mapRegion.name}` : "Bản đồ các đại vực"}
               >
                 {/* 1. Large 5 Major Regions view */}
                 {!mapRegion &&
                   majorRegions.map((region, index) => {
-                    const minX = region.atlas_x ?? region.min_x ?? 0;
-                    const minY = region.atlas_y ?? region.min_y ?? 0;
+                    const minX = region.atlas_x !== undefined && region.atlas_x !== null ? region.atlas_x : (region.min_x ?? 0);
+                    const minY = region.atlas_y !== undefined && region.atlas_y !== null ? region.atlas_y : (region.min_y ?? 0);
                     const width = region.width || 5000;
                     const height = region.height || 5000;
                     const isSelected = selectedMajorRegionId === region.id;
@@ -441,8 +449,8 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                 {/* 2. Sub-regions grid view */}
                 {mapRegion &&
                   mapSubRegions.map((region, index) => {
-                    const minX = region.atlas_x ?? region.min_x ?? 0;
-                    const minY = region.atlas_y ?? region.min_y ?? 0;
+                    const minX = region.atlas_x !== undefined && region.atlas_x !== null ? region.atlas_x : (region.min_x ?? 0);
+                    const minY = region.atlas_y !== undefined && region.atlas_y !== null ? region.atlas_y : (region.min_y ?? 0);
                     const width = region.width || 1000;
                     const height = region.height || 1000;
                     const centerX = minX + width / 2;

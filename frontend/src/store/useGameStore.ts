@@ -268,6 +268,7 @@ export interface Player {
   base_hp: number;
   body_mods: string[];
   current_region: string;
+  world_zone_id?: string;
   dao_marks: Record<string, number>;
   path_masteries: Record<string, number>;
   x: number;
@@ -528,10 +529,6 @@ export interface ImmortalAperture {
   state: 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED';
   created_at: string;
   updated_at: string;
-  temperature?: number;
-  humidity?: number;
-  qi?: number;
-  terrain?: string;
 }
 
 export interface DaoMark {
@@ -1076,11 +1073,6 @@ interface ActionInventoryResponse {
   lifespan?: number;
 }
 
-export interface ExploreResponse extends ActionInventoryResponse {
-  reward_stones?: number;
-  log: string;
-}
-
 export interface FeedResponse extends ActionInventoryResponse {
   message: string;
 }
@@ -1139,16 +1131,6 @@ export interface Region {
   effective_rules?: Region["rules"];
   has_boss?: boolean;
   monster_count?: number;
-}
-
-export interface WorldConfig {
-  width: number;
-  height: number;
-  large_zone_size: number;
-  sub_zone_size: number;
-  hub_region_id: string;
-  hub_x: number;
-  hub_y: number;
 }
 
 interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice {

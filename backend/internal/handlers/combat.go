@@ -14,7 +14,6 @@
 //	combat_ai.go         - BuildEnemyActions, BuildBasicEnemyAction, SelectActionsByAI
 //	combat_loot.go       - RollLoot, ApplyLoot
 //	combat_integration.go- IntegratePassiveGus
-//	combat_explore.go    - ExploreNode, checkAndIncrementExploreLimit
 //	combat_retreat.go    - Retreat handler
 //	combat_auto.go       - AutoCombatStart handler (manual/replay)
 //	combat_auto_resolve.go - ResolveCombat (skip battle + manual replay, applies results)

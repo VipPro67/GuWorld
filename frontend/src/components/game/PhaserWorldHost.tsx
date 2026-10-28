@@ -184,7 +184,8 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   }, [worldActive]);
 
   const lastEquippedGusRef = useRef<string>(JSON.stringify(player?.equipped_gus ?? []));
-  const lastRegionRef = useRef<string>(player?.current_region ?? "");
+  const activeZoneID = player?.world_zone_id?.trim() || player?.current_region || "";
+  const lastRegionRef = useRef<string>(activeZoneID);
   const lastReconnectTokenRef = useRef<number>(worldReconnectToken);
   useEffect(() => {
     if (!worldActive) {
@@ -193,7 +194,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     }
 
     const currentSerialized = JSON.stringify(player?.equipped_gus ?? []);
-    const region = player?.current_region ?? "";
+    const region = player?.world_zone_id?.trim() || player?.current_region || "";
 
     const regionChanged = lastRegionRef.current !== "" && lastRegionRef.current !== region;
     const gusChanged = lastEquippedGusRef.current !== currentSerialized;
@@ -218,7 +219,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
         void runtimeRef.current.reconnect();
       }
     }
-  }, [player?.equipped_gus, player?.current_region, worldActive, worldReconnectToken]);
+  }, [player?.equipped_gus, player?.current_region, player?.world_zone_id, worldActive, worldReconnectToken]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -269,6 +270,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
       // are map cells and must never be written to the player store.
       state.setPlayerFromServer({
         current_region: transfer.to_zone_id,
+        world_zone_id: transfer.to_zone_id,
         x: transfer.legacy_x,
         y: transfer.legacy_y,
         hp: transfer.hp,
@@ -297,7 +299,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
         gameRef.current = game;
         setStatus("ready");
         if (runtime && canJoinMMOZone) {
-          const zoneId = playerRef.current?.current_region?.trim() || mmoClientConfig.zoneId;
+          const zoneId = playerRef.current?.world_zone_id?.trim() || playerRef.current?.current_region?.trim() || mmoClientConfig.zoneId;
           if (!zoneId) {
             setRuntimeStatus("error");
             setErrorMessage("Nhân vật chưa có KHU_VUC để vào bản đồ realtime");
@@ -368,7 +370,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
         : canJoinMMOZone
           ? "Đang khởi tạo kết nối"
           : "Chế độ xem trước";
-  const connectionRegion = zoneId || player?.current_region || mmoClientConfig.zoneId;
+  const connectionRegion = zoneId || player?.world_zone_id || player?.current_region || mmoClientConfig.zoneId;
 
   return (
     <MMOErrorBoundary>

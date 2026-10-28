@@ -15,14 +15,15 @@ import (
 
 // GetRegions fetches all active regions (zones) from the database with ETag caching
 func GetRegions(c *gin.Context) {
-	getCachedDictionaryPartWithError(c, "explore_regions_v2", &[]models.Region{}, func() (interface{}, error) {
+	getCachedDictionaryPartWithError(c, "explore_regions_v3", &[]models.Region{}, func() (interface{}, error) {
 		query := `
 			SELECT regions.id, regions.name, regions.description, regions.width, regions.height, regions.min_rank, regions.max_rank, regions.is_active, regions.created_at, regions.updated_at,
 			       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0),
 			       COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0),
 			       COALESCE(rwm.world_map_id, 'world_map'), COALESCE(regions.rules::text,'{}'),
 			       COALESCE(ms.has_boss, FALSE) OR (regions.zone_type = 'BOSS_ZONE') AS has_boss,
-			       COALESCE(ms.monster_count, 0) AS monster_count
+			       COALESCE(ms.monster_count, 0) AS monster_count,
+			       COALESCE(regions.atlas_x, 0), COALESCE(regions.atlas_y, 0)
 			FROM regions
 			LEFT JOIN region_world_maps rwm ON rwm.region_id = regions.id
 			LEFT JOIN (
@@ -48,7 +49,7 @@ func GetRegions(c *gin.Context) {
 			var rulesJSON string
 			if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive, &r.CreatedAt, &r.UpdatedAt,
 				&r.ParentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &r.WorldMapID, &rulesJSON,
-				&r.HasBoss, &r.MonsterCount); err != nil {
+				&r.HasBoss, &r.MonsterCount, &r.AtlasX, &r.AtlasY); err != nil {
 				return nil, fmt.Errorf("scan active region: %w", err)
 			}
 			r.Rules = json.RawMessage(rulesJSON)

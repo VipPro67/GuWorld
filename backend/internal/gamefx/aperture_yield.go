@@ -10,7 +10,7 @@ package gamefx
 // most 10 harvests.
 const (
 	// ApertureYieldBase is both the per-harvest base and the hard floor, so a
-	// debuffed (starved / overgrazed / impure) node still yields this much.
+	// debuffed (impure) node still yields this much.
 	ApertureYieldBase = 10.0
 	// ApertureYieldTotalCap bounds the combined multiplier (level included).
 	ApertureYieldTotalCap = 50.0
@@ -34,13 +34,12 @@ type ApertureYieldInputs struct {
 	DaoMult      float64
 	ConflictMult float64
 	EcologyMult  float64
-	EcoMult      float64
 	LaborMult    float64
 	PopBonus     float64
 }
 
 // ApertureYield is the combination result. Parts holds every multiplier keyed
-// by name (level, dao, area, conflict, ecology, eco, labor, pop) so callers can
+// by name (level, dao, area, conflict, ecology, labor, pop) so callers can
 // render the breakdown without re-deriving it.
 type ApertureYield struct {
 	Count    float64
@@ -65,7 +64,6 @@ func ComputeApertureYield(in ApertureYieldInputs) ApertureYield {
 	}
 	conflictM := clampMin(in.ConflictMult, 1)
 	ecologyM := clampMin(in.EcologyMult, 1)
-	ecoM := clampMin(in.EcoMult, 1)
 	laborM := clampMin(in.LaborMult, 1)
 	popM := clampMin(in.PopBonus, 1)
 	if popM > ApertureYieldPopCap {
@@ -73,7 +71,7 @@ func ComputeApertureYield(in ApertureYieldInputs) ApertureYield {
 	}
 	areaM := 1 + float64(in.AreaSize)/10000000.0
 
-	raw := levelM * daoM * areaM * conflictM * ecologyM * ecoM * laborM * popM
+	raw := levelM * daoM * areaM * conflictM * ecologyM * laborM * popM
 	used := raw
 	capped := false
 	if used > ApertureYieldTotalCap {
@@ -97,7 +95,6 @@ func ComputeApertureYield(in ApertureYieldInputs) ApertureYield {
 			"area":     areaM,
 			"conflict": conflictM,
 			"ecology":  ecologyM,
-			"eco":      ecoM,
 			"labor":    laborM,
 			"pop":      popM,
 		},

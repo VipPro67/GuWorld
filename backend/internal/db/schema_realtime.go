@@ -41,6 +41,24 @@ func schemaRealtime() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("realtime_combat_instances", `
+	CREATE TABLE IF NOT EXISTS realtime_combat_instances (
+		id UUID PRIMARY KEY,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		mode VARCHAR(24) NOT NULL CHECK (mode IN ('training','arena','tournament','secret_realm')),
+		status VARCHAR(16) NOT NULL DEFAULT 'active' CHECK (status IN ('active','completed','cancelled')),
+		zone_id VARCHAR(80) NOT NULL,
+		origin_zone_id VARCHAR(80) NOT NULL,
+		payload JSONB NOT NULL DEFAULT '{}',
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		ended_at TIMESTAMPTZ
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_realtime_combat_active_player
+	ON realtime_combat_instances (player_id) WHERE status = 'active';
+	CREATE INDEX IF NOT EXISTS idx_realtime_combat_active_id
+	ON realtime_combat_instances (id, player_id) WHERE status = 'active';`); err != nil {
+		return err
+	}
 	if err := execSchema("realtime_loot_grants_death_idx", `
 	CREATE INDEX IF NOT EXISTS idx_realtime_loot_grants_death
 	ON realtime_loot_grants (zone_id, death_id);`); err != nil {

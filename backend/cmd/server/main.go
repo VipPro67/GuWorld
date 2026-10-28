@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -515,6 +516,50 @@ func main() {
 			}
 			base.Monsters = spawns
 			return sim.ZoneKey{MapID: "aperture_tribulation", InstanceID: eventID, RulesetVersion: "v1"}, base, true, nil
+		})
+		realtimeAdmission.SetCombatInstanceZoneLoader(func(loadCtx context.Context, playerID uuid.UUID, state handlers.RealtimeJoinState) (realtimegateway.CombatInstanceZone, bool, error) {
+			const prefix = "combat:"
+			if !strings.HasPrefix(state.WorldInstanceID, prefix) {
+				return realtimegateway.CombatInstanceZone{}, false, nil
+			}
+			instanceID, parseErr := uuid.Parse(strings.TrimPrefix(state.WorldInstanceID, prefix))
+			if parseErr != nil {
+				return realtimegateway.CombatInstanceZone{}, false, nil
+			}
+			var mode, zoneID string
+			var payload []byte
+			loadErr := db.DB.QueryRowContext(loadCtx, `
+				SELECT mode, zone_id, payload FROM realtime_combat_instances
+				WHERE id=$1 AND player_id=$2 AND status='active'
+			`, instanceID, playerID).Scan(&mode, &zoneID, &payload)
+			if loadErr != nil {
+				if errors.Is(loadErr, sql.ErrNoRows) {
+					return realtimegateway.CombatInstanceZone{}, false, nil
+				}
+				return realtimegateway.CombatInstanceZone{}, false, loadErr
+			}
+			base, found := realtimeWorldManager.BaseZoneMap(zoneID)
+			if !found {
+				return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("combat map %q is not configured", zoneID)
+			}
+			if mode == "training" {
+				var config handlers.PracticeRealtimeConfig
+				if err := json.Unmarshal(payload, &config); err != nil {
+					return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("decode practice config: %w", err)
+				}
+				base.Monsters = append(base.Monsters, realtimeworld.MonsterSpawn{
+					TemplateID: "practice_dummy", Name: "Hình Nhân Gỗ", X: float64(base.Width) * 0.55, Y: float64(base.Height) * 0.5,
+					MaxHP: config.DummyHP, CurrentHP: config.DummyHP, AttackDamage: config.DummyAtk, Defense: config.DummyDef,
+					Speed: config.DummySpeed, Radius: 0.55, AggroRadius: 24, LeashRadius: 30, AttackRange: 1.5,
+					AttackCooldownTicks: 20, NoRespawn: true,
+				})
+			} else {
+				return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("unsupported realtime combat mode %q", mode)
+			}
+			return realtimegateway.CombatInstanceZone{
+				Key: sim.ZoneKey{MapID: zoneID, InstanceID: instanceID.String(), RulesetVersion: "v1"},
+				Map: base, Isolated: true,
+			}, true, nil
 		})
 		realtimeAdmission.SetApertureStateSink(func(sinkCtx context.Context, playerID uuid.UUID, snapshot sim.Snapshot) error {
 			return handlers.PersistRealtimeTribulationSnapshot(sinkCtx, playerID, snapshot)

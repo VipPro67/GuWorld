@@ -568,7 +568,6 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			player.GET("/inventory/gus", handlers.GetPlayerInventoryGus)
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
 			player.GET("/passive-stats", handlers.GetPassiveStatsHandler)
-			player.POST("/explore/:id", middleware.RequireLegacyWorldMode(), handlers.Explore)
 			player.POST("/use-item", handlers.UseItem)
 			player.POST("/use-items", handlers.UseItems)
 			player.POST("/recharge", handlers.RechargeWithStones)
@@ -752,7 +751,8 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		combat.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			combat.POST("/start", middleware.RequireLegacyWorldMode(), handlers.AutoCombatStart)
-			combat.POST("/practice", handlers.PracticeCombatStart)
+			combat.POST("/practice", handlers.StartRealtimePractice)
+			combat.POST("/practice/exit", handlers.EndRealtimePractice)
 			combat.POST("/capture", middleware.RequireLegacyWorldMode(), handlers.CaptureMonster)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
@@ -929,9 +929,6 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 
 		// World & Exploration
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
-		api.GET("/explore/regions/:id/details", middleware.AuthRequired(), handlers.GetRegionDetails)
-		api.GET("/explore/maps", middleware.AuthRequired(), handlers.GetWorldMaps)
-		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/world/map-objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetZoneMapObjects)
 		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)

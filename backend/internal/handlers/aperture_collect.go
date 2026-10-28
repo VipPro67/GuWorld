@@ -458,10 +458,6 @@ type apertureRewardContext struct {
 	nodeDaoMap              map[string]int64
 	daoProfile              *gamefx.DaoCombatProfile
 	daoConflictReductionPct float64
-	overgrazing             bool
-	herbivores              int
-	starvationHerb          bool
-	starvationCarn          bool
 	variantHumans           map[string]struct {
 		population     int
 		laborIntensity string
@@ -530,8 +526,6 @@ func loadApertureRewardContextWithProfile(q apertureQueryer, playerID uuid.UUID,
 		ctx.daoConflictReductionPct = ctx.daoProfile.ConflictReductionPct
 	}
 
-	_, ctx.herbivores, _, ctx.overgrazing, ctx.starvationHerb, ctx.starvationCarn = EvaluateEcosystem(allNodes)
-
 	vhRows, err := q.Query(`SELECT race, population, labor_intensity FROM aperture_variant_humans WHERE aperture_id = $1`, apertureID)
 	if err == nil {
 		defer vhRows.Close()
@@ -595,24 +589,6 @@ func apertureNodeYield(ctx *apertureRewardContext, n models.ApertureResourceNode
 		ecologyMult = 1.0 - ecologyPenalty
 	}
 
-	ecoMult := 1.0
-	switch n.NodeType {
-	case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "FARMING_ZONE":
-		if ctx.overgrazing {
-			ecoMult = 0.5
-		} else if ctx.herbivores > 0 {
-			ecoMult = 1.25
-		}
-	case "SPIRIT_DEER_PASTURE", "BREEDING_ZONE":
-		if ctx.starvationHerb {
-			ecoMult = 0.2
-		}
-	case "SILVER_WOLF_DEN":
-		if ctx.starvationCarn {
-			ecoMult = 0.2
-		}
-	}
-
 	laborMult := 1.0
 	popBonus := 1.0
 	if race := getVariantHumanForNode(n.NodeType); race != "" {
@@ -637,13 +613,12 @@ func apertureNodeYield(ctx *apertureRewardContext, n models.ApertureResourceNode
 		DaoMult:      daoMult,
 		ConflictMult: conflictMult,
 		EcologyMult:  ecologyMult,
-		EcoMult:      ecoMult,
 		LaborMult:    laborMult,
 		PopBonus:     popBonus,
 	})
 }
 
-var apertureYieldFactorOrder = []string{"level", "dao", "area", "conflict", "ecology", "eco", "labor", "pop"}
+var apertureYieldFactorOrder = []string{"level", "dao", "area", "conflict", "ecology", "labor", "pop"}
 
 func apertureYieldFactors(y gamefx.ApertureYield) []models.ApertureYieldFactor {
 	factors := make([]models.ApertureYieldFactor, 0, len(apertureYieldFactorOrder))

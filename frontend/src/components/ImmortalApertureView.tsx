@@ -23,7 +23,6 @@ import {
   Package,
   Lock as LockIcon,
   Users,
-  Leaf,
   RefreshCw,
   Info,
   Search,
@@ -316,7 +315,7 @@ export const ImmortalApertureView: React.FC = () => {
   const [cleanseMarks, setCleanseMarks] = useState<number>(1000);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
-  const [variantSubTab, setVariantSubTab] = useState<"overview" | "settlements" | "npcs" | "refine" | "ecosystem">("overview");
+  const [variantSubTab, setVariantSubTab] = useState<"overview" | "settlements" | "npcs" | "refine">("overview");
 
   useEffect(() => {
     if (variantSubTab === "refine") {
@@ -692,24 +691,6 @@ export const ImmortalApertureView: React.FC = () => {
     return detail ? 1 - detail.internal_conflict_penalty_pct / 100 : 1;
   };
 
-  const plantCount = apertureNodes.reduce((count, n) => count + (!n.is_destroyed &&
-    ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS",
-     "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
-     "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
-     "KIM_FARM", "VANG_FARM", "HUYET_FARM", "THAT_FARM", "THAY_THUAT_FARM", "LUAT_FARM",
-     "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
-     "NO_FARM", "NO_FARM_ADV"].includes(n.node_type) ? 1 :
-    !n.is_destroyed && n.node_type === "FARMING_ZONE" ? (n.cells?.length || 1) : 0), 0);
-  const herbCount = apertureNodes.reduce((count, n) => count + (!n.is_destroyed && n.node_type === "SPIRIT_DEER_PASTURE" ? 1 :
-    !n.is_destroyed && n.node_type === "BREEDING_ZONE" ? (n.cells?.length || 1) : 0), 0);
-  const carnCount = apertureNodes.filter(n => !n.is_destroyed &&
-    ["SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
-  ).length;
-
-  const starvationHerb = herbCount > 0 && plantCount === 0;
-  const starvationCarn = carnCount > 0 && herbCount === 0;
-  const overgrazing = herbCount > plantCount && carnCount === 0 && plantCount > 0;
-
   // Bulk action helpers
   const bulkCollectableNodes = apertureNodes.filter(n => !n.is_destroyed && n.node_category !== "DEFENSE" && canCollect(n, effectiveTimeRate));
   const bulkReadyCount = bulkCollectableNodes.length;
@@ -720,27 +701,6 @@ export const ImmortalApertureView: React.FC = () => {
     return sum + Math.ceil(baseCost * 1.3);
   }, 0);
   const canAffordBulkRepair = player.immortal_stones >= bulkRepairCost;
-
-  // Total Food Production — dùng sản lượng server tính (yield_preview), không
-  // tự suy lại công thức ở client.
-  const totalFoodProd = apertureNodes.reduce((sum, n) => {
-    if (!n.is_destroyed && n.yield_preview &&
-        ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "SPIRIT_DEER_PASTURE",
-         "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
-         "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
-         "KIM_FARM", "VANG_FARM", "HUYET_FARM", "THAT_FARM", "THAY_THUAT_FARM", "LUAT_FARM",
-         "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
-         "NO_FARM", "NO_FARM_ADV", "SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
-    ) {
-      return sum + n.yield_preview.expected;
-    }
-    return sum;
-  }, 0);
-
-  // Total Variant Human Population and Food Consumption
-  const totalVariantHumanPop = variantHumans.reduce((sum, v) => sum + v.population, 0);
-  const foodNeeded = totalVariantHumanPop / 100.0;
-  const foodSurplus = totalFoodProd >= foodNeeded;
 
   // ── Thanh Đạo Tẩy Thể (spec §6) ──
   const dominantPurity = daoNgan?.paths?.find((p) => p.path === daoNgan?.dominant_path)?.purity_pct ?? 0;
@@ -858,48 +818,6 @@ return (
                   <div className="text-lg font-bold text-slate-200 mt-1">{(aperture.area_size / 666.67).toFixed(1)} Mẫu (đất cát, rừng hồ...)</div>
                 </div>
               </div>
-
-              {/* Sinh Cảnh Tiên Khiếu */}
-              <div className="border-t border-slate-800/60 pt-4 space-y-3">
-                <h3 className="text-sm font-bold text-slate-350 flex items-center gap-2 uppercase tracking-wider font-mono">
-                  🌍 Sinh cảnh & Khí hậu Tiên Khiếu
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-left">
-                  <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 flex flex-col justify-between">
-                    <span className="text-slate-500 font-mono block mb-1">Nhiệt độ</span>
-                    <span className={`text-sm font-bold font-mono ${
-                      (aperture.temperature ?? 25.0) > 35 ? 'text-rose-400' :
-                      (aperture.temperature ?? 25.0) < 15 ? 'text-blue-400' :
-                      'text-emerald-450'
-                    }`}>
-                      {(aperture.temperature ?? 25.0).toFixed(1)}°C
-                    </span>
-                  </div>
-                  <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 flex flex-col justify-between">
-                    <span className="text-slate-500 font-mono block mb-1">Độ ẩm</span>
-                    <span className={`text-sm font-bold font-mono ${
-                      (aperture.humidity ?? 50.0) > 70 ? 'text-blue-400' :
-                      (aperture.humidity ?? 50.0) < 30 ? 'text-amber-500' :
-                      'text-cyan-450'
-                    }`}>
-                      {(aperture.humidity ?? 50.0).toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 flex flex-col justify-between">
-                    <span className="text-slate-500 font-mono block mb-1">Tiên Khí</span>
-                    <span className="text-sm font-bold text-purple-400 font-mono">
-                      {Math.round(aperture.qi ?? 100.0)}
-                    </span>
-                  </div>
-                  <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 flex flex-col justify-between">
-                    <span className="text-slate-500 font-mono block mb-1">Địa Hình</span>
-                    <span className="text-[11px] font-bold text-amber-300 leading-tight">
-                      {aperture.terrain || "Thảo Nguyên Trù Phú"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
 
               {/* Time Flow Slider */}
               {/* <div className="bg-slate-950/50 p-6 rounded-xl border border-slate-800 space-y-4">
@@ -2677,7 +2595,6 @@ return (
                 { id: "settlements", label: "Thành Trì", icon: <MapIcon className="w-4 h-4 shrink-0" /> },
                 { id: "npcs", label: "Cổ Sư", icon: <Sparkles className="w-4 h-4 shrink-0" /> },
                 { id: "refine", label: "Luyện Cổ Tự Động", icon: <Flame className="w-4 h-4 shrink-0" /> },
-                { id: "ecosystem", label: "Sinh Thái", icon: <Leaf className="w-4 h-4 shrink-0" /> },
               ]}
               activeId={variantSubTab}
               onChange={(id) => setVariantSubTab(id as ApiResponseData)}
@@ -3410,71 +3327,6 @@ return (
               </div>
             )}
 
-            {/* SUB-TAB: ECOSYSTEM */}
-            {variantSubTab === "ecosystem" && (
-              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                    <Leaf className="w-5 h-5 text-emerald-400" />
-                    Chuỗi Sinh Thái Tiên Khiếu
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-1">Duy trì cân bằng thực vật → thú ăn cỏ → thú ăn thịt để tối ưu sản lượng.</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 text-center space-y-1">
-                    <Leaf className="w-8 h-8 mx-auto text-emerald-500/40" />
-                    <div className="text-xl font-black text-emerald-400">{plantCount}</div>
-                    <div className="text-[10px] text-slate-400">Thực Vật</div>
-                  </div>
-                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 text-center space-y-1">
-                    <span className="text-2xl">🦌</span>
-                    <div className="text-xl font-black text-amber-400">{herbCount}</div>
-                    <div className="text-[10px] text-slate-400">Thú Ăn Cỏ</div>
-                  </div>
-                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 text-center space-y-1">
-                    <span className="text-2xl">🐺</span>
-                    <div className="text-xl font-black text-rose-400">{carnCount}</div>
-                    <div className="text-[10px] text-slate-400">Thú Ăn Thịt</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 space-y-2">
-                    <h3 className="text-xs font-bold text-slate-200">Cung Cấp Lương Thực</h3>
-                    <div className="space-y-1.5 text-[10px]">
-                      <div className="flex justify-between"><span className="text-slate-400">Sản lượng:</span><span className="text-emerald-400 font-bold">{totalFoodProd} / năm</span></div>
-                      <div className="flex justify-between"><span className="text-slate-400">Tiêu thụ ({totalVariantHumanPop} người):</span><span className="text-rose-400 font-bold">{foodNeeded.toFixed(0)} / năm</span></div>
-                      <div className="flex justify-between pt-1 border-t border-slate-800">
-                        <span className="text-slate-400">Cân đối:</span>
-                        {foodSurplus ? (
-                          <span className="text-emerald-400 font-bold">Thặng Dư ✓</span>
-                        ) : (
-                          <span className="text-rose-400 font-bold animate-pulse">Thiếu Thụt ✗</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 space-y-2">
-                    <h3 className="text-xs font-bold text-slate-200 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Xung Đột Đạo Ngân</h3>
-                    {(() => {
-                      const affectedNodes = apertureNodes.filter(n => !n.is_destroyed && getDaoConflictMultiplier(n) < 0.999);
-                      if (affectedNodes.length === 0) return <div className="text-[10px] text-emerald-400 text-center py-2">Không có suy giảm xung đột</div>;
-                      return (
-                        <div className="space-y-1 max-h-24 overflow-y-auto">
-                          {affectedNodes.map(node => (
-                            <div key={node.id} className="text-[9px] text-rose-300 flex justify-between gap-2">
-                              <span className="truncate">{node.name} · {translatePath(node.path)}</span>
-                              <span className="shrink-0 text-rose-500">-{((1 - getDaoConflictMultiplier(node)) * 100).toFixed(1)}%</span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

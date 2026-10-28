@@ -37,10 +37,6 @@ type ImmortalAperture struct {
 	ReturnY                  *float64    `json:"return_y,omitempty"`
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
-	Temperature              float64     `json:"temperature,omitempty"`
-	Humidity                 float64     `json:"humidity,omitempty"`
-	Qi                       float64     `json:"qi,omitempty"`
-	Terrain                  string      `json:"terrain,omitempty"`
 }
 
 func (a ImmortalAperture) TotalTribulationCount() int {
@@ -92,7 +88,7 @@ type ApertureResourceNode struct {
 }
 
 // ApertureYieldFactor is one multiplier of the harvest breakdown (gamefx
-// ComputeApertureYield). Keys: level, dao, area, conflict, ecology, eco, labor, pop.
+// ComputeApertureYield). Keys: level, dao, area, conflict, ecology, labor, pop.
 type ApertureYieldFactor struct {
 	Key   string  `json:"key"`
 	Value float64 `json:"value"`

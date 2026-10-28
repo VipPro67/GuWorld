@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -50,6 +51,18 @@ type WorldStateStore interface {
 // zone map. ok is false when the player has no active tribulation event.
 type TribulationZoneLoader func(ctx context.Context, playerID uuid.UUID) (sim.ZoneKey, realtimeworld.ZoneMap, bool, error)
 
+// CombatInstanceZone is a server-authored arena or training map instance.
+// OverrideState is optional and lets isolated modes supply temporary vitals
+// while keeping the player's durable character state untouched.
+type CombatInstanceZone struct {
+	Key           sim.ZoneKey
+	Map           realtimeworld.ZoneMap
+	OverrideState *handlers.RealtimeJoinState
+	Isolated      bool
+}
+
+type CombatInstanceZoneLoader func(ctx context.Context, playerID uuid.UUID, state handlers.RealtimeJoinState) (CombatInstanceZone, bool, error)
+
 // ApertureStateSink persists authoritative entity HP from an aperture
 // tribulation snapshot (monsters and resource nodes).
 type ApertureStateSink func(ctx context.Context, playerID uuid.UUID, snapshot sim.Snapshot) error
@@ -66,6 +79,7 @@ type Admission struct {
 	sessions          map[uuid.UUID]session
 	joinAttempts      map[uuid.UUID][]time.Time
 	tribulationZones  TribulationZoneLoader
+	combatZones       CombatInstanceZoneLoader
 	apertureStateSink ApertureStateSink
 }
 
@@ -89,6 +103,7 @@ type session struct {
 	safeY               float64
 	mapWidth            float64
 	mapHeight           float64
+	persistState        bool
 }
 
 // edgeTransferCooldown prevents border ping-pong when a player holds movement
@@ -192,6 +207,15 @@ func (a *Admission) SetTribulationZoneLoader(loader TribulationZoneLoader) {
 	a.tribulationZones = loader
 }
 
+// SetCombatInstanceZoneLoader installs the loader for authenticated arena and
+// training instances. It is consulted only when the durable player row has a
+// server-created world_instance_id using the combat: namespace.
+func (a *Admission) SetCombatInstanceZoneLoader(loader CombatInstanceZoneLoader) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.combatZones = loader
+}
+
 // SetApertureStateSink installs the durable HP sink for tribulation monsters and
 // resource nodes. It runs after player checkpoints and handoffs.
 func (a *Admission) SetApertureStateSink(sink ApertureStateSink) {
@@ -272,8 +296,27 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	if a.manager.OwnsCharacter(sim.CharacterID(playerID.String())) {
 		return nil, admissionError(409, "realtime_character_already_owned", "Character already has an active realtime controller")
 	}
+	joinCtx, cancel := context.WithTimeout(ctx, joinReadTimeout)
+	defer cancel()
+	state, err := a.load(joinCtx, playerID)
+	if err != nil {
+		return nil, admissionError(503, "realtime_character_unavailable", "Could not load authoritative character state")
+	}
+	if state.RegionID == "" || state.MapID != request.ZoneID {
+		return nil, admissionError(409, "realtime_map_mismatch", "Requested map does not match the character's current region")
+	}
+	if state.MapInstanceID != "" {
+		return nil, admissionError(409, "realtime_instance_conflict", "Character is already assigned to another map instance")
+	}
+	if state.HasActiveCombat || state.NeedsOnboarding {
+		return nil, admissionError(409, "realtime_character_not_ready", "Character cannot join the realtime world in its current state")
+	}
+	if math.IsNaN(state.HP) || math.IsInf(state.HP, 0) || math.IsNaN(state.BaseHP) || math.IsInf(state.BaseHP, 0) || state.HP <= 0 || state.BaseHP <= 0 {
+		return nil, admissionError(409, "realtime_character_invalid", "Character vitals are invalid for admission")
+	}
 	var key sim.ZoneKey
 	tribulationZone := false
+	privateCombatZone := false
 	if request.ZoneID == "aperture_tribulation" {
 		a.mu.Lock()
 		loader := a.tribulationZones
@@ -299,14 +342,53 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		key = loadedKey
 		tribulationZone = true
 	}
-	if !tribulationZone {
-		var zoneErr error
-		key, zoneErr = a.manager.ZoneKeyForMapWithCapacity(request.ZoneID)
-		if zoneErr != nil {
-			if errors.Is(zoneErr, realtimeworld.ErrZoneFull) {
+	if !tribulationZone && strings.HasPrefix(state.WorldInstanceID, "combat:") {
+		a.mu.Lock()
+		loader := a.combatZones
+		a.mu.Unlock()
+		if loader == nil {
+			return nil, admissionError(503, "realtime_combat_instance_unavailable", "The private combat map loader is not configured")
+		}
+		combatZone, found, loadErr := loader(joinCtx, playerID, state)
+		if loadErr != nil {
+			logger.S.Errorf("Realtime combat map load failed for player %s: %v", playerID, loadErr)
+			return nil, admissionError(503, "realtime_combat_instance_unavailable", "The private combat map could not be loaded")
+		}
+		if !found {
+			return nil, admissionError(409, "realtime_combat_instance_inactive", "No active realtime combat session exists for this character")
+		}
+		if combatZone.Key.MapID != request.ZoneID || combatZone.Key.InstanceID == "" {
+			return nil, admissionError(503, "realtime_combat_instance_unavailable", "The private combat map has an invalid instance key")
+		}
+		if combatZone.OverrideState != nil {
+			state = *combatZone.OverrideState
+			if state.RegionID == "" || state.MapID != request.ZoneID || state.MapInstanceID != "" || state.HasActiveCombat {
+				return nil, admissionError(503, "realtime_combat_instance_unavailable", "The private combat map returned invalid character state")
+			}
+			if math.IsNaN(state.HP) || math.IsInf(state.HP, 0) || math.IsNaN(state.BaseHP) || math.IsInf(state.BaseHP, 0) || state.HP <= 0 || state.BaseHP <= 0 {
+				return nil, admissionError(503, "realtime_combat_instance_unavailable", "The private combat map returned invalid character vitals")
+			}
+		}
+		if err := a.manager.RegisterZoneMap(combatZone.Key, combatZone.Map); err != nil {
+			if errors.Is(err, realtimeworld.ErrZoneFull) {
 				return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
 			}
-			return nil, admissionError(403, "realtime_map_unavailable", "Realtime zone is not configured for this map")
+			logger.S.Errorf("Realtime combat map registration failed for player %s: %v", playerID, err)
+			return nil, admissionError(503, "realtime_combat_instance_unavailable", "The private combat map could not be configured")
+		}
+		key = combatZone.Key
+		privateCombatZone = combatZone.Isolated
+	}
+	if !tribulationZone {
+		if key.MapID == "" {
+			var zoneErr error
+			key, zoneErr = a.manager.ZoneKeyForMapWithCapacity(request.ZoneID)
+			if zoneErr != nil {
+				if errors.Is(zoneErr, realtimeworld.ErrZoneFull) {
+					return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
+				}
+				return nil, admissionError(403, "realtime_map_unavailable", "Realtime zone is not configured for this map")
+			}
 		}
 	}
 	lease, err := a.manager.ClaimCharacter(sim.CharacterID(playerID.String()), controllerID.String(), key)
@@ -320,24 +402,6 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		}
 	}()
 
-	joinCtx, cancel := context.WithTimeout(ctx, joinReadTimeout)
-	defer cancel()
-	state, err := a.load(joinCtx, playerID)
-	if err != nil {
-		return nil, admissionError(503, "realtime_character_unavailable", "Could not load authoritative character state")
-	}
-	if state.RegionID == "" || state.MapID != request.ZoneID {
-		return nil, admissionError(409, "realtime_map_mismatch", "Requested map does not match the character's current region")
-	}
-	if state.MapInstanceID != "" {
-		return nil, admissionError(409, "realtime_instance_conflict", "Character is already assigned to another map instance")
-	}
-	if state.HasActiveCombat || state.NeedsOnboarding {
-		return nil, admissionError(409, "realtime_character_not_ready", "Character cannot join the realtime world in its current state")
-	}
-	if math.IsNaN(state.HP) || math.IsInf(state.HP, 0) || math.IsNaN(state.BaseHP) || math.IsInf(state.BaseHP, 0) || state.HP <= 0 || state.BaseHP <= 0 {
-		return nil, admissionError(409, "realtime_character_invalid", "Character vitals are invalid for admission")
-	}
 	a.mu.Lock()
 	compiled := a.compiled
 	stateStore := a.states
@@ -355,7 +419,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	baseHP := state.HP
 	baseShield := 0.0
 	var durableCombat *persistence.CombatState
-	if stateStore != nil {
+	if stateStore != nil && !privateCombatZone {
 		durable, ok, loadErr := stateStore.Load(ctx, playerID)
 		if loadErr != nil {
 			return nil, admissionError(503, "realtime_checkpoint_unavailable", "Could not load the realtime world checkpoint")
@@ -460,13 +524,18 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	}
 	attached = true
 	zoneMap, _ := a.manager.ZoneMapFor(key)
+	var mana *manaSettlement
+	if !privateCombatZone {
+		mana = &manaSettlement{last: playerCombat.Mana}
+	}
 	active := session{
 		playerID: playerID, regionID: state.RegionID, lease: lease, mapVersion: request.MapVersion, contentVersion: request.ContentVersion,
 		skills: skills, loadoutRevision: loadoutRevision, movementSpeed: moveSpeed,
-		mana:             &manaSettlement{last: playerCombat.Mana},
+		mana:             mana,
 		locationRevision: locationRevision, hasLocationRevision: hasLocationRevision,
 		safeX: safeSpawn.X, safeY: safeSpawn.Y,
 		mapWidth: float64(zoneMap.Width), mapHeight: float64(zoneMap.Height),
+		persistState: !privateCombatZone,
 	}
 	a.mu.Lock()
 	a.sessions[controllerID] = active
@@ -1003,6 +1072,9 @@ func (a *Admission) flushState(active session) error {
 // reports whether the committed Gu usage changed the inventory the client
 // should refetch.
 func (a *Admission) flushStateLocked(active session) (bool, error) {
+	if !active.persistState {
+		return false, nil
+	}
 	if a.states == nil {
 		return false, nil
 	}

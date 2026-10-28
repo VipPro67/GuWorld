@@ -105,7 +105,7 @@ Không gian tiềm thức và ký ức tàn dư của tiền nhân hoặc thiên
 _Avoid_: Bí cảnh, phó bản bản đồ, dungeon bản đồ
 
 ### Bí Cảnh Không Gian (Spatial Secret Realm)
-Không gian tiểu giới hoặc phúc địa vô chủ tồn tại độc lập với Ngũ Vực nhưng có lối vào/lối ra cụ thể trên bản đồ thế giới. Vận hành theo mô hình phiên dùng chung (Shared Spatial Instance) có thời lượng giới hạn. Cổ sư tự do di chuyển theo tọa độ, khai thác tài nguyên, săn quái, tranh đoạt hoặc tương tác với môi trường theo các quy tắc bí cảnh (áp chế tu vi, vùng an toàn hoặc hỗn chiến tự do).
+Không gian tiểu giới hoặc phúc địa vô chủ tồn tại độc lập với Ngũ Vực nhưng có lối vào/lối ra cụ thể trên bản đồ thế giới. Mỗi phiên là một map riêng có scope `SHARED`, `PARTY` hoặc `SOLO`, thời hạn và luật cấu hình; hoạt động theo tài nguyên thật của nhân vật và đưa người chơi về vị trí đã lưu khi thoát hoặc hết giờ. Cổ sư tự do di chuyển theo tọa độ, khai thác tài nguyên, săn quái, tranh đoạt hoặc tương tác với môi trường theo luật bí cảnh.
 _Avoid_: Mộng cảnh, dungeon trả lời câu hỏi
 
 ### Truyền Thừa Tiền Nhân (Spatial Inheritance Ground)
@@ -117,6 +117,12 @@ _Avoid_: Bí cảnh đại trà, mộng cảnh
 
 ### Quy Tắc Bí Cảnh (Spatial Realm Rules / Realm Rules)
 Tập luật môi trường ràng buộc hành vi của mọi Cổ sư khi hiện diện bên trong một Bí cảnh hoặc Vùng truyền thừa. Bao gồm: Thời lượng đếm ngược (Duration Timer), Cơ chế PK (Vùng An Toàn / Hỗn Chiến Tự Do), Giới hạn cảnh giới tối đa & Áp chế tu vi (Rank Suppression), Quy tắc trừng phạt tử vong (trục xuất về thế giới hoặc hồi sinh tại cổng), và Cấm đoán truyền tống trận.
+
+### Map Trận Đấu Đấu Trường (Arena Match Map)
+Map realtime riêng cho một trận Đấu Trường, chỉ được chia sẻ bởi những người trong trận. Mỗi trận cách ly trạng thái và tài nguyên combat; ngắt kết nối có thời gian quay lại 30 giây trước khi bị xử thua.
+
+### Map Tập Luyện (Training Map)
+Map realtime riêng tư cho một phiên tập luyện, dùng tài nguyên combat tạm thời và có thể thoát hoặc đặt lại bất cứ lúc nào mà không ảnh hưởng trạng thái nhân vật thật.
 
 
 ## Nguyên Tuyền (Primeval Vein)
@@ -133,3 +139,21 @@ _Avoid_: player DTO, player object
 ### Chuỗi Di Chuyển (Movement Chain)
 Chuỗi kiểm tra và ghi đích dùng chung cho mọi cách người chơi đổi ô: quyền điều khiển realtime → biên giới → sống/chết → chiến đấu → trưởng tổ đội → chính sách vùng → đích → áp chế giới vực → ghi vị trí → kéo tổ đội → phát sự kiện.
 _Avoid_: move handler, teleport logic
+
+## Realtime Combat & Techniques (Chiến Đấu Thời Gian Thực & Chiêu Thức)
+
+### Chiến Đấu Thời Gian Thực (Realtime Combat)
+Mô hình chiến đấu trong đó người chơi trực tiếp điều khiển di chuyển và lựa chọn chiêu thức, còn đồng đội và đối thủ do AI hành động; kết quả được server quyết định liên tục theo thời gian thay vì theo lượt.
+_Avoid_: auto-combat mô phỏng theo lượt
+
+### Hiệu Ứng Chiến Đấu Realtime (Realtime Combat Effect)
+Hiệu ứng chiến đấu cần có hành vi, mục tiêu và thời lượng realtime được định nghĩa rõ; số lượt không tự quy đổi thành giây. Hiệu ứng chưa có hành vi realtime chưa thể dùng trong chiến đấu realtime.
+
+### Dạng Phòng Thủ Tiên Cổ (Defensive Immortal Gu Form)
+Trạng thái biến thân do Tiên Cổ phòng thủ kích hoạt, có thời gian biến thân riêng theo từng Cổ; khi hoàn tất, trạng thái phòng thủ có hiệu lực và tiêu hao mana liên tục cho đến khi tắt hoặc hết mana.
+
+### Gián Đoạn Biến Thân (Transformation Interrupt)
+Khống chế cứng có thể hủy quá trình biến thân trước khi hoàn tất; sát thương thường không hủy thi triển. Phòng thủ của Tiên Cổ chỉ có hiệu lực sau khi biến thân hoàn tất.
+
+### Chiêu Thức Dạng Biến Thân (Form Skill)
+Chiêu thức riêng của một dạng biến thân, chỉ có thể dùng khi trạng thái biến thân tương ứng còn hoạt động.

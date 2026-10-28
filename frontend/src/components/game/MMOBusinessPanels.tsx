@@ -83,6 +83,7 @@ export function MMOBusinessPanels({ panel, onClose, onLoadoutSaved }: MMOBusines
               onUseItems={store.useItems}
               onUpdateStatus={store.updateGuStatus}
               onSetVital={store.setVitalGu}
+              onUseGu={store.useGu}
               onUseSupportGu={store.useSupportGu}
               onDropGu={store.dropGu}
               onDropGus={store.dropGus}

@@ -768,6 +768,16 @@ func (m *Manager) stopZone(key sim.ZoneKey, zone *managedZone) {
 	if m.zones[key] == zone {
 		delete(m.zones, key)
 	}
+	if _, runtimeOnly := m.runtimeKeys[key]; runtimeOnly {
+		delete(m.runtimeKeys, key)
+		delete(m.maps, key)
+		for i, candidate := range m.keys {
+			if candidate == key {
+				m.keys = append(m.keys[:i], m.keys[i+1:]...)
+				break
+			}
+		}
+	}
 	zone.evicting = false
 	m.cond.Broadcast()
 	m.mu.Unlock()

@@ -32,7 +32,7 @@ const Columns = `p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitu
 	p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones,
 	p.wall_progress, p.human_qi, p.next_tribulation_time,
 	p.hp, p.base_hp, p.body_mods, p.x, p.y,
-	p.equipped_gus, p.cleared_cells, p.visited_subzones, p.current_region, p.path_masteries,
+	p.equipped_gus, p.cleared_cells, p.visited_subzones, p.current_region, COALESCE(p.world_zone_id, ''), p.path_masteries,
 	p.active_combat, p.last_mana_update, COALESCE(p.last_hunger_tick_at, p.created_at, NOW()), p.created_at, p.lifespan, p.time_speed_multiplier,
 	p.party_id, p.arena_rank, COALESCE(p.email, ''), p.google_id,
 	p.explore_count, p.last_explore_reset, p.aperture_stress,
@@ -49,7 +49,7 @@ const Columns = `p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitu
 
 // ColumnCount is the number of destinations Scan expects. Keeping it next to
 // Columns lets a DB-free test catch column/scan drift at build time.
-const ColumnCount = 63
+const ColumnCount = 64
 
 // GuScope selects which Gu instances the snapshot attaches.
 type GuScope int
@@ -97,7 +97,7 @@ func Scan(row RowScanner) (models.Player, []byte, error) {
 		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
 		&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-		&player.CurrentRegion, &player.PathMasteries, &activeCombat,
+		&player.CurrentRegion, &player.WorldZoneID, &player.PathMasteries, &activeCombat,
 		&player.LastManaUpdate, &player.LastHungerTickAt, &player.CreatedAt, &player.Lifespan, &player.TimeSpeedMultiplier,
 		&player.PartyID, &player.ArenaRank, &player.Email, &player.GoogleID,
 		&player.ExploreCount, &player.LastExploreReset,

@@ -9,7 +9,6 @@ import type {
   RefineRateBreakdown,
   RefiningRecipe,
   Region,
-  WorldConfig,
 } from "@/store/useGameStore";
 import { LatestRequestGate } from "@/lib/player-reconciliation";
 
@@ -25,11 +24,9 @@ export interface CultivationSlice {
   recipesFetchedAt: number | null;
   regions: Region[];
   regionsLoaded: boolean;
-  world: WorldConfig | null;
   fetchRecipes: (forceFresh?: boolean) => Promise<void>;
   refreshRecipeProgress: () => Promise<void>;
   fetchRegions: () => Promise<void>;
-  fetchWorld: () => Promise<WorldConfig | null>;
   quests: ApiResponseData[];
   fetchQuests: () => Promise<void>;
   refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance; rate_breakdown?: RefineRateBreakdown } | null>;
@@ -54,7 +51,6 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   quests: [],
   regions: [],
   regionsLoaded: false,
-  world: null,
 
   fetchRecipes: async (forceFresh = false) => {
     if (get().recipesLoaded && !forceFresh) return;
@@ -124,7 +120,7 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
 
     // 1. Read from IndexedDB for 0ms instant display
     try {
-      const cached = await getDictionaryCache<Region[]>("game_explore_regions");
+      const cached = await getDictionaryCache<Region[]>("game_explore_regions_v2");
       if (cached && cached.data && Array.isArray(cached.data) && cached.data.length > 0) {
         cachedEtag = cached.etag;
         set({ regions: cached.data, regionsLoaded: true });
@@ -158,27 +154,11 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       const data = await response.json();
       const etag = response.headers.get("ETag") || undefined;
       set({ regions: data || [], regionsLoaded: true });
-      void setDictionaryCache("game_explore_regions", data || [], etag);
+      void setDictionaryCache("game_explore_regions_v2", data || [], etag);
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Regions sync error:", err.message);
       set({ regionsLoaded: true });
-    }
-  },
-
-  fetchWorld: async () => {
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/explore/world`);
-      if (!response.ok) {
-        throw new Error("Failed to load world config");
-      }
-      const data = await response.json();
-      set({ world: data || null });
-      return data || null;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      console.error("World config sync error:", err.message);
-      return null;
     }
   },
 
