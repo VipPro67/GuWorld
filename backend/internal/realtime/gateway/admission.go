@@ -278,23 +278,26 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		a.mu.Lock()
 		loader := a.tribulationZones
 		a.mu.Unlock()
-		if loader != nil {
-			loadedKey, zoneMap, ok, loadErr := loader(ctx, playerID)
-			if loadErr != nil {
-				return nil, admissionError(503, "realtime_tribulation_unavailable", "Could not load the active tribulation encounter")
-			}
-			if !ok {
-				return nil, admissionError(409, "realtime_tribulation_inactive", "No active tribulation event for this character")
-			}
-			if err := a.manager.RegisterZoneMap(loadedKey, zoneMap); err != nil {
-				if errors.Is(err, realtimeworld.ErrZoneFull) {
-					return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
-				}
-				return nil, admissionError(503, "realtime_tribulation_unavailable", "Could not configure the tribulation encounter")
-			}
-			key = loadedKey
-			tribulationZone = true
+		if loader == nil {
+			return nil, admissionError(503, "realtime_tribulation_unavailable", "The private aperture tribulation map loader is not configured; check the realtime map artifact and startup logs")
 		}
+		loadedKey, zoneMap, ok, loadErr := loader(ctx, playerID)
+		if loadErr != nil {
+			logger.S.Errorf("Realtime tribulation map load failed for player %s: %v", playerID, loadErr)
+			return nil, admissionError(503, "realtime_tribulation_unavailable", "The aperture tribulation map or encounter could not be loaded; check backend startup logs and map/content versions")
+		}
+		if !ok {
+			return nil, admissionError(409, "realtime_tribulation_inactive", "No active tribulation event for this character")
+		}
+		if err := a.manager.RegisterZoneMap(loadedKey, zoneMap); err != nil {
+			if errors.Is(err, realtimeworld.ErrZoneFull) {
+				return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
+			}
+			logger.S.Errorf("Realtime tribulation map registration failed for player %s: %v", playerID, err)
+			return nil, admissionError(503, "realtime_tribulation_unavailable", "The aperture tribulation map could not be configured; check its artifact and startup logs")
+		}
+		key = loadedKey
+		tribulationZone = true
 	}
 	if !tribulationZone {
 		var zoneErr error

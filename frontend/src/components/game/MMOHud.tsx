@@ -766,7 +766,7 @@ export function MMOHud(props: MMOHudProps) {
           <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
             <span className="flex items-center gap-1.5 font-serif font-bold text-xs text-amber-300">
               <Sparkles className="h-4 w-4 text-amber-400 animate-pulse" />
-              Kiếp Nạn Tiên Khiếu (20×20)
+              Kiếp Nạn Tiên Khiếu (40×40)
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-950/80 border border-rose-500/50 text-rose-300 font-mono">
               {props.nearby.filter((e) => e.kind === "monster" && e.templateId !== "aperture_node").length} Quái / Boss Kiếp
@@ -1218,7 +1218,7 @@ export function MMOHud(props: MMOHudProps) {
             <MapPin className="h-3 w-3 shrink-0 text-amber-400" />
             <span className="truncate">
               {zoneMapId === "aperture_tribulation"
-                ? "⚡ Tiên Khiếu (20×20)"
+                ? "⚡ Tiên Khiếu (40×40)"
                 : zoneMapId.replaceAll("_", " ") || "Khu vực"}
             </span>
           </span>

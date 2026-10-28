@@ -628,13 +628,13 @@ export const ImmortalApertureView: React.FC = () => {
       if (player) {
         setPlayerFromServer({
           current_region: "aperture_tribulation",
-          x: 10,
-          y: 10,
+          x: 20,
+          y: 20,
         });
       }
       setView("mmo-world");
       addToast(
-        "⚡ Đã tiến vào bản đồ Tiên Khiếu 20×20! Dùng WASD hoặc chuột để di chuyển, phím Q/W/E/R tung chiêu diệt Quái Kiếp!",
+        "⚡ Đã tiến vào bản đồ Tiên Khiếu 40×40! Dùng WASD hoặc chuột để di chuyển, phím Q/W/E/R tung chiêu diệt Quái Kiếp!",
         "info"
       );
     }
@@ -1403,7 +1403,7 @@ return (
                       <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/30 text-[11px] text-amber-200/90 leading-relaxed space-y-1.5">
                         <p className="font-bold text-amber-300 flex items-center gap-1.5">
                           <Sparkles className="w-4 h-4 text-amber-400" />
-                          Chiến Trường Tiên Khiếu Realtime (Bản đồ 20×20):
+                          Chiến Trường Tiên Khiếu Realtime (Bản đồ 40×40):
                         </p>
                         <p>
                           Khi vào trận, Đạo hữu sẽ được chuyển thẳng tới bản đồ Tiên Khiếu (canvas Phaser MMO). 
@@ -1419,7 +1419,7 @@ return (
                           className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-rose-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg ring-1 ring-amber-400/40"
                         >
                           <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                          Vào Tiên Khiếu Nghênh Kiếp (Bản Đồ Realtime 20×20)
+                          Vào Tiên Khiếu Nghênh Kiếp (Bản Đồ Realtime 40×40)
                         </button>
                         <button
                           onClick={handleEngage}

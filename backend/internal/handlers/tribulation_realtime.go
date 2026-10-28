@@ -141,6 +141,7 @@ func RealtimeEngageTribulation(c *gin.Context) {
 	for enemyRows.Next() {
 		var en RealtimeTribulationEnemy
 		if err := enemyRows.Scan(&en.ID, &en.Name, &en.EnemyType, &en.Path, &en.HP, &en.MaxHP, &en.Attack, &en.Defense, &en.X, &en.Y, &en.IsBoss, &en.Rank, &en.SubRank); err == nil {
+			en.X, en.Y = int(projectApertureCell(en.X)), int(projectApertureCell(en.Y))
 			enemies = append(enemies, en)
 		}
 	}
@@ -162,37 +163,66 @@ func RealtimeEngageTribulation(c *gin.Context) {
 	for nodeRows.Next() {
 		var n RealtimeApertureNode
 		if err := nodeRows.Scan(&n.ID, &n.Name, &n.NodeType, &n.Path, &n.X, &n.Y, &n.HP, &n.MaxHP, &n.DefensePower, &n.BlocksMovement); err == nil {
+			n.X, n.Y = int(projectApertureCell(n.X)), int(projectApertureCell(n.Y))
 			nodes = append(nodes, n)
 		}
 	}
 
-	// 4. Record current world position before entering Aperture (if not already inside)
+	// 4–5. Save the exact return position and move into the event map atomically.
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu chuyển bản đồ"})
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
 	var currRegion string
 	var currX, currY float64
-	_ = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT COALESCE(current_region, 'hub_nam_cuong'), COALESCE(world_x, x::double precision, 500), COALESCE(world_y, y::double precision, 500)
-		FROM players WHERE id = $1
-	`, playerID).Scan(&currRegion, &currX, &currY)
+	if err := tx.QueryRowContext(c.Request.Context(), `
+		SELECT current_region, COALESCE(world_x, x::double precision), COALESCE(world_y, y::double precision)
+		FROM players WHERE id = $1 FOR UPDATE
+	`, playerID).Scan(&currRegion, &currX, &currY); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc vị trí hiện tại của nhân vật"})
+		return
+	}
 
 	if currRegion != "" && currRegion != "aperture_tribulation" {
-		_, _ = db.DB.ExecContext(c.Request.Context(), `
+		if _, err := tx.ExecContext(c.Request.Context(), `
 			UPDATE immortal_apertures
 			SET return_region = $1, return_x = $2, return_y = $3
 			WHERE id = $4
-		`, currRegion, currX, currY, ev.ApertureID)
+		`, currRegion, currX, currY, ev.ApertureID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí trở về Tiên Khiếu"})
+			return
+		}
+		var atlasX, atlasY sql.NullInt64
+		if err := tx.QueryRowContext(c.Request.Context(), `SELECT atlas_x, atlas_y FROM regions WHERE id = $1`, currRegion).Scan(&atlasX, &atlasY); err != nil && err != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu tọa độ bản đồ thế giới"})
+			return
+		}
+		if _, err := tx.ExecContext(c.Request.Context(), `
+			INSERT INTO aperture_return_anchors(aperture_id, atlas_x, atlas_y, updated_at)
+			VALUES ($1, $2, $3, NOW())
+			ON CONFLICT (aperture_id) DO UPDATE SET atlas_x = EXCLUDED.atlas_x, atlas_y = EXCLUDED.atlas_y, updated_at = NOW()
+		`, ev.ApertureID, nullableIntArg(atlasX), nullableIntArg(atlasY)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu điểm neo vị trí trở về"})
+			return
+		}
 	}
 
-	// 5. Update player's region to aperture_tribulation
-	_, err = db.DB.ExecContext(c.Request.Context(), `
+	_, err = tx.ExecContext(c.Request.Context(), `
 		UPDATE players
 		SET current_region = 'aperture_tribulation', world_zone_id = 'aperture_tribulation',
-		    world_x = 10, world_y = 10, x = 10, y = 10,
+		    world_x = 20, world_y = 20, x = 20, y = 20,
 		    world_location_revision = world_location_revision + 1
 		WHERE id = $1
 	`, playerID)
 	if err != nil {
 		logger.S.Errorf("Failed to update player %s region to aperture_tribulation: %v", playerID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật khu vực người chơi: " + err.Error()})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất chuyển bản đồ"})
 		return
 	}
 	finishHandoff()
@@ -206,7 +236,7 @@ func RealtimeEngageTribulation(c *gin.Context) {
 		"zone_id":           "aperture_tribulation",
 		"map_version":       "regions-v1",
 		"content_version":   "region-content-v1",
-		"player_spawn":      gin.H{"x": 10.0, "y": 10.0},
+		"player_spawn":      gin.H{"x": 20.0, "y": 20.0},
 		"nodes":             nodes,
 		"enemies":           enemies,
 		"realtime_transfer": realtimeTransfer,
@@ -411,7 +441,10 @@ func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uui
 		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi cập nhật Tiên Khiếu")
 	}
 
-	exitRegion, exitX, exitY := resolveApertureExitLocation(ctx, playerID)
+	exitRegion, exitX, exitY, exitErr := resolveApertureExitLocation(ctx, tx, playerID)
+	if exitErr != nil {
+		return result, http.StatusConflict, fmt.Errorf("Không thể tìm vị trí an toàn để trở về: %w", exitErr)
+	}
 	if _, err = tx.ExecContext(ctx, `
 		UPDATE players 
 		SET active_combat = NULL, current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5,
@@ -449,78 +482,60 @@ func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uui
 	return result, 0, nil
 }
 
-// resolveApertureExitLocation returns the saved pre-tribulation position. A
-// hub_* region is never used as an exit: if the old position was a hub, the
-// placed region (when non-hub) or the nearest active non-hub KHU_VUC/SAFE_ZONE
-// is used instead.
-func resolveApertureExitLocation(ctx context.Context, playerID uuid.UUID) (region string, x float64, y float64) {
-	region = "hub_nam_cuong"
-	x, y = 500, 500
+type apertureExitQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
 
-	var isPlaced bool
-	var placedRegion, returnRegion sql.NullString
-	var placedX, placedY, returnX, returnY sql.NullFloat64
+func nullableIntArg(value sql.NullInt64) any {
+	if !value.Valid {
+		return nil
+	}
+	return value.Int64
+}
 
-	err := db.DB.QueryRowContext(ctx, `
-		SELECT is_placed, placed_region, placed_x, placed_y, return_region, return_x, return_y
-		FROM immortal_apertures
-		WHERE player_id = $1
-	`, playerID).Scan(&isPlaced, &placedRegion, &placedX, &placedY, &returnRegion, &returnX, &returnY)
-	if err != nil {
-		return
+// resolveApertureExitLocation restores an exact valid saved position. If its
+// region was removed/disabled or the coordinates no longer fit, it uses the
+// nearest active safe region from the atlas snapshot, then an active hub.
+func resolveApertureExitLocation(ctx context.Context, q apertureExitQueryer, playerID uuid.UUID) (region string, x float64, y float64, err error) {
+	var returnRegion sql.NullString
+	var returnX, returnY sql.NullFloat64
+	if err = q.QueryRowContext(ctx, `SELECT return_region, return_x, return_y FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&returnRegion, &returnX, &returnY); err != nil {
+		return "", 0, 0, fmt.Errorf("read aperture return location: %w", err)
 	}
-
-	returnValid := returnRegion.Valid && returnRegion.String != ""
-	placedValid := isPlaced && placedRegion.Valid && placedRegion.String != ""
-	if returnValid && isUsableExitRegion(returnRegion.String) {
-		region = returnRegion.String
-		if returnX.Valid {
-			x = returnX.Float64
+	var anchorX, anchorY sql.NullInt64
+	if err = q.QueryRowContext(ctx, `SELECT atlas_x, atlas_y FROM aperture_return_anchors WHERE aperture_id = (SELECT id FROM immortal_apertures WHERE player_id = $1)`, playerID).Scan(&anchorX, &anchorY); err != nil && err != sql.ErrNoRows {
+		return "", 0, 0, fmt.Errorf("read aperture return anchor: %w", err)
+	}
+	if returnRegion.Valid && returnX.Valid && returnY.Valid {
+		var active bool
+		var width, height int
+		if queryErr := q.QueryRowContext(ctx, `SELECT is_active, width, height FROM regions WHERE id = $1`, returnRegion.String).Scan(&active, &width, &height); queryErr == nil && active && width > 0 && height > 0 && returnX.Float64 >= 0 && returnY.Float64 >= 0 && returnX.Float64 < float64(width) && returnY.Float64 < float64(height) {
+			return returnRegion.String, returnX.Float64, returnY.Float64, nil
 		}
-		if returnY.Valid {
-			y = returnY.Float64
+	}
+	if !anchorX.Valid || !anchorY.Valid {
+		if returnRegion.Valid {
+			_ = q.QueryRowContext(ctx, `SELECT atlas_x, atlas_y FROM regions WHERE id = $1`, returnRegion.String).Scan(&anchorX, &anchorY)
 		}
-		return
 	}
-	if placedValid && isUsableExitRegion(placedRegion.String) {
-		region = placedRegion.String
-		if placedX.Valid {
-			x = placedX.Float64
-		}
-		if placedY.Valid {
-			y = placedY.Float64
-		}
-		return
+	ax, ay := int64(0), int64(0)
+	if anchorX.Valid && anchorY.Valid {
+		ax, ay = anchorX.Int64, anchorY.Int64
 	}
-
-	// Both saved positions are missing or hubs. Anchor on the hub that would
-	// otherwise have been used, then pick the closest detailed non-hub region.
-	anchor := ""
-	switch {
-	case returnValid:
-		anchor = returnRegion.String
-	case placedValid:
-		anchor = placedRegion.String
-	default:
-		_ = db.DB.QueryRowContext(ctx, `SELECT COALESCE(current_region, '') FROM players WHERE id = $1`, playerID).Scan(&anchor)
-	}
-	var atlasX, atlasY int
-	if anchor != "" {
-		_ = db.DB.QueryRowContext(ctx, `SELECT COALESCE(atlas_x, 0), COALESCE(atlas_y, 0) FROM regions WHERE id = $1`, anchor).Scan(&atlasX, &atlasY)
-	}
-	if err := db.DB.QueryRowContext(ctx, `
-		SELECT r.id, COALESCE(r.entry_x, 500), COALESCE(r.entry_y, 500)
+	const safeQuery = `SELECT r.id, COALESCE(r.entry_x, 0), COALESCE(r.entry_y, 0)
 		FROM regions r
-		JOIN region_world_maps rwm ON rwm.region_id = r.id
-		WHERE r.is_active = TRUE
-		  AND r.id NOT LIKE 'hub\_%'
-		  AND r.zone_type IN ('KHU_VUC', 'SAFE_ZONE')
-		ORDER BY (POWER(r.atlas_x - $1, 2) + POWER(r.atlas_y - $2, 2)), r.id
-		LIMIT 1
-	`, atlasX, atlasY).Scan(&region, &x, &y); err != nil {
-		region, x, y = "hub_nam_cuong", 500, 500
+		WHERE r.is_active = TRUE AND r.zone_type IN ('KHU_VUC', 'SAFE_ZONE') AND left(r.id, 4) <> 'hub_'
+		ORDER BY (POWER(r.atlas_x - $1, 2) + POWER(r.atlas_y - $2, 2)), r.id LIMIT 1`
+	if err = q.QueryRowContext(ctx, safeQuery, ax, ay).Scan(&region, &x, &y); err == nil {
+		return region, x, y, nil
 	}
-	return
+	const hubQuery = `SELECT id, COALESCE(entry_x, 0), COALESCE(entry_y, 0) FROM regions
+		WHERE is_active = TRUE AND left(id, 4) = 'hub_'
+		ORDER BY (POWER(atlas_x - $1, 2) + POWER(atlas_y - $2, 2)), id LIMIT 1`
+	if err = q.QueryRowContext(ctx, hubQuery, ax, ay).Scan(&region, &x, &y); err == nil {
+		return region, x, y, nil
+	}
+	return "", 0, 0, fmt.Errorf("no active safe region or hub is available for aperture exit")
 }
 
 func isHubRegion(regionID string) bool {
@@ -528,7 +543,7 @@ func isHubRegion(regionID string) bool {
 }
 
 func isUsableExitRegion(regionID string) bool {
-	return regionID != "" && regionID != "aperture_tribulation" && !isHubRegion(regionID)
+	return regionID != "" && regionID != "aperture_tribulation"
 }
 
 // RealtimeEscapeTribulation teleports player out of the tribulation map back to safe exit position.
@@ -545,8 +560,18 @@ func RealtimeEscapeTribulation(c *gin.Context) {
 	}
 	defer abortHandoff()
 
-	exitRegion, exitX, exitY := resolveApertureExitLocation(c.Request.Context(), playerID)
-	_, err := db.DB.ExecContext(c.Request.Context(), `
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu rời Tiên Khiếu"})
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+	exitRegion, exitX, exitY, exitErr := resolveApertureExitLocation(c.Request.Context(), tx, playerID)
+	if exitErr != nil {
+		c.JSON(http.StatusConflict, gin.H{"code": "aperture_exit_unavailable", "error": exitErr.Error()})
+		return
+	}
+	_, err = tx.ExecContext(c.Request.Context(), `
 		UPDATE players
 		SET current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5,
 		    world_location_revision = world_location_revision + 1
@@ -554,6 +579,10 @@ func RealtimeEscapeTribulation(c *gin.Context) {
 	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khi rút lui khỏi Tiên Khiếu"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí trở về"})
 		return
 	}
 	finishHandoff()

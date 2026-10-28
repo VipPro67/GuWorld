@@ -14,7 +14,8 @@ const defaultMapDir = "data/mmo/maps"
 const defaultGuProfiles = "data/mmo/gu/transpiled_profiles.json"
 
 // Config is the process-level admission policy for realtime world sessions.
-// Empty zone or player allowlists deny all joins, even when Enabled is true.
+// Empty zone or player allowlists deny public joins; the private aperture event
+// map bypasses only the zone list and still requires the player allowlist.
 type Config struct {
 	Enabled             bool
 	PhaserClientEnabled bool
@@ -110,6 +111,11 @@ func (c Config) AllowsJoin(playerID, zoneID string) bool {
 		_, zoneWildcard = c.ZoneIDs["all"]
 	}
 	_, zoneAllowed := c.ZoneIDs[strings.TrimSpace(zoneID)]
+	// The per-player tribulation map is an internal event map. It does not need
+	// to be exposed in MMO_ZONE_IDS, but it remains behind the player allowlist.
+	if strings.TrimSpace(zoneID) == "aperture_tribulation" {
+		zoneAllowed = true
+	}
 
 	return (playerWildcard || playerAllowed) && (zoneWildcard || zoneAllowed)
 }

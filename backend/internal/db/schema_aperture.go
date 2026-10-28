@@ -41,6 +41,18 @@ func schemaAperture() error {
 	);`); err != nil {
 		return err
 	}
+	// Keep the atlas anchor independently from return_region: regions may be
+	// removed (which clears return_region through its FK) while an aperture
+	// still needs a deterministic nearest-safe-region fallback.
+	if err := execSchema("aperture_return_anchors", `
+	CREATE TABLE IF NOT EXISTS aperture_return_anchors (
+		aperture_id UUID PRIMARY KEY REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		atlas_x INTEGER,
+		atlas_y INTEGER,
+		updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+	);`); err != nil {
+		return err
+	}
 
 	// player_dao_path was an obsolete duplicate store. Preserve any legacy-only
 	// path values as a fallback, while canonical immortal_apertures values win,

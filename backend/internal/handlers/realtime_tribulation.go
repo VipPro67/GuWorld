@@ -124,7 +124,7 @@ func LoadRealtimeTribulationSpawns(ctx context.Context, playerID uuid.UUID) (str
 		stats := realtimeai.DefaultStats(templateType)
 		spawns = append(spawns, realtimeworld.MonsterSpawn{
 			TemplateID: templateID, Name: name,
-			X: clampApertureCell(x), Y: clampApertureCell(y),
+			X: projectApertureCell(x), Y: projectApertureCell(y),
 			MaxHP: math.Max(1, maxHP), CurrentHP: math.Max(1, hp),
 			AttackDamage: math.Max(0, attack), NodeDamage: damageToNodes, Defense: math.Max(0, defense),
 			Speed: stats.Speed, Radius: stats.Radius,
@@ -173,7 +173,7 @@ func LoadRealtimeTribulationSpawns(ctx context.Context, playerID uuid.UUID) (str
 		}
 		spawns = append(spawns, realtimeworld.MonsterSpawn{
 			TemplateID: apertureNodeTemplateID, Name: name,
-			X: clampApertureCell(x), Y: clampApertureCell(y),
+			X: projectApertureCell(x), Y: projectApertureCell(y),
 			MaxHP: math.Max(1, float64(maxHP)), CurrentHP: math.Max(1, float64(hp)),
 			Defense: math.Max(0, float64(defense)),
 			Speed:   0, Radius: radius, Passive: true,
@@ -190,8 +190,7 @@ func LoadRealtimeTribulationSpawns(ctx context.Context, playerID uuid.UUID) (str
 }
 
 func clampApertureCell(value int) float64 {
-	// The authored 20x20 aperture map has a solid border at 0 and 19. Keep a
-	// radius-aware margin so setup validation never rejects a DB grid cell.
+	// Keep an inner margin on the persistent 20x20 aperture grid.
 	if value < 2 {
 		return 2
 	}
@@ -199,6 +198,11 @@ func clampApertureCell(value int) float64 {
 		return 17
 	}
 	return float64(value)
+}
+
+func projectApertureCell(value int) float64 {
+	// The realtime encounter is a 40x40 projection of the persistent 20x20 grid.
+	return clampApertureCell(value) * 2
 }
 
 // PersistRealtimeTribulationSnapshot copies authoritative live HP for the
@@ -324,13 +328,21 @@ func HandleRealtimeTribulationPlayerDeath(ctx context.Context, death realtimewor
 		return nil
 	}
 	finishHandoff, abortHandoff, realtimeTransfer, status, _, message := beginTribulationHandoff(playerID)
-	if status == http.StatusServiceUnavailable {
+	if status != 0 {
 		return fmt.Errorf("tribulation death handoff unavailable: %s", message)
 	}
 	defer abortHandoff()
 
-	exitRegion, exitX, exitY := resolveApertureExitLocation(ctx, playerID)
-	if _, err := db.DB.ExecContext(ctx, `
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tribulation defeat exit: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	exitRegion, exitX, exitY, err := resolveApertureExitLocation(ctx, tx, playerID)
+	if err != nil {
+		return fmt.Errorf("resolve tribulation defeat exit: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
 		UPDATE players
 		SET hp = 1, active_combat = NULL,
 		    current_region = $1, world_zone_id = $1, map_instance_id = NULL,
@@ -339,6 +351,9 @@ func HandleRealtimeTribulationPlayerDeath(ctx context.Context, death realtimewor
 		WHERE id = $6
 	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID); err != nil {
 		return fmt.Errorf("persist defeated tribulation exit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit defeated tribulation exit: %w", err)
 	}
 	if status == 0 {
 		finishHandoff()
@@ -360,15 +375,25 @@ func RealtimeExitTribulation(c *gin.Context) {
 		return
 	}
 	finishHandoff, abortHandoff, realtimeTransfer, status, code, message := beginTribulationHandoff(playerID)
-	if status == http.StatusServiceUnavailable {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": code, "error": message})
+	if status != 0 {
+		c.JSON(status, gin.H{"code": code, "error": message})
 		return
 	}
 	defer abortHandoff()
 
 	ctx := c.Request.Context()
-	exitRegion, exitX, exitY := resolveApertureExitLocation(ctx, playerID)
-	_, err := db.DB.ExecContext(ctx, `
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu rời Tiên Khiếu"})
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+	exitRegion, exitX, exitY, exitErr := resolveApertureExitLocation(ctx, tx, playerID)
+	if exitErr != nil {
+		c.JSON(http.StatusConflict, gin.H{"code": "aperture_exit_unavailable", "error": exitErr.Error()})
+		return
+	}
+	_, err = tx.ExecContext(ctx, `
 		UPDATE players
 		SET active_combat = NULL, current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5,
 		    world_location_revision = world_location_revision + 1
@@ -376,6 +401,10 @@ func RealtimeExitTribulation(c *gin.Context) {
 	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khi rời khỏi Tiên Khiếu"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí trở về"})
 		return
 	}
 	if status == 0 {

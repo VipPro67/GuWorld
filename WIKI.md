@@ -236,7 +236,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - **Khi mới khai mở**, Tiên Khiếu được tạo sẵn 2-4 mỏ tài nguyên ngẫu nhiên (tuỳ phẩm cấp):
   - LOW: 2 mỏ, MID: 3 mỏ, HIGH/EXTREME: 4 mỏ.
   - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
-- Bản đồ Tiên Khiếu là lưới 20×20. Mỗi node trồng trọt, chăn nuôi hoặc khai thác có thể chiếm một vùng ô liền nhau; nhiều node cùng loại được phép đặt, nhưng mỗi ô chỉ thuộc một node.
+- Lưới xây dựng Tiên Khiếu là 20×20; map độ kiếp realtime là 40×40 và chiếu các vị trí theo tỷ lệ 2×. Mỗi node trồng trọt, chăn nuôi hoặc khai thác có thể chiếm một vùng ô liền nhau; nhiều node cùng loại được phép đặt, nhưng mỗi ô chỉ thuộc một node.
 - **Gieo giống:** đặt một khu trồng trọt/chăn nuôi/khai thác cần tiêu hao **100** chính vật phẩm định sản xuất (`prod_key`) làm hạt giống, **giống nhau ở mọi rank**. Mỏ khởi tạo sẵn thì miễn giống; muốn nhân giống loại mới phải kiếm được loại đó (loot/shop) trước. Giống **không được hoàn** khi tháo dỡ.
 - **Sản lượng mỗi lần thu** (do server tính, gửi kèm trong `yield_preview` của `GET /immortal-aperture/nodes`):
   `sản lượng = max(10, 10 × min(50, hệ số cấp × hệ số Đạo Ngân × hệ số diện tích × xung đột × sinh thái × lao động × dân số))`

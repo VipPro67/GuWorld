@@ -80,10 +80,7 @@ func main() {
 		realtimeStartupError = err.Error()
 		logger.S.Warnf("Realtime world rollout config is invalid; keeping admission disabled: %v", err)
 	} else if realtimeConfig.Enabled {
-		if len(realtimeConfig.ZoneIDs) == 0 {
-			realtimeStartupError = "REALTIME_WORLD_ENABLED=true but MMO_ZONE_IDS is empty"
-		}
-		logger.S.Infof("Realtime world rollout configured (zones=%d, allowlisted_players=%d, max_players_per_zone=%d); join also requires enabled client flag and matching map/content versions", len(realtimeConfig.ZoneIDs), len(realtimeConfig.PlayerAllowlist), realtimeConfig.MaxPlayersPerZone)
+		logger.S.Infof("Realtime world rollout configured (zones=%d plus private tribulation map, allowlisted_players=%d, max_players_per_zone=%d); join also requires enabled client flag and matching map/content versions", len(realtimeConfig.ZoneIDs), len(realtimeConfig.PlayerAllowlist), realtimeConfig.MaxPlayersPerZone)
 	} else {
 		realtimeStartupError = "REALTIME_WORLD_ENABLED is false"
 		logger.S.Info("Realtime world rollout is disabled")
@@ -208,17 +205,22 @@ func main() {
 	var realtimeWorldManager *realtimeworld.Manager
 	var compiledGuCatalog *realtimeeffects.CompiledCatalog
 	var realtimeStateStore *persistence.Service
-	if realtimeConfig.Enabled && len(realtimeConfig.ZoneIDs) > 0 {
+	var tribulationMapLoadErr error
+	if realtimeConfig.Enabled {
 		instances := realtimeConfig.InstancesPerZone
 		if instances < 1 {
 			instances = 1
 		}
-		zoneIDs := expandRealtimeZoneIDs(realtimeConfig.ZoneIDs, realtimeConfig.MapDir, realtimeConfig.MapVersion, realtimeConfig.ContentVersion)
+		configuredZoneIDs := expandRealtimeZoneIDs(realtimeConfig.ZoneIDs, realtimeConfig.MapDir, realtimeConfig.MapVersion, realtimeConfig.ContentVersion)
+		zoneIDs := make(map[string]struct{}, len(configuredZoneIDs)+1)
+		for mapID := range configuredZoneIDs {
+			zoneIDs[mapID] = struct{}{}
+		}
+		// aperture_tribulation is loaded as a private per-event map even when it
+		// is intentionally absent from MMO_ZONE_IDS.
+		zoneIDs["aperture_tribulation"] = struct{}{}
 		logger.S.Infof("Realtime world maps enabled: %d (phaser_client=%v, map_version=%q, content_version=%q)",
 			len(zoneIDs), realtimeConfig.PhaserClientEnabled, realtimeConfig.MapVersion, realtimeConfig.ContentVersion)
-		if len(zoneIDs) == 0 {
-			logger.S.Errorf("MMO_ZONE_IDS expanded to 0 maps: check MMO_ZONE_IDS, MMO_MAP_DIR and that MMO_MAP_VERSION/MMO_CONTENT_VERSION match the JSON map headers")
-		}
 		zoneKeys := make([]sim.ZoneKey, 0, len(zoneIDs)*instances)
 		for mapID := range zoneIDs {
 			for index := 0; index < instances; index++ {
@@ -270,6 +272,10 @@ func main() {
 				mapPath := resolveRealtimeMapPath(realtimeConfig.MapDir, key.MapID)
 				loadedMap, mapErr := nav.LoadFile(mapPath)
 				if mapErr != nil {
+					if key.MapID == "aperture_tribulation" {
+						tribulationMapLoadErr = fmt.Errorf("private tribulation map %q could not be loaded from %s: %w", key.MapID, mapPath, mapErr)
+						continue
+					}
 					if errors.Is(mapErr, os.ErrNotExist) {
 						mapLoadErr = fmt.Errorf("configured realtime map %q not found at %s", key.MapID, mapPath)
 					} else {
@@ -278,10 +284,18 @@ func main() {
 					break
 				}
 				if realtimeConfig.MapVersion != "" && loadedMap.Version != realtimeConfig.MapVersion {
+					if key.MapID == "aperture_tribulation" {
+						tribulationMapLoadErr = fmt.Errorf("private tribulation map %q has version %q; MMO_MAP_VERSION requires %q", key.MapID, loadedMap.Version, realtimeConfig.MapVersion)
+						continue
+					}
 					mapLoadErr = fmt.Errorf("configured realtime map %q has version %q; MMO_MAP_VERSION requires %q", key.MapID, loadedMap.Version, realtimeConfig.MapVersion)
 					break
 				}
 				if realtimeConfig.ContentVersion != "" && loadedMap.ContentVersion != realtimeConfig.ContentVersion {
+					if key.MapID == "aperture_tribulation" {
+						tribulationMapLoadErr = fmt.Errorf("private tribulation map %q has content version %q; MMO_CONTENT_VERSION requires %q", key.MapID, loadedMap.ContentVersion, realtimeConfig.ContentVersion)
+						continue
+					}
 					mapLoadErr = fmt.Errorf("configured realtime map %q has content version %q; MMO_CONTENT_VERSION requires %q", key.MapID, loadedMap.ContentVersion, realtimeConfig.ContentVersion)
 					break
 				}
@@ -420,7 +434,10 @@ func main() {
 		} else {
 			realtimeStartupError = ""
 			realtimeWorldManager = manager
-			logger.S.Infof("Realtime world manager started with %d configured zones across %d checked maps (lazy worlds, 5m idle eviction); WebSocket join is guarded by allowlist and version gates", len(zoneKeys), len(mapArtifacts))
+			logger.S.Infof("Realtime world manager started with %d configured/private zones across %d checked maps (lazy worlds, 5m idle eviction); WebSocket join is guarded by allowlist and version gates", len(zoneKeys), len(mapArtifacts))
+			if tribulationMapLoadErr != nil {
+				logger.S.Errorf("Realtime tribulation event map unavailable: %v", tribulationMapLoadErr)
+			}
 		}
 	}
 	handlers.SetRealtimeRuntimeError(realtimeStartupError)
@@ -485,6 +502,9 @@ func main() {
 	realtimeAdmission.SetStateStore(realtimeStateStore)
 	if realtimeWorldManager != nil {
 		realtimeAdmission.SetTribulationZoneLoader(func(loadCtx context.Context, playerID uuid.UUID) (sim.ZoneKey, realtimeworld.ZoneMap, bool, error) {
+			if tribulationMapLoadErr != nil {
+				return sim.ZoneKey{}, realtimeworld.ZoneMap{}, false, tribulationMapLoadErr
+			}
 			base, ok := realtimeWorldManager.BaseZoneMap("aperture_tribulation")
 			if !ok {
 				return sim.ZoneKey{}, realtimeworld.ZoneMap{}, false, fmt.Errorf("aperture_tribulation map is not configured")
