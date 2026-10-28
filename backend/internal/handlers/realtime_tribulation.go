@@ -315,6 +315,41 @@ func HandleRealtimeTribulationDeath(ctx context.Context, death realtimeworld.Dea
 	return nil
 }
 
+// HandleRealtimeTribulationPlayerDeath exits a defeated character without a
+// death drop. The event stays ACTIVE; the saved pre-tribulation position is
+// reused and HP is restored to 1 so the character can recover.
+func HandleRealtimeTribulationPlayerDeath(ctx context.Context, death realtimeworld.DeathEvent) error {
+	playerID, err := uuid.Parse(string(death.TargetID))
+	if err != nil {
+		return nil
+	}
+	finishHandoff, abortHandoff, realtimeTransfer, status, _, message := beginTribulationHandoff(playerID)
+	if status == http.StatusServiceUnavailable {
+		return fmt.Errorf("tribulation death handoff unavailable: %s", message)
+	}
+	defer abortHandoff()
+
+	exitRegion, exitX, exitY := resolveApertureExitLocation(ctx, playerID)
+	if _, err := db.DB.ExecContext(ctx, `
+		UPDATE players
+		SET hp = 1, active_combat = NULL,
+		    current_region = $1, world_zone_id = $1, map_instance_id = NULL,
+		    world_x = $2, world_y = $3, world_safe_x = $2, world_safe_y = $3,
+		    x = $4, y = $5, world_location_revision = world_location_revision + 1
+		WHERE id = $6
+	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID); err != nil {
+		return fmt.Errorf("persist defeated tribulation exit: %w", err)
+	}
+	if status == 0 {
+		finishHandoff()
+	}
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	notify.Send(db.DB, playerID, "tribulation_defeat", "Kiệt Sức Trong Tiên Khiếu",
+		"Đạo hữu đã kiệt sức trước quái tai kiếp và được đưa về vị trí cũ. Không rơi rớt vật phẩm.")
+	logger.S.Infof("Realtime tribulation defeat exit for %s (realtime=%v)", playerID, realtimeTransfer)
+	return nil
+}
+
 // RealtimeExitTribulation always returns the character to the saved aperture
 // exit. Unlike realtime-escape it does not need an event ID, so it also works
 // after a refresh, an expired event or a party/UI desync.

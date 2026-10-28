@@ -47,6 +47,7 @@ type DeathEvent struct {
 	TemplateID   string
 	PersistentID string
 	IsNode       bool
+	TargetKind   string
 }
 
 // Region-local rollout loads one independent world per active KHU_VUC/SAFE_ZONE.
@@ -1165,7 +1166,17 @@ func (m *Manager) broadcastSnapshots(ctx context.Context, zone *managedZone, don
 
 func (m *Manager) enqueueDeaths(zone *managedZone, snapshot sim.Snapshot) {
 	for _, event := range snapshot.Events {
-		if event.Type != "ENTITY_DIED" || event.TemplateID == "" || event.SourceID == "" {
+		if event.Type != "ENTITY_DIED" {
+			continue
+		}
+		playerDeath := event.TargetKind == string(sim.EntityPlayer)
+		if playerDeath {
+			// Only aperture deaths need the realtime exit path; other player
+			// deaths keep their existing legacy/MMO handling.
+			if snapshot.ZoneKey.MapID != "aperture_tribulation" {
+				continue
+			}
+		} else if event.TemplateID == "" || event.SourceID == "" {
 			continue
 		}
 		death := DeathEvent{
@@ -1174,6 +1185,7 @@ func (m *Manager) enqueueDeaths(zone *managedZone, snapshot sim.Snapshot) {
 			SourceID: sim.EntityID(event.SourceID), TargetID: sim.EntityID(event.TargetID), TemplateID: event.TemplateID,
 			PersistentID: event.PersistentID,
 			IsNode:       len(event.TargetID) > 2 && event.TargetID[:2] == "n:",
+			TargetKind:   event.TargetKind,
 		}
 		select {
 		case m.deathQueue <- death:

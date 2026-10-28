@@ -449,9 +449,10 @@ func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uui
 	return result, 0, nil
 }
 
-// resolveApertureExitLocation determines where the player exits to:
-// If aperture is placed in world (is_placed == true), exit to (placed_region, placed_x, placed_y).
-// Otherwise, exit to return_region (saved before entering Aperture), fallback to hub_nam_cuong.
+// resolveApertureExitLocation returns the saved pre-tribulation position. A
+// hub_* region is never used as an exit: if the old position was a hub, the
+// placed region (when non-hub) or the nearest active non-hub KHU_VUC/SAFE_ZONE
+// is used instead.
 func resolveApertureExitLocation(ctx context.Context, playerID uuid.UUID) (region string, x float64, y float64) {
 	region = "hub_nam_cuong"
 	x, y = 500, 500
@@ -465,30 +466,69 @@ func resolveApertureExitLocation(ctx context.Context, playerID uuid.UUID) (regio
 		FROM immortal_apertures
 		WHERE player_id = $1
 	`, playerID).Scan(&isPlaced, &placedRegion, &placedX, &placedY, &returnRegion, &returnX, &returnY)
+	if err != nil {
+		return
+	}
 
-	if err == nil {
-		if isPlaced && placedRegion.Valid && placedRegion.String != "" {
-			region = placedRegion.String
-			if placedX.Valid {
-				x = placedX.Float64
-			}
-			if placedY.Valid {
-				y = placedY.Float64
-			}
-			return
+	returnValid := returnRegion.Valid && returnRegion.String != ""
+	placedValid := isPlaced && placedRegion.Valid && placedRegion.String != ""
+	if returnValid && isUsableExitRegion(returnRegion.String) {
+		region = returnRegion.String
+		if returnX.Valid {
+			x = returnX.Float64
 		}
-		if returnRegion.Valid && returnRegion.String != "" {
-			region = returnRegion.String
-			if returnX.Valid {
-				x = returnX.Float64
-			}
-			if returnY.Valid {
-				y = returnY.Float64
-			}
-			return
+		if returnY.Valid {
+			y = returnY.Float64
 		}
+		return
+	}
+	if placedValid && isUsableExitRegion(placedRegion.String) {
+		region = placedRegion.String
+		if placedX.Valid {
+			x = placedX.Float64
+		}
+		if placedY.Valid {
+			y = placedY.Float64
+		}
+		return
+	}
+
+	// Both saved positions are missing or hubs. Anchor on the hub that would
+	// otherwise have been used, then pick the closest detailed non-hub region.
+	anchor := ""
+	switch {
+	case returnValid:
+		anchor = returnRegion.String
+	case placedValid:
+		anchor = placedRegion.String
+	default:
+		_ = db.DB.QueryRowContext(ctx, `SELECT COALESCE(current_region, '') FROM players WHERE id = $1`, playerID).Scan(&anchor)
+	}
+	var atlasX, atlasY int
+	if anchor != "" {
+		_ = db.DB.QueryRowContext(ctx, `SELECT COALESCE(atlas_x, 0), COALESCE(atlas_y, 0) FROM regions WHERE id = $1`, anchor).Scan(&atlasX, &atlasY)
+	}
+	if err := db.DB.QueryRowContext(ctx, `
+		SELECT r.id, COALESCE(r.entry_x, 500), COALESCE(r.entry_y, 500)
+		FROM regions r
+		JOIN region_world_maps rwm ON rwm.region_id = r.id
+		WHERE r.is_active = TRUE
+		  AND r.id NOT LIKE 'hub\_%'
+		  AND r.zone_type IN ('KHU_VUC', 'SAFE_ZONE')
+		ORDER BY (POWER(r.atlas_x - $1, 2) + POWER(r.atlas_y - $2, 2)), r.id
+		LIMIT 1
+	`, atlasX, atlasY).Scan(&region, &x, &y); err != nil {
+		region, x, y = "hub_nam_cuong", 500, 500
 	}
 	return
+}
+
+func isHubRegion(regionID string) bool {
+	return strings.HasPrefix(regionID, "hub_")
+}
+
+func isUsableExitRegion(regionID string) bool {
+	return regionID != "" && regionID != "aperture_tribulation" && !isHubRegion(regionID)
 }
 
 // RealtimeEscapeTribulation teleports player out of the tribulation map back to safe exit position.

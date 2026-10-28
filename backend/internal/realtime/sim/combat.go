@@ -846,7 +846,7 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 	target.Combat.Pending = nil
 	target.AI.Threat = ""
 	target.AI.PatrolTarget = nil
-	w.emitEvent(combat.Event{Type: combat.EventEntityDied, SourceID: sourceID, TargetID: string(target.ID), SkillID: skillID, X: target.Transform.Position.X, Y: target.Transform.Position.Y, TemplateID: target.AI.TemplateID, PersistentID: target.AI.PersistentID})
+	w.emitEvent(combat.Event{Type: combat.EventEntityDied, SourceID: sourceID, TargetID: string(target.ID), SkillID: skillID, X: target.Transform.Position.X, Y: target.Transform.Position.Y, TemplateID: target.AI.TemplateID, PersistentID: target.AI.PersistentID, TargetKind: string(target.Kind)})
 	if target.Kind == EntityMonster && target.AI.Active {
 		target.AI.State = AIDead
 		if !target.AI.NoRespawn {

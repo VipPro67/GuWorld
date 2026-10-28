@@ -1524,7 +1524,10 @@ func TestRegisterZoneMapActivatesRuntimeEventInstance(t *testing.T) {
 	eventKey := sim.ZoneKey{MapID: "event-map", InstanceID: "event-uuid", RulesetVersion: "v1"}
 	eventMap := ZoneMap{
 		Width: 20, Height: 20, Hash: "event-map-hash",
-		Monsters: []MonsterSpawn{lazyMonsterSpawn(5, 5, 50)},
+		Monsters: []MonsterSpawn{
+			lazyMonsterSpawn(5, 5, 50),
+			{TemplateID: "aperture_node", Name: "Node", X: 8, Y: 8, MaxHP: 100, Speed: 0, Radius: 0.6, Node: true, NoRespawn: true},
+		},
 	}
 	if err := manager.RegisterZoneMap(eventKey, eventMap); err != nil {
 		t.Fatal(err)
@@ -1552,7 +1555,7 @@ func TestRegisterZoneMapActivatesRuntimeEventInstance(t *testing.T) {
 				monsters++
 			}
 		}
-		if monsters == 1 {
+		if monsters == 2 {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)

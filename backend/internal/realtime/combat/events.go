@@ -38,4 +38,5 @@ type Event struct {
 	Reason        string
 	TemplateID    string
 	PersistentID  string
+	TargetKind    string
 }

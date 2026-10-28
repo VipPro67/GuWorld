@@ -350,6 +350,16 @@ func main() {
 			}
 			lootSvc := realloot.NewService(db.DB, inventorySvc)
 			manager.SetDeathHandler(func(callCtx context.Context, death realtimeworld.DeathEvent) {
+				if death.TargetKind == string(sim.EntityPlayer) {
+					if death.ZoneKey.MapID == "aperture_tribulation" {
+						tribCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+						if err := handlers.HandleRealtimeTribulationPlayerDeath(tribCtx, death); err != nil {
+							logger.S.Errorf("Realtime tribulation player death handling failed for %s: %v", death.TargetID, err)
+						}
+						cancel()
+					}
+					return
+				}
 				if death.ZoneKey.MapID == "aperture_tribulation" {
 					tribCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					if err := handlers.HandleRealtimeTribulationDeath(tribCtx, death); err != nil {

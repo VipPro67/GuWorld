@@ -217,8 +217,8 @@ func (w *World) ConfigureMonsterSpawns(spawns []Entity) error {
 		return fmt.Errorf("%w: catalog has %d entries, maximum is %d", ErrInvalidEntity, len(spawns), MaxMonsterSpawnCatalog)
 	}
 	for _, spawn := range spawns {
-		if spawn.Kind != EntityMonster || !spawn.AI.Active {
-			return fmt.Errorf("%w: spawn catalog entries must be AI monsters", ErrInvalidEntity)
+		if spawn.Kind != EntityMonster {
+			return fmt.Errorf("%w: spawn catalog entries must be monsters", ErrInvalidEntity)
 		}
 	}
 	if err := validateSetupEntities(w.collision, spawns, nil); err != nil {
@@ -781,7 +781,9 @@ func (w *World) updateMonsterSpawnsLocked() bool {
 			continue
 		}
 		entity := slot.prototype
-		entity.Vitals.HP = entity.Vitals.MaxHP
+		if entity.Vitals.HP <= 0 || entity.Vitals.HP > entity.Vitals.MaxHP {
+			entity.Vitals.HP = entity.Vitals.MaxHP
+		}
 		entity.Transform.Position = entity.AI.Home
 		entity.AI.State = AIIdle
 		entity.AI.RespawnTick = 0

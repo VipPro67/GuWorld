@@ -35,6 +35,25 @@ func TestTribulationNodeDamage(t *testing.T) {
 	}
 }
 
+func TestIsHubRegion(t *testing.T) {
+	for _, id := range []string{"hub_nam_cuong", "hub_thuong_gia_thanh", "hub_tay_mac"} {
+		if !isHubRegion(id) {
+			t.Errorf("isHubRegion(%q) = false, want true", id)
+		}
+	}
+	for _, id := range []string{"thanh_mao_son", "tan_thu_coc_nam_cuong", "aperture_tribulation"} {
+		if isHubRegion(id) {
+			t.Errorf("isHubRegion(%q) = true, want false", id)
+		}
+	}
+	if isUsableExitRegion("aperture_tribulation") {
+		t.Error("aperture_tribulation must not be an exit region")
+	}
+	if !isUsableExitRegion("thanh_mao_son") {
+		t.Error("thanh_mao_son should be a usable exit region")
+	}
+}
+
 func TestClampApertureCell(t *testing.T) {
 	cases := map[int]float64{-1: 2, 0: 2, 1: 2, 2: 2, 10: 10, 17: 17, 18: 17, 19: 17, 99: 17}
 	for in, want := range cases {
