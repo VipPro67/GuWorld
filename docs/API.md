@@ -178,7 +178,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/teleport/mine` | Lấy danh sách các Trận Pháp do bản thân hoặc Tông Môn sở hữu. |
 | POST | `/teleport/build` | Bố trí Trận Pháp mới tại toạ độ hiện tại. Body: `{"name","tier","direction_type","access_policy","fee_enabled","fee_currency","fee_amount"}`. |
 | GET | `/teleport/directory` | Lấy danh bạ các điểm truyền tống khả dụng từ Trận Pháp mà người chơi đang đứng (lọc cự ly, hướng kết nối, quyền riêng tư, phí). |
-| POST | `/teleport/travel` | Kích hoạt truyền tống đến trận pháp đích. Body: `{"target_array_id": "uuid"}`. Kiểm tra cấm chế teleport và điều kiện rank/Cổ tại khu đích; không dùng được trong bí cảnh. Trừ phí (95% vào két sắt trận, 5% hao tán), giảm 1 độ bền, áp dụng debuff Giới Vực Bích nếu nhảy xuyên vực. |
+| POST | `/teleport/travel` | Kích hoạt truyền tống đến trận pháp đích. Body: `{"target_array_id": "uuid"}`. Kiểm tra cấm chế teleport và điều kiện rank/Cổ tại khu đích; không dùng được trong bí cảnh. Trừ phí (95% vào két sắt trận, 5% hao tán), giảm 1 độ bền, áp dụng debuff Giới Vực Bích nếu nhảy xuyên vực. Nhân vật đang được realtime world điều khiển vẫn dùng được: backend tạm dừng checkpoint, đồng bộ vị trí live, commit đích rồi nhả lease; response có `realtime_transfer: true` để client reconnect vào zone đích. |
 | POST | `/teleport/manage` | Thay đổi tên, hướng (hai chiều/1 chiều), quyền (`PUBLIC`/`SECT`/`PERSONAL`), bật/tắt phí và mức giá vé. |
 | POST | `/teleport/repair` | Tiêu hao Nguyên Thạch phục hồi độ bền trận pháp. Body: `{"array_id": "uuid", "amount": 10}`. |
 | POST | `/teleport/withdraw` | Rút số dư doanh thu từ Két Sắt (`vault_balance`) về túi đồ của chủ sở hữu. Body: `{"array_id": "uuid", "amount": 0}` (0 = rút tất cả). |

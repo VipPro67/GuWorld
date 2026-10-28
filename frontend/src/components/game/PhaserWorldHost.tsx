@@ -122,6 +122,7 @@ interface PhaserWorldHostProps {
 export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostProps) {
   const setView = useUIStore((state) => state.setView);
   const player = useGameStore((state) => state.player);
+  const worldReconnectToken = useGameStore((state) => state.worldReconnectToken);
   const isDivinationModalOpen = useGameStore((state) => state.isDivinationModalOpen);
   const savedCombatSettings = useGameStore((state) => state.combatSettings);
   const currentCombatSettings = savedCombatSettings ?? player?.combat_settings ?? null;
@@ -184,28 +185,40 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
 
   const lastEquippedGusRef = useRef<string>(JSON.stringify(player?.equipped_gus ?? []));
   const lastRegionRef = useRef<string>(player?.current_region ?? "");
+  const lastReconnectTokenRef = useRef<number>(worldReconnectToken);
   useEffect(() => {
-    if (!worldActive) return;
+    if (!worldActive) {
+      lastReconnectTokenRef.current = worldReconnectToken;
+      return;
+    }
 
     const currentSerialized = JSON.stringify(player?.equipped_gus ?? []);
     const region = player?.current_region ?? "";
 
     const regionChanged = lastRegionRef.current !== "" && lastRegionRef.current !== region;
     const gusChanged = lastEquippedGusRef.current !== currentSerialized;
+    const reconnectRequested = lastReconnectTokenRef.current !== worldReconnectToken;
 
     lastRegionRef.current = region;
     lastEquippedGusRef.current = currentSerialized;
+    lastReconnectTokenRef.current = worldReconnectToken;
 
     if (regionChanged) {
       if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
         void runtimeRef.current.reconnectTo(region);
+      }
+    } else if (reconnectRequested) {
+      // Server-owned teleport released the old lease without changing region
+      // (same-map jump); rejoin the current zone so the new position is loaded.
+      if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
+        void runtimeRef.current.reconnect();
       }
     } else if (gusChanged) {
       if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
         void runtimeRef.current.reconnect();
       }
     }
-  }, [player?.equipped_gus, player?.current_region, worldActive]);
+  }, [player?.equipped_gus, player?.current_region, worldActive, worldReconnectToken]);
 
   useEffect(() => {
     const host = hostRef.current;

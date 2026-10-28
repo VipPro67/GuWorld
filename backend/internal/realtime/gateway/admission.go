@@ -520,6 +520,107 @@ func (a *Admission) MoveTarget(playerID, controllerID uuid.UUID, target protocol
 	})
 }
 
+// BeginTeleport flushes the live character and pauses zone checkpoints so a
+// legacy HTTP teleport can read the real position, validate costs and persist
+// the destination in one transaction. The lease is released by FinishTeleport
+// once the destination commit succeeded, or resumed by AbortTeleport.
+func (a *Admission) BeginTeleport(playerID uuid.UUID) (bool, error) {
+	a.mu.Lock()
+	var controllerID uuid.UUID
+	var active session
+	found := false
+	for id, candidate := range a.sessions {
+		if candidate.playerID != playerID || candidate.closing || candidate.transferring {
+			continue
+		}
+		candidate.transferring = true
+		candidate.lastTransferAt = time.Now()
+		a.sessions[id] = candidate
+		controllerID, active, found = id, candidate, true
+		break
+	}
+	a.mu.Unlock()
+	if !found {
+		return false, nil
+	}
+	if err := a.flushState(active); err != nil {
+		a.finishFailedTransfer(active, controllerID)
+		return false, err
+	}
+	return true, nil
+}
+
+// PlayerLocation returns the live region and legacy-projected position for a
+// zone-owned character. Legacy HTTP reads (teleport directory) use it instead
+// of the periodic checkpoint coordinates.
+func (a *Admission) PlayerLocation(playerID uuid.UUID) (string, int, int, bool) {
+	a.mu.Lock()
+	var active session
+	found := false
+	for _, candidate := range a.sessions {
+		if candidate.playerID == playerID && !candidate.closing {
+			active, found = candidate, true
+			break
+		}
+	}
+	a.mu.Unlock()
+	if !found {
+		return "", 0, 0, false
+	}
+	snapshot, err := a.manager.SnapshotForLease(active.lease)
+	if err != nil {
+		return "", 0, 0, false
+	}
+	for _, entity := range snapshot.Entities {
+		if entity.CharacterID != active.lease.CharacterID {
+			continue
+		}
+		x, y, ok := a.manager.LocalToLegacy(active.lease.ZoneKey, entity.Transform.Position)
+		if !ok {
+			return "", 0, 0, false
+		}
+		return active.regionID, int(math.Round(x)), int(math.Round(y)), true
+	}
+	return "", 0, 0, false
+}
+
+// AbortTeleport resumes periodic checkpoints after a refused teleport.
+func (a *Admission) AbortTeleport(playerID uuid.UUID) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for controllerID, active := range a.sessions {
+		if active.playerID == playerID && active.transferring {
+			active.transferring = false
+			a.sessions[controllerID] = active
+		}
+	}
+}
+
+// FinishTeleport releases the suspended lease and session after the legacy
+// teleport persisted the new region and position. The client rejoins the
+// destination zone with a fresh lease.
+func (a *Admission) FinishTeleport(playerID uuid.UUID) {
+	a.mu.Lock()
+	var lease realtimeworld.OwnershipLease
+	found := false
+	for controllerID, active := range a.sessions {
+		if active.playerID != playerID {
+			continue
+		}
+		lease = active.lease
+		delete(a.sessions, controllerID)
+		found = true
+		break
+	}
+	a.mu.Unlock()
+	if !found {
+		return
+	}
+	if !a.manager.LeaveCharacter(lease) {
+		logger.S.Warnf("Realtime teleport left a stale lease for %s; disconnect will retry release", playerID)
+	}
+}
+
 // TransferAtEdge performs the authoritative border handoff for one owned
 // character. The destination zone and map-local arrival are resolved from the
 // source map's authored edge portal; the caller only supplies the authoritative

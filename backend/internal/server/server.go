@@ -373,6 +373,17 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 	if len(realtimeAdmission) > 0 {
 		worldAdmission = realtimeAdmission[0]
 	}
+	if worldAdmission != nil {
+		middleware.SetRealtimeTeleportBridge(&middleware.RealtimeTeleportBridge{
+			Begin:  worldAdmission.BeginTeleport,
+			Abort:  worldAdmission.AbortTeleport,
+			Finish: worldAdmission.FinishTeleport,
+		})
+		middleware.SetRealtimeLocationReader(worldAdmission.PlayerLocation)
+	} else {
+		middleware.SetRealtimeTeleportBridge(nil)
+		middleware.SetRealtimeLocationReader(nil)
+	}
 	if shub != nil {
 		handlers.SetWSStatsProvider(shub.GetStats)
 		handlers.SetWSConnectedProvider(shub.IsConnected)

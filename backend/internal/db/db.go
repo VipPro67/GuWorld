@@ -2089,8 +2089,8 @@ func seedRegionsFromCSV(filename string) error {
 		if item.worldMapID != "" {
 			// Region-local MMO maps are generated artifacts. Register their catalogue
 			// rows before assigning the FK so importing Region.csv is sufficient to
-			// activate the KHU_VUC/SAFE_ZONE map bindings.
-			if item.worldMapID == item.id && (item.zoneType == "KHU_VUC" || item.zoneType == "SAFE_ZONE") {
+			// activate the KHU_VUC/SAFE_ZONE/TRIBULATION map bindings.
+			if item.worldMapID == item.id && (item.zoneType == "KHU_VUC" || item.zoneType == "SAFE_ZONE" || item.zoneType == "TRIBULATION") {
 				if err := registerGeneratedRegionMap(item.id, item.name, item.minRank, item.maxRank); err != nil {
 					return fmt.Errorf("register realtime map for region %s: %w", item.id, err)
 				}

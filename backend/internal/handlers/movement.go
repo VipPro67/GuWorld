@@ -65,6 +65,11 @@ type movementSpec struct {
 	x, y         int
 	hasTarget    bool
 	targetRegion string
+	// realtimeAuthorized is set only after a handler suspended the live zone
+	// session for this exact mutation (currently the teleport array handoff).
+	// Every other guard still runs; only the realtime-ownership refusal is
+	// skipped because the caller already coordinated with the lease.
+	realtimeAuthorized bool
 }
 
 // movementError is the only failure shape the chain returns for guard
@@ -118,7 +123,9 @@ func validateMovementState(player *models.Player, spec movementSpec, ownedByReal
 
 // checkMovement runs the full guard for a player-initiated movement.
 func checkMovement(tx *sql.Tx, player *models.Player, spec movementSpec) error {
-	if err := validateMovementState(player, spec, middleware.IsRealtimeWorldOwned(player.ID)); err != nil {
+	authorizedHandoff := spec.realtimeAuthorized && spec.kind == movementTeleport
+	ownedByRealtime := middleware.IsRealtimeWorldOwned(player.ID) && !authorizedHandoff
+	if err := validateMovementState(player, spec, ownedByRealtime); err != nil {
 		return err
 	}
 	policy, known := movementPolicies[spec.kind]

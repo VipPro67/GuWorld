@@ -23,10 +23,25 @@ type realtimeVitalsBridge struct {
 	apply RealtimeHPApplier
 }
 
+// RealtimeTeleportBridge suspends the authoritative zone checkpoint for one
+// legacy HTTP teleport, then either releases the lease after the destination is
+// persisted or resumes normal checkpoints when the teleport is refused.
+type RealtimeTeleportBridge struct {
+	Begin  func(uuid.UUID) (bool, error)
+	Abort  func(uuid.UUID)
+	Finish func(uuid.UUID)
+}
+
 var (
 	realtimeOwnershipChecker atomic.Pointer[RealtimeOwnershipChecker]
 	realtimeVitals           atomic.Pointer[realtimeVitalsBridge]
+	realtimeTeleport         atomic.Pointer[RealtimeTeleportBridge]
+	realtimeLocation         atomic.Pointer[RealtimeLocationReader]
 )
+
+// RealtimeLocationReader reports the live region and legacy-projected position
+// of a character owned by a zone session.
+type RealtimeLocationReader func(uuid.UUID) (regionID string, x, y int, ok bool)
 
 // SetRealtimeOwnershipChecker installs the process-local ownership lookup.
 // Passing nil clears it; the server sets this once during startup.
@@ -52,6 +67,63 @@ func SetRealtimeVitalsBridge(read RealtimeHPReader, apply RealtimeHPApplier) {
 func IsRealtimeWorldOwned(playerID uuid.UUID) bool {
 	checker := realtimeOwnershipChecker.Load()
 	return checker != nil && (*checker)(playerID)
+}
+
+// SetRealtimeTeleportBridge installs the lease handoff used by legacy HTTP
+// teleport handlers. Passing nil clears it.
+func SetRealtimeTeleportBridge(bridge *RealtimeTeleportBridge) {
+	if bridge == nil || bridge.Begin == nil || bridge.Abort == nil || bridge.Finish == nil {
+		realtimeTeleport.Store(nil)
+		return
+	}
+	realtimeTeleport.Store(bridge)
+}
+
+// SetRealtimeLocationReader installs the live position lookup used by legacy
+// handlers that must read the character's MMO cell instead of the last
+// checkpoint. Passing nil clears it.
+func SetRealtimeLocationReader(reader RealtimeLocationReader) {
+	if reader == nil {
+		realtimeLocation.Store(nil)
+		return
+	}
+	realtimeLocation.Store(&reader)
+}
+
+// RealtimePlayerLocation returns the live region and legacy-projected position.
+// ok is false when the character has no active zone session.
+func RealtimePlayerLocation(playerID uuid.UUID) (regionID string, x, y int, ok bool) {
+	reader := realtimeLocation.Load()
+	if reader == nil {
+		return "", 0, 0, false
+	}
+	return (*reader)(playerID)
+}
+
+// BeginRealtimeTeleport suspends zone checkpoints and flushes the live position
+// so a legacy teleport reads the character's real coordinates. It reports
+// whether a live session was handed off.
+func BeginRealtimeTeleport(playerID uuid.UUID) (bool, error) {
+	bridge := realtimeTeleport.Load()
+	if bridge == nil {
+		return false, nil
+	}
+	return bridge.Begin(playerID)
+}
+
+// AbortRealtimeTeleport resumes checkpoints after a refused teleport.
+func AbortRealtimeTeleport(playerID uuid.UUID) {
+	if bridge := realtimeTeleport.Load(); bridge != nil {
+		bridge.Abort(playerID)
+	}
+}
+
+// FinishRealtimeTeleport releases the suspended lease after the teleport has
+// been persisted. The client is expected to rejoin the destination zone.
+func FinishRealtimeTeleport(playerID uuid.UUID) {
+	if bridge := realtimeTeleport.Load(); bridge != nil {
+		bridge.Finish(playerID)
+	}
 }
 
 // RealtimePlayerHP reads the live zone HP. It is false when the player is not

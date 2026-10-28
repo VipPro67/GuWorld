@@ -545,6 +545,11 @@ func GetTeleportDirectory(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player data"})
 		return
 	}
+	if region, x, y, ok := middleware.RealtimePlayerLocation(authID); ok {
+		// A zone-owned character checkpoints every few seconds; the directory
+		// must use the live cell or it misses the array the player is standing on.
+		player.CurrentRegion, player.X, player.Y = region, x, y
+	}
 
 	playerSectID := getPlayerSectID(nil, authID)
 
@@ -754,8 +759,30 @@ func TravelTeleport(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	if rejectRealtimeOwned(c, authID) {
-		return
+	realtimeTransfer := false
+	realtimeFinished := false
+	if middleware.IsRealtimeWorldOwned(authID) {
+		handedOff, handoffErr := middleware.BeginRealtimeTeleport(authID)
+		if handoffErr != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"code":  "realtime_checkpoint_unavailable",
+				"error": "Không thể tạm dừng điều khiển realtime để truyền tống, vui lòng thử lại.",
+			})
+			return
+		}
+		if !handedOff {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":  "realtime_world_owns_character",
+				"error": "Character is controlled by the realtime world",
+			})
+			return
+		}
+		realtimeTransfer = true
+		defer func() {
+			if !realtimeFinished {
+				middleware.AbortRealtimeTeleport(authID)
+			}
+		}()
 	}
 
 	var req models.TravelTeleportReq
@@ -863,8 +890,9 @@ func TravelTeleport(c *gin.Context) {
 		dest.SectID = &dSectID.String
 	}
 	if errMove := checkMovement(tx, &player, movementSpec{
-		kind:         movementTeleport,
-		targetRegion: dest.RegionID,
+		kind:               movementTeleport,
+		targetRegion:       dest.RegionID,
+		realtimeAuthorized: realtimeTransfer,
 	}); errMove != nil {
 		if respondMovementError(c, errMove) {
 			return
@@ -1009,6 +1037,24 @@ func TravelTeleport(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu vị trí mới của nhân vật"})
 		return
 	}
+	if realtimeTransfer {
+		// The destination must be projection-complete before the zone lease is
+		// released; otherwise admission would keep the old world_zone_id and
+		// reject the reconnect with realtime_map_mismatch. All region maps use
+		// the identity legacy transform (origin 0, scale 1), so players.x/y are
+		// also the destination map-local coordinates.
+		_, err = tx.Exec(`
+			UPDATE players
+			SET world_zone_id = $1, world_instance_id = '',
+			    world_x = $2, world_y = $3, world_safe_x = $2, world_safe_y = $3,
+			    world_location_revision = world_location_revision + 1
+			WHERE id = $4
+		`, player.CurrentRegion, player.X, player.Y, player.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu vị trí realtime của nhân vật"})
+			return
+		}
+	}
 
 	syncedMembers := SyncPartyMembersLocation(tx, &player)
 
@@ -1017,12 +1063,20 @@ func TravelTeleport(c *gin.Context) {
 		return
 	}
 
+	if realtimeTransfer {
+		// The destination is durable now; release the suspended lease so the
+		// client can rejoin the destination zone with a fresh session.
+		middleware.FinishRealtimeTeleport(authID)
+		realtimeFinished = true
+	}
+
 	broadcastPlayerWorldPos(&player)
 	publishPartyMovement(syncedMembers, publishPartyRealtimeEvent)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": logMsg,
-		"player":  player,
+		"message":           logMsg,
+		"player":            player,
+		"realtime_transfer": realtimeTransfer,
 	})
 }
 

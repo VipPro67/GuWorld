@@ -167,8 +167,11 @@ preview zone loops do not own player or monster entities.
   empty `InstanceID`; a non-empty isolated instance, including a future MMO
   session, does not activate that worker. It also skips characters with an
   active in-process realtime lease. Realtime-owned characters are also
-  rejected by the legacy movement, combat, loot, teleport, and websocket move
-  command paths. These guards activate only after an in-process lease exists.
+  rejected by the legacy movement, combat, loot, and websocket move command
+  paths. Teleport arrays are the exception: `/api/teleport/travel` flushes the
+  live position, persists the destination, releases the lease and asks the
+  client to rejoin the destination zone. These guards activate only after an
+  in-process lease exists.
 - `Manager.JoinCharacter`/`LeaveCharacter` pair in-memory player membership
   with a controller lease and enforce the zone capacity. `ReplaceCharacterLease`
   protects reconnects from stale tokens; entity add/remove is delivered through

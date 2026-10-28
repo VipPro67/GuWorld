@@ -50,6 +50,10 @@ type RealtimeWorldAdmission interface {
 	BasicAttack(playerID, controllerID uuid.UUID, attack protocol.Attack) error
 	SubscribeSnapshots(playerID, controllerID uuid.UUID) (<-chan sim.Snapshot, func(), error)
 	TransferAtEdge(playerID, controllerID uuid.UUID, position sim.Vec2) (protocol.Transfer, bool, error)
+	BeginTeleport(playerID uuid.UUID) (bool, error)
+	AbortTeleport(playerID uuid.UUID)
+	FinishTeleport(playerID uuid.UUID)
+	PlayerLocation(playerID uuid.UUID) (regionID string, x, y int, ok bool)
 	Leave(playerID, controllerID uuid.UUID) error
 	Disconnect(playerID, controllerID uuid.UUID)
 }

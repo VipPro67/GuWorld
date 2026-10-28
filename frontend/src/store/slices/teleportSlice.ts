@@ -210,6 +210,11 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       if (data.player) {
         get().setPlayerFromServer(data.player);
       }
+      if (data.realtime_transfer) {
+        // The backend released the realtime lease after persisting the
+        // teleport; rejoin the destination zone with a fresh session.
+        get().requestWorldReconnect();
+      }
       await get().fetchTeleportDirectory();
       return { success: true, message: data.message };
     } catch (caught: unknown) {

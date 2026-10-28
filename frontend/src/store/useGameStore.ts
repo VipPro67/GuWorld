@@ -1188,6 +1188,8 @@ interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlic
   playerRevision: number;
   beginAction: (key: string) => boolean;
   endAction: (key: string) => void;
+  worldReconnectToken: number;
+  requestWorldReconnect: () => void;
   isActionPending: (key: string) => boolean;
   error: string | null;
   logs: string[];
@@ -1726,6 +1728,8 @@ export const useGameStore = create<GameState>((set, get) => {
     return { pendingActions, actionLoading: Object.keys(pendingActions).length > 0 };
   }),
   isActionPending: (key) => !!get().pendingActions[key],
+  worldReconnectToken: 0,
+  requestWorldReconnect: () => set((state) => ({ worldReconnectToken: state.worldReconnectToken + 1 })),
   error: null,
   playerEventsConnected: false,
   playerEventsRetries: 0,

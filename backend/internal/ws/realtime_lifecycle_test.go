@@ -67,6 +67,13 @@ func (f *fakeRealtimeAdmission) TransferAtEdge(_, _ uuid.UUID, _ sim.Vec2) (prot
 	return protocol.Transfer{}, false, nil
 }
 
+func (f *fakeRealtimeAdmission) BeginTeleport(_ uuid.UUID) (bool, error) { return false, nil }
+func (f *fakeRealtimeAdmission) AbortTeleport(_ uuid.UUID)               {}
+func (f *fakeRealtimeAdmission) FinishTeleport(_ uuid.UUID)              {}
+func (f *fakeRealtimeAdmission) PlayerLocation(_ uuid.UUID) (string, int, int, bool) {
+	return "", 0, 0, false
+}
+
 func (f *fakeRealtimeAdmission) SubscribeSnapshots(_, _ uuid.UUID) (<-chan sim.Snapshot, func(), error) {
 	return make(chan sim.Snapshot), func() {}, nil
 }
