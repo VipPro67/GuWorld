@@ -246,6 +246,9 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/tribulations/active` |
 | POST | `/tribulations/:eventId/engage` | Xuất trận chống quái tai kiếp — tạo `active_combat` (nhiều địch, `enemy_type` = `TRIBULATION_BOSS`/`TRIBULATION_MONSTER`) rồi đánh qua combat UI thông thường (`/combat/start`). Giáp + máu người chơi tiêu hao trước, sát thương tràn sẽ trừ `immortal_apertures.aperture_hp`. |
 | POST | `/tribulations/:eventId/resolve` |
+| POST | `/tribulations/:eventId/realtime-engage` | Chuyển nhân vật vào map realtime `aperture_tribulation` và trả danh sách node/quái. Nếu nhân vật đang có lease realtime, backend flush vị trí live, ghi đích rồi nhả lease để client join lại map kiếp (tránh checkpoint zone cũ ghi đè region). |
+| POST | `/tribulations/:eventId/realtime-victory` | Kết toán thắng kiếp, cộng Đạo Ngân, đột phá nếu đủ điều kiện và đưa nhân vật về vị trí vào kiếp/điểm đặt Tiên Khiếu. Áp dụng cùng cơ chế bàn giao lease realtime. |
+| POST | `/tribulations/:eventId/realtime-escape` | Rút lui khỏi map kiếp về vị trí an toàn, áp dụng cùng cơ chế bàn giao lease realtime. |
 
 `POST /immortal-aperture/nodes` accepts `{node_type, x, y, path, prod_key, cells}`. `cells` is a connected array of `{x,y}` cells on the 20×20 grid; omitted `cells` means the single anchor cell. The seed cost is `ApertureNodeTemplate.seed_amount` (100) for every rank. Resource zones are capped at `min(area_size / 100000, 200)` per aperture.
 

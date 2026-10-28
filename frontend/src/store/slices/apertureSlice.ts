@@ -1129,10 +1129,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Vượt kiếp thành công!", "success");
       get().addLog(data.message || "Vượt kiếp thành công.");
-      await get().fetchAperture(true);
-      await get().fetchDaoMarks(true);
-      await get().fetchApertureNodes(true);
-      set({ activeTribulation: null });
+      // Rejoin the exit zone immediately: the backend has already released the
+      // aperture lease, so waiting for the panel refreshes leaves the character
+      // detached from any live zone.
       if (get().player) {
         get().setPlayerFromServer({
           current_region: (data.return_region as string) || "hub_nam_cuong",
@@ -1140,6 +1139,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           y: typeof data.return_y === "number" ? data.return_y : 500,
         });
       }
+      await get().fetchAperture(true);
+      await get().fetchDaoMarks(true);
+      await get().fetchApertureNodes(true);
+      set({ activeTribulation: null });
       return data;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

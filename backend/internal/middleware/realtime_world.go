@@ -23,10 +23,11 @@ type realtimeVitalsBridge struct {
 	apply RealtimeHPApplier
 }
 
-// RealtimeTeleportBridge suspends the authoritative zone checkpoint for one
-// legacy HTTP teleport, then either releases the lease after the destination is
-// persisted or resumes normal checkpoints when the teleport is refused.
-type RealtimeTeleportBridge struct {
+// RealtimeHandoffBridge suspends the authoritative zone checkpoint for one
+// legacy HTTP world mutation (teleport, tribulation entry/exit), then either
+// releases the lease after the destination is persisted or resumes normal
+// checkpoints when the mutation is refused.
+type RealtimeHandoffBridge struct {
 	Begin  func(uuid.UUID) (bool, error)
 	Abort  func(uuid.UUID)
 	Finish func(uuid.UUID)
@@ -35,7 +36,7 @@ type RealtimeTeleportBridge struct {
 var (
 	realtimeOwnershipChecker atomic.Pointer[RealtimeOwnershipChecker]
 	realtimeVitals           atomic.Pointer[realtimeVitalsBridge]
-	realtimeTeleport         atomic.Pointer[RealtimeTeleportBridge]
+	realtimeHandoff          atomic.Pointer[RealtimeHandoffBridge]
 	realtimeLocation         atomic.Pointer[RealtimeLocationReader]
 )
 
@@ -69,14 +70,14 @@ func IsRealtimeWorldOwned(playerID uuid.UUID) bool {
 	return checker != nil && (*checker)(playerID)
 }
 
-// SetRealtimeTeleportBridge installs the lease handoff used by legacy HTTP
-// teleport handlers. Passing nil clears it.
-func SetRealtimeTeleportBridge(bridge *RealtimeTeleportBridge) {
+// SetRealtimeHandoffBridge installs the lease handoff used by legacy HTTP
+// world handlers. Passing nil clears it.
+func SetRealtimeHandoffBridge(bridge *RealtimeHandoffBridge) {
 	if bridge == nil || bridge.Begin == nil || bridge.Abort == nil || bridge.Finish == nil {
-		realtimeTeleport.Store(nil)
+		realtimeHandoff.Store(nil)
 		return
 	}
-	realtimeTeleport.Store(bridge)
+	realtimeHandoff.Store(bridge)
 }
 
 // SetRealtimeLocationReader installs the live position lookup used by legacy
@@ -100,28 +101,28 @@ func RealtimePlayerLocation(playerID uuid.UUID) (regionID string, x, y int, ok b
 	return (*reader)(playerID)
 }
 
-// BeginRealtimeTeleport suspends zone checkpoints and flushes the live position
+// BeginRealtimeHandoff suspends zone checkpoints and flushes the live position
 // so a legacy teleport reads the character's real coordinates. It reports
 // whether a live session was handed off.
-func BeginRealtimeTeleport(playerID uuid.UUID) (bool, error) {
-	bridge := realtimeTeleport.Load()
+func BeginRealtimeHandoff(playerID uuid.UUID) (bool, error) {
+	bridge := realtimeHandoff.Load()
 	if bridge == nil {
 		return false, nil
 	}
 	return bridge.Begin(playerID)
 }
 
-// AbortRealtimeTeleport resumes checkpoints after a refused teleport.
-func AbortRealtimeTeleport(playerID uuid.UUID) {
-	if bridge := realtimeTeleport.Load(); bridge != nil {
+// AbortRealtimeHandoff resumes checkpoints after a refused world mutation.
+func AbortRealtimeHandoff(playerID uuid.UUID) {
+	if bridge := realtimeHandoff.Load(); bridge != nil {
 		bridge.Abort(playerID)
 	}
 }
 
-// FinishRealtimeTeleport releases the suspended lease after the teleport has
+// FinishRealtimeHandoff releases the suspended lease after the destination has
 // been persisted. The client is expected to rejoin the destination zone.
-func FinishRealtimeTeleport(playerID uuid.UUID) {
-	if bridge := realtimeTeleport.Load(); bridge != nil {
+func FinishRealtimeHandoff(playerID uuid.UUID) {
+	if bridge := realtimeHandoff.Load(); bridge != nil {
 		bridge.Finish(playerID)
 	}
 }

@@ -633,6 +633,8 @@ Lưu các sự kiện Kiếp Nạn của Tiên Khiếu:
 - `reward_dao_marks` (BIGINT) — Số Đạo Ngân thưởng
 - `started_at` / `ended_at` (TIMESTAMPTZ)
 
+Khi nhân vật đang ở map realtime, ba endpoint `realtime-engage`, `realtime-victory`, `realtime-escape` bàn giao lease zone cũ trước khi ghi `current_region/world_zone_id`: flush vị trí live, tạm dừng checkpoint, ghi đích và nhả lease. Nhờ vậy checkpoint/disconnect của zone cũ không ghi đè region và lần join kế tiếp không bị `realtime_map_mismatch`.
+
 ### Bảng `tribulation_enemies`
 
 Lưu các quái vật sinh ra trong Kiếp Nạn Tiên Khiếu:

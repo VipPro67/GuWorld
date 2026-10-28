@@ -520,11 +520,11 @@ func (a *Admission) MoveTarget(playerID, controllerID uuid.UUID, target protocol
 	})
 }
 
-// BeginTeleport flushes the live character and pauses zone checkpoints so a
-// legacy HTTP teleport can read the real position, validate costs and persist
-// the destination in one transaction. The lease is released by FinishTeleport
-// once the destination commit succeeded, or resumed by AbortTeleport.
-func (a *Admission) BeginTeleport(playerID uuid.UUID) (bool, error) {
+// BeginHandoff flushes the live character and pauses zone checkpoints so a
+// legacy HTTP world mutation (teleport or tribulation transition) can read the
+// real position and persist its destination in one transaction. The lease is
+// released by FinishHandoff after the commit, or resumed by AbortHandoff.
+func (a *Admission) BeginHandoff(playerID uuid.UUID) (bool, error) {
 	a.mu.Lock()
 	var controllerID uuid.UUID
 	var active session
@@ -584,8 +584,8 @@ func (a *Admission) PlayerLocation(playerID uuid.UUID) (string, int, int, bool) 
 	return "", 0, 0, false
 }
 
-// AbortTeleport resumes periodic checkpoints after a refused teleport.
-func (a *Admission) AbortTeleport(playerID uuid.UUID) {
+// AbortHandoff resumes periodic checkpoints after a refused world mutation.
+func (a *Admission) AbortHandoff(playerID uuid.UUID) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for controllerID, active := range a.sessions {
@@ -596,10 +596,10 @@ func (a *Admission) AbortTeleport(playerID uuid.UUID) {
 	}
 }
 
-// FinishTeleport releases the suspended lease and session after the legacy
-// teleport persisted the new region and position. The client rejoins the
+// FinishHandoff releases the suspended lease and session after the legacy
+// handler persisted the new region and position. The client rejoins the
 // destination zone with a fresh lease.
-func (a *Admission) FinishTeleport(playerID uuid.UUID) {
+func (a *Admission) FinishHandoff(playerID uuid.UUID) {
 	a.mu.Lock()
 	var lease realtimeworld.OwnershipLease
 	found := false

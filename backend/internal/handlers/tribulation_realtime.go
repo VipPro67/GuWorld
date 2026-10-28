@@ -50,6 +50,43 @@ type RealtimeTribulationEnemy struct {
 	SubRank   int     `json:"sub_rank"`
 }
 
+// beginTribulationHandoff coordinates one tribulation map transition with an
+// existing realtime lease. It flushes the live position before the handler
+// writes the new region, so the old zone's disconnect checkpoint cannot revert
+// the transition to the previous map. abort is safe to defer; finish must run
+// after the database write commits. A non-zero status rejects the request.
+func beginTribulationHandoff(playerID uuid.UUID) (finish, abort func(), realtime bool, status int, code, message string) {
+	noop := func() {}
+	if !middleware.IsRealtimeWorldOwned(playerID) {
+		return noop, noop, false, 0, "", ""
+	}
+	handedOff, err := middleware.BeginRealtimeHandoff(playerID)
+	if err != nil {
+		return noop, noop, false, http.StatusServiceUnavailable, "realtime_checkpoint_unavailable",
+			"Không thể tạm dừng điều khiển realtime để chuyển bản đồ, vui lòng thử lại."
+	}
+	if !handedOff {
+		return noop, noop, false, http.StatusConflict, "realtime_world_owns_character",
+			"Character is controlled by the realtime world"
+	}
+	finished := false
+	finish = func() {
+		if finished {
+			return
+		}
+		middleware.FinishRealtimeHandoff(playerID)
+		finished = true
+	}
+	abort = func() {
+		if finished {
+			return
+		}
+		middleware.AbortRealtimeHandoff(playerID)
+		finished = true
+	}
+	return finish, abort, true, 0, "", ""
+}
+
 // RealtimeEngageTribulation loads the player's 20x20 Aperture nodes and active tribulation
 // enemies for a real-time combat session in the Immortal Aperture.
 func RealtimeEngageTribulation(c *gin.Context) {
@@ -58,6 +95,12 @@ func RealtimeEngageTribulation(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	finishHandoff, abortHandoff, realtimeTransfer, status, code, message := beginTribulationHandoff(playerID)
+	if status != 0 {
+		c.JSON(status, gin.H{"code": code, "error": message})
+		return
+	}
+	defer abortHandoff()
 
 	eventIDStr := c.Param("eventId")
 	eventID, err := uuid.Parse(eventIDStr)
@@ -142,7 +185,9 @@ func RealtimeEngageTribulation(c *gin.Context) {
 	// 5. Update player's region to aperture_tribulation
 	_, err = db.DB.ExecContext(c.Request.Context(), `
 		UPDATE players
-		SET current_region = 'aperture_tribulation', world_zone_id = 'aperture_tribulation', world_x = 10, world_y = 10, x = 10, y = 10
+		SET current_region = 'aperture_tribulation', world_zone_id = 'aperture_tribulation',
+		    world_x = 10, world_y = 10, x = 10, y = 10,
+		    world_location_revision = world_location_revision + 1
 		WHERE id = $1
 	`, playerID)
 	if err != nil {
@@ -150,19 +195,21 @@ func RealtimeEngageTribulation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật khu vực người chơi: " + err.Error()})
 		return
 	}
+	finishHandoff()
 
 	c.JSON(http.StatusOK, gin.H{
-		"event_id":         ev.ID,
-		"aperture_id":      ev.ApertureID,
-		"tribulation_type": ev.TribulationType,
-		"path":             ev.Path,
-		"reward_dao_marks": ev.RewardDaoMarks,
-		"zone_id":          "aperture_tribulation",
-		"map_version":      "regions-v1",
-		"content_version":  "region-content-v1",
-		"player_spawn":     gin.H{"x": 10.0, "y": 10.0},
-		"nodes":            nodes,
-		"enemies":          enemies,
+		"event_id":          ev.ID,
+		"aperture_id":       ev.ApertureID,
+		"tribulation_type":  ev.TribulationType,
+		"path":              ev.Path,
+		"reward_dao_marks":  ev.RewardDaoMarks,
+		"zone_id":           "aperture_tribulation",
+		"map_version":       "regions-v1",
+		"content_version":   "region-content-v1",
+		"player_spawn":      gin.H{"x": 10.0, "y": 10.0},
+		"nodes":             nodes,
+		"enemies":           enemies,
+		"realtime_transfer": realtimeTransfer,
 	})
 }
 
@@ -180,6 +227,12 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	finishHandoff, abortHandoff, realtimeTransfer, status, code, message := beginTribulationHandoff(playerID)
+	if status != 0 {
+		c.JSON(status, gin.H{"code": code, "error": message})
+		return
+	}
+	defer abortHandoff()
 
 	eventIDStr := c.Param("eventId")
 	eventID, err := uuid.Parse(eventIDStr)
@@ -344,7 +397,8 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 	exitRegion, exitX, exitY := resolveApertureExitLocation(c.Request.Context(), playerID)
 	_, _ = tx.Exec(`
 		UPDATE players 
-		SET active_combat = NULL, current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5 
+		SET active_combat = NULL, current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5,
+		    world_location_revision = world_location_revision + 1
 		WHERE id = $6
 	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID)
 
@@ -352,6 +406,7 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit giao dịch"})
 		return
 	}
+	finishHandoff()
 
 	rewardStrings := []string{}
 	for path, amount := range rewards {
@@ -376,6 +431,7 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 		"return_region":     exitRegion,
 		"return_x":          exitX,
 		"return_y":          exitY,
+		"realtime_transfer": realtimeTransfer,
 	})
 }
 
@@ -428,22 +484,31 @@ func RealtimeEscapeTribulation(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	finishHandoff, abortHandoff, realtimeTransfer, status, code, message := beginTribulationHandoff(playerID)
+	if status != 0 {
+		c.JSON(status, gin.H{"code": code, "error": message})
+		return
+	}
+	defer abortHandoff()
 
 	exitRegion, exitX, exitY := resolveApertureExitLocation(c.Request.Context(), playerID)
 	_, err := db.DB.ExecContext(c.Request.Context(), `
 		UPDATE players
-		SET current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5
+		SET current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5,
+		    world_location_revision = world_location_revision + 1
 		WHERE id = $6
 	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khi rút lui khỏi Tiên Khiếu"})
 		return
 	}
+	finishHandoff()
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":       "Đã an toàn rời khỏi Tiên Khiếu trở về thế giới thực!",
-		"return_region": exitRegion,
-		"return_x":      exitX,
-		"return_y":      exitY,
+		"message":           "Đã an toàn rời khỏi Tiên Khiếu trở về thế giới thực!",
+		"return_region":     exitRegion,
+		"return_x":          exitX,
+		"return_y":          exitY,
+		"realtime_transfer": realtimeTransfer,
 	})
 }

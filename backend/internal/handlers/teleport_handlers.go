@@ -762,7 +762,7 @@ func TravelTeleport(c *gin.Context) {
 	realtimeTransfer := false
 	realtimeFinished := false
 	if middleware.IsRealtimeWorldOwned(authID) {
-		handedOff, handoffErr := middleware.BeginRealtimeTeleport(authID)
+		handedOff, handoffErr := middleware.BeginRealtimeHandoff(authID)
 		if handoffErr != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{
 				"code":  "realtime_checkpoint_unavailable",
@@ -780,7 +780,7 @@ func TravelTeleport(c *gin.Context) {
 		realtimeTransfer = true
 		defer func() {
 			if !realtimeFinished {
-				middleware.AbortRealtimeTeleport(authID)
+				middleware.AbortRealtimeHandoff(authID)
 			}
 		}()
 	}
@@ -1066,7 +1066,7 @@ func TravelTeleport(c *gin.Context) {
 	if realtimeTransfer {
 		// The destination is durable now; release the suspended lease so the
 		// client can rejoin the destination zone with a fresh session.
-		middleware.FinishRealtimeTeleport(authID)
+		middleware.FinishRealtimeHandoff(authID)
 		realtimeFinished = true
 	}
 

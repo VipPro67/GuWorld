@@ -204,9 +204,9 @@ func (r *recordingRealtimeAdmission) BasicAttack(_, _ uuid.UUID, _ protocol.Atta
 func (r *recordingRealtimeAdmission) TransferAtEdge(_, _ uuid.UUID, _ sim.Vec2) (protocol.Transfer, bool, error) {
 	return protocol.Transfer{}, false, nil
 }
-func (r *recordingRealtimeAdmission) BeginTeleport(_ uuid.UUID) (bool, error) { return false, nil }
-func (r *recordingRealtimeAdmission) AbortTeleport(_ uuid.UUID)               {}
-func (r *recordingRealtimeAdmission) FinishTeleport(_ uuid.UUID)              {}
+func (r *recordingRealtimeAdmission) BeginHandoff(_ uuid.UUID) (bool, error) { return false, nil }
+func (r *recordingRealtimeAdmission) AbortHandoff(_ uuid.UUID)               {}
+func (r *recordingRealtimeAdmission) FinishHandoff(_ uuid.UUID)              {}
 func (r *recordingRealtimeAdmission) PlayerLocation(_ uuid.UUID) (string, int, int, bool) {
 	return "", 0, 0, false
 }

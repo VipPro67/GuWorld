@@ -61,9 +61,10 @@ the operational view of the same cohort plan.
 `RequireLegacyWorldMode` blocks explore/move/turn-combat/capture/
 arena/PvP/ground-loot routes plus party invitations and acceptance, merchant,
 scouting, spatial realm mutations and sect defense/attack while a realtime
-lease owns the character. Teleport arrays are handled by a lease handoff in
-`/api/teleport/travel` (flush live position, persist destination, release
-lease, client rejoins the destination zone) instead of being rejected. The old
+lease owns the character. Teleport arrays and realtime tribulation
+entry/victory/escape are handled by a lease handoff (flush live position,
+persist destination, release lease, client rejoins the destination zone)
+instead of being rejected. The old
 WebSocket `world.move_path` and `match.input` are also rejected. Domain
 inventory/quest/tu luyện mutations remain available because they are needed by
 the React business panels; they do not drive world position/HP.
