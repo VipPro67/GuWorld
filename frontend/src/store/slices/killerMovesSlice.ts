@@ -31,6 +31,64 @@ export interface KillerMoveEffectOption {
   };
 }
 
+export interface KillerMoveCombatProfile {
+  id?: string;
+  name?: string;
+  rank: number;
+  main_path: string;
+  all_paths: string[];
+  target_type: string;
+  bypass: boolean;
+  warmup_turns: number;
+  cooldown_turns: number;
+  priority: number;
+  mana_cost: number;
+  hunger_cost: number;
+  base_damage?: number;
+  damage_mult?: number;
+  base_shield?: number;
+  base_healing?: number;
+  lifesteal_pct?: number;
+  crit_bonus?: number;
+  success_chance: number;
+  backfire_hp_pct: number;
+  backfire_status?: string;
+}
+
+export interface GuHouseCombatProfile {
+  id?: string;
+  name?: string;
+  rank: number;
+  core_gu_ids: string[];
+  aux_gu_count: number;
+  max_house_hp: number;
+  current_house_hp: number;
+  house_defense: number;
+  damage_reduction: number;
+  immune_debuffs: boolean;
+  zero_backfire: boolean;
+  actions: KillerMoveCombatProfile[];
+}
+
+export interface GuHouseRecord {
+  id: string;
+  player_id: string;
+  name: string;
+  rank: number;
+  core_gu_instances: string[];
+  aux_gu_count: number;
+  house_profile: GuHouseCombatProfile;
+  current_durability: number;
+  is_equipped: boolean;
+  created_at: string;
+}
+
+export interface GuHouseDraft {
+  name: string;
+  core_gu_instance_ids: string[];
+  aux_gu_count: number;
+}
+
 export interface KillerMoveRecord {
   id: string;
   name: string;
@@ -45,6 +103,7 @@ export interface KillerMoveRecord {
   harmony: number;
   complexity: number;
   success_chance: number;
+  combat_profile?: KillerMoveCombatProfile;
   mastery_xp: number;
   mastery_level: number;
   is_equipped: boolean;
@@ -72,6 +131,7 @@ export interface KillerMovePreview {
   complexity: number;
   success_chance: number;
   mana_cost: number;
+  combat_profile?: KillerMoveCombatProfile;
   warnings: string[];
 }
 
@@ -82,12 +142,19 @@ export interface KillerMovesSlice {
   killerMovesMaxSaved: number;
   killerMovesMaxEquipped: number;
   killerMovesLoading: boolean;
+  guHouses: GuHouseRecord[];
+  guHousesLoading: boolean;
   fetchKillerMoves: () => Promise<void>;
   previewKillerMove: (draft: KillerMoveDraft) => Promise<KillerMovePreview | null>;
   createKillerMove: (draft: KillerMoveDraft) => Promise<boolean>;
   toggleKillerMoveEquip: (id: string) => Promise<boolean>;
   deleteKillerMove: (id: string) => Promise<boolean>;
   useKillerMove: (id: string) => Promise<boolean>;
+  fetchGuHouses: () => Promise<void>;
+  previewGuHouse: (draft: GuHouseDraft) => Promise<GuHouseCombatProfile | null>;
+  createGuHouse: (draft: GuHouseDraft) => Promise<boolean>;
+  toggleEquipGuHouse: (id: string) => Promise<boolean>;
+  repairGuHouse: (id: string) => Promise<boolean>;
 }
 
 export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, KillerMovesSlice> = (set, get) => ({
@@ -97,6 +164,8 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   killerMovesMaxSaved: 12,
   killerMovesMaxEquipped: 4,
   killerMovesLoading: false,
+  guHouses: [],
+  guHousesLoading: false,
 
   fetchKillerMoves: async () => {
     const { token, logout } = get();
@@ -211,6 +280,90 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
       return false;
     } finally {
       get().endAction("player:inventory");
+    }
+  },
+
+  fetchGuHouses: async () => {
+    const { token } = get();
+    if (!token) return;
+    set({ guHousesLoading: true });
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/gu-houses`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể tải danh sách Tiên Cổ Ốc");
+      set({ guHouses: data.gu_houses || [], guHousesLoading: false });
+    } catch (caught) {
+      set({ guHousesLoading: false });
+      get().addToast(caught instanceof Error ? caught.message : "Lỗi tải Tiên Cổ Ốc", "error");
+    }
+  },
+
+  previewGuHouse: async (draft) => {
+    const { token } = get();
+    if (!token) return null;
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/gu-houses/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Công thức Cổ Ốc chưa hợp lệ");
+      return data as GuHouseCombatProfile;
+    } catch (caught) {
+      get().addToast(caught instanceof Error ? caught.message : "Lỗi tính toán Tiên Cổ Ốc", "error");
+      return null;
+    }
+  },
+
+  createGuHouse: async (draft) => {
+    const { token } = get();
+    if (!token) return false;
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/gu-houses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể chế tạo Tiên Cổ Ốc");
+      get().addToast(data.message || "Đã chế tạo thành công Tiên Cổ Ốc", "success");
+      await get().fetchGuHouses();
+      return true;
+    } catch (caught) {
+      get().addToast(caught instanceof Error ? caught.message : "Lỗi chế tạo", "error");
+      return false;
+    }
+  },
+
+  toggleEquipGuHouse: async (id) => {
+    const { token } = get();
+    if (!token) return false;
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/gu-houses/${encodeURIComponent(id)}/equip`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể cập nhật trang bị");
+      await get().fetchGuHouses();
+      return true;
+    } catch (caught) {
+      get().addToast(caught instanceof Error ? caught.message : "Lỗi trang bị Cổ Ốc", "error");
+      return false;
+    }
+  },
+
+  repairGuHouse: async (id) => {
+    const { token } = get();
+    if (!token) return false;
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/gu-houses/${encodeURIComponent(id)}/repair`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể tu sửa Tiên Cổ Ốc");
+      get().addToast(data.message || "Đã tu sửa Tiên Cổ Ốc hoàn hảo", "success");
+      await get().fetchGuHouses();
+      return true;
+    } catch (caught) {
+      get().addToast(caught instanceof Error ? caught.message : "Lỗi tu sửa", "error");
+      return false;
     }
   },
 });

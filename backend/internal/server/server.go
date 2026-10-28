@@ -239,9 +239,6 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/dungeons", "dungeons.update", handlers.AdminCreateDungeon, "admin.create_dungeon", "dungeon", false, "", false, false, false},
 		{http.MethodPut, "/dungeons/:id", "dungeons.update", handlers.AdminUpdateDungeon, "admin.update_dungeon", "dungeon", false, "", false, false, false},
 		{http.MethodDelete, "/dungeons/:id", "dungeons.delete", handlers.AdminDeleteDungeon, "admin.delete_dungeon", "dungeon", true, "path", false, false, true},
-		// sect_mines
-		{http.MethodGet, "/sect-mines", "sect_mines.read", handlers.AdminListSectMines, "", "", false, "", false, false, false},
-		{http.MethodPut, "/sect-mines/:id", "sect_mines.update", handlers.AdminUpdateSectMine, "admin.update_sect_mine", "sect_mine", false, "", false, false, false},
 		// apertures
 		{http.MethodGet, "/apertures/:id/nodes", "apertures.read", handlers.AdminListApertureNodes, "", "", false, "", false, false, false},
 		{http.MethodGet, "/apertures/:id/tribulations", "apertures.read", handlers.AdminListApertureTribulations, "", "", false, "", false, false, false},
@@ -777,6 +774,19 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			killerMoves.DELETE("/:id", handlers.DeleteKillerMove)
 		}
 
+		// Immortal Gu Houses (Tiên Cổ Ốc)
+		guHouses := api.Group("/gu-houses")
+		guHouses.Use(middleware.AuthRequired())
+		guHouses.Use(middleware.RequireOnboarded())
+		guHouses.Use(middleware.RateLimitByPlayer(30, time.Minute))
+		{
+			guHouses.GET("", handlers.ListGuHouses)
+			guHouses.POST("/preview", handlers.PreviewGuHouse)
+			guHouses.POST("", handlers.CreateGuHouse)
+			guHouses.POST("/:id/equip", handlers.EquipGuHouse)
+			guHouses.POST("/:id/repair", handlers.RepairGuHouse)
+		}
+
 		// Immortal Aperture — group: 30/min, per player: 20/min
 		aperture := api.Group("/immortal-aperture")
 		aperture.Use(middleware.AuthRequired())
@@ -923,6 +933,7 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		api.GET("/explore/maps", middleware.AuthRequired(), handlers.GetWorldMaps)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
+		api.GET("/world/map-objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetZoneMapObjects)
 		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)
 		api.POST("/world/portal/transfer", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.PortalTransfer)
 

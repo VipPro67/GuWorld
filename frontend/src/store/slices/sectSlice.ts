@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
-import type { Sect, MySectStatus, SectMission, SectMemberInfo, SectJoinRequest, SectPromotionRequest, SectMine, SectRelocationEstimate } from "@/store/useGameStore";
+import type { Sect, MySectStatus, SectMission, SectMemberInfo, SectJoinRequest, SectPromotionRequest, SectRelocationEstimate } from "@/store/useGameStore";
 
 let fetchMySectStatusPromise: Promise<void> | null = null;
 let lastMySectFetchPlayerId: string | null = null;

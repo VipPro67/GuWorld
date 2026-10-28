@@ -886,7 +886,7 @@ Thay thế cho chế độ gia tộc dựa trên huyết thống cổ xưa, Tôn
   - Phải là Cổ sư tự do (chưa gia nhập tông môn nào, nếu có phải rời/phản môn trước).
   - Tên tông môn từ 3 đến 50 ký tự (hệ thống tự chuẩn hóa thành ID duy nhất, cấm trùng lặp).
 - **Vị trí Căn cứ Tông Môn**:
-  - **Bắt buộc dã ngoại (`KHU_VUC`)**: Không thể lập phái trong An Toàn Khu / Điểm tập kết / Trấn (`HUB`, `SAFE_ZONE`, `hub_nam_cuong`, `Lobby`). Cổ sư phải di chuyển ra ngoài dã ngoại.
+  - **Bắt buộc dã ngoại (`KHU_VUC`)**: Không thể lập phái trong An Toàn Khu / Điểm tập kết / Trấn (`HUB`, `SAFE_ZONE`). Cổ sư phải di chuyển ra ngoài dã ngoại.
   - Tọa độ thực tế của người sáng lập (`current_region`, `x`, `y`) sẽ trở thành **Tọa độ Căn cứ Tông Môn** (`region`, `map_x`, `map_y`) cố định trên bản đồ thế giới.
 - **Đặc quyền Người sáng lập**:
   - Tự động đảm nhiệm vị trí **Chưởng Môn (`CHUONG_MON`)**.

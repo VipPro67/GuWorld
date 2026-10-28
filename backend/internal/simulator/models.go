@@ -175,6 +175,13 @@ type SimAction struct {
 	// Backlash from using Gu rank > actor rank
 	BacklashDamage float64 // HP damage taken by caster from Gu backlash
 
+	// Killer Move / Gu House Profile pacing & risk
+	CooldownTurns  int     // turns before action can be reused (0 = every turn)
+	WarmupTurns    int     // turns of channeling/charging required before executing
+	BackfireDamage float64 // HP damage to caster on failure
+	BackfireStatus string  // status applied to caster on failure (e.g. "THOUGHT_CHAOS")
+	IsFromGuHouse  bool    // executed by an Immortal Gu House
+
 	// Targeting (AOE support)
 	TargetType string // "SINGLE" | "ROW" | "COL" | "CROSS" | "ALL" | "ALL_ENEMIES"
 	TargetX    int    // preferred grid X (1=Front, 2=Mid, 3=Back)
@@ -400,6 +407,16 @@ type CombatantAuto struct {
 	// Custom state for special Gu effects (e.g. GU_POEM_IMMORTAL stacks)
 	CustomState map[string]int
 
+	// Action cooldown tracking: Action SourceID / KillerMoveID -> turns remaining
+	ActionCooldowns map[string]int
+
+	// Channeling / Warmup action (e.g. Sát Chiêu Đại Trận)
+	ChargingAction    *SimAction
+	ChargingTurnsLeft int
+
+	// Immortal Gu House (Tiên Cổ Ốc) vehicle stance
+	GuHouse *GuHouseState
+
 	// Mechanics contains equipped/passive mechanics compiled at combat start.
 	Mechanics []CombatMechanic
 
@@ -408,6 +425,18 @@ type CombatantAuto struct {
 
 	// Hidden state
 	IsDead bool
+}
+
+// GuHouseState represents the active Immortal Gu House vehicle for a combatant.
+type GuHouseState struct {
+	ID              string
+	Name            string
+	Rank            int
+	MaxHP           float64
+	HP              float64
+	Defense         float64
+	DamageReduction float64
+	IsDestroyed     bool
 }
 
 // CombatState represents the mutable snapshot of the battlefield at any given moment.

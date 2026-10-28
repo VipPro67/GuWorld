@@ -78,6 +78,7 @@ type killerMovePreview struct {
 	Complexity       float64                 `json:"complexity"`
 	SuccessChance    float64                 `json:"success_chance"`
 	ManaCost         float64                 `json:"mana_cost"`
+	CombatProfile    models.KillerMoveCombatProfile `json:"combat_profile"`
 	Warnings         []string                `json:"warnings"`
 }
 
@@ -97,6 +98,7 @@ type storedKillerMove struct {
 	Harmony                  float64                 `json:"harmony"`
 	Complexity               float64                 `json:"complexity"`
 	SuccessChance            float64                 `json:"success_chance"`
+	CombatProfile            models.KillerMoveCombatProfile `json:"combat_profile"`
 	MasteryXP                int                     `json:"mastery_xp"`
 	MasteryLevel             int                     `json:"mastery_level"`
 	Equipped                 bool                    `json:"is_equipped"`
@@ -410,7 +412,113 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 	if harmony < 0.8 {
 		warnings = append(warnings, "Các lưu phái phối hợp chưa hòa hợp; tỉ lệ thành công giảm")
 	}
-	return killerMovePreview{Components: components, SelectedEffects: selected, CompiledEffects: blocks, Rank: main.Rank, Path: path, PathMasteryLevel: pathMasteryLevel, PowerBudget: budget, PowerLoad: load, EffectScale: scale, Harmony: harmony, Complexity: complexity, SuccessChance: success, ManaCost: manaCost, Warnings: warnings}, main, nil
+	profile := compileKillerMoveCombatProfile(mainSpec, main, components, selected, blocks, path, pathMasteryLevel, harmony, complexity, success, manaCost)
+	return killerMovePreview{Components: components, SelectedEffects: selected, CompiledEffects: blocks, Rank: main.Rank, Path: path, PathMasteryLevel: pathMasteryLevel, PowerBudget: budget, PowerLoad: load, EffectScale: scale, Harmony: harmony, Complexity: complexity, SuccessChance: success, ManaCost: manaCost, CombatProfile: profile, Warnings: warnings}, main, nil
+}
+
+func getGuTargetType(spec models.Gu) string {
+	for _, b := range spec.Effects.GetBlocks() {
+		sel := strings.ToUpper(string(b.Target.Selector))
+		if strings.Contains(sel, "ALL") {
+			return "ALL_ENEMIES"
+		}
+		if strings.Contains(sel, "ROW") || strings.Contains(sel, "COL") {
+			return "ROW"
+		}
+	}
+	if spec.SkillProfile != nil {
+		switch spec.SkillProfile.Shape {
+		case models.SkillShapeCircle, models.SkillShapeCone, models.SkillShapeRectangle:
+			return "ALL_ENEMIES"
+		case models.SkillShapeLine, models.SkillShapeCross:
+			return "ROW"
+		}
+	}
+	return "SINGLE"
+}
+
+func compileKillerMoveCombatProfile(
+	mainSpec models.Gu,
+	main ownedKillerMoveGu,
+	components []killerMoveComponent,
+	selected []killerMoveEffectRef,
+	blocks []gameplayeffects.Block,
+	path string,
+	pathMasteryLevel int,
+	harmony, complexity, success, manaCost float64,
+) models.KillerMoveCombatProfile {
+	targetType := "SINGLE"
+	bypass := false
+	allPaths := []string{path}
+	seenPaths := map[string]bool{path: true}
+
+	for _, comp := range components {
+		if comp.InstanceID == main.InstanceID {
+			continue
+		}
+		spec, ok := models.GetGu(comp.GuID, comp.Rank)
+		if !ok {
+			continue
+		}
+		for _, p := range spec.Path {
+			clean := gamefx.CleanPath(p)
+			if !seenPaths[clean] {
+				seenPaths[clean] = true
+				allPaths = append(allPaths, clean)
+			}
+		}
+		tgt := getGuTargetType(spec)
+		if tgt == "ALL" || tgt == "ALL_ENEMIES" {
+			targetType = "ALL_ENEMIES"
+		} else if (tgt == "ROW" || tgt == "COL" || tgt == "CROSS") && targetType != "ALL_ENEMIES" {
+			targetType = "ROW"
+		}
+		for _, tag := range spec.CombatTags {
+			tagLower := strings.ToLower(tag)
+			if strings.Contains(tagLower, "aoe") || strings.Contains(tagLower, "range") {
+				if targetType != "ALL_ENEMIES" {
+					targetType = "ROW"
+				}
+			}
+			if strings.Contains(tagLower, "pierce") || strings.Contains(tagLower, "penetrat") || strings.Contains(tagLower, "xuyen") {
+				bypass = true
+			}
+		}
+	}
+
+	cooldown := 1 + (len(components)-1)/2
+	if targetType == "ROW" {
+		cooldown += 1
+	} else if targetType == "ALL_ENEMIES" {
+		cooldown += 2
+	}
+
+	warmup := 0
+	if main.Rank >= 6 {
+		warmup = 1
+	}
+
+	backfirePct := math.Max(0.08, 0.28-float64(pathMasteryLevel)*0.035-(harmony-0.6)*0.20)
+	backfireStatus := ""
+	if harmony < 0.75 {
+		backfireStatus = "THOUGHT_CHAOS"
+	}
+
+	return models.KillerMoveCombatProfile{
+		Rank:              main.Rank,
+		MainPath:          path,
+		AllPaths:          allPaths,
+		TargetType:        targetType,
+		Bypass:            bypass,
+		WarmupTurns:       warmup,
+		CooldownTurns:     cooldown,
+		Priority:          1,
+		ManaCost:          manaCost,
+		HungerCost:        float64(len(components)),
+		SuccessChance:     success,
+		BackfireHPPercent: backfirePct,
+		BackfireStatus:    backfireStatus,
+	}
 }
 
 func killerMoveEffectLoad(op gameplayeffects.Operation, target gameplayeffects.Target) float64 {
@@ -537,9 +645,10 @@ func CreateKillerMove(c *gin.Context) {
 	components, _ := json.Marshal(preview.Components)
 	selected, _ := json.Marshal(preview.SelectedEffects)
 	compiled, _ := json.Marshal(preview.CompiledEffects)
+	profBytes, _ := json.Marshal(preview.CombatProfile)
 	var id string
-	err = tx.QueryRow(`INSERT INTO player_killer_moves(player_id,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,balance_version)
-	VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`, playerID, name, main.InstanceID, main.GuID, main.Rank, components, selected, compiled, preview.Path, preview.PathMasteryLevel, preview.PowerBudget, preview.PowerLoad, preview.Harmony, preview.Complexity, preview.SuccessChance, killerMoveBalanceVersion).Scan(&id)
+	err = tx.QueryRow(`INSERT INTO player_killer_moves(player_id,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,balance_version,combat_profile)
+	VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb) RETURNING id`, playerID, name, main.InstanceID, main.GuID, main.Rank, components, selected, compiled, preview.Path, preview.PathMasteryLevel, preview.PowerBudget, preview.PowerLoad, preview.Harmony, preview.Complexity, preview.SuccessChance, killerMoveBalanceVersion, profBytes).Scan(&id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu sát chiêu"})
 		return
@@ -579,7 +688,7 @@ func ListKillerMoves(c *gin.Context) {
 	if !ok {
 		return
 	}
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,is_equipped,balance_version FROM player_killer_moves WHERE player_id=$1 ORDER BY created_at DESC`, playerID)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,is_equipped,balance_version,COALESCE(combat_profile,'{}'::jsonb) FROM player_killer_moves WHERE player_id=$1 ORDER BY created_at DESC`, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải sát chiêu"})
 		return
@@ -605,14 +714,19 @@ func ListKillerMoves(c *gin.Context) {
 	result := make([]storedKillerMove, 0)
 	for rows.Next() {
 		var m storedKillerMove
-		var components, selected, compiled []byte
-		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &components, &selected, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &m.Equipped, &m.BalanceVersion); err != nil {
+		var components, selected, compiled, combatProf []byte
+		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &components, &selected, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &m.Equipped, &m.BalanceVersion, &combatProf); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc sát chiêu"})
 			return
 		}
 		_ = json.Unmarshal(components, &m.Components)
 		_ = json.Unmarshal(selected, &m.SelectedEffects)
 		_ = json.Unmarshal(compiled, &m.CompiledEffects)
+		_ = json.Unmarshal(combatProf, &m.CombatProfile)
+		if m.CombatProfile.CooldownTurns == 0 {
+			m.CombatProfile.CooldownTurns = 1 + (len(m.Components)-1)/2
+			m.CombatProfile.TargetType = "SINGLE"
+		}
 		m.MasteryLevel = m.MasteryXP / 100
 		currentLevel := gamefx.PathMasteryLevel(masteries[gamefx.CleanPath(m.Path)])
 		m.SuccessChance = killerMoveAdjustedChance(m.SuccessChance, m.CreationPathMasteryLevel, currentLevel, m.MasteryXP)
@@ -844,7 +958,7 @@ func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator
 		}
 	}
 
-	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp FROM player_killer_moves WHERE player_id=$1 AND id = ANY($2)`, player.ID, targetIDs)
+	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,COALESCE(combat_profile,'{}'::jsonb) FROM player_killer_moves WHERE player_id=$1 AND id = ANY($2)`, player.ID, targetIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -857,12 +971,17 @@ func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator
 	byID := make(map[string]storedKillerMove)
 	for rows.Next() {
 		var m storedKillerMove
-		var comps, compiled []byte
-		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &comps, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP); err != nil {
+		var comps, compiled, combatProf []byte
+		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &comps, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &combatProf); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(comps, &m.Components)
 		_ = json.Unmarshal(compiled, &m.CompiledEffects)
+		_ = json.Unmarshal(combatProf, &m.CombatProfile)
+		if m.CombatProfile.CooldownTurns == 0 {
+			m.CombatProfile.CooldownTurns = 1 + (len(m.Components)-1)/2
+			m.CombatProfile.TargetType = "SINGLE"
+		}
 		valid := true
 		for _, component := range m.Components {
 			g, ok := owned[component.InstanceID]

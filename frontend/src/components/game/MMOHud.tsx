@@ -17,6 +17,8 @@ import type { MMOPanel } from "./MMOBusinessPanels";
 import type { MapPortal } from "@/game/world/MapLoader";
 import { useQuickActionIds, QUICK_ACTIONS_MAP } from "@/lib/mmo-quick-actions";
 import { QuickActionCustomizer } from "./QuickActionCustomizer";
+import { collectMarkers, findNearestMarker } from "@/game/world/markers/collect";
+import type { WorldMarker } from "@/game/world/markers/types";
 
 export interface HudTarget {
   id: string;
@@ -76,6 +78,39 @@ const MODE_LABEL: Record<WorldSkillInfo["mode"], string> = {
   GROUND: "Diện rộng",
   SELF: "Bản thân",
 };
+
+const RADAR_MARKER_CLASS: Record<WorldMarker["kind"], string> = {
+  vein: "h-2.5 w-2.5 rounded-full bg-emerald-400 border border-emerald-950 shadow-[0_0_6px_#10b981]",
+  drop: "h-2 w-2 rounded-full bg-amber-400 border border-amber-950 shadow-[0_0_5px_#f59e0b]",
+  teleport: "h-2.5 w-2.5 rounded-full bg-cyan-400 border border-blue-950 shadow-[0_0_6px_#38bdf8]",
+  portal: "h-3 w-3 rounded-full bg-blue-400 border border-white shadow-[0_0_8px_#38bdf8] animate-pulse",
+  sect: "h-3.5 w-3.5 rounded border text-[8px]",
+};
+
+function radarMarkerSpec(marker: WorldMarker): { className: string; glyph: string; title: string } {
+  if (marker.kind === "sect") {
+    const isMine = marker.sect?.isMine ?? false;
+    return {
+      className: `${RADAR_MARKER_CLASS.sect} ${isMine ? "bg-blue-600 border-blue-200 shadow-[0_0_8px_#3b82f6]" : "bg-amber-600 border-amber-200 shadow-[0_0_8px_#f59e0b]"}`,
+      glyph: "🏯",
+      title: `Tông Môn: ${marker.name} (Cấp ${marker.sect?.level ?? 1})`,
+    };
+  }
+  if (marker.kind === "vein") {
+    return {
+      className: RADAR_MARKER_CLASS.vein,
+      glyph: "",
+      title: `${marker.name} (${marker.vein?.rarity || "Thường"})`,
+    };
+  }
+  if (marker.kind === "drop") {
+    return { className: RADAR_MARKER_CLASS.drop, glyph: "", title: `Chiến Lợi Phẩm (${marker.name})` };
+  }
+  if (marker.kind === "portal") {
+    return { className: RADAR_MARKER_CLASS.portal, glyph: "", title: `Cổng: Đến ${marker.name}` };
+  }
+  return { className: RADAR_MARKER_CLASS.teleport, glyph: "", title: `Truyền Tống: ${marker.name}` };
+}
 
 const MODE_BADGE: Record<
   WorldSkillInfo["mode"],
@@ -321,11 +356,13 @@ export function MMOHud(props: MMOHudProps) {
   const groundDrops = useGameStore((state) => state.groundDrops);
   const fetchGroundDrops = useGameStore((state) => state.fetchGroundDrops);
   const lootGroundDrop = useGameStore((state) => state.lootGroundDrop);
-  const myTeleportArrays = useGameStore((state) => state.myTeleportArrays);
 
   const nearbyCells = useWorldStore((state) => state.nearbyCells);
   const fetchNearbyCells = useWorldStore((state) => state.fetchNearbyCells);
   const harvestVein = useWorldStore((state) => state.harvestVein);
+  const zoneMarkers = useWorldStore((state) => state.zoneMarkers);
+  const zoneMarkersRegion = useWorldStore((state) => state.zoneMarkersRegion);
+  const fetchZoneMarkers = useWorldStore((state) => state.fetchZoneMarkers);
 
   const [showTeleportDirectory, setShowTeleportDirectory] = useState(false);
   const [showTeleportBuild, setShowTeleportBuild] = useState(false);
@@ -371,13 +408,16 @@ export function MMOHud(props: MMOHudProps) {
     };
     fetchDrops();
     fetchCells();
+    void fetchZoneMarkers(zoneRegionId);
     const dropsTimer = window.setInterval(fetchDrops, 8000);
     const cellsTimer = window.setInterval(fetchCells, 30000);
+    const markersTimer = window.setInterval(() => void fetchZoneMarkers(zoneRegionId), 30000);
     return () => {
       window.clearInterval(dropsTimer);
       window.clearInterval(cellsTimer);
+      window.clearInterval(markersTimer);
     };
-  }, [props.connected, props.worldActive, props.player?.id, fetchGroundDrops, fetchNearbyCells]);
+  }, [props.connected, props.worldActive, props.player?.id, zoneRegionId, fetchGroundDrops, fetchNearbyCells, fetchZoneMarkers]);
 
   const handleInvitePlayer = async (username: string) => {
     let party = useGameStore.getState().party;
@@ -400,69 +440,26 @@ export function MMOHud(props: MMOHudProps) {
     gs.setChatOpen(true);
   };
 
-  // Nearby Primeval Veins
-  const nearbyVeins = nearbyCells.filter((c) => c.cell_type === "PrimevalVein" || !!c.vein);
-
-  // Nearby Teleport Arrays (filtered by current zone to avoid cross-region coordinate collision)
-  const nearbyTeleports = [
-    ...(myTeleportArrays || []).filter((t) => t.region_id === zoneRegionId).map((t) => ({ x: t.x, y: t.y, name: t.name || "Truyền Tống Trận", id: t.id })),
-    ...nearbyCells.filter((c) => c.cell_type === "TeleportArray" || c.cell_type === "ENTRY_PORTAL").map((c) => ({ x: c.x, y: c.y, name: c.content || "Truyền Tống Trận", id: c.content })),
-  ];
-
-  // Nearby Sects
-  const sectMap = useGameStore((state) => state.sectMap);
-  const fetchSectsMap = useGameStore((state) => state.fetchSectsMap);
   const mySectStatus = useGameStore((state) => state.mySectStatus);
   const attackSect = useGameStore((state) => state.attackSect);
 
-  useEffect(() => {
-    if (props.connected) void fetchSectsMap();
-  }, [props.connected, fetchSectsMap]);
+  // Single marker view-model: the radar and the proximity prompts below read the
+  // same array the Phaser world layer draws, so they cannot drift apart.
+  const markers = collectMarkers({
+    regionId: zoneRegionId,
+    cells: nearbyCells,
+    zoneMarkers: zoneMarkersRegion === zoneRegionId ? zoneMarkers : [],
+    groundDrops,
+    mapPortals: props.mapPortals,
+    mySectId: mySectStatus?.sect?.id,
+  });
 
-  const nearbySects = (sectMap || []).filter(
-    (s) => s.region === zoneRegionId && typeof s.map_x === "number" && typeof s.map_y === "number"
-  );
-
-  // Proximity items (within interaction range)
-  let closestDrop: (typeof groundDrops)[0] | null = null;
-  let closestDropDist = Infinity;
-  for (const drop of groundDrops) {
-    const dist = Math.hypot(drop.x - props.position.x, drop.y - props.position.y);
-    if (dist <= 3.2 && dist < closestDropDist) {
-      closestDrop = drop;
-      closestDropDist = dist;
-    }
-  }
-
-  let closestVein: (typeof nearbyVeins)[0] | null = null;
-  let closestVeinDist = Infinity;
-  for (const veinCell of nearbyVeins) {
-    const dist = Math.hypot(veinCell.x - props.position.x, veinCell.y - props.position.y);
-    if (dist <= 3.5 && dist < closestVeinDist) {
-      closestVein = veinCell;
-      closestVeinDist = dist;
-    }
-  }
-
-  let closestTp: (typeof nearbyTeleports)[0] | null = null;
-  let closestTpDist = Infinity;
-  for (const tp of nearbyTeleports) {
-    const dist = Math.hypot(tp.x - props.position.x, tp.y - props.position.y);
-    if (dist <= 3.0 && dist < closestTpDist) {
-      closestTp = tp;
-      closestTpDist = dist;
-    }
-  }
-
-  let closestSect: (typeof nearbySects)[0] | null = null;
-  let closestSectDist = Infinity;
-  for (const s of nearbySects) {
-    const dist = Math.hypot(s.map_x - props.position.x, s.map_y - props.position.y);
-    if (dist <= 4.0 && dist < closestSectDist) {
-      closestSect = s;
-      closestSectDist = dist;
-    }
-  }
+  const closestSect = findNearestMarker(markers, props.position, "sect");
+  const closestDrop = findNearestMarker(markers, props.position, "drop");
+  const closestVein = findNearestMarker(markers, props.position, "vein");
+  const closestTp = findNearestMarker(markers, props.position, "teleport");
+  const distanceTo = (marker: { x: number; y: number } | null) =>
+    marker ? Math.hypot(marker.x - props.position.x, marker.y - props.position.y) : 0;
 
   const targetArt = props.target?.kind === "monster" ? getMonsterArt(props.target.templateId) : null;
   const immortal = (props.player?.rank ?? 1) >= 6;
@@ -1277,80 +1274,20 @@ export function MMOHud(props: MMOHudProps) {
                 );
               })}
 
-              {/* Primeval Veins on Radar */}
-              {nearbyVeins.map((cell, idx) => {
-                const dx = cell.x - props.position.x;
-                const dy = cell.y - props.position.y;
+              {/* Structures on Radar — one marker list shared with the world layer */}
+              {markers.map((marker) => {
+                const dx = marker.x - props.position.x;
+                const dy = marker.y - props.position.y;
                 if (Math.abs(dx) > radarRange || Math.abs(dy) > radarRange) return null;
+                const spec = radarMarkerSpec(marker);
                 return (
                   <div
-                    key={`vein-${idx}`}
-                    className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400 border border-emerald-950 shadow-[0_0_6px_#10b981]"
+                    key={`${marker.kind}:${marker.id}`}
+                    className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center ${spec.className}`}
                     style={{ left: `${50 + (dx / radarRange) * 46}%`, top: `${50 + (dy / radarRange) * 46}%` }}
-                    title={`${cell.vein?.vein_type === "immortal" ? "Tiên Tuyền" : "Nguyên Tuyền"} (${cell.vein?.rarity || "Thường"}): ${Math.hypot(dx, dy).toFixed(1)} ô`}
-                  />
-                );
-              })}
-
-              {/* Ground Drops on Radar */}
-              {groundDrops.map((drop) => {
-                const dx = drop.x - props.position.x;
-                const dy = drop.y - props.position.y;
-                if (Math.abs(dx) > radarRange || Math.abs(dy) > radarRange) return null;
-                return (
-                  <div
-                    key={`drop-${drop.id}`}
-                    className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-400 border border-amber-950 shadow-[0_0_5px_#f59e0b]"
-                    style={{ left: `${50 + (dx / radarRange) * 46}%`, top: `${50 + (dy / radarRange) * 46}%` }}
-                    title={`Chiến Lợi Phẩm (${drop.killer_name || "Rơi đồ"}): ${Math.hypot(dx, dy).toFixed(1)} ô`}
-                  />
-                );
-              })}
-
-              {/* Teleport Arrays / Portals on Radar */}
-              {nearbyTeleports.map((tp, idx) => {
-                const dx = tp.x - props.position.x;
-                const dy = tp.y - props.position.y;
-                if (Math.abs(dx) > radarRange || Math.abs(dy) > radarRange) return null;
-                return (
-                  <div
-                    key={`tp-${idx}`}
-                    className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400 border border-blue-950 shadow-[0_0_6px_#38bdf8]"
-                    style={{ left: `${50 + (dx / radarRange) * 46}%`, top: `${50 + (dy / radarRange) * 46}%` }}
-                    title={`Truyền Tống: ${tp.name}: ${Math.hypot(dx, dy).toFixed(1)} ô`}
-                  />
-                );
-              })}
-
-              {/* Map Portals on Radar */}
-              {props.mapPortals?.map((p, idx) => {
-                const dx = p.x - props.position.x;
-                const dy = p.y - props.position.y;
-                if (Math.abs(dx) > radarRange || Math.abs(dy) > radarRange) return null;
-                return (
-                  <div
-                    key={`map-portal-${idx}`}
-                    className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400 border border-white shadow-[0_0_8px_#38bdf8] animate-pulse"
-                    style={{ left: `${50 + (dx / radarRange) * 46}%`, top: `${50 + (dy / radarRange) * 46}%` }}
-                    title={`Cổng: Đến ${p.name || p.targetZoneId}: ${Math.hypot(dx, dy).toFixed(1)} ô`}
-                  />
-                );
-              })}
-
-              {/* Sects on Radar */}
-              {nearbySects.map((s, idx) => {
-                const dx = s.map_x - props.position.x;
-                const dy = s.map_y - props.position.y;
-                if (Math.abs(dx) > radarRange || Math.abs(dy) > radarRange) return null;
-                const isMySect = s.id === mySectStatus?.sect?.id;
-                return (
-                  <div
-                    key={`sect-${idx}`}
-                    className={`absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded ${isMySect ? "bg-blue-600 border-blue-200 shadow-[0_0_8px_#3b82f6]" : "bg-amber-600 border-amber-200 shadow-[0_0_8px_#f59e0b]"} border flex items-center justify-center text-[8px]`}
-                    style={{ left: `${50 + (dx / radarRange) * 46}%`, top: `${50 + (dy / radarRange) * 46}%` }}
-                    title={`Tông Môn: ${s.name} (Cấp ${s.level || 1}): ${Math.hypot(dx, dy).toFixed(1)} ô`}
+                    title={`${spec.title}: ${Math.hypot(dx, dy).toFixed(1)} ô`}
                   >
-                    🏯
+                    {spec.glyph}
                   </div>
                 );
               })}
@@ -1408,8 +1345,8 @@ export function MMOHud(props: MMOHudProps) {
       {(closestDrop || closestVein || closestTp || closestSect) && (
         <div className="pointer-events-auto absolute bottom-[145px] left-1/2 -translate-x-1/2 sm:bottom-[160px] md:bottom-44 flex flex-col items-center gap-1.5 z-20 max-w-[min(94vw,360px)]">
           {closestSect && (() => {
-            const isMySect = closestSect.id === mySectStatus?.sect?.id;
-            const isShielded = Boolean(closestSect.shield_until && new Date(closestSect.shield_until).getTime() > Date.now());
+            const isMySect = closestSect.sect?.isMine ?? false;
+            const isShielded = Boolean(closestSect.sect?.shieldUntil && closestSect.sect.shieldUntil > Date.now());
 
             return (
               <div className={`flex items-center justify-between gap-2.5 rounded-2xl border ${isMySect ? "border-blue-500/70 bg-[#0d1f35e6]" : "border-amber-500/70 bg-[#251608e6]"} px-3.5 py-1.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 w-full`}>
@@ -1421,11 +1358,11 @@ export function MMOHud(props: MMOHudProps) {
                     <div className="flex items-center gap-1.5 text-xs font-serif font-bold text-amber-200 truncate">
                       <span>{closestSect.name}</span>
                       <span className="rounded bg-black/60 border border-amber-500/30 px-1 text-[9px] text-amber-300">
-                        Cấp {closestSect.level || 1}
+                        Cấp {closestSect.sect?.level ?? 1}
                       </span>
                     </div>
                     <div className="text-[10px] text-zinc-300 truncate">
-                      {isMySect ? "Trụ sở môn phái" : isShielded ? "🛡️ Đang trong thời gian bảo hộ" : `Cự ly: ${closestSectDist.toFixed(1)} ô`}
+                      {isMySect ? "Trụ sở môn phái" : isShielded ? "🛡️ Đang trong thời gian bảo hộ" : `Cự ly: ${distanceTo(closestSect).toFixed(1)} ô`}
                     </div>
                   </div>
                 </div>
@@ -1447,6 +1384,7 @@ export function MMOHud(props: MMOHudProps) {
                     onClick={async () => {
                       if (closestSect) {
                         await attackSect(closestSect.id);
+                        void fetchZoneMarkers(zoneRegionId);
                       }
                     }}
                     className="shrink-0 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 border border-rose-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
@@ -1468,14 +1406,14 @@ export function MMOHud(props: MMOHudProps) {
                     🎁 Chiến Lợi Phẩm
                   </div>
                   <div className="text-[10px] text-[#cfbe9e] truncate">
-                    {closestDrop.killer_name ? `Hạ bởi: ${closestDrop.killer_name}` : "Rơi thạch, tài nguyên"} ({closestDropDist.toFixed(1)} ô)
+                    {closestDrop.drop?.killer_name ? `Hạ bởi: ${closestDrop.drop.killer_name}` : "Rơi thạch, tài nguyên"} ({distanceTo(closestDrop).toFixed(1)} ô)
                   </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={async () => {
-                  if (closestDrop) await lootGroundDrop(closestDrop.id);
+                  if (closestDrop) await lootGroundDrop(closestDrop.interaction?.action.targetId ?? closestDrop.id);
                 }}
                 className="shrink-0 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 border border-amber-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
               >
@@ -1492,22 +1430,21 @@ export function MMOHud(props: MMOHudProps) {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 text-xs font-serif font-bold text-emerald-200 truncate">
-                    <span>{closestVein.vein?.vein_type === "immortal" ? "Tiên Tuyền" : "Nguyên Tuyền"}</span>
+                    <span>{closestVein.name}</span>
                     <span className="rounded bg-emerald-950/80 border border-emerald-500/40 px-1 text-[9px] text-emerald-300">
                       {closestVein.vein?.rarity || "Thường"}
                     </span>
                   </div>
                   <div className="text-[10px] text-[#a7d4ba] truncate">
-                    Tích: <strong className="text-amber-300">{closestVein.vein?.accumulated_stones?.toLocaleString("vi-VN") ?? 0}</strong> NT ({closestVeinDist.toFixed(1)} ô)
+                    Tích: <strong className="text-amber-300">{closestVein.vein?.accumulated_stones?.toLocaleString("vi-VN") ?? 0}</strong> NT ({distanceTo(closestVein).toFixed(1)} ô)
                   </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={async () => {
-                  if (closestVein?.vein?.id) {
-                    await harvestVein(closestVein.vein.id);
-                  }
+                  const veinId = closestVein?.interaction?.action.targetId;
+                  if (veinId) await harvestVein(veinId);
                 }}
                 className="shrink-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
               >
@@ -1524,10 +1461,10 @@ export function MMOHud(props: MMOHudProps) {
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-serif font-bold text-cyan-200 truncate">
-                    🌀 {closestTp.name || "Truyền Tống Trận"}
+                    🌀 {closestTp.name}
                   </div>
                   <div className="text-[10px] text-cyan-300/80 truncate">
-                    Cự ly: {closestTpDist.toFixed(1)} ô
+                    Cự ly: {distanceTo(closestTp).toFixed(1)} ô
                   </div>
                 </div>
               </div>

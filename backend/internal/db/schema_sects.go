@@ -43,6 +43,12 @@ func schemaSects() error {
 		return err
 	}
 
+	// Map markers and sect war lookups filter by region.
+	if err := execSchema("sects_region_idx", `
+	CREATE INDEX IF NOT EXISTS idx_sects_region ON sects (region);`); err != nil {
+		return err
+	}
+
 	if err := execSchema("sect_missions", `
 	CREATE TABLE IF NOT EXISTS sect_missions (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

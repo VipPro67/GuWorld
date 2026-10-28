@@ -1179,6 +1179,8 @@ NPC `MINER` và `FARMER` tăng sản lượng node phù hợp; NPC `REFINER` tă
 
 `WorldMap` đại lục hiển thị trên canvas đại giới 15.000 × 10.000 (Atlas) gồm 5 Đại Vực: hàng trên là Nam Cương (atlas_x=0–4.999), Trung Châu (5.000–9.999), Bắc Nguyên (10.000–14.999); hàng dưới là Tây Mạc (atlas_x=0–7.499) và Đông Hải (7.500–14.999). Tây Mạc và Đông Hải đều có atlas_y từ 5.000 đến 9.999. Toàn bộ các `SAFE_ZONE`, `HUB` và `KHU_VUC` con đều áp dụng hệ tọa độ cục bộ (local coordinates) chuẩn MMO bắt đầu từ (0, 0) với kích thước đồng nhất 1.000 × 1.000 (`min_x=0, min_y=0, max_x=1000, max_y=1000, width=1000, height=1000`), điểm vào trung tâm là (500, 500). Vị trí hiển thị trên bản đồ thế giới vĩ mô (World Atlas) được lưu trữ qua hai cột `atlas_x, atlas_y` trong `Region.csv` và bảng `regions`. Các map MMO và map cells đều được chuẩn hóa theo hệ tọa độ local này. Vùng kỹ thuật cũ `ngoai_vuc_tang_nhat` được giữ inactive để tương thích dữ liệu cũ. Bạch Thiên là tầng 2 (`bai_thien`), Hắc Thiên là tầng 3 (`hac_thien`); hai tầng và region Đại Vực tương ứng hiện được seed ở trạng thái khóa để chờ luồng lên tầng. Mười Khu Vực con cũ của hai Đại Vực được chuyển thành `SECRET_REALM` trên tầng 1; mỗi vùng có một template `SPATIAL_REALM`, một instance đang hoạt động dùng chung cho toàn server, một cổng vào cố định trên bản đồ thế giới và một cổng thoát trong bí cảnh. `Region.csv` import tự seed template và hai loại cổng. Backend chỉ cho vào khi người chơi đứng đúng ô `ENTRY_PORTAL` gắn với template; UI hiển thị vị trí cổng và khóa nút vào ở nơi khác. Tọa độ của mỗi bí cảnh là cục bộ trong bản đồ instance, không chiếm vùng tọa độ của thế giới. Ngoài `Southern_Border` (HUB mặc định), có HUB khởi đầu riêng (`hub_thuong_gia_thanh`, `hub_trung_chau`, `hub_bac_nguyen`, `hub_tay_mac`, `hub_dong_hai`). Khi hoàn tất onboarding (`complete-onboarding`), người chơi được đặt vào HUB theo vùng đăng ký (xem `startingRegionHubs` trong `player.go`), không sinh quái trong HUB.
 
+**Marker công trình tĩnh.** Mọi công trình có vị trí trên map đều dùng chung khoá `(region_id, x, y)` với ô local của zone: `sects` (`region` + `map_x/map_y`), `teleport_arrays`, `primeval_veins`, `merchants`, `map_cells`. `GET /api/world/map-objects` gộp `sects` + `teleport_arrays` vào một contract `MapMarkerView` (`id`, `kind`, `region_id`, `x`, `y`, `name`, `detail`); các thực thể động (Nguyên Tuyền, đồ rơi) vẫn đi qua `/explore/cells/rect` vì cần cửa sổ toạ độ và làm mới nhanh. Client hợp nhất hai nguồn thành một danh sách marker dùng chung cho lớp Phaser, radar và panel tương tác gần — thêm loại công trình mới chỉ cần thêm một nhánh trong collector, không phải sửa từng renderer. `sect_mines` đã bị loại bỏ: tài nguyên ngoài map nay do `primeval_veins` đảm nhiệm.
+
 **`world_maps` và `region_world_maps`** là danh mục tầng và liên kết region với tầng. Ba bản ghi tầng được seed theo thứ tự `world_map` (tầng 1), `bai_thien` (tầng 2), `hac_thien` (tầng 3); năm ID map realtime (`realtime_preview`, `misty_forest`, `bone_crypt`, `crimson_ravine`, `emerald_grotto`) cũng được seed để Admin có thể gán region vào zone MMO. Các map realtime dùng kích thước artifact 64×48 và việc thêm vào catalog **không** tự chuyển region hay bật admission. Hai tầng trên vẫn khóa; khi gán region vào tầng khóa, region phải có `is_active=false`. `Region.csv` export có thêm `world_map_id`; import cho phép cấu hình region inactive trên tầng khóa nhưng từ chối region active. Admin Create/Update cũng áp dụng điều kiện này. Region tự gán map riêng (`world_map_id` trùng `id`, dùng cho `KHU_VUC`, `SAFE_ZONE` và `TRIBULATION`) được đăng ký và bật trong `world_maps` từ artifact `data/mmo/maps/<id>.json` ngay khi import, nên `aperture_tribulation` không bị chặn bởi kiểm tra tầng khóa. API `/api/explore/maps` đọc danh mục tầng. Nút lên tầng chưa được triển khai.
 
 Các bí cảnh bản đồ dùng chung có `regions.zone_type='SECRET_REALM'` và một `instance_templates.type='SPATIAL_REALM'` trỏ qua `spatial_region_id`. Chỉ số liệu về tọa độ region được import từ `Region.csv`; sau import, `seedHacBaiSpatialRealms` tạo template dùng chung, `ENTRY_PORTAL` trên tầng 1 và `EXIT_PORTAL` cho mười bí cảnh Hắc/Bạch. Instance isolation dựa trên `players.map_instance_id`; backend kiểm tra đúng region và tọa độ cổng vào trước khi tham gia phiên chung, còn vị trí quay về được lưu theo từng thành viên.
@@ -1342,42 +1344,11 @@ Seed từ `SectMission.csv` (append-only, `ON CONFLICT DO NOTHING`) luôn để 
 | `expires_at` | TIMESTAMP NULL | Sao chép từ bảng nhiệm vụ khi nhận. Worker đổi `IN_PROGRESS` → `EXPIRED` khi quá hạn. |
 | UNIQUE | (player_id, mission_id) | Mỗi người chơi chỉ nhận 1 lần mỗi nhiệm vụ |
 
-### Bảng `sect_mine_defenders` (Phòng thủ Lãnh địa)
-
-| Cột | Kiểu | Ghi chú |
-| --- | --- | --- |
-| `id` | UUID PK | |
-| `mine_id` | INTEGER FK | → `sect_mines(id)` ON DELETE CASCADE |
-| `sect_id` | VARCHAR(50) FK | → `sects(id)` ON DELETE CASCADE |
-| `defender_type` | VARCHAR(20) | `member` (đệ tử) hoặc `beast` (thần thú thuê) |
-| `player_id` | UUID NULL | Đệ tử phòng thủ. UNIQUE (partial) — mỗi đệ tử chỉ giữ 1 mỏ |
-| `name` | VARCHAR(100) | Tên hiển thị (snapshot) |
-| `monster_id` / `monster_rank` / `monster_sub_rank` | VARCHAR(80)/INT | Dữ liệu thần thú |
-| `power` | DOUBLE PRECISION | Điểm phòng thủ (tính lúc gán) |
-| `assigned_at` | TIMESTAMP | |
-
-`power` đệ tử = `(atk + def + hp/20) × (1 + 0.15×(rank−1))`; thần thú = `atk + def + hp/20` (qua `ScaleMonsterStats`).
-
-### Bảng `sect_mines` — cột tích lũy
-
-| Cột | Kiểu | Ghi chú |
-| --- | --- | --- |
-| `pending_funds` | DOUBLE PRECISION | Bộ tích lũy Quỹ (worker cộng theo phút, đổi sang số nguyên khi ≥ 1) |
-| `pending_materials` | DOUBLE PRECISION | Bộ tích lũy Linh tài |
-
-### Bảng `sect_members` — cột cống hiến lãnh địa
-
-| Cột | Kiểu | Ghi chú |
-| --- | --- | --- |
-| `territory_pending` | DOUBLE PRECISION | Bộ tích lũy điểm cống hiến theo giờ |
-| `territory_credited_at` | DATE | Ngày đã cộng (để reset cap) |
-| `territory_credited_today` | INTEGER | Số điểm đã cộng hôm nay (cap 200/ngày) |
-
 ## Lưu ý khi thay đổi schema
 
 - Schema được tách theo domain ở `backend/internal/db/schema_*.go`, mỗi bảng là `CREATE TABLE IF NOT EXISTS` với toàn bộ cột inline. `InitSchema()` trong `db.go` gọi các schema function theo thứ tự FK. Không có migration riêng; cột mới khai báo trực tiếp trong `CREATE TABLE` (fresh init).
 - Thêm/sửa bảng: sửa file `schema_*.go` tương ứng → xóa DB (hoặc `DROP TABLE` thủ công) → restart server.
-- FK cho các cột `players.race` / `players.constitution` / `players.current_region`: các dòng sentinel (`''`) và vùng `Southern_Border` được pre-seed trong `InitSchema` nên đăng ký vẫn hoạt động trước khi import CSV. Các HUB khởi đầu theo Đại Vực (`hub_*`) nằm trong `Region.csv` và được import qua Admin tab "Dữ liệu"; nếu chưa import, `complete-onboarding` fallback về `Southern_Border`. Các bảng dictionary (`race_dictionary`, `constitution_dictionary`) tự seed default dataset khi DB rỗng; CSV import (Admin tab "Dữ liệu") vẫn là nguồn chính thức.
+- FK cho các cột `players.race` / `players.constitution` / `players.current_region`: các dòng sentinel (`''`), vùng `Southern_Border` và region spawn mặc định `tan_thu_coc_nam_cuong` được pre-seed trong `InitSchema` nên đăng ký vẫn hoạt động trước khi import CSV. Region `hub_nam_cuong` cũ đã bị loại bỏ hoàn toàn (seed, dữ liệu, map realtime); các tham chiếu legacy trong dữ liệu cũ được chuyển về `tan_thu_coc_nam_cuong`. Các HUB khởi đầu theo Đại Vực (`hub_*`) nằm trong `Region.csv` và được import qua Admin tab "Dữ liệu"; nếu chưa import, `complete-onboarding` fallback về `Southern_Border`. Các bảng dictionary (`race_dictionary`, `constitution_dictionary`) tự seed default dataset khi DB rỗng; CSV import (Admin tab "Dữ liệu") vẫn là nguồn chính thức.
 
 ### Lưu trữ sủng vật
 

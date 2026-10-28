@@ -17,7 +17,7 @@ const (
 )
 
 // HubRegionID is the safe lobby zone (players start here, no monsters spawn).
-const HubRegionID = "hub_nam_cuong"
+const HubRegionID = "tan_thu_coc_nam_cuong"
 
 // HubEntryPoint is the default spawn / retreat coordinates when the hub zone
 // geometry is not yet loaded.

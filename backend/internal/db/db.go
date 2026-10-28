@@ -313,9 +313,6 @@ func InitSchema() error {
 	if err := seedSystemPlayers(); err != nil {
 		return fmt.Errorf("seed system players: %w", err)
 	}
-	// if err := seedSectMines(); err != nil {
-	// 	return fmt.Errorf("seed sect mines: %w", err)
-	// }
 	if err := backfillWallets(); err != nil {
 		return fmt.Errorf("backfill wallets: %w", err)
 	}
@@ -520,22 +517,13 @@ func isRetryableSchemaError(err error) bool {
 }
 
 // seedHubRegion seeds the default spawn region so the players.current_region FK
-// (default 'hub_nam_cuong') is satisfied on a fresh database before the admin
-// imports Region.csv. The CSV import overwrites/extends this row.
+// (default 'tan_thu_coc_nam_cuong') is satisfied on a fresh database before the
+// admin imports Region.csv. The CSV import overwrites/extends this row.
 //
 // The parent region ('dai_vuc_nam_cuong') only exists after the CSV import, so
 // the FK target is resolved with a subquery instead of a literal: setting the
 // literal on a fresh database violates regions_parent_id_fkey and aborts boot.
 func seedHubRegion() error {
-	if _, err := schemaDB().Exec(`
-	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, atlas_x, atlas_y, updated_at, parent_id)
-	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 1000, 1000, 1, 9, true, 'HUB', 0, 0, 1000, 1000, 500, 500, '{"cell_type_weights":{"Empty":100}}', 2000, 2000, NOW(), (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong'))
-	ON CONFLICT (id) DO UPDATE SET parent_id = (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong') WHERE regions.parent_id IS NULL OR regions.parent_id = '';`); err != nil {
-		return err
-	}
-	if _, err := schemaDB().Exec(`INSERT INTO region_world_maps (region_id, world_map_id) VALUES ('hub_nam_cuong', 'world_map') ON CONFLICT (region_id) DO NOTHING`); err != nil {
-		return err
-	}
 	if _, err := schemaDB().Exec(`
 	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, atlas_x, atlas_y, updated_at, parent_id)
 	VALUES ('tan_thu_coc_nam_cuong', 'Tân Thủ Cốc Nam Cương', 'Thung lũng khởi đầu thanh bình cho các tân thủ Cổ Sư học tập luyện cổ và chiến đấu.', 1000, 1000, 1, 2, true, 'SAFE_ZONE', 0, 0, 1000, 1000, 500, 500, '{"cell_type_weights":{"Empty":60,"Monster":60,"Resource":1}}', 2000, 1000, NOW(), (SELECT id FROM regions WHERE id = 'dai_vuc_nam_cuong'))
@@ -680,33 +668,18 @@ func seedSpatialRealmEntryPortals(exec csvImportExecutor) error {
 func seedSystemPlayers() error {
 	if _, err := schemaDB().Exec(`
 	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
-	VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true)
+	VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'tan_thu_coc_nam_cuong', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true)
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
 		return err
 	}
 	if _, err := schemaDB().Exec(`
 	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
-	VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true)
+	VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'tan_thu_coc_nam_cuong', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true)
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
 		return err
 	}
 	return nil
 }
-
-// seedSectMines seeds the 5 fixed sect mines.
-// func seedSectMines() error {
-// 	if _, err := schemaDB().Exec(`
-// 	INSERT INTO sect_mines (name, rarity) VALUES
-// 	('Thái Cổ Tinh Mạch', 'Truyền Thuyết'),
-// 	('Cửu U Huyết Mạch', 'Sử Thi'),
-// 	('Thiên Cương Linh Khí Mạch', 'Hiếm'),
-// 	('Huyền Vũ Thạch Động', 'Hiếm'),
-// 	('Bách Thảo Tiên Vực', 'Thường')
-// 	ON CONFLICT (name) DO NOTHING;`); err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
 
 // backfillWallets mirrors each player's stone balances into the wallet table.
 // The anti-join makes this a no-op once every player has a wallet, avoiding an
@@ -756,7 +729,7 @@ func ensureAdmin() error {
 			) VALUES (
 				gen_random_uuid(), 'admin', $1, 'admin@guworld.local', 6, 1, 
 				'Giáp', 99, 100, 100, 
-				100, 100, 'hub_nam_cuong', 50, 50, 'REF-ADMIN', true,
+				100, 100, 'tan_thu_coc_nam_cuong', 50, 50, 'REF-ADMIN', true,
 				0, 0
 			)`, string(hash)); err != nil {
 			return err

@@ -31,17 +31,37 @@ export interface NearbyCell {
   vein?: NearbyVeinInfo;
 }
 
+/**
+ * Static structure marker from GET /api/world/map-objects. The backend folds
+ * sects and teleport arrays into one contract so the map layer, radar and
+ * proximity panel share a single source of truth.
+ */
+export interface MapMarkerView {
+  id: string;
+  kind: string;
+  region_id: string;
+  x: number;
+  y: number;
+  name: string;
+  detail?: Record<string, unknown>;
+}
+
 interface WorldStoreState {
   nearbyCells: NearbyCell[];
+  zoneMarkers: MapMarkerView[];
+  zoneMarkersRegion: string | null;
   loading: boolean;
   error: string | null;
 
   fetchNearbyCells: (x: number, y: number, radius: number) => Promise<boolean>;
+  fetchZoneMarkers: (regionId: string) => Promise<boolean>;
   harvestVein: (veinId: string) => Promise<boolean>;
 }
 
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
   nearbyCells: [],
+  zoneMarkers: [],
+  zoneMarkersRegion: null,
   loading: false,
   error: null,
 
@@ -86,6 +106,21 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       return true;
     } catch (err) {
       console.warn("fetchNearbyCells failed:", err);
+      return false;
+    }
+  },
+
+  fetchZoneMarkers: async (regionId: string) => {
+    if (!regionId) return false;
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/world/map-objects?region=${encodeURIComponent(regionId)}`);
+      if (!res.ok) throw new Error("Could not fetch zone markers");
+      const data = await res.json();
+      if (!Array.isArray(data)) return false;
+      set({ zoneMarkers: data as MapMarkerView[], zoneMarkersRegion: regionId });
+      return true;
+    } catch (err) {
+      console.warn("fetchZoneMarkers failed:", err);
       return false;
     }
   },

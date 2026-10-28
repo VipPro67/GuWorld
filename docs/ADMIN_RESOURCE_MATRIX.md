@@ -157,7 +157,6 @@ entry lệch này để tự động sinh màn hình.
 | `gu_history` | Read-only | `gus.read` | History only. |
 | `data` | Import/export only | `game_data.read` | CSV operations; nested dictionary CRUD vẫn cần permission riêng. |
 | `shop` | Full CRUD | `shop.read` | Caravan shop; arena shop dùng permission riêng cho mutation. |
-| `mines` | Domain command only | `sect_mines.read` | Quản lý mỏ Tông Môn. |
 | `gift_codes` | Domain command only | `gift_codes.read` | List/create only. |
 | `topup_wallet` | Read-only | `billing.read` | Payment/order ledger; không mutation. |
 | `logs` | Read-only | `audit.read` | Audit log, append-only. |

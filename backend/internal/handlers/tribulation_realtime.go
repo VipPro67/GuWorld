@@ -186,12 +186,19 @@ func RealtimeEngageTribulation(c *gin.Context) {
 	}
 
 	if currRegion != "" && currRegion != "aperture_tribulation" {
-		if _, err := tx.ExecContext(c.Request.Context(), `
+		result, err := tx.ExecContext(c.Request.Context(), `
 			UPDATE immortal_apertures
 			SET return_region = $1, return_x = $2, return_y = $3
 			WHERE id = $4
-		`, currRegion, currX, currY, ev.ApertureID); err != nil {
+		`, currRegion, currX, currY, ev.ApertureID)
+		if err != nil {
+			logger.S.Errorf("[APERTURE-RETURN-SAVE] update failed: player=%s aperture=%s region=%q err=%v", playerID, ev.ApertureID, currRegion, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí trở về Tiên Khiếu"})
+			return
+		}
+		if affected, rowsErr := result.RowsAffected(); rowsErr != nil || affected != 1 {
+			logger.S.Errorf("[APERTURE-RETURN-SAVE] update affected %d rows: player=%s aperture=%s region=%q rows_error=%v", affected, playerID, ev.ApertureID, currRegion, rowsErr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy Tiên Khiếu để lưu vị trí trở về"})
 			return
 		}
 		var atlasX, atlasY sql.NullInt64

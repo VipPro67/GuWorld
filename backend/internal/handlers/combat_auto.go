@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -518,6 +520,27 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	playerStats := CalculatePlayerStats(player)
 	actor := models.CombatantFromPlayer(player, playerStats)
 
+	var guHouseState *simulator.GuHouseState
+	var houseID, houseName string
+	var houseRank int
+	var rawHouseProfile []byte
+	var durability float64
+	if tx != nil {
+		if err := tx.QueryRow(`SELECT id::text, name, rank, house_profile, current_durability FROM player_gu_houses WHERE player_id=$1 AND is_equipped=true LIMIT 1`, player.ID).Scan(&houseID, &houseName, &houseRank, &rawHouseProfile, &durability); err == nil && durability > 0 {
+			var houseProf models.GuHouseCombatProfile
+			_ = json.Unmarshal(rawHouseProfile, &houseProf)
+			guHouseState = &simulator.GuHouseState{
+				ID:              houseID,
+				Name:            houseName,
+				Rank:            houseRank,
+				MaxHP:           houseProf.MaxHouseHP,
+				HP:              houseProf.MaxHouseHP * (durability / 100.0),
+				Defense:         houseProf.HouseDefense,
+				DamageReduction: houseProf.DamageReduction,
+			}
+		}
+	}
+
 	var allActions []simulator.SimAction
 	var combatantMechanics []simulator.CombatMechanic
 
@@ -705,6 +728,22 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		act.ComponentGuIDs = move.ComponentInstanceIDs()
 		currentMasteryLevel := gamefx.PathMasteryLevel(player.PathMasteries[gamefx.CleanPath(move.Path)])
 		act.SuccessChance = killerMoveAdjustedChance(move.SuccessChance, move.CreationPathMasteryLevel, currentMasteryLevel, move.MasteryXP)
+		if move.CombatProfile.CooldownTurns > 0 {
+			act.CooldownTurns = move.CombatProfile.CooldownTurns
+		} else {
+			act.CooldownTurns = 1 + (len(move.Components)-1)/2
+		}
+		act.WarmupTurns = move.CombatProfile.WarmupTurns
+		if move.CombatProfile.BackfireHPPercent > 0 {
+			act.BackfireDamage = math.Round(playerStats["max_hp"] * move.CombatProfile.BackfireHPPercent)
+		} else {
+			act.BackfireDamage = math.Round(playerStats["max_hp"] * 0.12)
+		}
+		act.BackfireStatus = move.CombatProfile.BackfireStatus
+		if move.CombatProfile.TargetType != "" {
+			act.TargetType = move.CombatProfile.TargetType
+		}
+		act.Bypass = move.CombatProfile.Bypass
 		act.Damage *= attackFactor
 		act.Defense *= defenseFactor
 		allActions = append(allActions, act)
@@ -935,6 +974,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		GuUsedCounts:         make(map[string]int),
 		KillerMoveUsedCounts: make(map[string]int),
 		Mechanics:            combatantMechanics,
+		GuHouse:              guHouseState,
 	}
 	simCombatant.StatProvenance = buildStatProvenance(player, playerStats, charFX.HealingReceivedBonus)
 

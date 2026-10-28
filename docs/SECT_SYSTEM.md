@@ -37,7 +37,7 @@ Cấu trúc chính:
 - `backend/internal/handlers/sect_salary.go`
   - API phát lương cho tông môn.
 - `backend/internal/handlers/sect_warfare.go`
-  - Quản lý mỏ khoáng, phòng thủ và tấn công lãnh thổ.
+  - Quản lý lãnh thổ tông môn, phòng thủ và tấn công.
 - `backend/internal/handlers/admin_sects.go`
   - Các API admin giám sát/điều chỉnh dữ liệu tông môn.
 
@@ -102,11 +102,8 @@ CREATE TABLE IF NOT EXISTS sect_members (
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
   member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON',
   contribution_points BIGINT NOT NULL DEFAULT 0,
-  master_id VARCHAR(50) DEFAULT NULL,
   joined_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
-  territory_pending DOUBLE PRECISION NOT NULL DEFAULT 0,
-  territory_credited_at DATE,
-  territory_credited_today INTEGER NOT NULL DEFAULT 0
+  is_defending BOOLEAN NOT NULL DEFAULT FALSE
 );
 ```
 
@@ -114,7 +111,7 @@ Ràng buộc quan trọng:
 - Mỗi người chỉ thuộc tối đa 1 tông môn.
 - `member_rank` có các giá trị như: `NGOAI_MON`, `NOI_MON`, `TINH_ANH`, `CHAN_TRUYEN`, `TRUONG_LAO`, `HO_PHAP`, `CHUONG_MON`.
 - `contribution_points`: điểm cống hiến dùng để tính quyền lợi, điều kiện thăng chức, đóng góp kho.
-- `territory_pending` và `territory_credited_today`: theo dõi phần thưởng lãnh thổ theo ngày.
+- `is_defending`: thành viên đang trú thủ tại căn cứ tông môn (dùng cho phòng thủ khi bị tấn công).
 
 ### 3.3 Bảng `sect_join_requests`
 
@@ -189,47 +186,6 @@ CREATE TABLE IF NOT EXISTS player_sect_missions (
 
 - Mỗi cá nhân nhận nhiệm vụ sẽ có 1 record riêng.
 - `status` của player mission có thể là `IN_PROGRESS`, `COMPLETED`, `EXPIRED`, ... tùy logic handler.
-
-### 3.7 Bảng `sect_mines`
-
-```sql
-CREATE TABLE IF NOT EXISTS sect_mines (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(100) NOT NULL UNIQUE,
-  rarity VARCHAR(50) NOT NULL,
-  occupier_sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE SET NULL,
-  occupied_at TIMESTAMP WITH TIME ZONE,
-  shield_until TIMESTAMP WITH TIME ZONE,
-  last_claimed_at TIMESTAMP WITH TIME ZONE,
-  pending_funds DOUBLE PRECISION NOT NULL DEFAULT 0,
-  pending_materials DOUBLE PRECISION NOT NULL DEFAULT 0
-);
-```
-
-- Dùng cho chiến tranh lãnh thổ / mỏ khoáng.
-- `occupier_sect_id` = tông chiếm giữ.
-- `shield_until` = thời gian miễn pháo kích / khóa phòng thủ.
-
-### 3.8 Bảng `sect_mine_defenders`
-
-```sql
-CREATE TABLE IF NOT EXISTS sect_mine_defenders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  mine_id INTEGER NOT NULL REFERENCES sect_mines(id) ON DELETE CASCADE,
-  sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
-  defender_type VARCHAR(20) NOT NULL DEFAULT 'member',
-  player_id UUID REFERENCES players(id) ON DELETE CASCADE,
-  name VARCHAR(100) NOT NULL DEFAULT '',
-  monster_id VARCHAR(50) REFERENCES monster_templates(id) ON DELETE CASCADE,
-  monster_rank INTEGER NOT NULL DEFAULT 1,
-  monster_sub_rank INTEGER NOT NULL DEFAULT 1,
-  power DOUBLE PRECISION NOT NULL DEFAULT 0,
-  assigned_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now()
-);
-```
-
-- Dùng để bố trí thành viên hoặc thú hộ mỏ.
-- Có index unique cho `player_id` khi `defender_type = 'member'`.
 
 ---
 
@@ -385,30 +341,6 @@ Công thức phí (`computeVaultFees`):
 - Nếu UPDATE trừ phí thất bại, worker đọc lại `funds` + `last_maintenance_at` để phân biệt "đã trừ rồi" với "thiếu quỹ", tránh giáng cấp oan.
 - Nếu cần thay đổi logic cấp tối thiểu, cập nhật ở worker + doc.
 
-### 4.9 Lãnh thổ / mỏ khoáng
-
-Handler:
-- `GetSectMines`
-- `DefendSectMine`
-- `AttackSectMine`
-- `UndefendSectMine`
-
-Worker:
-- `sect_territory.go`
-
-Cơ chế:
-- Mỗi mỏ có `rarity` và `occupier_sect_id`.
-- Mỗi tông chiếm giữ mỏ sẽ nhận quỹ / vật liệu theo thời gian.
-- Có `shield_until` và `pending_funds`, `pending_materials`.
-- Người phòng thủ trong mỏ lấy điểm công lực từ `sect_mine_defenders`.
-
-Ràng buộc:
-- Tấn công chỉ thực hiện khi có quyền quản lý tông món.
-- Nếu `shield_until` còn hiệu lực, không thể tấn công.
-- Tổng đánh giá lực phòng thủ dựa trên `computeMemberPower`, `computeBeastPower` và power của defender.
-
----
-
 ## 5. Rank và quyền quản lý
 
 Hằng số rank và trật tự:
@@ -536,7 +468,6 @@ Các bảng dễ lỗi duplicate:
 - `sect_members.player_id` unique
 - `sect_join_requests` unique `(sect_id, player_id)`
 - `sect_promotion_requests` unique `(sect_id, player_id)`
-- `sect_mine_defenders` unique player defender khi `defender_type='member'`
 
 Khi sửa các flow insert/update, luôn kiểm tra:
 - `player_id` đã thuộc sect chưa.
@@ -577,14 +508,6 @@ Nên kiểm tra cả 2 nơi khi tạo/hoàn thành nhiệm vụ.
 
 Nếu cần mở rộng ( ví dụ level max, giảm cấp nhiều hơn 1 bước, log phức tạp ), phải cập nhật cả worker và docs.
 
-### 8.6 Tấn công mỏ / shield logic
-
-`shield_until` được kiểm tra ở `AttackSectMine` và `GetSectMines`:
-- Nếu vướng shielding, attack bị từ chối.
-- Nếu `occupier_sect_id` trùng với tông của người tấn công thì reject.
-
-Khi sửa logic, cần giữ đồng bộ giữa frontend expectation và backend response payload.
-
 ---
 
 ## 9. Checklist sửa lỗi / bổ sung tính năng
@@ -594,7 +517,7 @@ Khi sửa logic, cần giữ đồng bộ giữa frontend expectation và backen
 1. Xác định file liên quan đúng:
    - `sect.go` cho flow core
    - `sect_salary.go` cho phát lương
-   - `sect_warfare.go` cho mỏ
+   - `sect_warfare.go` cho chiến tranh tông môn
    - `schema_sects.go` cho schema
    - `sect_*.go` trong worker cho scheduled logic
 2. Kiểm tra bảng dữ liệu có đúng schema không.
@@ -643,7 +566,7 @@ Hệ thống tông môn hiện tại đang hoạt động theo mô hình:
 - Tông là entity chính lưu kho, quỹ, cấp độ, quyền duyệt.
 - Thành viên thuộc 1 tông và có rank.
 - Nghề nghiệp / chuyển cấp / nhiệm vụ / lãnh thổ / ngân quỹ đều được tính bằng query + transaction và worker.
-- Dữ liệu phụ thuộc chặt chẽ vào `sects`, `sect_members`, `sect_missions`, `player_sect_missions`, `sect_mines`, `sect_mine_defenders`.
+- Dữ liệu phụ thuộc chặt chẽ vào `sects`, `sect_members`, và `sect_missions`, `player_sect_missions`.
 - Khi cần sửa lỗi, luôn kiểm tra đồng bộ giữa schema, handler, route, worker và frontend payload.
 
 ---

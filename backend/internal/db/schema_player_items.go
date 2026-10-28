@@ -23,6 +23,7 @@ func schemaPlayerItems() error {
 		harmony DOUBLE PRECISION NOT NULL DEFAULT 0,
 		complexity DOUBLE PRECISION NOT NULL DEFAULT 0,
 		success_chance DOUBLE PRECISION NOT NULL DEFAULT 0,
+		combat_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
 		mastery_xp INTEGER NOT NULL DEFAULT 0,
 		is_equipped BOOLEAN NOT NULL DEFAULT false,
 		balance_version INTEGER NOT NULL DEFAULT 1,
@@ -37,6 +38,35 @@ func schemaPlayerItems() error {
 	}
 	if err := execSchema("player_killer_moves_equipped_idx", `
 	CREATE INDEX IF NOT EXISTS idx_player_killer_moves_equipped ON player_killer_moves (player_id, is_equipped) WHERE is_equipped = true;`); err != nil {
+		return err
+	}
+	if err := execSchema("player_killer_moves_combat_profile_col", `
+	ALTER TABLE player_killer_moves ADD COLUMN IF NOT EXISTS combat_profile JSONB NOT NULL DEFAULT '{}'::jsonb;`); err != nil {
+		return err
+	}
+
+	if err := execSchema("player_gu_houses", `
+	CREATE TABLE IF NOT EXISTS player_gu_houses (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		name VARCHAR(80) NOT NULL,
+		rank INTEGER NOT NULL DEFAULT 6,
+		core_gu_instances JSONB NOT NULL DEFAULT '[]'::jsonb,
+		aux_gu_count INTEGER NOT NULL DEFAULT 0,
+		house_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
+		current_durability DOUBLE PRECISION NOT NULL DEFAULT 100,
+		is_equipped BOOLEAN NOT NULL DEFAULT false,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("player_gu_houses_owner_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_gu_houses_owner ON player_gu_houses (player_id, created_at DESC);`); err != nil {
+		return err
+	}
+	if err := execSchema("player_gu_houses_equipped_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_gu_houses_equipped ON player_gu_houses (player_id, is_equipped) WHERE is_equipped = true;`); err != nil {
 		return err
 	}
 

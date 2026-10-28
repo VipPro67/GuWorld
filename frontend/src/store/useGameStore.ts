@@ -863,32 +863,6 @@ export interface PlayerInstanceSession {
   temp_inventory: ApiResponseData[];
 }
 
-export interface SectMineDefender {
-  id: string;
-  defender_type: 'member' | 'beast';
-  player_id: string | null;
-  name: string;
-  monster_id: string | null;
-  monster_rank: number;
-  monster_sub_rank: number;
-  power: number;
-  assigned_at: string;
-}
-
-export interface SectMine {
-  id: number;
-  name: string;
-  rarity: string;
-  occupier_sect_id: string | null;
-  occupier_name: string | null;
-  occupied_at: string | null;
-  shield_until: string | null;
-  last_claimed_at: string | null;
-  defenders: SectMineDefender[];
-  total_defense_power: number;
-  output_per_hour: { funds_per_hour: number; contribution_per_hour: number } | null;
-}
-
 export interface SectVaultGuItem {
   id: string;
   rank?: number;

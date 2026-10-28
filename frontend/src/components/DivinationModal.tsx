@@ -272,7 +272,7 @@ export const DivinationModal: React.FC = () => {
                       type="text"
                       value={suspectedRegion}
                       onChange={(e) => setSuspectedRegion(e.target.value)}
-                      placeholder="VD: hub_nam_cuong"
+                      placeholder="VD: tan_thu_coc_nam_cuong"
                       className="w-full rounded border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white placeholder-neutral-600 focus:border-amber-500 focus:outline-none"
                     />
                   </div>

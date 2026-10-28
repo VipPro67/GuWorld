@@ -64,7 +64,6 @@ import { Num } from "./Num";
 import { TopupWalletAdminTab } from "./admin/TopupWalletAdminTab";
 import { DictionariesAdminTab } from "./admin/DictionariesAdminTab";
 import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
-import { SectMinesAdminTab } from "./admin/SectMinesAdminTab";
 import { ApertureChildrenAdmin } from "./admin/ApertureChildrenAdmin";
 import { ApertureRefinementQueueAdmin } from "./admin/ApertureRefinementQueueAdmin";
 import { ApertureSettlementsAdmin } from "./admin/ApertureSettlementsAdmin";
@@ -4169,12 +4168,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
             </div>
           </div>
-        </div>
-      )}
-      {/* Sect mines section */}
-      {section === "mines" && (
-        <div className="space-y-4">
-          <SectMinesAdminTab addToast={addToast} />
         </div>
       )}
       {/* Gift Codes section */}

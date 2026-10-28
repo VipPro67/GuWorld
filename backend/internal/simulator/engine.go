@@ -921,10 +921,14 @@ func Simulate(state *CombatState) []CombatLog {
 
 				pI := ai.Priority
 				pJ := aj.Priority
-				if pI == 0 && ai.ActionType != "BASIC_ATTACK" {
+				if ai.ActionType == "BASIC_ATTACK" && pI == 0 {
+					pI = 999
+				} else if pI == 0 {
 					pI = 500
 				}
-				if pJ == 0 && aj.ActionType != "BASIC_ATTACK" {
+				if aj.ActionType == "BASIC_ATTACK" && pJ == 0 {
+					pJ = 999
+				} else if pJ == 0 {
 					pJ = 500
 				}
 
@@ -1446,7 +1450,46 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				roll := rng.Float64()
 				if roll >= chance {
-					turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "KILLER_MOVE_FAILED", Detail: fmt.Sprintf("%s thôi động [%s] thất bại (%.0f%% / tỉ lệ %.0f%%); các Cổ thành phần vẫn hao độ no!", actor.Name, a.Name, roll*100, chance*100)})
+					backfireDmg := a.BackfireDamage
+					if backfireDmg <= 0 {
+						backfireDmg = math.Round(actor.MaxHP * 0.12)
+					}
+					if actor.GuHouse != nil && !actor.GuHouse.IsDestroyed {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "KILLER_MOVE_FAILED",
+							Detail: fmt.Sprintf("%s thôi động [%s] thất bại (%.0f%% / tỉ lệ %.0f%%); Tiên Cổ Ốc [%s] đã che chắn áp lực phản phệ cho chủ nhân!", actor.Name, a.Name, roll*100, chance*100, actor.GuHouse.Name),
+						})
+					} else {
+						actor.HP -= backfireDmg
+						if actor.HP < 0 {
+							actor.HP = 0
+						}
+						turnLogs = append(turnLogs, CombatLog{
+							Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "KILLER_MOVE_FAILED", Damage: backfireDmg,
+							Detail: fmt.Sprintf("[Phản Phệ] %s thôi động sát chiêu [%s] thất bại (%.0f%% / tỉ lệ %.0f%%), chân nguyên bạo tẩu gây %.0f sát thương phản phệ!", actor.Name, a.Name, roll*100, chance*100, backfireDmg),
+						})
+						if a.BackfireStatus != "" {
+							actor.HasThoughtChaos = true
+							turnLogs = append(turnLogs, CombatLog{
+								Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "BACKFIRE_STATUS",
+								Detail: fmt.Sprintf("%s rơi vào trạng thái [%s] do chấn thương niệm đầu!", actor.Name, a.BackfireStatus),
+							})
+						}
+					}
+					actionKey := a.KillerMoveID
+					if actionKey == "" {
+						actionKey = a.SourceID
+					}
+					if actionKey != "" {
+						if actor.ActionCooldowns == nil {
+							actor.ActionCooldowns = make(map[string]int)
+						}
+						failCd := a.CooldownTurns / 2
+						if failCd < 1 {
+							failCd = 1
+						}
+						actor.ActionCooldowns[actionKey] = failCd
+					}
 					return res
 				}
 				if actor.KillerMoveUsedCounts == nil {
@@ -1454,6 +1497,16 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				if a.KillerMoveID != "" {
 					actor.KillerMoveUsedCounts[a.KillerMoveID]++
+				}
+				actionKey := a.KillerMoveID
+				if actionKey == "" {
+					actionKey = a.SourceID
+				}
+				if actionKey != "" && a.CooldownTurns > 0 {
+					if actor.ActionCooldowns == nil {
+						actor.ActionCooldowns = make(map[string]int)
+					}
+					actor.ActionCooldowns[actionKey] = a.CooldownTurns
 				}
 			}
 
@@ -2711,6 +2764,14 @@ func Simulate(state *CombatState) []CombatLog {
 			if !ccCheckedThisTurn[actor] {
 				ccCheckedThisTurn[actor] = true
 
+				if actor.ActionCooldowns != nil {
+					for k, cd := range actor.ActionCooldowns {
+						if cd > 0 {
+							actor.ActionCooldowns[k] = cd - 1
+						}
+					}
+				}
+
 				// Check stun
 				isStunned := actor.IsStunned
 				if !isStunned {
@@ -2757,6 +2818,27 @@ func Simulate(state *CombatState) []CombatLog {
 						Detail:    fmt.Sprintf("%s bị trói, không thể hành động!", actor.Name),
 					})
 					ccDisabledThisTurn[actor] = true
+				}
+
+				if ccDisabledThisTurn[actor] && actor.ChargingAction != nil {
+					backfireDmg := actor.ChargingAction.BackfireDamage
+					if backfireDmg <= 0 {
+						backfireDmg = math.Round(actor.MaxHP * 0.15)
+					}
+					actor.HP -= backfireDmg
+					if actor.HP < 0 {
+						actor.HP = 0
+					}
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "CHANNEL_INTERRUPTED",
+						Damage:    backfireDmg,
+						Detail:    fmt.Sprintf("[Đứt Đoạn Tụ Khí] %s bị khống chế khi đang ngưng tụ sát chiêu [%s], bị chân nguyên phản phệ mất %.0f HP!", actor.Name, actor.ChargingAction.Name, backfireDmg),
+					})
+					actor.ChargingAction = nil
+					actor.ChargingTurnsLeft = 0
 				}
 
 				if !ccDisabledThisTurn[actor] {
@@ -2846,6 +2928,37 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 			executedDamageThisTurn := false
 
+			if actor.ChargingAction != nil {
+				actor.ChargingTurnsLeft--
+				if actor.ChargingTurnsLeft <= 0 {
+					chargedAct := actor.ChargingAction
+					actor.ChargingAction = nil
+					actor.ChargingTurnsLeft = 0
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "WARMUP_COMPLETE",
+						Detail:    fmt.Sprintf("[Tụ Khí Hoàn Tất] %s đã ngưng tụ xong sát chiêu [%s], bộc phát kinh thiên động địa!", actor.Name, chargedAct.Name),
+					})
+					out := runOne(actor, chargedAct, isAlly, enemyTargets)
+					postActionChecks(enemyTargets, actor)
+					if out.abort {
+						break
+					}
+					continue
+				} else {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "CHARGING",
+						Detail:    fmt.Sprintf("[Tụ Khí] %s tiếp tục ngưng tụ chân nguyên cho sát chiêu [%s] (còn %d hiệp)!", actor.Name, actor.ChargingAction.Name, actor.ChargingTurnsLeft),
+					})
+					continue
+				}
+			}
+
 			for {
 				executedActionInLoop := false
 				for ai := 0; ai < len(actor.Actions); ai++ {
@@ -2860,6 +2973,21 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 					if !checkActionCondition(a, actor, primaryTgt) {
 						continue
+					}
+
+					if a.WarmupTurns > 0 {
+						actor.ChargingAction = a
+						actor.ChargingTurnsLeft = a.WarmupTurns
+						executedThisTurn[ai] = true
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "START_CHARGING",
+							Detail:    fmt.Sprintf("[Tụ Khí Sát Chiêu] %s bắt đầu vận chuyển chân nguyên, ngưng tụ sát chiêu [%s] (cần %d hiệp tụ khí)!", actor.Name, a.Name, a.WarmupTurns),
+						})
+						executedDamageThisTurn = true
+						break
 					}
 
 					out := runOne(actor, a, isAlly, enemyTargets)
@@ -3235,6 +3363,37 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 		target.IsSleeping = false
 	}
 
+	// ── Immortal Gu House (Tiên Cổ Ốc) damage absorption ──
+	if target.GuHouse != nil && !target.GuHouse.IsDestroyed {
+		if target.GuHouse.DamageReduction > 0 {
+			damage *= (1.0 - math.Min(0.85, target.GuHouse.DamageReduction))
+		}
+		if target.GuHouse.HP >= damage {
+			target.GuHouse.HP -= damage
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   actor.ID,
+				ActorName: actor.Name,
+				Action:    "GU_HOUSE_ABSORB",
+				Damage:    damage,
+				Detail:    fmt.Sprintf("[Tiên Cổ Ốc] %s che chắn cho %s, hấp thụ %.0f sát thương (Ốc còn %.0f/%.0f HP)!", target.GuHouse.Name, target.Name, damage, target.GuHouse.HP, target.GuHouse.MaxHP),
+			})
+			return 0
+		}
+		absorbed := target.GuHouse.HP
+		damage -= absorbed
+		target.GuHouse.HP = 0
+		target.GuHouse.IsDestroyed = true
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   actor.ID,
+			ActorName: actor.Name,
+			Action:    "GU_HOUSE_DESTROYED",
+			Damage:    absorbed,
+			Detail:    fmt.Sprintf("[Tiên Cổ Ốc Vỡ Vụn] Kiến trúc phòng ngự %s của %s bị công phá! %s phải trực tiếp nghênh địch!", target.GuHouse.Name, target.Name, target.Name),
+		})
+	}
+
 	// Phá Không Cổ shield bypass
 	if shieldBypass {
 		target.HP -= damage
@@ -3444,6 +3603,15 @@ func redirectApertureOverflow(state *CombatState, target *CombatantAuto, logs *[
 
 // checkActionCondition returns true if the action's use condition is met.
 func checkActionCondition(action *SimAction, actor, target *CombatantAuto) bool {
+	if action != nil && actor != nil && actor.ActionCooldowns != nil {
+		actionKey := action.KillerMoveID
+		if actionKey == "" {
+			actionKey = action.SourceID
+		}
+		if actionKey != "" && actor.ActionCooldowns[actionKey] > 0 {
+			return false
+		}
+	}
 	switch action.UseCondition {
 	case "":
 		return true

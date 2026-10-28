@@ -54,7 +54,6 @@ var resources = []Resource{
 	resource("world_bosses", "world", "Boss thế giới", "/admin/world_bosses", []string{"read", "update", "delete"}, []string{"world_bosses.read"}, []string{"world_bosses.update", "world_bosses.delete"}, "high", []string{"live world boss actors in Redis"}, nil, "admin."),
 	resource("quests", "content", "Nhiệm vụ", "/admin/data", crud(), []string{"quests.read"}, []string{"quests.update", "quests.delete"}, "high", []string{"game_quests_list"}, []string{"quest registry"}, "admin."),
 	resource("dungeons", "world", "Phó bản", "/admin/data", crud(), []string{"dungeons.read"}, []string{"dungeons.update", "dungeons.delete"}, "high", nil, []string{"instance cache"}, "admin."),
-	resource("sect_mines", "world", "Lãnh địa tông môn", "/admin/data", []string{"read", "update"}, []string{"sect_mines.read"}, []string{"sect_mines.update"}, "high", nil, nil, "admin."),
 }
 
 func resource(key, domain, label, route string, capabilities, reads, writes []string, risk string, invalidation, reload []string, auditPrefix string) Resource {

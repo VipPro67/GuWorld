@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useGameStore, Sect, SectMission, GuInstance, SectMine, SectVaultGuItem, formatRecipeName, guSpecFor, SectRelocationEstimate } from "@/store/useGameStore";
+import { useGameStore, Sect, SectMission, GuInstance, SectVaultGuItem, formatRecipeName, guSpecFor, SectRelocationEstimate } from "@/store/useGameStore";
 import { translatePath, parsePaths } from "@/lib/translate";
 import { getItemIconUrl } from "@/lib/item-icons";
 import {
@@ -557,7 +557,6 @@ export const SectView: React.FC = () => {
   const getRegionName = (region: string): string => {
     switch (region) {
       case "hub_trung_chau": return "Trung Châu";
-      case "hub_nam_cuong": return "Nam Cương";
       case "hub_bac_nguyen": return "Bắc Nguyên";
       case "hub_tay_mac": return "Tây Mạc";
       case "hub_dong_hai": return "Đông Hải";
@@ -746,7 +745,6 @@ export const SectView: React.FC = () => {
             >
               <option value="all">Tất cả Vực Giới</option>
               <option value="hub_trung_chau">Trung Châu</option>
-              <option value="hub_nam_cuong">Nam Cương</option>
               <option value="hub_bac_nguyen">Bắc Nguyên</option>
               <option value="hub_tay_mac">Tây Mạc</option>
               <option value="hub_dong_hai">Đông Hải</option>
