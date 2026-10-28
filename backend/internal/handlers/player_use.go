@@ -579,9 +579,9 @@ func SetVitalGu(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET hp = $1, equipped_gus = $2, active_combat = $3, statuses = $4
-		WHERE id = $5`,
-		player.HP, player.EquippedGus, player.ActiveCombat, player.Statuses, player.ID,
+		SET hp = $1, equipped_gus = $2, statuses = $3
+		WHERE id = $4`,
+		player.HP, player.EquippedGus, player.Statuses, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -25,7 +24,7 @@ func (s *countingScanner) Scan(dest ...any) error {
 
 func TestScanUsesEveryCanonicalColumn(t *testing.T) {
 	scanner := &countingScanner{}
-	if _, _, err := Scan(scanner); err != nil {
+	if _, err := Scan(scanner); err != nil {
 		t.Fatalf("Scan returned error: %v", err)
 	}
 	if scanner.n != ColumnCount {
@@ -35,7 +34,7 @@ func TestScanUsesEveryCanonicalColumn(t *testing.T) {
 
 func TestScanPropagatesDriverError(t *testing.T) {
 	want := errors.New("boom")
-	if _, _, err := Scan(&countingScanner{err: want}); !errors.Is(err, want) {
+	if _, err := Scan(&countingScanner{err: want}); !errors.Is(err, want) {
 		t.Fatalf("Scan error = %v, want %v", err, want)
 	}
 }
@@ -49,31 +48,6 @@ func TestIsNotFound(t *testing.T) {
 	}
 	if IsNotFound(errors.New("other")) {
 		t.Fatal("IsNotFound(other) = true")
-	}
-}
-
-func TestShouldClearActiveCombat(t *testing.T) {
-	playerID := uuid.New()
-	partyID := uuid.New()
-	other := uuid.New()
-
-	cases := []struct {
-		name     string
-		partyID  *uuid.UUID
-		leaderID string
-		want     bool
-	}{
-		{"solo keeps combat", nil, "", false},
-		{"party leader keeps combat", &partyID, playerID.String(), false},
-		{"party member clears combat", &partyID, other.String(), true},
-		{"missing leader keeps combat", &partyID, "", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := ShouldClearActiveCombat(playerID, tc.partyID, tc.leaderID); got != tc.want {
-				t.Fatalf("ShouldClearActiveCombat = %v, want %v", got, tc.want)
-			}
-		})
 	}
 }
 

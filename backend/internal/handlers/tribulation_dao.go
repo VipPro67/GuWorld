@@ -43,47 +43,6 @@ func randomOrdinaryDaoMarkPaths(paths []string, count int) []string {
 	return eligible[:count]
 }
 
-// vitalGuPathForAscension finds the primary ordinary path of the player's vital Gu.
-// It explicitly excludes Heaven Path ("heaven") and falls back to a random ordinary path.
-func vitalGuPathForAscension(tx *sql.Tx, player *models.Player) string {
-	if player != nil {
-		for _, inst := range player.GuInventory {
-			if inst.IsVital {
-				if spec, found := models.GetGu(inst.GuID, inst.Rank); found {
-					for _, p := range spec.Path {
-						clean := gamefx.CleanPath(p)
-						if clean != "" && clean != heavenDaoPath {
-							return clean
-						}
-					}
-				}
-			}
-		}
-
-		if tx != nil && player.ID.String() != "" {
-			var vitalGuID string
-			var vitalGuRank int
-			err := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE player_id = $1 AND is_vital = true LIMIT 1`, player.ID).Scan(&vitalGuID, &vitalGuRank)
-			if err == nil {
-				if spec, found := models.GetGu(vitalGuID, vitalGuRank); found {
-					for _, p := range spec.Path {
-						clean := gamefx.CleanPath(p)
-						if clean != "" && clean != heavenDaoPath {
-							return clean
-						}
-					}
-				}
-			}
-		}
-	}
-
-	randomPaths := randomOrdinaryDaoMarkPaths(models.AllGuPaths(), 1)
-	if len(randomPaths) > 0 {
-		return randomPaths[0]
-	}
-	return "strength"
-}
-
 func daoMarkGainMultiplierTx(tx *sql.Tx, playerID string) float64 {
 	var constitution string
 	if err := tx.QueryRow(`SELECT COALESCE(constitution, '') FROM players WHERE id = $1`, playerID).Scan(&constitution); err != nil {

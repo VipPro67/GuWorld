@@ -339,7 +339,7 @@ func (s SocialState) Apply(p *Player) {
 	p.ArenaRank = s.ArenaRank
 }
 
-// CombatConfig groups combat equipment and auto-combat settings.
+// CombatConfig groups combat equipment and realtime combat controls.
 type CombatConfig struct {
 	EquippedGus    EquippedGusList  `json:"equipped_gus"`
 	CombatSettings AutoCombatConfig `json:"combat_settings"`

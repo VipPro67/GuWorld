@@ -683,20 +683,6 @@ func HitWorldMonster(ctx context.Context, regionID, instanceID, commandID string
 	return outcome, out, err
 }
 
-// DefeatWorldMonster marks the currently active instance defeated after a
-// turn-based encounter. Unlike a real-time hit, the encounter owns the entire
-// remaining monster HP and is not tied to a stale movement revision.
-func DefeatWorldMonster(ctx context.Context, regionID, instanceID, encounterID string, now time.Time, respawnAfter, ttl time.Duration) (WorldMonsterHitResult, WorldMonster, error) {
-	monster, exists, err := GetWorldMonster(ctx, regionID, instanceID)
-	if err != nil || !exists {
-		return WorldMonsterAlreadyDefeated, WorldMonster{}, err
-	}
-	if monster.MaxHP <= 0 {
-		return "", WorldMonster{}, fmt.Errorf("invalid monster max hp %v", monster.MaxHP)
-	}
-	return HitWorldMonster(ctx, regionID, instanceID, "combat:"+encounterID, -1, monster.MaxHP, now, respawnAfter, ttl)
-}
-
 func applyWorldMonsterHit(monster *WorldMonster, damage float64, now time.Time, respawnAfter time.Duration) WorldMonsterHitResult {
 	monster.HP = max(0, monster.HP-damage)
 	monster.Revision++

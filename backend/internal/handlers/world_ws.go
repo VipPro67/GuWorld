@@ -15,8 +15,6 @@ import (
 func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMessage) (int, json.RawMessage) {
 	var limit int
 	switch command {
-	case "world.move_path":
-		limit = 120
 	case "world.cells_rect":
 		limit = 240
 	case "world.drops":
@@ -32,21 +30,10 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 	if !middleware.AllowPlayer(playerID, limit, time.Minute) {
 		return http.StatusTooManyRequests, json.RawMessage(`{"error":"Đạo hữu thao tác quá nhanh. Vui lòng đợi rồi thử lại!"}`)
 	}
-	if command == "world.move_path" && middleware.IsRealtimeWorldOwned(playerID) {
-		return http.StatusConflict, json.RawMessage(`{"code":"realtime_world_owns_character","error":"Character is controlled by the realtime world"}`)
-	}
-
 	var status int
 	var result any
 
 	switch command {
-	case "world.move_path":
-		var req MoveRequest
-		if err := json.Unmarshal(payload, &req); err != nil {
-			return http.StatusBadRequest, json.RawMessage(`{"error":"Invalid move request"}`)
-		}
-		status, result = ExecuteMovePlayerPath(playerID, req)
-
 	case "chat.send":
 		var req BaoHoangRequest
 		if err := json.Unmarshal(payload, &req); err != nil {

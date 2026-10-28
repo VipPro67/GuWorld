@@ -59,6 +59,48 @@ func schemaRealtime() error {
 	ON realtime_combat_instances (id, player_id) WHERE status = 'active';`); err != nil {
 		return err
 	}
+	if err := execSchema("realtime_combat_sessions", `
+	CREATE TABLE IF NOT EXISTS realtime_combat_sessions (
+		id UUID PRIMARY KEY,
+		mode VARCHAR(24) NOT NULL CHECK (mode IN ('arena','tournament','sect_war','secret_realm','ascension')),
+		status VARCHAR(16) NOT NULL DEFAULT 'active' CHECK (status IN ('active','completed','cancelled')),
+		zone_id VARCHAR(80) NOT NULL,
+		origin_zone_id VARCHAR(80) NOT NULL,
+		payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		ended_at TIMESTAMPTZ
+	);
+	CREATE TABLE IF NOT EXISTS realtime_combat_session_participants (
+		session_id UUID NOT NULL REFERENCES realtime_combat_sessions(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		status VARCHAR(16) NOT NULL DEFAULT 'active' CHECK (status IN ('active','eliminated','completed','cancelled')),
+		payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+		disconnected_at TIMESTAMPTZ,
+		PRIMARY KEY (session_id, player_id)
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_realtime_combat_session_active_player
+	ON realtime_combat_session_participants (player_id) WHERE status = 'active';
+	CREATE INDEX IF NOT EXISTS idx_realtime_combat_session_participant_lookup
+	ON realtime_combat_session_participants (session_id, player_id);
+	CREATE TABLE IF NOT EXISTS realtime_combat_session_events (
+		id BIGSERIAL PRIMARY KEY,
+		session_id UUID NOT NULL REFERENCES realtime_combat_sessions(id) ON DELETE CASCADE,
+		event_id BIGINT NOT NULL,
+		payload JSONB NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_realtime_combat_session_events
+	ON realtime_combat_session_events (session_id, event_id);`); err != nil {
+		return err
+	}
+	// Keep pre-existing databases compatible with new private realtime match
+	// modes; CREATE TABLE IF NOT EXISTS does not refresh a CHECK constraint.
+	if err := execSchema("realtime_combat_sessions_mode_check", `
+	ALTER TABLE realtime_combat_sessions DROP CONSTRAINT IF EXISTS realtime_combat_sessions_mode_check;
+	ALTER TABLE realtime_combat_sessions ADD CONSTRAINT realtime_combat_sessions_mode_check
+	CHECK (mode IN ('arena','tournament','sect_war','secret_realm','ascension'));`); err != nil {
+		return err
+	}
 	if err := execSchema("realtime_loot_grants_death_idx", `
 	CREATE INDEX IF NOT EXISTS idx_realtime_loot_grants_death
 	ON realtime_loot_grants (zone_id, death_id);`); err != nil {

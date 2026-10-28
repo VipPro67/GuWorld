@@ -93,6 +93,7 @@ type Spawn struct {
 	Name      string
 	Kind      string
 	MonsterID string
+	Rank      int
 	X         float64
 	Y         float64
 }
@@ -216,7 +217,12 @@ func Build(raw TiledMapJSON) (*Map, error) {
 				if monsterID != "" && !validIdentifier(monsterID) {
 					return nil, fmt.Errorf("%w: spawn %q monster_id is invalid", ErrInvalidMap, object.Name)
 				}
-				spawns = append(spawns, Spawn{Name: object.Name, Kind: object.Type, MonsterID: monsterID, X: object.X, Y: object.Y})
+				rankValue, _ := propertyFloat(object.Properties, "rank")
+				rank := int(rankValue)
+				if rank < 0 || rankValue != float64(rank) {
+					return nil, fmt.Errorf("%w: spawn %q rank must be a non-negative integer", ErrInvalidMap, object.Name)
+				}
+				spawns = append(spawns, Spawn{Name: object.Name, Kind: object.Type, MonsterID: monsterID, Rank: rank, X: object.X, Y: object.Y})
 			}
 		}
 	}

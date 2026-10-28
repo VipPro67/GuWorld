@@ -175,8 +175,17 @@ func EnterSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	if rejectRealtimeOwned(c, playerID) {
+	if reason := RealtimeRuntimeError(); reason != "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_unavailable", "error": "Bí Cảnh realtime hiện chưa khả dụng."})
 		return
+	}
+	handedOff, handoffErr := middleware.BeginRealtimeHandoff(playerID)
+	if handoffErr != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_checkpoint_unavailable", "error": "Không thể đồng bộ vị trí trước khi vào Bí Cảnh."})
+		return
+	}
+	if handedOff {
+		defer middleware.AbortRealtimeHandoff(playerID)
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
@@ -185,13 +194,12 @@ func EnterSpatialRealm(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var oldRegion, entryItem, regionID, scope string
+	var oldRegion, oldWorldZone, oldWorldInstance, entryItem, regionID, scope string
 	var oldX, oldY, requiredRank, entryX, entryY, duration int
 	var rawRules []byte
-	var activeCombat sql.NullString
 	var oldInstance sql.NullString
-	err = tx.QueryRowContext(c.Request.Context(), `SELECT current_region,x,y,rank,active_combat::text,map_instance_id::text FROM players WHERE id=$1 FOR UPDATE`, playerID).
-		Scan(&oldRegion, &oldX, &oldY, &requiredRank, &activeCombat, &oldInstance)
+	err = tx.QueryRowContext(c.Request.Context(), `SELECT current_region,x,y,rank,map_instance_id::text,COALESCE(world_zone_id,''),COALESCE(world_instance_id,'') FROM players WHERE id=$1 FOR UPDATE`, playerID).
+		Scan(&oldRegion, &oldX, &oldY, &requiredRank, &oldInstance, &oldWorldZone, &oldWorldInstance)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhân vật"})
 		return
@@ -200,7 +208,7 @@ func EnterSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
 		return
 	}
-	if oldInstance.Valid || (activeCombat.Valid && activeCombat.String != "null" && activeCombat.String != "") {
+	if oldInstance.Valid || oldWorldInstance != "" {
 		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đang ở bí cảnh khác hoặc đang chiến đấu"})
 		return
 	}
@@ -300,22 +308,6 @@ func EnterSpatialRealm(c *gin.Context) {
 		}
 	}
 
-	// Expire stale session rows for this template
-	var expiredIDs []uuid.UUID
-	rows, err := tx.QueryContext(c.Request.Context(), `SELECT id FROM shared_spatial_instances WHERE template_id=$1 AND status='ACTIVE' AND expires_at<=NOW() FOR UPDATE`, req.TemplateID)
-	if err == nil {
-		for rows.Next() {
-			var id uuid.UUID
-			if rows.Scan(&id) == nil {
-				expiredIDs = append(expiredIDs, id)
-			}
-		}
-		rows.Close()
-		for _, id := range expiredIDs {
-			_ = closeSpatialRealmTx(c.Request.Context(), tx, id, "TIMEOUT")
-		}
-	}
-
 	// Hybrid scope allocation: SHARED, PARTY, or SOLO
 	var instanceID uuid.UUID
 	if scope == "PARTY" {
@@ -387,12 +379,45 @@ func EnterSpatialRealm(c *gin.Context) {
 		}
 	}
 
+	var regionZoneType, assignedMap string
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(r.zone_type,''),COALESCE(w.world_map_id,'') FROM regions r LEFT JOIN region_world_maps w ON w.region_id=r.id WHERE r.id=$1`, regionID).Scan(&regionZoneType, &assignedMap); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải bản đồ Bí Cảnh."})
+		return
+	}
+	realmZoneID := realtimeMapID(regionID, regionZoneType, assignedMap)
+	if oldWorldZone == "" {
+		var oldType, oldMap string
+		_ = tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(r.zone_type,''),COALESCE(w.world_map_id,'') FROM regions r LEFT JOIN region_world_maps w ON w.region_id=r.id WHERE r.id=$1`, oldRegion).Scan(&oldType, &oldMap)
+		oldWorldZone = realtimeMapID(oldRegion, oldType, oldMap)
+	}
+	if _, err = tx.ExecContext(c.Request.Context(), `
+		INSERT INTO realtime_combat_sessions (id,mode,zone_id,origin_zone_id,payload)
+		VALUES ($1,'secret_realm',$2,$3,jsonb_build_object('template_id',$4,'scope',$5))
+		ON CONFLICT (id) DO NOTHING
+	`, instanceID, realmZoneID, oldWorldZone, req.TemplateID, scope); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở phiên realtime cho Bí Cảnh."})
+		return
+	}
+	var activeSession bool
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM realtime_combat_session_participants WHERE player_id=$1 AND status='active')`, playerID).Scan(&activeSession); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên realtime hiện tại."})
+		return
+	}
+	if activeSession {
+		c.JSON(http.StatusConflict, gin.H{"error": "Nhân vật đã ở trong một phiên realtime khác."})
+		return
+	}
+	_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO realtime_combat_session_participants(session_id,player_id,payload) VALUES($1,$2,jsonb_build_object('origin_zone_id',$3,'origin_region_id',$4,'origin_x',$5,'origin_y',$6))`, instanceID, playerID, oldWorldZone, oldRegion, oldX, oldY)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không thể tham gia phiên realtime Bí Cảnh."})
+		return
+	}
 	_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO shared_spatial_instance_members(instance_id,player_id,return_region_id,return_x,return_y) VALUES($1,$2,$3,$4,$5)`, instanceID, playerID, oldRegion, oldX, oldY)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đã ở trong một bí cảnh"})
 		return
 	}
-	_, err = tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=$4,last_mana_update=NOW(),version=version+1 WHERE id=$5`, regionID, entryX, entryY, instanceID, playerID)
+	_, err = tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=$4,world_zone_id=$5,world_instance_id=$6,world_x=$7,world_y=$8,world_safe_x=$7,world_safe_y=$8,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$9`, regionID, entryX, entryY, instanceID, realmZoneID, "realm:"+instanceID.String(), entryX, entryY, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển nhân vật vào bí cảnh"})
 		return
@@ -401,14 +426,14 @@ func EnterSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái vào bí cảnh"})
 		return
 	}
-	for _, expiredID := range expiredIDs {
-		syncExitedSpatialInstance(expiredID)
+	if handedOff {
+		middleware.FinishRealtimeHandoff(playerID)
 	}
 	syncSpatialPlayer(playerID, regionID, entryX, entryY, instanceID)
 	if neededItem != "" && neededItem != "NONE" {
 		auditlog.Log(db.DB, auditlog.Entry{PlayerID: &playerID, Action: "spatial_realm.enter", EntityType: "instance_template", EntityID: req.TemplateID, RequestSummary: fmt.Sprintf("Vào bí cảnh bản đồ (%s): %dx %s", scope, neededCount, neededItem), IPAddress: c.ClientIP(), Success: true})
 	}
-	c.JSON(http.StatusOK, gin.H{"instance_id": instanceID, "region_id": regionID, "x": entryX, "y": entryY, "scope": scope, "rules": rules})
+	c.JSON(http.StatusOK, gin.H{"instance_id": instanceID, "region_id": regionID, "zone_id": realmZoneID, "world_instance_id": "realm:" + instanceID.String(), "x": entryX, "y": entryY, "scope": scope, "rules": rules})
 }
 
 // ExitSpatialRealm is the idempotent common exit path used by the exit portal,
@@ -419,8 +444,13 @@ func ExitSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	if rejectRealtimeOwned(c, playerID) {
+	handedOff, handoffErr := middleware.BeginRealtimeHandoff(playerID)
+	if handoffErr != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_checkpoint_unavailable", "error": "Không thể đồng bộ vị trí trước khi rời Bí Cảnh."})
 		return
+	}
+	if handedOff {
+		defer middleware.AbortRealtimeHandoff(playerID)
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
@@ -450,7 +480,13 @@ func ExitSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cần đứng tại cổng thoát của bí cảnh"})
 		return
 	}
-	result, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,active_combat=NULL,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, region, x, y, playerID, instanceID)
+	var returnZoneType, returnMap string
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(r.zone_type,''),COALESCE(w.world_map_id,'') FROM regions r LEFT JOIN region_world_maps w ON w.region_id=r.id WHERE r.id=$1`, region).Scan(&returnZoneType, &returnMap); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác định bản đồ quay về."})
+		return
+	}
+	returnZone := realtimeMapID(region, returnZoneType, returnMap)
+	result, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,world_zone_id=$6,world_instance_id='',world_x=$2,world_y=$3,world_safe_x=$2,world_safe_y=$3,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, region, x, y, playerID, instanceID, returnZone)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đưa nhân vật về vị trí cũ"})
 		return
@@ -464,31 +500,48 @@ func ExitSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất thoát bí cảnh"})
 		return
 	}
+	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE realtime_combat_session_participants SET status='completed' WHERE session_id=$1 AND player_id=$2 AND status='active'`, instanceID, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất phiên realtime Bí Cảnh."})
+		return
+	}
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái thoát"})
 		return
 	}
+	if handedOff {
+		middleware.FinishRealtimeHandoff(playerID)
+	}
 	syncSpatialPlayer(playerID, region, x, y, uuid.Nil)
-	c.JSON(http.StatusOK, gin.H{"exited": true, "region_id": region, "x": x, "y": y})
+	c.JSON(http.StatusOK, gin.H{"exited": true, "region_id": region, "zone_id": returnZone, "world_instance_id": "", "x": x, "y": y})
 }
 
 func closeSpatialRealmTx(ctx context.Context, tx *sql.Tx, instanceID uuid.UUID, reason string) error {
-	rows, err := tx.QueryContext(ctx, `SELECT player_id,return_region_id,return_x,return_y FROM shared_spatial_instance_members WHERE instance_id=$1 AND exited_at IS NULL FOR UPDATE`, instanceID)
+	rows, err := tx.QueryContext(ctx, `
+		SELECT m.player_id,m.return_region_id,m.return_x,m.return_y,
+			COALESCE(r.zone_type,''),COALESCE(w.world_map_id,'')
+		FROM shared_spatial_instance_members m
+		LEFT JOIN regions r ON r.id=m.return_region_id
+		LEFT JOIN region_world_maps w ON w.region_id=m.return_region_id
+		WHERE m.instance_id=$1 AND m.exited_at IS NULL FOR UPDATE OF m
+	`, instanceID)
 	if err != nil {
 		return err
 	}
 	type member struct {
 		id     uuid.UUID
 		region string
+		zone   string
 		x, y   int
 	}
 	var members []member
 	for rows.Next() {
 		var m member
-		if err := rows.Scan(&m.id, &m.region, &m.x, &m.y); err != nil {
+		var zoneType, assignedMap string
+		if err := rows.Scan(&m.id, &m.region, &m.x, &m.y, &zoneType, &assignedMap); err != nil {
 			rows.Close()
 			return err
 		}
+		m.zone = realtimeMapID(m.region, zoneType, assignedMap)
 		members = append(members, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -497,10 +550,13 @@ func closeSpatialRealmTx(ctx context.Context, tx *sql.Tx, instanceID uuid.UUID, 
 	}
 	rows.Close()
 	for _, m := range members {
-		if _, err := tx.ExecContext(ctx, `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,active_combat=NULL,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, m.region, m.x, m.y, m.id, instanceID); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,world_zone_id=$6,world_instance_id='',world_x=$2,world_y=$3,world_safe_x=$2,world_safe_y=$3,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, m.region, m.x, m.y, m.id, instanceID, m.zone); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE shared_spatial_instance_members SET exited_at=NOW(),exit_reason=$1 WHERE player_id=$2 AND instance_id=$3 AND exited_at IS NULL`, reason, m.id, instanceID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE realtime_combat_session_participants SET status='completed' WHERE session_id=$1 AND player_id=$2 AND status='active'`, instanceID, m.id); err != nil {
 			return err
 		}
 	}
@@ -510,6 +566,12 @@ func closeSpatialRealmTx(ctx context.Context, tx *sql.Tx, instanceID uuid.UUID, 
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM map_ground_drops WHERE region_id=$1 AND (map_instance_id=$2 OR map_instance_id IS NULL)`, regionID, instanceID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE realtime_combat_session_participants SET status='completed' WHERE session_id=$1 AND status='active'`, instanceID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE realtime_combat_sessions SET status='completed',ended_at=NOW() WHERE id=$1 AND mode='secret_realm' AND status='active'`, instanceID); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE shared_spatial_instances SET status='CLOSED',closed_at=NOW(),close_reason=$1 WHERE id=$2 AND status='ACTIVE'`, reason, instanceID)
@@ -534,26 +596,75 @@ func GetSpatialRealmRules(instanceID uuid.UUID) (*RealmRules, error) {
 }
 
 func expireSpatialRealm(ctx context.Context, instanceID uuid.UUID) error {
+	rows, err := db.DB.QueryContext(ctx, `SELECT player_id FROM shared_spatial_instance_members WHERE instance_id=$1 AND exited_at IS NULL`, instanceID)
+	if err != nil {
+		return err
+	}
+	var memberIDs []uuid.UUID
+	for rows.Next() {
+		var memberID uuid.UUID
+		if err := rows.Scan(&memberID); err != nil {
+			rows.Close()
+			return err
+		}
+		memberIDs = append(memberIDs, memberID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	var handedOff []uuid.UUID
+	for _, memberID := range memberIDs {
+		handed, handoffErr := middleware.BeginRealtimeHandoff(memberID)
+		if handoffErr != nil {
+			for _, previous := range handedOff {
+				middleware.AbortRealtimeHandoff(previous)
+			}
+			return handoffErr
+		}
+		if handed {
+			handedOff = append(handedOff, memberID)
+		}
+	}
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
+		for _, memberID := range handedOff {
+			middleware.AbortRealtimeHandoff(memberID)
+		}
 		return err
 	}
 	defer tx.Rollback()
 	var status string
 	err = tx.QueryRowContext(ctx, `SELECT status FROM shared_spatial_instances WHERE id=$1 AND expires_at<=NOW() FOR UPDATE`, instanceID).Scan(&status)
 	if err == sql.ErrNoRows {
+		for _, memberID := range handedOff {
+			middleware.AbortRealtimeHandoff(memberID)
+		}
 		return nil
 	}
 	if err != nil {
+		for _, memberID := range handedOff {
+			middleware.AbortRealtimeHandoff(memberID)
+		}
 		return err
 	}
 	if status == "ACTIVE" {
 		if err := closeSpatialRealmTx(ctx, tx, instanceID, "TIMEOUT"); err != nil {
+			for _, memberID := range handedOff {
+				middleware.AbortRealtimeHandoff(memberID)
+			}
 			return err
 		}
 	}
 	if err := tx.Commit(); err != nil {
+		for _, memberID := range handedOff {
+			middleware.AbortRealtimeHandoff(memberID)
+		}
 		return err
+	}
+	for _, memberID := range handedOff {
+		middleware.FinishRealtimeHandoff(memberID)
 	}
 	syncExitedSpatialInstance(instanceID)
 	return nil
@@ -612,6 +723,7 @@ func syncSpatialPlayer(playerID uuid.UUID, region string, x, y int, instanceID u
 		inst = instanceID.String()
 	}
 	broadcastWorldPos(WorldPosEvent{ID: playerID.String(), Username: username, AvatarURL: avatar, X: x, Y: y, Region: region, MapID: worldMapIDForRegion(region), InstanceID: inst, TS: time.Now().UnixMilli(), ScopeResolved: true})
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
 }
 
 // ClaimAltarRequest specifies the altar being claimed by the player.
@@ -674,6 +786,9 @@ func GetInheritanceAltarInfo(c *gin.Context) {
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT current_region, x, y FROM players WHERE id = $1`, playerID).Scan(&currentRegion, &px, &py); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
+	}
+	if region, x, y, online := middleware.RealtimePlayerLocation(playerID); online {
+		currentRegion, px, py = region, x, y
 	}
 
 	var cellX, cellY int
@@ -795,6 +910,14 @@ func ClaimInheritanceAltar(c *gin.Context) {
 	if req.AltarID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu mã Đài Truyền Thừa (altar_id)"})
 		return
+	}
+	handedOff, handoffErr := middleware.BeginRealtimeHandoff(playerID)
+	if handoffErr != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_checkpoint_unavailable", "error": "Không thể đồng bộ vị trí trước khi nhận truyền thừa."})
+		return
+	}
+	if handedOff {
+		defer middleware.AbortRealtimeHandoff(playerID)
 	}
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
@@ -1045,6 +1168,10 @@ func ClaimInheritanceAltar(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất tiếp nhận truyền thừa"})
 		return
 	}
+	if handedOff {
+		middleware.FinishRealtimeHandoff(playerID)
+	}
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
 
 	if meta.Tier == "IMMORTAL" {
 		_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Chúc mừng đạo hữu %s đã thông qua khảo nghiệm, đắc được Chân Truyền [%s]!", player.Username, meta.AltarName))

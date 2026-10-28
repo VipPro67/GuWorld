@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -218,8 +219,39 @@ func main() {
 			zoneIDs[mapID] = struct{}{}
 		}
 		// aperture_tribulation is loaded as a private per-event map even when it
-		// is intentionally absent from MMO_ZONE_IDS.
+		// is intentionally absent from MMO_ZONE_IDS. The preview artifact also
+		// backs isolated practice and arena combat sessions.
 		zoneIDs["aperture_tribulation"] = struct{}{}
+		zoneIDs["realtime_preview"] = struct{}{}
+		var spatialRealmMapErr error
+		spatialRows, spatialErr := db.DB.QueryContext(ctx, `
+			SELECT DISTINCT CASE
+				WHEN r.zone_type IN ('KHU_VUC','SAFE_ZONE','TRIBULATION') THEN r.id
+				ELSE COALESCE(NULLIF(w.world_map_id,''),'world_map')
+			END
+			FROM instance_templates t
+			JOIN regions r ON r.id=t.spatial_region_id AND r.is_active=TRUE
+			LEFT JOIN region_world_maps w ON w.region_id=r.id
+			WHERE t.type IN ('SPATIAL_REALM','SPATIAL_INHERITANCE') AND t.spatial_region_id IS NOT NULL
+		`)
+		if spatialErr != nil {
+			spatialRealmMapErr = fmt.Errorf("load realtime spatial realm maps: %w", spatialErr)
+		} else {
+			for spatialRows.Next() {
+				var mapID string
+				if err := spatialRows.Scan(&mapID); err != nil {
+					spatialRealmMapErr = fmt.Errorf("scan realtime spatial realm map: %w", err)
+					break
+				}
+				if mapID != "" {
+					zoneIDs[mapID] = struct{}{}
+				}
+			}
+			if err := spatialRows.Err(); err != nil && spatialRealmMapErr == nil {
+				spatialRealmMapErr = fmt.Errorf("read realtime spatial realm maps: %w", err)
+			}
+			spatialRows.Close()
+		}
 		logger.S.Infof("Realtime world maps enabled: %d (phaser_client=%v, map_version=%q, content_version=%q)",
 			len(zoneIDs), realtimeConfig.PhaserClientEnabled, realtimeConfig.MapVersion, realtimeConfig.ContentVersion)
 		zoneKeys := make([]sim.ZoneKey, 0, len(zoneIDs)*instances)
@@ -264,7 +296,7 @@ func main() {
 		}
 		zoneMaps := make(map[sim.ZoneKey]realtimeworld.ZoneMap, len(zoneKeys))
 		mapArtifacts := make(map[string]realtimeworld.ZoneMap, len(zoneIDs))
-		var mapLoadErr error
+		mapLoadErr := spatialRealmMapErr
 		for _, key := range zoneKeys {
 			// Instances of the same map share one immutable collision/spawn
 			// artifact; only their world state and runners differ.
@@ -314,7 +346,7 @@ func main() {
 						}
 						stats := realtimeai.DefaultStats(template.Type)
 						monsters = append(monsters, realtimeworld.MonsterSpawn{
-							TemplateID: template.ID, Name: template.Name, X: spawn.X, Y: spawn.Y,
+							TemplateID: template.ID, Rank: spawn.Rank, Name: template.Name, X: spawn.X, Y: spawn.Y,
 							MaxHP: template.MaxHP, AttackDamage: template.BaseAttack, Defense: template.BaseDefense,
 							Speed: stats.Speed, Radius: stats.Radius,
 							AggroRadius: stats.AggroRadius, LeashRadius: stats.LeashRadius,
@@ -359,49 +391,75 @@ func main() {
 			manager, managerErr = realtimeworld.NewLazyManagerWithMaps(zoneKeys, sim.DefaultQueueSize, realtimeConfig.MaxPlayersPerZone, zoneMaps)
 		}
 		if managerErr == nil {
+			manager.SetSnapshotObserver(func(snapshotCtx context.Context, snapshot sim.Snapshot) {
+				persistCtx, cancel := context.WithTimeout(snapshotCtx, 2*time.Second)
+				defer cancel()
+				if err := handlers.PersistRealtimeCombatEvents(persistCtx, snapshot); err != nil {
+					logger.S.Warnf("Realtime combat history persistence failed for %v: %v", snapshot.ZoneKey, err)
+				}
+			})
 			inventorySvc := handlers.InventorySvc
 			if inventorySvc == nil {
 				inventorySvc = services.NewInventoryService(db.DB)
 			}
 			lootSvc := realloot.NewService(db.DB, inventorySvc)
-			manager.SetDeathHandler(func(callCtx context.Context, death realtimeworld.DeathEvent) {
+			manager.SetRetryingDeathHandler(func(callCtx context.Context, death realtimeworld.DeathEvent) error {
+				if handled, combatErr := handlers.HandleRealtimeCombatInstanceDeath(callCtx, death); combatErr != nil {
+					logger.S.Errorf("Private realtime combat settlement failed for %s: %v", death.TargetID, combatErr)
+					return combatErr
+				} else if handled {
+					return nil
+				}
 				if death.TargetKind == string(sim.EntityPlayer) {
 					if death.ZoneKey.MapID == "aperture_tribulation" {
-						tribCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-						if err := handlers.HandleRealtimeTribulationPlayerDeath(tribCtx, death); err != nil {
+						if err := handlers.HandleRealtimeTribulationPlayerDeath(callCtx, death); err != nil {
 							logger.S.Errorf("Realtime tribulation player death handling failed for %s: %v", death.TargetID, err)
+							return err
 						}
-						cancel()
+					} else {
+						if err := handlers.HandleRealtimePlayerDeath(callCtx, death); err != nil {
+							logger.S.Errorf("Realtime player death handling failed for %s: %v", death.TargetID, err)
+							return err
+						}
 					}
-					return
+					return nil
 				}
 				if death.ZoneKey.MapID == "aperture_tribulation" {
-					tribCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-					if err := handlers.HandleRealtimeTribulationDeath(tribCtx, death); err != nil {
+					if err := handlers.HandleRealtimeTribulationDeath(callCtx, death); err != nil {
 						logger.S.Errorf("Realtime tribulation death handling failed for %s: %v", death.TargetID, err)
+						return err
 					}
-					cancel()
+				}
+				if death.TemplateID == "practice_dummy" {
+					return nil
 				}
 				if death.IsNode {
-					return
+					return nil
 				}
 				recipient, parseErr := uuid.Parse(string(death.SourceID))
 				if parseErr != nil {
-					return
+					return nil
 				}
 				result, grantErr := lootSvc.GrantKill(callCtx, realloot.GrantKey{
 					ZoneID: death.ZoneKey.MapID, DeathID: fmt.Sprintf("%s:%d:%s", death.Generation, death.EventID, death.TargetID),
-					RecipientID: recipient, TemplateID: death.TemplateID, RewardVersion: realloot.RewardVersion,
+					RecipientID: recipient, TemplateID: death.TemplateID, MonsterRank: death.MonsterRank, RewardVersion: realloot.RewardVersion,
 				})
 				if grantErr != nil {
 					logger.S.Errorf("Realtime loot grant failed for %s: %v", death.TargetID, grantErr)
-					return
+					return grantErr
 				}
-				if result.AlreadyGranted {
-					return
+				monsterName := death.TemplateID
+				if template, ok := models.MonsterRegistry[death.TemplateID]; ok && template.Name != "" {
+					monsterName = template.Name
 				}
-				logger.S.Infof("Realtime loot granted: recipient=%s template=%s rewards=%d", recipient, death.TemplateID, len(result.Rewards))
-				if len(result.Rewards) > 0 {
+				if historyErr := handlers.RecordRealtimeMonsterKill(callCtx, recipient, death, monsterName); historyErr != nil {
+					logger.S.Errorf("Realtime monster combat history persistence failed for %s: %v", death.TargetID, historyErr)
+					return historyErr
+				}
+				if !result.AlreadyGranted {
+					logger.S.Infof("Realtime loot granted: recipient=%s template=%s rewards=%d", recipient, death.TemplateID, len(result.Rewards))
+				}
+				if !result.AlreadyGranted && len(result.Rewards) > 0 {
 					templateName := death.TemplateID
 					if tmpl, ok := models.MonsterRegistry[death.TemplateID]; ok && tmpl.Name != "" {
 						templateName = tmpl.Name
@@ -426,6 +484,7 @@ func main() {
 					}
 					_ = notify.Send(db.DB, recipient, "combat_loot", fmt.Sprintf("Trảm sát %s!", templateName), fmt.Sprintf("Thu được: %s.", strings.Join(rewardParts, ", ")))
 				}
+				return nil
 			})
 			managerErr = manager.Start(ctx)
 		}
@@ -518,6 +577,66 @@ func main() {
 			return sim.ZoneKey{MapID: "aperture_tribulation", InstanceID: eventID, RulesetVersion: "v1"}, base, true, nil
 		})
 		realtimeAdmission.SetCombatInstanceZoneLoader(func(loadCtx context.Context, playerID uuid.UUID, state handlers.RealtimeJoinState) (realtimegateway.CombatInstanceZone, bool, error) {
+			const realmPrefix = "realm:"
+			if strings.HasPrefix(state.WorldInstanceID, realmPrefix) {
+				routeSuffix := strings.TrimPrefix(state.WorldInstanceID, realmPrefix)
+				instanceToken, _, _ := strings.Cut(routeSuffix, ":")
+				instanceID, parseErr := uuid.Parse(instanceToken)
+				if parseErr != nil || state.MapInstanceID != instanceID.String() {
+					return realtimegateway.CombatInstanceZone{}, false, nil
+				}
+				var zoneID, pvpMode string
+				var rawRules []byte
+				var duration int
+				loadErr := db.DB.QueryRowContext(loadCtx, `
+					SELECT s.zone_id,COALESCE(t.rules,'{}'::jsonb),t.duration_minutes
+					FROM realtime_combat_sessions s
+					JOIN realtime_combat_session_participants p ON p.session_id=s.id AND p.player_id=$2 AND p.status='active'
+					JOIN shared_spatial_instances i ON i.id=s.id AND i.status='ACTIVE' AND i.expires_at>NOW()
+					JOIN shared_spatial_instance_members m ON m.instance_id=i.id AND m.player_id=p.player_id AND m.exited_at IS NULL
+					JOIN instance_templates t ON t.id=i.template_id
+					WHERE s.id=$1 AND s.mode='secret_realm' AND s.status='active'
+				`, instanceID, playerID).Scan(&zoneID, &rawRules, &duration)
+				if errors.Is(loadErr, sql.ErrNoRows) {
+					return realtimegateway.CombatInstanceZone{}, false, nil
+				}
+				if loadErr != nil {
+					return realtimegateway.CombatInstanceZone{}, false, loadErr
+				}
+				var rawRuleSet struct {
+					PvPMode string `json:"pvp_mode"`
+				}
+				if err := json.Unmarshal(rawRules, &rawRuleSet); err != nil {
+					return realtimegateway.CombatInstanceZone{}, false, err
+				}
+				pvpMode = strings.ToUpper(strings.TrimSpace(rawRuleSet.PvPMode))
+				base, found := realtimeWorldManager.BaseZoneMap(zoneID)
+				if !found {
+					return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("spatial realm map %q is not configured", zoneID)
+				}
+				base.Safe = pvpMode == "" || pvpMode == "SAFE"
+				base.PvP = pvpMode == "FREE_PK" || pvpMode == "FACTION_PK"
+				// Realm exits are explicit, session-aware actions. Authored world
+				// portals would bypass membership cleanup and leak the player out.
+				base.Portals = nil
+				partyIDOverride := ""
+				if pvpMode == "FACTION_PK" {
+					var sectID string
+					if err := db.DB.QueryRowContext(loadCtx, `SELECT COALESCE(sect_id,'') FROM sect_members WHERE player_id=$1 LIMIT 1`, playerID).Scan(&sectID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+						return realtimegateway.CombatInstanceZone{}, false, err
+					}
+					if sectID != "" {
+						partyIDOverride = "sect:" + sectID
+					} else {
+						partyIDOverride = "unaffiliated:" + playerID.String()
+					}
+				}
+				return realtimegateway.CombatInstanceZone{
+					Key:             sim.ZoneKey{MapID: zoneID, InstanceID: instanceID.String(), RulesetVersion: "v1"},
+					Map:             base,
+					PartyIDOverride: partyIDOverride,
+				}, true, nil
+			}
 			const prefix = "combat:"
 			if !strings.HasPrefix(state.WorldInstanceID, prefix) {
 				return realtimegateway.CombatInstanceZone{}, false, nil
@@ -527,11 +646,19 @@ func main() {
 				return realtimegateway.CombatInstanceZone{}, false, nil
 			}
 			var mode, zoneID string
-			var payload []byte
+			var payload, sessionPayload []byte
 			loadErr := db.DB.QueryRowContext(loadCtx, `
 				SELECT mode, zone_id, payload FROM realtime_combat_instances
-				WHERE id=$1 AND player_id=$2 AND status='active'
+				WHERE id=$1 AND player_id=$2 AND mode='training' AND status='active'
 			`, instanceID, playerID).Scan(&mode, &zoneID, &payload)
+			if errors.Is(loadErr, sql.ErrNoRows) {
+				loadErr = db.DB.QueryRowContext(loadCtx, `
+					SELECT s.mode, s.zone_id, p.payload, s.payload
+					FROM realtime_combat_sessions s
+					JOIN realtime_combat_session_participants p ON p.session_id=s.id
+					WHERE s.id=$1 AND p.player_id=$2 AND s.status='active' AND p.status='active'
+				`, instanceID, playerID).Scan(&mode, &zoneID, &payload, &sessionPayload)
+			}
 			if loadErr != nil {
 				if errors.Is(loadErr, sql.ErrNoRows) {
 					return realtimegateway.CombatInstanceZone{}, false, nil
@@ -549,10 +676,102 @@ func main() {
 				}
 				base.Monsters = append(base.Monsters, realtimeworld.MonsterSpawn{
 					TemplateID: "practice_dummy", Name: "Hình Nhân Gỗ", X: float64(base.Width) * 0.55, Y: float64(base.Height) * 0.5,
-					MaxHP: config.DummyHP, CurrentHP: config.DummyHP, AttackDamage: config.DummyAtk, Defense: config.DummyDef,
+					MaxHP: config.DummyHP, CurrentHP: config.DummyHP, Shield: config.DummyShield, AttackDamage: config.DummyAtk, Defense: config.DummyDef,
 					Speed: config.DummySpeed, Radius: 0.55, AggroRadius: 24, LeashRadius: 30, AttackRange: 1.5,
 					AttackCooldownTicks: 20, NoRespawn: true,
 				})
+			} else if mode == "arena" || mode == "tournament" || mode == "sect_war" {
+				var vitals handlers.RealtimeCombatInstanceVitals
+				if err := json.Unmarshal(payload, &vitals); err != nil {
+					return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("decode combat instance vitals: %w", err)
+				}
+				if math.IsNaN(vitals.CurrentHP) || math.IsInf(vitals.CurrentHP, 0) || vitals.CurrentHP <= 0 || vitals.CurrentHP > state.BaseHP ||
+					math.IsNaN(vitals.CurrentMana) || math.IsInf(vitals.CurrentMana, 0) || vitals.CurrentMana < 0 || vitals.CurrentMana > state.MaxMana ||
+					math.IsNaN(vitals.X) || math.IsInf(vitals.X, 0) || math.IsNaN(vitals.Y) || math.IsInf(vitals.Y, 0) {
+					return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("invalid combat instance participant state")
+				}
+				state.HP = vitals.CurrentHP
+				state.CurrentMana = vitals.CurrentMana
+				if vitals.CombatTeamID != "" {
+					state.PartyID = vitals.CombatTeamID
+				}
+				base.Monsters = nil
+				base.Portals = nil
+				base.Safe = false
+				base.PvP = true
+				if mode == "sect_war" {
+					var config struct {
+						GuardianTemplateID string  `json:"guardian_template_id"`
+						GuardianName       string  `json:"guardian_name"`
+						GuardianRank       int     `json:"guardian_rank"`
+						GuardianHP         float64 `json:"guardian_hp"`
+						GuardianAttack     float64 `json:"guardian_attack"`
+						GuardianDefense    float64 `json:"guardian_defense"`
+						GuardianDead       bool    `json:"guardian_dead"`
+					}
+					if err := json.Unmarshal(sessionPayload, &config); err != nil || config.GuardianTemplateID == "" || config.GuardianHP <= 0 {
+						return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("invalid sect war guardian configuration")
+					}
+					if !config.GuardianDead {
+						stats := realtimeai.DefaultStats("BOSS")
+						base.Monsters = append(base.Monsters, realtimeworld.MonsterSpawn{
+							TemplateID: config.GuardianTemplateID, Name: config.GuardianName,
+							X: float64(base.Width) * 0.70, Y: float64(base.Height) * 0.5,
+							MaxHP: config.GuardianHP, CurrentHP: config.GuardianHP,
+							AttackDamage: config.GuardianAttack, Defense: config.GuardianDefense,
+							Speed: stats.Speed, Radius: stats.Radius, AggroRadius: 30,
+							LeashRadius: 36, AttackRange: stats.AttackRange,
+							AttackCooldownTicks: stats.AttackCooldownTicks, NoRespawn: true,
+						})
+					}
+				}
+				spawn := sim.Vec2{X: vitals.X, Y: vitals.Y}
+				return realtimegateway.CombatInstanceZone{
+					Key: sim.ZoneKey{MapID: zoneID, InstanceID: instanceID.String(), RulesetVersion: "v1"},
+					Map: base, OverrideState: &state, SpawnPosition: &spawn,
+					Isolated: true, PersistCombatState: true,
+				}, true, nil
+			} else if mode == "ascension" {
+				var config struct {
+					TemplateID   string  `json:"template_id"`
+					Name         string  `json:"name"`
+					MaxHP        float64 `json:"max_hp"`
+					AttackDamage float64 `json:"attack_damage"`
+					Defense      float64 `json:"defense"`
+					CurrentHP    float64 `json:"current_hp"`
+					CurrentMana  float64 `json:"current_mana"`
+					X            float64 `json:"x"`
+					Y            float64 `json:"y"`
+				}
+				if err := json.Unmarshal(payload, &config); err != nil || config.TemplateID == "" || config.MaxHP <= 0 || config.CurrentHP <= 0 {
+					return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("invalid ascension encounter config")
+				}
+				if math.IsNaN(config.X) || math.IsInf(config.X, 0) || math.IsNaN(config.Y) || math.IsInf(config.Y, 0) ||
+					config.X < 0 || config.Y < 0 || config.X > float64(base.Width) || config.Y > float64(base.Height) {
+					return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("invalid ascension participant position")
+				}
+				state.HP = math.Min(state.BaseHP, config.CurrentHP)
+				state.CurrentMana = math.Max(0, math.Min(state.MaxMana, config.CurrentMana))
+				base.Monsters = nil
+				base.Portals = nil
+				base.Safe = false
+				base.PvP = false
+				template := models.MonsterRegistry[config.TemplateID]
+				stats := realtimeai.DefaultStats(template.Type)
+				base.Monsters = append(base.Monsters, realtimeworld.MonsterSpawn{
+					TemplateID: config.TemplateID, Name: config.Name,
+					X: float64(base.Width) * 0.65, Y: float64(base.Height) * 0.5,
+					MaxHP: config.MaxHP, CurrentHP: config.MaxHP,
+					AttackDamage: config.AttackDamage, Defense: config.Defense,
+					Speed: stats.Speed, Radius: stats.Radius, AggroRadius: 28,
+					LeashRadius: 32, AttackRange: stats.AttackRange,
+					AttackCooldownTicks: stats.AttackCooldownTicks, NoRespawn: true,
+				})
+				spawn := sim.Vec2{X: config.X, Y: config.Y}
+				return realtimegateway.CombatInstanceZone{
+					Key: sim.ZoneKey{MapID: zoneID, InstanceID: instanceID.String(), RulesetVersion: "v1"},
+					Map: base, OverrideState: &state, SpawnPosition: &spawn, Isolated: true, PersistCombatState: true,
+				}, true, nil
 			} else {
 				return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("unsupported realtime combat mode %q", mode)
 			}
@@ -564,10 +783,40 @@ func main() {
 		realtimeAdmission.SetApertureStateSink(func(sinkCtx context.Context, playerID uuid.UUID, snapshot sim.Snapshot) error {
 			return handlers.PersistRealtimeTribulationSnapshot(sinkCtx, playerID, snapshot)
 		})
+		realtimeAdmission.SetCombatInstanceStateSink(func(sinkCtx context.Context, playerID uuid.UUID, key sim.ZoneKey, entity sim.Entity) error {
+			sessionID, parseErr := uuid.Parse(key.InstanceID)
+			if parseErr != nil {
+				return fmt.Errorf("parse combat instance session id: %w", parseErr)
+			}
+			result, saveErr := db.DB.ExecContext(sinkCtx, `
+				UPDATE realtime_combat_session_participants
+				SET payload = payload || jsonb_build_object('current_hp',$1,'current_mana',$2,'x',$3,'y',$4)
+				WHERE session_id=$5 AND player_id=$6 AND status='active'
+			`, entity.Vitals.HP, entity.Combat.Mana, entity.Transform.Position.X, entity.Transform.Position.Y, sessionID, playerID)
+			if saveErr != nil {
+				return fmt.Errorf("checkpoint combat instance participant: %w", saveErr)
+			}
+			if changed, rowsErr := result.RowsAffected(); rowsErr != nil || changed != 1 {
+				if rowsErr == nil && changed == 0 {
+					var status string
+					statusErr := db.DB.QueryRowContext(sinkCtx, `
+						SELECT status FROM realtime_combat_session_participants
+						WHERE session_id=$1 AND player_id=$2
+					`, sessionID, playerID).Scan(&status)
+					if statusErr == nil && status != "active" {
+						return nil // Completed virtual sessions intentionally discard later socket flushes.
+					}
+				}
+				return fmt.Errorf("combat instance participant checkpoint matched %d rows: %v", changed, rowsErr)
+			}
+			return nil
+		})
 		handlers.SetRealtimeStatsProvider(func() any { return realtimeWorldManager.Stats() })
 		worker.RunEvery(ctx, 10*time.Second, "realtime-checkpoint", func(context.Context) {
 			realtimeAdmission.CheckpointActive()
 		})
+		worker.RunEvery(ctx, 5*time.Second, "sect-war-disconnect-settlement", handlers.SweepDisconnectedSectWars)
+		worker.RunEvery(ctx, 5*time.Second, "arena-disconnect-settlement", handlers.SweepDisconnectedArenas)
 	}
 	r := server.SetupRouter(shub, realtimeAdmission)
 

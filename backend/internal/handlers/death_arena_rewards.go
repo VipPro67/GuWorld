@@ -4,11 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -19,8 +16,7 @@ func loadTeamMembersForCombat(q db.Queryer, teamID string) ([]*teamMemberCombata
 		       COALESCE(p.race, ''), COALESCE(p.constitution, ''),
 		       `+db.GuInventoryAggregateEquipped("p.id")+`,
 		       COALESCE(ia.dao_marks, '{}'::jsonb),
-		       COALESCE(p.path_masteries, '{}'::jsonb),
-		       COALESCE(p.combat_settings, '{}'::jsonb)
+		       COALESCE(p.path_masteries, '{}'::jsonb)
 		FROM death_arena_team_members dtm
 		JOIN players p ON dtm.player_id = p.id
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
@@ -38,7 +34,7 @@ func loadTeamMembersForCombat(q db.Queryer, teamID string) ([]*teamMemberCombata
 			&m.PlayerID, &m.CurrentHP, &m.MaxHP, &m.CurrentMana, &m.MaxMana,
 			&m.Username, &m.Rank, &m.SubRank, &m.PlayerHP, &m.BaseHP, &m.PlayerMana, &m.MaxManaPlayer,
 			&m.Race, &m.Constitution,
-			&m.GuInventory, &m.DaoMarks, &m.PathMasteries, &m.CombatSettings,
+			&m.GuInventory, &m.DaoMarks, &m.PathMasteries,
 		); errScan != nil {
 			logger.S.Errorf("Death Arena: Failed to scan team member %s: %v", m.PlayerID, errScan)
 			return nil, errScan
@@ -50,153 +46,23 @@ func loadTeamMembersForCombat(q db.Queryer, teamID string) ([]*teamMemberCombata
 }
 
 type teamMemberCombatant struct {
-	PlayerID       string
-	CurrentHP      float64
-	MaxHP          float64
-	CurrentMana    float64
-	MaxMana        float64
-	Username       string
-	Rank           int
-	SubRank        int
-	PlayerHP       float64
-	BaseHP         float64
-	PlayerMana     float64
-	MaxManaPlayer  float64
-	Race           string
-	Constitution   string
-	GuInventory    models.GuInventory
-	DaoMarks       models.DaoMarksMap
-	PathMasteries  models.PathMasteriesMap
-	CombatSettings models.AutoCombatConfig
-}
-
-// buildTeamCombatant builds a combatant from team member data
-func buildTeamCombatant(member *teamMemberCombatant) (*simulator.CombatantAuto, error) {
-	// Calculate stats
-	player := &models.Player{}
-	player.ID = uuid.MustParse(member.PlayerID)
-	player.Username = member.Username
-	player.Rank = member.Rank
-	player.SubRank = member.SubRank
-	player.HP = member.CurrentHP
-	player.BaseHP = member.BaseHP
-	player.CurrentMana = member.CurrentMana
-	player.MaxMana = member.MaxMana
-	player.Race = member.Race
-	player.Constitution = member.Constitution
-	player.GuInventory = member.GuInventory
-	player.DaoMarks = member.DaoMarks
-	player.PathMasteries = member.PathMasteries
-	player.CombatSettings = member.CombatSettings
-
-	playerStats := CalculatePlayerStats(player)
-	actor := models.CombatantFromPlayer(player, playerStats)
-
-	// Build actions from equipped Gus
-	var allActions []simulator.SimAction
-	var allMechanics []simulator.CombatMechanic
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" && gu.Hunger > 0 {
-			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
-				allMechanics = append(allMechanics, battleStartMechanics(spec)...)
-				if hasCombatActiveEffects(&spec) {
-					act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
-					if err != nil {
-						continue
-					}
-					act.SourceID = gu.GuID
-					act.InstanceID = gu.InstanceID
-					allActions = append(allActions, act)
-				}
-			}
-		}
-	}
-
-	// Basic attack fallback
-	allActions = append(allActions, simulator.SimAction{
-		ActionType: "BASIC_ATTACK",
-		Name:       "Đánh thường",
-		Damage:     playerStats["attack"],
-		ManaCost:   0,
-	})
-
-	// Build DaoMarks
-	daoMarks := make(simulator.DaoMarks)
-	for k, v := range member.DaoMarks {
-		daoMarks[k] = v
-	}
-
-	// Calculate max HP
-	baseHP := member.BaseHP + playerStats["hp"]
-	maxHP := baseHP
-	if maxHP <= 0 {
-		maxHP = 100
-	}
-
-	// Use current HP from tournament state
-	simHP := member.CurrentHP
-	if simHP > maxHP {
-		simHP = maxHP
-	}
-	if simHP <= 0 {
-		simHP = maxHP
-	}
-
-	simMana := member.CurrentMana
-	if simMana > member.MaxMana {
-		simMana = member.MaxMana
-	}
-
-	charFX := gamefx.Get(player)
-
-	simCombatant := &simulator.CombatantAuto{
-		ID:                   member.PlayerID,
-		Name:                 member.Username,
-		Kind:                 "Player",
-		Rank:                 member.Rank,
-		SubRank:              member.SubRank,
-		MaxHP:                maxHP,
-		HP:                   simHP,
-		MaxMana:              member.MaxMana,
-		Mana:                 simMana,
-		BaseDmg:              playerStats["attack"],
-		BaseDef:              playerStats["defense"],
-		Speed:                playerStats["speed"],
-		DaoMarks:             daoMarks,
-		PathMasteries:        member.PathMasteries,
-		PathMasteryGainLimit: gamefx.PathMasteryBattleGainLimit(member.Rank),
-		DaoBonus:             charFX.DaoNganBonus,
-		PathDamageBonus:      charFX.PathDamageBonus,
-		PathResistance:       charFX.PathResistanceBonus,
-		HealingReceived:      charFX.HealingReceivedBonus,
-		MentalResistance:     charFX.MentalResistanceBonus,
-		Tenacity:             charFX.Tenacity,
-		CCResist:             charFX.CCResist,
-		Actions:              allActions,
-		Mechanics:            allMechanics,
-		AutoHealHP:           false,
-		HealThreshold:        0.3,
-		AutoRestoreMana:      true,
-		ManaThreshold:        0.2,
-		HealCharges:          0,
-		HealPotency:          0,
-		PrimevalStones:       999999,
-		ImmortalStones:       999999,
-		RefineManaTier:       gamefx.RefineManaTier(member.Rank, member.GuInventory),
-		Loadout: &simulator.CombatLoadout{
-			GuIds: func() []string {
-				var ids []string
-				for _, gu := range player.GuInventory {
-					if gu.Equipped && gu.Status == "ACTIVE" && gu.Hunger > 0 {
-						ids = append(ids, gu.GuID)
-					}
-				}
-				return ids
-			}(),
-		},
-	}
-
-	return simCombatant, nil
+	PlayerID      string
+	CurrentHP     float64
+	MaxHP         float64
+	CurrentMana   float64
+	MaxMana       float64
+	Username      string
+	Rank          int
+	SubRank       int
+	PlayerHP      float64
+	BaseHP        float64
+	PlayerMana    float64
+	MaxManaPlayer float64
+	Race          string
+	Constitution  string
+	GuInventory   models.GuInventory
+	DaoMarks      models.DaoMarksMap
+	PathMasteries models.PathMasteriesMap
 }
 
 // awardChampionRewards awards rewards to top 3 teams

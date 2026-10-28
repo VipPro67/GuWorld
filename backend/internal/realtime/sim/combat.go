@@ -27,6 +27,7 @@ type AttackCommand struct {
 	LeaseToken string
 	Seq        uint64
 	TargetID   EntityID
+	Aim        Vec2
 }
 
 type PendingCast struct {
@@ -51,17 +52,21 @@ type CombatState struct {
 	RecoveryUntil            uint64
 	RecoveryPolicy           string
 	BasicAttackCooldownUntil uint64
-	Cooldowns                [7]uint64
-	Skills                   [7]combat.Skill
-	GuHunger                 [7]float64
-	GuUses                   [7]uint64
+	Cooldowns                [13]uint64
+	Skills                   [13]combat.Skill
+	GuHunger                 [13]float64
+	GuUses                   [13]uint64
+	KillerMoveUses           [13]uint64
+	FormActive               bool
+	FormManaDrainPerTick     float64
+	FormDefenseBonus         float64
 	Pending                  *PendingCast
 	Statuses                 []StatusEffect
 	Hidden                   combat.HiddenPassive
 }
 
 func (w *World) SubmitBasicAttack(command AttackCommand) error {
-	if command.EntityID == "" || command.Seq == 0 || command.TargetID == "" || len(command.TargetID) > MaxEntityIDLength {
+	if command.EntityID == "" || command.Seq == 0 || len(command.TargetID) > MaxEntityIDLength || !finite(command.Aim.X) || !finite(command.Aim.Y) || (command.TargetID == "" && math.Hypot(command.Aim.X, command.Aim.Y) <= 0.01) {
 		return ErrInvalidInput
 	}
 	if len(command.LeaseToken) > MaxEntityIDLength {
@@ -99,30 +104,39 @@ func (w *World) startBasicAttackLocked(attacker *Entity, command AttackCommand) 
 		reject("global_cooldown")
 		return
 	}
-	if w.hasStatus(attacker, "BLIND") {
-		attacker.Combat.BasicAttackCooldownUntil = w.tick + combat.BasicAttackCooldownTicks
-		attacker.Revision++
-		w.emitEvent(combat.Event{Type: combat.EventBasicAttack, SourceID: string(attacker.ID), TargetID: string(command.TargetID), SkillID: "BASIC_ATTACK", DurationTicks: 2})
-		w.emitEvent(combat.Event{Type: combat.EventDamageApplied, SourceID: string(attacker.ID), TargetID: string(command.TargetID), SkillID: "BASIC_ATTACK", X: attacker.Transform.Position.X, Y: attacker.Transform.Position.Y, Amount: 0, HP: attacker.Vitals.HP, Shield: attacker.Vitals.Shield, Reason: "blind"})
-		return
-	}
-	target := w.entities[command.TargetID]
-	if !w.canHarm(attacker, target) {
-		reject("invalid_target")
-		return
-	}
-	if distance(attacker.Transform.Position, target.Transform.Position) > combat.BasicAttackRange {
-		reject("out_of_range")
-		return
-	}
 	if w.tick < attacker.Combat.BasicAttackCooldownUntil {
 		reject("cooldown")
 		return
 	}
+	var target *Entity
+	if command.TargetID != "" {
+		target = w.entities[command.TargetID]
+		if !w.canHarm(attacker, target) {
+			reject("invalid_target")
+			return
+		}
+		if distance(attacker.Transform.Position, target.Transform.Position) > combat.BasicAttackRange {
+			reject("out_of_range")
+			return
+		}
+	} else {
+		target = w.firstCollisionAlongAim(attacker, command.Aim, combat.BasicAttackRange, combat.AimedHitPadding, func(target *Entity) bool {
+			return w.canHarm(attacker, target)
+		})
+	}
 	attacker.Combat.BasicAttackCooldownUntil = w.tick + combat.BasicAttackCooldownTicks
 	attacker.Revision++
 	w.removeStatusLocked(attacker, "STEALTH")
-	w.emitEvent(combat.Event{Type: combat.EventBasicAttack, SourceID: string(attacker.ID), TargetID: string(target.ID), SkillID: "BASIC_ATTACK", DurationTicks: 2})
+	w.emitEvent(combat.Event{Type: combat.EventBasicAttack, SourceID: string(attacker.ID), TargetID: string(command.TargetID), SkillID: "BASIC_ATTACK", DurationTicks: 2})
+	if w.hasStatus(attacker, "BLIND") {
+		if target != nil {
+			w.emitEvent(combat.Event{Type: combat.EventDamageApplied, SourceID: string(attacker.ID), TargetID: string(target.ID), SkillID: "BASIC_ATTACK", X: target.Transform.Position.X, Y: target.Transform.Position.Y, Amount: 0, HP: target.Vitals.HP, Shield: target.Vitals.Shield, Reason: "blind"})
+		}
+		return
+	}
+	if target == nil {
+		return
+	}
 	w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(attacker.ID), TargetID: string(target.ID), SkillID: "BASIC_ATTACK", X: target.Transform.Position.X, Y: target.Transform.Position.Y})
 	damage := attacker.Combat.BasicAttackDamage
 	if damage <= 0 {
@@ -159,9 +173,11 @@ func newPlayerCombat(loadout []combat.Skill) CombatState {
 		Hidden:             combat.PreviewHiddenPassive(),
 	}
 	for _, skill := range loadout {
-		if skill.Slot >= 1 && skill.Slot <= 6 && skill.ID != "" {
+		if skill.Slot >= 1 && skill.Slot <= 12 && skill.ID != "" {
 			state.Skills[skill.Slot] = skill
-			state.GuHunger[skill.Slot] = skill.GuHunger
+			if skill.Slot <= 6 || len(skill.GuComponentIDs) > 0 {
+				state.GuHunger[skill.Slot] = skill.GuHunger
+			}
 		}
 	}
 	return state
@@ -192,7 +208,7 @@ type ProjectileState struct {
 }
 
 func (w *World) SubmitCast(command CastCommand) error {
-	if command.EntityID == "" || command.Seq == 0 || command.Slot < 1 || command.Slot > 6 {
+	if command.EntityID == "" || command.Seq == 0 || command.Slot < 1 || command.Slot > 12 {
 		return ErrInvalidInput
 	}
 	if command.Mode != combat.ModeTarget && command.Mode != combat.ModeDirection && command.Mode != combat.ModeGround && command.Mode != combat.ModeSelf {
@@ -244,13 +260,24 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 		reject("unknown_skill")
 		return
 	}
-	if skill.IsToggle && skill.StatusID != "" && w.hasStatus(caster, skill.StatusID) {
-		w.removeStatusLocked(caster, skill.StatusID)
+	if command.Mode != skill.Mode {
+		reject("wrong_target_mode")
+		return
+	}
+	if skill.FormActivation && caster.Combat.FormActive {
+		caster.Combat.FormActive = false
+		caster.Combat.FormManaDrainPerTick = 0
+		caster.Combat.FormDefenseBonus = 0
 		caster.Revision++
 		return
 	}
-	if command.Mode != skill.Mode {
-		reject("wrong_target_mode")
+	if skill.FormAbility && !caster.Combat.FormActive {
+		reject("form_inactive")
+		return
+	}
+	if skill.IsToggle && skill.StatusID != "" && w.hasStatus(caster, skill.StatusID) {
+		w.removeStatusLocked(caster, skill.StatusID)
+		caster.Revision++
 		return
 	}
 	if w.tick < caster.Combat.RecoveryUntil {
@@ -271,14 +298,21 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 	}
 	switch skill.Mode {
 	case combat.ModeTarget:
-		target := w.entities[command.TargetID]
-		if target == nil || !w.canApplySkill(caster, target, skill) {
-			reject("invalid_target")
+		if command.TargetID != "" {
+			target := w.entities[command.TargetID]
+			if target == nil || !w.canApplySkill(caster, target, skill) {
+				reject("invalid_target")
+				return
+			}
+			if distance(caster.Transform.Position, target.Transform.Position) > skill.Range {
+				reject("out_of_range")
+				return
+			}
+		} else if math.Hypot(command.Aim.X, command.Aim.Y) <= 0.01 {
+			reject("invalid_aim")
 			return
-		}
-		if distance(caster.Transform.Position, target.Transform.Position) > skill.Range {
-			reject("out_of_range")
-			return
+		} else {
+			pending.Point = Vec2{X: caster.Transform.Position.X + command.Aim.X, Y: caster.Transform.Position.Y + command.Aim.Y}
 		}
 	case combat.ModeGround:
 		if distance(caster.Transform.Position, command.Point) > skill.Range {
@@ -295,14 +329,14 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 			return
 		}
 	}
-	if skill.GuInstanceID != "" && caster.Combat.GuHunger[skill.Slot] < 1 {
+	if (skill.GuInstanceID != "" || len(skill.GuComponentIDs) > 0) && caster.Combat.GuHunger[skill.Slot] < 1 {
 		reject("gu_exhausted")
 		return
 	}
-	// Turn combat consumes one hunger from the exact Gu instance on an attempt,
-	// before backlash and the mana check. The zone keeps the balance until the
-	// next atomic player checkpoint settles its per-instance usage delta.
-	if skill.GuInstanceID != "" {
+	// Gu and composite killer move casts consume one hunger from every required
+	// Gu on an attempt, before backlash and the mana check. The zone keeps the
+	// balances until the next atomic player checkpoint settles usage by instance.
+	if skill.GuInstanceID != "" || len(skill.GuComponentIDs) > 0 {
 		caster.Combat.GuHunger[skill.Slot]--
 		caster.Combat.GuUses[skill.Slot]++
 		caster.Revision++
@@ -335,11 +369,31 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 	}
 	w.emitEvent(combat.Event{
 		Type: combat.EventCastAccepted, SourceID: string(caster.ID), TargetID: string(command.TargetID),
-		SkillID: skill.ID, X: command.Point.X, Y: command.Point.Y, DurationTicks: skill.WindupTicks,
+		SkillID: skill.ID, X: pending.Point.X, Y: pending.Point.Y, DurationTicks: skill.WindupTicks,
 	})
 }
 
 func (w *World) tickCombat() {
+	for _, entity := range w.entities {
+		if entity.Kind != EntityPlayer || !entity.Combat.FormActive || entity.Vitals.HP <= 0 {
+			continue
+		}
+		drain := entity.Combat.FormManaDrainPerTick
+		if drain <= 0 || entity.Combat.Mana < drain {
+			entity.Combat.FormActive = false
+			entity.Combat.FormManaDrainPerTick = 0
+			entity.Combat.FormDefenseBonus = 0
+			entity.Revision++
+			continue
+		}
+		entity.Combat.Mana -= drain
+		if entity.Combat.Mana <= 0 {
+			entity.Combat.FormActive = false
+			entity.Combat.FormManaDrainPerTick = 0
+			entity.Combat.FormDefenseBonus = 0
+		}
+		entity.Revision++
+	}
 	if w.tick%combat.ManaRegenInterval == 0 {
 		for _, entity := range w.entities {
 			if entity.Kind != EntityPlayer || entity.Vitals.HP <= 0 {
@@ -376,22 +430,63 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		return
 	}
 	skill := pending.Skill
+	if skill.SuccessChance > 0 && w.rng.Float64() >= skill.SuccessChance {
+		if skill.BackfireHPPercent > 0 {
+			backfire := caster.Vitals.MaxHP * skill.BackfireHPPercent
+			w.applyDamageLocked(caster, caster, backfire, "KILLER_MOVE_BACKFIRE")
+		}
+		w.emitEvent(combat.Event{Type: combat.EventCastRejected, SourceID: string(caster.ID), SkillID: skill.ID, Reason: "backfire"})
+		return
+	}
+	recordKillerMoveUse := func() {
+		if skill.KillerMoveID != "" {
+			caster.Combat.KillerMoveUses[skill.Slot]++
+		}
+	}
 	// Recovery runs after the cast resolves. It gates the next cast/basic
 	// attack and scales ground movement according to the authored policy.
 	if skill.RecoveryTicks > 0 || skill.MovementPolicy != "" {
 		caster.Combat.RecoveryUntil = w.tick + skill.RecoveryTicks
 		caster.Combat.RecoveryPolicy = skill.MovementPolicy
 	}
+	if skill.FormActivation {
+		caster.Combat.FormActive = true
+		caster.Combat.FormManaDrainPerTick = skill.FormManaDrainPerTick
+		caster.Combat.FormDefenseBonus = skill.FormDefenseBonus
+		caster.Revision++
+		return
+	}
 	switch skill.Mode {
 	case combat.ModeTarget:
-		target := w.entities[pending.TargetID]
-		if target == nil || !w.canApplySkill(caster, target, skill) || distance(caster.Transform.Position, target.Transform.Position) > skill.Range {
-			w.emitEvent(combat.Event{Type: combat.EventCastRejected, SourceID: string(caster.ID), SkillID: skill.ID, Reason: "target_lost"})
-			return
+		var target *Entity
+		if pending.TargetID != "" {
+			target = w.entities[pending.TargetID]
+			if target == nil || !w.canApplySkill(caster, target, skill) || distance(caster.Transform.Position, target.Transform.Position) > skill.Range {
+				w.emitEvent(combat.Event{Type: combat.EventCastRejected, SourceID: string(caster.ID), SkillID: skill.ID, Reason: "target_lost"})
+				return
+			}
+		} else {
+			aim := Vec2{X: pending.Point.X - caster.Transform.Position.X, Y: pending.Point.Y - caster.Transform.Position.Y}
+			reach := math.Min(skill.Range, math.Hypot(aim.X, aim.Y))
+			target = w.firstCollisionAlongAim(caster, aim, reach, combat.AimedHitPadding, func(candidate *Entity) bool {
+				return w.canApplySkill(caster, candidate, skill)
+			})
+			if target == nil {
+				break
+			}
 		}
+		recordKillerMoveUse()
 		w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(target.ID), SkillID: skill.ID, X: target.Transform.Position.X, Y: target.Transform.Position.Y})
 		w.applyDamageLocked(caster, target, skill.Damage, skill.ID)
 		if target.Vitals.HP > 0 {
+			if skill.Heal > 0 {
+				target.Vitals.HP = math.Min(target.Vitals.MaxHP, target.Vitals.HP+skill.Heal)
+				target.Revision++
+			}
+			if skill.Shield > 0 {
+				target.Vitals.Shield += skill.Shield
+				target.Revision++
+			}
 			w.applyStatusLocked(caster, target, skill)
 			if skill.Cleanse {
 				w.cleanseDebuffsLocked(target)
@@ -482,6 +577,15 @@ func (w *World) resolveCastLocked(caster *Entity) {
 			}
 		}
 	case combat.ModeSelf:
+		recordKillerMoveUse()
+		if skill.Heal > 0 {
+			caster.Vitals.HP = math.Min(caster.Vitals.MaxHP, caster.Vitals.HP+skill.Heal)
+			caster.Revision++
+		}
+		if skill.Shield > 0 {
+			caster.Vitals.Shield += skill.Shield
+			caster.Revision++
+		}
 		w.applyStatusLocked(caster, caster, skill)
 		if skill.Cleanse {
 			w.cleanseDebuffsLocked(caster)
@@ -507,8 +611,8 @@ func (w *World) resolveCastLocked(caster *Entity) {
 			caster.Revision++
 		}
 	}
-	// Heal and shield always resolve on the caster, matching the legacy
-	// simulator where HEAL/SHIELD operations land on the acting character even
+	// Heal and shield always resolve on the caster, matching the existing Gu contract where HEAL/SHIELD operations land on the
+	// acting character even
 	// when the Gu's target mode is TARGET, DIRECTION or GROUND.
 	w.applySelfSupportLocked(caster, skill)
 }
@@ -782,7 +886,11 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 			}
 		}
 	}
-	remaining := amount - math.Max(0, target.Defense)
+	defense := target.Defense
+	if target.Kind == EntityPlayer && target.Combat.FormActive {
+		defense += target.Combat.FormDefenseBonus
+	}
+	remaining := amount - math.Max(0, defense)
 	if target.DaoProfile != nil {
 		remaining *= 1 - target.DaoProfile.GetDefensiveResistance(path)
 	}
@@ -814,7 +922,7 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 	if hpDamage > 0 || shieldAbsorbed > 0 {
 		w.removeStatusLocked(target, "STEALTH")
 	}
-	if target.Kind == EntityPlayer && target.Combat.Pending != nil {
+	if target.Kind == EntityPlayer && target.Combat.Pending != nil && !target.Combat.Pending.Skill.FormActivation {
 		interrupted := target.Combat.Pending.Skill.ID
 		target.Combat.Pending = nil
 		interruptedBy := ""
@@ -846,7 +954,7 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 	target.Combat.Pending = nil
 	target.AI.Threat = ""
 	target.AI.PatrolTarget = nil
-	w.emitEvent(combat.Event{Type: combat.EventEntityDied, SourceID: sourceID, TargetID: string(target.ID), SkillID: skillID, X: target.Transform.Position.X, Y: target.Transform.Position.Y, TemplateID: target.AI.TemplateID, PersistentID: target.AI.PersistentID, TargetKind: string(target.Kind)})
+	w.emitEvent(combat.Event{Type: combat.EventEntityDied, SourceID: sourceID, TargetID: string(target.ID), SkillID: skillID, X: target.Transform.Position.X, Y: target.Transform.Position.Y, TemplateID: target.AI.TemplateID, MonsterRank: target.AI.Rank, PersistentID: target.AI.PersistentID, TargetKind: string(target.Kind)})
 	if target.Kind == EntityMonster && target.AI.Active {
 		target.AI.State = AIDead
 		if !target.AI.NoRespawn {
@@ -924,6 +1032,34 @@ func segmentDistance(from, to, point Vec2) float64 {
 	t = math.Max(0, math.Min(1, t))
 	closestX, closestY := from.X+t*dx, from.Y+t*dy
 	return math.Hypot(point.X-closestX, point.Y-closestY)
+}
+
+// firstCollisionAlongAim finds the first eligible body intersected by a narrow
+// swing/ray. Distance and ID ordering keep ties deterministic across zone runs.
+func (w *World) firstCollisionAlongAim(source *Entity, aim Vec2, reach, hitRadius float64, eligible func(*Entity) bool) *Entity {
+	length := math.Hypot(aim.X, aim.Y)
+	if source == nil || length <= 0.01 || reach <= 0 {
+		return nil
+	}
+	from := source.Transform.Position
+	direction := Vec2{X: aim.X / length, Y: aim.Y / length}
+	to := Vec2{X: from.X + direction.X*reach, Y: from.Y + direction.Y*reach}
+	var first *Entity
+	firstAlong := math.Inf(1)
+	for _, target := range w.entities {
+		if !eligible(target) || segmentDistance(from, to, target.Transform.Position) > hitRadius+target.Radius {
+			continue
+		}
+		along := (target.Transform.Position.X-from.X)*direction.X + (target.Transform.Position.Y-from.Y)*direction.Y
+		if along < -target.Radius || along > reach+target.Radius {
+			continue
+		}
+		if first == nil || along < firstAlong || (along == firstAlong && target.ID < first.ID) {
+			first = target
+			firstAlong = along
+		}
+	}
+	return first
 }
 
 func (w *World) applyKnockbackLocked(source, target *Entity, dist float64) {

@@ -321,7 +321,7 @@ func TestWorldMonsterChasesWithoutContactAttacking(t *testing.T) {
 	}
 	c[0].X = 5
 	m, event = tickWorldMonster(m, c, now.Add(2500*time.Millisecond), active)
-	if m.State != MonsterStateAttack || m.X != 4 || event != "monster_encounter_started" {
+	if m.State != MonsterStateAttack || m.X != 4 || event != "monster_attack_started" {
 		t.Fatalf("monster should start encounter in attack range: monster=%+v event=%s", m, event)
 	}
 	c[0].X = 8
@@ -626,7 +626,7 @@ func installWorldAttackTest(t *testing.T, now time.Time, monsters []WorldMonster
 	return &events, &calls
 }
 
-func TestWorldMonsterContactDoesNotDamageOrCounterattack(t *testing.T) {
+func TestWorldMonsterContactAppliesRealtimeAttackWithoutCounterattack(t *testing.T) {
 	now := time.Now().UTC()
 	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1, Attack: 25}
 	m := testMonster(now.Add(-time.Second))
@@ -640,8 +640,9 @@ func TestWorldMonsterContactDoesNotDamageOrCounterattack(t *testing.T) {
 		return cache.WorldMonsterHit, monster, 20, nil
 	}
 	processWorldMonsterTick(context.Background(), now)
-	if attacks.Load() != 0 || counters.Load() != 0 {
-		t.Fatalf("contact combat calls: attacks=%d counterattacks=%d, want zero", attacks.Load(), counters.Load())
+	waitWorldMonsterAttackPoolIdle(t)
+	if attacks.Load() != 1 || counters.Load() != 0 {
+		t.Fatalf("contact combat calls: attacks=%d counterattacks=%d, want one realtime attack and no counterattack", attacks.Load(), counters.Load())
 	}
 }
 
@@ -734,86 +735,24 @@ func TestRotatingMonsterBucketWindowEventuallyVisitsEveryBucket(t *testing.T) {
 	}
 }
 
-func TestBuildWorldMonsterCombatStateRegular(t *testing.T) {
-	template := models.MonsterTemplate{
-		ID:          "m_wolf",
-		Name:        "Sói Hoang",
-		MaxHP:       100,
-		BaseAttack:  15,
-		BaseDefense: 5,
-	}
-	monster := WorldMonster{
-		InstanceID:        "inst_123",
-		RegionID:          "Southern_Border",
-		MonsterTemplateID: "m_wolf",
-		Rank:              1,
-		SubRank:           1,
-		IsBoss:            false,
-	}
-
-	state := BuildWorldMonsterCombatState(template, monster)
-
-	if state.WorldMonsterRegionID != "Southern_Border" {
-		t.Errorf("WorldMonsterRegionID = %q, want 'Southern_Border'", state.WorldMonsterRegionID)
-	}
-	if state.WorldMonsterID != "inst_123" {
-		t.Errorf("WorldMonsterID = %q, want 'inst_123'", state.WorldMonsterID)
-	}
-	if state.WorldMonsterEncounterID == "" {
-		t.Errorf("expected non-empty WorldMonsterEncounterID")
-	}
-	if state.EnemyType == "BOSS" {
-		t.Errorf("expected regular enemy type, got %q", state.EnemyType)
-	}
-}
-
-func TestBuildWorldMonsterCombatStateBoss(t *testing.T) {
-	template := models.MonsterTemplate{
-		ID:          "m_boss_bear",
-		Name:        "Gấu Bạo Chúa",
-		MaxHP:       1000,
-		BaseAttack:  100,
-		BaseDefense: 50,
-	}
-	monster := WorldMonster{
-		InstanceID:        "inst_boss_999",
-		RegionID:          "Southern_Border",
-		MonsterTemplateID: "m_boss_bear",
-		SpawnID:           "mapcell:Southern_Border:12:34",
-		Rank:              3,
-		SubRank:           2,
-		IsBoss:            true,
-	}
-
-	state := BuildWorldMonsterCombatState(template, monster)
-
-	if state.EnemyType != "BOSS" {
-		t.Errorf("EnemyType = %q, want 'BOSS'", state.EnemyType)
-	}
-	if state.WorldBossCellRegionID != "Southern_Border" || state.WorldBossCellX != 12 || state.WorldBossCellY != 34 {
-		t.Errorf("Boss cell mismatch: got region=%s x=%d y=%d, want Southern_Border:12:34",
-			state.WorldBossCellRegionID, state.WorldBossCellX, state.WorldBossCellY)
-	}
-}
-
-// waitWorldMonsterEncounterPoolIdle blocks until no encounter worker holds a
+// waitWorldMonsterAttackPoolIdle blocks until no attack worker holds a
 // slot, so pool assertions are deterministic regardless of test ordering.
-func waitWorldMonsterEncounterPoolIdle(t *testing.T) {
+func waitWorldMonsterAttackPoolIdle(t *testing.T) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		filled := 0
-		for i := 0; i < cap(worldMonsterEncounterSlots); i++ {
+		for i := 0; i < cap(worldMonsterAttackSlots); i++ {
 			select {
-			case worldMonsterEncounterSlots <- struct{}{}:
+			case worldMonsterAttackSlots <- struct{}{}:
 				filled++
 			default:
 			}
 		}
 		for i := 0; i < filled; i++ {
-			<-worldMonsterEncounterSlots
+			<-worldMonsterAttackSlots
 		}
-		if filled == cap(worldMonsterEncounterSlots) {
+		if filled == cap(worldMonsterAttackSlots) {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -823,50 +762,50 @@ func waitWorldMonsterEncounterPoolIdle(t *testing.T) {
 	}
 }
 
-// TestContactDispatchesEncounterOffTick verifies a proximity contact is handed
+// TestContactDispatchesRealtimeAttackOffTick verifies a proximity contact is handed
 // to the bounded background pool instead of being resolved inline by the tick.
-func TestContactDispatchesEncounterOffTick(t *testing.T) {
+func TestContactDispatchesRealtimeAttackOffTick(t *testing.T) {
 	now := time.Now().UTC()
 	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1, Attack: 25}
 	m := testMonster(now.Add(-time.Second))
-	// Chase -> Attack with the player already inside attack range exercises the
-	// transition that reserves the encounter.
+	// Chase -> Attack with the player already inside attack range reserves one
+	// realtime monster attack.
 	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateChase, p.ID.String(), 2, now.Add(-time.Second)
 	m.X, m.Y = 1, 0
 	_, attacks := installWorldAttackTest(t, now, []WorldMonster{m}, p)
 
-	before := worldMonsterMetrics.encounterDispatched.Load()
+	before := worldMonsterMetrics.attackDispatched.Load()
 	processWorldMonsterTick(context.Background(), now)
-	if got := worldMonsterMetrics.encounterDispatched.Load(); got != before+1 {
-		t.Fatalf("encounterDispatched = %d, want %d", got, before+1)
+	if got := worldMonsterMetrics.attackDispatched.Load(); got != before+1 {
+		t.Fatalf("attackDispatched = %d, want %d", got, before+1)
 	}
-	// The legacy inline damage path must remain unused.
-	if attacks.Load() != 0 {
-		t.Fatalf("legacy inline attack ran %d times, want 0", attacks.Load())
+	waitWorldMonsterAttackPoolIdle(t)
+	if attacks.Load() != 1 {
+		t.Fatalf("realtime attack ran %d times, want 1", attacks.Load())
 	}
 }
 
-// TestEncounterDispatchDefersWhenPoolFull verifies the tick never blocks: when
+// TestRealtimeAttackDispatchDefersWhenPoolFull verifies the tick never blocks: when
 // every worker slot is taken, the contact is deferred instead of queueing.
-func TestEncounterDispatchDefersWhenPoolFull(t *testing.T) {
-	waitWorldMonsterEncounterPoolIdle(t)
-	for i := 0; i < cap(worldMonsterEncounterSlots); i++ {
-		worldMonsterEncounterSlots <- struct{}{}
+func TestRealtimeAttackDispatchDefersWhenPoolFull(t *testing.T) {
+	waitWorldMonsterAttackPoolIdle(t)
+	for i := 0; i < cap(worldMonsterAttackSlots); i++ {
+		worldMonsterAttackSlots <- struct{}{}
 	}
 	defer func() {
-		for i := 0; i < cap(worldMonsterEncounterSlots); i++ {
-			<-worldMonsterEncounterSlots
+		for i := 0; i < cap(worldMonsterAttackSlots); i++ {
+			<-worldMonsterAttackSlots
 		}
 	}()
 
-	deferredBefore := worldMonsterMetrics.encounterDeferred.Load()
-	dispatchedBefore := worldMonsterMetrics.encounterDispatched.Load()
-	dispatchWorldMonsterEncounter(context.Background(), WorldMonster{InstanceID: "m-full", RegionID: "field"}, uuid.NewString())
+	deferredBefore := worldMonsterMetrics.attackDeferred.Load()
+	dispatchedBefore := worldMonsterMetrics.attackDispatched.Load()
+	dispatchWorldMonsterAttack(context.Background(), WorldMonster{InstanceID: "m-full", RegionID: "field"}, uuid.NewString())
 
-	if got := worldMonsterMetrics.encounterDeferred.Load(); got != deferredBefore+1 {
-		t.Fatalf("encounterDeferred = %d, want %d", got, deferredBefore+1)
+	if got := worldMonsterMetrics.attackDeferred.Load(); got != deferredBefore+1 {
+		t.Fatalf("attackDeferred = %d, want %d", got, deferredBefore+1)
 	}
-	if got := worldMonsterMetrics.encounterDispatched.Load(); got != dispatchedBefore {
-		t.Fatalf("encounterDispatched changed on a full pool: %d -> %d", dispatchedBefore, got)
+	if got := worldMonsterMetrics.attackDispatched.Load(); got != dispatchedBefore {
+		t.Fatalf("attackDispatched changed on a full pool: %d -> %d", dispatchedBefore, got)
 	}
 }

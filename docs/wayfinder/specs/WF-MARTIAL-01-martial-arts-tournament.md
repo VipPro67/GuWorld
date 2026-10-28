@@ -182,8 +182,8 @@ Clone `StartTournament` → `StartMartialTournament` (LOCKED → IN_PROGRESS, r�
 ## 7. Resolve trận 1v1
 
 Clone `resolveTeamMatch` (`death_arena_process.go`) thành `resolveMartialMatch(tournamentID, matchID, combatantAID, combatantBID *string)`:
-- Thay `loadTeamMembersForCombat(teamID)` bằng `loadCombatant(combatantID)` — cùng câu SELECT (player + Gu + dao_marks + path_masteries + combat_settings), chỉ đổi `WHERE p.id = $1` và bỏ join `death_arena_team_members`.
-- Tái dùng **nguyên vẹn** `buildTeamCombatant(member *teamMemberCombatant)` (đầu vào struct giữ nguyên) và `simulator.Simulate`:
+- **Đã superseded:** vòng đấu nay dùng phiên realtime riêng; phần simulator bên dưới chỉ ghi lại phương án turn-based ban đầu và không còn là chỉ dẫn triển khai hiện hành.
+- Phương án ban đầu từng đề xuất tái dùng `buildTeamCombatant` và `simulator.Simulate`:
 
 ```go
 simState := &simulator.CombatState{Turn: 0, Seed: time.Now().UnixNano(), VirtualMode: true}

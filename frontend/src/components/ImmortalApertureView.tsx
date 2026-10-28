@@ -285,8 +285,6 @@ export const ImmortalApertureView: React.FC = () => {
     upgradeApertureNode,
     manageApertureNodesBatch,
     fetchActiveTribulation,
-    engageTribulationCombat,
-    resolveTribulation,
     realtimeEngageTribulation,
     realtimeResolveTribulationVictory,
     useItems: consumeItems,
@@ -637,16 +635,6 @@ export const ImmortalApertureView: React.FC = () => {
         "info"
       );
     }
-  };
-
-  const handleEngage = async () => {
-    if (!activeTribulation) return;
-    await engageTribulationCombat(activeTribulation.event.id);
-  };
-
-  const handleResolve = async () => {
-    if (!activeTribulation) return;
-    await resolveTribulation(activeTribulation.event.id);
   };
 
   // Helper helper to format names nicely
@@ -1339,41 +1327,22 @@ return (
                           <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
                           Vào Tiên Khiếu Nghênh Kiếp (Bản Đồ Realtime 40×40)
                         </button>
-                        <button
-                          onClick={handleEngage}
-                          disabled={actionLoading}
-                          className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-slate-700"
-                        >
-                          <Sword className="w-4 h-4" />
-                          {actionLoading ? "Đang xuất trận..." : "Xuất Trận Tự Động (Turn-based Cũ)"}
-                        </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Resolve Panel */}
-                  <div className="space-y-4 pt-4 border-t border-slate-800">
+                  {/* Realtime settlement panel */}
+                  <div className="space-y-3 pt-4 border-t border-slate-800">
                     <h3 className="text-md font-bold text-slate-200 flex items-center gap-2">
                       <Shield className="w-4 h-4 text-emerald-400" />
-                      Kết Toán Vượt Kiếp
+                      Kết Toán Realtime
                     </h3>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Để kết thúc tai kiếp hoàn toàn, hãy tiêu diệt toàn bộ kẻ địch trên bản đồ lưới trước khi nhấn kết toán để nhận **Đạo Ngân tối đa**.
-                    </p>
-                    <p className="text-[11px] text-rose-500 font-semibold leading-relaxed">
-                      ⚠️ Cảnh báo: Kết toán khi còn quái vật sống (rút lui) sẽ LUÔN THẤT BẠI! Tiên Khiếu sẽ bị tổn hại nặng nề, mất tài nguyên và không nhận được Đạo Ngân!
+                      Vào bản đồ nghênh kiếp để chiến đấu realtime. Hệ thống tự kết toán khi toàn bộ quái kiếp bị đánh bại; có thể rút lui từ HUD trong bản đồ.
                     </p>
                     <p className="text-[11px] text-cyan-400 font-semibold leading-relaxed">
-                      Lưu ý Đột Phá: Đảm bảo Cảnh Giới Lưu Phái đạt yêu cầu (Thất: Tông Sư, Bát: Đại Tông Sư, Cửu: Vô Thượng Đại Tông Sư ). Nếu thiếu, việc vượt kiếp vẫn thành công nhưng sẽ KHÔNG thể thăng Chuyển tu vi dù đủ số lần tai kiếp.
+                      Đột phá tu vi được xét khi tai kiếp realtime hoàn tất, dựa trên tiến trình Đạo Ngân và cảnh giới lưu phái.
                     </p>
-
-                    <button
-                      onClick={handleResolve}
-                      disabled={actionLoading}
-                      className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl transition shadow-lg"
-                    >
-                      {actionLoading ? "Đang xử lý..." : "Yêu Cầu Kết Toán Tai Kiếp"}
-                    </button>
                   </div>
                 </div>
               ) : (

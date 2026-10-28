@@ -73,54 +73,6 @@ export interface RefineRateBreakdown {
 }
 
 
-export interface Combatant {
-  id: string;
-  name: string;
-  kind: string; // "Player", "Normal", "Boss", etc.
-  rank: number;
-  sub_rank: number;
-  hp: number;
-  max_hp: number;
-  current_mana: number;
-  max_mana: number;
-  base_attack: number;
-  base_defense: number;
-  gu_inventory?: GuInstance[];
-  dao_marks?: Record<string, number>;
-  path_masteries?: Record<string, number>;
-  ai_profile?: string;
-  loot_table_id?: string;
-  grid_x?: number;
-  grid_y?: number;
-  speed?: number;
-  virtual_shield?: number;
-  avatar_url?: string;
-}
-
-export interface CombatState {
-  enemy_name: string;
-  enemy_hp: number;
-  enemy_max_hp: number;
-  enemy_damage: number;
-  enemy_defense: number;
-  charge_points: number;
-  target_player_id?: string;
-  enemy_template_id?: string;
-  world_monster_region_id?: string;
-  world_monster_id?: string;
-  world_monster_encounter_id?: string;
-  allies?: Combatant[];
-  enemies?: Combatant[];
-  enemy_type?: string;
-  enemy_rank?: number;
-  enemy_sub_rank?: number;
-  combat_mode?: string;
-  tribulation_event_id?: string;
-  target_sect_id?: string;
-  aperture_hp?: number;
-  aperture_max_hp?: number;
-}
-
 export interface PlayerPet {
   id: string;
   player_id: string;
@@ -269,6 +221,7 @@ export interface Player {
   body_mods: string[];
   current_region: string;
   world_zone_id?: string;
+  world_instance_id?: string;
   dao_marks: Record<string, number>;
   path_masteries: Record<string, number>;
   x: number;
@@ -276,7 +229,6 @@ export interface Player {
   equipped_gus: string[];
   cleared_cells: Record<string, string>;
   visited_subzones?: string[];
-  active_combat: CombatState | null;
   last_mana_update: string;
   created_at: string;
   lifespan: number;
@@ -332,23 +284,7 @@ export interface PlayerStatusInstance {
 }
 
 
-export interface GuTactic {
-  gu_id: string;
-  priority: number;
-  use_condition: string;
-  condition_value: number;
-}
-
 export interface AutoCombatConfig {
-  auto_heal_hp: boolean;
-  heal_threshold: number;
-  auto_restore_mana: boolean;
-  mana_threshold: number;
-  category_priorities?: string[];
-  gu_priorities: GuTactic[];
-  killer_move_priorities?: GuTactic[];
-  km_priorities?: GuTactic[];
-  skip_battle: boolean;
   realtime_left_click_slot?: number;
   realtime_right_click_action?: "attack" | "skill";
   realtime_right_click_slot?: number;
@@ -1216,14 +1152,11 @@ export const AUTHENTICATED_SESSION = "cookie-session";
 const PLAYER_EVENT_TYPES = [
   "mana.snapshot",
   "player.updated",
-  "combat.started",
-  "combat.ended",
   "trade.updated",
   "player.heartbeat",
   "player.position",
   "player.hp",
   "player.mana",
-  "player.combat_state",
   "session.kicked",
 ] as const;
 
@@ -1866,54 +1799,20 @@ export const useGameStore = create<GameState>((set, get) => {
             return;
           }
 
-          if (eventType === "player.combat_state" || eventType === "combat.started" || eventType === "combat.ended") {
-            if (!currentPlayer) return;
-            const nextCombat = eventData?.active_combat || null;
-            const updatedPlayer = {
-              ...currentPlayer,
-              active_combat: nextCombat,
-              ...(eventVersion !== undefined ? { version: eventVersion } : {}),
-            };
-            set((state) => ({
-              player: updatedPlayer,
-              playerStateRevision: incomingRevision ?? get().playerStateRevision,
-              playerRevision: state.playerRevision + 1,
-              ...(nextCombat === null || eventType === "combat.ended" ? { activeCombatReplay: null } : {}),
-              manaSnapshot: updatedPlayer
-                ? createManaSnapshotFromPlayer(
-                    updatedPlayer,
-                    get().guDictionary,
-                    get().constitutionDictionary,
-                    get().aperture?.time_rate
-                  )
-                : get().manaSnapshot,
-            }));
-            if (eventType === "combat.started") {
-              get().addLog("Chiến đấu realtime đã bắt đầu.");
-            } else if (eventType === "combat.ended") {
-              get().addLog("Chiến đấu realtime đã kết thúc.");
-            }
-            return;
-          }
-
           // Full snapshot fallback (for initial connection and other events)
           if (!eventData?.id && !payload.patch) return;
 
           if (!currentPlayer || (eventData.id && currentPlayer.id !== eventData.id)) return;
 
-          const { active_combat, ...rest } = eventData;
-          const nextCombat = active_combat !== undefined ? active_combat : currentPlayer.active_combat;
           const updatedPlayer = normalizePlayer({
             ...currentPlayer,
-            ...rest,
+            ...eventData,
             id: currentPlayer.id,
-            active_combat: nextCombat,
           });
           set((state) => ({
             player: updatedPlayer,
             playerStateRevision: incomingRevision ?? get().playerStateRevision,
             playerRevision: state.playerRevision + 1,
-            ...(nextCombat === null ? { activeCombatReplay: null } : {}),
             manaSnapshot: updatedPlayer
               ? createManaSnapshotFromPlayer(
                   updatedPlayer,

@@ -94,7 +94,10 @@ func recoverDeathArenaOnStartup() {
 func reconcileInProgressTournament(tournamentID string) {
 	// Reset matches stuck IN_PROGRESS (crashed mid-resolve) back to PENDING
 	// so the count below reflects all unfinished work.
-	_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'PENDING' WHERE tournament_id = $1 AND status = 'IN_PROGRESS'`, tournamentID)
+	_, _ = db.DB.Exec(`UPDATE death_arena_matches m SET status='PENDING'
+		WHERE m.tournament_id=$1 AND m.status='IN_PROGRESS' AND NOT EXISTS (
+			SELECT 1 FROM realtime_combat_sessions s WHERE s.mode='tournament' AND s.status='active'
+			AND s.payload->>'tournament_id'=$1 AND s.payload->>'match_id'=m.id::text)`, tournamentID)
 
 	var pending int
 	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM death_arena_matches WHERE tournament_id = $1 AND status = 'PENDING'`, tournamentID).Scan(&pending)

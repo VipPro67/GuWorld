@@ -1,6 +1,6 @@
 # Cơ Chế Cảnh Giới Lưu Phái & Đạo Ngân
 
-> Dựa trên source code `backend/internal/handlers/` và `backend/internal/models/` — cập nhật cho V2 Killer Move.
+> Tài liệu này còn phần công thức lịch sử từ `handlers/`. Turn-based combat đã bị gỡ theo #272; phần combat cũ bên dưới không phải contract runtime. Combat realtime chỉ dùng cơ chế được khai báo trong profile MMO.
 
 ---
 
@@ -47,7 +47,7 @@ finalDefense = baseDefense × daoMultiplier
 
 > **Không áp lên chỉ số bị động.** Đạo Ngân chỉ khuếch đại sát thương/khiên/hồi máu của hành động trong combat (và các cơ chế triệu hồi/bắt thú/luyện cổ/trinh sát riêng). ATK/DEF/HP/SPEED cộng thẳng từ Cổ (`ALWAYS_ON` / `PASSIVE_STATS`) là **giá trị raw**, không nhân Đạo Ngân lẫn Đạo Cấp: `GetPassiveStats` (`handlers/player_stats.go`) và `PassiveHPBonus` (`gamefx/fx.go`) cộng đúng con số trong data.
 
-**Auto-combat (chiến đấu tự động):** Đạo Ngân được engine `simulator/engine.go` áp dụng **cho cả 2 phe** (người chơi lẫn quái) theo `DaoMultiplier()` (`engine.go`), dựa trên `SimAction.Path` — áp dụng cho **sát thương, Khiên Ảo (`Defense`) và hồi phục (`Healing`)** nếu hành động thuộc cùng đường (path). Log chiến đấu hiển thị phần cộng thêm dạng `gây X + Y sát thương do Đạo Ngân`, `nhận X + Y Khiên Ảo do Đạo Ngân`, `hồi phục X + Y HP do Đạo Ngân`. Trong auto-combat, sát chiêu được bỏ phần dao đã snapshot lúc tạo rồi engine tính lại theo Đạo Ngân hiện tại (`combat_auto.go:buildSimActionFromKillerMove`), còn kỹ năng Cổ thì `CalculateGuEffectForCombatant` được gọi với `applyDao=false` để engine tự áp dụng (`combat_auto.go:buildSimActionFromGu`).
+**Combat realtime:** profile MMO quyết định hành vi cast, target, thời lượng, hồi chiêu và hiệu ứng realtime. Hệ số `DaoMultiplier()` và cách áp dụng bên dưới chỉ ghi lại runtime turn-based đã nghỉ hưu; không dùng các công thức/đường dẫn `simulator/engine.go` để suy ra combat hiện hành. Profile thiếu hành vi realtime hợp lệ bị khóa, không tự đổi lượt thành thời gian.
 
 Frontend đồng bộ: `ImmortalApertureView.tsx:1850-1855`
 
@@ -131,9 +131,9 @@ Ví dụ JSON:
 | **Luyện Cổ thành công** | `refine_gu.go` | Theo rank Cổ đích: 2 / 5 / 15 / 40 / 100 / 500 / 2.500 / 15.000 / 50.000, sau đó áp dụng hiệu suất cảnh giới |
 | **Chân Ý từ phó bản** | `instance.go` | cộng thẳng `amount` điểm vào path |
 
-> **Giới hạn mỗi trận (battle cap):** các nguồn trong trận chiến thường từ Cổ phàm và Sát chiêu phàm — đánh tự động/Simulator (`simulator/engine.go`), sát chiêu phàm (`killer_move.go`) — bị chặn ở **`PathMasteryBattleGainLimit(rank)` = Rank × 10 điểm/trận** (`gamefx/path_mastery.go`). Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** được giải phóng hoàn toàn giới hạn (uncapped), không có tối đa điểm Chân Ý nhận trong 1 trận. Counter lưu trong `players.active_combat.path_mastery_gained` (JSONB, reset mỗi trận); với auto-combat, cap được áp dụng ngay trong vòng lặp simulator qua `CombatantAuto.PathMasteryGainLimit`. Khi nguồn phàm chạm trần, điểm Chân Ý phàm không cộng thêm và log có ghi `PATH_MASTERY_CAP`. Luyện cổ và thưởng phó bản không tính vào giới hạn này.
+> **Battle cap (lịch sử):** `PathMasteryBattleGainLimit(rank)` và counter `players.active_combat.path_mastery_gained` thuộc pipeline turn-based đã gỡ theo #272. Realtime hiện không có counter Chân Ý theo trận; đừng dùng giới hạn cũ để suy ra số điểm nhận trong MMO.
 
-Mỗi lần dùng Cổ thành công có Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Sau đó `CalculatePathMasteryGain` áp dụng hiệu suất theo cảnh giới hiện tại và giới hạn cảnh giới của rank Cổ; Cổ tiêu hao ngoài chiến đấu và Cổ trong simulator dùng chung công thức này.
+Luật Chân Ý khi dùng Cổ trong combat simulator là lịch sử. Cổ tiêu hao ngoài chiến đấu vẫn dùng `CalculatePathMasteryGain`; combat realtime chưa ghi Chân Ý cho cast, và hiện không có cap theo trận.
 
 ### 2.3 Công Thức Ảnh Hưởng
 

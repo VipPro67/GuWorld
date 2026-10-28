@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -27,6 +29,33 @@ type RealtimeEquippedGu struct {
 	BacklashPct float64
 	Path        string
 	Usable      bool
+}
+
+type RealtimeKillerMoveComponent struct {
+	InstanceID string
+	GuID       string
+	Rank       int
+	Hunger     float64
+}
+
+type RealtimeKillerMove struct {
+	ID                   string
+	Name                 string
+	Rank                 int
+	Path                 string
+	Components           []RealtimeKillerMoveComponent
+	ExpectedComponents   int
+	Effects              []gameplayeffects.Block
+	ManaCost             float64
+	SuccessChance        float64
+	BackfireHPPercent    float64
+	BackfireStatus       string
+	Complexity           float64
+	DamageScale          float64
+	RealtimeWindupMS     uint64
+	RealtimeCooldownMS   uint64
+	CreationMasteryLevel int
+	MasteryXP            int
 }
 
 // RealtimeJoinState is loaded from the primary database for admission. It is
@@ -57,10 +86,93 @@ type RealtimeJoinState struct {
 	DaoProfile               *gamefx.DaoCombatProfile
 	PathResistance           map[string]float64
 	Rank                     int
-	HasActiveCombat          bool
 	NeedsOnboarding          bool
 	PartyID                  string
 	EquippedGu               []RealtimeEquippedGu
+	KillerMoves              []RealtimeKillerMove
+}
+
+func loadRealtimeKillerMoves(ctx context.Context, tx *sql.Tx, playerID uuid.UUID) ([]RealtimeKillerMove, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id::text,name,main_gu_rank,path,components,compiled_effects,
+			COALESCE((combat_profile->>'mana_cost')::double precision,0),
+			success_chance,complexity,COALESCE(combat_profile->>'backfire_hp_pct','0'),
+			COALESCE(combat_profile->>'backfire_status',''),
+			COALESCE((combat_profile->>'realtime_windup_ms')::bigint,0),
+			COALESCE((combat_profile->>'realtime_cooldown_ms')::bigint,0),
+			creation_path_mastery_level,mastery_xp
+		FROM player_killer_moves WHERE player_id=$1 AND is_equipped=true
+		ORDER BY updated_at DESC,id LIMIT 4
+	`, playerID)
+	if err != nil {
+		return nil, fmt.Errorf("load equipped realtime killer moves: %w", err)
+	}
+	type componentRef struct {
+		InstanceID string `json:"instance_id"`
+		GuID       string `json:"gu_id"`
+		Rank       int    `json:"rank"`
+	}
+	type pendingComponents struct {
+		moveIndex  int
+		components []componentRef
+	}
+	moves := make([]RealtimeKillerMove, 0, 4)
+	componentRefs := make([]pendingComponents, 0, 4)
+	for rows.Next() {
+		var move RealtimeKillerMove
+		var rawComponents, rawEffects []byte
+		if err := rows.Scan(&move.ID, &move.Name, &move.Rank, &move.Path, &rawComponents, &rawEffects,
+			&move.ManaCost, &move.SuccessChance, &move.Complexity, &move.BackfireHPPercent, &move.BackfireStatus,
+			&move.RealtimeWindupMS, &move.RealtimeCooldownMS, &move.CreationMasteryLevel, &move.MasteryXP); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan equipped realtime killer move: %w", err)
+		}
+		var components []componentRef
+		if err := json.Unmarshal(rawComponents, &components); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("decode realtime killer move components: %w", err)
+		}
+		move.ExpectedComponents = len(components)
+		componentRefs = append(componentRefs, pendingComponents{moveIndex: len(moves), components: components})
+		if move.RealtimeWindupMS == 0 || move.RealtimeCooldownMS == 0 {
+			move.RealtimeWindupMS, move.RealtimeCooldownMS = models.KillerMoveRealtimeTiming(move.Rank, move.Complexity)
+		}
+		if err := json.Unmarshal(rawEffects, &move.Effects); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("decode realtime killer move effects: %w", err)
+		}
+		moves = append(moves, move)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("read equipped realtime killer moves: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close equipped realtime killer moves: %w", err)
+	}
+	// database/sql transactions use one connection. Resolve component rows only
+	// after closing the loadout cursor so the follow-up queries cannot wait on it.
+	for _, pending := range componentRefs {
+		move := &moves[pending.moveIndex]
+		for _, component := range pending.components {
+			var hunger float64
+			var state string
+			componentErr := tx.QueryRowContext(ctx, `
+				SELECT hunger,state FROM player_gu WHERE id=$1 AND player_id=$2 AND gu_id=$3 AND gu_rank=$4
+			`, component.InstanceID, playerID, component.GuID, component.Rank).Scan(&hunger, &state)
+			if errors.Is(componentErr, sql.ErrNoRows) || strings.EqualFold(state, "DEAD") {
+				move.Components = nil
+				break
+			}
+			if componentErr != nil {
+				return nil, fmt.Errorf("load realtime killer move component %s: %w", component.InstanceID, componentErr)
+			}
+			move.Components = append(move.Components, RealtimeKillerMoveComponent{
+				InstanceID: component.InstanceID, GuID: component.GuID, Rank: component.Rank, Hunger: hunger,
+			})
+		}
+	}
+	return moves, nil
 }
 
 func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoinState, error) {
@@ -76,7 +188,6 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 			COALESCE(p.map_instance_id::text, ''), p.x, p.y,
 			p.world_x, p.world_y, p.world_safe_x, p.world_safe_y,
 			p.world_instance_id, p.world_location_revision, p.world_zone_id <> '', p.hp, p.base_hp,
-			(p.active_combat IS NOT NULL AND p.active_combat <> 'null'::jsonb),
 			p.needs_onboarding, COALESCE(p.party_id::text, ''), COALESCE(p.equipped_gus, '[]'::jsonb),
 			COALESCE(p.username, '')
 		FROM players p
@@ -87,7 +198,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		&state.MapID, &state.RegionID, &regionType, &state.MapInstanceID, &state.X, &state.Y,
 		&state.WorldX, &state.WorldY, &state.WorldSafeX, &state.WorldSafeY,
 		&state.WorldInstanceID, &state.WorldLocationRevision, &state.HasWorldLocation,
-		&state.HP, &state.BaseHP, &state.HasActiveCombat, &state.NeedsOnboarding, &state.PartyID, &equippedOrder,
+		&state.HP, &state.BaseHP, &state.NeedsOnboarding, &state.PartyID, &equippedOrder,
 		&state.Username,
 	)
 	if err != nil {
@@ -97,8 +208,8 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	if !state.HasWorldLocation || state.RegionID == "aperture_tribulation" {
 		state.MapID = realtimeMapID(state.RegionID, regionType, state.MapID)
 	}
-	// Project the same player resources and passive combat stats used by the
-	// turn simulator. The equipped-only service keeps large inventories out of
+	// Project the player resources and passive combat stats used by realtime
+	// admission. The equipped-only service keeps large inventories out of
 	// realtime admission while preserving mana and Gu effect rules.
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -114,6 +225,11 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		return RealtimeJoinState{}, err
 	}
 	state.EquippedGu = equipped
+	killerMoves, err := loadRealtimeKillerMoves(ctx, tx, playerID)
+	if err != nil {
+		return RealtimeJoinState{}, err
+	}
+	state.KillerMoves = killerMoves
 	if err := tx.Commit(); err != nil {
 		return RealtimeJoinState{}, err
 	}
@@ -130,6 +246,16 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	state.MovementSpeed = RealtimeMovementSpeed(stats["movement"])
 	fx := gamefx.Get(&player)
 	dao := gamefx.BuildDaoCombatProfileWithReduction(player.DaoMarks, player.PathMasteries, fx.NonConflictingDaoMarks, fx.DaoConflictReductionPct, fx.DaoNganBonus)
+	for i := range state.KillerMoves {
+		move := &state.KillerMoves[i]
+		currentMastery := gamefx.PathMasteryLevel(player.PathMasteries[gamefx.CleanPath(move.Path)])
+		move.SuccessChance = killerMoveAdjustedChance(move.SuccessChance, move.CreationMasteryLevel, currentMastery, move.MasteryXP)
+		amp, efficiency, conflict := dao.GetOffensiveFactors(move.Path)
+		move.DamageScale = (1 + (amp-1)*efficiency) * conflict * gamefx.PathDamageMultiplierForPaths([]string{move.Path}, fx.PathDamageBonus) * gamefx.PathMasteryMultiplier(player.PathMasteries, []string{move.Path})
+		if move.DamageScale <= 0 {
+			move.DamageScale = 1
+		}
+	}
 	basicAmp, basicEfficiency, basicConflict := dao.GetOffensiveFactors("strength")
 	state.BaseAttack *= (1 + (basicAmp-1)*basicEfficiency) * basicConflict * gamefx.PathDamageMultiplierForPaths(nil, fx.PathDamageBonus)
 	state.DaoProfile = dao
@@ -199,7 +325,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		if entry.DamageScale <= 0 {
 			entry.DamageScale = 1
 		}
-		// Match turn-based self-shield scaling: apply path attainment and the
+		// Apply the existing self-shield scaling: path attainment and the
 		// conflict-adjusted Dao bonus. Conflict cannot reduce the base shield;
 		// it only reduces the additional Dao amplification. Path damage bonuses
 		// remain damage-only.

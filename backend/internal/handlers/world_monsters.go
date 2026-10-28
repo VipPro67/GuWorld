@@ -20,10 +20,12 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/gameplay/combatmath"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
+	realtimeworld "github.com/vippro67/GuWorld/backend/internal/realtime/world"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -57,11 +59,9 @@ const (
 	worldMonsterMaxPerTick        = 512
 	worldMonsterTickBudget        = 150 * time.Millisecond
 	worldMonsterBucketQueryRadius = 35
-	// Encounter attempts are handed to a bounded background pool instead of
-	// running inline: starting a combat opens a transaction and, with skip-battle
-	// enabled, resolves a full combat, which used to blow the 150ms tick budget
-	// and skip the remaining buckets (visible as monsters stuttering).
-	worldMonsterEncounterWorkers = 8
+	// Monster attacks are handed to a bounded background pool instead of
+	// running inline so database writes do not stall the 250ms world tick.
+	worldMonsterAttackWorkers = 8
 )
 
 type WorldMonster = cache.WorldMonster
@@ -95,15 +95,12 @@ var worldMonsterMetrics struct {
 	kills                atomic.Uint64
 	preventedDoubleKills atomic.Uint64
 	eventFanout          atomic.Uint64
-	encounterDispatched  atomic.Uint64
-	encounterDeferred    atomic.Uint64
+	attackDispatched     atomic.Uint64
+	attackDeferred       atomic.Uint64
 }
 
-// worldMonsterEncounterSlots bounds how many contacts may be promoted into a
-// combat at once. The tick reserves a slot without blocking (see
-// dispatchWorldMonsterEncounter); overflow contacts stay in ATTACK and are
-// re-attempted after their persisted cooldown.
-var worldMonsterEncounterSlots = make(chan struct{}, worldMonsterEncounterWorkers)
+// worldMonsterAttackSlots bounds concurrent monster attack persistence.
+var worldMonsterAttackSlots = make(chan struct{}, worldMonsterAttackWorkers)
 
 var worldMonsterBucketCursor atomic.Uint64
 
@@ -253,8 +250,8 @@ func calculateWorldPlayerAttack(p *models.Player) float64 {
 	return attack * (1 + allPct) * statusStatFactor(p, "attack")
 }
 
-// calculateWorldPlayerDefense is the query-free subset of the simulator stat
-// builder needed by a world attack. All inputs are supplied by the batch load.
+// calculateWorldPlayerDefense is the query-free subset of player stat
+// evaluation needed by a world attack. All inputs are supplied by the batch load.
 func calculateWorldPlayerDefense(p *models.Player) float64 {
 	defense := 5 + float64(p.Rank-1)*5 + float64(p.SubRank-1) + p.GrowthData.Boosts.Defense
 	best := map[string]models.GuInstance{}
@@ -285,9 +282,8 @@ func calculateWorldPlayerDefense(p *models.Player) float64 {
 }
 
 // worldStatusDefense returns the shield, the fractional damage reduction, and
-// whether Bất Tử (LAST_STAND) is active — overworld combat does not run the
-// turn-based simulator, so the HP floor has to be handed to ResolveBasicDamage
-// as minHP.
+// whether Bất Tử (LAST_STAND) is active. The damage calculation takes the HP
+// floor explicitly as minHP.
 func worldStatusDefense(statuses models.StatusList) (shield, reduction float64, lastStand bool) {
 	for _, st := range statuses.Active() {
 		if st.ID == "virtual_shield" {
@@ -361,9 +357,9 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 	shield, reduction, lastStand := worldStatusDefense(statuses)
 	minHP := 0.0
 	if lastStand {
-		minHP = simulator.LastStandMinHP
+		minHP = combatmath.LastStandMinHP
 	}
-	resolved := simulator.ResolveBasicDamage(monster.BaseAttack, target.Defense, reduction, hp, shield, minHP)
+	resolved := combatmath.ResolveBasicDamage(monster.BaseAttack, target.Defense, reduction, hp, shield, minHP)
 	setWorldVirtualShield(&statuses, resolved.Shield)
 	statusJSON, err := json.Marshal(statuses)
 	if err != nil {
@@ -372,13 +368,6 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 	died := hp > 0 && resolved.HP <= 0
 	if _, err = tx.ExecContext(ctx, `UPDATE players SET hp=$1,statuses=$2,version=version+1 WHERE id=$3`, resolved.HP, statusJSON, target.ID); err != nil {
 		return worldMonsterActionResult{}, err
-	}
-	if died {
-		killerName := monster.MonsterTemplateID
-		if template, ok := models.MonsterRegistry[monster.MonsterTemplateID]; ok && template.Name != "" {
-			killerName = template.Name
-		}
-		applyDeathDropRecord(tx, &target.ID, nil, false, DeathPos{Region: region, X: x, Y: y, KillerName: killerName})
 	}
 	result := worldMonsterActionResult{Applied: true, Died: died, Damage: resolved.HPDamage + resolved.ShieldAbsorbed, HP: resolved.HP, Shield: resolved.Shield}
 	if _, err = tx.ExecContext(ctx, `UPDATE world_monster_actions SET applied=$2,died=$3,damage=$4,remaining_hp=$5,remaining_shield=$6 WHERE action_token=$1`, actionToken, result.Applied, result.Died, result.Damage, result.HP, result.Shield); err != nil {
@@ -391,7 +380,7 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 }
 
 func applyWorldCounterattack(ctx context.Context, monster WorldMonster, target worldCombatPlayer, commandID string, now time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
-	damage := simulator.ResolveBaseDamage(math.Max(1, target.Attack), monster.BaseDefense)
+	damage := combatmath.ResolveBaseDamage(math.Max(1, target.Attack), monster.BaseDefense)
 	outcome, updated, err := cache.HitWorldMonster(ctx, monster.RegionID, monster.InstanceID, commandID, monster.Revision, damage, now,
 		monsterRespawnDelay(monster.RespawnSeconds), monsterTTL(monster.RespawnSeconds))
 	return outcome, updated, damage, err
@@ -1156,7 +1145,7 @@ func tickWorldMonster(monster WorldMonster, candidates []WorldPosEntry, now time
 		case MonsterStateChase:
 			eventType = "monster_targeted"
 		case MonsterStateAttack:
-			eventType = "monster_encounter_started"
+			eventType = "monster_attack_started"
 		case MonsterStateReturn, MonsterStateIdle:
 			eventType = "monster_returned"
 		}
@@ -1238,30 +1227,57 @@ func startWorldMonsterWorker(ctx context.Context, interval time.Duration) <-chan
 	return done
 }
 
-// dispatchWorldMonsterEncounter hands a proximity contact to a bounded
-// background pool so the 250ms tick never blocks on a transaction (and, for
-// skip-battle players, a full combat resolve). The caller already reserved the
-// contact with a compare-and-swap and refreshed the monster's NextAttackAt, so
-// at most one dispatch per cooldown window is in flight. If the pool is full the
-// contact is dropped for this tick; the monster stays in ATTACK and is retried
-// after its cooldown.
-func dispatchWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targetID string) {
+// dispatchWorldMonsterAttack applies one realtime monster attack. The caller
+// has already claimed this attack window by advancing NextAttackAt in Redis.
+func dispatchWorldMonsterAttack(ctx context.Context, monster WorldMonster, targetID string) {
 	select {
-	case worldMonsterEncounterSlots <- struct{}{}:
+	case worldMonsterAttackSlots <- struct{}{}:
 	default:
-		worldMonsterMetrics.encounterDeferred.Add(1)
+		worldMonsterMetrics.attackDeferred.Add(1)
 		return
 	}
-	worldMonsterMetrics.encounterDispatched.Add(1)
+	worldMonsterMetrics.attackDispatched.Add(1)
 	works := monster
 	go func() {
-		defer func() { <-worldMonsterEncounterSlots }()
-		// The worker context outlives the tick; startWorldMonsterEncounter
-		// re-validates the monster from Redis before doing anything.
-		worker.SafeRun("World Monster Encounter", ctx, func(ctx context.Context) {
-			if err := startWorldMonsterEncounter(ctx, works, targetID); err != nil {
-				logger.S.Warnf("start world monster encounter %s -> %s: %v", works.InstanceID, targetID, err)
-				resetWorldMonsterAfterEncounter(ctx, works)
+		defer func() { <-worldMonsterAttackSlots }()
+		worker.SafeRun("World Monster Attack", ctx, func(ctx context.Context) {
+			playerUUID, err := uuid.Parse(targetID)
+			if err != nil {
+				return
+			}
+			players, err := loadWorldCombatPlayers(ctx, []uuid.UUID{playerUUID})
+			if err != nil {
+				logger.S.Warnf("load world monster target %s: %v", targetID, err)
+				return
+			}
+			player, ok := players[playerUUID]
+			if !ok {
+				return
+			}
+			action, err := applyWorldMonsterAction(ctx, works, player, uuid.NewString())
+			if err != nil {
+				logger.S.Warnf("apply world monster attack %s -> %s: %v", works.InstanceID, targetID, err)
+				return
+			}
+			if action.Rejected || !action.Applied {
+				return
+			}
+			PublishPlayerRealtimeEvent(playerUUID, PlayerEventUpdated)
+			broadcastWorldCombat(works, "monster_attack", map[string]any{
+				"target_id": targetID, "damage": action.Damage,
+				"target_hp": action.HP, "target_shield": action.Shield, "target_died": action.Died,
+			})
+			if action.Died {
+				deathCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+				defer cancel()
+				death := realtimeworld.DeathEvent{
+					ZoneKey:  sim.ZoneKey{MapID: worldMapIDForRegion(works.RegionID)},
+					SourceID: sim.EntityID(works.MonsterTemplateID), TargetID: sim.EntityID(targetID),
+					TemplateID: works.MonsterTemplateID, TargetKind: string(sim.EntityPlayer),
+				}
+				if err := HandleRealtimePlayerDeath(deathCtx, death); err != nil {
+					logger.S.Errorf("settle world monster death %s -> %s: %v", works.InstanceID, targetID, err)
+				}
 			}
 		})
 	}()
@@ -1374,10 +1390,19 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 				parsed, parseErr := uuid.Parse(id)
 				return parseErr == nil && isWSConnected(parsed)
 			})
+			eventRevision := next.Revision
 			attemptEncounter := next.State == MonsterStateAttack &&
 				(monster.State != MonsterStateAttack || next.TargetID != monster.TargetID || next.NextAttackAt.IsZero() || !next.NextAttackAt.After(now))
 			if attemptEncounter {
 				next.NextAttackAt = now.Add(2 * time.Second)
+				// The attack is a separate authoritative action from the movement
+				// or state transition above, so give its result a newer revision.
+				if next.Revision == monster.Revision {
+					next.Revision++
+				} else {
+					eventRevision = next.Revision
+					next.Revision++
+				}
 			}
 			if eventType == "monster_moved" {
 				if !monster.LastSeenAt.IsZero() && now.Sub(monster.LastSeenAt) < worldMonsterMoveEventGap {
@@ -1397,10 +1422,12 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 				continue
 			}
 			if eventType != "" {
-				broadcastWorldCombat(next, eventType, nil)
+				stateEvent := next
+				stateEvent.Revision = eventRevision
+				broadcastWorldCombat(stateEvent, eventType, nil)
 			}
 			if attemptEncounter && next.TargetID != "" {
-				dispatchWorldMonsterEncounter(ctx, next, next.TargetID)
+				dispatchWorldMonsterAttack(ctx, next, next.TargetID)
 			}
 		}
 	}

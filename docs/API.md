@@ -72,8 +72,8 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/player/clear-stress` |
 | GET | `/player/profile/:username` |
 | PUT | `/player/profile/settings` | Cập nhật hồ sơ (bio, avatar, mật khẩu, ngụy trang). Username không trùng nhau dù khác hoa/thường; nhập tên người chơi tại các tính năng được hỗ trợ cũng không phân biệt hoa/thường. Đổi tên khác biệt thực sự: Rank 1-2 miễn phí; Rank 3-5 tốn Nguyên Thạch (5k/20k/100k); Rank 6-9 tốn Tiên Nguyên Thạch (100/500/2.5k/10k), tụt Đạo Ngân & Chân Ý Lưu Phái (-30%/-40%/-50%/-70%), tổn hại Tiên Khiếu và phát thông báo Thế Giới (không tụt tiểu cảnh giới). |
-| GET | `/player/combat-settings` | Đọc `combat_settings` (auto-heal/mana + **thứ tự ưu tiên loại** `category_priorities` + **bộ cổ sử dụng** `gu_priorities` + `km_priorities`). |
-| PUT | `/player/combat-settings` | Lưu `combat_settings`. `category_priorities` = thứ tự ưu tiên loại kỹ năng (`shield`, `heal`, `damage`, `other`); `gu_priorities` = **bộ cổ mang theo** (danh sách `gu_id` theo thứ tự `priority`); `killer_move_priorities` (hoặc `km_priorities`) = **sát chiêu trang bị** trong chiến đấu (danh sách ID sát chiêu theo thứ tự ưu tiên và điều kiện kích hoạt): sát chiêu không được trang bị ở đây hoặc trong loadout trận đấu sẽ không tự động kích hoạt. |
+| GET | `/player/combat-settings` | Đọc cấu hình điều khiển realtime và tự farm: click trái/phải, bật tự farm, tầm farm, ngưỡng dừng theo HP và dùng kỹ năng theo hotbar. Không còn chiến thuật tự động turn-based. |
+| PUT | `/player/combat-settings` | Lưu các trường điều khiển realtime và tự farm tương ứng; danh sách Cổ realtime cấu hình riêng qua `/inventory/realtime-hotbar`, Sát Chiêu lấy từ danh sách đã trang bị. |
 | GET | `/player/referrals` |
 | POST | `/player/referrals/claim` |
 | POST | `/player/referrals/bind` |
@@ -115,8 +115,11 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | --- | --- |
 | POST | `/cultivate/break-wall` |
 | POST | `/cultivate/use-relic-gu` |
-| POST | `/cultivate/ascension` |
-| POST | `/cultivate/tribulation` |
+| GET | `/cultivate/ascension/session` | Trạng thái phiên nghi thức Thăng Tiên + checklist chuẩn bị. |
+| POST | `/cultivate/ascension/shatter` | Khâu 1 Nát Khiếu: trùng kích liều mạng (yêu cầu Cổ Bản Mệnh), tiêu hao 30% Chân Nguyên tối đa/lần. |
+| POST | `/cultivate/ascension/temper` | Khâu 2a Dẫn Khí: khảo nghiệm tâm tính, body `{ "option_index": 0 }`. |
+| POST | `/cultivate/ascension/calamity/engage` | Khâu 2b: tạo private realtime session trên map `realtime_preview`; thắng chuyển sang `RELEASE`, thua kết thúc nghi thức. |
+| POST | `/cultivate/ascension/release` | Khâu 3 Thả Cổ: body `{ "gu_instance_ids": [...] }` — cổ 5C lưu phái Đại Sư, mỗi cổ 300 Đạo Ngân. |
 | GET | `/quest` |
 | POST | `/quest/complete` |
 | GET | `/achievements` |
@@ -142,7 +145,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/drop` |
 | POST | `/inventory/drop-batch` |
 | GET | `/killer-moves/options` | Cổ người chơi trong `player_gu` và effect combat/ON_USE được phép kéo vào công thức. |
-| GET | `/killer-moves` | Danh sách sát chiêu đã lưu, độ thành thạo, trạng thái thiếu Cổ và số ô trang bị. |
+| GET | `/killer-moves` | Danh sách sát chiêu đã lưu, độ thành thạo, trạng thái thiếu Cổ, timing realtime và `realtime_supported`/lý do khóa; tối đa 4 sát chiêu đã trang bị có thể vào hotbar ô 9–12 nếu effect được hỗ trợ. |
 | POST | `/killer-moves/preview` | Tính thử công thức. Body: `{ "main_gu_instance_id", "component_instance_ids": [], "selected_effect_keys": [] }`. Trả ngân sách, hệ số effect, độ hòa hợp, chi phí và tỉ lệ thành công. |
 | POST | `/killer-moves` | Lưu sát chiêu. Body preview cộng `name`; giới hạn 12 sát chiêu lưu và 4 sát chiêu trang bị. |
 | POST | `/killer-moves/:id/equip` | Bật/tắt trang bị. Mỗi Cổ thành phần phải còn đúng instance/rank trong `player_gu`. |
@@ -155,17 +158,15 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/gu-houses/:id/repair` | Tu sửa hồi phục độ bền Tiên Cổ Ốc về 100% bằng Nguyên Thạch. |
 | POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). Target rank ≥ 6 trùng toàn server → **409** (kể cả race thua khi concurrent). |
 | POST | `/refine/deduce` | Suy diễn recipe. |
-| POST | `/combat/start` | Bắt đầu mô phỏng tự động chiến đấu. Body nhận `loadout` (`GuIds[]`, `KillerMoveIds[]`, `AutoHealHP`, `HealThreshold`, `AutoRestoreMana`, `ManaThreshold`). Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
 | POST | `/combat/practice` | Tạo phiên tập luyện realtime riêng trên `realtime_preview`; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Không tiêu hao HP/Chân Nguyên thật và trả `{instance_id,zone_id,origin_zone_id,is_practice}` để client nối vào zone. |
 | POST | `/combat/practice/exit` | Kết thúc phiên tập luyện realtime và khôi phục zone đã lưu trước khi vào phòng tập. |
 | GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng), **mọi trận boss** (`BOSS`/`World_Boss`/`TRIBULATION_BOSS`, cả thắng lẫn thua), **mọi trận Tông Môn Chiến** (`SECT_WAR`, cả thắng lẫn thua, ghi cho cả người tấn công và từng đệ tử trấn thủ tham chiến với góc nhìn đảo phe), các trận PVE **thua**, và các trận PVE **thắng có rơi Tiên Cổ** (kể cả quái thường/tinh anh, để xem lại vận may); PVE thường thắng không rơi Tiên Cổ thì không lưu. Bản ghi PVE/boss cũ hơn 30 ngày bị worker xóa theo lô (PVP giữ vô hạn). |
-| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để replay. Log `TURN_END` có snapshot cuối lượt của hai phe (HP, Chân Nguyên, khiên, công/thủ/tốc độ và `statuses[]` gồm loại, giá trị, thời hạn còn lại); các trận lịch sử cũ không có snapshot giữa lượt vẫn đọc được. |
+| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để xem lại sự kiện chiến đấu realtime; các bản ghi turn-based cũ vẫn đọc được. |
 
 ## Exploration and combat
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| POST | `/combat/capture` | Bắt quái vật làm sủng vật. |
 | GET | `/explore/regions` | Danh sách zone (id, `world_map_id`, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`, `rules`, `effective_rules`). `rules` là luật khai báo tại khu đó; `effective_rules` là luật sau khi kế thừa theo nhóm từ khu cha. Client dùng luật hiệu lực để hiển thị cấm chế; backend vẫn tự kiểm tra. Xem `docs/GAME_DATA.md` để biết schema. `zone_type`: `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC` — khi chồng lấn, ưu tiên `HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC`. |
 | GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / radar MMO. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id,vein?}]`; ô Nguyên Tuyền có `cell_type="PrimevalVein"`, `content` = id mỏ và object `vein` chứa phẩm chất, sản lượng đã tích/trần và hạn. |
 | POST | `/world/portal/transfer` | Chuyển vùng legacy (không dùng khi nhân vật đang do realtime world sở hữu): body `{"target_zone_id","target_x","target_y"}`. `target_x/target_y` là **toạ độ ô của map MMO đích** (0..width/height), server cộng `regions.min_x/min_y` để ghi `players.x/y` legacy; kiểm tra giới hạn khu vực và áp dụng debuff giới bích. Chuyển vùng trong MMO đi qua rìa map và do server tự xử lý (`world.transfer`). |
@@ -211,7 +212,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/party/leave` |
 | POST | `/party/formation` | Trưởng nhóm xếp đội hình xuất trận. Body: `{"order": [{"kind": "player"\|"pet"\|"npc", "id": "...", "pos": 1-8}]}` (tối đa 8 sau trưởng nhóm; `pos` trùng/0 = tự xếp ô trống; rỗng = về tự động). |
 | GET | `/arena/leaderboard` |
-| POST | `/arena/challenge` |
+| POST | `/arena/challenge` | Tạo trận Võ Đài realtime riêng trên `realtime_preview`; body `{target_player_id}`; hai người dùng HP/Chân Nguyên tạm thời, kết quả đồng bộ xếp hạng, xu Võ Đài và lịch sử. Mất kết nối được 30 giây để quay lại, sau đó xử thua và kết toán như trận kết thúc bình thường. |
 | GET | `/arena/shop` |
 | POST | `/arena/shop/buy` |
 | GET | `/leaderboard/:category` | BXH tổng hợp. category: `rank`, `primeval_stones`, `gu_strongest`, `immortal_stones`, `sat_khi`. Trả về top 50, kèm rank người gọi |
@@ -248,8 +249,6 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/dao-marks` |
 | GET | `/dao-marks/dao-ngan` | Đạo ngân (composite dao power) calculation. |
 | GET | `/tribulations/active` |
-| POST | `/tribulations/:eventId/engage` | Xuất trận chống quái tai kiếp — tạo `active_combat` (nhiều địch, `enemy_type` = `TRIBULATION_BOSS`/`TRIBULATION_MONSTER`) rồi đánh qua combat UI thông thường (`/combat/start`). Giáp + máu người chơi tiêu hao trước, sát thương tràn sẽ trừ `immortal_apertures.aperture_hp`. |
-| POST | `/tribulations/:eventId/resolve` |
 | POST | `/tribulations/:eventId/realtime-engage` | Chuyển nhân vật vào map realtime `aperture_tribulation` 40×40 và trả danh sách node/quái đã chiếu từ lưới Tiên Khiếu 20×20 theo tỷ lệ 2×. Vị trí region và tọa độ local hiện tại được lưu nguyên vẹn cùng anchor atlas trước khi chuyển, trong cùng transaction. Nếu nhân vật đang có lease realtime, backend flush vị trí live, ghi đích rồi nhả lease để client join lại map kiếp (tránh checkpoint zone cũ ghi đè region). |
 | POST | `/tribulations/:eventId/realtime-victory` | Kết toán thắng kiếp, cộng Đạo Ngân, đột phá nếu đủ điều kiện và đưa nhân vật về vị trí region/tọa độ đã lưu nếu region còn active và tọa độ hợp lệ (kể cả hub). Nếu không, chọn khu vực an toàn active gần anchor atlas nhất, rồi hub active; trả lỗi nếu không có đích hợp lệ. Chỉ thành công khi toàn bộ `tribulation_enemies` đã chết; backend tự kết toán khi quái cuối cùng chết trong realtime. |
 | POST | `/tribulations/:eventId/realtime-escape` | Rút lui khỏi map kiếp về vị trí an toàn, áp dụng cùng cơ chế bàn giao lease realtime. |
@@ -345,17 +344,17 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/spatial-realms` | Danh sách Bí Cảnh Không Gian & Truyền Thừa (`SPATIAL_REALM`, `SPATIAL_INHERITANCE`), hỗ trợ phân loại `scope` (`SHARED`, `PARTY`, `SOLO`) và `rules` JSONB |
 | GET | `/spatial-realms/active` | Bí cảnh bản đồ hiện tại của người chơi (kèm thông tin phiên, thời hạn `expires_at`, quy tắc `rules`) |
 | GET | `/spatial-realms/altar-info` | Tra cứu chi tiết Đài Truyền Thừa (`altar_id`), điều kiện khảo nghiệm (cảnh giới, Đạo Ngân, tín vật, trạng thái thủ hộ thú, đã nhận hay chưa) |
-| POST | `/spatial-realms/enter` | Tiến vào Bí Cảnh / Truyền Thừa. Body: `{ "template_id": "..." }`. Kiểm tra Rule Engine (cảnh giới, áp chế, tín vật tiêu hao `rules.entry_item`, tổ đội theo `scope=PARTY`) |
-| POST | `/spatial-realms/exit` | Thoát tại ô cổng thoát của bí cảnh |
-| POST | `/spatial-realms/claim-altar` | Tiếp nhận di sản Đài Truyền Thừa (`INHERITANCE_ALTAR`). Body: `{ "altar_id": "..." }`. Kiểm tra khoảng cách, diệt Thủ hộ giả, điều kiện Đạo Ngân, cảnh giới, tín vật, chống nhận lặp (độc bản Rank 6+ qua `player_inheritance_claims`). Cấp phát Cổ trùng, phương thuốc, nguyên thạch, đạo tài. |
+| POST | `/spatial-realms/enter` | Tiến vào map Bí Cảnh realtime riêng theo phiên `SHARED`/`PARTY`/`SOLO`. Body: `{ "template_id": "..." }`. Kiểm tra cổng, cảnh giới, tín vật, quy tắc và thành viên; trả `zone_id` + `world_instance_id` để client chuyển map. |
+| POST | `/spatial-realms/exit` | Thoát tại cổng ra; khôi phục vị trí/map bên ngoài đã lưu và đóng membership realtime. Hết thời hạn cũng đưa thành viên về vị trí này. |
+| POST | `/spatial-realms/claim-altar` | Tiếp nhận di sản Đài Truyền Thừa (`INHERITANCE_ALTAR`). Body: `{ "altar_id": "..." }`. Kiểm tra khoảng cách realtime, diệt Thủ hộ giả, điều kiện Đạo Ngân, cảnh giới, tín vật, chống nhận lặp (độc bản Rank 6+ qua `player_inheritance_claims`). Cấp phát Cổ trùng, phương thuốc, nguyên thạch, đạo tài. |
 
 `POST /chat/bao-hoang/send` nhận `channel=region` để gửi miễn phí vào khu vực hiện tại. Lịch sử khu vực được cô lập theo `current_region` và `map_instance_id`; kênh cập nhật theo vị trí mới khi frontend đồng bộ khóa hiện tại. Mỗi lần tải chỉ trả tối đa 50 tin gần nhất.
 
-Bí cảnh bản đồ và Vùng truyền thừa (`SPATIAL_REALM`, `SPATIAL_INHERITANCE`) vận hành theo mô hình Hybrid Scope:
+Bí cảnh bản đồ và Vùng truyền thừa (`SPATIAL_REALM`, `SPATIAL_INHERITANCE`) dùng realtime server-authoritative, với một `world_instance_id`/map instance riêng cho mỗi phiên Hybrid Scope:
 - **`SHARED`**: 1 phiên chung toàn server per template. Mọi người chơi cùng vào 1 bản đồ.
 - **`PARTY`**: 1 phiên riêng cho từng tổ đội (`party_id`), kiểm tra số lượng thành viên tối thiểu/tối đa.
 - **`SOLO`**: 1 phiên riêng cho từng cá nhân (`owner_id`).
-- **Rule Engine (`rules` JSONB)**: `duration_minutes` (hết hạn worker dọn), `pvp_mode` (`SAFE` cấm PK / `FREE_PK`), `max_allowed_rank` & `apply_rank_suppression`, `allow_teleport` (cấm truyền tống khi đang ở bí cảnh), `death_penalty` (`EVICT` / `SAFE_RESPAWN`), `entry_item` & `entry_item_count`. Ground drops được cô lập per `map_instance_id`.
+- **Rule Engine (`rules` JSONB)**: `duration_minutes` (hết hạn worker dọn và trả thành viên về tọa độ cũ), `pvp_mode` (`SAFE` / `FREE_PK` / `FACTION_PK`), `max_allowed_rank` & `apply_rank_suppression`, `allow_teleport`, `death_penalty` (`EVICT` / `SAFE_RESPAWN`), `entry_item` & `entry_item_count`. Tài nguyên nhân vật được lưu như combat realtime bình thường; ground drops tiếp tục được cô lập per `map_instance_id`.
 
 ## Gacha (Cổ Từ / Mở Đá)
 
@@ -556,14 +555,14 @@ Welcome của realtime world (`world.welcome`) có `movement_speed` (đơn vị 
 
 ### Lệnh WorldMap qua WebSocket
 
-WorldMap ưu tiên dùng cùng kết nối WebSocket để tránh tạo nhiều HTTP request khi
-di chuyển và kéo camera. Client gửi envelope
+Các truy vấn ô và đối tượng dùng cùng kết nối WebSocket để giảm HTTP request
+khi kéo camera. Di chuyển MMO dùng giao thức realtime `world.move_target`,
+không dùng lệnh đường đi legacy. Client gửi envelope
 `{type:"command", channel, request_id, payload}` và nhận
 `{type:"command.result", channel, request_id, ok, status, data}`. Các lệnh hiện có:
 
 | Channel | Payload | Tương đương HTTP |
 | --- | --- | --- |
-| `world.move_path` | `{x,y}` | `POST /explore/move-path` |
 | `world.cells_rect` | `{min_x,min_y,max_x,max_y}` | `GET /explore/cells/rect` |
 | `world.objects` | `{}` | `GET /explore/objects` |
 | `match.input` | `{seq, move:{dx,dy}, casts:[{gu_id,rank,mode,ax,ay,target_id}]}` | Không có (chỉ WebSocket) |
@@ -717,4 +716,4 @@ world-position broadcast radius is not used as the monster activation radius.
 {"command_id":"uuid","gu_instance_id":"uuid","target":{"kind":"monster","id":"monster-instance-uuid"}}
 ```
 
-The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The targeted WebSocket channel `world:combat` carries `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, `monster_respawned`, and `monster_updated` (admin runtime edits).
+The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The targeted WebSocket channel `world:combat` carries `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `monster_attack_started`, `monster_attack`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, `monster_respawned`, and `monster_updated` (admin runtime edits). `monster_attack` includes `target_id`, actual HP damage, remaining HP/shield and whether the target was defeated; monster contact no longer creates a turn-based `active_combat` encounter.

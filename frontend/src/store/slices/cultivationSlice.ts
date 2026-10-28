@@ -16,6 +16,20 @@ const recipeRequests = new LatestRequestGate();
 
 const fetchRecipesPromises = new Map<string, Promise<void>>();
 
+// Phiên Thăng Tiên (Nát Khiếu → Dẫn Khí → Thả Cổ) trả về từ backend.
+export interface AscensionSessionState {
+  id: string;
+  player_id: string;
+  step: "SHATTERING" | "GUID_QI" | "CALAMITY" | "RELEASE" | "FAILED" | "COMPLETED";
+  attempts: number;
+  temper_stage: number;
+  temper_choices: number[];
+  ascension_qi: number;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CultivationSlice {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
@@ -34,8 +48,12 @@ export interface CultivationSlice {
   breakWall: (manaSpend: number) => Promise<{ success: boolean; message: string } | null>;
   rechargeWithStones: (stones: number) => Promise<{ success: boolean; message: string } | null>;
   useRelicGu: (relicKey: string) => Promise<{ success: boolean; message: string } | null>;
-  ascension: () => Promise<{ success: boolean; message: string } | null>;
-  triggerTribulation: () => Promise<{ success: boolean; message: string } | null>;
+  fetchAscensionSession: () => Promise<AscensionSessionState | null>;
+  shatterAperture: () => Promise<{ success: boolean; shattered: boolean; message: string } | null>;
+  temperAscension: (optionIndex: number) => Promise<{ success: boolean; message: string } | null>;
+  engageAscensionCalamity: () => Promise<{ success: boolean; message: string } | null>;
+  releaseAscensionGu: (instanceIds: string[]) => Promise<{ success: boolean; message: string } | null>;
+  ascensionSession: AscensionSessionState | null;
   completeQuest: (questId: string) => Promise<{ success: boolean; message: string } | null>;
   redeemGiftCode: (code: string) => Promise<{ success: boolean; message: string } | null>;
 }
@@ -339,25 +357,123 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
     } finally { get().endAction("player:cultivation"); }
   },
 
-  ascension: async () => {
+  ascensionSession: null,
+
+  fetchAscensionSession: async () => {
+    const { token } = get();
+    if (!token) return null;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/session`, { method: "GET" });
+      if (response.status === 401) { throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể tải phiên Thăng Tiên.");
+      set({ ascensionSession: data.session ?? null });
+      return data.session ?? null;
+    } catch {
+      set({ ascensionSession: null });
+      return null;
+    }
+  },
+
+  shatterAperture: async () => {
     const { player, token, logout } = get();
     if (!player || !token || !get().beginAction("player:cultivation")) return null;
     set({ error: null });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension`, {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/shatter`, { method: "POST" });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Trùng kích nát khiếu thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Trùng kích nát khiếu.");
+      if (data.shattered) await get().fetchAscensionSession();
+      return { success: data.success, shattered: !!data.shattered, message: data.message };
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Nát khiếu lỗi: ${err.message}`);
+      return { success: false, shattered: false, message: err.message };
+    } finally { get().endAction("player:cultivation"); }
+  },
+
+  temperAscension: async (optionIndex) => {
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/temper`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ option_index: optionIndex }),
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
-      if (!response.ok) { throw new Error(data.error || "Thăng tiên thất bại."); }
+      if (!response.ok) throw new Error(data.error || "Khảo nghiệm tâm tính thất bại.");
       get().applyInventoryFromResponse(data);
-      get().addLog(data.message || "Thăng tiên hoàn tất.");
+      get().addLog(data.message || "Khảo nghiệm tâm tính.");
+      set({ ascensionSession: data.session ?? null });
       return { success: data.success, message: data.message };
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Thăng tiên lỗi: ${err.message}`);
+      get().addLog(`Dẫn Khí lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { get().endAction("player:cultivation"); }
+  },
+
+  engageAscensionCalamity: async () => {
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/calamity/engage`, { method: "POST" });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể nghênh chiến Địa Tai.");
+      get().addLog(data.message || "Địa Tai giáng lâm.");
+      if (data.zone_id && data.instance_id) {
+        get().setPlayerFromServer({
+          world_zone_id: data.zone_id,
+          world_instance_id: `combat:${data.instance_id}`,
+        });
+        get().requestWorldReconnect();
+        get().setView("mmo-world");
+      }
+      await get().fetchAscensionSession();
+      return { success: true, message: data.message };
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Địa Tai lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { get().endAction("player:cultivation"); }
+  },
+
+  releaseAscensionGu: async (instanceIds) => {
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/release`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gu_instance_ids: instanceIds }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thả cổ thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Thả cổ hoàn tất.");
+      set({ ascensionSession: data.session ?? null });
+      return { success: data.success, message: data.message };
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Thả cổ lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { get().endAction("player:cultivation"); }
   },
@@ -412,25 +528,4 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
 
-  triggerTribulation: async () => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:cultivation")) return null;
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/cultivate/tribulation`, {
-        method: "POST",
-      });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
-      const data = await response.json();
-      if (!response.ok) { throw new Error(data.error || "Không thể kích hoạt thiên kiếp."); }
-      get().addLog(data.message || "Thiên kiếp giáng lâm.");
-      return { success: true, message: data.message };
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Lỗi độ kiếp: ${err.message}`);
-      return { success: false, message: err.message };
-    } finally { get().endAction("player:cultivation"); }
-  },
 });

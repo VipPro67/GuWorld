@@ -46,6 +46,11 @@ func schemaCombat() error {
 	CREATE INDEX IF NOT EXISTS idx_combat_history_pve_cleanup ON combat_history (created_at, id) WHERE UPPER(enemy_type) <> 'PVP';`); err != nil {
 		return err
 	}
+	if err := execSchema("combat_history_realtime_death_unique_idx", `
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_combat_history_realtime_death
+	ON combat_history (player_id, (summary->>'death_id')) WHERE summary ? 'death_id';`); err != nil {
+		return err
+	}
 	if err := execSchema("arena_rankings_points_idx", `
 	CREATE INDEX IF NOT EXISTS idx_arena_rankings_points ON arena_rankings (points DESC);`); err != nil {
 		return err

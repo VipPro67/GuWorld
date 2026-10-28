@@ -45,6 +45,7 @@ type DeathEvent struct {
 	SourceID     sim.EntityID
 	TargetID     sim.EntityID
 	TemplateID   string
+	MonsterRank  int
 	PersistentID string
 	IsNode       bool
 	TargetKind   string
@@ -313,11 +314,13 @@ func clampFloat(value, minimum, maximum float64) float64 {
 // supply them.
 type MonsterSpawn struct {
 	TemplateID          string
+	Rank                int
 	Name                string
 	X                   float64
 	Y                   float64
 	MaxHP               float64
 	CurrentHP           float64
+	Shield              float64
 	AttackDamage        float64
 	NodeDamage          float64
 	Defense             float64
@@ -364,7 +367,8 @@ type Manager struct {
 	cancel            context.CancelFunc
 	started           bool
 	closed            bool
-	deathHandler      func(context.Context, DeathEvent)
+	deathHandler      func(context.Context, DeathEvent) error
+	snapshotObserver  func(context.Context, sim.Snapshot)
 	deathQueue        chan DeathEvent
 	deathDone         chan struct{}
 	runCtx            context.Context
@@ -373,6 +377,7 @@ type Manager struct {
 	idleTimeout       time.Duration
 	idleDone          <-chan struct{}
 	evictWG           sync.WaitGroup
+	deathQueueClose   sync.Once
 }
 
 func NewManager(keys []sim.ZoneKey, queueSize int) (*Manager, error) {
@@ -518,7 +523,7 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 	if spawn.TemplateID == "" || spawn.TemplateID != strings.TrimSpace(spawn.TemplateID) {
 		return sim.Entity{}, ErrInvalidMonsterSpawn
 	}
-	if !finite(spawn.X) || !finite(spawn.Y) || spawn.MaxHP <= 0 {
+	if !finite(spawn.X) || !finite(spawn.Y) || !finite(spawn.Shield) || spawn.Shield < 0 || spawn.MaxHP <= 0 {
 		return sim.Entity{}, ErrInvalidMonsterSpawn
 	}
 	entityID := sim.EntityID(fmt.Sprintf("m:%d", index))
@@ -541,13 +546,13 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 		ID:        entityID,
 		Kind:      sim.EntityMonster,
 		Transform: sim.Transform{Position: sim.Vec2{X: spawn.X, Y: spawn.Y}},
-		Vitals:    sim.Vitals{HP: currentHP, MaxHP: spawn.MaxHP},
+		Vitals:    sim.Vitals{HP: currentHP, MaxHP: spawn.MaxHP, Shield: spawn.Shield},
 		Defense:   spawn.Defense,
 		Speed:     spawn.Speed,
 		Radius:    spawn.Radius,
 		Faction:   faction,
 		AI: sim.AIState{
-			Active: active, Passive: spawn.Passive, TemplateID: spawn.TemplateID, PersistentID: spawn.PersistentID,
+			Active: active, Passive: spawn.Passive, TemplateID: spawn.TemplateID, Rank: spawn.Rank, PersistentID: spawn.PersistentID,
 			Name: spawn.Name, State: sim.AIIdle,
 			Home:        sim.Vec2{X: spawn.X, Y: spawn.Y},
 			AggroRadius: spawn.AggroRadius, LeashRadius: spawn.LeashRadius,
@@ -589,13 +594,40 @@ func (m *Manager) SafeSpawn(key sim.ZoneKey, preferred sim.Vec2, radius float64)
 	return preferred, false
 }
 
-// SetDeathHandler installs the durable reward sink. It must be called before
-// Start; nil disables death processing.
+// SetDeathHandler installs a fire-and-forget death sink. It must be called
+// before Start; nil disables death processing.
 func (m *Manager) SetDeathHandler(handler func(context.Context, DeathEvent)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !m.started {
+		if handler == nil {
+			m.deathHandler = nil
+		} else {
+			m.deathHandler = func(ctx context.Context, death DeathEvent) error {
+				handler(ctx, death)
+				return nil
+			}
+		}
+	}
+}
+
+// SetRetryingDeathHandler installs a sink whose errors are retried with
+// bounded exponential backoff until each authoritative death is settled.
+func (m *Manager) SetRetryingDeathHandler(handler func(context.Context, DeathEvent) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.started {
 		m.deathHandler = handler
+	}
+}
+
+// SetSnapshotObserver installs a non-authoritative observer for published
+// snapshots. It runs on the broadcaster loop, outside the zone tick owner.
+func (m *Manager) SetSnapshotObserver(observer func(context.Context, sim.Snapshot)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.started {
+		m.snapshotObserver = observer
 	}
 }
 
@@ -783,8 +815,9 @@ func (m *Manager) stopZone(key sim.ZoneKey, zone *managedZone) {
 	m.mu.Unlock()
 }
 
-// drainSnapshots moves deaths from any buffered snapshot into the death queue
-// without blocking. It is called only after the zone runner has stopped.
+// drainSnapshots moves deaths from any buffered snapshot into the death queue.
+// It is called only after the zone runner has stopped; enqueue applies
+// backpressure if settlement is temporarily slower than the world tick.
 func (m *Manager) drainSnapshots(zone *managedZone) {
 	for {
 		select {
@@ -818,9 +851,6 @@ func (m *Manager) Stop(ctx context.Context) error {
 			done = append(done, zone.broadcastDone)
 		}
 	}
-	if m.deathDone != nil {
-		done = append(done, m.deathDone)
-	}
 	if m.idleDone != nil {
 		done = append(done, m.idleDone)
 	}
@@ -841,6 +871,14 @@ func (m *Manager) Stop(ctx context.Context) error {
 	// Eviction goroutines only wait for the runners above; let them finish
 	// before the manager forgets the zone catalog and wakes waiters.
 	m.evictWG.Wait()
+	m.deathQueueClose.Do(func() { close(m.deathQueue) })
+	if m.deathDone != nil {
+		select {
+		case <-m.deathDone:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 
 	m.mu.Lock()
 	m.started = false
@@ -997,12 +1035,18 @@ func (m *Manager) RegisterZoneMap(key sim.ZoneKey, zoneMap ZoneMap) error {
 func (m *Manager) BaseZoneMap(mapID string) (ZoneMap, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	var fallback ZoneMap
+	found := false
 	for key, zoneMap := range m.maps {
-		if key.MapID == mapID {
+		if key.MapID != mapID {
+			continue
+		}
+		if _, runtimeOnly := m.runtimeKeys[key]; !runtimeOnly {
 			return zoneMap, true
 		}
+		fallback, found = zoneMap, true
 	}
-	return ZoneMap{}, false
+	return fallback, found
 }
 
 func (m *Manager) ZoneKeyForMap(mapID string) (sim.ZoneKey, error) {
@@ -1133,12 +1177,29 @@ func (m *Manager) broadcastSnapshots(ctx context.Context, zone *managedZone, don
 	for {
 		select {
 		case <-ctx.Done():
-			// Drain snapshots published before cancellation so pending deaths
-			// still reach the death worker. stopZone performs one final drain
-			// after the runner exits.
+			// Keep consuming while the runner exits. It may be applying backpressure
+			// on a death snapshot, which cannot be dropped during shutdown.
+			if zone.done != nil {
+				select {
+				case snapshot := <-zone.snapshots:
+					m.enqueueDeaths(zone, snapshot)
+				case <-zone.done:
+					m.drainSnapshots(zone)
+					return
+				}
+				continue
+			}
 			m.drainSnapshots(zone)
 			return
 		case snapshot := <-zone.snapshots:
+			if len(snapshot.Events) > 0 {
+				m.mu.Lock()
+				observer := m.snapshotObserver
+				m.mu.Unlock()
+				if observer != nil {
+					observer(ctx, snapshot)
+				}
+			}
 			m.enqueueDeaths(zone, snapshot)
 			m.mu.Lock()
 			if len(zone.subscribers) == 0 {
@@ -1180,47 +1241,46 @@ func (m *Manager) enqueueDeaths(zone *managedZone, snapshot sim.Snapshot) {
 			continue
 		}
 		playerDeath := event.TargetKind == string(sim.EntityPlayer)
-		if playerDeath {
-			// Only aperture deaths need the realtime exit path; other player
-			// deaths keep their existing legacy/MMO handling.
-			if snapshot.ZoneKey.MapID != "aperture_tribulation" {
-				continue
-			}
-		} else if event.TemplateID == "" || event.SourceID == "" {
+		if !playerDeath && (event.TemplateID == "" || event.SourceID == "") {
 			continue
 		}
 		death := DeathEvent{
 			ZoneKey: snapshot.ZoneKey, Generation: zone.generation,
 			EventID: event.ID, Tick: event.Tick,
-			SourceID: sim.EntityID(event.SourceID), TargetID: sim.EntityID(event.TargetID), TemplateID: event.TemplateID,
+			SourceID: sim.EntityID(event.SourceID), TargetID: sim.EntityID(event.TargetID), TemplateID: event.TemplateID, MonsterRank: event.MonsterRank,
 			PersistentID: event.PersistentID,
 			IsNode:       len(event.TargetID) > 2 && event.TargetID[:2] == "n:",
 			TargetKind:   event.TargetKind,
 		}
-		select {
-		case m.deathQueue <- death:
-		default:
-			// Keep the zone feed non-blocking; telemetry for dropped rewards is future work.
-		}
+		m.deathQueue <- death
 	}
 }
 
-func (m *Manager) deathWorker(ctx context.Context) {
+func (m *Manager) deathWorker(_ context.Context) {
 	defer close(m.deathDone)
 	m.mu.Lock()
 	handler := m.deathHandler
 	m.mu.Unlock()
 	for {
-		select {
-		case <-ctx.Done():
+		death, ok := <-m.deathQueue
+		if !ok {
 			return
-		case death := <-m.deathQueue:
-			if handler == nil {
-				continue
-			}
-			callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			handler(callCtx, death)
+		}
+		if handler == nil {
+			continue
+		}
+		backoff := 250 * time.Millisecond
+		for {
+			callCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			err := handler(callCtx, death)
 			cancel()
+			if err == nil {
+				break
+			}
+			time.Sleep(backoff)
+			if backoff < 10*time.Second {
+				backoff *= 2
+			}
 		}
 	}
 }

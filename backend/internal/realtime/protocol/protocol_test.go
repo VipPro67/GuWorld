@@ -37,15 +37,22 @@ func TestDecodeWorldInput(t *testing.T) {
 	}
 }
 
-func TestDecodeBasicAttackRequiresTargetAndSequence(t *testing.T) {
+func TestDecodeBasicAttackRequiresTargetOrAimAndSequence(t *testing.T) {
 	_, decoded, err := DecodeClientMessage([]byte(`{"v":1,"type":"world.attack","payload":{"seq":1,"target_id":"m:1"}}`))
 	attack, ok := decoded.(Attack)
 	if err != nil || !ok || attack.Seq != 1 || attack.TargetID != "m:1" {
 		t.Fatalf("attack=%+v decoded=%T err=%v", attack, decoded, err)
 	}
+	_, decoded, err = DecodeClientMessage([]byte(`{"v":1,"type":"world.attack","payload":{"seq":2,"aim_x":1,"aim_y":0}}`))
+	aimed, ok := decoded.(Attack)
+	if err != nil || !ok || aimed.Seq != 2 || aimed.TargetID != "" || aimed.AimX != 1 {
+		t.Fatalf("aimed attack=%+v decoded=%T err=%v", aimed, decoded, err)
+	}
 	for _, raw := range []string{
 		`{"v":1,"type":"world.attack","payload":{"seq":0,"target_id":"m:1"}}`,
+		`{"v":1,"type":"world.attack","payload":{"seq":1}}`,
 		`{"v":1,"type":"world.attack","payload":{"seq":1,"target_id":""}}`,
+		`{"v":1,"type":"world.attack","payload":{"seq":1,"aim_x":1000001}}`,
 	} {
 		if _, _, err := DecodeClientMessage([]byte(raw)); err == nil {
 			t.Fatalf("accepted malformed attack: %s", raw)

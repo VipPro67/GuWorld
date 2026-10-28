@@ -79,21 +79,23 @@ type Welcome struct {
 // SkillInfo is the server-owned hotbar projection sent on join. Damage and
 // validation stay server-side; the client uses it for mode/name/cooldowns.
 type SkillInfo struct {
-	Slot          uint8   `json:"slot"`
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Mode          string  `json:"mode"`
-	Shape         string  `json:"shape,omitempty"`
-	AngleDeg      float64 `json:"angle_deg,omitempty"`
-	LengthUnits   float64 `json:"length_units,omitempty"`
-	WidthUnits    float64 `json:"width_units,omitempty"`
-	InnerRadius   float64 `json:"inner_radius,omitempty"`
-	ManaCost      float64 `json:"mana_cost"`
-	Range         float64 `json:"range"`
-	RadiusUnits   float64 `json:"radius_units,omitempty"`
-	CooldownTicks uint64  `json:"cooldown_ticks"`
-	WindupTicks   uint64  `json:"windup_ticks"`
-	IsToggle      bool    `json:"is_toggle,omitempty"`
+	Slot           uint8   `json:"slot"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Mode           string  `json:"mode"`
+	Shape          string  `json:"shape,omitempty"`
+	AngleDeg       float64 `json:"angle_deg,omitempty"`
+	LengthUnits    float64 `json:"length_units,omitempty"`
+	WidthUnits     float64 `json:"width_units,omitempty"`
+	InnerRadius    float64 `json:"inner_radius,omitempty"`
+	ManaCost       float64 `json:"mana_cost"`
+	Range          float64 `json:"range"`
+	RadiusUnits    float64 `json:"radius_units,omitempty"`
+	CooldownTicks  uint64  `json:"cooldown_ticks"`
+	WindupTicks    uint64  `json:"windup_ticks"`
+	IsToggle       bool    `json:"is_toggle,omitempty"`
+	FormActivation bool    `json:"form_activation,omitempty"`
+	FormAbility    bool    `json:"form_ability,omitempty"`
 }
 
 type Input struct {
@@ -123,10 +125,13 @@ type Cast struct {
 	Y        float64 `json:"y,omitempty"`
 }
 
-// Attack is a basic melee hit intent. Damage/range/cooldown are server-owned.
+// Attack is a basic melee swing intent. The client may select a target or aim
+// into space; damage, collision and cooldown are server-owned.
 type Attack struct {
-	Seq      uint64 `json:"seq"`
-	TargetID string `json:"target_id"`
+	Seq      uint64  `json:"seq"`
+	TargetID string  `json:"target_id,omitempty"`
+	AimX     float64 `json:"aim_x,omitempty"`
+	AimY     float64 `json:"aim_y,omitempty"`
 }
 
 type Reject struct {
@@ -166,6 +171,7 @@ type EntityState struct {
 	CastSkillID string   `json:"cast_skill_id,omitempty"`
 	CastEndTick uint64   `json:"cast_end_tick,omitempty"`
 	CastWindup  uint64   `json:"cast_windup_ticks,omitempty"`
+	FormActive  bool     `json:"form_active,omitempty"`
 	Statuses    []string `json:"statuses,omitempty"`
 	Stealthed   bool     `json:"stealthed,omitempty"`
 	Flying      bool     `json:"flying,omitempty"`
@@ -290,8 +296,11 @@ func DecodeClientMessage(data []byte) (Envelope, any, error) {
 }
 
 func (attack Attack) Validate() error {
-	if attack.Seq == 0 || attack.TargetID == "" || len(attack.TargetID) > MaxEntityID || strings.TrimSpace(attack.TargetID) != attack.TargetID {
+	if attack.Seq == 0 || len(attack.TargetID) > MaxEntityID || strings.TrimSpace(attack.TargetID) != attack.TargetID || !validCoordinate(attack.AimX) || !validCoordinate(attack.AimY) {
 		return fmt.Errorf("%w: invalid basic attack", ErrInvalidMessage)
+	}
+	if attack.TargetID == "" && math.Hypot(attack.AimX, attack.AimY) <= 0.01 {
+		return fmt.Errorf("%w: basic attack requires a target or aim", ErrInvalidMessage)
 	}
 	return nil
 }
@@ -323,7 +332,7 @@ func (target MoveTarget) Validate() error {
 }
 
 func (cast Cast) Validate() error {
-	if cast.Seq == 0 || cast.Slot < 1 || cast.Slot > 6 || !validCoordinate(cast.AimX) || !validCoordinate(cast.AimY) || !validCoordinate(cast.X) || !validCoordinate(cast.Y) {
+	if cast.Seq == 0 || cast.Slot < 1 || cast.Slot > 12 || !validCoordinate(cast.AimX) || !validCoordinate(cast.AimY) || !validCoordinate(cast.X) || !validCoordinate(cast.Y) {
 		return fmt.Errorf("%w: invalid cast", ErrInvalidMessage)
 	}
 	if len(cast.TargetID) > MaxEntityID || strings.TrimSpace(cast.TargetID) != cast.TargetID {

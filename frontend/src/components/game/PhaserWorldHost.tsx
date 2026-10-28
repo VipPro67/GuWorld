@@ -61,8 +61,8 @@ function buildHud(runtime: WorldRuntime, player: Player | null): HudData | null 
   const self = runtime.getSelfEntity();
   const tick = runtime.estimatedTick();
   const tickRate = runtime.getTickRate();
-  const cooldownRemaining = new Array(7).fill(0);
-  for (let slot = 1; slot <= 6; slot += 1) {
+  const cooldownRemaining = new Array(13).fill(0);
+  for (let slot = 1; slot <= 12; slot += 1) {
     cooldownRemaining[slot] = Math.max(0, ((combat.cooldowns[slot] ?? 0) - tick) / tickRate);
   }
   const remainingTicks = combat.castEndTick - tick;
@@ -105,7 +105,7 @@ function realtimeControls(settings: AutoCombatConfig | null | undefined) {
     farmRange: settings?.realtime_farm_range ?? 14,
     farmStopHPPercent: settings?.realtime_farm_stop_hp_percent ?? 25,
     farmUseSkills: settings?.realtime_farm_use_skills ?? false,
-    // Turn-based Gu tactic loadout was retired; auto-farm now follows hotbar order.
+    // Auto-farm follows the realtime hotbar, including supported killer moves.
     guPriorities: [],
   };
 }
@@ -186,6 +186,8 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   const lastEquippedGusRef = useRef<string>(JSON.stringify(player?.equipped_gus ?? []));
   const activeZoneID = player?.world_zone_id?.trim() || player?.current_region || "";
   const lastRegionRef = useRef<string>(activeZoneID);
+  const activeInstanceID = player?.world_instance_id?.trim() || "";
+  const lastInstanceRef = useRef<string>(activeInstanceID);
   const lastReconnectTokenRef = useRef<number>(worldReconnectToken);
   useEffect(() => {
     if (!worldActive) {
@@ -195,31 +197,40 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
 
     const currentSerialized = JSON.stringify(player?.equipped_gus ?? []);
     const region = player?.world_zone_id?.trim() || player?.current_region || "";
+    const instance = player?.world_instance_id?.trim() || "";
 
     const regionChanged = lastRegionRef.current !== "" && lastRegionRef.current !== region;
+    const instanceChanged = lastInstanceRef.current !== instance;
     const gusChanged = lastEquippedGusRef.current !== currentSerialized;
     const reconnectRequested = lastReconnectTokenRef.current !== worldReconnectToken;
+    const runtime = runtimeRef.current;
+    const runtimeCanReconnect = runtime && (
+      runtimeStatus === "joined" || runtimeStatus === "idle" || runtimeStatus === "closed" || runtimeStatus === "error"
+    );
+
+    // Keep the old routing refs while a join is in flight. runtimeStatus is a
+    // dependency below, so the queued route change is retried as soon as that
+    // join settles instead of being lost during `connecting`.
+    if ((regionChanged || instanceChanged || reconnectRequested || gusChanged) && !runtimeCanReconnect) {
+      lastReconnectTokenRef.current = worldReconnectToken;
+      return;
+    }
 
     lastRegionRef.current = region;
+    lastInstanceRef.current = instance;
     lastEquippedGusRef.current = currentSerialized;
     lastReconnectTokenRef.current = worldReconnectToken;
 
-    if (regionChanged) {
-      if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
-        void runtimeRef.current.reconnectTo(region);
-      }
-    } else if (reconnectRequested) {
-      // Server-owned teleport released the old lease without changing region
-      // (same-map jump); rejoin the current zone so the new position is loaded.
-      if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
-        void runtimeRef.current.reconnect();
-      }
-    } else if (gusChanged) {
-      if (runtimeRef.current && (runtimeRef.current.getStatus() === "joined" || runtimeRef.current.getStatus() === "idle")) {
-        void runtimeRef.current.reconnect();
-      }
+    if (regionChanged && runtime) {
+      void runtime.reconnectTo(region);
+    } else if ((reconnectRequested || instanceChanged) && runtime) {
+      // Server-owned private sessions (or a same-map teleport) can change the
+      // realtime routing key without changing the map ID.
+      void runtime.reconnect();
+    } else if (gusChanged && runtime) {
+      void runtime.reconnect();
     }
-  }, [player?.equipped_gus, player?.current_region, player?.world_zone_id, worldActive, worldReconnectToken]);
+  }, [player?.equipped_gus, player?.current_region, player?.world_zone_id, player?.world_instance_id, worldActive, worldReconnectToken, runtimeStatus]);
 
   useEffect(() => {
     const host = hostRef.current;

@@ -94,6 +94,7 @@ export class WorldScene extends Phaser.Scene {
   private pathQueue: WorldPoint[] = [];
   private pathGoal: WorldPoint | null = null;
   private aimingSlot: number | null = null;
+  private lastMoveAim: WorldPoint = { x: 1, y: 0 };
   private autoFarmTargetId = "";
   private autoFarmMoving = false;
   private autoFarmPauseUntil = 0;
@@ -133,7 +134,7 @@ export class WorldScene extends Phaser.Scene {
       this.cycleTarget();
       return;
     }
-    const slot = slotFromCode(event.code);
+    const slot = event.altKey ? killerSlotFromCode(event.code) : slotFromCode(event.code);
     if (slot !== null) {
       event.preventDefault();
       this.activateHotbarSlot(slot);
@@ -312,6 +313,7 @@ export class WorldScene extends Phaser.Scene {
 
     const movement = this.router.movement();
     if (movement.x !== 0 || movement.y !== 0) {
+      this.lastMoveAim = movement;
       this.stopAutoFarmMovement();
       this.click.cancel();
       this.cancelPath();
@@ -403,7 +405,7 @@ export class WorldScene extends Phaser.Scene {
     this.runtime.cancelMoveTarget();
     this.autoFarmMoving = false;
     if (now >= this.nextAutoFarmAttackAt) {
-      this.runtime.sendBasicAttack(monster.id);
+      this.runtime.sendBasicAttack({ target_id: monster.id });
       this.nextAutoFarmAttackAt = now + AUTO_FARM_ATTACK_INTERVAL_MS;
     }
     if (controls.farmUseSkills && now >= this.nextAutoFarmSkillAt) {
@@ -553,12 +555,12 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     if (!fromPointer && skill.mode === "TARGET") {
-      const candidate = this.findTargetNear(pointer) ?? (this.selectedTargetId ? this.monsters().find((m) => m.id === this.selectedTargetId) : null);
-      if (!candidate && this.aimingSlot !== slot) {
+      const selected = this.selectedTargetId ? this.monsters().find((m) => m.id === this.selectedTargetId) : null;
+      if (!selected && this.aimingSlot !== slot) {
         this.aimingSlot = slot;
         this.router.setAiming(true);
         this.runtime?.setAimingSlot(slot);
-        this.notice(`${skill.name}: nhấp vào mục tiêu để cast · Esc hủy`);
+        this.notice(`${skill.name}: nhấp vào mục tiêu hoặc khoảng trống để cast · Esc hủy`);
         return;
       }
     }
@@ -568,23 +570,23 @@ export class WorldScene extends Phaser.Scene {
         this.runtime.sendCast({ slot, mode: "SELF" });
         return;
       case "TARGET": {
-        const clickedTarget = fromPointer ? this.findTargetNear(pointer) : null;
-        let target = clickedTarget ?? this.monsters().find((monster) => monster.id === this.selectedTargetId) ?? null;
-        if (!target) target = this.findTargetNear(pointer);
-        if (!target) {
-          const nearest = this.monsters().sort(
-            (left, right) =>
-              Math.hypot(left.x - self.x, left.y - self.y) - Math.hypot(right.x - self.x, right.y - self.y),
-          )[0];
-          target = nearest ?? null;
-        }
-        if (!target) {
-          this.notice("Không có mục tiêu — click quái hoặc Tab");
+        const target = fromPointer
+          ? this.findTargetNear(pointer)
+          : this.monsters().find((monster) => monster.id === this.selectedTargetId) ?? null;
+        if (target) {
+          this.selectedTargetId = target.id;
+          this.runtime.setSelectedTarget(target.id);
+          this.runtime.sendCast({ slot, mode: "TARGET", target_id: target.id });
           return;
         }
-        this.selectedTargetId = target.id;
-        this.runtime.setSelectedTarget(target.id);
-        this.runtime.sendCast({ slot, mode: "TARGET", target_id: target.id });
+        const dx = pointer.x - self.x;
+        const dy = pointer.y - self.y;
+        const length = Math.hypot(dx, dy);
+        if (length <= 0.01) {
+          this.notice("Cần hướng ngắm hợp lệ");
+          return;
+        }
+        this.runtime.sendCast({ slot, mode: "TARGET", aim_x: dx, aim_y: dy });
         return;
       }
       case "DIRECTION": {
@@ -612,6 +614,8 @@ export class WorldScene extends Phaser.Scene {
 
   setJoystickVector(vector: WorldPoint): void {
     this.router.setJoystick(vector);
+    const length = Math.hypot(vector.x, vector.y);
+    if (length > 0.01) this.lastMoveAim = { x: vector.x / length, y: vector.y / length };
   }
 
   zoomIn(): number {
@@ -651,26 +655,25 @@ export class WorldScene extends Phaser.Scene {
       this.notice("Chưa kết nối world server");
       return;
     }
-    let target = preferSelected ? this.monsters().find((monster) => monster.id === this.selectedTargetId) ?? null : null;
-    if (!target) {
-      const near = this.findTargetNear(this.pointerWorld());
-      if (near?.kind === "monster") target = near;
-    }
-    if (!target) target = this.monsters().find((monster) => monster.id === this.selectedTargetId) ?? null;
-    if (!target) {
-      const self = this.runtime.getSelfPosition();
-      target = this.monsters().sort(
-        (left, right) =>
-          Math.hypot(left.x - self.x, left.y - self.y) - Math.hypot(right.x - self.x, right.y - self.y),
-      )[0] ?? null;
-    }
-    if (!target) {
-      this.notice("Không có quái để đánh — click quái hoặc Tab");
+    const selected = preferSelected ? this.monsters().find((monster) => monster.id === this.selectedTargetId) : null;
+    if (selected) {
+      this.runtime.sendBasicAttack({ target_id: selected.id });
       return;
     }
-    this.selectedTargetId = target.id;
-    this.runtime.setSelectedTarget(target.id);
-    this.runtime.sendBasicAttack(target.id);
+    if (preferSelected) {
+      this.runtime.sendBasicAttack({ aim_x: this.lastMoveAim.x, aim_y: this.lastMoveAim.y });
+      return;
+    }
+    const pointer = this.pointerWorld();
+    const self = this.runtime.getSelfPosition();
+    const dx = pointer.x - self.x;
+    const dy = pointer.y - self.y;
+    const length = Math.hypot(dx, dy);
+    if (length <= 0.01) {
+      this.notice("Cần hướng đánh hợp lệ");
+      return;
+    }
+    this.runtime.sendBasicAttack({ aim_x: dx / length, aim_y: dy / length });
   }
 
   private skillForSlot(slot: number): WorldSkillInfo | null {
@@ -1349,7 +1352,12 @@ function isTextField(target: EventTarget | Element | null): boolean {
 }
 
 function slotFromCode(code: string): number | null {
-  const match = /^(?:Digit|Numpad)([1-6])$/.exec(code);
+  const match = /^(?:Digit|Numpad)([1-8])$/.exec(code);
   if (!match) return null;
   return Number(match[1]);
+}
+
+function killerSlotFromCode(code: string): number | null {
+  const match = /^(?:Digit|Numpad)([1-4])$/.exec(code);
+  return match ? Number(match[1]) + 8 : null;
 }

@@ -19,7 +19,7 @@ func combatCheckpoint(state sim.CombatState, tick uint64, hp float64) *persisten
 	checkpoint.BasicAttackRemainingTicks = remainingTicks(state.BasicAttackCooldownUntil, tick)
 	checkpoint.RecoveryRemainingTicks = remainingTicks(state.RecoveryUntil, tick)
 	checkpoint.RecoveryPolicy = state.RecoveryPolicy
-	for slot := 1; slot <= 6; slot++ {
+	for slot := 1; slot <= 12; slot++ {
 		checkpoint.CooldownRemainingTicks[slot] = remainingTicks(state.Cooldowns[slot], tick)
 		checkpoint.CooldownSkillIDs[slot] = state.Skills[slot].ID
 	}
@@ -81,7 +81,7 @@ func restoreCombat(target *sim.CombatState, durable persistence.CombatState, tic
 		target.RecoveryUntil = deadline(tick, durable.RecoveryRemainingTicks)
 		target.RecoveryPolicy = durable.RecoveryPolicy
 	}
-	for slot := 1; slot <= 6; slot++ {
+	for slot := 1; slot <= 12; slot++ {
 		if durable.CooldownRemainingTicks[slot] == 0 {
 			continue
 		}

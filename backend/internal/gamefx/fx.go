@@ -88,7 +88,7 @@ type Effects struct {
 	// (áp lực không khiếu) gained per trùng kích attempt. 1.0 => stress ×2.
 	ApertureStressBonus float64 `json:"aperture_stress_bonus"`
 	// NonConflictingDaoMarks indicates whether character has the non-conflicting dao marks trait.
-	NonConflictingDaoMarks bool `json:"non_conflicting_dao_marks,omitempty"`
+	NonConflictingDaoMarks  bool    `json:"non_conflicting_dao_marks,omitempty"`
 	DaoConflictReductionPct float64 `json:"dao_conflict_reduction_pct,omitempty"`
 	// Immortal indicates if the character's lifespan never decreases.
 	Immortal bool `json:"immortal"`
@@ -461,30 +461,6 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 	return nil
 }
 
-// ApplyToEnemyCombatState populates all defender character effect properties into a CombatState.
-func (e Effects) ApplyToEnemyCombatState(combat *models.CombatState) {
-	if combat == nil {
-		return
-	}
-	combat.EnemyPathResistance = e.PathResistanceBonus
-	combat.EnemyMentalResistance = e.MentalResistanceBonus
-	combat.EnemyTenacity = e.Tenacity
-	combat.EnemyCCResist = e.CCResist
-	combat.EnemyDaoBonus = e.DaoNganBonus
-	combat.EnemyPathDamageBonus = e.PathDamageBonus
-	combat.EnemyHealingReceived = e.HealingReceivedBonus
-	combat.EnemySoulDefenseBonus = e.SoulDefenseBonus
-	combat.EnemyLuckBonus = e.LuckBonus
-}
-
-// ApplyEnemyEffects evaluates character effects from defender and applies them to combat.
-func ApplyEnemyEffects(combat *models.CombatState, defender *models.Player) {
-	if combat == nil || defender == nil {
-		return
-	}
-	Get(defender).ApplyToEnemyCombatState(combat)
-}
-
 // ValidRaces returns the set of accepted race keys.
 func ValidRaces() map[string]bool {
 	defs := effectiveRaces()
@@ -575,8 +551,8 @@ func Get(p *models.Player) Effects {
 			continue
 		}
 		addEffects(&fx, Effects{
-			Tenacity:               models.GuStatValue(spec, "TENACITY"),
-			CCResist:               models.GuStatValue(spec, "CC_RESIST"),
+			Tenacity:                models.GuStatValue(spec, "TENACITY"),
+			CCResist:                models.GuStatValue(spec, "CC_RESIST"),
 			DaoConflictReductionPct: models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION"),
 		})
 	}

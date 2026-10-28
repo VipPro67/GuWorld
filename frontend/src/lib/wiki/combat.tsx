@@ -243,7 +243,7 @@ export const combatPages: WikiPage[] = [
         description: "10 Nhóm Đạo, cơ chế triệt tiêu xung đột và màng kháng tự nhiên",
       },
       {
-        title: "Chiến đấu Lưới 3x3",
+        title: "Chiến đấu realtime",
         targetId: "combat",
         description: "Bố trí đội hình và lượt đánh",
       },
@@ -256,38 +256,38 @@ export const combatPages: WikiPage[] = [
   },
   {
     id: "combat",
-    title: "Chiến đấu Lưới 3x3",
+    title: "Chiến đấu realtime",
     category: "combat",
-    keywords: ["chiến đấu", "combat", "lưới", "3x3", "grid", "speed", "tốc độ", "khiên", "shield", "virtual shield", "aoe"],
+    keywords: ["chiến đấu", "combat", "realtime", "hotbar", "cast", "khiên", "shield", "aoe"],
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Các trận đấu trong game áp dụng cơ chế sắp xếp đội hình trên lưới 3x3 đối lập nhau. Sát thương nhận vào sẽ ưu tiên trừ trực tiếp vào lớp Cổ phòng ngự của bạn.
+          Chiến đấu chạy trên map realtime do server mô phỏng theo tick. Vị trí, mục tiêu, thời gian tụ lực, hồi chiêu, trạng thái và sát thương đều được máy chủ xác nhận.
         </p>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">1. Vị trí và tầm đánh AoE</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">1. Điều khiển và thi triển chiêu</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Bạn có thể xếp quân ở Tiền tuyến (X=1), Trung tuyến (X=2) hoặc Hậu phương (X=3). Trừ khi kỹ năng có tầm đánh đặc thù, các sát chiêu đơn mục tiêu bắt buộc phải đánh trúng và dọn sạch hàng Tiền tuyến của đối phương trước mới có thể đánh vào hàng sau.
+            Di chuyển bằng WASD/chuột; dùng hotbar để chọn Cổ có profile realtime. Chiêu có thể cần chọn mục tiêu hoặc hướng, tụ lực, tiêu Chân Nguyên và chờ hồi chiêu tùy profile.
           </p>
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)]">
-            <li>💥 <strong>Đánh Ngang:</strong> Quét sạch 3 ô nằm trên cùng một hàng ngang X.</li>
-            <li>💥 <strong>Đánh Dọc:</strong> Xuyên từ trước ra sau trên cùng một cột dọc Y.</li>
-            <li>💥 <strong>Toàn bản đồ:</strong> Tác động đồng thời lên cả 9 ô của kẻ địch.</li>
+            <li>🎯 <strong>Mục tiêu:</strong> profile khai báo mục tiêu, tầm đánh và giới hạn số mục tiêu.</li>
+            <li>💥 <strong>Vùng tác động:</strong> hình dạng, bán kính và hướng do profile realtime quyết định.</li>
+            <li>⚡ <strong>Server authoritative:</strong> client gửi lệnh; máy chủ kiểm tra range, mana, cooldown và hit.</li>
           </div>
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Cơ Chế Giao Trân & Đáp Trả</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Trạng thái và hiệu ứng</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Trong auto-combat, hiệu ứng hỗ trợ được resolve trước; mỗi nhân vật dùng hành động gây sát thương đầu tiên trong lượt, hoặc đánh thường nếu không có hành động phù hợp. Thứ tự lượt phụ thuộc tốc độ. Đòn đánh không tự kích hoạt một đòn phản công tức thời từ mục tiêu.
+            Status được áp dụng, cộng dồn và hết hạn theo tick realtime. Effect chỉ hoạt động khi có executor và profile realtime rõ ràng; dữ liệu turn-based cũ không tự đổi lượt thành giây hoặc tự phát sinh hành vi thay thế.
           </p>
         </div>
 
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">3. Khiên ảo & Sinh Mạng</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Sinh mạng cơ bản của Cổ sư rất mong manh. Hãy trang bị Cổ phòng ngự để nhận <strong>Khiên ảo</strong> (Shield). Khi bị tấn công, sát thương trừ vào khiên trước; <strong>sát thương tràn qua Khiên ảo mới trừ trực tiếp vào Sinh lực cơ thể</strong>. Nếu Sinh lực về 0, đạo hữu sẽ ngã xuống.
+            Sinh mạng và khiên được mô phỏng trong world runtime. Khiên hấp thụ sát thương theo quy tắc profile; khi HP về 0, server xử lý hạ gục, respawn/settlement và lịch sử theo chế độ chiến đấu.
           </p>
           <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs leading-relaxed text-amber-300">
             💀 <strong>Tử Đạo (Chết rơi đồ):</strong> Khi bại trận dã ngoại, bỏ chạy ngất xỉu, hay thua PvP, đạo hữu sẽ đánh rơi một phần tài sản đang giữ: Nguyên Thạch, nguyên liệu, Cổ trùng (trừ Cổ đang trang bị & Bản Mệnh Cổ) và Bí phương.

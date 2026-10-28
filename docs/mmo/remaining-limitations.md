@@ -112,9 +112,12 @@ Impact: cross-process double ownership remains a release blocker.
   the game tab is open, pauses for manual movement/clicks and open panels, and
   stops at the configured HP threshold. Auto-farm skill use follows the equipped
   hotbar order; the retired turn-based Gu tactic loadout is no longer edited or
-  sent by the client (`gu_priorities` is cleared on save). Legacy turn-based
-  fields such as `skip_battle` remain in the JSON for backend compatibility but
-  have no UI and are not used by the realtime world.
+  sent by the client (`gu_priorities` is cleared on save). The `skip_battle`
+  setting and its server-side simulator shortcut have been removed. The legacy
+  combat endpoint and tournament simulators have been migrated to realtime;
+  the backend turn-based simulator and its player-facing resolver routes have
+  been removed. Realtime tournament sessions settle through their death
+  handlers.
 - The browser flow is verified against live services on `localhost:3000`. Movement
   tested via both D key and pointer click-to-move, updating authoritative positions
   `(61, 60)` -> `(63, 60)` -> `(64, 62)`. Three equipped Gu skills map to hotbar keys `1–3`

@@ -4,6 +4,7 @@ import {
 } from "../network/WorldSocket.ts";
 import type { BufferedWorldState } from "../network/SnapshotBuffer.ts";
 import type {
+  BasicAttackPayload,
   CastPayload,
   WorldEvent,
   WorldJoinPayload,
@@ -51,6 +52,7 @@ export interface RuntimeEntity {
   isSelf: boolean;
   stealthed?: boolean;
   flying?: boolean;
+  formActive?: boolean;
   statuses?: string[];
 }
 
@@ -332,6 +334,7 @@ export class WorldRuntime {
         aggroTargetId: entity.aggro_target_id ?? "",
         stealthed: entity.stealthed,
         flying: entity.flying,
+        formActive: entity.form_active,
         statuses: entity.statuses,
       };
       if (entity.entity_id === this.selfId) {
@@ -388,8 +391,8 @@ export class WorldRuntime {
 
   public getSelfCombat(): SelfCombatView {
     const self = this.snapshot?.entities.find((entity) => entity.entity_id === this.selfId);
-    const cooldowns = self?.cooldowns ? [...self.cooldowns] : new Array(7).fill(0);
-    while (cooldowns.length < 7) cooldowns.push(0);
+    const cooldowns = self?.cooldowns ? [...self.cooldowns] : new Array(9).fill(0);
+    while (cooldowns.length < 9) cooldowns.push(0);
     return {
       mana: self?.mana ?? 0,
       maxMana: self?.max_mana ?? 0,
@@ -502,7 +505,7 @@ export class WorldRuntime {
 
   public requestBasicAttack(): void {
     const targetId = this.selectedTargetId;
-    if (targetId) this.sendBasicAttack(targetId);
+    if (targetId) this.sendBasicAttack({ target_id: targetId });
   }
 
   public getTickRate(): number {
@@ -558,9 +561,9 @@ export class WorldRuntime {
     return this.socket.sendCast(cast);
   }
 
-  public sendBasicAttack(targetId: string): number | null {
+  public sendBasicAttack(attack: Omit<BasicAttackPayload, "seq">): number | null {
     if (this.status !== "joined") return null;
-    return this.socket.sendBasicAttack(targetId);
+    return this.socket.sendBasicAttack(attack);
   }
 
   private bindSocket(): void {

@@ -16,7 +16,7 @@ logged as an unsettled session.
 
 Live hotbar slots also carry the owned `player_gu.id` and its admission-time
 hunger. Each valid cast attempt spends one hunger before backlash and mana
-validation, matching the turn simulator; an exhausted instance cannot cast.
+validation, matching the realtime combat runtime; an exhausted instance cannot cast.
 The zone counts uses per slot, and the same checkpoint transaction subtracts
 the per-instance usage delta from `player_gu.hunger`. A failed checkpoint keeps
 the session and its unsettled counters for retry. The preview hidden passive is
@@ -106,6 +106,12 @@ and reason; they are never loaded as a “skill without effects”.
 - Passives: trigger `ALWAYS_ON`/`PASSIVE`/`COMBAT_PASSIVE`, effects `STAT_MOD`.
 - `slot` is required for an active profile (1–6, unique) and omitted/0 for
   passive-only or catalog-only Gu.
+- A defensive transformation is authored separately under `form`. Its activation
+  and in-form ability occupy reserved realtime slots 7 and 8; they are generated
+  from the equipped Gu profile and are not part of the player's six Gu hotbar
+  assignments. `form` contains `windup_ms`, `mana_cost`, `mana_drain_per_sec`,
+  `defense_bonus`, and an `ability` object using the normal active-profile
+  shape.
 - `slot: 0` active profiles are compiled but not placed on the default bar; the
   join-time owned-Gu adapter re-slots them from the player's equipment (PR-23).
   This is how the 40 Alpha catalog profiles ship without overriding the MVP
@@ -131,18 +137,17 @@ Compiled MVP-only catalog hash:
 Compiled combined catalog hash (MVP + 40 Alpha, the default startup set):
 `fedc583f0672f48bb08396435c1ad01d42ca4c72d1774f2551c656c6489125d9`.
 
-The generated Alpha catalog contains 40 low-rank profiles. Three additional
-authored profiles cover the admin's equipped Gu; they use MMO-scale values,
-so the rank-7 Gu does not inherit its 30-million turn-based damage literally.
-FEAR remains unsupported. Other higher-rank and `NEEDS_REAUTHOR` Gu remain
-covered by `docs/mmo/gu-coverage.csv`.
+The generated Alpha catalog contains 40 low-rank profiles. Authored profiles
+cover supported equipped Gu using MMO-scale values, so high-rank Gu do not
+inherit their turn-based damage literally. `GU_BEAST_BODY_I` also authors a
+defensive form with a separate ability. FEAR remains unsupported. Other
+higher-rank and `NEEDS_REAUTHOR` Gu remain covered by
+`docs/mmo/gu-coverage.csv`.
 
 `GU_WATER_CLEANSING`'s 400 heal is the authored Gu value; the zone still caps
-at max HP. The PR-19 zone runtime now executes tick-scheduled statuses
-(DoT/HoT, stacks, refresh/ICD, movement blocking) and a preview hidden passive;
-the compiled `GU_WHITE_FROST` payload is not attached to the live loadout yet,
-so gameplay uses the preview slot-6 Frost Lock until the per-player loadout
-adapter lands (PR-23).
+at max HP. The zone executes tick-scheduled statuses (DoT/HoT, stacks,
+refresh/ICD, movement blocking) and supported hidden passives. Compiled Gu
+profiles are attached from each player's equipped loadout at join.
 
 ## Per-player loadout (join adapter)
 
@@ -154,8 +159,14 @@ in the build result. If no compiled Gu remains, the server preview hotbar is
 used rather than sending a partial/empty skill set.
 
 The immutable loadout and SHA-256 `loadout_revision` are cached in the session;
-the zone never queries the DB per cast. Live equipment changes while inside a
-zone require a rejoin in this PR (refresh command is future work).
+the zone never queries the DB per cast. Form activation and ability profiles
+are appended to reserved slots 7 and 8, with the ability only castable while
+the server reports the transformed state active. Transformation windup can be
+interrupted by hard crowd control; ordinary damage does not interrupt it.
+Defense bonus and mana drain begin after completion, and the form ends when
+manually toggled off or when mana can no longer pay its per-tick drain. Form
+state is runtime-only and resets on rejoin. Live equipment changes while inside
+a zone require a rejoin (refresh command is future work).
 
 ## Startup validation
 

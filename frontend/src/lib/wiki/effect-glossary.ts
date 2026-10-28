@@ -3,7 +3,7 @@
  *
  * Nguồn chuẩn: backend/internal/effectcatalog/block_manifest.go (trigger/op/
  * target/condition/stat/resource) và hành vi runtime trong backend/internal/
- * {handlers,simulator,gamefx}. Khi thêm trigger/op/native hook mới, cập nhật
+ * {handlers,realtime combat,gamefx}. Khi thêm trigger/op/native hook mới, cập nhật
  * file này — test src/lib/wiki/effects.test.ts sẽ fail nếu Gu.csv có mã lạ.
  */
 

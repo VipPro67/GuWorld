@@ -12,6 +12,20 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+func chebyshevDistance(x1, y1, x2, y2 int) int {
+	dx, dy := x2-x1, y2-y1
+	if dx < 0 {
+		dx = -dx
+	}
+	if dy < 0 {
+		dy = -dy
+	}
+	if dx > dy {
+		return dx
+	}
+	return dy
+}
+
 // Movement is one concept with many entrances: walking on the world grid, map
 // portals, teleport arrays, Gu-driven teleports, spatial-realm gates and party
 // joins. This file owns the shared chain:
@@ -114,9 +128,6 @@ func validateMovementState(player *models.Player, spec movementSpec, ownedByReal
 	}
 	if player.HP <= 0 {
 		return movementDenied(http.StatusBadRequest, "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!")
-	}
-	if player.ActiveCombat != nil {
-		return movementDenied(http.StatusBadRequest, "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước.")
 	}
 	return nil
 }

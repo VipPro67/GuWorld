@@ -72,11 +72,8 @@ func TestCompileKillerMoveCombatProfile(t *testing.T) {
 	if prof.Rank != 3 {
 		t.Fatalf("expected rank 3, got %d", prof.Rank)
 	}
-	if prof.CooldownTurns != 1 {
-		t.Fatalf("expected cooldown 1, got %d", prof.CooldownTurns)
-	}
-	if prof.WarmupTurns != 0 {
-		t.Fatalf("expected warmup 0 for rank 3, got %d", prof.WarmupTurns)
+	if prof.RealtimeCooldownMS == 0 || prof.RealtimeWindupMS == 0 {
+		t.Fatalf("expected explicit realtime timing, got windup=%d cooldown=%d", prof.RealtimeWindupMS, prof.RealtimeCooldownMS)
 	}
 	if prof.TargetType != "SINGLE" {
 		t.Fatalf("expected target SINGLE, got %s", prof.TargetType)

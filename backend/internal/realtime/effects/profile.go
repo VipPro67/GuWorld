@@ -42,6 +42,17 @@ type GuProfile struct {
 	Passives       []PassiveProfile `json:"passives,omitempty"`
 	HiddenPassives []PassiveProfile `json:"hidden_passives,omitempty"`
 	Visuals        VisualProfile    `json:"visuals"`
+	Form           *FormProfile     `json:"form,omitempty"`
+}
+
+// FormProfile describes a Gu that grants a persistent defensive form. Slot 7
+// activates the form; slot 8 is its separate authored ability.
+type FormProfile struct {
+	WindupMS        uint64        `json:"windup_ms"`
+	ManaCost        float64       `json:"mana_cost"`
+	ManaDrainPerSec float64       `json:"mana_drain_per_sec"`
+	DefenseBonus    float64       `json:"defense_bonus"`
+	Ability         ActiveProfile `json:"ability"`
 }
 
 type ActiveProfile struct {
@@ -118,14 +129,18 @@ type CompiledPassive struct {
 }
 
 type CompiledProfile struct {
-	GUID           string
-	Rank           int
-	Slot           int
-	Active         *CompiledActive
-	Passives       []CompiledPassive
-	HiddenPassives []CompiledPassive
-	Visuals        VisualProfile
-	SourceHash     string
+	GUID                 string
+	Rank                 int
+	Slot                 int
+	Active               *CompiledActive
+	FormActivation       *combat.Skill
+	FormAbility          *CompiledActive
+	FormManaDrainPerTick float64
+	FormDefenseBonus     float64
+	Passives             []CompiledPassive
+	HiddenPassives       []CompiledPassive
+	Visuals              VisualProfile
+	SourceHash           string
 }
 
 type CompiledCatalog struct {
@@ -292,6 +307,28 @@ func CompileCatalog(catalog ProfileCatalog, entries []GuEntry, requiredMVP []Ent
 		} else if profile.Slot != 0 {
 			return nil, fmt.Errorf("%s: slot requires an active block", path)
 		}
+		if profile.Form != nil {
+			form := profile.Form
+			if form.WindupMS == 0 || form.WindupMS > MaxWindupMS || !finiteFloat(form.ManaCost) || form.ManaCost < 0 || !finiteFloat(form.ManaDrainPerSec) || form.ManaDrainPerSec <= 0 || !finiteFloat(form.DefenseBonus) || form.DefenseBonus < 0 {
+				return nil, fmt.Errorf("%s.form: windup, mana cost, positive mana drain and non-negative defense bonus are required", path)
+			}
+			activation := combat.Skill{ID: profile.GUID + "_FORM", Slot: 7, Mode: combat.ModeSelf, Name: entry.Name + " Form", ManaCost: form.ManaCost, WindupTicks: msToTicks(form.WindupMS), MovementPolicy: combat.MovementRoot, FormActivation: true, FormManaDrainPerTick: form.ManaDrainPerSec / 20, FormDefenseBonus: form.DefenseBonus}
+			if entry.Name == "" {
+				activation.Name = profile.GUID + " Form"
+			}
+			if !activation.Valid() {
+				return nil, fmt.Errorf("%s.form: invalid activation skill", path)
+			}
+			ability, err := compileActive(path+".form.ability", form.Ability, 8, profile.GUID+"_FORM_ABILITY", entry)
+			if err != nil {
+				return nil, err
+			}
+			ability.Skill.FormAbility = true
+			compiledProfile.FormActivation = &activation
+			compiledProfile.FormAbility = ability
+			compiledProfile.FormManaDrainPerTick = activation.FormManaDrainPerTick
+			compiledProfile.FormDefenseBonus = form.DefenseBonus
+		}
 		for passiveIndex, passive := range profile.Passives {
 			compiledPassive, err := compilePassive(fmt.Sprintf("%s.passives[%d]", path, passiveIndex), passive)
 			if err != nil {
@@ -330,8 +367,8 @@ func CompileCatalog(catalog ProfileCatalog, entries []GuEntry, requiredMVP []Ent
 }
 
 func compileActive(path string, active ActiveProfile, slot int, guID string, entry GuEntry) (*CompiledActive, error) {
-	if slot < 0 || slot > 6 {
-		return nil, fmt.Errorf("%s: active profile slot must be 0 (catalog-only) or 1..6", path)
+	if slot < 0 || slot > 8 {
+		return nil, fmt.Errorf("%s: active profile slot must be 0 (catalog-only) or 1..8", path)
 	}
 	skillSlot := slot
 	if skillSlot == 0 {
@@ -370,6 +407,9 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 		MovementPolicy: active.MovementPolicy, CooldownTicks: msToTicks(active.CooldownMS),
 		MoveDistance: active.MoveDistance, KnockbackDistance: active.KnockbackDistance,
 		PlayerAtkRatio: active.PlayerAtkRatio, GuPowerRatio: active.GuPowerRatio,
+	}
+	if slot == 8 {
+		skill.FormAbility = true
 	}
 	compiled := &CompiledActive{}
 	if skill.Name == "" {

@@ -384,6 +384,29 @@ func schemaAperture() error {
 		return err
 	}
 
+	// Ascension sessions (nghi thức Thăng Tiên 3 khâu: Nát Khiếu → Dẫn Khí → Thả Cổ).
+	// One live session per player; SHATTERING tracks trùng kích attempts before the
+	// aperture wall breaks, the later steps run against a hard deadline.
+	if err := execSchema("ascension_sessions", `
+	CREATE TABLE IF NOT EXISTS ascension_sessions (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL UNIQUE REFERENCES players(id) ON DELETE CASCADE,
+		step VARCHAR(20) NOT NULL DEFAULT 'SHATTERING',
+		attempts INTEGER NOT NULL DEFAULT 0,
+		temper_stage INTEGER NOT NULL DEFAULT 0,
+		temper_choices JSONB NOT NULL DEFAULT '[]'::jsonb,
+		ascension_qi DOUBLE PRECISION NOT NULL DEFAULT 0,
+		expires_at TIMESTAMP WITH TIME ZONE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("ascension_sessions_player_idx", `
+	CREATE INDEX IF NOT EXISTS idx_ascension_sessions_player ON ascension_sessions (player_id, step);`); err != nil {
+		return err
+	}
+
 	return nil
 }
 

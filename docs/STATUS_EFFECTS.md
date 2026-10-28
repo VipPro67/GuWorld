@@ -1,3 +1,5 @@
+> **Historical reference:** The turn-based simulator described below was removed in #272. Realtime status behavior is implemented in `backend/internal/statusfx` and `backend/internal/realtime`.
+
 # GuWorld - Hệ Thống Effect & Status Effects (Reference & Developer Guide)
 
 Tài liệu chi tiết về kiến trúc, luồng hoạt động, danh mục status effect, và hướng dẫn lập trình viên **thêm Cổ trùng / Effect mới** vào hệ thống GuWorld.

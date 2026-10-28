@@ -65,7 +65,7 @@ func tribulationNodeDamage(tribulationType string) float64 {
 
 // LoadRealtimeTribulationSpawns builds the per-event encounter from the durable
 // rows. This is the only source of realtime tribulation stats: the rows already
-// carry the shared rank/sub-rank scale used by the turn-based fight.
+// carry the shared rank/sub-rank scale used by realtime combat.
 // ok is false when the player has no active tribulation event.
 func LoadRealtimeTribulationSpawns(ctx context.Context, playerID uuid.UUID) (string, []realtimeworld.MonsterSpawn, bool, error) {
 	if db.DB == nil {
@@ -344,7 +344,7 @@ func HandleRealtimeTribulationPlayerDeath(ctx context.Context, death realtimewor
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players
-		SET hp = 1, active_combat = NULL,
+		SET hp = 1,
 		    current_region = $1, world_zone_id = $1, map_instance_id = NULL,
 		    world_x = $2, world_y = $3, world_safe_x = $2, world_safe_y = $3,
 		    x = $4, y = $5, world_location_revision = world_location_revision + 1
@@ -395,7 +395,7 @@ func RealtimeExitTribulation(c *gin.Context) {
 	}
 	_, err = tx.ExecContext(ctx, `
 		UPDATE players
-		SET active_combat = NULL, current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5,
+		SET current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5,
 		    world_location_revision = world_location_revision + 1
 		WHERE id = $6
 	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID)

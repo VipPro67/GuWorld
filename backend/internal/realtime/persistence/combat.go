@@ -16,8 +16,8 @@ type CombatState struct {
 	Version                   int           `json:"version"`
 	GCDRemainingTicks         uint64        `json:"gcd_remaining_ticks,omitempty"`
 	BasicAttackRemainingTicks uint64        `json:"basic_attack_remaining_ticks,omitempty"`
-	CooldownRemainingTicks    [7]uint64     `json:"cooldown_remaining_ticks"`
-	CooldownSkillIDs          [7]string     `json:"cooldown_skill_ids"`
+	CooldownRemainingTicks    [13]uint64    `json:"cooldown_remaining_ticks"`
+	CooldownSkillIDs          [13]string    `json:"cooldown_skill_ids"`
 	Statuses                  []StatusState `json:"statuses,omitempty"`
 	Hidden                    HiddenState   `json:"hidden,omitempty"`
 	RecoveryRemainingTicks    uint64        `json:"recovery_remaining_ticks,omitempty"`

@@ -39,8 +39,8 @@ export interface KillerMoveCombatProfile {
   all_paths: string[];
   target_type: string;
   bypass: boolean;
-  warmup_turns: number;
-  cooldown_turns: number;
+  realtime_windup_ms?: number;
+  realtime_cooldown_ms?: number;
   priority: number;
   mana_cost: number;
   hunger_cost: number;
@@ -108,6 +108,8 @@ export interface KillerMoveRecord {
   mastery_level: number;
   is_equipped: boolean;
   available: boolean;
+  realtime_supported?: boolean;
+  realtime_unavailable_reason?: string;
   missing_gu?: string[];
   balance_version: number;
 }

@@ -1676,52 +1676,9 @@ function WallControls() {
   if (!player) return <div className="text-xs text-zinc-500 text-center py-2">Không có thông tin người chơi</div>;
 
   if (player.rank === 5 && player.sub_rank === 4 && (player.wall_progress ?? 0) >= 1) {
-    const apt = player.aptitude_type || "Đinh";
-    const isGiap = apt === "Giáp" || apt === "A";
-    const baseChance = isGiap ? 20 : 5;
-    const humanQi = player.human_qi || 0;
-    const qiBonus = (humanQi / 100000) * 20;
-    const totalChance = Math.min(90, baseChance + qiBonus);
-
     return (
       <div className="w-full space-y-3.5">
-        <div className="w-full flex flex-col items-center justify-center p-4 border border-rose-950 bg-rose-950/20 rounded-2xl shadow-[inset_0_0_12px_rgba(244,63,94,0.1)]">
-          <div className="text-rose-400 font-bold mb-1 text-center text-sm tracking-wide uppercase flex items-center gap-1.5">
-            <ShieldAlert className="w-4 h-4 text-rose-500 animate-bounce" />
-            Cơ Hội Thăng Tiên
-          </div>
-          <div className="text-[10.5px] text-zinc-400 mb-3 text-center leading-relaxed max-w-md">
-            Ngươi đã đạt tới Ngũ Chuyển Đỉnh Phong. Nhân khí tích lũy: <span className="font-bold text-amber-400 font-mono">{(humanQi).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} / 500.000</span> <br />
-            Thăng Tiên là quá trình độ kiếp cực kỳ nguy hiểm, nếu thất bại tu vi sẽ phế bỏ về Nhất Chuyển!
-          </div>
-
-          <div className="w-full max-w-sm bg-zinc-950/70 border border-rose-900/40 rounded-xl p-2.5 mb-3 text-xs space-y-1 font-mono">
-            <div className="flex justify-between text-zinc-400">
-              <span>Tư chất ({apt}):</span>
-              <span className="text-emerald-400 font-bold">+{baseChance}% gốc</span>
-            </div>
-            <div className="flex justify-between text-zinc-400">
-              <span>Bonus Nhân Khí (+20%/100k):</span>
-              <span className="text-amber-400 font-bold">+{qiBonus.toFixed(1)}%</span>
-            </div>
-            <div className="border-t border-zinc-800 pt-1 flex justify-between font-bold">
-              <span className="text-rose-300">Tỉ lệ thành công:</span>
-              <span className="text-rose-400 text-sm">{totalChance.toFixed(1)}% {totalChance >= 90 && "(Đạt Trần 90%)"}</span>
-            </div>
-          </div>
-
-          <button
-            className="px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer transition-all active:scale-95 uppercase tracking-wider"
-            onClick={async () => {
-              if (await store.showConfirm(`Tỉ lệ thăng tiên hiện tại của ngươi là ${totalChance.toFixed(1)}%. Thăng tiên là cửu tử nhất sinh, nếu thất bại tu vi phế bỏ về Nhất Chuyển! Ngươi quyết định dấn thân?`)) {
-                const res = await store.ascension();
-                if (res) store.addToast(res.message, "success");
-              }
-            }}
-          >
-            Liều Mạng Thăng Tiên ({totalChance.toFixed(1)}%)
-          </button>
-        </div>
+        <AscensionRitual />
 
         {/* Stones Recharge Section */}
         <div className="bg-zinc-950/50 border border-zinc-900 rounded-xl p-3">
@@ -1877,6 +1834,276 @@ function WallControls() {
       </div>
     </div>
   );
+}
+
+// ── Nghi thức Thăng Tiên: Nát Khiếu → Dẫn Khí → Thả Cổ ──
+
+const ASCENSION_GRADE_TIERS = [
+  { grade: "Sơ", qi: 100000, color: "text-slate-300" },
+  { grade: "Trung", qi: 230000, color: "text-emerald-400" },
+  { grade: "Thượng", qi: 370000, color: "text-cyan-400" },
+  { grade: "Chí Cao", qi: 480000, color: "text-amber-400" },
+];
+
+const ASCENSION_SHATTER_BASE = 15; // % vỡ khiếu lần đầu
+const ASCENSION_SHATTER_STEP = 15; // % cộng dồn mỗi lần hụt
+const ASCENSION_SHATTER_MAX = 90;
+const ASCENSION_SHATTER_COST_RATIO = 0.30; // 30% chân nguyên tối đa mỗi lần
+
+const ASCENSION_TEMPER_STAGES: { title: string; options: { text: string; soul?: number; manaPct?: number; stones?: number }[] }[] = [
+  {
+    title: "Định Tâm",
+    options: [
+      { text: "Tĩnh tọa điều tức, lấy thần thức áp chế tâm ma (−15 Soul HP)", soul: 15 },
+      { text: "Vận chân nguyên hòa giải 2 khí thiên địa (−25% Chân Nguyên tối đa)", manaPct: 0.25 },
+    ],
+  },
+  {
+    title: "Ký Địa",
+    options: [
+      { text: "Mở huyệt Long Không, dẫn địa mạch nhập khiếu (−25 Soul HP)", soul: 25 },
+      { text: "Đốt nguyên thạch trấn yểm địa mạch (−2.000 Nguyên Thạch)", stones: 2000 },
+    ],
+  },
+  {
+    title: "Thông Thiên",
+    options: [
+      { text: "Ngửa mặt đón thiên khí, lấy Nhân Khí làm mồi (−35 Soul HP)", soul: 35 },
+      { text: "Dốc toàn chân nguyên đón tiếp 2 khí thiên địa (−40% Chân Nguyên tối đa)", manaPct: 0.40 },
+    ],
+  },
+];
+
+function AscensionRitual() {
+  const store = useGameStore();
+  const player = store.player;
+  const session = store.ascensionSession;
+  const [selectedGu, setSelectedGu] = useState<string[]>([]);
+  const [, forceTick] = useState(0);
+
+  useEffect(() => {
+    store.fetchAscensionSession();
+    const t = setInterval(() => forceTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (session?.step !== "CALAMITY") return;
+    const t = setInterval(() => store.fetchAscensionSession(), 3000);
+    return () => clearInterval(t);
+  }, [session?.step]);
+
+  if (!player) return null;
+
+  const humanQi = player.human_qi || 0;
+  const hasVital = !!(player.gu_inventory ?? []).some((g) => g.is_vital && g.status !== "DEAD");
+  const maxMana = player.max_mana ?? 0;
+  const shatterCost = Math.max(500, maxMana * ASCENSION_SHATTER_COST_RATIO);
+  const sessionStep = session?.step;
+
+  // Hiệu lực phiên còn lại (đếm ngược).
+  let deadlineLeft: string | null = null;
+  if (session?.expires_at && ["GUID_QI", "CALAMITY", "RELEASE"].includes(sessionStep ?? "")) {
+    const ms = new Date(session.expires_at).getTime() - Date.now();
+    if (ms <= 0) deadlineLeft = "Hết hạn!";
+    else {
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      deadlineLeft = `${h}h ${m}p ${s}s`;
+    }
+  }
+
+  const stepIndex = sessionStep === "GUID_QI" ? 1 : sessionStep === "CALAMITY" ? 2 : sessionStep === "RELEASE" ? 3 : 0;
+
+  // Pool thả cổ: cổ 5C (không phải bản mệnh) của lưu phái đạt Đại Sư.
+  const releasePool = (player.gu_inventory ?? []).filter((g) => {
+    if (g.rank !== 5 || g.is_vital || g.status === "DEAD") return false;
+    const spec = guSpecFor(g.gu_id, g.rank);
+    if (!spec) return false;
+    const paths: string[] = Array.isArray(spec.path) ? spec.path : [spec.path];
+    return paths.some((p) => masteryLevelForPoints(player.path_masteries?.[translateMasteryPathKey(p)] ?? 0) >= 1);
+  });
+
+  const temperStage = session?.temper_stage ?? 0;
+  const inTemper = sessionStep === "GUID_QI" && temperStage < ASCENSION_TEMPER_STAGES.length;
+
+  return (
+    <div className="w-full flex flex-col items-center justify-center p-4 border border-rose-950 bg-rose-950/20 rounded-2xl shadow-[inset_0_0_12px_rgba(244,63,94,0.1)]">
+      <div className="text-rose-400 font-bold mb-1 text-center text-sm tracking-wide uppercase flex items-center gap-1.5">
+        <ShieldAlert className="w-4 h-4 text-rose-500 animate-bounce" />
+        Nghi Thức Thăng Tiên
+      </div>
+      <div className="text-[10.5px] text-zinc-400 mb-3 text-center leading-relaxed max-w-md">
+        Nát Khiếu → Dẫn Khí → Thả Cổ. Nhân Khí hiện tại: <span className="font-bold text-amber-400 font-mono">{humanQi.toLocaleString("vi-VN", { maximumFractionDigits: 0 })}</span>
+        {" "}— dưới <span className="font-mono text-rose-400">100.000</span> thì Dẫn Khí tất thất bại.
+        {deadlineLeft && <> Thời hạn phiên: <span className="font-mono text-rose-300 font-bold">{deadlineLeft}</span></>}
+      </div>
+
+      {/* Chuỗi khâu */}
+      <div className="w-full max-w-md grid grid-cols-4 gap-1 mb-3 text-center">
+        {["Nát Khiếu", "Dẫn Khí", "Địa Tai", "Thả Cổ"].map((label, i) => {
+          const active = sessionStep
+            ? (sessionStep === "SHATTERING" && i === 0) ||
+              (sessionStep === "GUID_QI" && i === 1) ||
+              (sessionStep === "CALAMITY" && i === 2) ||
+              (sessionStep === "RELEASE" && i === 3)
+            : false;
+          const done = i < stepIndex;
+          return (
+            <div key={label} className={`rounded-lg py-1.5 text-[10px] font-bold border ${done ? "border-emerald-600/50 bg-emerald-950/30 text-emerald-400" : active ? "border-rose-600/60 bg-rose-950/40 text-rose-300 animate-pulse" : "border-zinc-800 bg-zinc-950/50 text-zinc-500"}`}>
+              {done ? "✓ " : ""}{label}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Khâu 0/1: chuẩn bị + nát khiếu ── */}
+      {(!session || sessionStep === "SHATTERING" || sessionStep === "FAILED" || sessionStep === "COMPLETED") && (
+        <div className="w-full max-w-md space-y-2">
+          <div className="w-full bg-zinc-950/70 border border-rose-900/40 rounded-xl p-2.5 text-xs space-y-1 font-mono">
+            <div className="flex justify-between text-zinc-400">
+              <span>Cổ Bản Mệnh (bắt buộc):</span>
+              {hasVital ? <span className="text-emerald-400 font-bold">✓ Có</span> : <span className="text-rose-400 font-bold">✗ Thiếu</span>}
+            </div>
+            {ASCENSION_GRADE_TIERS.map((t) => (
+              <div key={t.grade} className="flex justify-between text-zinc-400">
+                <span>Phúc Địa {t.grade}:</span>
+                <span className={`${humanQi >= t.qi ? t.color : "text-zinc-500"} font-bold`}>{t.qi.toLocaleString("vi-VN")} Nhân Khí{humanQi >= t.qi ? " ✓" : ""}</span>
+              </div>
+            ))}
+            {session?.step === "SHATTERING" && (
+              <div className="flex justify-between text-zinc-400">
+                <span>Số lần đã trùng kích:</span>
+                <span className="text-rose-300 font-bold">{session.attempts} (tỉ lệ vỡ kế tiếp {Math.min(ASCENSION_SHATTER_MAX, ASCENSION_SHATTER_BASE + ASCENSION_SHATTER_STEP * session.attempts)}%)</span>
+              </div>
+            )}
+          </div>
+          {!hasVital && (
+            <div className="text-[10px] text-rose-400 text-center">
+              Phải trang bị Cổ Bản Mệnh để trấn giữ không khiếu trước khi liều mạng nát khiếu!
+            </div>
+          )}
+          <button
+            disabled={!hasVital || player.current_mana < shatterCost || store.actionLoading}
+            className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer disabled:cursor-not-allowed transition-all active:scale-95 uppercase tracking-wider"
+            onClick={async () => {
+              const attempts = session?.step === "SHATTERING" ? session.attempts : 0;
+              const chance = Math.min(ASCENSION_SHATTER_MAX, ASCENSION_SHATTER_BASE + ASCENSION_SHATTER_STEP * attempts);
+              if (!(await store.showConfirm(`Trùng kích nát khiếu tốn ${Math.round(shatterCost).toLocaleString("vi-VN")} Chân Nguyên, tỉ lệ vỡ hiện tại ${chance}%. Nát khiếu là mở đầu nghi thức cửu tử nhất sinh — ngươi chắc chứ?`))) return;
+              const res = await store.shatterAperture();
+              if (res) store.addToast(res.message, res.shattered ? "success" : "error");
+            }}
+          >
+            Trùng Kích Nát Khiếu (−{Math.round(shatterCost).toLocaleString("vi-VN")} Chân Nguyên)
+          </button>
+        </div>
+      )}
+
+      {/* ── Khâu 2a: Dẫn Khí — khảo nghiệm tâm tính ── */}
+      {inTemper && (
+        <div className="w-full max-w-md space-y-2">
+          <div className="text-[11px] text-zinc-300 font-bold text-center">
+            Khảo nghiệm tâm tính {temperStage + 1}/{ASCENSION_TEMPER_STAGES.length}: {ASCENSION_TEMPER_STAGES[temperStage].title}
+          </div>
+          {ASCENSION_TEMPER_STAGES[temperStage].options.map((opt, i) => {
+            const affordable =
+              (opt.soul ?? 0) <= (player.soul_hp ?? 0) &&
+              (opt.manaPct ?? 0) * maxMana <= player.current_mana &&
+              (opt.stones ?? 0) <= (player.primeval_stones ?? 0);
+            return (
+              <button
+                key={i}
+                disabled={!affordable || store.actionLoading}
+                className="w-full text-left px-3 py-2 bg-zinc-950/70 hover:bg-zinc-900 border border-zinc-800 hover:border-rose-700/60 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-[11px] text-zinc-300 transition-all cursor-pointer disabled:cursor-not-allowed"
+                onClick={async () => {
+                  const res = await store.temperAscension(i);
+                  if (res) store.addToast(res.message, res.success ? "success" : "error");
+                }}
+              >
+                {opt.text}
+                {!affordable && <span className="text-rose-500"> (không đủ tài nguyên)</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Khâu 2b: Địa Tai bản yếu ── */}
+      {sessionStep === "CALAMITY" && (
+        <div className="w-full max-w-md space-y-2 text-center">
+          <div className="text-[11px] text-rose-300 font-bold animate-pulse">
+            ĐỊA TAI BẢN YẾU giáng lâm! 2 khí thiên địa đang cuồn cuộn chờ thân chủ điều hòa.
+          </div>
+          <button
+            disabled={store.actionLoading}
+            className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl transition-all active:scale-95 uppercase tracking-wider cursor-pointer"
+            onClick={async () => {
+              const res = await store.engageAscensionCalamity();
+              if (res) store.addToast(res.message, "info");
+            }}
+          >
+            Nghênh Chiến Địa Tai Bản Yếu
+          </button>
+          <div className="text-[10px] text-zinc-500">Thua trận = nghi thức thất bại, mất một phần Nhân Khí. Rút lui an toàn được phép, có thể nghênh chiến lại trong thời hạn.</div>
+        </div>
+      )}
+
+      {/* ── Khâu 3: Thả Cổ ── */}
+      {sessionStep === "RELEASE" && (
+        <div className="w-full max-w-md space-y-2">
+          <div className="text-[11px] text-zinc-300 text-center">
+            Chọn cổ <span className="font-bold text-amber-400">Ngũ Chuyển</span> của lưu phái đạt <span className="font-bold text-emerald-400">Đại Sư</span> để thả vào khiếu — mỗi cổ tiêu hủy nhận <span className="font-mono text-amber-400">300 Đạo Ngân</span> theo lưu phái. Cổ bị hủy vĩnh viễn!
+          </div>
+          {releasePool.length === 0 && (
+            <div className="text-[10px] text-rose-400 text-center">Không có cổ 5C nào thuộc lưu phái đạt Đại Sư — chuẩn bị thiếu trầm trọng!</div>
+          )}
+          <div className="max-h-40 overflow-y-auto space-y-1">
+            {releasePool.map((g) => {
+              const spec = guSpecFor(g.gu_id, g.rank);
+              const paths: string[] = spec ? (Array.isArray(spec.path) ? spec.path : [spec.path]) : [];
+              const chosen = selectedGu.includes(g.instance_id);
+              return (
+                <button
+                  key={g.instance_id}
+                  className={`w-full text-left px-3 py-1.5 rounded-lg border text-[11px] transition-all cursor-pointer ${chosen ? "border-amber-500/60 bg-amber-950/30 text-amber-300" : "border-zinc-800 bg-zinc-950/60 text-zinc-300 hover:border-zinc-700"}`}
+                  onClick={() => setSelectedGu((cur) => chosen ? cur.filter((id) => id !== g.instance_id) : [...cur, g.instance_id])}
+                >
+                  {chosen ? "☑" : "☐"} {spec?.name || g.gu_id} — {paths.map((p) => translatePath(p)).join(", ")} (+300 Đạo Ngân)
+                </button>
+              );
+            })}
+          </div>
+          <button
+            disabled={selectedGu.length === 0 || store.actionLoading}
+            className="w-full px-5 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-zinc-950 font-black text-xs rounded-xl transition-all active:scale-95 uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+            onClick={async () => {
+              const totalMarks = selectedGu.length * 300;
+              if (!(await store.showConfirm(`Thả ${selectedGu.length} cổ 5C để tiêu hủy, nhận ${totalMarks} Đạo Ngân và THĂNG TIÊN? Hành động không thể đảo ngược!`))) return;
+              const res = await store.releaseAscensionGu(selectedGu);
+              if (res) {
+                store.addToast(res.message, res.success ? "success" : "error");
+                if (res.success) setSelectedGu([]);
+              }
+            }}
+          >
+            Thả Cổ — Hoàn Thành Thăng Tiên ({selectedGu.length} cổ · {selectedGu.length * 300} Đạo Ngân)
+          </button>
+        </div>
+      )}
+
+      {sessionStep === "FAILED" && (
+        <div className="text-[11px] text-rose-400 text-center">
+          Nghi thức thất bại! Đã mất một phần Nhân Khí và toàn bộ chuẩn bị. Có thể liều mạng nát khiếu lại bất cứ lúc nào.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Chuyển "Fire Path" → key "fire" để tra path_masteries.
+function translateMasteryPathKey(path: string): string {
+  return path.toLowerCase().replace(/\s+path$/i, "").trim();
 }
 
 function BlessedLandControls() {

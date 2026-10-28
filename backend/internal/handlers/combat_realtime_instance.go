@@ -32,6 +32,17 @@ type PracticeRealtimeConfig struct {
 	DummySpeed  float64 `json:"dummy_speed"`
 }
 
+// RealtimeCombatInstanceVitals stores temporary arena resources and the latest
+// position for one participant in a shared combat session.
+type RealtimeCombatInstanceVitals struct {
+	CurrentHP    float64 `json:"current_hp"`
+	CurrentMana  float64 `json:"current_mana"`
+	X            float64 `json:"x"`
+	Y            float64 `json:"y"`
+	CombatTeamID string  `json:"combat_team_id,omitempty"`
+	OriginZoneID string  `json:"origin_zone_id,omitempty"`
+}
+
 // StartRealtimePractice creates an isolated training instance. The durable
 // character keeps its real resources; only its realtime routing fields change.
 func StartRealtimePractice(c *gin.Context) {
@@ -74,7 +85,7 @@ func StartRealtimePractice(c *gin.Context) {
 	var regionID, currentZone, currentInstance string
 	err = tx.QueryRowContext(c.Request.Context(), `
 		SELECT COALESCE(current_region,''), COALESCE(NULLIF(world_zone_id,''), current_region), COALESCE(world_instance_id,'')
-		FROM players WHERE id=$1 AND (active_combat IS NULL OR active_combat='null'::jsonb) FOR UPDATE
+		FROM players WHERE id=$1 FOR UPDATE
 	`, playerID).Scan(&regionID, &currentZone, &currentInstance)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -141,17 +152,22 @@ func EndRealtimePractice(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
-	var originZone string
+	var originZone, combatZone string
 	err = tx.QueryRowContext(c.Request.Context(), `
-		SELECT origin_zone_id FROM realtime_combat_instances
+		SELECT origin_zone_id, zone_id FROM realtime_combat_instances
 		WHERE player_id=$1 AND mode='training' AND status='active' FOR UPDATE
-	`, playerID).Scan(&originZone)
+	`, playerID).Scan(&originZone, &combatZone)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"code": "training_session_inactive", "error": "Không có phiên tập luyện đang mở."})
 		return
 	}
-	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE players SET world_zone_id=$2, world_instance_id='', world_location_revision=world_location_revision+1 WHERE id=$1 AND world_instance_id LIKE 'combat:%'`, playerID, originZone); err != nil {
+	result, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET world_zone_id=$2, world_instance_id='', world_location_revision=world_location_revision+1 WHERE id=$1 AND world_zone_id=$3 AND world_instance_id LIKE 'combat:%'`, playerID, originZone, combatZone)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khôi phục bản đồ trước đó."})
+		return
+	}
+	if changed, rowsErr := result.RowsAffected(); rowsErr != nil || changed != 1 {
+		c.JSON(http.StatusConflict, gin.H{"code": "training_session_inactive", "error": "Nhân vật không còn ở trong phiên tập luyện này."})
 		return
 	}
 	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE realtime_combat_instances SET status='completed', ended_at=NOW() WHERE player_id=$1 AND mode='training' AND status='active'`, playerID); err != nil {

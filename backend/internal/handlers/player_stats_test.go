@@ -15,7 +15,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
 
 var registerStatsTxDriver sync.Once
@@ -288,42 +287,6 @@ func resetTestGuRegistry(t *testing.T) {
 
 // TestCombatSpeedNoDoubleCount verifies that combat speed equals passive stats speed
 // with no double-counting of speed_boost_flat effects.
-func TestCombatSpeedNoDoubleCount(t *testing.T) {
-	setupTestGuRegistry(t)
-	defer resetTestGuRegistry(t)
-
-	player := &models.Player{
-		CultivationState: models.CultivationState{
-			Rank:    1,
-			SubRank: 1,
-		},
-		GuInventory: models.GuInventory{
-			{InstanceID: "inst1", GuID: "GU_ACTIVE_SPD", Rank: 1, Status: "ACTIVE", Equipped: true},
-		},
-	}
-
-	// Get passive stats speed (should NOT include speed_boost_flat)
-	passiveStats := GetPassiveStats(player)
-	passiveSpeed := passiveStats.Stats["speed"]
-
-	// Build combatant with loadout including the speed-boost Gu
-	loadout := &simulator.CombatLoadout{
-		GuIds: []string{"GU_ACTIVE_SPD"},
-	}
-	simCombatant, err := buildSimCombatant(nil, player, false, true, loadout)
-	if err != nil {
-		t.Fatalf("failed to build sim combatant: %v", err)
-	}
-
-	// Combat speed should equal passive speed (no double-counting)
-	// Before fix: simCombatant.Speed = passiveSpeed + 20 (double-counted)
-	// After fix: simCombatant.Speed = passiveSpeed (correct)
-	if simCombatant.Speed != passiveSpeed {
-		t.Fatalf("expected combat speed %.2f to equal passive speed %.2f, got combat speed %.2f",
-			passiveSpeed, passiveSpeed, simCombatant.Speed)
-	}
-}
-
 // TestGetPassiveStats_StatusStatMods verifies that status stat_mods scale the
 // final stats (percentage on the accumulated total).
 func TestGetPassiveStats_StatusStatMods(t *testing.T) {
@@ -410,79 +373,6 @@ func TestBuildStatProvenance(t *testing.T) {
 // TestBuildSimCombatant_StatusFactorScalesSkillDamage verifies that status
 // stat_mods multiply the whole Gu skill output (not just the additive attack
 // component), so heavy suppression like Áp Chế visibly reduces skill damage.
-func TestBuildSimCombatant_StatusFactorScalesSkillDamage(t *testing.T) {
-	setupTestGuRegistry(t)
-	defer resetTestGuRegistry(t)
-
-	models.GuRegistry["GU_ACTIVE_DMG"] = map[int]models.GuDictionaryItem{
-		1: {
-			ID:   "GU_ACTIVE_DMG",
-			Name: "Sát Chủ Cổ",
-			Rank: 1,
-			Path: []string{"Fire Path"},
-			Effects: models.GuEffects{
-				Active: &models.ActiveEffect{DamageFlat: 100},
-			},
-		},
-	}
-
-	newPlayer := func() *models.Player {
-		return &models.Player{
-			CultivationState: models.CultivationState{Rank: 3, SubRank: 1},
-			GuInventory: models.GuInventory{
-				{InstanceID: "inst1", GuID: "GU_ACTIVE_DMG", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
-			},
-		}
-	}
-
-	clean, err := buildSimCombatant(nil, newPlayer(), true, true, nil)
-	if err != nil {
-		t.Fatalf("build clean combatant: %v", err)
-	}
-	wounded := newPlayer()
-	wounded.Statuses = models.StatusList{{ID: "death_penalty"}} // -50% attack/defense/speed
-	suppressed, err := buildSimCombatant(nil, wounded, true, true, nil)
-	if err != nil {
-		t.Fatalf("build suppressed combatant: %v", err)
-	}
-
-	var cleanSkill, supSkill, cleanBasic, supBasic float64
-	for _, a := range clean.Actions {
-		switch a.ActionType {
-		case "GU_SKILL":
-			cleanSkill = a.Damage
-		case "BASIC_ATTACK":
-			cleanBasic = a.Damage
-		}
-	}
-	for _, a := range suppressed.Actions {
-		switch a.ActionType {
-		case "GU_SKILL":
-			supSkill = a.Damage
-		case "BASIC_ATTACK":
-			supBasic = a.Damage
-		}
-	}
-
-	if cleanSkill <= 0 || supSkill <= 0 {
-		t.Fatalf("expected GU_SKILL damage on both builds, got clean=%v suppressed=%v", cleanSkill, supSkill)
-	}
-
-	// Skill Damage is pure Gu flat value (100 clean, 50 suppressed by -50% status factor).
-	// Attainment scaling is handled via DamageMult.
-	if diff := supSkill - 50.0; diff > 1e-6 || diff < -1e-6 {
-		t.Fatalf("suppressed skill damage = %v, want 50.0 (DamageFlat x status factor 0.5)", supSkill)
-	}
-	if diff := cleanSkill - 100.0; diff > 1e-6 || diff < -1e-6 {
-		t.Fatalf("clean skill damage = %v, want 100", cleanSkill)
-	}
-
-	// Basic attack damage IS the suppressed attack stat — no extra factor.
-	if cleanBasic != 30 || supBasic != 15 {
-		t.Fatalf("basic attack = clean %v / suppressed %v, want 30 / 15", cleanBasic, supBasic)
-	}
-}
-
 // TestGetPassiveStatsIgnoresDaoMarksAndMastery locks in that additive Gu
 // passives are raw values: dao marks and path mastery must not scale passive
 // ATK/DEF/HP/SPEED.

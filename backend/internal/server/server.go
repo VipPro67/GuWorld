@@ -387,9 +387,6 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
 			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
-		handlers.WorldCellBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
-		}
 		handlers.WorldCombatBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
 			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
@@ -613,8 +610,13 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		{
 			cultivate.POST("/break-wall", handlers.BreakWall)
 			cultivate.POST("/use-relic-gu", handlers.UseRelicGu)
-			cultivate.POST("/ascension", handlers.Ascension)
-			cultivate.POST("/tribulation", handlers.Tribulation)
+
+			// Nghi thức Thăng Tiên 3 khâu: Nát Khiếu → Dẫn Khí → Thả Cổ
+			cultivate.GET("/ascension/session", handlers.GetAscensionSession)
+			cultivate.POST("/ascension/shatter", handlers.AscensionShatter)
+			cultivate.POST("/ascension/temper", handlers.AscensionTemper)
+			cultivate.POST("/ascension/calamity/engage", handlers.AscensionEngageCalamity)
+			cultivate.POST("/ascension/release", handlers.AscensionRelease)
 		}
 
 		// Quest — group: 40/min, per player: 25/min
@@ -750,10 +752,8 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		combat.Use(middleware.RequireOnboarded())
 		combat.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
-			combat.POST("/start", middleware.RequireLegacyWorldMode(), handlers.AutoCombatStart)
 			combat.POST("/practice", handlers.StartRealtimePractice)
 			combat.POST("/practice/exit", handlers.EndRealtimePractice)
-			combat.POST("/capture", middleware.RequireLegacyWorldMode(), handlers.CaptureMonster)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}
@@ -851,8 +851,6 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		tribulations.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			tribulations.GET("/active", handlers.GetActiveTribulation)
-			tribulations.POST("/:eventId/engage", handlers.EngageTribulation)
-			tribulations.POST("/:eventId/resolve", handlers.ResolveTribulation)
 			tribulations.POST("/:eventId/realtime-engage", handlers.RealtimeEngageTribulation)
 			tribulations.POST("/:eventId/realtime-victory", handlers.RealtimeResolveTribulationVictory)
 			tribulations.POST("/:eventId/realtime-escape", handlers.RealtimeEscapeTribulation)
@@ -1038,8 +1036,8 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			instance.POST("/action", handlers.ActionInstance)
 			instance.GET("/spatial", handlers.ListSpatialRealms)
 			instance.GET("/spatial/active", handlers.GetActiveSpatialRealm)
-			instance.POST("/spatial/enter", middleware.RequireLegacyWorldMode(), handlers.EnterSpatialRealm)
-			instance.POST("/spatial/exit", middleware.RequireLegacyWorldMode(), handlers.ExitSpatialRealm)
+			instance.POST("/spatial/enter", handlers.EnterSpatialRealm)
+			instance.POST("/spatial/exit", handlers.ExitSpatialRealm)
 		}
 
 		// Dream Realms — dedicated API for Mộng Cảnh (scenario Q&A system)
@@ -1064,9 +1062,9 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			spatialRealms.GET("", handlers.ListSpatialRealms)
 			spatialRealms.GET("/active", handlers.GetActiveSpatialRealm)
 			spatialRealms.GET("/altar-info", handlers.GetInheritanceAltarInfo)
-			spatialRealms.POST("/enter", middleware.RequireLegacyWorldMode(), handlers.EnterSpatialRealm)
-			spatialRealms.POST("/exit", middleware.RequireLegacyWorldMode(), handlers.ExitSpatialRealm)
-			spatialRealms.POST("/claim-altar", middleware.RequireLegacyWorldMode(), handlers.ClaimInheritanceAltar)
+			spatialRealms.POST("/enter", handlers.EnterSpatialRealm)
+			spatialRealms.POST("/exit", handlers.ExitSpatialRealm)
+			spatialRealms.POST("/claim-altar", handlers.ClaimInheritanceAltar)
 		}
 
 		// Sect — group: 40/min, per player: 25/min

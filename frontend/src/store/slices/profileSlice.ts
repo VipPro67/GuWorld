@@ -70,7 +70,6 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
 
       const player: Player = await response.json();
       const localToken = (typeof window !== "undefined" ? localStorage.getItem("gu_auth_token") : null) || AUTHENTICATED_SESSION;
-      set({ activeCombatReplay: null });
       get().setPlayerFromServer(player, { token: localToken });
       if (typeof window !== "undefined") {
         localStorage.setItem("gu_player_id", player.id);

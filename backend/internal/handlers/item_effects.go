@@ -56,7 +56,7 @@ func exitSpatialRealmEffect(tx *sql.Tx, player *models.Player, item models.ItemS
 	if err != nil {
 		return "", fmt.Errorf("không thể tải phiên bí cảnh: %w", err)
 	}
-	result, err := tx.Exec(`UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,active_combat=NULL WHERE id=$4 AND map_instance_id=$5`, region, x, y, player.ID, instanceID)
+	result, err := tx.Exec(`UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL WHERE id=$4 AND map_instance_id=$5`, region, x, y, player.ID, instanceID)
 	if err != nil {
 		return "", err
 	}
@@ -68,7 +68,6 @@ func exitSpatialRealmEffect(tx *sql.Tx, player *models.Player, item models.ItemS
 		return "", err
 	}
 	placePlayerAt(player, region, x, y)
-	player.ActiveCombat = nil
 	return fmt.Sprintf("Đạo hữu sử dụng %s để thoát khỏi bí cảnh.", item.Name), nil
 }
 
@@ -317,10 +316,6 @@ func soulBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, va
 }
 
 func removeNegativeStatusEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
-	if player.ActiveCombat != nil && len(player.ActiveCombat.PlayerStatusEffects) > 0 {
-		player.ActiveCombat.PlayerStatusEffects = []models.StatusEffect{}
-		return fmt.Sprintf("%s giải trừ toàn bộ trạng thái tiêu cực của đạo hữu trong trận chiến.", item.Name), nil
-	}
 	return "", nil
 }
 

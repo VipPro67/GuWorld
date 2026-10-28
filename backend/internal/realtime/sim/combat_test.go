@@ -305,6 +305,83 @@ func TestBasicAttackIsServerAuthoritativeAndCooldownLimited(t *testing.T) {
 	}
 }
 
+func TestAimedBasicAttackUsesCollisionAndMissConsumesCooldown(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	if err := w.AddEntity(newCombatPlayer("player", Vec2{})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("front", Vec2{X: 1.5})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("back", Vec2{X: -1.5})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitBasicAttack(AttackCommand{EntityID: "player", Seq: 1, Aim: Vec2{Y: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventBasicAttack) || hasEvent(events, combat.EventHitConfirmed) || entityHP(t, w, "front") != 100 {
+		t.Fatalf("empty swing should miss: %+v", events)
+	}
+	if err := w.SubmitBasicAttack(AttackCommand{EntityID: "player", Seq: 2, Aim: Vec2{X: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	events = collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventCastRejected) || entityHP(t, w, "front") != 100 {
+		t.Fatalf("miss should start cooldown: %+v", events)
+	}
+	collectEvents(t, w, int(combat.BasicAttackCooldownTicks)-1)
+	if err := w.SubmitBasicAttack(AttackCommand{EntityID: "player", Seq: 3, Aim: Vec2{X: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	events = collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventHitConfirmed) || entityHP(t, w, "front") != 100-combat.BasicAttackDamage || entityHP(t, w, "back") != 100 {
+		t.Fatalf("aimed swing should hit front only: %+v", events)
+	}
+}
+
+func TestAimedTargetCastCanMissAndStillSpendMana(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	if err := w.AddEntity(newCombatPlayer("player", Vec2{})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("mob", Vec2{X: 3})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, Aim: Vec2{X: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 6)
+	if !hasEvent(events, combat.EventCastAccepted) || hasEvent(events, combat.EventHitConfirmed) || entityHP(t, w, "mob") != 100 {
+		t.Fatalf("empty-space cast should miss: %+v", events)
+	}
+	if w.entities["player"].Combat.Mana >= w.entities["player"].Combat.MaxMana {
+		t.Fatal("empty-space cast did not spend mana")
+	}
+}
+
+func TestAimedTargetCastHitsFirstBodyBeforeClickedPoint(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	if err := w.AddEntity(newCombatPlayer("player", Vec2{})); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []Entity{
+		newTargetMonster("first", Vec2{X: 2}),
+		newTargetMonster("second", Vec2{X: 3}),
+	} {
+		if err := w.AddEntity(target); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, Aim: Vec2{X: 4}}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 6)
+	if !hasEvent(events, combat.EventHitConfirmed) || entityHP(t, w, "first") >= 100 || entityHP(t, w, "second") != 100 {
+		t.Fatalf("aimed cast should hit first body only: %+v", events)
+	}
+}
+
 func TestProjectedAttackAndDefenseUseCharacterValues(t *testing.T) {
 	w, _ := NewWorld("arena", 16)
 	player := newCombatPlayer("player", Vec2{})

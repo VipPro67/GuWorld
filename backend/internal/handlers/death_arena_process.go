@@ -1,13 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -29,8 +28,11 @@ func processPendingMatches(tournamentID string) {
 
 	logger.S.Infof("Death Arena: Starting match processing for tournament %s", tournamentID)
 
-	// Recover any match stuck IN_PROGRESS from previous crashes/restarts back to PENDING
-	_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'PENDING' WHERE tournament_id = $1 AND status = 'IN_PROGRESS'`, tournamentID)
+	// Only reopen a match if its realtime session was lost during a restart.
+	_, _ = db.DB.Exec(`UPDATE death_arena_matches m SET status='PENDING'
+		WHERE m.tournament_id=$1 AND m.status='IN_PROGRESS' AND NOT EXISTS (
+			SELECT 1 FROM realtime_combat_sessions s WHERE s.mode='tournament' AND s.status='active'
+			AND s.payload->>'tournament_id'=$1 AND s.payload->>'match_id'=m.id::text)`, tournamentID)
 
 	roundStartTime := time.Now()
 
@@ -56,6 +58,13 @@ func processPendingMatches(tournamentID string) {
 
 		if err == sql.ErrNoRows {
 			logger.S.Infof("Death Arena: No more pending matches for tournament %s", tournamentID)
+			var activeCount int
+			_ = db.DB.QueryRow(`SELECT COUNT(*) FROM death_arena_matches WHERE tournament_id=$1 AND status='IN_PROGRESS'`, tournamentID).Scan(&activeCount)
+			if activeCount > 0 {
+				settleExpiredTournamentDisconnects(context.Background(), tournamentID, "death_arena")
+				time.Sleep(time.Second)
+				continue
+			}
 			// Check if all matches in current round are finished
 			var pendingCount, finishedCount int
 			_ = db.DB.QueryRow(`
@@ -139,11 +148,9 @@ func processPendingMatches(tournamentID string) {
 		err = resolveTeamMatch(tournamentID, matchID, teamAID, teamBIDPtr)
 		if err != nil {
 			logger.S.Errorf("Death Arena: Error resolving match %s: %v", matchID, err)
-			// Mark as finished with fallback winner so bracket is never stuck
-			_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'FINISHED', winner_team_id = $1, finished_at = NOW() WHERE id = $2`, teamAID, matchID)
-			if teamBIDPtr != nil {
-				_, _ = db.DB.Exec(`UPDATE death_arena_teams SET eliminated = true WHERE id = $1`, *teamBIDPtr)
-			}
+			_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status='PENDING' WHERE id=$1 AND status='IN_PROGRESS'`, matchID)
+			time.Sleep(2 * time.Second)
+			continue
 		}
 
 		// Small delay between matches
@@ -168,7 +175,7 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		return err
 	}
 
-	// Load team members (alive only) without holding a transaction
+	// Load living participants and open their isolated realtime map.
 	teamAMembers, err := loadTeamMembersForCombat(db.DB, teamAID)
 	if err != nil {
 		return err
@@ -179,7 +186,7 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		return err
 	}
 
-	// If either team has no members, the other wins by default
+	// If a team has no living participants, record the default result without combat.
 	if len(teamAMembers) == 0 {
 		tx, err := db.DB.Begin()
 		if err != nil {
@@ -236,205 +243,7 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		return nil
 	}
 
-	// Build combat state for 6v6 purely in-memory
-	simState := &simulator.CombatState{
-		Turn:        0,
-		Seed:        time.Now().UnixNano(),
-		VirtualMode: true, // No resource consumption
-	}
-
-	// Build team A combatants
-	allySlots := [][2]int{
-		{2, 3}, {2, 1}, {1, 1}, {3, 1}, {2, 2}, {1, 2}, {3, 2}, {1, 3}, {3, 3},
-	}
-
-	for i, member := range teamAMembers {
-		if i >= 9 {
-			break
-		}
-		simAlly, err := buildTeamCombatant(member)
-		if err != nil {
-			logger.S.Warnf("Failed to build combatant for team A member %s: %v", member.PlayerID, err)
-			continue
-		}
-		simAlly.Kind = "Player"
-		if i < len(allySlots) {
-			simAlly.GridX = allySlots[i][0]
-			simAlly.GridY = allySlots[i][1]
-		}
-		simState.Allies = append(simState.Allies, simAlly)
-	}
-
-	// Build team B combatants
-	for i, member := range teamBMembers {
-		if i >= 9 {
-			break
-		}
-		simEnemy, err := buildTeamCombatant(member)
-		if err != nil {
-			logger.S.Warnf("Failed to build combatant for team B member %s: %v", member.PlayerID, err)
-			continue
-		}
-		simEnemy.Kind = "Enemy"
-		if i < len(allySlots) {
-			simEnemy.GridX = allySlots[i][0]
-			simEnemy.GridY = allySlots[i][1]
-		}
-		simState.Enemies = append(simState.Enemies, simEnemy)
-	}
-
-	// Run simulation purely in-memory (zero DB transaction lock)
-	logs := simulator.Simulate(simState)
-
-	// Determine winner
-	var winnerTeamID string
-	teamAAlive := false
-	teamBAlive := false
-
-	for _, ally := range simState.Allies {
-		if ally.HP > 0 {
-			teamAAlive = true
-			break
-		}
-	}
-	for _, enemy := range simState.Enemies {
-		if enemy.HP > 0 {
-			teamBAlive = true
-			break
-		}
-	}
-
-	if teamAAlive && !teamBAlive {
-		winnerTeamID = teamAID
-	} else if teamBAlive && !teamAAlive {
-		winnerTeamID = *teamBID
-	} else if teamAAlive && teamBAlive {
-		// Both alive - team with more total HP percentage wins
-		hpA := 0.0
-		for _, ally := range simState.Allies {
-			if ally.MaxHP > 0 {
-				hpA += ally.HP / ally.MaxHP
-			}
-		}
-		hpB := 0.0
-		for _, enemy := range simState.Enemies {
-			if enemy.MaxHP > 0 {
-				hpB += enemy.HP / enemy.MaxHP
-			}
-		}
-		if hpA >= hpB {
-			winnerTeamID = teamAID
-		} else {
-			winnerTeamID = *teamBID
-		}
-	} else {
-		// Both dead - draw, team A wins by default
-		winnerTeamID = teamAID
-	}
-
-	// Store combat log JSON
-	combatLogJSON, _ := json.Marshal(logs)
-
-	// Fast write transaction (< 5ms)
-	tx, err := db.DB.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// Update match result
-	_, err = tx.Exec(`
-		UPDATE death_arena_matches 
-		SET status = 'FINISHED', winner_team_id = $1, combat_log = $2, finished_at = NOW()
-		WHERE id = $3
-	`, winnerTeamID, combatLogJSON, matchID)
-	if err != nil {
-		return err
-	}
-
-	// Update HP for all members and mark eliminated ones
-	for _, ally := range simState.Allies {
-		newHP := ally.HP
-		if newHP < 0 {
-			newHP = 0
-		}
-		_, _ = tx.Exec(`
-			UPDATE death_arena_team_members 
-			SET current_hp = $1, current_mana = $2
-			WHERE player_id = $3 AND team_id = $4
-		`, newHP, ally.Mana, ally.ID, teamAID)
-
-		// Mark eliminated if HP <= 0
-		if ally.HP <= 0 {
-			_, _ = tx.Exec(`
-				UPDATE death_arena_team_members 
-				SET eliminated = true, eliminated_at_round = (
-					SELECT current_round FROM death_arena_tournaments WHERE id = $1
-				)
-				WHERE player_id = $2 AND team_id = $3
-			`, tournamentID, ally.ID, teamAID)
-		}
-	}
-
-	for _, enemy := range simState.Enemies {
-		newHP := enemy.HP
-		if newHP < 0 {
-			newHP = 0
-		}
-		_, _ = tx.Exec(`
-			UPDATE death_arena_team_members 
-			SET current_hp = $1, current_mana = $2
-			WHERE player_id = $3 AND team_id = $4
-		`, newHP, enemy.Mana, enemy.ID, *teamBID)
-
-		// Mark eliminated if HP <= 0
-		if enemy.HP <= 0 {
-			_, _ = tx.Exec(`
-				UPDATE death_arena_team_members 
-				SET eliminated = true, eliminated_at_round = (
-					SELECT current_round FROM death_arena_tournaments WHERE id = $1
-				)
-				WHERE player_id = $2 AND team_id = $3
-			`, tournamentID, enemy.ID, *teamBID)
-		}
-	}
-
-	// Eliminate losing team
-	loserTeamID := *teamBID
-	if winnerTeamID == *teamBID {
-		loserTeamID = teamAID
-	}
-
-	_, err = tx.Exec(`
-		UPDATE death_arena_teams 
-		SET eliminated = true, eliminated_at_round = (
-			SELECT current_round FROM death_arena_tournaments WHERE id = $1
-		)
-		WHERE id = $2
-	`, tournamentID, loserTeamID)
-	if err != nil {
-		return err
-	}
-
-	// Award round rewards to winning team members
-	reward := roundRewards[1]
-	_ = tx.QueryRow(`SELECT reward_stones_per_member FROM death_arena_matches WHERE id = $1`, matchID).Scan(&reward)
-
-	for _, member := range getTeamMembers(tx, winnerTeamID) {
-		_, _ = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, reward, member)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	invalidateTournamentCache(tournamentID)
-	BroadcastDeathArenaEvent("match_updated", tournamentID, map[string]interface{}{
-		"match_id":       matchID,
-		"winner_team_id": winnerTeamID,
-		"status":         "FINISHED",
-	})
-	return nil
+	return startRealtimeDeathArenaMatch(tournamentID, matchID, teamAID, *teamBID, teamAMembers, teamBMembers)
 }
 
 // advanceToNextRound advances the tournament to the next round

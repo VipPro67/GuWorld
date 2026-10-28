@@ -3656,7 +3656,6 @@
         "range_units": 0,
         "mana_cost": 20,
         "movement_policy": "SLOW",
-        "max_targets": 1,
         "effects": [
           {
             "type": "SHIELD",
@@ -3665,10 +3664,30 @@
         ]
       },
       "visuals": {
-        "icon": "gu/placeholder",
-        "cast_vfx": "cast/placeholder",
-        "projectile_vfx": "projectiles/water_arrow",
-        "impact_vfx": "impact/placeholder"
+        "icon": "gu/beast_body",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/armor"
+      },
+      "form": {
+        "windup_ms": 1200,
+        "mana_cost": 20,
+        "mana_drain_per_sec": 2,
+        "defense_bonus": 650,
+        "ability": {
+          "mode": "SELF",
+          "windup_ms": 400,
+          "recovery_ms": 200,
+          "cooldown_ms": 8000,
+          "range_units": 0,
+          "mana_cost": 8,
+          "movement_policy": "SLOW",
+          "effects": [
+            {
+              "type": "SHIELD",
+              "value": 650
+            }
+          ]
+        }
       }
     },
     {

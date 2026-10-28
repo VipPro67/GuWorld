@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"sort"
 	"sync/atomic"
@@ -32,39 +31,35 @@ var playerEventRevision atomic.Int64
 
 const (
 	PlayerEventUpdated   = "player.updated"
-	CombatEventStarted   = "combat.started"
-	CombatEventEnded     = "combat.ended"
 	TradeEventUpdated    = "trade.updated"
 	ManaEventSnapshot    = "mana.snapshot"
 	PlayerEventHeartbeat = "player.heartbeat"
 	SessionEventKicked   = "session.kicked"
 	PositionEventUpdated = "player.position"
-	CombatStateEvent     = "player.combat_state"
 )
 
 type PlayerRealtimeSnapshot struct {
-	ID                  string              `json:"id"`
-	StateRevision       int64               `json:"state_revision"`
-	CurrentMana         float64             `json:"current_mana"`
-	MaxMana             float64             `json:"max_mana"`
-	LastManaUpdate      time.Time           `json:"last_mana_update"`
-	TimeSpeedMultiplier float64             `json:"time_speed_multiplier"`
-	ActiveCombat        *models.CombatState `json:"active_combat"`
-	ApertureStress      float64             `json:"aperture_stress"`
-	HP                  float64             `json:"hp"`
-	BaseHP              float64             `json:"base_hp"`
-	Rank                int                 `json:"rank"`
-	SubRank             int                 `json:"sub_rank"`
-	PrimevalStones      float64             `json:"primeval_stones"`
-	ImmortalStones      float64             `json:"immortal_stones"`
-	WallProgress        float64             `json:"wall_progress"`
-	HumanQi             float64             `json:"human_qi"`
-	Lifespan            float64             `json:"lifespan"`
-	X                   int                 `json:"x"`
-	Y                   int                 `json:"y"`
-	CurrentRegion       string              `json:"current_region"`
-	ApertureStressLevel string              `json:"aperture_stress_level,omitempty"`
-	Version             int                 `json:"version"`
+	ID                  string    `json:"id"`
+	StateRevision       int64     `json:"state_revision"`
+	CurrentMana         float64   `json:"current_mana"`
+	MaxMana             float64   `json:"max_mana"`
+	LastManaUpdate      time.Time `json:"last_mana_update"`
+	TimeSpeedMultiplier float64   `json:"time_speed_multiplier"`
+	ApertureStress      float64   `json:"aperture_stress"`
+	HP                  float64   `json:"hp"`
+	BaseHP              float64   `json:"base_hp"`
+	Rank                int       `json:"rank"`
+	SubRank             int       `json:"sub_rank"`
+	PrimevalStones      float64   `json:"primeval_stones"`
+	ImmortalStones      float64   `json:"immortal_stones"`
+	WallProgress        float64   `json:"wall_progress"`
+	HumanQi             float64   `json:"human_qi"`
+	Lifespan            float64   `json:"lifespan"`
+	X                   int       `json:"x"`
+	Y                   int       `json:"y"`
+	CurrentRegion       string    `json:"current_region"`
+	ApertureStressLevel string    `json:"aperture_stress_level,omitempty"`
+	Version             int       `json:"version"`
 }
 
 type PlayerRealtimeEvent struct {
@@ -85,14 +80,13 @@ type PlayerDeltaEvent struct {
 
 // PlayerDeltaData contains only the fields that changed.
 type PlayerDeltaData struct {
-	X              int                 `json:"x,omitempty"`
-	Y              int                 `json:"y,omitempty"`
-	HP             *float64            `json:"hp,omitempty"`
-	MaxHP          *float64            `json:"max_hp,omitempty"`
-	CurrentMana    *float64            `json:"current_mana,omitempty"`
-	MaxMana        *float64            `json:"max_mana,omitempty"`
-	ActiveCombat   *models.CombatState `json:"active_combat"`
-	ApertureStress *float64            `json:"aperture_stress,omitempty"`
+	X              int      `json:"x,omitempty"`
+	Y              int      `json:"y,omitempty"`
+	HP             *float64 `json:"hp,omitempty"`
+	MaxHP          *float64 `json:"max_hp,omitempty"`
+	CurrentMana    *float64 `json:"current_mana,omitempty"`
+	MaxMana        *float64 `json:"max_mana,omitempty"`
+	ApertureStress *float64 `json:"aperture_stress,omitempty"`
 }
 
 // ClearPendingPlayerQueues removes a player's ID from async batch queues so uncommitted stale snapshots don't overwrite immediate DB commits.
@@ -107,8 +101,6 @@ func ClearPendingPlayerQueues(playerID string) {
 }
 
 // PublishPlayerSnapshot publishes a pre-loaded player snapshot to Redis Pub/Sub.
-// The broad snapshot stays cheap, while active_combat is reconciled against its
-// PostgreSQL source of truth before it can affect client navigation.
 func PublishPlayerSnapshot(player *models.Player, eventType string, domains ...PlayerEventDomain) {
 	if player == nil || db.DB == nil {
 		return
@@ -160,31 +152,6 @@ func PublishPlayerPositionDelta(playerID uuid.UUID, _, _ int) {
 		Data: PlayerDeltaData{
 			X: snapshot.X,
 			Y: snapshot.Y,
-		},
-	}
-	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
-}
-
-// PublishPlayerCombatDelta publishes combat state changes efficiently.
-func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, _ *models.CombatState) {
-	// Invalidate stale snapshot so LoadPlayerRealtimeSnapshot reloads from DB
-	_ = cache.Delete("player_snapshot:" + playerID.String())
-	snapshot, err := LoadPlayerRealtimeSnapshot(playerID)
-	if err != nil {
-		logger.S.Warnf("PublishPlayerCombatDelta: authoritative snapshot load failed for player=%s event=%s: %v", playerID, eventType, err)
-		return
-	}
-	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
-
-	delta := PlayerDeltaEvent{
-		StateRevision: snapshot.StateRevision,
-		Type:          eventType, Revision: nextPlayerEventRevision(),
-		ChangedDomains: []PlayerEventDomain{PlayerDomain},
-		Data: PlayerDeltaData{
-			// PostgreSQL is authoritative. The caller's copy may have been built
-			// before the transaction committed (or may simply be stale), while the
-			// snapshot above has just been reconciled with players.active_combat.
-			ActiveCombat: snapshot.ActiveCombat,
 		},
 	}
 	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
@@ -266,28 +233,20 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 	}
 	var cached PlayerRealtimeSnapshot
 	if err := cache.GetJSON("player_snapshot:"+playerID.String(), &cached); err == nil && cached.ID != "" {
-		// Redis accelerates the broad realtime snapshot, but active_combat drives
-		// navigation and must never outlive the database value. A narrow query
-		// prevents a stale cached combat from forcing the UI back into combat.
-		activeCombat, revision, err := loadAuthoritativePlayerMarker(db.DB, playerID)
-		if err != nil {
-			return PlayerRealtimeSnapshot{}, err
+		revision, revisionErr := loadPlayerStateRevision(db.DB, playerID)
+		if revisionErr != nil {
+			return PlayerRealtimeSnapshot{}, revisionErr
 		}
-		if cached.StateRevision != revision {
-			_ = cache.Delete("player_snapshot:" + playerID.String())
-		} else {
-			cached.ActiveCombat = activeCombat
-			syncCombatCache(playerID, activeCombat)
-			_ = cache.SetJSON("player_snapshot:"+playerID.String(), cached, 5*time.Minute)
+		if cached.StateRevision == revision {
 			return cached, nil
 		}
+		_ = cache.Delete("player_snapshot:" + playerID.String())
 	}
 
 	var player models.Player
-	var activeCombatBytes []byte
 	err := db.DB.QueryRow(`
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.last_mana_update,
-			p.time_speed_multiplier, p.active_combat, p.aperture_stress, p.hp, p.base_hp,
+			p.time_speed_multiplier, p.aperture_stress, p.hp, p.base_hp,
 			p.primeval_stones, p.immortal_stones, p.wall_progress, p.human_qi,
 			p.lifespan, p.x, p.y, p.current_region, p.path_masteries,
 			`+playerstate.RevisionExpr+`,
@@ -299,7 +258,7 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 	`, playerID).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.CurrentMana, &player.MaxMana, &player.LastManaUpdate,
-		&player.TimeSpeedMultiplier, &activeCombatBytes, &player.ApertureStress,
+		&player.TimeSpeedMultiplier, &player.ApertureStress,
 		&player.HP, &player.BaseHP, &player.PrimevalStones, &player.ImmortalStones,
 		&player.WallProgress, &player.HumanQi, &player.Lifespan,
 		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries, &player.StateRevision, &player.Version,
@@ -309,46 +268,11 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		return PlayerRealtimeSnapshot{}, err
 	}
 
-	player.ActiveCombat, err = decodeActiveCombat(activeCombatBytes)
-	if err != nil {
-		return PlayerRealtimeSnapshot{}, err
-	}
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 
 	snapshot := playerRealtimeSnapshot(player)
-	syncCombatCache(playerID, player.ActiveCombat)
 	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
 	return snapshot, nil
-}
-
-func syncCombatCache(playerID uuid.UUID, combat *models.CombatState) {
-	if combat == nil {
-		_ = cache.ClearCombatState(playerID.String())
-		return
-	}
-	_ = cache.SetCombatState(playerID.String(), combat)
-}
-
-func loadAuthoritativeActiveCombat(q interface {
-	QueryRow(query string, args ...any) *sql.Row
-}, playerID uuid.UUID) (*models.CombatState, error) {
-	var raw []byte
-	if err := q.QueryRow(`SELECT active_combat FROM players WHERE id = $1`, playerID).Scan(&raw); err != nil {
-		return nil, err
-	}
-	return decodeActiveCombat(raw)
-}
-
-func loadAuthoritativePlayerMarker(q interface {
-	QueryRow(query string, args ...any) *sql.Row
-}, playerID uuid.UUID) (*models.CombatState, int64, error) {
-	var raw []byte
-	var revision int64
-	if err := q.QueryRow("SELECT p.active_combat, "+playerstate.RevisionExpr+" FROM players p WHERE p.id = $1", playerID).Scan(&raw, &revision); err != nil {
-		return nil, 0, err
-	}
-	combat, err := decodeActiveCombat(raw)
-	return combat, revision, err
 }
 
 func loadPlayerStateRevision(q interface {
@@ -359,20 +283,6 @@ func loadPlayerStateRevision(q interface {
 	return revision, err
 }
 
-func decodeActiveCombat(raw []byte) (*models.CombatState, error) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
-	}
-	var combat models.CombatState
-	if err := json.Unmarshal(raw, &combat); err != nil {
-		return nil, err
-	}
-	if combat.IsEmpty() {
-		return nil, nil
-	}
-	return &combat, nil
-}
-
 func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 	return PlayerRealtimeSnapshot{
 		ID:                  player.ID.String(),
@@ -381,7 +291,6 @@ func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 		MaxMana:             player.MaxMana,
 		LastManaUpdate:      player.LastManaUpdate,
 		TimeSpeedMultiplier: player.TimeSpeedMultiplier + models.EquippedTimeSpeedBonus(player.GuInventory),
-		ActiveCombat:        player.ActiveCombat,
 		ApertureStress:      player.ApertureStress,
 		HP:                  player.HP,
 		BaseHP:              player.BaseHP,

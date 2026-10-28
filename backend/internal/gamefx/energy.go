@@ -50,50 +50,6 @@ func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 
 	return cost
 }
 
-// EnergyCostForCombatant computes the mana cost for a combatant (player or
-// enemy) using the same rules as EnergyCost but driven by a Combatant struct.
-func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem) float64 {
-	isImmortal := actor.Rank >= 6
-
-	if isImmortal {
-		if guSpec.Rank < util.ImmortalRankThreshold {
-			return 0
-		}
-		baseCost := 0.0
-		if guSpec.BaseManaCost > 0 {
-			baseCost = guSpec.BaseManaCost
-		}
-		cost := baseCost
-		if actor.Rank > guSpec.Rank {
-			cost = baseCost / math.Pow(100, float64(actor.Rank-guSpec.Rank))
-		} else if actor.Rank < guSpec.Rank {
-			cost = baseCost * HigherRankManaMultiplier(guSpec.Rank, actor.Rank)
-		}
-		refineTier := RefineManaTier(actor.Rank, actor.GuInventory)
-		if refineTier > 0 {
-			cost *= 0.5
-		}
-		return cost
-	}
-
-	cost := guSpec.BaseManaCost
-
-	if actor.Rank > guSpec.Rank && guSpec.Rank < util.ImmortalRankThreshold {
-		cost /= math.Pow(10, float64(actor.Rank-guSpec.Rank))
-	} else if actor.Rank < guSpec.Rank {
-		cost *= HigherRankManaMultiplier(guSpec.Rank, actor.Rank)
-	} else {
-		cost *= SubRankManaFactor(actor.SubRank)
-	}
-
-	refineTier := RefineManaTier(actor.Rank, actor.GuInventory)
-	if refineTier > 0 {
-		cost *= 0.5
-	}
-
-	return cost
-}
-
 func HigherRankManaMultiplier(guRank, userRank int) float64 {
 	if guRank <= userRank {
 		return 1.0

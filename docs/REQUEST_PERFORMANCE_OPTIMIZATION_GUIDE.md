@@ -234,13 +234,11 @@ hiện hoặc thu thêm mẫu và tách status/phase; không kết luận chỉ 
 - Login trả bootstrap tối thiểu; tải domain theo tab sau đó. Không gọi `/auth/me`
   ngay nếu login đã trả cùng session/player projection.
 
-### `POST /api/combat/start`
+### Turn-based combat (retired)
 
-- Profile riêng thời gian mô phỏng, lock wait, persistence và publish.
-- Mô phỏng deterministic và dựng delta ngoài transaction; transaction ngắn để
-  lock, revalidate input/version, ghi combat state/cost và commit.
-- Dùng operation/combat ID chống double-start; trả authoritative player/combat delta
-  để tránh status refetch tức thì.
+`POST /api/combat/start` and its deterministic simulator pipeline have been removed.
+Realtime combat uses server-owned sessions and event snapshots; profile those paths
+with the MMO performance audit instead.
 
 ### `POST /api/world/drops/:id/loot`
 

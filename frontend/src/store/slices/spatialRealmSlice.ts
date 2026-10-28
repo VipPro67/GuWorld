@@ -145,7 +145,7 @@ export const createSpatialRealmSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   enterSpatialRealm: async (templateId: string) => {
-    const { token, addToast, refreshPlayerSummary } = get();
+    const { token, addToast } = get();
     if (!token) return false;
     try {
       set({ spatialLoading: true });
@@ -159,8 +159,19 @@ export const createSpatialRealmSlice: StateCreator<ApiResponseData, ApiResponseD
         addToast(data.error || "Không thể tiến vào bí cảnh", "error");
         return false;
       }
+      if (data.zone_id && data.world_instance_id) {
+        get().setPlayerFromServer({
+          current_region: data.region_id,
+          map_instance_id: data.instance_id,
+          world_zone_id: data.zone_id,
+          world_instance_id: data.world_instance_id,
+          x: data.x,
+          y: data.y,
+        });
+        get().requestWorldReconnect();
+        get().setView("mmo-world");
+      }
       addToast("Đã bước qua không gian môn hộ, tiến vào bí cảnh!", "success");
-      await refreshPlayerSummary();
       await get().fetchActiveSpatialRealm();
       return true;
     } catch (err) {
@@ -173,7 +184,7 @@ export const createSpatialRealmSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   exitSpatialRealm: async () => {
-    const { token, addToast, refreshPlayerSummary } = get();
+    const { token, addToast } = get();
     if (!token) return false;
     try {
       set({ spatialLoading: true });
@@ -185,9 +196,19 @@ export const createSpatialRealmSlice: StateCreator<ApiResponseData, ApiResponseD
         addToast(data.error || "Không thể rời khỏi bí cảnh", "error");
         return false;
       }
+      if (data.zone_id) {
+        get().setPlayerFromServer({
+          current_region: data.region_id,
+          map_instance_id: null,
+          world_zone_id: data.zone_id,
+          world_instance_id: data.world_instance_id || "",
+          x: data.x,
+          y: data.y,
+        });
+        get().requestWorldReconnect();
+      }
       addToast("Đã an toàn quay trở về thế giới bên ngoài!", "success");
       set({ activeSpatialRealm: null });
-      await refreshPlayerSummary();
       return true;
     } catch (err) {
       console.error("Failed to exit spatial realm:", err);

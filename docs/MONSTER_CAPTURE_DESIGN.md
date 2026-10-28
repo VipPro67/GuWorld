@@ -1,3 +1,5 @@
+> **Historical design note:** Monster capture through turn-based combat was retired with #272. This document describes the former flow only; its endpoint and UI are not part of the current API.
+
 # Thiết kế: Bắt Monster bằng Cổ Trùng (Pet System)
 
 > Trạng thái: **Draft** — chưa code. Plan để review trước khi triển khai.

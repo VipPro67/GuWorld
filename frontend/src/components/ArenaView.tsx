@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
-import { Swords, Trophy, ShieldAlert, Award, RefreshCw, Star, Store } from "lucide-react";
+import { Swords, Trophy, Award, RefreshCw, Star, Store } from "lucide-react";
 import { ArenaShopView } from "./ArenaShopView";
 import { GamePanel, GameButton, GameCard } from "@/components/ui";
 // UI migrated to shared components
@@ -206,15 +206,7 @@ Tải lại
       </>
       )}
 
-      {player.active_combat && (
-        <div className="bg-rose-950/20 border border-rose-900/40 rounded-2xl p-4 flex items-center gap-3 relative z-10 animate-pulse">
-          <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0" />
-          <div className="text-left text-xs">
-            <span className="font-bold text-rose-600 dark:text-rose-400 font-serif block">Đang ở trong trạng thái chiến đấu!</span>
-            <span className="text-zinc-550 block">Hãy hoàn thành trận chiến dã thú hiện tại trước khi tỷ đấu võ đài.</span>
-          </div>
-        </div>
-      )}
+
     </GamePanel>
   );
 };

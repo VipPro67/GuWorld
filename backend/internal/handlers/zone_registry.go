@@ -862,23 +862,6 @@ func pickMonsterFromPool(regionID string, rng *rand.Rand, wantBoss bool) (models
 	return candidates[len(candidates)-1], true
 }
 
-// markBossCleared marks the persistent boss cell at the player's position as
-// cleared after a victorious boss fight on the shared map.
-func markBossCleared(tx *sql.Tx, player *models.Player) {
-	if player == nil || player.ActiveCombat == nil {
-		return
-	}
-	et := strings.ToUpper(player.ActiveCombat.EnemyType)
-	if et != "BOSS" && et != "WORLDBOSS" && et != "WORLD BOSS" {
-		return
-	}
-	region, x, y := player.CurrentRegion, player.X, player.Y
-	if player.ActiveCombat.WorldBossCellRegionID != "" {
-		region, x, y = player.ActiveCombat.WorldBossCellRegionID, player.ActiveCombat.WorldBossCellX, player.ActiveCombat.WorldBossCellY
-	}
-	_ = MarkPersistentCellCleared(tx, player.ID, region, x, y)
-}
-
 // recordVisitedSubZone appends a small-zone key to the player's visited set
 // if not already present (deduplicated, bounded by the world's sub-zone count).
 func recordVisitedSubZone(player *models.Player, key string) {

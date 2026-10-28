@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
@@ -532,23 +531,4 @@ func GetWorld(c *gin.Context) {
 		"hub_x":           HubEntryPoint.X,
 		"hub_y":           HubEntryPoint.Y,
 	})
-}
-
-func savePlayerMovement(tx *sql.Tx, player *models.Player, combatJSON any) error {
-	if ZoneByID(player.CurrentRegion) == nil {
-		player.CurrentRegion = HubRegionID
-	}
-
-	// Movement awards resources and may mutate hunger/progress in the same
-	// transaction. Persist the complete authoritative result synchronously so a
-	// Redis snapshot cannot survive a rollback or overwrite a newer mutation.
-	_, err := tx.Exec(`
-		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12, statuses = $13, version = version + 1
-		WHERE id = $14
-	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.Statuses, player.ID)
-	if err == nil {
-		player.Version++
-	}
-	return err
 }

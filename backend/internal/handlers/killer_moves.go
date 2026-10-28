@@ -17,7 +17,7 @@ import (
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -33,6 +33,10 @@ type killerMoveComponent struct {
 	InstanceID string `json:"instance_id"`
 	GuID       string `json:"gu_id"`
 	Rank       int    `json:"rank"`
+}
+
+func killerMoveComponentMatches(component killerMoveComponent, gu models.GuInstance) bool {
+	return gu.InstanceID == component.InstanceID && gu.GuID == component.GuID && gu.Rank == component.Rank && !strings.EqualFold(gu.Status, "DEAD")
 }
 
 type killerMoveEffectRef struct {
@@ -65,46 +69,48 @@ type killerMoveDraftRequest struct {
 }
 
 type killerMovePreview struct {
-	Components       []killerMoveComponent   `json:"components"`
-	SelectedEffects  []killerMoveEffectRef   `json:"selected_effects"`
-	CompiledEffects  []gameplayeffects.Block `json:"compiled_effects"`
-	Rank             int                     `json:"rank"`
-	Path             string                  `json:"path"`
-	PathMasteryLevel int                     `json:"path_mastery_level"`
-	PowerBudget      float64                 `json:"power_budget"`
-	PowerLoad        float64                 `json:"power_load"`
-	EffectScale      float64                 `json:"effect_scale"`
-	Harmony          float64                 `json:"harmony"`
-	Complexity       float64                 `json:"complexity"`
-	SuccessChance    float64                 `json:"success_chance"`
-	ManaCost         float64                 `json:"mana_cost"`
+	Components       []killerMoveComponent          `json:"components"`
+	SelectedEffects  []killerMoveEffectRef          `json:"selected_effects"`
+	CompiledEffects  []gameplayeffects.Block        `json:"compiled_effects"`
+	Rank             int                            `json:"rank"`
+	Path             string                         `json:"path"`
+	PathMasteryLevel int                            `json:"path_mastery_level"`
+	PowerBudget      float64                        `json:"power_budget"`
+	PowerLoad        float64                        `json:"power_load"`
+	EffectScale      float64                        `json:"effect_scale"`
+	Harmony          float64                        `json:"harmony"`
+	Complexity       float64                        `json:"complexity"`
+	SuccessChance    float64                        `json:"success_chance"`
+	ManaCost         float64                        `json:"mana_cost"`
 	CombatProfile    models.KillerMoveCombatProfile `json:"combat_profile"`
-	Warnings         []string                `json:"warnings"`
+	Warnings         []string                       `json:"warnings"`
 }
 
 type storedKillerMove struct {
-	ID                       string                  `json:"id"`
-	Name                     string                  `json:"name"`
-	MainGuInstance           string                  `json:"main_gu_instance_id"`
-	MainGuID                 string                  `json:"main_gu_id"`
-	MainGuRank               int                     `json:"main_gu_rank"`
-	Components               []killerMoveComponent   `json:"components"`
-	SelectedEffects          []killerMoveEffectRef   `json:"selected_effects"`
-	CompiledEffects          []gameplayeffects.Block `json:"compiled_effects"`
-	Path                     string                  `json:"path"`
-	CreationPathMasteryLevel int                     `json:"creation_path_mastery_level"`
-	PowerBudget              float64                 `json:"power_budget"`
-	PowerLoad                float64                 `json:"power_load"`
-	Harmony                  float64                 `json:"harmony"`
-	Complexity               float64                 `json:"complexity"`
-	SuccessChance            float64                 `json:"success_chance"`
-	CombatProfile            models.KillerMoveCombatProfile `json:"combat_profile"`
-	MasteryXP                int                     `json:"mastery_xp"`
-	MasteryLevel             int                     `json:"mastery_level"`
-	Equipped                 bool                    `json:"is_equipped"`
-	Available                bool                    `json:"available"`
-	MissingGu                []string                `json:"missing_gu,omitempty"`
-	BalanceVersion           int                     `json:"balance_version"`
+	ID                        string                         `json:"id"`
+	Name                      string                         `json:"name"`
+	MainGuInstance            string                         `json:"main_gu_instance_id"`
+	MainGuID                  string                         `json:"main_gu_id"`
+	MainGuRank                int                            `json:"main_gu_rank"`
+	Components                []killerMoveComponent          `json:"components"`
+	SelectedEffects           []killerMoveEffectRef          `json:"selected_effects"`
+	CompiledEffects           []gameplayeffects.Block        `json:"compiled_effects"`
+	Path                      string                         `json:"path"`
+	CreationPathMasteryLevel  int                            `json:"creation_path_mastery_level"`
+	PowerBudget               float64                        `json:"power_budget"`
+	PowerLoad                 float64                        `json:"power_load"`
+	Harmony                   float64                        `json:"harmony"`
+	Complexity                float64                        `json:"complexity"`
+	SuccessChance             float64                        `json:"success_chance"`
+	CombatProfile             models.KillerMoveCombatProfile `json:"combat_profile"`
+	MasteryXP                 int                            `json:"mastery_xp"`
+	MasteryLevel              int                            `json:"mastery_level"`
+	Equipped                  bool                           `json:"is_equipped"`
+	Available                 bool                           `json:"available"`
+	RealtimeSupported         bool                           `json:"realtime_supported"`
+	RealtimeUnavailableReason string                         `json:"realtime_unavailable_reason,omitempty"`
+	MissingGu                 []string                       `json:"missing_gu,omitempty"`
+	BalanceVersion            int                            `json:"balance_version"`
 }
 
 type ownedKillerMoveGu struct {
@@ -486,17 +492,7 @@ func compileKillerMoveCombatProfile(
 		}
 	}
 
-	cooldown := 1 + (len(components)-1)/2
-	if targetType == "ROW" {
-		cooldown += 1
-	} else if targetType == "ALL_ENEMIES" {
-		cooldown += 2
-	}
-
-	warmup := 0
-	if main.Rank >= 6 {
-		warmup = 1
-	}
+	windupMS, cooldownMS := models.KillerMoveRealtimeTiming(main.Rank, complexity)
 
 	backfirePct := math.Max(0.08, 0.28-float64(pathMasteryLevel)*0.035-(harmony-0.6)*0.20)
 	backfireStatus := ""
@@ -505,19 +501,19 @@ func compileKillerMoveCombatProfile(
 	}
 
 	return models.KillerMoveCombatProfile{
-		Rank:              main.Rank,
-		MainPath:          path,
-		AllPaths:          allPaths,
-		TargetType:        targetType,
-		Bypass:            bypass,
-		WarmupTurns:       warmup,
-		CooldownTurns:     cooldown,
-		Priority:          1,
-		ManaCost:          manaCost,
-		HungerCost:        float64(len(components)),
-		SuccessChance:     success,
-		BackfireHPPercent: backfirePct,
-		BackfireStatus:    backfireStatus,
+		Rank:               main.Rank,
+		MainPath:           path,
+		AllPaths:           allPaths,
+		TargetType:         targetType,
+		Bypass:             bypass,
+		RealtimeWindupMS:   windupMS,
+		RealtimeCooldownMS: cooldownMS,
+		Priority:           1,
+		ManaCost:           manaCost,
+		HungerCost:         float64(len(components)),
+		SuccessChance:      success,
+		BackfireHPPercent:  backfirePct,
+		BackfireStatus:     backfireStatus,
 	}
 }
 
@@ -723,19 +719,46 @@ func ListKillerMoves(c *gin.Context) {
 		_ = json.Unmarshal(selected, &m.SelectedEffects)
 		_ = json.Unmarshal(compiled, &m.CompiledEffects)
 		_ = json.Unmarshal(combatProf, &m.CombatProfile)
-		if m.CombatProfile.CooldownTurns == 0 {
-			m.CombatProfile.CooldownTurns = 1 + (len(m.Components)-1)/2
+		if m.CombatProfile.RealtimeWindupMS == 0 || m.CombatProfile.RealtimeCooldownMS == 0 {
+			m.CombatProfile.RealtimeWindupMS, m.CombatProfile.RealtimeCooldownMS = models.KillerMoveRealtimeTiming(m.MainGuRank, m.Complexity)
 			m.CombatProfile.TargetType = "SINGLE"
 		}
 		m.MasteryLevel = m.MasteryXP / 100
 		currentLevel := gamefx.PathMasteryLevel(masteries[gamefx.CleanPath(m.Path)])
 		m.SuccessChance = killerMoveAdjustedChance(m.SuccessChance, m.CreationPathMasteryLevel, currentLevel, m.MasteryXP)
 		m.Available = true
+		moveComponents := make([]realtimeeffects.KillerMoveComponent, 0, len(m.Components))
 		for _, component := range m.Components {
 			gu, exists := ownedSet[component.InstanceID]
 			if !exists || strings.EqualFold(gu.State, "DEAD") || gu.GuID != component.GuID || gu.Rank != component.Rank {
 				m.Available = false
 				m.MissingGu = append(m.MissingGu, component.InstanceID)
+				continue
+			}
+			if gu.Hunger < 1 {
+				m.Available = false
+				m.RealtimeUnavailableReason = "Cổ thành phần đã hết độ no"
+			}
+			moveComponents = append(moveComponents, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: gu.Hunger})
+		}
+		if !m.Available && m.RealtimeUnavailableReason == "" {
+			m.RealtimeUnavailableReason = "Thiếu Cổ thành phần"
+		}
+		if m.Available {
+			windupMS, cooldownMS := m.CombatProfile.RealtimeWindupMS, m.CombatProfile.RealtimeCooldownMS
+			if windupMS == 0 || cooldownMS == 0 {
+				windupMS, cooldownMS = models.KillerMoveRealtimeTiming(m.MainGuRank, m.Complexity)
+			}
+			supported := realtimeeffects.BuildKillerMoveSkills([]realtimeeffects.KillerMove{{
+				ID: m.ID, Name: m.Name, Rank: m.MainGuRank, Components: moveComponents,
+				ExpectedComponents: len(m.Components), Effects: m.CompiledEffects,
+				ManaCost: m.CombatProfile.ManaCost, SuccessChance: m.SuccessChance,
+				BackfireHPPercent: m.CombatProfile.BackfireHPPercent, BackfireStatus: m.CombatProfile.BackfireStatus,
+				Complexity: m.Complexity, WindupMS: windupMS, CooldownMS: cooldownMS,
+			}})
+			m.RealtimeSupported = len(supported) == 1
+			if !m.RealtimeSupported {
+				m.RealtimeUnavailableReason = "Effect chưa có executor realtime"
 			}
 		}
 		result = append(result, m)
@@ -801,48 +824,6 @@ func EquipKillerMove(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trang bị"})
 		return
 	}
-	// Synchronize with player's combat_settings
-	var rawSettings []byte
-	if err := tx.QueryRow(`SELECT combat_settings FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&rawSettings); err == nil {
-		var cs models.AutoCombatConfig
-		if json.Unmarshal(rawSettings, &cs) == nil {
-			if !equipped {
-				// Equipping: add to KillerMovePriorities if not present
-				found := false
-				for _, t := range cs.KillerMovePriorities {
-					if t.GuID == moveID {
-						found = true
-						break
-					}
-				}
-				if !found {
-					cs.KillerMovePriorities = append(cs.KillerMovePriorities, models.GuTactic{
-						GuID:           moveID,
-						Priority:       len(cs.KillerMovePriorities) + 1,
-						UseCondition:   "always",
-						ConditionValue: 30,
-					})
-					cs.KmPriorities = cs.KillerMovePriorities
-					if b, errMarshal := json.Marshal(cs); errMarshal == nil {
-						_, _ = tx.Exec(`UPDATE players SET combat_settings=$1 WHERE id=$2`, b, playerID)
-					}
-				}
-			} else {
-				// Unequipping: remove from KillerMovePriorities
-				filtered := cs.KillerMovePriorities[:0]
-				for _, t := range cs.KillerMovePriorities {
-					if t.GuID != moveID {
-						filtered = append(filtered, t)
-					}
-				}
-				cs.KillerMovePriorities = filtered
-				cs.KmPriorities = filtered
-				if b, errMarshal := json.Marshal(cs); errMarshal == nil {
-					_, _ = tx.Exec(`UPDATE players SET combat_settings=$1 WHERE id=$2`, b, playerID)
-				}
-			}
-		}
-	}
 	equipAction := "trang bị"
 	if equipped {
 		equipAction = "tháo trang bị"
@@ -897,145 +878,7 @@ func DeleteKillerMove(c *gin.Context) {
 		IPAddress: c.ClientIP(),
 		Success:   true,
 	})
-	// Clean up from combat_settings if present
-	var rawSettings []byte
-	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT combat_settings FROM players WHERE id=$1`, playerID).Scan(&rawSettings); err == nil {
-		var cs models.AutoCombatConfig
-		if json.Unmarshal(rawSettings, &cs) == nil {
-			filtered := cs.KillerMovePriorities[:0]
-			for _, t := range cs.KillerMovePriorities {
-				if t.GuID != moveID {
-					filtered = append(filtered, t)
-				}
-			}
-			if len(filtered) != len(cs.KillerMovePriorities) {
-				cs.KillerMovePriorities = filtered
-				cs.KmPriorities = filtered
-				if b, errMarshal := json.Marshal(cs); errMarshal == nil {
-					_, _ = db.DB.ExecContext(c.Request.Context(), `UPDATE players SET combat_settings=$1 WHERE id=$2`, b, playerID)
-				}
-			}
-		}
-	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa sát chiêu"})
-}
-
-// loadCombatKillerMoves loads the killer moves that should be active for combat.
-// 1. If loadout is provided with explicit KillerMoveIds:
-//   - If empty (len == 0), no killer moves are used (player explicitly selected 0).
-//   - If non-empty, only those specific killer moves are loaded.
-//
-// 2. Otherwise (loadout == nil or loadout.KillerMoveIds == nil):
-//   - Fall back to the player's CombatSettings (killer_move_priorities / km_priorities).
-//   - If CombatSettings has no killer moves configured, NO killer moves are loaded (does not auto-cast).
-//   - If CombatSettings has configured killer moves, only those are loaded.
-func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout) ([]storedKillerMove, error) {
-	if tx == nil || player == nil {
-		return nil, nil
-	}
-
-	var targetIDs []string
-	if loadout != nil && loadout.KillerMoveIds != nil {
-		if len(loadout.KillerMoveIds) == 0 {
-			return nil, nil
-		}
-		targetIDs = loadout.KillerMoveIds
-	} else {
-		kmTactics := player.CombatSettings.KillerMovePriorities
-		if len(kmTactics) == 0 {
-			kmTactics = player.CombatSettings.KmPriorities
-		}
-		if len(kmTactics) == 0 {
-			return nil, nil
-		}
-		for _, t := range kmTactics {
-			if t.GuID != "" {
-				targetIDs = append(targetIDs, t.GuID)
-			}
-		}
-		if len(targetIDs) == 0 {
-			return nil, nil
-		}
-	}
-
-	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,COALESCE(combat_profile,'{}'::jsonb) FROM player_killer_moves WHERE player_id=$1 AND id = ANY($2)`, player.ID, targetIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	owned := make(map[string]models.GuInstance, len(player.GuInventory))
-	for _, g := range player.GuInventory {
-		owned[g.InstanceID] = g
-	}
-	byID := make(map[string]storedKillerMove)
-	for rows.Next() {
-		var m storedKillerMove
-		var comps, compiled, combatProf []byte
-		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &comps, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &combatProf); err != nil {
-			return nil, err
-		}
-		_ = json.Unmarshal(comps, &m.Components)
-		_ = json.Unmarshal(compiled, &m.CompiledEffects)
-		_ = json.Unmarshal(combatProf, &m.CombatProfile)
-		if m.CombatProfile.CooldownTurns == 0 {
-			m.CombatProfile.CooldownTurns = 1 + (len(m.Components)-1)/2
-			m.CombatProfile.TargetType = "SINGLE"
-		}
-		valid := true
-		for _, component := range m.Components {
-			g, ok := owned[component.InstanceID]
-			if !ok || !killerMoveComponentMatches(component, g) || g.Hunger <= 0 {
-				valid = false
-				break
-			}
-		}
-		hasCombatEffect := false
-		for _, block := range m.CompiledEffects {
-			if block.Trigger == gameplayeffects.TriggerOnAction && len(block.Operations) > 0 {
-				hasCombatEffect = true
-				break
-			}
-		}
-		if valid && hasCombatEffect {
-			byID[m.ID] = m
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	var result []storedKillerMove
-	seen := make(map[string]bool, len(targetIDs))
-	for _, id := range targetIDs {
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		if m, ok := byID[id]; ok {
-			result = append(result, m)
-		}
-	}
-	return result, nil
-}
-
-// Load equipped moves for combat construction.
-func loadEquippedKillerMoves(tx *sql.Tx, player *models.Player) ([]storedKillerMove, error) {
-	return loadCombatKillerMoves(tx, player, nil)
-}
-
-// ComponentInstanceIDs exposes the Gu IDs whose fullness is consumed by a
-// killer move action.
-func (m storedKillerMove) ComponentInstanceIDs() []string {
-	result := make([]string, 0, len(m.Components))
-	for _, c := range m.Components {
-		result = append(result, c.InstanceID)
-	}
-	return result
-}
-
-func killerMoveComponentMatches(component killerMoveComponent, gu models.GuInstance) bool {
-	return gu.InstanceID == component.InstanceID && gu.GuID == component.GuID && gu.Rank == component.Rank && !strings.EqualFold(gu.Status, "DEAD")
 }
 
 // UseKillerMove executes the intentionally narrow out-of-combat subset: ON_USE
@@ -1054,10 +897,6 @@ func UseKillerMove(c *gin.Context) {
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
-		return
-	}
-	if player.ActiveCombat != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Không thể dùng sát chiêu ngoài combat khi đang chiến đấu"})
 		return
 	}
 	var move storedKillerMove

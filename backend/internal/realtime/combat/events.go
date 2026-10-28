@@ -37,6 +37,7 @@ type Event struct {
 	DurationTicks uint64
 	Reason        string
 	TemplateID    string
+	MonsterRank   int
 	PersistentID  string
 	TargetKind    string
 }

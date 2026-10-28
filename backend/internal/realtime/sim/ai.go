@@ -33,6 +33,7 @@ type AIState struct {
 	// threat table, so a player who attacks first can opt into the fight.
 	Passive      bool
 	TemplateID   string
+	Rank         int
 	PersistentID string
 	Name         string
 	State        AIStateKind
@@ -43,8 +44,8 @@ type AIState struct {
 	PatrolRadius float64
 	AttackDamage float64
 	// NodeDamage overrides AttackDamage against stationary player-faction
-	// structures (aperture resource nodes). It mirrors the turn-based worker's
-	// fixed per-hit node damage.
+	// structures (aperture resource nodes). It uses the same
+	// fixed per-hit node damage as other server-owned world interactions.
 	NodeDamage          float64
 	AttackCooldownTicks uint32
 	RespawnTicks        uint32

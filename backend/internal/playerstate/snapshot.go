@@ -9,7 +9,6 @@ package playerstate
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -33,7 +32,7 @@ const Columns = `p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitu
 	p.wall_progress, p.human_qi, p.next_tribulation_time,
 	p.hp, p.base_hp, p.body_mods, p.x, p.y,
 	p.equipped_gus, p.cleared_cells, p.visited_subzones, p.current_region, COALESCE(p.world_zone_id, ''), p.path_masteries,
-	p.active_combat, p.last_mana_update, COALESCE(p.last_hunger_tick_at, p.created_at, NOW()), p.created_at, p.lifespan, p.time_speed_multiplier,
+	p.last_mana_update, COALESCE(p.last_hunger_tick_at, p.created_at, NOW()), p.created_at, p.lifespan, p.time_speed_multiplier,
 	p.party_id, p.arena_rank, COALESCE(p.email, ''), p.google_id,
 	p.explore_count, p.last_explore_reset, p.aperture_stress,
 	p.last_cultivate_time, p.soul_hp, p.max_soul, p.soul_tier, p.needs_soul_refine,
@@ -49,7 +48,7 @@ const Columns = `p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitu
 
 // ColumnCount is the number of destinations Scan expects. Keeping it next to
 // Columns lets a DB-free test catch column/scan drift at build time.
-const ColumnCount = 64
+const ColumnCount = 63
 
 // GuScope selects which Gu instances the snapshot attaches.
 type GuScope int
@@ -85,11 +84,9 @@ type RowScanner interface {
 	Scan(dest ...any) error
 }
 
-// Scan maps the canonical Columns projection. activeCombat is returned raw so
-// callers can decide whether to decode it (the repair path may drop it).
-func Scan(row RowScanner) (models.Player, []byte, error) {
+// Scan maps the canonical Columns projection.
+func Scan(row RowScanner) (models.Player, error) {
 	var player models.Player
-	var activeCombat []byte
 	err := row.Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
@@ -97,7 +94,7 @@ func Scan(row RowScanner) (models.Player, []byte, error) {
 		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
 		&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-		&player.CurrentRegion, &player.WorldZoneID, &player.PathMasteries, &activeCombat,
+		&player.CurrentRegion, &player.WorldZoneID, &player.PathMasteries,
 		&player.LastManaUpdate, &player.LastHungerTickAt, &player.CreatedAt, &player.Lifespan, &player.TimeSpeedMultiplier,
 		&player.PartyID, &player.ArenaRank, &player.Email, &player.GoogleID,
 		&player.ExploreCount, &player.LastExploreReset,
@@ -110,7 +107,7 @@ func Scan(row RowScanner) (models.Player, []byte, error) {
 		&player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 		&player.Version, &player.StateRevision,
 	)
-	return player, activeCombat, err
+	return player, err
 }
 
 type execer interface {
@@ -129,8 +126,7 @@ func Load(q db.Queryer, id uuid.UUID, opts Options) (models.Player, error) {
 	if opts.ForUpdate {
 		query += " FOR UPDATE"
 	}
-	var activeCombatBytes []byte
-	player, activeCombatBytes, err := Scan(q.QueryRow(query, id))
+	player, err := Scan(q.QueryRow(query, id))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return player, sql.ErrNoRows
@@ -139,7 +135,6 @@ func Load(q db.Queryer, id uuid.UUID, opts Options) (models.Player, error) {
 	}
 
 	hydrateDaoMarks(q, &player)
-	hydrateActiveCombat(q, &player, activeCombatBytes)
 	loadMaterials(q, &player)
 	if RepairExpiredStatuses(q, &player) {
 		if rev, revErr := Revision(q, id); revErr == nil {
@@ -161,45 +156,6 @@ func hydrateDaoMarks(q db.Queryer, player *models.Player) {
 	if err := q.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&marks); err == nil {
 		player.DaoMarks = marks
 	}
-}
-
-// ShouldClearActiveCombat reports whether a party member's persisted combat is
-// stale: only the party leader owns a shared encounter. Kept pure so the rule
-// is testable without a transaction.
-func ShouldClearActiveCombat(playerID uuid.UUID, partyID *uuid.UUID, leaderID string) bool {
-	return partyID != nil && leaderID != "" && leaderID != playerID.String()
-}
-
-func hydrateActiveCombat(q db.Queryer, player *models.Player, raw []byte) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return
-	}
-	var cs models.CombatState
-	if err := json.Unmarshal(raw, &cs); err != nil {
-		logger.S.Warnf("load player snapshot: failed to unmarshal active_combat for player=%s: %v", player.ID, err)
-		return
-	}
-	if cs.IsEmpty() {
-		return
-	}
-	if player.PartyID != nil {
-		var leaderID string
-		err := q.QueryRow(`SELECT leader_id FROM parties WHERE id = $1`, player.PartyID).Scan(&leaderID)
-		if ShouldClearActiveCombat(player.ID, player.PartyID, leaderID) {
-			player.ActiveCombat = nil
-			if exec, ok := q.(execer); ok {
-				_, _ = exec.Exec(`UPDATE players SET active_combat = NULL WHERE id = $1`, player.ID)
-			}
-			return
-		}
-		if err != nil {
-			// A missing party row means the combat cannot belong to a shared
-			// encounter any more; keep the current "no leader, keep combat"
-			// behavior for transient errors.
-			logger.S.Warnf("load player snapshot: party lookup failed for player=%s: %v", player.ID, err)
-		}
-	}
-	player.ActiveCombat = &cs
 }
 
 func loadMaterials(q db.Queryer, player *models.Player) {

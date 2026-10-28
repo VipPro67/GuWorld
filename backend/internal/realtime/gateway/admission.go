@@ -55,10 +55,13 @@ type TribulationZoneLoader func(ctx context.Context, playerID uuid.UUID) (sim.Zo
 // OverrideState is optional and lets isolated modes supply temporary vitals
 // while keeping the player's durable character state untouched.
 type CombatInstanceZone struct {
-	Key           sim.ZoneKey
-	Map           realtimeworld.ZoneMap
-	OverrideState *handlers.RealtimeJoinState
-	Isolated      bool
+	Key                sim.ZoneKey
+	Map                realtimeworld.ZoneMap
+	OverrideState      *handlers.RealtimeJoinState
+	SpawnPosition      *sim.Vec2
+	PartyIDOverride    string
+	Isolated           bool
+	PersistCombatState bool
 }
 
 type CombatInstanceZoneLoader func(ctx context.Context, playerID uuid.UUID, state handlers.RealtimeJoinState) (CombatInstanceZone, bool, error)
@@ -66,6 +69,8 @@ type CombatInstanceZoneLoader func(ctx context.Context, playerID uuid.UUID, stat
 // ApertureStateSink persists authoritative entity HP from an aperture
 // tribulation snapshot (monsters and resource nodes).
 type ApertureStateSink func(ctx context.Context, playerID uuid.UUID, snapshot sim.Snapshot) error
+
+type CombatInstanceStateSink func(ctx context.Context, playerID uuid.UUID, key sim.ZoneKey, entity sim.Entity) error
 
 type Admission struct {
 	config   config.Config
@@ -81,6 +86,7 @@ type Admission struct {
 	tribulationZones  TribulationZoneLoader
 	combatZones       CombatInstanceZoneLoader
 	apertureStateSink ApertureStateSink
+	combatStateSink   CombatInstanceStateSink
 }
 
 type session struct {
@@ -104,6 +110,7 @@ type session struct {
 	mapWidth            float64
 	mapHeight           float64
 	persistState        bool
+	persistCombatState  bool
 }
 
 // edgeTransferCooldown prevents border ping-pong when a player holds movement
@@ -111,9 +118,10 @@ type session struct {
 const edgeTransferCooldown = 2 * time.Second
 
 type manaSettlement struct {
-	mu       sync.Mutex
-	last     float64
-	lastUses [7]uint64
+	mu                 sync.Mutex
+	last               float64
+	lastUses           [13]uint64
+	lastKillerMoveUses [13]uint64
 }
 
 type Error struct {
@@ -224,6 +232,14 @@ func (a *Admission) SetApertureStateSink(sink ApertureStateSink) {
 	a.apertureStateSink = sink
 }
 
+// SetCombatInstanceStateSink persists temporary vitals and position for
+// isolated combat sessions that must survive disconnect/reconnect.
+func (a *Admission) SetCombatInstanceStateSink(sink CombatInstanceStateSink) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.combatStateSink = sink
+}
+
 // CheckpointActive persists each live controller's position, HP and mana.
 // Calls may overlap Leave; each session serializes its mana settlement.
 func (a *Admission) CheckpointActive() {
@@ -305,10 +321,11 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	if state.RegionID == "" || state.MapID != request.ZoneID {
 		return nil, admissionError(409, "realtime_map_mismatch", "Requested map does not match the character's current region")
 	}
-	if state.MapInstanceID != "" {
+	isSpatialRealm := strings.HasPrefix(state.WorldInstanceID, "realm:")
+	if state.MapInstanceID != "" && !isSpatialRealm {
 		return nil, admissionError(409, "realtime_instance_conflict", "Character is already assigned to another map instance")
 	}
-	if state.HasActiveCombat || state.NeedsOnboarding {
+	if state.NeedsOnboarding {
 		return nil, admissionError(409, "realtime_character_not_ready", "Character cannot join the realtime world in its current state")
 	}
 	if math.IsNaN(state.HP) || math.IsInf(state.HP, 0) || math.IsNaN(state.BaseHP) || math.IsInf(state.BaseHP, 0) || state.HP <= 0 || state.BaseHP <= 0 {
@@ -317,6 +334,9 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	var key sim.ZoneKey
 	tribulationZone := false
 	privateCombatZone := false
+	spatialRealmZone := false
+	var privateCombatSpawn *sim.Vec2
+	persistCombatState := false
 	if request.ZoneID == "aperture_tribulation" {
 		a.mu.Lock()
 		loader := a.tribulationZones
@@ -362,7 +382,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		}
 		if combatZone.OverrideState != nil {
 			state = *combatZone.OverrideState
-			if state.RegionID == "" || state.MapID != request.ZoneID || state.MapInstanceID != "" || state.HasActiveCombat {
+			if state.RegionID == "" || state.MapID != request.ZoneID || state.MapInstanceID != "" {
 				return nil, admissionError(503, "realtime_combat_instance_unavailable", "The private combat map returned invalid character state")
 			}
 			if math.IsNaN(state.HP) || math.IsInf(state.HP, 0) || math.IsNaN(state.BaseHP) || math.IsInf(state.BaseHP, 0) || state.HP <= 0 || state.BaseHP <= 0 {
@@ -378,6 +398,38 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		}
 		key = combatZone.Key
 		privateCombatZone = combatZone.Isolated
+		privateCombatSpawn = combatZone.SpawnPosition
+		persistCombatState = combatZone.PersistCombatState
+	} else if isSpatialRealm {
+		a.mu.Lock()
+		loader := a.combatZones
+		a.mu.Unlock()
+		if loader == nil {
+			return nil, admissionError(503, "realtime_spatial_realm_unavailable", "The realtime spatial realm loader is not configured")
+		}
+		realmZone, found, loadErr := loader(joinCtx, playerID, state)
+		if loadErr != nil {
+			logger.S.Errorf("Realtime spatial realm load failed for player %s: %v", playerID, loadErr)
+			return nil, admissionError(503, "realtime_spatial_realm_unavailable", "The realtime spatial realm could not be loaded")
+		}
+		if !found || realmZone.Key.MapID != request.ZoneID || realmZone.Key.InstanceID == "" {
+			return nil, admissionError(409, "realtime_spatial_realm_inactive", "No active realtime spatial realm exists for this character")
+		}
+		if err := a.manager.RegisterZoneMap(realmZone.Key, realmZone.Map); err != nil {
+			if errors.Is(err, realtimeworld.ErrZoneFull) {
+				return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
+			}
+			logger.S.Errorf("Realtime spatial realm map registration failed for player %s: %v", playerID, err)
+			return nil, admissionError(503, "realtime_spatial_realm_unavailable", "The realtime spatial realm map could not be configured")
+		}
+		key = realmZone.Key
+		if realmZone.PartyIDOverride != "" {
+			state.PartyID = realmZone.PartyIDOverride
+		}
+		spatialRealmZone = true
+	}
+	if state.MapInstanceID != "" && !spatialRealmZone {
+		return nil, admissionError(409, "realtime_instance_conflict", "Character is already assigned to another map instance")
 	}
 	if !tribulationZone {
 		if key.MapID == "" {
@@ -409,6 +461,9 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	baseX := float64(state.X)
 	baseY := float64(state.Y)
 	position := a.manager.LegacyPosition(key, baseX, baseY)
+	if privateCombatSpawn != nil {
+		position = *privateCombatSpawn
+	}
 	locationRevision := &atomic.Int64{}
 	locationRevision.Store(state.WorldLocationRevision)
 	hasLocationRevision := state.HasWorldLocationRevision
@@ -424,7 +479,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		if loadErr != nil {
 			return nil, admissionError(503, "realtime_checkpoint_unavailable", "Could not load the realtime world checkpoint")
 		}
-		if ok && durable.ZoneID == request.ZoneID &&
+		if ok && durable.ZoneID == request.ZoneID && durable.InstanceID == key.InstanceID &&
 			a.manager.ContainsPosition(key, sim.Vec2{X: durable.X, Y: durable.Y}) {
 			locationRevision.Store(durable.LocationRevision)
 			hasLocationRevision = true
@@ -452,6 +507,22 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		})
 	}
 	loadout := realtimeeffects.BuildLoadout(compiled, equipped)
+	killerMoves := make([]realtimeeffects.KillerMove, 0, len(state.KillerMoves))
+	for _, move := range state.KillerMoves {
+		components := make([]realtimeeffects.KillerMoveComponent, 0, len(move.Components))
+		for _, component := range move.Components {
+			components = append(components, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: component.Hunger})
+		}
+		killerMoves = append(killerMoves, realtimeeffects.KillerMove{
+			ID: move.ID, Name: move.Name, Rank: move.Rank,
+			Components: components, ExpectedComponents: move.ExpectedComponents,
+			Effects: move.Effects, ManaCost: move.ManaCost,
+			SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
+			BackfireStatus: move.BackfireStatus, Complexity: move.Complexity, DamageScale: move.DamageScale,
+			WindupMS: move.RealtimeWindupMS, CooldownMS: move.RealtimeCooldownMS,
+		})
+	}
+	loadout.Skills, loadout.Revision = realtimeeffects.AppendKillerMoveLoadout(loadout.Skills, loadout.Revision, killerMoves)
 	skills := make([]combat.Skill, 0, len(loadout.Skills))
 	for _, skill := range loadout.Skills {
 		if skill.Slot < 1 || skill.Slot > len(state.EquippedGu) {
@@ -535,7 +606,8 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		locationRevision: locationRevision, hasLocationRevision: hasLocationRevision,
 		safeX: safeSpawn.X, safeY: safeSpawn.Y,
 		mapWidth: float64(zoneMap.Width), mapHeight: float64(zoneMap.Height),
-		persistState: !privateCombatZone,
+		persistState:       !privateCombatZone,
+		persistCombatState: persistCombatState,
 	}
 	a.mu.Lock()
 	a.sessions[controllerID] = active
@@ -945,12 +1017,12 @@ func (a *Admission) Cast(playerID, controllerID uuid.UUID, cast protocol.Cast) e
 	})
 }
 
-// BasicAttack forwards a target-only melee intent; the zone owns its range,
+// BasicAttack forwards a melee intent; the zone owns its range,
 // cooldown and damage resolution.
 func (a *Admission) BasicAttack(playerID, controllerID uuid.UUID, attack protocol.Attack) error {
 	return a.submitCommand(playerID, controllerID, sim.InputCommand{
 		Seq:    attack.Seq,
-		Attack: &sim.AttackCommand{Seq: attack.Seq, TargetID: sim.EntityID(attack.TargetID)},
+		Attack: &sim.AttackCommand{Seq: attack.Seq, TargetID: sim.EntityID(attack.TargetID), Aim: sim.Vec2{X: attack.AimX, Y: attack.AimY}},
 	})
 }
 
@@ -1072,6 +1144,32 @@ func (a *Admission) flushState(active session) error {
 // reports whether the committed Gu usage changed the inventory the client
 // should refetch.
 func (a *Admission) flushStateLocked(active session) (bool, error) {
+	if active.persistCombatState {
+		if active.mana != nil {
+			active.mana.mu.Lock()
+			defer active.mana.mu.Unlock()
+		}
+		snapshot, err := a.manager.SnapshotForLease(active.lease)
+		if err != nil {
+			return false, err
+		}
+		for _, entity := range snapshot.Entities {
+			if entity.CharacterID != active.lease.CharacterID {
+				continue
+			}
+			a.mu.Lock()
+			sink := a.combatStateSink
+			a.mu.Unlock()
+			if sink == nil {
+				return false, errors.New("realtime combat instance state sink is not configured")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			err := sink(ctx, active.playerID, active.lease.ZoneKey, entity)
+			cancel()
+			return false, err
+		}
+		return false, fmt.Errorf("realtime combat instance participant %s missing from checkpoint snapshot", active.playerID)
+	}
 	if !active.persistState {
 		return false, nil
 	}
@@ -1110,34 +1208,52 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 		}
 		delta := 0.0
 		guUses := make(map[string]uint64)
+		killerMoveUses := make(map[string]uint64)
 		if active.mana != nil {
 			delta = entity.Combat.Mana - active.mana.last
-			for slot := 1; slot <= 6; slot++ {
+			for slot := 1; slot <= 12; slot++ {
 				uses := entity.Combat.GuUses[slot]
 				if uses < active.mana.lastUses[slot] {
 					return false, fmt.Errorf("realtime Gu usage counter went backwards for slot %d", slot)
 				}
 				if spent := uses - active.mana.lastUses[slot]; spent > 0 {
-					instanceID := entity.Combat.Skills[slot].GuInstanceID
-					if instanceID == "" {
+					skill := entity.Combat.Skills[slot]
+					if skill.GuInstanceID != "" {
+						guUses[skill.GuInstanceID] += spent
+					} else if len(skill.GuComponentIDs) > 0 {
+						for _, instanceID := range skill.GuComponentIDs {
+							guUses[instanceID] += spent
+						}
+					} else {
 						return false, fmt.Errorf("realtime Gu usage has no instance for slot %d", slot)
 					}
-					guUses[instanceID] += spent
+				}
+				moveUses := entity.Combat.KillerMoveUses[slot]
+				if moveUses < active.mana.lastKillerMoveUses[slot] {
+					return false, fmt.Errorf("realtime Sát Chiêu usage counter went backwards for slot %d", slot)
+				}
+				if spentMoveUses := moveUses - active.mana.lastKillerMoveUses[slot]; spentMoveUses > 0 {
+					skill := entity.Combat.Skills[slot]
+					if skill.KillerMoveID == "" {
+						return false, fmt.Errorf("realtime Sát Chiêu usage has no move ID for slot %d", slot)
+					}
+					killerMoveUses[skill.KillerMoveID] += spentMoveUses
 				}
 			}
 		}
 		var revision int64
 		manaApplied := false
 		if atomicStore, ok := a.states.(interface {
-			SaveAndApplyCombatDeltaRevision(context.Context, persistence.State, float64, map[string]uint64) (int64, error)
+			SaveAndApplyCombatDeltaRevision(context.Context, persistence.State, float64, map[string]uint64, map[string]uint64) (int64, error)
 		}); ok {
 			var saveErr error
-			revision, saveErr = atomicStore.SaveAndApplyCombatDeltaRevision(ctx, checkpoint, delta, guUses)
+			revision, saveErr = atomicStore.SaveAndApplyCombatDeltaRevision(ctx, checkpoint, delta, guUses, killerMoveUses)
 			if saveErr != nil {
 				return false, saveErr
 			}
 			active.mana.last = entity.Combat.Mana
 			active.mana.lastUses = entity.Combat.GuUses
+			active.mana.lastKillerMoveUses = entity.Combat.KillerMoveUses
 			manaApplied = true
 		} else if len(guUses) > 0 {
 			return false, fmt.Errorf("realtime state store cannot atomically settle Gu usage")
@@ -1223,6 +1339,7 @@ func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protoc
 		if entity.Combat.MaxMana > 0 {
 			state.Mana = entity.Combat.Mana
 			state.MaxMana = entity.Combat.MaxMana
+			state.FormActive = entity.Combat.FormActive
 			state.Cooldowns = make([]uint64, len(entity.Combat.Cooldowns))
 			copy(state.Cooldowns, entity.Combat.Cooldowns[:])
 			if entity.Combat.Pending != nil {
@@ -1271,6 +1388,7 @@ func skillInfos(loadout []combat.Skill) []protocol.SkillInfo {
 			WidthUnits: skill.WidthUnits, InnerRadius: skill.InnerRadius,
 			ManaCost: skill.ManaCost, Range: skill.Range, RadiusUnits: skill.Radius, CooldownTicks: skill.CooldownTicks,
 			WindupTicks: skill.WindupTicks, IsToggle: skill.IsToggle,
+			FormActivation: skill.FormActivation, FormAbility: skill.FormAbility,
 		})
 	}
 	return infos

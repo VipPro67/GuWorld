@@ -70,9 +70,6 @@ func ValidateRealtimeRegionTransfer(ctx context.Context, playerID uuid.UUID, tar
 	if gamefx.IsDeadState(&loaded) || loaded.HP <= 0 {
 		return fmt.Errorf("%w: character is not alive", ErrRealtimeRegionTransferDenied)
 	}
-	if loaded.ActiveCombat != nil {
-		return fmt.Errorf("%w: character is in combat", ErrRealtimeRegionTransferDenied)
-	}
 	if err := checkRegionEntry(target.ID, loaded.Rank, loaded.GuInventory); err != nil {
 		return fmt.Errorf("%w: %v", ErrRealtimeRegionTransferDenied, err)
 	}
@@ -106,9 +103,6 @@ func ApplyRealtimeRegionTransfer(ctx context.Context, req RealtimeRegionTransfer
 	}
 	if gamefx.IsDeadState(&loaded) || loaded.HP <= 0 {
 		return PlayerTransferResult{}, fmt.Errorf("%w: character is not alive", ErrRealtimeRegionTransferDenied)
-	}
-	if loaded.ActiveCombat != nil {
-		return PlayerTransferResult{}, fmt.Errorf("%w: character is in combat", ErrRealtimeRegionTransferDenied)
 	}
 	if err := checkRegionEntry(target.ID, loaded.Rank, loaded.GuInventory); err != nil {
 		return PlayerTransferResult{}, fmt.Errorf("%w: %v", ErrRealtimeRegionTransferDenied, err)

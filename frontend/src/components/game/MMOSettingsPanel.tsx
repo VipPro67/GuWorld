@@ -87,15 +87,6 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
     setSavingCombat(true);
     const source = store.combatSettings ?? player?.combat_settings;
     const settings: AutoCombatConfig = {
-      auto_heal_hp: source?.auto_heal_hp ?? false,
-      heal_threshold: source?.heal_threshold ?? 30,
-      auto_restore_mana: source?.auto_restore_mana ?? false,
-      mana_threshold: source?.mana_threshold ?? 30,
-      category_priorities: source?.category_priorities ?? ["other", "shield", "heal", "damage"],
-      gu_priorities: [],
-      killer_move_priorities: [],
-      km_priorities: [],
-      skip_battle: source?.skip_battle ?? false,
       realtime_left_click_slot: combatDraft.leftClickSlot,
       realtime_right_click_action: combatDraft.rightClickAction,
       realtime_right_click_slot: combatDraft.rightClickAction === "skill" ? combatDraft.rightClickSlot : 0,
@@ -220,7 +211,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
           <section className="rounded-2xl border border-zinc-900 bg-zinc-900/40 p-3 sm:p-4">
             <h3 className="font-serif text-sm font-bold text-zinc-100">Điều khiển chuột & phím</h3>
             <p className="mt-1 text-[11px] text-zinc-500">
-              Phím 1–6 dùng Cổ theo thứ tự hotbar. Thiết lập chuột được lưu cùng chiến thuật nhân vật.
+              Phím 1–6 dùng Cổ theo thứ tự hotbar; phím 7 biến thân và phím 8 dùng chiêu trong dạng khi Cổ hỗ trợ. Thiết lập chuột được lưu cùng điều khiển realtime.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="text-xs text-zinc-400">

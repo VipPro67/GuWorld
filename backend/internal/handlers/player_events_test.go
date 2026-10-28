@@ -8,18 +8,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-func TestDecodeActiveCombatTreatsDatabaseNullAsNoCombat(t *testing.T) {
-	for _, raw := range [][]byte{nil, {}, []byte("null"), []byte("{}")} {
-		combat, err := decodeActiveCombat(raw)
-		if err != nil {
-			t.Fatalf("decodeActiveCombat(%q) returned error: %v", raw, err)
-		}
-		if combat != nil {
-			t.Fatalf("decodeActiveCombat(%q) = %#v, want nil", raw, combat)
-		}
-	}
-}
-
 func TestPlayerRealtimePayloadsCarryStateRevision(t *testing.T) {
 	snapshot := playerRealtimeSnapshot(models.Player{Account: models.Account{StateRevision: 42}})
 	if snapshot.StateRevision != 42 {
@@ -55,11 +43,5 @@ func TestPlayerEventRevisionIsMonotonic(t *testing.T) {
 	second := nextPlayerEventRevision()
 	if second <= first {
 		t.Fatalf("revision did not increase: first=%d second=%d", first, second)
-	}
-}
-
-func TestDecodeActiveCombatRejectsInvalidJSON(t *testing.T) {
-	if _, err := decodeActiveCombat([]byte("{")); err == nil {
-		t.Fatal("decodeActiveCombat accepted invalid JSON")
 	}
 }

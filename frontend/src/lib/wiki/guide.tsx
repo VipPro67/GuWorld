@@ -206,25 +206,18 @@ export const guidePages: WikiPage[] = [
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
-                Khi đạt <strong>Ngũ Chuyển Đỉnh Phong</strong>, đạo hữu có thể tiến hành thăng tiên để đột phá thành <strong>Cổ Tiên (Lục Chuyển trở lên)</strong>.
-              </p>
-              <p>
-                Yêu cầu tối thiểu <strong>100.000 Nhân Khí</strong> để tiến hành Thăng Tiên. Tỉ lệ thành công phụ thuộc vào <strong>Tư chất</strong> và <strong>Nhân Khí tích lũy</strong> (giới hạn tối đa 500.000 Nhân Khí, tổng tỉ lệ cap tại <strong>90%</strong>):
+                Khi đạt <strong>Ngũ Chuyển Đỉnh Phong</strong> và sở hữu <strong>Cổ Bản Mệnh</strong>, đạo hữu có thể tiến hành nghi thức Thăng Tiên gồm <strong>3 khâu</strong> để đột phá thành <strong>Cổ Tiên (Lục Chuyển)</strong>.
               </p>
               <div className="bg-zinc-950/80 border border-[var(--border)] rounded-lg p-3 my-2 space-y-1 font-mono text-[11px]">
-                <div className="text-amber-400 font-bold">📊 Công thức: Tỉ lệ = Xác suất gốc Tư chất + (Nhân Khí ÷ 100.000) × 20%</div>
-                <div className="text-[var(--text-secondary)]">• <strong>Tư chất Giáp:</strong> 20% gốc</div>
-                <div className="text-[var(--text-secondary)]">• <strong>Tư chất Ất / Bính / Đinh:</strong> 5% gốc</div>
-                <div className="text-emerald-400 border-t border-zinc-800 pt-1 mt-1">
-                  💡 <strong>Ví dụ cụ thể:</strong><br />
-                  • <strong>Tư chất Giáp (100k Nhân Khí):</strong> 20% + 20% = <strong>40% tỉ lệ thành công</strong>.<br />
-                  • <strong>Tư chất Giáp (350k Nhân Khí):</strong> 20% + 70% = <strong>90% tỉ lệ thành công</strong> (Đạt trần 90%).<br />
-                  • <strong>Tư chất Ất/Bính/Đinh (100k Nhân Khí):</strong> 5% + 20% = <strong>25% tỉ lệ thành công</strong>.<br />
-                  • <strong>Tư chất Ất/Bính/Đinh (425k Nhân Khí):</strong> 5% + 85% = <strong>90% tỉ lệ thành công</strong> (Đạt trần 90%).
-                </div>
+                <div className="text-rose-400 font-bold">🔥 Khâu 1 — Nát Khiếu:</div>
+                <div className="text-[var(--text-secondary)]">Trùng kích không khiếu của chính mình, mỗi lần tốn 30% Chân Nguyên tối đa. Tỉ lệ vỡ: 15% lần đầu, +15% mỗi lần hụt, trần 90%.</div>
+                <div className="text-cyan-400 font-bold border-t border-zinc-800 pt-1 mt-1">🌀 Khâu 2 — Dẫn Khí:</div>
+                <div className="text-[var(--text-secondary)]">Khiếu nát mở phiên <strong>2 giờ</strong>: vượt khảo nghiệm tâm tính 3 tầng, cân bằng 2 khí thiên địa với Nhân Khí (dưới 100k = thất bại; 100k/230k/370k/480k định phẩm Phúc Địa Sơ/Trung/Thượng/Chí Cao), rồi sống sót <strong>Địa Tai Bản Yếu</strong>.</div>
+                <div className="text-amber-400 font-bold border-t border-zinc-800 pt-1 mt-1">🐛 Khâu 3 — Thả Cổ:</div>
+                <div className="text-[var(--text-secondary)]">Thả cổ Ngũ Chuyển của lưu phái đạt <strong>Đại Sư</strong> vào khiếu tiêu hủy — mỗi cổ nhận 300 Đạo Ngân theo lưu phái, định rõ đạo chủ tu.</div>
               </div>
               <p className="text-rose-400/90 italic">
-                ⚠️ Nếu thăng tiên thất bại, không khiếu vỡ nát, Nhân Khí về 0 và tu vi phế bỏ hoàn toàn về Nhất Chuyển Sơ Giai!
+                ⚠️ Thất bại giữa chừng (hết giờ / thiếu Nhân Khí / thua Địa Tai): mất part chuẩn bị và 20% Nhân Khí, nhưng giữ nguyên Ngũ Chuyển Đỉnh Phong — có thể liều mạng lại.
               </p>
               <p>
                 Sau khi thăng tiên, đạo hữu sẽ sở hữu <strong>Tiên Khiếu</strong> riêng biệt và phải đối đầu với các <strong>Kiếp Nạn</strong> (Địa Tai, Thiên Kiếp...) định kỳ. Kiếp đầu tiên giáng lâm vào <strong>năm nội bộ thứ 10</strong> — tính ra khoảng <strong>2–10 giờ đời thật</strong> tùy phẩm chất Tiên Khiếu (1 năm nội bộ = 10 giờ đời thật ÷ hệ số gia tốc time_rate 10–55×). Vượt qua kiếp nạn thành công sẽ nhận được lượng lớn Đạo Ngân để gia tăng sức mạnh vượt bậc.

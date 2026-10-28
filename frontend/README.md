@@ -42,7 +42,6 @@ Nếu biến này không tồn tại, store dùng mặc định `http://localhos
 | `src/components/GuInventory.tsx` | Inventory Cổ. |
 | `src/components/RefiningFurnace.tsx` | Luyện Cổ/suy diễn recipe. |
 | `src/components/ExplorationMap.tsx` | Bản đồ lưới đơn giản (vị trí hiện tại + bấm ô di chuyển, chế độ Cài Đặt Chung). |
-| `src/components/CombatScreen.tsx` | Combat UI. |
 | `src/components/DungeonView.tsx` | Instance/phó bản. |
 | `src/components/ImmortalApertureView.tsx` | Tiên khiếu, node, tai kiếp. |
 | `src/components/SectView.tsx` | Môn phái. |

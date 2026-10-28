@@ -281,7 +281,9 @@ func playerLiveGuIDs(tx *sql.Tx, playerID uuid.UUID) ([]string, error) {
 // NeedsHungerEvaluation performs a lock-free check to determine if a player's Gus
 // require hunger decay evaluation (i.e. >= 3 hours since last_hunger_tick_at).
 // Read paths can use this to skip acquiring a write transaction and FOR UPDATE lock entirely.
-func NeedsHungerEvaluation(q interface{ QueryRow(query string, args ...any) *sql.Row }, playerID uuid.UUID) bool {
+func NeedsHungerEvaluation(q interface {
+	QueryRow(query string, args ...any) *sql.Row
+}, playerID uuid.UUID) bool {
 	var lastTick time.Time
 	err := q.QueryRow(`
 		SELECT COALESCE(last_hunger_tick_at, created_at, NOW())
@@ -426,13 +428,12 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 		return nil
 	}
 
-	// Vital Gu death → 80 HP backlash per death; drop active_combat on collapse.
+	// Vital Gu death → 80 HP backlash per death.
 	if vitalDeaths > 0 {
 		backlash := 80.0 * float64(vitalDeaths)
 		if _, err := tx.Exec(`
 			UPDATE players p
-			SET hp = GREATEST(p.hp - $1, 0),
-			    active_combat = CASE WHEN p.hp - $1 <= 0 THEN NULL ELSE p.active_combat END
+			SET hp = GREATEST(p.hp - $1, 0)
 			WHERE p.id = $2`, backlash, playerID); err != nil {
 			return err
 		}

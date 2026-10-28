@@ -136,6 +136,16 @@ Túi/Tu luyện/Tổ đội/Cài đặt + chat overlay; mở panel đặt UI-mod
 không dừng zone. Loot auto-grant idempotent qua `realtime_loot_grants`; vị trí MMO được checkpoint
 trong `players` (join resume, leave/disconnect flush, worker 10s), còn
 `player_world_state_v2` chỉ giữ HP/shield và phiên bản map, xem `docs/mmo/recovery.md`.
+Death Arena và Martial Arena tạo `realtime_combat_sessions` mode `tournament` trên map ảo cô lập;
+participants được route vào cùng instance, worker chỉ chuyển vòng sau khi session kết thúc. Disconnect
+được xử thua sau 30 giây; Death Arena lưu HP/Mana còn lại cho vòng sau, Martial Arena hồi đầy chỉ số
+mỗi trận. Kết quả và phần thưởng được ghi trong transaction settlement của realtime death handler.
+Snapshots trận riêng lưu combat events cùng checkpoint HP/Mana trong
+`realtime_combat_session_events`; khi trận kết thúc, các event được dùng làm
+combat log cho lịch sử đấu trường, võ đài và chiến tranh tông môn.
+Chiến tranh tông môn dùng session `sect_war`, có Hộ Sơn Thần Thú trên map ảo,
+settlement giữ logic cướp kho/khiên phòng thủ/đóng góp và Qi. Chỉ thành viên
+đang có lease realtime được đưa vào trận; sủng vật chưa được mô hình hóa ở map này.
 Portal metadata được parse/render và `Manager.TransferCharacter` handoff atomic trong process, nhưng
 chưa tự trigger portal/update DB/scene swap; xem `docs/mmo/transfer.md`. Ruleset map `pve/pvp/safe`, party-aware
 harm rules, boss threat + splash và nhãn/tint party trong snapshot; xem `docs/mmo/pvp-party.md`.
@@ -252,9 +262,9 @@ Rules:
   need a `done` channel keep their own loop, but wrap the tick body in `SafeRun`.
 - Work that a tick hands off (because it opens a transaction or runs heavy CPU) goes to a
   bounded pool rather than running inline, so one slow item cannot blow the tick budget.
-  Example: `dispatchWorldMonsterEncounter` (`handlers/world_monsters.go`) reserves a slot on
-  a buffered channel and runs `startWorldMonsterEncounter` under `SafeRun` in a goroutine;
-  when the pool is full the contact is deferred to its next cooldown instead of queueing.
+  Example: `dispatchWorldMonsterAttack` (`handlers/world_monsters.go`) reserves a slot on
+  a buffered channel and applies a realtime monster attack under `SafeRun` in a goroutine;
+  when the pool is full the attack is deferred to its next cooldown instead of queueing.
 
 ## Quản lý dữ liệu gameplay
 

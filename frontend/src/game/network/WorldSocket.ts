@@ -205,7 +205,7 @@ export class WorldSocket {
   /** Sends a server-validated cast intent. Damage is never calculated client-side. */
   public sendCast(cast: Omit<CastPayload, "seq">): number | null {
     if (!this.isJoined() || !this.socket) return null;
-    if (cast.slot < 1 || cast.slot > 6 || !Number.isFinite(cast.slot)) return null;
+    if (cast.slot < 1 || cast.slot > 12 || !Number.isFinite(cast.slot)) return null;
     for (const value of [cast.aim_x, cast.aim_y, cast.x, cast.y]) {
       if (value !== undefined && (!Number.isFinite(value) || Math.abs(value) > 1_000_000)) return null;
     }
@@ -221,19 +221,25 @@ export class WorldSocket {
     }
   }
 
-  /** Sends a target-only melee intent; server owns damage and attack cadence. */
-  public sendBasicAttack(targetId: string): number | null {
-	if (!this.isJoined() || !this.socket || !targetId.trim() || targetId.length > 80) return null;
-	const seq = this.nextSequence();
-	if (seq === null || !this.socket) return null;
-	const payload: BasicAttackPayload = { seq, target_id: targetId };
-	try {
-		this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.attack", payload }));
-		return seq;
-	} catch (error) {
-		this.notifyError(asError(error, "basic_attack_send_failed"));
-		return null;
-	}
+  /** Sends a melee intent; the zone resolves collision, damage and cadence. */
+  public sendBasicAttack(attack: Omit<BasicAttackPayload, "seq">): number | null {
+    if (!this.isJoined() || !this.socket) return null;
+    const targetId = attack.target_id;
+    const aimX = attack.aim_x ?? 0;
+    const aimY = attack.aim_y ?? 0;
+    if (targetId !== undefined && (!targetId.trim() || targetId.length > 80)) return null;
+    if (!Number.isFinite(aimX) || !Number.isFinite(aimY) || Math.abs(aimX) > 1_000_000 || Math.abs(aimY) > 1_000_000) return null;
+    if (!targetId && Math.hypot(aimX, aimY) <= 0.01) return null;
+    const seq = this.nextSequence();
+    if (seq === null || !this.socket) return null;
+    const payload: BasicAttackPayload = { ...attack, seq };
+    try {
+      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.attack", payload }));
+      return seq;
+    } catch (error) {
+      this.notifyError(asError(error, "basic_attack_send_failed"));
+      return null;
+    }
   }
 
   public onEvents(callback: (event: WorldEvent) => void): () => void {

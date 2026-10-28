@@ -123,6 +123,12 @@ func (w *World) applyStatusLocked(source, target *Entity, skill combat.Skill) {
 		SkillID: skill.ID, DurationTicks: duration, Amount: 1, Reason: skill.StatusID,
 		X: target.Transform.Position.X, Y: target.Transform.Position.Y,
 	})
+	if target.Kind == EntityPlayer && target.Combat.Pending != nil && target.Combat.Pending.Skill.FormActivation && w.isStunned(target) {
+		interrupted := target.Combat.Pending.Skill.ID
+		target.Combat.Pending = nil
+		target.Revision++
+		w.emitEvent(combat.Event{Type: combat.EventCastInterrupted, SourceID: string(sourceID), TargetID: string(target.ID), SkillID: interrupted, Reason: "hard_cc"})
+	}
 }
 
 func (w *World) tickStatuses() {

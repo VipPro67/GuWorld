@@ -12,7 +12,6 @@ export interface PetsSlice {
   setPetSleep: (petId: string, sleeping: boolean) => Promise<boolean>;
   releasePet: (petId: string) => Promise<boolean>;
   mergePets: (targetId: string, sourceIds: string[]) => Promise<boolean>;
-  captureMonster: () => Promise<{ captured: boolean; message: string } | null>;
 }
 
 export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, PetsSlice> = (set, get) => ({
@@ -151,32 +150,5 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     } finally { get().endAction("pets"); }
   },
 
-  captureMonster: async () => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("pets")) return null;
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/combat/capture`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ player_id: player.id }),
-      });
-      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Bắt thất bại");
-      get().applyInventoryFromResponse(data);
-      if (data.captured) {
-        get().addToast(data.message || "Bắt thành công!", "success");
-        await get().fetchPlayerPets();
-      } else {
-        get().addToast(data.message || "Bắt thất bại!", "error");
-      }
-      return { captured: data.captured, message: data.message };
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addToast(err.message, "error");
-      return null;
-    } finally { get().endAction("pets"); }
-  },
+
 });

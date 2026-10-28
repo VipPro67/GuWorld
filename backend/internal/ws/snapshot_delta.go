@@ -172,6 +172,7 @@ func entityStateEqual(a, b protocol.EntityState) bool {
 		a.CastSkillID != b.CastSkillID ||
 		a.CastEndTick != b.CastEndTick ||
 		a.CastWindup != b.CastWindup ||
+		a.FormActive != b.FormActive ||
 		a.Stealthed != b.Stealthed ||
 		a.Flying != b.Flying {
 		return false

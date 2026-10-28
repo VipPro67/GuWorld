@@ -7,8 +7,7 @@ not by wishful capacity claims.
 
 ## Guiding constraints
 
-- The legacy turn-based world stays rollback-safe until a separate cleanup PR
-  proves flag-OFF regression and a canary/rollback rehearsal.
+- Turn-based combat entrypoints and backend simulator were retired in #272. Rollback, if needed, is a code release rollback; no turn-based combat feature flag or parallel runtime is maintained.
 - Server authority over movement, HP, effects, loot and ownership is non-
   negotiable; clients only send intent.
 - Content is data-driven (`Gu.csv`, map JSON, dictionaries); new mechanics need
@@ -88,7 +87,7 @@ Trigger: beta economy/loot data stable.
 
 ## Explicitly deferred
 
-- Deleting Pixi/legacy movement or turn-based handlers.
+- Deleting remaining non-combat Pixi/legacy compatibility code only after its consumer audit; turn-based combat handlers are already retired under #272.
 - Claiming 100 players/zone or multi-worker capacity without a measured run.
 - Automatic turn→millisecond conversion for Gu effects.
 - Cross-process GvG/large-world routing before lease fencing.

@@ -285,10 +285,3 @@ func HasExplorationInventorySpace(player *models.Player, incomingCount int, terr
 
 	return (currentSize + incomingCount) <= maxSlots
 }
-
-// resolveCellArrival places the player at (x, y), derives the region / subzone
-// and resolves the cell content the player stepped onto (resource pickup, wild
-// Gu capture, monster / boss combat or player-initiated PVP), including the
-// small adjacency ambush chance (skipped when allowAmbush is false — used by
-// free path movement so the player only fights when stepping onto an actual
-// monster cell, not randomly on empty cells). It mutates player in-place and

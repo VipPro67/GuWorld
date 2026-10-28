@@ -15,8 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-// loadMartialCombatant loads one combatant's player data into the shared
-// teamMemberCombatant shape so buildTeamCombatant can be reused unchanged.
+// loadMartialCombatant loads one combatant's player data for its realtime match.
 func loadMartialCombatant(q db.Queryer, combatantID string) (*teamMemberCombatant, error) {
 	var m teamMemberCombatant
 	err := q.QueryRow(`
@@ -25,8 +24,7 @@ func loadMartialCombatant(q db.Queryer, combatantID string) (*teamMemberCombatan
 		       COALESCE(p.race, ''), COALESCE(p.constitution, ''),
 		       `+db.GuInventoryAggregateEquipped("p.id")+`,
 		       COALESCE(ia.dao_marks, '{}'::jsonb),
-		       COALESCE(p.path_masteries, '{}'::jsonb),
-		       COALESCE(p.combat_settings, '{}'::jsonb)
+		       COALESCE(p.path_masteries, '{}'::jsonb)
 		FROM martial_combatants mc
 		JOIN players p ON mc.player_id = p.id
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
@@ -34,7 +32,7 @@ func loadMartialCombatant(q db.Queryer, combatantID string) (*teamMemberCombatan
 	`, combatantID).Scan(
 		&m.PlayerID, &m.CurrentHP, &m.MaxHP, &m.CurrentMana, &m.MaxMana,
 		&m.Username, &m.Rank, &m.SubRank, &m.PlayerHP, &m.BaseHP, &m.PlayerMana, &m.MaxManaPlayer,
-		&m.Race, &m.Constitution, &m.GuInventory, &m.DaoMarks, &m.PathMasteries, &m.CombatSettings,
+		&m.Race, &m.Constitution, &m.GuInventory, &m.DaoMarks, &m.PathMasteries,
 	)
 	if err != nil {
 		return nil, err

@@ -115,7 +115,6 @@ func TestAdmissionRejectsUntrustedOrIneligibleJoinState(t *testing.T) {
 	}{
 		{name: "map mismatch", state: handlers.RealtimeJoinState{MapID: "cave", RegionID: "cave", HP: 50, BaseHP: 50}, mapID: "forest", code: "realtime_map_mismatch"},
 		{name: "legacy instance", state: handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", MapInstanceID: "legacy-instance", HP: 50, BaseHP: 50}, mapID: "forest", code: "realtime_instance_conflict"},
-		{name: "active combat", state: handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", HP: 50, BaseHP: 50, HasActiveCombat: true}, mapID: "forest", code: "realtime_character_not_ready"},
 		{name: "onboarding", state: handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", HP: 50, BaseHP: 50, NeedsOnboarding: true}, mapID: "forest", code: "realtime_character_not_ready"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -604,7 +603,7 @@ func (f *fakeStateStore) SaveAndApplyManaDelta(ctx context.Context, state persis
 	return nil
 }
 
-func (f *fakeStateStore) SaveAndApplyCombatDeltaRevision(ctx context.Context, state persistence.State, delta float64, uses map[string]uint64) (int64, error) {
+func (f *fakeStateStore) SaveAndApplyCombatDeltaRevision(ctx context.Context, state persistence.State, delta float64, uses, killerMoveUses map[string]uint64) (int64, error) {
 	if err := f.SaveAndApplyManaDelta(ctx, state, delta); err != nil {
 		return 0, err
 	}
@@ -758,7 +757,7 @@ func TestAdmissionRestoresDurableCombatStateOnJoin(t *testing.T) {
 		MapVersion: "map-1", ContentVersion: "content-1",
 		Combat: &persistence.CombatState{
 			Version: persistence.CombatStateVersion, GCDRemainingTicks: 5,
-			CooldownRemainingTicks: [7]uint64{0, 100}, CooldownSkillIDs: [7]string{"", "GU_WHITE_FROST"},
+			CooldownRemainingTicks: [13]uint64{0, 100}, CooldownSkillIDs: [13]string{"", "GU_WHITE_FROST"},
 			RecoveryRemainingTicks: 4, RecoveryPolicy: "SLOW",
 			Statuses: []persistence.StatusState{{
 				ID: "FREEZE", RemainingTicks: 30, DurationTicks: 30, MoveMultiplier: 0,

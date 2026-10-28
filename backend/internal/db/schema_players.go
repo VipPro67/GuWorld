@@ -45,7 +45,6 @@ func schemaPlayers() error {
 		gender VARCHAR(20) NOT NULL DEFAULT '',
 		constitution VARCHAR(100) NOT NULL DEFAULT '' REFERENCES constitution_dictionary(key),
 		path_masteries JSONB NOT NULL DEFAULT '{}',
-		active_combat JSONB DEFAULT NULL,
 		body_mods JSONB NOT NULL DEFAULT '[]',
 		visited_subzones JSONB NOT NULL DEFAULT '[]',
 		equipped_gus JSONB NOT NULL DEFAULT '[]',
@@ -208,10 +207,6 @@ func schemaPlayers() error {
 	}
 	if err := execSchema("players_username_trgm_idx", `
 	CREATE INDEX IF NOT EXISTS idx_players_username_trgm ON players USING gin (public.immutable_unaccent(username) gin_trgm_ops);`); err != nil {
-		return err
-	}
-	if err := execSchema("players_active_combat_gin_idx", `
-	CREATE INDEX IF NOT EXISTS idx_players_active_combat ON players USING gin (active_combat);`); err != nil {
 		return err
 	}
 	if err := execSchema("players_statuses_gin_idx", `

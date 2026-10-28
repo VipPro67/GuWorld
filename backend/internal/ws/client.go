@@ -335,7 +335,7 @@ func wsActionName(msg WSMessage) string {
 	switch msg.Type {
 	case "command":
 		switch msg.Channel {
-		case "world.leave", "world.move_path", "world.cells_rect", "world.drops", "world.objects", "match.input", "chat.send":
+		case "world.leave", "world.cells_rect", "world.drops", "world.objects", "match.input", "chat.send":
 			return "command:" + msg.Channel
 		default:
 			return "command:unknown"
@@ -491,7 +491,7 @@ func (c *Client) handleMessage(msg WSMessage) {
 			return
 		}
 		switch msg.Channel {
-		case "world.leave", "world.move_path", "world.cells_rect", "world.drops", "world.objects", "match.input", "chat.send":
+		case "world.leave", "world.cells_rect", "world.drops", "world.objects", "match.input", "chat.send":
 			select {
 			case c.commands <- msg:
 			default:
@@ -1004,6 +1004,7 @@ func protocolEntityState(entity sim.Entity) protocol.EntityState {
 	if entity.Combat.MaxMana > 0 {
 		state.Mana = entity.Combat.Mana
 		state.MaxMana = entity.Combat.MaxMana
+		state.FormActive = entity.Combat.FormActive
 		state.Cooldowns = make([]uint64, len(entity.Combat.Cooldowns))
 		copy(state.Cooldowns, entity.Combat.Cooldowns[:])
 		if entity.Combat.Pending != nil {

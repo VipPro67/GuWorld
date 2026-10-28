@@ -68,6 +68,88 @@ const REGION_COLORS = [
   "#355a50", "#5b442b", "#475635", "#70502b", "#594467", "#713f43", "#3e536b",
 ];
 
+interface GreatDomainLayout {
+  id: string;
+  name: string;
+  shortName: string;
+  subTitle: string;
+  path: string;
+  labelX: number;
+  labelY: number;
+  gradientId: string;
+  baseColor: string;
+  strokeColor: string;
+  wallName: string;
+}
+
+const GREAT_DOMAINS: Record<string, GreatDomainLayout> = {
+  dai_vuc_trung_chau: {
+    id: "dai_vuc_trung_chau",
+    name: "Đại Vực Trung Châu",
+    shortName: "TRUNG CHÂU",
+    subTitle: "Thập Đại Cổ Phái",
+    path: "M 360 260 L 640 260 L 690 380 L 630 490 L 370 490 L 310 380 Z",
+    labelX: 500,
+    labelY: 375,
+    gradientId: "grad-trung-chau",
+    baseColor: "#543e1d",
+    strokeColor: "#f59e0b",
+    wallName: "Bạch Khí Giới Bích",
+  },
+  dai_vuc_bac_nguyen: {
+    id: "dai_vuc_bac_nguyen",
+    name: "Đại Vực Bắc Nguyên",
+    shortName: "BẮC NGUYÊN",
+    subTitle: "Hoàng Kim Bộ Lạc",
+    path: "M 180 115 L 280 40 L 720 40 L 820 115 L 640 260 L 360 260 Z",
+    labelX: 500,
+    labelY: 155,
+    gradientId: "grad-bac-nguyen",
+    baseColor: "#1d472c",
+    strokeColor: "#10b981",
+    wallName: "Liệp Phong Giới Bích",
+  },
+  dai_vuc_dong_hai: {
+    id: "dai_vuc_dong_hai",
+    name: "Đại Vực Đông Hải",
+    shortName: "ĐÔNG HẢI",
+    subTitle: "Vạn Đảo Hạo Hãn",
+    path: "M 820 115 L 960 220 L 960 530 L 860 620 L 630 490 L 690 380 L 640 260 Z",
+    labelX: 810,
+    labelY: 375,
+    gradientId: "grad-dong-hai",
+    baseColor: "#0f4566",
+    strokeColor: "#06b6d4",
+    wallName: "Thương Thủy Giới Bích",
+  },
+  dai_vuc_nam_cuong: {
+    id: "dai_vuc_nam_cuong",
+    name: "Đại Vực Nam Cương",
+    shortName: "NAM CƯƠNG",
+    subTitle: "Thập Vạn Đại Sơn",
+    path: "M 370 490 L 630 490 L 860 620 L 750 710 L 250 710 L 140 620 Z",
+    labelX: 500,
+    labelY: 600,
+    gradientId: "grad-nam-cuong",
+    baseColor: "#1a4538",
+    strokeColor: "#34d399",
+    wallName: "Chướng Khí Giới Bích",
+  },
+  dai_vuc_tay_mac: {
+    id: "dai_vuc_tay_mac",
+    name: "Đại Vực Tây Mạc",
+    shortName: "TÂY MẠC",
+    subTitle: "Vô Tận Sa Hải",
+    path: "M 180 115 L 360 260 L 310 380 L 370 490 L 140 620 L 40 530 L 40 220 Z",
+    labelX: 190,
+    labelY: 375,
+    gradientId: "grad-tay-mac",
+    baseColor: "#573d1b",
+    strokeColor: "#d97706",
+    wallName: "Cuồng Cát Giới Bích",
+  },
+};
+
 function normalizeSearch(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLocaleLowerCase("vi-VN");
 }
@@ -149,10 +231,17 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
 
   const mapViewBox = useMemo(() => {
     if (!mapRegion) {
-      return `0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`;
+      return "0 0 1000 750";
     }
     return `${mapRegionX} ${mapRegionY} ${mapRegionW} ${mapRegionH}`;
   }, [mapRegion, mapRegionX, mapRegionY, mapRegionW, mapRegionH]);
+
+  const overviewPlayerPos = useMemo(() => {
+    if (!currentMajorRegion) return null;
+    const layout = GREAT_DOMAINS[currentMajorRegion.id];
+    if (!layout) return null;
+    return { x: layout.labelX, y: layout.labelY - 50 };
+  }, [currentMajorRegion]);
 
   const playerAtlasX = currentRegion?.atlas_x !== undefined ? currentRegion.atlas_x + x : (currentRegion?.min_x !== undefined ? currentRegion.min_x + x : x);
   const playerAtlasY = currentRegion?.atlas_y !== undefined ? currentRegion.atlas_y + y : (currentRegion?.min_y !== undefined ? currentRegion.min_y + y : y);
@@ -358,93 +447,223 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
 
               <svg
                 viewBox={mapViewBox}
-                className={`relative block w-full ${mapRegion ? "aspect-square" : "aspect-[3/2]"}`}
+                className={`relative block w-full ${mapRegion ? "aspect-square" : "aspect-[4/3]"}`}
                 aria-label={mapRegion ? `Bản đồ ${mapRegion.name}` : "Bản đồ các đại vực"}
               >
-                {/* 1. Large 5 Major Regions view */}
-                {!mapRegion &&
-                  majorRegions.map((region, index) => {
-                    const minX = region.atlas_x !== undefined && region.atlas_x !== null ? region.atlas_x : (region.min_x ?? 0);
-                    const minY = region.atlas_y !== undefined && region.atlas_y !== null ? region.atlas_y : (region.min_y ?? 0);
-                    const width = region.width || 5000;
-                    const height = region.height || 5000;
-                    const isSelected = selectedMajorRegionId === region.id;
-                    const isCurrent = currentMajorRegion?.id === region.id;
-                    const label = region.name.replace(/^Đại Vực\s*/i, "");
-                    const isMatched = isRegionMatch(region);
+                <defs>
+                  {/* Glowing filter for Regional Walls */}
+                  <filter id="wall-glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3.5" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
 
-                    return (
-                      <g
-                        key={region.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Chọn ${region.name}`}
-                        onClick={() => {
-                          setSelectedMajorRegionId(region.id);
-                          setZoomedRegionId(region.id);
-                          setInspectedSubRegionId(regions.find((child) => child.parent_id === region.id && child.is_active)?.id ?? region.id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
+                  {/* Domain Background Gradients */}
+                  <radialGradient id="grad-trung-chau" cx="50%" cy="50%" r="60%">
+                    <stop offset="0%" stopColor="#8d6832" stopOpacity="0.9" />
+                    <stop offset="65%" stopColor="#5a421e" stopOpacity="0.9" />
+                    <stop offset="100%" stopColor="#36260f" stopOpacity="0.95" />
+                  </radialGradient>
+
+                  <linearGradient id="grad-bac-nguyen" x1="50%" y1="0%" x2="50%" y2="100%">
+                    <stop offset="0%" stopColor="#25643e" stopOpacity="0.9" />
+                    <stop offset="60%" stopColor="#1a4a2d" stopOpacity="0.9" />
+                    <stop offset="100%" stopColor="#102e1b" stopOpacity="0.95" />
+                  </linearGradient>
+
+                  <linearGradient id="grad-dong-hai" x1="100%" y1="50%" x2="0%" y2="50%">
+                    <stop offset="0%" stopColor="#156e99" stopOpacity="0.9" />
+                    <stop offset="60%" stopColor="#0f4c6e" stopOpacity="0.9" />
+                    <stop offset="100%" stopColor="#0a2a3b" stopOpacity="0.95" />
+                  </linearGradient>
+
+                  <linearGradient id="grad-nam-cuong" x1="50%" y1="100%" x2="50%" y2="0%">
+                    <stop offset="0%" stopColor="#215e4a" stopOpacity="0.9" />
+                    <stop offset="60%" stopColor="#184637" stopOpacity="0.9" />
+                    <stop offset="100%" stopColor="#0d261e" stopOpacity="0.95" />
+                  </linearGradient>
+
+                  <linearGradient id="grad-tay-mac" x1="0%" y1="50%" x2="100%" y2="50%">
+                    <stop offset="0%" stopColor="#7e5722" stopOpacity="0.9" />
+                    <stop offset="60%" stopColor="#583c16" stopOpacity="0.9" />
+                    <stop offset="100%" stopColor="#33210a" stopOpacity="0.95" />
+                  </linearGradient>
+                </defs>
+
+                {/* 1. Large 5 Major Regions view (Bố cục Ngũ Vực Chuẩn Cổ Chân Nhân) */}
+                {!mapRegion && (
+                  <g className="transition-all duration-300">
+                    {/* Background Domain Polygons */}
+                    {majorRegions.map((region) => {
+                      const layout = GREAT_DOMAINS[region.id];
+                      if (!layout) return null;
+                      const isSelected = selectedMajorRegionId === region.id;
+                      const isCurrent = currentMajorRegion?.id === region.id;
+                      const isMatched = isRegionMatch(region);
+
+                      return (
+                        <g
+                          key={region.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Chọn ${region.name}`}
+                          onClick={() => {
                             setSelectedMajorRegionId(region.id);
                             setZoomedRegionId(region.id);
                             setInspectedSubRegionId(regions.find((child) => child.parent_id === region.id && child.is_active)?.id ?? region.id);
-                          }
-                        }}
-                        className={`cursor-pointer transition duration-200 hover:brightness-110 ${!isMatched ? "opacity-30" : "opacity-100"}`}
-                      >
-                        <rect
-                          x={minX + 50}
-                          y={minY + 50}
-                          width={Math.max(0, width - 100)}
-                          height={Math.max(0, height - 100)}
-                          rx="240"
-                          fill={REGION_COLORS[index % REGION_COLORS.length]}
-                          fillOpacity={isSelected ? 0.72 : 0.42}
-                          stroke={isSelected ? "#e9bd6c" : isCurrent ? "#fbbf24" : "#9b7644"}
-                          strokeOpacity={isSelected || isCurrent ? 0.95 : 0.4}
-                          strokeWidth={isSelected ? 60 : 30}
-                        />
-                        <text
-                          x={minX + width / 2}
-                          y={minY + height / 2 - 40}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#fff0cf"
-                          fontSize="280"
-                          fontWeight="700"
-                          className="pointer-events-none select-none"
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setSelectedMajorRegionId(region.id);
+                              setZoomedRegionId(region.id);
+                              setInspectedSubRegionId(regions.find((child) => child.parent_id === region.id && child.is_active)?.id ?? region.id);
+                            }
+                          }}
+                          className={`cursor-pointer transition-all duration-200 hover:brightness-125 ${!isMatched ? "opacity-30" : "opacity-100"}`}
                         >
-                          {label}
-                        </text>
-                        <text
-                          x={minX + width / 2}
-                          y={minY + height / 2 + 200}
-                          textAnchor="middle"
-                          fill="#e9c77d"
-                          fontSize="150"
-                          fontWeight="600"
-                          className="pointer-events-none select-none"
-                        >
-                          C{region.min_rank}–C{region.max_rank}
-                        </text>
-                        {isCurrent && (
-                          <text
-                            x={minX + width / 2}
-                            y={minY + height / 2 + 400}
-                            textAnchor="middle"
-                            fill="#fcd34d"
-                            fontSize="160"
-                            fontWeight="700"
-                            className="pointer-events-none select-none"
-                          >
-                            ĐANG Ở ĐÂY
-                          </text>
-                        )}
+                          <path
+                            d={layout.path}
+                            fill={`url(#${layout.gradientId})`}
+                            stroke={isSelected ? "#f59e0b" : isCurrent ? "#ef4444" : layout.strokeColor}
+                            strokeWidth={isSelected ? 4 : isCurrent ? 3.5 : 2}
+                            strokeOpacity={isSelected || isCurrent ? 1 : 0.6}
+                            className="transition-all duration-200"
+                          />
+
+                          {/* Domain Center Label Group */}
+                          <g transform={`translate(${layout.labelX}, ${layout.labelY})`}>
+                            {/* Short Name */}
+                            <text
+                              x="0"
+                              y="-12"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fill={isSelected ? "#fffbeb" : "#fef3c7"}
+                              fontSize="21"
+                              fontWeight="800"
+                              letterSpacing="2.5"
+                              className="pointer-events-none select-none drop-shadow-md"
+                            >
+                              {layout.shortName}
+                            </text>
+
+                            {/* Subtitle / Characteristic */}
+                            <text
+                              x="0"
+                              y="10"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fill={isSelected ? "#fde68a" : "#d8b485"}
+                              fontSize="11"
+                              fontWeight="500"
+                              className="pointer-events-none select-none"
+                            >
+                              {layout.subTitle}
+                            </text>
+
+                            {/* Rank range badge */}
+                            <g transform="translate(0, 27)">
+                              <rect x="-32" y="-8.5" width="64" height="17" rx="8.5" fill="#000000" fillOpacity="0.5" stroke={layout.strokeColor} strokeWidth="1" strokeOpacity="0.5" />
+                              <text
+                                x="0"
+                                y="1"
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fill="#fcd34d"
+                                fontSize="10"
+                                fontWeight="700"
+                                fontFamily="monospace"
+                                className="pointer-events-none select-none"
+                              >
+                                C{region.min_rank}–C{region.max_rank}
+                              </text>
+                            </g>
+
+                            {/* Is Current Player Badge */}
+                            {isCurrent && (
+                              <g transform="translate(0, 48)">
+                                <rect x="-42" y="-8.5" width="84" height="17" rx="8.5" fill="#ef4444" fillOpacity="0.9" stroke="#fee2e2" strokeWidth="0.8" />
+                                <text
+                                  x="0"
+                                  y="1"
+                                  textAnchor="middle"
+                                  dominantBaseline="middle"
+                                  fill="#ffffff"
+                                  fontSize="9"
+                                  fontWeight="800"
+                                  letterSpacing="0.5"
+                                  className="pointer-events-none select-none"
+                                >
+                                  ĐANG Ở ĐÂY
+                                </text>
+                              </g>
+                            )}
+                          </g>
+                        </g>
+                      );
+                    })}
+
+                    {/* Regional Wall Glowing Lines (Ngũ Vực Giới Bích) */}
+                    <g className="pointer-events-none" filter="url(#wall-glow)">
+                      {/* Trung Châu Ring Wall */}
+                      <path
+                        d="M 360 260 L 640 260 L 690 380 L 630 490 L 370 490 L 310 380 Z"
+                        fill="none"
+                        stroke="#ef4444"
+                        strokeWidth="3.5"
+                        strokeLinejoin="round"
+                        opacity="0.85"
+                      />
+                      {/* Corner Radiating Walls */}
+                      <line x1="180" y1="115" x2="360" y2="260" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" opacity="0.85" />
+                      <line x1="820" y1="115" x2="640" y2="260" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" opacity="0.85" />
+                      <line x1="140" y1="620" x2="370" y2="490" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" opacity="0.85" />
+                      <line x1="860" y1="620" x2="630" y2="490" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" opacity="0.85" />
+                    </g>
+
+                    {/* Regional Wall Name Tags */}
+                    <g className="pointer-events-none select-none">
+                      {/* Liệp Phong (Bắc Nguyên ↔ Tây Mạc) */}
+                      <g transform="translate(265, 182)">
+                        <rect x="-35" y="-8" width="70" height="16" rx="4" fill="#18181b" fillOpacity="0.85" stroke="#ef4444" strokeWidth="1" />
+                        <text x="0" y="1" textAnchor="middle" dominantBaseline="middle" fill="#fca5a5" fontSize="8" fontWeight="600">Liệp Phong Giới</text>
                       </g>
-                    );
-                  })}
+
+                      {/* Thương Thủy (Bắc Nguyên ↔ Đông Hải) */}
+                      <g transform="translate(735, 182)">
+                        <rect x="-36" y="-8" width="72" height="16" rx="4" fill="#18181b" fillOpacity="0.85" stroke="#ef4444" strokeWidth="1" />
+                        <text x="0" y="1" textAnchor="middle" dominantBaseline="middle" fill="#fca5a5" fontSize="8" fontWeight="600">Thương Thủy Giới</text>
+                      </g>
+
+                      {/* Cuồng Cát (Nam Cương ↔ Tây Mạc) */}
+                      <g transform="translate(250, 560)">
+                        <rect x="-35" y="-8" width="70" height="16" rx="4" fill="#18181b" fillOpacity="0.85" stroke="#ef4444" strokeWidth="1" />
+                        <text x="0" y="1" textAnchor="middle" dominantBaseline="middle" fill="#fca5a5" fontSize="8" fontWeight="600">Cuồng Cát Giới</text>
+                      </g>
+
+                      {/* Chướng Khí (Nam Cương ↔ Đông Hải) */}
+                      <g transform="translate(750, 560)">
+                        <rect x="-36" y="-8" width="72" height="16" rx="4" fill="#18181b" fillOpacity="0.85" stroke="#ef4444" strokeWidth="1" />
+                        <text x="0" y="1" textAnchor="middle" dominantBaseline="middle" fill="#fca5a5" fontSize="8" fontWeight="600">Chướng Khí Giới</text>
+                      </g>
+
+                      {/* Bạch Khí (Bao quanh Trung Châu) */}
+                      <g transform="translate(500, 260)">
+                        <rect x="-35" y="-8" width="70" height="16" rx="4" fill="#18181b" fillOpacity="0.85" stroke="#ef4444" strokeWidth="1" />
+                        <text x="0" y="1" textAnchor="middle" dominantBaseline="middle" fill="#fca5a5" fontSize="8" fontWeight="600">Bạch Khí Giới</text>
+                      </g>
+                    </g>
+
+                    {/* Player Pointer on Overview Mode */}
+                    {overviewPlayerPos && (
+                      <g transform={`translate(${overviewPlayerPos.x}, ${overviewPlayerPos.y})`} className="pointer-events-none">
+                        <circle cx="0" cy="0" r="16" fill="#f43f5e" fillOpacity="0.3" />
+                        <circle cx="0" cy="0" r="7" fill="#f43f5e" stroke="#fff1f2" strokeWidth="2.5" />
+                        <path d="M 0 -18 L -4 -6 L 4 -6 Z" fill="#fff1f2" />
+                      </g>
+                    )}
+                  </g>
+                )}
 
                 {/* 2. Sub-regions grid view */}
                 {mapRegion &&

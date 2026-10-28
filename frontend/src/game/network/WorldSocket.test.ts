@@ -112,10 +112,13 @@ test("WorldSocket joins, buffers snapshots, and sequences normalized input", asy
   const cast = JSON.parse(fake.sent[3]) as { type: string; payload: { seq: number; slot: number; mode: string; x: number } };
   assert.equal(cast.type, "world.cast");
   assert.deepEqual(cast.payload, { seq: 3, slot: 3, mode: "GROUND", x: 12.5, y: 8 });
-  assert.equal(client.sendBasicAttack("m:1"), 4);
+  assert.equal(client.sendBasicAttack({ target_id: "m:1" }), 4);
   const attack = JSON.parse(fake.sent[4]) as { type: string; payload: { seq: number; target_id: string } };
   assert.equal(attack.type, "world.attack");
   assert.deepEqual(attack.payload, { seq: 4, target_id: "m:1" });
+  assert.equal(client.sendBasicAttack({ aim_x: 0, aim_y: 1 }), 5);
+  const aimedAttack = JSON.parse(fake.sent[5]) as { type: string; payload: { seq: number; aim_x: number; aim_y: number } };
+  assert.deepEqual(aimedAttack.payload, { seq: 5, aim_x: 0, aim_y: 1 });
   fake.receive({
     v: 1,
     type: "world.events",

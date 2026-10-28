@@ -321,33 +321,6 @@ func mapMGetResults(results []interface{}) []string {
 	return jsonStrs
 }
 
-// SetCombatState stores active combat state in Redis with 15 minutes TTL.
-func SetCombatState(playerID string, state interface{}) error {
-	if Client == nil {
-		return nil
-	}
-	key := "combat_state:" + playerID
-	return SetJSON(key, state, 15*time.Minute)
-}
-
-// GetCombatState retrieves active combat state from Redis.
-func GetCombatState(playerID string, dest interface{}) error {
-	if Client == nil {
-		return redis.Nil
-	}
-	key := "combat_state:" + playerID
-	return GetJSON(key, dest)
-}
-
-// ClearCombatState removes active combat state from Redis.
-func ClearCombatState(playerID string) error {
-	if Client == nil {
-		return nil
-	}
-	key := "combat_state:" + playerID
-	return Delete(key)
-}
-
 type TemporaryStatusData struct {
 	ID        string    `json:"id"`
 	Source    string    `json:"source,omitempty"`

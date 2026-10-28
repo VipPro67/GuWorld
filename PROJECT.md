@@ -108,4 +108,4 @@ Nguồn chuẩn nằm trong `backend/data/`, gồm dictionary Cổ/vật phẩm/
 
 ### Server-authoritative ordinary world monsters
 
-The world map now has an on-demand Redis runtime for ordinary monsters. PostgreSQL remains the static template/spawn source and durable player/reward store. One bounded fixed-tick worker processes only active player AOI buckets; there is no goroutine, PostgreSQL row, movement write, or hit write per monster. Stable instance targeting, revisioned AOI combat events, atomic Redis damage/defeat transitions, tombstones, and respawn replacement form the runtime contract. Turn-based arena, instance, and practice simulation remain separate and retain their existing behavior.
+The world map uses realtime combat for ordinary monsters, arena matches, training and configured combat instances. The turn-based backend simulator and its combat entrypoints were removed under #272. PvE uses the authoritative map runtime; arena and training use private realtime maps. PostgreSQL remains the static template/spawn source and durable player/reward store.

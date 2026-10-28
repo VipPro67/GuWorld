@@ -53,6 +53,7 @@ const (
 	MaxCastRangeUnits        = 64
 	MaxProjectileTicks       = 120
 	BasicAttackRange         = 2.2
+	AimedHitPadding          = 0.35
 	BasicAttackDamage        = 12
 	BasicAttackCooldownTicks = 10
 	MaxWindupTicks           = 100 // 5s at 20 Hz
@@ -63,13 +64,17 @@ const (
 // placeholders; they are not derived from Gu.csv yet.
 type Skill struct {
 	ID                   string
-	GuInstanceID         string  `json:"-"` // owned instance charged for live casts
-	GuHunger             float64 `json:"-"` // admission snapshot; zone decrements per attempt
+	GuInstanceID         string   `json:"-"` // owned instance charged for live casts
+	GuHunger             float64  `json:"-"` // admission snapshot; zone decrements per attempt
+	GuComponentIDs       []string `json:"-"` // all owned Gu instances charged by a composite killer move
+	KillerMoveID         string   `json:"-"` // persistent mastery target for successful Sát Chiêu casts
 	Slot                 int
 	Mode                 Mode
 	Name                 string
 	ManaCost             float64
 	BacklashPct          float64 `json:"-"` // admission-only legacy combat projection
+	SuccessChance        float64 `json:"-"`
+	BackfireHPPercent    float64 `json:"-"`
 	Path                 string  `json:"-"` // admission-only legacy combat projection
 	Range                float64
 	WindupTicks          uint64
@@ -107,6 +112,10 @@ type Skill struct {
 	ManaDrainPerTick     float64 `json:"mana_drain_per_tick,omitempty"`
 	ThoughtDrainPerTick  float64 `json:"thought_drain_per_tick,omitempty"`
 	IsToggle             bool    `json:"is_toggle,omitempty"`
+	FormActivation       bool    `json:"form_activation,omitempty"`
+	FormAbility          bool    `json:"form_ability,omitempty"`
+	FormManaDrainPerTick float64 `json:"form_mana_drain_per_tick,omitempty"`
+	FormDefenseBonus     float64 `json:"form_defense_bonus,omitempty"`
 	MoveDistance         float64 `json:"move_distance,omitempty"`
 	KnockbackDistance    float64 `json:"knockback_distance,omitempty"`
 	PlayerAtkRatio       float64 `json:"player_atk_ratio,omitempty"`
@@ -163,7 +172,14 @@ func SkillBySlot(slot int) (Skill, bool) {
 }
 
 func (skill Skill) Valid() bool {
-	if skill.ID == "" || skill.Slot < 1 || skill.Slot > 6 || !finite(skill.ManaCost) || skill.ManaCost < 0 || !finite(skill.BacklashPct) || skill.BacklashPct < 0 {
+	if skill.ID == "" || skill.Slot < 1 || skill.Slot > 12 || !finite(skill.ManaCost) || skill.ManaCost < 0 || !finite(skill.BacklashPct) || skill.BacklashPct < 0 || !finite(skill.SuccessChance) || skill.SuccessChance < 0 || skill.SuccessChance > 1 || !finite(skill.BackfireHPPercent) || skill.BackfireHPPercent < 0 {
+		return false
+	}
+	if skill.FormActivation {
+		return skill.Slot == 7 && skill.Mode == ModeSelf && skill.WindupTicks <= MaxWindupTicks &&
+			finite(skill.FormManaDrainPerTick) && skill.FormManaDrainPerTick > 0 && finite(skill.FormDefenseBonus) && skill.FormDefenseBonus >= 0
+	}
+	if skill.FormAbility && skill.Slot != 8 {
 		return false
 	}
 	if !ValidMovementPolicy(skill.MovementPolicy) {

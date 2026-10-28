@@ -136,7 +136,13 @@ func (s *Service) GrantKill(ctx context.Context, key GrantKey) (Result, error) {
 
 	rank := key.MonsterRank
 	if rank <= 0 {
-		rank = 1
+		regionID := regionIDForZone(key.ZoneID)
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(min_rank,1) FROM regions WHERE id=$1`, regionID).Scan(&rank); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return result, err
+		}
+		if rank <= 0 {
+			rank = 1
+		}
 	}
 
 	var allRewards []Reward
@@ -153,10 +159,7 @@ func (s *Service) GrantKill(ctx context.Context, key GrantKey) (Result, error) {
 	}
 
 	// 2. Roll region-specific loot table (Loot theo vùng)
-	regionID := key.ZoneID
-	if parts := strings.Split(regionID, "/"); len(parts) > 1 {
-		regionID = strings.Trim(parts[0], "\"")
-	}
+	regionID := regionIDForZone(key.ZoneID)
 	if regionID != "" && template.Type != "" {
 		regRules := models.GetRegionLootRules(regionID, template.Type, rank)
 		if len(regRules) > 0 {
@@ -208,6 +211,15 @@ func (s *Service) GrantKill(ctx context.Context, key GrantKey) (Result, error) {
 		}
 	}
 
+	// Monster Gu inventory and configured Gu pools are independent of item loot
+	// tables. Keep this roll in the same transaction so a replay cannot duplicate
+	// either kind of reward.
+	guRewards, err := s.rollMonsterGus(ctx, tx, template, rank, regionID)
+	if err != nil {
+		return result, err
+	}
+	allRewards = append(allRewards, guRewards...)
+
 	if len(allRewards) == 0 {
 		return s.finishGrant(ctx, tx, key, result, nil)
 	}
@@ -216,6 +228,153 @@ func (s *Service) GrantKill(ctx context.Context, key GrantKey) (Result, error) {
 		return result, err
 	}
 	return s.finishGrant(ctx, tx, key, result, allRewards)
+}
+
+func regionIDForZone(zoneID string) string {
+	regionID := zoneID
+	if parts := strings.Split(regionID, "/"); len(parts) > 1 {
+		regionID = strings.Trim(parts[0], "\"")
+	}
+	return regionID
+}
+
+func (s *Service) rollMonsterGus(ctx context.Context, tx *sql.Tx, template models.MonsterTemplate, monsterRank int, regionID string) ([]Reward, error) {
+	rewards := make([]Reward, 0)
+	for _, carried := range template.GuInventory {
+		if carried.GuID == "" {
+			continue
+		}
+		rank := carried.Rank
+		if rank <= 0 {
+			rank = 1
+		}
+		rewards = append(rewards, Reward{Kind: "gu", ID: carried.GuID, Rank: rank})
+	}
+
+	pool := template.GuPool
+	if len(pool) == 0 && regionID != "" {
+		rows, err := tx.QueryContext(ctx, `
+			WITH RECURSIVE region_scope AS (
+				SELECT id,parent_id,pool_weights,0 AS depth FROM regions WHERE id=$1
+				UNION ALL
+				SELECT parent.id,parent.parent_id,parent.pool_weights,child.depth+1
+				FROM regions parent JOIN region_scope child ON parent.id=child.parent_id
+			)
+			SELECT pool_weights FROM region_scope ORDER BY depth`, regionID)
+		if err != nil {
+			return nil, err
+		}
+		{
+			seen := make(map[string]struct{})
+			for rows.Next() {
+				var raw []byte
+				if scanErr := rows.Scan(&raw); scanErr != nil {
+					rows.Close()
+					return nil, scanErr
+				}
+				var pools models.ZonePools
+				if json.Unmarshal(raw, &pools) != nil {
+					continue
+				}
+				for _, entry := range pools.MonsterGus {
+					if entry.GuID == "" {
+						continue
+					}
+					if _, exists := seen[entry.GuID]; exists {
+						continue
+					}
+					seen[entry.GuID] = struct{}{}
+					pool = append(pool, entry)
+				}
+			}
+			if rowsErr := rows.Err(); rowsErr != nil {
+				rows.Close()
+				return nil, rowsErr
+			}
+			rows.Close()
+		}
+	}
+
+	eligible := make([]eligibleGu, 0, len(pool))
+	for _, entry := range pool {
+		if entry.GuID == "" || entry.IsWorldBoss || entry.Weight <= 0 {
+			continue
+		}
+		rank := entry.Rank
+		if rank <= 0 {
+			rank = 1
+		}
+		if rank > monsterRank {
+			continue
+		}
+		if _, exists := models.GuRegistry[entry.GuID][rank]; !exists {
+			continue
+		}
+		eligible = append(eligible, eligibleGu{entry: entry, rank: rank})
+	}
+	if len(eligible) == 0 {
+		return rewards, nil
+	}
+
+	slots := 1
+	switch strings.ToUpper(strings.TrimSpace(template.Type)) {
+	case "BOSS", "WORLD_BOSS", "WORLDBOSS", "WORLD BOSS", "TRIBULATION_BOSS":
+		slots = 5
+	case "ELITE":
+		slots = 3
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for slot := 0; slot < slots; slot++ {
+		totalWeight := 0.0
+		for _, candidate := range eligible {
+			totalWeight += candidate.entry.Weight
+		}
+		if totalWeight <= 0 {
+			break
+		}
+		draw := s.rng.Float64() * totalWeight
+		selected := eligible[len(eligible)-1]
+		for _, candidate := range eligible {
+			draw -= candidate.entry.Weight
+			if draw < 0 {
+				selected = candidate
+				break
+			}
+		}
+		copies := rollQuantity(s.rng, selected.entry.MinCount, selected.entry.MaxCount)
+		chance := guDropChance(selected.rank, template.Type) / 100
+		if s.rng.Float64() <= chance {
+			for i := int64(0); i < copies; i++ {
+				rewards = append(rewards, Reward{Kind: "gu", ID: selected.entry.GuID, Rank: selected.rank})
+			}
+		}
+		for i := range eligible {
+			if eligible[i].entry.GuID == selected.entry.GuID {
+				eligible = append(eligible[:i], eligible[i+1:]...)
+				break
+			}
+		}
+	}
+	return rewards, nil
+}
+
+type eligibleGu struct {
+	entry models.GuPoolEntry
+	rank  int
+}
+
+func guDropChance(rank int, monsterType string) float64 {
+	tier := strings.ToLower(strings.TrimSpace(monsterType))
+	switch tier {
+	case "boss", "world_boss", "worldboss", "world boss", "tribulation_boss":
+		return [...]float64{0, 50, 40, 30, 20, 15, 1, .5, .2, .05}[min(max(rank, 1), 9)]
+	case "normal", "monster":
+		return [...]float64{0, 15, 10, 6, 3, 1.5, .05, .02, .01, .005}[min(max(rank, 1), 9)]
+	default:
+		return [...]float64{0, 40, 30, 20, 12, 8, .3, .1, .05, .01}[min(max(rank, 1), 9)]
+	}
 }
 
 func (s *Service) finishGrant(ctx context.Context, tx *sql.Tx, key GrantKey, result Result, rewards []Reward) (Result, error) {
@@ -315,7 +474,7 @@ func grantGu(ctx context.Context, tx *sql.Tx, playerID uuid.UUID, reward Reward)
 		INSERT INTO player_gu
 			(id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, equipped, is_vital, integration_time, growth_hours)
 		VALUES ($1,$2,$3,$4,$4,1,100,'ACTIVE','INVENTORY',false,false,0,0)
-		ON CONFLICT (id) DO NOTHING
+		ON CONFLICT DO NOTHING
 	`, uuid.NewString(), playerID, reward.ID, rank)
 	return err
 }

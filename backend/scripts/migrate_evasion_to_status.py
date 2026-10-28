@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Migrate Gu.csv: EVASION passive stat -> EVASION status, drop ACCURACY stat.
+"""Historical one-time migration: EVASION passive stat -> legacy status data.
+
+This script predates realtime combat. Its emitted turn-based `turns` effect is
+not a realtime profile and must not be treated as a currently castable skill.
 
 Background
 ----------
@@ -10,9 +13,8 @@ statusfx registry, applied by a Gu action exactly like INVINCIBLE:
 
     {"op": "STATUS", "status_id": "EVASION", "chance": 0.15, "turns": 1, "value": X}
 
-`chance` is the per-use proc chance (rank-scaled at +0.05/rank in
-combat_auto_resolve.go), `turns` the duration (rank-scaled +(rank-1)/3), and
-`value` the dodge strength in percent (merged by max, capped at 0.75).
+The old simulator applied rank scaling to `chance` and `turns`; `value` was
+interpreted as dodge strength in percent. Those turn-based semantics are retired.
 
 ACCURACY is removed outright: it was subtracted as a flat stat (values up to
 1000) from a 0..1 dodge chance, so any holder of one Accuracy Gu could never be
@@ -37,9 +39,7 @@ import sys
 
 CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "Gu.csv")
 
-# Base proc chance / duration authored on every converted row. Rank scaling in
-# combat_auto_resolve.go turns these into:
-#   chance .15/.20/.25/.30/.35/.40/.45/.50/.55 and turns 1/1/1/2/2/2/3/3/3
+# Base proc chance / legacy turn duration authored on converted rows.
 BASE_CHANCE = 0.15
 BASE_TURNS = 1
 

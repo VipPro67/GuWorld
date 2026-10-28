@@ -49,11 +49,7 @@ func suppressTribulationsForDeadAperture(tx *sql.Tx, playerID string) (bool, err
 	}
 	if _, err := tx.Exec(`
 		UPDATE players
-		SET next_tribulation_time = NULL,
-		    active_combat = CASE
-		        WHEN active_combat->>'tribulation_event_id' <> ''
-		          OR active_combat->>'enemy_template_id' = 'monster_heavenly_tribulation'
-		        THEN NULL ELSE active_combat END
+		SET next_tribulation_time = NULL
 		WHERE id = $1
 	`, playerID); err != nil {
 		return false, err

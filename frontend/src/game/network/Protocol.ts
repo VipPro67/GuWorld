@@ -57,6 +57,7 @@ export interface WorldEntityState {
   statuses?: string[];
   stealthed?: boolean;
   flying?: boolean;
+  form_active?: boolean;
 }
 
 export interface WorldProjectileState {
@@ -84,6 +85,8 @@ export interface WorldSkillInfo {
   cooldown_ticks: number;
   windup_ticks: number;
   is_toggle?: boolean;
+  form_activation?: boolean;
+  form_ability?: boolean;
 }
 
 export interface CastPayload {
@@ -99,7 +102,9 @@ export interface CastPayload {
 
 export interface BasicAttackPayload {
   seq: number;
-  target_id: string;
+  target_id?: string;
+  aim_x?: number;
+  aim_y?: number;
 }
 
 export interface WorldEvent {
@@ -294,10 +299,10 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
   }
   let skills: WorldSkillInfo[] | undefined;
   if (value.skills !== undefined) {
-    if (!Array.isArray(value.skills) || value.skills.length > 6) throw new Error("World welcome skills are invalid");
+    if (!Array.isArray(value.skills) || value.skills.length > 12) throw new Error("World welcome skills are invalid");
     const slots = new Set<number>();
     skills = value.skills.map((raw) => {
-      if (!isRecord(raw) || !isSafePositiveInteger(raw.slot) || raw.slot > 6 || slots.has(raw.slot)) throw new Error("World welcome skill slot is invalid");
+      if (!isRecord(raw) || !isSafePositiveInteger(raw.slot) || raw.slot > 12 || slots.has(raw.slot)) throw new Error("World welcome skill slot is invalid");
       slots.add(raw.slot);
       const mode = raw.mode;
       if (mode !== "TARGET" && mode !== "DIRECTION" && mode !== "GROUND" && mode !== "SELF") throw new Error("World welcome skill mode is invalid");
@@ -320,6 +325,9 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
         mana_cost: raw.mana_cost, range: raw.range,
         radius_units: raw.radius_units as number | undefined,
         cooldown_ticks: raw.cooldown_ticks, windup_ticks: raw.windup_ticks,
+        is_toggle: raw.is_toggle === true,
+        form_activation: raw.form_activation === true,
+        form_ability: raw.form_ability === true,
       };
     });
   }
@@ -396,7 +404,7 @@ function parseEntityState(value: unknown): WorldEntityState {
     throw new Error("World snapshot cast skill id is invalid");
   }
   if (value.cooldowns !== undefined) {
-    if (!Array.isArray(value.cooldowns) || value.cooldowns.length > 7 || value.cooldowns.some((entry) => !isSafeNonNegativeInteger(entry))) {
+    if (!Array.isArray(value.cooldowns) || value.cooldowns.length > 9 || value.cooldowns.some((entry) => !isSafeNonNegativeInteger(entry))) {
       throw new Error("World snapshot cooldowns are invalid");
     }
   }
@@ -427,6 +435,10 @@ function parseEntityState(value: unknown): WorldEntityState {
   if (value.cast_skill_id !== undefined) entity.cast_skill_id = value.cast_skill_id as string;
   if (value.cast_end_tick !== undefined) entity.cast_end_tick = value.cast_end_tick as number;
   if (value.cast_windup_ticks !== undefined) entity.cast_windup_ticks = value.cast_windup_ticks as number;
+  if (value.form_active !== undefined) {
+    if (typeof value.form_active !== "boolean") throw new Error("World snapshot form state is invalid");
+    entity.form_active = value.form_active;
+  }
   return entity;
 }
 

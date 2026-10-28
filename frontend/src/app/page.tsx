@@ -25,7 +25,6 @@ import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliatio
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
 const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
 const RefiningFurnace = dynamic(() => import("@/components/RefiningFurnace").then(m => m.RefiningFurnace), { ssr: false });
-const CombatScreen = dynamic(() => import("@/components/CombatScreen").then(m => m.CombatScreen), { ssr: false });
 const CaravanShop = dynamic(() => import("@/components/CaravanShop").then(m => m.CaravanShop), { ssr: false });
 const MerchantTradeView = dynamic(() => import("@/components/MerchantTradeView").then(m => m.MerchantTradeView), { ssr: false });
 const PremiumStoreView = dynamic(() => import("@/components/PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
@@ -72,8 +71,6 @@ export default function Home() {
     itemDictionary,
     fetchDictionary,
     refineGu,
-    fleeCombat,
-    activeCombatReplay,
     buyShopItem,
     sellShopItem,
     sellShopItemsBulk,
@@ -102,7 +99,6 @@ export default function Home() {
     cancelTrade,
     playerPets,
     monsterDictionary,
-    party,
     dictionaryLoaded,
     dictionaryError,
   ] = useGameStore(
@@ -127,8 +123,6 @@ export default function Home() {
       state.itemDictionary,
       state.fetchDictionary,
       state.refineGu,
-      state.fleeCombat,
-      state.activeCombatReplay,
       state.buyShopItem,
       state.sellShopItem,
       state.sellShopItemsBulk,
@@ -157,7 +151,6 @@ export default function Home() {
       state.cancelTrade,
       state.playerPets,
       state.monsterDictionary,
-      state.party,
       state.dictionaryLoaded,
       state.dictionaryError,
     ])
@@ -201,25 +194,18 @@ export default function Home() {
     return installPlayerLifecycleReconciliation(window, document, () => void reconcilePlayer(true));
   }, [playerId, reconcilePlayer]);
 
-  // 2. Sparse authoritative status sync. PostgreSQL (via /player/status) is the
-  // source of truth for active_combat; keep reconciling while the combat UI is
-  // open so a missed/stale realtime event cannot trap the player there.
-  const hasActiveCombat = Boolean(player?.active_combat);
+  // 2. Sparse authoritative status sync for player progression and inventory.
   useEffect(() => {
     if (!playerId) return;
-
-    if (hasActiveCombat) {
-      void fetchPlayerStatus(playerId);
-    }
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
         void fetchPlayerStatus(playerId);
       }
-    }, hasActiveCombat ? 10000 : 90000);
+    }, 90000);
 
     return () => clearInterval(interval);
-  }, [playerId, hasActiveCombat, fetchPlayerStatus]);
+  }, [playerId, fetchPlayerStatus]);
 
   // 3. Trade realtime subscription. This replaces the old /api/trade/active polling loop.
   const isPlayerReady = !!player;
@@ -243,12 +229,6 @@ export default function Home() {
     }, 30000);
     return () => clearInterval(interval);
   }, [playerId, player?.current_region, isGameWorldSurface, fetchMerchants]);
-
-  const isPartyMemberNotLeader = Boolean(player?.party_id) && party !== null && party.leader_id !== player?.id;
-  // Force combat view if player is actively in combat (and is leader or solo) or if we have an active replay with logs
-  const hasReplayLogs = Boolean(activeCombatReplay && activeCombatReplay.enemy && (activeCombatReplay.logs?.length ?? 0) > 0);
-  const inCombat = (player && player.active_combat && !isPartyMemberNotLeader) || hasReplayLogs;
-
 
   const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
@@ -307,7 +287,7 @@ export default function Home() {
 
   // Phaser is the only persistent gameplay world. Old view IDs remain aliases
   // for navigation compatibility and never open a legacy map surface.
-  const isGameWorldView = Boolean(player && !player.needs_onboarding && !inCombat);
+  const isGameWorldView = Boolean(player && !player.needs_onboarding);
   // Full-bleed modes take the whole surface instead of the side drawer.
   const isFullBleedView = currentView === "practice-room" || isGameWorldSurface;
   const isWideFeatureView = ["aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "death-arena", "martial-arena"].includes(currentView);
@@ -330,12 +310,12 @@ export default function Home() {
         <div className="flex items-center gap-4">
           <div
             onClick={() => {
-              if (player && !inCombat && currentView !== "dashboard") {
+              if (player && currentView !== "dashboard") {
                 setView("dashboard");
               }
             }}
-            className={`flex items-center gap-2 ${player && !inCombat && currentView !== "dashboard" ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
-            title={player && !inCombat && currentView !== "dashboard" ? "Trở về Sảnh" : undefined}
+            className={`flex items-center gap-2 ${player && currentView !== "dashboard" ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+            title={player && currentView !== "dashboard" ? "Trở về Sảnh" : undefined}
           >
               <div className="w-8 h-8 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)] flex items-center justify-center shrink-0">
                 <Sparkles className="w-4 h-4 text-emerald-400" />
@@ -347,7 +327,7 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-2">
-          {player && !inCombat && <NotificationBell />}
+          {player && <NotificationBell />}
         </div>
       </header>}
       {/* Main Content Area */}
@@ -371,16 +351,6 @@ export default function Home() {
           <div className="py-12 w-full flex justify-center">
             <OnboardingModal onComplete={completeOnboarding} />
           </div>
-        ) : inCombat ? (
-          <div className="w-full">
-            <CombatScreen
-              player={player}
-              enemy={player.active_combat || activeCombatReplay!.enemy}
-              guDictionary={guDictionary}
-              actionLoading={actionLoading}
-              onRetreat={fleeCombat}
-            />
-          </div>
         ) : (
           <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
             <PhaserWorldHost worldActive={isGameWorldSurface || currentView === "practice-room"} onExit={() => setView("character")} />
@@ -401,7 +371,7 @@ export default function Home() {
                       <div className="hidden text-[10px] uppercase tracking-[.2em] text-[#d8b979]/70 sm:block">Cổ Giới · Bảng điều khiển</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {player && !inCombat && <NotificationBell />}
+                      {player && <NotificationBell />}
                       <button
                         onClick={() => setView("mmo-world")}
                         aria-label="Đóng bảng điều khiển"

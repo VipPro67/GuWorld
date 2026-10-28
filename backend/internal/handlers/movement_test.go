@@ -49,11 +49,6 @@ func TestValidateMovementState(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "active combat blocks movement",
-			mutate:     func(p *models.Player) { p.ActiveCombat = &models.CombatState{} },
-			wantStatus: http.StatusBadRequest,
-		},
-		{
 			name:       "healthy player passes",
 			wantStatus: 0,
 		},

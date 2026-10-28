@@ -29,6 +29,7 @@ type LoadoutResult struct {
 // reported) rather than cast as an empty skill.
 func BuildLoadout(catalog *CompiledCatalog, equipped []EquippedGu) LoadoutResult {
 	result := LoadoutResult{}
+	formAdded := false
 	if catalog == nil {
 		result.Skipped = append(result.Skipped, equipped...)
 		return result
@@ -42,17 +43,25 @@ func BuildLoadout(catalog *CompiledCatalog, equipped []EquippedGu) LoadoutResult
 			continue
 		}
 		profile, ok := catalog.Profile(instance.GU, instance.Rank)
-		if !ok || profile.Active == nil {
+		if !ok {
 			result.Skipped = append(result.Skipped, instance)
 			continue
 		}
-		skill := profile.Active.Skill
-		skill.Slot = index + 1
-		if !skill.Valid() {
-			result.Skipped = append(result.Skipped, instance)
-			continue
+		if profile.Active != nil {
+			skill := profile.Active.Skill
+			skill.Slot = index + 1
+			if skill.Valid() {
+				skill.GuInstanceID = instance.InstanceID
+				result.Skills = append(result.Skills, skill)
+			}
 		}
-		result.Skills = append(result.Skills, skill)
+		if !formAdded && profile.FormActivation != nil && profile.FormAbility != nil {
+			activation, ability := *profile.FormActivation, profile.FormAbility.Skill
+			if activation.Valid() && ability.Valid() {
+				result.Skills = append(result.Skills, activation, ability)
+				formAdded = true
+			}
+		}
 	}
 	result.Revision = hex.EncodeToString(hash.Sum(nil))
 	sort.SliceStable(result.Skills, func(i, j int) bool { return result.Skills[i].Slot < result.Skills[j].Slot })
@@ -70,7 +79,8 @@ func SkillInfos(skills []combat.Skill) []SkillInfo {
 			WidthUnits: skill.WidthUnits, InnerRadius: skill.InnerRadius,
 			ManaCost: skill.ManaCost, Range: skill.Range, RadiusUnits: skill.Radius,
 			CooldownTicks: skill.CooldownTicks, WindupTicks: skill.WindupTicks,
-			IsToggle: skill.IsToggle,
+			IsToggle:       skill.IsToggle,
+			FormActivation: skill.FormActivation, FormAbility: skill.FormAbility,
 		})
 	}
 	return infos
@@ -79,19 +89,21 @@ func SkillInfos(skills []combat.Skill) []SkillInfo {
 // SkillInfo mirrors protocol.SkillInfo without importing protocol (protocol
 // must not depend on effects). Gateway converts this DTO.
 type SkillInfo struct {
-	Slot          uint8
-	ID            string
-	Name          string
-	Mode          string
-	Shape         string
-	AngleDeg      float64
-	LengthUnits   float64
-	WidthUnits    float64
-	InnerRadius   float64
-	ManaCost      float64
-	Range         float64
-	RadiusUnits   float64
-	CooldownTicks uint64
-	WindupTicks   uint64
-	IsToggle      bool
+	Slot           uint8
+	ID             string
+	Name           string
+	Mode           string
+	Shape          string
+	AngleDeg       float64
+	LengthUnits    float64
+	WidthUnits     float64
+	InnerRadius    float64
+	ManaCost       float64
+	Range          float64
+	RadiusUnits    float64
+	CooldownTicks  uint64
+	WindupTicks    uint64
+	IsToggle       bool
+	FormActivation bool
+	FormAbility    bool
 }

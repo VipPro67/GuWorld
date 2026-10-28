@@ -1,7 +1,6 @@
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
-import { useUIStore } from "@/store/useUIStore";
 import type { DeathArenaTournament, DeathArenaMatch, DeathArenaTeam, DeathArenaTeamMember, DeathArenaReward } from "@/store/useGameStore";
 
 export interface ArenaSlice {
@@ -135,7 +134,14 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
-      useUIStore.getState().setView("arena");
+      if (data.zone_id && data.instance_id) {
+        get().setPlayerFromServer({
+          world_zone_id: data.zone_id,
+          world_instance_id: `combat:${data.instance_id}`,
+        });
+        get().requestWorldReconnect();
+        get().setView("mmo-world");
+      }
       get().addLog(data.message || "Đã thách đấu đối thủ!");
       return true;
     } catch (caught: unknown) {

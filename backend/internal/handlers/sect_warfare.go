@@ -100,9 +100,18 @@ func computeBeastPower(mon models.MonsterTemplate, rank, subRank int) float64 {
 	return atk + def + maxHP/20.0
 }
 
-// sectGuardianCombatant generates the Hộ Sơn Thần Thú (Guardian Beast) Combatant
-// whose stats scale with sect level and defensive_array building level.
-func sectGuardianCombatant(sectName string, sectLevel int, defensiveArrayLvl int) models.Combatant {
+type sectGuardianProfile struct {
+	Name         string
+	Rank         int
+	SubRank      int
+	MaxHP        float64
+	BaseAttack   float64
+	BaseDefense  float64
+}
+
+// sectGuardianProfileFor creates the realtime guardian profile whose stats
+// scale with sect level and defensive_array building level.
+func sectGuardianProfileFor(sectName string, sectLevel int, defensiveArrayLvl int) sectGuardianProfile {
 	rank := sectLevel
 	if rank < 1 {
 		rank = 1
@@ -117,24 +126,9 @@ func sectGuardianCombatant(sectName string, sectLevel int, defensiveArrayLvl int
 	baseHP := 500.0 * float64(arrLvl) * (1.0 + 0.5*float64(rank))
 	baseAtk := 80.0 * float64(arrLvl) * (1.0 + 0.3*float64(rank))
 	baseDef := 60.0 * float64(arrLvl) * (1.0 + 0.3*float64(rank))
-	baseMana := 200.0 * float64(arrLvl)
-	baseSpeed := 8.0 + float64(rank)*2.0
-
-	return models.Combatant{
-		ID:            fmt.Sprintf("sect_guardian_%s", uuid.New().String()[:8]),
-		Name:          fmt.Sprintf("Hộ Sơn Thần Thú (%s)", sectName),
-		Kind:          "Boss",
-		Rank:          rank,
-		SubRank:       arrLvl,
-		HP:            baseHP,
-		MaxHP:         baseHP,
-		CurrentMana:   baseMana,
-		MaxMana:       baseMana,
-		BaseAttack:    baseAtk,
-		BaseDefense:   baseDef,
-		Speed:         baseSpeed,
-		AIProfile:     "aggressive",
-		StatusEffects: []models.StatusEffect{},
+	return sectGuardianProfile{
+		Name: fmt.Sprintf("Hộ Sơn Thần Thú (%s)", sectName), Rank: rank,
+		SubRank: arrLvl, MaxHP: baseHP, BaseAttack: baseAtk, BaseDefense: baseDef,
 	}
 }
 
@@ -539,9 +533,8 @@ func ToggleDefendSect(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": msg, "is_defending": newState})
 }
 
-// AttackSect initiates real turn-based combat against a target sect.
-// Enemies = Guardian Beast + sect members with is_defending=true at sect location.
-// Allies = attacker + party members + pets (loaded by StartCombat).
+// AttackSect starts a realtime sect-war instance. Enemies are the guardian
+// beast and defending sect members; allies join the attacker in the instance.
 func AttackSect(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -590,12 +583,25 @@ func AttackSect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn mục tiêu đang trong thời gian Hộ Sơn Đại Trận bảo hộ!"})
 		return
 	}
+	var activeSectWar bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM realtime_combat_sessions WHERE mode='sect_war' AND status='active' AND payload->>'target_sect_id'=$1)`, req.TargetSectID).Scan(&activeSectWar); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra chiến trận đang diễn ra."})
+		return
+	}
+	if activeSectWar {
+		c.JSON(http.StatusConflict, gin.H{"error": "Tông môn này đang trong một chiến trận khác."})
+		return
+	}
 
 	// Load attacker and check position
 	attacker, aerr := evaluateManaTxEquipped(tx, playerID)
 	if aerr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
+	}
+	if region, x, y, ok := middleware.RealtimePlayerLocation(playerID); ok {
+		attacker.CurrentRegion = region
+		attacker.X, attacker.Y = x, y
 	}
 
 	distX := math.Abs(float64(attacker.X - targetMapX))
@@ -604,11 +610,6 @@ func AttackSect(c *gin.Context) {
 	const maxSectAttackRange = 2
 	if dist > maxSectAttackRange {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Khoảng cách quá xa (%d ô)! Cần tiếp cận Tông Môn trong vòng %d ô mới có thể khiêu chiến!", dist, maxSectAttackRange)})
-		return
-	}
-
-	if attacker.ActiveCombat != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trận chiến khác!"})
 		return
 	}
 
@@ -659,131 +660,63 @@ func AttackSect(c *gin.Context) {
 		return
 	}
 
-	// Build Guardian Beast as main enemy
-	guardian := sectGuardianCombatant(targetName, targetLevel, arrLvl)
-
-	// Build combat state with guardian as main enemy
-	sectWarCombat := models.CombatState{
-		EnemyTemplateID: guardian.ID,
-		EnemyName:       guardian.Name,
-		EnemyType:       "SECT_WAR",
-		CombatMode:      "real",
-		EnemyHP:         guardian.HP,
-		EnemyMaxHP:      guardian.MaxHP,
-		EnemyMana:       guardian.CurrentMana,
-		EnemyMaxMana:    guardian.MaxMana,
-		EnemyDamage:     guardian.BaseAttack,
-		EnemyDefense:    guardian.BaseDefense,
-		EnemySpeed:      guardian.Speed,
-		EnemyRank:       guardian.Rank,
-		EnemySubRank:    guardian.SubRank,
-		AIProfile:       "aggressive",
-		TargetSectID:    req.TargetSectID,
-	}
-
-	// Initialize combat (this populates Allies from party + pets)
-	attacker.ActiveCombat = StartCombat(tx, &sectWarCombat, &attacker)
-
-	// Load defending members at sect location as additional enemies.
-	// Collect all IDs and close the rows BEFORE running further queries on the
-	// same tx — a still-open *sql.Rows pins the tx's connection and every
-	// subsequent Exec/Query on the tx fails with conn-busy errors.
+	// Only realtime-owned defenders can enter this player-controlled virtual map.
 	var defenderIDs []uuid.UUID
 	defRows, derr := tx.Query(`
 		SELECT sm.player_id FROM sect_members sm
 		JOIN players p ON sm.player_id = p.id
 		WHERE sm.sect_id = $1 AND sm.is_defending = true
-		  AND p.current_region = $2 AND p.x = $3 AND p.y = $4 AND p.hp > 0
+	  AND p.current_region = $2 AND p.hp > 0
 		LIMIT 8
-	`, req.TargetSectID, targetRegion, targetMapX, targetMapY)
+	`, req.TargetSectID, targetRegion)
 	if derr != nil {
-		logger.S.Errorf("AttackSect: failed to load defenders for sect %s: %v", req.TargetSectID, derr)
-	} else {
-		for defRows.Next() {
-			var defID uuid.UUID
-			if defRows.Scan(&defID) != nil {
-				continue
-			}
-			defenderIDs = append(defenderIDs, defID)
-		}
-		if rowsErr := defRows.Err(); rowsErr != nil {
-			logger.S.Errorf("AttackSect: failed iterating defenders for sect %s: %v", req.TargetSectID, rowsErr)
-		}
-		defRows.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải đội hình phòng thủ."})
+		return
 	}
-	for _, defID := range defenderIDs {
-		defPlayer, errDef := evaluateManaTxEquippedReadonly(tx, defID)
-		if errDef != nil || defPlayer.HP <= 0 {
+	for defRows.Next() {
+		var defID uuid.UUID
+		if defRows.Scan(&defID) != nil || !middleware.IsRealtimeWorldOwned(defID) {
 			continue
 		}
-		defStats := CalculatePlayerStats(&defPlayer)
-		defCombatant := models.CombatantFromPlayer(&defPlayer, defStats)
-		defCombatant.Kind = "Player"
-		defCombatant.CombatSettings = &defPlayer.CombatSettings
-		defCombatant.GuInventory = defPlayer.GuInventory
-		attacker.ActiveCombat.Enemies = append(attacker.ActiveCombat.Enemies, defCombatant)
-	}
-
-	// Re-assign grid positions for enemies
-	enemySlots := [][2]int{
-		{2, 3}, {2, 1}, {1, 1}, {3, 1}, {2, 2}, {1, 2}, {3, 2}, {1, 3}, {3, 3},
-	}
-	for idx := range attacker.ActiveCombat.Enemies {
-		if idx < len(enemySlots) {
-			attacker.ActiveCombat.Enemies[idx].GridX = enemySlots[idx][0]
-			attacker.ActiveCombat.Enemies[idx].GridY = enemySlots[idx][1]
-		}
-		if attacker.ActiveCombat.Enemies[idx].Speed == 0 {
-			attacker.ActiveCombat.Enemies[idx].Speed = 8.0 + float64(attacker.ActiveCombat.Enemies[idx].Rank)*2.0
+		region, x, y, ok := middleware.RealtimePlayerLocation(defID)
+		if ok && region == targetRegion && x == targetMapX && y == targetMapY {
+			defenderIDs = append(defenderIDs, defID)
 		}
 	}
-
-	combatBytes, mErr := json.Marshal(attacker.ActiveCombat)
-	if mErr != nil {
-		// NaN/Inf in the combat state makes json.Marshal fail; an empty payload
-		// would poison the jsonb column, so fail the request cleanly instead.
-		logger.S.Errorf("AttackSect: failed to marshal combat state for player %s: %v", playerID, mErr)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
+	if rowsErr := defRows.Err(); rowsErr != nil {
+		defRows.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải đội hình phòng thủ."})
 		return
 	}
-	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 5, $2) WHERE id = $3", string(combatBytes), MaxHumanQi, playerID)
-	if err != nil {
-		logger.S.Errorf("AttackSect: failed to save combat state for player %s: %v", playerID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
+	defRows.Close()
+
+	instanceID, participantIDs, startErr := startRealtimeSectWar(c.Request.Context(), tx, playerID, attacker.Username, req.TargetSectID, targetName, targetRegion, targetLevel, arrLvl, defenderIDs)
+	if startErr != nil {
+		logger.S.Errorf("AttackSect: failed to start realtime sect war for player %s: %v", playerID, startErr)
+		c.JSON(http.StatusConflict, gin.H{"error": "Không thể bắt đầu chiến trận realtime. Hãy bảo đảm đội hình đang trực tuyến và không ở trận khác."})
 		return
 	}
-
-	auditlog.Log(tx, auditlog.Entry{
-		PlayerID: &playerID, Action: "sect.attack", EntityType: "sect",
-		EntityID:       req.TargetSectID,
-		RequestSummary: fmt.Sprintf("Khiêu chiến tông môn %s (Hộ Sơn Thần Thú R%d, %d đệ tử trấn thủ)", targetName, targetLevel, len(defenderIDs)),
-		Metadata: map[string]interface{}{
-			"target_sect_id":   req.TargetSectID,
-			"target_sect_name": targetName,
-			"my_sect_id":       mySectID,
-			"guardian_rank":    targetLevel,
-			"defender_count":   len(defenderIDs),
-		},
-		IPAddress: c.ClientIP(), Success: true,
+	attacker.HumanQi = math.Min(attacker.HumanQi+5, MaxHumanQi)
+	defCount := 0
+	for _, id := range participantIDs {
+		if id != playerID && !containsUUID(defenderIDs, id) {
+			defCount++
+		}
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.attack", EntityType: "sect", EntityID: req.TargetSectID,
+		RequestSummary: fmt.Sprintf("Tấn công realtime tông môn %s", targetName),
+		Metadata:       map[string]interface{}{"target_sect_id": req.TargetSectID, "my_sect_id": mySectID, "instance_id": instanceID.String(), "guardian_rank": targetLevel, "defender_count": len(defenderIDs)},
+		IPAddress:      c.ClientIP(), Success: true,
 	})
-
-	err = tx.Commit()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
-		return
-	}
-
-	defCount := len(attacker.ActiveCombat.Enemies) - 1 // minus guardian
-	msg := fmt.Sprintf("Khiêu chiến Tông Môn %s! Đối mặt Hộ Sơn Thần Thú", targetName)
+	_ = SendSystemMessage("sect", sql.NullString{String: req.TargetSectID, Valid: true},
+		fmt.Sprintf("[Chiến Báo] Kẻ địch %s đã phát động tấn công Sơn Môn realtime!", attacker.Username))
+	msg := fmt.Sprintf("Khiêu chiến Tông Môn %s! Trận realtime đã bắt đầu với Hộ Sơn Thần Thú", targetName)
 	if defCount > 0 {
 		msg += fmt.Sprintf(" cùng %d đệ tử trấn thủ", defCount)
 	}
 	msg += ". Nhân Khí +5."
-
-	_ = SendSystemMessage("sect", sql.NullString{String: req.TargetSectID, Valid: true},
-		fmt.Sprintf("[Chiến Báo] Kẻ địch %s đã phát động tấn công Sơn Môn!", attacker.Username))
-
-	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": msg})
+	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": msg, "instance_id": instanceID, "zone_id": practiceRealtimeMapID})
 }
 
 // sectPlunderVoidPct — Thiên Đạo Tiêu Hủy (Void Destruction) khi cướp kho Tông Môn,
@@ -811,12 +744,21 @@ func splitVoidDestruction(stolen int64, voidPct float64) (destroyed, delivered i
 	return destroyed, stolen - destroyed
 }
 
-// ApplySectWarVictory is called by auto-combat resolution when attacker wins a SECT_WAR combat.
+// ApplySectWarVictory applies rewards after a realtime sect-war instance ends.
 // It plunders funds, vault_materials, vault_gu, and vault_recipes from the target sect.
 // Một phần chiến lợi phẩm bị Thiên Đạo tiêu hủy vĩnh viễn (Void Destruction),
 // phần còn lại chia cho đội tấn công. Mọi thao tác xóa kho / lưu đồ cho đội chạy
 // theo batch (một câu SQL mỗi bảng / mỗi thành viên) để nhanh và chính xác.
-func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.CombatState) []string {
+type sectWarSettlement struct {
+	TargetSectID string
+	Participants []sectWarParticipant
+}
+
+type sectWarParticipant struct {
+	PlayerID uuid.UUID
+}
+
+func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *sectWarSettlement) []string {
 	var logs []string
 	if combat == nil || combat.TargetSectID == "" {
 		return logs
@@ -824,11 +766,9 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 
 	// Gather all team members (attacker + allies/party)
 	teamMembers := []uuid.UUID{player.ID}
-	for _, ally := range combat.Allies {
-		if ally.Kind == "Ally" || ally.Kind == "Player" {
-			if aUUID, parseErr := uuid.Parse(ally.ID); parseErr == nil && aUUID != player.ID {
-				teamMembers = append(teamMembers, aUUID)
-			}
+	for _, participant := range combat.Participants {
+		if participant.PlayerID != uuid.Nil && participant.PlayerID != player.ID {
+			teamMembers = append(teamMembers, participant.PlayerID)
 		}
 	}
 
@@ -1258,7 +1198,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 
 // ApplySectWarDefeat is called when attacker loses a SECT_WAR combat.
 // Awards defending members contribution points and grants a short shield.
-func ApplySectWarDefeat(tx *sql.Tx, player *models.Player, combat *models.CombatState) []string {
+func ApplySectWarDefeat(tx *sql.Tx, player *models.Player, combat *sectWarSettlement) []string {
 	var logs []string
 	if combat == nil || combat.TargetSectID == "" {
 		return logs

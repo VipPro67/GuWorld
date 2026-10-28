@@ -30,8 +30,8 @@ a version mismatch.
 | `world.welcome` | server → client | Session/entity identity, tick rate, map/content versions, map collision hash, server tick, owner hotbar projection (`skills[]`) and `loadout_revision`, baseline and initial snapshot. |
 | `world.input` | client → server | Monotonic `seq` plus normalized movement vector; zero vector stops movement. |
 | `world.move_target` | client → server | Monotonic `seq` and a world-unit destination for bounded server pathing. |
-| `world.cast` | client → server | Monotonic `seq`, hotbar slot 1–6, `mode` (`TARGET`/`DIRECTION`/`GROUND`/`SELF`), optional target and aim/point coordinates. |
-| `world.attack` | client → server | Monotonic `seq` and `target_id` for a basic melee attack; J or the HUD button sends intent only. |
+| `world.cast` | client → server | Monotonic `seq`, hotbar slot 1–12, `mode` (`TARGET`/`DIRECTION`/`GROUND`/`SELF`), optional target and aim/point coordinates. Slots 7–8 are reserved for a profile-provided defensive form and its separate ability; slots 9–12 are equipped killer moves with supported realtime effects. |
+| `world.attack` | client → server | Monotonic `seq` plus either `target_id` or an `aim_x`/`aim_y` direction for a basic melee swing; the server resolves collision. |
 | `world.events` | server → client | Reliable gameplay events with event IDs and server tick (`DAMAGE_APPLIED`, `CAST_ACCEPTED`, `CAST_REJECTED`, `ENTITY_DIED`, ...). |
 | `world.snapshot` | server → client | Baseline/delta state, tick, acknowledged sequence and entity revisions; each entity carries `kind` and `max_hp`. Monsters also carry `template_id`, `name`, `ai_state` and `aggro_target_id` for combat presentation. |
 | `world.transfer` | server → client | Server-owned border handoff: `from_zone_id`, `to_zone_id`, `target_x/target_y` (map-local cells) and `legacy_x/legacy_y` (players.x/y world projection), plus carried `hp`. The client updates its durable position from the legacy pair and reconnects with the new `zone_id`. Client-initiated transfers are not accepted. |
@@ -66,22 +66,29 @@ stays allowlisted.
 
 ## Combat preview
 
-Basic attack uses the same authoritative zone tick as skills. The server checks
-that the player is alive and not stunned, can harm the selected target, and is
-within 2.2 world units; a successful hit deals 12 preview damage and starts a
-10-tick cooldown. These are temporary preview balance values, not values read
-from Gu data. `BASIC_ATTACK` and `HIT_CONFIRMED` events drive the client
-animation; damage remains server-authored. Press **J** or click **ĐÁNH** in the
-combat HUD. If no target is selected, the client selects the nearest visible
-monster before sending the intent.
+Basic attack uses the same authoritative zone tick as skills. Manual swings
+send an aim direction. The zone checks enemy collision along a narrow segment
+up to 2.2 world units and hits the first eligible body only. A swing into empty
+space still animates and starts the 10-tick cooldown, but emits no hit or damage.
+Selected-target attacks remain available for the HUD and auto-farm. These are
+temporary preview balance values, not values read from Gu data. `BASIC_ATTACK`
+and `HIT_CONFIRMED` events drive the client animation; damage remains server-authored.
+Right-click or click **ĐÁNH** in the combat HUD to attack.
 
-`world.cast` currently uses six server-side preview skills (slots 1–6) that map
-to `TARGET`, `DIRECTION`, `GROUND` and `SELF`. They are placeholders until the
-Gu compiler/loadout adapter lands; the client only mirrors their mode/range for
-UI and never sends damage. The zone validates ownership, slot, mode, mana,
-GCD/cooldown, range, target faction and ground walkability, then resolves windup,
-projectile/AoE hit and shield/HP changes on the tick. Incoming damage interrupts
-a player's windup.
+`world.cast` uses six equipped-Gu slots (1–6), plus reserved slots 7–8 when an
+equipped Gu provides a defensive transformation, and slots 9–12 for up to four
+equipped killer moves with supported realtime effects. The server sends only skills
+available to the current loadout; the client only mirrors skill metadata for
+the HUD and never sends damage. The zone validates ownership, slot, mode, mana,
+GCD/cooldown, range, target faction and ground walkability, then resolves
+windup, projectile/AoE hit and shield/HP changes on the tick. Damage interrupts
+ordinary windup; hard crowd control interrupts form activation, while ordinary
+damage does not.
+`TARGET` casts with an explicit `target_id` keep their lock-on behavior. A
+`TARGET` cast without one can carry `aim_x`/`aim_y` as a displacement to the
+clicked point; the server resolves the first eligible body on that segment when
+the windup ends. It spends mana
+and cooldown even if the cast hits empty space.
 
 Damage is always server-authored. `world.events` carries the resulting
 `CAST_ACCEPTED`, `CAST_REJECTED`, `CAST_INTERRUPTED`, `PROJECTILE_SPAWNED`,
@@ -102,8 +109,9 @@ falls back to the server preview hotbar (no partial skill set). `loadout_revisio
 is a deterministic hash of the equipped instance order. Live loadout refresh
 while inside a zone is still future work; rejoin rebuilds it from the database.
 
-The owner entity in each snapshot also carries coarse combat state for the HUD:`mana`, `max_mana`, `cooldowns` (absolute tick deadlines, index 1–6),
-`cast_skill_id`, `cast_end_tick` and `cast_windup_ticks`. Projectiles are sent as
+The owner entity in each snapshot also carries coarse combat state for the HUD:
+`mana`, `max_mana`, `cooldowns` (absolute tick deadlines, indexes 1–12),
+`form_active`, `cast_skill_id`, `cast_end_tick` and `cast_windup_ticks`. Projectiles are sent as
 `projectiles[]` with id/source/skill/position/radius; the client renders them
 but never resolves hits. React HUD state is derived from these snapshots and is
 throttled to 10 Hz; per-frame positions stay in Phaser.
@@ -114,7 +122,7 @@ The initial validation limits
 - Entity ID maximum: 80 characters; world coordinate absolute limit: 1,000,000.
 - Movement vector must be finite and have magnitude at most 1.01; server normalizes
   the small tolerance used for diagonal keyboard input.
-- Cast slot must be 1–6; `seq` must be positive and monotonic per controller.
+- Cast slot must be 1–12 and offered by the joined loadout; `seq` must be positive and monotonic per controller. Desktop killer moves use Alt+1 through Alt+4.
 - Version mismatch, malformed payload, replayed sequence, stale map/content
   version, and invalid target are rejected or sent through resync policy.
 

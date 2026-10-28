@@ -82,18 +82,19 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 
 		spec, found := models.GetGu(gu.GuID, gu.Rank)
 		if found {
+			windupMS, cooldownMS := models.KillerMoveRealtimeTiming(gu.Rank, 1)
 			actionPath := "strength"
 			if len(spec.Path) > 0 {
 				actionPath = gamefx.CleanPath(spec.Path[0])
 			}
 			actions = append(actions, models.KillerMoveCombatProfile{
-				ID:            id,
-				Name:          fmt.Sprintf("Trận Kích: %s", spec.Name),
-				Rank:          gu.Rank,
-				MainPath:      actionPath,
-				AllPaths:      []string{actionPath},
-				TargetType:    getGuTargetType(spec),
-				CooldownTurns: 2,
+				ID:               id,
+				Name:             fmt.Sprintf("Trận Kích: %s", spec.Name),
+				Rank:             gu.Rank,
+				MainPath:         actionPath,
+				AllPaths:         []string{actionPath},
+				TargetType:       getGuTargetType(spec),
+				RealtimeWindupMS: windupMS, RealtimeCooldownMS: cooldownMS,
 				Priority:      1,
 				ManaCost:      spec.BaseManaCost * 1.5,
 				BaseDamage:    float64(gu.Rank * 120),

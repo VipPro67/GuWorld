@@ -1,14 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -45,8 +44,11 @@ func processPendingMartialMatches(tournamentID string) {
 
 	logger.S.Infof("Martial Arena: processing matches for tournament %s", tournamentID)
 
-	// Recover matches stuck IN_PROGRESS from a crash back to PENDING.
-	_, _ = db.DB.Exec(`UPDATE martial_matches SET status = 'PENDING' WHERE tournament_id = $1 AND status = 'IN_PROGRESS'`, tournamentID)
+	// Reopen only matches whose realtime session was lost during a restart.
+	_, _ = db.DB.Exec(`UPDATE martial_matches m SET status='PENDING'
+		WHERE m.tournament_id=$1 AND m.status='IN_PROGRESS' AND NOT EXISTS (
+			SELECT 1 FROM realtime_combat_sessions s WHERE s.mode='tournament' AND s.status='active'
+			AND s.payload->>'tournament_id'=$1 AND s.payload->>'match_id'=m.id::text)`, tournamentID)
 
 	for {
 		var status string
@@ -64,6 +66,13 @@ func processPendingMartialMatches(tournamentID string) {
 		`, tournamentID).Scan(&matchID, &combatantAID, &combatantBID)
 
 		if err == sql.ErrNoRows {
+			var activeCount int
+			_ = db.DB.QueryRow(`SELECT COUNT(*) FROM martial_matches WHERE tournament_id=$1 AND status='IN_PROGRESS'`, tournamentID).Scan(&activeCount)
+			if activeCount > 0 {
+				settleExpiredTournamentDisconnects(context.Background(), tournamentID, "martial_arena")
+				time.Sleep(time.Second)
+				continue
+			}
 			var pending, finished int
 			_ = db.DB.QueryRow(`
 				SELECT COUNT(*) FILTER (WHERE status = 'PENDING'),
@@ -97,11 +106,9 @@ func processPendingMartialMatches(tournamentID string) {
 
 		if err := resolveMartialMatch(tournamentID, matchID, combatantAID, bPtr); err != nil {
 			logger.S.Errorf("Martial Arena: error resolving match %s: %v", matchID, err)
-			// Fallback winner so the bracket is never stuck.
-			_, _ = db.DB.Exec(`UPDATE martial_matches SET status = 'FINISHED', winner_combatant_id = $1, finished_at = NOW() WHERE id = $2`, combatantAID, matchID)
-			if bPtr != nil {
-				_, _ = db.DB.Exec(`UPDATE martial_combatants SET eliminated = true WHERE id = $1`, *bPtr)
-			}
+			_, _ = db.DB.Exec(`UPDATE martial_matches SET status='PENDING' WHERE id=$1 AND status='IN_PROGRESS'`, matchID)
+			time.Sleep(2 * time.Second)
+			continue
 		}
 
 		time.Sleep(2 * time.Second)
@@ -130,78 +137,7 @@ func resolveMartialMatch(tournamentID, matchID, combatantAID string, combatantBI
 		return err
 	}
 
-	ally, err := buildTeamCombatant(memberA)
-	if err != nil {
-		return err
-	}
-	enemy, err := buildTeamCombatant(memberB)
-	if err != nil {
-		return err
-	}
-
-	// Full power for a virtual tournament: no persistent damage between rounds.
-	ally.Kind = "Player"
-	ally.HP = ally.MaxHP
-	ally.Mana = ally.MaxMana
-	enemy.Kind = "Enemy"
-	enemy.HP = enemy.MaxHP
-	enemy.Mana = enemy.MaxMana
-
-	simState := &simulator.CombatState{Turn: 0, Seed: time.Now().UnixNano(), VirtualMode: true}
-	simState.Allies = append(simState.Allies, ally)
-	simState.Enemies = append(simState.Enemies, enemy)
-	logs := simulator.Simulate(simState)
-
-	winner := combatantAID
-	switch {
-	case ally.HP <= 0 && enemy.HP > 0:
-		winner = *combatantBID
-	case ally.HP > 0 && enemy.HP <= 0:
-		winner = combatantAID
-	case ally.HP > 0 && enemy.HP > 0:
-		// Both alive: higher HP percentage wins; tie goes to A.
-		if enemy.HP/enemy.MaxHP > ally.HP/ally.MaxHP {
-			winner = *combatantBID
-		}
-	default:
-		winner = combatantAID // both dead -> A
-	}
-
-	combatLogJSON, _ := json.Marshal(logs)
-
-	tx, err := db.DB.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err = tx.Exec(`
-		UPDATE martial_matches SET status = 'FINISHED', winner_combatant_id = $1, combat_log = $2, finished_at = NOW()
-		WHERE id = $3
-	`, winner, combatLogJSON, matchID); err != nil {
-		return err
-	}
-
-	loser := combatantAID
-	if winner == combatantAID {
-		loser = *combatantBID
-	}
-	_, _ = tx.Exec(`
-		UPDATE martial_combatants SET eliminated = true, eliminated_at_round = (SELECT current_round FROM martial_tournaments WHERE id = $1)
-		WHERE id = $2
-	`, tournamentID, loser)
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	invalidateMartialCache(tournamentID)
-	BroadcastMartialArenaEvent("match_updated", tournamentID, map[string]interface{}{
-		"match_id":            matchID,
-		"winner_combatant_id": winner,
-		"status":              "FINISHED",
-	})
-	return nil
+	return startRealtimeMartialArenaMatch(tournamentID, matchID, combatantAID, *combatantBID, memberA, memberB)
 }
 
 // advanceMartialRound creates next-round matches from the current winners, or crowns

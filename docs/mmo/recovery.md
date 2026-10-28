@@ -50,7 +50,7 @@ or write `players.hp` blindly:
   healed value.
 
 Active Gu heals are separate: every cast mode (TARGET, DIRECTION, GROUND and
-SELF) now resolves `HEAL`/`SHIELD` on the caster, matching the turn simulator,
+SELF) now resolves `HEAL`/`SHIELD` on the caster, matching the realtime combat runtime,
 so a targeted recovery Gu heals while still damaging its target. Dead zone
 entities are ignored by the bridge; item use cannot revive a character.
 

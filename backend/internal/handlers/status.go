@@ -3,16 +3,11 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
-	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/simulator"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
-	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // rowQuerier matches the QueryRow surface shared by *sql.DB and *sql.Tx so
@@ -70,42 +65,9 @@ const SinhKhiTanGuID = "GU_KILL_ENERGY"
 // playerHasBattleStartMechanic reports whether any equipped, ACTIVE, fed Gu
 // authored with the given ON_BATTLE_START UNIQUE native-hook code is in the
 // player's loadout. Dùng chung cho CLEANSE_REGIONAL_WALL và FAKE_REGIONAL_WALL.
-func playerHasBattleStartMechanic(player *models.Player, code string) bool {
-	if player == nil {
-		return false
-	}
-	for _, gu := range player.GuInventory {
-		if !gu.Equipped || gu.Status != "ACTIVE" || gu.Hunger <= 0 {
-			continue
-		}
-		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok {
-			if spec, ok = models.GetGuAny(gu.GuID); !ok {
-				continue
-			}
-		}
-		for _, m := range models.CompiledGuEffects(spec).NativeMechanics() {
-			if m.Trigger == gameplayeffects.TriggerOnBattleStart && m.Code == code {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // maybeCleanseRegionalWall gỡ trạng thái Áp Chế Giới Vực khỏi người chơi khi
 // bắt đầu trận (bất kỳ Cổ nào trong loadout mang CLEANSE_REGIONAL_WALL).
 // Gọi trước khi tính CalculatePlayerStats.
-func maybeCleanseRegionalWall(player *models.Player) {
-	if player == nil || !playerHasBattleStartMechanic(player, "CLEANSE_REGIONAL_WALL") {
-		return
-	}
-	if player.Statuses.Has("regional_wall_suppression") {
-		player.Statuses.Remove("regional_wall_suppression")
-		logger.S.Infof("Cleared regional_wall_suppression via CLEANSE_REGIONAL_WALL")
-	}
-}
-
 // ApplySinhKhiTanHitToList tăng StatusList thêm 1 tầng Sinh Khí Tàn (cap V),
 // refresh thời hạn SinhKhiTanDurationMinutes. Trả về tầng mới + cường độ.
 // Pure trên memory, caller tự persist.
@@ -208,153 +170,16 @@ func CleanseSinhKhiTanOneTier(q execQuerier, rq rowQuerier, playerID uuid.UUID) 
 }
 
 // persistentHitGrant là một persistent status được grant sau combat.
-type persistentHitGrant struct {
-	StatusKey string
-	GuID      string
-	Tier      int // tier sau grant cho sinh_khi_tan, các status khác = 0
-}
-
 // persistentHitStatusKeys maps GuID phe ta (SimAction.SourceID) sang
 // persistent status key khai trên Cổ (UNIQUE PERSIST_STATUS_ON_HIT).
-func persistentHitStatusKeys(simState *simulator.CombatState) map[string]string {
-	out := map[string]string{}
-	if simState == nil {
-		return out
-	}
-	for _, a := range simState.Allies {
-		if a == nil {
-			continue
-		}
-		for _, act := range a.Actions {
-			if act.PersistentStatusKey == "" || act.SourceID == "" {
-				continue
-			}
-			if _, dup := out[act.SourceID]; !dup {
-				out[act.SourceID] = act.PersistentStatusKey
-			}
-		}
-	}
-	return out
-}
-
 // maybeGrantPersistentHitStatuses grant các persistent status data-driven
 // cho defender PvP khi đòn của Cổ mang PERSIST_STATUS_ON_HIT đánh trúng
 // (log HitLanded, gồm cả hit bị khiên hấp thụ; miss/evade/miễn nhiễm
 // không grant). Mỗi status grant tối đa 1 lần mỗi trận. Chỉ PvP thật
 // (bỏ arena virtual/dummy). Lỗi grant được bỏ qua để không chặn kết toán.
-func maybeGrantPersistentHitStatuses(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, logs []simulator.CombatLog) []persistentHitGrant {
-	if player == nil || player.ActiveCombat == nil || simState == nil {
-		return nil
-	}
-	if player.ActiveCombat.EnemyType != "PVP" {
-		return nil
-	}
-	defenderID := player.ActiveCombat.TargetPlayerID
-	if defenderID == "" || defenderID == "dummy" {
-		return nil
-	}
-	statusByGu := persistentHitStatusKeys(simState)
-	if len(statusByGu) == 0 {
-		return nil
-	}
-	allyIDs := make(map[string]bool, len(simState.Allies))
-	for _, a := range simState.Allies {
-		if a != nil {
-			allyIDs[a.ID] = true
-		}
-	}
-	hitKeys := make(map[string]string, len(statusByGu))
-	for _, l := range logs {
-		if !l.HitLanded || !allyIDs[l.ActorId] {
-			continue
-		}
-		key, hasGu := statusByGu[l.SourceGuID]
-		if !hasGu || key == "" {
-			continue
-		}
-		if _, dup := hitKeys[key]; !dup {
-			hitKeys[key] = l.SourceGuID
-		}
-	}
-	if len(hitKeys) == 0 {
-		return nil
-	}
-	defenderUUID, err := uuid.Parse(defenderID)
-	if err != nil || defenderUUID == player.ID {
-		return nil
-	}
-	var grants []persistentHitGrant
-	for key, guID := range hitKeys {
-		if strings.EqualFold(key, gamefx.StatusSinhKhiTan) {
-			tier, ok, err := GrantSinhKhiTanHit(tx, tx, defenderUUID)
-			if err != nil || !ok {
-				continue
-			}
-			grants = append(grants, persistentHitGrant{StatusKey: key, GuID: guID, Tier: tier})
-			continue
-		}
-		if !gamefx.ValidStatuses()[key] {
-			continue
-		}
-		if ok, err := GrantPlayerStatus(tx, tx, defenderUUID, key, guID, -1, 0); err != nil || !ok {
-			continue
-		}
-		grants = append(grants, persistentHitGrant{StatusKey: key, GuID: guID})
-	}
-	return grants
-}
-
 // maybeGrantFakeRegionalWallStatus grant trạng thái Áp Chế Giới Vực (regional_wall_suppression)
 // cho defender PvP khi attacker mang FAKE_REGIONAL_WALL (Ngũ Hành Thiên Chướng Trận).
 // Cường độ debuff giảm 1 nửa so với Giới Vực Bích tự nhiên, thời gian ngắn hơn (15 phút + 5 phút mỗi rank).
-func maybeGrantFakeRegionalWallStatus(tx *sql.Tx, player *models.Player) *simulator.CombatLog {
-	if player == nil || player.ActiveCombat == nil {
-		return nil
-	}
-	if player.ActiveCombat.EnemyType != "PVP" || !playerHasBattleStartMechanic(player, "FAKE_REGIONAL_WALL") {
-		return nil
-	}
-	defenderID := player.ActiveCombat.TargetPlayerID
-	if defenderID == "" || defenderID == "dummy" {
-		return nil
-	}
-	defenderUUID, err := uuid.Parse(defenderID)
-	if err != nil || defenderUUID == player.ID {
-		return nil
-	}
-	defenderRank := player.ActiveCombat.EnemyRank
-	defenderSubRank := player.ActiveCombat.EnemySubRank
-	if defenderRank < 1 && len(player.ActiveCombat.Enemies) > 0 {
-		defenderRank = player.ActiveCombat.Enemies[0].Rank
-		defenderSubRank = player.ActiveCombat.Enemies[0].SubRank
-	}
-	if defenderRank < 1 {
-		defenderRank = 1
-	}
-	if defenderSubRank < 1 {
-		defenderSubRank = 1
-	}
-	pct, _ := gamefx.RegionalWallDebuff(defenderRank, defenderSubRank)
-	debuffPct := pct * 0.5 // Debuff giảm 1 nửa
-	durationMinutes := 15 + (defenderRank-1)*5
-	if durationMinutes < 15 {
-		durationMinutes = 15
-	}
-	duration := time.Duration(durationMinutes) * time.Minute
-
-	ok, err := GrantPlayerStatus(tx, tx, defenderUUID, "regional_wall_suppression", "Ngũ Hành Thiên Chướng Trận", duration, debuffPct)
-	if err != nil || !ok {
-		return nil
-	}
-	formationMsg := fmt.Sprintf("⚠️ Đạo hữu bị đối phương kích hoạt Ngũ Hành Thiên Chướng Trận phản chiếu, gánh chịu [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %.1f%% trong %d phút).", -debuffPct*100, durationMinutes)
-	logger.S.Warnf("[Áp Chế Giới Vực] Người chơi %s bị áp chế bởi Ngũ Hành Thiên Chướng Trận (giảm %.1f%% trong %d phút)", defenderUUID, -debuffPct*100, durationMinutes)
-	_ = notify.Send(tx, defenderUUID, "regional_wall_suppression", "Áp Chế Giới Vực (Trận Pháp)", formationMsg)
-	return &simulator.CombatLog{
-		Action: "REGIONAL_WALL_SUPPRESSION_APPLIED",
-		Detail: fmt.Sprintf("Ngũ Hành Thiên Chướng Trận phản chiếu! Kẻ địch nhận [Áp Chế Giới Vực] (công/thủ/tốc giảm %.1f%% trong %d phút).", -debuffPct*100, durationMinutes),
-	}
-}
-
 // RevokePlayerStatus removes every instance of a status id. Returns whether
 // the status was present.
 func RevokePlayerStatus(q execQuerier, rq rowQuerier, playerID uuid.UUID, statusID string) (bool, error) {

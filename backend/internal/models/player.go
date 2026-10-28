@@ -167,38 +167,15 @@ func (s *StatusList) Expire(now time.Time) bool {
 // shared world map (bounded set, used for exploration achievements).
 type VisitedSubZonesList []string
 
-type StatusEffect struct {
-	Type  string  `json:"type"`
-	Value float64 `json:"value"`
-	Turns int     `json:"turns"`
-}
-
-// GuTactic defines auto-combat behavior for a specific Gu.
-type GuTactic struct {
-	GuID           string  `json:"gu_id"`
-	Priority       int     `json:"priority"`
-	UseCondition   string  `json:"use_condition"` // "always","hp_below","mana_above","enemy_hp_below"
-	ConditionValue float64 `json:"condition_value"`
-}
-
-// AutoCombatConfig holds a player's persistent auto-combat settings.
+// AutoCombatConfig stores realtime combat controls and client auto-farm policy.
 type AutoCombatConfig struct {
-	AutoHealHP               bool       `json:"auto_heal_hp"`
-	HealThreshold            float64    `json:"heal_threshold"`
-	AutoRestoreMana          bool       `json:"auto_restore_mana"`
-	ManaThreshold            float64    `json:"mana_threshold"`
-	CategoryPriorities       []string   `json:"category_priorities"`
-	GuPriorities             []GuTactic `json:"gu_priorities"`
-	KillerMovePriorities     []GuTactic `json:"killer_move_priorities"`
-	KmPriorities             []GuTactic `json:"km_priorities,omitempty"`
-	SkipBattle               bool       `json:"skip_battle"`
-	RealtimeLeftClickSlot    int        `json:"realtime_left_click_slot"`
-	RealtimeRightClickAction string     `json:"realtime_right_click_action"`
-	RealtimeRightClickSlot   int        `json:"realtime_right_click_slot"`
-	RealtimeAutoFarm         bool       `json:"realtime_auto_farm"`
-	RealtimeFarmRange        float64    `json:"realtime_farm_range"`
-	RealtimeFarmStopHP       float64    `json:"realtime_farm_stop_hp_percent"`
-	RealtimeFarmUseSkills    bool       `json:"realtime_farm_use_skills"`
+	RealtimeLeftClickSlot    int     `json:"realtime_left_click_slot"`
+	RealtimeRightClickAction string  `json:"realtime_right_click_action"`
+	RealtimeRightClickSlot   int     `json:"realtime_right_click_slot"`
+	RealtimeAutoFarm         bool    `json:"realtime_auto_farm"`
+	RealtimeFarmRange        float64 `json:"realtime_farm_range"`
+	RealtimeFarmStopHP       float64 `json:"realtime_farm_stop_hp_percent"`
+	RealtimeFarmUseSkills    bool    `json:"realtime_farm_use_skills"`
 }
 
 func (c *AutoCombatConfig) NormalizeRealtimeSettings() {
@@ -263,14 +240,6 @@ func (c *AutoCombatConfig) Scan(value interface{}) error {
 	}
 	err := json.Unmarshal(bytes, c)
 	if err == nil {
-		if len(c.CategoryPriorities) == 0 {
-			c.CategoryPriorities = []string{"other", "shield", "heal", "damage"}
-		}
-		if len(c.KillerMovePriorities) == 0 && len(c.KmPriorities) > 0 {
-			c.KillerMovePriorities = c.KmPriorities
-		} else if len(c.KmPriorities) == 0 && len(c.KillerMovePriorities) > 0 {
-			c.KmPriorities = c.KillerMovePriorities
-		}
 		c.NormalizeRealtimeSettings()
 	}
 	return err
@@ -288,15 +257,6 @@ func (c AutoCombatConfig) Value() (driver.Value, error) {
 // DefaultAutoCombatConfig returns sensible defaults.
 func DefaultAutoCombatConfig() AutoCombatConfig {
 	return AutoCombatConfig{
-		AutoHealHP:               false,
-		HealThreshold:            30,
-		AutoRestoreMana:          false,
-		ManaThreshold:            30,
-		CategoryPriorities:       []string{"other", "shield", "heal", "damage"},
-		GuPriorities:             []GuTactic{},
-		KillerMovePriorities:     []GuTactic{},
-		KmPriorities:             []GuTactic{},
-		SkipBattle:               false,
 		RealtimeRightClickAction: "attack",
 		RealtimeFarmRange:        14,
 		RealtimeFarmStopHP:       25,
@@ -308,86 +268,6 @@ type TitleEffectSnapshot struct {
 	AchievementID string  `json:"achievement_id"`
 	MonsterType   string  `json:"monster_type"`
 	DamagePct     float64 `json:"damage_pct"`
-}
-
-// CombatState represents the PVE combat status with a wild beast.
-type CombatState struct {
-	CombatID                string               `json:"combat_id,omitempty"`
-	TitleEffectSnapshot     *TitleEffectSnapshot `json:"title_effect_snapshot,omitempty"`
-	EnemyTemplateID         string               `json:"enemy_template_id,omitempty"`
-	WorldMonsterRegionID    string               `json:"world_monster_region_id,omitempty"`
-	WorldMonsterID          string               `json:"world_monster_id,omitempty"`
-	WorldMonsterEncounterID string               `json:"world_monster_encounter_id,omitempty"`
-	WorldBossCellRegionID   string               `json:"world_boss_cell_region_id,omitempty"`
-	WorldBossCellX          int                  `json:"world_boss_cell_x,omitempty"`
-	WorldBossCellY          int                  `json:"world_boss_cell_y,omitempty"`
-	EnemyName               string               `json:"enemy_name"`
-	EnemyAvatarURL          string               `json:"enemy_avatar_url,omitempty"`
-	EnemyType               string               `json:"enemy_type,omitempty"`
-	CombatMode              string               `json:"combat_mode,omitempty"` // "virtual" = illusion (no real cost), "real" = actual resource consumption, "" = legacy default
-	EnemyHP                 float64              `json:"enemy_hp"`
-	EnemyMaxHP              float64              `json:"enemy_max_hp"`
-	EnemyMana               float64              `json:"enemy_mana,omitempty"`
-	EnemyMaxMana            float64              `json:"enemy_max_mana,omitempty"`
-	EnemyDamage             float64              `json:"enemy_damage"`
-	EnemyDefense            float64              `json:"enemy_defense"`
-	EnemySpeed              float64              `json:"enemy_speed,omitempty"`
-	EnemyRank               int                  `json:"enemy_rank,omitempty"`
-	EnemySubRank            int                  `json:"enemy_sub_rank,omitempty"`
-	EnemyGuInventory        GuInventory          `json:"enemy_gu_inventory,omitempty"`
-	EnemyDaoMarks           DaoMarksMap          `json:"enemy_dao_marks,omitempty"`
-	EnemyPathMasteries      map[string]int       `json:"enemy_path_masteries,omitempty"`
-	AIProfile               string               `json:"ai_profile,omitempty"`
-	LootTableID             string               `json:"loot_table_id,omitempty"`
-	ChargePoints            int                  `json:"charge_points"`
-	TargetPlayerID          string               `json:"target_player_id,omitempty"`
-	TargetSectID            string               `json:"target_sect_id,omitempty"`
-	EnemyStatusEffects      []StatusEffect       `json:"enemy_status_effects,omitempty"`
-	PlayerStatusEffects     []StatusEffect       `json:"player_status_effects,omitempty"`
-	// Defender-side character effects for PVP enemies (race/constitution/status).
-	EnemyPathResistance   map[string]float64 `json:"enemy_path_resistance,omitempty"`
-	EnemyMentalResistance float64            `json:"enemy_mental_resistance,omitempty"`
-	EnemyTenacity         float64            `json:"enemy_tenacity,omitempty"`
-	EnemyCCResist         float64            `json:"enemy_cc_resist,omitempty"`
-	EnemyDaoBonus         map[string]float64 `json:"enemy_dao_bonus,omitempty"`
-	EnemyPathDamageBonus  map[string]float64 `json:"enemy_path_damage_bonus,omitempty"`
-	EnemyHealingReceived  float64            `json:"enemy_healing_received,omitempty"`
-	EnemySoulDefenseBonus float64            `json:"enemy_soul_defense_bonus,omitempty"`
-	EnemyLuckBonus        float64            `json:"enemy_luck_bonus,omitempty"`
-	EnemyCombatSettings   *AutoCombatConfig  `json:"enemy_combat_settings,omitempty"`
-	SkillCooldowns        map[string]int     `json:"skill_cooldowns,omitempty"`
-	ItemsUsedCount        int                `json:"items_used_count"`
-	ItemCooldowns         map[string]int     `json:"item_cooldowns,omitempty"`
-	// PathMasteryGained tracks Chân Ý points already earned in this battle, so
-	// combat gains can be capped at PathMasteryBattleGainLimit(rank) per battle.
-	PathMasteryGained int         `json:"path_mastery_gained,omitempty"`
-	Allies            []Combatant `json:"allies,omitempty"`
-	PetIDs            []string    `json:"pet_ids,omitempty"`
-	Enemies           []Combatant `json:"enemies,omitempty"`
-	// PetSoulCharged marks that pet deployment soul cost was already paid for
-	// this combat, preventing a double charge when InitializeCombatState is
-	// re-invoked (e.g. combat setup when Allies is empty).
-	PetSoulCharged bool `json:"pet_soul_charged,omitempty"`
-	// TribulationEventID links this combat to a tribulation (tai kiếp) event.
-	// When non-empty, enemies overflow damage spills into the Immortal Aperture.
-	TribulationEventID string  `json:"tribulation_event_id,omitempty"`
-	ApertureHP         float64 `json:"aperture_hp,omitempty"`
-	ApertureMaxHP      float64 `json:"aperture_max_hp,omitempty"`
-
-	// Steal Gu pre-combat mechanics (Vô Tướng Thủ & Ám Thâu Cổ)
-	TempStolenGuInstanceID string `json:"temp_stolen_gu_instance_id,omitempty"`
-	TempStolenGuID         string `json:"temp_stolen_gu_id,omitempty"`
-	TempStolenGuRank       int    `json:"temp_stolen_gu_rank,omitempty"`
-	TempStolenGuName       string `json:"temp_stolen_gu_name,omitempty"`
-	PermStolenGuInstanceID string `json:"perm_stolen_gu_instance_id,omitempty"`
-	PermStolenGuID         string `json:"perm_stolen_gu_id,omitempty"`
-	PermStolenGuRank       int    `json:"perm_stolen_gu_rank,omitempty"`
-	PermStolenGuName       string `json:"perm_stolen_gu_name,omitempty"`
-	StealLogMessage        string `json:"steal_log_message,omitempty"`
-	// StealMissLogs records explicit pre-combat steal failures/skips so the
-	// combat replay can distinguish "thất bại roll" from "không đủ điều kiện".
-	// Each entry is "ACTION|detail", e.g. "PERM_STEAL_MISS|...".
-	StealMissLogs []string `json:"steal_miss_logs,omitempty"`
 }
 
 // ImmortalState groups immortal expansion data.
@@ -426,9 +306,6 @@ func (s ImmortalState) Value() (driver.Value, error) {
 	return string(b), nil
 }
 
-// Player represents a cultivator in the Gu World.
-// The struct embeds domain sub-states (Account, Cultivation, Body, etc.)
-// so field promotion preserves backward-compatible Go access and JSON output.
 type Player struct {
 	Account
 	CultivationState
@@ -444,7 +321,6 @@ type Player struct {
 
 	ImmortalState      ImmortalState       `json:"immortal_state"`
 	GuInventory        GuInventory         `json:"gu_inventory"`
-	ActiveCombat       *CombatState        `json:"active_combat"`
 	GrowthData         GrowthData          `json:"growth_data"`
 	MaterialsInventory MaterialsInventory  `json:"materials_inventory,omitempty"`
 	CompletedQuests    CompletedQuestsList `json:"completed_quests,omitempty"`
@@ -692,47 +568,6 @@ func (d DaoMarksMap) Value() (driver.Value, error) {
 	b, err := json.Marshal(d)
 	if err != nil {
 		return "{}", err
-	}
-	return string(b), nil
-}
-
-// IsEmpty returns true if the CombatState has no active combat content.
-func (c *CombatState) IsEmpty() bool {
-	if c == nil {
-		return true
-	}
-	return c.EnemyName == "" && c.EnemyTemplateID == "" && len(c.Enemies) == 0 && c.TargetPlayerID == "" && c.TribulationEventID == ""
-}
-
-// Scan implements the sql.Scanner interface for CombatState pointer
-func (c *CombatState) Scan(value interface{}) error {
-	if c == nil {
-		return nil
-	}
-	if value == nil {
-		*c = CombatState{}
-		return nil
-	}
-	b, ok := scanBytes(value)
-	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
-	}
-	if len(b) == 0 || string(b) == "null" || string(b) == "{}" {
-		*c = CombatState{}
-		return nil
-	}
-	b = truncateJSON(b)
-	return json.Unmarshal(b, c)
-}
-
-// Value implements the driver.Valuer interface for CombatState
-func (c *CombatState) Value() (driver.Value, error) {
-	if c == nil || c.IsEmpty() {
-		return nil, nil
-	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return nil, err
 	}
 	return string(b), nil
 }

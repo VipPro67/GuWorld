@@ -137,13 +137,13 @@ func (s *Service) SaveAndApplyManaDelta(ctx context.Context, state State, delta 
 }
 
 func (s *Service) SaveAndApplyManaDeltaRevision(ctx context.Context, state State, delta float64) (int64, error) {
-	return s.SaveAndApplyCombatDeltaRevision(ctx, state, delta, nil)
+	return s.SaveAndApplyCombatDeltaRevision(ctx, state, delta, nil, nil)
 }
 
 // SaveAndApplyCombatDeltaRevision atomically settles the zone's mana and Gu
 // usage with the location/vitals checkpoint. Usage is additive so feeding or
 // passive hunger decay during the session cannot be overwritten by a snapshot.
-func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state State, delta float64, guUses map[string]uint64) (int64, error) {
+func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state State, delta float64, guUses, killerMoveUses map[string]uint64) (int64, error) {
 	if err := state.Validate(); err != nil {
 		return 0, err
 	}
@@ -181,6 +181,18 @@ func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state Sta
 		}
 		if rows != 1 {
 			return 0, fmt.Errorf("settle Gu hunger: instance %s not found for player %s", instanceID, state.PlayerID)
+		}
+	}
+	for moveID, uses := range killerMoveUses {
+		if moveID == "" || uses == 0 || uses > 1_000_000 {
+			return 0, ErrInvalidState
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE player_killer_moves
+			SET mastery_xp = LEAST(5000, mastery_xp + $1), updated_at = NOW()
+			WHERE id = $2::uuid AND player_id = $3
+		`, uses, moveID, state.PlayerID); err != nil {
+			return 0, fmt.Errorf("settle Sát Chiêu mastery for %s: %w", moveID, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {

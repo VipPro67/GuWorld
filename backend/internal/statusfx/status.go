@@ -1,15 +1,15 @@
 // Package statusfx is the canonical, data-driven status/effect registry shared
-// by the simulator engine and the legacy combat handlers.
+// by realtime combat and gameplay effect handlers.
 //
-// It owns nothing from models/simulator (stdlib only) so both packages can
-// import it without an import cycle. Adding a new status is a single registry
-// entry + an optional behaviour hook in the engine; no new if-chains.
+// It owns no model types, so combat and gameplay packages can import it without
+// an import cycle. Adding a status is a registry entry plus an optional runtime
+// behaviour hook.
 package statusfx
 
 // Canonical status IDs. These are the uppercase strings written into
 // models.ActiveEffect.ApplyStatus (and Gu.csv), matching the catalog.
 const (
-	// Legacy tier-based statuses (handled by the simulator tier pipeline today).
+	// Tier-based statuses retain their data-defined scaling behavior.
 	StatusBleed      = "BLEED"
 	StatusPoison     = "POISON"
 	StatusStun       = "STUN"
@@ -81,7 +81,7 @@ const (
 	CategoryImmortal    StatusCategory = "IMMORTAL"
 )
 
-// Behaviour tags drive the simulator's apply/tick dispatch. Each new status
+// Behaviour tags drive realtime status application and ticking. Each new status
 // maps to one behaviour hook; unknown behaviours fall through to a no-op log.
 const (
 	BehaviourDot             = "dot"              // damage over time (bleed, poison, burn, slow_damage)
