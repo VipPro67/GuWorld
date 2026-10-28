@@ -333,9 +333,22 @@ export function MMOHud(props: MMOHudProps) {
   const { ids: quickActionIds } = useQuickActionIds();
 
   const activeTribulation = useGameStore((state) => state.activeTribulation);
+  const fetchActiveTribulation = useGameStore((state) => state.fetchActiveTribulation);
   const realtimeResolveTribulationVictory = useGameStore((state) => state.realtimeResolveTribulationVictory);
-  const realtimeEscapeTribulation = useGameStore((state) => state.realtimeEscapeTribulation);
+  const realtimeExitTribulation = useGameStore((state) => state.realtimeExitTribulation);
   const [tribulationActionLoading, setTribulationActionLoading] = useState(false);
+
+  // Welcome zone IDs include the runtime instance ("map#instance"). Region
+  // lookups (teleport arrays, sect markers, aperture panels) need the map/region
+  // part only, otherwise nothing matches on the live world.
+  const zoneMapId = (props.zoneId || "").split("#")[0];
+  const zoneRegionId = props.player?.current_region || zoneMapId;
+
+  useEffect(() => {
+    if (zoneMapId === "aperture_tribulation") {
+      void fetchActiveTribulation(true);
+    }
+  }, [zoneMapId, fetchActiveTribulation]);
 
   // Poll world state without restarting the timers every time the player moves.
   // Drops are time-sensitive; cells change much less often and are fetched on
@@ -392,7 +405,7 @@ export function MMOHud(props: MMOHudProps) {
 
   // Nearby Teleport Arrays (filtered by current zone to avoid cross-region coordinate collision)
   const nearbyTeleports = [
-    ...(myTeleportArrays || []).filter((t) => t.region_id === props.zoneId).map((t) => ({ x: t.x, y: t.y, name: t.name || "Truyền Tống Trận", id: t.id })),
+    ...(myTeleportArrays || []).filter((t) => t.region_id === zoneRegionId).map((t) => ({ x: t.x, y: t.y, name: t.name || "Truyền Tống Trận", id: t.id })),
     ...nearbyCells.filter((c) => c.cell_type === "TeleportArray" || c.cell_type === "ENTRY_PORTAL").map((c) => ({ x: c.x, y: c.y, name: c.content || "Truyền Tống Trận", id: c.content })),
   ];
 
@@ -407,7 +420,7 @@ export function MMOHud(props: MMOHudProps) {
   }, [props.connected, fetchSectsMap]);
 
   const nearbySects = (sectMap || []).filter(
-    (s) => s.region === props.zoneId && typeof s.map_x === "number" && typeof s.map_y === "number"
+    (s) => s.region === zoneRegionId && typeof s.map_x === "number" && typeof s.map_y === "number"
   );
 
   // Proximity items (within interaction range)
@@ -748,7 +761,7 @@ export function MMOHud(props: MMOHudProps) {
         </div>
       )}
 
-      {props.zoneId === "aperture_tribulation" ? (
+      {zoneMapId === "aperture_tribulation" ? (
         <div className={`pointer-events-auto absolute left-2 ${questBoxTop} w-[min(92vw,280px)] rounded-2xl p-3 z-20 border border-amber-500/50 bg-[#16100bf2] text-[#f4e8cb] shadow-[0_8px_32px_rgba(0,0,0,.6)] backdrop-blur-md space-y-2.5`}>
           <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
             <span className="flex items-center gap-1.5 font-serif font-bold text-xs text-amber-300">
@@ -756,7 +769,7 @@ export function MMOHud(props: MMOHudProps) {
               Kiếp Nạn Tiên Khiếu (20×20)
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-950/80 border border-rose-500/50 text-rose-300 font-mono">
-              {props.nearby.filter((e) => e.kind === "monster").length} Quái / Boss Kiếp
+              {props.nearby.filter((e) => e.kind === "monster" && e.templateId !== "aperture_node").length} Quái / Boss Kiếp
             </span>
           </div>
 
@@ -790,10 +803,9 @@ export function MMOHud(props: MMOHudProps) {
               type="button"
               disabled={tribulationActionLoading}
               onClick={async () => {
-                if (!activeTribulation) return;
                 setTribulationActionLoading(true);
                 try {
-                  await realtimeEscapeTribulation(activeTribulation.event.id);
+                  await realtimeExitTribulation();
                 } finally {
                   setTribulationActionLoading(false);
                 }
@@ -801,7 +813,7 @@ export function MMOHud(props: MMOHudProps) {
               className="w-full py-1.5 px-3 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-[11px] border border-slate-700/80 flex items-center justify-center gap-1.5 transition cursor-pointer"
             >
               <X className="h-3.5 w-3.5 text-rose-400" />
-              Rút Lui (Trở Về Vị Trí Cũ)
+              Thoát Tiên Khiếu (Trở Về Vị Trí Cũ)
             </button>
           </div>
         </div>
@@ -1205,9 +1217,9 @@ export function MMOHud(props: MMOHudProps) {
           <span className="flex min-w-0 items-center gap-1 truncate" title={props.zoneId}>
             <MapPin className="h-3 w-3 shrink-0 text-amber-400" />
             <span className="truncate">
-              {props.zoneId === "aperture_tribulation"
+              {zoneMapId === "aperture_tribulation"
                 ? "⚡ Tiên Khiếu (20×20)"
-                : props.zoneId.replaceAll("_", " ") || "Khu vực"}
+                : zoneMapId.replaceAll("_", " ") || "Khu vực"}
             </span>
           </span>
           <div className="flex items-center gap-0.5 shrink-0">

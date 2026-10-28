@@ -834,7 +834,13 @@ func (w *World) updateMonsterSpawnsLocked() bool {
 			continue
 		}
 		if entity.Vitals.HP <= 0 {
-			slot.respawnTick = entity.AI.RespawnTick
+			if entity.AI.NoRespawn {
+				// Tribulation spawns are one-shot: keep the slot permanently
+				// filled so the authored spawn cannot reappear after despawn.
+				slot.respawnTick = ^uint64(0)
+			} else {
+				slot.respawnTick = entity.AI.RespawnTick
+			}
 		} else {
 			slot.respawnTick = 0
 		}
@@ -901,6 +907,9 @@ func (w *World) HasPendingActivity() bool {
 	w.stateMu.Lock()
 	defer w.stateMu.Unlock()
 	for _, slot := range w.monsterSpawns {
+		if slot.prototype.AI.NoRespawn {
+			continue
+		}
 		if slot.respawnTick > w.tick {
 			return true
 		}

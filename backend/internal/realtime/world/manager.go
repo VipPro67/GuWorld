@@ -38,13 +38,15 @@ var (
 // DeathEvent is a durable-reward intent extracted from an authoritative death.
 // It is delivered off the zone tick to the loot service.
 type DeathEvent struct {
-	ZoneKey    sim.ZoneKey
-	Generation string
-	EventID    uint64
-	Tick       uint64
-	SourceID   sim.EntityID
-	TargetID   sim.EntityID
-	TemplateID string
+	ZoneKey      sim.ZoneKey
+	Generation   string
+	EventID      uint64
+	Tick         uint64
+	SourceID     sim.EntityID
+	TargetID     sim.EntityID
+	TemplateID   string
+	PersistentID string
+	IsNode       bool
 }
 
 // Region-local rollout loads one independent world per active KHU_VUC/SAFE_ZONE.
@@ -314,7 +316,9 @@ type MonsterSpawn struct {
 	X                   float64
 	Y                   float64
 	MaxHP               float64
+	CurrentHP           float64
 	AttackDamage        float64
+	NodeDamage          float64
 	Defense             float64
 	Speed               float64
 	Radius              float64
@@ -329,6 +333,15 @@ type MonsterSpawn struct {
 	// Passive monsters (SAFE_ZONE content) never initiate combat. They keep
 	// their retaliation table so a player can opt into a training fight.
 	Passive bool
+	// PersistentID links a replayed realtime entity to its durable row
+	// (tribulation_enemies.id or aperture_resource_nodes.id).
+	PersistentID string
+	// NoRespawn keeps one-shot event entities dead for the lifetime of the
+	// zone instead of scheduling the normal spawn respawn.
+	NoRespawn bool
+	// Node marks a stationary player-faction aperture resource node. Node
+	// entities never move or attack; tribulation monsters target them.
+	Node bool
 }
 
 // MaxMonstersPerZone bounds one zone's monster entities. Region maps seed
@@ -344,6 +357,7 @@ type Manager struct {
 	zones             map[sim.ZoneKey]*managedZone
 	maps              map[sim.ZoneKey]ZoneMap
 	keys              []sim.ZoneKey
+	runtimeKeys       map[sim.ZoneKey]struct{}
 	owners            map[sim.CharacterID]OwnershipLease
 	maxPlayersPerZone int
 	cancel            context.CancelFunc
@@ -396,6 +410,7 @@ func newManagerWithMaps(keys []sim.ZoneKey, queueSize, maxPlayersPerZone int, ma
 
 	manager := &Manager{
 		zones: make(map[sim.ZoneKey]*managedZone), maps: maps, keys: ordered,
+		runtimeKeys:       make(map[sim.ZoneKey]struct{}),
 		owners:            make(map[sim.CharacterID]OwnershipLease),
 		maxPlayersPerZone: maxPlayersPerZone, deathQueue: make(chan DeathEvent, 256),
 		lazy: lazy, queueSize: queueSize, idleTimeout: 5 * time.Minute,
@@ -505,22 +520,39 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 	if !finite(spawn.X) || !finite(spawn.Y) || spawn.MaxHP <= 0 {
 		return sim.Entity{}, ErrInvalidMonsterSpawn
 	}
+	entityID := sim.EntityID(fmt.Sprintf("m:%d", index))
+	faction := "monster"
+	active := true
+	if spawn.Node {
+		entityID = sim.EntityID(fmt.Sprintf("n:%d", index))
+		faction = "player"
+		active = false
+	}
+	attackDamage := spawn.AttackDamage
+	if spawn.Node {
+		attackDamage = 0
+	}
+	currentHP := spawn.CurrentHP
+	if currentHP <= 0 || currentHP > spawn.MaxHP {
+		currentHP = spawn.MaxHP
+	}
 	return sim.Entity{
-		ID:        sim.EntityID(fmt.Sprintf("m:%d", index)),
+		ID:        entityID,
 		Kind:      sim.EntityMonster,
 		Transform: sim.Transform{Position: sim.Vec2{X: spawn.X, Y: spawn.Y}},
-		Vitals:    sim.Vitals{HP: spawn.MaxHP, MaxHP: spawn.MaxHP},
+		Vitals:    sim.Vitals{HP: currentHP, MaxHP: spawn.MaxHP},
 		Defense:   spawn.Defense,
 		Speed:     spawn.Speed,
 		Radius:    spawn.Radius,
-		Faction:   "monster",
+		Faction:   faction,
 		AI: sim.AIState{
-			Active: true, Passive: spawn.Passive, TemplateID: spawn.TemplateID, Name: spawn.Name, State: sim.AIIdle,
+			Active: active, Passive: spawn.Passive, TemplateID: spawn.TemplateID, PersistentID: spawn.PersistentID,
+			Name: spawn.Name, State: sim.AIIdle,
 			Home:        sim.Vec2{X: spawn.X, Y: spawn.Y},
 			AggroRadius: spawn.AggroRadius, LeashRadius: spawn.LeashRadius,
 			AttackRange: spawn.AttackRange, PatrolRadius: spawn.PatrolRadius,
-			AttackDamage: spawn.AttackDamage, AttackCooldownTicks: spawn.AttackCooldownTicks,
-			RespawnTicks: spawn.RespawnTicks, ThinkTicks: 5,
+			AttackDamage: attackDamage, NodeDamage: spawn.NodeDamage, AttackCooldownTicks: spawn.AttackCooldownTicks,
+			RespawnTicks: spawn.RespawnTicks, NoRespawn: spawn.NoRespawn, ThinkTicks: 5,
 			SplashRadius: spawn.SplashRadius, SplashDamage: spawn.SplashDamage,
 		},
 	}, nil
@@ -914,6 +946,54 @@ func (m *Manager) ZoneKeyForMapWithCapacity(mapID string) (sim.ZoneKey, error) {
 	return best, nil
 }
 
+// RegisterZoneMap installs a runtime-created catalog entry before the first
+// claim. It is used for per-event instances (tribulation) whose monster list is
+// derived from durable state instead of the startup artifact. If the key is
+// already live, the existing zone and its authoritative entity state win so a
+// reconnect does not reset an in-progress encounter.
+func (m *Manager) RegisterZoneMap(key sim.ZoneKey, zoneMap ZoneMap) error {
+	if err := key.Validate(); err != nil {
+		return err
+	}
+	if _, err := monsterEntities(key, zoneMap); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.started || m.closed {
+		return ErrManagerNotRunning
+	}
+	if m.zones[key] != nil {
+		// A live zone keeps its authoritative entity state. Still refresh the
+		// catalog copy so the next rebuild after idle eviction starts from the
+		// latest durable HP/dead set.
+		m.maps[key] = zoneMap
+		return nil
+	}
+	if _, exists := m.maps[key]; !exists {
+		if len(m.keys) >= MaxZonesPerProcess {
+			return ErrZoneFull
+		}
+		m.keys = append(m.keys, key)
+		m.runtimeKeys[key] = struct{}{}
+	}
+	m.maps[key] = zoneMap
+	return nil
+}
+
+// BaseZoneMap returns the immutable map artifact shared by every instance of
+// mapID. It is used to build runtime event zones without reading the file again.
+func (m *Manager) BaseZoneMap(mapID string) (ZoneMap, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for key, zoneMap := range m.maps {
+		if key.MapID == mapID {
+			return zoneMap, true
+		}
+	}
+	return ZoneMap{}, false
+}
+
 func (m *Manager) ZoneKeyForMap(mapID string) (sim.ZoneKey, error) {
 	var match sim.ZoneKey
 	for _, key := range m.keys {
@@ -1092,6 +1172,8 @@ func (m *Manager) enqueueDeaths(zone *managedZone, snapshot sim.Snapshot) {
 			ZoneKey: snapshot.ZoneKey, Generation: zone.generation,
 			EventID: event.ID, Tick: event.Tick,
 			SourceID: sim.EntityID(event.SourceID), TargetID: sim.EntityID(event.TargetID), TemplateID: event.TemplateID,
+			PersistentID: event.PersistentID,
+			IsNode:       len(event.TargetID) > 2 && event.TargetID[:2] == "n:",
 		}
 		select {
 		case m.deathQueue <- death:

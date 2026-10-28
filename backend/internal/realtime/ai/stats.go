@@ -29,9 +29,9 @@ type Stats struct {
 // DefaultStats derives movement/AI budgets from the Monster.csv type column.
 func DefaultStats(templateType string) Stats {
 	switch strings.ToLower(strings.TrimSpace(templateType)) {
-	case "boss":
+	case "boss", "tribulation_boss":
 		return Stats{Speed: 2.6, Radius: 0.8, AggroRadius: 14, LeashRadius: 24, AttackRange: 1.8, PatrolRadius: 3, AttackCooldownTicks: 30, RespawnTicks: BossRespawnTicks, SplashRadius: 4, SplashDamage: 10}
-	case "elite":
+	case "elite", "tribulation_monster":
 		return Stats{Speed: 2.9, Radius: 0.6, AggroRadius: 12, LeashRadius: 20, AttackRange: 1.5, PatrolRadius: 4, AttackCooldownTicks: 25, RespawnTicks: EliteRespawnTicks}
 	default:
 		return Stats{Speed: 3.2, Radius: 0.5, AggroRadius: 10, LeashRadius: 16, AttackRange: 1.25, PatrolRadius: 5, AttackCooldownTicks: DefaultAttackCooldownTicks, RespawnTicks: DefaultRespawnTicks}

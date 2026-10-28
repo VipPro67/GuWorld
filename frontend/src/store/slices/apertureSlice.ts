@@ -72,6 +72,7 @@ export interface ApertureSlice {
   realtimeEngageTribulation: (eventId: string) => Promise<Record<string, unknown> | null>;
   realtimeResolveTribulationVictory: (eventId: string, nodeHP: Record<string, number>) => Promise<Record<string, unknown> | null>;
   realtimeEscapeTribulation: (eventId: string) => Promise<boolean>;
+  realtimeExitTribulation: () => Promise<boolean>;
   nodeWorkers: ApertureNodeWorker[];
   refinementQueue: ApertureRefinementJob[];
   settlements: ApertureSettlement[];
@@ -1177,6 +1178,44 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           x: typeof data.return_x === "number" ? data.return_x : 500,
           y: typeof data.return_y === "number" ? data.return_y : 500,
         });
+      }
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  realtimeExitTribulation: async () => {
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/realtime-exit`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Thoát Tiên Khiếu thất bại");
+      }
+      get().addToast(data.message || "Đã thoát khỏi Tiên Khiếu!", "info");
+      if (get().player) {
+        get().setPlayerFromServer({
+          current_region: (data.return_region as string) || "hub_nam_cuong",
+          x: typeof data.return_x === "number" ? data.return_x : 500,
+          y: typeof data.return_y === "number" ? data.return_y : 500,
+        });
+      }
+      if (data.realtime_transfer) {
+        get().requestWorldReconnect();
       }
       return true;
     } catch (caught: unknown) {

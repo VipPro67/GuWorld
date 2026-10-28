@@ -361,7 +361,7 @@ export class WorldScene extends Phaser.Scene {
     this.autoFarmStopNoticeShown = false;
 
     const target = entities
-      .filter((entity) => entity.kind === "monster" && entity.hp > 0)
+      .filter((entity) => this.isAttackableEntity(entity))
       .map((entity) => ({ entity, distance: Math.hypot(entity.x - self.x, entity.y - self.y) }))
       .filter(({ distance }) => distance <= controls.farmRange)
       .sort((left, right) => left.distance - right.distance)[0];
@@ -486,13 +486,19 @@ export class WorldScene extends Phaser.Scene {
 
   private monsters(): RuntimeEntity[] {
     if (!this.runtime) return [];
-    return this.runtime.getEntities().filter((entity) => entity.kind === "monster" && entity.hp > 0);
+    return this.runtime.getEntities().filter((entity) => this.isAttackableEntity(entity));
+  }
+
+  // Aperture resource nodes are stationary player-faction entities used by the
+  // tribulation sim. They are visible but must never become player targets.
+  private isAttackableEntity(entity: RuntimeEntity): boolean {
+    return entity.kind === "monster" && entity.templateId !== "aperture_node" && entity.hp > 0;
   }
 
   private findTargetNear(point: WorldPoint): RuntimeEntity | null {
     let nearest: RuntimeEntity | null = null;
     let nearestDistance = 1.35;
-    const candidates = this.runtime ? this.runtime.getEntities().filter((e) => !e.isSelf && e.hp > 0) : [];
+    const candidates = this.runtime ? this.runtime.getEntities().filter((e) => !e.isSelf && this.isAttackableEntity(e)) : [];
     for (const candidate of candidates) {
       const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
       if (distance <= nearestDistance) {

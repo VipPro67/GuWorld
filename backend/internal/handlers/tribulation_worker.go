@@ -91,6 +91,18 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 		return tx.Commit()
 	}
 
+	// The realtime zone owns monster movement, node damage and deaths while the
+	// character fights inside the aperture. The durable rows are synced from the
+	// live snapshot instead; running this worker in parallel would damage nodes
+	// with invisible enemies and desync the encounter.
+	var currentRegion string
+	if err := tx.QueryRow(`SELECT COALESCE(current_region, '') FROM players WHERE id = $1`, ev.PlayerID).Scan(&currentRegion); err != nil {
+		return err
+	}
+	if currentRegion == "aperture_tribulation" {
+		return tx.Commit()
+	}
+
 	// Fixed node damage per hit, based on tribulation type
 	nodeDmgPerHit := 1 // EARTH_CALAMITY
 	switch ev.TribulationType {

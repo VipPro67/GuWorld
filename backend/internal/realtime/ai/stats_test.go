@@ -18,4 +18,12 @@ func TestDefaultStatsScaleWithMonsterType(t *testing.T) {
 	if DefaultStats("unknown").AttackRange != normal.AttackRange {
 		t.Fatal("unknown type should use the normal archetype")
 	}
+	tribulationBoss := DefaultStats("Tribulation_Boss")
+	if tribulationBoss.AttackRange != boss.AttackRange || tribulationBoss.SplashRadius != boss.SplashRadius {
+		t.Fatalf("tribulation boss should use the boss archetype: %+v", tribulationBoss)
+	}
+	tribulationMinion := DefaultStats("Tribulation_Monster")
+	if tribulationMinion.AggroRadius != elite.AggroRadius {
+		t.Fatalf("tribulation minion should use the elite archetype: %+v", tribulationMinion)
+	}
 }

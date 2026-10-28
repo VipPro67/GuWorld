@@ -246,6 +246,29 @@ func TestMonsterDamageDeathAndRespawn(t *testing.T) {
 	}
 }
 
+func TestNoRespawnMonsterStaysDead(t *testing.T) {
+	w, _ := NewWorld("arena", 8)
+	monster := newAIMonster("one-shot", Vec2{X: 5, Y: 5})
+	monster.AI.NoRespawn = true
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+	result, err := w.QueueDamage("one-shot", 999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Step()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 600; i++ {
+		w.Step()
+	}
+	if hp := entityHP(t, w, "one-shot"); hp != 0 {
+		t.Fatalf("no-respawn monster revived: hp=%v", hp)
+	}
+}
+
 func TestMonsterSpawnsActivateOnlyNearPlayersAndShareAcrossPlayers(t *testing.T) {
 	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "spawn-radius", RulesetVersion: "v1"}, 8, 13)
 	if err != nil {

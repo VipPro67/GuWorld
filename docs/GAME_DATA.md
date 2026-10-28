@@ -633,7 +633,9 @@ Lưu các sự kiện Kiếp Nạn của Tiên Khiếu:
 - `reward_dao_marks` (BIGINT) — Số Đạo Ngân thưởng
 - `started_at` / `ended_at` (TIMESTAMPTZ)
 
-Khi nhân vật đang ở map realtime, ba endpoint `realtime-engage`, `realtime-victory`, `realtime-escape` bàn giao lease zone cũ trước khi ghi `current_region/world_zone_id`: flush vị trí live, tạm dừng checkpoint, ghi đích và nhả lease. Nhờ vậy checkpoint/disconnect của zone cũ không ghi đè region và lần join kế tiếp không bị `realtime_map_mismatch`.
+Khi nhân vật đang ở map realtime, các endpoint `realtime-engage`, `realtime-victory`, `realtime-escape`, `realtime-exit` bàn giao lease zone cũ trước khi ghi `current_region/world_zone_id`: flush vị trí live, tạm dừng checkpoint, ghi đích và nhả lease. Nhờ vậy checkpoint/disconnect của zone cũ không ghi đè region và lần join kế tiếp không bị `realtime_map_mismatch`.
+
+Mỗi event có một instance realtime riêng (`aperture_tribulation#<event_id>`), không dùng chung map với người khác. Khi join, backend dựng encounter từ chính `tribulation_enemies` và `aperture_resource_nodes` (không dùng spawn tĩnh trong map artifact): HP/ATK/DEF lấy từ row DB đã scale theo rank/sub-rank, `tribulation_enemies.is_dead` được cập nhật khi quái chết, checkpoint 10 giây đồng bộ HP quái/node còn sống. Quái của kiếp nạn có `NoRespawn`, nên không hồi sinh; node phòng thủ (`node_category='DEFENSE'`) bị loại khỏi encounter realtime. Worker legacy dừng mô phỏng khi `players.current_region='aperture_tribulation'`; node do quái phá trực tiếp trong combat realtime. Khi quái cuối cùng chết, server tự kết toán victory (idempotent) và đưa nhân vật về vị trí thoát.
 
 ### Bảng `tribulation_enemies`
 

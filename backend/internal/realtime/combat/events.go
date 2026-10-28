@@ -37,4 +37,5 @@ type Event struct {
 	DurationTicks uint64
 	Reason        string
 	TemplateID    string
+	PersistentID  string
 }

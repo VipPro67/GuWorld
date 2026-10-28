@@ -213,14 +213,43 @@ func RealtimeEngageTribulation(c *gin.Context) {
 	})
 }
 
-// RealtimeTribulationVictoryRequest is the payload sent when a player defeats all
-// tribulation enemies in the real-time Aperture map.
+// RealtimeTribulationVictoryRequest is kept for API compatibility. Node HP is
+// read from the authoritative realtime snapshot/DB, never trusted from the
+// client.
 type RealtimeTribulationVictoryRequest struct {
-	NodeHP map[string]int `json:"node_hp"` // node_id -> remaining HP
+	NodeHP map[string]int `json:"node_hp"`
 }
 
-// RealtimeResolveTribulationVictory marks the tribulation victory, updates resource node
-// damage, awards Dao Marks, updates Aperture state, and checks for rank breakthroughs.
+type realtimeTribulationVictoryResult struct {
+	Message         string
+	Rewards         map[string]int64
+	UpdatedDaoMarks models.DaoMarksMap
+	DidBreakthrough bool
+	NewRank         int
+	DestroyedNodes  int
+	ReturnRegion    string
+	ReturnX         float64
+	ReturnY         float64
+}
+
+func (r realtimeTribulationVictoryResult) payload(realtimeTransfer bool) gin.H {
+	return gin.H{
+		"message":           r.Message,
+		"rewards":           r.Rewards,
+		"updated_dao_marks": r.UpdatedDaoMarks,
+		"did_breakthrough":  r.DidBreakthrough,
+		"new_rank":          r.NewRank,
+		"destroyed_nodes":   r.DestroyedNodes,
+		"return_region":     r.ReturnRegion,
+		"return_x":          r.ReturnX,
+		"return_y":          r.ReturnY,
+		"realtime_transfer": realtimeTransfer,
+	}
+}
+
+// RealtimeResolveTribulationVictory is the manual/fallback settlement endpoint.
+// It only succeeds when every event enemy is already dead; the authoritative
+// auto-settlement path runs from the realtime death handler.
 func RealtimeResolveTribulationVictory(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -234,82 +263,75 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 	}
 	defer abortHandoff()
 
-	eventIDStr := c.Param("eventId")
-	eventID, err := uuid.Parse(eventIDStr)
+	eventID, err := uuid.Parse(c.Param("eventId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã đợt tai kiếp không hợp lệ"})
 		return
 	}
-
-	var req RealtimeTribulationVictoryRequest
-	_ = c.ShouldBindJSON(&req)
-
-	tx, err := db.DB.Begin()
+	result, status, err := settleRealtimeTribulationVictory(c.Request.Context(), playerID, eventID, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		if status == 0 {
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
-	defer tx.Rollback()
+	finishHandoff()
+	c.JSON(http.StatusOK, result.payload(realtimeTransfer))
+}
 
-	// 1. Fetch active event
+// settleRealtimeTribulationVictory commits the victory in one transaction. It
+// is shared by the HTTP fallback and automatic settlement on the last realtime
+// monster death. status is the HTTP status to surface for a refusal.
+func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uuid.UUID, ipAddress string) (realtimeTribulationVictoryResult, int, error) {
+	var result realtimeTribulationVictoryResult
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi cơ sở dữ liệu")
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	var ev models.TribulationEvent
-	err = tx.QueryRow(`
+	err = tx.QueryRowContext(ctx, `
 		SELECT id, aperture_id, player_id, tribulation_type, path, reward_dao_marks, started_at
 		FROM tribulation_events
 		WHERE id = $1 AND player_id = $2 AND status = 'ACTIVE'
+		FOR UPDATE
 	`, eventID, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.RewardDaoMarks, &ev.StartedAt)
 	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Đợt tai kiếp này đã kết thúc hoặc không tồn tại"})
-		return
+		return result, http.StatusNotFound, fmt.Errorf("Đợt tai kiếp này đã kết thúc hoặc không tồn tại")
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn tai kiếp"})
-		return
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi truy vấn tai kiếp")
 	}
 
-	// 2. Mark all enemies as defeated
-	_, err = tx.Exec(`UPDATE tribulation_enemies SET is_dead = true WHERE event_id = $1`, ev.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái quái tai kiếp"})
-		return
+	var alive int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(1) FROM tribulation_enemies WHERE event_id = $1 AND is_dead = false
+	`, ev.ID).Scan(&alive); err != nil {
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi kiểm tra quái tai kiếp")
+	}
+	if alive > 0 {
+		return result, http.StatusBadRequest, fmt.Errorf("Vẫn còn %d quái kiếp chưa bị tiêu diệt", alive)
 	}
 
-	// 3. Update remaining HP of resource nodes and mark destroyed if HP <= 0
-	destroyedCount := 0
-	if req.NodeHP != nil {
-		for nodeIDStr, currentHP := range req.NodeHP {
-			nodeID, parseErr := uuid.Parse(nodeIDStr)
-			if parseErr != nil {
-				continue
-			}
-			isDestroyed := currentHP <= 0
-			if currentHP < 0 {
-				currentHP = 0
-			}
-			if isDestroyed {
-				destroyedCount++
-			}
-			_, _ = tx.Exec(`
-				UPDATE aperture_resource_nodes
-				SET hp = $1, is_destroyed = $2, updated_at = NOW()
-				WHERE id = $3 AND aperture_id = $4
-			`, currentHP, isDestroyed, nodeID, ev.ApertureID)
-		}
+	// Node HP was synced from the authoritative zone snapshot during handoff.
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(1) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = true
+	`, ev.ApertureID).Scan(&result.DestroyedNodes); err != nil {
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi kiểm tra tài nguyên Tiên Khiếu")
 	}
 
-	// 4. Fetch Aperture state
 	var ap models.ImmortalAperture
-	err = tx.QueryRow(`
+	err = tx.QueryRowContext(ctx, `
 		SELECT id, aperture_hp, max_aperture_hp, next_tribulation_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, internal_years_passed
 		FROM immortal_apertures WHERE id = $1
 	`, ev.ApertureID).Scan(&ap.ID, &ap.ApertureHP, &ap.MaxApertureHP, &ap.NextTribulationYear,
 		&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.InternalYearsPassed)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin Tiên Khiếu"})
-		return
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi lấy thông tin Tiên Khiếu")
 	}
 
-	// 5. Increment calamity counters and check breakthrough
 	switch ev.TribulationType {
 	case "EARTH_CALAMITY":
 		ap.EarthCalamityCount++
@@ -325,21 +347,21 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 
 	var playerRank int
 	var username string
-	_ = tx.QueryRow(`SELECT rank, username FROM players WHERE id = $1`, playerID).Scan(&playerRank, &username)
+	_ = tx.QueryRowContext(ctx, `SELECT rank, username FROM players WHERE id = $1`, playerID).Scan(&playerRank, &username)
 
 	didBreakthrough := false
 	breakthroughMsg := ""
 	canBreak, newRank := models.CheckImmortalBreakthrough(playerRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
 	if canBreak {
 		var pathMasteries models.PathMasteriesMap
-		_ = tx.QueryRow(`SELECT COALESCE(path_masteries, '{}'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&pathMasteries)
+		_ = tx.QueryRowContext(ctx, `SELECT COALESCE(path_masteries, '{}'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&pathMasteries)
 		reqLevel := gamefx.PathMasteryLevelRequiredForRank(newRank)
 		if !gamefx.HasPathMasteryAtLeast(pathMasteries, reqLevel) {
 			blockedMsg := fmt.Sprintf(" Chưa đủ điều kiện đột phá lên %s: cần ít nhất 1 lưu phái đạt %s (%d điểm).", models.GetRankName(newRank), gamefx.PathMasteryLevelName(reqLevel), gamefx.PathMasteryPointsForLevel(reqLevel))
-			_, _ = tx.Exec(`INSERT INTO messages (sender_id, receiver_id, content, channel) VALUES ($1, $1, $2, 'system')`, playerID, "Đột phá bị chặn: "+blockedMsg)
+			_, _ = tx.ExecContext(ctx, `INSERT INTO messages (sender_id, receiver_id, content, channel) VALUES ($1, $1, $2, 'system')`, playerID, "Đột phá bị chặn: "+blockedMsg)
 			breakthroughMsg = blockedMsg
 		} else {
-			_, _ = tx.Exec(`UPDATE players SET rank = $1 WHERE id = $2`, newRank, playerID)
+			_, _ = tx.ExecContext(ctx, `UPDATE players SET rank = $1 WHERE id = $2`, newRank, playerID)
 			ap.RankStartYear = math.Floor(ap.InternalYearsPassed)
 			ap.EarthCalamityCount = 0
 			ap.HeavenlyTribulationCount = 0
@@ -369,17 +391,15 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 	ap.ApertureHP = ap.MaxApertureHP
 	ap.State = "STABLE"
 
-	// 6. Award Dao Marks
 	rewards := distributeDaoMarks(ev.Path, ev.RewardDaoMarks)
 	updatedDaoMarks, errDao := addMultipleDaoMarksTx(tx, playerID.String(), rewards)
 	if errDao != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + errDao.Error()})
-		return
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi cộng Đạo Ngân: %w", errDao)
 	}
 
 	now := time.Now()
-	_, _ = tx.Exec(`UPDATE tribulation_events SET status = 'SUCCESS', aperture_hp_after = $1, ended_at = $2 WHERE id = $3`, ap.ApertureHP, now, ev.ID)
-	_, err = tx.Exec(`
+	_, _ = tx.ExecContext(ctx, `UPDATE tribulation_events SET status = 'SUCCESS', aperture_hp_after = $1, ended_at = $2 WHERE id = $3`, ap.ApertureHP, now, ev.ID)
+	if _, err = tx.ExecContext(ctx, `
 		UPDATE immortal_apertures 
 		SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
 			rank_start_year = $4, earth_calamity_count = $5, heavenly_tribulation_count = $6,
@@ -387,26 +407,23 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 		WHERE id = $10
 	`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
 		ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount,
-		ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Tiên Khiếu"})
-		return
+		ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID); err != nil {
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi cập nhật Tiên Khiếu")
 	}
 
-	// 7. Clear any lingering active combat and return player to original position or placed aperture entrance
-	exitRegion, exitX, exitY := resolveApertureExitLocation(c.Request.Context(), playerID)
-	_, _ = tx.Exec(`
+	exitRegion, exitX, exitY := resolveApertureExitLocation(ctx, playerID)
+	if _, err = tx.ExecContext(ctx, `
 		UPDATE players 
 		SET active_combat = NULL, current_region = $1, world_zone_id = $1, world_x = $2, world_y = $3, x = $4, y = $5,
 		    world_location_revision = world_location_revision + 1
 		WHERE id = $6
-	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID)
+	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID); err != nil {
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi lưu vị trí trở về")
+	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit giao dịch"})
-		return
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi commit giao dịch")
 	}
-	finishHandoff()
 
 	rewardStrings := []string{}
 	for path, amount := range rewards {
@@ -414,25 +431,22 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 	}
 	rewardText := strings.Join(rewardStrings, ", ")
 	msg := fmt.Sprintf("Vượt kiếp thành công trong Tiên Khiếu! Thu hoạch %s. Tiên Khiếu đã ổn định trở lại.", rewardText)
-	if destroyedCount > 0 {
-		msg += fmt.Sprintf(" (Có %d điểm tài nguyên bị tổn hại nặng)", destroyedCount)
+	if result.DestroyedNodes > 0 {
+		msg += fmt.Sprintf(" (Có %d điểm tài nguyên bị tổn hại nặng)", result.DestroyedNodes)
 	}
 	msg += breakthroughMsg
 
-	logger.S.Infof("Player %s completed realtime tribulation %s (Breakthrough: %v)", playerID, ev.ID, didBreakthrough)
+	result.Message = msg
+	result.Rewards = rewards
+	result.UpdatedDaoMarks = updatedDaoMarks
+	result.DidBreakthrough = didBreakthrough
+	result.NewRank = playerRank
+	result.ReturnRegion = exitRegion
+	result.ReturnX = exitX
+	result.ReturnY = exitY
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":           msg,
-		"rewards":           rewards,
-		"updated_dao_marks": updatedDaoMarks,
-		"did_breakthrough":  didBreakthrough,
-		"new_rank":          playerRank,
-		"destroyed_nodes":   destroyedCount,
-		"return_region":     exitRegion,
-		"return_x":          exitX,
-		"return_y":          exitY,
-		"realtime_transfer": realtimeTransfer,
-	})
+	logger.S.Infof("Player %s completed realtime tribulation %s (Breakthrough: %v, IP: %s)", playerID, ev.ID, didBreakthrough, ipAddress)
+	return result, 0, nil
 }
 
 // resolveApertureExitLocation determines where the player exits to:

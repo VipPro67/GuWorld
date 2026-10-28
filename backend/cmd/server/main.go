@@ -350,6 +350,16 @@ func main() {
 			}
 			lootSvc := realloot.NewService(db.DB, inventorySvc)
 			manager.SetDeathHandler(func(callCtx context.Context, death realtimeworld.DeathEvent) {
+				if death.ZoneKey.MapID == "aperture_tribulation" {
+					tribCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+					if err := handlers.HandleRealtimeTribulationDeath(tribCtx, death); err != nil {
+						logger.S.Errorf("Realtime tribulation death handling failed for %s: %v", death.TargetID, err)
+					}
+					cancel()
+				}
+				if death.IsNode {
+					return
+				}
 				recipient, parseErr := uuid.Parse(string(death.SourceID))
 				if parseErr != nil {
 					return
@@ -464,6 +474,21 @@ func main() {
 	realtimeAdmission.SetLoadoutCatalog(compiledGuCatalog)
 	realtimeAdmission.SetStateStore(realtimeStateStore)
 	if realtimeWorldManager != nil {
+		realtimeAdmission.SetTribulationZoneLoader(func(loadCtx context.Context, playerID uuid.UUID) (sim.ZoneKey, realtimeworld.ZoneMap, bool, error) {
+			base, ok := realtimeWorldManager.BaseZoneMap("aperture_tribulation")
+			if !ok {
+				return sim.ZoneKey{}, realtimeworld.ZoneMap{}, false, fmt.Errorf("aperture_tribulation map is not configured")
+			}
+			eventID, spawns, active, err := handlers.LoadRealtimeTribulationSpawns(loadCtx, playerID)
+			if err != nil || !active {
+				return sim.ZoneKey{}, realtimeworld.ZoneMap{}, active, err
+			}
+			base.Monsters = spawns
+			return sim.ZoneKey{MapID: "aperture_tribulation", InstanceID: eventID, RulesetVersion: "v1"}, base, true, nil
+		})
+		realtimeAdmission.SetApertureStateSink(func(sinkCtx context.Context, playerID uuid.UUID, snapshot sim.Snapshot) error {
+			return handlers.PersistRealtimeTribulationSnapshot(sinkCtx, playerID, snapshot)
+		})
 		handlers.SetRealtimeStatsProvider(func() any { return realtimeWorldManager.Stats() })
 		worker.RunEvery(ctx, 10*time.Second, "realtime-checkpoint", func(context.Context) {
 			realtimeAdmission.CheckpointActive()

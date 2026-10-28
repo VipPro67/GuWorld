@@ -31,18 +31,24 @@ type AIState struct {
 	Active bool
 	// Passive monsters never acquire a target by proximity. They still use the
 	// threat table, so a player who attacks first can opt into the fight.
-	Passive             bool
-	TemplateID          string
-	Name                string
-	State               AIStateKind
-	Home                Vec2
-	AggroRadius         float64
-	LeashRadius         float64
-	AttackRange         float64
-	PatrolRadius        float64
-	AttackDamage        float64
+	Passive      bool
+	TemplateID   string
+	PersistentID string
+	Name         string
+	State        AIStateKind
+	Home         Vec2
+	AggroRadius  float64
+	LeashRadius  float64
+	AttackRange  float64
+	PatrolRadius float64
+	AttackDamage float64
+	// NodeDamage overrides AttackDamage against stationary player-faction
+	// structures (aperture resource nodes). It mirrors the turn-based worker's
+	// fixed per-hit node damage.
+	NodeDamage          float64
 	AttackCooldownTicks uint32
 	RespawnTicks        uint32
+	NoRespawn           bool
 	SplashRadius        float64
 	SplashDamage        float64
 	ThreatTable         map[EntityID]float64
@@ -72,7 +78,7 @@ func (w *World) stepMonsterAI() {
 		}
 		if entity.Vitals.HP <= 0 {
 			entity.moveIntent = Vec2{}
-			if entity.AI.RespawnTick > 0 && w.tick >= entity.AI.RespawnTick {
+			if !entity.AI.NoRespawn && entity.AI.RespawnTick > 0 && w.tick >= entity.AI.RespawnTick {
 				w.respawnMonsterLocked(entity)
 			}
 			continue
@@ -174,7 +180,11 @@ func (w *World) actMonsterLocked(monster *Entity) {
 				}
 				if w.tick >= monster.AI.NextAttackTick {
 					monster.AI.NextAttackTick = w.tick + uint64(cooldown)
-					w.applyDamageLocked(monster, target, monster.AI.AttackDamage, "")
+					damage := monster.AI.AttackDamage
+					if target.Kind == EntityMonster && target.Faction == "player" && monster.AI.NodeDamage > 0 {
+						damage = monster.AI.NodeDamage
+					}
+					w.applyDamageLocked(monster, target, damage, "")
 					if monster.AI.SplashRadius > 0 {
 						splash := monster.AI.SplashDamage
 						if splash <= 0 {
@@ -186,7 +196,11 @@ func (w *World) actMonsterLocked(monster *Entity) {
 							}
 							if math.Hypot(other.Transform.Position.X-target.Transform.Position.X, other.Transform.Position.Y-target.Transform.Position.Y) <= monster.AI.SplashRadius {
 								w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(monster.ID), TargetID: string(other.ID), X: other.Transform.Position.X, Y: other.Transform.Position.Y, Reason: "splash"})
-								w.applyDamageLocked(monster, other, splash, "")
+								amount := splash
+								if other.Kind == EntityMonster && other.Faction == "player" && monster.AI.NodeDamage > 0 {
+									amount = monster.AI.NodeDamage
+								}
+								w.applyDamageLocked(monster, other, amount, "")
 							}
 						}
 					}

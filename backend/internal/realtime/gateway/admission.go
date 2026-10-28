@@ -46,6 +46,14 @@ type WorldStateStore interface {
 	Save(context.Context, persistence.State) error
 }
 
+// TribulationZoneLoader resolves a per-player event encounter and its dynamic
+// zone map. ok is false when the player has no active tribulation event.
+type TribulationZoneLoader func(ctx context.Context, playerID uuid.UUID) (sim.ZoneKey, realtimeworld.ZoneMap, bool, error)
+
+// ApertureStateSink persists authoritative entity HP from an aperture
+// tribulation snapshot (monsters and resource nodes).
+type ApertureStateSink func(ctx context.Context, playerID uuid.UUID, snapshot sim.Snapshot) error
+
 type Admission struct {
 	config   config.Config
 	manager  *realtimeworld.Manager
@@ -54,9 +62,11 @@ type Admission struct {
 	states   WorldStateStore
 	paused   atomic.Bool
 
-	mu           sync.Mutex
-	sessions     map[uuid.UUID]session
-	joinAttempts map[uuid.UUID][]time.Time
+	mu                sync.Mutex
+	sessions          map[uuid.UUID]session
+	joinAttempts      map[uuid.UUID][]time.Time
+	tribulationZones  TribulationZoneLoader
+	apertureStateSink ApertureStateSink
 }
 
 type session struct {
@@ -174,6 +184,22 @@ func (a *Admission) SetStateStore(store WorldStateStore) {
 	a.states = store
 }
 
+// SetTribulationZoneLoader installs the per-event encounter builder used when a
+// player joins aperture_tribulation. Passing nil keeps the startup catalog.
+func (a *Admission) SetTribulationZoneLoader(loader TribulationZoneLoader) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.tribulationZones = loader
+}
+
+// SetApertureStateSink installs the durable HP sink for tribulation monsters and
+// resource nodes. It runs after player checkpoints and handoffs.
+func (a *Admission) SetApertureStateSink(sink ApertureStateSink) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.apertureStateSink = sink
+}
+
 // CheckpointActive persists each live controller's position, HP and mana.
 // Calls may overlap Leave; each session serializes its mana settlement.
 func (a *Admission) CheckpointActive() {
@@ -246,12 +272,39 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	if a.manager.OwnsCharacter(sim.CharacterID(playerID.String())) {
 		return nil, admissionError(409, "realtime_character_already_owned", "Character already has an active realtime controller")
 	}
-	key, err := a.manager.ZoneKeyForMapWithCapacity(request.ZoneID)
-	if err != nil {
-		if errors.Is(err, realtimeworld.ErrZoneFull) {
-			return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
+	var key sim.ZoneKey
+	tribulationZone := false
+	if request.ZoneID == "aperture_tribulation" {
+		a.mu.Lock()
+		loader := a.tribulationZones
+		a.mu.Unlock()
+		if loader != nil {
+			loadedKey, zoneMap, ok, loadErr := loader(ctx, playerID)
+			if loadErr != nil {
+				return nil, admissionError(503, "realtime_tribulation_unavailable", "Could not load the active tribulation encounter")
+			}
+			if !ok {
+				return nil, admissionError(409, "realtime_tribulation_inactive", "No active tribulation event for this character")
+			}
+			if err := a.manager.RegisterZoneMap(loadedKey, zoneMap); err != nil {
+				if errors.Is(err, realtimeworld.ErrZoneFull) {
+					return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
+				}
+				return nil, admissionError(503, "realtime_tribulation_unavailable", "Could not configure the tribulation encounter")
+			}
+			key = loadedKey
+			tribulationZone = true
 		}
-		return nil, admissionError(403, "realtime_map_unavailable", "Realtime zone is not configured for this map")
+	}
+	if !tribulationZone {
+		var zoneErr error
+		key, zoneErr = a.manager.ZoneKeyForMapWithCapacity(request.ZoneID)
+		if zoneErr != nil {
+			if errors.Is(zoneErr, realtimeworld.ErrZoneFull) {
+				return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
+			}
+			return nil, admissionError(403, "realtime_map_unavailable", "Realtime zone is not configured for this map")
+		}
 	}
 	lease, err := a.manager.ClaimCharacter(sim.CharacterID(playerID.String()), controllerID.String(), key)
 	if err != nil {
@@ -918,12 +971,29 @@ func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 
 func (a *Admission) flushState(active session) error {
 	publishInventory, err := a.flushStateLocked(active)
+	if err != nil {
+		return err
+	}
+	if active.regionID == "aperture_tribulation" {
+		a.mu.Lock()
+		sink := a.apertureStateSink
+		a.mu.Unlock()
+		if sink != nil {
+			if snapshot, snapshotErr := a.manager.SnapshotForLease(active.lease); snapshotErr == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				if sinkErr := sink(ctx, active.playerID, snapshot); sinkErr != nil {
+					logger.S.Errorf("Realtime tribulation state sync failed for %s: %v", active.playerID, sinkErr)
+				}
+				cancel()
+			}
+		}
+	}
 	if publishInventory {
 		// Do not hold the per-session mana settlement lock while loading and
 		// broadcasting the authoritative inventory snapshot.
 		handlers.PublishPlayerRealtimeEvent(active.playerID, handlers.PlayerEventUpdated, handlers.GuInventoryDomain)
 	}
-	return err
+	return nil
 }
 
 // flushStateLocked serializes the mana/hunger settlement for one session and

@@ -1501,3 +1501,61 @@ func TestZoneAllocatorSkipsInstanceBeingEvicted(t *testing.T) {
 		t.Fatalf("allocator chose the evicting instance %s", allocated.String())
 	}
 }
+
+func TestRegisterZoneMapActivatesRuntimeEventInstance(t *testing.T) {
+	baseKey := sim.ZoneKey{MapID: "event-map", InstanceID: "shared", RulesetVersion: "v1"}
+	manager, err := NewLazyManagerWithMaps([]sim.ZoneKey{baseKey}, 8, 2, map[sim.ZoneKey]ZoneMap{
+		baseKey: {Width: 20, Height: 20, Hash: "event-map-hash"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := manager.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		shutdown, done := context.WithTimeout(context.Background(), time.Second)
+		defer done()
+		_ = manager.Stop(shutdown)
+	})
+
+	eventKey := sim.ZoneKey{MapID: "event-map", InstanceID: "event-uuid", RulesetVersion: "v1"}
+	eventMap := ZoneMap{
+		Width: 20, Height: 20, Hash: "event-map-hash",
+		Monsters: []MonsterSpawn{lazyMonsterSpawn(5, 5, 50)},
+	}
+	if err := manager.RegisterZoneMap(eventKey, eventMap); err != nil {
+		t.Fatal(err)
+	}
+	lease, err := manager.ClaimCharacter("event-character", "controller", eventKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lease.ZoneKey != eventKey {
+		t.Fatalf("lease key = %s, want runtime event key", lease.ZoneKey.String())
+	}
+	if _, err := manager.AttachCharacterEntity(lease, lazyPlayerEntity("event-character", 6, 6, nil)); err != nil {
+		t.Fatal(err)
+	}
+	waitForLazyZone(t, manager, eventKey, func(zone *managedZone) bool { return zone.generation != "" })
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshot, err := manager.Snapshot(eventKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		monsters := 0
+		for _, entity := range snapshot.Entities {
+			if entity.Kind == sim.EntityMonster {
+				monsters++
+			}
+		}
+		if monsters == 1 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("runtime event instance did not materialize its dynamic monster")
+}
