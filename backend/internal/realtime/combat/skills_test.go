@@ -29,9 +29,9 @@ func TestDefaultLoadoutIsValidAndCoversAllModes(t *testing.T) {
 
 func TestInvalidSkillsAreRejected(t *testing.T) {
 	skill := DefaultLoadout()[1]
-	skill.Slot = 7
+	skill.Slot = 13
 	if skill.Valid() {
-		t.Fatal("slot outside 1..6 accepted")
+		t.Fatal("slot outside 1..12 accepted")
 	}
 	skill = DefaultLoadout()[1]
 	skill.ProjectileSpeed = 0

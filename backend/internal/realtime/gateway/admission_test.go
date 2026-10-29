@@ -57,7 +57,7 @@ func TestAdmissionJoinUsesServerStateAndLeaveReleasesMembership(t *testing.T) {
 	if entity.EntityID != playerID.String() || entity.X != 17 || entity.Y != 29 || entity.HP != 70 || !initialSnapshot.IsBaseline || initialSnapshot.BaselineID != welcome.BaselineID {
 		t.Fatalf("entity was not built from trusted database state: %+v", entity)
 	}
-	if entity.Mana != 42 || entity.MaxMana != 500 || len(entity.Cooldowns) != 7 {
+	if entity.Mana != 42 || entity.MaxMana != 500 || len(entity.Cooldowns) != 13 {
 		t.Fatalf("welcome combat state is invalid: %+v", entity)
 	}
 	if _, err := admission.Join(context.Background(), playerID, controllerID, request); err != nil || loaderCalls != 1 {
@@ -791,7 +791,7 @@ func TestAdmissionRestoresDurableCombatStateOnJoin(t *testing.T) {
 		t.Fatalf("join snapshot entities=%d, want 1", len(snapshot.Entities))
 	}
 	entity := snapshot.Entities[0]
-	if len(entity.Cooldowns) != 7 || entity.Cooldowns[1] == 0 {
+	if len(entity.Cooldowns) != 13 || entity.Cooldowns[1] == 0 {
 		t.Fatalf("durable cooldown was not restored: %+v", entity.Cooldowns)
 	}
 	foundFreeze := false

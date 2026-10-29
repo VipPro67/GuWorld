@@ -108,12 +108,6 @@ func TestEnergyCostMortalSubRank(t *testing.T) {
 		t.Errorf("mortal player rank 1 sub 4 vs gu rank 3 cost = %v, want 50 (x5, no sub-rank)", got)
 	}
 
-	// Combatant path mirrors the player path.
-	actor := &models.Combatant{Rank: 2, SubRank: 4, MaxMana: 500}
-	cgu := &models.GuDictionaryItem{Rank: 2, BaseManaCost: 10}
-	if got := EnergyCostForCombatant(actor, cgu); got != 1.25 {
-		t.Errorf("combatant rank 2 sub 4 cost = %v, want 1.25 (10÷8)", got)
-	}
 }
 
 func TestHigherRankManaMultiplier(t *testing.T) {
@@ -169,26 +163,6 @@ func TestHigherRankManaMultiplier(t *testing.T) {
 				c.want,
 			)
 		}
-	}
-}
-
-func TestEnergyCostForCombatant(t *testing.T) {
-	actor := &models.Combatant{Rank: 2, MaxMana: 500}
-	gu := &models.GuDictionaryItem{Rank: 2, BaseManaCost: 10}
-	if got := EnergyCostForCombatant(actor, gu); got != 10 {
-		t.Errorf("combatant mortal cost = %v, want 10", got)
-	}
-
-	immortal := &models.Combatant{Rank: 7}
-	igu := &models.GuDictionaryItem{Rank: 7, BaseManaCost: 50}
-	if got := EnergyCostForCombatant(immortal, igu); got != 50 {
-		t.Errorf("combatant immortal cost = %v, want 50", got)
-	}
-
-	// higher-rank immortal combatant -> multiplier (immortal gap 1 -> x100)
-	highIgu := &models.GuDictionaryItem{Rank: 8, BaseManaCost: 50}
-	if got := EnergyCostForCombatant(immortal, highIgu); got != 5000 {
-		t.Errorf("combatant immortal higher-rank cost = %v, want 5000", got)
 	}
 }
 

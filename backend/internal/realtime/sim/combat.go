@@ -479,14 +479,6 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(target.ID), SkillID: skill.ID, X: target.Transform.Position.X, Y: target.Transform.Position.Y})
 		w.applyDamageLocked(caster, target, skill.Damage, skill.ID)
 		if target.Vitals.HP > 0 {
-			if skill.Heal > 0 {
-				target.Vitals.HP = math.Min(target.Vitals.MaxHP, target.Vitals.HP+skill.Heal)
-				target.Revision++
-			}
-			if skill.Shield > 0 {
-				target.Vitals.Shield += skill.Shield
-				target.Revision++
-			}
 			w.applyStatusLocked(caster, target, skill)
 			if skill.Cleanse {
 				w.cleanseDebuffsLocked(target)
@@ -578,14 +570,6 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		}
 	case combat.ModeSelf:
 		recordKillerMoveUse()
-		if skill.Heal > 0 {
-			caster.Vitals.HP = math.Min(caster.Vitals.MaxHP, caster.Vitals.HP+skill.Heal)
-			caster.Revision++
-		}
-		if skill.Shield > 0 {
-			caster.Vitals.Shield += skill.Shield
-			caster.Revision++
-		}
 		w.applyStatusLocked(caster, caster, skill)
 		if skill.Cleanse {
 			w.cleanseDebuffsLocked(caster)

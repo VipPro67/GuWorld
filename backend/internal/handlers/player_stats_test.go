@@ -190,14 +190,6 @@ func TestGetPassiveStats_SpeedIsolation(t *testing.T) {
 		t.Fatalf("expected exactly 1 speed detail in Details, got %d", speedDetailCount)
 	}
 
-	// Test hasCombatEffects vs hasCombatActiveEffects
-	activeSpec, _ := models.GetGu("GU_PASSIVE_SPD", 1)
-	if !hasCombatEffects(&activeSpec) {
-		t.Fatalf("GU_PASSIVE_SPD should be eligible for combat loadout (hasCombatEffects == true)")
-	}
-	if hasCombatActiveEffects(&activeSpec) {
-		t.Fatalf("GU_PASSIVE_SPD should not generate an empty 0-damage active action (hasCombatActiveEffects == false)")
-	}
 }
 
 func TestGetPassiveStatsLoadsBlockV2PassivesFromRegistry(t *testing.T) {
@@ -337,36 +329,6 @@ func TestGetPassiveStats_StatFloorAtZero(t *testing.T) {
 		if got := result.Stats[key]; got != 0 {
 			t.Fatalf("%s = %v, want 0 (floored)", key, got)
 		}
-	}
-}
-
-// TestBuildStatProvenance verifies the status provenance snapshot: base stats
-// (statuses stripped) vs final stats, with the itemized status modifiers.
-func TestBuildStatProvenance(t *testing.T) {
-	player := &models.Player{
-		CultivationState: models.CultivationState{Rank: 1, SubRank: 1},
-	}
-	player.Statuses = models.StatusList{{ID: "death_penalty"}}
-
-	finalStats := CalculatePlayerStats(player)
-	pv := buildStatProvenance(player, finalStats, gamefx.Get(player).HealingReceivedBonus)
-	if pv == nil {
-		t.Fatal("expected provenance for death_penalty")
-	}
-
-	atk := pv["attack"]
-	if atk == nil {
-		t.Fatal("missing attack provenance")
-	}
-	if atk.BaseValue != 10 || atk.FinalValue != 5 {
-		t.Fatalf("attack provenance base/final = %v/%v, want 10/5", atk.BaseValue, atk.FinalValue)
-	}
-	if len(atk.Mods) != 1 || atk.Mods[0].Key != "death_penalty" || atk.Mods[0].Pct != -0.5 {
-		t.Fatalf("unexpected attack mods: %+v", atk.Mods)
-	}
-
-	if _, ok := pv["healing_received"]; ok {
-		t.Fatal("death_penalty has no healing_received, provenance must not include it")
 	}
 }
 

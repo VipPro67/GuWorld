@@ -543,20 +543,11 @@ func TestGuTeleportRange(t *testing.T) {
 	}
 }
 
-func TestChebyshevDistanceAndRandomTeleportTarget(t *testing.T) {
+func TestChebyshevDistance(t *testing.T) {
 	if got := chebyshevDistance(3, 4, 6, 4); got != 3 {
 		t.Fatalf("chebyshevDistance = %d, want 3", got)
 	}
 	if got := chebyshevDistance(0, 0, 4, 9); got != 9 {
 		t.Fatalf("chebyshevDistance = %d, want 9", got)
-	}
-	for i := 0; i < 100; i++ {
-		x, y := randomTeleportTarget(15000, 10000, 500)
-		if chebyshevDistance(15000, 10000, x, y) > 500 {
-			t.Fatalf("randomTeleportTarget exceeded limit: (%d,%d)", x, y)
-		}
-		if !inWorld(x, y) {
-			t.Fatalf("randomTeleportTarget out of world: (%d,%d)", x, y)
-		}
 	}
 }

@@ -82,7 +82,7 @@ func TestRejectMalformedWorldMessages(t *testing.T) {
 	if err := (Input{Seq: 1, Move: &Vector{X: math.Inf(1)}}).Validate(); err == nil {
 		t.Fatal("accepted infinite vector")
 	}
-	if err := (Cast{Seq: 1, Slot: 7}).Validate(); err == nil {
+	if err := (Cast{Seq: 1, Slot: 13}).Validate(); err == nil {
 		t.Fatal("accepted invalid slot")
 	}
 }

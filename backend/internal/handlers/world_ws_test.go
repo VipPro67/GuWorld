@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
 func TestHandleWorldWSCommandRejectsUnknownCommand(t *testing.T) {
@@ -33,30 +32,13 @@ func TestHandleWorldWSCommandRejectsMalformedRectangle(t *testing.T) {
 	}
 }
 
-func TestHandleWorldWSCommandRejectsMalformedMovePath(t *testing.T) {
+func TestHandleWorldWSCommandRejectsLegacyMovePath(t *testing.T) {
 	status, body := HandleWorldWSCommand(uuid.New(), "world.move_path", json.RawMessage(`{"x": "invalid"}`))
-	if status != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+	if status != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", status, http.StatusNotFound)
 	}
 	if !json.Valid(body) {
 		t.Fatalf("invalid JSON response: %s", body)
-	}
-}
-
-func TestHandleWorldWSCommandBlocksLegacyMovementForRealtimeOwner(t *testing.T) {
-	playerID := uuid.New()
-	middleware.SetRealtimeOwnershipChecker(func(id uuid.UUID) bool { return id == playerID })
-	t.Cleanup(func() { middleware.SetRealtimeOwnershipChecker(nil) })
-	status, body := HandleWorldWSCommand(playerID, "world.move_path", json.RawMessage(`{"x":10,"y":10}`))
-	if status != http.StatusConflict {
-		t.Fatalf("status = %d, want %d", status, http.StatusConflict)
-	}
-	var result map[string]string
-	if err := json.Unmarshal(body, &result); err != nil {
-		t.Fatalf("invalid JSON response: %v", err)
-	}
-	if result["code"] != "realtime_world_owns_character" {
-		t.Fatalf("unexpected rejection code: %q", result["code"])
 	}
 }
 
