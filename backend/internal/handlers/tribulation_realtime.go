@@ -186,24 +186,27 @@ func RealtimeEngageTribulation(c *gin.Context) {
 	}
 
 	if currRegion != "" && currRegion != "aperture_tribulation" {
+		returnRegion, returnX, returnY, atlasX, atlasY, locationErr := resolveApertureReturnLocation(
+			c.Request.Context(), tx, playerID, currRegion, currX, currY,
+		)
+		if locationErr != nil {
+			logger.S.Errorf("[APERTURE-RETURN-SAVE] resolve failed: player=%s aperture=%s region=%q err=%v", playerID, ev.ApertureID, currRegion, locationErr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác thực vị trí trở về Tiên Khiếu"})
+			return
+		}
 		result, err := tx.ExecContext(c.Request.Context(), `
 			UPDATE immortal_apertures
 			SET return_region = $1, return_x = $2, return_y = $3
 			WHERE id = $4
-		`, currRegion, currX, currY, ev.ApertureID)
+		`, returnRegion, returnX, returnY, ev.ApertureID)
 		if err != nil {
-			logger.S.Errorf("[APERTURE-RETURN-SAVE] update failed: player=%s aperture=%s region=%q err=%v", playerID, ev.ApertureID, currRegion, err)
+			logger.S.Errorf("[APERTURE-RETURN-SAVE] update failed: player=%s aperture=%s region=%q resolved_region=%q err=%v", playerID, ev.ApertureID, currRegion, returnRegion, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí trở về Tiên Khiếu"})
 			return
 		}
 		if affected, rowsErr := result.RowsAffected(); rowsErr != nil || affected != 1 {
 			logger.S.Errorf("[APERTURE-RETURN-SAVE] update affected %d rows: player=%s aperture=%s region=%q rows_error=%v", affected, playerID, ev.ApertureID, currRegion, rowsErr)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy Tiên Khiếu để lưu vị trí trở về"})
-			return
-		}
-		var atlasX, atlasY sql.NullInt64
-		if err := tx.QueryRowContext(c.Request.Context(), `SELECT atlas_x, atlas_y FROM regions WHERE id = $1`, currRegion).Scan(&atlasX, &atlasY); err != nil && err != sql.ErrNoRows {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu tọa độ bản đồ thế giới"})
 			return
 		}
 		if _, err := tx.ExecContext(c.Request.Context(), `
@@ -248,6 +251,49 @@ func RealtimeEngageTribulation(c *gin.Context) {
 		"enemies":           enemies,
 		"realtime_transfer": realtimeTransfer,
 	})
+}
+
+// resolveApertureReturnLocation prevents stale realtime region IDs and
+// out-of-bounds world coordinates from violating the aperture return-region
+// foreign key or creating an exit point that cannot be restored later.
+func resolveApertureReturnLocation(
+	ctx context.Context,
+	q interface {
+		QueryRowContext(context.Context, string, ...any) *sql.Row
+	},
+	playerID uuid.UUID,
+	region string,
+	x, y float64,
+) (string, float64, float64, sql.NullInt64, sql.NullInt64, error) {
+	var active bool
+	var width, height, entryX, entryY int
+	var safeX, safeY, atlasX, atlasY sql.NullInt64
+	err := q.QueryRowContext(ctx, `
+		SELECT is_active, width, height, entry_x, entry_y, safe_zone_x, safe_zone_y, atlas_x, atlas_y
+		FROM regions WHERE id = $1
+	`, region).Scan(&active, &width, &height, &entryX, &entryY, &safeX, &safeY, &atlasX, &atlasY)
+	if err == nil && active && width > 0 && height > 0 {
+		if x >= 0 && y >= 0 && x < float64(width) && y < float64(height) {
+			return region, x, y, atlasX, atlasY, nil
+		}
+		if safeX.Valid && safeY.Valid && safeX.Int64 >= 0 && safeY.Int64 >= 0 && safeX.Int64 < int64(width) && safeY.Int64 < int64(height) {
+			return region, float64(safeX.Int64), float64(safeY.Int64), atlasX, atlasY, nil
+		}
+		entryX = min(max(entryX, 0), width-1)
+		entryY = min(max(entryY, 0), height-1)
+		return region, float64(entryX), float64(entryY), atlasX, atlasY, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return "", 0, 0, sql.NullInt64{}, sql.NullInt64{}, fmt.Errorf("validate current region %q: %w", region, err)
+	}
+	region, x, y, err = resolveApertureExitLocation(ctx, q, playerID)
+	if err != nil {
+		return "", 0, 0, sql.NullInt64{}, sql.NullInt64{}, err
+	}
+	if err := q.QueryRowContext(ctx, `SELECT atlas_x, atlas_y FROM regions WHERE id = $1`, region).Scan(&atlasX, &atlasY); err != nil {
+		return "", 0, 0, sql.NullInt64{}, sql.NullInt64{}, fmt.Errorf("read fallback region anchor %q: %w", region, err)
+	}
+	return region, x, y, atlasX, atlasY, nil
 }
 
 // RealtimeTribulationVictoryRequest is kept for API compatibility. Node HP is
