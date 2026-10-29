@@ -17,8 +17,8 @@ import {
   Settings2,
   type LucideIcon,
 } from "lucide-react";
-import { useState, useEffect } from "react";
 import type { MMOPanel } from "@/components/game/MMOBusinessPanels";
+import { getUiPreferences, updateUiPreferences, useUiPreferences } from "@/lib/ui-preferences";
 
 export interface QuickActionDef {
   id: string;
@@ -77,34 +77,20 @@ export const DEFAULT_QUICK_ACTION_IDS = ["maps", "inventory", "cultivation", "sh
 export const MAX_QUICK_ACTIONS = 5;
 export const MIN_QUICK_ACTIONS = 1;
 
-const STORAGE_KEY = "gu_mmo_quick_actions";
-const EVENT_NAME = "gu_mmo_quick_actions_updated";
-
 export function getQuickActionIds(): string[] {
   if (typeof window === "undefined") return DEFAULT_QUICK_ACTION_IDS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_QUICK_ACTION_IDS;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      const valid = parsed.filter((id) => typeof id === "string" && QUICK_ACTIONS_MAP[id]);
-      if (valid.length > 0) return valid.slice(0, MAX_QUICK_ACTIONS);
-    }
-  } catch {}
-  return DEFAULT_QUICK_ACTION_IDS;
+  const valid = getUiPreferences().quickActions.filter((id) => QUICK_ACTIONS_MAP[id]);
+  return valid.length > 0 ? valid.slice(0, MAX_QUICK_ACTIONS) : DEFAULT_QUICK_ACTION_IDS;
 }
 
 export function saveQuickActionIds(ids: string[]): void {
   if (typeof window === "undefined") return;
-  try {
-    const valid = ids.filter((id) => QUICK_ACTIONS_MAP[id]).slice(0, MAX_QUICK_ACTIONS);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(valid.length > 0 ? valid : DEFAULT_QUICK_ACTION_IDS));
-    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: valid }));
-  } catch {}
+  const valid = ids.filter((id) => QUICK_ACTIONS_MAP[id]).slice(0, MAX_QUICK_ACTIONS);
+  updateUiPreferences({ quickActions: valid.length > 0 ? valid : DEFAULT_QUICK_ACTION_IDS });
 }
 
 export function resetQuickActionIds(): string[] {
-  saveQuickActionIds(DEFAULT_QUICK_ACTION_IDS);
+  updateUiPreferences({ quickActions: DEFAULT_QUICK_ACTION_IDS });
   return DEFAULT_QUICK_ACTION_IDS;
 }
 
@@ -113,30 +99,16 @@ export function useQuickActionIds(): {
   setIds: (ids: string[]) => void;
   reset: () => void;
 } {
-  const [ids, setIdsState] = useState<string[]>(DEFAULT_QUICK_ACTION_IDS);
-
-  useEffect(() => {
-    setIdsState(getQuickActionIds());
-    const handler = () => {
-      setIdsState(getQuickActionIds());
-    };
-    window.addEventListener(EVENT_NAME, handler);
-    window.addEventListener("storage", handler);
-    return () => {
-      window.removeEventListener(EVENT_NAME, handler);
-      window.removeEventListener("storage", handler);
-    };
-  }, []);
+  const preferences = useUiPreferences();
+  const ids = preferences.quickActions.filter((id) => QUICK_ACTIONS_MAP[id]).slice(0, MAX_QUICK_ACTIONS);
 
   const setIds = (next: string[]) => {
     saveQuickActionIds(next);
-    setIdsState(next);
   };
 
   const reset = () => {
-    const def = resetQuickActionIds();
-    setIdsState(def);
+    resetQuickActionIds();
   };
 
-  return { ids, setIds, reset };
+  return { ids: ids.length > 0 ? ids : DEFAULT_QUICK_ACTION_IDS, setIds, reset };
 }

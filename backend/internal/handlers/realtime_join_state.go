@@ -3,9 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -56,6 +54,7 @@ type RealtimeKillerMove struct {
 	RealtimeCooldownMS   uint64
 	CreationMasteryLevel int
 	MasteryXP            int
+	HouseStrike          bool
 }
 
 // RealtimeJoinState is loaded from the primary database for admission. It is
@@ -90,89 +89,6 @@ type RealtimeJoinState struct {
 	PartyID                  string
 	EquippedGu               []RealtimeEquippedGu
 	KillerMoves              []RealtimeKillerMove
-}
-
-func loadRealtimeKillerMoves(ctx context.Context, tx *sql.Tx, playerID uuid.UUID) ([]RealtimeKillerMove, error) {
-	rows, err := tx.QueryContext(ctx, `
-		SELECT id::text,name,main_gu_rank,path,components,compiled_effects,
-			COALESCE((combat_profile->>'mana_cost')::double precision,0),
-			success_chance,complexity,COALESCE(combat_profile->>'backfire_hp_pct','0'),
-			COALESCE(combat_profile->>'backfire_status',''),
-			COALESCE((combat_profile->>'realtime_windup_ms')::bigint,0),
-			COALESCE((combat_profile->>'realtime_cooldown_ms')::bigint,0),
-			creation_path_mastery_level,mastery_xp
-		FROM player_killer_moves WHERE player_id=$1 AND is_equipped=true
-		ORDER BY updated_at DESC,id LIMIT 4
-	`, playerID)
-	if err != nil {
-		return nil, fmt.Errorf("load equipped realtime killer moves: %w", err)
-	}
-	type componentRef struct {
-		InstanceID string `json:"instance_id"`
-		GuID       string `json:"gu_id"`
-		Rank       int    `json:"rank"`
-	}
-	type pendingComponents struct {
-		moveIndex  int
-		components []componentRef
-	}
-	moves := make([]RealtimeKillerMove, 0, 4)
-	componentRefs := make([]pendingComponents, 0, 4)
-	for rows.Next() {
-		var move RealtimeKillerMove
-		var rawComponents, rawEffects []byte
-		if err := rows.Scan(&move.ID, &move.Name, &move.Rank, &move.Path, &rawComponents, &rawEffects,
-			&move.ManaCost, &move.SuccessChance, &move.Complexity, &move.BackfireHPPercent, &move.BackfireStatus,
-			&move.RealtimeWindupMS, &move.RealtimeCooldownMS, &move.CreationMasteryLevel, &move.MasteryXP); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("scan equipped realtime killer move: %w", err)
-		}
-		var components []componentRef
-		if err := json.Unmarshal(rawComponents, &components); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("decode realtime killer move components: %w", err)
-		}
-		move.ExpectedComponents = len(components)
-		componentRefs = append(componentRefs, pendingComponents{moveIndex: len(moves), components: components})
-		if move.RealtimeWindupMS == 0 || move.RealtimeCooldownMS == 0 {
-			move.RealtimeWindupMS, move.RealtimeCooldownMS = models.KillerMoveRealtimeTiming(move.Rank, move.Complexity)
-		}
-		if err := json.Unmarshal(rawEffects, &move.Effects); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("decode realtime killer move effects: %w", err)
-		}
-		moves = append(moves, move)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, fmt.Errorf("read equipped realtime killer moves: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close equipped realtime killer moves: %w", err)
-	}
-	// database/sql transactions use one connection. Resolve component rows only
-	// after closing the loadout cursor so the follow-up queries cannot wait on it.
-	for _, pending := range componentRefs {
-		move := &moves[pending.moveIndex]
-		for _, component := range pending.components {
-			var hunger float64
-			var state string
-			componentErr := tx.QueryRowContext(ctx, `
-				SELECT hunger,state FROM player_gu WHERE id=$1 AND player_id=$2 AND gu_id=$3 AND gu_rank=$4
-			`, component.InstanceID, playerID, component.GuID, component.Rank).Scan(&hunger, &state)
-			if errors.Is(componentErr, sql.ErrNoRows) || strings.EqualFold(state, "DEAD") {
-				move.Components = nil
-				break
-			}
-			if componentErr != nil {
-				return nil, fmt.Errorf("load realtime killer move component %s: %w", component.InstanceID, componentErr)
-			}
-			move.Components = append(move.Components, RealtimeKillerMoveComponent{
-				InstanceID: component.InstanceID, GuID: component.GuID, Rank: component.Rank, Hunger: hunger,
-			})
-		}
-	}
-	return moves, nil
 }
 
 func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoinState, error) {
@@ -225,7 +141,11 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		return RealtimeJoinState{}, err
 	}
 	state.EquippedGu = equipped
-	killerMoves, err := loadRealtimeKillerMoves(ctx, tx, playerID)
+	loadout, loadoutConfigured, err := loadPlayerCombatLoadout(ctx, tx, playerID)
+	if err != nil {
+		return RealtimeJoinState{}, err
+	}
+	_, killerMoves, err := resolveCombatSkills(ctx, tx, playerID, loadout, loadoutConfigured)
 	if err != nil {
 		return RealtimeJoinState{}, err
 	}

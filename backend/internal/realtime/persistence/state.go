@@ -187,6 +187,10 @@ func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state Sta
 		if moveID == "" || uses == 0 || uses > 1_000_000 {
 			return 0, ErrInvalidState
 		}
+		if _, parseErr := uuid.Parse(moveID); parseErr != nil {
+			// Trận Kích / other non-killer-move ids never accrue mastery XP.
+			continue
+		}
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE player_killer_moves
 			SET mastery_xp = LEAST(5000, mastery_xp + $1), updated_at = NOW()

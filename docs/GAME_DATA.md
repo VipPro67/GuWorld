@@ -11,6 +11,23 @@ only HP/shield and map/content versions. Existing databases require the
 explicit maintenance script `backend/scripts/migrate_player_world_location.sql`;
 it is not run during startup. See `docs/mmo/recovery.md`.
 
+## Realtime skill loadout
+
+`players.realtime_skill_loadout` is an ordered JSONB array (max 4) of
+`{"kind":"move"|"house","id":"..."}` entries and
+`players.realtime_skill_loadout_configured` distinguishes "never saved" (the
+server backfills slots from the equipped pool) from an explicit order. It binds
+hotbar slots 9–12, shared by equipped player killer moves
+(`player_killer_moves.is_equipped`) and the Trận Kích actions of the equipped
+`player_gu_houses` row. Resolution and slot binding live in
+`handlers/skill_loadout.go`; entries whose source is gone (move deleted or
+unequipped, house unequipped) are dropped and later entries compact upward,
+while resolvable-but-unsupported entries keep their slot as an empty gap so the
+remaining keys do not shift. `PUT /api/combat/skill-loadout` rejects entries
+that are not equipped or not realtime-supported at save time. Trận Kích
+consumption drains the house core Gu hunger but does not accrue killer-move
+mastery XP.
+
 ## Daily missions
 
 Daily mission progress is stored in `player_daily_missions`; `player_daily_mission_events`

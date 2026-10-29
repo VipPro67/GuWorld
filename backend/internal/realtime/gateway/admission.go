@@ -520,6 +520,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 			SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
 			BackfireStatus: move.BackfireStatus, Complexity: move.Complexity, DamageScale: move.DamageScale,
 			WindupMS: move.RealtimeWindupMS, CooldownMS: move.RealtimeCooldownMS,
+			HouseStrike: move.HouseStrike,
 		})
 	}
 	loadout.Skills, loadout.Revision = realtimeeffects.AppendKillerMoveLoadout(loadout.Skills, loadout.Revision, killerMoves)

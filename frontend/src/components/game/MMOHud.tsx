@@ -16,6 +16,7 @@ import { TeleportBuildModal } from "@/components/Teleport/TeleportBuildModal";
 import type { MMOPanel } from "./MMOBusinessPanels";
 import type { MapPortal } from "@/game/world/MapLoader";
 import { useQuickActionIds, QUICK_ACTIONS_MAP } from "@/lib/mmo-quick-actions";
+import { resolvePlayerViewMode, resolveTargetViewMode, hotbarKeyLabel, updateUiPreferences, useHotbarKeybinds } from "@/lib/ui-preferences";
 import { QuickActionCustomizer } from "./QuickActionCustomizer";
 import { collectMarkers, findNearestMarker } from "@/game/world/markers/collect";
 import type { WorldMarker } from "@/game/world/markers/types";
@@ -78,10 +79,6 @@ const MODE_LABEL: Record<WorldSkillInfo["mode"], string> = {
   GROUND: "Diện rộng",
   SELF: "Bản thân",
 };
-
-function hotbarKeyLabel(slot: number): string {
-  return slot >= 9 ? `Alt+${slot - 8}` : String(slot);
-}
 
 const RADAR_MARKER_CLASS: Record<WorldMarker["kind"], string> = {
   vein: "h-2.5 w-2.5 rounded-full bg-emerald-400 border border-emerald-950 shadow-[0_0_6px_#10b981]",
@@ -206,41 +203,27 @@ export function MMOHud(props: MMOHudProps) {
   const [minimapCollapsed, setMinimapCollapsed] = useState(false);
   const [mobileNavCollapsed, setMobileNavCollapsed] = useState(false);
   const [tribulationPanelExpanded, setTribulationPanelExpanded] = useState(false);
-  const [playerViewMode, setPlayerViewMode] = useState<"expanded" | "compact" | "minimized">(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("gu_player_view_mode");
-      if (saved === "expanded" || saved === "compact" || saved === "minimized") return saved;
-      if (window.innerWidth < 640) return "compact";
-    }
-    return "expanded";
-  });
+  const [playerViewMode, setPlayerViewMode] = useState<"expanded" | "compact" | "minimized">(() => resolvePlayerViewMode());
 
   const changePlayerViewMode = (mode: "expanded" | "compact" | "minimized") => {
     setPlayerViewMode(mode);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("gu_player_view_mode", mode);
-      } catch {}
-    }
+    updateUiPreferences({ playerViewMode: mode });
   };
 
-  const [targetViewMode, setTargetViewMode] = useState<"expanded" | "compact" | "minimized">(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("gu_target_view_mode");
-      if (saved === "expanded" || saved === "compact" || saved === "minimized") return saved;
-      if (window.matchMedia("(max-width: 767px)").matches) return "compact";
-    }
-    return "expanded";
-  });
+  const [targetViewMode, setTargetViewMode] = useState<"expanded" | "compact" | "minimized">(() => resolveTargetViewMode());
 
   const changeTargetViewMode = (mode: "expanded" | "compact" | "minimized") => {
     setTargetViewMode(mode);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("gu_target_view_mode", mode);
-      } catch {}
-    }
+    updateUiPreferences({ targetViewMode: mode });
   };
+
+  const hotbarKeybinds = useHotbarKeybinds();
+  // Only render slots that actually hold a Gu or a realtime skill; empty
+  // placeholders are gone so the HUD reflects the current loadout.
+  const hotbarSlots = Array.from({ length: 12 }, (_, index) => index + 1).filter((slot) =>
+    props.skills.some((entry) => entry.slot === slot) ||
+    props.guSlots.some((entry) => entry.slot === slot && entry.guId),
+  );
 
   const monsterDictionary = useGameStore((state) => state.monsterDictionary);
   const guDictionary = useGameStore((state) => state.guDictionary);
@@ -1501,8 +1484,8 @@ export function MMOHud(props: MMOHudProps) {
 
       {/* Mobile Combat Hub: 2-Row Cluster + Big Attack Button (Tối ưu ngón cái tay phải, không bị che/tràn màn hình) */}
       <div className="pointer-events-auto absolute bottom-2 right-2 flex items-end gap-1.5 md:hidden z-20 select-none">
-        <div className={`grid grid-cols-4 gap-1 rounded-xl p-1 shadow-xl ${frame}`}>
-          {Array.from({ length: 12 }, (_, index) => index + 1).map((slot) => {
+        {hotbarSlots.length > 0 && <div className={`grid grid-cols-4 gap-1 rounded-xl p-1 shadow-xl ${frame}`}>
+          {hotbarSlots.map((slot) => {
             const skill = props.skills.find((entry) => entry.slot === slot);
             const guSlot = props.guSlots.find((entry) => entry.slot === slot);
             const remaining = props.cooldownRemaining[slot] ?? 0;
@@ -1549,7 +1532,7 @@ export function MMOHud(props: MMOHudProps) {
                 }`}
               >
                 <span className="absolute left-0 top-0 rounded-br bg-black/85 px-1 py-0.2 font-mono text-[8px] font-bold text-[#f4d695] border-r border-b border-[#8f6d40]/50 leading-none z-10">
-                  {hotbarKeyLabel(slot)}
+                  {hotbarKeyLabel(slot, hotbarKeybinds)}
                 </span>
                 {isToggled || (isFormActivation && formActive) ? (
                   <span className="absolute right-0 top-0 rounded-bl bg-emerald-700 px-1 py-0.2 font-sans text-[7px] font-bold text-white z-10 animate-pulse">
@@ -1582,7 +1565,7 @@ export function MMOHud(props: MMOHudProps) {
               </button>
             );
           })}
-        </div>
+        </div>}
 
         {/* Big Attack Button */}
         <button
@@ -1637,7 +1620,7 @@ export function MMOHud(props: MMOHudProps) {
             {props.rightClickAction === "skill" ? `Cổ ${props.rightClickSlot}` : "Đánh"}
           </span>
         </button>
-        {Array.from({ length: 12 }, (_, index) => index + 1).map((slot) => {
+        {hotbarSlots.map((slot) => {
           const skill = props.skills.find((entry) => entry.slot === slot);
           const guSlot = props.guSlots.find((entry) => entry.slot === slot);
           const remaining = props.cooldownRemaining[slot] ?? 0;
@@ -1668,7 +1651,7 @@ export function MMOHud(props: MMOHudProps) {
               onMouseLeave={() => props.onHoverSkill?.(null)}
               title={
                 skill
-                  ? `${guSlot?.name ?? skill.name} · Phím [${hotbarKeyLabel(slot)}]
+                  ? `${guSlot?.name ?? skill.name} · Phím [${hotbarKeyLabel(slot, hotbarKeybinds)}]
 Cơ chế: ${MODE_BADGE[skill.mode].icon} ${MODE_BADGE[skill.mode].label}
 Tầm xa: ${skill.range.toFixed(1)} ô${skill.radius_units ? ` · Bán kính: ${skill.radius_units} ô` : ""}${skill.shape ? ` · Dạng: ${skill.shape}` : ""}
 Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi: ${(skill.cooldown_ticks / 20).toFixed(1)}s${isToggled ? " · (ĐANG DUY TRÌ)" : ""}`
@@ -1689,7 +1672,7 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
               }`}
             >
               <span className="absolute left-0 top-0 rounded-br bg-black/85 px-1.5 py-0.5 font-mono text-[9px] sm:text-[11px] md:text-xs font-bold text-[#f4d695] border-r border-b border-[#8f6d40]/50 leading-none z-10">
-                {hotbarKeyLabel(slot)}
+                {hotbarKeyLabel(slot, hotbarKeybinds)}
               </span>
               {isToggled || (isFormActivation && formActive) ? (
                 <span className="absolute right-0 top-0 rounded-bl bg-emerald-700 px-1 py-0.5 font-sans text-[7px] sm:text-[9px] font-bold text-white border-l border-b border-emerald-400 z-10 animate-pulse">

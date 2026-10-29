@@ -37,6 +37,9 @@ type KillerMove struct {
 	DamageScale        float64
 	WindupMS           uint64
 	CooldownMS         uint64
+	// HouseStrike marks Trận Kích synthesized from an equipped Tiên Cổ Ốc.
+	// House actions drain core-Gu hunger but never accrue killer-move mastery.
+	HouseStrike bool
 }
 
 // BuildKillerMoveSkills projects at most four equipped moves into reserved
@@ -89,9 +92,11 @@ func compileKillerMove(move KillerMove, slot int) (combat.Skill, bool) {
 	}
 	skill := combat.Skill{
 		ID: "KILLER_MOVE_" + move.ID, Slot: slot, Name: move.Name, ManaCost: move.ManaCost,
-		KillerMoveID:  move.ID,
 		SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
 		Range: 9, MaxTargets: 1, RequiresEnemyTarget: true,
+	}
+	if !move.HouseStrike {
+		skill.KillerMoveID = move.ID
 	}
 	if move.DamageScale > 0 {
 		skill.Damage = move.DamageScale

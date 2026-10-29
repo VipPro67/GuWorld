@@ -73,7 +73,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/player/profile/:username` |
 | PUT | `/player/profile/settings` | Cập nhật hồ sơ (bio, avatar, mật khẩu, ngụy trang). Username không trùng nhau dù khác hoa/thường; nhập tên người chơi tại các tính năng được hỗ trợ cũng không phân biệt hoa/thường. Đổi tên khác biệt thực sự: Rank 1-2 miễn phí; Rank 3-5 tốn Nguyên Thạch (5k/20k/100k); Rank 6-9 tốn Tiên Nguyên Thạch (100/500/2.5k/10k), tụt Đạo Ngân & Chân Ý Lưu Phái (-30%/-40%/-50%/-70%), tổn hại Tiên Khiếu và phát thông báo Thế Giới (không tụt tiểu cảnh giới). |
 | GET | `/player/combat-settings` | Đọc cấu hình điều khiển realtime và tự farm: click trái/phải, bật tự farm, tầm farm, ngưỡng dừng theo HP và dùng kỹ năng theo hotbar. Không còn chiến thuật tự động turn-based. |
-| PUT | `/player/combat-settings` | Lưu các trường điều khiển realtime và tự farm tương ứng; danh sách Cổ realtime cấu hình riêng qua `/inventory/realtime-hotbar`, Sát Chiêu lấy từ danh sách đã trang bị. |
+| PUT | `/player/combat-settings` | Lưu các trường điều khiển realtime và tự farm tương ứng; danh sách Cổ realtime cấu hình riêng qua `/inventory/realtime-hotbar`, thứ tự Sát Chiêu/Trận Kích Tiên Cổ Ốc trong ô 9–12 cấu hình qua `/combat/skill-loadout`. |
 | GET | `/player/referrals` |
 | POST | `/player/referrals/claim` |
 | POST | `/player/referrals/bind` |
@@ -145,7 +145,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/drop` |
 | POST | `/inventory/drop-batch` |
 | GET | `/killer-moves/options` | Cổ người chơi trong `player_gu` và effect combat/ON_USE được phép kéo vào công thức. |
-| GET | `/killer-moves` | Danh sách sát chiêu đã lưu, độ thành thạo, trạng thái thiếu Cổ, timing realtime và `realtime_supported`/lý do khóa; tối đa 4 sát chiêu đã trang bị có thể vào hotbar ô 9–12 nếu effect được hỗ trợ. |
+| GET | `/killer-moves` | Danh sách sát chiêu đã lưu, độ thành thạo, trạng thái thiếu Cổ, timing realtime và `realtime_supported`/lý do khóa. Sát chiêu đã trang bị và Trận Kích của Tiên Cổ Ốc đang xuất chiến cùng dùng bốn ô hotbar 9–12; thứ tự lưu qua `/combat/skill-loadout`. |
 | POST | `/killer-moves/preview` | Tính thử công thức. Body: `{ "main_gu_instance_id", "component_instance_ids": [], "selected_effect_keys": [] }`. Trả ngân sách, hệ số effect, độ hòa hợp, chi phí và tỉ lệ thành công. |
 | POST | `/killer-moves` | Lưu sát chiêu. Body preview cộng `name`; giới hạn 12 sát chiêu lưu và 4 sát chiêu trang bị. |
 | POST | `/killer-moves/:id/equip` | Bật/tắt trang bị. Mỗi Cổ thành phần phải còn đúng instance/rank trong `player_gu`. |
@@ -160,6 +160,8 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/refine/deduce` | Suy diễn recipe. |
 | POST | `/combat/practice` | Tạo phiên tập luyện realtime riêng trên `realtime_preview`; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Không tiêu hao HP/Chân Nguyên thật và trả `{instance_id,zone_id,origin_zone_id,is_practice}` để client nối vào zone. |
 | POST | `/combat/practice/exit` | Kết thúc phiên tập luyện realtime và khôi phục zone đã lưu trước khi vào phòng tập. |
+| GET | `/combat/skill-loadout` | Hotbar chiêu thức ô 9–12: `{slots, available, first_slot, max_slots}`. `slots` chỉ chứa chiêu đang ghim theo thứ tự phím; `available` gồm mọi Sát Chiêu đã trang bị và Trận Kích của Tiên Cổ Ốc đang xuất chiến kèm `supported`/`reason`. Hai nguồn dùng chung bốn ô. |
+| PUT | `/combat/skill-loadout` | Lưu thứ tự ghim ô 9–12 (Alt+1–4). Body `{ "entries": [{ "kind": "move"\|"house", "id": "..." }] }`, tối đa 4, không trùng; từ chối chiêu chưa trang bị hoặc chưa hỗ trợ realtime. Trả `{message, loadout}` đã resolve. |
 | GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng), **mọi trận boss** (`BOSS`/`World_Boss`/`TRIBULATION_BOSS`, cả thắng lẫn thua), **mọi trận Tông Môn Chiến** (`SECT_WAR`, cả thắng lẫn thua, ghi cho cả người tấn công và từng đệ tử trấn thủ tham chiến với góc nhìn đảo phe), các trận PVE **thua**, và các trận PVE **thắng có rơi Tiên Cổ** (kể cả quái thường/tinh anh, để xem lại vận may); PVE thường thắng không rơi Tiên Cổ thì không lưu. Bản ghi PVE/boss cũ hơn 30 ngày bị worker xóa theo lô (PVP giữ vô hạn). |
 | GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để xem lại sự kiện chiến đấu realtime; các bản ghi turn-based cũ vẫn đọc được. |
 

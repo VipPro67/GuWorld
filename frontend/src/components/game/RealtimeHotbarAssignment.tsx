@@ -56,7 +56,7 @@ export function RealtimeHotbarAssignment({ player, onSaved }: { player: Player; 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-emerald-100">Gán Cổ vào hotbar realtime</h3>
-          <p className="mt-1 text-[11px] text-zinc-400">Gán thứ tự Cổ cho phím 1–6; chuột trái/phải sẽ dùng theo chiến thuật realtime.</p>
+          <p className="mt-1 text-[11px] text-zinc-400">Gán thứ tự Cổ cho 6 ô đầu hotbar (phím mặc định 1–6, có thể đổi bên dưới); chuột trái/phải sẽ dùng theo chiến thuật realtime.</p>
         </div>
         <button type="button" onClick={() => void save()} disabled={saving || visibleSlots === 0 || slots.length !== visibleSlots || new Set(slots).size !== slots.length} className="rounded-lg border border-emerald-300/25 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-40">
           {saving ? "Đang lưu…" : "Lưu & kết nối lại"}

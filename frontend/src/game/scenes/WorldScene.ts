@@ -25,6 +25,7 @@ import {
 import { PREVIEW_WORLD_HEIGHT, PREVIEW_WORLD_WIDTH, WORLD_RUNTIME_KEY } from "../bootstrap/constants.ts";
 import { useGameStore } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
+import { matchHotbarSlot } from "@/lib/ui-preferences";
 
 interface ActorView {
   container: Phaser.GameObjects.Container;
@@ -137,7 +138,7 @@ export class WorldScene extends Phaser.Scene {
       this.cycleTarget();
       return;
     }
-    const slot = event.altKey ? killerSlotFromCode(event.code) : slotFromCode(event.code);
+    const slot = matchHotbarSlot(event);
     if (slot !== null) {
       event.preventDefault();
       this.activateHotbarSlot(slot);
@@ -1396,13 +1397,3 @@ function isTextField(target: EventTarget | Element | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
-function slotFromCode(code: string): number | null {
-  const match = /^(?:Digit|Numpad)([1-8])$/.exec(code);
-  if (!match) return null;
-  return Number(match[1]);
-}
-
-function killerSlotFromCode(code: string): number | null {
-  const match = /^(?:Digit|Numpad)([1-4])$/.exec(code);
-  return match ? Number(match[1]) + 8 : null;
-}

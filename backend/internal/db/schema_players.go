@@ -54,6 +54,8 @@ func schemaPlayers() error {
 		earned_achievements JSONB NOT NULL DEFAULT '[]',
 		growth_data JSONB NOT NULL DEFAULT '{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}',
 		combat_settings JSONB NOT NULL DEFAULT '{}',
+		realtime_skill_loadout JSONB NOT NULL DEFAULT '[]'::jsonb,
+		realtime_skill_loadout_configured BOOLEAN NOT NULL DEFAULT false,
 		immortal_state JSONB NOT NULL DEFAULT '{}',
 		last_mana_update TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		last_hunger_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -114,6 +116,14 @@ func schemaPlayers() error {
 	if err := execSchema("players_username_case_insensitive_unique", `
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_players_username_lower_unique ON players (LOWER(username));`); err != nil {
 		return fmt.Errorf("cannot enforce case-insensitive username uniqueness; resolve existing usernames that differ only by letter case first: %w", err)
+	}
+	if err := execSchema("players_realtime_skill_loadout", `
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS realtime_skill_loadout JSONB NOT NULL DEFAULT '[]'::jsonb;`); err != nil {
+		return err
+	}
+	if err := execSchema("players_realtime_skill_loadout_configured", `
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS realtime_skill_loadout_configured BOOLEAN NOT NULL DEFAULT false;`); err != nil {
+		return err
 	}
 	if err := execSchema("players_map_instance_idx", `CREATE INDEX IF NOT EXISTS idx_players_map_instance_location ON players (map_instance_id, current_region, x, y);`); err != nil {
 		return err

@@ -5,6 +5,7 @@ import { useUIStore } from "@/store/useUIStore";
 import { AUTHENTICATED_SESSION } from "@/store/useGameStore";
 import type { Player } from "@/store/useGameStore";
 import { shouldApplyReconciliation, shouldRefreshCollections } from "@/lib/player-reconciliation";
+import { getUiPreferences } from "@/lib/ui-preferences";
 
 const lastStatusFetchTimes = new Map<string, number>();
 const pendingStatusFetches = new Map<string, Promise<void>>();
@@ -83,7 +84,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
         console.warn("[WebSocket] Failed to subscribe events during session restore:", wsErr);
       }
       const today = new Date().toISOString().split('T')[0];
-      const hiddenUntil = typeof window !== "undefined" ? localStorage.getItem("gu_changelog_hide_until") : null;
+      const hiddenUntil = getUiPreferences().changelogHideUntil;
       if (hiddenUntil !== today) {
         useUIStore.getState().setShowChangelog(true);
       }

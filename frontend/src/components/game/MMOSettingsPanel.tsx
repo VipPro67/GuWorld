@@ -6,7 +6,6 @@ import {
   Wrench,
   Swords,
   Sliders,
-  Keyboard,
   RotateCcw,
   Sparkles,
   Volume2,
@@ -16,8 +15,9 @@ import {
 import { useGameStore, type AutoCombatConfig, type Player } from "@/store/useGameStore";
 import { QuickActionCustomizer } from "./QuickActionCustomizer";
 import { RealtimeHotbarAssignment } from "./RealtimeHotbarAssignment";
+import { SkillLoadoutEditor, HotbarKeybindEditor } from "./SkillLoadoutEditor";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
-import { resetQuickActionIds } from "@/lib/mmo-quick-actions";
+import { resetUiPreferences, updateUiPreferences, useUiPreferences } from "@/lib/ui-preferences";
 
 export type MMOSettingsTab = "quick_actions" | "combat" | "general";
 
@@ -70,8 +70,9 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
   const [savingCombat, setSavingCombat] = useState(false);
 
   // General settings state
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [showOtherPlayerNames, setShowOtherPlayerNames] = useState(true);
+  const uiPreferences = useUiPreferences();
+  const soundEnabled = uiPreferences.soundEnabled;
+  const showOtherPlayerNames = uiPreferences.showOtherPlayerNames;
 
   useEffect(() => {
     if (!store.combatSettings && !store.combatSettingsLoading) {
@@ -118,7 +119,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
           }`}
         >
           <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-          Tiện ích & Phím tắt
+          Tiện ích
         </button>
 
         <button
@@ -148,52 +149,13 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
         </button>
       </div>
 
-      {/* Tab 1: Tiện ích & Phím tắt (Mặc định khi bấm Cài đặt) */}
+      {/* Tab 1: Tiện ích (thanh ghim + menu yêu thích) */}
       {activeTab === "quick_actions" && (
         <div className="space-y-4 animate-in fade-in duration-200">
           <QuickActionCustomizer inline />
-
-          {/* Bảng phím tắt điều khiển */}
-          <section className="rounded-2xl border border-zinc-900 bg-zinc-900/40 p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Keyboard className="w-4 h-4 text-amber-400" />
-              <h3 className="font-serif text-sm font-bold text-zinc-100">Bảng phím tắt PC & Bàn phím</h3>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 text-xs font-mono text-zinc-300">
-              <div className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1.5 border border-zinc-800/80">
-                <span className="text-zinc-400">Di chuyển</span>
-                <span className="font-bold text-amber-300">W, A, S, D / Mũi tên</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1.5 border border-zinc-800/80">
-                <span className="text-zinc-400">Đi theo đường (A*)</span>
-                <span className="font-bold text-amber-300">Chuột trái click đất</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1.5 border border-zinc-800/80">
-                <span className="text-zinc-400">Dùng Cổ kỹ năng</span>
-                <span className="font-bold text-amber-300">Phím 1 – 6</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1.5 border border-zinc-800/80">
-                <span className="text-zinc-400">Đánh thường</span>
-                <span className="font-bold text-amber-300">Phím R / Chuột phải</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1.5 border border-zinc-800/80">
-                <span className="text-zinc-400">Đổi mục tiêu gần nhất</span>
-                <span className="font-bold text-amber-300">Phím Tab</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1.5 border border-zinc-800/80">
-                <span className="text-zinc-400">Hủy chọn / Thoát</span>
-                <span className="font-bold text-amber-300">Phím Esc</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1.5 border border-zinc-800/80">
-                <span className="text-zinc-400">Zoom Camera</span>
-                <span className="font-bold text-amber-300">Cuộn chuột (Scroll)</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1.5 border border-zinc-800/80">
-                <span className="text-zinc-400">Bật/tắt Debug HUD</span>
-                <span className="font-bold text-amber-300">Phím F3</span>
-              </div>
-            </div>
-          </section>
+          <p className="text-[11px] text-zinc-500">
+            Phím tắt hotbar chiến đấu và thứ tự sát chiêu / Trận Kích nằm trong tab “Chiến đấu &amp; Điều khiển”.
+          </p>
         </div>
       )}
 
@@ -208,10 +170,14 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
 
           {player && <RealtimeHotbarAssignment player={player} onSaved={onLoadoutSaved} />}
 
+          <SkillLoadoutEditor />
+
+          {player && <HotbarKeybindEditor player={player} />}
+
           <section className="rounded-2xl border border-zinc-900 bg-zinc-900/40 p-3 sm:p-4">
             <h3 className="font-serif text-sm font-bold text-zinc-100">Điều khiển chuột & phím</h3>
             <p className="mt-1 text-[11px] text-zinc-500">
-              Phím 1–6 dùng Cổ theo thứ tự hotbar; phím 7 biến thân và phím 8 dùng chiêu trong dạng khi Cổ hỗ trợ. Thiết lập chuột được lưu cùng điều khiển realtime.
+              Các ô Cổ 1–6 dùng theo thứ tự hotbar; ô 7 biến thân và ô 8 dùng chiêu trong dạng khi Cổ hỗ trợ (phím mặc định 1–8). Thiết lập chuột được lưu cùng điều khiển realtime.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="text-xs text-zinc-400">
@@ -361,7 +327,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                   type="checkbox"
                   className={toggleClass}
                   checked={showOtherPlayerNames}
-                  onChange={(e) => setShowOtherPlayerNames(e.target.checked)}
+                  onChange={(e) => updateUiPreferences({ showOtherPlayerNames: e.target.checked })}
                 />
               </label>
               <p className="text-[10px] text-zinc-500">
@@ -383,7 +349,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                   type="checkbox"
                   className={toggleClass}
                   checked={soundEnabled}
-                  onChange={(e) => setSoundEnabled(e.target.checked)}
+                  onChange={(e) => updateUiPreferences({ soundEnabled: e.target.checked })}
                 />
               </label>
               <p className="text-[10px] text-zinc-500">
@@ -406,8 +372,8 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
               <button
                 type="button"
                 onClick={() => {
-                  resetQuickActionIds();
-                  store.addToast("Đã khôi phục thanh tiện ích về mặc định", "success");
+                  resetUiPreferences();
+                  store.addToast("Đã khôi phục tiện ích và phím tắt về mặc định", "success");
                 }}
                 className="rounded-lg border border-[#8f6d40]/60 bg-[#2b1f15] px-3 py-1.5 text-xs text-amber-200 hover:bg-[#432d1c] transition"
               >

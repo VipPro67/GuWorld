@@ -754,6 +754,8 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		{
 			combat.POST("/practice", handlers.StartRealtimePractice)
 			combat.POST("/practice/exit", handlers.EndRealtimePractice)
+			combat.GET("/skill-loadout", handlers.GetCombatSkillLoadout)
+			combat.PUT("/skill-loadout", handlers.UpdateCombatSkillLoadout)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}

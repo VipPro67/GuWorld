@@ -21,6 +21,7 @@ import { TradeRoomModal } from "@/components/TradeRoomModal";
 import { GameLoadingScreen } from "@/components/GameLoadingScreen";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliation";
+import { updateUiPreferences } from "@/lib/ui-preferences";
 
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
 const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
@@ -176,7 +177,7 @@ export default function Home() {
   const handleCloseChangelog = () => {
     if (dontShowToday) {
       const today = new Date().toISOString().split('T')[0];
-      localStorage.setItem("gu_changelog_hide_until", today);
+      updateUiPreferences({ changelogHideUntil: today });
     }
     setDontShowToday(false);
     setShowChangelog(false);
