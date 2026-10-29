@@ -1233,7 +1233,10 @@ export class WorldScene extends Phaser.Scene {
       this.cancelPath();
       return;
     }
-    this.runtime.sendMoveTarget(this.pathQueue[0]);
+    const target = this.pathQueue[0];
+    const activeTarget = this.runtime.getMoveTarget();
+    if (activeTarget && Math.hypot(activeTarget.x - target.x, activeTarget.y - target.y) < 0.001) return;
+    this.runtime.sendMoveTarget(target);
   }
 
   private advancePath(): void {
