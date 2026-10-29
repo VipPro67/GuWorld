@@ -625,15 +625,12 @@ export const ImmortalApertureView: React.FC = () => {
       if (player) {
         setPlayerFromServer({
           current_region: "aperture_tribulation",
+          world_zone_id: "aperture_tribulation",
           x: 20,
           y: 20,
         });
       }
       setView("mmo-world");
-      addToast(
-        "⚡ Đã tiến vào bản đồ Tiên Khiếu 40×40! Dùng WASD hoặc chuột để di chuyển, phím Q/W/E/R tung chiêu diệt Quái Kiếp!",
-        "info"
-      );
     }
   };
 

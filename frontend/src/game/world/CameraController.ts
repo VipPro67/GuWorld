@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { centeredCameraBounds } from "./cameraBounds.ts";
 
 const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 1.6;
@@ -36,23 +37,21 @@ export class CameraController {
 
   public setBounds(x: number, y: number, width: number, height: number): void {
     this.lastBounds = { x, y, width, height };
+    this.refreshBounds();
+  }
+
+  public refreshBounds(): void {
+    const { x, y, width, height } = this.lastBounds;
+    if (width <= 0 || height <= 0) return;
     const viewportWidth = this.scene.scale.width / this.camera.zoom;
     const viewportHeight = this.scene.scale.height / this.camera.zoom;
-    this.camera.setBounds(x, y, Math.max(width, viewportWidth), Math.max(height, viewportHeight));
+    const bounds = centeredCameraBounds(x, y, width, height, viewportWidth, viewportHeight);
+    this.camera.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
   public setZoom(zoom: number): void {
     this.camera.setZoom(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)));
-    if (this.lastBounds.width > 0 && this.lastBounds.height > 0) {
-      const viewportWidth = this.scene.scale.width / this.camera.zoom;
-      const viewportHeight = this.scene.scale.height / this.camera.zoom;
-      this.camera.setBounds(
-        this.lastBounds.x,
-        this.lastBounds.y,
-        Math.max(this.lastBounds.width, viewportWidth),
-        Math.max(this.lastBounds.height, viewportHeight),
-      );
-    }
+    this.refreshBounds();
   }
 
   public getZoom(): number {

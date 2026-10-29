@@ -205,6 +205,7 @@ export function MMOHud(props: MMOHudProps) {
   const [questsOpen, setQuestsOpen] = useState(true);
   const [minimapCollapsed, setMinimapCollapsed] = useState(false);
   const [mobileNavCollapsed, setMobileNavCollapsed] = useState(false);
+  const [tribulationPanelExpanded, setTribulationPanelExpanded] = useState(false);
   const [playerViewMode, setPlayerViewMode] = useState<"expanded" | "compact" | "minimized">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("gu_player_view_mode");
@@ -389,6 +390,8 @@ export function MMOHud(props: MMOHudProps) {
   useEffect(() => {
     if (zoneMapId === "aperture_tribulation") {
       void fetchActiveTribulation(true);
+    } else {
+      setTribulationPanelExpanded(false);
     }
   }, [zoneMapId, fetchActiveTribulation]);
 
@@ -764,7 +767,17 @@ export function MMOHud(props: MMOHudProps) {
       )}
 
       {zoneMapId === "aperture_tribulation" ? (
-        <div className={`pointer-events-auto absolute left-2 ${questBoxTop} w-[min(92vw,280px)] rounded-2xl p-3 z-20 border border-amber-500/50 bg-[#16100bf2] text-[#f4e8cb] shadow-[0_8px_32px_rgba(0,0,0,.6)] backdrop-blur-md space-y-2.5`}>
+        <div className={`pointer-events-none absolute left-2 ${questBoxTop} w-[min(92vw,280px)] z-20 text-[#f4e8cb]`}>
+          <button
+            type="button"
+            onClick={() => setTribulationPanelExpanded((expanded) => !expanded)}
+            aria-expanded={tribulationPanelExpanded}
+            className="pointer-events-auto flex items-center gap-2 rounded-full border border-amber-500/60 bg-[#16100bf2] px-3 py-2 text-xs font-semibold text-amber-200 shadow-lg md:hidden"
+          >
+            <Sparkles className="h-4 w-4" /> Kiếp nạn · {props.nearby.filter((e) => e.kind === "monster" && e.templateId !== "aperture_node").length} quái
+            {tribulationPanelExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+          <div className={`${tribulationPanelExpanded ? "block" : "hidden"} pointer-events-auto mt-2 max-h-[min(48vh,320px)] overflow-y-auto rounded-2xl border border-amber-500/50 bg-[#16100bf2] p-3 shadow-[0_8px_32px_rgba(0,0,0,.6)] backdrop-blur-md space-y-2.5 md:mt-0 md:block md:max-h-none md:overflow-visible`}>
           <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
             <span className="flex items-center gap-1.5 font-serif font-bold text-xs text-amber-300">
               <Sparkles className="h-4 w-4 text-amber-400 animate-pulse" />
@@ -817,6 +830,7 @@ export function MMOHud(props: MMOHudProps) {
               <X className="h-3.5 w-3.5 text-rose-400" />
               Thoát Tiên Khiếu (Trở Về Vị Trí Cũ)
             </button>
+          </div>
           </div>
         </div>
       ) : (

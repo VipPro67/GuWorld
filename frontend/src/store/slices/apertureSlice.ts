@@ -1061,6 +1061,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       if (get().player) {
         get().setPlayerFromServer({
           current_region: (data.return_region as string) || "tan_thu_coc_nam_cuong",
+          world_zone_id: (data.return_region as string) || "tan_thu_coc_nam_cuong",
           x: typeof data.return_x === "number" ? data.return_x : 500,
           y: typeof data.return_y === "number" ? data.return_y : 500,
         });
@@ -1100,6 +1101,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       if (get().player) {
         get().setPlayerFromServer({
           current_region: (data.return_region as string) || "tan_thu_coc_nam_cuong",
+          world_zone_id: (data.return_region as string) || "tan_thu_coc_nam_cuong",
           x: typeof data.return_x === "number" ? data.return_x : 500,
           y: typeof data.return_y === "number" ? data.return_y : 500,
         });
@@ -1135,6 +1137,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       if (get().player) {
         get().setPlayerFromServer({
           current_region: (data.return_region as string) || "tan_thu_coc_nam_cuong",
+          world_zone_id: (data.return_region as string) || "tan_thu_coc_nam_cuong",
           x: typeof data.return_x === "number" ? data.return_x : 500,
           y: typeof data.return_y === "number" ? data.return_y : 500,
         });

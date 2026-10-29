@@ -109,7 +109,10 @@ export class WorldScene extends Phaser.Scene {
   private lastHudAt = 0;
   private cleanups: Array<() => void> = [];
 
-  private readonly onResize = (): void => this.positionHud();
+  private readonly onResize = (): void => {
+    this.positionHud();
+    this.cameraController.refreshBounds();
+  };
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat) return;
     if (event.code === "F3" && this.debugHud) {
@@ -913,7 +916,7 @@ export class WorldScene extends Phaser.Scene {
     this.mapStatus = "loading";
     try {
       const loaded = await loadWorldMap(url);
-      if (!this.scene.isActive()) return;
+      if (!this.scene.isActive() || url !== this.mapUrl) return;
       this.map = loaded;
       this.mapStatus = "ready";
       this.mapError = "";
@@ -1017,7 +1020,7 @@ export class WorldScene extends Phaser.Scene {
       cells: ws.nearbyCells,
       zoneMarkers: ws.zoneMarkersRegion === zoneId ? ws.zoneMarkers : [],
       groundDrops: gs.groundDrops,
-      mapPortals: this.map?.portals ?? [],
+      mapPortals: this.map?.id === zoneId ? this.map.portals : [],
       mySectId: gs.mySectStatus?.sect?.id,
     });
 

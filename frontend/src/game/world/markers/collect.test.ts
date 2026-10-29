@@ -108,6 +108,17 @@ test("a teleport array present in both feeds is drawn once", () => {
   assert.equal(markers[0].interaction?.action.targetId, "tp-a");
 });
 
+test("markers from the previous region do not appear in a private map", () => {
+  const markers = collectMarkers({
+    regionId: "aperture_tribulation",
+    cells: [{ x: 50, y: 50, region_id: "tan_thu_coc_nam_cuong", cell_type: "TeleportArray", content: "old-teleport" }],
+    zoneMarkers: [{ id: "old-structure", kind: "teleport", region_id: "tan_thu_coc_nam_cuong", x: 51, y: 51, name: "Old structure", detail: {} }],
+    groundDrops: [{ id: "old-drop", x: 52, y: 52, region_id: "tan_thu_coc_nam_cuong", killer_name: "" }],
+  });
+
+  assert.deepEqual(markers, []);
+});
+
 test("findNearestMarker respects per-kind interaction ranges", () => {
   const markers = collectMarkers({
     regionId: "bach_cot_son",

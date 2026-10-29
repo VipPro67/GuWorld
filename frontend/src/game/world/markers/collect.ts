@@ -85,11 +85,13 @@ export function collectMarkers(sources: MarkerSources): WorldMarker[] {
   };
 
   for (const marker of sources.zoneMarkers ?? []) {
+    if (marker.region_id && marker.region_id !== region) continue;
     if (marker.kind === "sect") push(sectMarker(marker, sources.mySectId));
     else if (marker.kind === "teleport") push(teleportMarker(marker));
   }
 
   for (const cell of sources.cells ?? []) {
+    if (cell.region_id && cell.region_id !== region) continue;
     if (cell.cell_type === "PrimevalVein" || cell.vein) {
       const immortal = cell.vein?.vein_type === "immortal";
       push({
@@ -128,6 +130,7 @@ export function collectMarkers(sources: MarkerSources): WorldMarker[] {
   }
 
   for (const drop of sources.groundDrops ?? []) {
+    if (drop.region_id && drop.region_id !== region) continue;
     push({
       id: drop.id,
       kind: "drop",
