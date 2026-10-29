@@ -41,6 +41,17 @@ func schemaAperture() error {
 	);`); err != nil {
 		return err
 	}
+	// Existing deployments may already have immortal_apertures from before the
+	// return location fields were introduced. CREATE TABLE IF NOT EXISTS does
+	// not evolve those tables, so add the columns explicitly for upgrades.
+	if err := execSchema("immortal_apertures_return_location_columns", `
+		ALTER TABLE immortal_apertures
+			ADD COLUMN IF NOT EXISTS return_region VARCHAR(50) REFERENCES regions(id) ON DELETE SET NULL,
+			ADD COLUMN IF NOT EXISTS return_x DOUBLE PRECISION DEFAULT 500,
+			ADD COLUMN IF NOT EXISTS return_y DOUBLE PRECISION DEFAULT 500;
+	`); err != nil {
+		return err
+	}
 	// Keep the atlas anchor independently from return_region: regions may be
 	// removed (which clears return_region through its FK) while an aperture
 	// still needs a deterministic nearest-safe-region fallback.
