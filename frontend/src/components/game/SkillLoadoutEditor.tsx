@@ -184,6 +184,15 @@ export function HotbarKeybindEditor({ player }: { player: Player | null }) {
   const loadout = useGameStore((state) => state.skillLoadout);
   const toast = useGameStore((state) => state.addToast);
   const [captureSlot, setCaptureSlot] = useState<number | null>(null);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [showTouchKeybinds, setShowTouchKeybinds] = useState(false);
+
+  useEffect(() => {
+    setIsTouchDevice(
+      typeof window !== "undefined" &&
+        (window.matchMedia("(max-width: 767px)").matches || "ontouchstart" in window || navigator.maxTouchPoints > 0),
+    );
+  }, []);
 
   const rows = useMemo(() => {
     const result: Array<{ slot: number; name: string }> = [];
@@ -229,16 +238,43 @@ export function HotbarKeybindEditor({ player }: { player: Player | null }) {
     setCaptureSlot(null);
   };
 
+  if (isTouchDevice && !showTouchKeybinds) {
+    return (
+      <section className="rounded-2xl border border-zinc-900 bg-zinc-900/40 p-3 sm:p-4">
+        <button
+          type="button"
+          onClick={() => setShowTouchKeybinds(true)}
+          className="flex w-full items-center justify-between text-left text-xs text-zinc-400 hover:text-amber-200 transition"
+        >
+          <div className="flex items-center gap-2">
+            <Keyboard className="h-4 w-4 text-zinc-500" />
+            <span>Phím tắt bàn phím PC (Đang ẩn trên thiết bị di động/cảm ứng)</span>
+          </div>
+          <span className="text-[11px] font-medium text-amber-500/80 hover:text-amber-400">Mở</span>
+        </button>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-2xl border border-zinc-900 bg-zinc-900/40 p-3 sm:p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Keyboard className="h-4 w-4 text-amber-400" />
-            <h3 className="font-serif text-sm font-bold text-zinc-100">Phím tắt hotbar</h3>
+            <h3 className="font-serif text-sm font-bold text-zinc-100">Phím tắt bàn phím PC</h3>
+            {isTouchDevice && (
+              <button
+                type="button"
+                onClick={() => setShowTouchKeybinds(false)}
+                className="text-[10px] text-zinc-500 hover:text-zinc-300 ml-1 underline"
+              >
+                (Thu gọn)
+              </button>
+            )}
           </div>
           <p className="mt-1 text-[11px] text-zinc-500">
-            Chỉ hiện các ô đang có chiêu. Bấm vào ô phím rồi nhấn phím mới · Esc để hủy. Lưu trên thiết bị này.
+            Gán nút bấm bàn phím máy tính cho từng ô kỹ năng. Bấm vào nút phím rồi nhấn phím mới · Esc để hủy.
           </p>
         </div>
         <button
@@ -260,6 +296,9 @@ export function HotbarKeybindEditor({ player }: { player: Player | null }) {
         <div className="grid gap-1.5 sm:grid-cols-2">
           {rows.map((row) => (
             <div key={row.slot} className="flex items-center gap-2 rounded-xl bg-black/30 px-2.5 py-1.5">
+              <span className="shrink-0 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
+                Ô {row.slot}
+              </span>
               <span className="min-w-0 flex-1 truncate text-xs text-zinc-300" title={row.name}>{row.name}</span>
               <button
                 type="button"
@@ -272,7 +311,7 @@ export function HotbarKeybindEditor({ player }: { player: Player | null }) {
                     : "border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-amber-500/60"
                 }`}
               >
-                {captureSlot === row.slot ? "…" : hotbarKeyLabel(row.slot, keybinds) || "—"}
+                {captureSlot === row.slot ? "…" : `Phím ${hotbarKeyLabel(row.slot, keybinds) || "—"}`}
               </button>
             </div>
           ))}

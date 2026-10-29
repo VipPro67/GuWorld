@@ -154,7 +154,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
         <div className="space-y-4 animate-in fade-in duration-200">
           <QuickActionCustomizer inline />
           <p className="text-[11px] text-zinc-500">
-            Phím tắt hotbar chiến đấu và thứ tự sát chiêu / Trận Kích nằm trong tab “Chiến đấu &amp; Điều khiển”.
+            Thứ tự hotbar chiến đấu và cài đặt chiêu thức nằm trong tab “Chiến đấu &amp; Điều khiển”.
           </p>
         </div>
       )}

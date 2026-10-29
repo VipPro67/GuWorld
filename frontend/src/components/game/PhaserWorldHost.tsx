@@ -173,8 +173,14 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   }, [menuOpen]);
 
   useEffect(() => {
-    if (runtimeStatus === "error" || runtimeStatus === "closed") setPanel(null);
+    if (runtimeStatus === "error") setPanel(null);
   }, [runtimeStatus]);
+
+  useEffect(() => {
+    if (runtimeStatus === "error" || status === "error") {
+      setHud(null);
+    }
+  }, [runtimeStatus, status]);
 
   useEffect(() => {
     if (!worldActive) {
@@ -189,6 +195,18 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   const activeInstanceID = player?.world_instance_id?.trim() || "";
   const lastInstanceRef = useRef<string>(activeInstanceID);
   const lastReconnectTokenRef = useRef<number>(worldReconnectToken);
+  const pendingGusSyncRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (panel === null && pendingGusSyncRef.current) {
+      pendingGusSyncRef.current = false;
+      const runtime = runtimeRef.current;
+      if (worldActive && runtime && (runtime.getStatus() === "joined" || runtime.getStatus() === "idle")) {
+        void runtime.reconnect();
+      }
+    }
+  }, [panel, worldActive]);
+
   useEffect(() => {
     if (!worldActive) {
       lastReconnectTokenRef.current = worldReconnectToken;
@@ -228,9 +246,13 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
       // realtime routing key without changing the map ID.
       void runtime.reconnect();
     } else if (gusChanged && runtime) {
-      void runtime.reconnect();
+      if (panel !== null) {
+        pendingGusSyncRef.current = true;
+      } else {
+        void runtime.reconnect();
+      }
     }
-  }, [player?.equipped_gus, player?.current_region, player?.world_zone_id, player?.world_instance_id, worldActive, worldReconnectToken, runtimeStatus]);
+  }, [player?.equipped_gus, player?.current_region, player?.world_zone_id, player?.world_instance_id, worldActive, worldReconnectToken, runtimeStatus, panel]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -246,7 +268,10 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
       if (!runtime) return;
       const commit = () => {
         lastHudAt = performance.now();
-        setHud(buildHud(runtime, playerRef.current));
+        const next = buildHud(runtime, playerRef.current);
+        if (next) {
+          setHud(next);
+        }
       };
       if (performance.now() - lastHudAt >= hudRefreshInterval) {
         commit();
@@ -545,10 +570,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
               setPanel(null);
             }}
             onLoadoutSaved={() => {
-              setPanel(null);
-              if (worldActive && runtimeRef.current && runtimeRef.current.getStatus() === "joined") {
-                void runtimeRef.current.reconnect();
-              }
+              pendingGusSyncRef.current = true;
             }}
           />
         )}
