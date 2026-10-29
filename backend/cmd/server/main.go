@@ -80,12 +80,12 @@ func main() {
 	realtimeConfig, err := realtimeconfig.Load()
 	if err != nil {
 		realtimeStartupError = err.Error()
-		logger.S.Warnf("Realtime world rollout config is invalid; keeping admission disabled: %v", err)
+		logger.S.Warnf("Realtime world config is invalid; admission is unavailable: %v", err)
 	} else if realtimeConfig.Enabled {
-		logger.S.Infof("Realtime world rollout configured (zones=%d plus private tribulation map, allowlisted_players=%d, max_players_per_zone=%d); join also requires enabled client flag and matching map/content versions", len(realtimeConfig.ZoneIDs), len(realtimeConfig.PlayerAllowlist), realtimeConfig.MaxPlayersPerZone)
+		logger.S.Infof("Realtime world enabled for signed-in players (all shipped public maps plus private event maps, max_players_per_zone=%d)", realtimeConfig.MaxPlayersPerZone)
 	} else {
-		realtimeStartupError = "REALTIME_WORLD_ENABLED is false"
-		logger.S.Info("Realtime world rollout is disabled")
+		realtimeStartupError = "realtime world configuration is disabled"
+		logger.S.Info("Realtime world configuration is disabled")
 	}
 
 	err = db.Connect()
@@ -218,8 +218,7 @@ func main() {
 		for mapID := range configuredZoneIDs {
 			zoneIDs[mapID] = struct{}{}
 		}
-		// aperture_tribulation is loaded as a private per-event map even when it
-		// is intentionally absent from MMO_ZONE_IDS. The preview artifact also
+		// aperture_tribulation is loaded as a private per-event map. The preview artifact also
 		// backs isolated practice and arena combat sessions.
 		zoneIDs["aperture_tribulation"] = struct{}{}
 		zoneIDs["realtime_preview"] = struct{}{}
@@ -494,7 +493,7 @@ func main() {
 		} else {
 			realtimeStartupError = ""
 			realtimeWorldManager = manager
-			logger.S.Infof("Realtime world manager started with %d configured/private zones across %d checked maps (lazy worlds, 5m idle eviction); WebSocket join is guarded by allowlist and version gates", len(zoneKeys), len(mapArtifacts))
+			logger.S.Infof("Realtime world manager started with %d public/private zones across %d checked maps (lazy worlds, 5m idle eviction)", len(zoneKeys), len(mapArtifacts))
 			if tribulationMapLoadErr != nil {
 				logger.S.Errorf("Realtime tribulation event map unavailable: %v", tribulationMapLoadErr)
 			}
@@ -912,9 +911,9 @@ func edgeSide(x, y float64, width, height int) (realtimeworld.EdgeSide, bool) {
 	}
 }
 
-// expandRealtimeZoneIDs turns MMO_ZONE_IDS=* / all into the actual map
+// expandRealtimeZoneIDs turns the public map wildcard into the shipped map
 // catalogue. Region maps are one JSON file per KHU_VUC/SAFE_ZONE; loading the
-// whole directory keeps every authored edge target admittable.
+// whole directory keeps every authored edge target available.
 func expandRealtimeZoneIDs(configured map[string]struct{}, mapDir, mapVersion, contentVersion string) map[string]struct{} {
 	_, wildcardStar := configured["*"]
 	_, wildcardAll := configured["all"]
@@ -924,7 +923,7 @@ func expandRealtimeZoneIDs(configured map[string]struct{}, mapDir, mapVersion, c
 	directory := resolveRealtimeMapDir(mapDir)
 	entries, err := os.ReadDir(directory)
 	if err != nil {
-		logger.S.Errorf("MMO_ZONE_IDS=all could not read map directory %s: %v", directory, err)
+		logger.S.Errorf("Could not read public map directory %s: %v", directory, err)
 		return configured
 	}
 	expanded := make(map[string]struct{}, len(entries))
@@ -940,7 +939,7 @@ func expandRealtimeZoneIDs(configured map[string]struct{}, mapDir, mapVersion, c
 		// expands only the maps matching the configured versions.
 		header, err := readRealtimeMapHeader(filepath.Join(directory, entry.Name()))
 		if err != nil {
-			logger.S.Warnf("MMO_ZONE_IDS=all skipped %s: %v", entry.Name(), err)
+			logger.S.Warnf("Public map catalogue skipped %s: %v", entry.Name(), err)
 			skipped++
 			continue
 		}
@@ -952,7 +951,7 @@ func expandRealtimeZoneIDs(configured map[string]struct{}, mapDir, mapVersion, c
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	logger.S.Infof("MMO_ZONE_IDS=all expanded to %d maps from %s (%d version-mismatched skipped, version=%q content=%q)",
+	logger.S.Infof("Public map catalogue loaded %d maps from %s (%d version-mismatched skipped, version=%q content=%q)",
 		len(ids), directory, skipped, mapVersion, contentVersion)
 	return expanded
 }

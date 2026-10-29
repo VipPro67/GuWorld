@@ -65,17 +65,11 @@ Loot/checkpoint are reported `NOT MEASURED` because they require PostgreSQL.
 
 ```bash
 # backend (staging only)
-REALTIME_WORLD_ENABLED=true \
-PHASER_WORLD_CLIENT_ENABLED=true \
-MMO_ZONE_IDS=realtime_preview \
-MMO_ALLOWLIST=<player-uuid> \
 MMO_MAP_DIR=data/mmo/maps \
 MMO_GU_PROFILES=data/mmo/gu/transpiled_profiles.json \
 go run ./cmd/server
 
 # frontend
-NEXT_PUBLIC_REALTIME_WORLD_ENABLED=true \
-NEXT_PUBLIC_PHASER_WORLD_CLIENT_ENABLED=true \
 NEXT_PUBLIC_MMO_ZONE_ID=realtime_preview \
 npm run dev
 ```

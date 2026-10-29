@@ -1,5 +1,5 @@
-// Package config contains the fail-closed rollout configuration for the new
-// realtime world runtime. It deliberately does not change legacy world ownership.
+// Package config contains tuning and shipped release defaults for the
+// realtime world runtime. Public maps are open to every signed-in player.
 package config
 
 import (
@@ -18,9 +18,9 @@ const defaultGuProfiles = "data/mmo/gu/transpiled_profiles.json"
 const DefaultMapVersion = "regions-v1"
 const DefaultContentVersion = "region-content-v1"
 
-// Config is the process-level admission policy for realtime world sessions.
-// Empty zone or player allowlists deny public joins; the private aperture event
-// map bypasses only the zone list and still requires the player allowlist.
+// Config is the process-level runtime configuration for realtime world sessions.
+// Zone existence and authoritative character location are checked by the manager
+// and admission loader; player access is not controlled by deployment allowlists.
 type Config struct {
 	Enabled             bool
 	PhaserClientEnabled bool
@@ -45,20 +45,7 @@ func Load() (Config, error) {
 // depending on package-global mutable configuration.
 func LoadFromLookup(lookup func(string) (string, bool)) (Config, error) {
 	if lookup == nil {
-		return disabled(), fmt.Errorf("realtime config: environment lookup is nil")
-	}
-
-	enabled, err := readBool(lookup, "REALTIME_WORLD_ENABLED", false)
-	if err != nil {
-		return disabled(), err
-	}
-	phaserEnabled, err := readBool(lookup, "PHASER_WORLD_CLIENT_ENABLED", false)
-	if err != nil {
-		return disabled(), err
-	}
-	admissionPaused, err := readBool(lookup, "MMO_ADMISSION_PAUSED", false)
-	if err != nil {
-		return disabled(), err
+		lookup = func(string) (string, bool) { return "", false }
 	}
 
 	instances := 1
@@ -80,17 +67,16 @@ func LoadFromLookup(lookup func(string) (string, bool)) (Config, error) {
 	}
 
 	return Config{
-		Enabled:             enabled,
-		PhaserClientEnabled: phaserEnabled,
-		AdmissionPaused:     admissionPaused,
+		Enabled:             true,
+		PhaserClientEnabled: true,
 		MaxPlayersPerZone:   maxPlayers,
 		InstancesPerZone:    instances,
 		MapVersion:          DefaultMapVersion,
 		ContentVersion:      DefaultContentVersion,
 		MapDir:              mapDir(lookup),
 		GuProfiles:          guProfiles(lookup),
-		ZoneIDs:             parseSet(value(lookup, "MMO_ZONE_IDS")),
-		PlayerAllowlist:     parseSet(value(lookup, "MMO_ALLOWLIST")),
+		ZoneIDs:             map[string]struct{}{"*": {}},
+		PlayerAllowlist:     map[string]struct{}{"*": {}},
 	}, nil
 }
 
@@ -99,42 +85,10 @@ func (c Config) AllowsWorldJoin(playerID, zoneID, mapVersion, contentVersion str
 		mapVersion == c.MapVersion && contentVersion == c.ContentVersion
 }
 
-// AllowsJoin checks all server-side rollout gates. The allowlist is required;
-// an empty allowlist never means "allow everyone", but '*' or 'all' grants access to all players / zones.
+// AllowsJoin admits signed-in players to zones loaded in the runtime catalogue.
+// The manager rejects unknown zone IDs and the join loader verifies character location.
 func (c Config) AllowsJoin(playerID, zoneID string) bool {
-	if !c.Enabled || strings.TrimSpace(playerID) == "" || strings.TrimSpace(zoneID) == "" {
-		return false
-	}
-	_, playerWildcard := c.PlayerAllowlist["*"]
-	if !playerWildcard {
-		_, playerWildcard = c.PlayerAllowlist["all"]
-	}
-	_, playerAllowed := c.PlayerAllowlist[strings.TrimSpace(playerID)]
-
-	_, zoneWildcard := c.ZoneIDs["*"]
-	if !zoneWildcard {
-		_, zoneWildcard = c.ZoneIDs["all"]
-	}
-	_, zoneAllowed := c.ZoneIDs[strings.TrimSpace(zoneID)]
-	// The per-player tribulation map is an internal event map. It does not need
-	// to be exposed in MMO_ZONE_IDS, but it remains behind the player allowlist.
-	if strings.TrimSpace(zoneID) == "aperture_tribulation" {
-		zoneAllowed = true
-	}
-
-	return (playerWildcard || playerAllowed) && (zoneWildcard || zoneAllowed)
-}
-
-func readBool(lookup func(string) (string, bool), name string, fallback bool) (bool, error) {
-	raw, ok := lookup(name)
-	if !ok || strings.TrimSpace(raw) == "" {
-		return fallback, nil
-	}
-	parsed, err := strconv.ParseBool(strings.TrimSpace(raw))
-	if err != nil {
-		return fallback, fmt.Errorf("realtime config: %s must be true or false", name)
-	}
-	return parsed, nil
+	return c.Enabled && strings.TrimSpace(playerID) != "" && strings.TrimSpace(zoneID) != ""
 }
 
 func value(lookup func(string) (string, bool), name string) string {
@@ -156,17 +110,6 @@ func guProfiles(lookup func(string) (string, bool)) string {
 		return defaultGuProfiles
 	}
 	return raw
-}
-
-func parseSet(raw string) map[string]struct{} {
-	values := make(map[string]struct{})
-	for _, value := range strings.Split(raw, ",") {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			values[value] = struct{}{}
-		}
-	}
-	return values
 }
 
 func disabled() Config {

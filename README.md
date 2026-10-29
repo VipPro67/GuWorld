@@ -78,11 +78,11 @@ Smoke vertical slice (5 player + 10 quái, di chuyển/cast/death/metrics):
 Synthetic load: `go run ./cmd/mmo_bench -players 100 -mobs 50 -ticks 1000`.
 Checklist Gate B: `docs/mmo/vertical-slice.md`; benchmark: `docs/mmo/benchmark.md`.
 
-Phía client, bật đồng thời `NEXT_PUBLIC_REALTIME_WORLD_ENABLED` và
-`NEXT_PUBLIC_PHASER_WORLD_CLIENT_ENABLED`, cấu hình
-`MAP_VERSION`/`CONTENT_VERSION` khớp backend; sau đăng nhập client tự chọn map
-theo `current_region` của nhân vật (hoặc dùng `NEXT_PUBLIC_MMO_ZONE_ID` làm zone
-dự phòng khi preview). Client gửi `world.join`, render snapshot AOI và
+Realtime MMO được bật mặc định cho mọi tài khoản đã đăng nhập. Backend tự nạp
+các map công khai khớp release; không cần cờ bật, danh sách zone hay allowlist.
+Sau đăng nhập client tự chọn map theo `current_region` của nhân vật (hoặc dùng
+`NEXT_PUBLIC_MMO_ZONE_ID` làm giá trị dự phòng nếu nhân vật chưa có khu vực).
+Client gửi `world.join`, render snapshot AOI và
 dự phòng WASD/click-to-move; server vẫn xác nhận vị trí, HP, collision tĩnh, monster AI và
 combat preview (phím 1–6, projectile/AoE/shield) với animation placeholder và VFX pool. Map preview
 dùng chung JSON cho server/client; ngoài `realtime_preview` có pack Alpha 4 map liên kết

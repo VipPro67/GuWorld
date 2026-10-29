@@ -504,7 +504,7 @@ Các đường dẫn `backend/internal/realtime/*` và `frontend/src/game/*` ban
 **Đường dẫn:** `backend/cmd/server/main.go` (existing), `backend/internal/realtime/config/config.go` (new), `frontend/src/lib/featureFlags.ts` (new), `docs/mmo/rollout.md` (new)
 
 **Các task:**
-- [x] Định nghĩa các flag rollout `REALTIME_WORLD_ENABLED`, `MMO_ZONE_IDS`, `MMO_ALLOWLIST`, `PHASER_WORLD_CLIENT_ENABLED`, giới hạn 100 người/zone và tối đa 64 zone/process. Map/content versions lấy từ release artifacts, không cấu hình bằng env.
+- [x] (Lịch sử) Định nghĩa các flag rollout và allowlist trong giai đoạn canary. Các gate rollout đã được gỡ khi Phaser MMO trở thành gameplay world chính; map/content versions lấy từ release artifacts, không cấu hình bằng env.
 - [x] Legacy monster worker chỉ xử lý `world_map` với `InstanceID` rỗng; thêm regression test để bỏ qua instance realtime.
 - [x] Thêm primitive lease đơn chủ ở process-level (claim/replace/release, token chống stale disconnect) và guard legacy movement, combat, loot, teleport cùng lệnh `world.move_path`/`match.input` khi nhân vật đang được realtime sở hữu.
 - [x] Nối lease process-local vào authenticated join/reconnect/disconnect và instance zone riêng; guard worker quái legacy cùng các world movement/combat/loot/teleport paths đã được audit.

@@ -66,10 +66,10 @@ The whole border band (not just the portal marker) is a crossing:
   with both coordinate pairs. The client reconnects with the new `zone_id`;
   `world.welcome` loads the destination map.
 - Sides without an authored portal (Đại Vực rim) remain a wall.
-- `MMO_ZONE_IDS=all` (or `*`) expands to every map in `MMO_MAP_DIR` whose
-  `map_version`/`content_version` match the rollout config, so all leg targets
-  are admittable without listing 125 ids. Preview/Alpha/legacy artifacts in the
-  same directory are skipped.
+- The runtime loads every map in `MMO_MAP_DIR` whose `map_version` and
+  `content_version` match the shipped release, so authored leg targets are
+  available without a deployment zone list. Preview/Alpha/legacy artifacts in
+  the same directory are skipped.
 
 `MapPortal` metadata (`portals` object group, property `edge`) stays the
 authoritative adjacency source; the server never accepts a client-supplied

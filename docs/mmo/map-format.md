@@ -93,24 +93,17 @@ exists, is inside the target map and lands on a walkable tile. Monster IDs are
 resolved through the normal `monster_templates` registry at startup; an unknown
 ID logs a warning and skips that spawn rather than failing the whole zone.
 
-To run the generated regional maps, configure the map list. Release versions
-are fixed in the shipped map metadata and backend/frontend source:
-
-```bash
-MMO_ZONE_IDS=all
-```
-
-The backend expands `all` to maps matching the shipped release. The client
-loads `/game/maps/<zone>.json` from the character's current region.
+The backend automatically loads all generated regional maps matching the
+shipped release. The client loads `/game/maps/<zone>.json` from the character's
+current region.
 
 ## Version and admission
 
 - `map_version` and `content_version` are fixed by the shipped release and
   checked against each loaded map. Keep the backend and frontend map copies in
   sync; version variables are not configured in deployment environments.
-- `MMO_ZONE_IDS` values are `region_world_maps.world_map_id` values. To use the
-  sample map in staging, map a test region to `realtime_preview` and configure
-  `MMO_ZONE_IDS=realtime_preview`.
+- Public zones are available automatically when their map artifact is part of
+  the shipped release. Character location determines the join zone.
 - `MMO_MAP_DIR` (default `data/mmo/maps`) selects the server map directory.
   A missing or invalid file logs an error and prevents the realtime manager
   from starting; admission stays disabled.

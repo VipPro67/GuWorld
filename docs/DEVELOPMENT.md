@@ -87,15 +87,11 @@ Các biến thường dùng:
 | `GRAFANA_URL`, `GRAFANA_API_KEY`, `GRAFANA_USER`, `GRAFANA_SERVICE_NAME` | Cấu hình log shipping tới Grafana Cloud qua OpenTelemetry OTLP HTTP (`/otlp/v1/logs`). |
 | `AUTO_BAN_FINGERPRINT_LIMIT`, `AUTO_BAN_REFERRAL_LIMIT`, `AUTO_BAN_DURATION_HOURS`, `AUTO_BAN_BLOCK_DEVICE` | Auto-ban chống lạm dụng: ngưỡng số tài khoản/thiết bị (mặc định 5), ngưỡng referral đáng ngờ (mặc định 5), thời hạn ban giờ (mặc định 72, ≤0 = vĩnh viễn), và có chặn device kèm hay không (mặc định true). Đặt 0 để tắt rule tương ứng. |
 | `REGIONAL_WALL_SUPPRESSION_ENABLED` | Bật/tắt phạt [Áp Chế Giới Vực] (`regional_wall_suppression`) khi người chơi (hoặc thành viên tổ đội theo đội trưởng) vượt Giới Vực Bích giữa các Đại Vực. Mặc định bật; đặt `false`/`0`/`off`/`no` để tắt hoàn toàn việc gắn status. Cần restart backend sau khi đổi. |
-| `REALTIME_WORLD_ENABLED` | Cờ backend cho world realtime; mặc định `false`. Khi bật, map độ kiếp riêng được nạp nội bộ; các zone công khai chạy khi có trong `MMO_ZONE_IDS` và admission vượt qua các gate còn lại. |
-| `MMO_ZONE_IDS` | Danh sách map/zone được cấu hình, phân tách bằng dấu phẩy. Dev regional pack hiện dùng 125 KHU_VUC/SAFE_ZONE; manager hỗ trợ tối đa 256 zone instances/process; rỗng thì chỉ map event riêng `aperture_tribulation` được nạp nội bộ; các map công khai không được mở. Map độ kiếp vẫn cần player allowlist và map/content version hợp lệ. |
-| `MMO_ALLOWLIST` | Danh sách player ID được phép thử nghiệm, phân tách bằng dấu phẩy. Hỗ trợ `*` hoặc `all` để mở cho tất cả người chơi. Rỗng sẽ từ chối mọi lượt join. |
+| Realtime MMO | Bật mặc định cho mọi tài khoản đã đăng nhập. Backend tự nạp toàn bộ map công khai khớp release; map Tiên Khiếu/độ kiếp riêng vẫn được admission theo instance và trạng thái nhân vật. Không cần env bật, chọn zone hay allowlist. |
 | `MMO_MAX_PLAYERS_PER_ZONE` | Giới hạn admission mỗi zone; mặc định `5`, cho phép `1`–`100`. |
 | `MMO_INSTANCES_PER_ZONE` | Số instance của mỗi map trong process; mặc định `1`, cho phép `1`–`8`. Join được route tới instance ít người nhất còn capacity. Mỗi map được đọc/kiểm tra một lần lúc startup và dùng chung artifact collision/spawn giữa các instance; world, quái và runner 20 Hz chỉ được tạo khi instance có lease đầu tiên và bị giải phóng sau 5 phút không còn lease/subscriber/projectile/event chờ. |
 | `MMO_MAP_DIR` | Thư mục map JSON server đọc lúc startup; mặc định `data/mmo/maps`. Mỗi map đọc `<map_id>.json`; thiếu/sai map hoặc version không khớp release đi kèm code thì manager không khởi chạy và admission fail closed. Việc kiểm tra vẫn chạy đủ cho mọi map cấu hình kể cả khi chưa có instance nào hoạt động. |
 | `MMO_GU_PROFILES` | Danh sách catalog profile Gu realtime, phân tách bằng dấu phẩy; mặc định `data/mmo/gu/transpiled_profiles.json`. Compile/validate lúc startup khi realtime bật; đường dẫn tương đối được dò từ thư mục đang chạy lên các thư mục cha (hỗ trợ `backend/cmd/server`). Lỗi sẽ log và hotbar realtime fail-closed, không có chiêu mẫu thay thế. |
-| `MMO_ADMISSION_PAUSED` | Chặn join MMO mới nhưng để session hiện tại chạy tiếp; dùng cho cutover/rollback. `Admission.Drain` cũng bật cờ này, checkpoint và release mọi lease. |
-| `PHASER_WORLD_CLIENT_ENABLED` | Cờ backend rollout client Phaser; mặc định `false`. Cả cờ này và backend flag, allowlist/version đều phải cho phép join. |
 
 DB đã khởi tạo trước khi thêm các cột `world_*` cần backup, drain realtime/movement, rồi chạy thủ công `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/scripts/migrate_player_world_location.sql` trước khi nâng backend. Không chạy script khi server cũ còn nhận movement hoặc checkpoint.
 
@@ -114,7 +110,7 @@ variables; the backend and frontend use the same built-in values.
 
 Sau đăng nhập và onboarding, Phaser 4.2.1 là gameplay world duy nhất; `dashboard`/`world-map` cũ chỉ
 còn là view ID tương thích, các component map turn-based đã bị gỡ khỏi frontend và không fallback
-client chỉ kết nối khi bật `NEXT_PUBLIC_REALTIME_WORLD_ENABLED` và `NEXT_PUBLIC_PHASER_WORLD_CLIENT_ENABLED`; map/content versions được lấy từ release đã đóng gói. Client gửi
+client kết nối Phaser MMO cho mọi tài khoản đã đăng nhập; map/content versions được lấy từ release đã đóng gói. Client gửi
 `world.join` bằng zone ID của `current_region`, tải map tương ứng từ `/game/maps/<zone>.json`, render snapshot AOI 20 Hz, WASD + click-to-move và để server xác nhận vị trí/HP. Không có
 Phaser physics và không có sát thương do client tính. Thiếu cấu hình zone thì Phaser hiện preview/error,
 không quay lại world cũ. Vùng khởi đầu lưu trong `current_region` vẫn được dùng làm metadata để xác

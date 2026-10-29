@@ -270,21 +270,21 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	if a.manager == nil {
 		reason := handlers.RealtimeRuntimeError()
 		if reason == "" {
-			reason = "realtime manager was not installed (check REALTIME_WORLD_ENABLED, MMO_ZONE_IDS and startup logs)"
+			reason = "realtime manager was not installed; check map artifacts and startup logs"
 		}
 		return nil, admissionError(503, "realtime_manager_unavailable", "Realtime world manager is unavailable: "+reason)
 	}
 	if !a.config.Enabled {
-		return nil, admissionError(503, "realtime_disabled", "Realtime world is disabled: REALTIME_WORLD_ENABLED=false")
+		return nil, admissionError(503, "realtime_disabled", "Realtime world runtime is unavailable")
 	}
 	if !a.config.PhaserClientEnabled {
-		return nil, admissionError(503, "realtime_client_disabled", "Realtime world is disabled: PHASER_WORLD_CLIENT_ENABLED=false")
+		return nil, admissionError(503, "realtime_client_disabled", "Realtime world client is unavailable")
 	}
 	if a.paused.Load() {
 		return nil, admissionError(503, "realtime_admission_paused", "Realtime world admission is paused for cutover/rollback")
 	}
 	if !a.config.AllowsJoin(playerID.String(), request.ZoneID) {
-		return nil, admissionError(403, "realtime_world_forbidden", "Player or map is not allowlisted")
+		return nil, admissionError(403, "realtime_world_forbidden", "Player or map is not available")
 	}
 	if !a.config.AllowsWorldJoin(playerID.String(), request.ZoneID, request.MapVersion, request.ContentVersion) {
 		return nil, admissionError(409, "realtime_version_mismatch", "Map or content version is stale")

@@ -1,41 +1,29 @@
-# Realtime MMO rollout gates
+# Realtime MMO runtime
 
-This document records the first rollout boundary from the realtime MMO master
-plan. The legacy world remains the only live gameplay mode until realtime
-movement/combat and the remaining mutation guards are complete. The
-authenticated join route creates a server-side entity and streams AOI
-snapshots; there is still no live combat or reward path in the new zone. Unjoined
-preview zone loops do not own player or monster entities.
+Realtime MMO is the primary world for every signed-in player. Public map
+catalogue entries matching the shipped release are loaded automatically;
+admission validates the authenticated character's actual location and map
+release. Private aperture and combat instances remain isolated by server-owned
+instance IDs.
 
 ## Current state
 
-- `REALTIME_WORLD_ENABLED` defaults to `false`.
-- `MMO_ZONE_IDS` and `MMO_ALLOWLIST` are required for admission. Empty values
-  deny every join; the allowlist contains player IDs, not usernames. Each zone ID
-  is a `region_world_maps.world_map_id` (not a display region name). The client
-  must send the same ID as `NEXT_PUBLIC_MMO_ZONE_ID`, and the character's current
-  region must map to that world map or admission fails with a map mismatch.
+- All signed-in players can join the realtime world; no rollout flags, zone
+  allowlist, or player allowlist are required.
 - Map/content versions are fixed by the shipped map artifacts and checked by
   the backend; they are not deployment environment variables. The client sends
   the same versions from the shared release contract.
 - `MMO_MAX_PLAYERS_PER_ZONE` defaults to `5` and accepts values from `1` to
   `100`.
-- `PHASER_WORLD_CLIENT_ENABLED` defaults to `false` and does not grant access by
-  itself.
-- Backend rollout config is parsed fail-closed. Invalid boolean or capacity
-  configuration returns a disabled config.
-- With `REALTIME_WORLD_ENABLED=true` and one or more `MMO_ZONE_IDS`, startup now
-  creates up to 64 preview zones and runs their fixed 20 Hz loops. The manager
+- Startup loads every shipped public map and creates its zone loops. The manager
   supports process-local player entity join/leave, ownership leases, and a
   configured per-zone capacity.
-- `backend/internal/realtime/config/config_test.go` covers disabled defaults,
-  joint player/zone allowlisting, malformed flags, and capacity bounds.
+- `backend/internal/realtime/config/config_test.go` covers public admission,
+  fixed release versions, and capacity bounds.
 - Phaser 4.2.1 is pinned in `frontend/package.json` and the lockfile. The
-  client preview mounts a lazy, client-only Phaser host behind both public
-  flags; the legacy Pixi world remains the default, and admission is still
-  decided by the backend allowlist. When
-  `NEXT_PUBLIC_MMO_ZONE_ID`/`MAP_VERSION`/`CONTENT_VERSION` are configured the
-  host joins the v1 protocol, renders AOI snapshots, sends WASD/move_target
+  client mounts a lazy, client-only Phaser host. `NEXT_PUBLIC_MMO_ZONE_ID` is
+  only a fallback when the character has no current region. The host joins the
+  v1 protocol, renders AOI snapshots, sends WASD/move_target
   intents and reconciles local prediction. The scene still uses placeholder art
   and no Phaser physics.
 - `world.move_target` is now accepted after join. The zone clamps the requested
@@ -88,11 +76,9 @@ preview zone loops do not own player or monster entities.
   telemetry and an F3 client debug HUD for tick/network/prediction/FPS. Browser
   frame-time/VRAM, RTT/jitter/loss, AOI bytes/client and DB/Redis load remain
   NOT MEASURED; see `docs/mmo/benchmark.md`.
-- PR-31 adds cutover/rollback controls: `MMO_ADMISSION_PAUSED` blocks new joins,
-  `Admission.Drain` checkpoints and releases every session (also on graceful
-  shutdown), and the runbook documents cohort → canary → cleanup. Pixi and
-  legacy handlers are intentionally **not removed** yet; see
-  `docs/mmo/cutover.md`.
+- PR-31 adds the admission drain path, which checkpoints and releases every
+  session on graceful shutdown. Old rollout environment gates have since been
+  removed; see `docs/mmo/cutover.md` for current operations.
 - PR-32 adds in-process instance scaling: `MMO_INSTANCES_PER_ZONE` (1–8),
   least-loaded instance allocation with per-instance capacity and
   `realtime_zone_full`; `Manager.Stats` exposes per-zone counts. Dedicated worker
@@ -194,18 +180,12 @@ preview zone loops do not own player or monster entities.
 
 ## Safe activation order
 
-1. Deploy code with all realtime flags off.
-2. Enable the preview runtime in staging and verify it shuts down cleanly.
-   Keep the player allowlist empty until the mutation-path audit and authoritative
-   movement path are ready.
-3. Set `REALTIME_WORLD_ENABLED=true`, an explicit comma-separated
-   `MMO_ZONE_IDS` and `MMO_ALLOWLIST`. Keep `MMO_MAX_PLAYERS_PER_ZONE` low for
-   the first test.
-4. Enable `PHASER_WORLD_CLIENT_ENABLED=true` only after the Phaser client uses
-   the v1 world.join envelope and the remaining release gates pass.
-5. For rollback, disable the Phaser client flag first, stop new realtime joins,
-   drain active sessions to a safe state, and only then disable the backend
-   runtime. Do not delete or rewrite legacy player rows as part of rollback.
+1. Deploy the code and map artifacts together; no MMO feature flags are needed.
+2. Confirm the server loaded all maps matching the shipped release and that
+   database migrations for world location are applied.
+3. Keep `MMO_MAX_PLAYERS_PER_ZONE` at its default or set an appropriate capacity.
+4. For maintenance, use the existing graceful drain/shutdown path; do not use
+   player or zone allowlists as feature switches.
 
 ## Ownership limits still to address
 

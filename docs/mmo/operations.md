@@ -100,11 +100,11 @@ Still missing:
 
 ## Incident/rollback playbook
 
-- Duplicate grant / dual ownership: rollback immediately
-  (`MMO_ADMISSION_PAUSED=true`, drain, keep ledger rows).
-- Tick p99 > 50ms sustained, severe backpressure or FPS collapse: pause new
-  admits, drain, restore legacy route, investigate hotspots.
-- Map/collider error: disable new MMO admits; do not delete durable state.
-- DB/Redis outage: realtime runtime keeps running with bounded retries/fallback,
-  but stop new admits if checkpoint/loot cannot be trusted.
+- Duplicate grant / dual ownership: rollback immediately by draining sessions
+  and redeploying the previous known-good application; keep ledger rows.
+- Tick p99 > 50ms sustained, severe backpressure or FPS collapse: drain sessions,
+  roll back the deployment, investigate hotspots.
+- Map/collider error: roll back the deployment; do not delete durable state.
+- DB/Redis outage: runtime keeps running with bounded retries/fallback; roll
+  back if checkpoint/loot state cannot be trusted.
 - See `docs/mmo/cutover.md` for the full staged rollback.

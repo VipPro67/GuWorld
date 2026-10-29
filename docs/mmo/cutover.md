@@ -6,26 +6,13 @@ authoritative realtime runtime. The player model and fresh schema no longer
 contain the turn-based `active_combat` snapshot. Existing databases may retain
 the unused legacy column because this project does not apply schema migrations.
 
-## Flags
+## Runtime configuration
 
-Backend:
-
-| Flag | Purpose |
-| --- | --- |
-| `REALTIME_WORLD_ENABLED` | starts the realtime runtime/zones |
-| `PHASER_WORLD_CLIENT_ENABLED` | admits the Phaser client cohort |
-| `MMO_ALLOWLIST` | player cohort (empty = deny everyone) |
-| `MMO_ADMISSION_PAUSED` | block **new** joins while existing sessions continue |
-
-Frontend:
-
-| Flag | Purpose |
-| --- | --- |
-| `NEXT_PUBLIC_REALTIME_WORLD_ENABLED` | show the MMO UI entry |
-| `NEXT_PUBLIC_PHASER_WORLD_CLIENT_ENABLED` | allow the Phaser route |
-
-All defaults are OFF. Admission is fail-closed; invalid config disables the
-runtime.
+Realtime MMO is enabled for every signed-in player. The server automatically
+loads all public maps matching the shipped release; feature flags, player
+allowlists, and zone allowlists are not used. `MMO_MAX_PLAYERS_PER_ZONE`,
+`MMO_INSTANCES_PER_ZONE`, and asset directory variables remain optional
+capacity/deployment tuning.
 
 ## Rollout stages
 
@@ -33,20 +20,13 @@ Gate D evidence/sign-off is in `docs/mmo/release-checklist.md`; candidate SLOs
 and the capacity decision matrix are in `docs/mmo/slo.md`. The stages below are
 the operational view of the same cohort plan.
 
-1. **Local/headless**: `mmo_slice`, unit/race tests, flags OFF.
-2. **Staging allowlist**: one map, one account, `MMO_ALLOWLIST` non-empty.
-3. **Opt-in cohort**: add player IDs; keep legacy world available for everyone
-   else. Do not add a player to both an MMO lease and a legacy movement session.
-4. **Canary default**: only after Gate B evidence and a rollback rehearsal; flip
-   the frontend entry and keep backend allowlists explicit until the next gate.
-5. **Cleanup**: remaining legacy movement and map adapters can be removed after
-   the mutation audit and canary rollback rehearsal are complete.
+1. Deploy backend and matching map artifacts together.
+2. Verify database world-location migrations and map catalogue load in startup logs.
+3. Monitor capacity and zone health; tune per-zone capacity if needed.
 
 ## Rollback
 
-1. Set `MMO_ADMISSION_PAUSED=true` (or disable `PHASER_WORLD_CLIENT_ENABLED` /
-   `REALTIME_WORLD_ENABLED` on a restart) to block new MMO joins.
-2. Call the admission drain path (`Admission.Drain`, also invoked during graceful
+1. Call the admission drain path (`Admission.Drain`, also invoked during graceful
    server shutdown):
    - pauses admission;
    - checkpoints location to `players` and vitals/map versions to `player_world_state_v2`;

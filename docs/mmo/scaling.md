@@ -53,11 +53,11 @@ Do not claim 100 players/zone or multi-worker capacity until those are measured.
 ```env
 MMO_INSTANCES_PER_ZONE=3
 MMO_MAX_PLAYERS_PER_ZONE=5
-MMO_ZONE_IDS=realtime_preview
 ```
 
-This creates three instances of `realtime_preview`, each capped at five players
-(15 total in this process) and routes joins to the least-loaded instance.
+This creates three instances of each shipped public map, each capped at five
+players (15 total per map in this process) and routes joins to the least-loaded
+instance.
 
 ## Tests
 

@@ -34,15 +34,12 @@ review; it is not evidence that production cutover or browser flows passed.
    yet all audited or fenced against mutations while the same character is
    realtime-owned; this is a production cutover blocker.
 
-## Rollback path
+## Historical rollback path
 
-1. Pause new admission (`MMO_ADMISSION_PAUSED=true`) and drain active sessions
-   through the admission drain/shutdown path.
-2. Disable `PHASER_WORLD_CLIENT_ENABLED` and the frontend public MMO flag so the
-   home view resolves to the legacy `world-map`.
-3. Disable backend realtime admission after sessions are drained. Preserve
-   checkpoints and loot-grant rows; rollback must not delete player data.
-4. Verify one legacy login/world flow and one rejoin before any cohort expands.
+This pre-launch runbook described environment-gated rollout. Current production
+behavior keeps MMO enabled for signed-in players; use graceful drain and deploy
+the previous known-good application version for rollback. Preserve checkpoints
+and loot-grant rows.
 
 The sequence above is the documented rollback design. A staging canary and
 timed rollback rehearsal have not been performed; see `cutover.md` and

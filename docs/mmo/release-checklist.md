@@ -100,18 +100,17 @@ Do not raise `MMO_MAX_PLAYERS_PER_ZONE` or advertise 100/zone from the synthetic
 benchmark alone. The current process-local instance split does not fence
 cross-process ownership.
 
-## 5. Canary plan (5% → 25% → 100%)
+## 5. Capacity rollout
 
-The backend uses an explicit `MMO_ALLOWLIST`, not a percentage router. "Percent"
-means a deterministic cohort slice selected by operations; every admitted player
-must still be on the allowlist. Keep the legacy world available throughout.
+Realtime MMO is open to all signed-in accounts. Increase capacity only after
+measuring stable load; there is no player allowlist or legacy-world cohort.
 
 | Stage | Cohort | Duration/exit | Rollback trigger |
 | --- | --- | --- | --- |
 | Internal | QA + ops accounts, 1 zone | 1 session + full regression | any duplicate loot/owner, crash loop |
 | 5% | ~5% of target cohort (min 1 account) | 24 h stable or 2 peak cycles | tick p99 > 25 ms sustained, reconnect < 95%, unexplained 5xx |
 | 25% | ~25% of target cohort | 48 h stable or 2 peak cycles | queue drops without resync, FPS regression, economy mismatch |
-| 100% | all opted-in accounts | 7 days before cleanup PR | any release blocker or unowned state corruption |
+| Public | all signed-in accounts | 7 days of measured stable operation | any release blocker or unowned state corruption |
 
 Per stage:
 
@@ -128,15 +127,13 @@ Per stage:
 
 Rehearse before the first external cohort:
 
-1. Set `MMO_ADMISSION_PAUSED=true`; confirm new joins are blocked and existing
-   sessions continue.
-2. Trigger graceful drain/shutdown; confirm checkpoint upserts, leases released
+1. Trigger graceful drain/shutdown; confirm checkpoint upserts, leases released
    and no duplicate owner after restart.
-3. Disable `PHASER_WORLD_CLIENT_ENABLED` / `NEXT_PUBLIC_*`; confirm the legacy
-   route is usable.
-4. Keep `realtime_loot_grants` and checkpoints; do not delete rows.
-5. Restart, re-run the release gate and one allowlisted smoke session.
-6. Record elapsed time, data loss window and any manual steps.
+2. Redeploy the previous known-good application version if rollback is needed;
+   MMO admission is not controlled by environment feature flags.
+3. Keep `realtime_loot_grants` and checkpoints; do not delete rows.
+4. Restart, re-run the release gate and a signed-in smoke session.
+5. Record elapsed time, data loss window and any manual steps.
 
 Any rehearsal failure is a Gate D blocker.
 
