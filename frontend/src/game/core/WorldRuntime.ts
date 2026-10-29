@@ -108,6 +108,7 @@ export const DEFAULT_REALTIME_CONTROL_SETTINGS: RealtimeControlSettings = {
 
 const DEFAULT_SPEED = 4;
 const INTERPOLATION_DELAY_TICKS = 2;
+const MAX_SELF_RECONCILE_LEAD_TICKS = 2;
 const INPUT_SEND_INTERVAL = 0.1;
 const INPUT_KEEPALIVE_INTERVAL = 0.15;
 
@@ -614,7 +615,29 @@ export class WorldRuntime {
     const self = state.entities.find((entity) => entity.entity_id === this.selfId);
     if (self) {
       this.selfHp = self.hp;
-      const correction = this.predictor.softReconcile({ x: self.x, y: self.y }, state.ackSeq);
+      // The snapshot describes an earlier server tick. Advance its position by
+      // the movement we have held since then before reconciling, otherwise each
+      // snapshot pulls the locally predicted player backward by one-way latency.
+      const leadTicks = Math.min(
+        MAX_SELF_RECONCILE_LEAD_TICKS,
+        Math.max(0, this.clock.estimatedTick() - state.tick),
+      );
+      const position = { x: self.x, y: self.y };
+      let movement = this.inputVector;
+      if (this.localTarget) {
+        const predicted = this.predictor.getPosition();
+        const dx = this.localTarget.x - predicted.x;
+        const dy = this.localTarget.y - predicted.y;
+        const distance = Math.hypot(dx, dy);
+        movement = distance > 0.001 ? { x: dx / distance, y: dy / distance } : { x: 0, y: 0 };
+      }
+      const movementMagnitude = Math.hypot(movement.x, movement.y);
+      if (movementMagnitude > 0) {
+        const distance = (this.speed * leadTicks) / this.clock.getTickRate();
+        position.x += (movement.x / movementMagnitude) * distance;
+        position.y += (movement.y / movementMagnitude) * distance;
+      }
+      const correction = this.predictor.softReconcile(position, state.ackSeq, 2, 0.08);
       this.lastCorrection = correction.correction;
       if (correction.snapped) this.localTarget = null;
     }
