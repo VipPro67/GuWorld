@@ -7,6 +7,8 @@
 **Tiến độ triển khai:** Batch đầu tiên đã chuyển movement/runtime stats sang commit đồng bộ trong transaction nghiệp vụ; legacy Redis payload vẫn được xử lý trong cửa sổ tương thích bằng version/timestamp guard và compare-and-ACK. Growth đã thống nhất lock `players -> player_gu`, passive-stats dùng projection read-only và full player loader không còn lấy connection DB thứ hai trong transaction. Các hạng mục domain table/CAS đầy đủ, idempotency/outbox và refactor combat vẫn theo backlog bên dưới.
 **Cập nhật 2026-10-26:** `internal/playerstate` đã gom shape đọc của `players` (column list, revision, Gu/materials, repair, not-found) và `services.PlayerService` chỉ còn phần time projection. Phần ghi/unit-of-work và phân quyền field vẫn nằm trong backlog của kế hoạch này.
 
+Đây là tài liệu thiết kế và backlog, không phải mô tả hiện trạng đầy đủ. Mục 3 ghi lại baseline khi lập kế hoạch; hãy kiểm tra code hiện hành trước khi dùng một rủi ro trong đó làm căn cứ sửa. Bản đồ ownership player hiện tại nằm ở [PLAYER_DOMAIN.md](PLAYER_DOMAIN.md).
+
 ## 1. Kết luận điều hành
 
 `players` hiện là một **hot aggregate**: thông tin tài khoản, hồ sơ, tài nguyên, HP/mana, vị trí, combat và nhiều JSONB cùng nằm trên một tuple. PostgreSQL khóa theo row chứ không theo column, vì vậy heartbeat, di chuyển, combat, hunger, growth và giao dịch vẫn tranh cùng một row dù cập nhật các trường khác nhau.
@@ -45,7 +47,7 @@ Ngưỡng trên là điểm khởi đầu; chốt baseline thực tế trong 48 
 - Không gọi Redis, publish event, HTTP hoặc công việc CPU nặng trong lúc giữ transaction DB.
 - Chỉ trả thành công sau khi durable state cần thiết đã commit. Event realtime được phát sau commit hoặc qua outbox.
 
-## 3. Hiện trạng và rủi ro cụ thể
+## 3. Baseline và rủi ro ghi nhận khi lập kế hoạch (2026-09-11)
 
 ### 3.1 Một row chứa quá nhiều miền ghi
 
@@ -65,7 +67,7 @@ Các GIN index trên JSONB làm mỗi lần sửa JSON tương ứng tốn thêm
 - Combat mở transaction và khóa actor sớm, sau đó mới mô phỏng, xử lý target/allies/mine/loot và commit ở cuối.
 - Trade đã có pattern khóa hai player theo UUID; pattern này chưa được áp dụng nhất quán cho combat, marketplace, party và worker batch.
 - Nhiều nơi dùng `DB.Begin()` nên request bị hủy không tự hủy transaction. Timeout toàn cục hiện chỉ là hàng rào cuối, không phải quản lý transaction theo use case.
-- `PlayerService.loadRow` có thể đọc inventory bằng `s.db` thay vì query handle/transaction đang truyền vào. Flow mutation vì vậy vừa có snapshot không nhất quán, vừa giữ một connection trong lúc chờ connection thứ hai.
+- **Đã xử lý theo cập nhật 2026-10-26:** player snapshot hiện nằm trong `internal/playerstate`; các loader nhận query handle hiện hành và không dùng `PlayerService.loadRow` cũ. Không dùng mục baseline này như lỗi còn tồn tại.
 - `GetPassiveStatsHandler` dùng transaction và rollback ở cuối cho một luồng đọc/projection. Nếu evaluator có lazy write/lock, endpoint polling này tạo contention nhưng không lưu kết quả.
 
 ### 3.3 Write-behind Redis chưa có ranh giới ownership an toàn

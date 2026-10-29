@@ -3,6 +3,8 @@ package models
 import (
 	"database/sql"
 	"encoding/json"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -67,16 +69,48 @@ type MonsterSpawn struct {
 	IsActive       bool    `json:"is_active"`
 }
 
+// MonsterRankScalingEnabled reports whether monster and boss stats are
+// multiplied by the shared RankScale(rank) curve. Defaults to enabled; set
+// MONSTER_RANK_SCALING_ENABLED to false/0/off/no to drop the rank multiplier
+// while keeping the type and sub-rank multipliers.
+func MonsterRankScalingEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("MONSTER_RANK_SCALING_ENABLED"))) {
+	case "false", "0", "off", "no":
+		return false
+	}
+	return true
+}
+
+// MonsterStatMultiplier is the global multiplier applied to every monster/boss
+// stat (HP/ATK/DEF) after rank, type and sub-rank scaling. Defaults to 1.0;
+// set MONSTER_STAT_MULTIPLIER to a positive float (e.g. 0.5) for a temporary
+// global nerf/buff. Missing, invalid or non-positive values fall back to 1.0.
+func MonsterStatMultiplier() float64 {
+	raw := strings.TrimSpace(os.Getenv("MONSTER_STAT_MULTIPLIER"))
+	if raw == "" {
+		return 1.0
+	}
+	mult, err := strconv.ParseFloat(raw, 64)
+	if err != nil || mult <= 0 {
+		return 1.0
+	}
+	return mult
+}
+
 func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, subRank int, monsterType string) (maxHP, attack, defense float64) {
 	// Single shared scale table (models.RankScaleTable). Monster base stats are
 	// authored rank-independent in Monster.csv, so the rank curve is the only
 	// thing that grows with rank — matching Gu values (ratio * RankScale).
-	rankMultiplier := RankScale(rank)
-	if rank > 9 {
-		// Chaos/Hybrid tribulation spawns at rank 10 (there is no rank-10 row in
-		// the table). Preserve its historical order-of-magnitude bump over rank 9
-		// (10^10 -> 10^13) instead of clamping it.
-		rankMultiplier = 10000000000000.0
+	// MONSTER_RANK_SCALING_ENABLED=false keeps only the type/sub-rank multipliers.
+	rankMultiplier := 1.0
+	if MonsterRankScalingEnabled() {
+		rankMultiplier = RankScale(rank)
+		if rank > 9 {
+			// Chaos/Hybrid tribulation spawns at rank 10 (there is no rank-10 row in
+			// the table). Preserve its historical order-of-magnitude bump over rank 9
+			// (10^10 -> 10^13) instead of clamping it.
+			rankMultiplier = 10000000000000.0
+		}
 	}
 
 	typeMultiplier := 1.0
@@ -117,6 +151,14 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 
 	if defense < 0 {
 		defense = 0
+	}
+
+	// Global tuning knob applied last so every spawn path (world monsters,
+	// region preview, sect beasts, ascension/tribulation bosses) stays in sync.
+	if mult := MonsterStatMultiplier(); mult != 1.0 {
+		maxHP *= mult
+		attack *= mult
+		defense *= mult
 	}
 	return
 }

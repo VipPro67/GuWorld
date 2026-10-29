@@ -2,3 +2,23 @@
 /.env
 /.env.local
 **/google.json
+
+# Go test and profiling outputs
+*.test
+*.cover
+*.prof
+*.pprof
+/backend/coverage.out
+/backend/bin/
+
+# Backend executables currently built into the source tree
+/backend/cmd/server/server
+/backend/gudata
+/backend/guworld_bin
+/backend/guworld_server
+/backend/server
+/backend/tmp_server
+
+# Local machine noise
+.DS_Store
+*.log

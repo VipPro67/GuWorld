@@ -566,6 +566,7 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 
 > **Trạng thái gameplay hiện tại:** bề mặt thế giới sau onboarding dùng Phaser realtime. Di chuyển là
 > WASD hoặc click-to-move và server xác nhận vị trí; client không mở chạm trán theo lượt khi đi qua ô.
+> Khi giữ hướng di chuyển, các snapshot đến trễ không kéo nhân vật lùi từng nhịp; sai lệch lớn do vật cản hoặc dịch chuyển vẫn được đồng bộ về vị trí máy chủ.
 > Các mô tả lưới ô/Pixi phía dưới ghi lại gameplay legacy và không còn là luồng thế giới đang chạy.
 
 > **Tốc độ chạy MMO:** realtime world dùng tốc độ nền 4 ô/giây tại passive MOVEMENT = 1; mỗi điểm MOVEMENT cao hơn mốc này cộng 5% tốc độ. Slow, haste, root và stun tiếp tục tác động theo trạng thái realtime.

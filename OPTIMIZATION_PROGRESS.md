@@ -1,5 +1,7 @@
 # GuWorld Optimization Progress Tracking
 
+This is a historical progress log, not a live inventory of current files or completed checks. For current Player ownership, use [docs/PLAYER_DOMAIN.md](docs/PLAYER_DOMAIN.md); rerun validation commands against the current worktree.
+
 ## Phase 1: Quick Wins (High Impact, Low Risk) - 1-2 days
 
 ### Backend - Helper Functions Extraction
@@ -133,11 +135,7 @@
   - `rankLabel`, `subRankLabel`, `typeColor`, `gridXLabel`
   - `EFFECT_STYLE`, `EFFECT_LABEL`, `getCombatEffects`, `EffectBadge`
   - Removed ~120 lines of duplication from CombatScreen.tsx
-- [ ] **Split player.go** (5296 lines) into:
-  - `player_auth.go` - register, login, logout, OTP
-  - `player_inventory.go` - equip, use items, drop
-  - `player_exploration.go` - explore, feed
-  - `player_progression.go` - onboarding, stats, leveling
+- [x] **Split the legacy player.go handler** into focused `player_*` files. The old filename/task breakdown is obsolete; use [docs/PLAYER_DOMAIN.md](docs/PLAYER_DOMAIN.md) for current ownership.
 
 - [ ] **Split admin.go** (4434 lines)
 - [ ] **Split sect.go** (3839 lines)
@@ -187,7 +185,9 @@ cd frontend && npm run lint
 cd frontend && npm run build
 ```
 
-## ✅ Validation Results (All Phases)
+## Historical Validation Results
+
+These results were recorded during the original optimization passes; they are not a guarantee about the current worktree. Run the relevant checks again for each new change.
 
 | Check | Command | Result |
 |-------|---------|--------|

@@ -110,3 +110,176 @@ test("WorldRuntime joins, predicts movement and handles click targets", async ()
   runtime.disconnect();
   assert.equal(runtime.getStatus(), "closed");
 });
+
+test("held movement does not step backward when a delayed snapshot arrives", async () => {
+  const fake = new FakeSocket();
+  let now = 0;
+  const runtime = new WorldRuntime({
+    nowMs: () => now,
+    socketOptions: {
+      url: "wss://api.example/api/ws",
+      getToken: () => "token",
+      getTabId: () => "tab",
+      createSocket: () => fake as never,
+    },
+  });
+  const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+  fake.open();
+  const joinRequest = JSON.parse(fake.sent[0]) as { request_id: string };
+  fake.receive(welcome(joinRequest.request_id));
+  await pending;
+
+  runtime.setMoveVector({ x: 1, y: 0 });
+  runtime.update(0.1);
+  now = 100;
+  const before = runtime.getSelfPosition().x;
+  fake.receive({
+    v: 1,
+    type: "world.snapshot",
+    payload: {
+      tick: 11, ack_seq: 1, baseline_id: 1, base_tick: 10, is_baseline: false,
+      entities: [{ entity_id: "player-1", entity_revision: 1, x: 10.28, y: 10, hp: 80 }],
+      removed: [],
+    },
+  });
+  assert.ok(runtime.getSelfPosition().x >= before, `snapshot pulled player backward from ${before} to ${runtime.getSelfPosition().x}`);
+  runtime.setMoveVector({ x: 0, y: 0 });
+  fake.receive({
+    v: 1,
+    type: "world.snapshot",
+    payload: {
+      tick: 12, ack_seq: 1, baseline_id: 1, base_tick: 10, is_baseline: false,
+      entities: [{ entity_id: "player-1", entity_revision: 2, x: before, y: 10, hp: 80 }],
+      removed: [],
+    },
+  });
+  assert.ok(runtime.getSelfPosition().x >= before, "snapshot pulled player back before the stop input was acknowledged");
+  fake.receive({
+    v: 1,
+    type: "world.snapshot",
+    payload: {
+      tick: 13, ack_seq: 2, baseline_id: 1, base_tick: 10, is_baseline: false,
+      entities: [{ entity_id: "player-1", entity_revision: 3, x: before, y: 10, hp: 80 }],
+      removed: [],
+    },
+  });
+  assert.ok(Math.abs(runtime.getSelfPosition().x - before) < 0.1);
+  runtime.disconnect();
+});
+
+test("server blocked and slowed movement still corrects local prediction", async () => {
+  for (const serverStep of [0, 0.14]) {
+    const fake = new FakeSocket();
+    let now = 0;
+    const runtime = new WorldRuntime({
+      nowMs: () => now,
+      socketOptions: {
+        url: "wss://api.example/api/ws",
+        getToken: () => "token",
+        getTabId: () => "tab",
+        createSocket: () => fake as never,
+      },
+    });
+    const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+    fake.open();
+    const joinRequest = JSON.parse(fake.sent[0]) as { request_id: string };
+    fake.receive(welcome(joinRequest.request_id));
+    await pending;
+    runtime.setMoveVector({ x: 1, y: 0 });
+    for (let step = 1; step <= 30; step++) {
+      runtime.update(0.05);
+      now += 50;
+      fake.receive({
+        v: 1,
+        type: "world.snapshot",
+        payload: {
+          tick: 10 + step, ack_seq: 1, baseline_id: 1, base_tick: 10, is_baseline: false,
+          entities: [{ entity_id: "player-1", entity_revision: step, x: 10 + serverStep * step, y: 10, hp: 80 }],
+          removed: [],
+        },
+      });
+      assert.ok(runtime.getSelfPosition().x <= 10 + serverStep * step + 0.6,
+        `server step ${serverStep} accumulated prediction error at snapshot ${step}`);
+      assert.ok(runtime.getDebugStats().lastCorrection < 2,
+        `server step ${serverStep} caused a hard snap at snapshot ${step}`);
+    }
+    runtime.disconnect();
+  }
+});
+
+test("click-to-move stays smooth after prediction reaches the target before the server", async () => {
+  const fake = new FakeSocket();
+  let now = 0;
+  const runtime = new WorldRuntime({
+    nowMs: () => now,
+    socketOptions: {
+      url: "wss://api.example/api/ws",
+      getToken: () => "token",
+      getTabId: () => "tab",
+      createSocket: () => fake as never,
+    },
+  });
+  const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+  fake.open();
+  const joinRequest = JSON.parse(fake.sent[0]) as { request_id: string };
+  fake.receive(welcome(joinRequest.request_id));
+  await pending;
+  assert.equal(runtime.sendMoveTarget({ x: 10.56, y: 10 }), true);
+  runtime.update(0.1);
+  const before = runtime.getSelfPosition().x;
+  now = 100;
+  fake.receive({
+    v: 1,
+    type: "world.snapshot",
+    payload: {
+      tick: 11, ack_seq: 1, baseline_id: 1, base_tick: 10, is_baseline: false,
+      entities: [{ entity_id: "player-1", entity_revision: 1, x: 10.28, y: 10, hp: 80 }],
+      removed: [],
+    },
+  });
+  assert.ok(runtime.getSelfPosition().x >= before - 0.001);
+  fake.receive({
+    v: 1,
+    type: "world.snapshot",
+    payload: {
+      tick: 12, ack_seq: 1, baseline_id: 1, base_tick: 10, is_baseline: false,
+      entities: [{ entity_id: "player-1", entity_revision: 2, x: 10.56, y: 10, hp: 80 }],
+      removed: [],
+    },
+  });
+  assert.ok(Math.abs(runtime.getSelfPosition().x - 10.56) < 0.001);
+  runtime.disconnect();
+});
+
+test("turning away from a wall resumes immediate local movement", async () => {
+  const fake = new FakeSocket();
+  const runtime = new WorldRuntime({
+    socketOptions: {
+      url: "wss://api.example/api/ws",
+      getToken: () => "token",
+      getTabId: () => "tab",
+      createSocket: () => fake as never,
+    },
+  });
+  const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+  fake.open();
+  const joinRequest = JSON.parse(fake.sent[0]) as { request_id: string };
+  fake.receive(welcome(joinRequest.request_id));
+  await pending;
+  runtime.setMoveVector({ x: 1, y: 0 });
+  runtime.update(0.05);
+  fake.receive({
+    v: 1,
+    type: "world.snapshot",
+    payload: {
+      tick: 11, ack_seq: 1, baseline_id: 1, base_tick: 10, is_baseline: false,
+      entities: [{ entity_id: "player-1", entity_revision: 1, x: 10, y: 10, hp: 80 }],
+      removed: [],
+    },
+  });
+  runtime.setMoveVector({ x: 0, y: 1 });
+  const before = runtime.getSelfPosition().y;
+  runtime.update(0.05);
+  assert.ok(runtime.getSelfPosition().y > before + 0.2);
+  runtime.disconnect();
+});

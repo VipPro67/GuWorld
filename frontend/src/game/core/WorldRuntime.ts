@@ -75,6 +75,7 @@ export interface WorldRuntimeOptions {
   socketOptions?: WorldSocketOptions;
   /** Fallback speed in world units per second for servers without movement_speed. */
   speed?: number;
+  nowMs?: () => number;
 }
 
 export interface RealtimeTactic {
@@ -108,7 +109,8 @@ export const DEFAULT_REALTIME_CONTROL_SETTINGS: RealtimeControlSettings = {
 
 const DEFAULT_SPEED = 4;
 const INTERPOLATION_DELAY_TICKS = 2;
-const MAX_SELF_RECONCILE_LEAD_TICKS = 2;
+const MAX_SELF_RECONCILE_LEAD_TICKS = 5;
+const MAX_SELF_LATENCY_MS = 250;
 const INPUT_SEND_INTERVAL = 0.1;
 const INPUT_KEEPALIVE_INTERVAL = 0.15;
 
@@ -120,6 +122,7 @@ export class WorldRuntime {
   private socket: WorldSocket;
   private readonly socketOptions: WorldSocketOptions | undefined;
   private speed: number;
+  private predictionSpeed: number;
   private readonly clock = new WorldClock();
   private readonly predictor = new SelfPredictor();
   private readonly interpolator = new RemoteInterpolator();
@@ -146,15 +149,22 @@ export class WorldRuntime {
 
   private inputVector: WorldPoint = { x: 0, y: 0 };
   private lastSentVector: WorldPoint = { x: 0, y: 0 };
+  private readonly nowMs: () => number;
+  private sentMovementAt = new Map<number, number>();
+  private oneWayLatencyMs = 0;
+  private stopSeq = 0;
   private localTarget: WorldPoint | null = null;
+  private pendingTarget: WorldPoint | null = null;
   private inputAccumulator = 0;
   private sendAccumulator = 0;
   private lastStaleReconnectAt = 0;
 
   constructor(options: WorldRuntimeOptions = {}) {
     this.socketOptions = options.socketOptions;
+    this.nowMs = options.nowMs ?? Date.now;
     this.socket = new WorldSocket(this.socketOptions);
     this.speed = options.speed ?? DEFAULT_SPEED;
+    this.predictionSpeed = this.speed;
     this.predictor.setSpeed(this.speed);
     this.bindSocket();
   }
@@ -170,6 +180,7 @@ export class WorldRuntime {
       const welcome = await this.socket.connect(join);
       this.welcome = welcome;
       this.speed = welcome.movement_speed ?? this.speed;
+      this.predictionSpeed = this.speed;
       this.predictor.setSpeed(this.speed);
       this.selfId = welcome.entity_id;
       this.clock.sync(welcome.server_tick, welcome.tick_rate);
@@ -218,17 +229,37 @@ export class WorldRuntime {
     this.combatNotice = "";
     this.uiModal = false;
     this.lastCorrection = 0;
+    this.sentMovementAt.clear();
+    this.oneWayLatencyMs = 0;
+    this.stopSeq = 0;
+    this.pendingTarget = null;
     this.status = "closed";
     this.emit();
   }
 
   public setMoveVector(vector: WorldPoint): void {
     const normalized = normalizeWorldVector(vector);
-    if (normalized.x !== 0 || normalized.y !== 0) this.localTarget = null;
+    const priorMagnitude = Math.hypot(this.inputVector.x, this.inputVector.y);
+    const nextMagnitude = Math.hypot(normalized.x, normalized.y);
+    const directionalCosine = priorMagnitude > 0 && nextMagnitude > 0
+      ? (normalized.x * this.inputVector.x + normalized.y * this.inputVector.y) / (priorMagnitude * nextMagnitude)
+      : -1;
+    if (nextMagnitude > 0 && directionalCosine < 0.95) {
+      this.predictionSpeed = this.speed;
+      this.predictor.setSpeed(this.speed);
+    }
+    if (normalized.x !== 0 || normalized.y !== 0) {
+      this.localTarget = null;
+      this.pendingTarget = null;
+    }
     this.inputVector = normalized;
     if (this.status !== "joined") return;
     if (!sameVector(normalized, this.lastSentVector)) {
-      this.socket.sendInput(normalized);
+      const seq = this.socket.sendInput(normalized);
+      if (seq !== null) {
+        this.recordMovementSend(seq);
+        this.stopSeq = normalized.x === 0 && normalized.y === 0 ? seq : 0;
+      }
       this.lastSentVector = normalized;
       this.sendAccumulator = 0;
     }
@@ -241,6 +272,11 @@ export class WorldRuntime {
     const seq = this.socket.sendMoveTarget(bounded);
     if (seq === null) return false;
     this.localTarget = bounded;
+    this.pendingTarget = bounded;
+    this.predictionSpeed = this.speed;
+    this.predictor.setSpeed(this.speed);
+    this.recordMovementSend(seq);
+    this.stopSeq = 0;
     this.inputVector = { x: 0, y: 0 };
     this.lastSentVector = { x: 0, y: 0 };
     this.sendAccumulator = 0;
@@ -252,9 +288,11 @@ export class WorldRuntime {
     if (!this.localTarget) return;
     if (this.status === "joined") {
       const position = this.predictor.getPosition();
-      this.socket.sendMoveTarget(position);
+      const seq = this.socket.sendMoveTarget(position);
+      if (seq !== null) this.recordMovementSend(seq);
     }
     this.localTarget = null;
+    this.pendingTarget = null;
   }
 
   /**
@@ -291,7 +329,7 @@ export class WorldRuntime {
         this.localTarget = null;
       } else {
         this.predictor.advance({ x: dx / distance, y: dy / distance }, dt);
-        if (distance <= this.speed * dt + 0.05) this.localTarget = null;
+        if (distance <= this.predictionSpeed * dt + 0.05) this.localTarget = null;
       }
     } else {
       this.predictor.advance(this.inputVector, dt);
@@ -302,7 +340,8 @@ export class WorldRuntime {
     this.sendAccumulator += dt;
     if (this.inputVector.x === 0 && this.inputVector.y === 0) {
       if (!sameVector(this.lastSentVector, { x: 0, y: 0 }) && this.sendAccumulator >= INPUT_SEND_INTERVAL) {
-        this.socket.sendInput({ x: 0, y: 0 });
+        const seq = this.socket.sendInput({ x: 0, y: 0 });
+        if (seq !== null) this.recordMovementSend(seq);
         this.lastSentVector = { x: 0, y: 0 };
         this.sendAccumulator = 0;
       }
@@ -312,7 +351,8 @@ export class WorldRuntime {
       this.inputAccumulator >= INPUT_SEND_INTERVAL &&
       this.sendAccumulator >= INPUT_KEEPALIVE_INTERVAL
     ) {
-      this.socket.sendInput(this.inputVector);
+      const seq = this.socket.sendInput(this.inputVector);
+      if (seq !== null) this.recordMovementSend(seq);
       this.lastSentVector = this.inputVector;
       this.inputAccumulator = 0;
       this.sendAccumulator = 0;
@@ -598,6 +638,7 @@ export class WorldRuntime {
           this.combatNotice = "";
         } else if (event.type === "MOVE_TARGET_REJECTED") {
           this.localTarget = null;
+          this.pendingTarget = null;
           this.combatNotice = "Đường đi bị chặn";
         }
         for (const listener of this.combatListeners) listener(event);
@@ -608,6 +649,8 @@ export class WorldRuntime {
 
   private applySnapshot(state: BufferedWorldState | null): void {
     if (!state) return;
+    const previous = this.snapshot;
+    this.updateMovementLatency(state.ackSeq);
     this.snapshot = state;
     if (Math.abs(this.clock.estimatedTick() - state.tick) > 4) {
       this.clock.sync(state.tick, this.clock.getTickRate());
@@ -615,27 +658,44 @@ export class WorldRuntime {
     const self = state.entities.find((entity) => entity.entity_id === this.selfId);
     if (self) {
       this.selfHp = self.hp;
-      // The snapshot describes an earlier server tick. Advance its position by
-      // the movement we have held since then before reconciling, otherwise each
-      // snapshot pulls the locally predicted player backward by one-way latency.
+      if (this.pendingTarget && Math.hypot(self.x - this.pendingTarget.x, self.y - this.pendingTarget.y) <= 0.15) {
+        this.pendingTarget = null;
+      }
+      // Project using movement the server actually made between snapshots.
+      // This yields zero lead at walls/root and the reduced speed during slow.
+      const priorSelf = previous?.entities.find((entity) => entity.entity_id === this.selfId);
+      const tickDelta = previous ? state.tick - previous.tick : 0;
+      const observedSpeed = priorSelf && tickDelta > 0
+        ? Math.hypot(self.x - priorSelf.x, self.y - priorSelf.y) * this.clock.getTickRate() / tickDelta
+        : null;
+      if (observedSpeed !== null && observedSpeed <= this.speed * 1.5 &&
+        (this.inputVector.x !== 0 || this.inputVector.y !== 0 || this.pendingTarget)) {
+        this.predictionSpeed = observedSpeed;
+        this.predictor.setSpeed(this.predictionSpeed);
+      }
       const leadTicks = Math.min(
         MAX_SELF_RECONCILE_LEAD_TICKS,
-        Math.max(0, this.clock.estimatedTick() - state.tick),
+        Math.max(0, this.clock.estimatedTick() - state.tick, this.oneWayLatencyMs * this.clock.getTickRate() / 1000),
       );
       const position = { x: self.x, y: self.y };
-      let movement = this.inputVector;
-      if (this.localTarget) {
-        const predicted = this.predictor.getPosition();
-        const dx = this.localTarget.x - predicted.x;
-        const dy = this.localTarget.y - predicted.y;
-        const distance = Math.hypot(dx, dy);
-        movement = distance > 0.001 ? { x: dx / distance, y: dy / distance } : { x: 0, y: 0 };
-      }
-      const movementMagnitude = Math.hypot(movement.x, movement.y);
-      if (movementMagnitude > 0) {
-        const distance = (this.speed * leadTicks) / this.clock.getTickRate();
-        position.x += (movement.x / movementMagnitude) * distance;
-        position.y += (movement.y / movementMagnitude) * distance;
+      const stillMoving = this.inputVector.x !== 0 || this.inputVector.y !== 0 || this.pendingTarget !== null || (this.stopSeq > 0 && state.ackSeq < this.stopSeq);
+      if (priorSelf && tickDelta > 0 && leadTicks > 0 && stillMoving) {
+        const dx = self.x - priorSelf.x;
+        const dy = self.y - priorSelf.y;
+        if (observedSpeed !== null && observedSpeed <= this.speed * 1.5) {
+          let projectedX = dx * leadTicks / tickDelta;
+          let projectedY = dy * leadTicks / tickDelta;
+          if (this.pendingTarget) {
+            const remaining = Math.hypot(this.pendingTarget.x - position.x, this.pendingTarget.y - position.y);
+            const projectedDistance = Math.hypot(projectedX, projectedY);
+            if (projectedDistance > remaining && projectedDistance > 0) {
+              projectedX *= remaining / projectedDistance;
+              projectedY *= remaining / projectedDistance;
+            }
+          }
+          position.x += projectedX;
+          position.y += projectedY;
+        }
       }
       const correction = this.predictor.softReconcile(position, state.ackSeq, 2, 0.08);
       this.lastCorrection = correction.correction;
@@ -646,6 +706,23 @@ export class WorldRuntime {
       state.entities.filter((entity) => entity.entity_id !== this.selfId),
     );
     this.emit();
+  }
+
+  private recordMovementSend(seq: number): void {
+    this.sentMovementAt.set(seq, this.nowMs());
+    if (this.sentMovementAt.size > 64) this.sentMovementAt.delete(this.sentMovementAt.keys().next().value!);
+  }
+
+  private updateMovementLatency(ackSeq: number): void {
+    let latestSentAt: number | undefined;
+    for (const [seq, sentAt] of this.sentMovementAt) {
+      if (seq > ackSeq) break;
+      latestSentAt = sentAt;
+      this.sentMovementAt.delete(seq);
+    }
+    if (latestSentAt === undefined) return;
+    const sample = Math.min(MAX_SELF_LATENCY_MS, Math.max(0, (this.nowMs() - latestSentAt) / 2));
+    this.oneWayLatencyMs = this.oneWayLatencyMs === 0 ? sample : this.oneWayLatencyMs * 0.75 + sample * 0.25;
   }
 
   private emit(): void {

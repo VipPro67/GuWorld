@@ -16,6 +16,7 @@ HP/ATK/DEF = base × RankScale(rank quái) × typeMult × subRankMult × calamit
 - `calamityMult`: **chỉ Kiếp Nạn Hỗn Loạn (CHAOTIC_TRIBULATION)**, áp vào HP + ATK (không áp DEF):
   `1 + (1 − purity) × 0.75` → **1.30×** (purity 0.60) đến **1.675×** (purity 0.10).
 - **Không còn** scale theo độ khó (`difficulty`) hay theo lượng Đạo Ngân của người chơi.
+- Env điều chỉnh toàn cục (xem `docs/DEVELOPMENT.md`): `MONSTER_RANK_SCALING_ENABLED=false` bỏ hẳn `RankScale` (và bump rank 10) khỏi công thức trên; `MONSTER_STAT_MULTIPLIER` (mặc định `1.0`) nhân thêm vào cả HP/ATK/DEF sau cùng, tức công thức đầy đủ là `base × RankScale × typeMult × subRankMult × hệ số hạ công/thủ × calamityMult × MONSTER_STAT_MULTIPLIER`.
 
 Rank quái theo **loại kiếp**; riêng Hỗn Loạn lấy đúng **rank người chơi**:
 

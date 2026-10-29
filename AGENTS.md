@@ -20,13 +20,13 @@ cd frontend && npm run lint       # ESLint 9
 cd frontend && npm run build      # Next.js build
 ```
 
-No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/handlers/`.
+No CI/CD. No standalone typecheck script. Backend tests are distributed across packages; run `go test ./...` from `backend/`.
 
 ## Backend Conventions (agent would likely miss)
 
-- **Player reads are centralized.** `internal/playerstate` owns the `players` column list, scan order, revision expression, Gu/materials attachments and not-found behavior. Add player row reads through `playerstate.Load`/`Scan`, not a new hand-written SELECT. Player-initiated cell changes go through `handlers/movement.go` (`checkMovement` + `applyDestination` + the shared publish helpers); don't add a new prologue that re-checks a subset.
-- **Handlers are fat, and load-bearing services sit behind them.** Gameplay logic lives in `backend/internal/handlers/`, split per domain (e.g. `player_auth.go`, `player_inventory.go`, `player_stats.go`, `player_explore.go`, `player_daongan.go`, `player_profile.go`, `combat.go`). A small service layer exists for shared persistence/state and **is** wired in: `backend/internal/services/` (`PlayerService`, `InventoryService`, `QuestService`, `RecipeService`, `AchievementService`) exposed to handlers via the `PlayerSvc` / `InventorySvc` globals in `handlers/services.go`. Reuse those instead of pasting new player-row SQL; a real seam exists, so keep reads/writes routed through it.
-- **No migrations.** Schema is split per domain in `backend/internal/db/schema_*.go` (each table a `CREATE TABLE IF NOT EXISTS` with all columns inline, plus indexes and FK). `InitSchema()` in `backend/internal/db/db.go` calls them in FK order and seeds static runtime data (system players, hub region `Southern_Border`, default race/constitution rows + `''` sentinel keys, 31 mine slots, 5 sect mines, wallet/leaderboard backfills). When adding **new columns**, declare them inline in the `CREATE TABLE` of the matching `schema_*.go` file (fresh init; no ALTER patches). Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` (`player_auth.go`) maps each registration region to its hub and falls back to `Southern_Border`.
+- **Player changes have a dedicated map.** For route-to-handler ownership, snapshot/service boundaries, mutation workflow, and focused tests, read `docs/PLAYER_DOMAIN.md` before changing player persistence, player-visible state, or player routes. `internal/playerstate` owns the canonical full-row projection and collection revision; narrow projections remain valid when they intentionally read only the fields a caller needs. Player-initiated cell changes go through `handlers/movement.go` and its shared check/write/publish flow.
+- **Services are selective, not universal.** Gameplay rules remain primarily in `backend/internal/handlers/`. The wired shared services are `PlayerService`, `InventoryService`, `QuestService`, `RecipeService`, and `AchievementService`, exposed through `handlers/services.go`. Reuse a service when it owns the operation; do not assume map, combat-session, or dao services exist, or route every handler through a service.
+- **Schema is idempotently initialized, not managed by a versioned migration framework.** Domain DDL lives in `backend/internal/db/schema_*.go`; it includes `CREATE TABLE`, indexes, compatibility `ALTER` statements and backfills. `InitSchema()` runs these in dependency order and seeds runtime prerequisites. For a new column, update the table definition and add the compatibility DDL required for existing installations, following the owning schema file. Check for separately required, explicitly run data-migration scripts. Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` maps each registration region to its hub and falls back to `Southern_Border`.
 - **DB reset note:** `players.race`, `players.constitution`, `players.current_region` have FKs. `InitSchema` pre-seeds the `''` race/constitution keys and the `Southern_Border` region so registration works before CSV import; race/constitution registry loaders filter out `''` keys.
 - CSV data is managed through the Admin panel.
 - CSV files are not automatically seeded on startup.
@@ -152,7 +152,7 @@ For non-trivial changes:
 * Never assume a table or column exists.
 * Inspect `backend/internal/db/schema_*.go` before writing SQL against project tables.
 * Preserve existing constraints and indexes.
-* Schema khởi tạo mới: cột mới sửa trực tiếp trong `CREATE TABLE` của `schema_*.go`; không dùng ALTER patch.
+* Keep fresh-install DDL and existing-install compatibility changes aligned in the owning `schema_*.go`; use explicit data-migration scripts when the change requires an operational rollout.
 * For data migrations, consider existing production rows and duplicate-key constraints.
 * Be careful with concurrent updates to `player`, `player_gu`, combat state, and other frequently updated tables.
 * Prefer transactions for operations that modify multiple related records.

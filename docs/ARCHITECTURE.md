@@ -10,9 +10,9 @@ Browser / Next.js UI
   -> Redis cache/pub-sub, WebSocket hub and polling/batch workers
 ```
 
-Gameplay rules remain primarily in handlers, but reusable player, inventory, map, combat-session, recipe, quest, achievement and dao operations now live in `internal/services`. This is an incremental split, not a universal service/repository layer.
+Gameplay rules remain primarily in handlers. The wired shared services are `PlayerService`, `InventoryService`, `RecipeService`, `QuestService` and `AchievementService`; this is an incremental split, not a universal service/repository layer. Check `handlers/services.go` and the package before assuming another service exists.
 
-The durable shape of a player read lives in `internal/playerstate`: one column projection, one collection-revision expression, one Gu/materials attachment policy and one not-found rule. `internal/services.PlayerService` adds the time projection on top of that snapshot. Player-initiated cell changes go through the movement chain in `internal/handlers/movement.go`, so ownership, alive/combat checks, region policy, the destination write, the regional-wall debuff and post-commit publication do not drift between walking, portals, teleport arrays, Gu teleports, spatial realms and party joins.
+The canonical full-row player projection and collection revision live in `internal/playerstate`. `Load` can select Gu scope; materials, Dao-mark hydration and expired-status repair are part of every successful load. `PlayerService` adds time/status projection on top of that snapshot. Intentional narrow field projections are valid when a caller does not need a full snapshot. Player-initiated cell changes go through the movement chain in `internal/handlers/movement.go`, so ownership, alive/combat checks, region policy, the destination write, the regional-wall debuff and post-commit publication do not drift between walking, portals, teleport arrays, Gu teleports, spatial realms and party joins.
 
 ## Backend startup
 
@@ -35,7 +35,7 @@ The durable shape of a player read lives in `internal/playerstate`: one column p
 | `backend/internal/db` | Connection, domain schema, static seeds and Admin CSV import/export helpers. |
 | `backend/internal/models` | Domain structs, JSON scanners and runtime registries. |
 | `backend/internal/handlers` | HTTP orchestration and domain gameplay rules. |
-| `backend/internal/services` | Shared player/inventory/map/combat/recipe/quest/achievement/dao operations and time projection. |
+| `backend/internal/services` | Existing shared player, inventory, recipe, quest and achievement operations, plus player time/status projection. |
 | `backend/internal/playerstate` | Canonical player row projection, snapshot views, collection revision and lazy repairs. |
 | `backend/internal/middleware` | Authentication, rate limits and request context. |
 | `backend/internal/cache`, `backend/internal/ws` | Redis and realtime WebSocket infrastructure. |
@@ -61,7 +61,8 @@ The durable shape of a player read lives in `internal/playerstate`: one column p
 
 ## Player state and movement
 
-- `playerstate.Load` is the only reader of the full `players` row. Callers choose what to attach (`Gu`, `Materials`, `Repair`) and receive `sql.ErrNoRows` for a missing player; `playerstate.RevisionExpr` is the only collection-revision definition.
+- For a route-to-handler map and the safe workflow for player-domain changes, see [PLAYER_DOMAIN.md](PLAYER_DOMAIN.md).
+- `playerstate.Load` owns the canonical full `players` row projection and returns `sql.ErrNoRows` for a missing player. `Options.Gu` selects Gu scope; materials loading, Dao-mark hydration and lazy expired-status repair are not optional. Narrow reads and response refresh projections may select only needed fields. `playerstate.RevisionExpr` is the collection-revision definition.
 - `handlers/movement.go` is the one movement chain. Callers pass a `movementSpec` (kind + destination); the per-kind `movementPolicies` table decides party-leader, region-entry and region-action checks plus their status codes, so a new entrance cannot quietly skip a guard. Every entrance maps a guard failure through the same JSON shape, writes its own extra columns inside its transaction, then publishes through the shared helpers.
 - Server-driven placements (respawn, realm returns) use `placePlayerAt` and deliberately skip the guard chain.
 

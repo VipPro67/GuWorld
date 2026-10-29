@@ -10,11 +10,11 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 
 - `backend/cmd/server/main.go`: entrypoint backend, load `.env`, kết nối PostgreSQL/Redis, khởi tạo schema, load các registry từ DB, chạy worker và Gin router/WebSocket hub.
 - `backend/internal/server/server.go`: khai báo toàn bộ route `/api`.
-- `backend/internal/db/db.go` + `backend/internal/db/schema_*.go`: schema PostgreSQL, patch tương thích dạng `CREATE/ALTER IF NOT EXISTS` và seed hệ thống tối thiểu. Dictionary gameplay được import qua Admin.
+- `backend/internal/db/db.go` + `backend/internal/db/schema_*.go`: khởi tạo schema idempotent, gồm DDL tương thích cho database đã tồn tại và seed hệ thống tối thiểu. Dự án không dùng migration framework có version; một số thay đổi dữ liệu vẫn có script triển khai riêng. Dictionary gameplay được import qua Admin.
 - `backend/internal/models`: struct domain cho player, Cổ, item, recipe, combat, aperture, monster, cell, feedback, killer move.
 - `backend/internal/handlers`: điều phối HTTP và phần lớn luật gameplay theo từng domain.
-- `backend/internal/services`: các module dùng chung đã được tách cho player, inventory, map, combat session, recipe, quest, achievement và đạo ngân; không phải mọi handler đều đi qua service.
-- `backend/internal/playerstate`: shape đọc chuẩn của bảng `players` (column list, revision bộ sưu tập, Gu/vật phẩm, repair, not-found); `PlayerService` chỉ còn phần time projection.
+- `backend/internal/services`: các service hiện có cho player, inventory, recipe, quest và achievement; không phải mọi handler đều đi qua service.
+- `backend/internal/playerstate`: projection chuẩn cho full row `players`, revision bộ sưu tập, Gu scope, vật liệu, Dao Marks, repair trạng thái hết hạn và not-found; `PlayerService` bổ sung projection thời gian/trạng thái.
 - `backend/internal/handlers/movement.go`: chuỗi kiểm tra/ghi đích/phát sự kiện dùng chung cho đi bộ, cổng chuyển vùng, truyền tống trận, Cổ dịch chuyển, bí cảnh và vào tổ đội.
 - `backend/internal/worker`: polling/batch worker cho đói/tăng trưởng, persistence, môn phái và mô phỏng xã hội tiên khiếu.
 - `backend/internal/cache`: Redis client (bắt buộc).
@@ -102,6 +102,7 @@ Nguồn chuẩn nằm trong `backend/data/`, gồm dictionary Cổ/vật phẩm/
 
 - API: `docs/API.md`.
 - Kiến trúc: `docs/ARCHITECTURE.md`.
+- Ownership và workflow khi sửa player: `docs/PLAYER_DOMAIN.md`.
 - Dữ liệu: `docs/GAME_DATA.md`.
 - Hướng dẫn phát triển: `docs/DEVELOPMENT.md`.
 - Wiki gameplay: `WIKI.md`.
