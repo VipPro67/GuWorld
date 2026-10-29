@@ -7,8 +7,8 @@
   "tilewidth": 32,
   "tileheight": 32,
   "map_id": "realtime_preview",
-  "map_version": "preview-1",
-  "content_version": "content-1",
+  "map_version": "regions-v1",
+  "content_version": "region-content-v1",
   "properties": [
     {
       "name": "coordinate_units",

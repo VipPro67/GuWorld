@@ -96,7 +96,7 @@ func TestPreviewMapParsesAndBlocksBorders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.ID != "realtime_preview" || loaded.Version != "preview-1" || loaded.Width != 64 || loaded.Height != 48 {
+	if loaded.ID != "realtime_preview" || loaded.Version != "regions-v1" || loaded.ContentVersion != "region-content-v1" || loaded.Width != 64 || loaded.Height != 48 {
 		t.Fatalf("unexpected map identity: %+v", loaded)
 	}
 	if loaded.Ruleset != "pve" {
@@ -105,7 +105,7 @@ func TestPreviewMapParsesAndBlocksBorders(t *testing.T) {
 	if loaded.Hash == "" {
 		t.Fatal("map hash is empty")
 	}
-	if loaded.Hash != "2a23f2f6ba350e15c5707309d7581536cd038b0c65f2edfa390f9b128c9f631b" {
+	if loaded.Hash != "7fa20da7a1961930c87bf793b9514bb125c5a045afadb58629f60d4ffbf76e7a" {
 		t.Fatalf("preview map hash drifted from the shared client expectation: %s", loaded.Hash)
 	}
 	if !loaded.IsSolid(0.5, 0.5) || !loaded.IsSolid(63.5, 20.5) || !loaded.IsSolid(0.5, 47.5) {

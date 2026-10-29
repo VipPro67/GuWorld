@@ -30,13 +30,13 @@ test("all alpha maps parse and link to known maps", () => {
 test("computeWorldMapHash matches the Go nav loader", async () => {
   const map = parseWorldMap(JSON.parse(readFileSync(fixtureUrl, "utf8")));
   const hash = await computeWorldMapHash(map);
-  assert.equal(hash, "2a23f2f6ba350e15c5707309d7581536cd038b0c65f2edfa390f9b128c9f631b");
+  assert.equal(hash, "7fa20da7a1961930c87bf793b9514bb125c5a045afadb58629f60d4ffbf76e7a");
 });
 
 test("parseWorldMap loads the shared preview map and identifies blockers", () => {
   const map = parseWorldMap(JSON.parse(readFileSync(fixtureUrl, "utf8")));
   assert.equal(map.id, "realtime_preview");
-  assert.equal(map.version, "preview-1");
+  assert.equal(map.version, "regions-v1");
   assert.equal(map.width, 64);
   assert.equal(map.height, 48);
   assert.equal(map.pixelWidth, 64 * 24);
