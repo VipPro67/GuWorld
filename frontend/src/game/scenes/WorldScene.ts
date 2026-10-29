@@ -1238,8 +1238,15 @@ export class WorldScene extends Phaser.Scene {
 
   private advancePath(): void {
     if (!this.runtime || this.pathQueue.length === 0) return;
-    if (this.runtime.getMoveTarget() !== null) return;
-    this.sendNextPath();
+    // Lookahead: send the next waypoint as soon as the predicted position is
+    // within 1.2 units — well before arrival — so there is no perceptible
+    // pause between segments even at high latency.
+    const self = this.runtime.getSelfPosition();
+    const next = this.pathQueue[0];
+    const distToNext = Math.hypot(next.x - self.x, next.y - self.y);
+    if (distToNext <= 1.2) {
+      this.sendNextPath();
+    }
   }
 
   private cancelPath(): void {

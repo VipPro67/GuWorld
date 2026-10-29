@@ -55,6 +55,20 @@ test("PathPlanner routes around an obstacle and avoids solid cells", () => {
   assert.deepEqual(path[path.length - 1], { x: 8.5, y: 5.5 });
 });
 
+test("PathPlanner finds path around a wall (verifies heap order correctness)", () => {
+  // L-shaped wall at x=5 leaving only a top gap at y=1
+  const solid = border();
+  for (let y = 2; y <= 8; y += 1) solid[y * 10 + 5] = true;
+  const map = mapWith(solid);
+  const path = findPath(map, { x: 2.5, y: 5.5 }, { x: 7.5, y: 5.5 });
+  assert.ok(path, "should find a path when gap exists");
+  assert.ok(path.length > 1, "path should have multiple waypoints");
+  assert.deepEqual(path[path.length - 1], { x: 7.5, y: 5.5 });
+  for (const point of path) {
+    assert.equal(map.isSolid(point.x, point.y), false, `waypoint (${point.x},${point.y}) must not be solid`);
+  }
+});
+
 test("PathPlanner returns null for blocked or out-of-bounds goals", () => {
   const solid = border();
   for (let y = 1; y <= 8; y += 1) solid[y * 10 + 5] = true;

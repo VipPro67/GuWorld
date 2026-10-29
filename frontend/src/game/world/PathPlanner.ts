@@ -15,9 +15,61 @@ const DIRECTIONS: Array<[number, number, number]> = [
   [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2],
 ];
 
+// ---------------------------------------------------------------------------
+// Binary min-heap keyed on Node.f — O(log n) push/pop instead of O(n) scan.
+// ---------------------------------------------------------------------------
+class NodeHeap {
+  private readonly data: Node[] = [];
+
+  get size(): number {
+    return this.data.length;
+  }
+
+  push(node: Node): void {
+    this.data.push(node);
+    this.bubbleUp(this.data.length - 1);
+  }
+
+  pop(): Node {
+    const top = this.data[0];
+    const last = this.data.pop()!;
+    if (this.data.length > 0) {
+      this.data[0] = last;
+      this.siftDown(0);
+    }
+    return top;
+  }
+
+  private bubbleUp(index: number): void {
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+      if (this.data[parent].f <= this.data[index].f) break;
+      [this.data[parent], this.data[index]] = [this.data[index], this.data[parent]];
+      index = parent;
+    }
+  }
+
+  private siftDown(index: number): void {
+    const length = this.data.length;
+    while (true) {
+      const left = (index << 1) + 1;
+      const right = left + 1;
+      let smallest = index;
+      if (left < length && this.data[left].f < this.data[smallest].f) smallest = left;
+      if (right < length && this.data[right].f < this.data[smallest].f) smallest = right;
+      if (smallest === index) break;
+      [this.data[smallest], this.data[index]] = [this.data[index], this.data[smallest]];
+      index = smallest;
+    }
+  }
+}
+
 /**
  * Client-only A* preview/path executor. The server still validates each
  * waypoint as a normal world.move_target; this never grants authority.
+ *
+ * Uses a binary min-heap for O(n log n) expansion instead of the previous
+ * O(n²) linear-scan open list.
  */
 export function findPath(map: LoadedWorldMap, start: WorldPoint, goal: WorldPoint, maxNodes = MAX_NODES): WorldPoint[] | null {
   if (!inside(map, start) || !inside(map, goal)) return null;
@@ -31,17 +83,14 @@ export function findPath(map: LoadedWorldMap, start: WorldPoint, goal: WorldPoin
   const goalY = Math.floor(goal.y);
   if (startX === goalX && startY === goalY) return [{ ...goal }];
 
-  const open: Node[] = [{ x: startX, y: startY, g: 0, f: heuristic(startX, startY, goalX, goalY), parent: null }];
+  const open = new NodeHeap();
+  open.push({ x: startX, y: startY, g: 0, f: heuristic(startX, startY, goalX, goalY), parent: null });
   const best = new Map<string, number>([[`${startX},${startY}`, 0]]);
   const closed = new Set<string>();
   let expanded = 0;
 
-  while (open.length > 0 && expanded < maxNodes) {
-    let bestIndex = 0;
-    for (let index = 1; index < open.length; index += 1) {
-      if (open[index].f < open[bestIndex].f) bestIndex = index;
-    }
-    const current = open.splice(bestIndex, 1)[0];
+  while (open.size > 0 && expanded < maxNodes) {
+    const current = open.pop();
     expanded += 1;
     const currentKey = `${current.x},${current.y}`;
     if (closed.has(currentKey)) continue;

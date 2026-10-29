@@ -12,6 +12,7 @@ function emitDirection(x: number, y: number, fine = false) {
   window.dispatchEvent(new CustomEvent("gu_world_direction", { detail: { x, y, fine } }));
 }
 
+/** Snap to 8 cardinal/diagonal directions (used only for very gentle nudges). */
 function quantizeDirection(x: number, y: number) {
   const angle = Math.round(Math.atan2(y, x) / (Math.PI / 4)) * (Math.PI / 4);
   return {
@@ -30,7 +31,18 @@ export function MovementJoystick() {
   const [knob, setKnob] = useState<Point>({ x: 0, y: 0 });
 
   const emitChangedDirection = useCallback((x: number, y: number, fine = false) => {
-    const next = x === 0 && y === 0 ? { x: 0, y: 0 } : quantizeDirection(x, y);
+    // Fine (gentle nudge): snap to 8 directions to prevent micro-drift.
+    // Full push: send the raw analog vector so diagonal movement is smooth
+    // instead of being locked to 45° increments.
+    let next: { x: number; y: number };
+    if (x === 0 && y === 0) {
+      next = { x: 0, y: 0 };
+    } else if (fine) {
+      next = quantizeDirection(x, y);
+    } else {
+      const distance = Math.hypot(x, y);
+      next = { x: x / distance, y: y / distance };
+    }
     if (next.x === emittedDirectionRef.current.x && next.y === emittedDirectionRef.current.y && lastFineRef.current === fine) return;
     emittedDirectionRef.current = next;
     lastFineRef.current = fine;
@@ -50,7 +62,7 @@ export function MovementJoystick() {
     setKnob({ x, y });
 
     if (distance < RADIUS * DEAD_ZONE) emitChangedDirection(0, 0);
-    else emitChangedDirection(x, y, distance < RADIUS * 0.65);
+    else emitChangedDirection(rawX, rawY, distance < RADIUS * 0.65);
   }, [emitChangedDirection]);
 
   const release = useCallback(() => {
