@@ -43,6 +43,16 @@ export class EntityAnimator {
     return this.current;
   }
 
+  public getFacingLeft(): boolean {
+    return this.facingLeft;
+  }
+
+  public faceToward(dx: number): void {
+    if (dx < -0.01) this.facingLeft = true;
+    else if (dx > 0.01) this.facingLeft = false;
+    this.sprite.setFlipX(this.facingLeft);
+  }
+
   public setStaticTexture(key: string): void {
     if (this.staticTexture === key) return;
     this.staticTexture = key;

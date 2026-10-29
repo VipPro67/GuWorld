@@ -184,6 +184,8 @@ export class WorldScene extends Phaser.Scene {
     if (clicked) {
       this.runtime.setSelectedTarget(clicked.id);
       this.selectedTargetId = clicked.id;
+      const pixels = worldToPixels({ x: clicked.x, y: clicked.y });
+      this.vfx.spawnTargetMark(pixels.x, pixels.y - 8);
       return;
     }
     if (this.map && this.map.isSolid(target.x, target.y)) {
@@ -576,6 +578,7 @@ export class WorldScene extends Phaser.Scene {
         if (target) {
           this.selectedTargetId = target.id;
           this.runtime.setSelectedTarget(target.id);
+          this.markWorldPoint({ x: target.x, y: target.y });
           this.runtime.sendCast({ slot, mode: "TARGET", target_id: target.id });
           return;
         }
@@ -587,6 +590,7 @@ export class WorldScene extends Phaser.Scene {
           return;
         }
         this.runtime.sendCast({ slot, mode: "TARGET", aim_x: dx, aim_y: dy });
+        this.markWorldPoint(pointer);
         return;
       }
       case "DIRECTION": {
@@ -598,10 +602,12 @@ export class WorldScene extends Phaser.Scene {
           return;
         }
         this.runtime.sendCast({ slot, mode: "DIRECTION", aim_x: dx / length, aim_y: dy / length });
+        this.markWorldPoint(pointer);
         return;
       }
       case "GROUND":
         this.runtime.sendCast({ slot, mode: "GROUND", x: pointer.x, y: pointer.y });
+        this.markWorldPoint(pointer);
         return;
       default:
         return;
@@ -741,10 +747,22 @@ export class WorldScene extends Phaser.Scene {
     switch (event.type) {
       case "BASIC_ATTACK":
         this.markActorCast(event.source_id, 2);
+        this.playBasicAttack(event.source_id, event.target_id);
         return;
       case "CAST_ACCEPTED": {
         const duration = typeof payload.duration_ticks === "number" ? payload.duration_ticks : 0;
         this.markActorCast(event.source_id, duration);
+        this.playCastPulse(event.source_id);
+        const skillId = typeof payload.skill_id === "string" ? payload.skill_id : "";
+        const skill = this.runtime?.getSkills().find((entry) => entry.id === skillId);
+        if (skill && eventX !== null && eventY !== null) {
+          const point = worldToPixels({ x: eventX, y: eventY });
+          if (skill.mode === "GROUND" || skill.shape) {
+            this.vfx.spawnSkillArea(point.x, point.y, skill);
+          } else {
+            this.vfx.spawnTargetMark(point.x, point.y);
+          }
+        }
         return;
       }
       case "HIT_CONFIRMED": {
@@ -836,6 +854,38 @@ export class WorldScene extends Phaser.Scene {
     if (!actor) return;
     actor.castUntil = this.time.now + Math.max(100, durationTicks * 50);
     if (actor.hitUntil > this.time.now) actor.castUntil = Math.max(actor.castUntil, actor.hitUntil);
+  }
+
+  private playBasicAttack(sourceId?: string, targetId?: string): void {
+    if (!sourceId) return;
+    const source = this.actors.get(sourceId);
+    if (!source) return;
+    const sourceEntity = this.runtime?.getEntities().find((entity) => entity.id === sourceId);
+    const target = targetId ? this.runtime?.getEntities().find((entity) => entity.id === targetId) : null;
+    const dx = target && sourceEntity ? target.x - sourceEntity.x : (source.animator.getFacingLeft() ? -1 : 1);
+    const dy = target && sourceEntity ? target.y - sourceEntity.y : 0;
+    source.animator.faceToward(dx);
+    this.vfx.spawnSlash(source.container.x, source.container.y - 30, dx, dy);
+    this.tweens.add({
+      targets: source.sprite,
+      scaleX: source.sprite.scaleX * 1.12,
+      scaleY: source.sprite.scaleY * 0.94,
+      duration: 80,
+      yoyo: true,
+      ease: "Quad.easeOut",
+    });
+  }
+
+  private playCastPulse(sourceId?: string): void {
+    if (!sourceId) return;
+    const actor = this.actors.get(sourceId);
+    if (!actor) return;
+    this.vfx.spawnCastPulse(actor.container.x, actor.container.y - 24);
+  }
+
+  private markWorldPoint(point: WorldPoint): void {
+    const pixels = worldToPixels(point);
+    this.vfx.spawnTargetMark(pixels.x, pixels.y);
   }
 
   private markActorHit(entityId: string | undefined): void {
