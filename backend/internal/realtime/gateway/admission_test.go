@@ -135,7 +135,7 @@ func TestAdmissionRejectsUntrustedOrIneligibleJoinState(t *testing.T) {
 	}
 }
 
-func TestAdmissionEnforcesAllowlistAndManagerCapacity(t *testing.T) {
+func TestAdmissionAllowsEveryPlayerAndEnforcesManagerCapacity(t *testing.T) {
 	playerID, otherPlayerID := uuid.New(), uuid.New()
 	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
 	manager := startTestManager(t, key, 1)
@@ -144,19 +144,15 @@ func TestAdmissionEnforcesAllowlistAndManagerCapacity(t *testing.T) {
 	}
 	admission := NewAdmission(testConfig(playerID), manager, loader)
 	request := protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}
-	if _, err := admission.Join(context.Background(), otherPlayerID, uuid.New(), request); admissionErrorCode(err) != "realtime_world_forbidden" {
-		t.Fatalf("non-allowlisted player join error: %v", err)
+	otherController := uuid.New()
+	if _, err := admission.Join(context.Background(), otherPlayerID, otherController, request); err != nil {
+		t.Fatalf("player outside the legacy allowlist should join: %v", err)
 	}
-	if _, err := admission.Join(context.Background(), playerID, uuid.New(), request); err != nil {
-		t.Fatal(err)
+	if _, err := admission.Join(context.Background(), playerID, uuid.New(), request); admissionErrorCode(err) != "realtime_zone_full" {
+		t.Fatalf("second player should be limited by zone capacity: %v", err)
 	}
-	if _, err := admission.Join(context.Background(), playerID, uuid.New(), request); admissionErrorCode(err) != "realtime_character_already_owned" {
+	if _, err := admission.Join(context.Background(), otherPlayerID, uuid.New(), request); admissionErrorCode(err) != "realtime_character_already_owned" {
 		t.Fatalf("duplicate controller join error: %v", err)
-	}
-
-	fullAdmission := NewAdmission(testConfig(otherPlayerID), manager, loader)
-	if _, err := fullAdmission.Join(context.Background(), otherPlayerID, uuid.New(), request); admissionErrorCode(err) != "realtime_zone_full" {
-		t.Fatalf("full zone join error: %v", err)
 	}
 }
 
@@ -178,27 +174,8 @@ func TestAdmissionRejectsStaleVersionsBeforeLoadingCharacter(t *testing.T) {
 	}
 }
 
-func TestAdmissionRequiresBothServerAndClientFlags(t *testing.T) {
+func TestAdmissionRequiresRunningManager(t *testing.T) {
 	playerID := uuid.New()
-	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
-	manager := startTestManager(t, key, 1)
-	cfg := testConfig(playerID)
-	cfg.PhaserClientEnabled = false
-	admission := NewAdmission(cfg, manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
-		t.Fatal("disabled admission must not load player state")
-		return handlers.RealtimeJoinState{}, errors.New("unreachable")
-	})
-	if _, err := admission.Join(context.Background(), playerID, uuid.New(), protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); admissionErrorCode(err) != "realtime_client_disabled" {
-		t.Fatalf("client flag disabled join error: %v", err)
-	}
-
-	cfg.PhaserClientEnabled = true
-	cfg.Enabled = false
-	serverDisabled := NewAdmission(cfg, manager, nil)
-	if _, err := serverDisabled.Join(context.Background(), playerID, uuid.New(), protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); admissionErrorCode(err) != "realtime_disabled" {
-		t.Fatalf("server flag disabled join error: %v", err)
-	}
-
 	managerUnavailable := NewAdmission(testConfig(playerID), nil, nil)
 	if _, err := managerUnavailable.Join(context.Background(), playerID, uuid.New(), protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); admissionErrorCode(err) != "realtime_manager_unavailable" {
 		t.Fatalf("nil manager join error: %v", err)
@@ -270,9 +247,10 @@ func startTestManager(t *testing.T, key sim.ZoneKey, capacity int) *realtimeworl
 }
 
 func testConfig(playerID uuid.UUID) config.Config {
+	_ = playerID
 	return config.Config{
 		Enabled: true, PhaserClientEnabled: true, MaxPlayersPerZone: 2, MapVersion: "map-1", ContentVersion: "content-1",
-		ZoneIDs: map[string]struct{}{"forest": {}}, PlayerAllowlist: map[string]struct{}{playerID.String(): {}},
+		ZoneIDs: map[string]struct{}{"forest": {}},
 	}
 }
 
@@ -810,7 +788,6 @@ func TestAdmissionRejectsControllerReuseAcrossCharacters(t *testing.T) {
 	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
 	manager := startTestManager(t, key, 2)
 	cfg := testConfig(playerA)
-	cfg.PlayerAllowlist[playerB.String()] = struct{}{}
 	loader := func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
 		return handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", HP: 70, BaseHP: 100}, nil
 	}
