@@ -8,8 +8,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/handlers"
+	"github.com/vippro67/GuWorld/backend/internal/realtime/config"
+	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
+	"github.com/vippro67/GuWorld/backend/internal/realtime/gateway"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/protocol"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
+	realtimeworld "github.com/vippro67/GuWorld/backend/internal/realtime/world"
 )
 
 type fakeRealtimeAdmission struct {
@@ -281,4 +286,88 @@ func TestRealtimeInputDispatchesCast(t *testing.T) {
 	if admission.castPlayer != playerID || admission.castController != controllerID || admission.castValue.Slot != 2 || admission.castValue.Mode != "DIRECTION" || admission.castValue.AimX != 1 {
 		t.Fatalf("cast was not dispatched with authenticated identity: %+v", admission)
 	}
+}
+
+func TestWebSocketCastReachesAuthoritativeZoneResolution(t *testing.T) {
+	playerID, controllerID := uuid.New(), uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "ws-cast-test", RulesetVersion: "v1"}
+	manager, err := realtimeworld.NewLazyManagerWithMaps([]sim.ZoneKey{key}, 8, 2, map[sim.ZoneKey]realtimeworld.ZoneMap{
+		key: {Monsters: []realtimeworld.MonsterSpawn{{
+			TemplateID: "test_mob", X: 3, Y: 0, MaxHP: 200, AttackDamage: 1,
+			Speed: 1, Radius: 0.5, AggroRadius: 1, LeashRadius: 2, AttackRange: 0.5,
+			PatrolRadius: 0, AttackCooldownTicks: 20, RespawnTicks: 100,
+		}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := manager.Stop(ctx); err != nil {
+			t.Errorf("stop manager: %v", err)
+		}
+	})
+
+	profiles, err := realtimeeffects.LoadProfiles("../../data/mmo/gu/transpiled_profiles.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := realtimeeffects.CompileCatalog(profiles, nil, realtimeeffects.DefaultMVP())
+	if err != nil {
+		t.Fatal(err)
+	}
+	admission := gateway.NewAdmission(config.Config{
+		Enabled: true, PhaserClientEnabled: true, MaxPlayersPerZone: 2,
+		MapVersion: "map-1", ContentVersion: "content-1", ZoneIDs: map[string]struct{}{"forest": {}},
+	}, manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{
+			MapID: "forest", RegionID: "forest", X: 0, Y: 0, HP: 100, BaseHP: 100,
+			Rank: 3, CurrentMana: 20, MaxMana: 80, BaseAttack: 30,
+			EquippedGu: []handlers.RealtimeEquippedGu{{
+				InstanceID: "inst-frost", GuID: "GU_WHITE_FROST", Rank: 3, Hunger: 10, Usable: true, ManaCost: 2.5, DamageScale: 1.5,
+			}},
+		}, nil
+	})
+	admission.SetLoadoutCatalog(catalog)
+	if _, err := admission.Join(context.Background(), playerID, controllerID, protocol.JoinRequest{
+		ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &Client{
+		playerID: playerID, controllerID: controllerID, realtimeAdmission: admission,
+		done: make(chan struct{}), worldInputs: make(chan WSMessage, 1), send: make(chan []byte, 1),
+	}
+	raw := []byte(`{"v":1,"type":"world.cast","request_id":"cast-e2e","payload":{"seq":1,"slot":1,"mode":"TARGET","target_id":"m:0"}}`)
+	client.handleMessage(WSMessage{Type: protocol.TypeCast, RequestID: "cast-e2e", Raw: raw})
+	queued := <-client.worldInputs
+	status, body := client.handleRealtimeInput(queued)
+	if status != http.StatusAccepted || string(body) != `{"accepted":true}` {
+		t.Fatalf("cast ingress status=%d body=%s", status, body)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshot, err := manager.Snapshot(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entity := range snapshot.Entities {
+			if entity.Kind != sim.EntityMonster {
+				continue
+			}
+			for _, status := range entity.Combat.Statuses {
+				if status.ID == "FREEZE" {
+					return
+				}
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("authoritative zone did not apply FREEZE from the WebSocket cast intent")
 }

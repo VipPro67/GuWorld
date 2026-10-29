@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { WorldRuntime, RuntimeEntity } from "../core/WorldRuntime.ts";
+import { buildCastIntent } from "../input/CastIntent.ts";
 import { InputRouter } from "../input/InputRouter.ts";
 import { ClickToMove } from "../input/ClickToMove.ts";
 import { LoadedWorldMap, computeWorldMapHash, loadWorldMap } from "../world/MapLoader.ts";
@@ -464,24 +465,8 @@ export class WorldScene extends Phaser.Scene {
     if (!this.runtime) return;
     const skill = this.skillForSlot(slot);
     if (!skill) return;
-    switch (skill.mode) {
-      case "SELF":
-        this.runtime.sendCast({ slot, mode: "SELF" });
-        break;
-      case "TARGET":
-        this.runtime.sendCast({ slot, mode: "TARGET", target_id: target.id });
-        break;
-      case "DIRECTION": {
-        const dx = target.x - self.x;
-        const dy = target.y - self.y;
-        const length = Math.hypot(dx, dy) || 1;
-        this.runtime.sendCast({ slot, mode: "DIRECTION", aim_x: dx / length, aim_y: dy / length });
-        break;
-      }
-      case "GROUND":
-        this.runtime.sendCast({ slot, mode: "GROUND", x: target.x, y: target.y });
-        break;
-    }
+    const intent = buildCastIntent(skill, self, target, target.id);
+    if (intent) this.runtime.sendCast(intent);
   }
 
   private syncFocus(): void {
@@ -572,9 +557,11 @@ export class WorldScene extends Phaser.Scene {
     }
     this.cancelAim();
     switch (skill.mode) {
-      case "SELF":
-        this.runtime.sendCast({ slot, mode: "SELF" });
+      case "SELF": {
+        const intent = buildCastIntent(skill, self);
+        if (intent) this.runtime.sendCast(intent);
         return;
+      }
       case "TARGET": {
         const target = fromPointer
           ? this.findTargetNear(pointer)
@@ -583,36 +570,35 @@ export class WorldScene extends Phaser.Scene {
           this.selectedTargetId = target.id;
           this.runtime.setSelectedTarget(target.id);
           this.markWorldPoint({ x: target.x, y: target.y });
-          this.runtime.sendCast({ slot, mode: "TARGET", target_id: target.id });
+          const intent = buildCastIntent(skill, self, target, target.id);
+          if (intent) this.runtime.sendCast(intent);
           return;
         }
-        const dx = pointer.x - self.x;
-        const dy = pointer.y - self.y;
-        const length = Math.hypot(dx, dy);
-        if (length <= 0.01) {
+        const intent = buildCastIntent(skill, self, pointer);
+        if (!intent) {
           this.notice("Cần hướng ngắm hợp lệ");
           return;
         }
-        this.runtime.sendCast({ slot, mode: "TARGET", aim_x: dx, aim_y: dy });
+        this.runtime.sendCast(intent);
         this.markWorldPoint(pointer);
         return;
       }
       case "DIRECTION": {
-        const dx = pointer.x - self.x;
-        const dy = pointer.y - self.y;
-        const length = Math.hypot(dx, dy);
-        if (length < 0.1) {
+        const intent = buildCastIntent(skill, self, pointer);
+        if (!intent) {
           this.notice("Cần hướng ngắm hợp lệ");
           return;
         }
-        this.runtime.sendCast({ slot, mode: "DIRECTION", aim_x: dx / length, aim_y: dy / length });
+        this.runtime.sendCast(intent);
         this.markWorldPoint(pointer);
         return;
       }
-      case "GROUND":
-        this.runtime.sendCast({ slot, mode: "GROUND", x: pointer.x, y: pointer.y });
+      case "GROUND": {
+        const intent = buildCastIntent(skill, self, pointer);
+        if (intent) this.runtime.sendCast(intent);
         this.markWorldPoint(pointer);
         return;
+      }
       default:
         return;
     }

@@ -1,11 +1,70 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"io"
 	"net/http"
+	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
+
+var registerMovementPolicyDriver sync.Once
+
+type movementPolicyDriver struct{}
+type movementPolicyConn struct{ isLeader bool }
+type movementPolicyTx struct{}
+type movementPolicyRows struct {
+	isLeader bool
+	read     bool
+}
+
+func (movementPolicyDriver) Open(name string) (driver.Conn, error) {
+	return &movementPolicyConn{isLeader: name == "leader"}, nil
+}
+func (*movementPolicyConn) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("not implemented")
+}
+func (*movementPolicyConn) Close() error              { return nil }
+func (*movementPolicyConn) Begin() (driver.Tx, error) { return movementPolicyTx{}, nil }
+func (c *movementPolicyConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
+	return &movementPolicyRows{isLeader: c.isLeader}, nil
+}
+func (movementPolicyTx) Commit() error        { return nil }
+func (movementPolicyTx) Rollback() error      { return nil }
+func (*movementPolicyRows) Columns() []string { return []string{"is_leader"} }
+func (*movementPolicyRows) Close() error      { return nil }
+func (r *movementPolicyRows) Next(values []driver.Value) error {
+	if r.read {
+		return io.EOF
+	}
+	r.read = true
+	values[0] = r.isLeader
+	return nil
+}
+
+func movementPolicyTxFor(t *testing.T, name string) *sql.Tx {
+	t.Helper()
+	registerMovementPolicyDriver.Do(func() {
+		sql.Register("movement-policy-test", movementPolicyDriver{})
+	})
+	database, err := sql.Open("movement-policy-test", name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	tx, err := database.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback() })
+	return tx
+}
 
 func movementTestPlayer() *models.Player {
 	player := &models.Player{}
@@ -75,6 +134,32 @@ func TestValidateMovementState(t *testing.T) {
 			}
 			if tc.wantCode != "" && err.code != tc.wantCode {
 				t.Fatalf("code = %q, want %q", err.code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestCheckMovementUsesTransactionPartyLeadership(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		isLeader bool
+		wantErr  bool
+	}{
+		{name: "leader can move party", isLeader: true},
+		{name: "member cannot move party", wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			player := movementTestPlayer()
+			player.ID = uuid.New()
+			partyID := uuid.New()
+			player.PartyID = &partyID
+			connection := "member"
+			if test.isLeader {
+				connection = "leader"
+			}
+			err := checkMovement(movementPolicyTxFor(t, connection), player, movementSpec{kind: movementWalk})
+			if (err != nil) != test.wantErr {
+				t.Fatalf("checkMovement error = %v, wantErr %v", err, test.wantErr)
 			}
 		})
 	}
