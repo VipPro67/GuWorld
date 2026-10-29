@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type Phaser from "phaser";
 import { WorldRuntime, type WorldRuntimeStatus, type RuntimeEntity } from "@/game/core/WorldRuntime";
-import { canJoinMMOZone, mmoClientConfig } from "@/lib/mmoConfig";
+import { canJoinMMOZone, mmoClientConfig, versionsForMMOZone } from "@/lib/mmoConfig";
 import { MMOErrorBoundary } from "./MMOErrorBoundary";
 import { MMOHud, type HudTarget } from "./MMOHud";
 import { MMOBusinessPanels, type MMOPanel } from "./MMOBusinessPanels";
@@ -316,10 +316,11 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
             setErrorMessage("Nhân vật chưa có KHU_VUC để vào bản đồ realtime");
             return;
           }
+          const versions = versionsForMMOZone(zoneId);
           void runtime.connect({
             zone_id: zoneId,
-            map_version: mmoClientConfig.mapVersion,
-            content_version: mmoClientConfig.contentVersion,
+            map_version: versions.mapVersion,
+            content_version: versions.contentVersion,
           });
         }
       } catch (error) {

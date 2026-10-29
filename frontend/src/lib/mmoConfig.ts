@@ -6,6 +6,14 @@ const value = (raw: string | undefined): string => (raw ?? "").trim();
 const mapVersion = "regions-v1";
 const contentVersion = "region-content-v1";
 
+export function versionsForMMOZone(zoneId: string): { mapVersion: string; contentVersion: string } {
+  const mapId = value(zoneId).split("#", 1)[0];
+  if (mapId === "world_map") {
+    return { mapVersion: "legacy-converted-v2", contentVersion: "legacy-regions-v2" };
+  }
+  return { mapVersion, contentVersion };
+}
+
 export const mmoClientConfig = {
   worldEnabled: true,
   phaserClientEnabled: true,

@@ -52,6 +52,26 @@ func TestDeploymentCannotOverrideMapVersions(t *testing.T) {
 	}
 }
 
+func TestLegacyWorldMapUsesItsShippedArtifactVersions(t *testing.T) {
+	cfg, err := LoadFromLookup(func(string) (string, bool) { return "", false })
+	if err != nil {
+		t.Fatalf("LoadFromLookup returned error: %v", err)
+	}
+	mapVersion, contentVersion := VersionsForMap("world_map#private-instance")
+	if mapVersion != LegacyWorldMapVersion || contentVersion != LegacyWorldContentVersion {
+		t.Fatalf("world_map versions = %q/%q", mapVersion, contentVersion)
+	}
+	if !cfg.AllowsWorldJoin("player-1", "world_map", mapVersion, contentVersion) {
+		t.Fatal("shipped legacy world map artifact should be joinable")
+	}
+	if cfg.AllowsWorldJoin("player-1", "world_map", DefaultMapVersion, DefaultContentVersion) {
+		t.Fatal("world_map must reject the regional-map release versions")
+	}
+	if gotMap, gotContent := VersionsForMap("thanh_mao_son"); gotMap != DefaultMapVersion || gotContent != DefaultContentVersion {
+		t.Fatalf("regional map versions = %q/%q", gotMap, gotContent)
+	}
+}
+
 func TestInstancesPerZoneBounds(t *testing.T) {
 	for _, raw := range []string{"0", "9", "many"} {
 		t.Run(raw, func(t *testing.T) {

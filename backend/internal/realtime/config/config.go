@@ -17,6 +17,18 @@ const defaultGuProfiles = "data/mmo/gu/transpiled_profiles.json"
 // Keep them aligned with backend/data/mmo/maps and frontend/public/game/maps.
 const DefaultMapVersion = "regions-v1"
 const DefaultContentVersion = "region-content-v1"
+const LegacyWorldMapVersion = "legacy-converted-v2"
+const LegacyWorldContentVersion = "legacy-regions-v2"
+
+// VersionsForMap returns the immutable artifact contract for a shipped map.
+// The four secret realms still use the converted legacy world_map as their
+// spatial base; all generated regional maps use the current release contract.
+func VersionsForMap(mapID string) (mapVersion, contentVersion string) {
+	if strings.Split(strings.TrimSpace(mapID), "#")[0] == "world_map" {
+		return LegacyWorldMapVersion, LegacyWorldContentVersion
+	}
+	return DefaultMapVersion, DefaultContentVersion
+}
 
 // Config is the process-level runtime configuration for realtime world sessions.
 // Zone existence and authoritative character location are checked by the manager
@@ -81,8 +93,18 @@ func LoadFromLookup(lookup func(string) (string, bool)) (Config, error) {
 }
 
 func (c Config) AllowsWorldJoin(playerID, zoneID, mapVersion, contentVersion string) bool {
-	return c.AllowsJoin(playerID, zoneID) && c.MapVersion != "" && c.ContentVersion != "" &&
-		mapVersion == c.MapVersion && contentVersion == c.ContentVersion
+	mapID := strings.Split(strings.TrimSpace(zoneID), "#")[0]
+	expectedMapVersion, expectedContentVersion := c.MapVersion, c.ContentVersion
+	if expectedMapVersion == "" {
+		expectedMapVersion = DefaultMapVersion
+	}
+	if expectedContentVersion == "" {
+		expectedContentVersion = DefaultContentVersion
+	}
+	if mapID == "world_map" {
+		expectedMapVersion, expectedContentVersion = LegacyWorldMapVersion, LegacyWorldContentVersion
+	}
+	return c.AllowsJoin(playerID, zoneID) && mapVersion == expectedMapVersion && contentVersion == expectedContentVersion
 }
 
 // AllowsJoin admits signed-in players to zones loaded in the runtime catalogue.
