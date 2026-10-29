@@ -52,9 +52,14 @@ type DeathEvent struct {
 }
 
 // Region-local rollout loads one independent world per active KHU_VUC/SAFE_ZONE.
-// Keep a finite process cap, but leave room for the current 125-map regional
-// pack and incremental world growth.
+// This cap applies to the configured startup catalog. Runtime-created private
+// instances have their own cap below so the public region pack does not consume
+// their capacity.
 const MaxZonesPerProcess = 256
+
+// MaxRuntimeZonesPerProcess bounds dynamic per-player/event maps (such as
+// aperture tribulations) independently from the configured startup catalog.
+const MaxRuntimeZonesPerProcess = 2048
 
 const (
 	AOICellSize   = 16.0
@@ -1020,7 +1025,7 @@ func (m *Manager) RegisterZoneMap(key sim.ZoneKey, zoneMap ZoneMap) error {
 		return nil
 	}
 	if _, exists := m.maps[key]; !exists {
-		if len(m.keys) >= MaxZonesPerProcess {
+		if len(m.runtimeKeys) >= MaxRuntimeZonesPerProcess {
 			return ErrZoneFull
 		}
 		m.keys = append(m.keys, key)
