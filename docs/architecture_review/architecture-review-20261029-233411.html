@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture Review | Realtime Movement & Combat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "strict" });</script>
+  <style>
+    :root { color-scheme: dark; --ink:#e8eee9; --muted:#a9b5ad; --bg:#101713; --panel:#18231d; --line:#33463a; --mint:#8be0b1; --amber:#f2c879; --coral:#f08d78; }
+    * { box-sizing:border-box }
+    body { margin:0; color:var(--ink); background:radial-gradient(ellipse at 12% 0%, #24392c 0, transparent 34rem), linear-gradient(145deg,#101713,#17221c 55%,#111a15); font:16px/1.55 ui-sans-serif,system-ui,sans-serif }
+    .wrap { max-width:1200px; margin:auto; padding:56px 24px 80px }
+    .eyebrow { color:var(--mint); font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em }
+    h1 { margin:.4rem 0 1rem; max-width:900px; font-size:clamp(2rem,5vw,3.8rem); line-height:1.04; letter-spacing:0; font-weight:800 }
+    h2 { font-size:1.55rem; margin:0 0 14px; letter-spacing:0 }
+    h3 { font-size:1.12rem; margin:0; letter-spacing:0 }
+    p { margin:.65rem 0 }
+    .lead { max-width:850px; color:#c6d1c9; font-size:1.08rem }
+    .meta { display:flex; flex-wrap:wrap; gap:8px; margin:22px 0 34px }
+    .tag { border:1px solid var(--line); padding:4px 9px; color:#c4d2c8; font-size:.8rem; border-radius:4px; background:#142019 }
+    .section { margin-top:42px }
+    .summary { border-left:3px solid var(--mint); padding:14px 18px; background:#142019bb; max-width:980px }
+    .candidate { margin-top:24px; padding:24px; border:1px solid var(--line); border-radius:6px; background:linear-gradient(135deg,#1a2720ed,#141d18ed); box-shadow:0 14px 40px #0002 }
+    .head { display:flex; flex-wrap:wrap; gap:14px; justify-content:space-between; align-items:flex-start }
+    .badge { white-space:nowrap; padding:4px 10px; font-weight:700; font-size:.78rem; border-radius:4px; color:#251b07; background:var(--amber) }
+    .badge.strong { background:var(--mint); color:#0d2115 }
+    .files { color:#b8c6bc; font-size:.9rem; margin-top:10px }
+    code { color:#bfe9cf; background:#0d1711; border:1px solid #293d30; border-radius:3px; padding:1px 5px; font-size:.88em }
+    a { color:#a9e8c1; text-decoration:underline; text-decoration-color:#557661; text-underline-offset:3px }
+    .cols { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:20px }
+    .mini { padding:14px 15px; background:#101a14; border:1px solid #2b3c31; border-radius:4px }
+    .mini strong { display:block; font-size:.78rem; color:var(--mint); text-transform:uppercase; margin-bottom:5px }
+    .diagrams { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:19px }
+    .diagram { border:1px solid #314238; border-radius:4px; padding:14px; min-height:200px; background:#0e1712 }
+    .diagram h4 { margin:0 0 12px; color:#bdc9c0; font-size:.82rem; text-transform:uppercase }
+    .flow { display:flex; flex-direction:column; gap:7px; max-width:460px; margin:auto }
+    .node { border:1px solid #506355; border-radius:4px; padding:8px 11px; background:#1b2a20; text-align:center; font-size:.88rem }
+    .node.hot { border-color:#c08369; background:#33231d }
+    .node.good { border-color:#65a982; background:#193326 }
+    .arrow { text-align:center; color:#91aa98; line-height:1; font-size:1.15rem }
+    .branch { display:grid; grid-template-columns:1fr 1fr; gap:8px }
+    .caveat { border-left:3px solid var(--amber); padding:10px 13px; background:#2b2517; color:#e7d5ad; margin-top:15px }
+    .do-not { border-left:3px solid var(--coral); padding:10px 13px; background:#2a1c19; color:#e5c4bc }
+    .top { border:1px solid #5d8a6c; padding:20px; background:#15251b; border-radius:5px }
+    ul { padding-left:20px; margin:.5rem 0 }
+    li { margin:.35rem 0 }
+    .foot { color:var(--muted); font-size:.88rem; margin-top:38px; border-top:1px solid var(--line); padding-top:16px }
+    @media (max-width:760px) { .wrap{padding:32px 16px 54px}.cols,.diagrams{grid-template-columns:1fr}.candidate{padding:17px} }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="eyebrow">Architecture review · 29 Oct 2026</div>
+    <h1>Di chuyển realtime & tung chiêu</h1>
+    <p class="lead">Rà soát tập trung vào <strong>Chuỗi Di Chuyển</strong> và luồng intent của <strong>Chiến Đấu Thời Gian Thực</strong>. Mục tiêu là tìm cơ hội tăng depth, locality, leverage và testability; chưa thiết kế interface mới.</p>
+    <div class="meta"><span class="tag">Phạm vi: frontend Phaser + backend realtime</span><span class="tag">Không sửa repository</span><span class="tag">3 ứng viên kiến trúc</span></div>
+
+    <section class="summary">
+      <strong>Nhận định chung.</strong> Các module authoritative hiện tại có phân công hợp lý: frontend gửi ý định; zone simulation giữ quyền quyết định vị trí và kết quả chiến đấu. Cơ hội đáng xem xét nằm ở kiểm thử các seam thật và tập trung phần client đang lặp, không phải gom mọi xử lý vào một module lớn.
+    </section>
+
+    <section class="section">
+      <h2>Ứng viên</h2>
+
+      <article class="candidate">
+        <div class="head"><div><div class="eyebrow">01 · Player Movement Chain</div><h3>Khóa hành vi chung qua call site thật</h3></div><span class="badge">Worth exploring</span></div>
+        <p class="files"><strong>Files:</strong> <a href="backend/internal/handlers/movement.go">movement.go</a>, <a href="backend/internal/handlers/movement_test.go">movement_test.go</a>, <a href="backend/internal/handlers/portal_transfer.go">portal_transfer.go</a>, <a href="backend/internal/handlers/teleport_handlers.go">teleport_handlers.go</a>, <a href="backend/internal/handlers/party.go">party.go</a></p>
+        <div class="cols">
+          <div class="mini"><strong>Problem</strong><p><code>checkMovement</code> gom thứ tự guard và policy dùng chung, còn callers thực hiện transaction-specific write và publish. Test hiện tập trung vào pure validation và policy table; ít test kiểm tra caller nối guard, transaction và publication đúng với nhau.</p></div>
+          <div class="mini"><strong>Deepening opportunity</strong><p>Giữ module Chuỗi Di Chuyển hiện có. Tăng testability tại seam mà handler thực sự gọi, để một test kiểm tra được thứ tự kiểm tra và hậu quả khi từ chối, không chỉ gọi helper thuần.</p></div>
+          <div class="mini"><strong>Benefits: locality & leverage</strong><p>Thay đổi policy vẫn có một nơi sở hữu; test qua caller cung cấp leverage cho nhiều kiểu di chuyển và giữ lỗi wiring gần module cần sửa. Không cần thêm adapter nếu chưa có implementation thứ hai.</p></div>
+          <div class="mini"><strong>Risks / unknowns</strong><p>Persistence khác nhau theo entrance có chủ ý và phải giữ atomicity hiện tại. Cần xác minh chính xác call site nào dùng từng movement kind trước khi điều chỉnh bảng policy.</p></div>
+        </div>
+        <div class="diagrams">
+          <div class="diagram"><h4>Before · verification scattered</h4><div class="flow"><div class="node">Pure guard tests</div><div class="arrow">↓ kiểm tra helper</div><div class="branch"><div class="node hot">Portal caller</div><div class="node hot">Teleport caller</div><div class="node hot">Party caller</div><div class="node">Transaction + publish</div></div><div class="arrow">↓ liên kết caller khó xác nhận</div><div class="node">Behavior thật</div></div></div>
+          <div class="diagram"><h4>After · test through the seam</h4><div class="flow"><div class="node good">Caller-level test</div><div class="arrow">↓ cùng interface thực</div><div class="node good">Chuỗi Di Chuyển</div><div class="arrow">↓ guard + outcome</div><div class="branch"><div class="node">Portal write</div><div class="node">Teleport write</div></div><div class="arrow">↓ verify commit / publish</div><div class="node good">Behavior được khóa tại call site</div></div></div>
+        </div>
+      </article>
+
+      <article class="candidate">
+        <div class="head"><div><div class="eyebrow">02 · Client cast intent</div><h3>Tập trung ánh xạ mode trong thao tác tung chiêu</h3></div><span class="badge">Worth exploring</span></div>
+        <p class="files"><strong>Files:</strong> <a href="frontend/src/game/scenes/WorldScene.ts">WorldScene.ts</a>, <a href="frontend/src/game/core/WorldRuntime.ts">WorldRuntime.ts</a>, <a href="frontend/src/game/network/WorldSocket.ts">WorldSocket.ts</a></p>
+        <div class="cols">
+          <div class="mini"><strong>Problem</strong><p><code>castSlot</code> và <code>castAutoFarmSkill</code> đều ánh xạ mode thành payload SELF/TARGET/DIRECTION/GROUND. Phần chọn mục tiêu và tương tác khác nhau là chủ ý, nhưng phần tạo intent có thể trôi lệch khi thêm mode hoặc thay payload.</p></div>
+          <div class="mini"><strong>Deepening opportunity</strong><p>Khám phá cách làm sâu module client cast-intent để giữ khác biệt giữa thao tác thủ công và auto-farm, đồng thời làm phần chung dễ kiểm thử. Chưa xác định interface mới trong báo cáo này.</p></div>
+          <div class="mini"><strong>Benefits: locality & leverage</strong><p>Đặt quy tắc ánh xạ intent tại một locality rõ giúp hai caller và test dùng cùng hành vi; leverage tăng khi mode mới chỉ phải được xác minh một lần.</p></div>
+          <div class="mini"><strong>Risks / unknowns</strong><p>Manual aim/pointer và auto-farm có policy khác nhau. Trộn lựa chọn mục tiêu vào cùng module sẽ làm mất locality và có thể thay đổi trải nghiệm; hiện chưa có test trực tiếp qua WorldScene.</p></div>
+        </div>
+        <div class="diagrams">
+          <div class="diagram"><h4>Before · mapping repeated</h4><div class="flow"><div class="branch"><div class="node hot">Manual hotbar</div><div class="node hot">Auto-farm</div></div><div class="arrow">↓ mỗi nhánh tự ánh xạ</div><div class="branch"><div class="node">Mode → payload</div><div class="node">Mode → payload</div></div><div class="arrow">↓</div><div class="node">WorldRuntime → socket</div></div></div>
+          <div class="diagram"><h4>After · shared intent behavior</h4><div class="flow"><div class="branch"><div class="node">Manual target/aim policy</div><div class="node">Auto-farm target policy</div></div><div class="arrow">↓ chỉ chia sẻ phần chung</div><div class="node good">Cast intent module</div><div class="arrow">↓</div><div class="node good">WorldRuntime → socket</div><div class="arrow">↓ kiểm tra hai caller qua cùng seam</div><div class="node">Intent contract tests</div></div></div>
+        </div>
+      </article>
+
+      <article class="candidate">
+        <div class="head"><div><div class="eyebrow">03 · Authoritative cast path</div><h3>Thêm một phép thử xuyên từ WS đến zone resolution</h3></div><span class="badge">Worth exploring</span></div>
+        <p class="files"><strong>Files:</strong> <a href="backend/internal/ws/client.go">client.go</a>, <a href="backend/internal/ws/realtime_lifecycle_test.go">realtime_lifecycle_test.go</a>, <a href="backend/internal/realtime/protocol/protocol.go">protocol.go</a>, <a href="backend/internal/realtime/gateway/admission.go">admission.go</a>, <a href="backend/internal/realtime/gateway/admission_test.go">admission_test.go</a>, <a href="backend/internal/realtime/sim/combat.go">combat.go</a></p>
+        <div class="cols">
+          <div class="mini"><strong>Problem</strong><p>Test coverage hiện tốt nhưng chia theo seam: protocol decode, WS dispatch dùng fake admission, gateway admission, và simulation combat. Chưa thấy test đại diện đi từ message WS hợp lệ qua admission đến quyết định authoritative của zone.</p></div>
+          <div class="mini"><strong>Deepening opportunity</strong><p>Giữ module protocol, gateway và simulation riêng; thêm kiểm tra call-site thật cho một đường cast đại diện để bảo đảm identity và payload được chuyển nguyên vẹn đến nơi quyết định.</p></div>
+          <div class="mini"><strong>Benefits: locality & leverage</strong><p>Một test qua seam thật bắt được wiring regression mà unit test riêng lẻ không phát hiện, trong khi các test chi tiết mode/range/cooldown vẫn ở simulation, đúng locality của luật chiến đấu.</p></div>
+          <div class="mini"><strong>Risks / unknowns</strong><p>Khởi tạo WS đầy đủ có thể tốn kém. Chỉ nên có ít test xuyên tầng; không chuyển mọi trường hợp chiến đấu thành integration test.</p></div>
+        </div>
+        <div class="diagrams">
+          <div class="diagram"><h4>Before · seams tested separately</h4><div class="flow"><div class="node">Protocol decode test</div><div class="branch"><div class="node hot">WS → fake admission</div><div class="node hot">Gateway → real zone</div></div><div class="arrow">↓ chưa chứng minh toàn tuyến</div><div class="node">Authoritative cast result</div></div></div>
+          <div class="diagram"><h4>After · one representative real path</h4><div class="flow"><div class="node good">WebSocket cast message</div><div class="arrow">↓</div><div class="node">Decode + authenticated identity</div><div class="arrow">↓</div><div class="node">Admission → simulation</div><div class="arrow">↓</div><div class="node good">Assert accepted / rejected outcome</div></div></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="section">
+      <h2>Giữ nguyên có chủ đích</h2>
+      <div class="do-not"><ul>
+        <li>Không gộp Chuỗi Di Chuyển bền vững ở handlers với movement realtime trong Phaser/zone; chúng sở hữu state và transaction khác nhau.</li>
+        <li>Không chuyển luật hợp lệ của chiêu, damage, cooldown hay tài nguyên sang frontend, WebSocket hoặc gateway. Zone simulation phải giữ quyền authoritative.</li>
+        <li>Không loại bỏ kiểm tra cấu trúc ở client/server chỉ vì trông lặp; hai module phục vụ hai mức tin cậy khác nhau.</li>
+        <li>Không ép các caller ghi persistence khác nhau vào chung một module nếu việc đó làm giảm locality hoặc atomicity.</li>
+      </ul></div>
+      <p class="files">ADR-0001 củng cố nguyên tắc client gửi intent, server sở hữu state; ADR này nói về Actor Instance/World Presence và không yêu cầu thay đổi interface của player casting. Không có xung đột ADR cần mở lại.</p>
+    </section>
+
+    <section class="section top">
+      <div class="eyebrow">Top recommendation</div>
+      <h2>Ưu tiên test xuyên call site cho authoritative cast path</h2>
+      <p>Đây là ứng viên xác minh được nguyên tắc quan trọng nhất của Realtime Combat: ý định từ client đi qua đúng ingress, giữ nguyên danh tính/payload, rồi zone simulation tự quyết định kết quả. Từng module đã có test riêng, nên một test đại diện qua seam thật bổ sung leverage mà không tái cấu trúc luật combat hoặc tạo thêm interface.</p>
+      <p>Ứng viên kế tiếp là caller-level test cho Chuỗi Di Chuyển. Việc deepening client cast-intent đáng khám phá sau đó nếu thêm mode thường xuyên làm hai nhánh manual/auto-farm lệch nhau.</p>
+    </section>
+
+    <footer class="foot">Nguồn trong repo: CONTEXT.md (Chuỗi Di Chuyển, Realtime Combat), ADR-0001, các test movement/protocol/WS/admission/simulation. Khuyến nghị là cơ hội kiến trúc, không phải kết luận có lỗi runtime.</footer>
+  </main>
+</body>
+</html>
