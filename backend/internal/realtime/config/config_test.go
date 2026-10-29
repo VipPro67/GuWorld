@@ -13,8 +13,11 @@ func TestLoadFromLookupDefaultsToDisabledAndClosedAdmission(t *testing.T) {
 	if config.AllowsJoin("player-1", "zone-1") {
 		t.Fatal("empty allowlists must deny admission")
 	}
-	if config.AllowsWorldJoin("player-1", "zone-1", "map-1", "content-1") {
-		t.Fatal("missing map/content versions must deny the v1 join handshake")
+	if config.AllowsWorldJoin("player-1", "zone-1", DefaultMapVersion, DefaultContentVersion) {
+		t.Fatal("disabled defaults and empty allowlists must deny the v1 join handshake")
+	}
+	if config.MapVersion != DefaultMapVersion || config.ContentVersion != DefaultContentVersion {
+		t.Fatalf("default release versions = %q/%q", config.MapVersion, config.ContentVersion)
 	}
 	if config.MapDir != defaultMapDir {
 		t.Fatalf("default map dir = %q, want %q", config.MapDir, defaultMapDir)
@@ -32,8 +35,6 @@ func TestAllowsJoinRequiresBothPlayerAndZoneAllowlist(t *testing.T) {
 		"REALTIME_WORLD_ENABLED": "true",
 		"MMO_ZONE_IDS":           "zone-1, zone-2",
 		"MMO_ALLOWLIST":          "player-1",
-		"MMO_MAP_VERSION":        "map-a1",
-		"MMO_CONTENT_VERSION":    "content-b1",
 	}
 	config, err := LoadFromLookup(func(key string) (string, bool) {
 		value, ok := values[key]
@@ -51,11 +52,30 @@ func TestAllowsJoinRequiresBothPlayerAndZoneAllowlist(t *testing.T) {
 	if config.AllowsJoin("player-1", "zone-3") {
 		t.Fatal("non-allowlisted zone must be denied")
 	}
-	if !config.AllowsWorldJoin("player-1", "zone-2", "map-a1", "content-b1") {
+	if !config.AllowsWorldJoin("player-1", "zone-2", DefaultMapVersion, DefaultContentVersion) {
 		t.Fatal("matching map/content versions should be admitted")
 	}
-	if config.AllowsWorldJoin("player-1", "zone-2", "stale", "content-b1") {
+	if config.AllowsWorldJoin("player-1", "zone-2", "stale", DefaultContentVersion) {
 		t.Fatal("stale map version must be denied")
+	}
+}
+
+func TestDeploymentCannotOverrideMapVersions(t *testing.T) {
+	values := map[string]string{
+		"MMO_MAP_VERSION":                 "stale-map",
+		"MMO_CONTENT_VERSION":             "stale-content",
+		"NEXT_PUBLIC_MMO_MAP_VERSION":     "stale-map",
+		"NEXT_PUBLIC_MMO_CONTENT_VERSION": "stale-content",
+	}
+	config, err := LoadFromLookup(func(key string) (string, bool) {
+		value, ok := values[key]
+		return value, ok
+	})
+	if err != nil {
+		t.Fatalf("LoadFromLookup returned error: %v", err)
+	}
+	if config.MapVersion != DefaultMapVersion || config.ContentVersion != DefaultContentVersion {
+		t.Fatalf("deployment overrode shipped versions: %q/%q", config.MapVersion, config.ContentVersion)
 	}
 }
 
@@ -114,8 +134,6 @@ func TestAllowsJoinWithWildcard(t *testing.T) {
 				"REALTIME_WORLD_ENABLED": "true",
 				"MMO_ZONE_IDS":           "zone-1",
 				"MMO_ALLOWLIST":          wildcard,
-				"MMO_MAP_VERSION":        "map-a1",
-				"MMO_CONTENT_VERSION":    "content-b1",
 			}
 			cfg, err := LoadFromLookup(func(key string) (string, bool) {
 				return values[key], true

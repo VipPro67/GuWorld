@@ -69,8 +69,6 @@ REALTIME_WORLD_ENABLED=true \
 PHASER_WORLD_CLIENT_ENABLED=true \
 MMO_ZONE_IDS=realtime_preview \
 MMO_ALLOWLIST=<player-uuid> \
-MMO_MAP_VERSION=regions-v1 \
-MMO_CONTENT_VERSION=region-content-v1 \
 MMO_MAP_DIR=data/mmo/maps \
 MMO_GU_PROFILES=data/mmo/gu/transpiled_profiles.json \
 go run ./cmd/server
@@ -79,10 +77,11 @@ go run ./cmd/server
 NEXT_PUBLIC_REALTIME_WORLD_ENABLED=true \
 NEXT_PUBLIC_PHASER_WORLD_CLIENT_ENABLED=true \
 NEXT_PUBLIC_MMO_ZONE_ID=realtime_preview \
-NEXT_PUBLIC_MMO_MAP_VERSION=regions-v1 \
-NEXT_PUBLIC_MMO_CONTENT_VERSION=region-content-v1 \
 npm run dev
 ```
+
+Map/content versions are embedded in the shipped map files and do not need
+environment variables.
 
 ## Known blockers before calling Gate B complete
 

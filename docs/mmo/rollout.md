@@ -15,8 +15,9 @@ preview zone loops do not own player or monster entities.
   is a `region_world_maps.world_map_id` (not a display region name). The client
   must send the same ID as `NEXT_PUBLIC_MMO_ZONE_ID`, and the character's current
   region must map to that world map or admission fails with a map mismatch.
-- `MMO_MAP_VERSION` and `MMO_CONTENT_VERSION` must exactly match the v1 join
-  request. Missing or stale versions deny admission.
+- Map/content versions are fixed by the shipped map artifacts and checked by
+  the backend; they are not deployment environment variables. The client sends
+  the same versions from the shared release contract.
 - `MMO_MAX_PLAYERS_PER_ZONE` defaults to `5` and accepts values from `1` to
   `100`.
 - `PHASER_WORLD_CLIENT_ENABLED` defaults to `false` and does not grant access by
@@ -198,8 +199,8 @@ preview zone loops do not own player or monster entities.
    Keep the player allowlist empty until the mutation-path audit and authoritative
    movement path are ready.
 3. Set `REALTIME_WORLD_ENABLED=true`, an explicit comma-separated
-   `MMO_ZONE_IDS`, `MMO_ALLOWLIST`, `MMO_MAP_VERSION`, and
-   `MMO_CONTENT_VERSION`. Keep `MMO_MAX_PLAYERS_PER_ZONE` low for the first test.
+   `MMO_ZONE_IDS` and `MMO_ALLOWLIST`. Keep `MMO_MAX_PLAYERS_PER_ZONE` low for
+   the first test.
 4. Enable `PHASER_WORLD_CLIENT_ENABLED=true` only after the Phaser client uses
    the v1 world.join envelope and the remaining release gates pass.
 5. For rollback, disable the Phaser client flag first, stop new realtime joins,

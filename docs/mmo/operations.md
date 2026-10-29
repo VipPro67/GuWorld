@@ -48,8 +48,7 @@ staging-canary and on-call evidence.
 ## Content versioning
 
 - Client sends `map_version` + `content_version` in `world.join`; backend
-  compares both against `MMO_MAP_VERSION`/`MMO_CONTENT_VERSION` and rejects
-  stale versions.
+  compares them with the shipped release values and rejects stale versions.
 - `world.welcome.map_hash` is the SHA-256 of the server collision artifact; the
   client recomputes the same hash from its downloaded JSON and shows `LỆCH HASH`.
   Compact border/packed collision must produce the identical tile stream.

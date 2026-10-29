@@ -318,18 +318,18 @@ func main() {
 				}
 				if realtimeConfig.MapVersion != "" && loadedMap.Version != realtimeConfig.MapVersion {
 					if key.MapID == "aperture_tribulation" {
-						tribulationMapLoadErr = fmt.Errorf("private tribulation map %q has version %q; MMO_MAP_VERSION requires %q", key.MapID, loadedMap.Version, realtimeConfig.MapVersion)
+						tribulationMapLoadErr = fmt.Errorf("private tribulation map %q has version %q; shipped release requires %q", key.MapID, loadedMap.Version, realtimeConfig.MapVersion)
 						continue
 					}
-					mapLoadErr = fmt.Errorf("configured realtime map %q has version %q; MMO_MAP_VERSION requires %q", key.MapID, loadedMap.Version, realtimeConfig.MapVersion)
+					mapLoadErr = fmt.Errorf("configured realtime map %q has version %q; shipped release requires %q", key.MapID, loadedMap.Version, realtimeConfig.MapVersion)
 					break
 				}
 				if realtimeConfig.ContentVersion != "" && loadedMap.ContentVersion != realtimeConfig.ContentVersion {
 					if key.MapID == "aperture_tribulation" {
-						tribulationMapLoadErr = fmt.Errorf("private tribulation map %q has content version %q; MMO_CONTENT_VERSION requires %q", key.MapID, loadedMap.ContentVersion, realtimeConfig.ContentVersion)
+						tribulationMapLoadErr = fmt.Errorf("private tribulation map %q has content version %q; shipped release requires %q", key.MapID, loadedMap.ContentVersion, realtimeConfig.ContentVersion)
 						continue
 					}
-					mapLoadErr = fmt.Errorf("configured realtime map %q has content version %q; MMO_CONTENT_VERSION requires %q", key.MapID, loadedMap.ContentVersion, realtimeConfig.ContentVersion)
+					mapLoadErr = fmt.Errorf("configured realtime map %q has content version %q; shipped release requires %q", key.MapID, loadedMap.ContentVersion, realtimeConfig.ContentVersion)
 					break
 				}
 				spawns := make([]sim.Vec2, 0, len(loadedMap.Spawns))

@@ -93,22 +93,21 @@ exists, is inside the target map and lands on a walkable tile. Monster IDs are
 resolved through the normal `monster_templates` registry at startup; an unknown
 ID logs a warning and skips that spawn rather than failing the whole zone.
 
-To run the Alpha chain, set one uniform version and the map list:
+To run the generated regional maps, configure the map list. Release versions
+are fixed in the shipped map metadata and backend/frontend source:
 
 ```bash
-MMO_ZONE_IDS=misty_forest,bone_crypt,crimson_ravine,emerald_grotto
-MMO_MAP_VERSION=alpha-1
+MMO_ZONE_IDS=all
 ```
 
-The per-zone `crimson_ravine` config is what marks the zone PvP; the client still
-loads `/game/maps/<zone>.json` from `NEXT_PUBLIC_MMO_ZONE_ID`.
+The backend expands `all` to maps matching the shipped release. The client
+loads `/game/maps/<zone>.json` from the character's current region.
 
 ## Version and admission
 
-- `map_version` should equal the backend `MMO_MAP_VERSION` and the client
-  `NEXT_PUBLIC_MMO_MAP_VERSION`. Startup logs a warning on mismatch; the client
-  shows `LỆCH VERSION` in the HUD when `world.welcome.map_version` differs from
-  the loaded file.
+- `map_version` and `content_version` are fixed by the shipped release and
+  checked against each loaded map. Keep the backend and frontend map copies in
+  sync; version variables are not configured in deployment environments.
 - `MMO_ZONE_IDS` values are `region_world_maps.world_map_id` values. To use the
   sample map in staging, map a test region to `realtime_preview` and configure
   `MMO_ZONE_IDS=realtime_preview`.

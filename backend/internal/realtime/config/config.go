@@ -13,6 +13,11 @@ const defaultMaxPlayersPerZone = 5
 const defaultMapDir = "data/mmo/maps"
 const defaultGuProfiles = "data/mmo/gu/transpiled_profiles.json"
 
+// Map versions are part of the shipped MMO release, not deployment options.
+// Keep them aligned with backend/data/mmo/maps and frontend/public/game/maps.
+const DefaultMapVersion = "regions-v1"
+const DefaultContentVersion = "region-content-v1"
+
 // Config is the process-level admission policy for realtime world sessions.
 // Empty zone or player allowlists deny public joins; the private aperture event
 // map bypasses only the zone list and still requires the player allowlist.
@@ -80,8 +85,8 @@ func LoadFromLookup(lookup func(string) (string, bool)) (Config, error) {
 		AdmissionPaused:     admissionPaused,
 		MaxPlayersPerZone:   maxPlayers,
 		InstancesPerZone:    instances,
-		MapVersion:          boundedVersion(value(lookup, "MMO_MAP_VERSION")),
-		ContentVersion:      boundedVersion(value(lookup, "MMO_CONTENT_VERSION")),
+		MapVersion:          DefaultMapVersion,
+		ContentVersion:      DefaultContentVersion,
 		MapDir:              mapDir(lookup),
 		GuProfiles:          guProfiles(lookup),
 		ZoneIDs:             parseSet(value(lookup, "MMO_ZONE_IDS")),
@@ -134,14 +139,6 @@ func readBool(lookup func(string) (string, bool), name string, fallback bool) (b
 
 func value(lookup func(string) (string, bool), name string) string {
 	raw, _ := lookup(name)
-	return raw
-}
-
-func boundedVersion(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || len(raw) > 80 {
-		return ""
-	}
 	return raw
 }
 
