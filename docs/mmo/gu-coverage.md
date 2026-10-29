@@ -34,18 +34,17 @@ the authored profile schema and compiled MVP artifact.
 ## Realtime cast-profile snapshot (2026-10-26)
 
 `audit-realtime` classifies effect vocabulary; it does **not** mean an entry is
-already usable on the MMO hotbar. The transpiler only emits an active profile
-when every `ON_ACTION` block is fully representable by the current realtime
-cast contract. It supports flat damage, flat self shield/heal, self cleanse,
-and explicitly authored profile overrides. It does not infer durations from
-turn-based status effects, drop conditional or mixed operations, or invent a
-fallback attack. Domain/world hooks can remain beside a supported combat
-action without hiding that action.
+already usable on the MMO hotbar. The transpiler supports flat damage, flat
+self shield/heal, self cleanse, and explicitly authored profile overrides.
+When a safe action also contains a legacy `STATUS`, it preserves the safe
+portion and omits the status; it never infers realtime durations from turns.
+Conditional and other unsupported operations still keep the action out of the
+hotbar. Domain/world hooks can remain beside a supported combat action.
 
-Current catalog: 4,427 profile records, 2,423 active profiles, 1,294
-passive-only profiles, and 710 entries without a castable hotbar skill. The
-Eight authored overrides preserve the five preview hotbar profiles and the
-three MMO profiles documented below.
+Current catalog: 4,427 profile records, 2,794 active profiles, 1,261
+passive-only profiles, and 372 entries without a castable hotbar skill. The
+nine authored overrides preserve the five preview hotbar profiles and the
+additional test/form profiles.
 The active-profile coverage test checks every `ON_ACTION` entry in `Gu.csv`
 against the transpiler rules.
 
@@ -63,9 +62,11 @@ go run ./cmd/gudata compile-realtime-gu \
   -profiles data/mmo/gu/transpiled_profiles.json
 ```
 
-Entries without a cast profile remain visible in inventory but cannot be cast;
-this is intentional until their status timing, conditional logic, buff stat
-semantics, or native hook has an explicit realtime implementation.
+Actions that combine safe damage/heal/shield effects with a legacy `STATUS`
+remain castable with the safe effects only. The status is omitted until its
+duration and stacking behavior are authored for realtime. Status-only actions,
+conditional actions, and unsupported operations remain visible in inventory
+but cannot be cast until their realtime behavior is explicitly implemented.
 
 ## Six MVP Gu
 

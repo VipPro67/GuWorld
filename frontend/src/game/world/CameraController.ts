@@ -25,8 +25,9 @@ export class CameraController {
   }
 
   public follow(target: Phaser.GameObjects.Container): void {
-    this.camera.startFollow(target, true, 0.12, 0.12);
-    this.camera.setDeadzone(140, 90);
+    this.camera.startFollow(target, true, 0.22, 0.22);
+    const mobile = this.scene.scale.width < 768;
+    this.camera.setDeadzone(mobile ? 72 : 140, mobile ? 56 : 90);
   }
 
   public stopFollow(): void {

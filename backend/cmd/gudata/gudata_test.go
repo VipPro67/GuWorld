@@ -172,6 +172,16 @@ func TestTranspileGuProfileDoesNotInventCombatPayload(t *testing.T) {
 		t.Fatalf("turn-based status without realtime duration became a castable skill: %+v", profile.Active)
 	}
 
+	profile = transpileGuProfile("GU_DAMAGE_WITH_STATUS", 3, "Ice Path", "Attack", 5, []rawTranspileBlock{
+		{ID: "ACTIVE_SKILL", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{
+			{Op: "DAMAGE", SubType: "FLAT", Value: 50},
+			{Op: "STATUS", Value: 5},
+		}},
+	})
+	if profile.Active == nil || len(profile.Active.Effects) != 1 || profile.Active.Effects[0].Type != "DAMAGE" {
+		t.Fatalf("safe action effect was dropped with an unauthored status: %+v", profile.Active)
+	}
+
 	profile = transpileGuProfile("GU_PARTIAL_ACTION", 3, "Fire Path", "Attack", 5, []rawTranspileBlock{
 		{ID: "ACTIVE_DAMAGE", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "TARGET"}, Operations: []rawTranspileOp{{Op: "DAMAGE", Value: 50, SubType: "FLAT"}}},
 		{ID: "ACTIVE_BUFF", Trigger: "ON_ACTION", Target: rawTranspileTarget{Selector: "ALL_ALLIES"}, Operations: []rawTranspileOp{{Op: "STAT_MOD", Stat: "ATTACK", Value: 5, SubType: "ADD_FLAT"}}},

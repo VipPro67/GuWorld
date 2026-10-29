@@ -241,19 +241,20 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     runtimeRef.current = runtime;
     let hudTimer: number | null = null;
     let lastHudAt = 0;
+    const hudRefreshInterval = window.matchMedia("(max-width: 767px)").matches ? 200 : 100;
     const pushHud = () => {
       if (!runtime) return;
       const commit = () => {
         lastHudAt = performance.now();
         setHud(buildHud(runtime, playerRef.current));
       };
-      if (performance.now() - lastHudAt >= 100) {
+      if (performance.now() - lastHudAt >= hudRefreshInterval) {
         commit();
       } else if (hudTimer === null) {
         hudTimer = window.setTimeout(() => {
           hudTimer = null;
           if (!cancelled) commit();
-        }, 100);
+        }, hudRefreshInterval);
       }
     };
     const runtimeUnsubscribe = runtime?.subscribe(() => {

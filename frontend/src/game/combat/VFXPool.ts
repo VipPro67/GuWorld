@@ -69,9 +69,9 @@ export class VFXPool {
     if (!mark) return;
     mark.lineStyle(3, 0xffe6a3, 0.95);
     mark.beginPath();
-    mark.moveTo(x + dx * 10 - dy * 18, y + dy * 10 + dx * 18);
-    mark.lineTo(x + dx * 22 + dy * 3, y + dy * 22 - dx * 3);
-    mark.lineTo(x + dx * 34 - dy * 11, y + dy * 34 + dx * 11);
+    mark.moveTo(dx * 10 - dy * 18, dy * 10 + dx * 18);
+    mark.lineTo(dx * 22 + dy * 3, dy * 22 - dx * 3);
+    mark.lineTo(dx * 34 - dy * 11, dy * 34 + dx * 11);
     mark.strokePath();
     this.animateActionMark(mark, x, y, 170, 1.25);
   }

@@ -409,6 +409,11 @@ func realtimeCastBlockSupported(block rawTranspileBlock) bool {
 	hasDamageMultiplier := false
 	for _, operation := range block.Operations {
 		switch strings.ToUpper(strings.TrimSpace(operation.Op)) {
+		case "STATUS":
+			// Legacy turn durations cannot be represented honestly in realtime.
+			// Keep any safe damage/heal/shield part of a mixed action castable;
+			// the status itself is intentionally omitted until authored in ms.
+			continue
 		case "DAMAGE":
 			if operation.Target != nil || !realtimeDamageTargetSupported(block.Target.Selector) ||
 				operation.SubType != "" && !strings.EqualFold(operation.SubType, "FLAT") && !strings.EqualFold(operation.SubType, "MULTIPLIER") {
@@ -451,15 +456,19 @@ func realtimeCastBlocksSupported(blocks []rawTranspileBlock) bool {
 		return false
 	}
 	damageSelector := ""
+	hasCastableOperation := false
 	for _, block := range blocks {
 		if !realtimeCastBlockSupported(block) {
 			return false
 		}
 		blockHasDamage := false
 		for _, operation := range block.Operations {
-			if strings.EqualFold(operation.Op, "DAMAGE") {
+			switch strings.ToUpper(strings.TrimSpace(operation.Op)) {
+			case "DAMAGE":
+				hasCastableOperation = true
 				blockHasDamage = true
-				break
+			case "SHIELD", "HEAL", "DIRECT_HP", "CLEANSE":
+				hasCastableOperation = true
 			}
 		}
 		if !blockHasDamage {
@@ -474,7 +483,7 @@ func realtimeCastBlocksSupported(blocks []rawTranspileBlock) bool {
 		}
 		damageSelector = selector
 	}
-	return true
+	return hasCastableOperation
 }
 
 func realtimeDamageTargetSupported(selector string) bool {

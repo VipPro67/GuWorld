@@ -852,7 +852,7 @@ export class WorldScene extends Phaser.Scene {
     if (!entityId) return;
     const actor = this.actors.get(entityId);
     if (!actor) return;
-    actor.castUntil = this.time.now + Math.max(100, durationTicks * 50);
+    actor.castUntil = this.time.now + Math.max(350, durationTicks * 50);
     if (actor.hitUntil > this.time.now) actor.castUntil = Math.max(actor.castUntil, actor.hitUntil);
   }
 
@@ -866,14 +866,6 @@ export class WorldScene extends Phaser.Scene {
     const dy = target && sourceEntity ? target.y - sourceEntity.y : 0;
     source.animator.faceToward(dx);
     this.vfx.spawnSlash(source.container.x, source.container.y - 30, dx, dy);
-    this.tweens.add({
-      targets: source.sprite,
-      scaleX: source.sprite.scaleX * 1.12,
-      scaleY: source.sprite.scaleY * 0.94,
-      duration: 80,
-      yoyo: true,
-      ease: "Quad.easeOut",
-    });
   }
 
   private playCastPulse(sourceId?: string): void {
