@@ -1,5 +1,6 @@
 export const WORLD_PROTOCOL_VERSION = 1;
 export const WORLD_MAX_MESSAGE_BYTES = 16 * 1024;
+export const WORLD_COOLDOWN_SLOTS = 13;
 
 export type WorldMessageType =
   | "world.join"
@@ -404,7 +405,7 @@ function parseEntityState(value: unknown): WorldEntityState {
     throw new Error("World snapshot cast skill id is invalid");
   }
   if (value.cooldowns !== undefined) {
-    if (!Array.isArray(value.cooldowns) || value.cooldowns.length > 9 || value.cooldowns.some((entry) => !isSafeNonNegativeInteger(entry))) {
+    if (!Array.isArray(value.cooldowns) || value.cooldowns.length > WORLD_COOLDOWN_SLOTS || value.cooldowns.some((entry) => !isSafeNonNegativeInteger(entry))) {
       throw new Error("World snapshot cooldowns are invalid");
     }
   }

@@ -14,6 +14,7 @@ import type {
   WorldTransferPayload,
   WorldWelcomePayload,
 } from "../network/Protocol.ts";
+import { WORLD_COOLDOWN_SLOTS } from "../network/Protocol.ts";
 import { SelfPredictor } from "../network/Prediction.ts";
 import { RemoteInterpolator } from "../network/RemoteInterpolator.ts";
 import { WorldClock } from "./WorldClock.ts";
@@ -391,8 +392,8 @@ export class WorldRuntime {
 
   public getSelfCombat(): SelfCombatView {
     const self = this.snapshot?.entities.find((entity) => entity.entity_id === this.selfId);
-    const cooldowns = self?.cooldowns ? [...self.cooldowns] : new Array(9).fill(0);
-    while (cooldowns.length < 9) cooldowns.push(0);
+    const cooldowns = self?.cooldowns ? [...self.cooldowns] : new Array(WORLD_COOLDOWN_SLOTS).fill(0);
+    while (cooldowns.length < WORLD_COOLDOWN_SLOTS) cooldowns.push(0);
     return {
       mana: self?.mana ?? 0,
       maxMana: self?.max_mana ?? 0,

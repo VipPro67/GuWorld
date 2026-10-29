@@ -32,6 +32,28 @@ test("parseWorldSnapshotPayload accepts floating-point mana and max_mana", () =>
   assert.equal(parsed.entities[0].shield, 50.5);
 });
 
+test("parseWorldSnapshotPayload accepts the server's 13 cooldown slots", () => {
+  const cooldowns = Array.from({ length: 13 }, (_, slot) => slot);
+  const parsed = parseWorldSnapshotPayload({
+    tick: 5,
+    ack_seq: 0,
+    baseline_id: 1,
+    base_tick: 5,
+    is_baseline: true,
+    entities: [{ entity_id: "player-1", entity_revision: 1, x: 1, y: 1, hp: 100, cooldowns }],
+  });
+
+  assert.deepEqual(parsed.entities[0].cooldowns, cooldowns);
+  assert.throws(() => parseWorldSnapshotPayload({
+    tick: 5,
+    ack_seq: 0,
+    baseline_id: 1,
+    base_tick: 5,
+    is_baseline: true,
+    entities: [{ entity_id: "player-1", entity_revision: 1, x: 1, y: 1, hp: 100, cooldowns: [...cooldowns, 13] }],
+  }), /World snapshot cooldowns are invalid/);
+});
+
 test("parseWorldTransferPayload keeps map-local and legacy coordinates separate", () => {
   const parsed = parseWorldTransferPayload({
     from_zone_id: "thanh_mao_son",
