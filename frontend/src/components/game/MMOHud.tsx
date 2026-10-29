@@ -227,6 +227,7 @@ export function MMOHud(props: MMOHudProps) {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("gu_target_view_mode");
       if (saved === "expanded" || saved === "compact" || saved === "minimized") return saved;
+      if (window.matchMedia("(max-width: 767px)").matches) return "compact";
     }
     return "expanded";
   });
@@ -831,7 +832,7 @@ export function MMOHud(props: MMOHudProps) {
 
       {/* Target Frame: Minimized (Ẩn luôn / Thu nhỏ) */}
       {props.target && targetViewMode === "minimized" && (
-        <div className="pointer-events-auto absolute left-1/2 top-[320px] -translate-x-1/2 sm:top-[270px] xl:top-2 flex items-center gap-2 rounded-full border border-[#a88952]/60 bg-[#16100bf2] px-3 py-1 shadow-lg backdrop-blur-md text-xs text-[#f5dfab]">
+        <div className="pointer-events-auto absolute left-2 top-[max(120px,18dvh)] md:left-1/2 md:top-[320px] md:-translate-x-1/2 xl:top-2 flex items-center gap-2 rounded-full border border-[#a88952]/60 bg-[#16100bf2] px-3 py-1 shadow-lg backdrop-blur-md text-xs text-[#f5dfab]">
           {props.target.kind === "player" ? (
             <Users className="h-3.5 w-3.5 text-sky-400" />
           ) : (
@@ -862,7 +863,7 @@ export function MMOHud(props: MMOHudProps) {
 
       {/* Target Frame: Compact (Rút gọn) */}
       {props.target && targetViewMode === "compact" && (
-        <div className={`pointer-events-auto absolute left-1/2 top-[320px] w-[min(92vw,290px)] -translate-x-1/2 rounded-xl p-2.5 sm:top-[270px] xl:top-2 ${frame}`}>
+        <div className={`pointer-events-auto absolute left-2 top-[max(120px,18dvh)] w-[min(72vw,290px)] rounded-xl p-2.5 md:left-1/2 md:top-[320px] md:w-[min(92vw,290px)] md:-translate-x-1/2 xl:top-2 ${frame}`}>
           {props.target.kind === "player" ? (
             <div>
               <div className="flex items-center gap-2">
@@ -976,7 +977,7 @@ export function MMOHud(props: MMOHudProps) {
 
       {/* Target Frame: Expanded (Chi tiết / Thần thức thám trắc) */}
       {props.target && targetViewMode === "expanded" && (
-        <div className={`pointer-events-auto absolute left-1/2 top-[300px] w-[min(94vw,330px)] -translate-x-1/2 rounded-xl p-3 sm:top-[235px] xl:top-2 ${frame}`}>
+        <div className={`pointer-events-auto absolute left-2 top-[max(120px,18dvh)] w-[min(88vw,330px)] max-h-[62dvh] overflow-y-auto rounded-xl p-3 md:left-1/2 md:top-[300px] md:w-[min(94vw,330px)] md:-translate-x-1/2 md:max-h-none xl:top-2 ${frame}`}>
           {props.target.kind === "player" ? (
             <div>
               <div className="flex items-start gap-2.5">
@@ -1486,7 +1487,7 @@ export function MMOHud(props: MMOHudProps) {
 
       {/* Mobile Combat Hub: 2-Row Cluster + Big Attack Button (Tối ưu ngón cái tay phải, không bị che/tràn màn hình) */}
       <div className="pointer-events-auto absolute bottom-2 right-2 flex items-end gap-1.5 md:hidden z-20 select-none">
-        <div className={`grid grid-cols-3 gap-1 rounded-xl p-1.5 shadow-xl ${frame}`}>
+        <div className={`grid grid-cols-4 gap-1 rounded-xl p-1 shadow-xl ${frame}`}>
           {Array.from({ length: 12 }, (_, index) => index + 1).map((slot) => {
             const skill = props.skills.find((entry) => entry.slot === slot);
             const guSlot = props.guSlots.find((entry) => entry.slot === slot);
@@ -1523,7 +1524,7 @@ export function MMOHud(props: MMOHudProps) {
                         ? `${guSlot.name} · Chưa có chiêu realtime`
                         : "Trống"
                 }
-                className={`relative flex h-11 w-11 flex-col justify-between overflow-hidden rounded-lg border p-1 text-center transition active:scale-90 ${
+                className={`relative flex h-10 w-10 flex-col justify-between overflow-hidden rounded-lg border p-0.5 text-center transition active:scale-90 ${
                   isAimingThis
                     ? "border-amber-400 bg-gradient-to-b from-[#4a3512] to-[#241a08] text-amber-100 ring-2 ring-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)] scale-105 z-20 animate-pulse"
                     : isToggled || (isFormActivation && formActive)
