@@ -75,6 +75,17 @@ The whole border band (not just the portal marker) is a crossing:
 authoritative adjacency source; the server never accepts a client-supplied
 destination region.
 
+## Private encounter exit and reconnect
+
+Leaving a private encounter (tribulation death, settlement, manual exit) writes
+`players.current_region` and `players.world_zone_id` directly, so there is no
+`world.transfer` message. The player realtime event carries `world_zone_id` and
+the client reconnects to that destination. If an automatic reconnect races the
+event, `WorldRuntime` also asks the host for the freshest `world_zone_id` before
+replaying the join, and a `realtime_map_mismatch` rejection triggers one
+authoritative status refresh plus a reconnect to the corrected zone. The old
+`aperture_tribulation` zone is never replayed after a forced exit.
+
 ## Still missing before PR-27 can be accepted
 
 - Multi-process ownership/lease fencing and transfer rollback on target crash.

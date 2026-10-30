@@ -134,6 +134,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   const gameRef = useRef<Phaser.Game | null>(null);
   const destroyRef = useRef<DestroyGame | null>(null);
   const runtimeRef = useRef<WorldRuntime | null>(null);
+  const recoveringMismatchRef = useRef(false);
   const onExitRef = useRef(onExit);
   useEffect(() => {
     onExitRef.current = onExit;
@@ -260,7 +261,12 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
 
     const runtime = canJoinMMOZone ? new WorldRuntime() : null;
     runtime?.setUiModal(panel !== null || menuOpen || isDivinationModalOpen || !worldActive);
+    runtime?.setJoinZoneResolver(() => {
+      const current = useGameStore.getState().player;
+      return current?.world_zone_id?.trim() || current?.current_region?.trim() || null;
+    });
     runtimeRef.current = runtime;
+    let cancelled = false;
     let hudTimer: number | null = null;
     let lastHudAt = 0;
     const hudRefreshInterval = window.matchMedia("(max-width: 767px)").matches ? 200 : 100;
@@ -285,7 +291,33 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     const runtimeUnsubscribe = runtime?.subscribe(() => {
       setRuntimeStatus(runtime.getStatus());
       setZoneId(runtime.getWelcome()?.zone_id ?? "");
-      if (runtime.getStatus() === "error") setErrorMessage(runtime.getError());
+      if (runtime.getStatus() === "error") {
+        setErrorMessage(runtime.getError());
+        // A death/settlement in a private encounter moves the character to a
+        // new region. If the automatic reconnect raced the player event, refresh
+        // the authoritative region and rejoin the correct zone instead of
+        // replaying the old aperture zone forever.
+        if (runtime.getErrorCode() === "realtime_map_mismatch" && !recoveringMismatchRef.current) {
+          recoveringMismatchRef.current = true;
+          void (async () => {
+            const state = useGameStore.getState();
+            const playerId = state.player?.id;
+            if (playerId) {
+              await state.fetchPlayerStatus(playerId, true);
+            }
+            const current = useGameStore.getState().player;
+            const resolvedZone = current?.world_zone_id?.trim() || current?.current_region?.trim();
+            if (!cancelled && resolvedZone) {
+              setErrorMessage("");
+              setRuntimeStatus("connecting");
+              void runtime.reconnectTo(resolvedZone);
+            }
+            window.setTimeout(() => {
+              recoveringMismatchRef.current = false;
+            }, 5000);
+          })();
+        }
+      }
       pushHud();
     });
     const errorUnsubscribe = runtime?.onError((error) => {
@@ -321,7 +353,6 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
       void runtimeRef.current?.reconnectTo(transfer.to_zone_id);
     });
 
-    let cancelled = false;
     pushHud();
 
     void (async () => {
@@ -384,7 +415,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     runtimeRef.current?.setRealtimeSettings(realtimeControls(currentCombatSettings));
   }, [currentCombatSettings]);
 
-  const reconnect = useCallback(() => {
+  const reconnect = useCallback(async () => {
     const runtime = runtimeRef.current;
     if (!runtime) {
       retry();
@@ -392,7 +423,18 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     }
     setErrorMessage("");
     setRuntimeStatus("connecting");
-    void runtime.reconnect();
+    const state = useGameStore.getState();
+    const playerId = state.player?.id;
+    if (playerId) {
+      await state.fetchPlayerStatus(playerId, true);
+    }
+    const current = useGameStore.getState().player;
+    const resolvedZone = current?.world_zone_id?.trim() || current?.current_region?.trim();
+    if (resolvedZone) {
+      await runtime.reconnectTo(resolvedZone);
+    } else {
+      await runtime.reconnect();
+    }
   }, [retry]);
 
   const connectionFailed = status === "error" || runtimeStatus === "error" || runtimeStatus === "closed";

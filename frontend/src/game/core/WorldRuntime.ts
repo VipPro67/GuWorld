@@ -1,5 +1,6 @@
 import {
   WorldSocket,
+  WorldSocketError,
   type WorldSocketOptions,
 } from "../network/WorldSocket.ts";
 import type { BufferedWorldState } from "../network/SnapshotBuffer.ts";
@@ -146,6 +147,8 @@ export class WorldRuntime {
   private selfHp = 0;
   private lastJoin: WorldJoinPayload | null = null;
   private errorMessage = "";
+  private errorCode = "";
+  private joinZoneResolver: (() => string | null) | null = null;
 
   private inputVector: WorldPoint = { x: 0, y: 0 };
   private lastSentVector: WorldPoint = { x: 0, y: 0 };
@@ -173,6 +176,7 @@ export class WorldRuntime {
     if (this.status === "connecting") return null;
     this.lastJoin = join;
     this.errorMessage = "";
+    this.errorCode = "";
     this.combatNotice = "";
     this.status = "connecting";
     this.emit();
@@ -191,6 +195,7 @@ export class WorldRuntime {
     } catch (error) {
       this.status = "error";
       this.errorMessage = error instanceof Error ? error.message : "Không thể vào world realtime";
+      this.errorCode = error instanceof WorldSocketError ? error.code : "world_connect_failed";
       this.emit();
       return null;
     }
@@ -200,9 +205,14 @@ export class WorldRuntime {
     const join = this.lastJoin;
     this.disconnect();
     if (!join) return null;
+    let nextJoin = join;
+    const resolvedZone = this.joinZoneResolver?.()?.trim() ?? "";
+    if (resolvedZone && resolvedZone !== join.zone_id) {
+      nextJoin = { ...join, zone_id: resolvedZone };
+    }
     this.socket = new WorldSocket(this.socketOptions);
     this.bindSocket();
-    return this.connect(join);
+    return this.connect(nextJoin);
   }
 
   /**
@@ -404,6 +414,15 @@ export class WorldRuntime {
 
   public getError(): string {
     return this.errorMessage;
+  }
+
+  public getErrorCode(): string {
+    return this.errorCode;
+  }
+
+  /** Resolves the freshest server-owned zone before a reconnect. */
+  public setJoinZoneResolver(resolver: (() => string | null) | null): void {
+    this.joinZoneResolver = resolver;
   }
 
   public getWelcome(): WorldWelcomePayload | null {
@@ -614,10 +633,12 @@ export class WorldRuntime {
       this.socket.onResyncRequired((reason) => {
         this.status = "error";
         this.errorMessage = `Mất đồng bộ snapshot: ${reason}`;
+        this.errorCode = "snapshot_resync_required";
         this.emit();
       }),
       this.socket.onError((error) => {
         this.errorMessage = error.message;
+        this.errorCode = error instanceof WorldSocketError ? error.code : "world_socket_error";
         this.emit();
       }),
       this.socket.onTransfer((transfer) => {
