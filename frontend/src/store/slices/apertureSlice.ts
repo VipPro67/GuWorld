@@ -42,13 +42,21 @@ let lastActiveTribulationPlayerId: string | null = null;
 let lastActiveTribulationFetchTime = 0;
 const ACTIVE_TRIBULATION_TTL_MS = 15000;
 
+export interface ActiveTribulation {
+  event: TribulationEvent;
+  enemies: TribulationEnemy[];
+  total_enemies?: number;
+  defeated_enemies?: number;
+  remaining_enemies?: number;
+}
+
 export interface ApertureSlice {
   aperture: ImmortalAperture | null;
   daoMarks: DaoMark[];
   daoNgan: DaoNganResult | null;
   apertureNodes: ApertureResourceNode[];
   variantHumans: ApertureVariantHuman[];
-  activeTribulation: { event: TribulationEvent; enemies: TribulationEnemy[] } | null;
+  activeTribulation: ActiveTribulation | null;
   fetchAperture: (forceRefresh?: boolean) => Promise<void>;
   fetchDaoMarks: (forceRefresh?: boolean) => Promise<void>;
   fetchDaoNgan: (forceRefresh?: boolean) => Promise<void>;

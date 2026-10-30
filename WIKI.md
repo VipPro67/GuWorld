@@ -131,7 +131,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - Trong quá trình tu hành, Cổ sư có thể tích luỹ điểm **Chân Ý** của các lưu phái (ví dụ: Kiếm Đạo, Hỏa Đạo, Trí Đạo...) để thăng tiến cảnh giới lưu phái.
 - **Cách nhận điểm Chân Ý:**
   - **Sử dụng Cổ tiêu hao/Cổ trong chiến đấu realtime:** (bao gồm đánh tay và auto-farm chạy trên client như khai thác mỏ, tàn tích). Mỗi lần thi triển thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận còn phụ thuộc hiệu suất cảnh giới và giới hạn của rank Cổ. (Lưu ý: Đấu Trường Ảo không cộng điểm).
-  - **Giới hạn mỗi trận:** điểm Chân Ý nhận từ chiến đấu đối với Cổ phàm và Sát chiêu phàm bị chặn ở **Rank × 10 điểm/trận** (đánh tay, đánh tự động và sát chiêu phàm đều tính chung). Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** không bị giới hạn tối đa trong trận chiến, thỏa sức ngộ đạo không có trần giới hạn. Thưởng phó bản và luyện Cổ không tính vào giới hạn này.
+  - **Không có giới hạn mỗi trận:** điểm Chân Ý từ Cổ, sát chiêu và đánh thường được cộng trực tiếp khi settle checkpoint, không bị chặn bởi Rank × 10 như quy tắc turn-based cũ. Hunger, mana và cooldown là giới hạn tự nhiên.
   - Các nguồn điểm khác đã có trong game gồm phần thưởng Phó bản (như Mộng Cảnh) và Luyện Cổ; điểm thực nhận tuân theo công thức của từng hoạt động.
 - **Các mốc cảnh giới:** Phàm Thai (< 10.000) -> Đại Sư (10.000) -> Tông Sư (100.000) -> Đại Tông Sư (1.000.000) -> Vô Thượng Đại Tông Sư (10.000.000).
 - **Tác dụng:**
@@ -171,7 +171,7 @@ Nghi thức Thăng Tiên gồm **3 khâu tuần tự** — không còn là một
 - **Lưu phái tai kiếp ưu tiên lưu phái của Cổ bản mệnh** nếu đó không phải Thiên Đạo. Tỉ lệ ưu tiên bắt đầu từ 80% và tăng theo cấp tai kiếp: Địa Tai **80%**, Thiên Kiếp **85%**, Hạo Kiếp **90%**, Vạn Kiếp **95%**, Hỗn Độn Đại Nạn **100%**; lượt không kích hoạt ưu tiên sẽ chọn ngẫu nhiên trong các lưu phái thường còn lại. Thiên Đạo không xuất hiện trong lưu phái chính hoặc phần Đạo Ngân phụ của phần thưởng tai kiếp.
 - **Bảo hộ khi vắng mặt:** nếu đến mốc tai kiếp mà đạo hữu **đang offline**, tai kiếp sẽ không sinh quái và không phá hoại — Tiên Khiếu chuyển trạng thái **"Kiếp Lực Tích Lũy"** (`TRIBULATION_PENDING`). Khi đạo hữu online trở lại, tai kiếp mới giáng xuống (trong vòng 60 giây) và có **5 phút chuẩn bị** trước khi quái bắt đầu di chuyển/phá mỏ. Thời gian nội bộ vẫn trôi bình thường nên không thể trốn kiếp vô hạn; nếu giữ kiếp offline quá **24 giờ**, phần thưởng Đạo Ngân sẽ bị **giảm còn một nửa**. Bộ đếm 6 giờ tự kết toán chỉ tính thời gian online.
 - Khi đến gần node/vùng, quái đánh vùng 3×3 quanh vị trí của nó. Mỗi ô thuộc node bị trúng cộng sát thương vào HP chung của node; sát thương mỗi ô theo loại kiếp: Địa Tai 1, Thiên Kiếp 2, Hạo Kiếp 4, Vạn Kiếp 8, Hỗn Độn Đại Nạn 16. Đại Yêu gây gấp đôi sát thương yêu tướng.
-- **Chiến trường tai kiếp dùng map realtime riêng:** vào map Tiên Khiếu từ bảng điều khiển, tự di chuyển và thi triển Cổ theo hotbar; quái realtime tự tìm người chơi hoặc phá node, còn trạng thái node/quái được máy chủ lưu theo sự kiện. Quái cuối cùng bị hạ sẽ tự kết toán tai kiếp, nhận Đạo Ngân và xử lý đột phá nếu đủ điều kiện. Nếu đạo hữu bị hạ gục, nhân vật được đưa về tọa độ đã lưu mà không rơi đồ.
+- **Chiến trường tai kiếp dùng map realtime riêng:** vào map Tiên Khiếu từ bảng điều khiển, tự di chuyển và thi triển Cổ theo hotbar; quái realtime tự tìm người chơi hoặc phá node, còn trạng thái node/quái được máy chủ lưu theo sự kiện. Quái cuối cùng bị hạ sẽ tự kết toán tai kiếp, nhận Đạo Ngân và xử lý đột phá nếu đủ điều kiện. Hệ thống còn đối soát trạng thái realtime với DB và tự kết toán trong tối đa ~5 giây kể cả khi death event cuối bị lỡ; HUD hiển thị số quái còn lại theo dữ liệu máy chủ (không phải số quái trong radar cục bộ). Nếu đạo hữu bị hạ gục, nhân vật được đưa về tọa độ đã lưu mà không rơi đồ.
 - **Cổ sư chỉ được xuất trận khi Sinh lực Tiên Khiếu > 5% Sinh lực tối đa.** Nếu Tiên Khiếu nguy cấp (≤ 5%), đạo hữu không thể ra tay — quái sẽ tiếp tục càn quét mỏ trong sự bất lực; hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp.
 - **Thoát hoặc hết hạn tai kiếp:** Rút lui bằng HUD hoặc hết thời gian online cho phép sẽ kết toán thất bại; bộ đếm số lượng tai kiếp không tăng, nhưng mốc `next_tribulation_year` vẫn được đẩy lên để có thời gian hồi phục. Hạ quái cuối cùng sẽ tự kết toán thắng và nhận thưởng; không còn nút kết toán mô phỏng trận đấu.
 - **Kiếp nạn theo cấp bậc:**
@@ -414,7 +414,7 @@ Hiệu ứng chiến đấu đặc thù của Cổ trùng được lấy từ c�
 
 Trong Túi Đồ, mở tab **Sát Chiêu**, chọn một Cổ chính và thêm Cổ phụ tùy ý. Kéo các hiệu ứng được hỗ trợ từ Cổ thành phần vào công thức, xem trước uy lực sau cân bằng, độ hòa hợp và tỉ lệ thành công, rồi đặt tên và lưu. Người chơi lưu tối đa 12 công thức và trang bị tối đa 4 sát chiêu.
 
-Rank Cổ chính quyết định phần lớn ngân sách sức mạnh; Cổ phụ bổ sung ngân sách với mức giảm dần. Số lượng, phạm vi và độ phức tạp effect làm tăng tải công thức. Khi tải vượt ngân sách, hệ thống tự giảm giá trị effect và hiển thị kết quả trước khi lưu. Cấp lưu phái và độ thành thạo ảnh hưởng tỉ lệ thôi động; dùng thành công giúp tăng thành thạo sát chiêu.
+Rank Cổ chính quyết định phần lớn ngân sách sức mạnh; Cổ phụ bổ sung ngân sách với mức giảm dần. Số lượng, phạm vi và độ phức tạp effect làm tăng tải công thức. Khi tải vượt ngân sách, hệ thống tự giảm giá trị effect và hiển thị kết quả trước khi lưu. Cấp lưu phái và độ thành thạo ảnh hưởng tỉ lệ thôi động; dùng thành công giúp tăng thành thạo sát chiêu và cộng **Chân Ý lưu phái hạch tâm** theo rank Cổ chính (R1=1 … R9=300, giảm theo cảnh giới hiện tại).
 
 Sát chiêu cần được trang bị và kích hoạt trong **Cài đặt chiến thuật** (Aperture > Cài đặt) hoặc tick chọn trực tiếp trong màn hình **Chuẩn bị chiến đấu** trước trận; sát chiêu không được trang bị/chọn sẽ không tự động kích hoạt. Effect hồi phục `ON_USE` có thể được dùng ngoài combat bằng nút **Dùng**. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Một instance Cổ có thể tham gia nhiều sát chiêu. Nếu instance đó rời `player_gu`, chết hoặc đổi thành Cổ/rank khác, những công thức tham chiếu nó sẽ tạm thời không dùng được.
 
@@ -1369,7 +1369,7 @@ Sức dò chia làm ba trụ, **càng đầu bảng càng nặng**:
    | Cộng phẳng | +0 | **+50** | **+140** | **+280** | **+470** |
    | Nhân thêm | ×1.00 | ×1.05 | ×1.12 | ×1.20 | ×1.30 |
 
-   Mốc cảnh giới: 10.000 / 100.000 / 1.000.000 / 10.000.000 Chân Ý. Cảnh giới tích từ **4 nguồn**: dùng Cổ, chiến đấu, thi triển sát chiêu, và luyện Cổ.
+   Mốc cảnh giới: 10.000 / 100.000 / 1.000.000 / 10.000.000 Chân Ý. Cảnh giới tích từ **các nguồn**: dùng Cổ, cast Cổ thường và đánh thường trong combat realtime, thi triển sát chiêu, và luyện Cổ.
 
 2. **Cổ trùng.** Mỗi Cổ đang trang bị cộng theo phẩm bậc (Cổ rank *n* → `+5n`): Cổ 3 chuyển +15, Cổ 7 chuyển +35, Cổ 9 chuyển +45. Phe thủ đối xứng bằng Ngụy Trang (`DISGUISE ×5`) + `PERFECT_DISGUISE` (+80, Thái Độ Cổ) + `CONCEAL_GU` (+30), nên **cùng lượng Cổ thì hai phe cân bằng**.
 

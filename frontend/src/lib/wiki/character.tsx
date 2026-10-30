@@ -395,7 +395,7 @@ export const characterPages: WikiPage[] = [
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Cảnh giới lưu phái thể hiện sự thấu hiểu của linh hồn bạn đối với quy luật vạn vật thế gian. Tích lũy cảnh giới lưu phái thông qua việc rèn luyện sát chiêu chiến đấu hoặc hấp thu Chân Ý khi thám hiểm Mộng Cảnh. Song song đó, <strong>Đạo Ngân</strong> (vết khắc của quy luật tự nhiên) ghi lại độ lĩnh ngộ theo từng lưu phái.
+          Cảnh giới lưu phái thể hiện sự thấu hiểu của linh hồn bạn đối với quy luật vạn vật thế gian. Tích lũy cảnh giới lưu phái thông qua việc thi triển Cổ, đánh thường, rèn luyện sát chiêu chiến đấu hoặc hấp thu Chân Ý khi thám hiểm Mộng Cảnh. Song song đó, <strong>Đạo Ngân</strong> (vết khắc của quy luật tự nhiên) ghi lại độ lĩnh ngộ theo từng lưu phái.
         </p>
 
         <div className="space-y-4">

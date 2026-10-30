@@ -29,7 +29,7 @@ func CalculatePathMasteryGain(guRank int, pathLevel int, baseGain int) int {
 		return 0
 	}
 
-	factor := 1.0 - 0.20*float64(pathLevel)
+	factor := 1.0 - PathMasteryEfficiencyLossPerLevel*float64(pathLevel)
 	if factor < 0.0 {
 		factor = 0.0
 	}

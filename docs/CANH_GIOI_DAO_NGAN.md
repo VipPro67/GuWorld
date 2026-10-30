@@ -95,11 +95,11 @@ Cảnh giới lưu phái là cấp độ lĩnh ngộ Chân Ý (True Meaning) c�
 
 | Level | Key | Hệ Số (Multiplier) | Mốc Điểm |
 |-------|-----|-------------------|----------|
-| 0 | `"Ordinary"` — Phàm Thai | ×1.0 | < 100 |
-| 1 | `"Master"` / "Đại Sư" | ×1.1 | ≥ 100 |
-| 2 | `"Grandmaster"` / "Tông Sư" | ×1.25 | ≥ 500 |
-| 3 | `"Great Grandmaster"` / "Đại Tông Sư" | ×1.4 | ≥ 2.500 |
-| 4 | `"Supreme Grandmaster"` / "Vô Thượng Đại Tông Sư" | ×1.5 | ≥ 10.000 |
+| 0 | `"Ordinary"` — Phàm Thai | ×1.0 | < 10.000 |
+| 1 | `"Master"` / "Đại Sư" | ×1.1 | ≥ 10.000 |
+| 2 | `"Grandmaster"` / "Tông Sư" | ×1.25 | ≥ 100.000 |
+| 3 | `"Great Grandmaster"` / "Đại Tông Sư" | ×1.4 | ≥ 1.000.000 |
+| 4 | `"Supreme Grandmaster"` / "Vô Thượng Đại Tông Sư" | ×1.5 | ≥ 10.000.000 |
 
 - **Struct:** `PathMasteriesMap map[string]int` (`player.go:56`)
 - **Player field:** `PathMasteries PathMasteriesMap` (`player.go`)
@@ -110,9 +110,9 @@ Cảnh giới lưu phái là cấp độ lĩnh ngộ Chân Ý (True Meaning) c�
 
 | Rank đích | Cảnh giới yêu cầu | Điểm tối thiểu |
 |-----------|-------------------|----------------|
-| Rank 7 | Tông Sư (Grandmaster, level 2) | 500 |
-| Rank 8 | Đại Tông Sư (Great Grandmaster, level 3) | 2.500 |
-| Rank 9 | Vô Thượng Đại Tông Sư (Supreme Grandmaster, level 4) | 10.000 |
+| Rank 7 | Tông Sư (Grandmaster, level 2) | 100.000 |
+| Rank 8 | Đại Tông Sư (Great Grandmaster, level 3) | 1.000.000 |
+| Rank 9 | Vô Thượng Đại Tông Sư (Supreme Grandmaster, level 4) | 10.000.000 |
 
 Kiểm tra tại `tribulation.go` (`handleSuccess`) qua `gamefx.PathMasteryLevelRequiredForRank` + `gamefx.HasPathMasteryAtLeast`. Nếu chưa đủ, đột phá bị chặn (chỉ thông báo, không tăng rank, không trừ kiếp).
 
@@ -127,13 +127,16 @@ Ví dụ JSON:
 
 | Nguồn | Handler | Điểm |
 |-------|---------|------|
-| **Sát Chiêu thành công** | `killer_move.go` CastKillerMove | +2 điểm cho path hạch tâm |
+| **Sát Chiêu thành công** | `killer_moves.go` (`UseKillerMove`, realtime settlement) | Theo rank Cổ hạch tâm: 1 / 2 / 5 / 10 / 20 / 50 / 100 / 200 / 300 (R1–R9), sau đó áp dụng hiệu suất cảnh giới. Chỉ cộng path hạch tâm; Trận Kích không cộng |
+| **Cast Cổ thường trong combat realtime** | `realtime/persistence` settlement | Cùng bảng rank của Cổ đang dùng, path sát thương của kỹ năng, áp dụng hiệu suất cảnh giới |
+| **Đánh thường trúng mục tiêu** | `realtime/persistence` settlement | +1 điểm vào path `strength` (qua `CalculatePathMasteryGain`), không tính đòn chém vào không khí |
+| **Cổ tiêu hao ngoài combat** | `player_gu_use.go` | Cùng bảng rank của Cổ, áp dụng hiệu suất cảnh giới |
 | **Luyện Cổ thành công** | `refine_gu.go` | Theo rank Cổ đích: 2 / 5 / 15 / 40 / 100 / 500 / 2.500 / 15.000 / 50.000, sau đó áp dụng hiệu suất cảnh giới |
 | **Chân Ý từ phó bản** | `instance.go` | cộng thẳng `amount` điểm vào path |
 
-> **Battle cap (lịch sử):** `PathMasteryBattleGainLimit(rank)` và counter `players.active_combat.path_mastery_gained` thuộc pipeline turn-based đã gỡ theo #272. Realtime hiện không có counter Chân Ý theo trận; đừng dùng giới hạn cũ để suy ra số điểm nhận trong MMO.
+> **Không có cap Chân Ý theo trận.** `PathMasteryBattleGainLimit(rank)` và counter `players.active_combat.path_mastery_gained` thuộc pipeline turn-based cũ đã bị gỡ; realtime cộng trực tiếp vào `players.path_masteries` khi settle checkpoint.
 
-Luật Chân Ý khi dùng Cổ trong combat simulator là lịch sử. Cổ tiêu hao ngoài chiến đấu vẫn dùng `CalculatePathMasteryGain`; combat realtime chưa ghi Chân Ý cho cast, và hiện không có cap theo trận.
+Realtime dùng chung công thức `CalculatePathMasteryGain(rank, level, PathMasteryGuUseBaseGain(rank))`. Điểm được settle atomically cùng hunger/mana tại checkpoint; nếu transaction lỗi, lần checkpoint sau gửi lại cùng delta.
 
 ### 2.3 Công Thức Ảnh Hưởng
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -363,6 +364,37 @@ func RealtimeResolveTribulationVictory(c *gin.Context) {
 	c.JSON(http.StatusOK, result.payload(realtimeTransfer))
 }
 
+// reconcileTribulationEnemiesFromLiveState marks durable enemies dead when the
+// authoritative realtime snapshot already reports HP <= 0. The periodic
+// checkpoint is AOI-filtered and may lag behind the final kill, so settlement
+// must not depend on that write having happened.
+func reconcileTribulationEnemiesFromLiveState(ctx context.Context, tx *sql.Tx, playerID, eventID uuid.UUID) (int, error) {
+	_, dead, ok := middleware.RealtimeTribulationEnemies(playerID)
+	if !ok || len(dead) == 0 {
+		return 0, nil
+	}
+	ids := make([]string, 0, len(dead))
+	for id := range dead {
+		if _, err := uuid.Parse(id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE tribulation_enemies
+		SET hp = 0, is_dead = true, updated_at = NOW()
+		WHERE event_id = $1 AND is_dead = false AND id = ANY($2::uuid[])
+	`, eventID, pq.Array(ids))
+	if err != nil {
+		return 0, err
+	}
+	affected, _ := result.RowsAffected()
+	return int(affected), nil
+}
+
 // settleRealtimeTribulationVictory commits the victory in one transaction. It
 // is shared by the HTTP fallback and automatic settlement on the last realtime
 // monster death. status is the HTTP status to surface for a refusal.
@@ -385,6 +417,14 @@ func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uui
 		return result, http.StatusNotFound, fmt.Errorf("Đợt tai kiếp này đã kết thúc hoặc không tồn tại")
 	} else if err != nil {
 		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi truy vấn tai kiếp")
+	}
+
+	reconciled, reconcileErr := reconcileTribulationEnemiesFromLiveState(ctx, tx, playerID, eventID)
+	if reconcileErr != nil {
+		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi đồng bộ quái tai kiếp từ realtime: %w", reconcileErr)
+	}
+	if reconciled > 0 {
+		logger.S.Infof("Reconciled %d tribulation enemies from live snapshot for %s event %s", reconciled, playerID, ev.ID)
 	}
 
 	var alive int

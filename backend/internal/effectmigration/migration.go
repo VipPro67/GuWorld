@@ -242,6 +242,7 @@ var guFlat = map[string]operation{
 	"passive.hearing": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "HEARING"}, "passive.disguise_level": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "DISGUISE"},
 	"passive.time_speed_multiplier": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "TIME_SPEED", Unit: "RATIO"}, "passive.success_rate_bonus": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "REFINE_SUCCESS", Unit: "PERCENT"},
 	"passive.refine_mana_tier": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "REFINE_MANA_TIER"}, "passive.storage_capacity": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "STORAGE"},
+	"passive.luck": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "LUCK"},
 	"passive.tenacity": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "TENACITY"}, "passive.cc_resist": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "CC_RESIST"},
 	"passive.dao_mark_multiplier": {Op: "STAT_MOD", SubType: "MULTIPLY_PERCENT", Stat: "DAO_MARK", Unit: "RATIO"}, "passive.path_conflict_reduction": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_CONFLICT_REDUCTION", Unit: "PERCENT"},
 	"passive.anti_heaven_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "heaven", Unit: "PERCENT"}, "passive.anti_earth_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "earth", Unit: "PERCENT"}, "passive.anti_dream_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "dream", Unit: "PERCENT"}, "passive.immune_dream_status": {Op: "UNIQUE", Code: "IMMUNE_DREAM_STATUS"},

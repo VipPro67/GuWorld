@@ -581,12 +581,12 @@ func (f *fakeStateStore) SaveAndApplyManaDelta(ctx context.Context, state persis
 	return nil
 }
 
-func (f *fakeStateStore) SaveAndApplyCombatDeltaRevision(ctx context.Context, state persistence.State, delta float64, uses, killerMoveUses map[string]uint64) (int64, error) {
+func (f *fakeStateStore) SaveAndApplyCombatDeltaRevision(ctx context.Context, state persistence.State, delta float64, usage persistence.CombatUsage) (int64, error) {
 	if err := f.SaveAndApplyManaDelta(ctx, state, delta); err != nil {
 		return 0, err
 	}
-	copyUses := make(map[string]uint64, len(uses))
-	for id, count := range uses {
+	copyUses := make(map[string]uint64, len(usage.Gu))
+	for id, count := range usage.Gu {
 		copyUses[id] = count
 	}
 	f.guUseDeltas = append(f.guUseDeltas, copyUses)

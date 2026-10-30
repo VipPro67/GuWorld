@@ -50,6 +50,7 @@ func BuildLoadout(catalog *CompiledCatalog, equipped []EquippedGu) LoadoutResult
 		if profile.Active != nil {
 			skill := profile.Active.Skill
 			skill.Slot = index + 1
+			skill.Rank = instance.Rank
 			if skill.Valid() {
 				skill.GuInstanceID = instance.InstanceID
 				result.Skills = append(result.Skills, skill)

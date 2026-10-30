@@ -21,6 +21,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 var DB *sql.DB
@@ -967,6 +968,42 @@ func preflightEffectCSVs(sources []effectCSVSource) error {
 	return nil
 }
 
+// parseCSVPrice parses currency and price values exported from sheets or databases.
+// Handles US comma separators ("1,000", "250,000"), European/Vietnamese dot thousand separators
+// ("1.000", "14.000.000"), trailing .000 decimals from Postgres NUMERIC(30,3) ("1000.000", "250.000"),
+// and compound multi-dot artifacts from spreadsheet export ("1.000.000", "14.000.000.000").
+func parseCSVPrice(raw string) float64 {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return 0
+	}
+	s = strings.ReplaceAll(s, ",", "")
+
+	parts := strings.Split(s, ".")
+	if len(parts) > 1 {
+		// Case: exported with trailing 3 decimal zeros (e.g. Postgres NUMERIC .000)
+		// which may have had thousand dots inserted by spreadsheet (e.g. "1.000.000", "14.000.000.000"):
+		if len(parts) >= 2 && parts[len(parts)-1] == "000" {
+			intPart := strings.Join(parts[:len(parts)-1], "")
+			if v, err := strconv.ParseFloat(intPart, 64); err == nil {
+				return v
+			}
+		}
+		// Case: multiple dots without trailing .000 (e.g. "14.000.000"):
+		// All dots are thousand separators
+		if len(parts) > 2 {
+			joined := strings.Join(parts, "")
+			if v, err := strconv.ParseFloat(joined, 64); err == nil {
+				return v
+			}
+		}
+	}
+
+	var v float64
+	fmt.Sscanf(s, "%f", &v)
+	return v
+}
+
 // parseRarity parses the rarity column (1-9 tier, empty/unset = 0). Non-numeric
 // legacy values (e.g. stray booleans or word tiers) are coerced to 0.
 func parseRarity(raw string) int {
@@ -1045,7 +1082,7 @@ func seedItemsFromCSV(filename string) error {
 
 		basePrice := 0.0
 		if basePriceIdx >= 0 && basePriceIdx < len(row) {
-			fmt.Sscanf(strings.TrimSpace(row[basePriceIdx]), "%f", &basePrice)
+			basePrice = parseCSVPrice(row[basePriceIdx])
 		}
 
 		imageURL := ""
@@ -1238,14 +1275,18 @@ func seedGusFromCSV(filename string) error {
 		combatRolesRaw := get(row, combatRolesIdx)
 		combatTagsRaw := get(row, combatTagsIdx)
 		supportTagsRaw := get(row, supportTagsIdx)
-		basePriceStr := get(row, basePriceIdx)
-		basePrice := 0.0
-		fmt.Sscanf(basePriceStr, "%f", &basePrice)
-
-		imageURL := get(row, imageURLIdx)
-
 		rank := 1
 		fmt.Sscanf(rankStr, "%d", &rank)
+		basePriceStr := get(row, basePriceIdx)
+		basePrice := parseCSVPrice(basePriceStr)
+		if rank >= 2 && rank <= 9 && basePrice > 0 {
+			canon := pricing.GuBasePriceByRank(rank)
+			if basePrice*1000 == canon || basePrice*1000000 == canon {
+				basePrice = canon
+			}
+		}
+
+		imageURL := get(row, imageURLIdx)
 		hungerRate := 0
 		fmt.Sscanf(hungerStr, "%d", &hungerRate)
 		maxHunger := 100
@@ -1611,10 +1652,8 @@ func seedRecipesFromCSV(filename string) error {
 
 		rate := 0.5
 		fmt.Sscanf(rateStr, "%f", &rate)
-		stoneCost := 0
-		fmt.Sscanf(stoneCostStr, "%d", &stoneCost)
-		immortalCost := 0.0
-		fmt.Sscanf(immortalCostStr, "%f", &immortalCost)
+		stoneCost := int(parseCSVPrice(stoneCostStr))
+		immortalCost := parseCSVPrice(immortalCostStr)
 
 		// Skip if target Gu doesn't exist (FK constraint)
 		var exists bool
@@ -1738,7 +1777,7 @@ func seedShopItemsFromCSV(filename string) error {
 			fmt.Sscanf(rankRaw, "%d", &rank)
 		}
 		if priceRaw := get(row, priceIdx); priceRaw != "" {
-			fmt.Sscanf(get(row, priceIdx), "%d", &price)
+			price = int(parseCSVPrice(priceRaw))
 		}
 		if stockRaw := get(row, stockIdx); stockRaw != "" {
 			fmt.Sscanf(stockRaw, "%d", &stock)
@@ -1804,7 +1843,7 @@ func seedArenaShopItemsFromCSV(filename string) error {
 		}
 		price, qty, stock, sortOrder := 0, 1, -1, seeded
 		if priceRaw := get(row, priceIdx); priceRaw != "" {
-			fmt.Sscanf(get(row, priceIdx), "%d", &price)
+			price = int(parseCSVPrice(priceRaw))
 		}
 		if qtyRaw := get(row, qtyIdx); qtyRaw != "" {
 			fmt.Sscanf(qtyRaw, "%d", &qty)
@@ -3510,12 +3549,12 @@ var individualExportDefs = map[string]exportDef{
 	"item": {
 		filename: "Item.csv",
 		columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
-		query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'[]'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
+		query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'[]'), COALESCE(description,''), CASE WHEN COALESCE(base_price,0) = 0 THEN '0' ELSE TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM base_price::text)) END, COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
 	},
 	"gu": {
 		filename: "Gu.csv",
 		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url", "skill_profile"},
-		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,''), COALESCE(skill_profile::text,'') FROM gu_dictionary ORDER BY id`,
+		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), CASE WHEN COALESCE(base_price,0) = 0 THEN '0' ELSE TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM base_price::text)) END, COALESCE(image_url,''), COALESCE(skill_profile::text,'') FROM gu_dictionary ORDER BY id`,
 	},
 	"constitution": {
 		filename: "Constitution.csv",

@@ -34,8 +34,6 @@ var PathMasteryLevelMultipliers = [5]float64{1.0, 1.1, 1.25, 1.4, 1.5}
 const (
 	// PathMasteryEfficiencyLossPerLevel is the reduction in mastery gain per path level attained (20% per level).
 	PathMasteryEfficiencyLossPerLevel = 0.20
-	// PathMasteryBattleGainPerRankMultiplier is the cap multiplier per battle based on cultivation rank (rank * 10).
-	PathMasteryBattleGainPerRankMultiplier = 10
 )
 
 // PathMasteryGuUseBaseGains defines the base Chân Ý earned each time a Gu is

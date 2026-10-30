@@ -51,10 +51,10 @@ func TestRealGuCatalogHasExplicitRealtimeStatus(t *testing.T) {
 	if byID["GU_WATER_CLEANSING"].Status != StatusSupported {
 		t.Fatalf("GU_WATER_CLEANSING heal should be supported, got %s", byID["GU_WATER_CLEANSING"].Status)
 	}
-	if report.Summary.Entries != 4427 || report.Summary.Supported != 3374 ||
+	if report.Summary.Entries != 4635 || report.Summary.Supported != 3582 ||
 		report.Summary.NeedsReauthor != 871 || report.Summary.Unsupported != 0 ||
-		report.Summary.NotActive != 182 || report.Summary.Blocks != 5021 ||
-		report.Summary.Operations != 6380 {
+		report.Summary.NotActive != 182 || report.Summary.Blocks != 5393 ||
+		report.Summary.Operations != 6752 {
 		t.Fatalf("realtime coverage summary drifted from the committed baseline: %+v", report.Summary)
 	}
 	var csvBuffer bytes.Buffer
@@ -62,7 +62,7 @@ func TestRealGuCatalogHasExplicitRealtimeStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(csvBuffer.Bytes())
-	if got := hex.EncodeToString(digest[:]); got != "549c9dd30b79e70d2a3e24edbb57ed18078c84f66a507461f6b3fd7005fae2d9" {
+	if got := hex.EncodeToString(digest[:]); got != "2ddb399bcba5b49cc640cc327dee1920c0c0382bf311b6042b3d37d13e90ba76" {
 		t.Fatalf("gu-coverage.csv drifted; regenerate docs/mmo/gu-coverage.csv: %s", got)
 	}
 }

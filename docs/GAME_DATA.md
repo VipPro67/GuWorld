@@ -294,13 +294,13 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 | 3 | Great Grandmaster (Đại Tông Sư) | ×1.4 | ≥ 1.000.000 |
 | 4 | Supreme Grandmaster (Vô Thượng Đại Tông Sư) | ×1.5 | ≥ 10.000.000 |
 
-Điểm nhận từ: dùng Cổ (theo bảng rank bên dưới), sát chiêu thành công, luyện Cổ thành công (theo rank Cổ đích), và thưởng Chân Ý phó bản (cộng thẳng `amount`). Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
+Điểm nhận từ: dùng Cổ (theo bảng rank bên dưới), cast Cổ thường và đánh thường trong combat realtime, sát chiêu thành công (theo rank Cổ hạch tâm), luyện Cổ thành công (theo rank Cổ đích), và thưởng Chân Ý phó bản (cộng thẳng `amount`). Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
 
 > **Hệ số Đạo Cấp chỉ dùng trong combat.** Uy lực/khiên/hồi máu của Cổ và sát chiêu nhân hệ số trên; còn **chỉ số bị động** (ATK/DEF/HP/SPEED cộng thẳng từ `ALWAYS_ON` / `PASSIVE_STATS`) là **giá trị raw** — không nhân Đạo Cấp lẫn Đạo Ngân (`handlers/player_stats.go`, `gamefx.PassiveHPBonus`).
 
-**Giới hạn Chân Ý theo trận (quy tắc cũ):** giới hạn Rank × 10 và counter `players.active_combat.path_mastery_gained` thuộc executor turn-based đã bị gỡ. Realtime hiện không duy trì counter này; không dùng mô tả cũ để suy ra giới hạn hoặc mức thưởng trong combat.
+**Không có giới hạn Chân Ý theo trận.** Giới hạn Rank × 10 và counter `players.active_combat.path_mastery_gained` thuộc executor turn-based đã bị gỡ. Realtime cộng trực tiếp vào `players.path_masteries` khi settle checkpoint, atomically cùng hunger/mana; checkpoint lỗi sẽ retry ở lần sau.
 
-**Chân Ý khi dùng Cổ:** mỗi lần thôi động Cổ thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận vẫn chịu hiệu suất theo cảnh giới hiện tại và giới hạn cảnh giới của rank Cổ.
+**Chân Ý khi dùng Cổ:** mỗi lần thôi động Cổ thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận vẫn chịu hiệu suất theo cảnh giới hiện tại và giới hạn cảnh giới của rank Cổ. Sát chiêu dùng cùng bảng theo rank Cổ hạch tâm; đánh thường trúng mục tiêu cộng 1 điểm vào path `strength`.
 
 ### Phó Bản — bảng `instance_templates`
 

@@ -823,6 +823,19 @@ func spawnTribulationEventWorker(apertureID string, playerID string, currentHP f
 	}
 	defer tx.Rollback()
 
+	// A player can only face one tribulation at a time. The aperture state
+	// normally prevents a second spawn, but a stale row must never let the
+	// panel and the realtime map select different events.
+	var hasActive bool
+	if err := tx.QueryRow(`
+		SELECT EXISTS(SELECT 1 FROM tribulation_events WHERE player_id = $1 AND status = 'ACTIVE')
+	`, playerID).Scan(&hasActive); err != nil {
+		return err
+	}
+	if hasActive {
+		return nil
+	}
+
 	var rank int
 	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&rank)
 	if err != nil {

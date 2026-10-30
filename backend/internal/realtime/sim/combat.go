@@ -56,7 +56,9 @@ type CombatState struct {
 	Skills                   [13]combat.Skill
 	GuHunger                 [13]float64
 	GuUses                   [13]uint64
+	GuMasteryUses            [13]uint64
 	KillerMoveUses           [13]uint64
+	BasicAttackUses          uint64
 	FormActive               bool
 	FormManaDrainPerTick     float64
 	FormDefenseBonus         float64
@@ -137,6 +139,7 @@ func (w *World) startBasicAttackLocked(attacker *Entity, command AttackCommand) 
 	if target == nil {
 		return
 	}
+	attacker.Combat.BasicAttackUses++
 	w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(attacker.ID), TargetID: string(target.ID), SkillID: "BASIC_ATTACK", X: target.Transform.Position.X, Y: target.Transform.Position.Y})
 	damage := attacker.Combat.BasicAttackDamage
 	if damage <= 0 {
@@ -358,6 +361,11 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 	}
 
 	caster.Combat.Mana -= skill.ManaCost
+	// Chân Ý only counts accepted regular Gu casts; hunger above charges every
+	// attempt, including casts rejected for insufficient mana.
+	if skill.GuInstanceID != "" && skill.KillerMoveID == "" {
+		caster.Combat.GuMasteryUses[skill.Slot]++
+	}
 	caster.Combat.GCDUntil = w.tick + combat.DefaultGCDTicks
 	caster.Combat.Cooldowns[skill.Slot] = w.tick + skill.CooldownTicks
 	caster.Combat.Pending = &pending

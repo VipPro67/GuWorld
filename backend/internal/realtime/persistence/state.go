@@ -9,9 +9,35 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
+
+// SkillUseKey identifies one regular Gu cast source for Chân Ý settlement.
+// Path is the damage path resolved at admission, Rank is the Gu instance rank.
+type SkillUseKey struct {
+	Path string
+	Rank int
+}
+
+// CombatUsage is the delta of combat actions accumulated since the previous
+// durable checkpoint. Gu settles hunger, KillerMoves settle per-move mastery,
+// and Skills/BasicAttacks settle path mastery (Chân Ý).
+type CombatUsage struct {
+	Gu           map[string]uint64
+	KillerMoves  map[string]uint64
+	Skills       map[SkillUseKey]uint64
+	BasicAttacks uint64
+}
+
+type killerMoveGain struct {
+	path string
+	rank int
+	uses uint64
+}
 
 type State struct {
 	PlayerID            uuid.UUID
@@ -137,17 +163,25 @@ func (s *Service) SaveAndApplyManaDelta(ctx context.Context, state State, delta 
 }
 
 func (s *Service) SaveAndApplyManaDeltaRevision(ctx context.Context, state State, delta float64) (int64, error) {
-	return s.SaveAndApplyCombatDeltaRevision(ctx, state, delta, nil, nil)
+	return s.SaveAndApplyCombatDeltaRevision(ctx, state, delta, CombatUsage{})
 }
 
-// SaveAndApplyCombatDeltaRevision atomically settles the zone's mana and Gu
+// SaveAndApplyCombatDeltaRevision atomically settles the zone's mana and combat
 // usage with the location/vitals checkpoint. Usage is additive so feeding or
 // passive hunger decay during the session cannot be overwritten by a snapshot.
-func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state State, delta float64, guUses, killerMoveUses map[string]uint64) (int64, error) {
+func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state State, delta float64, usage CombatUsage) (int64, error) {
 	if err := state.Validate(); err != nil {
 		return 0, err
 	}
 	if !finiteManaDelta(delta) {
+		return 0, ErrInvalidState
+	}
+	for _, uses := range usage.Skills {
+		if uses == 0 || uses > 1_000_000 {
+			return 0, ErrInvalidState
+		}
+	}
+	if usage.BasicAttacks > 1_000_000 {
 		return 0, ErrInvalidState
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -164,7 +198,7 @@ func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state Sta
 			return 0, err
 		}
 	}
-	for instanceID, uses := range guUses {
+	for instanceID, uses := range usage.Gu {
 		if instanceID == "" || uses == 0 || uses > 1_000_000 {
 			return 0, ErrInvalidState
 		}
@@ -183,7 +217,8 @@ func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state Sta
 			return 0, fmt.Errorf("settle Gu hunger: instance %s not found for player %s", instanceID, state.PlayerID)
 		}
 	}
-	for moveID, uses := range killerMoveUses {
+	killerGains := make([]killerMoveGain, 0, len(usage.KillerMoves))
+	for moveID, uses := range usage.KillerMoves {
 		if moveID == "" || uses == 0 || uses > 1_000_000 {
 			return 0, ErrInvalidState
 		}
@@ -191,18 +226,133 @@ func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state Sta
 			// Trận Kích / other non-killer-move ids never accrue mastery XP.
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `
+		var movePath string
+		var moveRank int
+		err := tx.QueryRowContext(ctx, `
 			UPDATE player_killer_moves
 			SET mastery_xp = LEAST(5000, mastery_xp + $1), updated_at = NOW()
 			WHERE id = $2::uuid AND player_id = $3
-		`, uses, moveID, state.PlayerID); err != nil {
+			RETURNING COALESCE(path, ''), COALESCE(main_gu_rank, 1)
+		`, uses, moveID, state.PlayerID).Scan(&movePath, &moveRank)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
 			return 0, fmt.Errorf("settle Sát Chiêu mastery for %s: %w", moveID, err)
 		}
+		killerGains = append(killerGains, killerMoveGain{path: movePath, rank: moveRank, uses: uses})
+	}
+	if err := settlePathMastery(ctx, tx, state.PlayerID, usage.Skills, usage.BasicAttacks, killerGains); err != nil {
+		return 0, err
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
 	return revision, nil
+}
+
+// settlePathMastery accumulates Chân Ý from regular Gu casts, basic attacks and
+// successful killer moves. It locks the player row so concurrent writers (for
+// example an out-of-combat consumable) cannot lose points.
+func settlePathMastery(ctx context.Context, tx *sql.Tx, playerID uuid.UUID, skills map[SkillUseKey]uint64, basicAttacks uint64, killerGains []killerMoveGain) error {
+	if len(skills) == 0 && basicAttacks == 0 && len(killerGains) == 0 {
+		return nil
+	}
+	merged := make(map[SkillUseKey]uint64, len(skills)+len(killerGains)+1)
+	addUse := func(path string, rank int, uses uint64) {
+		if uses == 0 {
+			return
+		}
+		key := normalizeSkillUseKey(path, rank)
+		merged[key] += uses
+	}
+	for _, gain := range killerGains {
+		addUse(gain.path, gain.rank, gain.uses)
+	}
+	for key, uses := range skills {
+		addUse(key.Path, key.Rank, uses)
+	}
+	if basicAttacks > 0 {
+		addUse("strength", 1, basicAttacks)
+	}
+	if len(merged) == 0 {
+		return nil
+	}
+	// Apply deterministic order: multiple sources on one path can land on
+	// different ranks, and level efficiency makes the total order-dependent.
+	keys := make([]SkillUseKey, 0, len(merged))
+	for key := range merged {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].Path != keys[j].Path {
+			return keys[i].Path < keys[j].Path
+		}
+		return keys[i].Rank < keys[j].Rank
+	})
+	var raw []byte
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(path_masteries,'{}'::jsonb) FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&raw); err != nil {
+		return fmt.Errorf("load path masteries: %w", err)
+	}
+	masteries := models.PathMasteriesMap{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &masteries); err != nil {
+			return fmt.Errorf("decode path masteries: %w", err)
+		}
+	}
+	if masteries == nil {
+		masteries = models.PathMasteriesMap{}
+	}
+	changed := false
+	for _, key := range keys {
+		if applyPathMasteryUses(masteries, key.Path, key.Rank, merged[key]) {
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE players SET path_masteries=$1 WHERE id=$2`, masteries, playerID); err != nil {
+		return fmt.Errorf("settle path masteries: %w", err)
+	}
+	return nil
+}
+
+func normalizeSkillUseKey(path string, rank int) SkillUseKey {
+	cleanPath := gamefx.CleanPath(path)
+	if cleanPath == "" {
+		cleanPath = "strength"
+	}
+	if rank < 1 {
+		rank = 1
+	}
+	return SkillUseKey{Path: cleanPath, Rank: rank}
+}
+
+// applyPathMasteryUses applies the current rank-based Chân Ý table once per
+// use. Sequential application lets a long checkpoint chain cross a realm
+// milestone with the correct efficiency, and stops as soon as the rank cap
+// makes further gains impossible.
+func applyPathMasteryUses(masteries models.PathMasteriesMap, path string, rank int, uses uint64) bool {
+	if uses == 0 {
+		return false
+	}
+	key := normalizeSkillUseKey(path, rank)
+	baseGain := gamefx.PathMasteryGuUseBaseGain(key.Rank)
+	if baseGain <= 0 {
+		return false
+	}
+	changed := false
+	for i := uint64(0); i < uses; i++ {
+		points := masteries[key.Path]
+		gain := gamefx.CalculatePathMasteryGain(key.Rank, gamefx.PathMasteryLevel(points), baseGain)
+		if gain <= 0 {
+			break
+		}
+		masteries[key.Path] = points + gain
+		changed = true
+	}
+	return changed
 }
 
 // ApplyManaDelta settles the zone-owned mana change against the player row.

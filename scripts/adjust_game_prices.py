@@ -267,7 +267,10 @@ def main():
                         raise ValueError(f"{filename}:{line} giá trị {column} phải là số không âm")
                     new = (amount * factors[factor_name]).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
 
-                new_str = f"{new:.3f}"
+                if new == int(new):
+                    new_str = str(int(new))
+                else:
+                    new_str = f"{new:.3f}".rstrip("0").rstrip(".")
                 if old.strip() != new_str:
                     changes.append((start, end, new_str))
                     column_counts[column] = column_counts.get(column, 0) + 1

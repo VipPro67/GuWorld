@@ -266,6 +266,9 @@ func TestOwnedGuHungerIsChargedByInstanceOnAttempt(t *testing.T) {
 	if state.GuHunger[1] != 0 || state.GuUses[1] != 1 || state.GuHunger[2] != 4 || state.GuUses[2] != 0 {
 		t.Fatalf("wrong instance was charged: hunger=%v uses=%v", state.GuHunger, state.GuUses)
 	}
+	if state.GuMasteryUses[1] != 0 {
+		t.Fatalf("rejected cast trained Chân Ý: %d", state.GuMasteryUses[1])
+	}
 	cast.Seq = 2
 	if err := w.SubmitCast(cast); err != nil {
 		t.Fatal(err)
@@ -296,12 +299,18 @@ func TestBasicAttackIsServerAuthoritativeAndCooldownLimited(t *testing.T) {
 	if hp := entityHP(t, w, "mob"); hp != 100-combat.BasicAttackDamage {
 		t.Fatalf("monster hp=%v, want %v", hp, 100-combat.BasicAttackDamage)
 	}
+	if uses := w.entities["player"].Combat.BasicAttackUses; uses != 1 {
+		t.Fatalf("basic attack uses=%d, want 1", uses)
+	}
 	if err := w.SubmitBasicAttack(AttackCommand{EntityID: "player", Seq: 2, TargetID: "mob"}); err != nil {
 		t.Fatal(err)
 	}
 	events = collectEvents(t, w, 1)
 	if !hasEvent(events, combat.EventCastRejected) || entityHP(t, w, "mob") != 100-combat.BasicAttackDamage {
 		t.Fatalf("basic attack cooldown was not enforced: events=%+v hp=%v", events, entityHP(t, w, "mob"))
+	}
+	if uses := w.entities["player"].Combat.BasicAttackUses; uses != 1 {
+		t.Fatalf("rejected basic attack counted as use: %d", uses)
 	}
 }
 
@@ -323,6 +332,9 @@ func TestAimedBasicAttackUsesCollisionAndMissConsumesCooldown(t *testing.T) {
 	if !hasEvent(events, combat.EventBasicAttack) || hasEvent(events, combat.EventHitConfirmed) || entityHP(t, w, "front") != 100 {
 		t.Fatalf("empty swing should miss: %+v", events)
 	}
+	if uses := w.entities["player"].Combat.BasicAttackUses; uses != 0 {
+		t.Fatalf("empty swing counted as Chân Ý use: %d", uses)
+	}
 	if err := w.SubmitBasicAttack(AttackCommand{EntityID: "player", Seq: 2, Aim: Vec2{X: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -337,6 +349,9 @@ func TestAimedBasicAttackUsesCollisionAndMissConsumesCooldown(t *testing.T) {
 	events = collectEvents(t, w, 1)
 	if !hasEvent(events, combat.EventHitConfirmed) || entityHP(t, w, "front") != 100-combat.BasicAttackDamage || entityHP(t, w, "back") != 100 {
 		t.Fatalf("aimed swing should hit front only: %+v", events)
+	}
+	if uses := w.entities["player"].Combat.BasicAttackUses; uses != 1 {
+		t.Fatalf("landed basic attack uses=%d, want 1", uses)
 	}
 }
 
@@ -938,5 +953,27 @@ func TestDirectionProjectilePierce(t *testing.T) {
 	}
 	if w.entities["mob2"].Vitals.HP >= 100 {
 		t.Fatal("mob2 should take damage from piercing projectile")
+	}
+}
+
+func TestAcceptedGuCastCountsChanhYUse(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	player.Combat.Skills[1].GuInstanceID = "instance-a"
+	player.Combat.GuHunger[1] = 1
+	player.Combat.Mana = 100
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("mob", Vec2{X: 1})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	collectEvents(t, w, 6)
+	state := w.entities["player"].Combat
+	if state.GuMasteryUses[1] != 1 {
+		t.Fatalf("accepted cast mastery uses=%d, want 1", state.GuMasteryUses[1])
 	}
 }

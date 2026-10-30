@@ -828,6 +828,9 @@ export class WorldScene extends Phaser.Scene {
           this.runtime?.setSelectedTarget(null);
         }
         this.notice("Mục tiêu đã gục ngã");
+        if (this.runtime?.getWelcome()?.zone_id?.split("#")[0] === "aperture_tribulation") {
+          void useGameStore.getState().fetchActiveTribulation(true);
+        }
         if (eventX !== null && eventY !== null) {
           const pixels = worldToPixels({ x: eventX, y: eventY });
           this.vfx.spawnRing(pixels.x, pixels.y - 8, 0xf87171);

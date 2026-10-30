@@ -19,6 +19,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/spatial"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 var (
@@ -66,6 +67,11 @@ const (
 	AOIViewRadius = 32.0
 )
 
+// maxDeathHandlerAttempts bounds retries for one authoritative death so a
+// permanent failure cannot block every later death in the process. It is a var
+// so tests can shorten the retry window.
+var maxDeathHandlerAttempts = 6
+
 type managedZone struct {
 	world          *sim.World
 	cancel         context.CancelFunc
@@ -77,6 +83,7 @@ type managedZone struct {
 	broadcastDone  <-chan struct{}
 	subscribers    map[uint64]snapshotSubscriber
 	nextSubscriber uint64
+	viewRadius     float64
 }
 
 type snapshotSubscriber struct {
@@ -160,7 +167,11 @@ type ZoneMap struct {
 	LegacyOriginX float64
 	LegacyOriginY float64
 	LegacyScale   float64
-	SafeSpawn     func(preferred sim.Vec2, radius float64) (sim.Vec2, bool)
+	// ViewRadius overrides the default AOI radius for private zones whose
+	// authored map is smaller than or equal to the encounter. Zero keeps the
+	// public AOI default.
+	ViewRadius float64
+	SafeSpawn  func(preferred sim.Vec2, radius float64) (sim.Vec2, bool)
 }
 
 // LegacyPosition converts persisted legacy world coordinates into map units.
@@ -518,9 +529,14 @@ func buildManagedZone(key sim.ZoneKey, queueSize int, zoneMap ZoneMap) (*managed
 	if err != nil {
 		return nil, err
 	}
+	viewRadius := zoneMap.ViewRadius
+	if viewRadius < AOIViewRadius {
+		viewRadius = AOIViewRadius
+	}
 	return &managedZone{
 		world: world, generation: generation, idleSince: time.Now(),
 		snapshots: make(chan sim.Snapshot, 1), subscribers: make(map[uint64]snapshotSubscriber),
+		viewRadius: viewRadius,
 	}, nil
 }
 
@@ -1108,7 +1124,7 @@ func (m *Manager) SnapshotForLease(lease OwnershipLease) (sim.Snapshot, error) {
 	if zone == nil {
 		return sim.Snapshot{}, ErrUnknownZone
 	}
-	snapshot, ok := filterSnapshotForOwner(zone.world.Snapshot(), active.CharacterID)
+	snapshot, ok := filterSnapshotForOwner(zone.world.Snapshot(), active.CharacterID, zone.viewRadius)
 	if !ok {
 		return sim.Snapshot{}, ErrInvalidLease
 	}
@@ -1141,13 +1157,13 @@ func (m *Manager) SubscribeSnapshots(lease OwnershipLease) (<-chan sim.Snapshot,
 	zone.nextSubscriber++
 	subscriberID := zone.nextSubscriber
 	feed := make(chan sim.Snapshot, 1)
-	initial, ownerExists := filterSnapshotForOwner(zone.world.Snapshot(), lease.CharacterID)
+	initial, ownerExists := filterSnapshotForOwner(zone.world.Snapshot(), lease.CharacterID, zone.viewRadius)
 	if !ownerExists {
 		m.mu.Unlock()
 		return nil, nil, ErrInvalidLease
 	}
 	zone.subscribers[subscriberID] = snapshotSubscriber{
-		feed: feed, minTick: initial.Tick, characterID: lease.CharacterID, viewRadius: AOIViewRadius,
+		feed: feed, minTick: initial.Tick, characterID: lease.CharacterID, viewRadius: zone.viewRadius,
 		leaseToken: lease.Token,
 	}
 	m.markZoneActiveLocked(zone)
@@ -1165,14 +1181,17 @@ func (m *Manager) SubscribeSnapshots(lease OwnershipLease) (<-chan sim.Snapshot,
 	return feed, unsubscribe, nil
 }
 
-func filterSnapshotForOwner(snapshot sim.Snapshot, characterID sim.CharacterID) (sim.Snapshot, bool) {
+func filterSnapshotForOwner(snapshot sim.Snapshot, characterID sim.CharacterID, viewRadius float64) (sim.Snapshot, bool) {
 	index := spatial.NewIndex(AOICellSize)
 	index.Rebuild(snapshot.Entities)
 	owner, exists := index.Entity(sim.EntityID(characterID))
 	if !exists {
 		return sim.Snapshot{}, false
 	}
-	snapshot.Entities = index.Query(owner.Transform.Position, AOIViewRadius, owner.ID)
+	if viewRadius < AOIViewRadius {
+		viewRadius = AOIViewRadius
+	}
+	snapshot.Entities = index.Query(owner.Transform.Position, viewRadius, owner.ID)
 	return snapshot, true
 }
 
@@ -1275,11 +1294,21 @@ func (m *Manager) deathWorker(_ context.Context) {
 			continue
 		}
 		backoff := 250 * time.Millisecond
+		attempts := 0
 		for {
 			callCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			err := handler(callCtx, death)
 			cancel()
 			if err == nil {
+				break
+			}
+			attempts++
+			if attempts >= maxDeathHandlerAttempts {
+				// Never let one poison death block every later kill in every
+				// zone. The aperture checkpoint/auto-settle worker recovers the
+				// durable tribulation state from the authoritative snapshot.
+				logger.S.Errorf("Realtime death settlement failed after %d attempts (zone=%s target=%s template=%s): %v",
+					attempts, death.ZoneKey.String(), death.TargetID, death.TemplateID, err)
 				break
 			}
 			time.Sleep(backoff)

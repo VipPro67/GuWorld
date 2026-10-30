@@ -33,11 +33,17 @@ type RealtimeHandoffBridge struct {
 	Finish func(uuid.UUID)
 }
 
+// RealtimeTribulationEnemyReader reports the authoritative alive/dead
+// persistent IDs of a player's live tribulation encounter. ok is false when
+// the player is not currently inside the encounter.
+type RealtimeTribulationEnemyReader func(uuid.UUID) (alive, dead map[string]bool, ok bool)
+
 var (
 	realtimeOwnershipChecker atomic.Pointer[RealtimeOwnershipChecker]
 	realtimeVitals           atomic.Pointer[realtimeVitalsBridge]
 	realtimeHandoff          atomic.Pointer[RealtimeHandoffBridge]
 	realtimeLocation         atomic.Pointer[RealtimeLocationReader]
+	realtimeTribulationEnemy atomic.Pointer[RealtimeTribulationEnemyReader]
 )
 
 // RealtimeLocationReader reports the live region and legacy-projected position
@@ -89,6 +95,26 @@ func SetRealtimeLocationReader(reader RealtimeLocationReader) {
 		return
 	}
 	realtimeLocation.Store(&reader)
+}
+
+// SetRealtimeTribulationEnemyReader installs the live tribulation enemy state
+// lookup. Passing nil clears it.
+func SetRealtimeTribulationEnemyReader(reader RealtimeTribulationEnemyReader) {
+	if reader == nil {
+		realtimeTribulationEnemy.Store(nil)
+		return
+	}
+	realtimeTribulationEnemy.Store(&reader)
+}
+
+// RealtimeTribulationEnemies returns the live alive/dead persistent IDs for a
+// tribulation encounter. ok is false when no live encounter is available.
+func RealtimeTribulationEnemies(playerID uuid.UUID) (alive, dead map[string]bool, ok bool) {
+	reader := realtimeTribulationEnemy.Load()
+	if reader == nil {
+		return nil, nil, false
+	}
+	return (*reader)(playerID)
 }
 
 // RealtimePlayerLocation returns the live region and legacy-projected position.

@@ -18,7 +18,8 @@ func GetActiveTribulation(c *gin.Context) {
 		return
 	}
 
-	// 1. Fetch active event lock-free
+	// 1. Fetch active event lock-free. Keep the same recency order as the
+	// realtime event loader so the panel and the joined map never disagree.
 	var ev models.TribulationEvent
 	var endedAt sql.NullTime
 	var hpAfter sql.NullFloat64
@@ -26,6 +27,7 @@ func GetActiveTribulation(c *gin.Context) {
 		SELECT id, aperture_id, player_id, tribulation_type, path, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at
 		FROM tribulation_events
 		WHERE player_id = $1 AND status = 'ACTIVE'
+		ORDER BY started_at DESC
 		LIMIT 1
 	`, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Status, &ev.ApertureHPBefore, &hpAfter, &ev.RewardDaoMarks, &ev.StartedAt, &endedAt)
 
@@ -84,8 +86,39 @@ func GetActiveTribulation(c *gin.Context) {
 		}
 	}
 
+	var totalEnemies int
+	if err := db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT COUNT(1) FROM tribulation_enemies WHERE event_id = $1
+	`, ev.ID).Scan(&totalEnemies); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đếm quái tai kiếp"})
+		return
+	}
+
+	// The live realtime snapshot is authoritative while the player is inside
+	// the encounter. Hide enemies that are already dead there even if the
+	// durable is_dead write has not landed yet.
+	if _, dead, ok := middleware.RealtimeTribulationEnemies(playerID); ok && len(dead) > 0 {
+		live := enemies[:0]
+		for _, en := range enemies {
+			if dead[en.ID] {
+				continue
+			}
+			live = append(live, en)
+		}
+		enemies = live
+	}
+
+	remaining := len(enemies)
+	defeated := totalEnemies - remaining
+	if defeated < 0 {
+		defeated = 0
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"event":   ev,
-		"enemies": enemies,
+		"event":             ev,
+		"enemies":           enemies,
+		"total_enemies":     totalEnemies,
+		"defeated_enemies":  defeated,
+		"remaining_enemies": remaining,
 	})
 }

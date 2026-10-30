@@ -1311,6 +1311,9 @@ export const useGameStore = create<GameState>((set, get) => {
     if (source.materials_inventory && typeof source.materials_inventory === "object" && !Array.isArray(source.materials_inventory)) {
       updates.materials_inventory = source.materials_inventory as Record<string, number>;
     }
+    if (source.path_masteries && typeof source.path_masteries === "object" && !Array.isArray(source.path_masteries)) {
+      updates.path_masteries = source.path_masteries as Record<string, number>;
+    }
     if (source.primeval_stones !== undefined && !isNaN(Number(source.primeval_stones))) {
       updates.primeval_stones = Number(source.primeval_stones);
     }

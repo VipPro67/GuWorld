@@ -459,7 +459,7 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 			    is_dead = CASE WHEN e.hp - v.dmg <= 0 THEN true ELSE false END,
 			    updated_at = NOW()
 			FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS dmg) AS v
-			WHERE e.id = v.id
+			WHERE e.id = v.id AND e.is_dead = false
 		`, pq.Array(tIDs), pq.Array(tDmg))
 		if err != nil {
 			return fmt.Errorf("batch watchtower damage: %w", err)
@@ -529,6 +529,8 @@ func StartTribulationWorker(ctx context.Context) {
 			logger.S.Errorf("Tribulation grid worker error: %v", err)
 		}
 	})
+
+	StartTribulationAutoSettleWorker(ctx)
 
 	logger.S.Info("Tribulation and internal year worker started successfully (Interval: 60s)")
 }

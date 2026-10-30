@@ -1562,3 +1562,95 @@ func TestRegisterZoneMapActivatesRuntimeEventInstance(t *testing.T) {
 	}
 	t.Fatal("runtime event instance did not materialize its dynamic monster")
 }
+
+func TestRuntimeZoneViewRadiusIncludesMapWideMonsters(t *testing.T) {
+	baseKey := sim.ZoneKey{MapID: "wide-event-map", InstanceID: "shared", RulesetVersion: "v1"}
+	manager, err := NewLazyManagerWithMaps([]sim.ZoneKey{baseKey}, 8, 2, map[sim.ZoneKey]ZoneMap{
+		baseKey: {Width: 40, Height: 40, Hash: "wide-event-map-hash"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := manager.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		shutdown, done := context.WithTimeout(context.Background(), time.Second)
+		defer done()
+		_ = manager.Stop(shutdown)
+	})
+
+	eventKey := sim.ZoneKey{MapID: "wide-event-map", InstanceID: "event-uuid", RulesetVersion: "v1"}
+	eventMap := ZoneMap{
+		Width: 40, Height: 40, Hash: "wide-event-map-hash", ViewRadius: 60,
+		Monsters: []MonsterSpawn{lazyMonsterSpawn(35, 35, 50)},
+	}
+	if err := manager.RegisterZoneMap(eventKey, eventMap); err != nil {
+		t.Fatal(err)
+	}
+	lease, err := manager.ClaimCharacter("wide-character", "controller", eventKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err = manager.AttachCharacterEntity(lease, lazyPlayerEntity("wide-character", 5, 5, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForLazyZone(t, manager, eventKey, func(zone *managedZone) bool { return zone.generation != "" })
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshot, err := manager.SnapshotForLease(lease)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entity := range snapshot.Entities {
+			if entity.Kind == sim.EntityMonster && entity.Transform.Position.X == 35 && entity.Transform.Position.Y == 35 {
+				return
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("private zone snapshot did not include the map-wide monster outside the public AOI")
+}
+
+func TestDeathWorkerContinuesAfterPermanentHandlerFailure(t *testing.T) {
+	previousAttempts := maxDeathHandlerAttempts
+	maxDeathHandlerAttempts = 2
+	t.Cleanup(func() { maxDeathHandlerAttempts = previousAttempts })
+
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "preview", RulesetVersion: "v1"}
+	manager, err := NewManager([]sim.ZoneKey{key}, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settled := make(chan sim.EntityID, 1)
+	manager.SetRetryingDeathHandler(func(_ context.Context, death DeathEvent) error {
+		if death.TargetID == "m:poison" {
+			return errors.New("permanent settlement failure")
+		}
+		settled <- death.TargetID
+		return nil
+	})
+	if err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		shutdown, done := context.WithTimeout(context.Background(), time.Second)
+		defer done()
+		_ = manager.Stop(shutdown)
+	})
+	manager.deathQueue <- DeathEvent{ZoneKey: key, TargetID: "m:poison", TemplateID: "test_mob", SourceID: "character-1"}
+	manager.deathQueue <- DeathEvent{ZoneKey: key, TargetID: "m:next", TemplateID: "test_mob", SourceID: "character-1"}
+
+	select {
+	case target := <-settled:
+		if target != "m:next" {
+			t.Fatalf("settled death=%q, want the death behind the poison event", target)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a permanently failing death blocked later death settlement")
+	}
+}

@@ -966,11 +966,17 @@ func UseKillerMove(c *gin.Context) {
 		return
 	}
 	player.CurrentMana -= cost
-	currentLevel := gamefx.PathMasteryLevel(player.PathMasteries[gamefx.CleanPath(move.Path)])
+	cleanPath := gamefx.CleanPath(move.Path)
+	if cleanPath == "" {
+		cleanPath = "strength"
+	}
+	currentLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
 	chance := killerMoveAdjustedChance(move.SuccessChance, move.CreationPathMasteryLevel, currentLevel, move.MasteryXP)
 	roll := rand.Float64()
 	success := roll < chance
 	message := ""
+	pathGain := 0
+	pathPoints := player.PathMasteries[cleanPath]
 	if success {
 		healed := 0.0
 		for _, block := range move.CompiledEffects {
@@ -1004,6 +1010,17 @@ func UseKillerMove(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi nhận thành thạo sát chiêu"})
 			return
 		}
+		// Sát chiêu thành công cộng Chân Ý cho path hạch tâm, cùng bảng rank
+		// với cast Cổ. Tính theo cảnh giới hiện tại để giữ hiệu suất.
+		pathGain = gamefx.CalculatePathMasteryGain(move.MainGuRank, currentLevel, gamefx.PathMasteryGuUseBaseGain(move.MainGuRank))
+		if pathGain > 0 {
+			if player.PathMasteries == nil {
+				player.PathMasteries = make(models.PathMasteriesMap)
+			}
+			player.PathMasteries[cleanPath] += pathGain
+			pathPoints = player.PathMasteries[cleanPath]
+			message += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(gamefx.PathMasteryLevel(pathPoints)))
+		}
 	} else {
 		message = fmt.Sprintf("Thôi động [%s] thất bại (%.0f%% / tỉ lệ %.0f%%). Các Cổ thành phần vẫn hao độ no.", move.Name, roll*100, chance*100)
 	}
@@ -1015,7 +1032,7 @@ func UseKillerMove(c *gin.Context) {
 			return
 		}
 	}
-	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2 WHERE id=$3`, player.HP, player.CurrentMana, playerID); err != nil {
+	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2,path_masteries=$3 WHERE id=$4`, player.HP, player.CurrentMana, player.PathMasteries, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái nhân vật"})
 		return
 	}
@@ -1036,6 +1053,8 @@ func UseKillerMove(c *gin.Context) {
 			"hp_after":       player.HP,
 			"mana_after":     player.CurrentMana,
 			"components":     len(move.Components),
+			"path_gain":      pathGain,
+			"path_points":    pathPoints,
 		},
 		IPAddress: c.ClientIP(),
 		Success:   true,
@@ -1044,7 +1063,7 @@ func UseKillerMove(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất sát chiêu"})
 		return
 	}
-	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": message, "killer_move_id": move.ID, "success": success, "success_chance": chance})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": message, "killer_move_id": move.ID, "success": success, "success_chance": chance, "path": cleanPath, "path_gain": pathGain, "path_masteries": player.PathMasteries})
 }
 
 func killerMoveAdjustedChance(base float64, creationLevel, currentLevel, xp int) float64 {

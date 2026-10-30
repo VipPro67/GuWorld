@@ -149,7 +149,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/killer-moves/preview` | Tính thử công thức. Body: `{ "main_gu_instance_id", "component_instance_ids": [], "selected_effect_keys": [] }`. Trả ngân sách, hệ số effect, độ hòa hợp, chi phí và tỉ lệ thành công. |
 | POST | `/killer-moves` | Lưu sát chiêu. Body preview cộng `name`; giới hạn 12 sát chiêu lưu và 4 sát chiêu trang bị. |
 | POST | `/killer-moves/:id/equip` | Bật/tắt trang bị. Mỗi Cổ thành phần phải còn đúng instance/rank trong `player_gu`. |
-| POST | `/killer-moves/:id/use` | Dùng ngoài combat nếu công thức có effect hồi phục `ON_USE`; hao Chân Nguyên và mỗi Cổ thành phần giảm 1 độ no. |
+| POST | `/killer-moves/:id/use` | Dùng ngoài combat nếu công thức có effect hồi phục `ON_USE`; hao Chân Nguyên và mỗi Cổ thành phần giảm 1 độ no. Nếu thành công, cộng Chân Ý path hạch tâm theo rank Cổ chính; response có thêm `path`, `path_gain`, `path_masteries`. |
 | DELETE | `/killer-moves/:id` | Xóa sát chiêu của người chơi hiện tại. |
 | GET | `/gu-houses` | Danh sách Tiên Cổ Ốc đã đúc kết, độ bền hiện tại và trạng thái xuất chiến. |
 | POST | `/gu-houses/preview` | Tính thử chỉ số Tiên Cổ Ốc (Máu, Giáp, Kháng sát thương, Trận Kích). Body: `{ "name", "core_gu_instance_ids": [], "aux_gu_count": int }`. |
@@ -250,9 +250,9 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | DELETE | `/immortal-aperture/npcs/:npc_id` |
 | GET | `/dao-marks` |
 | GET | `/dao-marks/dao-ngan` | Đạo ngân (composite dao power) calculation. |
-| GET | `/tribulations/active` |
+| GET | `/tribulations/active` | Trả event đang ACTIVE (chọn theo `started_at` mới nhất, cùng thứ tự với loader realtime), danh sách quái còn sống và `total_enemies` / `defeated_enemies` / `remaining_enemies`. Khi nhân vật đang ở trong encounter realtime, quái đã chết theo snapshot authoritative được loại khỏi danh sách ngay cả khi `tribulation_enemies.is_dead` chưa kịp ghi. |
 | POST | `/tribulations/:eventId/realtime-engage` | Chuyển nhân vật vào map realtime `aperture_tribulation` 40×40 và trả danh sách node/quái đã chiếu từ lưới Tiên Khiếu 20×20 theo tỷ lệ 2×. Vị trí region và tọa độ local hiện tại được lưu nguyên vẹn cùng anchor atlas trước khi chuyển, trong cùng transaction. Nếu nhân vật đang có lease realtime, backend flush vị trí live, ghi đích rồi nhả lease để client join lại map kiếp (tránh checkpoint zone cũ ghi đè region). |
-| POST | `/tribulations/:eventId/realtime-victory` | Kết toán thắng kiếp, cộng Đạo Ngân, đột phá nếu đủ điều kiện và đưa nhân vật về vị trí region/tọa độ đã lưu nếu region còn active và tọa độ hợp lệ (kể cả hub). Nếu không, chọn khu vực an toàn active gần anchor atlas nhất, rồi hub active; trả lỗi nếu không có đích hợp lệ. Chỉ thành công khi toàn bộ `tribulation_enemies` đã chết; backend tự kết toán khi quái cuối cùng chết trong realtime. |
+| POST | `/tribulations/:eventId/realtime-victory` | Kết toán thắng kiếp, cộng Đạo Ngân, đột phá nếu đủ điều kiện và đưa nhân vật về vị trí region/tọa độ đã lưu nếu region còn active và tọa độ hợp lệ (kể cả hub). Nếu không, chọn khu vực an toàn active gần anchor atlas nhất, rồi hub active; trả lỗi nếu không có đích hợp lệ. Trước khi kiểm tra điều kiện thắng, backend đối soát `tribulation_enemies` với snapshot realtime (quái HP ≤ 0 được đánh dấu chết) và worker tự kết toán mọi event ACTIVE đã sạch quái trong tối đa ~5 giây. |
 | POST | `/tribulations/:eventId/realtime-escape` | Rút lui khỏi map kiếp về vị trí an toàn, áp dụng cùng cơ chế bàn giao lease realtime. |
 | POST | `/tribulations/realtime-exit` | Thoát Tiên Khiếu không cần biết `eventId` (dùng được sau refresh hoặc khi event đã hết). Handoff lease, đồng bộ HP quái/node, đưa nhân vật về vị trí cũ đã lưu (kể cả hub nếu còn active và tọa độ hợp lệ); nếu region không còn hợp lệ thì dùng khu vực an toàn active gần nhất rồi mới fallback sang hub. |
 

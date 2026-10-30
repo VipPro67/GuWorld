@@ -1271,7 +1271,10 @@ return (
                     <div className="space-y-3">
                       <div className="text-xs font-bold text-slate-300 flex justify-between items-center">
                         <span>Quái Tai Kiếp</span>
-                        <span className="text-slate-500 font-normal">Còn lại: {activeTribulation.enemies.length} quái</span>
+                        <span className="text-slate-500 font-normal">
+                          Đã diệt: {activeTribulation.defeated_enemies ?? Math.max(0, (activeTribulation.total_enemies ?? activeTribulation.enemies.length) - activeTribulation.enemies.length)}
+                          /{activeTribulation.total_enemies ?? activeTribulation.enemies.length} · Còn lại: {activeTribulation.remaining_enemies ?? activeTribulation.enemies.length} quái
+                        </span>
                       </div>
 
                       <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">

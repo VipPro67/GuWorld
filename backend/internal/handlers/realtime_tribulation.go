@@ -227,7 +227,9 @@ func PersistRealtimeTribulationSnapshot(ctx context.Context, playerID uuid.UUID,
 		if strings.HasPrefix(string(entity.ID), "n:") {
 			if _, err := tx.ExecContext(ctx, `
 				UPDATE aperture_resource_nodes
-				SET hp = $1, is_destroyed = ($1 <= 0), updated_at = NOW()
+				SET hp = CASE WHEN is_destroyed OR $1 <= 0 THEN 0 ELSE $1 END,
+				    is_destroyed = is_destroyed OR $1 <= 0,
+				    updated_at = NOW()
 				WHERE id = $2
 			`, hp, persistentID); err != nil {
 				return err
@@ -308,6 +310,15 @@ func HandleRealtimeTribulationDeath(ctx context.Context, death realtimeworld.Dea
 
 	result, status, settleErr := settleRealtimeTribulationVictory(ctx, playerID, eventID, "realtime")
 	if settleErr != nil {
+		if status == http.StatusNotFound {
+			// Another path (auto-reconcile worker, manual settle or a previous
+			// retry) already closed this event. Releasing the handoff and
+			// returning nil prevents a permanent retry loop.
+			if handoffStatus == 0 {
+				finishHandoff()
+			}
+			return nil
+		}
 		return fmt.Errorf("settle realtime tribulation victory (%d): %w", status, settleErr)
 	}
 	if handoffStatus == 0 {

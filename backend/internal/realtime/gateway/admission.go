@@ -121,7 +121,9 @@ type manaSettlement struct {
 	mu                 sync.Mutex
 	last               float64
 	lastUses           [13]uint64
+	lastMasteryUses    [13]uint64
 	lastKillerMoveUses [13]uint64
+	lastBasicUses      uint64
 }
 
 type Error struct {
@@ -554,6 +556,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 			}
 			skill.BacklashPct = entry.BacklashPct
 			skill.Path = entry.Path
+			skill.Rank = entry.Rank
 		}
 		skills = append(skills, skill)
 	}
@@ -746,6 +749,48 @@ func (a *Admission) BeginHandoff(playerID uuid.UUID) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// TribulationEnemyStates returns the authoritative alive/dead persistent IDs
+// of the player's live aperture tribulation encounter. ok is false when the
+// player has no active tribulation realtime session. The tribulation zone is
+// private, so its snapshot covers the whole encounter.
+func (a *Admission) TribulationEnemyStates(playerID uuid.UUID) (alive, dead map[string]bool, ok bool) {
+	a.mu.Lock()
+	var active session
+	found := false
+	for _, candidate := range a.sessions {
+		if candidate.playerID != playerID || candidate.closing {
+			continue
+		}
+		active, found = candidate, true
+		break
+	}
+	a.mu.Unlock()
+	if !found || active.lease.ZoneKey.MapID != "aperture_tribulation" {
+		return nil, nil, false
+	}
+	snapshot, err := a.manager.SnapshotForLease(active.lease)
+	if err != nil {
+		return nil, nil, false
+	}
+	alive = make(map[string]bool)
+	dead = make(map[string]bool)
+	for _, entity := range snapshot.Entities {
+		if entity.Kind != sim.EntityMonster || entity.Faction != "monster" {
+			continue
+		}
+		persistentID := strings.TrimSpace(entity.AI.PersistentID)
+		if persistentID == "" {
+			continue
+		}
+		if entity.Vitals.HP > 0 {
+			alive[persistentID] = true
+		} else {
+			dead[persistentID] = true
+		}
+	}
+	return alive, dead, true
 }
 
 // PlayerLocation returns the live region and legacy-projected position for a
@@ -1115,7 +1160,7 @@ func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 }
 
 func (a *Admission) flushState(active session) error {
-	publishInventory, err := a.flushStateLocked(active)
+	publishInventory, publishPlayer, err := a.flushStateLocked(active)
 	if err != nil {
 		return err
 	}
@@ -1133,18 +1178,25 @@ func (a *Admission) flushState(active session) error {
 			}
 		}
 	}
-	if publishInventory {
+	if publishInventory || publishPlayer {
 		// Do not hold the per-session mana settlement lock while loading and
-		// broadcasting the authoritative inventory snapshot.
-		handlers.PublishPlayerRealtimeEvent(active.playerID, handlers.PlayerEventUpdated, handlers.GuInventoryDomain)
+		// broadcasting the authoritative player snapshot.
+		domains := make([]handlers.PlayerEventDomain, 0, 2)
+		if publishInventory {
+			domains = append(domains, handlers.GuInventoryDomain)
+		}
+		if publishPlayer {
+			domains = append(domains, handlers.PlayerDomain)
+		}
+		handlers.PublishPlayerRealtimeEvent(active.playerID, handlers.PlayerEventUpdated, domains...)
 	}
 	return nil
 }
 
 // flushStateLocked serializes the mana/hunger settlement for one session and
 // reports whether the committed Gu usage changed the inventory the client
-// should refetch.
-func (a *Admission) flushStateLocked(active session) (bool, error) {
+// should refetch and whether Chân Ý changed the player snapshot.
+func (a *Admission) flushStateLocked(active session) (bool, bool, error) {
 	if active.persistCombatState {
 		if active.mana != nil {
 			active.mana.mu.Lock()
@@ -1152,7 +1204,7 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 		}
 		snapshot, err := a.manager.SnapshotForLease(active.lease)
 		if err != nil {
-			return false, err
+			return false, false, err
 		}
 		for _, entity := range snapshot.Entities {
 			if entity.CharacterID != active.lease.CharacterID {
@@ -1162,20 +1214,20 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 			sink := a.combatStateSink
 			a.mu.Unlock()
 			if sink == nil {
-				return false, errors.New("realtime combat instance state sink is not configured")
+				return false, false, errors.New("realtime combat instance state sink is not configured")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			err := sink(ctx, active.playerID, active.lease.ZoneKey, entity)
 			cancel()
-			return false, err
+			return false, false, err
 		}
-		return false, fmt.Errorf("realtime combat instance participant %s missing from checkpoint snapshot", active.playerID)
+		return false, false, fmt.Errorf("realtime combat instance participant %s missing from checkpoint snapshot", active.playerID)
 	}
 	if !active.persistState {
-		return false, nil
+		return false, false, nil
 	}
 	if a.states == nil {
-		return false, nil
+		return false, false, nil
 	}
 	if active.mana != nil {
 		active.mana.mu.Lock()
@@ -1183,7 +1235,7 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 	}
 	snapshot, err := a.manager.SnapshotForLease(active.lease)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	for _, entity := range snapshot.Entities {
 		if entity.CharacterID != active.lease.CharacterID {
@@ -1210,12 +1262,14 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 		delta := 0.0
 		guUses := make(map[string]uint64)
 		killerMoveUses := make(map[string]uint64)
+		skillUses := make(map[persistence.SkillUseKey]uint64)
+		basicAttackUses := uint64(0)
 		if active.mana != nil {
 			delta = entity.Combat.Mana - active.mana.last
 			for slot := 1; slot <= 12; slot++ {
 				uses := entity.Combat.GuUses[slot]
 				if uses < active.mana.lastUses[slot] {
-					return false, fmt.Errorf("realtime Gu usage counter went backwards for slot %d", slot)
+					return false, false, fmt.Errorf("realtime Gu usage counter went backwards for slot %d", slot)
 				}
 				if spent := uses - active.mana.lastUses[slot]; spent > 0 {
 					skill := entity.Combat.Skills[slot]
@@ -1226,45 +1280,68 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 							guUses[instanceID] += spent
 						}
 					} else {
-						return false, fmt.Errorf("realtime Gu usage has no instance for slot %d", slot)
+						return false, false, fmt.Errorf("realtime Gu usage has no instance for slot %d", slot)
+					}
+				}
+				masteryUses := entity.Combat.GuMasteryUses[slot]
+				if masteryUses < active.mana.lastMasteryUses[slot] {
+					return false, false, fmt.Errorf("realtime Gu mastery counter went backwards for slot %d", slot)
+				}
+				if spentMastery := masteryUses - active.mana.lastMasteryUses[slot]; spentMastery > 0 {
+					skill := entity.Combat.Skills[slot]
+					// Only regular, accepted Gu casts train Chân Ý. Killer moves
+					// settle their core path below; Trận Kích is excluded there.
+					if skill.GuInstanceID != "" && skill.KillerMoveID == "" {
+						skillUses[persistence.SkillUseKey{Path: skill.Path, Rank: skill.Rank}] += spentMastery
 					}
 				}
 				moveUses := entity.Combat.KillerMoveUses[slot]
 				if moveUses < active.mana.lastKillerMoveUses[slot] {
-					return false, fmt.Errorf("realtime Sát Chiêu usage counter went backwards for slot %d", slot)
+					return false, false, fmt.Errorf("realtime Sát Chiêu usage counter went backwards for slot %d", slot)
 				}
 				if spentMoveUses := moveUses - active.mana.lastKillerMoveUses[slot]; spentMoveUses > 0 {
 					skill := entity.Combat.Skills[slot]
 					if skill.KillerMoveID == "" {
-						return false, fmt.Errorf("realtime Sát Chiêu usage has no move ID for slot %d", slot)
+						return false, false, fmt.Errorf("realtime Sát Chiêu usage has no move ID for slot %d", slot)
 					}
 					killerMoveUses[skill.KillerMoveID] += spentMoveUses
 				}
 			}
+			if entity.Combat.BasicAttackUses < active.mana.lastBasicUses {
+				return false, false, fmt.Errorf("realtime basic attack usage counter went backwards")
+			}
+			basicAttackUses = entity.Combat.BasicAttackUses - active.mana.lastBasicUses
 		}
 		var revision int64
 		manaApplied := false
 		if atomicStore, ok := a.states.(interface {
-			SaveAndApplyCombatDeltaRevision(context.Context, persistence.State, float64, map[string]uint64, map[string]uint64) (int64, error)
+			SaveAndApplyCombatDeltaRevision(context.Context, persistence.State, float64, persistence.CombatUsage) (int64, error)
 		}); ok {
 			var saveErr error
-			revision, saveErr = atomicStore.SaveAndApplyCombatDeltaRevision(ctx, checkpoint, delta, guUses, killerMoveUses)
+			revision, saveErr = atomicStore.SaveAndApplyCombatDeltaRevision(ctx, checkpoint, delta, persistence.CombatUsage{
+				Gu:           guUses,
+				KillerMoves:  killerMoveUses,
+				Skills:       skillUses,
+				BasicAttacks: basicAttackUses,
+			})
 			if saveErr != nil {
-				return false, saveErr
+				return false, false, saveErr
 			}
 			active.mana.last = entity.Combat.Mana
 			active.mana.lastUses = entity.Combat.GuUses
+			active.mana.lastMasteryUses = entity.Combat.GuMasteryUses
 			active.mana.lastKillerMoveUses = entity.Combat.KillerMoveUses
+			active.mana.lastBasicUses = entity.Combat.BasicAttackUses
 			manaApplied = true
-		} else if len(guUses) > 0 {
-			return false, fmt.Errorf("realtime state store cannot atomically settle Gu usage")
+		} else if len(guUses) > 0 || len(killerMoveUses) > 0 || len(skillUses) > 0 || basicAttackUses > 0 {
+			return false, false, fmt.Errorf("realtime state store cannot atomically settle combat usage")
 		} else if atomicStore, ok := a.states.(interface {
 			SaveAndApplyManaDeltaRevision(context.Context, persistence.State, float64) (int64, error)
 		}); ok {
 			var saveErr error
 			revision, saveErr = atomicStore.SaveAndApplyManaDeltaRevision(ctx, checkpoint, delta)
 			if saveErr != nil {
-				return false, saveErr
+				return false, false, saveErr
 			}
 			active.mana.last = entity.Combat.Mana
 			manaApplied = true
@@ -1272,7 +1349,7 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 			SaveAndApplyManaDelta(context.Context, persistence.State, float64) error
 		}); ok {
 			if err := atomicStore.SaveAndApplyManaDelta(ctx, checkpoint, delta); err != nil {
-				return false, err
+				return false, false, err
 			}
 			active.mana.last = entity.Combat.Mana
 			manaApplied = true
@@ -1282,10 +1359,10 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 			var saveErr error
 			revision, saveErr = revisionStore.SaveRevision(ctx, checkpoint)
 			if saveErr != nil {
-				return false, saveErr
+				return false, false, saveErr
 			}
 		} else if err := a.states.Save(ctx, checkpoint); err != nil {
-			return false, err
+			return false, false, err
 		}
 		if active.locationRevision != nil && revision > 0 {
 			active.locationRevision.Store(revision)
@@ -1295,16 +1372,17 @@ func (a *Admission) flushStateLocked(active session) (bool, error) {
 			ApplyManaDelta(context.Context, uuid.UUID, float64) error
 		}); ok && active.mana != nil && !manaApplied {
 			if err := manaStore.ApplyManaDelta(ctx, active.playerID, delta); err != nil {
-				return false, err
+				return false, false, err
 			}
 			active.mana.last = entity.Combat.Mana
 		}
 		// The zone decrements the local hunger counters while casting; the caller
 		// asks the client to refetch the committed Gu inventory so the UI cannot
 		// show a stale hunger value after a checkpoint, disconnect or transfer.
-		return len(guUses) > 0, nil
+		masteryChanged := len(skillUses) > 0 || len(killerMoveUses) > 0 || basicAttackUses > 0
+		return len(guUses) > 0, masteryChanged, nil
 	}
-	return false, fmt.Errorf("realtime character %s missing from checkpoint snapshot", active.playerID)
+	return false, false, fmt.Errorf("realtime character %s missing from checkpoint snapshot", active.playerID)
 }
 
 func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protocol.Welcome, error) {

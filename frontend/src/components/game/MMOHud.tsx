@@ -363,6 +363,12 @@ export function MMOHud(props: MMOHudProps) {
   const realtimeResolveTribulationVictory = useGameStore((state) => state.realtimeResolveTribulationVictory);
   const realtimeExitTribulation = useGameStore((state) => state.realtimeExitTribulation);
   const [tribulationActionLoading, setTribulationActionLoading] = useState(false);
+  const tribulationRemaining = activeTribulation
+    ? (typeof activeTribulation.remaining_enemies === "number"
+      ? activeTribulation.remaining_enemies
+      : activeTribulation.enemies.length)
+    : 0;
+  const tribulationTotal = activeTribulation?.total_enemies ?? tribulationRemaining;
 
   // Welcome zone IDs include the runtime instance ("map#instance"). Region
   // lookups (teleport arrays, sect markers, aperture panels) need the map/region
@@ -373,9 +379,15 @@ export function MMOHud(props: MMOHudProps) {
   useEffect(() => {
     if (zoneMapId === "aperture_tribulation") {
       void fetchActiveTribulation(true);
-    } else {
-      setTribulationPanelExpanded(false);
+      // Keep the settlement counter aligned with the authoritative event while
+      // the player is inside the encounter. The in-map radar count is only a
+      // local view and must never be used as "quái còn lại".
+      const timer = window.setInterval(() => {
+        void fetchActiveTribulation(true);
+      }, 5000);
+      return () => window.clearInterval(timer);
     }
+    setTribulationPanelExpanded(false);
   }, [zoneMapId, fetchActiveTribulation]);
 
   // Poll world state without restarting the timers every time the player moves.
@@ -757,7 +769,7 @@ export function MMOHud(props: MMOHudProps) {
             aria-expanded={tribulationPanelExpanded}
             className="pointer-events-auto flex items-center gap-2 rounded-full border border-amber-500/60 bg-[#16100bf2] px-3 py-2 text-xs font-semibold text-amber-200 shadow-lg md:hidden"
           >
-            <Sparkles className="h-4 w-4" /> Kiếp nạn · {props.nearby.filter((e) => e.kind === "monster" && e.templateId !== "aperture_node").length} quái
+            <Sparkles className="h-4 w-4" /> Kiếp nạn · {tribulationRemaining} quái
             {tribulationPanelExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
           <div className={`${tribulationPanelExpanded ? "block" : "hidden"} pointer-events-auto mt-2 max-h-[min(48vh,320px)] overflow-y-auto rounded-2xl border border-amber-500/50 bg-[#16100bf2] p-3 shadow-[0_8px_32px_rgba(0,0,0,.6)] backdrop-blur-md space-y-2.5 md:mt-0 md:block md:max-h-none md:overflow-visible`}>
@@ -767,7 +779,7 @@ export function MMOHud(props: MMOHudProps) {
               Kiếp Nạn Tiên Khiếu (40×40)
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-950/80 border border-rose-500/50 text-rose-300 font-mono">
-              {props.nearby.filter((e) => e.kind === "monster" && e.templateId !== "aperture_node").length} Quái / Boss Kiếp
+              {tribulationRemaining}/{tribulationTotal} Quái / Boss Kiếp
             </span>
           </div>
 

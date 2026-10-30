@@ -574,6 +574,10 @@ func main() {
 				return sim.ZoneKey{}, realtimeworld.ZoneMap{}, active, err
 			}
 			base.Monsters = spawns
+			// The tribulation encounter is a private, single-player map. Send
+			// every monster and node to the client (and every checkpoint) so a
+			// kill can never be hidden outside the public AOI radius.
+			base.ViewRadius = math.Hypot(float64(base.Width), float64(base.Height)) + 4
 			return sim.ZoneKey{MapID: "aperture_tribulation", InstanceID: eventID, RulesetVersion: "v1"}, base, true, nil
 		})
 		realtimeAdmission.SetCombatInstanceZoneLoader(func(loadCtx context.Context, playerID uuid.UUID, state handlers.RealtimeJoinState) (realtimegateway.CombatInstanceZone, bool, error) {

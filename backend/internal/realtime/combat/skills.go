@@ -75,7 +75,8 @@ type Skill struct {
 	BacklashPct          float64 `json:"-"` // admission-only legacy combat projection
 	SuccessChance        float64 `json:"-"`
 	BackfireHPPercent    float64 `json:"-"`
-	Path                 string  `json:"-"` // admission-only legacy combat projection
+	Path                 string  `json:"-"` // damage path charged for Chân Ý settlement
+	Rank                 int     `json:"-"` // Gu rank charged for Chân Ý settlement
 	Range                float64
 	WindupTicks          uint64
 	RecoveryTicks        uint64

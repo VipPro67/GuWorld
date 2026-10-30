@@ -377,9 +377,17 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			Finish: worldAdmission.FinishHandoff,
 		})
 		middleware.SetRealtimeLocationReader(worldAdmission.PlayerLocation)
+		if enemyReader, ok := worldAdmission.(interface {
+			TribulationEnemyStates(uuid.UUID) (map[string]bool, map[string]bool, bool)
+		}); ok {
+			middleware.SetRealtimeTribulationEnemyReader(enemyReader.TribulationEnemyStates)
+		} else {
+			middleware.SetRealtimeTribulationEnemyReader(nil)
+		}
 	} else {
 		middleware.SetRealtimeHandoffBridge(nil)
 		middleware.SetRealtimeLocationReader(nil)
+		middleware.SetRealtimeTribulationEnemyReader(nil)
 	}
 	if shub != nil {
 		handlers.SetWSStatsProvider(shub.GetStats)
