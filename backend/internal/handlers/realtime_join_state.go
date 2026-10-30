@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 )
 
 // RealtimeEquippedGu is one immutable equipped-Gu entry used to build the
@@ -91,6 +92,24 @@ type RealtimeJoinState struct {
 	KillerMoves              []RealtimeKillerMove
 }
 
+// ProjectRealtimeEffects converts the character loadout row projection into
+// the realtime effects engine input. Realtime hotbar/loadout compilation and
+// gateway admission share this single mapping so neither side can drift from
+// the other's slot semantics.
+func (move RealtimeKillerMove) ProjectRealtimeEffects() realtimeeffects.KillerMove {
+	components := make([]realtimeeffects.KillerMoveComponent, 0, len(move.Components))
+	for _, component := range move.Components {
+		components = append(components, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: component.Hunger})
+	}
+	return realtimeeffects.KillerMove{
+		ID: move.ID, Name: move.Name, Rank: move.Rank, Components: components,
+		ExpectedComponents: move.ExpectedComponents, Effects: move.Effects, ManaCost: move.ManaCost,
+		SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
+		BackfireStatus: move.BackfireStatus, Complexity: move.Complexity, DamageScale: move.DamageScale,
+		WindupMS: move.RealtimeWindupMS, CooldownMS: move.RealtimeCooldownMS, HouseStrike: move.HouseStrike,
+	}
+}
+
 func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoinState, error) {
 	if db.DB == nil {
 		return RealtimeJoinState{}, errors.New("database not initialized")
@@ -136,20 +155,12 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	if err != nil {
 		return RealtimeJoinState{}, err
 	}
-	equipped, err := loadRealtimeEquipped(ctx, tx, playerID, equippedOrder)
+	loadout, err := LoadCombatLoadout(ctx, tx, playerID, equippedOrder)
 	if err != nil {
 		return RealtimeJoinState{}, err
 	}
-	state.EquippedGu = equipped
-	loadout, loadoutConfigured, err := loadPlayerCombatLoadout(ctx, tx, playerID)
-	if err != nil {
-		return RealtimeJoinState{}, err
-	}
-	_, killerMoves, err := resolveCombatSkills(ctx, tx, playerID, loadout, loadoutConfigured)
-	if err != nil {
-		return RealtimeJoinState{}, err
-	}
-	state.KillerMoves = killerMoves
+	state.EquippedGu = loadout.EquippedGu
+	state.KillerMoves = loadout.KillerMoves
 	if err := tx.Commit(); err != nil {
 		return RealtimeJoinState{}, err
 	}

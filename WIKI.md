@@ -153,7 +153,7 @@ Nghi thức Thăng Tiên gồm **3 khâu tuần tự** — không còn là một
 
 **Khâu 1 — Nát Khiếu:**
 - Ngũ Chuyển Đỉnh phong (Chuyển 5, SubRank 4, vách khiếu 100%) và **phải có Cổ Bản Mệnh** trấn giữ không khiếu.
-- Mỗi lần **Trùng Kích Nát Khiếu** tiêu hao `30% Chân Nguyên tối đa` (tối thiểu 500) và có tỉ lệ vỡ khiếu: bắt đầu **15%**, mỗi lần hụt cộng thêm **15%**, trần **90%**.
+- Mỗi lần **Trùng Kích Nát Khiếu** tiêu hao `30% Chân Nguyên tối đa` và có tỉ lệ vỡ khiếu: bắt đầu **15%**, mỗi lần hụt cộng thêm **15%**, trần **90%**.
 - Khi khiếu vỡ nát, **2 khí thiên địa** trào dâng — phiên Thăng Tiên mở với **thời hạn 2 giờ đời thật**.
 
 **Khâu 2 — Dẫn Khí:**

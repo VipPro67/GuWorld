@@ -511,19 +511,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	loadout := realtimeeffects.BuildLoadout(compiled, equipped)
 	killerMoves := make([]realtimeeffects.KillerMove, 0, len(state.KillerMoves))
 	for _, move := range state.KillerMoves {
-		components := make([]realtimeeffects.KillerMoveComponent, 0, len(move.Components))
-		for _, component := range move.Components {
-			components = append(components, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: component.Hunger})
-		}
-		killerMoves = append(killerMoves, realtimeeffects.KillerMove{
-			ID: move.ID, Name: move.Name, Rank: move.Rank,
-			Components: components, ExpectedComponents: move.ExpectedComponents,
-			Effects: move.Effects, ManaCost: move.ManaCost,
-			SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
-			BackfireStatus: move.BackfireStatus, Complexity: move.Complexity, DamageScale: move.DamageScale,
-			WindupMS: move.RealtimeWindupMS, CooldownMS: move.RealtimeCooldownMS,
-			HouseStrike: move.HouseStrike,
-		})
+		killerMoves = append(killerMoves, move.ProjectRealtimeEffects())
 	}
 	loadout.Skills, loadout.Revision = realtimeeffects.AppendKillerMoveLoadout(loadout.Skills, loadout.Revision, killerMoves)
 	skills := make([]combat.Skill, 0, len(loadout.Skills))

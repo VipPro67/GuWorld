@@ -9,9 +9,12 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 )
 
-const maxRealtimeHotbarSlots = 6
+// maxRealtimeHotbarSlots anchors the hotbar limit to the effects compiler so
+// the REST validation and gateway loadout share one slot constant.
+const maxRealtimeHotbarSlots = realtimeeffects.MaxHotbarSlots
 
 type realtimeHotbarRequest struct {
 	GuInstanceIDs []string `json:"gu_instance_ids"`

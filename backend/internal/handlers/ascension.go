@@ -48,6 +48,7 @@ const (
 	AscensionShatterBaseChance = 0.15
 	AscensionShatterStepChance = 0.15
 	AscensionShatterMaxChance  = 0.90
+	AscensionShatterCostRatio  = 0.30
 
 	// AscensionDaoMarksPerGu là Đạo Ngân nhận lại cho mỗi cổ 5C bị tiêu hủy khi thả cổ.
 	AscensionDaoMarksPerGu = 300
@@ -354,8 +355,8 @@ func AscensionShatter(c *gin.Context) {
 		}
 	}
 
-	// Cost: 30% of max mana (min 500) — liều mạng phải trả giá bằng chân nguyên.
-	cost := math.Max(500, gamefx.EffectiveMaxMana(&player)*0.30)
+	// Cost: 30% of max mana — liều mạng phải trả giá bằng chân nguyên.
+	cost := math.Max(1.0, gamefx.EffectiveMaxMana(&player)*AscensionShatterCostRatio)
 	if player.CurrentMana < cost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần %.0f Chân Nguyên cho mỗi lần trùng kích nát khiếu (Hiện có: %.0f)", cost, player.CurrentMana)})
 		return

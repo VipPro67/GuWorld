@@ -1898,7 +1898,7 @@ function AscensionRitual() {
   const humanQi = player.human_qi || 0;
   const hasVital = !!(player.gu_inventory ?? []).some((g) => g.is_vital && g.status !== "DEAD");
   const maxMana = player.max_mana ?? 0;
-  const shatterCost = Math.max(500, maxMana * ASCENSION_SHATTER_COST_RATIO);
+  const shatterCost = Math.max(1, maxMana * ASCENSION_SHATTER_COST_RATIO);
   const sessionStep = session?.step;
 
   // Hiệu lực phiên còn lại (đếm ngược).

@@ -64,20 +64,6 @@ type combatSkillResolution struct {
 	candidate combatSkillCandidate
 }
 
-func realtimeMoveForCompile(move RealtimeKillerMove) realtimeeffects.KillerMove {
-	components := make([]realtimeeffects.KillerMoveComponent, 0, len(move.Components))
-	for _, component := range move.Components {
-		components = append(components, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: component.Hunger})
-	}
-	return realtimeeffects.KillerMove{
-		ID: move.ID, Name: move.Name, Rank: move.Rank, Components: components,
-		ExpectedComponents: move.ExpectedComponents, Effects: move.Effects, ManaCost: move.ManaCost,
-		SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
-		BackfireStatus: move.BackfireStatus, Complexity: move.Complexity, DamageScale: move.DamageScale,
-		WindupMS: move.RealtimeWindupMS, CooldownMS: move.RealtimeCooldownMS, HouseStrike: move.HouseStrike,
-	}
-}
-
 func supportedKillerMove(move realtimeeffects.KillerMove) (bool, string) {
 	if len(move.Components) == 0 {
 		return false, "Cổ thành phần không khả dụng hoặc đã kiệt sức"
@@ -126,7 +112,7 @@ func resolveCombatSkills(ctx context.Context, q combatLoadoutQueryer, playerID u
 		return nil, nil, err
 	}
 	for i := range resolutions {
-		ok, reason := supportedKillerMove(realtimeMoveForCompile(resolutions[i].move))
+		ok, reason := supportedKillerMove(resolutions[i].move.ProjectRealtimeEffects())
 		resolutions[i].candidate.Supported = ok
 		if !ok && resolutions[i].candidate.Reason == "" {
 			resolutions[i].candidate.Reason = reason
@@ -457,39 +443,25 @@ func UpdateCombatSkillLoadout(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác thực hotbar chiêu thức"})
 		return
 	}
-	eligible := make(map[string]combatSkillCandidate, len(candidates))
-	for _, candidate := range candidates {
-		eligible[candidate.Kind+"\x00"+candidate.ID] = candidate
-	}
-	seen := map[string]bool{}
-	clean := make([]combatLoadoutEntry, 0, len(req.Entries))
-	for _, entry := range req.Entries {
-		if entry.ID == "" || (entry.Kind != "move" && entry.Kind != "house") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Hotbar chứa chiêu thức không hợp lệ"})
-			return
-		}
-		key := entry.Kind + "\x00" + entry.ID
-		if seen[key] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể ghim trùng một chiêu thức hai lần"})
-			return
-		}
-		candidate, exists := eligible[key]
-		if !exists {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Chiêu thức không còn trang bị hoặc không tồn tại"})
-			return
-		}
-		if !candidate.Supported {
-			message := candidate.Reason
-			if message == "" {
-				message = "Chiêu thức chưa hỗ trợ realtime"
+	clean, validateErr := validateCombatLoadoutEntries(req.Entries, candidates)
+	if validateErr != nil {
+		message := "Hotbar chứa chiêu thức không hợp lệ"
+		switch {
+		case errors.Is(validateErr, errLoadoutDuplicateEntry):
+			message = "Không thể ghim trùng một chiêu thức hai lần"
+		case errors.Is(validateErr, errLoadoutUnknownEntry):
+			message = "Chiêu thức không còn trang bị hoặc không tồn tại"
+		case errors.Is(validateErr, errLoadoutUnsupportedEntry):
+			message = "Chiêu thức chưa hỗ trợ realtime"
+			var entryErr *loadoutEntryError
+			if errors.As(validateErr, &entryErr) && entryErr.Detail != "" {
+				message = entryErr.Detail
 			}
-			c.JSON(http.StatusBadRequest, gin.H{"error": message})
-			return
 		}
-		seen[key] = true
-		clean = append(clean, combatLoadoutEntry{Kind: entry.Kind, ID: entry.ID})
+		c.JSON(http.StatusBadRequest, gin.H{"error": message})
+		return
 	}
-	raw, err := json.Marshal(clean)
+	raw, err := EncodeCombatLoadout(clean)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu hotbar chiêu thức không hợp lệ"})
 		return

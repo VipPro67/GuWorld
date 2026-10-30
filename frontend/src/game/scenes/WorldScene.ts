@@ -1,9 +1,9 @@
 import Phaser from "phaser";
 import type { WorldRuntime, RuntimeEntity } from "../core/WorldRuntime.ts";
-import { buildCastIntent } from "../input/CastIntent.ts";
 import { InputRouter } from "../input/InputRouter.ts";
-import { ClickToMove } from "../input/ClickToMove.ts";
 import { LoadedWorldMap, computeWorldMapHash, loadWorldMap } from "../world/MapLoader.ts";
+import { MotionController } from "../motion/MotionController.ts";
+import { CastController, type CastDelegate, type CastView } from "../cast/CastController.ts";
 import { CastTelegraph } from "../combat/CastTelegraph.ts";
 import { ProjectileView } from "../combat/ProjectileView.ts";
 import { VFXPool } from "../combat/VFXPool.ts";
@@ -62,7 +62,8 @@ function formatDamageAmount(amount: number): string {
 export class WorldScene extends Phaser.Scene {
   private runtime: WorldRuntime | null = null;
   private readonly router = new InputRouter();
-  private readonly click = new ClickToMove();
+  private motion!: MotionController;
+  private cast!: CastController;
   private readonly actors = new Map<string, ActorView>();
   private readonly requestedMonsterArt = new Set<string>();
   private readonly failedMonsterArtUntil = new Map<string, number>();
@@ -93,16 +94,11 @@ export class WorldScene extends Phaser.Scene {
   private cameraController!: CameraController;
   private debugHud: RealtimeDebugHUD | null = null;
   private targetIndicator!: Phaser.GameObjects.Graphics;
-  private pathQueue: WorldPoint[] = [];
-  private pathGoal: WorldPoint | null = null;
-  private aimingSlot: number | null = null;
   private lastMoveAim: WorldPoint = { x: 1, y: 0 };
   private autoFarmTargetId = "";
-  private autoFarmMoving = false;
   private autoFarmPauseUntil = 0;
   private nextAutoFarmAttackAt = 0;
   private nextAutoFarmSkillAt = 0;
-  private nextAutoFarmMoveAt = 0;
   private autoFarmStopNoticeShown = false;
   private combatUnsubscribe: (() => void) | null = null;
   private welcomeUnsubscribe: (() => void) | null = null;
@@ -126,9 +122,7 @@ export class WorldScene extends Phaser.Scene {
     if (isTextField(event.target)) return;
     if (this.runtime?.isUiModal()) return;
     if (event.code === "Escape") {
-      this.click.cancel();
-      this.runtime?.cancelMoveTarget();
-      this.cancelPath();
+      this.motion?.stopAll();
       this.cancelAim();
       this.runtime?.setSelectedTarget(null);
       this.selectedTargetId = null;
@@ -147,7 +141,6 @@ export class WorldScene extends Phaser.Scene {
     }
     if (this.router.setKey(event.code, true)) {
       event.preventDefault();
-      this.click.cancel();
     }
   };
   private readonly onKeyUp = (event: KeyboardEvent): void => {
@@ -156,9 +149,7 @@ export class WorldScene extends Phaser.Scene {
   private readonly onBlur = (): void => {
     this.router.reset();
     this.runtime?.setMoveVector({ x: 0, y: 0 });
-    this.click.cancel();
-    this.runtime?.cancelMoveTarget();
-    this.cancelPath();
+    this.motion?.stopAll();
     this.cancelAim();
   };
   private readonly onVisibility = (): void => {
@@ -167,19 +158,19 @@ export class WorldScene extends Phaser.Scene {
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
     if (!this.runtime || (pointer.button !== 0 && pointer.button !== 2)) return;
     if (!this.runtime.getWelcome()) return;
-    this.stopAutoFarmMovement();
+    this.motion?.stopApproach();
     this.autoFarmPauseUntil = this.time.now + 3000;
     if (pointer.button === 2) {
       this.activateRightClickAction();
       return;
     }
-    if (this.aimingSlot !== null) {
-      this.castSlot(this.aimingSlot, true);
+    if (this.cast?.isAiming()) {
+      this.cast.triggerSlot(this.cast.aimingSlot() as number, { fromPointer: true });
       return;
     }
     const leftClickSlot = this.runtime?.getRealtimeSettings().leftClickSlot ?? 0;
     if (leftClickSlot > 0) {
-      this.castSlot(leftClickSlot, true);
+      this.cast.triggerSlot(leftClickSlot, { fromPointer: true });
       return;
     }
     if (!this.router.canClickMove()) return;
@@ -203,12 +194,10 @@ export class WorldScene extends Phaser.Scene {
         this.notice("Không tìm thấy đường đi tới điểm đó");
         return;
       }
-      this.startPath(path, target);
+      this.motion.navigateTo(target, path);
       return;
     }
-    if (this.click.begin(target)) {
-      this.runtime.sendMoveTarget(target);
-    }
+    this.motion.navigateTo(target, null);
   };
 
   constructor() {
@@ -237,6 +226,13 @@ export class WorldScene extends Phaser.Scene {
     this.runtime = (this.registry.get(WORLD_RUNTIME_KEY) as WorldRuntime | undefined) ?? null;
     this.targetRing = this.add.graphics().setDepth(-7_000);
     this.telegraph = new CastTelegraph(this);
+    this.motion = new MotionController({
+      sendMoveTarget: (target) => this.runtime?.sendMoveTarget(target) ?? false,
+      cancelMoveTarget: () => this.runtime?.cancelMoveTarget(),
+      getSelfPosition: () => this.runtime?.getSelfPosition() ?? { x: 0, y: 0 },
+      getActiveMoveTarget: () => this.runtime?.getMoveTarget() ?? null,
+    });
+    this.cast = new CastController(this.createCastDelegate(this.telegraph));
     this.projectileView = new ProjectileView(this);
     this.vfx = new VFXPool(this);
     this.combatUnsubscribe = this.runtime?.onCombatEvents((event) => this.handleCombatEvent(event)) ?? null;
@@ -321,13 +317,11 @@ export class WorldScene extends Phaser.Scene {
     const movement = this.router.movement();
     if (movement.x !== 0 || movement.y !== 0) {
       this.lastMoveAim = movement;
-      this.stopAutoFarmMovement();
-      this.click.cancel();
-      this.cancelPath();
     }
+    this.motion.setManualVector(movement);
     this.runtime.setMoveVector(movement);
     this.runtime.update(delta / 1000);
-    this.advancePath();
+    this.motion.tick();
     this.selectedTargetId = this.runtime.getSelectedTargetId();
 
     const entities = this.runtime.getEntities();
@@ -337,7 +331,7 @@ export class WorldScene extends Phaser.Scene {
     this.drawPathMarker(entities);
     this.drawTargetRing();
     this.drawTargetIndicator(entities);
-    this.drawAimTelegraph(entities);
+    this.cast.update();
     this.projectileView.sync(this.runtime.getProjectiles());
     this.syncDynamicWorldObjects();
     this.debugHud?.update();
@@ -349,13 +343,13 @@ export class WorldScene extends Phaser.Scene {
     const controls = this.runtime.getRealtimeSettings();
     if (!controls.autoFarm || this.runtime.isUiModal()) {
       this.autoFarmTargetId = "";
-      this.stopAutoFarmMovement();
+      this.motion.stopApproach();
       return;
     }
     const manualMovement = this.router.movement();
     if (manualMovement.x !== 0 || manualMovement.y !== 0 || now < this.autoFarmPauseUntil) {
       this.autoFarmTargetId = "";
-      this.stopAutoFarmMovement();
+      this.motion.stopApproach();
       return;
     }
     const self = entities.find((entity) => entity.isSelf);
@@ -363,7 +357,7 @@ export class WorldScene extends Phaser.Scene {
     const hpPercent = (self.hp / self.maxHp) * 100;
     if (controls.farmStopHPPercent > 0 && hpPercent <= controls.farmStopHPPercent) {
       this.autoFarmTargetId = "";
-      this.stopAutoFarmMovement();
+      this.motion.stopApproach();
       if (!this.autoFarmStopNoticeShown) {
         this.notice(`Auto farm dừng vì HP ≤ ${controls.farmStopHPPercent}%`);
         this.autoFarmStopNoticeShown = true;
@@ -379,7 +373,7 @@ export class WorldScene extends Phaser.Scene {
       .sort((left, right) => left.distance - right.distance)[0];
     if (!target) {
       this.autoFarmTargetId = "";
-      this.stopAutoFarmMovement();
+      this.motion.stopApproach();
       return;
     }
 
@@ -388,8 +382,6 @@ export class WorldScene extends Phaser.Scene {
     this.selectedTargetId = monster.id;
     this.runtime.setSelectedTarget(monster.id);
     if (target.distance > BASIC_ATTACK_RANGE - 0.2) {
-      if (now < this.nextAutoFarmMoveAt && this.pathQueue.length > 0) return;
-      this.nextAutoFarmMoveAt = now + 900;
       const distance = Math.max(0.01, target.distance);
       const stopDistance = BASIC_ATTACK_RANGE - 0.4;
       const goal = {
@@ -398,19 +390,14 @@ export class WorldScene extends Phaser.Scene {
       };
       if (this.map) {
         const path = findPath(this.map, this.runtime.getSelfPosition(), goal);
-        if (path?.length) {
-          this.startPath(path, goal);
-          this.autoFarmMoving = true;
-        }
+        if (path?.length) this.motion.approach(goal, path, now);
       } else {
-        this.autoFarmMoving = this.runtime.sendMoveTarget(goal);
+        this.motion.approach(goal, null, now);
       }
       return;
     }
 
-    this.cancelPath();
-    this.runtime.cancelMoveTarget();
-    this.autoFarmMoving = false;
+    this.motion.disengage();
     if (now >= this.nextAutoFarmAttackAt) {
       this.runtime.sendBasicAttack({ target_id: monster.id });
       this.nextAutoFarmAttackAt = now + AUTO_FARM_ATTACK_INTERVAL_MS;
@@ -418,15 +405,8 @@ export class WorldScene extends Phaser.Scene {
     if (controls.farmUseSkills && now >= this.nextAutoFarmSkillAt) {
       const skill = this.autoFarmSkill(controls.guPriorities, self, monster);
       this.nextAutoFarmSkillAt = now + 250;
-      if (skill) this.castAutoFarmSkill(skill.slot, monster, self);
+      if (skill) this.cast.castAtEntity(skill.slot, monster);
     }
-  }
-
-  private stopAutoFarmMovement(): void {
-    if (!this.autoFarmMoving) return;
-    this.cancelPath();
-    this.runtime?.cancelMoveTarget();
-    this.autoFarmMoving = false;
   }
 
   private autoFarmSkill(
@@ -459,14 +439,6 @@ export class WorldScene extends Phaser.Scene {
       if (conditionMet) return skill;
     }
     return null;
-  }
-
-  private castAutoFarmSkill(slot: number, target: RuntimeEntity, self: RuntimeEntity): void {
-    if (!this.runtime) return;
-    const skill = this.skillForSlot(slot);
-    if (!skill) return;
-    const intent = buildCastIntent(skill, self, target, target.id);
-    if (intent) this.runtime.sendCast(intent);
   }
 
   private syncFocus(): void {
@@ -525,83 +497,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private castSlot(slot: number, fromPointer = false): void {
-    if (!this.runtime || this.runtime.getStatus() !== "joined") {
-      this.notice("Chưa kết nối world server");
-      return;
-    }
-    const skill = this.skillForSlot(slot);
-    if (!skill) {
-      this.notice(`Nút ${slot} chưa có Cổ hỗ trợ realtime`);
-      return;
-    }
-    const self = this.runtime.getSelfPosition();
-    const pointer = this.pointerWorld();
-    if (!fromPointer && (skill.mode === "DIRECTION" || skill.mode === "GROUND")) {
-      if (this.aimingSlot !== slot) {
-        this.aimingSlot = slot;
-        this.router.setAiming(true);
-        this.runtime?.setAimingSlot(slot);
-        this.notice(`${skill.name}: chọn hướng/điểm rồi click để cast · Esc hủy`);
-        return;
-      }
-    }
-    if (!fromPointer && skill.mode === "TARGET") {
-      const selected = this.selectedTargetId ? this.monsters().find((m) => m.id === this.selectedTargetId) : null;
-      if (!selected && this.aimingSlot !== slot) {
-        this.aimingSlot = slot;
-        this.router.setAiming(true);
-        this.runtime?.setAimingSlot(slot);
-        this.notice(`${skill.name}: nhấp vào mục tiêu hoặc khoảng trống để cast · Esc hủy`);
-        return;
-      }
-    }
-    this.cancelAim();
-    switch (skill.mode) {
-      case "SELF": {
-        const intent = buildCastIntent(skill, self);
-        if (intent) this.runtime.sendCast(intent);
-        return;
-      }
-      case "TARGET": {
-        const target = fromPointer
-          ? this.findTargetNear(pointer)
-          : this.monsters().find((monster) => monster.id === this.selectedTargetId) ?? null;
-        if (target) {
-          this.selectedTargetId = target.id;
-          this.runtime.setSelectedTarget(target.id);
-          this.markWorldPoint({ x: target.x, y: target.y });
-          const intent = buildCastIntent(skill, self, target, target.id);
-          if (intent) this.runtime.sendCast(intent);
-          return;
-        }
-        const intent = buildCastIntent(skill, self, pointer);
-        if (!intent) {
-          this.notice("Cần hướng ngắm hợp lệ");
-          return;
-        }
-        this.runtime.sendCast(intent);
-        this.markWorldPoint(pointer);
-        return;
-      }
-      case "DIRECTION": {
-        const intent = buildCastIntent(skill, self, pointer);
-        if (!intent) {
-          this.notice("Cần hướng ngắm hợp lệ");
-          return;
-        }
-        this.runtime.sendCast(intent);
-        this.markWorldPoint(pointer);
-        return;
-      }
-      case "GROUND": {
-        const intent = buildCastIntent(skill, self, pointer);
-        if (intent) this.runtime.sendCast(intent);
-        this.markWorldPoint(pointer);
-        return;
-      }
-      default:
-        return;
-    }
+    this.cast?.triggerSlot(slot, { fromPointer });
   }
 
   activateHotbarSlot(slot: number): void {
@@ -677,55 +573,53 @@ export class WorldScene extends Phaser.Scene {
     return this.runtime.getSkills().find((skill) => skill.slot === slot) ?? null;
   }
 
-  private hoveredSkillSlot: number | null = null;
-
   public setHoveredSkillSlot(slot: number | null): void {
-    this.hoveredSkillSlot = slot;
-    if (slot === null && this.aimingSlot === null) {
-      this.telegraph.clear();
-    }
+    this.cast?.setHoveredSlot(slot);
   }
 
   public cancelAim(): void {
-    if (this.aimingSlot === null) return;
-    this.aimingSlot = null;
-    this.router.setAiming(false);
-    this.runtime?.setAimingSlot(null);
-    this.telegraph.clear();
+    this.cast?.cancelAim();
   }
 
-  private drawAimTelegraph(entities: RuntimeEntity[]): void {
-    if (!this.runtime) {
-      this.telegraph.clear();
-      return;
-    }
-    const self = entities.find((entity) => entity.isSelf);
-    if (!self) {
-      this.telegraph.clear();
-      return;
-    }
-
-    if (this.aimingSlot !== null) {
-      const skill = this.skillForSlot(this.aimingSlot);
-      if (!skill) {
-        this.telegraph.clear();
-        return;
-      }
-      this.telegraph.draw(skill, { x: self.x, y: self.y }, this.pointerWorld());
-      return;
-    }
-
-    if (this.hoveredSkillSlot !== null) {
-      const skill = this.skillForSlot(this.hoveredSkillSlot);
-      if (!skill) {
-        this.telegraph.clear();
-        return;
-      }
-      this.telegraph.drawPreview(skill, { x: self.x, y: self.y });
-      return;
-    }
-
-    this.telegraph.clear();
+  /**
+   * Adapts the scene's runtime views and world lookups into the narrow seam
+   * consumed by CastController (see cast/CastController.ts).
+   */
+  private createCastDelegate(telegraph: CastTelegraph): CastDelegate {
+    const view: CastView = {
+      drawAim: (skill, self, pointer) => telegraph.draw(skill, self, pointer),
+      drawPreview: (skill, self) => telegraph.drawPreview(skill, self),
+      clear: () => telegraph.clear(),
+    };
+    return {
+      isJoined: () => this.runtime?.getStatus() === "joined",
+      skillForSlot: (slot) => this.skillForSlot(slot),
+      selfPosition: () => this.runtime?.getSelfPosition() ?? { x: 0, y: 0 },
+      renderedSelfPosition: () => {
+        const self = this.runtime?.getEntities().find((entity) => entity.isSelf);
+        return self ? { x: self.x, y: self.y } : null;
+      },
+      pointerWorld: () => this.pointerWorld(),
+      selectedTargetId: () => this.selectedTargetId,
+      selectTarget: (entityId) => {
+        // Keep the scene mirror in sync immediately: the target ring and
+        // offscreen indicator read this field before the next runtime emit.
+        this.selectedTargetId = entityId;
+        this.runtime?.setSelectedTarget(entityId);
+      },
+      setAiming: (slot) => {
+        this.router.setAiming(slot !== null);
+        this.runtime?.setAimingSlot(slot);
+      },
+      attackableEntities: () => this.monsters(),
+      entityNear: (point) => this.findTargetNear(point),
+      notice: (message) => this.notice(message),
+      markPoint: (point) => this.markWorldPoint(point),
+      sendCast: (intent) => {
+        this.runtime?.sendCast(intent);
+      },
+      view,
+    };
   }
 
   private handleCombatEvent(event: WorldEvent): void {
@@ -770,8 +664,7 @@ export class WorldScene extends Phaser.Scene {
         this.notice("Cast bị ngắt");
         return;
       case "MOVE_TARGET_REJECTED":
-        this.cancelPath();
-        this.runtime?.cancelMoveTarget();
+        this.motion?.stopAll();
         this.notice(reason ? `Đường đi bị chặn: ${reason}` : "Đường đi bị chặn");
         return;
       case "DAMAGE_APPLIED":
@@ -1205,48 +1098,6 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private startPath(path: WorldPoint[], goal: WorldPoint): void {
-    this.pathQueue = path.slice(1);
-    this.pathGoal = goal;
-    this.click.begin(goal);
-    this.sendNextPath();
-  }
-
-  private sendNextPath(): void {
-    if (!this.runtime) return;
-    const self = this.runtime.getSelfPosition();
-    while (this.pathQueue.length > 0 && Math.hypot(this.pathQueue[0].x - self.x, this.pathQueue[0].y - self.y) <= 0.4) {
-      this.pathQueue.shift();
-    }
-    if (this.pathQueue.length === 0) {
-      this.cancelPath();
-      return;
-    }
-    const target = this.pathQueue[0];
-    const activeTarget = this.runtime.getMoveTarget();
-    if (activeTarget && Math.hypot(activeTarget.x - target.x, activeTarget.y - target.y) < 0.001) return;
-    this.runtime.sendMoveTarget(target);
-  }
-
-  private advancePath(): void {
-    if (!this.runtime || this.pathQueue.length === 0) return;
-    // Lookahead: send the next waypoint as soon as the predicted position is
-    // within 1.2 units — well before arrival — so there is no perceptible
-    // pause between segments even at high latency.
-    const self = this.runtime.getSelfPosition();
-    const next = this.pathQueue[0];
-    const distToNext = Math.hypot(next.x - self.x, next.y - self.y);
-    if (distToNext <= 1.2) {
-      this.sendNextPath();
-    }
-  }
-
-  private cancelPath(): void {
-    this.pathQueue = [];
-    this.pathGoal = null;
-    this.click.cancel();
-  }
-
   private drawTargetIndicator(entities: RuntimeEntity[]): void {
     this.targetIndicator.clear();
     if (!this.selectedTargetId) return;
@@ -1277,9 +1128,11 @@ export class WorldScene extends Phaser.Scene {
     if (!this.runtime) return;
     const self = entities.find((entity) => entity.isSelf);
     if (!self) return;
-    if (this.pathQueue.length > 0) {
-      const points = [self, ...this.pathQueue];
-      if (this.pathGoal) points.push(this.pathGoal);
+    const pathQueue = this.motion.waypoints();
+    if (pathQueue.length > 0) {
+      const points = [self, ...pathQueue];
+      const pathGoal = this.motion.goal();
+      if (pathGoal) points.push(pathGoal);
       this.marker.lineStyle(2, 0x34d399, 0.55);
       for (let index = 1; index < points.length; index += 1) {
         const from = worldToPixels(points[index - 1]);
@@ -1289,21 +1142,20 @@ export class WorldScene extends Phaser.Scene {
         this.marker.lineTo(to.x, to.y);
         this.marker.strokePath();
       }
-      for (const waypoint of this.pathQueue) {
+      for (const waypoint of pathQueue) {
         const pixel = worldToPixels(waypoint);
         this.marker.fillStyle(0x6ee7b7, 0.45);
         this.marker.fillCircle(pixel.x, pixel.y, 4);
       }
-      if (this.pathGoal) {
-        const goal = worldToPixels(this.pathGoal);
+      if (pathGoal) {
+        const goal = worldToPixels(pathGoal);
         this.marker.lineStyle(2, 0x6ee7b7, 0.9);
         this.marker.strokeCircle(goal.x, goal.y, 10);
       }
       return;
     }
-    const target = this.click.getTarget() ?? this.runtime.getMoveTarget();
+    const target = this.motion.clickTarget() ?? this.runtime.getMoveTarget();
     if (!target) return;
-    this.click.completeIfNear(self);
     const from = worldToPixels({ x: self.x, y: self.y });
     const to = worldToPixels(target);
     this.marker.lineStyle(2, 0x34d399, 0.55);
