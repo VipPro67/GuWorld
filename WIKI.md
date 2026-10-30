@@ -451,6 +451,8 @@ Cổ sư có thể:
 
 ## 4.1. Cân bằng: Quái vs Cổ trùng cùng Rank
 
+Quái trên map realtime xuất hiện theo đàn 4–6 con. Vùng chuẩn 1.000 × 1.000 có khoảng 38 đàn khi tỷ trọng quái là 30%; mật độ thay đổi theo từng vùng.
+
 > **Không có Cổ trùng → người chơi tự động thua quái ở mọi rank.**
 
 Quái và Cổ trùng **cùng rank là cân bằng** (mất ~3–5 hit để hạ nhau). Không có Cổ, người chơi yếu hơn rất nhiều so với quái cùng rank.

@@ -252,7 +252,7 @@ def main():
             region_archetypes = in_band
 
         density = monster_density(row)
-        area_scale = (width * height) / 4_000_000
+        area_scale = (width * height) / 1_000_000
         pack_count = 0
         if region_archetypes and density > 0:
             pack_count = max(1, round(BASE_PACKS * density * area_scale))
