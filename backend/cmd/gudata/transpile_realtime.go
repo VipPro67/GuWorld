@@ -34,6 +34,9 @@ type rawTranspileOp struct {
 	Resource string              `json:"resource"`
 	Target   *rawTranspileTarget `json:"target"`
 	Value    float64             `json:"value"`
+	StatusID string              `json:"status_id,omitempty"`
+	Chance   float64             `json:"chance,omitempty"`
+	Turns    int                 `json:"turns,omitempty"`
 }
 
 type TranspileStats struct {
@@ -56,6 +59,8 @@ func cmdTranspileRealtimeGu(args []string) error {
 	output := fs.String("output", "data/mmo/gu/transpiled_profiles.json", "output path for the complete generated profile catalog")
 	compileReport := fs.String("compile-report", "", "optional path to write compiled catalog JSON directly")
 	statsFlag := fs.Bool("stats", true, "print detailed transpilation statistics")
+	populateCSV := fs.Bool("populate-csv", false, "populate empty skill_profile columns in Gu.csv for active combat Gu")
+	filterKeysPath := fs.String("filter-keys", "", "optional JSON file containing array of 'gu_id:rank' allowed in output catalog")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -78,6 +83,22 @@ func cmdTranspileRealtimeGu(args []string) error {
 		}
 	}
 
+	var allowedKeys map[string]bool
+	if *filterKeysPath != "" {
+		raw, err := os.ReadFile(*filterKeysPath)
+		if err != nil {
+			return fmt.Errorf("read filter-keys: %w", err)
+		}
+		var list []string
+		if err := json.Unmarshal(raw, &list); err != nil {
+			return fmt.Errorf("decode filter-keys: %w", err)
+		}
+		allowedKeys = make(map[string]bool, len(list))
+		for _, k := range list {
+			allowedKeys[k] = true
+		}
+	}
+
 	stats := TranspileStats{
 		TotalCSVEntries: len(t.rows),
 		ShapesCount:     make(map[string]int),
@@ -88,6 +109,8 @@ func cmdTranspileRealtimeGu(args []string) error {
 		Profiles:      make([]realtimeeffects.GuProfile, 0, len(t.rows)),
 	}
 
+	populatedCount := 0
+
 	for rowIndex, row := range t.rows {
 		guID := t.get(row, "id")
 		rank, _ := strconv.Atoi(t.get(row, "rank"))
@@ -95,6 +118,9 @@ func cmdTranspileRealtimeGu(args []string) error {
 			continue
 		}
 		key := fmt.Sprintf("%s:%d", guID, rank)
+		if allowedKeys != nil && !allowedKeys[key] {
+			continue
+		}
 
 		// Check if handcrafted override exists
 		if override, ok := overrideMap[key]; ok {
@@ -133,10 +159,65 @@ func cmdTranspileRealtimeGu(args []string) error {
 
 		profile := transpileGuProfile(guID, rank, pathStr, primaryRole, baseMana, blocks)
 		skillProfileJSON := strings.TrimSpace(t.get(row, "skill_profile"))
-		if skillProfileJSON != "" && profile.Active != nil {
+
+		if *populateCSV && skillProfileJSON == "" && profile.Active != nil {
+			name := t.get(row, "name")
+			sp := convertActiveToSkillProfile(name, pathStr, rank, profile.Active, profile.Visuals, blocks)
+			if b, err := json.Marshal(sp); err == nil {
+				skillProfileJSON = string(b)
+				t.set(row, "skill_profile", skillProfileJSON)
+				populatedCount++
+			}
+		}
+		if skillProfileJSON != "" {
 			var custom models.GuSkillProfile
 			if err := json.Unmarshal([]byte(skillProfileJSON), &custom); err == nil {
-				applyCustomSkillProfile(profile.Active, custom)
+				if custom.CastVFX != "" {
+					profile.Visuals.CastVFX = custom.CastVFX
+				}
+				if custom.ProjectileVFX != "" {
+					profile.Visuals.ProjectileVFX = custom.ProjectileVFX
+				}
+				if custom.ImpactVFX != "" {
+					profile.Visuals.ImpactVFX = custom.ImpactVFX
+				}
+				if custom.SkillIcon != "" {
+					profile.Visuals.Icon = custom.SkillIcon
+				}
+				if custom.Slot > 0 {
+					profile.Slot = custom.Slot
+				}
+				if profile.Active == nil && custom.CastMode != "" {
+					windupMS, recoveryMS, cooldownMS, manaCost := calculatePacing(rank, baseMana)
+					profile.Active = &realtimeeffects.ActiveProfile{
+						Mode:           combat.Mode(custom.CastMode),
+						WindupMS:       windupMS,
+						RecoveryMS:     recoveryMS,
+						CooldownMS:     cooldownMS,
+						ManaCost:       manaCost,
+						MovementPolicy: "SLOW",
+						RangeUnits:     custom.CastRange,
+						MaxTargets:     1,
+					}
+					dmgVal := custom.DamageBase
+					if dmgVal == 0 {
+						dmgVal = custom.DamageValue
+					}
+					if dmgVal > 0 {
+						profile.Active.Effects = append(profile.Active.Effects, realtimeeffects.EffectProfile{
+							Type:  "DAMAGE",
+							Value: dmgVal,
+						})
+					} else {
+						profile.Active.Effects = append(profile.Active.Effects, realtimeeffects.EffectProfile{
+							Type:  "DAMAGE",
+							Value: scaleMMODamage(float64(rank*20), rank),
+						})
+					}
+				}
+				if profile.Active != nil {
+					applyCustomSkillProfile(profile.Active, custom)
+				}
 			}
 		}
 		if profile.Active != nil {
@@ -161,6 +242,13 @@ func cmdTranspileRealtimeGu(args []string) error {
 		}
 
 		catalog.Profiles = append(catalog.Profiles, profile)
+	}
+
+	if *populateCSV && populatedCount > 0 {
+		if err := t.write(csvPath); err != nil {
+			return fmt.Errorf("write populated Gu.csv: %w", err)
+		}
+		fmt.Printf("Populated %d active skill profiles directly into %s\n", populatedCount, csvPath)
 	}
 
 	// Sort profiles deterministically by ID and rank
@@ -525,9 +613,9 @@ func calculatePacing(rank int, baseMana float64) (windupMS, recoveryMS, cooldown
 	if rank > 9 {
 		rank = 9
 	}
-	windups := []uint64{0, 150, 200, 300, 400, 500, 600, 700, 800, 1000}
-	recoveries := []uint64{0, 150, 150, 200, 200, 250, 250, 300, 300, 350}
-	cooldowns := []uint64{0, 4000, 6000, 8000, 12000, 16000, 20000, 25000, 30000, 35000}
+	windups := []uint64{0, 100, 150, 200, 250, 300, 400, 500, 600, 750}
+	recoveries := []uint64{0, 100, 150, 150, 200, 200, 250, 250, 300, 300}
+	cooldowns := []uint64{0, 2000, 3200, 4500, 6500, 9000, 12000, 15000, 18000, 22000}
 	minMana := []float64{0, 4, 6, 8, 12, 16, 20, 25, 30, 40}
 
 	windupMS = windups[rank]
@@ -669,6 +757,9 @@ func applyCustomSkillProfile(active *realtimeeffects.ActiveProfile, custom model
 	if custom.CooldownMs > 0 {
 		active.CooldownMS = uint64(custom.CooldownMs)
 	}
+	if custom.ManaCost > 0 {
+		active.ManaCost = custom.ManaCost
+	}
 	if custom.MaxTargets > 0 {
 		active.MaxTargets = custom.MaxTargets
 	}
@@ -684,7 +775,7 @@ func applyCustomSkillProfile(active *realtimeeffects.ActiveProfile, custom model
 	if custom.GuPowerRatio > 0 {
 		active.GuPowerRatio = custom.GuPowerRatio
 	}
-	if custom.ProjectileSpeed > 0 || custom.Pierce {
+	if custom.ProjectileSpeed > 0 || custom.Pierce || custom.SpreadCount > 0 || custom.SpreadAngleDeg > 0 {
 		if active.Projectile == nil {
 			active.Projectile = &realtimeeffects.ProjectileProfile{
 				SpeedUnitsPerSec: 18.0,
@@ -698,5 +789,313 @@ func applyCustomSkillProfile(active *realtimeeffects.ActiveProfile, custom model
 		if custom.Pierce {
 			active.Projectile.PierceCount = 3
 		}
+		if custom.SpreadCount > 0 {
+			active.Projectile.SpreadCount = custom.SpreadCount
+		}
+		if custom.SpreadAngleDeg > 0 {
+			active.Projectile.SpreadAngleDeg = custom.SpreadAngleDeg
+		}
+	}
+	dmgVal := custom.DamageBase
+	if dmgVal == 0 {
+		dmgVal = custom.DamageValue
+	}
+	if dmgVal > 0 {
+		found := false
+		for idx := range active.Effects {
+			if active.Effects[idx].Type == "DAMAGE" {
+				active.Effects[idx].Value = dmgVal
+				found = true
+				break
+			}
+		}
+		if !found {
+			active.Effects = append(active.Effects, realtimeeffects.EffectProfile{
+				Type:  "DAMAGE",
+				Value: dmgVal,
+			})
+		}
+	}
+	shieldVal := custom.ShieldBase
+	if shieldVal == 0 {
+		shieldVal = custom.ShieldValue
+	}
+	if shieldVal > 0 {
+		found := false
+		for idx := range active.Effects {
+			if active.Effects[idx].Type == "SHIELD" {
+				active.Effects[idx].Value = shieldVal
+				found = true
+				break
+			}
+		}
+		if !found {
+			active.Effects = append(active.Effects, realtimeeffects.EffectProfile{
+				Type:  "SHIELD",
+				Value: shieldVal,
+			})
+		}
+	}
+	healVal := custom.HealBase
+	if healVal == 0 {
+		healVal = custom.HealValue
+	}
+	if healVal > 0 {
+		found := false
+		for idx := range active.Effects {
+			if active.Effects[idx].Type == "HEAL" {
+				active.Effects[idx].Value = healVal
+				found = true
+				break
+			}
+		}
+		if !found {
+			active.Effects = append(active.Effects, realtimeeffects.EffectProfile{
+				Type:  "HEAL",
+				Value: healVal,
+			})
+		}
+	}
+	if custom.CleanseDebuff {
+		found := false
+		for idx := range active.Effects {
+			if active.Effects[idx].Type == "CLEANSE" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			active.Effects = append(active.Effects, realtimeeffects.EffectProfile{
+				Type: "CLEANSE",
+			})
+		}
+	}
+	if custom.StatusID != "" {
+		pvpCat := custom.PvPDrCategory
+		if pvpCat == "" {
+			switch custom.StatusID {
+			case "FREEZE", "STUN", "PETRIFY":
+				pvpCat = "HARD_CC"
+			case "BIND", "ROOT", "SLOW":
+				pvpCat = "SOFT_CC"
+			default:
+				pvpCat = "DOT"
+			}
+		}
+		durMs := custom.DurationMs
+		if durMs == 0 {
+			durMs = custom.StatusDurationMs
+		}
+		duration := uint64(durMs)
+		if duration == 0 {
+			duration = 2000
+		}
+		periodMs := custom.DotPeriodMs
+		if periodMs == 0 {
+			periodMs = custom.StatusPeriodMs
+		}
+		period := uint64(periodMs)
+		tickVal := custom.DotTickValue
+		if tickVal == 0 {
+			tickVal = custom.StatusTickValue
+		}
+		if tickVal > 0 && period == 0 {
+			period = 1000
+		}
+		moveMult := custom.StatusMoveMult
+		if moveMult == nil {
+			moveMult = custom.StatusMoveMultiplier
+		}
+		policy := custom.StatusStackPolicy
+		if policy == "" {
+			policy = "REFRESH"
+		}
+		maxStacks := custom.StatusMaxStacks
+		if maxStacks == 0 {
+			maxStacks = 1
+		}
+		debuff := true
+		found := false
+		for idx := range active.Effects {
+			if active.Effects[idx].Type == "STATUS" {
+				active.Effects[idx].StatusID = custom.StatusID
+				active.Effects[idx].DurationMS = duration
+				active.Effects[idx].PeriodMS = period
+				active.Effects[idx].TickValue = tickVal
+				active.Effects[idx].MoveMultiplier = moveMult
+				active.Effects[idx].MaxStacks = maxStacks
+				active.Effects[idx].StackPolicy = policy
+				active.Effects[idx].Debuff = &debuff
+				active.Effects[idx].PvPDrCategory = pvpCat
+				found = true
+				break
+			}
+		}
+		if !found {
+			active.Effects = append(active.Effects, realtimeeffects.EffectProfile{
+				Type:           "STATUS",
+				StatusID:       custom.StatusID,
+				DurationMS:     duration,
+				PeriodMS:       period,
+				TickValue:      tickVal,
+				MoveMultiplier: moveMult,
+				MaxStacks:      maxStacks,
+				StackPolicy:    policy,
+				Debuff:         &debuff,
+				PvPDrCategory:  pvpCat,
+			})
+		}
+	}
+}
+
+func convertActiveToSkillProfile(name, pathStr string, rank int, active *realtimeeffects.ActiveProfile, visuals realtimeeffects.VisualProfile, blocks []rawTranspileBlock) models.GuSkillProfile {
+	elem := inferElementType(pathStr)
+	sp := models.GuSkillProfile{
+		SkillName:            name,
+		SkillIcon:            visuals.Icon,
+		CastMode:             models.SkillCastMode(active.Mode),
+		CastRange:            active.RangeUnits,
+		Radius:               active.RadiusUnits,
+		AngleDeg:             active.AngleDeg,
+		Length:               active.LengthUnits,
+		Width:                active.WidthUnits,
+		MaxTargets:           active.MaxTargets,
+		CastTimeMs:           int(active.WindupMS),
+		RecoveryMs:           int(active.RecoveryMS),
+		CooldownMs:           int(active.CooldownMS),
+		ManaCost:             active.ManaCost,
+		PlayerAtkRatio:       0.8 + 0.1*float64(rank),
+		GuPowerRatio:         1.0 + 0.15*float64(rank),
+		ElementType:          elem,
+		DamageType:           "PATH",
+		CastVFX:              visuals.CastVFX,
+		ProjectileVFX:        visuals.ProjectileVFX,
+		ImpactVFX:            visuals.ImpactVFX,
+		CastSFX:              inferCastSFX(pathStr),
+		HitSFX:               inferHitSFX(pathStr),
+		CameraShakeIntensity: 0.05 * float64(rank),
+	}
+	switch active.Shape {
+	case combat.ShapeCircle:
+		sp.Shape = models.SkillShapeCircle
+	case combat.ShapeCone:
+		sp.Shape = models.SkillShapeCone
+	case combat.ShapeRectangle:
+		sp.Shape = models.SkillShapeRectangle
+	default:
+		sp.Shape = models.SkillShapeSingle
+	}
+	if active.Projectile != nil {
+		sp.ProjectileSpeed = active.Projectile.SpeedUnitsPerSec
+		sp.Pierce = active.Projectile.PierceCount > 0
+	}
+	for _, eff := range active.Effects {
+		switch eff.Type {
+		case "DAMAGE":
+			sp.DamageBase = eff.Value
+		case "SHIELD":
+			sp.ShieldBase = eff.Value
+		case "HEAL":
+			sp.HealBase = eff.Value
+		case "CLEANSE":
+			sp.CleanseDebuff = true
+		}
+	}
+	for _, b := range blocks {
+		for _, op := range b.Operations {
+			if op.Op == "STATUS" && op.StatusID != "" && sp.StatusID == "" {
+				sp.StatusID = op.StatusID
+				sp.EffectChance = op.Chance
+				if sp.EffectChance == 0 {
+					sp.EffectChance = 1.0
+				}
+				if op.Turns > 0 {
+					sp.DurationMs = op.Turns * 1000
+				}
+			}
+		}
+	}
+	return sp
+}
+
+func inferElementType(pathStr string) string {
+	p := strings.ToLower(pathStr)
+	switch {
+	case strings.Contains(p, "fire"), strings.Contains(p, "viêm"):
+		return "Fire"
+	case strings.Contains(p, "water"), strings.Contains(p, "thủy"):
+		return "Water"
+	case strings.Contains(p, "ice"), strings.Contains(p, "frost"), strings.Contains(p, "băng"):
+		return "Ice"
+	case strings.Contains(p, "lightning"), strings.Contains(p, "lôi"):
+		return "Lightning"
+	case strings.Contains(p, "poison"), strings.Contains(p, "độc"):
+		return "Poison"
+	case strings.Contains(p, "earth"), strings.Contains(p, "thổ"):
+		return "Earth"
+	case strings.Contains(p, "wind"), strings.Contains(p, "phong"):
+		return "Wind"
+	case strings.Contains(p, "light"), strings.Contains(p, "quang"), strings.Contains(p, "moon"):
+		return "Light"
+	case strings.Contains(p, "dark"), strings.Contains(p, "ám"), strings.Contains(p, "shadow"):
+		return "Dark"
+	case strings.Contains(p, "blood"), strings.Contains(p, "huyết"):
+		return "Blood"
+	case strings.Contains(p, "sword"), strings.Contains(p, "kiếm"):
+		return "Sword"
+	case strings.Contains(p, "blade"), strings.Contains(p, "đao"):
+		return "Blade"
+	case strings.Contains(p, "soul"), strings.Contains(p, "hồn"):
+		return "Soul"
+	case strings.Contains(p, "space"), strings.Contains(p, "vũ"):
+		return "Space"
+	case strings.Contains(p, "time"), strings.Contains(p, "trụ"):
+		return "Time"
+	case strings.Contains(p, "strength"), strings.Contains(p, "lực"):
+		return "Strength"
+	default:
+		return "Neutral"
+	}
+}
+
+func inferCastSFX(pathStr string) string {
+	p := strings.ToLower(pathStr)
+	switch {
+	case strings.Contains(p, "fire"), strings.Contains(p, "viêm"):
+		return "sfx/fire_cast"
+	case strings.Contains(p, "water"), strings.Contains(p, "thủy"):
+		return "sfx/water_cast"
+	case strings.Contains(p, "ice"), strings.Contains(p, "frost"), strings.Contains(p, "băng"):
+		return "sfx/ice_cast"
+	case strings.Contains(p, "lightning"), strings.Contains(p, "lôi"):
+		return "sfx/thunder_cast"
+	case strings.Contains(p, "poison"), strings.Contains(p, "độc"):
+		return "sfx/poison_cast"
+	case strings.Contains(p, "sword"), strings.Contains(p, "blade"), strings.Contains(p, "kiếm"), strings.Contains(p, "đao"):
+		return "sfx/slash_cast"
+	case strings.Contains(p, "wind"), strings.Contains(p, "phong"):
+		return "sfx/wind_cast"
+	default:
+		return "sfx/cast_generic"
+	}
+}
+
+func inferHitSFX(pathStr string) string {
+	p := strings.ToLower(pathStr)
+	switch {
+	case strings.Contains(p, "fire"), strings.Contains(p, "viêm"):
+		return "sfx/fire_hit"
+	case strings.Contains(p, "water"), strings.Contains(p, "thủy"):
+		return "sfx/water_hit"
+	case strings.Contains(p, "ice"), strings.Contains(p, "frost"), strings.Contains(p, "băng"):
+		return "sfx/ice_hit"
+	case strings.Contains(p, "lightning"), strings.Contains(p, "lôi"):
+		return "sfx/thunder_hit"
+	case strings.Contains(p, "poison"), strings.Contains(p, "độc"):
+		return "sfx/poison_hit"
+	case strings.Contains(p, "sword"), strings.Contains(p, "blade"), strings.Contains(p, "kiếm"), strings.Contains(p, "đao"):
+		return "sfx/slash_hit"
+	default:
+		return "sfx/hit_generic"
 	}
 }

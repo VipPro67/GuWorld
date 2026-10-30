@@ -25,7 +25,7 @@ func TestCompileCommittedProfiles(t *testing.T) {
 	if compiled.Hash == "" {
 		t.Fatal("compiled catalog hash is empty")
 	}
-	if compiled.Hash != "024cfdbed99ed0b158fc5e93285af3bb9b5de7fbe48e006675b271d5db23ab4b" {
+	if compiled.Hash != "2cdd4d4c2ae2e30d560517b78d6cd326ffe86af594509cf6594008944d102ba8" {
 		t.Fatalf("compiled catalog drifted; update this baseline: %s", compiled.Hash)
 	}
 	arrow, ok := compiled.Profile("GU_WATER_ARROW", 1)
@@ -165,5 +165,68 @@ func TestCompilerRejectsDuplicateSlots(t *testing.T) {
 	entries := []GuEntry{{ID: "GU_A", Rank: 1}, {ID: "GU_B", Rank: 1}}
 	if _, err := CompileCatalog(catalog, entries, nil); err == nil {
 		t.Fatal("duplicate slot was accepted")
+	}
+}
+
+func TestNewCombatProfileArchetypes(t *testing.T) {
+	profiles, err := LoadProfiles("../../../data/mmo/gu/transpiled_profiles.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := loadGuCSV("../../../data/Gu.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := CompileCatalog(profiles, entries, DefaultMVP())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Poison Sting 2: Spread projectiles + Poison DoT
+	poison, ok := compiled.Profile("GU_POISON_STING_2", 2)
+	if !ok || poison.Active == nil {
+		t.Fatal("GU_POISON_STING_2 rank 2 profile missing")
+	}
+	if poison.Active.Skill.SpreadCount != 5 || poison.Active.Skill.SpreadAngleDeg != 35 {
+		t.Fatalf("unexpected spread config: count=%d, angle=%f", poison.Active.Skill.SpreadCount, poison.Active.Skill.SpreadAngleDeg)
+	}
+	if poison.Active.Skill.StatusID != "POISON" || poison.Active.Skill.StatusDamagePerTick != 8 {
+		t.Fatalf("unexpected poison status: id=%s, dmg=%f", poison.Active.Skill.StatusID, poison.Active.Skill.StatusDamagePerTick)
+	}
+
+	// 2. Fire Ball: Burn status with healing reduction
+	fire, ok := compiled.Profile("GU_FIRE_BALL", 1)
+	if !ok || fire.Active == nil {
+		t.Fatal("GU_FIRE_BALL rank 1 profile missing")
+	}
+	if fire.Active.Skill.StatusID != "BURN" {
+		t.Fatalf("expected BURN status, got %s", fire.Active.Skill.StatusID)
+	}
+
+	// 3. Rule Restrict 2: Tactical CC Bind
+	rule, ok := compiled.Profile("GU_RULE_RESTRICT_2", 2)
+	if !ok || rule.Active == nil {
+		t.Fatal("GU_RULE_RESTRICT_2 rank 2 profile missing")
+	}
+	if rule.Active.Skill.StatusID != "BIND" || rule.Active.Skill.StatusMoveMultiplier != 0.0 {
+		t.Fatalf("unexpected bind status: id=%s, moveMult=%f", rule.Active.Skill.StatusID, rule.Active.Skill.StatusMoveMultiplier)
+	}
+
+	// 4. Blade Strike 1: Melee Cone Cleave + Knockback
+	blade, ok := compiled.Profile("GU_BLADE_STRIKE_1", 1)
+	if !ok || blade.Active == nil {
+		t.Fatal("GU_BLADE_STRIKE_1 rank 1 profile missing")
+	}
+	if blade.Active.Skill.Shape != combat.ShapeCone || blade.Active.Skill.KnockbackDistance != 2.0 {
+		t.Fatalf("unexpected blade cone config: shape=%s, knockback=%f", blade.Active.Skill.Shape, blade.Active.Skill.KnockbackDistance)
+	}
+
+	// 5. Black Boar 1: Melee Dash + Knockback
+	boar, ok := compiled.Profile("GU_BLACK_BOAR", 1)
+	if !ok || boar.Active == nil {
+		t.Fatal("GU_BLACK_BOAR rank 1 profile missing")
+	}
+	if boar.Active.Skill.MoveDistance != 4.0 || boar.Active.Skill.KnockbackDistance != 2.5 {
+		t.Fatalf("unexpected boar dash config: move=%f, knockback=%f", boar.Active.Skill.MoveDistance, boar.Active.Skill.KnockbackDistance)
 	}
 }
