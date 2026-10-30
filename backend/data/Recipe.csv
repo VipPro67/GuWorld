@@ -4482,3 +4482,240 @@ GU_FLY_SKY_I,6,1,"{""GU_FLY_SKY_5"": {""qty"": 1, ""rank"": 5}, ""GU_WIND_BLOW_5
 GU_FLY_SKY_I,7,1,"{""GU_FLY_SKY_I"": {""qty"": 1, ""rank"": 6}, ""GU_WIND_CHIME_WHISPER_I"": {""qty"": 1, ""rank"": 6}, ""GU_WIND_BLOW_5"": {""qty"": 1, ""rank"": 5}, ""GU_OIL_WORM_5"": {""qty"": 1, ""rank"": 5}, ""GU_QI_SEPARATION_4"": {""qty"": 1, ""rank"": 4}}","{""wind_stone_rank7"": 200, ""storm_eagle_feather_rank7"": 160, ""wind_stone_rank6"": 80, ""langya_refinement_shard_rank7"": 70, ""qi_stone_rank7"": 50}",0.03,200000.000,800.000
 GU_FLY_SKY_I,8,1,"{""GU_FLY_SKY_I"": {""qty"": 1, ""rank"": 7}, ""GU_WIND_DISASTER"": {""qty"": 1, ""rank"": 7}, ""GU_WIND_CHIME_WHISPER_I"": {""qty"": 1, ""rank"": 6}, ""GU_NINE_TURNS_NURTURE_PILL_I"": {""qty"": 1, ""rank"": 6}, ""GU_WIND_BLOW_5"": {""qty"": 1, ""rank"": 5}}","{""wind_stone_rank8"": 350, ""storm_eagle_feather_rank8"": 280, ""storm_eagle_feather_rank7"": 150, ""refinement_iron_rank8"": 120, ""qi_dragon_scale_rank8"": 90}",0.01,1000000.000,4000.000
 GU_FLY_SKY_I,9,1,"{""GU_FLY_SKY_I"": {""qty"": 1, ""rank"": 8}, ""GU_FLYING_SWORD_I"": {""qty"": 1, ""rank"": 8}, ""GU_WIND_DISASTER"": {""qty"": 1, ""rank"": 7}, ""GU_SPIRIT_FIRE_I"": {""qty"": 1, ""rank"": 7}, ""GU_QI_ESCAPE"": {""qty"": 1, ""rank"": 6}, ""GU_WIND_BLOW_5"": {""qty"": 1, ""rank"": 5}}","{""wind_stone_rank9"": 600, ""storm_eagle_feather_rank9"": 500, ""wind_stone_rank8"": 250, ""storm_eagle_feather_rank8"": 200, ""langya_refinement_shard_rank9"": 150}",0.002,5000000.000,20000.000
+GU_INFINITY,1,1,{},"{""INFINITY_STONE"": 10}",0.9,50.000,0.000
+GU_TAIJI,2,1,"{""GU_INFINITY"": {""qty"": 1, ""rank"": 1}}","{""TAIJI_JADE"": 10}",0.8,200.000,0.000
+GU_LANGYI_YANG,3,1,"{""GU_TAIJI"": {""qty"": 1, ""rank"": 2}}","{""LIANGYI_ORE"": 10}",0.7,800.000,0.000
+GU_LANGYI_YIN,3,1,"{""GU_TAIJI"": {""qty"": 1, ""rank"": 2}}","{""LIANGYI_ORE"": 10}",0.7,800.000,0.000
+GU_SIXIANG_TAIYANG,4,1,"{""GU_LANGYI_YANG"": {""qty"": 1, ""rank"": 3}}","{""SIXIANG_AMBER"": 10}",0.5,3000.000,0.000
+GU_SIXIANG_TAIYANG,4,2,"{""GU_LANGYI_YIN"": {""qty"": 1, ""rank"": 3}}","{""SIXIANG_AMBER"": 10}",0.5,3000.000,0.000
+GU_SIXIANG_TAIYIN,4,1,"{""GU_LANGYI_YANG"": {""qty"": 1, ""rank"": 3}}","{""SIXIANG_AMBER"": 10}",0.5,3000.000,0.000
+GU_SIXIANG_TAIYIN,4,2,"{""GU_LANGYI_YIN"": {""qty"": 1, ""rank"": 3}}","{""SIXIANG_AMBER"": 10}",0.5,3000.000,0.000
+GU_SIXIANG_SHAOYANG,4,1,"{""GU_LANGYI_YANG"": {""qty"": 1, ""rank"": 3}}","{""SIXIANG_AMBER"": 10}",0.5,3000.000,0.000
+GU_SIXIANG_SHAOYANG,4,2,"{""GU_LANGYI_YIN"": {""qty"": 1, ""rank"": 3}}","{""SIXIANG_AMBER"": 10}",0.5,3000.000,0.000
+GU_SIXIANG_SHAOYIN,4,1,"{""GU_LANGYI_YANG"": {""qty"": 1, ""rank"": 3}}","{""SIXIANG_AMBER"": 10}",0.5,3000.000,0.000
+GU_SIXIANG_SHAOYIN,4,2,"{""GU_LANGYI_YIN"": {""qty"": 1, ""rank"": 3}}","{""SIXIANG_AMBER"": 10}",0.5,3000.000,0.000
+GU_BAGUA_QIAN,5,1,"{""GU_SIXIANG_TAIYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_QIAN,5,2,"{""GU_SIXIANG_TAIYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_QIAN,5,3,"{""GU_SIXIANG_SHAOYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_QIAN,5,4,"{""GU_SIXIANG_SHAOYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_KUN,5,1,"{""GU_SIXIANG_TAIYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_KUN,5,2,"{""GU_SIXIANG_TAIYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_KUN,5,3,"{""GU_SIXIANG_SHAOYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_KUN,5,4,"{""GU_SIXIANG_SHAOYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_ZHEN,5,1,"{""GU_SIXIANG_TAIYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_ZHEN,5,2,"{""GU_SIXIANG_TAIYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_ZHEN,5,3,"{""GU_SIXIANG_SHAOYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_ZHEN,5,4,"{""GU_SIXIANG_SHAOYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_XUN,5,1,"{""GU_SIXIANG_TAIYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_XUN,5,2,"{""GU_SIXIANG_TAIYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_XUN,5,3,"{""GU_SIXIANG_SHAOYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_XUN,5,4,"{""GU_SIXIANG_SHAOYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_KAN,5,1,"{""GU_SIXIANG_TAIYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_KAN,5,2,"{""GU_SIXIANG_TAIYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_KAN,5,3,"{""GU_SIXIANG_SHAOYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_KAN,5,4,"{""GU_SIXIANG_SHAOYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_LI,5,1,"{""GU_SIXIANG_TAIYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_LI,5,2,"{""GU_SIXIANG_TAIYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_LI,5,3,"{""GU_SIXIANG_SHAOYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_LI,5,4,"{""GU_SIXIANG_SHAOYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_GEN,5,1,"{""GU_SIXIANG_TAIYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_GEN,5,2,"{""GU_SIXIANG_TAIYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_GEN,5,3,"{""GU_SIXIANG_SHAOYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_GEN,5,4,"{""GU_SIXIANG_SHAOYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_DUI,5,1,"{""GU_SIXIANG_TAIYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_DUI,5,2,"{""GU_SIXIANG_TAIYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_DUI,5,3,"{""GU_SIXIANG_SHAOYANG"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_BAGUA_DUI,5,4,"{""GU_SIXIANG_SHAOYIN"": {""qty"": 1, ""rank"": 4}}","{""BAGUA_CRYSTALS"": 10}",0.35,15000.000,0.000
+GU_HEXAGRAM_QIAN_QIAN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 2, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 20}",0.1,50000.000,100.000
+GU_HEXAGRAM_QIAN_KUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""KUN_EARTH_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_QIAN_ZHEN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""ZHEN_STORM_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_QIAN_XUN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""XUN_WIND_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_QIAN_KAN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 1, ""KAN_WATER_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_QIAN_LI,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_QIAN_GEN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_QIAN_DUI,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KUN_QIAN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""KUN_EARTH_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KUN_KUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 2, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 20}",0.1,50000.000,100.000
+GU_HEXAGRAM_KUN_ZHEN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""ZHEN_STORM_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KUN_XUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""XUN_WIND_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KUN_KAN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""KAN_WATER_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KUN_LI,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KUN_GEN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KUN_DUI,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_ZHEN_QIAN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""ZHEN_STORM_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_ZHEN_KUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""ZHEN_STORM_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_ZHEN_ZHEN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 2, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 20}",0.1,50000.000,100.000
+GU_HEXAGRAM_ZHEN_XUN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""XUN_WIND_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_ZHEN_KAN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""KAN_WATER_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_ZHEN_LI,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_ZHEN_GEN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_ZHEN_DUI,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_XUN_QIAN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""XUN_WIND_RANK6"": 1}",0.1,50000.000,100.000
+GU_HEXAGRAM_XUN_KUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""XUN_WIND_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_XUN_ZHEN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""XUN_WIND_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_XUN_XUN,6,1,"{""GU_BAGUA_XUN"": {""qty"": 2, ""rank"": 5}}","{""XUN_WIND_RANK6"": 20}",0.1,50000.000,100.000
+GU_HEXAGRAM_XUN_KAN,6,1,"{""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}}","{""XUN_WIND_RANK6"": 10, ""KAN_WATER_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_XUN_LI,6,1,"{""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""XUN_WIND_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_XUN_GEN,6,1,"{""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""XUN_WIND_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_XUN_DUI,6,1,"{""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""XUN_WIND_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KAN_QIAN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""KAN_WATER_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KAN_KUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""KAN_WATER_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KAN_ZHEN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""KAN_WATER_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KAN_XUN,6,1,"{""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}}","{""XUN_WIND_RANK6"": 10, ""KAN_WATER_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KAN_KAN,6,1,"{""GU_BAGUA_KAN"": {""qty"": 2, ""rank"": 5}}","{""KAN_WATER_RANK6"": 20}",0.1,50000.000,100.000
+GU_HEXAGRAM_KAN_LI,6,1,"{""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""KAN_WATER_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KAN_GEN,6,1,"{""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""KAN_WATER_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_KAN_DUI,6,1,"{""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""KAN_WATER_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_LI_QIAN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_LI_KUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_LI_ZHEN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_LI_XUN,6,1,"{""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""XUN_WIND_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_LI_KAN,6,1,"{""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}}","{""KAN_WATER_RANK6"": 10, ""LI_FIRE_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_LI_LI,6,1,"{""GU_BAGUA_LI"": {""qty"": 2, ""rank"": 5}}","{""LI_FIRE_RANK6"": 20}",0.1,50000.000,100.000
+GU_HEXAGRAM_LI_GEN,6,1,"{""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""LI_FIRE_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_LI_DUI,6,1,"{""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""LI_FIRE_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_GEN_QIAN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_GEN_KUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_GEN_ZHEN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_GEN_XUN,6,1,"{""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""XUN_WIND_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_GEN_KAN,6,1,"{""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""KAN_WATER_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_GEN_LI,6,1,"{""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""KAN_WATER_RANK6"": 10, ""GEN_MOUNTAIN_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_GEN_GEN,6,1,"{""GU_BAGUA_GEN"": {""qty"": 2, ""rank"": 5}}","{""GEN_MOUNTAIN_RANK6"": 20}",0.1,50000.000,100.000
+GU_HEXAGRAM_GEN_DUI,6,1,"{""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""GEN_MOUNTAIN_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_DUI_QIAN,6,1,"{""GU_BAGUA_QIAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""QIAN_SKY_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_DUI_KUN,6,1,"{""GU_BAGUA_KUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""KUN_EARTH_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_DUI_ZHEN,6,1,"{""GU_BAGUA_ZHEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""ZHEN_STORM_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_DUI_XUN,6,1,"{""GU_BAGUA_XUN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""XUN_WIND_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_DUI_KAN,6,1,"{""GU_BAGUA_KAN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""KAN_WATER_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_DUI_LI,6,1,"{""GU_BAGUA_LI"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}}","{""LI_FIRE_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_DUI_GEN,6,1,"{""GU_BAGUA_GEN"": {""qty"": 1, ""rank"": 5}, ""GU_BAGUA_DUI"": {""qty"": 1, ""rank"": 5}}","{""GEN_MOUNTAIN_RANK6"": 10, ""DUI_SWAMP_RANK6"": 10}",0.1,50000.000,100.000
+GU_HEXAGRAM_DUI_DUI,6,1,"{""GU_BAGUA_DUI"": {""qty"": 2, ""rank"": 5}}","{""DUI_SWAMP_RANK6"": 20}",0.1,50000.000,100.000
+GU_HEXAGRAM_QIAN_QIAN,7,1,"{""GU_HEXAGRAM_QIAN_QIAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 20}",0.05,200000.000,500.000
+GU_HEXAGRAM_QIAN_KUN,7,1,"{""GU_HEXAGRAM_QIAN_KUN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""KUN_EARTH_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_QIAN_ZHEN,7,1,"{""GU_HEXAGRAM_QIAN_ZHEN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""ZHEN_STORM_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_QIAN_XUN,7,1,"{""GU_HEXAGRAM_QIAN_XUN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""XUN_WIND_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_QIAN_KAN,7,1,"{""GU_HEXAGRAM_QIAN_KAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 1, ""KAN_WATER_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_QIAN_LI,7,1,"{""GU_HEXAGRAM_QIAN_LI"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_QIAN_GEN,7,1,"{""GU_HEXAGRAM_QIAN_GEN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_QIAN_DUI,7,1,"{""GU_HEXAGRAM_QIAN_DUI"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KUN_QIAN,7,1,"{""GU_HEXAGRAM_KUN_QIAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""KUN_EARTH_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KUN_KUN,7,1,"{""GU_HEXAGRAM_KUN_KUN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 20}",0.05,200000.000,500.000
+GU_HEXAGRAM_KUN_ZHEN,7,1,"{""GU_HEXAGRAM_KUN_ZHEN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""ZHEN_STORM_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KUN_XUN,7,1,"{""GU_HEXAGRAM_KUN_XUN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""XUN_WIND_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KUN_KAN,7,1,"{""GU_HEXAGRAM_KUN_KAN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""KAN_WATER_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KUN_LI,7,1,"{""GU_HEXAGRAM_KUN_LI"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KUN_GEN,7,1,"{""GU_HEXAGRAM_KUN_GEN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KUN_DUI,7,1,"{""GU_HEXAGRAM_KUN_DUI"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_ZHEN_QIAN,7,1,"{""GU_HEXAGRAM_ZHEN_QIAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""ZHEN_STORM_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_ZHEN_KUN,7,1,"{""GU_HEXAGRAM_ZHEN_KUN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""ZHEN_STORM_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_ZHEN_ZHEN,7,1,"{""GU_HEXAGRAM_ZHEN_ZHEN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 20}",0.05,200000.000,500.000
+GU_HEXAGRAM_ZHEN_XUN,7,1,"{""GU_HEXAGRAM_ZHEN_XUN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""XUN_WIND_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_ZHEN_KAN,7,1,"{""GU_HEXAGRAM_ZHEN_KAN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""KAN_WATER_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_ZHEN_LI,7,1,"{""GU_HEXAGRAM_ZHEN_LI"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_ZHEN_GEN,7,1,"{""GU_HEXAGRAM_ZHEN_GEN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_ZHEN_DUI,7,1,"{""GU_HEXAGRAM_ZHEN_DUI"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_XUN_QIAN,7,1,"{""GU_HEXAGRAM_XUN_QIAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""XUN_WIND_RANK7"": 1}",0.05,200000.000,500.000
+GU_HEXAGRAM_XUN_KUN,7,1,"{""GU_HEXAGRAM_XUN_KUN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""XUN_WIND_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_XUN_ZHEN,7,1,"{""GU_HEXAGRAM_XUN_ZHEN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""XUN_WIND_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_XUN_XUN,7,1,"{""GU_HEXAGRAM_XUN_XUN"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 20}",0.05,200000.000,500.000
+GU_HEXAGRAM_XUN_KAN,7,1,"{""GU_HEXAGRAM_XUN_KAN"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 10, ""KAN_WATER_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_XUN_LI,7,1,"{""GU_HEXAGRAM_XUN_LI"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_XUN_GEN,7,1,"{""GU_HEXAGRAM_XUN_GEN"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_XUN_DUI,7,1,"{""GU_HEXAGRAM_XUN_DUI"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KAN_QIAN,7,1,"{""GU_HEXAGRAM_KAN_QIAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""KAN_WATER_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KAN_KUN,7,1,"{""GU_HEXAGRAM_KAN_KUN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""KAN_WATER_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KAN_ZHEN,7,1,"{""GU_HEXAGRAM_KAN_ZHEN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""KAN_WATER_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KAN_XUN,7,1,"{""GU_HEXAGRAM_KAN_XUN"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 10, ""KAN_WATER_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KAN_KAN,7,1,"{""GU_HEXAGRAM_KAN_KAN"": {""qty"": 1, ""rank"": 6}}","{""KAN_WATER_RANK7"": 20}",0.05,200000.000,500.000
+GU_HEXAGRAM_KAN_LI,7,1,"{""GU_HEXAGRAM_KAN_LI"": {""qty"": 1, ""rank"": 6}}","{""KAN_WATER_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KAN_GEN,7,1,"{""GU_HEXAGRAM_KAN_GEN"": {""qty"": 1, ""rank"": 6}}","{""KAN_WATER_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_KAN_DUI,7,1,"{""GU_HEXAGRAM_KAN_DUI"": {""qty"": 1, ""rank"": 6}}","{""KAN_WATER_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_LI_QIAN,7,1,"{""GU_HEXAGRAM_LI_QIAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_LI_KUN,7,1,"{""GU_HEXAGRAM_LI_KUN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_LI_ZHEN,7,1,"{""GU_HEXAGRAM_LI_ZHEN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_LI_XUN,7,1,"{""GU_HEXAGRAM_LI_XUN"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_LI_KAN,7,1,"{""GU_HEXAGRAM_LI_KAN"": {""qty"": 1, ""rank"": 6}}","{""KAN_WATER_RANK7"": 10, ""LI_FIRE_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_LI_LI,7,1,"{""GU_HEXAGRAM_LI_LI"": {""qty"": 1, ""rank"": 6}}","{""LI_FIRE_RANK7"": 20}",0.05,200000.000,500.000
+GU_HEXAGRAM_LI_GEN,7,1,"{""GU_HEXAGRAM_LI_GEN"": {""qty"": 1, ""rank"": 6}}","{""LI_FIRE_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_LI_DUI,7,1,"{""GU_HEXAGRAM_LI_DUI"": {""qty"": 1, ""rank"": 6}}","{""LI_FIRE_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_GEN_QIAN,7,1,"{""GU_HEXAGRAM_GEN_QIAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_GEN_KUN,7,1,"{""GU_HEXAGRAM_GEN_KUN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_GEN_ZHEN,7,1,"{""GU_HEXAGRAM_GEN_ZHEN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_GEN_XUN,7,1,"{""GU_HEXAGRAM_GEN_XUN"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_GEN_KAN,7,1,"{""GU_HEXAGRAM_GEN_KAN"": {""qty"": 1, ""rank"": 6}}","{""KAN_WATER_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_GEN_LI,7,1,"{""GU_HEXAGRAM_GEN_LI"": {""qty"": 1, ""rank"": 6}}","{""KAN_WATER_RANK7"": 10, ""GEN_MOUNTAIN_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_GEN_GEN,7,1,"{""GU_HEXAGRAM_GEN_GEN"": {""qty"": 1, ""rank"": 6}}","{""GEN_MOUNTAIN_RANK7"": 20}",0.05,200000.000,500.000
+GU_HEXAGRAM_GEN_DUI,7,1,"{""GU_HEXAGRAM_GEN_DUI"": {""qty"": 1, ""rank"": 6}}","{""GEN_MOUNTAIN_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_DUI_QIAN,7,1,"{""GU_HEXAGRAM_DUI_QIAN"": {""qty"": 1, ""rank"": 6}}","{""QIAN_SKY_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_DUI_KUN,7,1,"{""GU_HEXAGRAM_DUI_KUN"": {""qty"": 1, ""rank"": 6}}","{""KUN_EARTH_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_DUI_ZHEN,7,1,"{""GU_HEXAGRAM_DUI_ZHEN"": {""qty"": 1, ""rank"": 6}}","{""ZHEN_STORM_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_DUI_XUN,7,1,"{""GU_HEXAGRAM_DUI_XUN"": {""qty"": 1, ""rank"": 6}}","{""XUN_WIND_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_DUI_KAN,7,1,"{""GU_HEXAGRAM_DUI_KAN"": {""qty"": 1, ""rank"": 6}}","{""KAN_WATER_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_DUI_LI,7,1,"{""GU_HEXAGRAM_DUI_LI"": {""qty"": 1, ""rank"": 6}}","{""LI_FIRE_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_DUI_GEN,7,1,"{""GU_HEXAGRAM_DUI_GEN"": {""qty"": 1, ""rank"": 6}}","{""GEN_MOUNTAIN_RANK7"": 10, ""DUI_SWAMP_RANK7"": 10}",0.05,200000.000,500.000
+GU_HEXAGRAM_DUI_DUI,7,1,"{""GU_HEXAGRAM_DUI_DUI"": {""qty"": 1, ""rank"": 6}}","{""DUI_SWAMP_RANK7"": 20}",0.05,200000.000,500.000
+GU_HEXAGRAM_QIAN_QIAN,8,1,"{""GU_HEXAGRAM_QIAN_QIAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 20}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_QIAN_KUN,8,1,"{""GU_HEXAGRAM_QIAN_KUN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""KUN_EARTH_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_QIAN_ZHEN,8,1,"{""GU_HEXAGRAM_QIAN_ZHEN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""ZHEN_STORM_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_QIAN_XUN,8,1,"{""GU_HEXAGRAM_QIAN_XUN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""XUN_WIND_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_QIAN_KAN,8,1,"{""GU_HEXAGRAM_QIAN_KAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 1, ""KAN_WATER_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_QIAN_LI,8,1,"{""GU_HEXAGRAM_QIAN_LI"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_QIAN_GEN,8,1,"{""GU_HEXAGRAM_QIAN_GEN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_QIAN_DUI,8,1,"{""GU_HEXAGRAM_QIAN_DUI"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KUN_QIAN,8,1,"{""GU_HEXAGRAM_KUN_QIAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""KUN_EARTH_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KUN_KUN,8,1,"{""GU_HEXAGRAM_KUN_KUN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 20}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KUN_ZHEN,8,1,"{""GU_HEXAGRAM_KUN_ZHEN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""ZHEN_STORM_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KUN_XUN,8,1,"{""GU_HEXAGRAM_KUN_XUN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""XUN_WIND_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KUN_KAN,8,1,"{""GU_HEXAGRAM_KUN_KAN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""KAN_WATER_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KUN_LI,8,1,"{""GU_HEXAGRAM_KUN_LI"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KUN_GEN,8,1,"{""GU_HEXAGRAM_KUN_GEN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KUN_DUI,8,1,"{""GU_HEXAGRAM_KUN_DUI"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_ZHEN_QIAN,8,1,"{""GU_HEXAGRAM_ZHEN_QIAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""ZHEN_STORM_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_ZHEN_KUN,8,1,"{""GU_HEXAGRAM_ZHEN_KUN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""ZHEN_STORM_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_ZHEN_ZHEN,8,1,"{""GU_HEXAGRAM_ZHEN_ZHEN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 20}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_ZHEN_XUN,8,1,"{""GU_HEXAGRAM_ZHEN_XUN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""XUN_WIND_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_ZHEN_KAN,8,1,"{""GU_HEXAGRAM_ZHEN_KAN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""KAN_WATER_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_ZHEN_LI,8,1,"{""GU_HEXAGRAM_ZHEN_LI"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_ZHEN_GEN,8,1,"{""GU_HEXAGRAM_ZHEN_GEN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_ZHEN_DUI,8,1,"{""GU_HEXAGRAM_ZHEN_DUI"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_XUN_QIAN,8,1,"{""GU_HEXAGRAM_XUN_QIAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""XUN_WIND_RANK8"": 1}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_XUN_KUN,8,1,"{""GU_HEXAGRAM_XUN_KUN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""XUN_WIND_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_XUN_ZHEN,8,1,"{""GU_HEXAGRAM_XUN_ZHEN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""XUN_WIND_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_XUN_XUN,8,1,"{""GU_HEXAGRAM_XUN_XUN"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 20}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_XUN_KAN,8,1,"{""GU_HEXAGRAM_XUN_KAN"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 10, ""KAN_WATER_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_XUN_LI,8,1,"{""GU_HEXAGRAM_XUN_LI"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_XUN_GEN,8,1,"{""GU_HEXAGRAM_XUN_GEN"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_XUN_DUI,8,1,"{""GU_HEXAGRAM_XUN_DUI"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KAN_QIAN,8,1,"{""GU_HEXAGRAM_KAN_QIAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""KAN_WATER_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KAN_KUN,8,1,"{""GU_HEXAGRAM_KAN_KUN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""KAN_WATER_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KAN_ZHEN,8,1,"{""GU_HEXAGRAM_KAN_ZHEN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""KAN_WATER_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KAN_XUN,8,1,"{""GU_HEXAGRAM_KAN_XUN"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 10, ""KAN_WATER_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KAN_KAN,8,1,"{""GU_HEXAGRAM_KAN_KAN"": {""qty"": 1, ""rank"": 7}}","{""KAN_WATER_RANK8"": 20}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KAN_LI,8,1,"{""GU_HEXAGRAM_KAN_LI"": {""qty"": 1, ""rank"": 7}}","{""KAN_WATER_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KAN_GEN,8,1,"{""GU_HEXAGRAM_KAN_GEN"": {""qty"": 1, ""rank"": 7}}","{""KAN_WATER_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_KAN_DUI,8,1,"{""GU_HEXAGRAM_KAN_DUI"": {""qty"": 1, ""rank"": 7}}","{""KAN_WATER_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_LI_QIAN,8,1,"{""GU_HEXAGRAM_LI_QIAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_LI_KUN,8,1,"{""GU_HEXAGRAM_LI_KUN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_LI_ZHEN,8,1,"{""GU_HEXAGRAM_LI_ZHEN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_LI_XUN,8,1,"{""GU_HEXAGRAM_LI_XUN"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_LI_KAN,8,1,"{""GU_HEXAGRAM_LI_KAN"": {""qty"": 1, ""rank"": 7}}","{""KAN_WATER_RANK8"": 10, ""LI_FIRE_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_LI_LI,8,1,"{""GU_HEXAGRAM_LI_LI"": {""qty"": 1, ""rank"": 7}}","{""LI_FIRE_RANK8"": 20}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_LI_GEN,8,1,"{""GU_HEXAGRAM_LI_GEN"": {""qty"": 1, ""rank"": 7}}","{""LI_FIRE_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_LI_DUI,8,1,"{""GU_HEXAGRAM_LI_DUI"": {""qty"": 1, ""rank"": 7}}","{""LI_FIRE_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_GEN_QIAN,8,1,"{""GU_HEXAGRAM_GEN_QIAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_GEN_KUN,8,1,"{""GU_HEXAGRAM_GEN_KUN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_GEN_ZHEN,8,1,"{""GU_HEXAGRAM_GEN_ZHEN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_GEN_XUN,8,1,"{""GU_HEXAGRAM_GEN_XUN"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_GEN_KAN,8,1,"{""GU_HEXAGRAM_GEN_KAN"": {""qty"": 1, ""rank"": 7}}","{""KAN_WATER_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_GEN_LI,8,1,"{""GU_HEXAGRAM_GEN_LI"": {""qty"": 1, ""rank"": 7}}","{""KAN_WATER_RANK8"": 10, ""GEN_MOUNTAIN_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_GEN_GEN,8,1,"{""GU_HEXAGRAM_GEN_GEN"": {""qty"": 1, ""rank"": 7}}","{""GEN_MOUNTAIN_RANK8"": 20}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_GEN_DUI,8,1,"{""GU_HEXAGRAM_GEN_DUI"": {""qty"": 1, ""rank"": 7}}","{""GEN_MOUNTAIN_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_DUI_QIAN,8,1,"{""GU_HEXAGRAM_DUI_QIAN"": {""qty"": 1, ""rank"": 7}}","{""QIAN_SKY_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_DUI_KUN,8,1,"{""GU_HEXAGRAM_DUI_KUN"": {""qty"": 1, ""rank"": 7}}","{""KUN_EARTH_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_DUI_ZHEN,8,1,"{""GU_HEXAGRAM_DUI_ZHEN"": {""qty"": 1, ""rank"": 7}}","{""ZHEN_STORM_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_DUI_XUN,8,1,"{""GU_HEXAGRAM_DUI_XUN"": {""qty"": 1, ""rank"": 7}}","{""XUN_WIND_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_DUI_KAN,8,1,"{""GU_HEXAGRAM_DUI_KAN"": {""qty"": 1, ""rank"": 7}}","{""KAN_WATER_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_DUI_LI,8,1,"{""GU_HEXAGRAM_DUI_LI"": {""qty"": 1, ""rank"": 7}}","{""LI_FIRE_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_DUI_GEN,8,1,"{""GU_HEXAGRAM_DUI_GEN"": {""qty"": 1, ""rank"": 7}}","{""GEN_MOUNTAIN_RANK8"": 10, ""DUI_SWAMP_RANK8"": 10}",0.02,1000000.000,2500.000
+GU_HEXAGRAM_DUI_DUI,8,1,"{""GU_HEXAGRAM_DUI_DUI"": {""qty"": 1, ""rank"": 7}}","{""DUI_SWAMP_RANK8"": 20}",0.02,1000000.000,2500.000
+GU_XUAN,9,1,"{""GU_HEXAGRAM_QIAN_QIAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_QIAN_KUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_QIAN_ZHEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_QIAN_XUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_QIAN_KAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_QIAN_LI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_QIAN_GEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_QIAN_DUI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KUN_QIAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KUN_KUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KUN_ZHEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KUN_XUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KUN_KAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KUN_LI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KUN_GEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KUN_DUI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_ZHEN_QIAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_ZHEN_KUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_ZHEN_ZHEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_ZHEN_XUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_ZHEN_KAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_ZHEN_LI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_ZHEN_GEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_ZHEN_DUI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_XUN_QIAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_XUN_KUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_XUN_ZHEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_XUN_XUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_XUN_KAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_XUN_LI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_XUN_GEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_XUN_DUI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KAN_QIAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KAN_KUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KAN_ZHEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KAN_XUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KAN_KAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KAN_LI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KAN_GEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_KAN_DUI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_LI_QIAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_LI_KUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_LI_ZHEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_LI_XUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_LI_KAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_LI_LI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_LI_GEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_LI_DUI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_GEN_QIAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_GEN_KUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_GEN_ZHEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_GEN_XUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_GEN_KAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_GEN_LI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_GEN_GEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_GEN_DUI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_DUI_QIAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_DUI_KUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_DUI_ZHEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_DUI_XUN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_DUI_KAN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_DUI_LI"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_DUI_GEN"": {""qty"": 1, ""rank"": 8}, ""GU_HEXAGRAM_DUI_DUI"": {""qty"": 1, ""rank"": 8}}",{},0.01,5000000.000,10000.000

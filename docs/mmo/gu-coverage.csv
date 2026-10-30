@@ -5476,6 +5476,7 @@ GU_WORLDLY_ESCAPE,6,Active,MOVEMENT_CORE,NEEDS_REAUTHOR,false,EVASION_SKILL,ON_A
 GU_WORLD_TREE,3,Passive,Support,SUPPORTED,false,PASSIVE_STATS,ALWAYS_ON,SELF,STAT_MOD,SUPPORTED,,
 GU_WORLD_TREE_IMMORTAL,6,Passive,HEAL_CORE,SUPPORTED,false,ACTIVE_SKILL,ON_ACTION,TARGET,HEAL,SUPPORTED,,
 GU_XAM_XAM,1,Consumable,CONSUMABLE,NOT_ACTIVE,false,REDUCE_STRESS,ON_CONSUME,SELF,UNIQUE,NOT_ACTIVE,domain_trigger_ON_CONSUME;native_hook_REDUCE_STRESS,Keep as domain/world action; it is not part of zone combat.
+GU_XUAN,9,Active,SPECIAL,NEEDS_REAUTHOR,false,INSTANT_WIN,ON_BATTLE_START,SELF,UNIQUE,NEEDS_REAUTHOR,native_hook_INSTANT_WIN;trigger_ON_BATTLE_START,Map to ON_ENTER_COMBAT with hysteresis; do not fire on every combat-boundary crossing. Implement a versioned Go native handler for INSTANT_WIN with deterministic tests; do not run scripts from data.
 GU_XUAN,10,Active,SPECIAL,NEEDS_REAUTHOR,false,INSTANT_WIN,ON_BATTLE_START,SELF,UNIQUE,NEEDS_REAUTHOR,native_hook_INSTANT_WIN;trigger_ON_BATTLE_START,Map to ON_ENTER_COMBAT with hysteresis; do not fire on every combat-boundary crossing. Implement a versioned Go native handler for INSTANT_WIN with deterministic tests; do not run scripts from data.
 GU_YEARNING_RED_THREAD_I,6,Support,UTILITY_SUPPORT,NEEDS_REAUTHOR,false,ACTIVE_SKILL,ON_ACTION,TARGET,STATUS,NEEDS_REAUTHOR,status_duration_stack,"Author durationMs, periodMs, max stacks, refresh/ICD and PvP diminishing returns for CHARM."
 GU_YEAR_GU,3,Support,ECONOMY_BOOST,NOT_ACTIVE,false,,,,,,no_effect_blocks,
