@@ -66,6 +66,8 @@ export interface CombatLogEntry {
   target_id?: string;
   target_name?: string;
   damage?: number;
+  shield_absorbed?: number;
+  hp_damage?: number;
   is_crit?: boolean;
   trigger?: string;
   detail?: string;
@@ -282,6 +284,35 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
 
       // Build events
       const events: FloatingEvent[] = [];
+      if (log.action === "SHIELD_ABSORB" && log.damage) {
+        events.push({
+          id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,
+          text: `🛡 -${formatNumber(log.damage)}`,
+          type: "shield",
+        });
+      }
+      if (log.action === "DAMAGE_APPLIED") {
+        if (log.shield_absorbed && log.shield_absorbed > 0) {
+          events.push({
+            id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,
+            text: `🛡 -${formatNumber(log.shield_absorbed)}`,
+            type: "shield",
+          });
+        }
+        if (log.hp_damage && log.hp_damage > 0) {
+          events.push({
+            id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,
+            text: `-${formatNumber(log.hp_damage)}`,
+            type: log.is_crit ? "crit" : "damage",
+          });
+        } else if (!log.shield_absorbed && log.damage) {
+          events.push({
+            id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,
+            text: `-${formatNumber(log.damage)}`,
+            type: log.is_crit ? "crit" : "damage",
+          });
+        }
+      }
       if (log.damage && ["DAMAGE", "DOT_TICK", "THORNS", "PHANTOM_ATTACK", "SHIELD_PIERCE", "SHIELD_BYPASS_ATTACK"].includes(log.action)) {
         events.push({
           id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,

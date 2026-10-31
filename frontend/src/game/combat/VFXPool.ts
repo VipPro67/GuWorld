@@ -6,6 +6,16 @@ const MAX_TEXTS = 64;
 const MAX_RINGS = 48;
 const MAX_ACTION_MARKS = 32;
 
+export interface FloatingTextOptions {
+  fontSize?: string;
+  isCrit?: boolean;
+  isShield?: boolean;
+  isHeal?: boolean;
+  isSkill?: boolean;
+  jitterX?: boolean;
+  offsetY?: number;
+}
+
 /** Small object pool for floating combat text and impact rings. */
 export class VFXPool {
   private readonly scene: Phaser.Scene;
@@ -20,24 +30,81 @@ export class VFXPool {
     this.scene = scene;
   }
 
-  public spawnText(x: number, y: number, text: string, color: string): void {
+  public spawnText(x: number, y: number, text: string, color: string, options?: FloatingTextOptions): void {
     if (this.activeTexts >= MAX_TEXTS) return;
     const node = this.texts.find((item) => !item.active) ?? this.createText();
     if (!node) return;
     this.activeTexts += 1;
+
+    const jitter = options?.jitterX !== false ? (Math.random() - 0.5) * 16 : 0;
+    const startX = x + jitter;
+    const startY = y + (options?.offsetY ?? 0);
+    const fontSize = options?.fontSize ?? (options?.isCrit ? "20px" : options?.isSkill ? "13px" : "15px");
+    const fontStyle = options?.isSkill ? "italic" : "bold";
+    const strokeThickness = options?.isCrit ? 4 : 3;
+
     node.setActive(true).setVisible(true);
-    node.setText(text).setColor(color).setPosition(x, y).setAlpha(1).setDepth(90_000);
-    this.scene.tweens.add({
-      targets: node,
-      y: y - 38,
-      alpha: 0,
-      duration: 900,
-      ease: "Cubic.easeOut",
-      onComplete: () => {
-        node.setActive(false).setVisible(false);
-        this.activeTexts = Math.max(0, this.activeTexts - 1);
-      },
-    });
+    node.setText(text)
+      .setColor(color)
+      .setFontSize(fontSize)
+      .setFontStyle(fontStyle)
+      .setStroke("#020617", strokeThickness)
+      .setPosition(startX, startY)
+      .setAlpha(1)
+      .setDepth(90_000);
+
+    if (options?.isCrit) {
+      node.setScale(1.4);
+      this.scene.tweens.add({
+        targets: node,
+        scale: 1.0,
+        duration: 140,
+        ease: "Back.easeOut",
+      });
+      this.scene.tweens.add({
+        targets: node,
+        y: startY - 48,
+        alpha: 0,
+        duration: 1100,
+        ease: "Cubic.easeOut",
+        onComplete: () => {
+          node.setScale(1).setActive(false).setVisible(false);
+          this.activeTexts = Math.max(0, this.activeTexts - 1);
+        },
+      });
+    } else if (options?.isSkill) {
+      node.setScale(1.0);
+      this.scene.tweens.add({
+        targets: node,
+        y: startY - 32,
+        alpha: 0,
+        duration: 1200,
+        ease: "Quad.easeOut",
+        onComplete: () => {
+          node.setScale(1).setActive(false).setVisible(false);
+          this.activeTexts = Math.max(0, this.activeTexts - 1);
+        },
+      });
+    } else {
+      node.setScale(1.2);
+      this.scene.tweens.add({
+        targets: node,
+        scale: 1.0,
+        duration: 110,
+        ease: "Quad.easeOut",
+      });
+      this.scene.tweens.add({
+        targets: node,
+        y: startY - 40,
+        alpha: 0,
+        duration: 950,
+        ease: "Cubic.easeOut",
+        onComplete: () => {
+          node.setScale(1).setActive(false).setVisible(false);
+          this.activeTexts = Math.max(0, this.activeTexts - 1);
+        },
+      });
+    }
   }
 
   public spawnRing(x: number, y: number, color: number): void {

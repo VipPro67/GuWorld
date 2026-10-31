@@ -23,21 +23,24 @@ const (
 // Event is emitted by the zone tick owner. IDs are monotonic per zone and are
 // sent to clients through world.events.
 type Event struct {
-	ID            uint64
-	Tick          uint64
-	Type          EventType
-	SourceID      string
-	TargetID      string
-	SkillID       string
-	X             float64
-	Y             float64
-	Amount        float64
-	HP            float64
-	Shield        float64
-	DurationTicks uint64
-	Reason        string
-	TemplateID    string
-	MonsterRank   int
-	PersistentID  string
-	TargetKind    string
+	ID             uint64
+	Tick           uint64
+	Type           EventType
+	SourceID       string
+	TargetID       string
+	SkillID        string
+	SkillName      string
+	X              float64
+	Y              float64
+	Amount         float64
+	ShieldAbsorbed float64
+	HPDamage       float64
+	HP             float64
+	Shield         float64
+	DurationTicks  uint64
+	Reason         string
+	TemplateID     string
+	MonsterRank    int
+	PersistentID   string
+	TargetKind     string
 }

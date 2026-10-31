@@ -6,7 +6,7 @@ import { MotionController } from "../motion/MotionController.ts";
 import { CastController, type CastDelegate, type CastView } from "../cast/CastController.ts";
 import { CastTelegraph } from "../combat/CastTelegraph.ts";
 import { ProjectileView } from "../combat/ProjectileView.ts";
-import { VFXPool } from "../combat/VFXPool.ts";
+import { VFXPool, type FloatingTextOptions } from "../combat/VFXPool.ts";
 import { EntityAnimator } from "../entities/EntityAnimator.ts";
 import { animationTextureKey, type ActorKind } from "../assets/AssetManifest.ts";
 import { getMonsterArt, loadMonsterArtCell } from "../assets/MonsterArt.ts";
@@ -50,8 +50,11 @@ const BASIC_ATTACK_RANGE = 2.2;
 const AUTO_FARM_ATTACK_INTERVAL_MS = 500;
 
 function formatDamageAmount(amount: number): string {
+  if (amount <= 0) return "0";
+  if (amount >= 100) return Math.round(amount).toLocaleString("vi-VN");
+  if (amount >= 10) return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(amount);
   if (amount < 0.001) return Number(amount.toPrecision(3)).toString();
-  return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 3 }).format(amount);
+  return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(amount);
 }
 
 /**
@@ -638,7 +641,15 @@ export class WorldScene extends Phaser.Scene {
         this.markActorCast(event.source_id, duration);
         this.playCastPulse(event.source_id);
         const skillId = typeof payload.skill_id === "string" ? payload.skill_id : "";
+        const skillName = typeof payload.skill_name === "string" && payload.skill_name ? payload.skill_name : "";
         const skill = this.runtime?.getSkills().find((entry) => entry.id === skillId);
+        const displayName = skillName || skill?.name || (skillId && skillId !== "BASIC_ATTACK" ? skillId : "");
+        if (displayName && event.source_id) {
+          const caster = this.actors.get(event.source_id);
+          if (caster) {
+            this.floatText(caster.lastX, caster.lastY - 14, `「${displayName}」`, "#c084fc", { isSkill: true });
+          }
+        }
         if (skill && eventX !== null && eventY !== null) {
           const point = worldToPixels({ x: eventX, y: eventY });
           if (skill.mode === "GROUND" || skill.shape) {
@@ -667,9 +678,12 @@ export class WorldScene extends Phaser.Scene {
         this.motion?.stopAll();
         this.notice(reason ? `Đường đi bị chặn: ${reason}` : "Đường đi bị chặn");
         return;
-      case "DAMAGE_APPLIED":
+      case "DAMAGE_APPLIED": {
         this.markActorHit(event.target_id);
         if (event.target_id && event.target_id === this.selfId) this.cameraController.shake(0.003);
+        const shieldAbsorbed = typeof payload.shield_absorbed === "number" ? payload.shield_absorbed : 0;
+        const hpDamage = typeof payload.hp_damage === "number" ? payload.hp_damage : 0;
+
         if (reason === "immune") {
           this.floatText(eventX, eventY, "MIỄN NHIỄM!", "#fde047");
           if (eventX !== null && eventY !== null) {
@@ -683,28 +697,50 @@ export class WorldScene extends Phaser.Scene {
             this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x67e8f9);
           }
         } else if (reason === "last_stand") {
-          this.floatText(eventX, eventY, `-${formatDamageAmount(amount)} BẤT TỬ!`, "#f43f5e");
+          this.floatText(eventX, eventY, `-${formatDamageAmount(amount)} BẤT TỬ!`, "#f43f5e", { isCrit: true });
           if (eventX !== null && eventY !== null) {
             const pixels = worldToPixels({ x: eventX, y: eventY });
             this.vfx.spawnRing(pixels.x, pixels.y - 8, 0xe11d48);
           }
-        } else {
-          this.floatText(eventX, eventY, amount > 0 ? `-${formatDamageAmount(amount)}` : "chặn", "#fca5a5");
+        } else if (shieldAbsorbed > 0 && hpDamage > 0) {
+          // Part absorbed by shield, part went to HP
+          this.floatText(eventX, eventY, `🛡 -${formatDamageAmount(shieldAbsorbed)}`, "#38bdf8", { isShield: true, offsetY: -16 });
+          this.floatText(eventX, eventY, `-${formatDamageAmount(hpDamage)}`, "#ef4444", { offsetY: 0 });
           if (eventX !== null && eventY !== null) {
             const pixels = worldToPixels({ x: eventX, y: eventY });
-            this.vfx.spawnRing(pixels.x, pixels.y - 8, amount > 0 ? 0xf87171 : 0x93c5fd);
+            this.vfx.spawnRing(pixels.x, pixels.y - 8, 0xf87171);
+          }
+        } else if (shieldAbsorbed > 0 && hpDamage <= 0) {
+          // Fully absorbed by shield
+          this.floatText(eventX, eventY, `🛡 -${formatDamageAmount(shieldAbsorbed || amount)}`, "#38bdf8", { isShield: true });
+          if (eventX !== null && eventY !== null) {
+            const pixels = worldToPixels({ x: eventX, y: eventY });
+            this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x38bdf8);
+          }
+        } else {
+          // Direct hit to HP
+          const displayDamage = hpDamage > 0 ? hpDamage : amount;
+          this.floatText(eventX, eventY, displayDamage > 0 ? `-${formatDamageAmount(displayDamage)}` : "0", displayDamage > 0 ? "#ef4444" : "#94a3b8");
+          if (eventX !== null && eventY !== null) {
+            const pixels = worldToPixels({ x: eventX, y: eventY });
+            this.vfx.spawnRing(pixels.x, pixels.y - 8, displayDamage > 0 ? 0xf87171 : 0x94a3b8);
           }
         }
         return;
+      }
       case "HEAL_APPLIED":
-        this.floatText(eventX, eventY, `+${Math.round(amount)}`, "#6ee7b7");
+        this.floatText(eventX, eventY, `+${formatDamageAmount(amount)}`, "#10b981", { isHeal: true });
         if (eventX !== null && eventY !== null) {
           const pixels = worldToPixels({ x: eventX, y: eventY });
-          this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x34d399);
+          this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x10b981);
         }
         return;
       case "SHIELD_APPLIED":
-        this.floatText(eventX, eventY, `+${Math.round(amount)} khiên`, "#93c5fd");
+        this.floatText(eventX, eventY, `🛡 +${formatDamageAmount(amount)}`, "#38bdf8", { isShield: true });
+        if (eventX !== null && eventY !== null) {
+          const pixels = worldToPixels({ x: eventX, y: eventY });
+          this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x38bdf8);
+        }
         return;
       case "STATUS_APPLIED": {
         const status = typeof payload.reason === "string" ? payload.reason : "STATUS";
@@ -773,10 +809,16 @@ export class WorldScene extends Phaser.Scene {
     actor.hitUntil = this.time.now + 180;
   }
 
-  private floatText(worldX: number | null, worldY: number | null, text: string, color: string): void {
+  private floatText(
+    worldX: number | null,
+    worldY: number | null,
+    text: string,
+    color: string,
+    options?: FloatingTextOptions
+  ): void {
     if (worldX === null || worldY === null) return;
     const pixels = worldToPixels({ x: worldX, y: worldY });
-    this.vfx.spawnText(pixels.x, pixels.y - 40, text, color);
+    this.vfx.spawnText(pixels.x, pixels.y - 40, text, color, options);
   }
 
   private drawTargetRing(): void {

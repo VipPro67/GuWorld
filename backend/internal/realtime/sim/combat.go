@@ -381,7 +381,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 	}
 	w.emitEvent(combat.Event{
 		Type: combat.EventCastAccepted, SourceID: string(caster.ID), TargetID: string(command.TargetID),
-		SkillID: skill.ID, X: pending.Point.X, Y: pending.Point.Y, DurationTicks: skill.WindupTicks,
+		SkillID: skill.ID, SkillName: skill.Name, X: pending.Point.X, Y: pending.Point.Y, DurationTicks: skill.WindupTicks,
 	})
 }
 

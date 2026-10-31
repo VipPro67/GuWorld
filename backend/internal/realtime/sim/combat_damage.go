@@ -66,6 +66,7 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 	}
 	remaining *= 1 - target.PathResistance[gamefx.CleanPath(path)]
 	remaining = math.Max(1, remaining)
+	totalDamage := remaining
 	shieldAbsorbed := 0.0
 	if target.Vitals.Shield > 0 {
 		absorbed := math.Min(target.Vitals.Shield, remaining)
@@ -104,7 +105,7 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 	w.emitEvent(combat.Event{
 		Type: combat.EventDamageApplied, SourceID: sourceID, TargetID: string(target.ID), SkillID: skillID,
 		X: target.Transform.Position.X, Y: target.Transform.Position.Y,
-		Amount: hpDamage, HP: target.Vitals.HP, Shield: target.Vitals.Shield, Reason: damageReason,
+		Amount: totalDamage, ShieldAbsorbed: shieldAbsorbed, HPDamage: hpDamage, HP: target.Vitals.HP, Shield: target.Vitals.Shield, Reason: damageReason,
 	})
 	if source != nil && target.Kind == EntityMonster {
 		w.recordThreatLocked(target, source, shieldAbsorbed+hpDamage)

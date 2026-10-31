@@ -13,15 +13,17 @@ import (
 )
 
 type realtimeCombatHistoryEvent struct {
-	EventID    uint64  `json:"event_id"`
-	Turn       uint64  `json:"turn"`
-	ActorID    string  `json:"actor_id"`
-	ActorName  string  `json:"actor_name"`
-	Action     string  `json:"action"`
-	TargetID   string  `json:"target_id,omitempty"`
-	TargetName string  `json:"target_name,omitempty"`
-	Damage     float64 `json:"damage,omitempty"`
-	Detail     string  `json:"detail,omitempty"`
+	EventID        uint64  `json:"event_id"`
+	Turn           uint64  `json:"turn"`
+	ActorID        string  `json:"actor_id"`
+	ActorName      string  `json:"actor_name"`
+	Action         string  `json:"action"`
+	TargetID       string  `json:"target_id,omitempty"`
+	TargetName     string  `json:"target_name,omitempty"`
+	Damage         float64 `json:"damage,omitempty"`
+	ShieldAbsorbed float64 `json:"shield_absorbed,omitempty"`
+	HPDamage       float64 `json:"hp_damage,omitempty"`
+	Detail         string  `json:"detail,omitempty"`
 }
 
 // PersistRealtimeCombatEvents stores authoritative events for private matches.
@@ -61,7 +63,7 @@ func PersistRealtimeCombatEvents(ctx context.Context, snapshot sim.Snapshot) err
 		entries = append(entries, realtimeCombatHistoryEvent{
 			EventID: event.ID, Turn: event.Tick, ActorID: event.SourceID, ActorName: actorName,
 			Action: string(event.Type), TargetID: event.TargetID, TargetName: targetName,
-			Damage: event.Amount, Detail: detail,
+			Damage: event.Amount, ShieldAbsorbed: event.ShieldAbsorbed, HPDamage: event.HPDamage, Detail: detail,
 		})
 	}
 	raw, err := json.Marshal(entries)

@@ -718,15 +718,17 @@ func TestQueueHPDeltaHealsAndClamps(t *testing.T) {
 	}
 }
 
-func TestDamageEventAmountMatchesHealthLost(t *testing.T) {
+func TestDamageEventCarriesMitigatedDamageAndHealthLost(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		shield     float64
-		wantDamage float64
+		name         string
+		shield       float64
+		wantTotal    float64
+		wantHP       float64
+		wantShieldAb float64
 	}{
-		{name: "unshielded", shield: 0, wantDamage: 12},
-		{name: "partly shielded", shield: 5, wantDamage: 7},
-		{name: "fully shielded", shield: 20, wantDamage: 0},
+		{name: "unshielded", shield: 0, wantTotal: 12, wantHP: 12, wantShieldAb: 0},
+		{name: "partly shielded", shield: 5, wantTotal: 12, wantHP: 7, wantShieldAb: 5},
+		{name: "fully shielded", shield: 20, wantTotal: 12, wantHP: 0, wantShieldAb: 12},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w, _ := NewWorld("arena", 16)
@@ -745,8 +747,9 @@ func TestDamageEventAmountMatchesHealthLost(t *testing.T) {
 			}
 			for _, event := range events {
 				if event.Type == combat.EventDamageApplied {
-					if event.Amount != tc.wantDamage || entityHP(t, w, "player") != 100-tc.wantDamage {
-						t.Fatalf("damage event amount=%v hp=%v, want damage=%v", event.Amount, entityHP(t, w, "player"), tc.wantDamage)
+					if event.Amount != tc.wantTotal || event.HPDamage != tc.wantHP || event.ShieldAbsorbed != tc.wantShieldAb || entityHP(t, w, "player") != 100-tc.wantHP {
+						t.Fatalf("damage event amount=%v hpDamage=%v shieldAbsorbed=%v hp=%v, want total=%v hp=%v shield=%v",
+							event.Amount, event.HPDamage, event.ShieldAbsorbed, entityHP(t, w, "player"), tc.wantTotal, tc.wantHP, tc.wantShieldAb)
 					}
 					return
 				}

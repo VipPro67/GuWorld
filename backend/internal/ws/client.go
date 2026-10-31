@@ -859,14 +859,17 @@ type worldSnapshotEnvelope struct {
 }
 
 type worldEventPayload struct {
-	SkillID       string  `json:"skill_id,omitempty"`
-	X             float64 `json:"x,omitempty"`
-	Y             float64 `json:"y,omitempty"`
-	Amount        float64 `json:"amount,omitempty"`
-	HP            float64 `json:"hp,omitempty"`
-	Shield        float64 `json:"shield,omitempty"`
-	DurationTicks uint64  `json:"duration_ticks,omitempty"`
-	Reason        string  `json:"reason,omitempty"`
+	SkillID        string  `json:"skill_id,omitempty"`
+	SkillName      string  `json:"skill_name,omitempty"`
+	X              float64 `json:"x,omitempty"`
+	Y              float64 `json:"y,omitempty"`
+	Amount         float64 `json:"amount,omitempty"`
+	ShieldAbsorbed float64 `json:"shield_absorbed,omitempty"`
+	HPDamage       float64 `json:"hp_damage,omitempty"`
+	HP             float64 `json:"hp,omitempty"`
+	Shield         float64 `json:"shield,omitempty"`
+	DurationTicks  uint64  `json:"duration_ticks,omitempty"`
+	Reason         string  `json:"reason,omitempty"`
 }
 
 type typedWorldEvent struct {
@@ -953,14 +956,17 @@ func (c *Client) sendWorldEvents(events []combat.Event, generation uint64) {
 			}
 		}
 		payload := &worldEventPayload{
-			SkillID:       event.SkillID,
-			X:             event.X,
-			Y:             event.Y,
-			Amount:        event.Amount,
-			HP:            event.HP,
-			Shield:        event.Shield,
-			DurationTicks: event.DurationTicks,
-			Reason:        event.Reason,
+			SkillID:        event.SkillID,
+			SkillName:      event.SkillName,
+			X:              event.X,
+			Y:              event.Y,
+			Amount:         event.Amount,
+			ShieldAbsorbed: event.ShieldAbsorbed,
+			HPDamage:       event.HPDamage,
+			HP:             event.HP,
+			Shield:         event.Shield,
+			DurationTicks:  event.DurationTicks,
+			Reason:         event.Reason,
 		}
 		batch.Events = append(batch.Events, typedWorldEvent{
 			EventID:  event.ID,
