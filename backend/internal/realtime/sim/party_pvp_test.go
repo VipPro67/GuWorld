@@ -12,12 +12,17 @@ func TestPlayerCanHarmAnotherPlayerOnlyInPvPDifferentParty(t *testing.T) {
 		pvp        bool
 		partyA     string
 		partyB     string
+		sourcePvP  bool
+		targetPvP  bool
 		wantReject bool
 	}{
-		{name: "pvp different party", pvp: true, partyA: "a", partyB: "b", wantReject: false},
-		{name: "pvp same party", pvp: true, partyA: "a", partyB: "a", wantReject: true},
-		{name: "pve", pvp: false, partyA: "a", partyB: "b", wantReject: true},
-		{name: "pvp no parties", pvp: true, wantReject: false},
+		{name: "pvp different party both opted in", pvp: true, partyA: "a", partyB: "b", sourcePvP: true, targetPvP: true, wantReject: false},
+		{name: "pvp different party attacker opted in", pvp: true, partyA: "a", partyB: "b", sourcePvP: true, wantReject: false},
+		{name: "pvp different party target opted in", pvp: true, partyA: "a", partyB: "b", targetPvP: true, wantReject: false},
+		{name: "pvp different party neither opted in", pvp: true, partyA: "a", partyB: "b", wantReject: true},
+		{name: "pvp same party", pvp: true, partyA: "a", partyB: "a", sourcePvP: true, targetPvP: true, wantReject: true},
+		{name: "pve", pvp: false, partyA: "a", partyB: "b", sourcePvP: true, targetPvP: true, wantReject: true},
+		{name: "pvp no parties", pvp: true, sourcePvP: true, wantReject: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			w, _ := NewWorld("arena", 8)
@@ -25,6 +30,7 @@ func TestPlayerCanHarmAnotherPlayerOnlyInPvPDifferentParty(t *testing.T) {
 			first := newCombatPlayer("player-a", Vec2{X: 0, Y: 0})
 			second := newCombatPlayer("player-b", Vec2{X: 2, Y: 0})
 			first.PartyID, second.PartyID = test.partyA, test.partyB
+			first.PvPEnabled, second.PvPEnabled = test.sourcePvP, test.targetPvP
 			if err := w.AddEntity(first); err != nil {
 				t.Fatal(err)
 			}

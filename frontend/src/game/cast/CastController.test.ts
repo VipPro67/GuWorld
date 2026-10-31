@@ -24,6 +24,7 @@ function entity(overrides: Partial<RuntimeEntity> = {}): RuntimeEntity {
     id: "m1",
     kind: "monster",
     partyId: "",
+    pvpEnabled: false,
     x: 4,
     y: 0,
     hp: 10,

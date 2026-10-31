@@ -586,7 +586,7 @@ func main() {
 	// refinement queues are drained by their dedicated worker (docs §6).
 	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute) // Phase 2: society simulation tick
 	worker.StartGuMasterSpawningWorker(ctx, db.DB, 30*time.Minute) // Phase 3: Gu Master spawning
-	worker.StartApertureRefinementWorker(ctx, db.DB)              // Phase 1: auto-refinement queue
+	worker.StartApertureRefinementWorker(ctx, db.DB)               // Phase 1: auto-refinement queue
 	handlers.StartRoamingMerchantWorker(ctx, db.DB, 2*time.Minute) // Roaming traders on the world map
 	if cache.Client != nil {
 		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)

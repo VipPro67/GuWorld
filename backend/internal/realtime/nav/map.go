@@ -245,11 +245,14 @@ func Build(raw TiledMapJSON) (*Map, error) {
 	}
 	// World PvP is opt-in per player, with map rules acting as the hard ceiling.
 	// Keep only hubs and beginner regions safe; all other realtime maps are PvP.
+	// An authored "safe" ruleset stays authoritative: a safe map is never demoted to PvP.
 	mapID := strings.ToLower(raw.MapID)
-	if regionKind == "SAFE_ZONE" || strings.HasPrefix(mapID, "hub_") || strings.HasPrefix(mapID, "tan_thu_coc_") {
-		ruleset = "safe"
-	} else {
-		ruleset = "pvp"
+	if ruleset != "safe" {
+		if regionKind == "SAFE_ZONE" || strings.HasPrefix(mapID, "hub_") || strings.HasPrefix(mapID, "tan_thu_coc_") {
+			ruleset = "safe"
+		} else {
+			ruleset = "pvp"
+		}
 	}
 	hash := hashMap(raw, collision)
 	return &Map{
