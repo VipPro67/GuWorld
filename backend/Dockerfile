@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 # Stage 1: Build the Go binary
 FROM golang:1.26.3-alpine AS builder
 
@@ -6,16 +5,13 @@ WORKDIR /app
 
 # Copy manifests để cache dependency
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build static binary siêu nhẹ với cache mount và lược bỏ debug symbols
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux \
+# Build static binary lược bỏ debug symbols
+RUN CGO_ENABLED=0 GOOS=linux \
     go build -ldflags="-w -s" -o guworld_server ./cmd/server
 
 # Stage 2: Runtime container
