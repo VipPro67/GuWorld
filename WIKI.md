@@ -460,7 +460,7 @@ Cổ sư có thể:
 
 ## 4.1. Cân bằng: Quái vs Cổ trùng cùng Rank
 
-Quái trên map realtime xuất hiện theo đàn 4–6 con. Vùng chuẩn 1.000 × 1.000 có khoảng 38 đàn khi tỷ trọng quái là 30%; mật độ thay đổi theo từng vùng.
+Quái trên map realtime xuất hiện phân bố khắp bản đồ (gồm quái đi lẻ 1–2 con, nhóm vừa 3–4 con và đàn lớn 5–6 con với độ tản rộng tự nhiên). Vùng chuẩn 1.000 × 1.000 có khoảng 120 điểm sinh quái (~420 con) khi tỷ trọng quái là 30%; mật độ thay đổi theo từng vùng.
 
 > **Không có Cổ trùng → người chơi tự động thua quái ở mọi rank.**
 

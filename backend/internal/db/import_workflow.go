@@ -72,6 +72,7 @@ var importDatasets = []importDataset{
 	{"race", "Race.csv", "race_dictionary", true, false, []string{"key"}},
 	{"status", "Status.csv", "status_dictionary", true, false, []string{"key"}},
 	{"recipe", "Recipe.csv", "refining_recipes", true, false, []string{"target_gu_id", "target_rank", "variant"}},
+	{"refine_stage", "RefineStage.csv", "refine_stage_templates", false, false, []string{"rank"}},
 	{"shop_item", "ShopItem.csv", "caravan_shop_items", true, false, []string{"id", "rank"}},
 	{"arena_shop_item", "ArenaShopItem.csv", "arena_shop_items", true, false, []string{"id"}},
 	{"region", "Region.csv", "regions", true, false, []string{"id"}},
@@ -163,7 +164,7 @@ func validateImportCSV(dataset importDataset, content []byte) (int, []ImportVali
 	}
 	seen := map[string]int{}
 	issues := []ImportValidationIssue{}
-	jsonFields := map[string]bool{"effects": true, "food_types": true, "required_gus": true, "required_materials": true, "pool_weights": true, "rules": true, "entries": true, "gu_inventory": true, "item_inventory": true, "dao_marks": true, "path_masteries": true, "metadata": true, "rewards": true, "map_data": true, "blocked_actions": true}
+	jsonFields := map[string]bool{"effects": true, "food_types": true, "required_gus": true, "required_materials": true, "pool_weights": true, "rules": true, "entries": true, "gu_inventory": true, "item_inventory": true, "dao_marks": true, "path_masteries": true, "metadata": true, "rewards": true, "map_data": true, "blocked_actions": true, "minigame_weights": true}
 	if dataset.key != "dream_realm" {
 		jsonFields["path"] = true
 	}

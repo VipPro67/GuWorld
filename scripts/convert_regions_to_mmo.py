@@ -20,7 +20,7 @@ EDGE = 1
 SPAWN_MARGIN = 2.0
 # Realtime spawn budget per 1,000,000 units^2 at the reference Monster weight
 # (KHU_VUC default 30/100). Region.csv pool_weights scale this up or down.
-BASE_PACKS = 38
+BASE_PACKS = 120
 REFERENCE_MONSTER_WEIGHT = 30
 # MaxMonstersPerZone in backend/internal/realtime/world/manager.go is 1200.
 TOTAL_SPAWNS_CAP = 1100
@@ -282,8 +282,18 @@ def main():
                 cx = min(width - SPAWN_MARGIN, max(SPAWN_MARGIN, cx))
                 cy = min(height - SPAWN_MARGIN, max(SPAWN_MARGIN, cy))
 
-                # 1 đàn gồm 4-6 con cùng chủng loại, chọn theo MonsterSpawn.chance
-                pack_size = 4 + (int.from_bytes(jitter[12:16], "big") % 3)
+                # Phân bố đa dạng: 30% quái đi lẻ/cặp đôi (1-2 con), 40% nhóm vừa (3-4 con), 30% đàn lớn (5-6 con)
+                pack_type_roll = int.from_bytes(jitter[16:20], "big") % 10
+                if pack_type_roll < 3:
+                    pack_size = 1 + (int.from_bytes(jitter[12:16], "big") % 2)
+                    max_dist = 6.0
+                elif pack_type_roll < 7:
+                    pack_size = 3 + (int.from_bytes(jitter[12:16], "big") % 2)
+                    max_dist = 8.0
+                else:
+                    pack_size = 5 + (int.from_bytes(jitter[12:16], "big") % 2)
+                    max_dist = 10.0
+
                 pack_tmpl = weighted_archetype(region_archetypes, f"{region_id}:pack:{c_idx}")
                 if pack_tmpl is None:
                     continue
@@ -304,7 +314,7 @@ def main():
                         x, y = cx, cy
                     else:
                         angle = (val_a % 360) * (math.pi / 180)
-                        dist = 1.5 + (val_b % 40) / 10.0
+                        dist = 2.0 + (val_b % int(max(1.0, (max_dist - 2.0)) * 10)) / 10.0
                         x = min(width - SPAWN_MARGIN, max(SPAWN_MARGIN, cx + dist * math.cos(angle)))
                         y = min(height - SPAWN_MARGIN, max(SPAWN_MARGIN, cy + dist * math.sin(angle)))
 

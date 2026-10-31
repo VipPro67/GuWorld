@@ -1,0 +1,11 @@
+id,situation,option_1,option_2,option_3,correct_index,neutral_index,explanation
+1,"Hỏa hậu bỗng bùng lên, lò rung nhẹ",Tăng hỏa,Hạ hỏa,Giữ nguyên,1,2,Hỏa quá liệt phải hạ nhiệt trước khi nguyên liệu cháy khét.
+2,Nguyên liệu tan chậm hơn dự định,Thêm dung môi,Chờ thêm,Tăng nhiệt,0,1,Thêm dung môi giúp nguyên liệu tan đều mà không làm lò mất ổn định.
+3,Khói trong lò chuyển màu xám,Mở lò ngay,Niêm phong lò,Hạ hỏa từ từ,2,1,Hạ hỏa từ từ để khói lắng, mở lò vội làm hỏng linh tính.
+4,Linh tính nguyên liệu bắt đầu loạn độ,Viết chặt niệm lực trấn áp,Dập hỏa dập lò đưa linh tính ra ngoài,Cứ mặc linh tính hoang loạn,0,2,Trấn niệm là cách chuẩn để giữ linh tính vào khuôn.
+5,Vỏ lò sờ lên lạnh bất thường,Tạt thêm một dòng Chân Nguyên,Tăng hỏa gấp,Nhân lúc nguội gỡ lò,0,2,Bổ cập Chân Nguyên duy trì nhiệt độ chuẩn của lò luyện.
+6,Dòng Chân Nguyên trong kinh mạch bắt đầu loạn nhịp,Hạ dần nhịp thở,Nhân khi mạch lỏng dồn hết cho lò,Cắn lưỡi giữ mạch,0,1,Giữ Chân Nguyên ổn định thay vì gạt cạn làm hao tổn bản gốc.
+7,Mùi khét thoảng qua miệng lò,Nhấn nhanh hỏa hậu,Nghỉ một nhịp cho hỏa lui,Dỗ linh tính bằng niệm lực,1,2,Hỏa lui một nhịp sẽ đẩy mùi khét ra ngoài rồi mới tiếp tục.
+8,Hồn quang nguyên liệu đồng bộ nhịp với lò,Giao nhịp bằng hơi thở,Che niệm lực lại,Tăng gấp đôi Chân Nguyên,0,1,Giao nhịp đúng làm linh tính dung hợp hoàn hảo.
+9,Hỏa hậu phụt mạnh một cú rồi chìm xuống,Châm đốt lần nữa,Giữ nhịp chờ hỏa vững,Kéo van thoát khí,1,2,Hỏa cần thời gian vững lại; can thiệp vội gây tắt lò.
+10,Tiết tĩnh lò ngả nghiêng báo hiệu dư địa cạn,Trút thẳng một hồn lực,Cạnh bên thêm nguyên liệu,Đóng van hỏa đoạn,2,0,Cắt hỏa kịp thời để tránh vỡ lò khi nguyên liệu cạn.

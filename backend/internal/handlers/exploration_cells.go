@@ -18,8 +18,8 @@ import (
 const clearedCellCooldown = 15 * time.Minute
 
 const (
-	monsterCampSpacing = 48
-	monsterCampRadius  = 6
+	monsterCampSpacing = 32
+	monsterCampRadius  = 8
 )
 
 type proceduralMonsterCamp struct {
@@ -318,23 +318,14 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 
 	weights := zone.PoolWeights.CellWeights
 	if len(weights) == 0 {
-		weights = map[string]int{"Monster": 2, "Resource": 4, "WildGu": 1, "Empty": 87}
+		weights = map[string]int{"Monster": 6, "Resource": 4, "WildGu": 1, "Empty": 75}
 	} else {
-		// Override to forcibly reduce density if DB has high values
 		newW := make(map[string]int)
 		for k, v := range weights {
 			if k == "Empty" {
-				newW[k] = v * 4
+				newW[k] = v * 2
 			} else {
-				newW[k] = v / 2
-				if k == "Monster" {
-					// Keep a few wanderers outside authored-looking camps, while
-					// making most ordinary spawns read as a group on the map.
-					newW[k] /= 3
-					if newW[k] == 0 && v > 0 {
-						newW[k] = 1
-					}
-				}
+				newW[k] = v
 			}
 		}
 		if newW["Empty"] == 0 {

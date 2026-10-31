@@ -269,6 +269,7 @@ func InitSchema() error {
 		{"player_extras", schemaPlayerExtras},
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},
+		{"refine", schemaRefine},
 		{"realtime", schemaRealtime},
 		{"aperture", schemaAperture},
 		{"actors", schemaActors},
@@ -3575,6 +3576,21 @@ var individualExportDefs = map[string]exportDef{
 		filename: "Recipe.csv",
 		columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
 		query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
+	},
+	"refine_stage": {
+		filename: "RefineStage.csv",
+		columns: []string{
+			"rank", "duration_seconds", "step_count", "minigame_count", "window_seconds",
+			"accuracy_max_bonus", "death_penalty", "mastery_multiplier_max",
+			"tap_half_width", "tap_period_ms", "sequence_length", "sequence_display_ms",
+			"sequence_input_ms", "order_item_count", "choice_option_count", "minigame_weights",
+		},
+		query: `SELECT rank, duration_seconds, step_count, minigame_count, window_seconds,
+		       accuracy_max_bonus, death_penalty, mastery_multiplier_max,
+		       tap_half_width, tap_period_ms, sequence_length, sequence_display_ms,
+		       sequence_input_ms, order_item_count, choice_option_count,
+		       COALESCE(minigame_weights::text,'{}')
+		FROM refine_stage_templates ORDER BY rank`,
 	},
 	"shop_item": {
 		filename: "ShopItem.csv",
