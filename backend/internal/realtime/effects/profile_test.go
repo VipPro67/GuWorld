@@ -25,7 +25,7 @@ func TestCompileCommittedProfiles(t *testing.T) {
 	if compiled.Hash == "" {
 		t.Fatal("compiled catalog hash is empty")
 	}
-	if compiled.Hash != "2cdd4d4c2ae2e30d560517b78d6cd326ffe86af594509cf6594008944d102ba8" {
+	if compiled.Hash != "c32d5e89d7539f27255f9b1e435db5495522906a1c7559ca95d49791853aadea" {
 		t.Fatalf("compiled catalog drifted; update this baseline: %s", compiled.Hash)
 	}
 	arrow, ok := compiled.Profile("GU_WATER_ARROW", 1)

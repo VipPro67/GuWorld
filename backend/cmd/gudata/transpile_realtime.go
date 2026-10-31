@@ -613,18 +613,15 @@ func calculatePacing(rank int, baseMana float64) (windupMS, recoveryMS, cooldown
 	if rank > 9 {
 		rank = 9
 	}
-	windups := []uint64{0, 100, 150, 200, 250, 300, 400, 500, 600, 750}
-	recoveries := []uint64{0, 100, 150, 150, 200, 200, 250, 250, 300, 300}
-	cooldowns := []uint64{0, 2000, 3200, 4500, 6500, 9000, 12000, 15000, 18000, 22000}
-	minMana := []float64{0, 4, 6, 8, 12, 16, 20, 25, 30, 40}
+	windups := []uint64{0, 100, 100, 150, 150, 150, 200, 200, 200, 200}
+	recoveries := []uint64{0, 100, 100, 100, 100, 100, 100, 100, 100, 100}
+	cooldowns := []uint64{0, 1000, 1100, 1200, 1400, 1500, 1600, 1800, 1900, 2000}
+	manaCosts := []float64{0, 10, 10, 12, 15, 15, 1, 2, 3, 5}
 
 	windupMS = windups[rank]
 	recoveryMS = recoveries[rank]
 	cooldownMS = cooldowns[rank]
-	manaCost = minMana[rank]
-	if baseMana > manaCost {
-		manaCost = baseMana
-	}
+	manaCost = manaCosts[rank]
 	return
 }
 
