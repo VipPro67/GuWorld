@@ -159,7 +159,7 @@ Nghi thức Thăng Tiên gồm **3 khâu tuần tự** — không còn là một
 **Khâu 2 — Dẫn Khí:**
 - Khảo nghiệm tâm tính 3 tầng (Định Tâm → Ký Địa → Thông Thiên), mỗi tầng chọn 1 phương án tiêu hao Soul HP / Chân Nguyên / Nguyên Thạch — chuẩn bị thiếu thì không thể vượt.
 - Cân bằng 2 khí thiên địa với Nhân Khí: **dưới 100.000 Nhân Khí = thất bại**. Đạt ngưỡng thì phúc địa định phẩm theo Nhân Khí: **Sơ** (≥100k), **Trung** (≥230k), **Thượng** (≥370k), **Chí Cao** (≥480k).
-- Ngay sau đó **Địa Tai Bản Yếu giáng lâm**: một đợt quái địa tai ngang tầm Ngũ Chuyển Đỉnh Phong trên map realtime riêng. Thắng mới qua khâu; thua trận = nghi thức thất bại. Phiên chiến đấu được lưu checkpoint để có thể kết nối lại trong thời hạn.
+- Ngay sau đó **Địa Tai Bản Yếu giáng lâm**: một đợt quái địa tai ngang tầm Ngũ Chuyển Đỉnh Phong giáng xuống trực tiếp trên bản đồ thế giới tại vị trí Cổ Sư (chưa có Tiên Khiếu nên tai kiếp diễn ra ở thế giới thực). Thắng mới qua khâu; thua trận = nghi thức thất bại. Phiên chiến đấu diễn ra trực tiếp ngoài thế giới mở, đồng đạo có thể hỗ trợ hộ đạo.
 
 **Khâu 3 — Thả Cổ:**
 - Thả các cổ **Ngũ Chuyển** thuộc lưu phái đạt cảnh giới **Đại Sư** (10.000 Chân Ý) vào khiếu để tiêu hủy — mỗi cổ nhận lại **300 Đạo Ngân** theo lưu phái đó, định rõ đạo chủ tu khi bắt đầu Lục Chuyển. Cổ bị hủy vĩnh viễn; Cổ Bản Mệnh không thể thả.

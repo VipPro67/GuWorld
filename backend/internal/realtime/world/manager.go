@@ -356,6 +356,8 @@ type MonsterSpawn struct {
 	// PersistentID links a replayed realtime entity to its durable row
 	// (tribulation_enemies.id or aperture_resource_nodes.id).
 	PersistentID string
+	// FixedTarget relentlessly locks monster aggro onto one specific entity ID.
+	FixedTarget string
 	// NoRespawn keeps one-shot event entities dead for the lifetime of the
 	// zone instead of scheduling the normal spawn respawn.
 	NoRespawn bool
@@ -541,17 +543,23 @@ func buildManagedZone(key sim.ZoneKey, queueSize int, zoneMap ZoneMap) (*managed
 }
 
 func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
+	entityID := sim.EntityID(fmt.Sprintf("m:%d", index))
+	if spawn.Node {
+		entityID = sim.EntityID(fmt.Sprintf("n:%d", index))
+	}
+	return monsterEntityWithID(entityID, spawn)
+}
+
+func monsterEntityWithID(entityID sim.EntityID, spawn MonsterSpawn) (sim.Entity, error) {
 	if spawn.TemplateID == "" || spawn.TemplateID != strings.TrimSpace(spawn.TemplateID) {
 		return sim.Entity{}, ErrInvalidMonsterSpawn
 	}
 	if !finite(spawn.X) || !finite(spawn.Y) || !finite(spawn.Shield) || spawn.Shield < 0 || spawn.MaxHP <= 0 {
 		return sim.Entity{}, ErrInvalidMonsterSpawn
 	}
-	entityID := sim.EntityID(fmt.Sprintf("m:%d", index))
 	faction := "monster"
 	active := true
 	if spawn.Node {
-		entityID = sim.EntityID(fmt.Sprintf("n:%d", index))
 		faction = "player"
 		active = false
 	}
@@ -563,8 +571,25 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 	if currentHP <= 0 || currentHP > spawn.MaxHP {
 		currentHP = spawn.MaxHP
 	}
+	aggroRadius := spawn.AggroRadius
+	if aggroRadius <= 0 {
+		aggroRadius = 15.0
+	}
+	leashRadius := spawn.LeashRadius
+	if leashRadius < aggroRadius {
+		leashRadius = aggroRadius * 1.5
+	}
+	attackRange := spawn.AttackRange
+	if attackRange <= 0 {
+		attackRange = 2.0
+	}
+	patrolRadius := spawn.PatrolRadius
+	if patrolRadius < 0 {
+		patrolRadius = 0
+	}
 	return sim.Entity{
 		ID:        entityID,
+		Name:      spawn.Name,
 		Kind:      sim.EntityMonster,
 		Transform: sim.Transform{Position: sim.Vec2{X: spawn.X, Y: spawn.Y}},
 		Vitals:    sim.Vitals{HP: currentHP, MaxHP: spawn.MaxHP, Shield: spawn.Shield},
@@ -574,15 +599,54 @@ func monsterEntity(index int, spawn MonsterSpawn) (sim.Entity, error) {
 		Faction:   faction,
 		AI: sim.AIState{
 			Active: active, Passive: spawn.Passive, TemplateID: spawn.TemplateID, Rank: spawn.Rank, PersistentID: spawn.PersistentID,
-			Name: spawn.Name, State: sim.AIIdle,
+			FixedTarget: sim.EntityID(spawn.FixedTarget),
+			Name:        spawn.Name, State: sim.AIIdle,
 			Home:        sim.Vec2{X: spawn.X, Y: spawn.Y},
-			AggroRadius: spawn.AggroRadius, LeashRadius: spawn.LeashRadius,
-			AttackRange: spawn.AttackRange, PatrolRadius: spawn.PatrolRadius,
+			AggroRadius: aggroRadius, LeashRadius: leashRadius,
+			AttackRange: attackRange, PatrolRadius: patrolRadius,
 			AttackDamage: attackDamage, NodeDamage: spawn.NodeDamage, AttackCooldownTicks: spawn.AttackCooldownTicks,
 			RespawnTicks: spawn.RespawnTicks, NoRespawn: spawn.NoRespawn, ThinkTicks: 5,
 			SplashRadius: spawn.SplashRadius, SplashDamage: spawn.SplashDamage,
 		},
 	}, nil
+}
+
+// SpawnDynamicMonster adds a runtime monster entity to a running or lazy zone.
+func (m *Manager) SpawnDynamicMonster(key sim.ZoneKey, spawn MonsterSpawn) (sim.EntityID, error) {
+	m.mu.Lock()
+	if !m.started || m.closed {
+		m.mu.Unlock()
+		return "", ErrManagerNotRunning
+	}
+	zone, err := m.ensureZoneLocked(key)
+	if err != nil {
+		m.mu.Unlock()
+		return "", err
+	}
+	m.markZoneActiveLocked(zone)
+	m.mu.Unlock()
+
+	entityID := sim.EntityID(fmt.Sprintf("dyn:%s:%d", spawn.TemplateID, time.Now().UnixNano()))
+	if spawn.PersistentID != "" {
+		entityID = sim.EntityID(fmt.Sprintf("boss:%s", spawn.PersistentID))
+	}
+
+	entity, err := monsterEntityWithID(entityID, spawn)
+	if err != nil {
+		return "", err
+	}
+
+	result, err := zone.world.QueueAddEntity(entity)
+	if err != nil {
+		return "", err
+	}
+	if err := waitForZoneMutation(zone, result); err != nil {
+		if strings.Contains(err.Error(), "duplicate id") {
+			return entityID, nil
+		}
+		return "", err
+	}
+	return entityID, nil
 }
 
 // MapHash returns the loaded collision/map hash for the join handshake.
@@ -1764,6 +1828,23 @@ func (m *Manager) PlayerVitals(characterID sim.CharacterID) (hp, maxHP float64, 
 		return 0, 0, false
 	}
 	return zone.world.PlayerVitals(sim.EntityID(characterID))
+}
+
+// PlayerPosition reads the live zone position for a character currently owned
+// by this manager. ok is false when the character has no attached entity.
+func (m *Manager) PlayerPosition(characterID sim.CharacterID) (sim.ZoneKey, sim.Vec2, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	active, exists := m.owners[characterID]
+	if !exists || !active.HasEntity {
+		return sim.ZoneKey{}, sim.Vec2{}, false
+	}
+	zone := m.zones[active.ZoneKey]
+	if zone == nil {
+		return active.ZoneKey, sim.Vec2{}, false
+	}
+	pos, ok := zone.world.PlayerPosition(sim.EntityID(characterID))
+	return active.ZoneKey, pos, ok
 }
 
 // ApplyHPDelta applies a trusted HP change from a legacy HTTP action to the

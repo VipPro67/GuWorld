@@ -94,6 +94,10 @@ func HandleRealtimePlayerDeath(ctx context.Context, death realtimeworld.DeathEve
 			return err
 		}
 	}
+	session, err := loadAscensionSession(tx, &player)
+	if err == nil && session != nil && session.Step == AscensionStepCalamity {
+		_ = failAscensionSession(tx, &player, session, "Đại bại trước Địa Tai Bản Yếu ngoài thế giới")
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit realtime death settlement: %w", err)
 	}

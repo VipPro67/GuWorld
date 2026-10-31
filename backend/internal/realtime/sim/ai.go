@@ -35,6 +35,7 @@ type AIState struct {
 	TemplateID   string
 	Rank         int
 	PersistentID string
+	FixedTarget  EntityID
 	Name         string
 	State        AIStateKind
 	Home         Vec2
@@ -115,6 +116,16 @@ func (w *World) stepMonsterAI() {
 }
 
 func (w *World) thinkMonsterLocked(monster *Entity) {
+	if monster.AI.FixedTarget != "" {
+		target := w.entities[monster.AI.FixedTarget]
+		if target != nil && target.Vitals.HP > 0 && !w.hasStatus(target, "STEALTH") && w.canHarm(monster, target) {
+			monster.AI.Threat = target.ID
+			monster.AI.PatrolTarget = nil
+			monster.AI.State = AIAggro
+			monster.AI.Home = monster.Transform.Position
+			return
+		}
+	}
 	distanceFromHome := math.Hypot(monster.Transform.Position.X-monster.AI.Home.X, monster.Transform.Position.Y-monster.AI.Home.Y)
 	if distanceFromHome > monster.AI.LeashRadius {
 		monster.AI.Threat = ""
@@ -155,14 +166,16 @@ func (w *World) actMonsterLocked(monster *Entity) {
 		monster.moveIntent = Vec2{}
 		return
 	}
-	distanceFromHome := math.Hypot(monster.Transform.Position.X-monster.AI.Home.X, monster.Transform.Position.Y-monster.AI.Home.Y)
-	if distanceFromHome > monster.AI.LeashRadius {
-		monster.AI.Threat = ""
-		monster.AI.PatrolTarget = nil
-		clear(monster.AI.ThreatTable)
-		monster.AI.State = AILeash
-		w.moveMonsterTowardLocked(monster, monster.AI.Home)
-		return
+	if monster.AI.FixedTarget == "" {
+		distanceFromHome := math.Hypot(monster.Transform.Position.X-monster.AI.Home.X, monster.Transform.Position.Y-monster.AI.Home.Y)
+		if distanceFromHome > monster.AI.LeashRadius {
+			monster.AI.Threat = ""
+			monster.AI.PatrolTarget = nil
+			clear(monster.AI.ThreatTable)
+			monster.AI.State = AILeash
+			w.moveMonsterTowardLocked(monster, monster.AI.Home)
+			return
+		}
 	}
 
 	if monster.AI.Threat != "" {
@@ -244,6 +257,13 @@ func (w *World) moveMonsterTowardLocked(monster *Entity, target Vec2) {
 }
 
 func (w *World) selectMonsterTargetLocked(monster *Entity) *Entity {
+	if monster.AI.FixedTarget != "" {
+		target := w.entities[monster.AI.FixedTarget]
+		if target != nil && target.Vitals.HP > 0 && !w.hasStatus(target, "STEALTH") && w.canHarm(monster, target) {
+			return target
+		}
+		return nil
+	}
 	// Threat table wins while entries are alive and within leash range.
 	var best *Entity
 	bestThreat := 0.0
@@ -291,6 +311,9 @@ func (w *World) selectMonsterTargetLocked(monster *Entity) *Entity {
 
 func (w *World) recordThreatLocked(monster *Entity, source *Entity, amount float64) {
 	if monster == nil || source == nil || monster.Kind != EntityMonster || !monster.AI.Active || source.Kind != EntityPlayer {
+		return
+	}
+	if monster.AI.FixedTarget != "" {
 		return
 	}
 	if monster.AI.ThreatTable == nil {

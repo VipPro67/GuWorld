@@ -452,6 +452,17 @@ func (w *World) PlayerVitals(target EntityID) (hp, maxHP float64, ok bool) {
 	return entity.Vitals.HP, entity.Vitals.MaxHP, true
 }
 
+// PlayerPosition returns the live position for one zone player entity.
+func (w *World) PlayerPosition(target EntityID) (Vec2, bool) {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	entity := w.entities[target]
+	if entity == nil || entity.Kind != EntityPlayer {
+		return Vec2{}, false
+	}
+	return entity.Transform.Position, true
+}
+
 // QueueHPDelta applies a trusted out-of-band HP change on the zone tick owner.
 // Legacy HTTP actions (consumables and support Gu) use it so the authoritative
 // MMO entity, HUD and checkpoint all observe the same result. Clients cannot

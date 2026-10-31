@@ -1654,3 +1654,60 @@ func TestDeathWorkerContinuesAfterPermanentHandlerFailure(t *testing.T) {
 		t.Fatal("a permanently failing death blocked later death settlement")
 	}
 }
+
+func TestSpawnDynamicMonster(t *testing.T) {
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "preview", RulesetVersion: "v1"}
+	manager, err := NewManager([]sim.ZoneKey{key}, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		shutdown, done := context.WithTimeout(context.Background(), time.Second)
+		defer done()
+		_ = manager.Stop(shutdown)
+	})
+
+	spawn := MonsterSpawn{
+		TemplateID:   "monster_earth_calamity_boss",
+		Rank:         5,
+		Name:         "Địa Tai Bản Yếu",
+		X:            10,
+		Y:            10,
+		MaxHP:        500,
+		CurrentHP:    500,
+		AttackDamage: 50,
+		Defense:      10,
+		Speed:        2,
+		Radius:       0.8,
+		PersistentID: "ascension:12345",
+		NoRespawn:    true,
+	}
+	entityID, err := manager.SpawnDynamicMonster(key, spawn)
+	if err != nil {
+		t.Fatalf("SpawnDynamicMonster failed: %v", err)
+	}
+	if entityID != "boss:ascension:12345" {
+		t.Fatalf("expected entityID 'boss:ascension:12345', got %q", entityID)
+	}
+
+	snap, err := manager.Snapshot(key)
+	if err != nil {
+		t.Fatalf("Snapshot failed: %v", err)
+	}
+	found := false
+	for _, entity := range snap.Entities {
+		if entity.ID == entityID {
+			found = true
+			if entity.Name != "Địa Tai Bản Yếu" {
+				t.Errorf("entity name = %q, want 'Địa Tai Bản Yếu'", entity.Name)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("spawned dynamic monster not found in zone snapshot")
+	}
+}

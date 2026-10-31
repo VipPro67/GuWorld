@@ -118,7 +118,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/cultivate/ascension/session` | Trạng thái phiên nghi thức Thăng Tiên + checklist chuẩn bị. |
 | POST | `/cultivate/ascension/shatter` | Khâu 1 Nát Khiếu: trùng kích liều mạng (yêu cầu Cổ Bản Mệnh), tiêu hao 30% Chân Nguyên tối đa/lần. |
 | POST | `/cultivate/ascension/temper` | Khâu 2a Dẫn Khí: khảo nghiệm tâm tính, body `{ "option_index": 0 }`. |
-| POST | `/cultivate/ascension/calamity/engage` | Khâu 2b: tạo private realtime session trên map `realtime_preview`; thắng chuyển sang `RELEASE`, thua kết thúc nghi thức. |
+| POST | `/cultivate/ascension/calamity/engage` | Khâu 2b: triệu hồi Địa Tai Bản Yếu (`monster_earth_calamity_boss`) trực tiếp ra bản đồ thế giới tại vị trí người chơi; thắng chuyển sang `RELEASE`, thua kết thúc nghi thức. |
 | POST | `/cultivate/ascension/release` | Khâu 3 Thả Cổ: body `{ "gu_instance_ids": [...] }` — cổ 5C lưu phái Đại Sư, mỗi cổ 300 Đạo Ngân. |
 | GET | `/quest` |
 | POST | `/quest/complete` |

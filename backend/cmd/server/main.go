@@ -430,6 +430,15 @@ func main() {
 						return err
 					}
 				}
+				if strings.HasPrefix(death.PersistentID, "ascension:") {
+					rawID := strings.TrimPrefix(death.PersistentID, "ascension:")
+					if pID, err := uuid.Parse(rawID); err == nil {
+						if err := handlers.CompleteAscensionCalamityForPlayer(callCtx, pID); err != nil {
+							logger.S.Errorf("Complete ascension calamity failed for player %s: %v", pID, err)
+							return err
+						}
+					}
+				}
 				if death.TemplateID == "practice_dummy" {
 					return nil
 				}
@@ -513,9 +522,42 @@ func main() {
 				return realtimeWorldManager.ApplyHPDelta(sim.CharacterID(playerID.String()), delta) == nil
 			},
 		)
+		handlers.SetAscensionWorldSpawner(func(ctx context.Context, playerID uuid.UUID, zoneID string, x, y float64, hp, atk, def float64) error {
+			key := sim.ZoneKey{MapID: zoneID}
+			if liveKey, livePos, ok := realtimeWorldManager.PlayerPosition(sim.CharacterID(playerID.String())); ok {
+				key = liveKey
+				x = livePos.X
+				y = livePos.Y
+			}
+			spawnPos, _ := realtimeWorldManager.SafeSpawn(key, sim.Vec2{X: x + 1.5, Y: y + 1.5}, 0.8)
+			spawn := realtimeworld.MonsterSpawn{
+				TemplateID:          "monster_earth_calamity_boss",
+				Rank:                5,
+				Name:                "Địa Tai Bản Yếu",
+				X:                   spawnPos.X,
+				Y:                   spawnPos.Y,
+				MaxHP:               hp,
+				CurrentHP:           hp,
+				AttackDamage:        atk,
+				Defense:             def,
+				Speed:               2.2,
+				Radius:              0.8,
+				AggroRadius:         30.0,
+				LeashRadius:         60.0,
+				AttackRange:         2.2,
+				PatrolRadius:        4.0,
+				AttackCooldownTicks: 20,
+				PersistentID:        fmt.Sprintf("ascension:%s", playerID.String()),
+				FixedTarget:         playerID.String(),
+				NoRespawn:           true,
+			}
+			_, err := realtimeWorldManager.SpawnDynamicMonster(key, spawn)
+			return err
+		})
 	} else {
 		middleware.SetRealtimeOwnershipChecker(nil)
 		middleware.SetRealtimeVitalsBridge(nil, nil)
+		handlers.SetAscensionWorldSpawner(nil)
 	}
 
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)

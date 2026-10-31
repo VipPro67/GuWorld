@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +19,8 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // Nghi thức Thăng Tiên 3 khâu (spec "Nát Khiếu → Dẫn Khí → Thả Cổ"):
@@ -595,7 +599,22 @@ func AscensionTemper(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "session": session, "message": msg})
 }
 
-// AscensionEngageCalamity starts Địa Tai bản yếu as an isolated realtime fight.
+// AscensionWorldSpawner handles dynamic spawning of the earth calamity boss on the world map.
+type AscensionWorldSpawner func(ctx context.Context, playerID uuid.UUID, zoneID string, x, y float64, hp, atk, def float64) error
+
+var (
+	ascensionWorldSpawnerMu sync.RWMutex
+	ascensionWorldSpawner   AscensionWorldSpawner
+)
+
+// SetAscensionWorldSpawner configures the world-map spawner for ascension calamity.
+func SetAscensionWorldSpawner(spawner AscensionWorldSpawner) {
+	ascensionWorldSpawnerMu.Lock()
+	defer ascensionWorldSpawnerMu.Unlock()
+	ascensionWorldSpawner = spawner
+}
+
+// AscensionEngageCalamity summons Địa Tai bản yếu onto the world map at the player's position.
 func AscensionEngageCalamity(c *gin.Context) {
 	authID, ok := middleware.GetPlayerID(c)
 	if !ok {
@@ -606,14 +625,15 @@ func AscensionEngageCalamity(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_unavailable", "error": "Địa Tai realtime hiện chưa khả dụng."})
 		return
 	}
-	handedOff, err := middleware.BeginRealtimeHandoff(authID)
-	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_checkpoint_unavailable", "error": "Không thể đồng bộ trạng thái trước khi vào Địa Tai."})
+
+	ascensionWorldSpawnerMu.RLock()
+	spawner := ascensionWorldSpawner
+	ascensionWorldSpawnerMu.RUnlock()
+	if spawner == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_unavailable", "error": "Dịch vụ Realtime World chưa sẵn sàng."})
 		return
 	}
-	if handedOff {
-		defer middleware.AbortRealtimeHandoff(authID)
-	}
+
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
@@ -645,8 +665,6 @@ func AscensionEngageCalamity(c *gin.Context) {
 		return
 	}
 
-	// Build the Địa Tai bản yếu wave: one earth-calamity boss + one minion,
-	// scaled to the ascending player's own rank (5).
 	const bossTemplateID = "monster_earth_calamity_boss"
 	var boss models.MonsterTemplate
 	var bossGu []byte
@@ -663,82 +681,70 @@ func AscensionEngageCalamity(c *gin.Context) {
 	}
 	bossHP, bossAtk, bossDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, 5, 4, boss.Type)
 
-	instanceID := uuid.New()
-	config, err := json.Marshal(map[string]any{
-		"template_id": bossTemplateID, "name": "Địa Tai Bản Yếu", "max_hp": bossHP,
-		"attack_damage": bossAtk, "defense": bossDef, "rank": 5, "sub_rank": 4,
-		"current_hp": player.HP, "current_mana": player.CurrentMana,
-		"x": 20.0, "y": 24.0,
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo phiên realtime"})
-		return
-	}
-	var originZone, currentInstance string
+	var originZone string
+	var worldX, worldY float64
 	if err := tx.QueryRow(`
-		SELECT COALESCE(NULLIF(world_zone_id,''),current_region), COALESCE(world_instance_id,'')
-		FROM players WHERE id=$1
-	`, player.ID).Scan(&originZone, &currentInstance); err != nil {
+		SELECT COALESCE(NULLIF(world_zone_id,''), current_region), world_x, world_y
+		FROM players WHERE id = $1
+	`, player.ID).Scan(&originZone, &worldX, &worldY); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc vị trí hiện tại"})
-		return
-	}
-	if currentInstance != "" {
-		c.JSON(http.StatusConflict, gin.H{"code": "combat_instance_conflict", "error": "Nhân vật đang ở trong một phiên realtime riêng."})
-		return
-	}
-	var hasPrivateCombat bool
-	if err := tx.QueryRow(`
-		SELECT EXISTS (
-			SELECT 1 FROM realtime_combat_instances WHERE player_id=$1 AND status='active'
-			UNION ALL
-			SELECT 1 FROM realtime_combat_session_participants WHERE player_id=$1 AND status='active'
-		)
-	`, player.ID).Scan(&hasPrivateCombat); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên realtime đang mở"})
-		return
-	}
-	if hasPrivateCombat {
-		c.JSON(http.StatusConflict, gin.H{"code": "combat_instance_conflict", "error": "Nhân vật đang có một phiên realtime riêng chưa kết thúc."})
 		return
 	}
 	if originZone == "" {
 		originZone = player.CurrentRegion
 	}
+
+	// Clear any stale world_instance_id or private combat sessions to prevent combat_instance_conflict
 	if _, err := tx.Exec(`
-		INSERT INTO realtime_combat_sessions (id,mode,zone_id,origin_zone_id,payload)
-		VALUES ($1,'ascension',$2,$3,'{}'::jsonb)
-	`, instanceID, practiceRealtimeMapID, originZone); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên chiến đấu realtime"})
+		UPDATE players SET world_instance_id = '', world_location_revision = world_location_revision + 1
+		WHERE id = $1 AND world_instance_id != ''
+	`, player.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi dọn dẹp trạng thái phiên cũ"})
 		return
 	}
-	if _, err := tx.Exec(`
-		INSERT INTO realtime_combat_session_participants (session_id,player_id,payload)
-		VALUES ($1,$2,$3)
-	`, instanceID, player.ID, config); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Không thể đăng ký nhân vật vào phiên realtime"})
-		return
-	}
-	if _, err := tx.Exec(`
-		UPDATE players SET world_zone_id=$2,world_instance_id=$3,
-			world_location_revision=world_location_revision+1
-		WHERE id=$1
-	`, player.ID, practiceRealtimeMapID, "combat:"+instanceID.String()); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Không thể chuyển vào bản đồ chiến đấu realtime"})
-		return
-	}
+	_, _ = tx.Exec(`
+		UPDATE realtime_combat_session_participants SET status = 'abandoned'
+		WHERE player_id = $1 AND status = 'active'
+	`, player.ID)
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
-	if handedOff {
-		middleware.FinishRealtimeHandoff(authID)
+
+	// Spawn the Địa Tai boss in the world zone right at or near player position
+	if err := spawner(c.Request.Context(), player.ID, originZone, worldX, worldY, bossHP, bossAtk, bossDef); err != nil {
+		logger.S.Errorf("Failed to spawn ascension boss in world: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể triệu hồi Địa Tai trên bản đồ thế giới: %v", err)})
+		return
 	}
 
 	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
 	c.JSON(http.StatusOK, gin.H{
-		"success": true, "message": "ĐỊA TAI BẢN YẾU giáng lâm trên bản đồ realtime riêng!",
-		"instance_id": instanceID, "zone_id": practiceRealtimeMapID,
+		"success": true,
+		"message": "ĐỊA TAI BẢN YẾU đã giáng lâm ngay bên cạnh ngươi trên đại lục! Hãy tiêu diệt nó để ngưng tụ Tiên Khiếu!",
+		"zone_id": originZone,
 	})
+}
+
+// CompleteAscensionCalamityForPlayer advances the ascension session to the release step when the calamity boss is slain.
+func CompleteAscensionCalamityForPlayer(ctx context.Context, playerID uuid.UUID) error {
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := completeAscensionCalamity(tx, playerID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	_ = notify.Send(db.DB, playerID, "ascension_calamity_victory", "ĐỊA TAI ĐÃ BỊ ĐÁNH TAN!", "Đại kiếp đã qua, ba khí Thiên Địa Nhân đã hòa quyện. Hãy mau chóng Thả Cổ bản mệnh để ngưng tụ Tiên Khiếu!")
+	return nil
 }
 
 func completeAscensionCalamity(tx *sql.Tx, playerID uuid.UUID) error {

@@ -428,6 +428,45 @@ func containsEntity(snapshot Snapshot, id EntityID) bool {
 	return false
 }
 
+func TestFixedTargetMonsterLocksAggro(t *testing.T) {
+	w, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "zone", InstanceID: "fixed", RulesetVersion: "v1"}, 8, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetPlayer := newPlayer("target_player")
+	targetPlayer.Transform.Position = Vec2{X: 5, Y: 0}
+
+	otherPlayer := newPlayer("other_player")
+	otherPlayer.Transform.Position = Vec2{X: 1, Y: 0} // closer than target_player
+
+	monster := newAIMonster("boss", Vec2{X: 0, Y: 0})
+	monster.AI.FixedTarget = "target_player"
+
+	if err := w.AddEntity(targetPlayer); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(otherPlayer); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(monster); err != nil {
+		t.Fatal(err)
+	}
+
+	w.Step()
+	bossEntity := w.entities["boss"]
+	if bossEntity.AI.Threat != "target_player" {
+		t.Fatalf("expected boss threat to be target_player, got %q", bossEntity.AI.Threat)
+	}
+
+	// Another player hits the boss with massive threat
+	w.recordThreatLocked(bossEntity, w.entities["other_player"], 999999)
+	w.Step()
+
+	if bossEntity.AI.Threat != "target_player" {
+		t.Fatalf("expected boss threat to remain target_player despite other player damage, got %q", bossEntity.AI.Threat)
+	}
+}
+
 func entityHP(t *testing.T, w *World, id EntityID) float64 {
 	t.Helper()
 	for _, entity := range w.Snapshot().Entities {

@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -59,5 +61,26 @@ func TestEligibleAscensionReleaseGu(t *testing.T) {
 	eligible := eligibleAscensionReleaseGu(player)
 	if len(eligible) != 1 || eligible[0].InstanceID != "fire5" {
 		t.Fatalf("eligibleAscensionReleaseGu = %+v, want only [fire5]", eligible)
+	}
+}
+
+func TestAscensionWorldSpawnerHook(t *testing.T) {
+	called := false
+	SetAscensionWorldSpawner(func(ctx context.Context, playerID uuid.UUID, zoneID string, x, y float64, hp, atk, def float64) error {
+		called = true
+		return nil
+	})
+	t.Cleanup(func() { SetAscensionWorldSpawner(nil) })
+
+	ascensionWorldSpawnerMu.RLock()
+	spawner := ascensionWorldSpawner
+	ascensionWorldSpawnerMu.RUnlock()
+
+	if spawner == nil {
+		t.Fatal("expected non-nil ascensionWorldSpawner")
+	}
+	_ = spawner(context.Background(), uuid.New(), "Southern_Border", 10, 10, 100, 10, 5)
+	if !called {
+		t.Fatal("expected ascensionWorldSpawner to be invoked")
 	}
 }
