@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -71,34 +71,25 @@ func RefineGu(c *gin.Context) {
 	}
 
 	// 3. Fetch Recipe
-	targetGuID, targetRank, variant, err := ParseRecipeID(req.RecipeID)
+	recipe, err := fetchRefiningRecipe(tx, req.RecipeID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID công thức không hợp lệ"})
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Refining recipe not found"})
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
-	var recipe models.RefiningRecipe
-	if rec, found := models.GetRecipeByTarget(targetGuID, targetRank, variant); found {
-		recipe = rec
-	} else {
-		err = tx.QueryRow(`
-			SELECT target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
-			FROM refining_recipes 
-			WHERE target_gu_id = $1 AND target_rank = $2 AND variant = $3`, targetGuID, targetRank, variant).Scan(
-			&recipe.TargetGuID, &recipe.TargetRank, &recipe.Variant, &recipe.RequiredGus,
-			&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
-			&recipe.ImmortalEssenceStonesCost,
-		)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Refining recipe not found"})
-			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch recipe"})
-			}
-			return
-		}
+	// 3a. Đường nhanh chỉ dành cho cổ thấp hơn cảnh giới người chơi và
+	// không phải Tiên Cổ; còn lại bắt buộc qua phiên luyện có thời gian.
+	if recipe.TargetRank >= 6 || recipe.TargetRank >= player.Rank {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cổ này cần luyện qua phiên có thời gian. Hãy bắt đầu một phiên luyện Cổ!",
+			"code":  "REFINE_SESSION_REQUIRED",
+		})
+		return
 	}
-	recipe.ID = req.RecipeID
 
 	// 3b. Calculate Mana Cost
 	manaCost, err := calculateRefineManaCost(player.Rank, recipe.TargetRank)
@@ -142,53 +133,33 @@ func RefineGu(c *gin.Context) {
 	}
 
 	// 6. Validate Selected Gu Instance IDs
-	totalReqGusCount := 0
-	for _, req := range recipe.RequiredGus {
-		totalReqGusCount += req.Qty
-	}
-	if len(req.SelectedGuInstanceIDs) != totalReqGusCount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Incorrect number of Gu bugs selected for refining"})
+	_, materialQualityBonus, guRequirementsNotMet, selErr := validateRefineSelection(&player, &recipe, req.SelectedGuInstanceIDs)
+	if selErr != nil {
+		if strings.HasPrefix(selErr.Error(), "Gu bug not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": selErr.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": selErr.Error()})
 		return
 	}
 
-	// Count Gu types (matching the required rank or higher) and verify ownership
-	selectedGusCounts := make(map[string]int)
+	// Tập instance id đã chọn (đã trim) — dùng để phân loại Cổ bị tiêu hao.
 	seenInstances := make(map[string]bool)
-	materialQualityBonus := 0.0
-
 	for _, instID := range req.SelectedGuInstanceIDs {
-		instID = strings.TrimSpace(instID)
-		if seenInstances[instID] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Duplicate Gu instance selected"})
-			return
-		}
-		seenInstances[instID] = true
-
-		item, _, found := models.FindGuByInstanceID(player.GuInventory, instID)
-		if !found {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Gu bug not found in your inventory: " + instID})
-			return
-		}
-		if item.Status == "DEAD" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot use a DEAD Gu bug for refining"})
-			return
-		}
-		// Count instances that satisfy the recipe requirement (equal or higher rank).
-		if reqGu, ok := recipe.RequiredGus[item.GuID]; ok && (reqGu.Rank == 0 || item.Rank >= reqGu.Rank) {
-			selectedGusCounts[item.GuID]++
-			if reqGu.Rank > 0 && item.Rank > reqGu.Rank {
-				materialQualityBonus += 0.02 * float64(item.Rank-reqGu.Rank)
-			}
-		}
+		seenInstances[strings.TrimSpace(instID)] = true
 	}
 
-	// Check if selection matches recipe required Gus.
-	guRequirementsNotMet := false
-	for guID, reqGu := range recipe.RequiredGus {
-		if selectedGusCounts[guID] != reqGu.Qty {
-			guRequirementsNotMet = true
-			break
-		}
+	// Cổ đang bị khóa bởi phiên luyện khác không thể dùng làm nguyên liệu.
+	lockedCount := 0
+	if err := tx.QueryRow(`SELECT COUNT(1) FROM player_gu WHERE player_id = $1 AND id = ANY($2::text[]) AND is_locked`,
+		player.ID, pq.Array(req.SelectedGuInstanceIDs)).Scan(&lockedCount); err != nil {
+		logger.S.Errorf("RefineGu: locked Gu check error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra Gu bị khóa"})
+		return
+	}
+	if lockedCount > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Có Cổ nguyên liệu đang bị giữ trong phiên luyện khác!", "code": "REFINE_GU_LOCKED"})
+		return
 	}
 
 	// Tiên cổ là duy nhất: xác định trước khi tính tỉ lệ để pity không giúp
@@ -212,157 +183,23 @@ func RefineGu(c *gin.Context) {
 		player.ImmortalStones -= recipe.ImmortalEssenceStonesCost
 	}
 
-	// 8. RNG Roll & 10 Factors Calculation
-	var pathRaw []byte
-	err = tx.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1 AND rank = $2`, recipe.TargetGuID, recipe.TargetRank).Scan(&pathRaw)
+	// 8. RNG Roll & 10 Factors Calculation — helper dùng chung với phiên luyện.
+	rateSnapshot, err := computeRefineRate(tx, &player, recipe, nil, refineRateInput{
+		materialQualityBonus: materialQualityBonus,
+		pityEligible:         pityEligible,
+		requirementsNotMet:   guRequirementsNotMet,
+	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query target Gu path: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute refine rate: " + err.Error()})
 		return
 	}
-
-	var paths []string
-	if err := json.Unmarshal(pathRaw, &paths); err != nil {
-		paths = []string{string(pathRaw)}
-	}
-
-	// Calculate target path attainment bonus & points
-	targetPathMastery := 0.0
-	targetPathPoints := 0
-	if player.PathMasteries != nil {
-		for _, path := range paths {
-			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			if points, ok := player.PathMasteries[cleanPath]; ok {
-				if points > targetPathPoints {
-					targetPathPoints = points
-				}
-				bonus := gamefx.TargetPathMasteryBonus(gamefx.PathMasteryLevel(points))
-				if bonus > targetPathMastery {
-					targetPathMastery = bonus
-				}
-			}
-		}
-	}
-
-	// Refinement Dao Marks & Mastery
-	refinementMarks := int64(0)
-	refinementPoints := 0
-	if player.DaoMarks != nil {
-		refinementMarks = player.DaoMarks["refinement"]
-	}
-	if player.PathMasteries != nil {
-		refinementPoints = player.PathMasteries["refinement"]
-	}
-
-	refinementDaoBonus := gamefx.RefinementDaoBonus(refinementMarks, targetPathPoints, recipe.TargetRank)
-
-	refinementRealm := gamefx.PathMasteryLevel(refinementPoints)
-	refinementMasteryBonus := gamefx.RefinementMasteryBonus(refinementRealm)
-
-	// Luck Bonus
-	luckMarks := int64(0)
-	if player.DaoMarks != nil {
-		luckMarks = player.DaoMarks["luck"]
-	}
-	fx := gamefx.Get(&player)
-	luckBonus := gamefx.RefinementLuckBonus(luckMarks, fx.LuckBonus)
-
-	// Environment Bonus
-	var regionPathsRaw []byte
-	if err := tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(paths, '[]') FROM regions WHERE id = $1`, player.CurrentRegion).Scan(&regionPathsRaw); err != nil {
-		logger.S.Warnf("RefineGu: failed to query region paths for region %s: %v", player.CurrentRegion, err)
-	}
-	var regionPaths []string
-	if len(regionPathsRaw) > 0 {
-		_ = json.Unmarshal(regionPathsRaw, &regionPaths)
-	}
-	envBonus := 0.0
-	for _, rp := range regionPaths {
-		cleanRP := strings.TrimSuffix(strings.ToLower(rp), " path")
-		for _, tp := range paths {
-			cleanTP := strings.TrimSuffix(strings.ToLower(tp), " path")
-			if cleanRP == cleanTP {
-				envBonus = 0.05
-				break
-			}
-		}
-		if envBonus > 0 {
-			break
-		}
-	}
-
-	// Support Bonus: chỉ từ chủng tộc/thể chất dương (bonus Cổ phụ trợ đã bị loại bỏ).
-	posRefineBonus := 0.0
-	negRefinePenalty := 0.0
-	if fx.RefineBonus > 0 {
-		posRefineBonus = fx.RefineBonus
-	} else if fx.RefineBonus < 0 {
-		negRefinePenalty = -fx.RefineBonus
-	}
-	supportBonus := posRefineBonus
-
-	// Per-rank pity: fail rank R stacks only buff rank R (+1%/stack, no cap).
-	// Success on that rank resets its stacks to 0 (handled after outcome).
-	insightStacks := refineInsightStacks(&player, recipe.TargetRank)
-	insightBonus := 0.0
-	if pityEligible {
-		insightBonus = float64(insightStacks) * RefineInsightBonusPerStack
-	}
-
-	// Apply Immortal Penalty to flat bonuses for Rank 6+
-	immortalPenalty := gamefx.RefinementImmortalPenalty(recipe.TargetRank)
-
-	if immortalPenalty > 1.0 {
-		refinementMasteryBonus /= immortalPenalty
-		targetPathMastery /= immortalPenalty
-		luckBonus /= immortalPenalty
-		supportBonus /= immortalPenalty
-		envBonus /= immortalPenalty
-		materialQualityBonus /= immortalPenalty
-		insightBonus /= immortalPenalty
-	}
-
-	// Final Rate Calculation (ép luyện đã bỏ: công thức luôn 100% mới được luyện).
-	baseRate := recipe.SuccessRate
-	sumPositiveBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus + insightBonus
-
-	rawPositiveRate := baseRate + sumPositiveBonus
-	completionPenalty := 1.0
-
-	// Cap positive rate at 1.0 (100%) BEFORE applying negative debuff penalties
-	cappedPositiveRate := rawPositiveRate
-	if cappedPositiveRate > 1.0 {
-		cappedPositiveRate = 1.0
-	}
-
-	// Subtract debuff penalties (e.g., refine_backfire, refine_fatigue) after capping
-	finalSuccessRate := cappedPositiveRate - negRefinePenalty
-	if finalSuccessRate < 0.0 {
-		finalSuccessRate = 0.0
-	}
-	if guRequirementsNotMet {
-		finalSuccessRate = 0.0
-	}
+	finalSuccessRate := rateSnapshot.Breakdown.FinalRate
+	refinementRealm := rateSnapshot.RefinementRealm
+	insightStacks := rateSnapshot.InsightStacks
+	breakdown := rateSnapshot.Breakdown
 
 	roll := rand.Float64()
 	outcome := determineRefineOutcome(roll, finalSuccessRate, refinementRealm, recipe.TargetRank)
-
-	breakdown := RefineRateBreakdown{
-		BaseRate:           baseRate,
-		CompletionPenalty:  completionPenalty,
-		ComboAccuracy:      !guRequirementsNotMet,
-		MaterialQuality:    materialQualityBonus,
-		RefinementDaoMarks: refinementDaoBonus,
-		RefinementMastery:  refinementMasteryBonus,
-		TargetPathMastery:  targetPathMastery,
-		LuckBonus:          luckBonus,
-		SupportBonus:       supportBonus,
-		StatusPenalty:      negRefinePenalty,
-		EnvBonus:           envBonus,
-		InsightBonus:       insightBonus,
-		InsightStacks:      insightStacks,
-		FinalRate:          finalSuccessRate,
-		RefinementRealm:    refinementRealm,
-	}
 
 	var newGuInstance models.GuInstance
 	var statusMsg string

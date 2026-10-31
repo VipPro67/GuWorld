@@ -170,6 +170,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	if !isWorldOnly {
 		// Auto-subscribe to player-specific and global channels for web UI
 		shub.Subscribe(client, ChannelName("player:"+playerID.String()))
+		shub.Subscribe(client, ChannelName("refine:"+playerID.String()))
 		shub.Subscribe(client, ChannelName("trade:"+playerID.String()))
 		shub.Subscribe(client, ChannelName("notif:"+playerID.String()))
 		shub.Subscribe(client, ChannelName("combat:"+playerID.String()))

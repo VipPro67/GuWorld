@@ -237,6 +237,9 @@ npm run build
 
 ## Background workers
 
+Active workers (`cmd/server/main.go`): Hunger, Tribulation, **Refine Session** (30s sweep — resolves overdue
+`refine_sessions`, idempotent với lazy GET `/refine/sessions*`), party/pets/society/arena, batch persister…
+
 Every recurring background task goes through `backend/internal/worker/runner.go`:
 
 ```go

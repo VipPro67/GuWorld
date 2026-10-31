@@ -46,19 +46,20 @@ export function MMOBusinessPanels({ panel, onClose, onLoadoutSaved }: MMOBusines
       <aside
         role="dialog"
         aria-label={meta.title}
-        className="mmo-panel-theme relative z-10 flex h-full w-full max-w-[min(94vw,640px)] flex-col border-l border-[#a88952]/60 bg-[#150f0bf2] text-[#f4e8cb] shadow-[-24px_0_80px_rgba(0,0,0,.55)] backdrop-blur-xl"
+        className="mmo-panel-theme mmo-paper-theme mmo-paper-surface relative z-10 flex h-full w-full max-w-[min(94vw,640px)] flex-col border-l border-[#80603a] text-[#49331f]"
       >
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[#a88952]/35 bg-[#2b2017]/70 px-4">
+        <header className="mmo-paper-heading flex h-14 shrink-0 items-center justify-between gap-3 px-4">
           <div className="flex items-center gap-2">
-            <Icon className="h-4 w-4 text-[#d8b979]" />
-            <div className="font-serif text-base font-semibold text-[#f4e8cb]">{meta.title}</div>
+            <span className="mmo-paper-seal">令</span>
+            <Icon className="h-4 w-4 text-[#79542f]" />
+            <div className="font-serif text-base font-semibold text-[#49331f]">{meta.title}</div>
           </div>
           <div className="flex items-center gap-2">
             <ClearCacheButton className="text-[10px]" />
             <button
               type="button"
               onClick={onClose}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-[#a88952]/40 bg-[#3a291d] text-[#ead6ad] transition hover:bg-[#624329] hover:text-white"
+              className="mmo-bamboo-action grid h-8 w-8 place-items-center"
               aria-label="Đóng"
             >
               <X className="h-4 w-4" />
@@ -91,7 +92,9 @@ export function MMOBusinessPanels({ panel, onClose, onLoadoutSaved }: MMOBusines
             />
             </div>
           ) : panel === "cultivation" && store.player ? (
-            <Aperture player={store.player} guDictionary={store.guDictionary} onRealtimeHotbarSaved={onLoadoutSaved} />
+            <div className="mmo-paper-aperture">
+              <Aperture player={store.player} guDictionary={store.guDictionary} onRealtimeHotbarSaved={onLoadoutSaved} />
+            </div>
           ) : panel === "settings" ? (
             <MMOSettingsPanel onLoadoutSaved={onLoadoutSaved} />
           ) : panel === "party" ? (

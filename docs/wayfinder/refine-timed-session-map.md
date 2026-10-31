@@ -69,6 +69,8 @@ Biến **Luyện Cổ** từ một `POST /api/refine` tức thời thành một 
 
 **Frontier hiện tại:** WF-REF-08 (prototype, HITL) và WF-REF-09 (quick path/kinh tế). Chỉ còn hai ticket trước khi map đạt đích spec.
 
+**Implementation status (2026-10-31):** Flow chính đã được implement theo spec WF-REF-05/06 — `schema_refine.go` (`refine_sessions` + `refine_stage_templates` + `refine_decisions`), `refine_session*.go` (create/submit/resolve/abort/ack/preview), worker 30s, WS kênh `refine`, hook chết, guard đường nhanh, slice `refineSessionSlice` + `RefineSessionPanel` (4 minigame). RefineStage.csv + RefineDecision.csv import qua Admin. Còn v1.1: prototype WF-REF-08, kinh tế quick path WF-REF-09, chống bot fog.
+
 ---
 
 ## Not yet specified (Fog of War)

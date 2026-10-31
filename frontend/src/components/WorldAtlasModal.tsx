@@ -348,19 +348,19 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
         role="dialog"
         aria-modal="true"
         aria-labelledby="world-atlas-title"
-        className="mmo-panel-theme flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#a88952]/60 bg-[#150f0b] text-[#f4e8cb] shadow-2xl shadow-black/60"
+        className="mmo-panel-theme mmo-paper-theme mmo-paper-surface flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-xl text-[#49331f]"
       >
         {/* Header */}
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
+        <header className="mmo-paper-heading flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-xl border border-cyan-400/30 bg-cyan-500/10 text-cyan-300 shadow-inner">
+            <div className="mmo-paper-icon">
               <Compass className="h-5 w-5" />
             </div>
             <div>
-              <h2 id="world-atlas-title" className="font-serif text-base font-bold text-cyan-50 sm:text-lg">
+              <h2 id="world-atlas-title" className="font-serif text-base font-bold text-[#49331f] sm:text-lg">
                 Bản Đồ Cổ Giới
               </h2>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[#795a34]">
                 {mapRegion ? `Chi tiết: ${mapRegion.name}` : "Toàn cảnh 5 Đại Vực & Phân bố Yêu thú, Chiến lợi phẩm"}
               </p>
             </div>

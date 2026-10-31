@@ -1112,6 +1112,18 @@ Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy
 - Backend chỉ chấp nhận Cổ nguyên liệu khớp cả `gu_id` lẫn `rank` (khi `rank != 0`); frontend (Lò Luyện, Wiki, Admin) hiển thị và chọn Cổ theo đúng bậc yêu cầu.
 - Ví dụ: `{"GU_WHITE_BOAR": {"qty": 1, "rank": 1}}`.
 
+### RefineStage (nhịp độ phiên luyện cổ)
+
+- Bảng `refine_stage_templates` (khóa `rank` 1–9) cấu hình nhịp độ + độ khó của phiên luyện Cổ theo thời gian (`refine_sessions`, WF-REF-06): `duration_seconds`, `step_count` (N), `minigame_count` (K), `window_seconds`, `accuracy_max_bonus`, `death_penalty`, `mastery_multiplier_max`, độ khó từng minigame (`tap_half_width`, `tap_period_ms`, `sequence_length`, `sequence_display_ms`, `sequence_input_ms`, `order_item_count`, `choice_option_count`) và trọng số `minigame_weights` (`{"TAP":1,"SEQUENCE":1,"ORDER":1}`).
+- Nguồn CSV: `RefineStage.csv` (16 cột, đúng 9 dòng rank 1–9; `minigame_weights` phải quote JSON). Import: Admin → "Dữ liệu" → "Nhịp độ luyện cổ" → Dry-run → Import. Không cần restart: handler đọc bảng mỗi lần tạo phiên; phiên đang chạy giữ snapshot `rate_snapshot` tại lúc tạo nên import giữa phiên không đổi kết quả.
+- Baseline 9 dòng được seed bằng Go khi `InitSchema` (`ON CONFLICT DO NOTHING`) — khôi phục mặc định bằng cách import lại `RefineStage.csv` baseline. Bảng thiếu rank → `POST /refine/sessions` trả **503** `REFINE_CONFIG_MISSING`.
+- Ràng buộc preflight: `minigame_count ≤ step_count − 1`, `window_seconds ≤ duration_seconds / step_count`, weights chỉ chứa TAP/SEQUENCE/ORDER với tổng > 0.
+
+### RefineDecision (kịch bản dẫn hỏa)
+
+- Bảng `refine_decisions`: các dòng CHOICE cho bước "Dẫn Hỏa" trong phiên luyện — `id, situation, option_1..3, correct_index, neutral_index, explanation` (CSV `RefineDecision.csv`).
+- Import qua Admin ("Kịch bản dẫn hỏa"); chọn dòng theo seed phiên, xáo thứ tự option. Registry rỗng → các bước CHOICE **fallback thành TAP** cùng độ khó (không chặn người chơi) kèm log. Không seed baseline lúc startup.
+
 ### Monster/combat
 
 Monster template chứa chỉ số, Gu inventory (`gu_inventory`) và Gu pool (`gu_pool`), item inventory, dao marks, path masteries, AI profile và loot table. Combat handler dùng dữ liệu này để khởi tạo trận, chọn hành động và roll loot.

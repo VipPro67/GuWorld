@@ -22,3 +22,6 @@
 # Local machine noise
 .DS_Store
 *.log
+
+# External game assets kept in public for local reference only
+/frontend/public/cotienlo-reference-assets/

@@ -713,6 +713,13 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		{
 			refining.POST("", handlers.RefineGu)
 			refining.POST("/deduce", handlers.DeduceRecipe)
+			refining.GET("/preview", handlers.RefinePreview)
+			refining.POST("/sessions", handlers.CreateRefineSession)
+			refining.GET("/sessions/active", handlers.GetActiveRefineSession)
+			refining.GET("/sessions/:id", handlers.GetRefineSession)
+			refining.POST("/sessions/:id/steps", handlers.SubmitRefineSessionStep)
+			refining.POST("/sessions/:id/abort", handlers.AbortRefineSession)
+			refining.POST("/sessions/:id/ack", handlers.AckRefineSession)
 		}
 
 		// Scouting & Divination — group: 60/min, per player: 30/min

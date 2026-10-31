@@ -3592,6 +3592,11 @@ var individualExportDefs = map[string]exportDef{
 		       COALESCE(minigame_weights::text,'{}')
 		FROM refine_stage_templates ORDER BY rank`,
 	},
+	"refine_decision": {
+		filename: "RefineDecision.csv",
+		columns:  []string{"id", "situation", "option_1", "option_2", "option_3", "correct_index", "neutral_index", "explanation"},
+		query:    `SELECT id, situation, option_1, option_2, COALESCE(option_3,''), correct_index, neutral_index, COALESCE(explanation,'') FROM refine_decisions ORDER BY id`,
+	},
 	"shop_item": {
 		filename: "ShopItem.csv",
 		columns:  []string{"id", "rank", "price", "stock", "is_default", "sort_order"},

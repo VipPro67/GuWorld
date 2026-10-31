@@ -447,7 +447,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
         {/* Character Title */}
         <h3
-          className="text-base sm:text-lg font-bold tracking-wider uppercase font-serif mb-1 flex items-center gap-1.5 z-10"
+          className="mmo-paper-ink text-base sm:text-lg font-bold tracking-wider uppercase font-serif mb-1 flex items-center gap-1.5 z-10"
           style={{ color: c.text, textShadow: `0 0 10px ${c.glow}` }}
         >
           {player.username}
@@ -457,9 +457,9 @@ export const Aperture: React.FC<ApertureProps> = ({
           {isImmortal ? "Tiên Phàm Cách Biệt" : `Tư Chất: ${aptitudeType} (${aptitudePercent}%)`} • {manaQuality}
         </p>
         <p className="text-xs font-semibold tracking-widest text-center mb-4 text-zinc-150 uppercase z-10">
-          Tu Vi: <span className="font-bold" style={{ color: c.text }}>{rankName}</span>
+          Tu Vi: <span className="mmo-paper-ink font-bold" style={{ color: c.text }}>{rankName}</span>
           {isImmortal ? (
-            <span className="font-bold text-[9px]" style={{ color: c.textLight }}>
+            <span className="mmo-paper-ink font-bold text-[9px]" style={{ color: c.textLight }}>
               &nbsp;&nbsp;❖&nbsp;&nbsp;{tribulationInfo}
             </span>
           ) : (
@@ -602,16 +602,16 @@ export const Aperture: React.FC<ApertureProps> = ({
                 </svg>
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                  <div className="flex flex-col items-center gap-1.5 p-4 bg-zinc-950/40 border border-cyan-500/10 rounded-3xl backdrop-blur-sm">
+                  <div className="mmo-paper-contrast-card flex flex-col items-center gap-1.5 p-4 bg-zinc-950/40 border border-cyan-500/10 rounded-3xl backdrop-blur-sm">
                     <span className="text-3xl animate-bounce">💎</span>
-                    <div className="text-sm font-bold text-zinc-100 font-mono tracking-wide" style={{ color: c.textLight }}>
+                    <div className="mmo-paper-ink text-sm font-bold text-zinc-100 font-mono tracking-wide" style={{ color: c.textLight }}>
                       {manaQuality}:
                     </div>
                     <div className="text-xl font-bold font-mono text-cyan-400">
                       {player ? Math.floor(currentMana).toLocaleString() : "--"} viên
                     </div>
                     <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
-                    <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.textLight }}>
+                    <div className="mmo-paper-ink text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.textLight }}>
                       Tốc lưu tiên khiếu: +{manaRegenRealHourly.toFixed(1)} viên/giờ
                     </div>
                     {!isImmortal && currentMana < maxMana && manaRegenRealHourly > 0 && (

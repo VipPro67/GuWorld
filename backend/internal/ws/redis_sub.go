@@ -14,6 +14,7 @@ import (
 // and forward messages to the Sharded WebSocket Hub.
 func StartRedisSubscribers(shub *ShardedHub) {
 	go subscribePattern(shub, "player:*")
+	go subscribePattern(shub, "refine:*")
 	go subscribePattern(shub, "chat:*")
 	go subscribePattern(shub, "trade:*")
 	go subscribePattern(shub, "world:pos")
@@ -89,7 +90,7 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 }
 
 func isPlayerScopedChannel(channel string) bool {
-	for _, prefix := range []string{"player:", "combat:", "trade:", "notif:"} {
+	for _, prefix := range []string{"player:", "combat:", "trade:", "notif:", "refine:"} {
 		if len(channel) >= len(prefix) && channel[:len(prefix)] == prefix {
 			return true
 		}
@@ -102,6 +103,8 @@ func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) 
 	switch {
 	case len(redisChannel) >= 7 && redisChannel[:7] == "player:":
 		clientChannel = "player"
+	case len(redisChannel) >= 7 && redisChannel[:7] == "refine:":
+		clientChannel = "refine"
 	case len(redisChannel) >= 6 && redisChannel[:6] == "trade:":
 		clientChannel = "trade"
 	case len(redisChannel) >= 6 && redisChannel[:6] == "notif:":

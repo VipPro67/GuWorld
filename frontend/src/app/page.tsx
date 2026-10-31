@@ -26,6 +26,7 @@ import { updateUiPreferences } from "@/lib/ui-preferences";
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
 const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
 const RefiningFurnace = dynamic(() => import("@/components/RefiningFurnace").then(m => m.RefiningFurnace), { ssr: false });
+const RefineSessionPanel = dynamic(() => import("@/components/RefineSessionPanel").then(m => m.RefineSessionPanel), { ssr: false });
 const CaravanShop = dynamic(() => import("@/components/CaravanShop").then(m => m.CaravanShop), { ssr: false });
 const MerchantTradeView = dynamic(() => import("@/components/MerchantTradeView").then(m => m.MerchantTradeView), { ssr: false });
 const PremiumStoreView = dynamic(() => import("@/components/PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
@@ -359,24 +360,24 @@ export default function Home() {
               <section
                 role="dialog"
                 aria-label={viewTitles[currentView] || "Chức năng"}
-                className={`mmo-panel-theme absolute z-40 flex flex-col overflow-hidden border border-[#a88952]/60 bg-[#150f0bf2] text-[#f4e8cb] shadow-[0_24px_80px_rgba(0,0,0,.55)] backdrop-blur-xl ${
+                className={`mmo-panel-theme mmo-paper-theme mmo-paper-surface absolute z-40 flex flex-col overflow-hidden text-[#49331f] ${
                   isFullBleedView
                     ? "inset-0"
                     : `inset-x-0 inset-y-0 md:inset-y-3 md:left-auto md:right-3 md:top-3 md:rounded-2xl ${isWideFeatureView ? "md:w-[min(58vw,760px)]" : "md:w-[min(46vw,560px)]"}`
                 }`}
               >
                 {!isFullBleedView && (
-                  <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[#a88952]/35 bg-[#2b2017]/70 px-4 sm:px-5">
+                  <div className="mmo-paper-heading flex min-h-14 shrink-0 items-center justify-between gap-3 px-4 sm:px-5">
                     <div className="min-w-0">
-                      <div className="truncate font-serif text-base font-semibold text-[#f4e8cb]">{viewTitles[currentView] || "Chức năng"}</div>
-                      <div className="hidden text-[10px] uppercase tracking-[.2em] text-[#d8b979]/70 sm:block">Cổ Giới · Bảng điều khiển</div>
+                      <div className="truncate font-serif text-base font-semibold text-[#49331f]">{viewTitles[currentView] || "Chức năng"}</div>
+                      <div className="hidden text-[10px] uppercase tracking-[.2em] text-[#795a34] sm:block">Cổ Giới · Bảng điều khiển</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {player && <NotificationBell />}
                       <button
                         onClick={() => setView("mmo-world")}
                         aria-label="Đóng bảng điều khiển"
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#a88952]/40 bg-[#3a291d] text-[#ead6ad] transition hover:bg-[#624329] hover:text-white"
+                        className="mmo-bamboo-action grid h-9 w-9 shrink-0 place-items-center"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -389,7 +390,7 @@ export default function Home() {
             <TrainingRoom onClose={() => setView("dashboard")} />
           </div>
         ) : currentView === "character" || currentView === "cultivation" ? (
-          <div className="w-full">
+          <div className="mmo-paper-aperture w-full">
               <Aperture
                 key={currentView}
                 player={player}
@@ -553,6 +554,9 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Phiên Luyện Cổ chạy nền — HUD nổi toàn cục (WF-REF-07) */}
+      {player && <RefineSessionPanel />}
 
       {/* Footer Details */}
       {!isGameWorldView && (

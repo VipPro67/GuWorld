@@ -156,8 +156,19 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/gu-houses` | Đúc kết Tiên Cổ Ốc mới. Cần từ 2 đến 5 Tiên Cổ Rank 6+ làm hạch tâm. |
 | POST | `/gu-houses/:id/equip` | Bật/tắt trạng thái xuất chiến của Tiên Cổ Ốc. Khi trang bị sẽ che chắn trọn vẹn cho Cổ Tiên trong combat. |
 | POST | `/gu-houses/:id/repair` | Tu sửa hồi phục độ bền Tiên Cổ Ốc về 100% bằng Nguyên Thạch. |
-| POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). Target rank ≥ 6 trùng toàn server → **409** (kể cả race thua khi concurrent). |
+| POST | `/refine` | Luyện Cổ đường nhanh (chỉ cổ target rank < rank người chơi và < 6; ngược lại trả **400** `REFINE_SESSION_REQUIRED`). Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`), không được `is_locked` (**409** `REFINE_GU_LOCKED`). Target rank ≥ 6 trùng toàn server → **409** (kể cả race thua khi concurrent). |
 | POST | `/refine/deduce` | Suy diễn recipe. |
+| GET | `/refine/preview` | `?recipe_id=` — preview tỉ lệ (không lock): `rate_min`/`rate_max` (band accuracy 0→100), `accuracy_max_bonus`, `death_penalty`, `warnings`, chi phí. Bảng stage thiếu → warning. |
+| POST | `/refine/sessions` | Mở **phiên luyện Cổ** (body `{recipe_id, selected_gu_instance_ids}`). Escrow ngay: trừ mana/đá/nguyên liệu + khóa Cổ (`is_locked`). Chỉ **1 phiên ACTIVE**/người chơi (`409 REFINE_SESSION_ACTIVE`). Trả `{session, ...inventory}`. |
+| GET | `/refine/sessions/active` | Phiên ACTIVE hiện tại (lazy-resolve nếu quá hạn) hoặc kết quả gần nhất chưa ack trong 7 ngày, hoặc `{session:null}`. |
+| GET | `/refine/sessions/:id` | Chi tiết phiên (lazy-resolve khi quá hạn). View công khai: `steps[]` (`state` DONE/OPEN/LOCKED/MISSED), `step` hiện tại kèm `nonce` + params công khai, `server_now`; **không** trả seed/đáp án. |
+| POST | `/refine/sessions/:id/steps` | Submit bước: `{step_index, nonce, action, payload, client_ts}`. Server chấm điểm; grace 1s sau `window_end` (quá → **410** `REFINE_STEP_CLOSED`); sớm hơn giờ mở → **409** `REFINE_STEP_NOT_OPEN`; sai nonce → **409** `REFINE_NONCE_INVALID`; sai action/payload → **400** `REFINE_PAYLOAD_INVALID`; nonce lặp trả kết quả cũ (**idempotent**). Bước cuối → resolve ngay, kèm `result` + inventory. |
+| POST | `/refine/sessions/:id/abort` | Hủy phiên: hoàn `floor(qty/2)` nguyên liệu (không hoàn mana/đá), Cổ nguyên liệu về Hấp Hối (`DYING`). Lần 2 trả trạng thái hiện có. |
+| POST | `/refine/sessions/:id/ack` | Đánh dấu đã xem kết quả (cờ UI, giữ `ok:true`). |
+
+Realtime: Kênh WS `refine` nhận `{type:"refine.session", session, revision}` khi tạo/submit/resolve/abort.
+
+Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404), `REFINE_SESSION_REQUIRED` (400), `REFINE_STEP_NOT_OPEN` (409), `REFINE_STEP_CLOSED` (410), `REFINE_STEP_ALREADY_DONE` (409), `REFINE_NONCE_INVALID` (409), `REFINE_PAYLOAD_INVALID` (400), `REFINE_GU_LOCKED` (409), `REFINE_CONFIG_MISSING` (503), `REFINE_IMMORTAL_CONFLICT` (409).
 | POST | `/combat/practice` | Tạo phiên tập luyện realtime riêng trên `realtime_preview`; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Không tiêu hao HP/Chân Nguyên thật và trả `{instance_id,zone_id,origin_zone_id,is_practice}` để client nối vào zone. |
 | POST | `/combat/practice/exit` | Kết thúc phiên tập luyện realtime và khôi phục zone đã lưu trước khi vào phòng tập. |
 | GET | `/combat/skill-loadout` | Hotbar chiêu thức ô 9–12: `{slots, available, first_slot, max_slots}`. `slots` chỉ chứa chiêu đang ghim theo thứ tự phím; `available` gồm mọi Sát Chiêu đã trang bị và Trận Kích của Tiên Cổ Ốc đang xuất chiến kèm `supported`/`reason`. Hai nguồn dùng chung bốn ô. |

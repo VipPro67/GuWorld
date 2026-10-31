@@ -175,6 +175,184 @@
   --color-teal-100: #f8e8c4;
 }
 
+/* Dark lacquer and aged-paper surfaces used by the live MMO hub panels. The
+   texture stays subtle; all labels and controls remain real UI text. */
+.mmo-paper-theme {
+  --th-zinc-950: #130e0a;
+  --th-zinc-900: #211810;
+  --th-zinc-800: #302318;
+  --th-zinc-700: #4b3827;
+  --th-zinc-600: #756047;
+  --th-zinc-500: #9f8969;
+  --th-zinc-400: #bea987;
+  --th-zinc-300: #dcc8a4;
+  --th-zinc-200: #ebd9b5;
+  --th-zinc-100: #f4e8cb;
+  --th-zinc-50: #fff3d8;
+  --color-zinc-950: #130e0a;
+  --color-zinc-900: #211810;
+  --color-zinc-800: #302318;
+  --color-zinc-700: #4b3827;
+  --color-zinc-600: #756047;
+  --color-zinc-500: #9f8969;
+  --color-zinc-400: #bea987;
+  --color-zinc-300: #dcc8a4;
+  --color-zinc-200: #ebd9b5;
+  --color-zinc-100: #f4e8cb;
+  --color-zinc-50: #fff3d8;
+  --bg-primary: #150f0b;
+  --bg-surface: #241a12;
+  --bg-elevated: #352618;
+  --text-primary: #f4e8cb;
+  --text-secondary: #dcc8a4;
+  --text-muted: #ad9878;
+  --border-default: #70573a;
+  --border-hover: #a88952;
+  --brand-primary: #e4b96c;
+  --brand-dim: #47341f;
+  --surface: var(--bg-surface);
+  --bg-card: var(--bg-surface);
+  --border: var(--border-default);
+}
+
+.mmo-paper-surface {
+  color: #f4e8cb;
+  background-color: #211810;
+  background-image:
+    linear-gradient(rgba(31, 23, 17, 0.94), rgba(37, 27, 19, 0.96)),
+    url("/assets/ui/guworld-rice-paper.webp?v=1");
+  background-repeat: repeat;
+  background-size: auto, 320px 320px;
+  border: 1px solid #8c6c40;
+  box-shadow:
+    inset 0 0 0 2px rgba(238, 211, 158, 0.12),
+    inset 0 0 0 4px rgba(8, 5, 3, 0.3),
+    0 8px 28px rgba(0, 0, 0, 0.42);
+}
+
+.mmo-paper-heading {
+  color: #f4e8cb;
+  background: linear-gradient(180deg, rgba(91, 64, 39, 0.98), rgba(54, 38, 25, 0.98));
+  border-bottom: 1px solid rgba(168, 137, 82, 0.72);
+  box-shadow: inset 0 1px rgba(255, 238, 197, 0.12), inset 0 -2px rgba(8, 5, 3, 0.3);
+}
+
+.mmo-paper-icon {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  flex: none;
+  border: 1px solid #a88952;
+  border-radius: 0.4rem;
+  color: #f1d28e;
+  background: rgba(15, 10, 7, 0.48);
+  box-shadow: inset 0 1px rgba(255, 238, 197, 0.12);
+}
+
+.mmo-bamboo-action {
+  position: relative;
+  color: #f4e8cb;
+  border: 1px solid #a88952;
+  border-radius: 0.65rem;
+  background:
+    linear-gradient(90deg, rgba(8, 5, 3, 0.28), transparent 8%, transparent 92%, rgba(8, 5, 3, 0.28)),
+    repeating-linear-gradient(0deg, transparent 0 9px, rgba(232, 193, 121, 0.09) 10px, transparent 11px),
+    linear-gradient(180deg, #604326, #3d2b1c);
+  box-shadow: inset 0 1px rgba(255, 238, 197, 0.15), inset 0 -2px rgba(8, 5, 3, 0.3), 0 2px 0 #21160e;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.mmo-bamboo-action:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.mmo-bamboo-action:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px rgba(255, 248, 219, 0.9), inset 0 -1px rgba(105, 70, 36, 0.2), 0 1px 0 #75532e;
+}
+
+.mmo-paper-seal {
+  display: inline-grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  flex: none;
+  border: 1px solid #a23d2d;
+  border-radius: 0.25rem;
+  color: #f08a73;
+  font-size: 0.75rem;
+  line-height: 1;
+  transform: rotate(-7deg);
+  box-shadow: inset 0 0 0 1px rgba(162, 61, 45, 0.24);
+}
+
+/* Dense game panels use 8–11px helper labels by default. Keep those readable
+   when the paper treatment is active without changing their data or layout. */
+.mmo-paper-theme :is(
+  [class*="text-[7px]"],
+  [class*="text-[8px]"],
+  [class*="text-[9px]"],
+  [class*="text-[10px]"],
+  [class*="text-[10.5px]"],
+  [class*="text-[11px]"],
+  [class*="text-[11.5px]"]
+),
+.mmo-paper-theme .text-xs {
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+}
+
+/* Keep semantic status accents bright enough to read on the dark paper skin. */
+.mmo-paper-aperture :is(.text-cyan-50, .text-cyan-100, .text-cyan-200, .text-cyan-300, .text-cyan-400, .text-cyan-500, .text-sky-200, .text-sky-300, .text-sky-400, .text-teal-200, .text-teal-300, .text-teal-400) {
+  color: #78d9e5 !important;
+}
+
+.mmo-paper-aperture :is(.text-emerald-200, .text-emerald-300, .text-emerald-400, .text-emerald-500, .text-green-200, .text-green-300, .text-green-400) {
+  color: #8bddaa !important;
+}
+
+.mmo-paper-aperture :is(.text-amber-200, .text-amber-300, .text-amber-400, .text-amber-500, .text-yellow-200, .text-yellow-300, .text-yellow-400, .text-orange-300, .text-orange-400) {
+  color: #f2cf7d !important;
+}
+
+.mmo-paper-aperture :is(.text-rose-200, .text-rose-300, .text-rose-400, .text-rose-500, .text-red-200, .text-red-300, .text-red-400, .text-pink-200, .text-pink-300, .text-pink-400) {
+  color: #f09b8e !important;
+}
+
+.mmo-paper-aperture :is(.text-purple-200, .text-purple-300, .text-purple-400, .text-violet-200, .text-violet-300, .text-violet-400, .text-indigo-200, .text-indigo-300, .text-indigo-400, .text-blue-200, .text-blue-300, .text-blue-400) {
+  color: #c9afe8 !important;
+}
+
+.mmo-paper-aperture :is([class~="bg-zinc-950/40"], [class~="bg-zinc-950/30"]) {
+  background-color: rgba(13, 9, 7, 0.76) !important;
+  border-color: rgba(168, 137, 82, 0.35) !important;
+}
+
+.mmo-paper-aperture .mmo-paper-ink {
+  color: #f4e8cb !important;
+  text-shadow: none !important;
+}
+
+.mmo-paper-theme :is(
+  [class*="text-[#49331f]"],
+  [class*="text-[#3f2a19]"],
+  [class*="text-[#3f2d1c]"],
+  [class*="text-[#70583c]"],
+  [class*="text-[#795a34]"],
+  [class*="text-[#79542f]"]
+) {
+  color: #f1dfbd !important;
+}
+
+.mmo-paper-theme [class*="text-[#875a2d]"] {
+  color: #e9c77d !important;
+}
+
+.mmo-paper-aperture button:disabled {
+  opacity: 0.72;
+}
+
 html {
   /* Keep rem-based typography and spacing at a compact desktop scale. */
   font-size: 16px;

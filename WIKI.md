@@ -508,7 +508,17 @@ Quái và Cổ trùng **cùng rank là cân bằng** (mất ~3–5 hit để h�
 ## 6. Luyện Cổ và suy diễn công thức
 
 - Cổ phương được Admin import từ `backend/data/Recipe.csv`.
-- Luyện Cổ dùng `/api/refine` với recipe và selected Gu instances.
+- **Hai đường luyện:**
+  - **Luyện nhanh** (`POST /api/refine`): tức thời, dành cho Cổ mục tiêu có rank **thấp hơn cảnh giới người chơi** và **không phải Tiên Cổ (rank ≥ 6)**. Cổ rank ngang cấp trở lên trả lỗi `REFINE_SESSION_REQUIRED`.
+  - **Phiên Luyện Cổ** (`POST /api/refine/sessions`): bắt buộc cho Cổ ngang cấp cảnh giới trở lên và toàn bộ Tiên Cổ. Tài nguyên + Cổ nguyên liệu bị trừ/khóa ngay khi mở phiên (persona cổ bị khóa không thể dùng việc khác); phiên chạy nền theo thời gian thật kể cả khi offline.
+- **Phiên Luyện Cổ theo thời gian:** chia thành N bước theo rank (R1: 3 bước/60s → R9: 7 bước/4 giờ), mỗi bước mở trong cửa sổ ngắn:
+  - Bước 1 luôn là **Dẫn Hỏa** (chọn hành động xử lý tình huống lò: đúng 100 điểm / trung tính 50 / sai 0).
+  - Bước cuối luôn là **Khai Lò** (Canh Nhịp — click đúng lúc kim đi vào vùng sáng; vùng càng hẹp rank càng cao).
+  - Các bước giữa là **Dãy Ấn** (nhập lại dãy ký tự), **Ghép Liệu** (xếp nguyên liệu theo bậc tăng dần) hoặc Dẫn Hỏa thêm.
+  - Bỏ lỡ cửa sổ bước nào = 0 điểm bước đó (không mất tài nguyên thêm); lịch cố định, không dịch chuyển.
+  - **Điểm chính xác** (trung bình các bước) cộng thêm tối đa **+8% → +4%** tỉ lệ thành công theo rank (`accuracy_max_bonus` cấu hình qua RefineStage.csv); chết khi đang luyện giảm 25 điểm phần trăm (một lần). Tri ân: success sẽ cộng Chân Ý Luyện Đạo nhân hệ số chính xác (tối đa ×2).
+  - Chỉ có **một phiên ACTIVE**; hủy phiên hoàn lại 50% nguyên liệu (không hoàn Chân Nguyên/đá), Cổ nguyên liệu rơi vào Hấp Hối.
+- Luyện Cổ nhanh dùng `/api/refine` với recipe và selected Gu instances.
 - Cổ nguyên liệu trong công thức yêu cầu **bằng hoặc cao hơn bậc quy định**. Dùng Cổ nguyên liệu bậc cao hơn sẽ tăng thêm tỉ lệ thành công (Chất lượng nguyên liệu).
 - Có thể kéo-thả Cổ bất kỳ vào ô nguyên liệu (kể cả ô "Cổ Trùng Ẩn"). Nếu bộ Cổ không khớp công thức, khi Luyện sẽ **thất bại chắc chắn** — nguyên liệu, tài nguyên vẫn bị tiêu hao.
 - Tàn phương (recipe chưa 100%) phải dùng `/api/refine/deduce` để suy diễn lên 100% mới được luyện (không còn Ép Luyện). Tiêu hao 15 Niệm Lực và Nguyên Thạch mỗi lần.

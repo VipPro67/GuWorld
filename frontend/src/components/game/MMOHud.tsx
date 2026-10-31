@@ -151,7 +151,7 @@ const MODE_BADGE: Record<
   },
 };
 
-const frame = "border border-[#a88952]/65 bg-[#150f0bd9] text-[#f4e8cb] shadow-[0_8px_28px_rgba(0,0,0,.48)] backdrop-blur-sm";
+const frame = "border border-[#a88952]/70 bg-[#211810f5] text-[#f4e8cb] shadow-[0_8px_28px_rgba(0,0,0,.55),inset_0_1px_rgba(255,238,197,.08)] backdrop-blur-sm";
 
 const menuGroups: Array<{ title: string; items: Array<{ label: string; icon: typeof Package; view?: string; panel?: Exclude<MMOPanel, null>; special?: "divination" | "quick-actions" | "teleport-directory" | "teleport-build"; minRank?: number }> }> = [
   { title: "Thế giới", items: [
@@ -829,12 +829,12 @@ export function MMOHud(props: MMOHudProps) {
           </div>
         </div>
       ) : (
-        <div className={`pointer-events-auto absolute left-2 ${questBoxTop} hidden w-[min(88vw,250px)] rounded-xl md:block z-10 transition-all ${frame}`}>
-          <button type="button" onClick={() => setQuestsOpen((open) => !open)} className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-bold text-[#edce91]">
-            <span className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5" /> Nhiệm vụ hôm nay</span><span>{questsOpen ? "−" : "+"}</span>
+        <div className={`mmo-panel-theme mmo-paper-theme mmo-paper-surface pointer-events-auto absolute left-2 ${questBoxTop} hidden w-[min(88vw,250px)] overflow-hidden rounded-md md:block z-10 transition-all`}>
+          <button type="button" onClick={() => setQuestsOpen((open) => !open)} className="mmo-paper-heading flex w-full items-center justify-between px-3 py-2 text-left text-xs font-bold">
+            <span className="flex items-center gap-2"><span className="mmo-paper-seal">令</span><BookOpen className="h-3.5 w-3.5" /> Cáo thị nhiệm vụ</span><span>{questsOpen ? "−" : "+"}</span>
           </button>
-          {questsOpen && <button type="button" onClick={() => props.onOpenView("achievements")} className="w-full border-t border-[#b89a66]/25 px-3 py-2 text-left text-[11px] text-[#e9dec3] hover:bg-[#f3d194]/10">
-            {mission ? <><div className="font-semibold text-amber-100">{mission.title ?? "Nhiệm vụ"}</div><div className="mt-1 line-clamp-2 text-[#c6b99d]">{mission.description ?? "Xem tiến độ nhiệm vụ"}</div><div className="mt-1 font-sans text-[10px] text-[#d9bd82]">{mission.claimable ? "Có thể nhận thưởng" : `${mission.progress ?? 0}/${mission.target ?? 0}`} · Mở nhiệm vụ</div></> : "Xem nhiệm vụ và thành tựu"}
+          {questsOpen && <button type="button" onClick={() => props.onOpenView("achievements")} className="mmo-bamboo-action mx-2 mb-2 w-[calc(100%-1rem)] px-3 py-2 text-left text-[11px]">
+            {mission ? <><div className="font-semibold text-[#3f2a19]">{mission.title ?? "Nhiệm vụ"}</div><div className="mt-1 line-clamp-2 text-[#70583c]">{mission.description ?? "Xem tiến độ nhiệm vụ"}</div><div className="mt-1 font-sans text-[10px] font-semibold text-[#875a2d]">{mission.claimable ? "Có thể nhận thưởng" : `${mission.progress ?? 0}/${mission.target ?? 0}`} · Mở sổ nhiệm vụ</div></> : "Mở sổ nhiệm vụ và thành tựu"}
           </button>}
         </div>
       )}

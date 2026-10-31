@@ -70,3 +70,21 @@ never resolves a hit. Cast telegraphs come from server skill metadata
 - No packed atlas, texture compression or animation graph yet.
 - No asset existence validation against a CDN/atlas build (PR-21 follow-up).
 - VFX are primitive rings/text; particle/shader pooling remains future work.
+
+## Hub UI paper skin
+
+- `frontend/public/assets/ui/guworld-rice-paper.webp` is an original generated
+  rice-paper material texture for GuWorld UI. It is a repeating 1254×1254 WebP
+  (about 84 KB), with no copied game artwork, text, or third-party marks.
+- `frontend/src/app/globals.css` loads it as a CSS background only when a paper
+  surface is rendered. Browser caching is used; bump the `?v=` query in
+  `.mmo-paper-surface` when replacing the file so clients fetch the new texture.
+- `mmo-paper-theme`, `mmo-paper-surface`, `mmo-paper-heading`, and
+  `mmo-bamboo-action` provide reusable dark lacquer panels, warm headers, and
+  bamboo-like controls with ivory text. Small helper labels are raised to 13px,
+  and the Aperture panel uses bright semantic accents for dark-surface
+  contrast. Text, values, and actions remain live UI elements.
+- Applied to the shared MMO feature-view shell, in-world business panels, the
+  daily quest notice, and the world atlas frame. New asset files must include
+  their source/license notes here and should retain the existing low-size,
+  lazy-by-surface loading approach.

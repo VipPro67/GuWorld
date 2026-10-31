@@ -59,6 +59,7 @@ func schemaRefine() error {
 	}
 
 	if err := execSchema("refine_stage_templates", `
+
 	CREATE TABLE IF NOT EXISTS refine_stage_templates (
 		rank                   INTEGER PRIMARY KEY CHECK (rank BETWEEN 1 AND 9),
 		duration_seconds       INTEGER NOT NULL CHECK (duration_seconds > 0),
@@ -86,6 +87,20 @@ func schemaRefine() error {
 		updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
 		CONSTRAINT refine_stage_minigame_le_steps CHECK (minigame_count <= step_count - 1)
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("refine_decisions", `
+	CREATE TABLE IF NOT EXISTS refine_decisions (
+		id             INTEGER PRIMARY KEY,
+		situation      TEXT NOT NULL,
+		option_1       TEXT NOT NULL,
+		option_2       TEXT NOT NULL,
+		option_3       TEXT NOT NULL DEFAULT '',
+		correct_index  INTEGER NOT NULL CHECK (correct_index >= 0 AND correct_index <= 2),
+		neutral_index  INTEGER NOT NULL DEFAULT -1 CHECK (neutral_index >= -1 AND neutral_index <= 2),
+		explanation    TEXT NOT NULL DEFAULT ''
 	);`); err != nil {
 		return err
 	}

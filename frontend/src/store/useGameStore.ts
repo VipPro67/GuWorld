@@ -18,6 +18,7 @@ import { createFeedbackSlice, type FeedbackSlice } from "@/store/slices/feedback
 import { createBettingSlice, type BettingSlice } from "@/store/slices/bettingSlice";
 import { createGachaSlice, type GachaSlice } from "@/store/slices/gachaSlice";
 import { createAchievementsSlice, type AchievementsSlice } from "@/store/slices/achievementsSlice";
+import { createRefineSessionSlice, type RefineSessionSlice } from "@/store/slices/refineSessionSlice";
 import { createPetsSlice, type PetsSlice } from "@/store/slices/petsSlice";
 import { createInstanceSlice, type InstanceSlice } from "@/store/slices/instanceSlice";
 import { createDreamRealmSlice, type DreamRealmSlice } from "@/store/slices/dreamRealmSlice";
@@ -1069,7 +1070,7 @@ export interface Region {
   monster_count?: number;
 }
 
-interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice {
+interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, RefineSessionSlice {
   player: Player | null;
   playerStateRevision: number | null;
   manaSnapshot: ManaSnapshot | null;
@@ -1580,6 +1581,7 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createFeedbackSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createBettingSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createGachaSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createRefineSessionSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createAchievementsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createPetsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createInstanceSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
@@ -1701,7 +1703,16 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       const unsubscribeOpen = wsManager.onOpen(({ reconnected }) => {
-        if (reconnected) void get().reconcilePlayer(true);
+        if (reconnected) {
+          void get().reconcilePlayer(true);
+          // Đồng bộ lại phiên luyện sau khi WS reconnect (WF-REF-05 §17).
+          void get().fetchActiveRefineSession();
+        }
+      });
+
+      // Listen for refine session updates (phiên luyện cổ chạy nền)
+      const unsubscribeRefine = wsManager.subscribe("refine", (rawPayload: ApiResponseData) => {
+        get().applyRefineSessionEvent(rawPayload);
       });
 
       // Listen for player updates
@@ -2144,6 +2155,7 @@ export const useGameStore = create<GameState>((set, get) => {
       (window as ApiResponseData).__gu_ws_cleanup = () => {
         unsubscribePlayer();
         unsubscribeOpen();
+        unsubscribeRefine();
         unsubscribeTrade();
         unsubscribeGeneralChat();
         unsubscribeSectChat();

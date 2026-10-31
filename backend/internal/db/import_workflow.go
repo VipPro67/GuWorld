@@ -73,6 +73,7 @@ var importDatasets = []importDataset{
 	{"status", "Status.csv", "status_dictionary", true, false, []string{"key"}},
 	{"recipe", "Recipe.csv", "refining_recipes", true, false, []string{"target_gu_id", "target_rank", "variant"}},
 	{"refine_stage", "RefineStage.csv", "refine_stage_templates", false, false, []string{"rank"}},
+	{"refine_decision", "RefineDecision.csv", "refine_decisions", false, false, []string{"id"}},
 	{"shop_item", "ShopItem.csv", "caravan_shop_items", true, false, []string{"id", "rank"}},
 	{"arena_shop_item", "ArenaShopItem.csv", "arena_shop_items", true, false, []string{"id"}},
 	{"region", "Region.csv", "regions", true, false, []string{"id"}},

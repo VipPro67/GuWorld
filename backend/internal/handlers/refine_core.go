@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -98,9 +100,287 @@ func ParseRecipeID(recipeID string) (string, int, int, error) {
 	return models.ParseRecipeID(recipeID)
 }
 
+// RefineRequest struct stays above; helpers below are shared by the instant
+// quick path (POST /api/refine) and the timed refine session flow.
+
 type RefineRequest struct {
 	RecipeID              string   `json:"recipe_id" binding:"required"`
 	SelectedGuInstanceIDs []string `json:"selected_gu_instance_ids"`
+}
+
+// RefineRateSnapshot freezes the success-rate computation at the moment a
+// refine session is created (WF-REF-05 §4.1). Resolution later uses these
+// values; cultivation/build changes made while waiting do not alter the rate.
+type RefineRateSnapshot struct {
+	Breakdown            RefineRateBreakdown `json:"breakdown"`
+	RawPositiveRate      float64             `json:"raw_positive_rate"`
+	StatusPenalty        float64             `json:"status_penalty"`
+	RefinementRealm      int                 `json:"refinement_realm"`
+	InsightStacks        int                 `json:"insight_stacks"`
+	ImmortalPenalty      float64             `json:"immortal_penalty"`
+	AccuracyMaxBonus     float64             `json:"accuracy_max_bonus"`
+	DeathPenalty         float64             `json:"death_penalty"`
+	MasteryMultiplierMax float64             `json:"mastery_multiplier_max"`
+	PityEligible         bool                `json:"pity_eligible"`
+}
+
+// refineRateInput carries the selection-dependent factors into computeRefineRate.
+type refineRateInput struct {
+	materialQualityBonus float64
+	pityEligible         bool
+	requirementsNotMet   bool
+}
+
+// Default stage config when refine_stage_templates lacks the rank (WF-REF-06 baseline).
+const (
+	refineBaselineAccuracyMaxBonus     = 0.08
+	refineBaselineDeathPenalty         = 0.25
+	refineBaselineMasteryMultiplierMax = 2.0
+)
+
+// refineQuerier accepts *sql.Tx, *sql.DB and any read-only wrapper exposing
+// QueryRow — used by the session flow so preview can run without a tx.
+type refineQuerier interface {
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+// computeRefineRate ports the 10-factor rate formula shared by the quick
+// path, session creation and preview. stage may be nil → WF-REF-06 baseline
+// values are used. It reads (but never writes) only tx-scoped reference data.
+func computeRefineRate(q refineQuerier, player *models.Player, recipe models.RefiningRecipe, stage *models.RefineStageTemplate, input refineRateInput) (RefineRateSnapshot, error) {
+	snap := RefineRateSnapshot{
+		AccuracyMaxBonus:     0.08,
+		DeathPenalty:         0.25,
+		MasteryMultiplierMax: 2.0,
+	}
+	if stage != nil {
+		snap.AccuracyMaxBonus = stage.AccuracyMaxBonus
+		snap.DeathPenalty = stage.DeathPenalty
+		snap.MasteryMultiplierMax = stage.MasteryMultiplierMax
+	}
+
+	var pathRaw []byte
+	if err := q.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1 AND rank = $2`, recipe.TargetGuID, recipe.TargetRank).Scan(&pathRaw); err != nil {
+		return snap, fmt.Errorf("query target Gu path: %w", err)
+	}
+	var paths []string
+	if err := json.Unmarshal(pathRaw, &paths); err != nil {
+		paths = []string{string(pathRaw)}
+	}
+
+	// Target path attainment bonus & points
+	targetPathMastery := 0.0
+	targetPathPoints := 0
+	if player.PathMasteries != nil {
+		for _, path := range paths {
+			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+			if points, ok := player.PathMasteries[cleanPath]; ok {
+				if points > targetPathPoints {
+					targetPathPoints = points
+				}
+				bonus := gamefx.TargetPathMasteryBonus(gamefx.PathMasteryLevel(points))
+				if bonus > targetPathMastery {
+					targetPathMastery = bonus
+				}
+			}
+		}
+	}
+
+	// Refinement Dao Marks & Mastery
+	refinementMarks := int64(0)
+	refinementPoints := 0
+	if player.DaoMarks != nil {
+		refinementMarks = player.DaoMarks["refinement"]
+	}
+	if player.PathMasteries != nil {
+		refinementPoints = player.PathMasteries["refinement"]
+	}
+	refinementDaoBonus := gamefx.RefinementDaoBonus(refinementMarks, targetPathPoints, recipe.TargetRank)
+	refinementRealm := gamefx.PathMasteryLevel(refinementPoints)
+	refinementMasteryBonus := gamefx.RefinementMasteryBonus(refinementRealm)
+
+	// Luck Bonus
+	luckMarks := int64(0)
+	if player.DaoMarks != nil {
+		luckMarks = player.DaoMarks["luck"]
+	}
+	fx := gamefx.Get(player)
+	luckBonus := gamefx.RefinementLuckBonus(luckMarks, fx.LuckBonus)
+
+	// Environment Bonus
+	var regionPathsRaw []byte
+	if err := q.QueryRow(`SELECT COALESCE(paths, '[]') FROM regions WHERE id = $1`, player.CurrentRegion).Scan(&regionPathsRaw); err != nil {
+		logger.S.Warnf("computeRefineRate: failed to query region paths for region %s: %v", player.CurrentRegion, err)
+	}
+	var regionPaths []string
+	if len(regionPathsRaw) > 0 {
+		_ = json.Unmarshal(regionPathsRaw, &regionPaths)
+	}
+	envBonus := 0.0
+	for _, rp := range regionPaths {
+		cleanRP := strings.TrimSuffix(strings.ToLower(rp), " path")
+		for _, tp := range paths {
+			cleanTP := strings.TrimSuffix(strings.ToLower(tp), " path")
+			if cleanRP == cleanTP {
+				envBonus = 0.05
+				break
+			}
+		}
+		if envBonus > 0 {
+			break
+		}
+	}
+
+	// Support Bonus: chỉ từ chủng tộc/thể chất dương (bonus Cổ phụ trợ đã bị loại bỏ).
+	posRefineBonus := 0.0
+	negRefinePenalty := 0.0
+	if fx.RefineBonus > 0 {
+		posRefineBonus = fx.RefineBonus
+	} else if fx.RefineBonus < 0 {
+		negRefinePenalty = -fx.RefineBonus
+	}
+	supportBonus := posRefineBonus
+
+	// Per-rank pity: fail rank R stacks only buff rank R (+1%/stack, no cap).
+	insightStacks := refineInsightStacks(player, recipe.TargetRank)
+	insightBonus := 0.0
+	if input.pityEligible {
+		insightBonus = float64(insightStacks) * RefineInsightBonusPerStack
+	}
+	materialQualityBonus := input.materialQualityBonus
+
+	// Apply Immortal Penalty to flat bonuses for Rank 6+
+	immortalPenalty := gamefx.RefinementImmortalPenalty(recipe.TargetRank)
+	if immortalPenalty > 1.0 {
+		refinementMasteryBonus /= immortalPenalty
+		targetPathMastery /= immortalPenalty
+		luckBonus /= immortalPenalty
+		supportBonus /= immortalPenalty
+		envBonus /= immortalPenalty
+		materialQualityBonus /= immortalPenalty
+		insightBonus /= immortalPenalty
+	}
+
+	baseRate := recipe.SuccessRate
+	sumPositiveBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus + insightBonus
+
+	rawPositiveRate := baseRate + sumPositiveBonus
+	completionPenalty := 1.0
+
+	// Cap positive rate at 1.0 (100%) BEFORE applying negative debuff penalties
+	cappedPositiveRate := rawPositiveRate
+	if cappedPositiveRate > 1.0 {
+		cappedPositiveRate = 1.0
+	}
+	finalSuccessRate := cappedPositiveRate - negRefinePenalty
+	if finalSuccessRate < 0.0 {
+		finalSuccessRate = 0.0
+	}
+	if input.requirementsNotMet {
+		finalSuccessRate = 0.0
+	}
+
+	snap.Breakdown = RefineRateBreakdown{
+		BaseRate:           baseRate,
+		CompletionPenalty:  completionPenalty,
+		ComboAccuracy:      !input.requirementsNotMet,
+		MaterialQuality:    materialQualityBonus,
+		RefinementDaoMarks: refinementDaoBonus,
+		RefinementMastery:  refinementMasteryBonus,
+		TargetPathMastery:  targetPathMastery,
+		LuckBonus:          luckBonus,
+		SupportBonus:       supportBonus,
+		StatusPenalty:      negRefinePenalty,
+		EnvBonus:           envBonus,
+		InsightBonus:       insightBonus,
+		InsightStacks:      insightStacks,
+		FinalRate:          finalSuccessRate,
+		RefinementRealm:    refinementRealm,
+	}
+	snap.RawPositiveRate = rawPositiveRate
+	snap.StatusPenalty = negRefinePenalty
+	snap.RefinementRealm = refinementRealm
+	snap.InsightStacks = insightStacks
+	snap.ImmortalPenalty = immortalPenalty
+	snap.PityEligible = input.pityEligible && !input.requirementsNotMet
+	return snap, nil
+}
+
+
+// fetchRefiningRecipe loads a recipe by its derived recipe_id — memory cache
+// first, DB fallback. Used by both the quick path and refine sessions.
+func fetchRefiningRecipe(q refineQuerier, recipeID string) (models.RefiningRecipe, error) {
+	targetGuID, targetRank, variant, err := ParseRecipeID(recipeID)
+	if err != nil {
+		return models.RefiningRecipe{}, fmt.Errorf("ID công thức không hợp lệ")
+	}
+	var recipe models.RefiningRecipe
+	if rec, found := models.GetRecipeByTarget(targetGuID, targetRank, variant); found {
+		recipe = rec
+	} else {
+		err = q.QueryRow(`
+			SELECT target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost
+			FROM refining_recipes
+			WHERE target_gu_id = $1 AND target_rank = $2 AND variant = $3`, targetGuID, targetRank, variant).Scan(
+			&recipe.TargetGuID, &recipe.TargetRank, &recipe.Variant, &recipe.RequiredGus,
+			&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
+			&recipe.ImmortalEssenceStonesCost,
+		)
+		if err != nil {
+			return models.RefiningRecipe{}, err
+		}
+	}
+	recipe.ID = recipeID
+	return recipe, nil
+}
+
+// validateRefineSelection checks the selected Gu instance ids against a
+// recipe: correct count, no duplicates, owned, not DEAD, matching ranks.
+// Returns the per-GuID satisfaction counts, the material-quality bonus, and
+// whether the selection fails to fulfil the recipe requirement.
+func validateRefineSelection(player *models.Player, recipe *models.RefiningRecipe, selected []string) (map[string]int, float64, bool, error) {
+	totalReqGusCount := 0
+	for _, reqGu := range recipe.RequiredGus {
+		totalReqGusCount += reqGu.Qty
+	}
+	if len(selected) != totalReqGusCount {
+		return nil, 0, false, fmt.Errorf("Incorrect number of Gu bugs selected for refining")
+	}
+
+	selectedGusCounts := make(map[string]int)
+	seenInstances := make(map[string]bool)
+	materialQualityBonus := 0.0
+
+	for _, instID := range selected {
+		instID = strings.TrimSpace(instID)
+		if seenInstances[instID] {
+			return nil, 0, false, fmt.Errorf("Duplicate Gu instance selected")
+		}
+		seenInstances[instID] = true
+
+		item, _, found := models.FindGuByInstanceID(player.GuInventory, instID)
+		if !found {
+			return nil, 0, false, fmt.Errorf("Gu bug not found in your inventory: %s", instID)
+		}
+		if item.Status == "DEAD" {
+			return nil, 0, false, fmt.Errorf("Cannot use a DEAD Gu bug for refining")
+		}
+		if reqGu, ok := recipe.RequiredGus[item.GuID]; ok && (reqGu.Rank == 0 || item.Rank >= reqGu.Rank) {
+			selectedGusCounts[item.GuID]++
+			if reqGu.Rank > 0 && item.Rank > reqGu.Rank {
+				materialQualityBonus += 0.02 * float64(item.Rank-reqGu.Rank)
+			}
+		}
+	}
+
+	guRequirementsNotMet := false
+	for guID, reqGu := range recipe.RequiredGus {
+		if selectedGusCounts[guID] != reqGu.Qty {
+			guRequirementsNotMet = true
+			break
+		}
+	}
+	return selectedGusCounts, materialQualityBonus, guRequirementsNotMet, nil
 }
 
 // GetRecipes returns list of all seeded refining formulas unlocked by the player

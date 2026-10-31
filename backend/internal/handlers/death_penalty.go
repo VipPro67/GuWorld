@@ -331,6 +331,18 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 		return ""
 	}
 
+	// Refine session death hook (WF-REF-05 §13): mark any ACTIVE refine
+	// session of the loser once with the snapshot death penalty. Within the
+	// savepoint scope — rolls back together with the whole death drop.
+	if _, err := tx.Exec(`
+		UPDATE refine_sessions
+		SET death_penalty = COALESCE((rate_snapshot->>'death_penalty')::float8, 0.25),
+		    death_marked_at = NOW()
+		WHERE player_id = $1 AND status = 'ACTIVE' AND death_penalty = 0
+	`, loserID); err != nil {
+		logger.S.Warnf("failed to mark refine session death for %s: %v", loserID, err)
+	}
+
 	// Split stones: Void Destruction vs Ground Loot
 	voidPct := deathPenaltyConfig.VoidDestructionPct / 100.0
 

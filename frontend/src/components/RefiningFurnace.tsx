@@ -283,6 +283,16 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const handleRefine = async () => {
     if (!canRefine || !selectedRecipe) return;
 
+    // Đường nhanh chỉ cho cổ thấp hơn cảnh giới; còn lại là phi��n luyện
+    // theo thời gian (WF-REF-05 §14 guard — server cũng tự chặn).
+    const playerRank = typeof player.rank === "number" ? player.rank : 1;
+    const targetRank = selectedRecipe.target_rank ?? 0;
+    if (targetRank >= 6 || targetRank >= playerRank) {
+      const selectedIds = requiredSlots.map((slot) => slottedGus[slot.index]);
+      await useGameStore.getState().createRefineSession(selectedRecipe.id, selectedIds);
+      return;
+    }
+
     setIsRefining(true);
     setRefineResult(null);
 

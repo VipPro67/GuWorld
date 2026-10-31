@@ -239,7 +239,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
 
       {/* Chat Overlay Panel */}
       {chatOpen && (
-        <div className={`fixed ${chatPosition} ${widthClasses} ${heightClasses} z-[70] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-3rem)] overflow-hidden flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
+        <div className={`${placement === "mmo" ? "mmo-panel-theme" : ""} fixed ${chatPosition} ${widthClasses} ${heightClasses} z-[70] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-3rem)] overflow-hidden flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
           {/* Channel Tabs */}
           <div className="flex items-center justify-between">
             <div className="flex gap-1.5 border-b border-[var(--border-default)] pb-2">
@@ -377,14 +377,14 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                 const isSystem = msg.sender_id === "11111111-1111-1111-1111-111111111111";
                 // Card container styles
                 const cardClass = isSystem
-                  ? "w-full bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 rounded-lg p-1.5 sm:p-2"
+                  ? "w-full bg-[#2a1b10] border border-[#a8793d] rounded-lg p-1.5 sm:p-2"
                   : "w-full bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-1.5 sm:p-2 group";
 
                 const nameColorClass = isSystem
-                  ? "text-amber-700 dark:text-amber-400 font-bold"
+                  ? "text-[#f2c65f] font-bold"
                   : `${rankNameColors[Number(msg.sender_rank)] || (isMe ? "text-sky-600 dark:text-sky-400" : "text-zinc-500 dark:text-zinc-400")} font-bold ${!isMe ? "cursor-pointer hover:brightness-125 hover:underline decoration-dotted transition-colors" : ""}`;
 
-                const contentColorClass = isSystem ? "text-amber-900 dark:text-amber-100/90" : "text-zinc-800 dark:text-zinc-200";
+                const contentColorClass = isSystem ? "text-[#f1dfbd]" : "text-zinc-800 dark:text-zinc-200";
 
                 return (
                   <div key={msg.id || index} className={`${cardClass} leading-relaxed break-all flex items-start gap-1.5`}>

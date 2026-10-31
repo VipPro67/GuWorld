@@ -76,6 +76,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
         localStorage.setItem("gu_player_id", player.id);
       }
       void get().fetchGuInventory();
+      void get().fetchActiveRefineSession(); // đồng bộ phiên luyện đang chạy nếu có
       await get().fetchUnreadNotificationsCount();
       try {
         get().subscribePlayerEvents();

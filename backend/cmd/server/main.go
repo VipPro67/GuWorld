@@ -564,6 +564,7 @@ func main() {
 	worker.StartPetHungerWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartGrowthWorker(ctx, db.DB, 1*time.Hour)
 	handlers.StartTribulationWorker(ctx)
+	handlers.StartRefineSessionWorker(ctx)
 	handlers.StartWorldIndexSyncWorker(ctx)
 	handlers.StartWorldMonsterWorker(ctx)
 	handlers.StartSpatialRealmExpiryWorker(ctx)
