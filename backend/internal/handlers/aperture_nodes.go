@@ -303,21 +303,14 @@ func PlaceApertureNode(c *gin.Context) {
 
 	template, valid := GetResourceNodeTemplate(req.NodeType)
 	if !valid {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại tài nguyên xây dựng không tồn tại"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại công trình không tồn tại"})
 		return
 	}
-	if len(req.Cells) > 1 && req.NodeType != "FARMING_ZONE" && req.NodeType != "BREEDING_ZONE" && req.NodeType != "MINING_ZONE" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ khu trồng trọt, chăn nuôi và khai thác mới chiếm nhiều ô."})
+	// Resource production moved to canon resource points (POST /points);
+	// the grid placement endpoint now only accepts DEFENSE structures.
+	if template.NodeCategory != "DEFENSE" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ công trình phòng thủ (Tường, Tháp Canh…) được xây trên lưới. Điểm tài nguyên do hệ thống sinh theo Đạo Ngân."})
 		return
-	}
-
-	if req.ProdKey != "" {
-		if itemSpec, exists := models.ItemRegistry[req.ProdKey]; exists {
-			if itemSpec.Type == "Currency" || itemSpec.Type == "Consumable" || itemSpec.ItemType == "Currency" || itemSpec.ItemType == "Consumable" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể sản xuất vật phẩm loại Currency hoặc Consumable trong mỏ tài nguyên"})
-				return
-			}
-		}
 	}
 
 	tx, err := db.DB.Begin()
@@ -419,10 +412,6 @@ func PlaceApertureNode(c *gin.Context) {
 	}
 
 	// 3. Deduct cost or item
-	nodeCategory := template.NodeCategory
-	if nodeCategory == "" {
-		nodeCategory = "RESOURCE"
-	}
 	nodeHPMax := template.HPMax
 	if nodeHPMax <= 0 {
 		nodeHPMax = 1000
@@ -518,47 +507,11 @@ func PlaceApertureNode(c *gin.Context) {
 	}
 
 	nodeName := template.Name
-	if nodeProdKey != "" {
-		if itemSpec, exists := models.ItemRegistry[nodeProdKey]; exists {
-			nodeName = template.Name + " (" + itemSpec.Name + ")"
-		}
-	}
-
-	// 3c. Gieo giống: khu tài nguyên tiêu hao một lượng chính vật phẩm
-	// định sản xuất (prod_key) làm hạt giống trước khi node hoạt động.
-	seedsConsumed := int64(0)
-	seedName := ""
-	if nodeCategory == "RESOURCE" {
-		if nodeProdKey == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Phải chọn vật phẩm sản xuất cho khu tài nguyên."})
-			return
-		}
-		if template.SeedAmount > 0 {
-			seedQty := int64(template.SeedAmount)
-			seedName = nodeProdKey
-			if itemSpec, exists := models.ItemRegistry[nodeProdKey]; exists {
-				seedName = itemSpec.Name
-			}
-			have, err := InventorySvc.GetQuantity(tx, playerID.String(), nodeProdKey)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn túi đồ giống"})
-				return
-			}
-			if have < seedQty {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Thiếu giống để gieo trồng: cần %d %s (đang có %d).", seedQty, seedName, have)})
-				return
-			}
-			if err := InventorySvc.RemoveItem(tx, playerID.String(), nodeProdKey, "materials", seedQty); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao giống gieo trồng"})
-				return
-			}
-			seedsConsumed = seedQty
-		}
-	}
 
 	// 4. Insert node
 	var node models.ApertureResourceNode
 	var createdAt time.Time
+	nodeCategory := "DEFENSE"
 	err = tx.QueryRow(`
 		INSERT INTO aperture_resource_nodes (aperture_id, node_type, name, path, level, hp, max_hp, x, y,
 			production_type, production_amount, production_interval_hours, last_collected_at,
@@ -638,9 +591,6 @@ func PlaceApertureNode(c *gin.Context) {
 	costDesc := strings.Join(costParts, ", ")
 
 	buildMsg := fmt.Sprintf("Xây dựng thành công %s! Tiêu hao: %s.", template.Name, costDesc)
-	if seedsConsumed > 0 {
-		buildMsg += fmt.Sprintf(" Gieo giống: %dx %s.", seedsConsumed, seedName)
-	}
 	notify.Send(db.DB, playerID, "aperture_build", "Xây Dựng Tiên Khiếu", buildMsg)
 
 	auditlog.Log(db.DB, auditlog.Entry{

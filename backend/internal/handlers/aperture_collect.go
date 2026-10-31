@@ -1,5 +1,9 @@
 package handlers
 
+// Shared harvest-economics helpers for the Immortal Aperture resource-point
+// economy (see docs/DESIGN_TIEN_KHAU.md §6) plus bulk defence repair. The old
+// per-node harvest flow was retired together with the resource-point rebuild.
+
 import (
 	"database/sql"
 	"encoding/json"
@@ -7,343 +11,16 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
-	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
-// CollectApertureResource claims the produced resources from a node
-func CollectApertureResource(c *gin.Context) {
-	playerID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	nodeIDStr := c.Param("id")
-	nodeID, err := uuid.Parse(nodeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã tài nguyên không hợp lệ"})
-		return
-	}
-
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	defer tx.Rollback()
-
-	// 1. Fetch node details
-	var n models.ApertureResourceNode
-	var lastCol sql.NullTime
-	var areaSize int64
-	var timeRate float64
-	var pTSM float64
-	var pRace string
-	err = tx.QueryRow(`
-		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y, COALESCE(n.production_key, ''), COALESCE(n.level, 1), p.time_speed_multiplier, COALESCE(p.race, '')
-		FROM aperture_resource_nodes n
-		JOIN immortal_apertures a ON n.aperture_id = a.id
-		JOIN players p ON a.player_id = p.id
-		WHERE n.id = $1 AND a.player_id = $2
-		FOR UPDATE OF n
-	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y, &n.ProductionKey, &n.Level, &pTSM, &pRace)
-
-	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
-		return
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
-		return
-	}
-
-	if n.IsDestroyed {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ tài nguyên này đã bị tàn phá không thể thu hoạch"})
-		return
-	}
-
-	if timeRate <= 0 {
-		timeRate = 1.0
-	}
-	tsm := 1.0
-	dummyP := models.Player{}
-	dummyP.Race = pRace
-	if !gamefx.Get(&dummyP).Immortal {
-		tsm = pTSM
-		if tsm <= 0 {
-			tsm = 1.0
-		}
-		if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
-			tsm += bonus
-		}
-	}
-	effectiveTimeRate := timeRate * tsm
-	if effectiveTimeRate <= 0 {
-		effectiveTimeRate = 1.0
-	}
-
-	// 2. Validate production timer
-	lastTime := time.Now().Add(-24 * time.Hour) // default
-	if lastCol.Valid {
-		lastTime = lastCol.Time
-	}
-
-	elapsed := time.Since(lastTime)
-	elapsedInternal := time.Duration(float64(elapsed) * effectiveTimeRate)
-	requiredHoursInternal := time.Duration(n.ProductionIntervalHours) * time.Hour
-	if elapsedInternal < requiredHoursInternal {
-		remainingInternal := requiredHoursInternal - elapsedInternal
-		remainingReal := time.Duration(float64(remainingInternal) / effectiveTimeRate)
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Mỏ đang tích lũy tài nguyên, vui lòng đợi thêm %d phút.", int(remainingReal.Minutes()))})
-		return
-	}
-
-	// Single collection always harvests 1 production interval
-	multiples := 1
-
-	// Retrieve all active nodes in the aperture to evaluate conflicts and food chain
-	rows, err := tx.Query(`
-		SELECT id, node_type, path, x, y, is_destroyed 
-		FROM aperture_resource_nodes 
-		WHERE aperture_id = $1 AND is_destroyed = false
-	`, n.ApertureID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải bản đồ sinh thái"})
-		return
-	}
-	var allNodes []models.ApertureResourceNode
-	for rows.Next() {
-		var other models.ApertureResourceNode
-		if err := rows.Scan(&other.ID, &other.NodeType, &other.Path, &other.X, &other.Y, &other.IsDestroyed); err == nil {
-			allNodes = append(allNodes, other)
-		}
-	}
-	rows.Close()
-	cellsByNode, err := loadApertureNodeCells(tx, n.ApertureID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải diện tích các khu tài nguyên"})
-		return
-	}
-	for i := range allNodes {
-		allNodes[i].Cells = cellsByNode[allNodes[i].ID]
-		if len(allNodes[i].Cells) == 0 {
-			allNodes[i].Cells = []models.ApertureGridCell{{X: allNodes[i].X, Y: allNodes[i].Y}}
-		}
-		if allNodes[i].ID == n.ID {
-			n.Cells = allNodes[i].Cells
-		}
-	}
-
-	exactReward, suitabilityNote, err := computeApertureNodeReward(tx, playerID, n, multiples, areaSize, allNodes, 1.0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tính sản lượng mỏ"})
-		return
-	}
-	remainder, err := loadApertureNodeRemainder(tx, n.ID, n.X, n.Y)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải sản lượng lẻ của khu"})
-		return
-	}
-	accumulatedReward := exactReward + remainder
-	totalReward := int64(math.Floor(accumulatedReward))
-	newRemainder := accumulatedReward - float64(totalReward)
-	if bonus := equippedTitleUtilityBonus(tx, playerID.String()); bonus > 0 {
-		totalReward = int64(math.Floor(float64(totalReward) * (1 + bonus/100)))
-	}
-
-	// 3. Grant rewards
-	var rewardMsg string
-	if n.ProductionType == "Stones" {
-		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, totalReward, playerID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Nguyên Thạch"})
-			return
-		}
-		rewardMsg = fmt.Sprintf("Thu hoạch được %d Nguyên Thạch!", totalReward)
-	} else if n.ProductionType == "Material" {
-		prodKey := resolveNodeProdKey(n)
-		if prodKey == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy thông tin vật phẩm sản xuất của mỏ này."})
-			return
-		}
-
-		if totalReward > 10000000 {
-			totalReward = 10000000
-		}
-
-		if totalReward > 0 {
-			err = InventorySvc.AddItem(tx, playerID.String(), prodKey, "materials", totalReward)
-			if err != nil {
-				logger.S.Errorf("CollectApertureResource AddItem failed: player=%s, prodKey=%s, totalReward=%d, err=%v", playerID.String(), prodKey, totalReward, err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng vật phẩm thu hoạch"})
-				return
-			}
-		}
-
-		// Translate item name for nice display
-		translatedName := prodKey
-		if itemSpec, exists := models.ItemRegistry[prodKey]; exists {
-			translatedName = itemSpec.Name
-		}
-		rewardMsg = fmt.Sprintf("Thu hoạch được %dx %s!", totalReward, translatedName)
-	} else {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Loại sản phẩm không hợp lệ"})
-		return
-	}
-
-	rewardMsg += suitabilityNote
-
-	// 4. Update node timer
-	_, err = tx.Exec(`
-		UPDATE aperture_resource_nodes 
-		SET last_collected_at = NOW() 
-		WHERE id = $1
-	`, nodeID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật thời gian mỏ"})
-		return
-	}
-	if err := saveApertureNodeRemainder(tx, n.ID, n.X, n.Y, newRemainder); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu sản lượng lẻ của khu"})
-		return
-	}
-	var rank int
-	if err := tx.QueryRow(`SELECT rank FROM players WHERE id=$1`, playerID).Scan(&rank); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tải được cảnh giới"})
-		return
-	}
-	if totalReward > 0 {
-		if err := TrackDailyMissionProgress(tx, playerID, rank, "aperture-collect:"+nodeID.String()+":"+lastTime.UTC().Format(time.RFC3339Nano), "aperture_collect", "", 1); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật nhiệm vụ hằng ngày"})
-			return
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save collection"})
-		return
-	}
-
-	fullRewardMsg := rewardMsg
-	if totalReward > 0 {
-		fullRewardMsg += " Nhân Khí +2."
-	}
-	notify.Send(db.DB, playerID, "aperture_harvest", "Thu Hoạch Tiên Khiếu", fullRewardMsg)
-
-	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
-		"message": fullRewardMsg,
-	})
-}
-
-// applyBulkReward applies a combined multiplier and an optional bulk discount to a base reward,
-// clamping the result to at least 1 whenever the base reward is positive.
-func applyBulkReward(baseReward float64, combinedMultiplier float64, bulkMultiplier float64) int64 {
-	totalReward := int64(baseReward * combinedMultiplier * bulkMultiplier)
-	if totalReward < 1 && baseReward > 0 {
-		totalReward = 1
-	}
-	return totalReward
-}
-
-func loadApertureNodeRemainder(tx *sql.Tx, nodeID string, x, y int) (float64, error) {
-	if _, err := tx.Exec(`
-		INSERT INTO aperture_resource_node_cells (node_id, aperture_id, x, y)
-		SELECT id, aperture_id, x, y FROM aperture_resource_nodes WHERE id = $1
-		ON CONFLICT DO NOTHING
-	`, nodeID); err != nil {
-		return 0, err
-	}
-	var remainder float64
-	err := tx.QueryRow(`SELECT production_remainder FROM aperture_resource_node_cells WHERE node_id = $1 AND x = $2 AND y = $3`, nodeID, x, y).Scan(&remainder)
-	return remainder, err
-}
-
-func saveApertureNodeRemainder(tx *sql.Tx, nodeID string, x, y int, remainder float64) error {
-	_, err := tx.Exec(`UPDATE aperture_resource_node_cells SET production_remainder = $1 WHERE node_id = $2 AND x = $3 AND y = $4`, remainder, nodeID, x, y)
-	return err
-}
-
-type apertureCellKey struct {
-	NodeID string
-	X, Y   int
-}
-
-type apertureNodeRemainderUpdate struct {
-	NodeID    string
-	X, Y      int
-	Remainder float64
-}
-
-// loadApertureNodeRemainders reads every cell remainder for an aperture in one
-// query, keyed by node + coordinates. Callers must ensure the anchor rows exist.
-func loadApertureNodeRemainders(tx *sql.Tx, apertureID uuid.UUID) (map[apertureCellKey]float64, error) {
-	rows, err := tx.Query(`SELECT node_id, x, y, production_remainder FROM aperture_resource_node_cells WHERE aperture_id = $1`, apertureID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make(map[apertureCellKey]float64)
-	for rows.Next() {
-		var nodeID string
-		var x, y int
-		var remainder float64
-		if err := rows.Scan(&nodeID, &x, &y, &remainder); err != nil {
-			return nil, err
-		}
-		out[apertureCellKey{nodeID, x, y}] = remainder
-	}
-	return out, rows.Err()
-}
-
-// saveApertureNodeRemainders writes all changed remainders in one statement.
-func saveApertureNodeRemainders(tx *sql.Tx, updates []apertureNodeRemainderUpdate) error {
-	if len(updates) == 0 {
-		return nil
-	}
-	ids := make([]string, len(updates))
-	xs := make([]int, len(updates))
-	ys := make([]int, len(updates))
-	remainders := make([]float64, len(updates))
-	for i, u := range updates {
-		ids[i], xs[i], ys[i], remainders[i] = u.NodeID, u.X, u.Y, u.Remainder
-	}
-	_, err := tx.Exec(`
-		UPDATE aperture_resource_node_cells AS c
-		SET production_remainder = u.remainder
-		FROM (
-			SELECT unnest($1::uuid[]) AS node_id,
-			       unnest($2::int[])::smallint AS x,
-			       unnest($3::int[])::smallint AS y,
-			       unnest($4::double precision[]) AS remainder
-		) AS u
-		WHERE c.node_id = u.node_id AND c.x = u.x AND c.y = u.y
-	`, pq.Array(ids), pq.Array(xs), pq.Array(ys), pq.Array(remainders))
-	return err
-}
-
-// computeBulkRepairCost returns the repair cost for a node after applying a bulk fee multiplier
-// (rounded up). Destroyed nodes cannot be repaired because they are deleted.
-func computeBulkRepairCost(hp, maxHP int, isDestroyed bool, feeMultiplier float64) (baseCost, totalCost int) {
-	if isDestroyed {
-		return 0, 0
-	}
-	baseCost = int(math.Ceil(float64(maxHP-hp) / 50.0))
-	if baseCost <= 0 {
-		return 0, 0
-	}
-	totalCost = int(math.Ceil(float64(baseCost) * feeMultiplier))
-	return baseCost, totalCost
-}
-
+// parseItemPaths tolerates both a plain path string and a JSON array.
 func parseItemPaths(pathRaw string) []string {
 	pathRaw = strings.TrimSpace(pathRaw)
 	if pathRaw == "" {
@@ -359,6 +36,8 @@ func parseItemPaths(pathRaw string) []string {
 	return paths
 }
 
+// normalizePathKey maps every authoring spelling of a path to the dao-mark
+// key used across economia and combat ("Wood Path" → "wood", ...).
 func normalizePathKey(path string) string {
 	p := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(path)), " path")
 	p = strings.TrimSuffix(p, "_path")
@@ -418,7 +97,7 @@ func normalizePathKey(path string) string {
 	}
 }
 
-func getPathDaoMultiplier(pathRaw string, nodeDaoMap map[string]int64) float64 {
+func getPathDaoMultiplier(pathRaw string, daoMarks map[string]int64) float64 {
 	paths := parseItemPaths(pathRaw)
 	if len(paths) == 0 {
 		return 1.0
@@ -426,18 +105,18 @@ func getPathDaoMultiplier(pathRaw string, nodeDaoMap map[string]int64) float64 {
 	var bestMarks int64
 	for _, p := range paths {
 		key := normalizePathKey(p)
-		if marks, ok := nodeDaoMap[key]; ok && marks > bestMarks {
+		if marks, ok := daoMarks[key]; ok && marks > bestMarks {
 			bestMarks = marks
 		}
 	}
 	return 1.0 + float64(bestMarks)*0.0001
 }
 
-// nodeDaoPurity returns Dao purity (dominant / total) for an aperture's mark map.
-// Returns 0 for an empty map, which callers treat as "no penalty".
-func nodeDaoPurity(nodeDaoMap map[string]int64) float64 {
+// nodeDaoPurity returns Dao purity (dominant / total). 0 = empty map, callers
+// treat that as "no penalty".
+func nodeDaoPurity(daoMarks map[string]int64) float64 {
 	var total, dominant int64
-	for _, v := range nodeDaoMap {
+	for _, v := range daoMarks {
 		if v <= 0 {
 			continue
 		}
@@ -450,29 +129,6 @@ func nodeDaoPurity(nodeDaoMap map[string]int64) float64 {
 		return 0
 	}
 	return float64(dominant) / float64(total)
-}
-
-// apertureRewardContext carries everything the harvest formula needs that is
-// expensive to read per node (Dao marks, combat profile, ecology, labor).
-type apertureRewardContext struct {
-	nodeDaoMap              map[string]int64
-	daoProfile              *gamefx.DaoCombatProfile
-	daoConflictReductionPct float64
-	variantHumans           map[string]struct {
-		population     int
-		laborIntensity string
-	}
-}
-
-type apertureQueryRower interface {
-	QueryRow(query string, args ...any) *sql.Row
-}
-
-// apertureQueryer is satisfied by both *sql.DB and *sql.Tx so the reward
-// context can be built from a request-scoped query as well as a transaction.
-type apertureQueryer interface {
-	apertureQueryRower
-	Query(query string, args ...any) (*sql.Rows, error)
 }
 
 func loadApertureDaoCombatProfile(q apertureQueryRower, playerID string, daoMarks map[string]int64) (*gamefx.DaoCombatProfile, gamefx.Effects) {
@@ -498,59 +154,6 @@ func loadApertureDaoCombatProfile(q apertureQueryRower, playerID string, daoMark
 	return gamefx.BuildDaoCombatProfileWithReduction(daoMarks, pathMasteries, fx.NonConflictingDaoMarks, fx.DaoConflictReductionPct, nil), fx
 }
 
-func loadApertureRewardContext(q apertureQueryer, playerID uuid.UUID, apertureID any, allNodes []models.ApertureResourceNode) (*apertureRewardContext, error) {
-	return loadApertureRewardContextWithProfile(q, playerID, apertureID, allNodes, nil)
-}
-
-// loadApertureRewardContextWithProfile accepts an already-built Dao profile so
-// request paths that loaded it earlier (GET /nodes) do not pay for it twice.
-func loadApertureRewardContextWithProfile(q apertureQueryer, playerID uuid.UUID, apertureID any, allNodes []models.ApertureResourceNode, profile *gamefx.DaoCombatProfile) (*apertureRewardContext, error) {
-	ctx := &apertureRewardContext{
-		nodeDaoMap: make(map[string]int64),
-		variantHumans: make(map[string]struct {
-			population     int
-			laborIntensity string
-		}),
-	}
-
-	var nodeDaoJSON []byte
-	if err := q.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON); err == nil && len(nodeDaoJSON) > 0 {
-		_ = json.Unmarshal(nodeDaoJSON, &ctx.nodeDaoMap)
-	}
-
-	ctx.daoProfile = profile
-	if ctx.daoProfile == nil {
-		ctx.daoProfile, _ = loadApertureDaoCombatProfile(q, playerID.String(), ctx.nodeDaoMap)
-	}
-	if ctx.daoProfile != nil {
-		ctx.daoConflictReductionPct = ctx.daoProfile.ConflictReductionPct
-	}
-
-	vhRows, err := q.Query(`SELECT race, population, labor_intensity FROM aperture_variant_humans WHERE aperture_id = $1`, apertureID)
-	if err == nil {
-		defer vhRows.Close()
-		for vhRows.Next() {
-			var race, intensity string
-			var pop int
-			if err := vhRows.Scan(&race, &pop, &intensity); err == nil {
-				ctx.variantHumans[race] = struct {
-					population     int
-					laborIntensity string
-				}{population: pop, laborIntensity: intensity}
-			}
-		}
-	}
-
-	return ctx, nil
-}
-
-func apertureDaoConflictMultiplier(ctx *apertureRewardContext, pathRaw string) float64 {
-	if ctx == nil {
-		return 1
-	}
-	return apertureDaoConflictMultiplierForProfile(ctx.daoProfile, pathRaw)
-}
-
 func apertureDaoConflictMultiplierForProfile(profile *gamefx.DaoCombatProfile, pathRaw string) float64 {
 	if profile == nil {
 		return 1
@@ -563,400 +166,30 @@ func apertureDaoConflictMultiplierForProfile(profile *gamefx.DaoCombatProfile, p
 	return multiplier
 }
 
-// apertureNodeYield assembles every multiplier for one harvest and hands the
-// combination to gamefx, which owns the shared formula and both caps.
-func apertureNodeYield(ctx *apertureRewardContext, n models.ApertureResourceNode, areaSize int64) gamefx.ApertureYield {
-	// Dao amplification follows the produced item's path, falling back to the
-	// zone path, and is applied exactly once.
-	daoMult := 1.0
-	if prodKey := resolveNodeProdKey(n); prodKey != "" {
-		if item, exists := models.ItemRegistry[prodKey]; exists && item.Path != "" {
-			daoMult = getPathDaoMultiplier(item.Path, ctx.nodeDaoMap)
-		}
-	}
-	if daoMult <= 1.0 {
-		daoMult = getPathDaoMultiplier(n.Path, ctx.nodeDaoMap)
-	}
-
-	// Dao conflict uses the same per-path combat profile as Gu techniques.
-	conflictMult := apertureDaoConflictMultiplier(ctx, n.Path)
-
-	// Ecology purity factor (spec §5.1): tạp tu làm cạn kiệt linh khí/khoáng mạch.
-	ecologyMult := 1.0
-	if p := nodeDaoPurity(ctx.nodeDaoMap); p > 0 {
-		purityMultiplier := gamefx.EcologyPurityFactor(p)
-		ecologyPenalty := (1.0 - purityMultiplier) * (1.0 - ctx.daoConflictReductionPct/100.0)
-		ecologyMult = 1.0 - ecologyPenalty
-	}
-
-	laborMult := 1.0
-	popBonus := 1.0
-	if race := getVariantHumanForNode(n.NodeType); race != "" {
-		if vh, ok := ctx.variantHumans[race]; ok {
-			if vh.population > 0 {
-				popBonus = 1.0 + float64(vh.population)/1000.0
-			}
-			switch vh.laborIntensity {
-			case "LOW":
-				laborMult = 0.7
-			case "HIGH":
-				laborMult = 1.5
-			case "EXPLOIT":
-				laborMult = 2.0
-			}
-		}
-	}
-
-	return gamefx.ComputeApertureYield(gamefx.ApertureYieldInputs{
-		Level:        n.Level,
-		AreaSize:     areaSize,
-		DaoMult:      daoMult,
-		ConflictMult: conflictMult,
-		EcologyMult:  ecologyMult,
-		LaborMult:    laborMult,
-		PopBonus:     popBonus,
-	})
+func apertureDaoConflictMultiplier(profile *gamefx.DaoCombatProfile, pathRaw string) float64 {
+	return apertureDaoConflictMultiplierForProfile(profile, pathRaw)
 }
 
-var apertureYieldFactorOrder = []string{"level", "dao", "area", "conflict", "ecology", "labor", "pop"}
-
-func apertureYieldFactors(y gamefx.ApertureYield) []models.ApertureYieldFactor {
-	factors := make([]models.ApertureYieldFactor, 0, len(apertureYieldFactorOrder))
-	for _, key := range apertureYieldFactorOrder {
-		if value, ok := y.Parts[key]; ok {
-			factors = append(factors, models.ApertureYieldFactor{Key: key, Value: value})
-		}
-	}
-	return factors
+type apertureQueryRower interface {
+	QueryRow(query string, args ...any) *sql.Row
 }
 
-// buildApertureYieldPreview mirrors what a harvest would grant right now,
-// including the fractional yield already carried on the node's anchor cell.
-func buildApertureYieldPreview(ctx *apertureRewardContext, n models.ApertureResourceNode, areaSize int64, remainder float64, effectiveTimeRate float64) *models.ApertureYieldPreview {
-	y := apertureNodeYield(ctx, n, areaSize)
-	expected := y.Count + remainder
-	whole := int64(math.Floor(expected))
-	if n.ProductionType == "Material" && whole > 10000000 {
-		whole = 10000000
+// computeBulkRepairCost returns the repair cost for a node after applying a
+// bulk fee multiplier (rounded up). Destroyed nodes cannot be repaired.
+func computeBulkRepairCost(hp, maxHP int, isDestroyed bool, feeMultiplier float64) (baseCost, totalCost int) {
+	if isDestroyed {
+		return 0, 0
 	}
-	intervalHours := n.ProductionIntervalHours
-	if intervalHours <= 0 {
-		intervalHours = 1
+	baseCost = int(math.Ceil(float64(maxHP-hp) / 50.0))
+	if baseCost <= 0 {
+		return 0, 0
 	}
-	perHour := y.Count * effectiveTimeRate / float64(intervalHours)
-	return &models.ApertureYieldPreview{
-		Base:      gamefx.ApertureYieldBase,
-		Expected:  expected,
-		Whole:     whole,
-		Remainder: expected - float64(whole),
-		Bonus:     y.Bonus,
-		RawBonus:  y.RawBonus,
-		Capped:    y.Capped,
-		PerHour:   perHour,
-		Factors:   apertureYieldFactors(y),
-	}
+	totalCost = int(math.Ceil(float64(baseCost) * feeMultiplier))
+	return baseCost, totalCost
 }
 
-// loadApertureRemainders reads the carried fractional yield for every node of
-// an aperture in one query (keyed "nodeID:x:y").
-func loadApertureRemainders(q apertureQueryer, apertureID string) map[string]float64 {
-	out := make(map[string]float64)
-	rows, err := q.Query(`SELECT node_id, x, y, production_remainder FROM aperture_resource_node_cells WHERE aperture_id = $1`, apertureID)
-	if err != nil {
-		return out
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var nodeID string
-		var x, y int
-		var remainder float64
-		if err := rows.Scan(&nodeID, &x, &y, &remainder); err == nil {
-			out[fmt.Sprintf("%s:%d:%d", nodeID, x, y)] = remainder
-		}
-	}
-	return out
-}
-
-func computeApertureNodeRewardWithCtx(ctx *apertureRewardContext, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) float64 {
-	total := apertureNodeYield(ctx, n, areaSize).Count * bulkMultiplier
-	if n.ProductionType == "Material" && total > 10000000 {
-		total = 10000000
-	}
-	return total
-}
-
-// computeApertureNodeReward computes the total reward for harvesting a single resource node,
-// applying all multipliers (Dao marks, conflicts, ecosystem, labor, suitability, area size)
-// and an optional bulkMultiplier (used by collect-all, e.g. 0.8 for a -20% bulk penalty).
-// It returns the reward amount and a suitability warning note (empty when production is optimal).
-func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) (float64, string, error) {
-	ctx, err := loadApertureRewardContext(tx, playerID, n.ApertureID, allNodes)
-	if err != nil {
-		return 0, "", err
-	}
-	totalReward := computeApertureNodeRewardWithCtx(ctx, n, multiples, areaSize, allNodes, bulkMultiplier)
-	return totalReward, "", nil
-}
-
-// CollectAllApertureResources harvests every resource node whose production timer is ready, in a
-// single transaction. As a convenience cost, yield is reduced by 20% and Human Qi gain is halved.
-func CollectAllApertureResources(c *gin.Context) {
-	playerID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
-		return
-	}
-	defer tx.Rollback()
-
-	// 1. Get aperture details
-	var apertureID uuid.UUID
-	var areaSize int64
-	var timeRate float64
-	var pTSM float64
-	var pRace string
-	err = tx.QueryRow(`
-		SELECT a.id, a.area_size, COALESCE(a.time_rate, 1.0), p.time_speed_multiplier, COALESCE(p.race, '')
-		FROM immortal_apertures a
-		JOIN players p ON a.player_id = p.id
-		WHERE a.player_id = $1
-	`, playerID).Scan(&apertureID, &areaSize, &timeRate, &pTSM, &pRace)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Tiên Khiếu."})
-		return
-	}
-	if timeRate <= 0 {
-		timeRate = 1.0
-	}
-	tsm := 1.0
-	dummyP := models.Player{}
-	dummyP.Race = pRace
-	if !gamefx.Get(&dummyP).Immortal {
-		tsm = pTSM
-		if tsm <= 0 {
-			tsm = 1.0
-		}
-		if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
-			tsm += bonus
-		}
-	}
-	effectiveTimeRate := timeRate * tsm
-	if effectiveTimeRate <= 0 {
-		effectiveTimeRate = 1.0
-	}
-
-	// 2. Load all active nodes
-	rows, err := tx.Query(`
-		SELECT id, aperture_id, node_type, name, path, level, hp, max_hp, x, y,
-			production_type, production_amount, production_interval_hours, last_collected_at,
-			is_destroyed, created_at, updated_at,
-			COALESCE(node_category, 'RESOURCE'), COALESCE(production_key, '')
-		FROM aperture_resource_nodes
-		WHERE aperture_id = $1 AND is_destroyed = false
-		ORDER BY id
-		FOR UPDATE
-	`, apertureID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách mỏ"})
-		return
-	}
-
-	var allNodes []models.ApertureResourceNode
-	for rows.Next() {
-		var n models.ApertureResourceNode
-		var lastCol sql.NullTime
-		if err := rows.Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.Path, &n.Level, &n.HP, &n.MaxHP, &n.X, &n.Y,
-			&n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol,
-			&n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt,
-			&n.NodeCategory, &n.ProductionKey); err == nil {
-			if lastCol.Valid {
-				n.LastCollectedAt = &lastCol.Time
-			}
-			allNodes = append(allNodes, n)
-		}
-	}
-	rows.Close()
-	cellsByNode, err := loadApertureNodeCells(tx, apertureID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải diện tích các khu tài nguyên"})
-		return
-	}
-	for i := range allNodes {
-		allNodes[i].Cells = cellsByNode[allNodes[i].ID]
-		if len(allNodes[i].Cells) == 0 {
-			allNodes[i].Cells = []models.ApertureGridCell{{X: allNodes[i].X, Y: allNodes[i].Y}}
-		}
-	}
-
-	// 3. Determine ready resource nodes and compute rewards
-	type collectResult struct {
-		NodeID string `json:"node_id"`
-		Name   string `json:"name"`
-		Reward int64  `json:"reward"`
-	}
-
-	// Ensure each node has an anchor cell row, then read every remainder once.
-	// This replaces 2 queries per ready node (insert + select) with one insert
-	// and one select for the whole aperture.
-	if _, err := tx.Exec(`
-		INSERT INTO aperture_resource_node_cells (node_id, aperture_id, x, y)
-		SELECT id, aperture_id, x, y FROM aperture_resource_nodes WHERE aperture_id = $1
-		ON CONFLICT DO NOTHING
-	`, apertureID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải sản lượng lẻ của khu"})
-		return
-	}
-	remainders, err := loadApertureNodeRemainders(tx, apertureID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải sản lượng lẻ của khu"})
-		return
-	}
-	var remainderUpdates []apertureNodeRemainderUpdate
-
-	var readyCount int
-	var productiveCount int
-	var totalStones int64
-	materialTotals := make(map[string]int64)
-	var results []collectResult
-
-	now := time.Now()
-
-	// Pre-load reward context once for all nodes to avoid N+1 queries
-	rewardCtx, err := loadApertureRewardContext(tx, playerID, apertureID, allNodes)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải dữ liệu Tiên Khiếu"})
-		return
-	}
-
-	for _, n := range allNodes {
-		if n.NodeCategory != "RESOURCE" || n.ProductionAmount <= 0 {
-			continue
-		}
-
-		intervalHours := n.ProductionIntervalHours
-		if intervalHours <= 0 {
-			intervalHours = 1
-		}
-		intervalDuration := time.Duration(float64(intervalHours*3600)/effectiveTimeRate) * time.Second
-
-		var elapsed time.Duration
-		if n.LastCollectedAt != nil {
-			elapsed = now.Sub(*n.LastCollectedAt)
-		} else {
-			elapsed = now.Sub(n.CreatedAt)
-		}
-
-		if elapsed < intervalDuration {
-			continue
-		}
-		multiples := 1
-
-		// Carry fractional yield on the zone's anchor cell so many small areas
-		// still add up to the configured full-grid production target.
-		remainder := remainders[apertureCellKey{n.ID, n.X, n.Y}]
-		accumulatedReward := computeApertureNodeRewardWithCtx(rewardCtx, n, multiples, areaSize, allNodes, 0.8) + remainder
-		reward := int64(math.Floor(accumulatedReward))
-		remainderUpdates = append(remainderUpdates, apertureNodeRemainderUpdate{
-			NodeID: n.ID, X: n.X, Y: n.Y, Remainder: accumulatedReward - float64(reward),
-		})
-
-		if n.ProductionType == "Stones" && reward > 0 {
-			totalStones += reward
-		} else if n.ProductionType == "Material" && reward > 0 {
-			prodKey := resolveNodeProdKey(n)
-			if prodKey != "" {
-				rewardToGrant := reward
-				if rewardToGrant > 10000000 {
-					rewardToGrant = 10000000
-				}
-				materialTotals[prodKey] += rewardToGrant
-			}
-		}
-
-		results = append(results, collectResult{NodeID: n.ID, Name: n.Name, Reward: reward})
-		readyCount++
-		if reward > 0 {
-			productiveCount++
-		}
-	}
-
-	if readyCount == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có mỏ nào sẵn sàng để thu hoạch."})
-		return
-	}
-	if err := saveApertureNodeRemainders(tx, remainderUpdates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu sản lượng lẻ của khu"})
-		return
-	}
-
-	// 4. Grant rewards
-	var updatedStones float64
-	if totalStones > 0 {
-		if err := tx.QueryRow(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2 RETURNING primeval_stones`, totalStones, playerID).Scan(&updatedStones); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Nguyên Thạch"})
-			return
-		}
-	} else {
-		_ = tx.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, playerID).Scan(&updatedStones)
-	}
-	if err := InventorySvc.BulkAddItems(tx, playerID.String(), "materials", materialTotals); err != nil {
-		logger.S.Errorf("CollectAllApertureResources BulkAddItems failed: player=%s, err=%v", playerID.String(), err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng vật phẩm thu hoạch"})
-		return
-	}
-
-	// 5. Reset timers in a single batch statement
-	harvestedIDs := make([]string, len(results))
-	for idx, r := range results {
-		harvestedIDs[idx] = r.NodeID
-	}
-	if len(harvestedIDs) > 0 {
-		if _, err := tx.Exec(`UPDATE aperture_resource_nodes SET last_collected_at = NOW() WHERE id = ANY($1::uuid[])`, pq.Array(harvestedIDs)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật thời gian mỏ"})
-			return
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save collection"})
-		return
-	}
-
-	var harvestDetails []string
-	if totalStones > 0 {
-		harvestDetails = append(harvestDetails, fmt.Sprintf("%d Nguyên Thạch", totalStones))
-	}
-	for prodKey, amount := range materialTotals {
-		itemName := prodKey
-		if itemSpec, exists := models.ItemRegistry[prodKey]; exists {
-			itemName = itemSpec.Name
-		}
-		harvestDetails = append(harvestDetails, fmt.Sprintf("%dx %s", amount, itemName))
-	}
-
-	detailStr := ""
-	if len(harvestDetails) > 0 {
-		detailStr = " Nhận được: " + strings.Join(harvestDetails, ", ") + "."
-	}
-
-	bulkMsg := fmt.Sprintf("Thu hoạch hàng loạt %d mỏ thành công!%s Nhân Khí +%d (Sản lượng -20%%).", readyCount, detailStr, productiveCount)
-	notify.Send(db.DB, playerID, "aperture_harvest_bulk", "Thu Hoạch Hàng Loạt Tiên Khiếu", bulkMsg)
-
-	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
-		"message":      bulkMsg,
-		"count":        readyCount,
-		"total_stones": totalStones,
-		"materials":    materialTotals,
-		"collected":    results,
-	})
-}
-
-// RepairAllApertureNodes repairs every damaged node in the player's aperture at
-// once. As a convenience cost, each node's repair fee is increased by 30% (rounded up).
+// RepairAllApertureNodes repairs every damaged (DEFENSE) node of the aperture
+// in one go for a +30% convenience fee.
 func RepairAllApertureNodes(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -1070,9 +303,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 	}
 
 	repairAllMsg := fmt.Sprintf("Sửa chữa hàng loạt %d công trình thành công! Tiêu tốn tổng cộng %d Tiên Nguyên Thạch (Phí +30%%).", len(results), totalCost)
-	notify.Send(db.DB, playerID, "aperture_repair_bulk", "Sửa Chữa Hàng Loạt Tiên Khiếu", repairAllMsg)
-
-	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"message":        repairAllMsg,
 		"repaired_count": len(results),
 		"total_cost":     totalCost,

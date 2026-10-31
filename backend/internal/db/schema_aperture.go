@@ -159,11 +159,67 @@ func schemaAperture() error {
 		return err
 	}
 
-	// Idempotent guard: without IS DISTINCT FROM the UPDATE rewrites every
-	// matching row on each boot (row locks + WAL), tripping the 15s
-	// statement_timeout once the table grows.
-	if err := execSchema("aperture_resource_nodes_interval_10h_upgrade", `
-	UPDATE aperture_resource_nodes SET production_interval_hours = 10 WHERE (node_category = 'RESOURCE' OR node_type IN ('FARMING_ZONE', 'BREEDING_ZONE', 'MINING_ZONE')) AND production_interval_hours IS DISTINCT FROM 10;
+	// Resource points own the production economy (canon resource points);
+	// the node table remains only for DEFENSE structures built on the grid.
+	if err := execSchema("aperture_resource_points", `
+	CREATE TABLE IF NOT EXISTS aperture_resource_points (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		scope VARCHAR(10) NOT NULL DEFAULT 'APERTURE',
+		aperture_id UUID REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		point_type VARCHAR(50) NOT NULL,
+		name VARCHAR(100) NOT NULL,
+		path VARCHAR(50) NOT NULL DEFAULT '',
+		grade VARCHAR(10) NOT NULL DEFAULT 'LOW',
+		point_class VARCHAR(10) NOT NULL DEFAULT 'NORMAL',
+		level INTEGER NOT NULL DEFAULT 1,
+		vitality INTEGER NOT NULL DEFAULT 100,
+		stock JSONB NOT NULL DEFAULT '{}'::jsonb,
+		stock_cap INTEGER NOT NULL DEFAULT 0,
+		x INTEGER NOT NULL DEFAULT 0,
+		y INTEGER NOT NULL DEFAULT 0,
+		region_id VARCHAR(50),
+		last_produced_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		state VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+		listed BOOLEAN NOT NULL DEFAULT false,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_resource_points_aperture_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_resource_points_aperture ON aperture_resource_points (aperture_id, state);`); err != nil {
+		return err
+	}
+	// Compatibility ALTER for existing installs created before point_class.
+	if err := execSchema("aperture_resource_points_point_class_compat", `
+	ALTER TABLE aperture_resource_points ADD COLUMN IF NOT EXISTS point_class VARCHAR(10) NOT NULL DEFAULT 'NORMAL';`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_point_workers", `
+	CREATE TABLE IF NOT EXISTS aperture_point_workers (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		point_id UUID NOT NULL REFERENCES aperture_resource_points(id) ON DELETE CASCADE,
+		variant_human_id UUID NOT NULL REFERENCES aperture_variant_humans(id) ON DELETE CASCADE,
+		assigned_population INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		UNIQUE (point_id, variant_human_id)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_point_workers_aperture_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_point_workers_point ON aperture_point_workers (point_id);`); err != nil {
+		return err
+	}
+
+	// Legacy RESOURCE nodes are replaced by the resource-point economy. The
+	// delete is unconditional because it is a one-way migration: every boot
+	// only defensive players structures survive.
+	if err := execSchema("aperture_resource_nodes_legacy_strip", `
+	DELETE FROM aperture_resource_nodes
+	WHERE COALESCE(node_category, 'RESOURCE') <> 'DEFENSE';
+	DELETE FROM aperture_resource_node_cells
+	WHERE NOT EXISTS (SELECT 1 FROM aperture_resource_nodes n WHERE n.id = aperture_resource_node_cells.node_id);
 	`); err != nil {
 		return err
 	}

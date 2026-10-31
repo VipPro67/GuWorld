@@ -98,6 +98,12 @@ func GetItemName(itemType string, itemDataJSON []byte) string {
 			}
 			return fmt.Sprintf("Phương thức %s", rec.RecipeID)
 		}
+	} else if itemType == "ResourcePoint" {
+		var point ResourcePointItemData
+		if err := json.Unmarshal(itemDataJSON, &point); err == nil && point.PointName != "" {
+			return point.PointName
+		}
+		return "Điểm Tài Nguyên"
 	}
 	return "Vật phẩm không rõ"
 }

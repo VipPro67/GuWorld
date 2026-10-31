@@ -3,7 +3,6 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -180,59 +178,6 @@ func GetImmortalAperture(c *gin.Context) {
 	c.JSON(http.StatusOK, ap)
 }
 
-func seedInitialApertureNodes(tx *sql.Tx, apertureID string, grade string) {
-	type StarterConfig struct {
-		NodeType     string
-		Name         string
-		Path         string
-		ProdKey      string
-		ZoneType     string
-		ProdType     string
-		ProdAmount   int
-		ProdInterval int
-	}
-
-	starterConfigs := []StarterConfig{
-		{NodeType: "FARMING_ZONE", Name: "Khu Trồng Trọt (Rượu Thanh Trúc)", Path: "Wood Path", ProdKey: "green_bamboo_wine", ZoneType: "khu_trong", ProdType: "Material", ProdAmount: 300, ProdInterval: 10},
-		{NodeType: "BREEDING_ZONE", Name: "Khu Chăn Nuôi (Thịt Hươu Linh)", Path: "Food Path", ProdKey: "spirit_deer_meat", ZoneType: "khu_nuoi", ProdType: "Material", ProdAmount: 250, ProdInterval: 10},
-		{NodeType: "MINING_ZONE", Name: "Khu Khai Thác (Ngọc Thạch)", Path: "Earth Path", ProdKey: "jade_stone", ZoneType: "khu_khai_thac", ProdType: "Material", ProdAmount: 210, ProdInterval: 10},
-	}
-
-	count := 2
-	switch grade {
-	case "MID":
-		count = 2
-	case "HIGH", "EXTREME":
-		count = 3
-	}
-
-	used := make(map[string]bool)
-	for i := 0; i < count && i < len(starterConfigs); i++ {
-		cfg := starterConfigs[i]
-
-		x, y := rand.Intn(20), rand.Intn(20)
-		key := fmt.Sprintf("%d,%d", x, y)
-		for used[key] {
-			x, y = rand.Intn(20), rand.Intn(20)
-			key = fmt.Sprintf("%d,%d", x, y)
-		}
-		used[key] = true
-
-		_, _ = tx.Exec(`
-			INSERT INTO aperture_resource_nodes
-				(aperture_id, node_type, name, path, level, hp, max_hp, x, y,
-				 production_type, production_amount, production_interval_hours, last_collected_at,
-				 node_category, defense_power, attack_range, hp_bonus, damage_reduction, blocks_movement,
-				 required_gu_id, required_gu_rank, zone_type, food_path, item_tier, production_key)
-			VALUES ($1, $2, $3, $4, 1, 1000, 1000, $5, $6, $7, $8, $9, NOW(),
-				'RESOURCE', 0, 0, 0, 0, false,
-				'', 0, $10, '', 'T1', $11)
-		`, apertureID, cfg.NodeType, cfg.Name, cfg.Path, x, y,
-			cfg.ProdType, cfg.ProdAmount, cfg.ProdInterval,
-			cfg.ZoneType, cfg.ProdKey)
-	}
-}
-
 // rollApertureGrade rolls the Tiên Khiếu grade based on Nhân Khí ratio q (0..1).
 // Higher Nhân Khí increases the chance of higher grades (weights sum to a constant 21).
 func rollApertureGrade(q float64) string {
@@ -266,9 +211,21 @@ func createAperture(tx *sql.Tx, playerID string, humanQi, currentMana float64) (
 	if err != nil {
 		return models.ImmortalAperture{}, err
 	}
-	// Seed a few random initial resource nodes for the new aperture
-	seedInitialApertureNodes(tx, ap.ID, ap.Grade)
+	// Seed a few random initial resource points for the new aperture
+	if err := GenerateApertureResourcePoints(tx, ap.ID, ap.PlayerID, models.DaoMarksMap{}, ap.Grade, seedPointCountForGrade(ap.Grade)); err != nil {
+		logger.S.Warnf("createAperture: seed resource points for %s: %v", ap.ID, err)
+	}
 	return ap, nil
+}
+
+// seedPointCountForGrade mirrors the old starter-node counts.
+func seedPointCountForGrade(grade string) int {
+	switch grade {
+	case "HIGH", "EXTREME":
+		return 3
+	default:
+		return 2
+	}
 }
 
 func buildApertureByGrade(playerID string, grade string) models.ImmortalAperture {
@@ -369,35 +326,27 @@ func GetDaoMarks(c *gin.Context) {
 	c.JSON(http.StatusOK, marks)
 }
 
-// GetApertureNodes returns resource nodes in player's aperture
+// GetApertureNodes returns the DEFENSE structures of the player's aperture
+// (walls, watchtowers…). Production no longer lives on this table — it is
+// owned by resource points (GET /immortal-aperture/points).
 func GetApertureNodes(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	var daoMarks models.DaoMarksMap
-	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoMarks)
-	daoProfile, _ := loadApertureDaoCombatProfile(db.DB, playerID.String(), daoMarks)
-
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT n.id, n.aperture_id, n.node_type, n.name, n.path, n.level, n.hp, n.max_hp, n.x, n.y,
-			n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at,
 			n.is_destroyed, n.created_at, n.updated_at,
-			COALESCE(n.node_category, 'RESOURCE'), COALESCE(n.defense_power, 0), COALESCE(n.attack_range, 0),
+			COALESCE(n.node_category, 'DEFENSE'), COALESCE(n.defense_power, 0), COALESCE(n.attack_range, 0),
 			COALESCE(n.hp_bonus, 0), COALESCE(n.damage_reduction, 0), COALESCE(n.blocks_movement, false),
-			COALESCE(n.required_gu_id, ''), COALESCE(n.required_gu_rank, 0),
-			COALESCE(n.zone_type, ''), COALESCE(n.food_path, ''), COALESCE(n.item_tier, ''),
-			COALESCE(n.production_key, ''),
-			COALESCE((SELECT json_agg(json_build_object('x', c.x, 'y', c.y) ORDER BY c.y, c.x)
-				FROM aperture_resource_node_cells c WHERE c.node_id = n.id),
-				json_build_array(json_build_object('x', n.x, 'y', n.y)))
+			COALESCE(n.required_gu_id, ''), COALESCE(n.required_gu_rank, 0)
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE a.player_id = $1 AND n.is_destroyed = false
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách điểm tài nguyên: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách công trình: " + err.Error()})
 		return
 	}
 	defer rows.Close()
@@ -405,87 +354,14 @@ func GetApertureNodes(c *gin.Context) {
 	nodes := []models.ApertureResourceNode{}
 	for rows.Next() {
 		var n models.ApertureResourceNode
-		var lastCol sql.NullTime
-		var cellsJSON []byte
 		err = rows.Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.Path, &n.Level, &n.HP, &n.MaxHP, &n.X, &n.Y,
-			&n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol,
 			&n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt,
 			&n.NodeCategory, &n.DefensePower, &n.AttackRange,
 			&n.HPBonus, &n.DamageReduction, &n.BlocksMovement,
-			&n.RequiredGuID, &n.RequiredGuRank,
-			&n.ZoneType, &n.FoodPath, &n.ItemTier, &n.ProductionKey, &cellsJSON)
+			&n.RequiredGuID, &n.RequiredGuRank)
 		if err == nil {
-			_ = json.Unmarshal(cellsJSON, &n.Cells)
-			n.DaoConflictMultiplier = apertureDaoConflictMultiplierForProfile(daoProfile, n.Path)
-			if lastCol.Valid {
-				n.LastCollectedAt = &lastCol.Time
-			}
 			nodes = append(nodes, n)
 		}
 	}
-
-	// Attach the server-computed harvest preview so the client never has to
-	// re-derive the yield formula (and can never disagree with the payout).
-	attachApertureYieldPreviews(playerID.String(), nodes, daoProfile)
-
 	c.JSON(http.StatusOK, nodes)
-
-}
-
-// attachApertureYieldPreviews fills YieldPreview for every resource node of the
-// player's aperture. Best-effort: on any read error the nodes are returned
-// without a preview instead of failing the whole request.
-func attachApertureYieldPreviews(playerID string, nodes []models.ApertureResourceNode, daoProfile *gamefx.DaoCombatProfile) {
-	if len(nodes) == 0 {
-		return
-	}
-	var apertureIDStr string
-	var areaSize int64
-	var timeRate, tsm float64
-	var race string
-	err := db.DB.QueryRow(`
-		SELECT a.id::text, a.area_size, COALESCE(a.time_rate, 1.0), p.time_speed_multiplier, COALESCE(p.race, '')
-		FROM immortal_apertures a
-		JOIN players p ON a.player_id = p.id
-		WHERE a.player_id = $1
-	`, playerID).Scan(&apertureIDStr, &areaSize, &timeRate, &tsm, &race)
-	if err != nil {
-		return
-	}
-	if timeRate <= 0 {
-		timeRate = 1.0
-	}
-	dummyP := models.Player{}
-	dummyP.Race = race
-	if !gamefx.Get(&dummyP).Immortal {
-		if tsm <= 0 {
-			tsm = 1.0
-		}
-		if bonus, err := db.EquippedTimeSpeedBonus(db.DB, playerID); err == nil {
-			tsm += bonus
-		}
-	} else {
-		tsm = 1.0
-	}
-	effectiveTimeRate := timeRate * tsm
-	if effectiveTimeRate <= 0 {
-		effectiveTimeRate = 1.0
-	}
-
-	pid, err := uuid.Parse(playerID)
-	if err != nil {
-		return
-	}
-	rewardCtx, err := loadApertureRewardContextWithProfile(db.DB, pid, apertureIDStr, nodes, daoProfile)
-	if err != nil {
-		return
-	}
-	remainders := loadApertureRemainders(db.DB, apertureIDStr)
-	for i := range nodes {
-		if nodes[i].NodeCategory != "RESOURCE" {
-			continue
-		}
-		remainder := remainders[fmt.Sprintf("%s:%d:%d", nodes[i].ID, nodes[i].X, nodes[i].Y)]
-		nodes[i].YieldPreview = buildApertureYieldPreview(rewardCtx, nodes[i], areaSize, remainder, effectiveTimeRate)
-	}
 }

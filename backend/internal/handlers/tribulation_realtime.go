@@ -147,23 +147,23 @@ func RealtimeEngageTribulation(c *gin.Context) {
 		}
 	}
 
-	// 3. Fetch active resource nodes in the player's Immortal Aperture
-	nodeRows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, name, node_type, COALESCE(path, ''), x, y, hp, max_hp, defense_power, blocks_movement
-		FROM aperture_resource_nodes
-		WHERE aperture_id = $1 AND is_destroyed = false
+	// 3. Fetch resource points in the player's Immortal Aperture
+	pointRows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT id, name, point_type, COALESCE(path, ''), x, y, vitality, 100, 5, false
+		FROM aperture_resource_points
+		WHERE aperture_id = $1 AND state <> 'EXHAUSTED'
 		ORDER BY y ASC, x ASC
 	`, ev.ApertureID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách tài nguyên Tiên Khiếu"})
 		return
 	}
-	defer nodeRows.Close()
+	defer pointRows.Close()
 
 	var nodes []RealtimeApertureNode
-	for nodeRows.Next() {
+	for pointRows.Next() {
 		var n RealtimeApertureNode
-		if err := nodeRows.Scan(&n.ID, &n.Name, &n.NodeType, &n.Path, &n.X, &n.Y, &n.HP, &n.MaxHP, &n.DefensePower, &n.BlocksMovement); err == nil {
+		if err := pointRows.Scan(&n.ID, &n.Name, &n.NodeType, &n.Path, &n.X, &n.Y, &n.HP, &n.MaxHP, &n.DefensePower, &n.BlocksMovement); err == nil {
 			n.X, n.Y = int(projectApertureCell(n.X)), int(projectApertureCell(n.Y))
 			nodes = append(nodes, n)
 		}
@@ -437,9 +437,10 @@ func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uui
 		return result, http.StatusBadRequest, fmt.Errorf("Vẫn còn %d quái kiếp chưa bị tiêu diệt", alive)
 	}
 
-	// Node HP was synced from the authoritative zone snapshot during handoff.
+	// Canon: a won tribulation also re-charges the da-mark terrain — every
+	// resource point revives with full vitality.
 	if err := tx.QueryRowContext(ctx, `
-		SELECT COUNT(1) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = true
+		SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = $1 AND vitality <= 0
 	`, ev.ApertureID).Scan(&result.DestroyedNodes); err != nil {
 		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi kiểm tra tài nguyên Tiên Khiếu")
 	}
@@ -514,6 +515,13 @@ func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uui
 	ap.ApertureHP = ap.MaxApertureHP
 	ap.State = "STABLE"
 
+	// Victory revives every resource point with full vitality (đạo ngân được
+	// ưu tiên giáo mạch sau khi vượt kiếp).
+	_, _ = tx.ExecContext(ctx, `
+		UPDATE aperture_resource_points SET vitality = 100, state = 'ACTIVE', updated_at = NOW()
+		WHERE aperture_id = $1
+	`, ev.ApertureID)
+
 	rewards := distributeDaoMarks(ev.Path, ev.RewardDaoMarks)
 	updatedDaoMarks, errDao := addMultipleDaoMarksTx(tx, playerID.String(), rewards)
 	if errDao != nil {
@@ -532,6 +540,17 @@ func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uui
 		ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount,
 		ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID); err != nil {
 		return result, http.StatusInternalServerError, fmt.Errorf("Lỗi cập nhật Tiên Khiếu")
+	}
+
+	// Canon (Blessed Land Consolidation): each breakthrough expands the
+	// aperture with one additional dao-mark-shaped resource point.
+	if didBreakthrough {
+		var apertureGrade string
+		if err := tx.QueryRowContext(ctx, `SELECT grade FROM immortal_apertures WHERE id = $1`, ev.ApertureID).Scan(&apertureGrade); err == nil {
+			if err := GenerateApertureResourcePoints(tx, ev.ApertureID, playerID.String(), updatedDaoMarks, apertureGrade, 1); err != nil {
+				logger.S.Warnf("victory: expand resource points for aperture %s: %v", ev.ApertureID, err)
+			}
+		}
 	}
 
 	exitRegion, exitX, exitY, exitErr := resolveApertureExitLocation(ctx, tx, playerID)

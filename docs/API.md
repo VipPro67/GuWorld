@@ -226,12 +226,20 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | Method | Path |
 | --- | --- |
 | GET | `/immortal-aperture` |
-| GET | `/immortal-aperture/nodes` |
-| POST | `/immortal-aperture/nodes` |
-| POST | `/immortal-aperture/nodes/:id/collect` |
-| POST | `/immortal-aperture/nodes/collect-all` |
+| GET | `/immortal-aperture/nodes` | Chỉ công trình phòng thủ (Tường, Tháp Canh…). Sản lượng không còn trên bảng này. |
+| POST | `/immortal-aperture/nodes` | Chỉ nhận loại DEFENSE; RESOURCE bị từ chối (sản lượng là Điểm Tài Nguyên tự sinh). |
 | POST | `/immortal-aperture/nodes/:id/uninstall` |
 | DELETE | `/immortal-aperture/nodes/:id` |
+| POST | `/immortal-aperture/points/collect-all` |
+| GET | `/immortal-aperture/points` | Danh sách Điểm Tài Nguyên (tích lũy lười: `stock` được cập nhật theo `last_produced_at × time_rate`, cap `stock_cap`). |
+| POST | `/immortal-aperture/points/:id/collect` |
+| POST | `/immortal-aperture/points/:id/revitalize` | Bồi Dưỡng: nộp vật liệu cùng phai (`<produce_key>_rank<N>`), hồi `vitality` theo lượng nộp. |
+| POST | `/immortal-aperture/points/:id/upgrade` | Nâng cấp theo Tiên Nguyên Thạch, tối đa cấp 5. |
+| GET/POST | `/immortal-aperture/points/:id/workers` | Phân công dị nhân vào điểm (+0.25% yield/500 dân định dạng). |
+| DELETE | `/immortal-aperture/points/:id/workers/:worker_id` |
+| GET | `/immortal-aperture/world-points` | Điểm tài nguyên ngoài map của vùng đang đứng (sản lượng 1× thời gian thực, không nhân Đạo Ngân tự nhiên). |
+| POST | `/immortal-aperture/world-points/:id/collect` | Thu hoạch tại chỗ: phải đứng cách ≤ 6 ô, vùng phải chặn an toàn, ô canh giữ (guardian cell) phải vừa được dọn (Redis `cleared_cells`). |
+| POST | `/immortal-aperture/world-points/:id/transplant` | Di Dời núi về Tiên Khiếu (canon Immortal Aperture Transplantation): cần vitality ≥ 70%, 1× `ITEM_APERTURE_EXPANSION_PILL` + Tiên Nguyên Thạch 100/200/400 theo grade; điểm thế giới tự hồi sinh về sau. |
 | POST | `/immortal-aperture/time-rate` |
 | POST | `/immortal-aperture/labor` |
 | POST | `/immortal-aperture/cleanse-dao-marks` | Thanh Đạo Tẩy Thể — bóc tách Đạo Ngân ngoại hệ (body `{path, marks}`), tiêu hao Tiên Nguyên Thạch, hoàn trả 30% dưới dạng Đạo Tài (`refund_item`, `refund_qty`, `refund_marks`), cooldown 12 giờ. |
@@ -239,10 +247,9 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/immortal-aperture/nodes/repair-all` |
 | POST | `/immortal-aperture/nodes/:id/upgrade` |
 | GET | `/immortal-aperture/variant-humans` |
-| GET/POST | `/immortal-aperture/nodes/:id/workers` |
-| DELETE | `/immortal-aperture/nodes/:id/workers/:worker_id` |
-| GET/POST | `/immortal-aperture/refinement-queue` |
-| DELETE | `/immortal-aperture/refinement-queue/:job_id` |
+| GET | `/immortal-aperture/refinement-queue` |
+| POST | `/immortal-aperture/refinement-queue` |
+| DELETE | `/immortal-aperture/refinement-queue/:job_id` | Hàng luyện tự động được worker 10 phút/tick tiêu thụ. |
 | GET | `/immortal-aperture/settlements` |
 | POST | `/immortal-aperture/settlements/:settlement_id/upgrade` |
 | GET | `/immortal-aperture/npcs` |
@@ -274,6 +281,8 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 `POST /immortal-aperture/nodes/batch` accepts `{action, node_ids}` for `repair`, `upgrade`, or permanent `delete` of up to 400 selected nodes. Repair and upgrade validate and charge the combined cost in one transaction.
 
 ## Shop, marketplace and P2P trade
+
+> **item_type của Bảo Hoàng Thiên:** `Gu`, `Material`, `Recipe`, `ResourcePoint` (điểm tài nguyên trong Tiên Khiếu của chính người bán; quantity luôn 1; mua → điểm rebind sang Tiên Khiếu người mua, ≤ 8 điểm; hủy → mở khóa `listed`).
 
 | Method | Path |
 | --- | --- |

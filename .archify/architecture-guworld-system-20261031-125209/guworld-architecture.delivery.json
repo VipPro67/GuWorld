@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "aeaa1419-09af-4de9-8548-636d1fcc9414",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/vippro67/Documents/GuWorld/.archify/architecture-guworld-system-20261031-125209/candidate.json",
+  "output": "/home/vippro67/Documents/GuWorld/.archify/architecture-guworld-system-20261031-125209/guworld-architecture.html",
+  "specification": {
+    "sha256": "e2bd9100b54e1678fffdb61796d1ba9e4016091f7906c46936433a115fd721e6",
+    "bytes": 9848
+  },
+  "artifact": {
+    "sha256": "a3c6d53099e676090653d3269b217d163c2f907c83fa569e0723f73de309f413",
+    "bytes": 869799
+  }
+}

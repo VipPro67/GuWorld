@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -327,4 +329,60 @@ func pauseRefinement(ctx context.Context, tx *sql.Tx, jobID, reason string) erro
 		return err
 	}
 	return errRefinementBlocked
+}
+
+// StartApertureRefinementWorker ticks the auto-refinement queue every 10
+// minutes: it picks the queued apertures and runs at most one refinement
+// attempt per queue in bounded, panic-recovered jobs.
+func StartApertureRefinementWorker(ctx context.Context, database *sql.DB) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			SafeRun("Aperture Refinement", ctx, func(ctx context.Context) {
+				tickApertureRefinement(ctx, database)
+			})
+		}
+	}
+}
+
+// tickApertureRefinement selects the apertures hosting queued refinement jobs
+// and dispatches a bounded worker per aperture. Errors are logged, never
+// fatal — refinement is a best-effort background economy.
+func tickApertureRefinement(ctx context.Context, database *sql.DB) {
+	rows, err := database.QueryContext(ctx, `
+		SELECT DISTINCT q.aperture_id
+		FROM aperture_refinement_queue q
+		WHERE q.enabled = true
+		LIMIT 32
+	`)
+	if err != nil {
+		logger.S.Errorf("ApertureRefinement: load queued apertures: %v", err)
+		return
+	}
+	var apertureIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			apertureIDs = append(apertureIDs, id)
+		}
+	}
+	rows.Close()
+
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	for _, id := range apertureIDs {
+		apertureID := id
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			processApertureRefinement(ctx, database, apertureID)
+		}()
+	}
+	wg.Wait()
 }

@@ -23,7 +23,7 @@ import (
 )
 
 type CreateListingRequest struct {
-	ItemType            string   `json:"item_type" binding:"required"` // Gu|Material|Recipe
+	ItemType            string   `json:"item_type" binding:"required"` // Gu|Material|Recipe|ResourcePoint
 	GuInstanceID        string   `json:"gu_instance_id"`
 	GuInstanceIDs       []string `json:"gu_instance_ids"`
 	ItemID              string   `json:"item_id"`
@@ -33,6 +33,14 @@ type CreateListingRequest struct {
 	DurationHours       int      `json:"duration_hours" binding:"required"`
 	ListingType         string   `json:"listing_type" binding:"required"` // MARKET|AUCTION|TRADE
 	TargetBuyerUsername string   `json:"target_buyer_username"`
+}
+
+// ResourcePointItemData is the item_data payload for ResourcePoint listings:
+// the point itself never leaves the seller's aperture table, only the details
+// of which point is being sold travel with the listing.
+type ResourcePointItemData struct {
+	PointID   string `json:"point_id"`
+	PointName string `json:"point_name"`
 }
 
 type PlaceBidRequest struct {
@@ -60,8 +68,8 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "currency phải là primeval hoặc immortal"})
 		return
 	}
-	if req.ItemType != "Gu" && req.ItemType != "Material" && req.ItemType != "Recipe" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu, Material hoặc Recipe"})
+	if req.ItemType != "Gu" && req.ItemType != "Material" && req.ItemType != "Recipe" && req.ItemType != "ResourcePoint" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu, Material, Recipe hoặc ResourcePoint"})
 		return
 	}
 	if req.ListingType != "MARKET" && req.ListingType != "AUCTION" && req.ListingType != "TRADE" {
@@ -141,7 +149,7 @@ func CreateListing(c *gin.Context) {
 		} else if req.GuInstanceID != "" {
 			effectiveQty = 1
 		}
-	} else if req.ItemType == "Recipe" {
+	} else if req.ItemType == "Recipe" || req.ItemType == "ResourcePoint" {
 		effectiveQty = 1
 	}
 	if effectiveQty <= 0 {
@@ -262,6 +270,62 @@ func CreateListing(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán Cổ trùng"})
 			return
 		}
+	} else if req.ItemType == "ResourcePoint" {
+		// canon: điểm tài nguyên thế sự do một Tiên Khiếu sở hữu mới bán được
+		// trên Bảo Hoàng Thiên (mâm Nguyệt / Phong Tuyết Đỉnh truyền tay).
+		if req.ItemID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không chỉ định điểm tài nguyên để đăng bán"})
+			return
+		}
+		if req.Quantity > 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mỗi đơn chỉ có thể niêm yết 1 điểm tài nguyên"})
+			return
+		}
+		req.Quantity = 1
+		pointID, err := uuid.Parse(req.ItemID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mã điểm tài nguyên không hợp lệ"})
+			return
+		}
+		var pointName, scope, pointState string
+		var listed bool
+		var apertureOwner uuid.UUID
+		err = tx.QueryRow(`
+			SELECT p.name, COALESCE(p.scope, 'APERTURE'), p.state, COALESCE(p.listed, false), a.player_id
+			FROM aperture_resource_points p
+			LEFT JOIN immortal_apertures a ON a.id = p.aperture_id
+			WHERE p.id = $1
+			FOR UPDATE OF p
+		`, pointID).Scan(&pointName, &scope, &pointState, &listed, &apertureOwner)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại"})
+			return
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+			return
+		}
+		if scope != "APERTURE" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Điểm tài nguyên thế giới chưa về Tiên Khiếu nào, không thể niêm yết"})
+			return
+		}
+		if pointState != "ACTIVE" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Điểm tài nguyên đã cạn kiệt sinh khí, không thể niêm yết"})
+			return
+		}
+		if apertureOwner != player.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Điểm tài nguyên không thuộc Tiên Khiếu của đạo hữu"})
+			return
+		}
+		if listed {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Điểm tài nguyên này đã được niêm yết trên Bảo Hoàng Thiên"})
+			return
+		}
+		itemDataJSON, err = json.Marshal(ResourcePointItemData{PointID: req.ItemID, PointName: pointName})
+		if err != nil {
+			logger.S.Errorf("Failed to marshal resource point: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán điểm tài nguyên"})
+			return
+		}
 	} else {
 		if req.Quantity <= 0 {
 			req.Quantity = 1
@@ -297,6 +361,19 @@ func CreateListing(c *gin.Context) {
 		logger.S.Errorf("Failed to create auction listing: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên giao dịch"})
 		return
+	}
+	if req.ItemType == "ResourcePoint" {
+		// Column guard: exactly one listing may ever claim the point.
+		res, err := tx.Exec(`UPDATE aperture_resource_points SET listed = true, updated_at = NOW() WHERE id = $1 AND listed = false`, req.ItemID)
+		if err != nil {
+			logger.S.Errorf("Failed to mark resource point listed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể niêm yết điểm tài nguyên"})
+			return
+		}
+		if rows, err := res.RowsAffected(); err != nil || rows == 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "Điểm tài nguyên vừa được niêm yết bởi giao dịch khác", "code": "RESOURCE_BUSY"})
+			return
+		}
 	}
 	if req.ItemType == "Gu" {
 		if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), guIDsToSell); err != nil {
@@ -767,6 +844,8 @@ func BuyListing(c *gin.Context) {
 		} else {
 			itemDataToSend = string(rawItemData)
 		}
+	} else if itemType == "ResourcePoint" {
+		itemDataToSend = string(rawItemData)
 	} else {
 		var itemData string
 		if err := json.Unmarshal(rawItemData, &itemData); err != nil {
@@ -775,7 +854,13 @@ func BuyListing(c *gin.Context) {
 		itemDataToSend = itemData
 	}
 
-	if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemDataToSend, purchaseQty); err != nil {
+	if itemType == "ResourcePoint" {
+		// canon: điểm tài nguyên đổi chủ thẳng vào Tiên Khiếu của người mua
+		if err := bindResourcePointToBuyer(tx, &buyer, sellerID, itemDataToSend); err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "RESOURCE_BUSY"})
+			return
+		}
+	} else if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemDataToSend, purchaseQty); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển giao vật phẩm"})
 		return
 	}
@@ -913,13 +998,22 @@ func CancelListing(c *gin.Context) {
 		return
 	}
 	playerBefore := append(models.GuInventory(nil), player.GuInventory...)
-	if err := addAuctionItemToPlayer(tx, &player, itemType, itemData, int64(qty)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn trả vật phẩm"})
-		return
-	}
-	if err := updatePlayerInventory(tx, player, playerBefore); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
-		return
+	if itemType == "ResourcePoint" {
+		// Điểm tài nguyên chưa bao giờ rời Tiên Khiếu của người bán: hủy chỉ
+		// cần gỡ cờ listed, không có gì để hoàn trả vào túi đồ.
+		if err := unlistResourcePoint(tx, itemData); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn trả điểm tài nguyên"})
+			return
+		}
+	} else {
+		if err := addAuctionItemToPlayer(tx, &player, itemType, itemData, int64(qty)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn trả vật phẩm"})
+			return
+		}
+		if err := updatePlayerInventory(tx, player, playerBefore); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
+			return
+		}
 	}
 	_, err = tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, req.ListingID)
 	if err != nil {
@@ -948,6 +1042,11 @@ func marketplaceItemDomains(itemType string) []PlayerEventDomain {
 	domains := []PlayerEventDomain{PlayerDomain}
 	if itemType == "Gu" {
 		return append(domains, GuInventoryDomain, CombatStatsDomain)
+	}
+	if itemType == "ResourcePoint" {
+		// Điểm tài nguyên chứa Cổ trùng hoang dã (match Gu branch behavior),
+		// nhưng khía cạnh items/điểm tài nguyên cũng cần làm mới.
+		return append(domains, ItemInventoryDomain, GuInventoryDomain)
 	}
 	return append(domains, ItemInventoryDomain)
 }

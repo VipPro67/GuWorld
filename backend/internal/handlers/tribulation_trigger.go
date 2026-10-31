@@ -181,54 +181,47 @@ func CheckAndTriggerTribulations() error {
 			}
 		}
 
-		// ── Batch-read: all nodes for affected apertures (1 query) ────────────
-		nodesByAperture := make(map[string][]models.ApertureResourceNode)
+		// ── Batch-read: resource points for affected apertures (1 query) ──────
+		pointsByAperture := make(map[string][]models.ApertureResourcePoint)
+		settlementsByAperture := map[string]int{}
 		{
 			aids := make([]string, len(apertures))
 			for i, ap := range apertures {
 				aids[i] = ap.ID
 			}
 			if nRows, qErr := db.DB.Query(`
-				SELECT aperture_id, id, node_type, name, path, hp, max_hp, x, y, is_destroyed, zone_type, production_amount
-				FROM aperture_resource_nodes
-				WHERE aperture_id = ANY($1::uuid[]) AND is_destroyed = false
+				SELECT aperture_id, id, point_type, name, path, vitality, state, x, y
+				FROM aperture_resource_points
+				WHERE aperture_id = ANY($1::uuid[])
 			`, pq.Array(aids)); qErr != nil {
-				logger.S.Errorf("CheckAndTriggerTribulations: batch-read resource nodes error: %v", qErr)
+				logger.S.Errorf("CheckAndTriggerTribulations: batch-read resource points error: %v", qErr)
 			} else {
-				defer nRows.Close()
 				for nRows.Next() {
-					var nd models.ApertureResourceNode
 					var aid string
-					if err := nRows.Scan(&aid, &nd.ID, &nd.NodeType, &nd.Name, &nd.Path, &nd.HP, &nd.MaxHP, &nd.X, &nd.Y, &nd.IsDestroyed, &nd.ZoneType, &nd.ProductionAmount); err == nil {
-						nd.ApertureID = aid
-						nodesByAperture[aid] = append(nodesByAperture[aid], nd)
+					var pt models.ApertureResourcePoint
+					if err := nRows.Scan(&aid, &pt.ID, &pt.PointType, &pt.Name, &pt.Path, &pt.Vitality, &pt.State, &pt.X, &pt.Y); err == nil {
+						pt.ApertureID = &aid
+						pointsByAperture[aid] = append(pointsByAperture[aid], pt)
 					}
 				}
+				nRows.Close()
 			}
-			if cRows, qErr := db.DB.Query(`
-				SELECT aperture_id, node_id, x, y FROM aperture_resource_node_cells
-				WHERE aperture_id = ANY($1::uuid[]) ORDER BY aperture_id, node_id, y, x
-			`, pq.Array(aids)); qErr != nil {
-				logger.S.Errorf("CheckAndTriggerTribulations: batch-read node areas error: %v", qErr)
-			} else {
-				cellsByNode := make(map[string][]models.ApertureGridCell)
-				for cRows.Next() {
-					var aid, nodeID string
-					var cell models.ApertureGridCell
-					if err := cRows.Scan(&aid, &nodeID, &cell.X, &cell.Y); err == nil {
-						cellsByNode[nodeID] = append(cellsByNode[nodeID], cell)
+
+			// Settlements gate population growth (variant-economy tables).
+			if sRows, qErr := db.DB.Query(`
+				SELECT aperture_id, COUNT(1)
+				FROM aperture_variant_settlements
+				WHERE aperture_id = ANY($1::uuid[])
+				GROUP BY aperture_id
+			`, pq.Array(aids)); qErr == nil {
+				for sRows.Next() {
+					var aid string
+					var n int
+					if sRows.Scan(&aid, &n) == nil {
+						settlementsByAperture[aid] = n
 					}
 				}
-				cRows.Close()
-				for aid := range nodesByAperture {
-					for i := range nodesByAperture[aid] {
-						node := &nodesByAperture[aid][i]
-						node.Cells = cellsByNode[node.ID]
-						if len(node.Cells) == 0 {
-							node.Cells = []models.ApertureGridCell{{X: node.X, Y: node.Y}}
-						}
-					}
-				}
+				sRows.Close()
 			}
 		}
 
@@ -313,10 +306,10 @@ func CheckAndTriggerTribulations() error {
 			id  string
 			val float64
 		}
-		type nodeUp struct {
+		type pointUp struct {
 			id        string
-			hp        int
-			destroyed bool
+			vitality  int
+			exhausted bool
 		}
 		type vhUp struct {
 			id             string
@@ -327,7 +320,7 @@ func CheckAndTriggerTribulations() error {
 
 		var lifeUps []lifespanUp
 		var manaUps []manaUp
-		var nodeUps []nodeUp
+		var pointUps []pointUp
 		var vhUps []vhUp
 		var msgs []msgIns
 
@@ -417,27 +410,28 @@ func CheckAndTriggerTribulations() error {
 				}
 				manaUps = append(manaUps, manaUp{id: ap.PlayerID, val: addedEssence})
 
-				// Conflicts Tick — read from pre-loaded nodes
-				nodes := nodesByAperture[ap.ID]
-				if len(nodes) > 0 {
+				// Conflicts Tick — resource points decay when their path conflicts
+				// with the aperture's Dao-mark composition.
+				points := pointsByAperture[ap.ID]
+				if len(points) > 0 {
 					daoProfile, _ := loadApertureDaoCombatProfile(db.DB, ap.PlayerID, ap.DaoMarks)
 
-					for _, nd := range nodes {
-						decayDamage := 0
-						conflictMultiplier := apertureDaoConflictMultiplierForProfile(daoProfile, nd.Path)
-						decayDamage += int(float64(nd.MaxHP) * 0.10 * float64(yearsDiff) * (1.0 - conflictMultiplier))
+					for i := range points {
+						pt := &points[i]
+						conflictMultiplier := apertureDaoConflictMultiplierForProfile(daoProfile, pt.Path)
+						decay := int(float64(pt.Vitality) * 0.10 * float64(yearsDiff) * (1.0 - conflictMultiplier))
 
-						if decayDamage > 0 {
-							newHP := nd.HP - decayDamage
-							isDestroyed := false
-							if newHP <= 0 {
-								newHP = 0
-								isDestroyed = true
+						if decay > 0 {
+							newVitality := pt.Vitality - decay
+							exhausted := false
+							if newVitality <= 0 {
+								newVitality = 0
+								exhausted = true
 							}
-							nodeUps = append(nodeUps, nodeUp{id: nd.ID, hp: newHP, destroyed: isDestroyed})
+							pointUps = append(pointUps, pointUp{id: pt.ID, vitality: newVitality, exhausted: exhausted})
 
-							if isDestroyed {
-								msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Điểm tài nguyên " + nd.Name + " đã bị phá hủy do bất ổn sinh thái hoặc xung đột Đạo ngân!"})
+							if exhausted {
+								msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Điểm tài nguyên " + pt.Name + " đã cạn kiệt sinh khí do bất ổn sinh thái hoặc xung đột Đạo ngân! Cần Bồi Dưỡng để khôi phục."})
 							}
 						}
 					}
@@ -446,9 +440,10 @@ func CheckAndTriggerTribulations() error {
 					vhs := vhByAperture[ap.ID]
 					if len(vhs) > 0 {
 						totalFoodProd := int64(0)
-						for _, nd := range nodes {
-							if nd.NodeType == "FARMING_ZONE" || nd.NodeType == "BREEDING_ZONE" || nd.ZoneType == "khu_trong" || nd.ZoneType == "khu_nuoi" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS" || nd.NodeType == "SPIRIT_DEER_PASTURE" {
-								totalFoodProd += nd.ProductionAmount
+						for i := range points {
+							tpl, ok := GetResourcePointTemplate(points[i].PointType)
+							if ok && tpl.IsFood && points[i].Vitality > 0 && points[i].State == "ACTIVE" {
+								totalFoodProd += int64(tpl.BaseYield)
 							}
 						}
 
@@ -484,22 +479,19 @@ func CheckAndTriggerTribulations() error {
 							if newHappiness < 30.0 || newOppression > 70.0 {
 								if rand.Float64() < (rebellionRisk / 100.0) {
 									newPop = int(float64(v.population) * 0.8)
-									// Rebellion damage is terminal at zero HP: delete the ruin.
+									// Rebellion ravages the tribal resource points instead
+									// of deleting rows: vitality halves (a dead point
+									// needs revitalize).
 									_, _ = db.DB.Exec(`
-						WITH victims AS MATERIALIZED (
-							SELECT id FROM aperture_resource_nodes
-							WHERE aperture_id = $1 AND is_destroyed = false
+						UPDATE aperture_resource_points
+						SET vitality = vitality / 2,
+						    state = CASE WHEN vitality <= 0 THEN 'EXHAUSTED' ELSE state END,
+						    updated_at = NOW()
+						WHERE id IN (
+							SELECT id FROM aperture_resource_points
+							WHERE aperture_id = $1 AND vitality > 0
 							ORDER BY random() LIMIT 2
-						), deleted AS (
-							DELETE FROM aperture_resource_nodes n
-							USING victims v
-							WHERE n.id = v.id AND n.hp <= 1
-							RETURNING n.id
 						)
-						UPDATE aperture_resource_nodes n
-						SET hp = n.hp / 2, updated_at = NOW()
-						FROM victims v
-						WHERE n.id = v.id AND n.hp > 1
 					`, ap.ID)
 									ap.ApertureHP = math.Max(0.0, ap.ApertureHP-ap.MaxApertureHP*0.05)
 									_, _ = db.DB.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, ap.ApertureHP, ap.ID)
@@ -507,24 +499,8 @@ func CheckAndTriggerTribulations() error {
 								}
 							}
 
-							settlementCount := 0
-							targetSettlementType := ""
-							switch v.race {
-							case "HAIRY_MAN":
-								targetSettlementType = "HAIRY_MAN_SETTLEMENT"
-							case "ROCKMAN":
-								targetSettlementType = "ROCKMAN_TRIBE"
-							case "FEATHERMAN":
-								targetSettlementType = "FEATHERMAN_CANYON"
-							}
-							for _, nd := range nodes {
-								if nd.NodeType == targetSettlementType {
-									settlementCount++
-								}
-							}
-
-							maxPop := 200 * settlementCount
-							if settlementCount > 0 {
+							maxPop := 200 * settlementsByAperture[ap.ID]
+							if settlementsByAperture[ap.ID] > 0 {
 								if newHappiness > 60.0 {
 									newPop = int(float64(v.population) * math.Pow(1.05, float64(yearsDiff)))
 								}
@@ -638,7 +614,7 @@ func CheckAndTriggerTribulations() error {
 		}
 
 		// ── Batch-write: all accumulated changes (single transaction) ─────────
-		if len(lifeUps)+len(manaUps)+len(nodeUps)+len(vhUps)+len(msgs) > 0 {
+		if len(lifeUps)+len(manaUps)+len(pointUps)+len(vhUps)+len(msgs) > 0 {
 			if tx, txErr := db.DB.Begin(); txErr == nil {
 				defer tx.Rollback()
 
@@ -677,28 +653,23 @@ func CheckAndTriggerTribulations() error {
 					}
 				}
 
-				// Batch UPDATE node HP
-				if len(nodeUps) > 0 {
-					ids := make([]string, 0, len(nodeUps))
-					hps := make([]int, 0, len(nodeUps))
-					destroyedIDs := make([]string, 0, len(nodeUps))
-					for _, u := range nodeUps {
-						if u.destroyed {
-							destroyedIDs = append(destroyedIDs, u.id)
-							continue
-						}
+				// Batch UPDATE point vitality
+				if len(pointUps) > 0 {
+					ids := make([]string, 0, len(pointUps))
+					vits := make([]int, 0, len(pointUps))
+					for _, u := range pointUps {
 						ids = append(ids, u.id)
-						hps = append(hps, u.hp)
+						vits = append(vits, u.vitality)
 					}
-					if len(ids) > 0 {
-						if _, err := tx.Exec(`UPDATE aperture_resource_nodes AS n SET hp = v.hp, updated_at = NOW() FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS hp) AS v WHERE n.id = v.id`, pq.Array(ids), pq.Array(hps)); err != nil {
-							logger.S.Errorf("CheckAndTriggerTribulations: batch update nodes failed: %v", err)
-						}
-					}
-					if len(destroyedIDs) > 0 {
-						if _, err := tx.Exec(`DELETE FROM aperture_resource_nodes WHERE id = ANY($1::uuid[])`, pq.Array(destroyedIDs)); err != nil {
-							logger.S.Errorf("CheckAndTriggerTribulations: delete destroyed nodes failed: %v", err)
-						}
+					if _, err := tx.Exec(`
+						UPDATE aperture_resource_points AS p
+						SET vitality = v.vitality,
+						    state = CASE WHEN v.vitality <= 0 THEN 'EXHAUSTED' ELSE p.state END,
+						    updated_at = NOW()
+						FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS vitality) AS v
+						WHERE p.id = v.id
+					`, pq.Array(ids), pq.Array(vits)); err != nil {
+						logger.S.Errorf("CheckAndTriggerTribulations: batch update points failed: %v", err)
 					}
 				}
 
@@ -1067,15 +1038,18 @@ func tribulationNodesToDestroy(activeCount int) int {
 // 2000 Nguyên Thạch + 5 Tiên Nguyên. Shared by every failure path so the penalty
 // cannot drift between them.
 func applyTribulationFailurePenalty(tx *sql.Tx, apertureID, playerID string) {
-	var activeNodesCount int
-	_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, apertureID).Scan(&activeNodesCount)
+	var activePoints int
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_points WHERE aperture_id = $1 AND state <> 'EXHAUSTED'`, apertureID).Scan(&activePoints)
 
-	if n := tribulationNodesToDestroy(activeNodesCount); n > 0 {
+	if n := tribulationNodesToDestroy(activePoints); n > 0 {
+		// Failed tribulations flatten a random share of the surviving resource
+		// points to zero vitality instead of destroying rows outright.
 		_, _ = tx.Exec(`
-			DELETE FROM aperture_resource_nodes
+			UPDATE aperture_resource_points
+			SET vitality = 0, state = 'EXHAUSTED', updated_at = NOW()
 			WHERE id IN (
-				SELECT id FROM aperture_resource_nodes
-				WHERE aperture_id = $1 AND is_destroyed = false
+				SELECT id FROM aperture_resource_points
+				WHERE aperture_id = $1 AND state <> 'EXHAUSTED'
 				ORDER BY random()
 				LIMIT $2
 			)

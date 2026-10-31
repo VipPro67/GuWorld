@@ -1,0 +1,13 @@
+point_type,name,path,produce_key,produce_interval_hours,base_yield,vitality_drain,vitality_regen_hours,is_food,worker_race,rare_rate,gu_rate,point_class
+HERB_VALLEY,Thung Lũng Linh Thảo,Wood Path,wood_crystal,12,10,8,20,false,HAIRY_MAN,0.15,0.10,NORMAL
+BEAST_PASTURE,Đồng Cỏ Dạ Thú,Food Path,food_essence,12,10,8,20,true,HAIRY_MAN,0.15,0.12,NORMAL
+ORE_VEIN,Mạch Quặng Địa Mạch,Earth Path,earth_soil,12,10,8,20,false,ROCKMAN,0.12,0.08,NORMAL
+SPIRIT_SPRING,Ao Linh Tuyền,Water Path,water_pearl,12,10,8,20,false,FEATHERMAN,0.12,0.08,NORMAL
+GOLD_SAND_SHOAL,Bãi Cát Kim Sa,Metal Path,metal_ore,12,10,8,20,false,ROCKMAN,0.10,0.06,NORMAL
+MOON_BOWL,Bát Nguyệt Cốc,Water Path,water_pearl,12,10,8,20,false,FEATHERMAN,0.15,0.14,NORMAL
+YEAR_ESSENCE_POOL,Dòng Năm Thú,Food Path,food_essence,12,10,8,20,true,HAIRY_MAN,0.15,0.14,NORMAL
+DANG_HON_PEAK,Núi Đãng Hồn,Soul Path,soul_sand,24,10,10,40,false,HAIRY_MAN,0.18,0.35,FAMOUS
+JADE_SNAKE_CAVE,Hẻm Ngọc Huyền Xà,Poison Path,poison_sand,24,10,10,40,false,ROCKMAN,0.18,0.35,FAMOUS
+PHOENIX_PEAK,Núi Phượng Vũ,Fire Path,fire_crystal,24,10,10,40,false,FEATHERMAN,0.16,0.30,FAMOUS
+FROSTY_PEAK,Núi Băng Thủy,Ice Path,ice_crystal,24,10,10,40,false,ROCKMAN,0.15,0.30,FAMOUS
+CORPSE_RIDGE,Thi Cương,Enslavement Path,enslavement_stone,24,10,10,40,false,ROCKMAN,0.15,0.30,FAMOUS

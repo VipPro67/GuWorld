@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -118,42 +117,4 @@ func parseResourceNodeTemplates(r io.Reader) map[string]ResourceNodeTemplate {
 		}
 	}
 	return templates
-}
-
-func resolveNodeProdKey(n models.ApertureResourceNode) string {
-	var prodKey string
-	if n.ProductionKey != "" {
-		prodKey = n.ProductionKey
-	} else if template, ok := GetResourceNodeTemplate(n.NodeType); ok && template.ProdKey != "" {
-		prodKey = template.ProdKey
-	} else if strings.Contains(n.Name, "(") && strings.Contains(n.Name, ")") {
-		start := strings.Index(n.Name, "(")
-		end := strings.Index(n.Name, ")")
-		if start < end {
-			itemName := strings.TrimSpace(n.Name[start+1 : end])
-			for id, spec := range models.ItemRegistry {
-				if strings.EqualFold(spec.Name, itemName) {
-					prodKey = id
-					break
-				}
-			}
-		}
-	}
-	if len(prodKey) > 50 {
-		prodKey = prodKey[:50]
-	}
-	return prodKey
-}
-
-func getVariantHumanForNode(nodeType string) string {
-	switch nodeType {
-	case "HAIRY_MAN_SETTLEMENT":
-		return "HAIRY_MAN"
-	case "ROCKMAN_TRIBE", "JADE_STONE_MINE", "PRIMEVAL_MINE", "MINING_ZONE":
-		return "ROCKMAN"
-	case "FEATHERMAN_CANYON":
-		return "FEATHERMAN"
-	default:
-		return ""
-	}
 }

@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/vippro67/Documents/GuWorld/.archify/architecture-guworld-system-20261031-125209/candidate.json",
+    "sha256": "e2bd9100b54e1678fffdb61796d1ba9e4016091f7906c46936433a115fd721e6",
+    "bytes": 9848
+  },
+  "artifact": {
+    "path": "/home/vippro67/Documents/GuWorld/.archify/architecture-guworld-system-20261031-125209/guworld-architecture.html",
+    "sha256": "a3c6d53099e676090653d3269b217d163c2f907c83fa569e0723f73de309f413",
+    "bytes": 869799
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/vippro67/Documents/GuWorld/.archify/architecture-guworld-system-20261031-125209/guworld-architecture.finalize.json",
+    "summaryReceipt": "/home/vippro67/Documents/GuWorld/.archify/architecture-guworld-system-20261031-125209/guworld-architecture.finalize-summary.json",
+    "browserCheckReceipt": "/home/vippro67/Documents/GuWorld/.archify/architecture-guworld-system-20261031-125209/guworld-architecture.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-31T05:56:13.835Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2222,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "routesOverSuggestedBends": 2
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [],
+      "detours": [
+        {
+          "relationship": {
+            "id": "playerstate-sql",
+            "from": "playerstate",
+            "to": "postgres",
+            "label": "row IO",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "bends": 3,
+          "stretch": 1.07
+        },
+        {
+          "relationship": {
+            "id": "gateway-persist",
+            "from": "gateway",
+            "to": "postgres",
+            "label": "persist zone state (join/leave · checkpoints)",
+            "collectionIndex": 13,
+            "artifactIndex": 14
+          },
+          "bends": 4,
+          "stretch": 1
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "playerstate → postgres needs 3 bends: move node playerstate or postgres so they share a row or column with matching centers, or sit diagonally with a clear corner.",
+      "gateway → postgres needs 4 bends: move node gateway or postgres so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

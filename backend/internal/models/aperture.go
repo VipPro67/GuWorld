@@ -1,6 +1,9 @@
 package models
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 )
@@ -43,6 +46,67 @@ func (a ImmortalAperture) TotalTribulationCount() int {
 	return a.EarthCalamityCount + a.HeavenlyTribulationCount + a.GrandTribulationCount + a.MyriadTribulationCount + a.ChaosCalamityCount
 }
 
+// AperturePointStock holds accumulated produce per item id. It is stored as a
+// JSONB map on aperture_resource_points.stock.
+type AperturePointStock map[string]int64
+
+// Scan implements sql.Scanner for AperturePointStock.
+func (s *AperturePointStock) Scan(value interface{}) error {
+	if value == nil {
+		*s = AperturePointStock{}
+		return nil
+	}
+	b, ok := scanBytes(value)
+	if !ok {
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
+	}
+	if len(b) == 0 || string(b) == "null" {
+		*s = AperturePointStock{}
+		return nil
+	}
+	b = truncateJSON(b)
+	return json.Unmarshal(b, s)
+}
+
+// Value implements driver.Valuer for AperturePointStock.
+func (s AperturePointStock) Value() (driver.Value, error) {
+	if s == nil {
+		return "{}", nil
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
+}
+
+// ApertureResourcePoint is a canon resource point of the Gu World. APERTURE
+// scope points live inside a blessed land (high time-rate + dao-mark rich) and
+// WORLD scope points are public contested terrain. Both run the same template,
+// production and trade rules; scope only selects the multiplier sources.
+type ApertureResourcePoint struct {
+	ID             string             `json:"id"`
+	Scope          string             `json:"scope"` // APERTURE | WORLD
+	ApertureID     *string            `json:"aperture_id,omitempty"`
+	PointType      string             `json:"point_type"`
+	Name           string             `json:"name"`
+	Path           string             `json:"path"`
+	Grade          string             `json:"grade"` // LOW | MID | TOP
+	PointClass     string             `json:"point_class"` // NORMAL | FAMOUS (núi danh / bí cảnh thiên địa)
+	Level          int                `json:"level"`
+	Vitality       int                `json:"vitality"`
+	Stock          AperturePointStock `json:"stock"`
+	StockCap       int64              `json:"stock_cap"`
+	X              int                `json:"x"`
+	Y              int                `json:"y"`
+	RegionID       *string            `json:"region_id,omitempty"`
+	LastProducedAt time.Time          `json:"last_produced_at"`
+	State          string             `json:"state"` // ACTIVE | EXHAUSTED
+	Listed         bool               `json:"listed"`
+	CreatedAt      time.Time          `json:"created_at"`
+	UpdatedAt      time.Time          `json:"updated_at"`
+}
+
 type DaoMark struct {
 	ID        string    `json:"id"`
 	PlayerID  string    `json:"player_id"`
@@ -50,6 +114,18 @@ type DaoMark struct {
 	Amount    int64     `json:"amount"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// AperturePointWorkerView is one labour assignment on a resource point.
+type AperturePointWorkerView struct {
+	ID                 string    `json:"id"`
+	PointID            string    `json:"point_id"`
+	VariantHumanID     string    `json:"variant_human_id"`
+	Race               string    `json:"race"`
+	Population         int       `json:"population"`
+	AssignedPopulation int       `json:"assigned_population"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type ApertureResourceNode struct {

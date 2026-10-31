@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -99,6 +100,19 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		}
 		buyerBefore := append(models.GuInventory(nil), buyer.GuInventory...)
 
+		// ResourcePoint: rebind the point into the buyer's aperture before
+		// any money moves. A business failure means the transfer can never
+		// happen — refund the escrowed bid and cancel cleanly.
+		if itemType == "ResourcePoint" {
+			if err := bindResourcePointToBuyer(tx, &buyer, sellerID, itemData); err != nil {
+				var transferErr *resourcePointTransferError
+				if !errors.As(err, &transferErr) {
+					return err
+				}
+				return rescindResourcePointAuction(tx, auctionID, buyerID, currentPrice, currency, itemData)
+			}
+		}
+
 		// Time-based commission fee
 		commission := math.Round(currentPrice*getCommissionPct(listingType, durationHours)*1000) / 1000
 		payout := currentPrice - commission
@@ -109,8 +123,10 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 			seller.ImmortalStones += payout
 		}
 
-		if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemData, qty); err != nil {
-			return err
+		if itemType != "ResourcePoint" {
+			if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemData, qty); err != nil {
+				return err
+			}
 		}
 
 		if err := updatePlayerInventory(tx, buyer, buyerBefore); err != nil {
@@ -132,11 +148,18 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 			Success:        true,
 		})
 	} else {
-		if err := addAuctionItemToPlayer(tx, &seller, itemType, itemData, qty); err != nil {
-			return err
-		}
-		if err := updatePlayerInventory(tx, seller, sellerBefore); err != nil {
-			return err
+		if itemType == "ResourcePoint" {
+			// Điểm tài nguyên chưa bao giờ rời Tiên Khiếu: chỉ gỡ cờ listed.
+			if err := unlistResourcePoint(tx, itemData); err != nil {
+				return err
+			}
+		} else {
+			if err := addAuctionItemToPlayer(tx, &seller, itemType, itemData, qty); err != nil {
+				return err
+			}
+			if err := updatePlayerInventory(tx, seller, sellerBefore); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, auctionID); err != nil {
 			return err
@@ -174,6 +197,11 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 }
 
 func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemData string, qty int64) error {
+	if itemType == "ResourcePoint" {
+		// Điểm tài nguyên phải đi qua bindResourcePointToBuyer: nhét lung tung
+		// sẽ thành material rác trong túi đồ.
+		return fmt.Errorf("ResourcePoint transfers must go through bindResourcePointToBuyer")
+	}
 	if itemType == "Gu" {
 		var gus []models.GuInstance
 		if err := json.Unmarshal([]byte(itemData), &gus); err == nil {
@@ -241,6 +269,136 @@ func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemDat
 	}
 
 	InventorySvc.AddItem(tx, player.ID.String(), itemData, "materials", qty)
+	return nil
+}
+
+// resourcePointTransferError marks a business (not infrastructure) failure to
+// move a resource point: the point is no longer listed, the seller no longer
+// owns it, or the buyer cannot receive it. The settlement loop treats it as
+// final (refund + cancel) instead of retrying forever.
+type resourcePointTransferError struct{ msg string }
+
+func (e *resourcePointTransferError) Error() string { return e.msg }
+
+// bindResourcePointToBuyer rebinds a listed APERTURE-scope resource point from
+// the seller into the buyer's aperture inside the caller's transaction. Canon:
+// a staked Mâm Nguyệt or a sold Phong Tuyết Đỉnh changes hands once payment
+// settles (Reverend Insanity ch. 1303 & 2153).
+func bindResourcePointToBuyer(tx *sql.Tx, buyer *models.Player, sellerID uuid.UUID, itemData string) error {
+	var point ResourcePointItemData
+	if err := json.Unmarshal([]byte(itemData), &point); err != nil || point.PointID == "" {
+		return &resourcePointTransferError{"Dữ liệu điểm tài nguyên không hợp lệ"}
+	}
+	pointID, err := uuid.Parse(point.PointID)
+	if err != nil {
+		return &resourcePointTransferError{"Dữ liệu điểm tài nguyên không hợp lệ"}
+	}
+
+	// 1. Lock the point row: it must still exist and still hang off a seller's
+	// aperture (guards the "seller lost the aperture meanwhile" settle case).
+	var apertureID sql.NullString
+	err = tx.QueryRow(`
+		SELECT aperture_id
+		FROM aperture_resource_points
+		WHERE id = $1
+		FOR UPDATE
+	`, pointID).Scan(&apertureID)
+	if err == sql.ErrNoRows {
+		return &resourcePointTransferError{"Điểm tài nguyên không còn tồn tại"}
+	} else if err != nil {
+		return fmt.Errorf("lỗi truy vấn điểm tài nguyên: %w", err)
+	}
+	if !apertureID.Valid {
+		return &resourcePointTransferError{"Người bán không còn sở hữu điểm tài nguyên này"}
+	}
+	var sellerStillOwns bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM immortal_apertures WHERE id = $1 AND player_id = $2)`, apertureID.String, sellerID).Scan(&sellerStillOwns); err != nil {
+		return fmt.Errorf("lỗi kiểm tra Tiên Khiếu người bán: %w", err)
+	}
+	if !sellerStillOwns {
+		return &resourcePointTransferError{"Người bán không còn sở hữu điểm tài nguyên này"}
+	}
+
+	// 2. The buyer must have an aperture with room for one more point.
+	var buyerApertureID string
+	var buyerPoints int
+	err = tx.QueryRow(`
+		SELECT a.id::text, (SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = a.id)
+		FROM immortal_apertures a
+		WHERE a.player_id = $1
+		FOR UPDATE OF a
+	`, buyer.ID).Scan(&buyerApertureID, &buyerPoints)
+	if err == sql.ErrNoRows {
+		return &resourcePointTransferError{"Đạo hữu chưa khai mở Tiên Khiếu — không thể nhận điểm tài nguyên"}
+	} else if err != nil {
+		return fmt.Errorf("lỗi kiểm tra Tiên Khiếu: %w", err)
+	}
+	if buyerPoints >= aperturePointPointGenCap {
+		return &resourcePointTransferError{fmt.Sprintf("Tiên Khiếu đã có tối đa %d điểm tài nguyên.", aperturePointPointGenCap)}
+	}
+
+	// 3. Rebind under the listed guard: 0 rows = a concurrent trade won the row.
+	res, err := tx.Exec(`
+		UPDATE aperture_resource_points
+		SET aperture_id = $1, listed = false, updated_at = NOW()
+		WHERE id = $2 AND listed = true
+	`, buyerApertureID, pointID)
+	if err != nil {
+		return fmt.Errorf("lỗi chuyển giao điểm tài nguyên: %w", err)
+	}
+	if rows, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("lỗi chuyển giao điểm tài nguyên: %w", err)
+	} else if rows == 0 {
+		return &resourcePointTransferError{"Điểm tài nguyên vừa được giao dịch bởi người khác"}
+	}
+	return nil
+}
+
+// rescindResourcePointAuction settles a ResourcePoint auction whose transfer
+// failed for good: the bid was fully escrowed at bid time, so refund the
+// winner, cancel the auction and strip the stale listed flag. The caller is
+// expected to return right away (commit already happened here).
+func rescindResourcePointAuction(tx *sql.Tx, auctionID string, bidderID uuid.UUID, currentPrice float64, currency string, itemData string) error {
+	refundCol := "primeval_stones"
+	if currency == "immortal" {
+		refundCol = "immortal_stones"
+	}
+	if _, err := tx.Exec(fmt.Sprintf(`UPDATE players SET %s = %s + $1 WHERE id = $2`, refundCol, refundCol), currentPrice, bidderID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, auctionID); err != nil {
+		return err
+	}
+	if err := unlistResourcePoint(tx, itemData); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &bidderID, Action: "marketplace.settle_auction_rescinded", EntityType: "auction",
+		EntityID:       auctionID,
+		RequestSummary: fmt.Sprintf("đấu giá điểm tài nguyên không thể chuyển giao | hoàn trả=%.3f %s", currentPrice, currency),
+		Success:        true,
+	})
+	notify.Send(db.DB, bidderID, "auction_rescinded", "Đấu Giá Hủy Giao Dịch",
+		fmt.Sprintf("Điểm tài nguyên không thể chuyển giao cho đạo hữu, %.3f %s đã được hoàn trả.", currentPrice, currency))
+	return nil
+}
+
+// unlistResourcePoint clears the listed flag once a ResourcePoint listing is
+// cancelled or expires: the point itself never left anyone's aperture.
+func unlistResourcePoint(tx *sql.Tx, itemData string) error {
+	var point ResourcePointItemData
+	if err := json.Unmarshal([]byte(itemData), &point); err != nil || point.PointID == "" {
+		return nil
+	}
+	if _, err := uuid.Parse(point.PointID); err != nil {
+		return nil
+	}
+	if _, err := tx.Exec(`UPDATE aperture_resource_points SET listed = false, updated_at = NOW() WHERE id = $1 AND listed = true`, point.PointID); err != nil {
+		return err
+	}
 	return nil
 }
 

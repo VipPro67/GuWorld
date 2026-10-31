@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "GuWorld architecture — REST API and realtime zone runtime",
+    "output": ".archify/architecture-guworld-system-20261031-125209/guworld-architecture.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "repository": {
+      "url": "https://github.com/VipPro67/GuWorld.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "10890f661ba2856a3abba025e279c003e3ae9b63"
+    }
+  },
+  "layout": { "mode": "grid" },
+  "components": [
+    { "id": "players", "type": "external", "label": "Players", "sublabel": "browser · token session", "pos": [40, 40], "size": [120, 56] },
+    { "id": "webapp", "type": "frontend", "label": "Next.js 16 SPA", "sublabel": "App Router · Zustand store", "pos": [40, 190], "size": [150, 64], "sources": [
+      { "path": "frontend/src/app/page.tsx", "line": 1, "end_line": 12 },
+      { "path": "frontend/src/store/useGameStore.ts", "line": 1574, "end_line": 1580 },
+      { "path": "frontend/src/store/useGameStore.ts", "line": 2329, "end_line": 2334 }
+    ] },
+    { "id": "admin", "type": "frontend", "label": "Admin panel", "sublabel": "CSV import · RBAC audit", "pos": [40, 340], "size": [150, 60], "sources": [
+      { "path": "frontend/src/components/admin/DataImportWorkflow.tsx", "line": 206, "end_line": 219 }
+    ] },
+    { "id": "gin", "type": "backend", "label": "Gin API server", "sublabel": "REST /api/* · auth", "pos": [245, 200], "size": [140, 64], "sources": [
+      { "path": "backend/internal/server/server.go", "line": 469, "end_line": 489 },
+      { "path": "backend/internal/server/server.go", "line": 566, "end_line": 571 }
+    ] },
+    { "id": "handlers", "type": "backend", "label": "Gameplay handlers", "sublabel": "movement guard chain", "pos": [245, 380], "size": [140, 64], "sources": [
+      { "path": "backend/internal/handlers/movement.go", "line": 29, "end_line": 40 },
+      { "path": "backend/internal/handlers/combat.go", "line": 1, "end_line": 5 }
+    ] },
+    { "id": "services", "type": "backend", "label": "Shared services", "sublabel": "5 wired services", "pos": [245, 560], "size": [140, 64], "sources": [
+      { "path": "backend/internal/handlers/services.go", "line": 5, "end_line": 11 }
+    ] },
+    { "id": "playerstate", "type": "backend", "label": "playerstate", "sublabel": "canonical players row", "pos": [245, 740], "size": [140, 64], "sources": [
+      { "path": "backend/internal/playerstate/snapshot.go", "line": 1, "end_line": 8 },
+      { "path": "backend/internal/playerstate/snapshot.go", "line": 22, "end_line": 26 }
+    ] },
+    { "id": "wshub", "type": "backend", "label": "WebSocket hub", "sublabel": "/api/ws · 16 shards", "pos": [475, 40], "size": [140, 60], "sources": [
+      { "path": "backend/internal/ws/sharded_hub.go", "line": 12, "end_line": 20 },
+      { "path": "backend/internal/ws/redis_sub.go", "line": 13, "end_line": 27 },
+      { "path": "backend/internal/server/server.go", "line": 471, "end_line": 489 }
+    ] },
+    { "id": "gateway", "type": "backend", "label": "Realtime gateway", "sublabel": "admission · leases", "pos": [475, 200], "size": [140, 60], "sources": [
+      { "path": "backend/internal/realtime/gateway/admission.go", "line": 271, "end_line": 281 }
+    ] },
+    { "id": "manager", "type": "backend", "label": "Zone manager", "sublabel": "leases · lazy zones", "pos": [475, 380], "size": [140, 64], "sources": [
+      { "path": "backend/internal/realtime/world/manager.go", "line": 374, "end_line": 380 }
+    ] },
+    { "id": "sim", "type": "backend", "label": "Zone simulator", "sublabel": "20 Hz · combat · AI", "pos": [475, 560], "size": [140, 64], "sources": [
+      { "path": "backend/internal/realtime/sim/world.go", "line": 23, "end_line": 27 },
+      { "path": "backend/internal/realtime/sim/runner.go", "line": 9, "end_line": 16 }
+    ] },
+    { "id": "workers", "type": "backend", "label": "Background workers", "sublabel": "RunEvery loops", "pos": [475, 740], "size": [140, 60], "sources": [
+      { "path": "backend/internal/worker/runner.go", "line": 11, "end_line": 16 },
+      { "path": "backend/cmd/server/main.go", "line": 563, "end_line": 592 }
+    ] },
+    { "id": "registries", "type": "backend", "label": "Data registries", "sublabel": "Gu·Item·Constitution·Race", "pos": [700, 40], "size": [140, 64], "sources": [
+      { "path": "backend/internal/gamefx/constitutions.go", "line": 109, "end_line": 115 },
+      { "path": "backend/internal/models/gu.go", "line": 1173, "end_line": 1180 }
+    ] },
+    { "id": "effects", "type": "backend", "label": "Gu effect compiler", "sublabel": "compile · fail-closed", "pos": [700, 200], "size": [140, 64], "sources": [
+      { "path": "backend/internal/realtime/effects/profile.go", "line": 246, "end_line": 252 }
+    ] },
+    { "id": "redis", "type": "database", "label": "Redis", "sublabel": "cache · pub/sub · delta queue", "pos": [475, 920], "size": [140, 60], "sources": [
+      { "path": "backend/internal/cache/redis.go", "line": 38, "end_line": 45 }
+    ] },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "gu_db · InitSchema DDL", "pos": [700, 920], "size": [140, 64], "sources": [
+      { "path": "backend/cmd/server/main.go", "line": 91, "end_line": 100 }
+    ] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Browser client (Next.js 16 + Zustand)", "wraps": ["webapp", "admin"] },
+    { "kind": "region", "label": "Go backend process (:8080)", "wraps": ["gin", "handlers", "services", "playerstate", "wshub", "gateway", "manager", "sim", "workers", "effects", "registries"] }
+  ],
+  "connections": [
+    { "id": "players-open", "from": "players", "to": "webapp", "label": "HTTP" },
+    { "id": "webapp-rest", "from": "webapp", "to": "gin", "label": "REST", "variant": "emphasis" },
+    { "id": "webapp-ws", "from": "webapp", "to": "wshub", "label": "WebSocket /api/ws", "variant": "emphasis" },
+    { "id": "admin-api", "from": "admin", "to": "gin", "label": "admin API · RBAC" },
+    { "id": "gin-dispatch", "from": "gin", "to": "handlers", "label": "dispatch · auth" },
+    { "id": "handlers-services", "from": "handlers", "to": "services", "label": "reuse Services" },
+    { "id": "services-playerstate", "from": "services", "to": "playerstate", "label": "row projection" },
+    { "id": "playerstate-sql", "from": "playerstate", "to": "postgres", "label": "row IO", "fromSide": "right", "toSide": "bottom", "via": [[400, 772], [400, 1005], [770, 1005]] },
+    { "id": "handlers-events", "from": "handlers", "to": "redis", "label": "publish events" },
+    { "id": "manager-snapshots", "from": "manager", "to": "wshub", "label": "AOI snapshots", "fromSide": "left", "toSide": "left", "via": [[450, 412], [450, 70]] },
+    { "id": "ws-inputs", "from": "wshub", "to": "gateway", "label": "inputs" },
+    { "id": "gateway-submit", "from": "gateway", "to": "manager", "label": "submit commands" },
+    { "id": "sim-run", "from": "manager", "to": "sim", "label": "Run · 20 Hz" },
+    { "id": "gateway-persist", "from": "gateway", "to": "postgres", "label": "persist zone state (join/leave · checkpoints)", "fromSide": "bottom", "toSide": "top", "via": [[545, 295], [720, 295], [720, 890], [770, 890]] },
+    { "id": "sql-registries", "from": "postgres", "to": "registries", "label": "dictionaries", "fromSide": "right", "toSide": "right", "via": [[855, 952], [855, 72], [840, 72]] },
+    { "id": "registry-effects", "from": "registries", "to": "effects", "label": "Gu catalog" },
+    { "id": "workers-sql", "from": "workers", "to": "postgres", "label": "scheduled SQL", "fromSide": "right", "toSide": "left", "via": [[640, 770], [640, 952], [700, 952]] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "REST API", "items": [
+      "Gameplay rules live in backend/internal/handlers (~280 files); combat files carry the combat- prefix",
+      "Movement has one guard chain: ownership → bounds → combat-free → destination → publish (movement.go)",
+      "playerstate owns the canonical players-row projection; handlers and services never re-derive the row shape",
+      "Most handlers write Postgres directly with *sql.Tx instead of going through the five shared services"
+    ] },
+    { "dot": "emerald", "title": "Realtime zones", "items": [
+      "Zone sim: deterministic 20 Hz tick — combat, damage, monster AI, statuses — with no I/O in the tick loop",
+      "Zone manager owns leases, lazy zone start and AOI-filtered snapshot broadcast — process-local, not via Redis",
+      "Zone state persists on join/leave and a 10 s realtime-checkpoint worker (gateway.CheckpointActive)",
+      "The hub also subscribes Redis pub/sub (player:*, chat:*, trade:*, world:*, combat:*, notif:*) for cross-actor fan-out"
+    ] },
+    { "dot": "rose", "title": "Data-driven gameplay", "items": [
+      "Gu · Item · Constitution · Race dictionaries load from Postgres into in-memory registries at startup; admin CSV import (Admin → “Dữ liệu”) + restart refreshes them",
+      "Gu effect profiles compile against the Gu catalog at boot (CompileCatalog); the compiled hotbar skills are injected straight into the zone manager's runtime",
+      "unsupported authored blocks fail closed so live hotbars stay empty"
+    ] },
+    { "dot": "violet", "title": "Sessions & events", "items": [
+      "Auth middleware validates JWT sessions with a Redis cache and Postgres fallback; Redis-off startup degrades to in-memory fallbacks",
+      "Handlers publish player:/chat:/trade: events to Redis pub/sub; the hub's Redis subscribers fan them out to clients",
+      "BatchPersister worker flushes queued Redis writes into Postgres every 5 s",
+      "Frontend consumes events over the same /api/ws WebSocket — no separate SSE channel in the current code"
+    ] }
+  ]
+}

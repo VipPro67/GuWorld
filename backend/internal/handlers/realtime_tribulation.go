@@ -141,9 +141,9 @@ func LoadRealtimeTribulationSpawns(ctx context.Context, playerID uuid.UUID) (str
 	}
 
 	nodeRows, err := db.DB.QueryContext(ctx, `
-		SELECT id, name, hp, max_hp, defense_power, x, y, blocks_movement, node_category
-		FROM aperture_resource_nodes
-		WHERE aperture_id = $1 AND is_destroyed = false
+		SELECT id, name, path, vitality, x, y
+		FROM aperture_resource_points
+		WHERE aperture_id = $1 AND state <> 'EXHAUSTED'
 		ORDER BY y ASC, x ASC
 	`, apertureID)
 	if err != nil {
@@ -152,32 +152,26 @@ func LoadRealtimeTribulationSpawns(ctx context.Context, playerID uuid.UUID) (str
 	defer nodeRows.Close()
 	for nodeRows.Next() {
 		var (
-			nodeID             uuid.UUID
-			name               string
-			hp, maxHP, defense int
-			x, y               int
-			blocksMovement     bool
-			nodeCategory       string
+			pointID  uuid.UUID
+			name     string
+			path     string
+			vitality int
+			x, y     int
 		)
-		if err := nodeRows.Scan(&nodeID, &name, &hp, &maxHP, &defense, &x, &y, &blocksMovement, &nodeCategory); err != nil {
+		if err := nodeRows.Scan(&pointID, &name, &path, &vitality, &x, &y); err != nil {
 			return "", nil, false, err
 		}
-		// Defensive structures are intentionally excluded from the live
-		// tribulation encounter; their durable state stays untouched.
-		if strings.EqualFold(strings.TrimSpace(nodeCategory), "DEFENSE") {
-			continue
-		}
-		radius := 0.6
-		if blocksMovement {
-			radius = 0.8
-		}
+		// Canon resource points enter the arena as destructible da mark
+		// terrain: tribulation monsters target their vitality. Exhausted
+		// points hold no produce, so they are skipped.
+		radius := 1.4
 		spawns = append(spawns, realtimeworld.MonsterSpawn{
 			TemplateID: apertureNodeTemplateID, Name: name,
 			X: projectApertureCell(x), Y: projectApertureCell(y),
-			MaxHP: math.Max(1, float64(maxHP)), CurrentHP: math.Max(1, float64(hp)),
-			Defense: math.Max(0, float64(defense)),
+			MaxHP: math.Max(1, float64(vitality)), CurrentHP: math.Max(1, float64(vitality)),
+			Defense: 5,
 			Speed:   0, Radius: radius, Passive: true,
-			PersistentID: nodeID.String(),
+			PersistentID: pointID.String(),
 			NoRespawn:    true,
 			Node:         true,
 		})
@@ -223,15 +217,15 @@ func PersistRealtimeTribulationSnapshot(ctx context.Context, playerID uuid.UUID,
 		if persistentID == "" {
 			continue
 		}
-		hp := int(math.Max(0, math.Round(entity.Vitals.HP)))
+		vitality := int(math.Max(0, math.Round(entity.Vitals.HP)))
 		if strings.HasPrefix(string(entity.ID), "n:") {
 			if _, err := tx.ExecContext(ctx, `
-				UPDATE aperture_resource_nodes
-				SET hp = CASE WHEN is_destroyed OR $1 <= 0 THEN 0 ELSE $1 END,
-				    is_destroyed = is_destroyed OR $1 <= 0,
+				UPDATE aperture_resource_points
+				SET vitality = GREATEST(0, $1),
+				    state = CASE WHEN GREATEST(0, $1) <= 0 THEN 'EXHAUSTED' ELSE state END,
 				    updated_at = NOW()
 				WHERE id = $2
-			`, hp, persistentID); err != nil {
+			`, vitality, persistentID); err != nil {
 				return err
 			}
 			continue
@@ -240,7 +234,7 @@ func PersistRealtimeTribulationSnapshot(ctx context.Context, playerID uuid.UUID,
 			UPDATE tribulation_enemies
 			SET hp = $1, is_dead = ($1 <= 0), updated_at = NOW()
 			WHERE id = $2 AND is_dead = false
-		`, hp, persistentID); err != nil {
+		`, vitality, persistentID); err != nil {
 			return err
 		}
 	}
@@ -280,9 +274,11 @@ func markRealtimeTribulationEnemyDead(ctx context.Context, enemyID string) (uuid
 func HandleRealtimeTribulationDeath(ctx context.Context, death realtimeworld.DeathEvent) error {
 	if death.IsNode {
 		if death.PersistentID != "" {
+			// A point's terrain body was destroyed: vitality drops to zero and
+			// the point becomes exhausted until it is revitalized.
 			_, _ = db.DB.ExecContext(ctx, `
-				UPDATE aperture_resource_nodes
-				SET hp = 0, is_destroyed = true, updated_at = NOW()
+				UPDATE aperture_resource_points
+				SET vitality = 0, state = 'EXHAUSTED', updated_at = NOW()
 				WHERE id = $1
 			`, death.PersistentID)
 		}

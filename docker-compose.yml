@@ -5,7 +5,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: gu_admin
-      POSTGRES_PASSWORD: cKsQD[ER&.z=1Xe$,+9KaH+#0vmen^~h
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in root .env}"
       POSTGRES_DB: gu_db
       TZ: Asia/Ho_Chi_Minh
     command: ["postgres", "-c", "timezone=Asia/Ho_Chi_Minh"]

@@ -1131,6 +1131,31 @@ func FindGuByNameOrID(query string, targetRank int) (GuDictionaryItem, bool) {
 	return GuDictionaryItem{}, false
 }
 
+// GuCandidatesForPath returns every distinct Gu ID whose Path list contains
+// the normalized path key and that exists at exactly `rank`. Used by the
+// resource-point economy to roll wild Gu worms of a point's path (canon:
+// Moon Bowl produces moon path Gu worms, ch. 1303).
+func GuCandidatesForPath(pathKey string, rank int) []string {
+	clean := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(pathKey, " path")))
+	if clean == "" {
+		return nil
+	}
+	ids := make([]string, 0, 8)
+	for id, ranks := range GuRegistry {
+		item, ok := ranks[rank]
+		if !ok {
+			continue
+		}
+		for _, p := range item.Path {
+			if strings.EqualFold(strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path")), clean) {
+				ids = append(ids, id)
+				break
+			}
+		}
+	}
+	return ids
+}
+
 // HasImmortalRank returns true if any rank variant of the given Gu ID is >= 6 (Tiên Cổ).
 func HasImmortalRank(id string) bool {
 	ranks, ok := GuRegistry[id]
