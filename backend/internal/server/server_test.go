@@ -329,3 +329,37 @@ func TestSensitiveAdminRoutesDeclareSafetyCeremony(t *testing.T) {
 		}
 	}
 }
+
+func TestCORS_PreflightAndExposeHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
+
+	r := SetupRouter(nil)
+
+	req, _ := http.NewRequest(http.MethodOptions, "/api/dictionary", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "if-none-match")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for OPTIONS preflight, got %d", w.Code)
+	}
+
+	allowOrigin := w.Header().Get("Access-Control-Allow-Origin")
+	if allowOrigin != "http://localhost:3000" {
+		t.Errorf("expected Access-Control-Allow-Origin: http://localhost:3000, got %q", allowOrigin)
+	}
+
+	allowHeaders := w.Header().Get("Access-Control-Allow-Headers")
+	if !strings.Contains(allowHeaders, "If-None-Match") {
+		t.Errorf("expected Access-Control-Allow-Headers to include If-None-Match, got %q", allowHeaders)
+	}
+
+	exposeHeaders := w.Header().Get("Access-Control-Expose-Headers")
+	if !strings.Contains(exposeHeaders, "ETag") {
+		t.Errorf("expected Access-Control-Expose-Headers to include ETag, got %q", exposeHeaders)
+	}
+}

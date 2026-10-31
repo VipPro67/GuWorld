@@ -443,7 +443,8 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		} else if allowedOriginsStr == "*" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		}
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Admin-Reason, X-Admin-Confirmation-Target, Idempotency-Key, Authorization, X-Player-Tab-ID, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Admin-Reason, X-Admin-Confirmation-Target, Idempotency-Key, Authorization, X-Player-Tab-ID, accept, origin, Cache-Control, X-Requested-With, If-None-Match, If-Match")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "ETag, Content-Length, Content-Disposition")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
 		if c.Request.Method == "OPTIONS" {

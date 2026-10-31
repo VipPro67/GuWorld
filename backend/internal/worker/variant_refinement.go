@@ -335,18 +335,9 @@ func pauseRefinement(ctx context.Context, tx *sql.Tx, jobID, reason string) erro
 // minutes: it picks the queued apertures and runs at most one refinement
 // attempt per queue in bounded, panic-recovered jobs.
 func StartApertureRefinementWorker(ctx context.Context, database *sql.DB) {
-	ticker := time.NewTicker(10 * time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			SafeRun("Aperture Refinement", ctx, func(ctx context.Context) {
-				tickApertureRefinement(ctx, database)
-			})
-		}
-	}
+	RunEvery(ctx, 10*time.Minute, "Aperture Refinement", func(ctx context.Context) {
+		tickApertureRefinement(ctx, database)
+	})
 }
 
 // tickApertureRefinement selects the apertures hosting queued refinement jobs
