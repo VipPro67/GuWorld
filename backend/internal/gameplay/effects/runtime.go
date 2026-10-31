@@ -23,7 +23,7 @@ type Snapshot struct {
 type Context struct {
 	RNG                             *rand.Rand
 	Actor, Target                   Snapshot
-	Rank, Mastery, Turn, Stacks     int
+	Rank, Mastery, Stacks           int
 	DaoMarks                        map[string]int64
 	Path                            []string
 	CatalogRevision                 uint64
@@ -405,8 +405,6 @@ func conditionsMatch(cs []Condition, ctx Context) bool {
 			got = float64(ctx.Rank)
 		case "MASTERY":
 			got = float64(ctx.Mastery)
-		case "TURN":
-			got = float64(ctx.Turn)
 		case "STACKS":
 			got = float64(ctx.Stacks)
 		default:

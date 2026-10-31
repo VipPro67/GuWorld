@@ -115,7 +115,7 @@ func processPendingMartialMatches(tournamentID string) {
 	}
 }
 
-// resolveMartialMatch runs one 1v1 auto-battle and records the result.
+// resolveMartialMatch starts one 1v1 realtime arena match and records the result.
 func resolveMartialMatch(tournamentID, matchID, combatantAID string, combatantBID *string) error {
 	if combatantBID == nil || *combatantBID == "" {
 		_, err := db.DB.Exec(`UPDATE martial_matches SET status = 'BYE', winner_combatant_id = $1, finished_at = NOW() WHERE id = $2`, combatantAID, matchID)

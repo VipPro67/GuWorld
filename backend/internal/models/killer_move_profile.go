@@ -53,17 +53,16 @@ type KillerMoveCombatProfile struct {
 // GuHouseCombatProfile represents an Immortal Gu House (Tiên Cổ Ốc) in combat.
 // It acts as a materialized immortal killer move entity / vehicle stance.
 type GuHouseCombatProfile struct {
-	ID                string                    `json:"id"`
-	Name              string                    `json:"name"`
-	Rank              int                       `json:"rank"`
-	CoreGuIDs         []string                  `json:"core_gu_ids"`
-	AuxGuCount        int                       `json:"aux_gu_count"`
-	MaxHouseHP        float64                   `json:"max_house_hp"`
-	CurrentHouseHP    float64                   `json:"current_house_hp"`
-	HouseDefense      float64                   `json:"house_defense"`
-	DamageReduction   float64                   `json:"damage_reduction"` // % damage reduction (0..1)
-	ImmuneDebuffs     bool                      `json:"immune_debuffs"`
-	ZeroBackfire      bool                      `json:"zero_backfire"`
-	Actions           []KillerMoveCombatProfile `json:"actions"`
-	UpkeepManaPerTurn float64                   `json:"upkeep_mana"`
+	ID              string                    `json:"id"`
+	Name            string                    `json:"name"`
+	Rank            int                       `json:"rank"`
+	CoreGuIDs       []string                  `json:"core_gu_ids"`
+	AuxGuCount      int                       `json:"aux_gu_count"`
+	MaxHouseHP      float64                   `json:"max_house_hp"`
+	CurrentHouseHP  float64                   `json:"current_house_hp"`
+	HouseDefense    float64                   `json:"house_defense"`
+	DamageReduction float64                   `json:"damage_reduction"` // % damage reduction (0..1)
+	ImmuneDebuffs   bool                      `json:"immune_debuffs"`
+	ZeroBackfire    bool                      `json:"zero_backfire"`
+	Actions         []KillerMoveCombatProfile `json:"actions"`
 }

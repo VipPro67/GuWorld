@@ -245,7 +245,7 @@ export const combatPages: WikiPage[] = [
       {
         title: "Chiến đấu realtime",
         targetId: "combat",
-        description: "Bố trí đội hình và lượt đánh",
+        description: "Hotbar, giờ đọc ma nhã và giao chiến thời gian thực",
       },
       {
         title: "Hướng dẫn Tân thủ",

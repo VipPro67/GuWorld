@@ -377,7 +377,7 @@ export const effectsPages: WikiPage[] = [
               <span className="text-[10px] text-[var(--text-muted)]">
                 {s === "active" && "đã chạy trong game"}
                 {s === "partial" && "có điều kiện hoặc thiếu phần phụ"}
-                {s === "legacy" && "tên cũ, vẫn dùng được"}
+                {s === "legacy" && "chỉ có tác dụng trong trận theo lượt cũ"}
                 {s === "unimplemented" && "khai báo nhưng chưa có hiệu lực"}
               </span>
             </span>

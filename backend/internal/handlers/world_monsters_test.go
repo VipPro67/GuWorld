@@ -37,26 +37,12 @@ func stubSafeZoneLookup(t *testing.T, safe func(string, int, int) bool) {
 	t.Cleanup(func() { isWorldMonsterSafeZone = previous })
 }
 
-// stubCounterAttack removes the Redis-backed counterattack from a tick so the
-// harness never touches cache.Client. It reports REVISION_CONFLICT, which is a
-// no-land outcome that broadcasts no counterattack event — a real hit would
-// always add an extra "entity_damaged". Tests that assert counterattack
-// behaviour install their own stub.
-func stubCounterAttack(t *testing.T) {
-	t.Helper()
-	applyWorldPlayerCounter = func(_ context.Context, monster WorldMonster, _ worldCombatPlayer, _ string, _ time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
-		return cache.WorldMonsterRevisionConflict, monster, 0, nil
-	}
-	t.Cleanup(func() { applyWorldPlayerCounter = applyWorldCounterattack })
-}
-
 func installMonsterTransitionTest(t *testing.T, monster WorldMonster, now time.Time, casOK bool) *[]WorldCombatEvent {
 	t.Helper()
 	playerID := uuid.New()
 	previousIndex, previousLoader, previousCAS := worldPosIndex, worldMonstersInBucket, casWorldMonster
 	previousBroadcaster := WorldCombatBroadcaster
 	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
-	stubCounterAttack(t)
 	worldPosIndex = newPositionIndex(WorldPosIndexBucket)
 	worldPosIndex.Reconcile([]WorldPosEntry{{ID: playerID.String(), Region: monster.RegionID, X: 4, Y: 0, TS: now.UnixMilli()}})
 	loaded := false
@@ -576,76 +562,6 @@ func TestWorldMonsterWorkerStopsWithContext(t *testing.T) {
 	}
 }
 
-func installWorldAttackTest(t *testing.T, now time.Time, monsters []WorldMonster, player worldCombatPlayer) (*[]WorldCombatEvent, *atomic.Int64) {
-	t.Helper()
-	previousIndex, previousLoader, previousCAS := worldPosIndex, worldMonstersInBucket, casWorldMonster
-	previousPlayers, previousAction, previousCounter, previousBroadcaster := loadWorldCombatPlayers, applyWorldMonsterAction, applyWorldPlayerCounter, WorldCombatBroadcaster
-	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
-	stubCounterAttack(t)
-	worldPosIndex = newPositionIndex(WorldPosIndexBucket)
-	worldPosIndex.Set(WorldPosEntry{ID: player.ID.String(), Region: player.Region, X: player.X, Y: player.Y, TS: now.UnixMilli()})
-	loaded := false
-	worldMonstersInBucket = func(context.Context, string, int, int) ([]WorldMonster, error) {
-		if loaded {
-			return nil, nil
-		}
-		loaded = true
-		return monsters, nil
-	}
-	loadWorldCombatPlayers = func(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]worldCombatPlayer, error) {
-		return map[uuid.UUID]worldCombatPlayer{player.ID: player}, nil
-	}
-	var calls atomic.Int64
-	applyWorldMonsterAction = func(_ context.Context, _ WorldMonster, _ worldCombatPlayer, _ string) (worldMonsterActionResult, error) {
-		calls.Add(1)
-		return worldMonsterActionResult{Applied: true, Damage: 10, HP: player.HP - 10}, nil
-	}
-	casWorldMonster = func(_ context.Context, _, next cache.WorldMonster, _ int64, _, _, _, _ int, _ time.Duration) (bool, error) {
-		monsters[0] = next
-		return true, nil
-	}
-	SetWSConnectedProvider(func(id uuid.UUID) bool { return id == player.ID })
-	events := []WorldCombatEvent{}
-	WorldCombatBroadcaster = func(_ string, payload []byte, _ map[uuid.UUID]struct{}) {
-		var e WorldCombatEvent
-		if err := json.Unmarshal(payload, &e); err != nil {
-			t.Fatal(err)
-		}
-		events = append(events, e)
-	}
-	t.Cleanup(func() {
-		worldPosIndex = previousIndex
-		worldMonstersInBucket = previousLoader
-		casWorldMonster = previousCAS
-		loadWorldCombatPlayers = previousPlayers
-		applyWorldMonsterAction = previousAction
-		applyWorldPlayerCounter = previousCounter
-		WorldCombatBroadcaster = previousBroadcaster
-		SetWSConnectedProvider(nil)
-	})
-	return &events, &calls
-}
-
-func TestWorldMonsterContactAppliesRealtimeAttackWithoutCounterattack(t *testing.T) {
-	now := time.Now().UTC()
-	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1, Attack: 25}
-	m := testMonster(now.Add(-time.Second))
-	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateAttack, p.ID.String(), 2, now.Add(-time.Second)
-	_, attacks := installWorldAttackTest(t, now, []WorldMonster{m}, p)
-	var counters atomic.Int64
-	applyWorldPlayerCounter = func(_ context.Context, monster WorldMonster, target worldCombatPlayer, commandID string, _ time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
-		counters.Add(1)
-		monster.HP -= 20
-		monster.Revision++
-		return cache.WorldMonsterHit, monster, 20, nil
-	}
-	processWorldMonsterTick(context.Background(), now)
-	waitWorldMonsterAttackPoolIdle(t)
-	if attacks.Load() != 1 || counters.Load() != 0 {
-		t.Fatalf("contact combat calls: attacks=%d counterattacks=%d, want one realtime attack and no counterattack", attacks.Load(), counters.Load())
-	}
-}
-
 func TestMaterializeSpawnReusesRuntimeWhileTTLRemains(t *testing.T) {
 	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
 	previousMaterialize := materializeWorldMonster
@@ -732,80 +648,5 @@ func TestRotatingMonsterBucketWindowEventuallyVisitsEveryBucket(t *testing.T) {
 	}
 	if len(seen) != len(buckets) {
 		t.Fatalf("rotating windows visited %d/%d buckets: %#v", len(seen), len(buckets), seen)
-	}
-}
-
-// waitWorldMonsterAttackPoolIdle blocks until no attack worker holds a
-// slot, so pool assertions are deterministic regardless of test ordering.
-func waitWorldMonsterAttackPoolIdle(t *testing.T) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		filled := 0
-		for i := 0; i < cap(worldMonsterAttackSlots); i++ {
-			select {
-			case worldMonsterAttackSlots <- struct{}{}:
-				filled++
-			default:
-			}
-		}
-		for i := 0; i < filled; i++ {
-			<-worldMonsterAttackSlots
-		}
-		if filled == cap(worldMonsterAttackSlots) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("world monster encounter pool never drained")
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-
-// TestContactDispatchesRealtimeAttackOffTick verifies a proximity contact is handed
-// to the bounded background pool instead of being resolved inline by the tick.
-func TestContactDispatchesRealtimeAttackOffTick(t *testing.T) {
-	now := time.Now().UTC()
-	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1, Attack: 25}
-	m := testMonster(now.Add(-time.Second))
-	// Chase -> Attack with the player already inside attack range reserves one
-	// realtime monster attack.
-	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateChase, p.ID.String(), 2, now.Add(-time.Second)
-	m.X, m.Y = 1, 0
-	_, attacks := installWorldAttackTest(t, now, []WorldMonster{m}, p)
-
-	before := worldMonsterMetrics.attackDispatched.Load()
-	processWorldMonsterTick(context.Background(), now)
-	if got := worldMonsterMetrics.attackDispatched.Load(); got != before+1 {
-		t.Fatalf("attackDispatched = %d, want %d", got, before+1)
-	}
-	waitWorldMonsterAttackPoolIdle(t)
-	if attacks.Load() != 1 {
-		t.Fatalf("realtime attack ran %d times, want 1", attacks.Load())
-	}
-}
-
-// TestRealtimeAttackDispatchDefersWhenPoolFull verifies the tick never blocks: when
-// every worker slot is taken, the contact is deferred instead of queueing.
-func TestRealtimeAttackDispatchDefersWhenPoolFull(t *testing.T) {
-	waitWorldMonsterAttackPoolIdle(t)
-	for i := 0; i < cap(worldMonsterAttackSlots); i++ {
-		worldMonsterAttackSlots <- struct{}{}
-	}
-	defer func() {
-		for i := 0; i < cap(worldMonsterAttackSlots); i++ {
-			<-worldMonsterAttackSlots
-		}
-	}()
-
-	deferredBefore := worldMonsterMetrics.attackDeferred.Load()
-	dispatchedBefore := worldMonsterMetrics.attackDispatched.Load()
-	dispatchWorldMonsterAttack(context.Background(), WorldMonster{InstanceID: "m-full", RegionID: "field"}, uuid.NewString())
-
-	if got := worldMonsterMetrics.attackDeferred.Load(); got != deferredBefore+1 {
-		t.Fatalf("attackDeferred = %d, want %d", got, deferredBefore+1)
-	}
-	if got := worldMonsterMetrics.attackDispatched.Load(); got != dispatchedBefore {
-		t.Fatalf("attackDispatched changed on a full pool: %d -> %d", dispatchedBefore, got)
 	}
 }

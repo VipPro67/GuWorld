@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -19,14 +18,8 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/gamefx"
-	"github.com/vippro67/GuWorld/backend/internal/gameplay/combatmath"
-	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
-	realtimeworld "github.com/vippro67/GuWorld/backend/internal/realtime/world"
-	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -59,9 +52,6 @@ const (
 	worldMonsterMaxPerTick        = 512
 	worldMonsterTickBudget        = 150 * time.Millisecond
 	worldMonsterBucketQueryRadius = 35
-	// Monster attacks are handed to a bounded background pool instead of
-	// running inline so database writes do not stall the 250ms world tick.
-	worldMonsterAttackWorkers = 8
 )
 
 type WorldMonster = cache.WorldMonster
@@ -95,12 +85,7 @@ var worldMonsterMetrics struct {
 	kills                atomic.Uint64
 	preventedDoubleKills atomic.Uint64
 	eventFanout          atomic.Uint64
-	attackDispatched     atomic.Uint64
-	attackDeferred       atomic.Uint64
 }
-
-// worldMonsterAttackSlots bounds concurrent monster attack persistence.
-var worldMonsterAttackSlots = make(chan struct{}, worldMonsterAttackWorkers)
 
 var worldMonsterBucketCursor atomic.Uint64
 
@@ -108,9 +93,6 @@ var (
 	worldMonstersInBucket    = cache.WorldMonstersInBucket
 	materializeWorldMonster  = cache.MaterializeWorldMonster
 	casWorldMonster          = cache.CASWorldMonster
-	loadWorldCombatPlayers   = loadWorldCombatPlayerSnapshots
-	applyWorldMonsterAction  = applyWorldMonsterAttack
-	applyWorldPlayerCounter  = applyWorldCounterattack
 	resolveWorldMonsterCell  = ResolveCell
 	deriveWorldMonsterRegion = DeriveRegionAt
 	isWorldMonsterSafeZone   = IsSafeZone
@@ -149,241 +131,6 @@ func parseStaticSpawnID(spawnID string) (regionID, monsterID string, ok bool) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true
-}
-
-type worldCombatPlayer struct {
-	ID       uuid.UUID
-	HP       float64
-	Region   string
-	X, Y     int
-	Dead     bool
-	Race     string
-	Lifespan float64
-	Defense  float64
-	Attack   float64
-	Statuses models.StatusList
-}
-
-// deadInCoiChet mirrors gamefx.IsDeadState for rows loaded by raw SQL instead of
-// the player service: Cõi Chết is derived from lifespan + race, never stored.
-func (p worldCombatPlayer) deadInCoiChet() bool {
-	probe := models.Player{}
-	probe.Race = p.Race
-	probe.Lifespan = p.Lifespan
-	return gamefx.IsDeadState(&probe)
-}
-
-type worldMonsterActionResult struct {
-	Applied, Died, Rejected bool
-	Damage, HP, Shield      float64
-}
-
-func loadWorldCombatPlayerSnapshots(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]worldCombatPlayer, error) {
-	out := make(map[uuid.UUID]worldCombatPlayer, len(ids))
-	if len(ids) == 0 {
-		return out, nil
-	}
-	rows, err := db.DB.QueryContext(ctx, `
-		SELECT p.id, p.hp, p.current_region, p.x, p.y, p.lifespan, COALESCE(p.race, ''), p.rank, p.sub_rank,
-		       p.statuses, p.growth_data, p.path_masteries,
-		       COALESCE(ia.dao_marks, '{}'::jsonb), `+db.GuInventoryAggregate("p.id")+`
-		FROM players p
-		LEFT JOIN immortal_apertures ia ON ia.player_id = p.id
-		WHERE p.id = ANY($1::uuid[])`, pq.Array(func() []string {
-		out := make([]string, len(ids))
-		for i := range ids {
-			out[i] = ids[i].String()
-		}
-		return out
-	}()))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var p models.Player
-		var snap worldCombatPlayer
-		if err := rows.Scan(&snap.ID, &snap.HP, &snap.Region, &snap.X, &snap.Y, &snap.Lifespan, &snap.Race,
-			&p.Rank, &p.SubRank, &p.Statuses, &p.GrowthData, &p.PathMasteries, &p.DaoMarks, &p.GuInventory); err != nil {
-			return nil, err
-		}
-		snap.Dead = snap.deadInCoiChet()
-		p.ID, p.HP, p.CurrentRegion, p.X, p.Y = snap.ID, snap.HP, snap.Region, snap.X, snap.Y
-		snap.Statuses = p.Statuses
-		snap.Defense = calculateWorldPlayerDefense(&p)
-		snap.Attack = calculateWorldPlayerAttack(&p)
-		out[snap.ID] = snap
-	}
-	return out, rows.Err()
-}
-
-// calculateWorldPlayerAttack mirrors the query-free portions of passive stat
-// calculation. World ticks batch-load all required data and must not issue a
-// territory query for every nearby player. Additive Gu stats are raw values:
-// path mastery and dao marks never scale passive stats.
-func calculateWorldPlayerAttack(p *models.Player) float64 {
-	attack := 10 + float64(p.Rank-1)*10 + float64(p.SubRank-1)*2 + p.GrowthData.Boosts.Attack
-	best := map[string]models.GuInstance{}
-	for _, gu := range p.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			if old, ok := best[gu.GuID]; !ok || gu.Rank > old.Rank {
-				best[gu.GuID] = gu
-			}
-		}
-	}
-	allPct := 0.0
-	for _, gu := range best {
-		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok {
-			continue
-		}
-		attack += models.GuStatValue(spec, "ATTACK")
-		if compiled := models.CompiledGuEffects(spec); compiled != nil {
-			allPct += compiled.StatValue(gameplayeffects.TriggerOnAction, "ALL", "MULTIPLY_PERCENT")
-		}
-	}
-	for _, st := range p.Statuses.Active() {
-		if st.ID == "buff_atk" {
-			attack += st.Value
-		}
-	}
-	return attack * (1 + allPct) * statusStatFactor(p, "attack")
-}
-
-// calculateWorldPlayerDefense is the query-free subset of player stat
-// evaluation needed by a world attack. All inputs are supplied by the batch load.
-func calculateWorldPlayerDefense(p *models.Player) float64 {
-	defense := 5 + float64(p.Rank-1)*5 + float64(p.SubRank-1) + p.GrowthData.Boosts.Defense
-	best := map[string]models.GuInstance{}
-	for _, gu := range p.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			if old, ok := best[gu.GuID]; !ok || gu.Rank > old.Rank {
-				best[gu.GuID] = gu
-			}
-		}
-	}
-	allPct := 0.0
-	for _, gu := range best {
-		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok {
-			continue
-		}
-		defense += models.GuStatValue(spec, "DEFENSE")
-		if compiled := models.CompiledGuEffects(spec); compiled != nil {
-			allPct += compiled.StatValue(gameplayeffects.TriggerOnAction, "ALL", "MULTIPLY_PERCENT")
-		}
-	}
-	for _, st := range p.Statuses.Active() {
-		if st.ID == "buff_def" {
-			defense += st.Value
-		}
-	}
-	return defense * (1 + allPct) * statusStatFactor(p, "defense")
-}
-
-// worldStatusDefense returns the shield, the fractional damage reduction, and
-// whether Bất Tử (LAST_STAND) is active. The damage calculation takes the HP
-// floor explicitly as minHP.
-func worldStatusDefense(statuses models.StatusList) (shield, reduction float64, lastStand bool) {
-	for _, st := range statuses.Active() {
-		if st.ID == "virtual_shield" {
-			shield += math.Max(0, st.Value)
-		}
-		switch {
-		case strings.EqualFold(st.ID, statusfx.StatusInvincible), strings.EqualFold(st.ID, "invulnerable"):
-			reduction = 1
-		case strings.EqualFold(st.ID, statusfx.StatusLastStand):
-			lastStand = true
-		case strings.EqualFold(st.ID, statusfx.StatusDamageReduction):
-			value := st.Value
-			if value > 1 {
-				value /= 100
-			}
-			if value > reduction {
-				reduction = value
-			}
-		}
-	}
-	return
-}
-
-func setWorldVirtualShield(statuses *models.StatusList, value float64) {
-	out := (*statuses)[:0]
-	for _, st := range *statuses {
-		if st.ID != "virtual_shield" {
-			out = append(out, st)
-			continue
-		}
-		if value > 0 {
-			st.Value, value = value, 0
-			out = append(out, st)
-		}
-	}
-	*statuses = out
-}
-
-func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target worldCombatPlayer, actionToken string) (worldMonsterActionResult, error) {
-	tx, err := db.DB.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		return worldMonsterActionResult{}, err
-	}
-	defer tx.Rollback()
-	var claimed string
-	if err := tx.QueryRowContext(ctx, `INSERT INTO world_monster_actions(action_token, monster_id, player_id)
-		VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING action_token`, actionToken, monster.InstanceID, target.ID).Scan(&claimed); err != nil {
-		if err == sql.ErrNoRows {
-			var replay worldMonsterActionResult
-			err = tx.QueryRowContext(ctx, `SELECT applied,died,damage,remaining_hp,remaining_shield FROM world_monster_actions WHERE action_token=$1`, actionToken).
-				Scan(&replay.Applied, &replay.Died, &replay.Damage, &replay.HP, &replay.Shield)
-			return replay, err
-		}
-		return worldMonsterActionResult{}, err
-	}
-	var hp float64
-	var region string
-	var x, y int
-	var lifespan float64
-	var race string
-	var statuses models.StatusList
-	if err := tx.QueryRowContext(ctx, `SELECT hp,current_region,x,y,lifespan,COALESCE(race,''),statuses FROM players WHERE id=$1 FOR UPDATE`, target.ID).
-		Scan(&hp, &region, &x, &y, &lifespan, &race, &statuses); err != nil {
-		return worldMonsterActionResult{}, err
-	}
-	dead := worldCombatPlayer{Race: race, Lifespan: lifespan}.deadInCoiChet()
-	if dead || hp <= 0 || !isRegionWithinScope(monster.RegionID, region) || x != target.X || y != target.Y || isWorldMonsterSafeZone(region, x, y) || math.Hypot(float64(x)-monster.X, float64(y)-monster.Y) > monster.AttackRange {
-		return worldMonsterActionResult{Rejected: true}, nil
-	}
-	statuses.Expire(time.Now())
-	shield, reduction, lastStand := worldStatusDefense(statuses)
-	minHP := 0.0
-	if lastStand {
-		minHP = combatmath.LastStandMinHP
-	}
-	resolved := combatmath.ResolveBasicDamage(monster.BaseAttack, target.Defense, reduction, hp, shield, minHP)
-	setWorldVirtualShield(&statuses, resolved.Shield)
-	statusJSON, err := json.Marshal(statuses)
-	if err != nil {
-		return worldMonsterActionResult{}, err
-	}
-	died := hp > 0 && resolved.HP <= 0
-	if _, err = tx.ExecContext(ctx, `UPDATE players SET hp=$1,statuses=$2,version=version+1 WHERE id=$3`, resolved.HP, statusJSON, target.ID); err != nil {
-		return worldMonsterActionResult{}, err
-	}
-	result := worldMonsterActionResult{Applied: true, Died: died, Damage: resolved.HPDamage + resolved.ShieldAbsorbed, HP: resolved.HP, Shield: resolved.Shield}
-	if _, err = tx.ExecContext(ctx, `UPDATE world_monster_actions SET applied=$2,died=$3,damage=$4,remaining_hp=$5,remaining_shield=$6 WHERE action_token=$1`, actionToken, result.Applied, result.Died, result.Damage, result.HP, result.Shield); err != nil {
-		return worldMonsterActionResult{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return worldMonsterActionResult{}, err
-	}
-	return result, nil
-}
-
-func applyWorldCounterattack(ctx context.Context, monster WorldMonster, target worldCombatPlayer, commandID string, now time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
-	damage := combatmath.ResolveBaseDamage(math.Max(1, target.Attack), monster.BaseDefense)
-	outcome, updated, err := cache.HitWorldMonster(ctx, monster.RegionID, monster.InstanceID, commandID, monster.Revision, damage, now,
-		monsterRespawnDelay(monster.RespawnSeconds), monsterTTL(monster.RespawnSeconds))
-	return outcome, updated, damage, err
 }
 
 type monsterSpawnRow struct {
@@ -1227,62 +974,6 @@ func startWorldMonsterWorker(ctx context.Context, interval time.Duration) <-chan
 	return done
 }
 
-// dispatchWorldMonsterAttack applies one realtime monster attack. The caller
-// has already claimed this attack window by advancing NextAttackAt in Redis.
-func dispatchWorldMonsterAttack(ctx context.Context, monster WorldMonster, targetID string) {
-	select {
-	case worldMonsterAttackSlots <- struct{}{}:
-	default:
-		worldMonsterMetrics.attackDeferred.Add(1)
-		return
-	}
-	worldMonsterMetrics.attackDispatched.Add(1)
-	works := monster
-	go func() {
-		defer func() { <-worldMonsterAttackSlots }()
-		worker.SafeRun("World Monster Attack", ctx, func(ctx context.Context) {
-			playerUUID, err := uuid.Parse(targetID)
-			if err != nil {
-				return
-			}
-			players, err := loadWorldCombatPlayers(ctx, []uuid.UUID{playerUUID})
-			if err != nil {
-				logger.S.Warnf("load world monster target %s: %v", targetID, err)
-				return
-			}
-			player, ok := players[playerUUID]
-			if !ok {
-				return
-			}
-			action, err := applyWorldMonsterAction(ctx, works, player, uuid.NewString())
-			if err != nil {
-				logger.S.Warnf("apply world monster attack %s -> %s: %v", works.InstanceID, targetID, err)
-				return
-			}
-			if action.Rejected || !action.Applied {
-				return
-			}
-			PublishPlayerRealtimeEvent(playerUUID, PlayerEventUpdated)
-			broadcastWorldCombat(works, "monster_attack", map[string]any{
-				"target_id": targetID, "damage": action.Damage,
-				"target_hp": action.HP, "target_shield": action.Shield, "target_died": action.Died,
-			})
-			if action.Died {
-				deathCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
-				defer cancel()
-				death := realtimeworld.DeathEvent{
-					ZoneKey:  sim.ZoneKey{MapID: worldMapIDForRegion(works.RegionID)},
-					SourceID: sim.EntityID(works.MonsterTemplateID), TargetID: sim.EntityID(targetID),
-					TemplateID: works.MonsterTemplateID, TargetKind: string(sim.EntityPlayer),
-				}
-				if err := HandleRealtimePlayerDeath(deathCtx, death); err != nil {
-					logger.S.Errorf("settle world monster death %s -> %s: %v", works.InstanceID, targetID, err)
-				}
-			}
-		})
-	}()
-}
-
 func processWorldMonsterTick(ctx context.Context, now time.Time) {
 	deadline := time.Now().Add(worldMonsterTickBudget)
 	online := worldPosIndex.OnlineEntries(-1, func(entry WorldPosEntry) bool {
@@ -1391,19 +1082,6 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 				return parseErr == nil && isWSConnected(parsed)
 			})
 			eventRevision := next.Revision
-			attemptEncounter := next.State == MonsterStateAttack &&
-				(monster.State != MonsterStateAttack || next.TargetID != monster.TargetID || next.NextAttackAt.IsZero() || !next.NextAttackAt.After(now))
-			if attemptEncounter {
-				next.NextAttackAt = now.Add(2 * time.Second)
-				// The attack is a separate authoritative action from the movement
-				// or state transition above, so give its result a newer revision.
-				if next.Revision == monster.Revision {
-					next.Revision++
-				} else {
-					eventRevision = next.Revision
-					next.Revision++
-				}
-			}
 			if eventType == "monster_moved" {
 				if !monster.LastSeenAt.IsZero() && now.Sub(monster.LastSeenAt) < worldMonsterMoveEventGap {
 					eventType = ""
@@ -1425,9 +1103,6 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 				stateEvent := next
 				stateEvent.Revision = eventRevision
 				broadcastWorldCombat(stateEvent, eventType, nil)
-			}
-			if attemptEncounter && next.TargetID != "" {
-				dispatchWorldMonsterAttack(ctx, next, next.TargetID)
 			}
 		}
 	}

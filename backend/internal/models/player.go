@@ -263,13 +263,6 @@ func DefaultAutoCombatConfig() AutoCombatConfig {
 	}
 }
 
-// TitleEffectSnapshot freezes the selected title's PvE bonus at combat start.
-type TitleEffectSnapshot struct {
-	AchievementID string  `json:"achievement_id"`
-	MonsterType   string  `json:"monster_type"`
-	DamagePct     float64 `json:"damage_pct"`
-}
-
 // ImmortalState groups immortal expansion data.
 type ImmortalState struct {
 	ImmortalEssence  int                    `json:"immortal_essence"`
