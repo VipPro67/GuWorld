@@ -34,8 +34,10 @@ interface ActorView {
   animator: EntityAnimator;
   label: Phaser.GameObjects.Text;
   hpBar: Phaser.GameObjects.Graphics;
+  shieldBar: Phaser.GameObjects.Graphics;
   lastHp: number;
   lastMaxHp: number;
+  lastShield: number;
   lastEngaged: boolean;
   lastSelected: boolean;
   templateId: string;
@@ -460,6 +462,13 @@ export class WorldScene extends Phaser.Scene {
     return this.runtime.getEntities().filter((entity) => this.isAttackableEntity(entity));
   }
 
+  private targetableEntities(): RuntimeEntity[] {
+    if (!this.runtime) return [];
+    return this.runtime.getEntities().filter((entity) =>
+      !entity.isSelf && entity.hp > 0 && (entity.kind === "player" || this.isAttackableEntity(entity)),
+    );
+  }
+
   // Aperture resource nodes are stationary player-faction entities used by the
   // tribulation sim. They are visible but must never become player targets.
   private isAttackableEntity(entity: RuntimeEntity): boolean {
@@ -469,7 +478,7 @@ export class WorldScene extends Phaser.Scene {
   private findTargetNear(point: WorldPoint): RuntimeEntity | null {
     let nearest: RuntimeEntity | null = null;
     let nearestDistance = 1.35;
-    const candidates = this.runtime ? this.runtime.getEntities().filter((e) => !e.isSelf && this.isAttackableEntity(e)) : [];
+    const candidates = this.targetableEntities();
     for (const candidate of candidates) {
       const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
       if (distance <= nearestDistance) {
@@ -483,7 +492,7 @@ export class WorldScene extends Phaser.Scene {
   private cycleTarget(): void {
     if (!this.runtime) return;
     const self = this.runtime.getSelfPosition();
-    const monsters = this.monsters().sort((left, right) => {
+    const monsters = this.targetableEntities().sort((left, right) => {
       const leftDistance = Math.hypot(left.x - self.x, left.y - self.y);
       const rightDistance = Math.hypot(right.x - self.x, right.y - self.y);
       if (leftDistance !== rightDistance) return leftDistance - rightDistance;
@@ -550,7 +559,7 @@ export class WorldScene extends Phaser.Scene {
       this.notice("Chưa kết nối world server");
       return;
     }
-    const selected = preferSelected ? this.monsters().find((monster) => monster.id === this.selectedTargetId) : null;
+    const selected = preferSelected ? this.targetableEntities().find((entity) => entity.id === this.selectedTargetId) : null;
     if (selected) {
       this.runtime.sendBasicAttack({ target_id: selected.id });
       return;
@@ -614,7 +623,7 @@ export class WorldScene extends Phaser.Scene {
         this.router.setAiming(slot !== null);
         this.runtime?.setAimingSlot(slot);
       },
-      attackableEntities: () => this.monsters(),
+      attackableEntities: () => this.targetableEntities(),
       entityNear: (point) => this.findTargetNear(point),
       notice: (message) => this.notice(message),
       markPoint: (point) => this.markWorldPoint(point),
@@ -1045,17 +1054,24 @@ export class WorldScene extends Phaser.Scene {
         actor.templateId = entity.templateId;
         this.applyMonsterArt(actor, entity.templateId);
       } else if (entity.kind === "player") {
-        actor.label.setText(entity.isSelf ? "Bạn" : entity.name || entity.id.slice(0, 8));
+        actor.label.setText(`${entity.isSelf ? "Bạn" : entity.name || entity.id.slice(0, 8)}${entity.pvpEnabled ? " ⚔" : ""}`);
+        actor.label.setColor(entity.pvpEnabled ? "#fb7185" : entity.isSelf || (selfParty !== "" && entity.partyId === selfParty) ? "#6ee7b7" : "#93c5fd");
       }
       const engaged = entity.kind === "monster" && !!entity.aggroTargetId && ["aggro", "chase", "attack"].includes(entity.aiState);
       const selected = this.selectedTargetId === entity.id;
+      const shieldBarChanged = entity.shield !== actor.lastShield || entity.maxHp !== actor.lastMaxHp;
       actor.hpBar.setVisible(entity.kind !== "monster" || engaged || selected);
+      actor.shieldBar.setVisible(entity.shield > 0 && (entity.kind === "player" || engaged || selected));
       if (entity.hp !== actor.lastHp || entity.maxHp !== actor.lastMaxHp || engaged !== actor.lastEngaged || selected !== actor.lastSelected) {
         this.drawHpBar(actor.hpBar, entity.maxHp > 0 ? entity.hp / entity.maxHp : 0, entity.kind === "monster" ? 0xd05348 : undefined);
         actor.lastHp = entity.hp;
         actor.lastMaxHp = entity.maxHp;
         actor.lastEngaged = engaged;
         actor.lastSelected = selected;
+      }
+      if (shieldBarChanged) {
+        this.drawShieldBar(actor.shieldBar, entity.maxHp > 0 ? entity.shield / entity.maxHp : 0);
+        actor.lastShield = entity.shield;
       }
     }
     for (const [id, actor] of this.actors) {
@@ -1083,9 +1099,10 @@ export class WorldScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 1);
     const hpBar = this.add.graphics();
-    const container = this.add.container(x, y, [sprite, label, hpBar]);
+    const shieldBar = this.add.graphics();
+    const container = this.add.container(x, y, [sprite, label, hpBar, shieldBar]);
     const actor: ActorView = {
-      container, sprite, animator, label, hpBar, lastHp: -1, lastMaxHp: -1, lastEngaged: false, lastSelected: false, templateId: "",
+      container, sprite, animator, label, hpBar, shieldBar, lastHp: -1, lastMaxHp: -1, lastShield: -1, lastEngaged: false, lastSelected: false, templateId: "",
       lastX: x, lastY: y, castUntil: 0, hitUntil: 0,
     };
     this.drawHpBar(hpBar, 1);
@@ -1124,6 +1141,16 @@ export class WorldScene extends Phaser.Scene {
     graphics.fillRect(-HP_BAR_WIDTH / 2 - 1, -66, HP_BAR_WIDTH + 2, 6);
     graphics.fillStyle(color ?? (value > 0.3 ? 0x34d399 : 0xf87171), 1);
     graphics.fillRect(-HP_BAR_WIDTH / 2, -65, HP_BAR_WIDTH * value, 4);
+  }
+
+  private drawShieldBar(graphics: Phaser.GameObjects.Graphics, ratio: number): void {
+    const value = Math.max(0, Math.min(1, ratio));
+    graphics.clear();
+    if (value <= 0) return;
+    graphics.fillStyle(0x082f49, 0.9);
+    graphics.fillRoundedRect(-HP_BAR_WIDTH / 2 - 1, -58, HP_BAR_WIDTH + 2, 5, 2);
+    graphics.fillStyle(0x38bdf8, 1);
+    graphics.fillRoundedRect(-HP_BAR_WIDTH / 2, -57, HP_BAR_WIDTH * value, 3, 1);
   }
 
   private syncCamera(): void {

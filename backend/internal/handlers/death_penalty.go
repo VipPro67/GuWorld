@@ -118,7 +118,9 @@ func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID, gain int) {
 		}
 	}
 
-	notify.Send(tx, *killerID, "sat_khi_increase", "Sát Khí gia tăng!",
+	// Persist the notification with the penalty transaction. Realtime death
+	// settlement also sends a post-commit WebSocket notification to the killer.
+	_ = notify.Send(tx, *killerID, "sat_khi_increase", "Sát Khí gia tăng!",
 		fmt.Sprintf("Tích tụ oán khí đồ sát! Sát Khí của bạn tăng %d tầng (lên Tầng %d). Nếu bị đánh bại, lượng tài sản đánh rơi sẽ gia tăng x%.1f!", gain, newLevel, 1.0+float64(newLevel)*0.5))
 
 	// Broadcast wanted / hunt notice when killer has slaughtered multiple players (>= 3 kills / Sát Khí level >= 3)

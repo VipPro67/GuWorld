@@ -115,6 +115,7 @@ type Entity struct {
 	Radius         float64                  `json:"radius"`
 	Faction        string                   `json:"faction"`
 	PartyID        string                   `json:"party_id,omitempty"`
+	PvPEnabled     bool                     `json:"pvp_enabled,omitempty"`
 	Revision       uint64                   `json:"revision"`
 	AckSeq         uint64                   `json:"ack_seq,omitempty"`
 	LeaseToken     string                   `json:"-"`
@@ -355,7 +356,7 @@ func (w *World) canHarm(source, target *Entity) bool {
 		return true
 	}
 	if source.Kind == EntityPlayer && target.Kind == EntityPlayer {
-		if !w.allowPvP {
+		if !w.allowPvP || (!source.PvPEnabled && !target.PvPEnabled) {
 			return false
 		}
 		if source.PartyID != "" && source.PartyID == target.PartyID {

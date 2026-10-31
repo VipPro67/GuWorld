@@ -230,6 +230,7 @@ func Build(raw TiledMapJSON) (*Map, error) {
 		return nil, fmt.Errorf("%w: collision layer is required", ErrInvalidMap)
 	}
 	ruleset := strings.ToLower(propertyString(raw.Properties, "ruleset"))
+	regionKind := strings.ToUpper(propertyString(raw.Properties, "legacy_region_kind"))
 	legacyOriginX, _ := propertyFloat(raw.Properties, "legacy_origin_x")
 	legacyOriginY, _ := propertyFloat(raw.Properties, "legacy_origin_y")
 	legacyScale, hasLegacyScale := propertyFloat(raw.Properties, "legacy_units_per_world_unit")
@@ -241,6 +242,14 @@ func Build(raw TiledMapJSON) (*Map, error) {
 	}
 	if ruleset != "pve" && ruleset != "pvp" && ruleset != "safe" {
 		return nil, fmt.Errorf("%w: ruleset must be pve/pvp/safe", ErrInvalidMap)
+	}
+	// World PvP is opt-in per player, with map rules acting as the hard ceiling.
+	// Keep only hubs and beginner regions safe; all other realtime maps are PvP.
+	mapID := strings.ToLower(raw.MapID)
+	if regionKind == "SAFE_ZONE" || strings.HasPrefix(mapID, "hub_") || strings.HasPrefix(mapID, "tan_thu_coc_") {
+		ruleset = "safe"
+	} else {
+		ruleset = "pvp"
 	}
 	hash := hashMap(raw, collision)
 	return &Map{

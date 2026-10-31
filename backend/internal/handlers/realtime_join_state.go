@@ -88,6 +88,7 @@ type RealtimeJoinState struct {
 	Rank                     int
 	NeedsOnboarding          bool
 	PartyID                  string
+	PvPEnabled               bool
 	EquippedGu               []RealtimeEquippedGu
 	KillerMoves              []RealtimeKillerMove
 }
@@ -116,6 +117,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	}
 	var state RealtimeJoinState
 	var equippedOrder models.EquippedGusList
+	var combatSettings models.AutoCombatConfig
 	var regionType string
 	err := db.DB.QueryRowContext(ctx, `
 		SELECT COALESCE(NULLIF(p.world_zone_id, ''), rwm.world_map_id, 'world_map'), COALESCE(p.current_region, ''),
@@ -124,7 +126,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 			p.world_x, p.world_y, p.world_safe_x, p.world_safe_y,
 			p.world_instance_id, p.world_location_revision, p.world_zone_id <> '', p.hp, p.base_hp,
 			p.needs_onboarding, COALESCE(p.party_id::text, ''), COALESCE(p.equipped_gus, '[]'::jsonb),
-			COALESCE(p.username, '')
+			COALESCE(p.username, ''), COALESCE(p.combat_settings, '{}'::jsonb)
 		FROM players p
 		LEFT JOIN region_world_maps rwm ON rwm.region_id = p.current_region
 		LEFT JOIN regions r ON r.id = p.current_region
@@ -134,11 +136,12 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		&state.WorldX, &state.WorldY, &state.WorldSafeX, &state.WorldSafeY,
 		&state.WorldInstanceID, &state.WorldLocationRevision, &state.HasWorldLocation,
 		&state.HP, &state.BaseHP, &state.NeedsOnboarding, &state.PartyID, &equippedOrder,
-		&state.Username,
+		&state.Username, &combatSettings,
 	)
 	if err != nil {
 		return RealtimeJoinState{}, err
 	}
+	state.PvPEnabled = combatSettings.PvPEnabled
 	state.HasWorldLocationRevision = true
 	if !state.HasWorldLocation || state.RegionID == "aperture_tribulation" {
 		state.MapID = realtimeMapID(state.RegionID, regionType, state.MapID)

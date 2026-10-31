@@ -1436,6 +1436,12 @@ Sau mỗi lần suy diễn, bảng **điểm của chính đạo hữu** (Cổ /
 
 Quái thường trên World Map là thực thể realtime riêng: mỗi lần sinh có ID, HP, vị trí và trạng thái riêng. Sát thương không chí mạng được giữ lại và đồng bộ cho người chơi gần đó. Quái tự phát hiện, đuổi, đánh theo nhịp realtime và quay lại điểm sinh khi mất mục tiêu hoặc vượt dây cương; quái không chọn mục tiêu ở khu an toàn hay vùng khác. Va chạm không mở trận turn-based. Sau khi bị hạ, quái sinh lại bằng instance ID mới sau thời gian hồi sinh của điểm spawn; nếu `respawn_seconds` nhỏ hơn 1, thời gian mặc định là 300 giây. Client chỉ dự đoán hiệu ứng hình ảnh; HP, tử vong và phần thưởng luôn do server quyết định.
 
+Người chơi trong cùng instance realtime có thể được chọn bằng cách nhấp vào nhân vật hoặc dùng phím chuyển mục tiêu. Bảng mục tiêu cho phép xem hồ sơ, mời tổ đội, nhắn riêng và gửi lời mời giao dịch; đòn đánh/kỹ năng lên người chơi vẫn tuân theo luật PvP của bản đồ và máy chủ.
+
+PvP có hai tầng: bản đồ `safe`/`pve` luôn cấm sát thương PvP; ở bản đồ `pvp`, người chơi có thể bật **Chủ động tham chiến PvP** trong Cài đặt chiến đấu. Khi ít nhất một trong hai người bật, cả hai có thể tấn công nhau; khi cả hai cùng tắt, PvP bị chặn. Người đang bật PvP có dấu song kiếm cạnh tên và trạng thái tham chiến trên bảng mục tiêu.
+
+Khi hạ gục người chơi trong thế giới mở PvP, người thắng nhận Sát Khí theo chênh lệch cảnh giới và thông báo kết quả sau khi máy chủ kết toán. Tài sản bị mất được tạo thành chiến lợi phẩm tại vị trí tử đạo nếu có phần rơi trên mặt đất; người thua nhận thông báo tổn thất và hồi sinh.
+
 Hồi sinh sau khi tử đạo trong combat:
 - Đạo hữu tử đạo sẽ hồi sinh tại **HUB/SAFE_ZONE an toàn gần nhất** (ưu tiên HUB, fallback SAFE ZONE) **trong Đại Vực tử vong** (không bị kéo sang Đại Vực khác); khi không có HUB/SAFE ZONE hợp lệ trên tầng đó thì hồi sinh tại **vị trí tử vong**.
 - Sau khi hồi sinh, nạn nhân PvP nhận trạng thái **Miễn Chiến PvP 10 phút** (chủ động khai chiến sẽ phá vỡ).

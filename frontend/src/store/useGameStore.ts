@@ -286,6 +286,7 @@ export interface PlayerStatusInstance {
 
 
 export interface AutoCombatConfig {
+  pvp_enabled?: boolean;
   realtime_left_click_slot?: number;
   realtime_right_click_action?: "attack" | "skill";
   realtime_right_click_slot?: number;

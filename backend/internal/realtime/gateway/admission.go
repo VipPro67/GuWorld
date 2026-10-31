@@ -262,7 +262,11 @@ func (a *Admission) CheckpointActive() {
 		if current.closing {
 			a.manager.LeaveCharacter(current.lease)
 			a.mu.Lock()
-			delete(a.sessions, controllerID)
+			// A reconnect can replace this controller while the checkpoint is
+			// running. Never let the old checkpoint delete the replacement.
+			if held, ok := a.sessions[controllerID]; ok && held.lease.Token == current.lease.Token {
+				delete(a.sessions, controllerID)
+			}
 			a.mu.Unlock()
 		}
 	}
@@ -579,6 +583,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		Radius:         playerRadius,
 		Faction:        "player",
 		PartyID:        state.PartyID,
+		PvPEnabled:     state.PvPEnabled,
 		Combat:         playerCombat,
 	}
 	lease, err = a.manager.AttachCharacterEntity(lease, entity)
@@ -623,7 +628,9 @@ func (a *Admission) reapClosingCharacter(playerID uuid.UUID) {
 	}
 	a.manager.LeaveCharacter(active.lease)
 	a.mu.Lock()
-	delete(a.sessions, controllerID)
+	if held, ok := a.sessions[controllerID]; ok && held.lease.Token == active.lease.Token {
+		delete(a.sessions, controllerID)
+	}
 	a.mu.Unlock()
 }
 
@@ -1393,7 +1400,8 @@ func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protoc
 	for _, entity := range snapshot.Entities {
 		state := protocol.EntityState{
 			EntityID: string(entity.ID), Revision: entity.Revision, Kind: string(entity.Kind), PartyID: entity.PartyID,
-			X: entity.Transform.Position.X, Y: entity.Transform.Position.Y, HP: entity.Vitals.HP, MaxHP: entity.Vitals.MaxHP, Shield: entity.Vitals.Shield,
+			PvPEnabled: entity.PvPEnabled,
+			X:          entity.Transform.Position.X, Y: entity.Transform.Position.Y, HP: entity.Vitals.HP, MaxHP: entity.Vitals.MaxHP, Shield: entity.Vitals.Shield,
 		}
 		if entity.Kind == sim.EntityMonster {
 			state.TemplateID = entity.AI.TemplateID

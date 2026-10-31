@@ -46,6 +46,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
 
   saveCombatSettings: async (settings) => {
     const { token, logout } = get();
+    const previousPvPEnabled = get().combatSettings?.pvp_enabled ?? get().player?.combat_settings?.pvp_enabled ?? false;
     if (!token || !get().beginAction("player:combat")) return false;
     set({ error: null });
     try {
@@ -61,6 +62,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Lưu cài đặt thất bại.");
       set({ combatSettings: data.combat_settings || settings });
+      if (previousPvPEnabled !== (settings.pvp_enabled ?? false)) get().requestWorldReconnect();
       get().addLog(data.message || "Đã lưu cài đặt chiến đấu.");
       return true;
     } catch (err: unknown) {

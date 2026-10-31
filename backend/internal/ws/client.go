@@ -997,7 +997,8 @@ func (c *Client) sendWorldEvents(events []combat.Event, generation uint64) {
 func protocolEntityState(entity sim.Entity) protocol.EntityState {
 	state := protocol.EntityState{
 		EntityID: string(entity.ID), Revision: entity.Revision, Kind: string(entity.Kind), PartyID: entity.PartyID,
-		X: entity.Transform.Position.X, Y: entity.Transform.Position.Y,
+		PvPEnabled: entity.PvPEnabled,
+		X:          entity.Transform.Position.X, Y: entity.Transform.Position.Y,
 		HP: entity.Vitals.HP, MaxHP: entity.Vitals.MaxHP, Shield: entity.Vitals.Shield,
 	}
 	if entity.Kind == sim.EntityMonster {

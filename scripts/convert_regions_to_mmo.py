@@ -374,7 +374,7 @@ def main():
             "width": width, "height": height, "tilewidth": 24, "tileheight": 24,
             "map_id": region_id, "map_version": MAP_VERSION, "content_version": CONTENT_VERSION,
             "properties": [
-                prop("ruleset", "safe" if is_safe else "pve"),
+                prop("ruleset", "safe" if is_safe else "pvp"),
                 prop("legacy_origin_x", origin_x), prop("legacy_origin_y", origin_y),
                 prop("legacy_units_per_world_unit", SCALE),
                 prop("legacy_region_id", region_id), prop("legacy_region_kind", row["zone_type"]),

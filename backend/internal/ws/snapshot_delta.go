@@ -158,6 +158,7 @@ func entityStateEqual(a, b protocol.EntityState) bool {
 		a.Revision != b.Revision ||
 		a.Kind != b.Kind ||
 		a.PartyID != b.PartyID ||
+		a.PvPEnabled != b.PvPEnabled ||
 		a.X != b.X ||
 		a.Y != b.Y ||
 		a.HP != b.HP ||

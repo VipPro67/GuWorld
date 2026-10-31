@@ -86,7 +86,7 @@ function buildHud(runtime: WorldRuntime, player: Player | null): HudData | null 
     castName: skills.find((skill) => skill.id === combat.castSkillId)?.name ?? "",
     castProgress,
     target: targetEntity
-      ? { id: targetEntity.id, kind: targetEntity.kind, hp: targetEntity.hp, maxHp: targetEntity.maxHp, shield: targetEntity.shield, name: targetEntity.name, templateId: targetEntity.templateId, aiState: targetEntity.aiState }
+      ? { id: targetEntity.id, kind: targetEntity.kind, hp: targetEntity.hp, maxHp: targetEntity.maxHp, shield: targetEntity.shield, name: targetEntity.name, templateId: targetEntity.templateId, aiState: targetEntity.aiState, pvpEnabled: targetEntity.pvpEnabled }
       : null,
     statusText: runtime.getCombatNotice(),
     position: runtime.getSelfPosition(),

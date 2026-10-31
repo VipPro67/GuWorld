@@ -127,7 +127,7 @@ def main():
     data = {
         "type": "map", "orientation": "orthogonal", "renderorder": "right-down", "width": WIDTH, "height": HEIGHT,
         "tilewidth": 24, "tileheight": 24, "map_id": "world_map", "map_version": "legacy-converted-v2", "content_version": "legacy-regions-v2",
-        "properties": [prop("ruleset", "pve"), prop("legacy_origin_x", 0), prop("legacy_origin_y", 0), prop("legacy_units_per_world_unit", SCALE), prop("legacy_source", "Region.csv + MapCell.csv + MonsterSpawn.csv")],
+        "properties": [prop("ruleset", "pvp"), prop("legacy_origin_x", 0), prop("legacy_origin_y", 0), prop("legacy_units_per_world_unit", SCALE), prop("legacy_source", "Region.csv + MapCell.csv + MonsterSpawn.csv")],
         "layers": [
             {"type": "tilelayer", "name": "ground", "width": WIDTH, "height": HEIGHT, "data": [0] * (WIDTH * HEIGHT)},
             {"type": "tilelayer", "name": "collision", "width": WIDTH, "height": HEIGHT, "data": edge},

@@ -38,6 +38,7 @@ export interface WorldEntityState {
   entity_revision: number;
   kind?: "player" | "monster";
   party_id?: string;
+  pvp_enabled?: boolean;
   template_id?: string;
   name?: string;
   ai_state?: string;
@@ -421,6 +422,10 @@ function parseEntityState(value: unknown): WorldEntityState {
     throw new Error("World snapshot party_id is invalid");
   }
   if (value.party_id !== undefined) entity.party_id = value.party_id as string;
+  if (value.pvp_enabled !== undefined) {
+    if (typeof value.pvp_enabled !== "boolean") throw new Error("World snapshot PvP state is invalid");
+    entity.pvp_enabled = value.pvp_enabled;
+  }
   for (const field of ["template_id", "name", "ai_state", "aggro_target_id"] as const) {
     const raw = value[field];
     if (raw !== undefined) {

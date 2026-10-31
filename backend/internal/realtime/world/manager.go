@@ -1039,14 +1039,14 @@ func (m *Manager) Stats() []ZoneStats {
 	return stats
 }
 
-// ZoneKeyForMapWithCapacity selects the least-loaded instance of a map that
-// still has player capacity. It enables in-process instance scaling without a
-// client-visible zone list.
+// ZoneKeyForMapWithCapacity packs players into the most-populated instance of
+// a map that still has capacity. This keeps players together for shared-world
+// play and only spreads them to another instance when the current one is full.
 func (m *Manager) ZoneKeyForMapWithCapacity(mapID string) (sim.ZoneKey, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var best, transitioning sim.ZoneKey
-	bestLoad := m.maxPlayersPerZone + 1
+	bestLoad := -1
 	found := false
 	for _, key := range m.keys {
 		if key.MapID != mapID {
@@ -1063,7 +1063,7 @@ func (m *Manager) ZoneKeyForMapWithCapacity(mapID string) (sim.ZoneKey, error) {
 			continue
 		}
 		load := m.ownedPlayerCountLocked(key)
-		if load < m.maxPlayersPerZone && load < bestLoad {
+		if load < m.maxPlayersPerZone && load > bestLoad {
 			best = key
 			bestLoad = load
 		}

@@ -60,6 +60,7 @@ export function RealtimeAutomationSettings({
     setSaving(true);
     const source = store.combatSettings ?? player?.combat_settings;
     const settings: AutoCombatConfig = {
+      pvp_enabled: (store.combatSettings ?? player?.combat_settings)?.pvp_enabled ?? false,
       realtime_left_click_slot: draft.leftClickSlot,
       realtime_right_click_action: draft.rightClickAction,
       realtime_right_click_slot: draft.rightClickAction === "skill" ? draft.rightClickSlot : 0,

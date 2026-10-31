@@ -27,6 +27,7 @@ interface MMOSettingsPanelProps {
 }
 
 interface RealtimeAutomationDraft {
+  pvpEnabled: boolean;
   leftClickSlot: number;
   rightClickAction: "attack" | "skill";
   rightClickSlot: number;
@@ -37,6 +38,7 @@ interface RealtimeAutomationDraft {
 }
 
 const DEFAULT_REALTIME_DRAFT: RealtimeAutomationDraft = {
+  pvpEnabled: false,
   leftClickSlot: 0,
   rightClickAction: "attack",
   rightClickSlot: 1,
@@ -48,6 +50,7 @@ const DEFAULT_REALTIME_DRAFT: RealtimeAutomationDraft = {
 
 function realtimeDraftFrom(settings: AutoCombatConfig | null | undefined): RealtimeAutomationDraft {
   return {
+    pvpEnabled: settings?.pvp_enabled ?? false,
     leftClickSlot: settings?.realtime_left_click_slot ?? DEFAULT_REALTIME_DRAFT.leftClickSlot,
     rightClickAction: settings?.realtime_right_click_action === "skill" ? "skill" : "attack",
     rightClickSlot: settings?.realtime_right_click_slot ?? DEFAULT_REALTIME_DRAFT.rightClickSlot,
@@ -88,6 +91,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
     setSavingCombat(true);
     const source = store.combatSettings ?? player?.combat_settings;
     const settings: AutoCombatConfig = {
+      pvp_enabled: combatDraft.pvpEnabled,
       realtime_left_click_slot: combatDraft.leftClickSlot,
       realtime_right_click_action: combatDraft.rightClickAction,
       realtime_right_click_slot: combatDraft.rightClickAction === "skill" ? combatDraft.rightClickSlot : 0,
@@ -173,6 +177,24 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
           <SkillLoadoutEditor />
 
           {player && <HotbarKeybindEditor player={player} />}
+
+          <section className="rounded-2xl border border-rose-900/50 bg-rose-950/20 p-3 sm:p-4">
+            <label className="flex items-start justify-between gap-3">
+              <span>
+                <span className="block font-serif text-sm font-bold text-rose-200">Chủ động tham chiến PvP</span>
+                <span className="mt-1 block text-[11px] text-zinc-400">
+                  Chỉ có hiệu lực trên bản đồ cho phép PvP. Khi bật, người chơi khác có thể tấn công bạn kể cả khi họ đang tắt PvP. Cả hai cùng tắt thì không thể đánh nhau.
+                </span>
+              </span>
+              <input
+                aria-label="Bật tham chiến PvP"
+                className="mt-1 h-4 w-4 accent-rose-500"
+                type="checkbox"
+                checked={combatDraft.pvpEnabled}
+                onChange={(event) => setCombatDraft((value) => ({ ...value, pvpEnabled: event.target.checked }))}
+              />
+            </label>
+          </section>
 
           <section className="rounded-2xl border border-zinc-900 bg-zinc-900/40 p-3 sm:p-4">
             <h3 className="font-serif text-sm font-bold text-zinc-100">Điều khiển chuột & phím</h3>

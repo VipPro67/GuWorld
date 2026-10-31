@@ -99,8 +99,8 @@ func TestPreviewMapParsesAndBlocksBorders(t *testing.T) {
 	if loaded.ID != "realtime_preview" || loaded.Version != "regions-v1" || loaded.ContentVersion != "region-content-v1" || loaded.Width != 64 || loaded.Height != 48 {
 		t.Fatalf("unexpected map identity: %+v", loaded)
 	}
-	if loaded.Ruleset != "pve" {
-		t.Fatalf("ruleset=%q, want pve", loaded.Ruleset)
+	if loaded.Ruleset != "pvp" {
+		t.Fatalf("ruleset=%q, want pvp", loaded.Ruleset)
 	}
 	if loaded.Hash == "" {
 		t.Fatal("map hash is empty")

@@ -30,6 +30,7 @@ export interface HudTarget {
   name: string;
   templateId: string;
   aiState: string;
+  pvpEnabled?: boolean;
 }
 
 export interface MMOHudProps {
@@ -892,6 +893,7 @@ export function MMOHud(props: MMOHudProps) {
                     <span className="rounded bg-sky-950/80 text-sky-300 border border-sky-500/40 px-1.5 py-0.2 text-[9px] font-semibold">
                       Cổ Sư Đồng Đạo
                     </span>
+                    {props.target.pvpEnabled && <span className="rounded bg-rose-950/80 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 text-[9px] font-semibold">⚔ Đang tham chiến</span>}
                   </div>
                 </div>
               </div>
@@ -1006,9 +1008,9 @@ export function MMOHud(props: MMOHudProps) {
                     <span className="rounded bg-sky-950/90 text-sky-300 border border-sky-500/50 px-1.5 py-0.5 font-semibold text-[9px]">
                       Cổ Sư Đồng Đạo
                     </span>
-                    <span className="rounded bg-emerald-950/70 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 text-[9px]">
-                      Hòa Bình
-                    </span>
+                    {props.target.pvpEnabled
+                      ? <span className="rounded bg-rose-950/80 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 text-[9px]">⚔ Đang tham chiến</span>
+                      : <span className="rounded bg-emerald-950/70 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 text-[9px]">Đang tắt PvP</span>}
                   </div>
                 </div>
               </div>

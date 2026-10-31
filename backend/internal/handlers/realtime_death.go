@@ -61,7 +61,9 @@ func HandleRealtimePlayerDeath(ctx context.Context, death realtimeworld.DeathEve
 	}
 
 	beforeGus := append(models.GuInventory(nil), player.GuInventory...)
-	dropSummary := applyDeathDrop(tx, &player, winnerID, false, DeathPos{
+	// Realtime player deaths are PvP kills: award the victor Sát Khí using
+	// the same rules as the legacy PvP settlement path.
+	dropSummary := applyDeathDrop(tx, &player, winnerID, winnerID != nil, DeathPos{
 		Region: deathRegion, X: deathX, Y: deathY, KillerName: killerName,
 	})
 	reduceSatKhiOnDeath(tx, playerID)
@@ -106,6 +108,14 @@ func HandleRealtimePlayerDeath(ctx context.Context, death realtimeworld.DeathEve
 	}
 	setWorldPosFromPlayer(&player)
 	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	if winnerID != nil {
+		// Transactional notification inserts are intentionally not broadcast
+		// before commit. Send post-commit events so the killer sees both the
+		// updated Sát Khí and the PvP result without waiting for a page refresh.
+		PublishPlayerRealtimeEvent(*winnerID, PlayerEventUpdated)
+		_ = notify.Send(db.DB, *winnerID, "pvp_kill", "Hạ gục người chơi",
+			fmt.Sprintf("Bạn đã hạ gục [%s]. Sát Khí của bạn đã tăng. %s", player.Username, dropSummary))
+	}
 	message := "Đạo hữu đã bị hạ gục. " + respawn.Message()
 	if dropSummary != "" {
 		message = fmt.Sprintf("Đạo hữu đã bị hạ gục và rơi rớt mất: %s. %s", dropSummary, respawn.Message())

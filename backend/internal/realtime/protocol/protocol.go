@@ -154,6 +154,7 @@ type EntityState struct {
 	Revision    uint64   `json:"entity_revision"`
 	Kind        string   `json:"kind,omitempty"`
 	PartyID     string   `json:"party_id,omitempty"`
+	PvPEnabled  bool     `json:"pvp_enabled,omitempty"`
 	TemplateID  string   `json:"template_id,omitempty"`
 	Name        string   `json:"name,omitempty"`
 	AIState     string   `json:"ai_state,omitempty"`

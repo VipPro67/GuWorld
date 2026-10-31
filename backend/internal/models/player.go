@@ -169,6 +169,7 @@ type VisitedSubZonesList []string
 
 // AutoCombatConfig stores realtime combat controls and client auto-farm policy.
 type AutoCombatConfig struct {
+	PvPEnabled               bool    `json:"pvp_enabled"`
 	RealtimeLeftClickSlot    int     `json:"realtime_left_click_slot"`
 	RealtimeRightClickAction string  `json:"realtime_right_click_action"`
 	RealtimeRightClickSlot   int     `json:"realtime_right_click_slot"`

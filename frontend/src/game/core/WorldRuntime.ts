@@ -42,6 +42,7 @@ export interface RuntimeEntity {
   id: string;
   kind: "player" | "monster";
   partyId: string;
+  pvpEnabled: boolean;
   x: number;
   y: number;
   hp: number;
@@ -378,6 +379,7 @@ export class WorldRuntime {
       const maxHp = entity.max_hp ?? 100;
       const kind = entity.kind ?? "player";
       const partyId = entity.party_id ?? "";
+      const pvpEnabled = entity.pvp_enabled ?? false;
       const shield = entity.shield ?? 0;
       const presentation = {
         templateId: entity.template_id ?? "",
@@ -391,11 +393,11 @@ export class WorldRuntime {
       };
       if (entity.entity_id === this.selfId) {
         const position = this.predictor.getPosition();
-        entities.push({ id: entity.entity_id, kind, partyId, x: position.x, y: position.y, hp: entity.hp, maxHp, shield, isSelf: true, ...presentation });
+        entities.push({ id: entity.entity_id, kind, partyId, pvpEnabled, x: position.x, y: position.y, hp: entity.hp, maxHp, shield, isSelf: true, ...presentation });
         continue;
       }
       const position = this.interpolator.positionAt(entity.entity_id, renderTick) ?? { x: entity.x, y: entity.y };
-      entities.push({ id: entity.entity_id, kind, partyId, x: position.x, y: position.y, hp: entity.hp, maxHp, shield, isSelf: false, ...presentation });
+      entities.push({ id: entity.entity_id, kind, partyId, pvpEnabled, x: position.x, y: position.y, hp: entity.hp, maxHp, shield, isSelf: false, ...presentation });
     }
     return entities;
   }

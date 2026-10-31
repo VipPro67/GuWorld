@@ -72,8 +72,8 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/player/clear-stress` |
 | GET | `/player/profile/:username` |
 | PUT | `/player/profile/settings` | Cập nhật hồ sơ (bio, avatar, mật khẩu, ngụy trang). Username không trùng nhau dù khác hoa/thường; nhập tên người chơi tại các tính năng được hỗ trợ cũng không phân biệt hoa/thường. Đổi tên khác biệt thực sự: Rank 1-2 miễn phí; Rank 3-5 tốn Nguyên Thạch (5k/20k/100k); Rank 6-9 tốn Tiên Nguyên Thạch (100/500/2.5k/10k), tụt Đạo Ngân & Chân Ý Lưu Phái (-30%/-40%/-50%/-70%), tổn hại Tiên Khiếu và phát thông báo Thế Giới (không tụt tiểu cảnh giới). |
-| GET | `/player/combat-settings` | Đọc cấu hình điều khiển realtime và tự farm: click trái/phải, bật tự farm, tầm farm, ngưỡng dừng theo HP và dùng kỹ năng theo hotbar. Không còn chiến thuật tự động turn-based. |
-| PUT | `/player/combat-settings` | Lưu các trường điều khiển realtime và tự farm tương ứng; danh sách Cổ realtime cấu hình riêng qua `/inventory/realtime-hotbar`, thứ tự Sát Chiêu/Trận Kích Tiên Cổ Ốc trong ô 9–12 cấu hình qua `/combat/skill-loadout`. |
+| GET | `/player/combat-settings` | Đọc cài đặt điều khiển realtime, tự farm và `pvp_enabled` (chủ động tham chiến PvP). PvP cá nhân chỉ có hiệu lực trên bản đồ `pvp`; bản đồ `safe`/`pve` luôn chặn. Không còn chiến thuật tự động turn-based. |
+| PUT | `/player/combat-settings` | Lưu cài đặt điều khiển realtime, tự farm và `pvp_enabled`; khi bật PvP trên bản đồ PvP, người chơi khác có thể tấn công nhân vật kể cả khi họ tắt PvP. Danh sách Cổ realtime cấu hình riêng qua `/inventory/realtime-hotbar`, thứ tự Sát Chiêu/Trận Kích Tiên Cổ Ốc trong ô 9–12 cấu hình qua `/combat/skill-loadout`. |
 | GET | `/player/referrals` |
 | POST | `/player/referrals/claim` |
 | POST | `/player/referrals/bind` |
