@@ -1040,7 +1040,11 @@ func applyCustomSkillProfile(active *realtimeeffects.ActiveProfile, custom model
 		if maxStacks == 0 {
 			maxStacks = 1
 		}
-		debuff := custom.StatusID != "HASTE"
+		// A speed multiplier above 1 is a movement buff, never a debuff; the
+		// compile validation (debuff=false, REFRESH, max_stacks=1) enforces the
+		// same invariant for boosted speeds.
+		boostsSpeed := moveMult != nil && *moveMult > 1
+		debuff := !boostsSpeed && custom.StatusID != "HASTE"
 		if custom.StatusDebuff != nil {
 			debuff = *custom.StatusDebuff
 		}

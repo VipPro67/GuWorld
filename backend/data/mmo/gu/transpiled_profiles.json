@@ -16751,7 +16751,36 @@
     {
       "gu_id": "GU_CHANGE_FORM",
       "rank": 5,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "shape": "CIRCLE",
+        "windup_ms": 300,
+        "recovery_ms": 100,
+        "cooldown_ms": 4000,
+        "range_units": 0,
+        "mana_cost": 35,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "effects": [
+          {
+            "type": "SHIELD",
+            "value": 500
+          },
+          {
+            "type": "CLEANSE"
+          },
+          {
+            "type": "STATUS",
+            "status_id": "STEALTH",
+            "duration_ms": 15000,
+            "move_multiplier": 1.3,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "DOT"
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -16765,7 +16794,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/formation"
+        "icon": "gu/change_form",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/shield"
       }
     },
     {
@@ -34201,7 +34232,29 @@
     {
       "gu_id": "GU_EAGLE_WINGS",
       "rank": 3,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "shape": "CIRCLE",
+        "windup_ms": 200,
+        "recovery_ms": 100,
+        "cooldown_ms": 2000,
+        "range_units": 0,
+        "mana_cost": 15,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "effects": [
+          {
+            "type": "STATUS",
+            "status_id": "FLYING",
+            "duration_ms": 15000,
+            "move_multiplier": 1.35,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "DOT"
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -34220,7 +34273,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/formation"
+        "icon": "gu/eagle_wings",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/ground_burst"
       }
     },
     {
@@ -110446,7 +110501,24 @@
     {
       "gu_id": "GU_TRANSFORM_CHIMERA_5",
       "rank": 5,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "shape": "CIRCLE",
+        "windup_ms": 500,
+        "recovery_ms": 100,
+        "cooldown_ms": 5000,
+        "range_units": 0,
+        "mana_cost": 40,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "player_atk_ratio": 1.5,
+        "effects": [
+          {
+            "type": "SHIELD",
+            "value": 600
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -110465,7 +110537,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/formation"
+        "icon": "gu/transformation_chimera",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/shield"
       }
     },
     {
@@ -110751,7 +110825,33 @@
     {
       "gu_id": "GU_TRANSFORM_EAGLE_4",
       "rank": 4,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "shape": "CIRCLE",
+        "windup_ms": 400,
+        "recovery_ms": 100,
+        "cooldown_ms": 3000,
+        "range_units": 0,
+        "mana_cost": 25,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "effects": [
+          {
+            "type": "SHIELD",
+            "value": 250
+          },
+          {
+            "type": "STATUS",
+            "status_id": "FLYING",
+            "duration_ms": 20000,
+            "move_multiplier": 1.45,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "DOT"
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -110770,7 +110870,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/formation"
+        "icon": "gu/transformation_eagle",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/shield"
       }
     },
     {
@@ -111018,7 +111120,32 @@
     {
       "gu_id": "GU_TRANSFORM_FISH_2",
       "rank": 2,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "shape": "CIRCLE",
+        "windup_ms": 150,
+        "recovery_ms": 100,
+        "cooldown_ms": 1200,
+        "range_units": 0,
+        "mana_cost": 10,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "effects": [
+          {
+            "type": "SHIELD",
+            "value": 80
+          },
+          {
+            "type": "STATUS",
+            "status_id": "EVASION",
+            "duration_ms": 6000,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": true,
+            "pvp_dr_category": "DOT"
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -111032,7 +111159,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/formation"
+        "icon": "gu/transformation_fish",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/shield"
       }
     },
     {
@@ -111058,7 +111187,29 @@
     {
       "gu_id": "GU_TRANSFORM_WOLF_1",
       "rank": 1,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "shape": "CIRCLE",
+        "windup_ms": 100,
+        "recovery_ms": 100,
+        "cooldown_ms": 1000,
+        "range_units": 0,
+        "mana_cost": 6,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "effects": [
+          {
+            "type": "STATUS",
+            "status_id": "FORM_WOLF_PARTIAL",
+            "duration_ms": 10000,
+            "move_multiplier": 1.25,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "DOT"
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -111072,7 +111223,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/formation"
+        "icon": "gu/transformation_wolf",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/ground_burst"
       }
     },
     {
