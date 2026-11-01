@@ -36,11 +36,11 @@ export const MENU_THEME_PRESETS: Array<{
   desc: string;
 }> = [
   { id: "default", name: "Hoàng Giấy", color: "#211810", desc: "Cổ điển trầm ấm" },
-  { id: "dark", name: "Huyền Mặc", color: "#111116", desc: "U minh sâu thẳm" },
-  { id: "jade", name: "Thanh Trúc", color: "#0c1a14", desc: "Ngọc bích tiên môn" },
-  { id: "ocean", name: "Hàn Băng", color: "#0b1522", desc: "U lam tĩnh mịch" },
-  { id: "crimson", name: "Xích Sa", color: "#1e0b0e", desc: "Huyết ma quyền uy" },
-  { id: "purple", name: "Tử Khí", color: "#170e1e", desc: "Tím thẫm tôn quý" },
+  { id: "purple", name: "Tử Khí", color: "#261338", desc: "Tím thẫm tôn quý" },
+  { id: "jade", name: "Thanh Trúc", color: "#0f2b20", desc: "Ngọc bích tiên môn" },
+  { id: "ocean", name: "Hàn Băng", color: "#11263d", desc: "U lam tĩnh mịch" },
+  { id: "crimson", name: "Xích Sa", color: "#331217", desc: "Huyết ma quyền uy" },
+  { id: "dark", name: "Huyền Mặc", color: "#16171c", desc: "U minh sâu thẳm" },
 ];
 
 export const DEFAULT_MENU_COLOR: MenuColorConfig = {
@@ -226,52 +226,228 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   return null;
 }
 
-export function resolveActiveMenuColor(config?: MenuColorConfig): {
-  hex: string;
-  rgb: { r: number; g: number; b: number };
-  opacity: number;
+interface ThemeTokens {
+  bg: string;
+  gradient1: string;
+  gradient2: string;
+  headingBg: string;
+  border: string;
+  borderSoft: string;
+  glow: string;
+  zinc950: string;
+  zinc900: string;
+  zinc800: string;
+  surface: string;
+  elevated: string;
+  accent: string;
+  tabActive: string;
+}
+
+const PRESET_TOKENS: Record<Exclude<MenuThemePreset, "custom">, ThemeTokens> = {
+  default: {
+    bg: "#211810",
+    gradient1: "rgba(33, 24, 16, 0.94)",
+    gradient2: "rgba(42, 30, 20, 0.96)",
+    headingBg: "linear-gradient(180deg, rgba(91, 64, 39, 0.98) 0%, rgba(54, 38, 25, 0.98) 100%)",
+    border: "#8c6c40",
+    borderSoft: "rgba(168, 137, 82, 0.72)",
+    glow: "rgba(238, 211, 158, 0.12)",
+    zinc950: "#130e0a",
+    zinc900: "#211810",
+    zinc800: "#302318",
+    surface: "#241a12",
+    elevated: "#352618",
+    accent: "#e4b96c",
+    tabActive: "#6b4728",
+  },
+  purple: {
+    bg: "#261338",
+    gradient1: "rgba(38, 19, 56, 0.94)",
+    gradient2: "rgba(48, 24, 70, 0.96)",
+    headingBg: "linear-gradient(180deg, rgba(92, 38, 138, 0.98) 0%, rgba(52, 20, 78, 0.98) 100%)",
+    border: "#8748b5",
+    borderSoft: "rgba(168, 105, 215, 0.72)",
+    glow: "rgba(216, 180, 254, 0.2)",
+    zinc950: "#160a22",
+    zinc900: "#2c1742",
+    zinc800: "#4c2472",
+    surface: "#28143b",
+    elevated: "#3a1c56",
+    accent: "#c084fc",
+    tabActive: "#5b21b6",
+  },
+  jade: {
+    bg: "#0f2b20",
+    gradient1: "rgba(15, 43, 32, 0.94)",
+    gradient2: "rgba(20, 56, 42, 0.96)",
+    headingBg: "linear-gradient(180deg, rgba(32, 95, 72, 0.98) 0%, rgba(18, 55, 40, 0.98) 100%)",
+    border: "#2d8a63",
+    borderSoft: "rgba(64, 180, 130, 0.72)",
+    glow: "rgba(110, 231, 183, 0.2)",
+    zinc950: "#081812",
+    zinc900: "#14392b",
+    zinc800: "#225841",
+    surface: "#133527",
+    elevated: "#1c4a37",
+    accent: "#34d399",
+    tabActive: "#065f46",
+  },
+  ocean: {
+    bg: "#11263d",
+    gradient1: "rgba(17, 38, 61, 0.94)",
+    gradient2: "rgba(23, 50, 80, 0.96)",
+    headingBg: "linear-gradient(180deg, rgba(36, 85, 138, 0.98) 0%, rgba(20, 48, 80, 0.98) 100%)",
+    border: "#367cb4",
+    borderSoft: "rgba(75, 155, 220, 0.72)",
+    glow: "rgba(147, 197, 253, 0.2)",
+    zinc950: "#091523",
+    zinc900: "#173250",
+    zinc800: "#244e7c",
+    surface: "#142d48",
+    elevated: "#1e3f65",
+    accent: "#60a5fa",
+    tabActive: "#1e40af",
+  },
+  crimson: {
+    bg: "#331217",
+    gradient1: "rgba(51, 18, 23, 0.94)",
+    gradient2: "rgba(65, 23, 30, 0.96)",
+    headingBg: "linear-gradient(180deg, rgba(118, 38, 48, 0.98) 0%, rgba(68, 20, 28, 0.98) 100%)",
+    border: "#9d3644",
+    borderSoft: "rgba(195, 75, 90, 0.72)",
+    glow: "rgba(252, 165, 165, 0.2)",
+    zinc950: "#1d0a0d",
+    zinc900: "#3d171c",
+    zinc800: "#5f222c",
+    surface: "#38141a",
+    elevated: "#4d1c24",
+    accent: "#f87171",
+    tabActive: "#991b1b",
+  },
+  dark: {
+    bg: "#16171c",
+    gradient1: "rgba(22, 23, 28, 0.94)",
+    gradient2: "rgba(30, 32, 38, 0.96)",
+    headingBg: "linear-gradient(180deg, rgba(62, 66, 78, 0.98) 0%, rgba(35, 37, 45, 0.98) 100%)",
+    border: "#525666",
+    borderSoft: "rgba(110, 115, 130, 0.72)",
+    glow: "rgba(226, 232, 240, 0.15)",
+    zinc950: "#0d0e11",
+    zinc900: "#1e2026",
+    zinc800: "#333641",
+    surface: "#1b1c22",
+    elevated: "#282a33",
+    accent: "#cbd5e1",
+    tabActive: "#334155",
+  },
+};
+
+function clampByte(val: number): number {
+  return Math.max(0, Math.min(255, Math.round(val)));
+}
+
+function adjustColor(rgb: { r: number; g: number; b: number }, factor: number, add = 0) {
+  return {
+    r: clampByte(rgb.r * factor + add),
+    g: clampByte(rgb.g * factor + add),
+    b: clampByte(rgb.b * factor + add),
+  };
+}
+
+function toRgbString(rgb: { r: number; g: number; b: number }): string {
+  return `${rgb.r}, ${rgb.g}, ${rgb.b}`;
+}
+
+function toHexString(rgb: { r: number; g: number; b: number }): string {
+  const pad = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${pad(rgb.r)}${pad(rgb.g)}${pad(rgb.b)}`;
+}
+
+export function resolveActiveMenuTokens(config?: MenuColorConfig): {
+  tokens: ThemeTokens;
   enableTexture: boolean;
+  opacity: number;
 } {
   const cfg = config ?? getUiPreferences().menuColor;
-  let hex = DEFAULT_MENU_COLOR.customBgColor;
-  if (cfg.preset === "custom") {
-    hex = cfg.customBgColor || DEFAULT_MENU_COLOR.customBgColor;
-  } else {
-    const found = MENU_THEME_PRESETS.find((p) => p.id === cfg.preset);
-    hex = found ? found.color : DEFAULT_MENU_COLOR.customBgColor;
-  }
-  const rgb = hexToRgb(hex) ?? { r: 33, g: 24, b: 16 };
   const opacity = Math.min(100, Math.max(50, Number(cfg.opacity) || 96));
   const enableTexture = cfg.enableTexture !== false;
-  return { hex, rgb, opacity, enableTexture };
+
+  if (cfg.preset !== "custom" && PRESET_TOKENS[cfg.preset]) {
+    const base = PRESET_TOKENS[cfg.preset];
+    const alpha1 = (opacity / 100).toFixed(2);
+    const alpha2 = Math.min(1, opacity / 100 + 0.02).toFixed(2);
+    const rgb = hexToRgb(base.bg) ?? { r: 33, g: 24, b: 16 };
+    const r2 = clampByte(rgb.r + 8);
+    const g2 = clampByte(rgb.g + 6);
+    const b2 = clampByte(rgb.b + 4);
+
+    return {
+      tokens: {
+        ...base,
+        gradient1: `rgba(${toRgbString(rgb)}, ${alpha1})`,
+        gradient2: `rgba(${r2}, ${g2}, ${b2}, ${alpha2})`,
+      },
+      enableTexture,
+      opacity,
+    };
+  }
+
+  // Custom Hex Theme Calculation
+  const customRgb = hexToRgb(cfg.customBgColor || "#211810") ?? { r: 33, g: 24, b: 16 };
+  const alpha1 = (opacity / 100).toFixed(2);
+  const alpha2 = Math.min(1, opacity / 100 + 0.02).toFixed(2);
+
+  const z950 = adjustColor(customRgb, 0.6);
+  const z900 = adjustColor(customRgb, 1.0);
+  const z800 = adjustColor(customRgb, 1.5, 15);
+  const surf = adjustColor(customRgb, 1.1, 5);
+  const elev = adjustColor(customRgb, 1.35, 10);
+  const bord = adjustColor(customRgb, 2.0, 30);
+  const bordSoft = adjustColor(customRgb, 1.8, 20);
+  const head1 = adjustColor(customRgb, 1.9, 25);
+  const head2 = adjustColor(customRgb, 1.3, 10);
+  const acc = adjustColor(customRgb, 2.5, 50);
+  const tab = adjustColor(customRgb, 1.7, 20);
+
+  const tokens: ThemeTokens = {
+    bg: toHexString(customRgb),
+    gradient1: `rgba(${toRgbString(customRgb)}, ${alpha1})`,
+    gradient2: `rgba(${toRgbString(adjustColor(customRgb, 1.15, 6))}, ${alpha2})`,
+    headingBg: `linear-gradient(180deg, rgba(${toRgbString(head1)}, 0.98) 0%, rgba(${toRgbString(head2)}, 0.98) 100%)`,
+    border: toHexString(bord),
+    borderSoft: `rgba(${toRgbString(bordSoft)}, 0.72)`,
+    glow: `rgba(${toRgbString(acc)}, 0.2)`,
+    zinc950: toHexString(z950),
+    zinc900: toHexString(z900),
+    zinc800: toHexString(z800),
+    surface: toHexString(surf),
+    elevated: toHexString(elev),
+    accent: toHexString(acc),
+    tabActive: toHexString(tab),
+  };
+
+  return { tokens, enableTexture, opacity };
 }
 
 export function applyMenuThemeToCss(config?: MenuColorConfig) {
   if (typeof document === "undefined") return;
-  const { hex, rgb, opacity, enableTexture } = resolveActiveMenuColor(config);
+  const { tokens, enableTexture } = resolveActiveMenuTokens(config);
   const root = document.documentElement;
 
-  const alpha1 = (opacity / 100).toFixed(2);
-  const alpha2 = Math.min(1, opacity / 100 + 0.02).toFixed(2);
-
-  const r2 = Math.min(255, rgb.r + 6);
-  const g2 = Math.min(255, rgb.g + 4);
-  const b2 = Math.min(255, rgb.b + 3);
-
-  const hr1 = Math.min(255, Math.round(rgb.r * 1.8 + 20));
-  const hg1 = Math.min(255, Math.round(rgb.g * 1.8 + 15));
-  const hb1 = Math.min(255, Math.round(rgb.b * 1.8 + 10));
-  const hr2 = Math.min(255, Math.round(rgb.r * 1.3 + 10));
-  const hg2 = Math.min(255, Math.round(rgb.g * 1.3 + 8));
-  const hb2 = Math.min(255, Math.round(rgb.b * 1.3 + 5));
-
-  root.style.setProperty("--mmo-menu-bg", hex);
-  root.style.setProperty("--mmo-menu-gradient-1", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha1})`);
-  root.style.setProperty("--mmo-menu-gradient-2", `rgba(${r2}, ${g2}, ${b2}, ${alpha2})`);
-  root.style.setProperty(
-    "--mmo-menu-heading-bg",
-    `linear-gradient(180deg, rgba(${hr1}, ${hg1}, ${hb1}, 0.98), rgba(${hr2}, ${hg2}, ${hb2}, 0.98))`
-  );
+  root.style.setProperty("--mmo-menu-bg", tokens.bg);
+  root.style.setProperty("--mmo-menu-gradient-1", tokens.gradient1);
+  root.style.setProperty("--mmo-menu-gradient-2", tokens.gradient2);
+  root.style.setProperty("--mmo-menu-heading-bg", tokens.headingBg);
+  root.style.setProperty("--mmo-menu-border", tokens.border);
+  root.style.setProperty("--mmo-menu-border-soft", tokens.borderSoft);
+  root.style.setProperty("--mmo-menu-glow", tokens.glow);
+  root.style.setProperty("--mmo-theme-zinc-950", tokens.zinc950);
+  root.style.setProperty("--mmo-theme-zinc-900", tokens.zinc900);
+  root.style.setProperty("--mmo-theme-zinc-800", tokens.zinc800);
+  root.style.setProperty("--mmo-theme-surface", tokens.surface);
+  root.style.setProperty("--mmo-theme-elevated", tokens.elevated);
+  root.style.setProperty("--mmo-menu-accent", tokens.accent);
+  root.style.setProperty("--mmo-menu-tab-active", tokens.tabActive);
   root.style.setProperty(
     "--mmo-menu-texture",
     enableTexture ? 'url("/assets/ui/guworld-rice-paper.webp?v=1")' : "none"

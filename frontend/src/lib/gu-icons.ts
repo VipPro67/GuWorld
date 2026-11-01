@@ -1,6 +1,8 @@
 /**
- * Gu icon resolver based on the extracted 438-icon official game atlas.
+ * Gu icon resolver with a generated family atlas and legacy icon fallbacks.
  */
+
+import { GU_FAMILY_ICON_SPRITES } from "./gu-family-icons";
 
 export const AVAILABLE_GU_ICONS: Set<string> = new Set([
   "gu_a_thi",
@@ -533,6 +535,11 @@ export function getGuIconUrl(guId?: string | null, guName?: string | null): stri
     if (CUSTOM_GU_ICONS[guId]) return CUSTOM_GU_ICONS[guId];
     const directId = guId.toLowerCase().trim();
     if (CUSTOM_GU_ICONS[directId]) return CUSTOM_GU_ICONS[directId];
+    // Gu data IDs encode rank as a trailing number or Roman numeral. Resolve
+    // those variants to the same newly authored family icon.
+    const familyId = guId.toUpperCase().trim().replace(/_(?:[1-9]|I|II|III|IV|V|VI|VII|VIII|IX)$/, "");
+    const atlasSprite = GU_FAMILY_ICON_SPRITES[familyId];
+    if (atlasSprite) return `/assets/gu_icons/families/${atlasSprite}`;
     if (AVAILABLE_GU_ICONS.has(directId)) return `/assets/gu_icons/${directId}.png`;
     if (AVAILABLE_GU_ICONS.has(`gu_${directId}`)) return `/assets/gu_icons/gu_${directId}.png`;
     if (directId.startsWith("gu_")) {
@@ -578,6 +585,8 @@ export function hasGuIcon(guId?: string | null, guName?: string | null): boolean
   if (guId) {
     if (CUSTOM_GU_ICONS[guId] || CUSTOM_GU_ICONS[guId.toLowerCase().trim()]) return true;
     const directId = guId.toLowerCase().trim();
+    const familyId = guId.toUpperCase().trim().replace(/_(?:[1-9]|I|II|III|IV|V|VI|VII|VIII|IX)$/, "");
+    if (GU_FAMILY_ICON_SPRITES[familyId]) return true;
     if (AVAILABLE_GU_ICONS.has(directId) || AVAILABLE_GU_ICONS.has(`gu_${directId}`)) return true;
     if (directId.startsWith("gu_") && AVAILABLE_GU_ICONS.has(directId.slice(3))) return true;
   }

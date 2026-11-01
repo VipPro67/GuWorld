@@ -361,12 +361,12 @@ export default function Home() {
                   role="dialog"
                   aria-modal="true"
                   aria-label={viewTitles[currentView] || "Chức năng"}
-                  className={`mmo-panel-theme mmo-paper-theme mmo-paper-surface relative flex h-full w-full flex-col overflow-hidden text-[#49331f] ${isFullBleedView ? "" : `md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:rounded-2xl ${isWideFeatureView ? "md:w-[min(76vw,1100px)]" : "md:w-[min(64vw,820px)]"}`}`}
+                  className={`mmo-panel-theme mmo-paper-theme mmo-paper-surface relative flex h-full w-full flex-col overflow-hidden text-[var(--text-primary,#f4e8cb)] ${isFullBleedView ? "" : `md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:rounded-2xl ${isWideFeatureView ? "md:w-[min(76vw,1100px)]" : "md:w-[min(64vw,820px)]"}`}`}
                 >
                   {!isFullBleedView && (
                   <div className="mmo-paper-heading flex min-h-14 shrink-0 items-center justify-between gap-3 px-4 sm:px-5">
                     <div className="min-w-0">
-                      <div className="truncate font-serif text-base font-semibold text-[#49331f]">{viewTitles[currentView] || "Chức năng"}</div>
+                      <div className="truncate font-serif text-base font-semibold text-[var(--text-primary,#f4e8cb)]">{viewTitles[currentView] || "Chức năng"}</div>
                       <div className="hidden text-[10px] uppercase tracking-[.2em] text-[#795a34] sm:block">Cổ Giới · Bảng điều khiển</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">

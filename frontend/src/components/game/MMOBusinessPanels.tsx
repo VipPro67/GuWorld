@@ -51,13 +51,13 @@ export function MMOBusinessPanels({ panel, onClose, onLoadoutSaved, position }: 
         role="dialog"
         aria-modal="true"
         aria-label={meta.title}
-        className="mmo-panel-theme mmo-paper-theme mmo-paper-surface relative z-10 flex h-full w-full flex-col border border-[#80603a] text-[#49331f] md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:w-[min(92vw,1152px)] md:rounded-xl"
+        className="mmo-panel-theme mmo-paper-theme mmo-paper-surface relative z-10 flex h-full w-full flex-col border border-[var(--mmo-menu-border,#80603a)] text-[var(--text-primary,#f4e8cb)] md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:w-[min(92vw,1152px)] md:rounded-xl"
       >
         <header className="mmo-paper-heading flex h-14 shrink-0 items-center justify-between gap-3 px-4">
           <div className="flex items-center gap-2">
             <span className="mmo-paper-seal">令</span>
-            <Icon className="h-4 w-4 text-[#79542f]" />
-            <div className="font-serif text-base font-semibold text-[#49331f]">{meta.title}</div>
+            <Icon className="h-4 w-4 text-[var(--mmo-menu-accent,#e4b96c)]" />
+            <div className="font-serif text-base font-semibold text-[var(--text-primary,#f4e8cb)]">{meta.title}</div>
           </div>
           <div className="flex items-center gap-2">
             <ClearCacheButton className="text-[10px]" />

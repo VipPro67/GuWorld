@@ -130,17 +130,17 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
   return (
     <div className="space-y-4 text-sm text-zinc-300 font-serif">
       {/* Top Tab Switcher */}
-      <div className="flex border-b border-[#a88952]/30 pb-2 gap-1.5">
+      <div className="flex border-b border-[var(--mmo-menu-border-soft,rgba(168,137,82,0.3))] pb-2 gap-1.5">
         <button
           type="button"
           onClick={() => setActiveTab("quick_actions")}
           className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition ${
             activeTab === "quick_actions"
-              ? "bg-[#6b4728] text-amber-200 border border-[#b89456] shadow-sm"
-              : "bg-[#251a12]/60 text-zinc-400 hover:text-[#f4e8cb] hover:bg-[#342419]"
+              ? "bg-[var(--mmo-menu-tab-active,#6b4728)] text-white border border-[var(--mmo-menu-accent,#b89456)] shadow-sm"
+              : "bg-[var(--mmo-theme-surface,#251a12)]/60 text-zinc-400 hover:text-[#f4e8cb] hover:bg-[var(--mmo-theme-elevated,#342419)]"
           }`}
         >
-          <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+          <Sparkles className="h-3.5 w-3.5 text-[var(--mmo-menu-accent,#fbbf24)]" />
           Tiện ích
         </button>
 
@@ -149,11 +149,11 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
           onClick={() => setActiveTab("combat")}
           className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition ${
             activeTab === "combat"
-              ? "bg-[#6b4728] text-amber-200 border border-[#b89456] shadow-sm"
-              : "bg-[#251a12]/60 text-zinc-400 hover:text-[#f4e8cb] hover:bg-[#342419]"
+              ? "bg-[var(--mmo-menu-tab-active,#6b4728)] text-white border border-[var(--mmo-menu-accent,#b89456)] shadow-sm"
+              : "bg-[var(--mmo-theme-surface,#251a12)]/60 text-zinc-400 hover:text-[#f4e8cb] hover:bg-[var(--mmo-theme-elevated,#342419)]"
           }`}
         >
-          <Swords className="h-3.5 w-3.5 text-amber-400" />
+          <Swords className="h-3.5 w-3.5 text-[var(--mmo-menu-accent,#fbbf24)]" />
           Chiến đấu & Điều khiển
         </button>
 
@@ -162,11 +162,11 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
           onClick={() => setActiveTab("general")}
           className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition ${
             activeTab === "general"
-              ? "bg-[#6b4728] text-amber-200 border border-[#b89456] shadow-sm"
-              : "bg-[#251a12]/60 text-zinc-400 hover:text-[#f4e8cb] hover:bg-[#342419]"
+              ? "bg-[var(--mmo-menu-tab-active,#6b4728)] text-white border border-[var(--mmo-menu-accent,#b89456)] shadow-sm"
+              : "bg-[var(--mmo-theme-surface,#251a12)]/60 text-zinc-400 hover:text-[#f4e8cb] hover:bg-[var(--mmo-theme-elevated,#342419)]"
           }`}
         >
-          <Sliders className="h-3.5 w-3.5 text-amber-400" />
+          <Sliders className="h-3.5 w-3.5 text-[var(--mmo-menu-accent,#fbbf24)]" />
           Cài đặt Chung
         </button>
       </div>
@@ -379,7 +379,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
           {/* Tông màu Menu & Bảng giao diện */}
           <section className="rounded-2xl border border-zinc-900 bg-zinc-900/40 p-3 sm:p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Palette className="w-4 h-4 text-amber-400" />
+              <Palette className="w-4 h-4 text-[var(--mmo-menu-accent,#e4b96c)]" />
               <h3 className="font-serif text-sm font-bold text-zinc-100">Tông màu Menu & Bảng chức năng</h3>
             </div>
             <p className="text-xs text-zinc-400 mb-3">
@@ -404,7 +404,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                     }}
                     className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition ${
                       isSelected
-                        ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400/50"
+                        ? "border-[var(--mmo-menu-accent,#e4b96c)] bg-[var(--mmo-theme-surface,#28143b)] ring-1 ring-[var(--mmo-menu-accent,#e4b96c)]"
                         : "border-zinc-800/80 bg-zinc-950/40 hover:border-zinc-700 hover:bg-zinc-900/50"
                     }`}
                   >
@@ -412,10 +412,10 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                       className="w-5 h-5 rounded-full shrink-0 border border-white/20 shadow-inner flex items-center justify-center"
                       style={{ backgroundColor: p.color }}
                     >
-                      {isSelected && <Check className="w-3 h-3 text-amber-300 stroke-[3]" />}
+                      {isSelected && <Check className="w-3 h-3 text-[var(--mmo-menu-accent,#fbbf24)] stroke-[3]" />}
                     </span>
                     <div className="min-w-0">
-                      <div className={`text-xs font-bold leading-tight ${isSelected ? "text-amber-200" : "text-zinc-200"}`}>
+                      <div className={`text-xs font-bold leading-tight ${isSelected ? "text-[var(--mmo-menu-accent,#fbbf24)] font-extrabold" : "text-zinc-200"}`}>
                         {p.name}
                       </div>
                       <div className="text-[10px] text-zinc-400 truncate">{p.desc}</div>
