@@ -122,7 +122,9 @@ format và quy trình copy nằm trong `docs/mmo/map-format.md`. Monster spawn k
 được tạo lại mỗi khi instance được kích hoạt từ `monster_templates` và chạy AI server-owned. Combat preview dùng phím
 1–6 (`TARGET`/`DIRECTION`/`GROUND`/`SELF`), damage/projectile/AoE do server tính; PR-19 thêm
 status tick/DoT/HoT/stack/cleanse, freeze chặn di chuyển/cast và hidden passive preview
-(HP thấp + 3 hit → shield, ICD). HUD React lấy hotbar/mana/cooldown/cast từ snapshot; aim DIRECTION/GROUND
+(HP thấp + 3 hit → shield, ICD). Khiên người chơi decay 10%/giây trên zone tick
+(`sim.DecayedShield`) và checkpoint cũng được làm già theo `updated_at` khi vào lại.
+HUD React lấy hotbar/mana/cooldown/cast từ snapshot; aim DIRECTION/GROUND
 là hai bước (chọn skill → click xác nhận), projectile do server mô phỏng. Art combat hiện là placeholder
 procedural (`placeholder-1`) với animation idle/walk/cast/hit/death và VFX pool; xem
 `docs/mmo/assets.md`. Click-to-move dùng A* preview phía client rồi gửi từng waypoint

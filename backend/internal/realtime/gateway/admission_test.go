@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -660,6 +661,40 @@ func TestAdmissionResumesDurableCheckpointAndFlushesOnLeave(t *testing.T) {
 	}
 	if len(store.saved) != 1 || store.saved[0].HP != 88 || store.saved[0].ZoneID != "forest" || store.saved[0].MapVersion != "map-1" {
 		t.Fatalf("leave did not flush durable state: %+v", store.saved)
+	}
+}
+
+func TestAdmissionDecaysCheckpointShieldWhileOffline(t *testing.T) {
+	playerID, controllerID := uuid.New(), uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
+	manager := startTestManager(t, key, 2)
+	updatedAt := time.Now().Add(-time.Second)
+	store := &fakeStateStore{ok: true, state: persistence.State{
+		PlayerID: playerID, ZoneID: "forest", InstanceID: "realtime-preview",
+		X: 42.5, Y: 31.5, HP: 88, Shield: 7, SafeX: 42.5, SafeY: 31.5,
+		MapVersion: "map-1", ContentVersion: "content-1",
+		UpdatedAt: updatedAt,
+	}}
+	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", X: 1, Y: 2, HP: 70, BaseHP: 100}, nil
+	})
+	admission.SetStateStore(store)
+	result, err := admission.Join(context.Background(), playerID, controllerID, protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	welcome := result.(protocol.Welcome)
+	var snapshot protocol.Snapshot
+	if err := json.Unmarshal(welcome.Snapshot, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	entity := snapshot.Entities[0]
+	want := sim.DecayedShield(7, time.Since(updatedAt))
+	if math.Abs(entity.Shield-want) > 0.05 || entity.Shield >= 7 {
+		t.Fatalf("offline checkpoint shield was not aged: %+v, want %v", entity, want)
+	}
+	if err := admission.Leave(playerID, controllerID); err != nil {
+		t.Fatal(err)
 	}
 }
 

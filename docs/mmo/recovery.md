@@ -24,6 +24,10 @@ changes location.
 - **Join**: the gateway loads location from `players`. Map/content versions in
   the vitals checkpoint gate restoration of checkpoint HP/shield; legacy
   coordinates are transformed only when no realtime location has been committed.
+  Shield is temporary in the zone (`sim.DecayedShield`: 10% of the current
+  shield per second), so the restored value is aged by the checkpoint's
+  `updated_at` instead of being replayed verbatim; a barrier cannot survive a
+  logout.
   Blocked/out-of-map coordinates go through `Manager.SafeSpawn`. A configured
   store read failure denies join with
   `realtime_checkpoint_unavailable` rather than guessing.

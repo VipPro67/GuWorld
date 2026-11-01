@@ -289,6 +289,9 @@ export const combatPages: WikiPage[] = [
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
             Sinh mạng và khiên được mô phỏng trong world runtime. Khiên hấp thụ sát thương theo quy tắc profile; khi HP về 0, server xử lý hạ gục, respawn/settlement và lịch sử theo chế độ chiến đấu.
           </p>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Khiên ảo là tạm thời: mỗi giây mất <strong>10% giá trị hiện tại</strong> (dưới 1 thì về 0). Khiên còn lại trong checkpoint cũng tan dần theo thời gian offline, nên đăng nhập lại không khôi phục lớp khiên cũ.
+          </p>
           <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs leading-relaxed text-amber-300">
             💀 <strong>Tử Đạo (Chết rơi đồ):</strong> Khi bại trận dã ngoại, bỏ chạy ngất xỉu, hay thua PvP, đạo hữu sẽ đánh rơi một phần tài sản đang giữ: Nguyên Thạch, nguyên liệu, Cổ trùng (trừ Cổ đang trang bị & Bản Mệnh Cổ) và Bí phương.
           </div>

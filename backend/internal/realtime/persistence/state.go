@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -57,6 +58,10 @@ type State struct {
 	SyncLegacy          bool
 	LocationRevision    int64
 	HasLocationRevision bool
+	// UpdatedAt is when the vitals checkpoint was written. Reconnect uses it to
+	// age the restored shield; zero means the caller has no timestamp (tests,
+	// synthetic states) and the shield is restored as-is.
+	UpdatedAt time.Time
 	// Combat is the restorable zone combat state (cooldowns, statuses, hidden
 	// proc counters). Nil means "no durable combat state to restore".
 	Combat *CombatState
@@ -98,6 +103,7 @@ func (s *Service) Load(ctx context.Context, playerID uuid.UUID) (State, bool, er
 		       p.world_x, p.world_y, p.world_safe_x, p.world_safe_y,
 		       COALESCE(c.hp, 0), COALESCE(c.shield, 0),
 		       COALESCE(c.map_version, ''), COALESCE(c.content_version, ''),
+		       COALESCE(c.updated_at, NOW()),
 		       p.world_location_revision,
 		       COALESCE(cc.combat_state, '{}'::jsonb)
 		FROM players p
@@ -108,7 +114,7 @@ func (s *Service) Load(ctx context.Context, playerID uuid.UUID) (State, bool, er
 		&state.PlayerID, &state.RegionID, &state.ZoneID, &state.InstanceID,
 		&state.X, &state.Y, &state.SafeX, &state.SafeY,
 		&state.HP, &state.Shield, &state.MapVersion, &state.ContentVersion,
-		&state.LocationRevision, &combatJSON,
+		&state.UpdatedAt, &state.LocationRevision, &combatJSON,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return State{}, false, nil

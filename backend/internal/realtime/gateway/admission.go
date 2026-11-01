@@ -495,7 +495,13 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 				if durable.HP > 0 {
 					baseHP = durable.HP
 				}
+				// Shields decay on the zone tick, so a frozen checkpoint must be
+				// aged by the offline time before it is restored. A zero
+				// timestamp means the store did not report one; keep the value.
 				baseShield = durable.Shield
+				if !durable.UpdatedAt.IsZero() {
+					baseShield = sim.DecayedShield(durable.Shield, time.Since(durable.UpdatedAt))
+				}
 			}
 		}
 		// Cooldowns, statuses and hidden-proc counters follow the character

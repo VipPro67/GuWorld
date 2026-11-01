@@ -386,6 +386,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 }
 
 func (w *World) tickCombat() {
+	w.decayShieldsLocked()
 	for _, entity := range w.entities {
 		if entity.Kind != EntityPlayer || !entity.Combat.FormActive || entity.Vitals.HP <= 0 {
 			continue
