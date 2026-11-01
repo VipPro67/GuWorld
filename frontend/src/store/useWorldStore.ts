@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { BACKEND_URL } from "@/lib/config";
 import { authFetch } from "@/lib/auth";
-import { useGameStore } from "@/store/useGameStore";
+import { useGameStore, type ApertureResourcePoint } from "@/store/useGameStore";
 import { wsManager } from "@/lib/websocket";
 
 export interface NearbyVeinInfo {
@@ -50,11 +50,17 @@ interface WorldStoreState {
   nearbyCells: NearbyCell[];
   zoneMarkers: MapMarkerView[];
   zoneMarkersRegion: string | null;
+  /** Public mines of the current region (WORLD-scope resource points). */
+  resourcePoints: ApertureResourcePoint[];
+  resourcePointsRegion: string | null;
   loading: boolean;
   error: string | null;
 
   fetchNearbyCells: (x: number, y: number, radius: number) => Promise<boolean>;
   fetchZoneMarkers: (regionId: string) => Promise<boolean>;
+  fetchWorldResourcePoints: (regionId: string) => Promise<boolean>;
+  collectWorldResourcePoint: (pointId: string) => Promise<boolean>;
+  transplantWorldResourcePoint: (pointId: string) => Promise<boolean>;
   harvestVein: (veinId: string) => Promise<boolean>;
 }
 
@@ -62,6 +68,8 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   nearbyCells: [],
   zoneMarkers: [],
   zoneMarkersRegion: null,
+  resourcePoints: [],
+  resourcePointsRegion: null,
   loading: false,
   error: null,
 
@@ -121,6 +129,60 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       return true;
     } catch (err) {
       console.warn("fetchZoneMarkers failed:", err);
+      return false;
+    }
+  },
+
+  fetchWorldResourcePoints: async (regionId: string) => {
+    if (!regionId) return false;
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/immortal-aperture/world-points`);
+      if (!res.ok) throw new Error("Could not fetch world resource points");
+      const data = await res.json();
+      if (!Array.isArray(data)) return false;
+      set({ resourcePoints: data as ApertureResourcePoint[], resourcePointsRegion: regionId });
+      return true;
+    } catch (err) {
+      console.warn("fetchWorldResourcePoints failed:", err);
+      return false;
+    }
+  },
+
+  collectWorldResourcePoint: async (pointId: string) => {
+    const game = useGameStore.getState();
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/immortal-aperture/world-points/${pointId}/collect`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        game.addToast(data.error || "Khai thác mỏ thất bại.", "error");
+        return false;
+      }
+      game.applyInventoryFromResponse(data);
+      game.addToast(data.message || "Khai thác mỏ thành công!", "success");
+      const region = game.player?.current_region || get().resourcePointsRegion || "";
+      if (region) void get().fetchWorldResourcePoints(region);
+      return true;
+    } catch (err) {
+      game.addToast(err instanceof Error ? err.message : "Khai thác mỏ thất bại.", "error");
+      return false;
+    }
+  },
+
+  transplantWorldResourcePoint: async (pointId: string) => {
+    const game = useGameStore.getState();
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/immortal-aperture/world-points/${pointId}/transplant`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        game.addToast(data.error || "Di dời mỏ thất bại.", "error");
+        return false;
+      }
+      game.addToast(data.message || "Di dời mỏ vào Tiên Khiếu thành công!", "success");
+      const region = game.player?.current_region || get().resourcePointsRegion || "";
+      if (region) void get().fetchWorldResourcePoints(region);
+      return true;
+    } catch (err) {
+      game.addToast(err instanceof Error ? err.message : "Di dời mỏ thất bại.", "error");
       return false;
     }
   },

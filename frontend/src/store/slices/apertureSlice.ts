@@ -7,6 +7,8 @@ import type {
   DaoMark,
   DaoNganResult,
   ApertureResourceNode,
+  ApertureResourcePoint,
+  AperturePointWorker,
   ApertureVariantHuman,
   ApertureNodeWorker,
   ApertureRefinementJob,
@@ -25,6 +27,11 @@ let fetchApertureNodesPromise: Promise<void> | null = null;
 let lastApertureNodesPlayerId: string | null = null;
 let lastApertureNodesFetchTime = 0;
 const APERTURE_NODES_TTL_MS = 10000;
+
+let fetchAperturePointsPromise: Promise<void> | null = null;
+let lastAperturePointsPlayerId: string | null = null;
+let lastAperturePointsFetchTime = 0;
+const APERTURE_POINTS_TTL_MS = 10000;
 
 let fetchVariantHumansPromise: Promise<void> | null = null;
 
@@ -55,6 +62,8 @@ export interface ApertureSlice {
   daoMarks: DaoMark[];
   daoNgan: DaoNganResult | null;
   apertureNodes: ApertureResourceNode[];
+  aperturePoints: ApertureResourcePoint[];
+  pointWorkers: Record<string, AperturePointWorker[]>;
   variantHumans: ApertureVariantHuman[];
   activeTribulation: ActiveTribulation | null;
   fetchAperture: (forceRefresh?: boolean) => Promise<void>;
@@ -64,8 +73,14 @@ export interface ApertureSlice {
   fetchApertureNodes: (forceRefresh?: boolean) => Promise<void>;
   fetchVariantHumans: () => Promise<void>;
   placeApertureNode: (nodeType: string, x: number, y: number, path?: string, prodKey?: string, cells?: { x: number; y: number }[]) => Promise<boolean>;
-  collectResourceNode: (nodeId: string) => Promise<boolean>;
-  collectAllResourceNodes: () => Promise<boolean>;
+  fetchAperturePoints: (forceRefresh?: boolean) => Promise<void>;
+  collectAperturePoint: (pointId: string) => Promise<boolean>;
+  collectAllAperturePoints: () => Promise<boolean>;
+  revitalizeAperturePoint: (pointId: string) => Promise<boolean>;
+  upgradeAperturePoint: (pointId: string) => Promise<boolean>;
+  fetchPointWorkers: (pointId: string) => Promise<void>;
+  assignWorkerToPoint: (pointId: string, variantHumanId: string, population: number) => Promise<boolean>;
+  removeWorkerFromPoint: (pointId: string, workerId: string) => Promise<boolean>;
   uninstallApertureNode: (nodeId: string) => Promise<boolean>;
   deleteApertureNode: (nodeId: string) => Promise<boolean>;
   setApertureTimeRate: (rate: number) => Promise<boolean>;
@@ -108,6 +123,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   daoMarks: [],
   daoNgan: null,
   apertureNodes: [],
+  aperturePoints: [],
+  pointWorkers: {},
   variantHumans: [],
   nodeWorkers: [],
   refinementQueue: [],
@@ -342,26 +359,56 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
   },
 
-  collectResourceNode: async (nodeId: string) => {
-    const { token, logout } = get();
+  fetchAperturePoints: async (forceRefresh = false) => {
+    const currentPlayerId = get().player?.id || "";
+    const now = Date.now();
+    if (
+      !forceRefresh &&
+      lastAperturePointsPlayerId === currentPlayerId &&
+      now - lastAperturePointsFetchTime < APERTURE_POINTS_TTL_MS &&
+      get().aperturePoints.length > 0
+    ) {
+      return;
+    }
+    if (fetchAperturePointsPromise) return fetchAperturePointsPromise;
+    const executeFetch = async () => {
+      const { token } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points`);
+        if (response.ok) {
+          const data = await response.json();
+          lastAperturePointsPlayerId = currentPlayerId;
+          lastAperturePointsFetchTime = Date.now();
+          set({ aperturePoints: Array.isArray(data) ? data : [] });
+        }
+      } catch (err) {
+        console.error("Failed to fetch aperture points:", err);
+        get().addToast("Lỗi tải điểm tài nguyên.", "error");
+      } finally {
+        fetchAperturePointsPromise = null;
+      }
+    };
+    fetchAperturePointsPromise = executeFetch();
+    return fetchAperturePointsPromise;
+  },
+
+  collectAperturePoint: async (pointId: string) => {
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/collect`, {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points/${pointId}/collect`, {
         method: "POST",
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Không thể thu hoạch tài nguyên");
+        throw new Error(data.error || "Không thể thu hoạch điểm tài nguyên");
       }
       get().addToast(data.message || "Thu hoạch thành công!", "success");
-      get().addLog(data.message || "Thu hoạch tài nguyên thành công.");
+      get().addLog(data.message || "Thu hoạch điểm tài nguyên thành công.");
       get().applyInventoryFromResponse(data);
-      await get().fetchApertureNodes(true);
+      await get().fetchAperturePoints(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -373,26 +420,22 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
   },
 
-  collectAllResourceNodes: async () => {
-    const { token, logout } = get();
+  collectAllAperturePoints: async () => {
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/collect-all`, {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points/collect-all`, {
         method: "POST",
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Không thể thu hoạch tài nguyên");
+        throw new Error(data.error || "Không thể thu hoạch điểm tài nguyên");
       }
-      get().addToast(data.message || "Thu hoạch hàng loạt thành công!", "success");
-      get().addLog(data.message || "Thu hoạch hàng loạt tài nguyên thành công.");
+      get().addToast(data.message || "Thu hoạch hàng loạt thành công!", "info");
+      get().addLog(data.message || "Thu hoạch hàng loạt điểm tài nguyên.");
       get().applyInventoryFromResponse(data);
-      await get().fetchApertureNodes(true);
+      await get().fetchAperturePoints(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -401,6 +444,120 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       return false;
     } finally {
       get().endAction("aperture");
+    }
+  },
+
+  revitalizeAperturePoint: async (pointId: string) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points/${pointId}/revitalize`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể bồi dưỡng điểm tài nguyên");
+      }
+      get().addToast(data.message || "Bồi dưỡng thành công!", "success");
+      get().addLog(data.message || "Đã bồi dưỡng điểm tài nguyên.");
+      get().applyInventoryFromResponse(data);
+      await get().fetchAperturePoints(true);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  upgradeAperturePoint: async (pointId: string) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points/${pointId}/upgrade`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể nâng cấp điểm tài nguyên");
+      }
+      get().addToast(data.message || "Nâng cấp thành công!", "success");
+      get().addLog(data.message || "Đã nâng cấp điểm tài nguyên.");
+      get().applyInventoryFromResponse(data);
+      await get().fetchAperturePoints(true);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  fetchPointWorkers: async (pointId: string) => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points/${pointId}/workers`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ pointWorkers: { ...get().pointWorkers, [pointId]: Array.isArray(data) ? data : [] } });
+      }
+    } catch (err) {
+      console.error("Failed to fetch point workers:", err);
+    }
+  },
+
+  assignWorkerToPoint: async (pointId: string, variantHumanId: string, population: number) => {
+    const { token } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points/${pointId}/workers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variant_human_id: variantHumanId, assigned_population: population }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể phân công lao động");
+      }
+      get().addToast(data.message || "Phân công lao động thành công", "success");
+      await get().fetchPointWorkers(pointId);
+      await get().fetchAperturePoints(true);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      get().addToast(err.message, "error");
+      return false;
+    }
+  },
+
+  removeWorkerFromPoint: async (pointId: string, workerId: string) => {
+    const { token } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points/${pointId}/workers/${workerId}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể xóa phân công lao động");
+      }
+      get().addToast(data.message || "Đã xóa phân công lao động", "info");
+      await get().fetchPointWorkers(pointId);
+      await get().fetchAperturePoints(true);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      get().addToast(err.message, "error");
+      return false;
     }
   },
 

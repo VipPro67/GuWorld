@@ -344,6 +344,7 @@ func GetApertureNodes(c *gin.Context) {
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE a.player_id = $1 AND n.is_destroyed = false
+		  AND COALESCE(n.node_category, 'DEFENSE') = 'DEFENSE'
 	`, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách công trình: " + err.Error()})

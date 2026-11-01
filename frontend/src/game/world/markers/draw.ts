@@ -136,6 +136,37 @@ function drawPortal(ctx: MarkerDrawContext, marker: WorldMarker): void {
   });
 }
 
+function drawResource(ctx: MarkerDrawContext, marker: WorldMarker): void {
+  const g = ctx.graphics;
+  const px = marker.x * PIXELS_PER_UNIT;
+  const py = marker.y * PIXELS_PER_UNIT + 10; // offset below monster sprites on the same cell
+  const famous = marker.resource?.point_class === "FAMOUS";
+  const ready = marker.resource?.state === "ACTIVE" && (marker.resource?.stock_total ?? 0) > 0;
+  const tint = famous ? 0xf59e0b : ready ? 0x10b981 : 0x64748b;
+
+  g.fillStyle(tint, ready ? 0.24 : 0.12);
+  g.fillCircle(px, py, 14);
+  g.lineStyle(2, tint, ready ? 0.95 : 0.6);
+  g.beginPath();
+  g.moveTo(px, py - 9);
+  g.lineTo(px + 9, py);
+  g.lineTo(px, py + 9);
+  g.lineTo(px - 9, py);
+  g.closePath();
+  g.strokePath();
+  g.fillStyle(tint, ready ? 0.9 : 0.45);
+  g.fillCircle(px, py, 3.5);
+
+  const stock = marker.resource?.stock_total ?? 0;
+  const vitality = marker.resource?.vitality ?? 100;
+  const label = famous ? `💎 ${marker.name} ★` : `💎 ${marker.name}`;
+  ctx.addLabel(px, py + 26, `${label}\n${stock} món · ${vitality}%`, {
+    size: "9px",
+    color: famous ? "#fde68a" : ready ? "#a7f3d0" : "#cbd5e1",
+    background: famous ? "#78350fdd" : "#064e3bdd",
+  });
+}
+
 export function drawWorldMarker(ctx: MarkerDrawContext, marker: WorldMarker): void {
   switch (marker.kind) {
     case "vein":
@@ -152,6 +183,9 @@ export function drawWorldMarker(ctx: MarkerDrawContext, marker: WorldMarker): vo
       break;
     case "portal":
       drawPortal(ctx, marker);
+      break;
+    case "resource":
+      drawResource(ctx, marker);
       break;
   }
 }

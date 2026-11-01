@@ -608,6 +608,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
         {panel && (
           <MMOBusinessPanels
             panel={panel}
+            position={hud?.position ?? null}
             onClose={() => {
               setPanel(null);
             }}

@@ -956,6 +956,22 @@ export class WorldScene extends Phaser.Scene {
       groundDrops: gs.groundDrops,
       mapPortals: this.map?.id === zoneId ? this.map.portals : [],
       mySectId: gs.mySectStatus?.sect?.id,
+      resourcePoints: ws.resourcePointsRegion === zoneId
+        ? ws.resourcePoints.map((point) => ({
+            id: point.id,
+            region_id: point.region_id ?? null,
+            x: point.x,
+            y: point.y,
+            name: point.name,
+            grade: point.grade,
+            point_class: point.point_class,
+            state: point.state,
+            vitality: point.vitality,
+            stock_total: Object.values(point.stock || {}).reduce((sum, amount) => sum + amount, 0),
+            stock_cap: point.stock_cap,
+            next_item_id: point.next_item_id,
+          }))
+        : [],
     });
 
     // Rebuilding every Phaser Text object on each tick is expensive; only redraw
@@ -972,6 +988,9 @@ export class WorldScene extends Phaser.Scene {
         marker.sect?.shieldUntil ?? "",
         marker.vein?.rarity ?? "",
         marker.vein?.accumulated_stones ?? "",
+        marker.resource?.stock_total ?? "",
+        marker.resource?.state ?? "",
+        marker.resource?.vitality ?? "",
       ].join(":"))
       .join("|");
     if (signature === this.lastMarkerSignature) return;

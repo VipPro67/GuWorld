@@ -6,6 +6,7 @@ import {
   type WorldMarkerDrop,
   type WorldMarkerKind,
   type WorldMarkerPortal,
+  type WorldMarkerResource,
 } from "./types.ts";
 
 export interface MarkerSources {
@@ -17,6 +18,8 @@ export interface MarkerSources {
   groundDrops?: WorldMarkerDrop[];
   /** Authored edge portals from the Tiled map. */
   mapPortals?: WorldMarkerPortal[];
+  /** Public mines of the region (WORLD-scope resource points). */
+  resourcePoints?: WorldMarkerResource[];
   mySectId?: string;
 }
 
@@ -127,6 +130,27 @@ export function collectMarkers(sources: MarkerSources): WorldMarker[] {
         },
       });
     }
+  }
+
+  for (const point of sources.resourcePoints ?? []) {
+    if (point.region_id && point.region_id !== region) continue;
+    const ready = point.state === "ACTIVE" && point.stock_total > 0;
+    const famous = point.point_class === "FAMOUS";
+    push({
+      id: point.id,
+      kind: "resource",
+      region: point.region_id || region,
+      x: point.x,
+      y: point.y,
+      name: point.name,
+      tone: famous ? "rare" : "neutral",
+      resource: point,
+      interaction: {
+        radiusCells: MARKER_INTERACTION_RADIUS.resource,
+        label: ready ? "Khai thác" : "Chưa có tài nguyên",
+        action: { type: "harvest-resource", targetId: point.id },
+      },
+    });
   }
 
   for (const drop of sources.groundDrops ?? []) {

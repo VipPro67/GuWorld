@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
-import { X, Settings2, Sparkles, Users, Package, Compass } from "lucide-react";
+import { X, Settings2, Sparkles, Users, Package, Compass, Gem } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 
@@ -11,13 +11,16 @@ const Aperture = dynamic(() => import("@/components/Aperture").then((m) => m.Ape
 const PartyView = dynamic(() => import("@/components/PartyView").then((m) => m.PartyView), { ssr: false });
 const WorldAtlasModal = dynamic(() => import("@/components/WorldAtlasModal").then((m) => m.WorldAtlasModal), { ssr: false });
 const MMOSettingsPanel = dynamic(() => import("./MMOSettingsPanel").then((m) => m.MMOSettingsPanel), { ssr: false });
+const WorldResourcePointsPanel = dynamic(() => import("./WorldResourcePointsPanel").then((m) => m.WorldResourcePointsPanel), { ssr: false });
 
-export type MMOPanel = "inventory" | "cultivation" | "party" | "settings" | "maps" | null;
+export type MMOPanel = "inventory" | "cultivation" | "party" | "settings" | "maps" | "resources" | null;
 
 interface MMOBusinessPanelsProps {
   panel: MMOPanel;
   onClose: () => void;
   onLoadoutSaved: () => void;
+  /** Realtime player position (map-local cells) for world-mine distance checks. */
+  position?: { x: number; y: number } | null;
 }
 
 const PANEL_META: Record<Exclude<MMOPanel, null>, { title: string; icon: typeof Package }> = {
@@ -26,9 +29,10 @@ const PANEL_META: Record<Exclude<MMOPanel, null>, { title: string; icon: typeof 
   party: { title: "Tổ đội", icon: Users },
   settings: { title: "Cài đặt & Tiện ích", icon: Settings2 },
   maps: { title: "Bản đồ Cổ Giới", icon: Compass },
+  resources: { title: "Mỏ tài nguyên công khai", icon: Gem },
 };
 
-export function MMOBusinessPanels({ panel, onClose, onLoadoutSaved }: MMOBusinessPanelsProps) {
+export function MMOBusinessPanels({ panel, onClose, onLoadoutSaved, position }: MMOBusinessPanelsProps) {
   const store = useGameStore();
   useEffect(() => { if (panel === "maps") void store.fetchRegions(); }, [panel, store.fetchRegions]);
   if (!panel) return null;
@@ -100,6 +104,8 @@ export function MMOBusinessPanels({ panel, onClose, onLoadoutSaved }: MMOBusines
             <MMOSettingsPanel onLoadoutSaved={onLoadoutSaved} />
           ) : panel === "party" ? (
             <PartyView />
+          ) : panel === "resources" ? (
+            <WorldResourcePointsPanel position={position} />
           ) : null}
         </div>
       </aside>

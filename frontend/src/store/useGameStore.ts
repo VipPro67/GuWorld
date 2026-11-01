@@ -585,6 +585,59 @@ export interface ApertureNodeWorker {
   updated_at: string;
 }
 
+// Aperture resource point (canon blessed-land mine). The backend computes the
+// harvest formula and ships the view-only fields below so the client never has
+// to re-derive it.
+export interface ApertureYieldPreview {
+  base: number;
+  expected: number;
+  whole: number;
+  remainder: number;
+  bonus: number;
+  raw_bonus: number;
+  capped: boolean;
+  per_hour: number;
+  factors: { key: string; value: number }[];
+}
+
+export interface ApertureResourcePoint {
+  id: string;
+  scope: string;
+  aperture_id?: string | null;
+  point_type: string;
+  name: string;
+  path: string;
+  grade: 'LOW' | 'MID' | 'TOP';
+  point_class: 'NORMAL' | 'FAMOUS';
+  level: number;
+  vitality: number;
+  stock: Record<string, number>;
+  stock_cap: number;
+  x: number;
+  y: number;
+  region_id?: string | null;
+  last_produced_at: string;
+  state: 'ACTIVE' | 'EXHAUSTED' | 'GONE';
+  listed: boolean;
+  produce_key?: string;
+  worker_race?: string;
+  production_interval_hours?: number;
+  next_item_id?: string;
+  assigned_workers?: number;
+  yield_preview?: ApertureYieldPreview;
+}
+
+export interface AperturePointWorker {
+  id: string;
+  point_id: string;
+  variant_human_id: string;
+  race: string;
+  population: number;
+  assigned_population: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApertureRefinementJob {
   id: string;
   aperture_id: string;

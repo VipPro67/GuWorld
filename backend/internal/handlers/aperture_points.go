@@ -23,7 +23,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -553,6 +552,54 @@ func aperturePointYield(ctx *aperturePointRewardContext, pt models.ApertureResou
 	})
 }
 
+// ---- view helpers -------------------------------------------------------
+
+// decorateAperturePointView fills the view-only fields the client renders (they
+// are not database columns): the produce family, production interval, the item
+// the next harvest yields and the full multiplier breakdown.
+func decorateAperturePointView(pt *models.ApertureResourcePoint, template ResourcePointTemplate, y gamefx.ApertureYield, effectiveRate float64, assignedWorkers int) {
+	pt.ProduceKey = template.ProduceKey
+	pt.WorkerRace = template.WorkerRace
+	pt.AssignedWorkers = assignedWorkers
+	pt.ProductionIntervalHours = template.ProduceIntervalHours
+	if pt.ProductionIntervalHours <= 0 {
+		pt.ProductionIntervalHours = 12
+	}
+	pt.NextItemID = pointProduceItem(template, *pt, false)
+	pt.YieldPreview = buildApertureYieldPreview(y, pt.ProductionIntervalHours, effectiveRate)
+}
+
+// buildApertureYieldPreview mirrors gamefx.ComputeApertureYield so the client
+// never re-derives the harvest formula.
+func buildApertureYieldPreview(y gamefx.ApertureYield, intervalHours int, effectiveRate float64) *models.ApertureYieldPreview {
+	whole := int64(math.Floor(y.Count))
+	factors := make([]models.ApertureYieldFactor, 0, len(y.Parts))
+	for _, key := range []string{"level", "dao", "area", "conflict", "ecology", "labor", "pop"} {
+		if value, ok := y.Parts[key]; ok {
+			factors = append(factors, models.ApertureYieldFactor{Key: key, Value: value})
+		}
+	}
+	hours := float64(intervalHours)
+	if hours <= 0 {
+		hours = 12
+	}
+	perHour := 0.0
+	if effectiveRate > 0 {
+		perHour = y.Count * effectiveRate / hours
+	}
+	return &models.ApertureYieldPreview{
+		Base:      gamefx.ApertureYieldBase,
+		Expected:  y.Count,
+		Whole:     whole,
+		Remainder: y.Count - float64(whole),
+		Bonus:     y.Bonus,
+		RawBonus:  y.RawBonus,
+		Capped:    y.Capped,
+		PerHour:   perHour,
+		Factors:   factors,
+	}
+}
+
 // ---- handlers -----------------------------------------------------------
 
 func effectiveApertureTimeRate(tx *sql.Tx, playerID string) (areaSize int64, effectiveTimeRate float64) {
@@ -658,6 +705,8 @@ func GetApertureResourcePoints(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tích lũy sản lượng"})
 			return
 		}
+		preview := aperturePointYield(ctx, p.ApertureResourcePoint, p.template, areaSize, workerMult)
+		decorateAperturePointView(&p.ApertureResourcePoint, p.template, preview, effectiveTimeRate, ctx.assignedWorkers[p.ID])
 		points[i] = p.ApertureResourcePoint
 	}
 	if err := tx.Commit(); err != nil {
@@ -696,14 +745,15 @@ func GetWorldResourcePoints(c *gin.Context) {
 		return
 	}
 
-	// Lazy reseed: canon worlds regenerate depleted famous mountains.
-	if err := seedWorldResourcePoints(tx, regionID, 1); err != nil {
+	// Lazy top-up: a region must have mines the first time anyone looks at it,
+	// before the periodic sweep (StartWorldResourcePointWorker) reaches it.
+	if _, _, err := ensureWorldResourcePoints(c.Request.Context(), tx, regionID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi sinh điểm tài nguyên thế giới"})
 		return
 	}
 
 	rows, err := tx.Query(`
-		SELECT id, point_type, name, path, grade, COALESCE(point_class, 'NORMAL'), level, vitality, stock, stock_cap, x, y, last_produced_at, state
+		SELECT id, COALESCE(scope, 'WORLD'), COALESCE(region_id, ''), point_type, name, path, grade, COALESCE(point_class, 'NORMAL'), level, vitality, stock, stock_cap, x, y, last_produced_at, state
 		FROM aperture_resource_points
 		WHERE scope = 'WORLD' AND region_id = $1
 	`, regionID)
@@ -717,7 +767,9 @@ func GetWorldResourcePoints(c *gin.Context) {
 	for rows.Next() {
 		var p models.ApertureResourcePoint
 		var stockJSON []byte
-		if err := rows.Scan(&p.ID, &p.PointType, &p.Name, &p.Path, &p.Grade, &p.PointClass, &p.Level, &p.Vitality, &stockJSON, &p.StockCap, &p.X, &p.Y, &p.LastProducedAt, &p.State); err == nil {
+		var pointRegion string
+		if err := rows.Scan(&p.ID, &p.Scope, &pointRegion, &p.PointType, &p.Name, &p.Path, &p.Grade, &p.PointClass, &p.Level, &p.Vitality, &stockJSON, &p.StockCap, &p.X, &p.Y, &p.LastProducedAt, &p.State); err == nil {
+			p.RegionID = &pointRegion
 			_ = json.Unmarshal(stockJSON, &p.Stock)
 			points = append(points, p)
 		}
@@ -735,6 +787,8 @@ func GetWorldResourcePoints(c *gin.Context) {
 		if err := accrueAperturePoint(tx, p, template, 1.0, 0, emptyCtx, 1.0); err != nil {
 			continue
 		}
+		preview := aperturePointYield(emptyCtx, *p, template, 0, 1.0)
+		decorateAperturePointView(p, template, preview, 1.0, 0)
 	}
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu tích lũy"})
@@ -798,18 +852,14 @@ func CollectWorldResourcePoint(c *gin.Context) {
 		return
 	}
 
-	// 2. Guard cleared: the point's cell must be cleared (guardian defeated).
+	// 2. Guard cleared: a persistent guardian (Boss/Monster map cell) on the
+	// point's cell must be inside its respawn window. Cells without a
+	// persistent guardian are open ground and can be mined directly.
 	if isWorldMonsterSafeZone(regionID, p.X, p.Y) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vùng an toàn không thể khai thác."})
 		return
 	}
-	coords := []cache.CellCoordKey{{RegionID: regionID, X: p.X, Y: p.Y}}
-	cleared, err := cache.GetClearedCells(coords)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra vùng canh giữ"})
-		return
-	}
-	if cleared[coords[0]].ClearedBy == "" && cleared[coords[0]].ClearedAt.IsZero() {
+	if worldPointGuardStatus(c.Request.Context(), regionID, p.X, p.Y) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Quái canh giữ điểm tài nguyên còn sống — hãy đánh bại bọn nó!"})
 		return
 	}
@@ -926,6 +976,40 @@ func harvestPointRow(tx *sql.Tx, playerID uuid.UUID, p *models.ApertureResourceP
 	return message, totalAmount > 0, nil
 }
 
+// placeTransplantedPointOnGrid picks a free cell of the persistent 20×20
+// aperture grid so a transplanted mountain participates in the grid/arena
+// projections instead of keeping its world-map coordinates.
+func placeTransplantedPointOnGrid(tx *sql.Tx, apertureID string) (int, int, bool) {
+	occupied := map[[2]int]bool{}
+	rows, err := tx.Query(`SELECT x, y FROM aperture_resource_points WHERE aperture_id = $1`, apertureID)
+	if err != nil {
+		return 0, 0, false
+	}
+	for rows.Next() {
+		var x, y int
+		if rows.Scan(&x, &y) == nil {
+			occupied[[2]int{x, y}] = true
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, 0, false
+	}
+	cells := make([][2]int, 0, 400)
+	for y := 0; y < 20; y++ {
+		for x := 0; x < 20; x++ {
+			if !occupied[[2]int{x, y}] {
+				cells = append(cells, [2]int{x, y})
+			}
+		}
+	}
+	if len(cells) == 0 {
+		return 0, 0, false
+	}
+	pick := cells[rand.Intn(len(cells))]
+	return pick[0], pick[1], true
+}
+
 // TransplantWorldResourcePoint moves a public world point into the player's
 // aperture — canon "Immortal Aperture Transplantation / Silent Hill purchase"
 // (arc 2121–2153): the mountain leaves the world and starts benefiting from
@@ -968,6 +1052,18 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	}
 	if p.Vitality < 70 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Sinh khí điểm tài nguyên dưới 70% — mạch núi suy yếu, không thể di dời. Hãy để nó hồi phục hoặc Bồi Dưỡng."})
+		return
+	}
+	// Moving a mountain is an in-person ritual: enforce the same presence rule
+	// as harvesting so the endpoint cannot be driven from another region.
+	var moverRegion string
+	var moverX, moverY float64
+	if err := tx.QueryRow(`SELECT COALESCE(current_region, ''), COALESCE(world_x, 0), COALESCE(world_y, 0) FROM players WHERE id = $1`, playerID).Scan(&moverRegion, &moverX, &moverY); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi vị trí đạo hữu"})
+		return
+	}
+	if moverRegion != regionID || math.Max(math.Abs(moverX-float64(p.X)), math.Abs(moverY-float64(p.Y))) > float64(worldHarvestRange) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Phải đến nơi (cách %d ô) mới di dời được mỏ này.", worldHarvestRange)})
 		return
 	}
 
@@ -1018,11 +1114,23 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
 		return
 	}
-	if _, err := tx.Exec(`
-		UPDATE aperture_resource_points
-		SET scope = 'APERTURE', aperture_id = $1, region_id = NULL, state = 'ACTIVE', updated_at = NOW()
-		WHERE id = $2
-	`, apertureIDNotaByte, pointID); err != nil {
+	gridX, gridY, hasGridCell := placeTransplantedPointOnGrid(tx, apertureIDNotaByte)
+	if hasGridCell {
+		_, err = tx.Exec(`
+			UPDATE aperture_resource_points
+			SET scope = 'APERTURE', aperture_id = $1, region_id = NULL, x = $2, y = $3,
+			    last_produced_at = NOW(), state = 'ACTIVE', updated_at = NOW()
+			WHERE id = $4
+		`, apertureIDNotaByte, gridX, gridY, pointID)
+	} else {
+		_, err = tx.Exec(`
+			UPDATE aperture_resource_points
+			SET scope = 'APERTURE', aperture_id = $1, region_id = NULL,
+			    last_produced_at = NOW(), state = 'ACTIVE', updated_at = NOW()
+			WHERE id = $2
+		`, apertureIDNotaByte, pointID)
+	}
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi di dời điểm tài nguyên"})
 		return
 	}
@@ -1035,98 +1143,6 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("Di dời %s vào Tiên Khiếu thành công!", p.Name),
 	})
-}
-
-// seedWorldResourcePoints spawns `count` public points inside one region,
-// grading them from the region's strongest monster rank. Regions of rank >= 4
-// also host ONE canon famous mountain (Núi Danh / bí cảnh thiên địa) anchored
-// on the region's strongest Boss cell.
-func seedWorldResourcePoints(tx *sql.Tx, regionID string, count int) error {
-	var regionRank int
-	maxRankRow, err := tx.Query(`
-		SELECT COALESCE(MAX((cc.metadata->>'rank')::int), 0)
-		FROM map_cells cc
-		WHERE cc.region_id = $1 AND cc.cell_type = 'Monster' AND cc.is_active = true
-	`, regionID)
-	if err == nil {
-		defer maxRankRow.Close()
-		if maxRankRow.Next() {
-			_ = maxRankRow.Scan(&regionRank)
-		}
-	} else {
-		return err
-	}
-
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	instanceGrade := "LOW"
-	switch {
-	case regionRank >= 7:
-		instanceGrade = "TOP"
-	case regionRank >= 4:
-		instanceGrade = "MID"
-	}
-
-	normalPool := canonWorldTemplatePool(false)
-	for i := 0; i < count; i++ {
-		// Keep at most 2 normal public points per region; over-spawning the
-		// world with mines flattens the scarcity that makes bosses matter.
-		var normalCount int
-		if err := tx.QueryRow(`
-			SELECT COUNT(1) FROM aperture_resource_points
-			WHERE scope = 'WORLD' AND region_id = $1 AND COALESCE(point_class, 'NORMAL') <> 'FAMOUS'
-		`, regionID).Scan(&normalCount); err == nil && normalCount >= 2 {
-			break
-		}
-		pick := weightedPointPick(rng, normalPool, instanceGrade)
-		if pick.PointType == "" {
-			continue
-		}
-		var x, y int
-		cellRow, err := tx.Query(`
-			SELECT x, y FROM map_cells
-			WHERE region_id = $1 AND cell_type = 'Monster' AND is_active = true
-			ORDER BY random() LIMIT 1
-		`, regionID)
-		if err != nil {
-			break
-		}
-		if cellRow.Next() {
-			if err := cellRow.Scan(&x, &y); err == nil {
-				_, _ = tx.Exec(`
-					INSERT INTO aperture_resource_points (scope, region_id, point_type, name, path, grade, point_class, level, vitality, stock, stock_cap, x, y, last_produced_at, state)
-					VALUES ('WORLD', $1, $2, $3, $4, $5, 'NORMAL', 1, 100, '{}'::jsonb, 0, $6, $7, NOW(), 'ACTIVE')
-				`, regionID, pick.PointType, pick.Name, pick.Path, instanceGrade, x, y)
-			}
-		}
-		cellRow.Close()
-	}
-
-	// One famous mountain per high-rank region, anchored on the strongest Boss
-	// cell — canon famous mountains are guarded by immemorial desolate beasts.
-	if regionRank >= 4 {
-		var famousCount int
-		if err := tx.QueryRow(`
-			SELECT COUNT(1) FROM aperture_resource_points
-			WHERE scope = 'WORLD' AND region_id = $1 AND COALESCE(point_class, 'NORMAL') = 'FAMOUS'
-		`, regionID).Scan(&famousCount); err == nil && famousCount == 0 {
-			if bossX, bossY, bossRank, ok := strongestBossCell(tx, regionID); ok {
-				famousPick := weightedPointPick(rng, canonWorldTemplatePool(true), "MID")
-				if famousPick.PointType != "" {
-					famousGrade := "MID"
-					if bossRank >= 7 {
-						famousGrade = "TOP"
-					} else if bossRank < 4 {
-						famousGrade = "LOW"
-					}
-					_, _ = tx.Exec(`
-						INSERT INTO aperture_resource_points (scope, region_id, point_type, name, path, grade, point_class, level, vitality, stock, stock_cap, x, y, last_produced_at, state)
-						VALUES ('WORLD', $1, $2, $3, $4, $5, 'FAMOUS', 1, 100, '{}'::jsonb, 0, $6, $7, NOW(), 'ACTIVE')
-					`, regionID, famousPick.PointType, famousPick.Name, famousPick.Path, famousGrade, bossX, bossY)
-				}
-			}
-		}
-	}
-	return nil
 }
 
 // strongestBossCell finds the highest-rank Boss cell of a region.

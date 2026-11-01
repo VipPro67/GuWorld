@@ -11,12 +11,12 @@ import type { NearbyVeinInfo } from "@/store/useWorldStore";
  * from the store remain assignable, while callers (and tests) only need the
  * subset that actually reaches the screen.
  */
-export type WorldMarkerKind = "sect" | "vein" | "teleport" | "portal" | "drop";
+export type WorldMarkerKind = "sect" | "vein" | "teleport" | "portal" | "drop" | "resource";
 
 export type WorldMarkerTone = "self" | "enemy" | "rare" | "neutral";
 
 export interface WorldMarkerAction {
-  type: "open-sect" | "attack-sect" | "harvest-vein" | "loot-drop" | "open-teleport";
+  type: "open-sect" | "attack-sect" | "harvest-vein" | "loot-drop" | "open-teleport" | "harvest-resource";
   targetId: string;
 }
 
@@ -38,6 +38,22 @@ export type WorldMarkerVein = Pick<NearbyVeinInfo, "id" | "vein_type" | "rarity"
 export type WorldMarkerDrop = Pick<GroundDrop, "id" | "x" | "y" | "killer_name"> & { region_id?: string };
 
 export type WorldMarkerPortal = Pick<MapPortal, "x" | "y" | "name" | "targetZoneId">;
+
+/** Narrowed public-mine payload: only what the map layer and radar render. */
+export interface WorldMarkerResource {
+  id: string;
+  region_id?: string | null;
+  x: number;
+  y: number;
+  name: string;
+  grade: string;
+  point_class: string;
+  state: string;
+  vitality: number;
+  stock_total: number;
+  stock_cap: number;
+  next_item_id?: string;
+}
 
 export interface WorldMarkerCell {
   x: number;
@@ -65,6 +81,7 @@ export interface WorldMarker {
   teleport?: { tier: string; accessPolicy: string };
   drop?: WorldMarkerDrop;
   portal?: WorldMarkerPortal;
+  resource?: WorldMarkerResource;
 }
 
 /** Interaction ranges live here so the map and HUD cannot drift apart. */
@@ -74,4 +91,6 @@ export const MARKER_INTERACTION_RADIUS: Record<WorldMarkerKind, number> = {
   teleport: 3.0,
   drop: 3.2,
   portal: 0,
+  // Backend worldHarvestRange (Chebyshev ≤ 6 cells).
+  resource: 6,
 };

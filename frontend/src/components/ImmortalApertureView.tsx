@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { operationsBy } from "@/lib/effect-blocks";
-import { useGameStore, ApertureResourceNode, TribulationEnemy } from "@/store/useGameStore";
+import { useGameStore, ApertureResourceNode, ApertureResourcePoint, TribulationEnemy } from "@/store/useGameStore";
 import {
   Shield,
   Activity,
@@ -31,21 +31,14 @@ import {
   ShieldCheck,
   ShieldAlert,
   BookOpen,
+  Gem,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
-import { APERTURE_SEED_BASE } from "@/lib/balance";
 import { formatNumber, calculateTribulationProgress } from "@/lib/utils";
 import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection, SearchableSelect } from "@/components/ui";
-import { CountdownTimer } from "./CountdownTimer";
+import { AperturePointsPanel, pointGlyph, pointIsReady } from "./AperturePointsPanel";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
-
-// Số giống để gieo một khu tài nguyên — giống nhau ở mọi rank (xem APERTURE_SEED_BASE).
-
-// Mirror of the backend harvest caps (backend/internal/gamefx/aperture_yield.go);
-// used for display only — the server always sends the authoritative bonus.
-const YIELD_TOTAL_CAP = 50;
-const YIELD_DAO_CAP = 50;
 
 export interface DaoGroupDef {
   id: string;
@@ -246,6 +239,7 @@ export const ImmortalApertureView: React.FC = () => {
     daoMarks,
     daoNgan,
     apertureNodes,
+    aperturePoints,
     variantHumans,
     settlements,
     variantNPCs,
@@ -258,6 +252,7 @@ export const ImmortalApertureView: React.FC = () => {
     fetchDaoNgan,
     cleanseDaoMarks,
     fetchApertureNodes,
+    fetchAperturePoints,
     fetchVariantHumans,
     fetchSettlements,
     buildSettlement,
@@ -274,8 +269,7 @@ export const ImmortalApertureView: React.FC = () => {
     recipes,
     fetchRecipes,
     placeApertureNode,
-    collectResourceNode,
-    collectAllResourceNodes,
+    collectAllAperturePoints,
     uninstallApertureNode,
     deleteApertureNode,
     setApertureTimeRate,
@@ -297,7 +291,7 @@ export const ImmortalApertureView: React.FC = () => {
     guDictionary,
   } = useGameStore();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "map" | "dao" | "tribulation" | "variant_humans">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "map" | "points" | "dao" | "tribulation" | "variant_humans">("overview");
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [buildCells, setBuildCells] = useState<{ x: number; y: number }[]>([]);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -329,7 +323,7 @@ export const ImmortalApertureView: React.FC = () => {
   const [refineRecipeId, setRefineRecipeId] = useState<string>("GU_LIQUOR_WORM");
   const [refineMode, setRefineMode] = useState<string>("FIXED_COUNT");
   const [refineTargetQty, setRefineTargetQty] = useState<number>(10);
-  const [buildCategory, setBuildCategory] = useState<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense">("khu_trong");
+  const [buildCategory, setBuildCategory] = useState<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense">("defense");
   const [pendingBuildZone, setPendingBuildZone] = useState<string | null>(null);
   const [buildPath, setBuildPath] = useState<string>("Wisdom Path");
   const [buildProdKey, setBuildProdKey] = useState<string>("");
@@ -369,6 +363,7 @@ export const ImmortalApertureView: React.FC = () => {
     fetchAperture();
     fetchDaoMarks();
     fetchDaoNgan();
+    fetchAperturePoints();
     fetchActiveTribulation();
   }, []);
 
@@ -378,6 +373,10 @@ export const ImmortalApertureView: React.FC = () => {
       fetchDaoNgan();
     } else if (activeTab === "map") {
       fetchApertureNodes();
+      fetchAperturePoints();
+    } else if (activeTab === "points") {
+      fetchAperturePoints(true);
+      fetchVariantHumans();
     } else if (activeTab === "tribulation") {
       fetchActiveTribulation();
     } else if (activeTab === "variant_humans") {
@@ -396,6 +395,7 @@ export const ImmortalApertureView: React.FC = () => {
       fetchDaoMarks(),
       fetchDaoNgan(),
       fetchApertureNodes(),
+      fetchAperturePoints(true),
       fetchActiveTribulation(),
       fetchVariantHumans(),
     ]);
@@ -486,6 +486,17 @@ export const ImmortalApertureView: React.FC = () => {
     cells.forEach(cell => nodeMap.set(`${cell.x},${cell.y}`, node));
   });
   const occupiedCells = nodeMap.size;
+
+  // Resource points live on the same 20x20 grid (x,y 0..19). Several points can
+  // share a cell with a defense structure, so keep a list per coordinate.
+  const pointsMap = new Map<string, ApertureResourcePoint[]>();
+  aperturePoints.forEach((point) => {
+    const key = `${point.x},${point.y}`;
+    const bucket = pointsMap.get(key);
+    if (bucket) bucket.push(point);
+    else pointsMap.set(key, [point]);
+  });
+  const readyPointCount = aperturePoints.filter(pointIsReady).length;
   const selectedNodes = apertureNodes.filter(node => selectedNodeIds.includes(node.id));
   const repairableSelectedNodes = selectedNodes.filter(node => !node.is_destroyed && node.hp < node.max_hp);
   const upgradeableSelectedNodes = selectedNodes.filter(node => !node.is_destroyed && node.level < 5);
@@ -526,6 +537,15 @@ export const ImmortalApertureView: React.FC = () => {
   const handleCellClick = (x: number, y: number) => {
     const coordKey = `${x},${y}`;
     const node = nodeMap.get(coordKey);
+    const pointsHere = pointsMap.get(coordKey);
+
+    // Resource points are harvested from the dedicated tab (stock, vitality,
+    // labour, upgrades). Clicking their cell jumps there with the point
+    // preselected so the grid stays a defence-building surface.
+    if (pointsHere?.length && !node && !multiSelectMode && !pendingBuildZone) {
+      setActiveTab("points");
+      return;
+    }
 
     if (multiSelectMode) {
       if (!node) return;
@@ -566,22 +586,6 @@ export const ImmortalApertureView: React.FC = () => {
       setSelectedNode(null);
       setPendingBuildZone(null);
       setBuildCells([]);
-    }
-  };
-
-  const handleCollect = async (nodeId: string) => {
-    const success = await collectResourceNode(nodeId);
-    if (success) {
-      setSelectedCell(null);
-      setSelectedNode(null);
-    }
-  };
-
-  const handleCollectAll = async () => {
-    const success = await collectAllResourceNodes();
-    if (success) {
-      setSelectedCell(null);
-      setSelectedNode(null);
     }
   };
 
@@ -677,8 +681,6 @@ export const ImmortalApertureView: React.FC = () => {
   };
 
   // Bulk action helpers
-  const bulkCollectableNodes = apertureNodes.filter(n => !n.is_destroyed && n.node_category !== "DEFENSE" && canCollect(n, effectiveTimeRate));
-  const bulkReadyCount = bulkCollectableNodes.length;
   const bulkDamagedNodes = apertureNodes.filter(n => !n.is_destroyed && n.hp < n.max_hp);
   const bulkRepairCount = bulkDamagedNodes.length;
   const bulkRepairCost = bulkDamagedNodes.reduce((sum, n) => {
@@ -748,6 +750,7 @@ return (
         items={[
           { id: "overview", label: "Tổng Quan", icon: <Activity className="w-4 h-4 shrink-0" />, disabled: false },
           { id: "map", label: "Bản Đồ & Phòng Thủ", icon: <MapIcon className="w-4 h-4 shrink-0" />, disabled: false, badge: aperture?.state === "TRIBULATION_ACTIVE" ? <span className="absolute top-0 right-0 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span></span> : undefined },
+          { id: "points", label: "Điểm Tài Nguyên", icon: <Gem className="w-4 h-4 shrink-0" />, disabled: false, count: aperturePoints.filter(pointIsReady).length },
           { id: "dao", label: "Bảng Đạo Ngân", icon: <Layers className="w-4 h-4 shrink-0" />, disabled: false },
           { id: "variant_humans", label: "Dị Nhân", icon: <Users className="w-4 h-4 shrink-0" />, disabled: false },
         ]}
@@ -1052,12 +1055,12 @@ return (
               {/* Bulk actions */}
               <div className="w-full flex flex-col sm:flex-row gap-2 mb-4">
                 <button
-                  onClick={handleCollectAll}
-                  disabled={actionLoading || bulkReadyCount === 0}
+                  onClick={() => void collectAllAperturePoints()}
+                  disabled={actionLoading || readyPointCount === 0}
                   className="flex-1 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-lg transition"
-                  title="Thu hoạch mọi mỏ đã đủ thời gian tích tụ (sản lượng -20%, Nhân Khí +1/mỏ)"
+                  title="Thu hoạch mọi điểm tài nguyên đang có tồn kho (Nhân Khí +2/điểm)"
                 >
-                  {actionLoading ? "Đang xử lý..." : `Thu Hoạch Tất Cả (${bulkReadyCount} mỏ, −20%)`}
+                  {actionLoading ? "Đang xử lý..." : `Thu Hoạch Tất Cả (${readyPointCount} điểm)`}
                 </button>
                 <button
                   onClick={handleRepairAll}
@@ -1127,6 +1130,9 @@ return (
                       const coordKey = `${x},${y}`;
                       const node = nodeMap.get(coordKey);
                       const enemy = enemyMap.get(coordKey);
+                      const pointsHere = pointsMap.get(coordKey);
+                      const hasPoint = !!pointsHere?.length;
+                      const readyPointHere = pointsHere?.some(pointIsReady) ?? false;
                       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
                       const isBuildSelected = buildCells.some(cell => cell.x === x && cell.y === y);
                       const isMultiSelected = !!node && selectedNodeIds.includes(node.id);
@@ -1152,6 +1158,9 @@ return (
                       if (enemy) {
                         cellIcon = "💀";
                         cellColor = "bg-rose-950/60 border-rose-500/40 animate-pulse cursor-pointer shadow-[0_0_8px_rgba(239,68,68,0.2)]";
+                      } else if (!node && hasPoint && pointsHere) {
+                        cellIcon = pointGlyph(pointsHere[0]);
+                        cellColor = "bg-emerald-950/50 hover:bg-emerald-900/60 border-emerald-500/40 cursor-pointer shadow-[0_0_6px_rgba(16,185,129,0.25)]";
                       } else if (node) {
                         if (node.is_destroyed) {
                           cellIcon = "🪦";
@@ -1195,10 +1204,19 @@ return (
                             if (!pendingBuildZone) handleCellClick(x, y);
                           }}
                           className={`w-full aspect-square flex items-center justify-center text-sm font-bold rounded cursor-pointer border transition-all ${cellColor}`}
-                          title={node ? `${node.name} · ${node.cells?.length || 1} ô · (${x}, ${y})` : `Tọa độ: (${x}, ${y})`}
+                          title={node
+                            ? `${node.name} · ${node.cells?.length || 1} ô · (${x}, ${y})${hasPoint ? ` · có ${pointsHere?.length} điểm tài nguyên` : ""}`
+                            : hasPoint
+                              ? `${pointsHere?.[0]?.name} · (${x}, ${y}) — bấm để mở Điểm Tài Nguyên`
+                              : `Tọa độ: (${x}, ${y})`}
                           style={{ minWidth: "28px" }}
                         >
-                          {cellIcon}
+                          <span className="relative flex h-full w-full items-center justify-center">
+                            {cellIcon}
+                            {hasPoint && (
+                              <span className={`absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full ${readyPointHere ? "bg-emerald-400" : "bg-emerald-700"}`} />
+                            )}
+                          </span>
                         </div>
                       );
                     })
@@ -1370,134 +1388,17 @@ return (
                           </div>
 
                           <div className="flex items-center gap-2 text-xs text-slate-400">
-                            <span>Khu: </span>
-                            <span className="text-slate-300 font-medium capitalize">{selectedNode.zone_type || "unknown"}</span>
+                            <span>Đại đạo: </span>
+                            <span className="text-slate-300 font-medium">{translatePath(selectedNode.path)}</span>
                             <span className="text-slate-500">|</span>
-                            <span>Tier: </span>
-                            <span className="text-slate-300 font-medium">{selectedNode.item_tier || "T1"}</span>
-                            <span className="text-slate-500">|</span>
-                            <span>Food Path: </span>
-                            <span className="text-slate-300 font-medium capitalize">{selectedNode.food_path || "none"}</span>
-                          </div>
-
-                          <div className="text-xs text-slate-400">
-                            Loại sản sinh: <span className="text-slate-300 font-medium">{selectedNode.production_type === "Material" ? "Vật phẩm" : "Nguyên Thạch"}</span>
+                            <span>Loại: </span>
+                            <span className="text-slate-300 font-medium">{selectedNode.node_category === "DEFENSE" ? "Công trình phòng thủ" : selectedNode.node_type}</span>
                           </div>
 
                           <div className="flex justify-between text-xs text-slate-400">
                             <span>{selectedNode.cells?.length || 1} ô · Độ bền: {selectedNode.hp}/{selectedNode.max_hp}</span>
                             {selectedNode.is_destroyed && <span className="text-rose-500 font-bold">Bị phá hủy</span>}
                           </div>
-
-                          {/* Keep detailed yield math collapsed so core land actions stay visible. */}
-                          {selectedNode.node_category !== "DEFENSE" && (
-                            <details className="rounded-xl border border-slate-800 bg-slate-950/30">
-                              <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-semibold text-emerald-300 flex items-center justify-between">
-                                <span>📊 Chi tiết sản lượng và sinh thái</span>
-                                <span className="text-slate-500 transition-transform group-open:rotate-180">⌄</span>
-                              </summary>
-                              {!selectedNode.is_destroyed && (() => {
-                                const yp = selectedNode.yield_preview;
-                                if (!yp) {
-                                  return (
-                                    <div className="p-3 text-xs text-slate-400">
-                                      Chưa có dữ liệu sản lượng. Hãy tải lại danh sách khu tài nguyên.
-                                    </div>
-                                  );
-                                }
-                                const factorMeta: Record<string, { icon: string; label: string }> = {
-                                  level: { icon: "⭐", label: "Cấp độ mỏ" },
-                                  dao: { icon: "☯️", label: "Đạo ngân (lưu phái vật phẩm)" },
-                                  area: { icon: "🗺️", label: "Diện tích Tiên Khiếu" },
-                                  conflict: { icon: "⚔️", label: "Xung đột Đạo ngân" },
-                                  ecology: { icon: "🌀", label: "Độ thuần khiết sinh thái" },
-                                  eco: { icon: "🌿", label: "Cân bằng sinh thái" },
-                                  labor: { icon: "⚙️", label: "Cường độ lao động" },
-                                  pop: { icon: "👥", label: "Dân số dị nhân" },
-                                };
-                                const itemSpec = itemDictionary[selectedNode.production_key];
-                                const itemName = selectedNode.production_type === "Stones"
-                                  ? "Nguyên Thạch"
-                                  : (itemSpec?.name || "vật phẩm");
-                                return (
-                                  <div className="p-3 bg-slate-950/80 rounded-xl border border-amber-500/30 text-xs space-y-2.5 shadow-md">
-                                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                                      <div className="font-bold text-amber-400 flex items-center gap-1.5">
-                                        <TrendingUp className="w-4 h-4 text-emerald-400" />
-                                        Phân Tích Hiệu Suất Sản Lượng
-                                      </div>
-                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                        yp.bonus >= 1.0
-                                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                          : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                                      }`}>
-                                        Hiệu suất thực tế: ×{yp.bonus.toFixed(2)}
-                                        {yp.capped && <span className="text-amber-400"> (chạm trần)</span>}
-                                      </span>
-                                    </div>
-
-                                    {/* Banner Sản Lượng Dự Tính (1 lần thu hoạch) */}
-                                    <div className="p-2.5 bg-gradient-to-r from-emerald-950/70 to-slate-900 border border-emerald-500/40 rounded-lg flex items-center justify-between shadow-inner">
-                                      <div>
-                                        <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                                          <Package className="w-3.5 h-3.5 text-emerald-300" />
-                                          Sản Lượng Dự Tính (1 Lần Thu Hoạch)
-                                        </div>
-                                        <div className="text-xs text-slate-300 mt-0.5">
-                                          Cơ bản {yp.base} × hiệu suất {yp.bonus.toFixed(2)}
-                                        </div>
-                                        <div className="text-[10px] text-slate-400 mt-0.5">
-                                          ≈ {yp.expected.toFixed(2)} món/lần · ~{formatNumber(Math.round(yp.per_hour * 10) / 10)} món/giờ
-                                        </div>
-                                      </div>
-                                      <div className="text-right">
-                                        <div className="text-sm font-extrabold text-emerald-300">
-                                          +{yp.whole.toLocaleString("vi-VN")} {selectedNode.production_type === "Stones" ? "Đá" : "món"}
-                                        </div>
-                                        {yp.remainder > 0.0001 && (
-                                          <div className="text-[10px] text-slate-400">
-                                            dồn {yp.remainder.toFixed(2)} cho lần sau
-                                          </div>
-                                        )}
-                                        <div className="text-[10px] text-amber-400 font-medium">{itemName}</div>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1.5 text-[11px]">
-                                      {yp.factors.map((factor) => {
-                                        const meta = factorMeta[factor.key] || { icon: "•", label: factor.key };
-                                        const delta = (factor.value - 1) * 100;
-                                        const negative = factor.value < 0.999;
-                                        const atDaoCap = factor.key === "dao" && factor.value >= YIELD_DAO_CAP;
-                                        return (
-                                          <div key={factor.key} className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
-                                            <span className="text-slate-300 flex items-center gap-1.5 shrink-0">
-                                              <span>{meta.icon}</span> {meta.label}:
-                                            </span>
-                                            <span className={negative ? "text-rose-400 font-bold text-right" : "text-emerald-400 font-bold text-right"}>
-                                              ×{factor.value.toFixed(2)}
-                                              <span className="text-slate-400 font-normal ml-1">
-                                                ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%{atDaoCap ? " · trần" : ""})
-                                              </span>
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
-                                      <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-amber-500/30">
-                                        <span className="text-slate-300 flex items-center gap-1.5">
-                                          <span>⚖️</span> Trần hệ số:
-                                        </span>
-                                        <span className={yp.capped ? "text-amber-400 font-bold" : "text-slate-400"}>
-                                          ×{yp.bonus.toFixed(2)} / ×{YIELD_TOTAL_CAP}
-                                          {yp.capped ? " (đã chạm trần)" : ""}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                            </details>
-                          )}
 
                           {/* Defense Structure Details */}
                           {!selectedNode.is_destroyed && selectedNode.node_category === "DEFENSE" && (() => {
@@ -1527,35 +1428,6 @@ return (
                               </details>
                             );
                           })()}
-
-                          {/* Countdown Timer */}
-                          {!selectedNode.is_destroyed && (
-                            <div className="text-xs text-slate-400 flex justify-between">
-                              <span>Thời gian tích tụ:</span>
-                              <span className="text-amber-400 font-semibold">
-                                <CountdownTimer node={selectedNode} timeRate={effectiveTimeRate} />
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Collect timing indicator - only for resource nodes */}
-                          {!selectedNode.is_destroyed && selectedNode.node_category !== "DEFENSE" && (
-                            <div className="pt-2">
-                              {canCollect(selectedNode, effectiveTimeRate) ? (
-                                <button
-                                  onClick={() => handleCollect(selectedNode.id)}
-                                  disabled={actionLoading}
-                                  className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm rounded-lg transition"
-                                >
-                                  {actionLoading ? "Đang thu hoạch..." : "Thu Hoạch Tài Nguyên"}
-                                </button>
-                              ) : (
-                                <div className="text-center text-xs text-slate-500 border border-slate-800/40 p-2 rounded">
-                                  Linh khí đang tích tụ (Chưa đạt mốc thời gian)
-                                </div>
-                              )}
-                            </div>
-                          )}
 
                           {/* Repair Node Section */}
                           {!selectedNode.is_destroyed && selectedNode.hp < selectedNode.max_hp && (() => {
@@ -1663,15 +1535,9 @@ return (
                       };
 
                       const categoryData: Record<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense", NodeOption[]> = {
-                        khu_trong: [
-                          { id: "FARMING_ZONE", name: "🌱 Khu Trồng Trọt (Tùy chỉnh)", desc: "Trồng tài nguyên thực vật theo Đại Đạo. Phí: 10 Tiên Nguyên Thạch.", cost: 10, qty: 0, zone: "khu_trong" },
-                        ],
-                        khu_nuoi: [
-                          { id: "BREEDING_ZONE", name: "🐄 Khu Chăn Nuôi (Tùy chỉnh)", desc: "Nuôi thú theo Đại Đạo. Phí: 24 Tiên Nguyên Thạch.", cost: 24, qty: 0, zone: "khu_nuoi" },
-                        ],
-                        khu_khai_thac: [
-                          { id: "MINING_ZONE", name: "⛏️ Khu Khai Thác (Tùy chỉnh)", desc: "Khai thác khoáng thạch theo Đại Đạo. Phí: 20 Tiên Nguyên Thạch.", cost: 20, qty: 0, zone: "khu_khai_thac" },
-                        ],
+                        khu_trong: [],
+                        khu_nuoi: [],
+                        khu_khai_thac: [],
                         defense: [
                           { id: "WALL", name: "🧱 Tường Thành", desc: "Chặn kẻ thù di chuyển. HP: 3000. Chi phí: 16 Tiên Nguyên Thạch + 2 Cổ trùng (Thú Bì, Thạch Bì).", cost: 16, qty: qtyWall, zone: "defense" },
                           { id: "WATCHTOWER", name: "🗼 Tháp Canh", desc: "Bắn kẻ thù phạm vi 3 ô. HP: 2000. Chi phí: 24 Tiên Nguyên Thạch + 2 Cổ trùng (Thiết Bì, Bán Thạch).", cost: 24, qty: qtyWatchtower, zone: "defense" },
@@ -1696,287 +1562,21 @@ return (
                             </div>
                           )}
 
-                          {/* Category Tabs */}
-                          <div className="flex bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[10px]">
-                            {["khu_trong", "khu_nuoi", "khu_khai_thac", "defense"].map((cat) => (
-                              <button
-                                key={cat}
-                                onClick={() => {
-                                  setBuildCategory(cat as ApiResponseData);
-                                  setPendingBuildZone(null); // Tắt bảng chọn tùy chỉnh khi chuyển tab!
-                                  setBuildCells([]);
-                                }}
-                                className={`flex-1 py-1 font-bold rounded capitalize transition-all ${
-                                  buildCategory === cat ? "bg-slate-800 text-amber-400" : "text-slate-400"
-                                }`}
-                              >
-                                {cat === "khu_trong" ? "🌱 Khu Trồng" : cat === "khu_nuoi" ? "🐄 Khu Nuôi" : cat === "khu_khai_thac" ? "⛏️ Khu Khai Thác" : "🛡️ Phòng Thủ"}
-                              </button>
-                            ))}
+                          {/* Production zones moved to the Điểm Tài Nguyên tab; the
+                              grid now only hosts DEFENSE structures. */}
+                          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2 text-[10px]">
+                            <span className="font-bold text-amber-400">🛡️ Công Trình Phòng Thủ</span>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab("points")}
+                              className="text-cyan-300 underline"
+                            >
+                              Điểm tài nguyên →
+                            </button>
                           </div>
 
                           <div className="space-y-3 pt-1">
-                            {pendingBuildZone ? (
-                              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-700/60 space-y-3 shadow-md">
-                                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                                  <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                                    {pendingBuildZone === "FARMING_ZONE" ? "🌱 Tùy chỉnh Khu Trồng Trọt" : pendingBuildZone === "BREEDING_ZONE" ? "🐄 Tùy chỉnh Khu Chăn Nuôi" : pendingBuildZone === "MINING_ZONE" ? "⛏️ Tùy chỉnh Khu Khai Thác" : "⚙️ Tùy chỉnh Mỏ Tài Nguyên"}
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 font-medium">Chi phí: 10 Tiên Nguyên Thạch</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] text-cyan-200">
-                                  <span>Vùng đã chọn: <strong>{buildCells.length} ô</strong>. Bấm hoặc kéo qua các ô trống liền cạnh để tô vùng.</span>
-                                  <div className="flex shrink-0 gap-2">
-                                    <button type="button" disabled={buildCells.length === 0} onClick={() => {
-                                      const remaining = buildCells.slice(0, -1);
-                                      setBuildCells(remaining);
-                                      setSelectedCell(remaining[0] || null);
-                                    }} className="text-cyan-300 underline disabled:text-slate-600">Hoàn tác</button>
-                                    <button type="button" onClick={() => { setBuildCells([]); setSelectedCell(null); }} className="text-cyan-300 underline">Xóa vùng</button>
-                                  </div>
-                                </div>
-
-                                {(() => {
-                                  // Parse path helper
-                                  const parseItemPaths = (pathVal: ApiResponseData): string[] => {
-                                    if (!pathVal) return [];
-                                    if (Array.isArray(pathVal)) return pathVal.map(p => String(p).trim());
-                                    if (typeof pathVal === "string") {
-                                      const s = pathVal.trim();
-                                      if (s.startsWith("[") && s.endsWith("]")) {
-                                        try {
-                                          const arr = JSON.parse(s);
-                                          if (Array.isArray(arr)) return arr.map(p => String(p).trim());
-                                        } catch (e) {}
-                                      }
-                                      const cleaned = s.replace(/[\[\]"]/g, "").trim();
-                                      return cleaned ? [cleaned] : [];
-                                    }
-                                    return [];
-                                  };
-
-                                  // Compute valid paths from itemDictionary
-                                  const pathsSet = new Set<string>();
-                                  const defaultPaths = [
-                                    "Wisdom Path", "Wood Path", "Fire Path", "Earth Path", "Metal Path", "Water Path",
-                                    "Wind Path", "Light Path", "Dark Path", "Ice Path", "Time Path",
-                                    "Space Path", "Blood Path", "Blade Path", "Sword Path",
-                                    "Food Path", "Star Path", "Poison Path", "Human Path", "Enslavement Path",
-                                    "Strength Path", "Bone Path", "Transformation Path", "Rule Path",
-                                    "Luck Path", "Refinement Path", "Soul Path", "Sound Path"
-                                  ];
-                                  defaultPaths.forEach(dp => pathsSet.add(dp));
-
-                                  Object.values(itemDictionary || {}).forEach(item => {
-                                    const paths = parseItemPaths(item.path);
-                                    paths.forEach(p => {
-                                      if (p) {
-                                        let formatted = p.trim();
-                                        if (!formatted.toLowerCase().endsWith("path")) {
-                                          formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1) + " Path";
-                                        } else {
-                                          formatted = formatted.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-                                        }
-                                        pathsSet.add(formatted);
-                                      }
-                                    });
-                                  });
-
-                                  // Helper to count items for a path
-                                  const getItemCountForPath = (pathName: string) => {
-                                    const rawPath = pathName.replace(/ Path$/i, '').trim().toLowerCase();
-                                    return Object.values(itemDictionary || {}).filter(item => {
-                                      const itemType = (item.type || item.item_type || "").toString();
-                                      if (["Currency", "Consumable"].includes(itemType)) return false;
-                                      const itemPaths = parseItemPaths(item.path).map(p => p.toLowerCase().replace(/ path$/i, '').trim());
-                                      return itemPaths.includes(rawPath);
-                                    }).length;
-                                  };
-
-                                  // Target zone category
-                                  const targetZone = pendingBuildZone === "FARMING_ZONE" ? "khu_trong"
-                                    : pendingBuildZone === "BREEDING_ZONE" ? "khu_nuoi"
-                                    : pendingBuildZone === "MINING_ZONE" ? "khu_khai_thac"
-                                    : buildCategory;
-
-                                  const targetZoneTitle = targetZone === "khu_trong" ? "🌱 Trồng Trọt"
-                                    : targetZone === "khu_nuoi" ? "🐄 Chăn Nuôi"
-                                    : targetZone === "khu_khai_thac" ? "⛏️ Khai Thác"
-                                    : "Tất cả";
-
-                                  // Sort paths alphabetically by Vietnamese translation
-                                  const sortedPaths = Array.from(pathsSet).sort((a, b) => {
-                                    const nameA = translatePath(a);
-                                    const nameB = translatePath(b);
-                                    return nameA.localeCompare(nameB, "vi");
-                                  });
-
-                                  // Filter paths by pathSearch query
-                                  const searchP = pathSearch.trim().toLowerCase();
-                                  const filteredPaths = sortedPaths.filter(p => {
-                                    if (!searchP) return true;
-                                    const viName = translatePath(p).toLowerCase();
-                                    const enName = p.toLowerCase();
-                                    return viName.includes(searchP) || enName.includes(searchP);
-                                  });
-
-                                  // Compute available items for the currently selected path & target zone
-                                  const selectedRawPath = buildPath.replace(/ Path$/i, '').trim().toLowerCase();
-                                  const availableItems = Object.values(itemDictionary || {}).filter(item => {
-                                    const itemPaths = parseItemPaths(item.path).map(p => p.toLowerCase().replace(/ path$/i, '').trim());
-                                    const matchesPath = buildPath === "ALL" || itemPaths.includes(selectedRawPath);
-                                    const matchesZone = showAllZoneItems || !["khu_trong", "khu_nuoi", "khu_khai_thac"].includes(targetZone)
-                                      ? true
-                                      : getItemZoneCategory(item) === targetZone;
-                                    return matchesPath && matchesZone;
-                                  }).sort((a, b) => (a.rank || 0) - (b.rank || 0) || a.name.localeCompare(b.name, "vi"));
-
-                                  // Filter items by itemSearch query
-                                  const searchI = itemSearch.trim().toLowerCase();
-                                  const filteredItems = availableItems.filter(item => {
-                                    if (!searchI) return true;
-                                    return item.name.toLowerCase().includes(searchI) || item.id.toLowerCase().includes(searchI);
-                                  });
-
-                                  const selectedItemSpec = buildProdKey ? itemDictionary[buildProdKey] : null;
-
-                                  return (
-                                    <div className="space-y-3">
-                                      <div>
-                                        <div className="flex justify-between items-center mb-1">
-                                          <label className="text-[11px] font-semibold text-slate-300">1. Chọn Đại Đạo (Path)</label>
-                                          <span className="text-[10px] text-amber-400 font-bold">{translatePath(buildPath)}</span>
-                                        </div>
-
-                                        {/* Search Input for Path */}
-                                        <input
-                                          type="text"
-                                          placeholder="🔍 Tìm Đại Đạo (vd: Huyết Đạo, Trí Đạo...)"
-                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 mb-1.5 focus:border-amber-500 outline-none transition"
-                                          value={pathSearch}
-                                          onChange={(e) => setPathSearch(e.target.value)}
-                                        />
-
-                                        <select
-                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:border-amber-500 outline-none cursor-pointer"
-                                          value={buildPath}
-                                          onChange={(e) => {
-                                            setBuildPath(e.target.value);
-                                            setBuildProdKey(""); // reset item when path changes
-                                            setItemSearch("");
-                                          }}
-                                        >
-                                          <option value="ALL">✨ Tất cả Đại Đạo (All Paths)</option>
-                                          {filteredPaths.map(p => {
-                                            const icon = getPathIconAndColor(p, "RESOURCE").icon;
-                                            const count = getItemCountForPath(p);
-                                            return (
-                                              <option key={p} value={p}>
-                                                {icon} {translatePath(p)} ({p}) — [{count} vật phẩm]
-                                              </option>
-                                            );
-                                          })}
-                                        </select>
-                                      </div>
-
-                                      <div>
-                                        <div className="flex justify-between items-center mb-1">
-                                          <label className="text-[11px] font-semibold text-slate-300">
-                                            2. Chọn vật phẩm sản xuất {targetZoneTitle}
-                                          </label>
-                                          <span className="text-[10px] text-slate-400 font-medium">({filteredItems.length} vật phẩm)</span>
-                                        </div>
-
-                                        {/* Search Input for Item */}
-                                        <input
-                                          type="text"
-                                          placeholder="🔍 Tìm theo tên vật phẩm..."
-                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 mb-1.5 focus:border-amber-500 outline-none transition"
-                                          value={itemSearch}
-                                          onChange={(e) => setItemSearch(e.target.value)}
-                                        />
-
-                                        <select
-                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:border-amber-500 outline-none cursor-pointer"
-                                          value={buildProdKey}
-                                          onChange={(e) => setBuildProdKey(e.target.value)}
-                                        >
-                                          <option value="" disabled>-- Chọn vật phẩm ({filteredItems.length} vật phẩm) --</option>
-                                          {filteredItems.map(item => {
-                                            const itemCat = getItemZoneCategory(item);
-                                            const catTag = itemCat === "khu_trong" ? "🌱 Trồng" : itemCat === "khu_nuoi" ? "🐄 Nuôi" : "⛏️ Khai Thác";
-                                            const rankTag = item.rank ? (item.rank >= 6 ? `Rank ${item.rank} ⭐ Tiên Cấp` : `Rank ${item.rank}`) : "Rank 1";
-                                            return (
-                                              <option key={item.id} value={item.id}>
-                                                [{catTag}] [{rankTag}] {item.name}
-                                              </option>
-                                            );
-                                          })}
-                                        </select>
-
-                                        {filteredItems.length === 0 && (
-                                          <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] text-amber-300 text-center space-y-1">
-                                            <div>Chưa tìm thấy vật phẩm thuộc nhóm <strong>{targetZoneTitle}</strong> trong <strong>{translatePath(buildPath)}</strong>.</div>
-                                            <button
-                                              type="button"
-                                              onClick={() => setShowAllZoneItems(true)}
-                                              className="text-cyan-400 underline font-semibold cursor-pointer"
-                                            >
-                                              Bấm vào đây để xem tất cả vật phẩm của {translatePath(buildPath)}
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* Selected Item Preview Card */}
-                                      {selectedItemSpec && (
-                                        <div className="p-3 bg-slate-950/90 rounded-xl border border-amber-500/40 space-y-1.5 shadow-lg">
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-xs font-bold text-amber-400">{selectedItemSpec.name}</span>
-                                            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
-                                              Rank {selectedItemSpec.rank || 1} {(selectedItemSpec.rank && selectedItemSpec.rank >= 6) ? "⭐ Tiên Cấp" : ""}
-                                            </span>
-                                          </div>
-                                          {selectedItemSpec.description && (
-                                            <div className="text-[10px] text-slate-300 leading-relaxed">{selectedItemSpec.description}</div>
-                                          )}
-                                          <div className="text-[9px] text-slate-400 pt-1.5 flex items-center justify-between border-t border-slate-800">
-                                            <span>Đại Đạo: <strong className="text-slate-200">{translatePath(buildPath)}</strong></span>
-                                            <span>Chu kỳ thu: <strong className="text-emerald-400">10 tiếng/lần</strong></span>
-                                          </div>
-                                          {(() => {
-                                            const seedHave = player.materials_inventory?.[buildProdKey] ?? 0;
-                                            const seedNeed = APERTURE_SEED_BASE;
-                                            const seedShort = seedHave < seedNeed;
-                                            return (
-                                              <div className={`text-[10px] pt-1.5 flex items-center justify-between border-t border-slate-800 font-semibold ${seedShort ? "text-rose-400" : "text-emerald-400"}`}>
-                                                <span>🌱 Giống cần: <strong>{seedNeed}× {selectedItemSpec.name}</strong></span>
-                                                <span>Trong túi: {seedHave}</span>
-                                              </div>
-                                            );
-                                          })()}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                                <div className="flex gap-2 pt-2">
-                                  <button
-                                    onClick={() => { setPendingBuildZone(null); setBuildCells([]); }}
-                                    className="flex-1 py-1.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded hover:bg-slate-700 transition"
-                                  >
-                                    Hủy
-                                  </button>
-                                  <button
-                                    onClick={() => handleBuildNode(pendingBuildZone, buildPath, buildProdKey)}
-                                    disabled={actionLoading || !buildProdKey || buildCells.length === 0 || (player.materials_inventory?.[buildProdKey] ?? 0) < APERTURE_SEED_BASE}
-                                    className="flex-1 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 disabled:from-slate-800 disabled:text-slate-500 text-slate-950 text-[10px] font-bold rounded transition"
-                                  >
-                                    {actionLoading ? "Đang xây..." : "Xác nhận Xây"}
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
+                            {
                               categoryData[buildCategory]?.map((option) => {
                                 const nodeItemID = "node_" + option.id.toLowerCase();
                                 const hasModel = option.qty > 0;
@@ -2012,7 +1612,7 @@ return (
                                   </div>
                                 );
                               })
-                            )}
+                            }
                           </div>
                         </div>
                       );
@@ -2021,7 +1621,7 @@ return (
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 text-slate-500 text-center">
                     <Plus className="w-12 h-12 text-slate-700 mb-2" />
-                    <p className="text-sm">Click vào một ô trên bản đồ Tiên Khiếu để xây dựng mỏ hoặc xem thông tin.</p>
+                    <p className="text-sm">Click vào một ô trên bản đồ để xây công trình phòng thủ, hoặc mở tab Điểm Tài Nguyên để thu hoạch.</p>
                   </div>
                 )}
               </div>
@@ -2040,7 +1640,10 @@ return (
         </div>
       )}
 
-        {/* TAB 3: DAO MARKS & DAO COMBAT PROFILE */}
+        {/* TAB 3: RESOURCE POINTS (canon blessed-land mines) */}
+        {activeTab === "points" && <AperturePointsPanel />}
+
+        {/* TAB 4: DAO MARKS & DAO COMBAT PROFILE */}
         {activeTab === "dao" && (
           <div className="space-y-6">
             {/* Header & Controls Panel */}
@@ -3327,11 +2930,3 @@ const Loader: React.FC = () => (
   </svg>
 );
 
-// Helper helper for checking if enough time passed to collect node resources
-function canCollect(node: ApertureResourceNode, timeRate: number = 1.0): boolean {
-  if (!node.last_collected_at) return true;
-  const lastTime = new Date(node.last_collected_at).getTime();
-  const rate = timeRate <= 0 ? 1.0 : timeRate;
-  const nextCollectTime = lastTime + (node.production_interval_hours * 60 * 60 * 1000) / rate;
-  return Date.now() >= nextCollectTime;
-}

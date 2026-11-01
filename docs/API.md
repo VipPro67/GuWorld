@@ -242,15 +242,15 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 | POST | `/immortal-aperture/nodes/:id/uninstall` |
 | DELETE | `/immortal-aperture/nodes/:id` |
 | POST | `/immortal-aperture/points/collect-all` |
-| GET | `/immortal-aperture/points` | Danh sách Điểm Tài Nguyên (tích lũy lười: `stock` được cập nhật theo `last_produced_at × time_rate`, cap `stock_cap`). |
+| GET | `/immortal-aperture/points` | Danh sách Điểm Tài Nguyên (tích lũy lười: `stock` cập nhật theo `last_produced_at × time_rate`, cap `stock_cap`). Mỗi điểm kèm field view-only do server tính: `produce_key`, `worker_race`, `production_interval_hours`, `next_item_id`, `assigned_workers`, `yield_preview` (`base/expected/whole/remainder/bonus/raw_bonus/capped/per_hour/factors`). |
 | POST | `/immortal-aperture/points/:id/collect` |
 | POST | `/immortal-aperture/points/:id/revitalize` | Bồi Dưỡng: nộp vật liệu cùng phai (`<produce_key>_rank<N>`), hồi `vitality` theo lượng nộp. |
 | POST | `/immortal-aperture/points/:id/upgrade` | Nâng cấp theo Tiên Nguyên Thạch, tối đa cấp 5. |
-| GET/POST | `/immortal-aperture/points/:id/workers` | Phân công dị nhân vào điểm (+0.25% yield/500 dân định dạng). |
+| GET/POST | `/immortal-aperture/points/:id/workers` | Phân công dị nhân vào điểm (+0.25 yield cho mỗi 500 dân, trần +25%). GET trả **mảng** worker, không bọc `{workers}`. |
 | DELETE | `/immortal-aperture/points/:id/workers/:worker_id` |
-| GET | `/immortal-aperture/world-points` | Điểm tài nguyên ngoài map của vùng đang đứng (sản lượng 1× thời gian thực, không nhân Đạo Ngân tự nhiên). |
-| POST | `/immortal-aperture/world-points/:id/collect` | Thu hoạch tại chỗ: phải đứng cách ≤ 6 ô, vùng phải chặn an toàn, ô canh giữ (guardian cell) phải vừa được dọn (Redis `cleared_cells`). |
-| POST | `/immortal-aperture/world-points/:id/transplant` | Di Dời núi về Tiên Khiếu (canon Immortal Aperture Transplantation): cần vitality ≥ 70%, 1× `ITEM_APERTURE_EXPANSION_PILL` + Tiên Nguyên Thạch 100/200/400 theo grade; điểm thế giới tự hồi sinh về sau. |
+| GET | `/immortal-aperture/world-points` | Điểm tài nguyên ngoài map của vùng đang đứng (sản lượng 1× thời gian thực, không nhân Đạo Ngân tự nhiên). Server top-up vùng trước khi trả; worker `World Resource Points` quét mỗi 10 phút các vùng hoang dã (`KHU_VUC`/`BOSS_ZONE`/`PVP_ZONE`): tối đa 2 mỏ thường + 1 núi danh (`point_class=FAMOUS`) khi vùng rank ≥ 4 và có ô Boss. |
+| POST | `/immortal-aperture/world-points/:id/collect` | Thu hoạch tại chỗ: cùng vùng, cách ≤ 6 ô (Chebyshev), không phải vùng an toàn. Ô đang có **world actor sống** (boss/quái trong Redis actor cache) thì bị chặn — hạ guardian rồi khai thác; ô trống khai thác trực tiếp. Cache không khả dụng thì fail-open. |
+| POST | `/immortal-aperture/world-points/:id/transplant` | Di Dời núi về Tiên Khiếu (canon Immortal Aperture Transplantation): phải đứng cùng vùng cách ≤ 6 ô, vitality ≥ 70%, Tiên Khiếu < 8 điểm, 1× `ITEM_APERTURE_EXPANSION_PILL` + Tiên Nguyên Thạch 100/200/400 theo grade. Mỏ được xếp vào ô trống trên lưới 20×20; vùng cũ tự mọc mỏ khác. |
 | POST | `/immortal-aperture/time-rate` |
 | POST | `/immortal-aperture/labor` |
 | POST | `/immortal-aperture/cleanse-dao-marks` | Thanh Đạo Tẩy Thể — bóc tách Đạo Ngân ngoại hệ (body `{path, marks}`), tiêu hao Tiên Nguyên Thạch, hoàn trả 30% dưới dạng Đạo Tài (`refund_item`, `refund_qty`, `refund_marks`), cooldown 12 giờ. |
@@ -274,9 +274,11 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 | POST | `/tribulations/:eventId/realtime-escape` | Rút lui khỏi map kiếp về vị trí an toàn, áp dụng cùng cơ chế bàn giao lease realtime. |
 | POST | `/tribulations/realtime-exit` | Thoát Tiên Khiếu không cần biết `eventId` (dùng được sau refresh hoặc khi event đã hết). Handoff lease, đồng bộ HP quái/node, đưa nhân vật về vị trí cũ đã lưu (kể cả hub nếu còn active và tọa độ hợp lệ); nếu region không còn hợp lệ thì dùng khu vực an toàn active gần nhất rồi mới fallback sang hub. |
 
-`POST /immortal-aperture/nodes` accepts `{node_type, x, y, path, prod_key, cells}`. `cells` is a connected array of `{x,y}` cells on the 20×20 grid; omitted `cells` means the single anchor cell. The seed cost is `ApertureNodeTemplate.seed_amount` (100) for every rank. Resource zones are capped at `min(area_size / 100000, 200)` per aperture.
+`POST /immortal-aperture/nodes` accepts `{node_type, x, y, path, prod_key, cells}` but **rejects every non-DEFENSE type** (production moved to resource points). `cells` is a connected array of `{x,y}` cells on the 20×20 grid; omitted `cells` means the single anchor cell. Defense structures require Tiên Nguyên Thạch plus the template's required Gu (consumed permanently).
 
-`GET /immortal-aperture/nodes` returns each node's `cells`, its combat-derived `dao_conflict_multiplier` when below 1, and a server-computed `yield_preview`:
+`GET /immortal-aperture/nodes` returns only defense structures (`node_category = DEFENSE`) with `cells`, `defense_power`, `attack_range`, `hp_bonus`, `damage_reduction`, `blocks_movement` and `required_gu_*`. It no longer returns `yield_preview` or `production_*` values (those columns are legacy).
+
+`GET /immortal-aperture/points` and `GET /immortal-aperture/world-points` return each point with a server-computed `yield_preview`:
 
 ```json
 "yield_preview": {
@@ -287,7 +289,7 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 }
 ```
 
-`factors` keys are `level, dao, area, conflict, ecology, eco, labor, pop`. Yield is `max(10, 10 × bonus)`, so every rank — and every debuffed node — yields at least 10 per harvest, and the 100-seed planting cost always repays within 10 harvests. `production_amount` is legacy: the harvest formula no longer reads it.
+`factors` keys are `level, dao, area, conflict, ecology, labor, pop` (server order). Count per interval is `10 × min(50, product of factors)`; the client must not re-derive it. `per_hour` already folds `time_rate` (1× for world points) and the template interval.
 
 `POST /immortal-aperture/nodes/batch` accepts `{action, node_ids}` for `repair`, `upgrade`, or permanent `delete` of up to 400 selected nodes. Repair and upgrade validate and charge the combined cost in one transaction.
 

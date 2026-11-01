@@ -87,6 +87,7 @@ const RADAR_MARKER_CLASS: Record<WorldMarker["kind"], string> = {
   teleport: "h-2.5 w-2.5 rounded-full bg-cyan-400 border border-blue-950 shadow-[0_0_6px_#38bdf8]",
   portal: "h-3 w-3 rounded-full bg-blue-400 border border-white shadow-[0_0_8px_#38bdf8] animate-pulse",
   sect: "h-3.5 w-3.5 rounded border text-[8px]",
+  resource: "h-3 w-3 rotate-45 rounded-sm bg-emerald-400 border border-emerald-950 shadow-[0_0_7px_#10b981]",
 };
 
 function radarMarkerSpec(marker: WorldMarker): { className: string; glyph: string; title: string } {
@@ -110,6 +111,14 @@ function radarMarkerSpec(marker: WorldMarker): { className: string; glyph: strin
   }
   if (marker.kind === "portal") {
     return { className: RADAR_MARKER_CLASS.portal, glyph: "", title: `Cổng: Đến ${marker.name}` };
+  }
+  if (marker.kind === "resource") {
+    const famous = marker.resource?.point_class === "FAMOUS";
+    return {
+      className: `${RADAR_MARKER_CLASS.resource} ${famous ? "bg-amber-400 shadow-[0_0_7px_#f59e0b]" : ""}`,
+      glyph: "",
+      title: `${famous ? "Núi Danh" : "Mỏ"}: ${marker.name} · ${marker.resource?.stock_total ?? 0}/${marker.resource?.stock_cap ?? 0}`,
+    };
   }
   return { className: RADAR_MARKER_CLASS.teleport, glyph: "", title: `Truyền Tống: ${marker.name}` };
 }
@@ -160,6 +169,7 @@ const menuGroups: Array<{ title: string; items: Array<{ label: string; icon: typ
     { label: "Truyền Tống Trận", icon: Compass, special: "teleport-directory" },
     { label: "Bố trí Truyền Tống Trận", icon: Plus, special: "teleport-build" },
     { label: "Tiên khiếu", icon: Sparkles, view: "aperture", minRank: 6 },
+    { label: "Mỏ tài nguyên", icon: Gem, panel: "resources" },
     { label: "Bí cảnh", icon: Gem, view: "dungeon" },
     { label: "Mộng cảnh", icon: Compass, view: "dream-realm" },
     { label: "Tông môn", icon: Crown, view: "sect" },
@@ -353,6 +363,7 @@ export function MMOHud(props: MMOHudProps) {
   const zoneMarkers = useWorldStore((state) => state.zoneMarkers);
   const zoneMarkersRegion = useWorldStore((state) => state.zoneMarkersRegion);
   const fetchZoneMarkers = useWorldStore((state) => state.fetchZoneMarkers);
+  const fetchWorldResourcePoints = useWorldStore((state) => state.fetchWorldResourcePoints);
 
   const [showTeleportDirectory, setShowTeleportDirectory] = useState(false);
   const [showTeleportBuild, setShowTeleportBuild] = useState(false);
@@ -413,15 +424,20 @@ export function MMOHud(props: MMOHudProps) {
     fetchDrops();
     fetchCells();
     void fetchZoneMarkers(zoneRegionId);
+    if (zoneRegionId && zoneRegionId !== "aperture_tribulation") void fetchWorldResourcePoints(zoneRegionId);
     const dropsTimer = window.setInterval(fetchDrops, 8000);
     const cellsTimer = window.setInterval(fetchCells, 30000);
     const markersTimer = window.setInterval(() => void fetchZoneMarkers(zoneRegionId), 30000);
+    const resourceTimer = window.setInterval(() => {
+      if (zoneRegionId && zoneRegionId !== "aperture_tribulation") void fetchWorldResourcePoints(zoneRegionId);
+    }, 30000);
     return () => {
       window.clearInterval(dropsTimer);
       window.clearInterval(cellsTimer);
       window.clearInterval(markersTimer);
+      window.clearInterval(resourceTimer);
     };
-  }, [props.connected, props.worldActive, props.player?.id, zoneRegionId, fetchGroundDrops, fetchNearbyCells, fetchZoneMarkers]);
+  }, [props.connected, props.worldActive, props.player?.id, zoneRegionId, fetchGroundDrops, fetchNearbyCells, fetchZoneMarkers, fetchWorldResourcePoints]);
 
   const handleInvitePlayer = async (username: string) => {
     let party = useGameStore.getState().party;

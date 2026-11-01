@@ -195,6 +195,27 @@ func schemaAperture() error {
 	ALTER TABLE aperture_resource_points ADD COLUMN IF NOT EXISTS point_class VARCHAR(10) NOT NULL DEFAULT 'NORMAL';`); err != nil {
 		return err
 	}
+	// WORLD scope points are public mines seeded per region. The partial unique
+	// index makes seeding idempotent and safe under concurrent sweeps; the
+	// de-duplicate DELETE repairs installs that predate it.
+	if err := execSchema("aperture_world_points_region_cell_unique", `
+	WITH ranked AS (
+		SELECT id, ROW_NUMBER() OVER (
+			PARTITION BY region_id, x, y
+			ORDER BY (COALESCE(point_class, 'NORMAL') = 'FAMOUS') DESC, created_at DESC NULLS LAST, id DESC
+		) AS rn
+		FROM aperture_resource_points
+		WHERE scope = 'WORLD'
+	)
+	DELETE FROM aperture_resource_points p
+	USING ranked r
+	WHERE p.id = r.id AND r.rn > 1;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_aperture_world_points_region_cell
+		ON aperture_resource_points (region_id, x, y) WHERE scope = 'WORLD';
+	CREATE INDEX IF NOT EXISTS idx_aperture_world_points_region
+		ON aperture_resource_points (region_id) WHERE scope = 'WORLD';`); err != nil {
+		return err
+	}
 	if err := execSchema("aperture_point_workers", `
 	CREATE TABLE IF NOT EXISTS aperture_point_workers (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -35,6 +35,7 @@ export const ALL_QUICK_ACTIONS: QuickActionDef[] = [
   // Thế giới
   { id: "maps", label: "Bản đồ", icon: Compass, category: "Thế giới", panel: "maps" },
   { id: "aperture", label: "Tiên khiếu", icon: Sparkles, category: "Thế giới", view: "aperture", minRank: 6 },
+  { id: "resources", label: "Mỏ tài nguyên", icon: Gem, category: "Thế giới", panel: "resources" },
   { id: "dungeon", label: "Bí cảnh", icon: Gem, category: "Thế giới", view: "dungeon" },
   { id: "dream-realm", label: "Mộng cảnh", icon: Compass, category: "Thế giới", view: "dream-realm" },
   { id: "sect", label: "Tông môn", icon: Crown, category: "Thế giới", view: "sect" },

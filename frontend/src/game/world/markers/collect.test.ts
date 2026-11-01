@@ -138,3 +138,72 @@ test("findNearestMarker respects per-kind interaction ranges", () => {
   assert.equal(findNearestMarker(markers, { x: 0, y: 0 }, "vein")?.id, "vein-1");
   assert.equal(findNearestMarker(markers, { x: 0, y: 0 }, "drop"), null);
 });
+
+test("world resource points become mine markers within the 6-cell range", () => {
+  const markers = collectMarkers({
+    regionId: "bach_cot_son",
+    resourcePoints: [
+      {
+        id: "point-1",
+        region_id: "bach_cot_son",
+        x: 10,
+        y: 10,
+        name: "Thung Lũng Linh Thảo",
+        grade: "LOW",
+        point_class: "NORMAL",
+        state: "ACTIVE",
+        vitality: 80,
+        stock_total: 12,
+        stock_cap: 40,
+      },
+      {
+        id: "point-2",
+        region_id: "bach_cot_son",
+        x: 20,
+        y: 20,
+        name: "Núi Đãng Hồn",
+        grade: "TOP",
+        point_class: "FAMOUS",
+        state: "EXHAUSTED",
+        vitality: 0,
+        stock_total: 0,
+        stock_cap: 60,
+      },
+    ],
+  });
+
+  const normal = markers.find((marker) => marker.id === "point-1");
+  assert.ok(normal);
+  assert.equal(normal.kind, "resource");
+  assert.equal(normal.tone, "neutral");
+  assert.equal(normal.interaction?.action.type, "harvest-resource");
+  assert.equal(normal.interaction?.radiusCells, 6);
+  assert.equal(normal.interaction?.label, "Khai thác");
+
+  const famous = markers.find((marker) => marker.id === "point-2");
+  assert.ok(famous);
+  assert.equal(famous.tone, "rare");
+  assert.equal(famous.interaction?.label, "Chưa có tài nguyên");
+});
+
+test("resource markers from another region are filtered out", () => {
+  const markers = collectMarkers({
+    regionId: "bach_cot_son",
+    resourcePoints: [
+      {
+        id: "point-3",
+        region_id: "am_hon_sa_vuc",
+        x: 1,
+        y: 1,
+        name: "Mạch Quặng",
+        grade: "MID",
+        point_class: "NORMAL",
+        state: "ACTIVE",
+        vitality: 100,
+        stock_total: 5,
+        stock_cap: 30,
+      },
+    ],
+  });
+  assert.deepEqual(markers, []);
+});

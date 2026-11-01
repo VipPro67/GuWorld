@@ -569,6 +569,7 @@ func main() {
 	handlers.StartWorldMonsterWorker(ctx)
 	handlers.StartSpatialRealmExpiryWorker(ctx)
 	handlers.StartPrimevalVeinWorker(ctx)
+	handlers.StartWorldResourcePointWorker(ctx)
 	handlers.StartArenaSettlementWorker(ctx)
 	handlers.StartAuctionSettlementWorker(ctx)
 	go handlers.StartBeastBettingWorker(ctx)
