@@ -176,8 +176,8 @@ export const DivinationModal: React.FC = () => {
   const gStatus = activeGuDivinationReport?.status_type;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
-      <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-amber-500/40 bg-neutral-950 shadow-[0_0_50px_rgba(245,158,11,0.2)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md md:p-4">
+      <div className="relative flex h-full max-h-full w-full flex-col overflow-hidden border border-amber-500/40 bg-neutral-950 shadow-[0_0_50px_rgba(245,158,11,0.2)] md:h-auto md:max-h-[92vh] md:max-w-3xl md:rounded-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-amber-500/20 bg-neutral-900/90 px-6 py-4">
           <div className="flex items-center gap-3">
@@ -246,7 +246,7 @@ export const DivinationModal: React.FC = () => {
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 space-y-5 overflow-y-auto p-6 text-sm">
+        <div className="flex-1 space-y-5 overflow-y-auto p-4 text-sm md:p-6">
           {/* TAB 1: PLAYER DIVINATION */}
           {activeScoutingTab === "player" && (
             <div className="space-y-4">

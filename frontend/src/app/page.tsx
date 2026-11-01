@@ -290,7 +290,6 @@ export default function Home() {
   // Phaser is the only persistent gameplay world. Old view IDs remain aliases
   // for navigation compatibility and never open a legacy map surface.
   const isGameWorldView = Boolean(player && !player.needs_onboarding);
-  // Full-bleed modes take the whole surface instead of the side drawer.
   const isFullBleedView = currentView === "practice-room" || isGameWorldSurface;
   const isWideFeatureView = ["aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "death-arena", "martial-arena"].includes(currentView);
 
@@ -357,16 +356,14 @@ export default function Home() {
           <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
             <PhaserWorldHost worldActive={isGameWorldSurface || currentView === "practice-room"} onExit={() => setView("character")} />
             {!isGameWorldSurface && (
-              <section
-                role="dialog"
-                aria-label={viewTitles[currentView] || "Chức năng"}
-                className={`mmo-panel-theme mmo-paper-theme mmo-paper-surface absolute z-40 flex flex-col overflow-hidden text-[#49331f] ${
-                  isFullBleedView
-                    ? "inset-0"
-                    : `inset-x-0 inset-y-0 md:inset-y-3 md:left-auto md:right-3 md:top-3 md:rounded-2xl ${isWideFeatureView ? "md:w-[min(58vw,760px)]" : "md:w-[min(46vw,560px)]"}`
-                }`}
-              >
-                {!isFullBleedView && (
+              <div className={`absolute inset-0 z-40 flex items-center justify-center ${isFullBleedView ? "" : "bg-black/75 backdrop-blur-sm md:p-4"}`}>
+                <section
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={viewTitles[currentView] || "Chức năng"}
+                  className={`mmo-panel-theme mmo-paper-theme mmo-paper-surface relative flex h-full w-full flex-col overflow-hidden text-[#49331f] ${isFullBleedView ? "" : `md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:rounded-2xl ${isWideFeatureView ? "md:w-[min(76vw,1100px)]" : "md:w-[min(64vw,820px)]"}`}`}
+                >
+                  {!isFullBleedView && (
                   <div className="mmo-paper-heading flex min-h-14 shrink-0 items-center justify-between gap-3 px-4 sm:px-5">
                     <div className="min-w-0">
                       <div className="truncate font-serif text-base font-semibold text-[#49331f]">{viewTitles[currentView] || "Chức năng"}</div>
@@ -383,8 +380,8 @@ export default function Home() {
                       </button>
                     </div>
                   </div>
-                )}
-                <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4 pb-28 sm:pb-8 ${isFullBleedView ? "p-0" : ""}`}>
+                  )}
+                  <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-28 sm:p-4 sm:pb-8 ${isFullBleedView ? "p-0" : ""}`}>
         {currentView === "practice-room" ? (
           <div className="w-full">
             <TrainingRoom onClose={() => setView("dashboard")} />
@@ -549,7 +546,8 @@ export default function Home() {
           <div className="py-12 text-center font-mono text-zinc-500">Giao diện không khả dụng</div>
         )}
                 </div>
-              </section>
+                </section>
+              </div>
             )}
           </div>
         )}

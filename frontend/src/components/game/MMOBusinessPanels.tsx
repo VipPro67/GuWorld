@@ -36,17 +36,18 @@ export function MMOBusinessPanels({ panel, onClose, onLoadoutSaved }: MMOBusines
   const meta = PANEL_META[panel];
   const Icon = meta.icon;
   return (
-    <div className="absolute inset-0 z-30 flex justify-end">
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 backdrop-blur-sm">
       <button
         type="button"
         aria-label="Đóng bảng điều khiển"
-        className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+        className="absolute inset-0"
         onClick={onClose}
       />
       <aside
         role="dialog"
+        aria-modal="true"
         aria-label={meta.title}
-        className="mmo-panel-theme mmo-paper-theme mmo-paper-surface relative z-10 flex h-full w-full max-w-[min(94vw,640px)] flex-col border-l border-[#80603a] text-[#49331f]"
+        className="mmo-panel-theme mmo-paper-theme mmo-paper-surface relative z-10 flex h-full w-full flex-col border border-[#80603a] text-[#49331f] md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:w-[min(92vw,1152px)] md:rounded-xl"
       >
         <header className="mmo-paper-heading flex h-14 shrink-0 items-center justify-between gap-3 px-4">
           <div className="flex items-center gap-2">

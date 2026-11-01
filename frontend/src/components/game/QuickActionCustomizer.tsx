@@ -218,9 +218,9 @@ export function QuickActionCustomizer({ inline = false, onClose }: QuickActionCu
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 select-none">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center select-none md:p-4">
       <div className="fixed inset-0 bg-black/65 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-[min(94vw,440px)] rounded-2xl border border-[#a88952]/70 bg-[#16100bf5] p-4 text-[#f4e8cb] shadow-2xl">
+      <div className="relative z-10 h-full w-full overflow-y-auto border border-[#a88952]/70 bg-[#16100bf5] p-4 text-[#f4e8cb] shadow-2xl md:h-auto md:max-h-[90dvh] md:w-[min(94vw,440px)] md:rounded-2xl">
         <div className="mb-3 flex items-center justify-between border-b border-[#b89a66]/30 pb-2">
           <div className="flex items-center gap-2">
             <Settings2 className="h-4 w-4 text-[#d8b979]" />

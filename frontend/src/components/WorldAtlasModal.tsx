@@ -339,7 +339,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] h-[100dvh] flex items-center justify-center bg-black/80 px-2 sm:px-4 md:px-6 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur-md"
+      className="fixed inset-0 z-[100] h-[100dvh] flex items-center justify-center bg-black/80 backdrop-blur-md md:px-6 md:py-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -348,7 +348,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
         role="dialog"
         aria-modal="true"
         aria-labelledby="world-atlas-title"
-        className="mmo-panel-theme mmo-paper-theme mmo-paper-surface flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-xl text-[#49331f]"
+        className="mmo-panel-theme mmo-paper-theme mmo-paper-surface flex h-full max-h-full w-full flex-col overflow-hidden text-[#49331f] md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:max-w-6xl md:rounded-xl"
       >
         {/* Header */}
         <header className="mmo-paper-heading flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
