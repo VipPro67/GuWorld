@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -67,6 +68,22 @@ func AdminCreateGiftCode(c *gin.Context) {
 	if len(req.Code) < 4 || len(req.Code) > 50 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã quà phải từ 4-50 ký tự"})
 		return
+	}
+	for i := range req.Rewards {
+		if req.Rewards[i].Type != "resource_point" {
+			continue
+		}
+		if req.Rewards[i].Amount < 1 || req.Rewards[i].Amount > float64(aperturePointPointGenCap) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Phần thưởng Điểm Tài Nguyên phải từ 1-%d điểm", aperturePointPointGenCap)})
+			return
+		}
+		if pointType := strings.ToUpper(strings.TrimSpace(req.Rewards[i].ID)); pointType != "" {
+			if _, ok := GetResourcePointTemplate(pointType); !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Loại điểm tài nguyên không tồn tại: " + pointType})
+				return
+			}
+			req.Rewards[i].ID = pointType
+		}
 	}
 
 	if req.MaxUses <= 0 {
@@ -233,8 +250,12 @@ func RedeemGiftCode(c *gin.Context) {
 		return
 	}
 
-	newGus, err := applyGiftCodeRewardsTx(tx, &player, gc.Rewards)
+	applyResult, err := applyGiftCodeRewardsTx(tx, &player, gc.Rewards)
 	if err != nil {
+		if errors.Is(err, errGiftCodeNeedsAperture) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi áp dụng phần thưởng: " + err.Error()})
 		return
 	}
@@ -260,7 +281,7 @@ func RedeemGiftCode(c *gin.Context) {
 			return
 		}
 	}
-	if err := db.AddPlayerGusBulk(tx, player.ID.String(), newGus); err != nil {
+	if err := db.AddPlayerGusBulk(tx, player.ID.String(), applyResult.NewGus); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
 		return
 	}
@@ -306,13 +327,24 @@ func RedeemGiftCode(c *gin.Context) {
 		Success:   true,
 	})
 
+	extra := ""
+	if len(applyResult.Notes) > 0 {
+		extra = " " + strings.Join(applyResult.Notes, " ")
+	}
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
-		"message": "Nhập mã quà thành công!" + rewardStr + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+		"message": "Nhập mã quà thành công!" + rewardStr + extra + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
 
-func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCodeReward) ([]models.GuInstance, error) {
-	var newGus []models.GuInstance
+// giftCodeApplyResult carries everything the redemption response needs: new Gu
+// instances plus player-facing notes about rewards that were capped or skipped.
+type giftCodeApplyResult struct {
+	NewGus []models.GuInstance
+	Notes  []string
+}
+
+func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCodeReward) (giftCodeApplyResult, error) {
+	var result giftCodeApplyResult
 	for _, r := range rewards {
 		switch r.Type {
 		case "human_qi":
@@ -347,7 +379,7 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 					Equipped:   false,
 				}
 				player.GuInventory = append(player.GuInventory, newGu)
-				newGus = append(newGus, newGu)
+				result.NewGus = append(result.NewGus, newGu)
 			}
 		case "lifespan":
 			player.Lifespan += r.Amount
@@ -364,11 +396,23 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 				IsUnlocked:     true,
 			})
 			if err != nil {
-				return nil, err
+				return result, err
+			}
+		case "resource_point":
+			requested := int(r.Amount)
+			added, err := grantApertureResourcePointsFromReward(tx, player.ID, r.ID, requested)
+			if err != nil {
+				return result, err
+			}
+			switch {
+			case added <= 0:
+				result.Notes = append(result.Notes, "Tiên Khiếu đã đủ 8 điểm tài nguyên nên phần thưởng điểm bị bỏ qua.")
+			case added < requested:
+				result.Notes = append(result.Notes, fmt.Sprintf("Tiên Khiếu chỉ còn chỗ cho %d/%d điểm tài nguyên.", added, requested))
 			}
 		}
 	}
-	return newGus, nil
+	return result, nil
 }
 
 func buildGiftCodeUpdateQuery(player *models.Player) (string, []interface{}) {
@@ -435,6 +479,16 @@ func buildGiftCodeRewardLabel(rewards []GiftCodeReward) string {
 			parts = append(parts, fmt.Sprintf("%.0f năm Thọ Nguyên", r.Amount))
 		case "wall_progress":
 			parts = append(parts, fmt.Sprintf("%.0f%% Phá Vách", r.Amount*100))
+		case "resource_point":
+			pointName := r.Label
+			if pointName == "" {
+				if template, ok := GetResourcePointTemplate(strings.ToUpper(strings.TrimSpace(r.ID))); ok {
+					pointName = template.Name
+				} else {
+					pointName = "Điểm Tài Nguyên"
+				}
+			}
+			parts = append(parts, fmt.Sprintf("%.0fx %s", r.Amount, pointName))
 		}
 	}
 	if len(parts) == 0 {

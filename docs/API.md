@@ -79,7 +79,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/player/referrals/bind` |
 | POST | `/player/simulate-deposit` | Admin only. |
 | POST | `/player/avatar` |
-| POST | `/player/redeem-gift-code` |
+| POST | `/player/redeem-gift-code` | Body `{code}`. Phần thưởng hỗ trợ `primeval_stones`, `immortal_stones`, `human_qi`, `item`, `gu`, `recipe`, `lifespan`, `wall_progress`, `dao_mark` và `resource_point` (`id` = point_type tùy chọn, rỗng = roll theo Đạo Ngân, `amount` = 1..8 điểm, áp cap 8 điểm/Tiên Khiếu; người chưa mở Tiên Khiếu nhận lỗi 400). |
 | GET | `/player/audit-logs` |
 | GET | `/player/notifications` |
 | GET | `/player/notifications/unread-count` |

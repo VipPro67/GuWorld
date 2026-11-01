@@ -93,6 +93,23 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:808
 const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
 const PLAYER_QUERY_KEYS = Object.keys(PLAYER_QUERY_DEFAULTS);
 
+// Keep in sync with backend/data/ResourcePointTemplate.csv. Empty id means the
+// reward rolls a point type from the player's Dao marks.
+const RESOURCE_POINT_TYPE_OPTIONS: { id: string; label: string }[] = [
+  { id: "HERB_VALLEY", label: "Thung Lũng Linh Thảo (Mộc)" },
+  { id: "BEAST_PASTURE", label: "Đồng Cỏ Dạ Thú (Thực)" },
+  { id: "ORE_VEIN", label: "Mạch Quặng Địa Mạch (Thổ)" },
+  { id: "SPIRIT_SPRING", label: "Ao Linh Tuyền (Thủy)" },
+  { id: "GOLD_SAND_SHOAL", label: "Bãi Cát Kim Sa (Kim)" },
+  { id: "MOON_BOWL", label: "Bát Nguyệt Cốc (Thủy)" },
+  { id: "YEAR_ESSENCE_POOL", label: "Dòng Năm Thú (Thực)" },
+  { id: "DANG_HON_PEAK", label: "Núi Đãng Hồn (Hồn · Núi Danh)" },
+  { id: "JADE_SNAKE_CAVE", label: "Hẻm Ngọc Huyền Xà (Độc · Núi Danh)" },
+  { id: "PHOENIX_PEAK", label: "Núi Phượng Vũ (Hỏa · Núi Danh)" },
+  { id: "FROSTY_PEAK", label: "Núi Băng Thủy (Băng · Núi Danh)" },
+  { id: "CORPSE_RIDGE", label: "Thi Cương (Nô · Núi Danh)" },
+];
+
 type DatasetDescriptor = {
   key: string;
   label: string;
@@ -4216,12 +4233,26 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                       <option value="lifespan">Thọ Nguyên</option>
                       <option value="wall_progress">Phá Vách</option>
                       <option value="dao_mark">Đạo Ấn</option>
+                      <option value="resource_point">Điểm Tài Nguyên</option>
                     </select>
                     {(r.type === "item" || r.type === "gu" || r.type === "dao_mark" || r.type === "recipe") && (
                       <div className="flex items-center gap-1">
                         <span className="text-[10px] font-mono text-zinc-400 min-w-[80px] truncate" title={r.id || "Chưa chọn"}>{r.id || "—"}</span>
                         <button onClick={() => { setGiftPickerIdx(i); ensureShopSearchLoaded(); setItemPicker({source: "gift", tab: r.type === "gu" ? "gu" : r.type === "recipe" ? "recipe" : "item", query: ""}); }} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
                       </div>
+                    )}
+                    {r.type === "resource_point" && (
+                      <select
+                        value={r.id || ""}
+                        onChange={e => { const upd = [...newGiftRewards]; upd[i].id = e.target.value; setNewGiftRewards(upd); }}
+                        className="px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none max-w-[190px]"
+                        title="Loại điểm tài nguyên được trao (để trống = ngẫu nhiên theo Đạo Ngân)"
+                      >
+                        <option value="">Ngẫu nhiên theo Đạo Ngân</option>
+                        {RESOURCE_POINT_TYPE_OPTIONS.map(option => (
+                          <option key={option.id} value={option.id}>{option.label}</option>
+                        ))}
+                      </select>
                     )}
                     {r.type === "gu" && (
                       <input type="number" min={0} max={9} placeholder="Rank (mặc định=0)" value={r.rank || ""} onChange={e => { const upd = [...newGiftRewards]; upd[i].rank = Number(e.target.value) || 0; setNewGiftRewards(upd); }} className="w-32 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none" />

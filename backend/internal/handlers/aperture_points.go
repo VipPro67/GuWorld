@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -269,13 +270,9 @@ func GenerateApertureResourcePoints(tx *sql.Tx, apertureID string, ownerPlayerID
 			break
 		}
 
-		var x, y int
-		for attempt := 0; attempt < 64; attempt++ {
-			cx, cy := rng.Intn(20), rng.Intn(20)
-			if !usedCells[fmt.Sprintf("%d,%d", cx, cy)] {
-				x, y = cx, cy
-				break
-			}
+		x, y, ok := pickFreeApertureCell(rng, usedCells)
+		if !ok {
+			return nil
 		}
 
 		if _, err := tx.Exec(`
@@ -287,6 +284,129 @@ func GenerateApertureResourcePoints(tx *sql.Tx, apertureID string, ownerPlayerID
 	}
 	_ = ownerPlayerID
 	return nil
+}
+
+// errGiftCodeNeedsAperture marks gift-code resource-point rewards that cannot be
+// applied because the player has not opened an aperture yet.
+var errGiftCodeNeedsAperture = errors.New("đạo hữu cần mở Tiên Khiếu (Lục Chuyển) trước khi nhận Điểm Tài Nguyên")
+
+// apertureUsedCells collects the occupied 20×20 grid cells of an aperture.
+func apertureUsedCells(tx *sql.Tx, apertureID string) map[string]bool {
+	used := map[string]bool{}
+	rows, err := tx.Query(`SELECT x, y FROM aperture_resource_points WHERE aperture_id = $1`, apertureID)
+	if err != nil {
+		return used
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var x, y int
+		if rows.Scan(&x, &y) == nil {
+			used[fmt.Sprintf("%d,%d", x, y)] = true
+		}
+	}
+	return used
+}
+
+// pickFreeApertureCell returns a free cell on the 20×20 aperture grid. Random
+// probing keeps layouts varied; the deterministic scan guarantees the remaining
+// cells are still found when the grid is nearly full.
+func pickFreeApertureCell(rng *rand.Rand, used map[string]bool) (int, int, bool) {
+	for attempt := 0; attempt < 64; attempt++ {
+		x, y := rng.Intn(20), rng.Intn(20)
+		key := fmt.Sprintf("%d,%d", x, y)
+		if used[key] {
+			continue
+		}
+		used[key] = true
+		return x, y, true
+	}
+	for y := 0; y < 20; y++ {
+		for x := 0; x < 20; x++ {
+			key := fmt.Sprintf("%d,%d", x, y)
+			if used[key] {
+				continue
+			}
+			used[key] = true
+			return x, y, true
+		}
+	}
+	return 0, 0, false
+}
+
+// grantApertureResourcePointsFromReward seeds up to `count` resource points into
+// the player's aperture for a gift-code reward. An empty pointType keeps the
+// natural Dao-mark weighted selection; a non-empty one forces that template.
+// The 8-point cap is authoritative: when the aperture is full this returns 0.
+func grantApertureResourcePointsFromReward(tx *sql.Tx, playerID uuid.UUID, pointType string, count int) (int, error) {
+	if tx == nil || count <= 0 {
+		return 0, nil
+	}
+	var apertureID, grade string
+	var daoJSON []byte
+	err := tx.QueryRow(`
+		SELECT id, grade, COALESCE(dao_marks, '{}'::jsonb)
+		FROM immortal_apertures WHERE player_id = $1 FOR UPDATE
+	`, playerID).Scan(&apertureID, &grade, &daoJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errGiftCodeNeedsAperture
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	pointType = strings.ToUpper(strings.TrimSpace(pointType))
+	if pointType != "" {
+		if _, ok := GetResourcePointTemplate(pointType); !ok {
+			return 0, fmt.Errorf("loại điểm tài nguyên không tồn tại: %s", pointType)
+		}
+	}
+
+	if pointType == "" {
+		var dao models.DaoMarksMap
+		_ = json.Unmarshal(daoJSON, &dao)
+		var before, after int
+		if err := tx.QueryRow(`SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = $1`, apertureID).Scan(&before); err != nil {
+			return 0, err
+		}
+		if before >= aperturePointPointGenCap {
+			return 0, nil
+		}
+		if err := GenerateApertureResourcePoints(tx, apertureID, playerID.String(), dao, grade, count); err != nil {
+			return 0, err
+		}
+		if err := tx.QueryRow(`SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = $1`, apertureID).Scan(&after); err != nil {
+			return 0, err
+		}
+		return after - before, nil
+	}
+
+	template, _ := GetResourcePointTemplate(pointType)
+	used := apertureUsedCells(tx, apertureID)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	added := 0
+	for i := 0; i < count; i++ {
+		var existing int
+		if err := tx.QueryRow(`SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = $1`, apertureID).Scan(&existing); err != nil {
+			return added, err
+		}
+		if existing >= aperturePointPointGenCap {
+			break
+		}
+		x, y, ok := pickFreeApertureCell(rng, used)
+		if !ok {
+			break
+		}
+		instanceGrade := pointInstanceGrade(rng, grade)
+		if _, err := tx.Exec(`
+			INSERT INTO aperture_resource_points
+				(aperture_id, point_type, name, path, grade, level, vitality, stock, stock_cap, x, y, last_produced_at, state)
+			VALUES ($1, $2, $3, $4, $5, 1, 100, '{}'::jsonb, 0, $6, $7, NOW(), 'ACTIVE')
+		`, apertureID, template.PointType, template.Name, template.Path, instanceGrade, x, y); err != nil {
+			return added, err
+		}
+		added++
+	}
+	return added, nil
 }
 
 // pointInstanceGrade rents the aperture grade down to the point grade: higher
