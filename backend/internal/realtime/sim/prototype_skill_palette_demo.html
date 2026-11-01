@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GuWorld: Prototype Hoán Đổi Thanh Kỹ Năng (Swap vs Overlay)</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --success: #3fb950;
+      --danger: #f85149;
+      --warning: #d29922;
+      --purple: #bc8cff;
+      --slot-bg: #21262d;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+    .container { max-width: 1000px; margin: 0 auto; }
+
+    header { margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    h1 { font-size: 24px; color: #f0f6fc; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .badge { background: #1f6feb; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 12px; font-weight: normal; }
+    p.lead { color: var(--text-muted); font-size: 14px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 20px; }
+    .card h2 { font-size: 16px; color: #f0f6fc; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+    /* Skill Bar Visualization */
+    .skill-bar-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 14px; }
+    @media (max-width: 600px) { .skill-bar-container { grid-template-columns: repeat(3, 1fr); } }
+
+    .skill-slot { background: var(--slot-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center; position: relative; transition: all 0.2s; min-height: 110px; display: flex; flex-direction: column; justify-content: space-between; }
+    .skill-slot.bear { border-color: #f0883e; background: #241912; }
+    .skill-slot.revert { border-color: var(--purple); background: #1c1429; }
+    .skill-slot.on-cooldown { opacity: 0.6; filter: grayscale(0.5); }
+    
+    .slot-num { font-size: 11px; font-weight: 700; color: var(--text-muted); position: absolute; top: 4px; left: 6px; }
+    .slot-name { font-size: 12px; font-weight: 600; color: #f0f6fc; margin-top: 14px; line-height: 1.2; }
+    .slot-cost { font-size: 11px; color: var(--accent); margin-top: 4px; }
+    .slot-cd { font-size: 11px; color: var(--warning); font-weight: 600; }
+    
+    .btn-slot { background: #30363d; border: 1px solid #484f58; color: #fff; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; margin-top: 6px; }
+    .btn-slot:hover { background: #484f58; }
+
+    /* Log Panel */
+    .log-panel { background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 10px; height: 180px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px; color: #8b949e; }
+    .log-item { margin-bottom: 4px; }
+    .log-item.highlight { color: #58a6ff; font-weight: 600; }
+    .log-item.warn { color: #d29922; }
+    .log-item.danger { color: #f85149; }
+    .log-item.success { color: #3fb950; }
+
+    /* Tabs & Walkthroughs */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; gap: 4px; overflow-x: auto; }
+    .tab { padding: 8px 14px; cursor: pointer; border: none; background: transparent; color: var(--text-muted); border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .walkthrough-box { background: #0d1117; border-left: 3px solid var(--accent); padding: 12px; border-radius: 0 6px 6px 0; margin-bottom: 16px; font-size: 13px; }
+    .walkthrough-steps { display: flex; flex-direction: column; gap: 10px; }
+    .step-item { display: flex; align-items: center; justify-content: space-between; background: #21262d; padding: 10px 14px; border-radius: 6px; font-size: 13px; }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    button:hover { background: #30363d; border-color: #8b949e; color: #fff; }
+    button.primary { background: #238636; border-color: #2ea043; color: #fff; }
+    button.primary:hover { background: #2ea043; }
+    button.danger { background: #da3633; border-color: #f85149; color: #fff; }
+    button.danger:hover { background: #b62324; }
+    button.warn { background: #9e6a03; border-color: #bb8009; color: #fff; }
+    button.warn:hover { background: #bb8009; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        Prototype: Skill Palette Swap vs Overlay
+        <span class="badge">Authoritative Action Bar</span>
+      </h1>
+      <p class="lead">
+        Demo kiểm chứng cơ chế hoán đổi thanh kỹ năng (Skill Bar Swap) khi Biến Thân Toàn Phần (Full Metamorphosis) và tăng cường kỹ năng (Overlay) khi Biến Thân Bộ Phận (Partial Transformation), kèm bảo toàn Cooldown và xác thực tính hợp lệ (Lock Validation).
+      </p>
+    </header>
+
+    <!-- Thanh Kỹ Năng Realtime (Active Action Bar 1..6) -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Thanh Kỹ Năng Chiến Đấu Realtime (Slots 1..6)</h2>
+        <span id="disp-bar-mode" style="font-size: 12px; font-weight: 600; color: var(--accent);">
+          [CHẾ ĐỘ: DẠNG NGƯỜI - NGUYÊN BẢN]
+        </span>
+      </div>
+
+      <div class="skill-bar-container" id="skill-bar">
+        <!-- Render động 6 slots -->
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Cột Trái: Trạng thái & Tài nguyên -->
+      <div class="card">
+        <h2>Trạng Thái & Năng Lượng</h2>
+        <div style="font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Hình Thái Hiện Tại:</span>
+            <strong id="disp-form-name">Cổ Sư Phàm Thể</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Tiên Nguyên / Mana:</span>
+            <strong id="disp-mana">150 / 150</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Đòn Đánh Thường (Basic Attack):</span>
+            <strong id="disp-basic-attack">Chưởng Kích (Sát thương: 20)</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Giáp & Hiệu Ứng Bổ Trợ:</span>
+            <strong id="disp-buffs">Giáp: 10</strong>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <span style="font-size: 12px; color: var(--text-muted);">Điều khiển nhịp thời gian:</span>
+          <div class="btn-group">
+            <button onclick="simTick(1)">+50ms (1 Tick)</button>
+            <button onclick="simTick(20)">+1.0 Giây (20 Ticks)</button>
+            <button onclick="simTick(60)">+3.0 Giây (60 Ticks)</button>
+            <button onclick="resetAll()" style="margin-left: auto;">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cột Phải: Nhật ký hành động -->
+      <div class="card">
+        <h2>Nhật Ký Thi Triển Kỹ Năng</h2>
+        <div id="log" class="log-panel">
+          <div class="log-item">[Tick 0] Khởi tạo Thanh Kỹ Năng. 6 Cổ trùng nhân tộc sẵn sàng.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenarios / Walkthroughs -->
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('tab-free')">🎮 Tự Do (Free-Play)</button>
+        <button class="tab" onclick="switchTab('tab-swap')">1. Full Swap (Viêm Hùng Biến)</button>
+        <button class="tab" onclick="switchTab('tab-overlay')">2. Partial Overlay (Lang Bì Cổ)</button>
+        <button class="tab" onclick="switchTab('tab-lock')">3. Xác Thực Khóa Skill Trái Phép</button>
+        <button class="tab" onclick="switchTab('tab-cd')">4. Bảo Toàn Hồi Chiêu Nhân Tộc</button>
+      </div>
+
+      <!-- Tab Freeplay -->
+      <div id="tab-free" class="tab-content active">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          Tùy ý kích hoạt các trạng thái biến thân hoặc xả chiêu để kiểm chứng cơ chế:
+        </p>
+        <div class="btn-group">
+          <button class="primary" onclick="activateFullMorph()">🐻 Kích Hoạt Viêm Hùng Biến (Swap Toàn Bộ 6 Slot)</button>
+          <button class="warn" onclick="activatePartialMorph()">🐺 Kích Hoạt Lang Bì Cổ (Partial Overlay + Đòn Bleed)</button>
+          <button onclick="revertToHuman()">👤 Thu Hồi Biến Thân (Về Dạng Người)</button>
+        </div>
+      </div>
+
+      <!-- Tab 1: Full Swap -->
+      <div id="tab-swap" class="tab-content">
+        <div class="walkthrough-box">
+          <strong>Kịch bản 1: Hoán Đổi Toàn Bộ Thanh Kỹ Năng (Full Metamorphosis Swap)</strong><br>
+          Khi biến thân thành Thái Cổ Viêm Hùng, toàn bộ 6 slot Cổ người phàm lập tức bị tráo đổi sang 6 chiêu thức hoang thú: Cào (Slot 1), Húc (Slot 2), Đập Nham Liệt (Slot 3), Gầm Thét (Slot 4), Viêm Bạo (Slot 5), và Giải Trừ (Slot 6). Khi bấm Giải Trừ (Slot 6), thanh kỹ năng người ban đầu được phục hồi trọn vẹn.
+        </div>
+        <div class="walkthrough-steps">
+          <div class="step-item">
+            <span>Bước 1: Kích hoạt Sát Chiêu Viêm Hùng Biến</span>
+            <button class="primary" onclick="activateFullMorph()">Kích Hoạt Viêm Hùng</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 2: Xả kỹ năng hoang thú Slot 1 (Hùng Trảo Cuồng Liệp)</span>
+            <button onclick="castSlot(1)">Dùng Slot 1 (Cào)</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 3: Xả tuyệt kỹ Slot 4 (Thao Thiết Thú Hống - Gây Stun AoE)</span>
+            <button class="warn" onclick="castSlot(4)">Dùng Slot 4 (Gầm Thét)</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 4: Dùng Slot 6 (Giải Trừ Biến Thân) để phục hồi thanh kỹ năng Cổ sư</span>
+            <button onclick="castSlot(6)">Slot 6: Giải Trừ</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Partial Overlay -->
+      <div id="tab-overlay" class="tab-content">
+        <div class="walkthrough-box" style="border-left-color: var(--warning);">
+          <strong>Kịch bản 2: Biến Thân Bộ Phận (Partial Transformation Overlay)</strong><br>
+          Khi kích hoạt Lang Bì Cổ (biến thân da sói), Cổ sư vẫn giữ nguyên thanh 6 kỹ năng người phàm. Đòn đánh thường được cường hóa vuốt sói kèm hiệu ứng Xuất Huyết (Bleed) và tăng +25 Giáp.
+        </div>
+        <div class="walkthrough-steps">
+          <div class="step-item">
+            <span>Bước 1: Kích hoạt Lang Bì Cổ (Biến thân bộ phận)</span>
+            <button class="warn" onclick="activatePartialMorph()">Kích Hoạt Lang Bì Cổ</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 2: Dùng đòn đánh thường (Kèm Bleed và tăng sát thương)</span>
+            <button onclick="castBasicAttack()">Đánh Thường (Vuốt Sói)</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 3: Vẫn có thể xả chiêu thức Cổ người phàm (Slot 1 Hỏa Cầu) bình thường</span>
+            <button onclick="castSlot(1)">Dùng Slot 1 (Hỏa Cầu Cổ)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Lock Validation -->
+      <div id="tab-lock" class="tab-content">
+        <div class="walkthrough-box" style="border-left-color: var(--danger);">
+          <strong>Kịch bản 3: Xác Thực Khóa Skill Trái Phép (Lock Validation)</strong><br>
+          Khi đang ở dạng thú (Full Metamorphosis), nếu client gửi gói tin cố thi triển skill người phàm cũ (hoặc slot phụ không tồn tại), Server Engine sẽ bác bỏ ngay với mã lỗi <code>form_skill_locked</code>.
+        </div>
+        <div class="walkthrough-steps">
+          <div class="step-item">
+            <span>Bước 1: Vào dạng thú Thái Cổ Viêm Hùng</span>
+            <button class="primary" onclick="activateFullMorph()">Kích Hoạt Viêm Hùng</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 2: Giả lập Client gửi lệnh thi triển chiêu Cổ người cũ</span>
+            <button class="danger" onclick="attemptIllegalCast()">Cố Cast Chiêu Người (Slot Phụ)</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 3: Server phản hồi Reject: <code>form_skill_locked</code></span>
+            <span style="color: var(--danger); font-size: 12px; font-weight: 600;">Server Rejected</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Cooldown Preservation -->
+      <div id="tab-cd" class="tab-content">
+        <div class="walkthrough-box" style="border-left-color: var(--purple);">
+          <strong>Kịch bản 4: Bảo Toàn Hồi Chiêu Nhân Tộc (Cooldown Preservation)</strong><br>
+          Cổ sư dùng đại chiêu người phàm Slot 5 (Hồi chiêu 8s). Sau đó lập tức biến thành thú chiến đấu trong 5s. Khi hủy biến thân trở về dạng người, hồi chiêu của Slot 5 vẫn được trừ đúng 5s trôi qua (còn lại 3s), không bị reset cũng không bị đóng băng!
+        </div>
+        <div class="walkthrough-steps">
+          <div class="step-item">
+            <span>Bước 1: Dùng Slot 5 Nhân tộc (Kiếm Quang Cổ - Hồi chiêu 8s)</span>
+            <button class="warn" onclick="castSlot(5)">Dùng Slot 5 (CD 8s)</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 2: Lập tức biến thân sang Viêm Hùng</span>
+            <button class="primary" onclick="activateFullMorph()">Biến Thân Viêm Hùng</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 3: Chiến đấu trong dạng thú 5 giây (Tua 100 ticks)</span>
+            <button onclick="simTick(100)">Tua 5s (+100 Ticks)</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 4: Giải trừ biến thân (Kiểm tra Slot 5 còn đúng 3s CD)</span>
+            <button onclick="revertToHuman()">Trở Về Dạng Người</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================================
+       Pure Action Bar & Skill Palette Module
+       ========================================================================= */
+    const HumanSkills = [
+      null,
+      { id: "GU_FIRE_BALL", name: "Nhất Giai Hỏa Cầu", cost: 10, cdTicks: 40, maxCd: 40, type: "Phóng Cầu Lửa (Dame: 40)" },
+      { id: "GU_WATER_SHIELD", name: "Thủy Giáp Cổ", cost: 15, cdTicks: 80, maxCd: 80, type: "Hộ Thể (+50 Giáp ảo)" },
+      { id: "GU_WIND_STEP", name: "Phong Hành Cổ", cost: 12, cdTicks: 60, maxCd: 60, type: "Tăng 40% Tốc chạy (3s)" },
+      { id: "GU_THUNDER_BURST", name: "Lôi Đình Cổ", cost: 25, cdTicks: 100, maxCd: 100, type: "Đột Kích Lôi Điện (Dame: 80)" },
+      { id: "GU_BLADE_AURA", name: "Ngũ Chuyển Kiếm Quang", cost: 40, cdTicks: 160, maxCd: 160, type: "Trảm Kích Tầm Xa (Dame: 180)" },
+      { id: "GU_HEAL_MEND", name: "Cửu Diệp Sinh Cơ Cổ", cost: 30, cdTicks: 140, maxCd: 140, type: "Hồi 120 Máu" }
+    ];
+
+    const BearSkills = [
+      null,
+      { id: "BEAR_CLAW_SWIPE", name: "Hùng Trảo Cuồng Liệp", cost: 5, cdTicks: 20, maxCd: 20, type: "Vồ Cào Cận Chiến (Dame: 65)" },
+      { id: "BEAR_FERAL_CHARGE", name: "Bạo Nộ Cuồng Húc", cost: 15, cdTicks: 80, maxCd: 80, type: "Húc Lao Tới Địch (Dame: 95)" },
+      { id: "BEAR_EARTH_SHATTER", name: "Chấn Địa Nham Liệt", cost: 25, cdTicks: 120, maxCd: 120, type: "Đập Đất AoE (Dame: 120)" },
+      { id: "BEAR_ROAR_INTIMIDATE", name: "Thao Thiết Thú Hống", cost: 20, cdTicks: 160, maxCd: 160, type: "Gầm Thét (Stun 1.5s)" },
+      { id: "BEAR_FLAME_RAMPAGE", name: "Vạn Thú Viêm Bạo", cost: 50, cdTicks: 300, maxCd: 300, type: "Đại Chiêu Viêm Thú (Dame: 250)" },
+      { id: "REVERT_METAMORPHOSIS", name: "Giải Trừ Biến Thân", cost: 0, cdTicks: 10, maxCd: 10, type: "Trở về Dạng Người" }
+    ];
+
+    const State = {
+      formKind: "NONE", // NONE, FULL, PARTIAL
+      formName: "Cổ Sư Phàm Thể",
+      mana: 150,
+      maxMana: 150,
+      currentTick: 0,
+      activeSkills: JSON.parse(JSON.stringify(HumanSkills)),
+      storedHumanSkills: null,
+      cooldownUntil: [0, 0, 0, 0, 0, 0, 0], // per slot
+      storedHumanCooldowns: null,
+      defense: 10,
+      basicAttack: "Chưởng Kích (Sát thương: 20)"
+    };
+
+    function appendLog(msg, type = "") {
+      const el = document.getElementById("log");
+      const item = document.createElement("div");
+      item.className = "log-item " + type;
+      item.textContent = `[Tick ${State.currentTick}] ${msg}`;
+      el.appendChild(item);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function renderUI() {
+      // Form & Resources
+      document.getElementById("disp-form-name").textContent = State.formName;
+      document.getElementById("disp-mana").textContent = `${Math.ceil(State.mana)} / ${State.maxMana}`;
+      document.getElementById("disp-basic-attack").textContent = State.basicAttack;
+      document.getElementById("disp-buffs").textContent = `Giáp: ${State.defense}` + (State.formKind === "PARTIAL" ? " | Lang Bì (Xuất Huyết)" : "");
+      
+      const modeLabel = document.getElementById("disp-bar-mode");
+      if (State.formKind === "FULL") {
+        modeLabel.textContent = "[CHẾ ĐỘ: DẠNG THÚ - SWAP TOÀN BỘ 6 SLOT]";
+        modeLabel.style.color = "var(--warning)";
+      } else if (State.formKind === "PARTIAL") {
+        modeLabel.textContent = "[CHẾ ĐỘ: BIẾN THÂN BỘ PHẬN - OVERLAY]";
+        modeLabel.style.color = "var(--purple)";
+      } else {
+        modeLabel.textContent = "[CHẾ ĐỘ: DẠNG NGƯỜI - NGUYÊN BẢN]";
+        modeLabel.style.color = "var(--accent)";
+      }
+
+      // Render 6 Skill Slots
+      const bar = document.getElementById("skill-bar");
+      bar.innerHTML = "";
+      for (let slot = 1; slot <= 6; slot++) {
+        const skill = State.activeSkills[slot];
+        const cdRemTicks = Math.max(0, State.cooldownUntil[slot] - State.currentTick);
+        const cdRemSec = (cdRemTicks / 20).toFixed(1);
+        const onCd = cdRemTicks > 0;
+
+        const slotDiv = document.createElement("div");
+        slotDiv.className = `skill-slot ${State.formKind === "FULL" ? (slot === 6 ? "revert" : "bear") : ""} ${onCd ? "on-cooldown" : ""}`;
+
+        slotDiv.innerHTML = `
+          <span class="slot-num">Slot ${slot}</span>
+          <div class="slot-name">${skill ? skill.name : "Trống"}</div>
+          <div class="slot-cost">${skill ? (skill.cost > 0 ? skill.cost + " Mana" : "Miễn phí") : ""}</div>
+          <div class="slot-cd">${onCd ? `Hồi: ${cdRemSec}s` : "Sẵn sàng"}</div>
+          <button class="btn-slot" onclick="castSlot(${slot})">${slot === 6 && State.formKind === "FULL" ? "Giải Trừ" : "Xuất Chiêu"}</button>
+        `;
+        bar.appendChild(slotDiv);
+      }
+    }
+
+    /* Actions */
+    function castSlot(slot) {
+      const skill = State.activeSkills[slot];
+      if (!skill) {
+        appendLog(`Slot ${slot} đang trống!`, "warn");
+        return;
+      }
+
+      // Check special Slot 6 in Full Morph: Revert Form
+      if (State.formKind === "FULL" && slot === 6) {
+        revertToHuman();
+        return;
+      }
+
+      // Cooldown check
+      if (State.currentTick < State.cooldownUntil[slot]) {
+        const rem = ((State.cooldownUntil[slot] - State.currentTick) / 20).toFixed(1);
+        appendLog(`Kỹ năng [${skill.name}] đang hồi chiêu (Còn ${rem}s)!`, "warn");
+        return;
+      }
+
+      // Mana check
+      if (State.mana < skill.cost) {
+        appendLog(`Không đủ Tiên Nguyên (Cần ${skill.cost} Mana) để dùng [${skill.name}]!`, "warn");
+        return;
+      }
+
+      // Execute Cast
+      State.mana -= skill.cost;
+      State.cooldownUntil[slot] = State.currentTick + skill.cdTicks;
+      appendLog(`✨ Xuất chiêu Slot ${slot}: [${skill.name}]! Tiêu hao ${skill.cost} Mana. ${skill.type}`, "highlight");
+      renderUI();
+    }
+
+    function activateFullMorph() {
+      if (State.formKind === "FULL") {
+        appendLog("Đang ở trong dạng Thái Cổ Viêm Hùng rồi!", "warn");
+        return;
+      }
+
+      // Backup human skills and remaining cooldowns
+      State.storedHumanSkills = JSON.parse(JSON.stringify(State.activeSkills));
+      State.storedHumanCooldowns = [...State.cooldownUntil];
+
+      // Swap to Bear Skills
+      State.formKind = "FULL";
+      State.formName = "Thái Cổ Viêm Hùng (Biến Thân)";
+      State.activeSkills = JSON.parse(JSON.stringify(BearSkills));
+      State.cooldownUntil = [0, 0, 0, 0, 0, 0, 0]; // Ready on enter
+      State.basicAttack = "Vuốt Cấu Xé (Sát thương: 45)";
+      State.defense = 30;
+
+      appendLog("🐻 HOÁN ĐỔI THANH KỸ NĂNG: Toàn bộ 6 slot Cổ được thay thế bằng bộ chiêu thức Thái Cổ Viêm Hùng!", "success");
+      renderUI();
+    }
+
+    function activatePartialMorph() {
+      if (State.formKind === "FULL") {
+        appendLog("Đang ở trong Dạng Thú Toàn Thân, không thể kích hoạt biến thân bộ phận!", "warn");
+        return;
+      }
+      State.formKind = "PARTIAL";
+      State.formName = "Cổ Sư (Lang Bì Biến)";
+      State.basicAttack = "Lang Bì Trảo (Sát thương: 35 + Hiệu ứng Xuất Huyết)";
+      State.defense = 25;
+      appendLog("🐺 OVERLAY BIẾN THÂN BỘ PHẬN: Kích hoạt Lang Bì Cổ! Giữ nguyên 6 chiêu thức người phàm, đòn đánh thường cường hóa Xuất Huyết, +15 Giáp.", "purple");
+      renderUI();
+    }
+
+    function revertToHuman() {
+      if (State.formKind === "NONE") {
+        appendLog("Đang ở dạng người nguyên bản rồi.", "warn");
+        return;
+      }
+
+      if (State.formKind === "FULL" && State.storedHumanSkills) {
+        // Restore human skills
+        State.activeSkills = JSON.parse(JSON.stringify(State.storedHumanSkills));
+        // Restore human cooldowns: advance by elapsed ticks
+        for (let i = 1; i <= 6; i++) {
+          State.cooldownUntil[i] = State.storedHumanCooldowns[i] || 0;
+        }
+      }
+
+      State.formKind = "NONE";
+      State.formName = "Cổ Sư Phàm Thể";
+      State.basicAttack = "Chưởng Kích (Sát thương: 20)";
+      State.defense = 10;
+
+      appendLog("👤 THU HỒI BIẾN THÂN: Khôi phục thanh 6 kỹ năng người phàm nguyên bản!", "highlight");
+      renderUI();
+    }
+
+    function attemptIllegalCast() {
+      if (State.formKind !== "FULL") {
+        appendLog("Cần vào dạng Thú trước để thử nghiệm kịch bản này.", "warn");
+        return;
+      }
+      appendLog("🛑 Client gửi lệnh dùng Cổ nhân tộc [Hỏa Cầu Cổ] khi đang hóa Viêm Hùng...", "warn");
+      appendLog("❌ Server Engine: REJECTED [reason: form_skill_locked]! Dạng Full Metamorphosis chỉ được dùng chiêu thú.", "danger");
+    }
+
+    function castBasicAttack() {
+      appendLog(`👊 Thi triển đòn đánh thường: ${State.basicAttack}!`, "highlight");
+    }
+
+    function simTick(ticks = 1) {
+      State.currentTick += ticks;
+      renderUI();
+    }
+
+    function resetAll() {
+      State.formKind = "NONE";
+      State.formName = "Cổ Sư Phàm Thể";
+      State.mana = 150;
+      State.currentTick = 0;
+      State.activeSkills = JSON.parse(JSON.stringify(HumanSkills));
+      State.storedHumanSkills = null;
+      State.cooldownUntil = [0, 0, 0, 0, 0, 0, 0];
+      State.storedHumanCooldowns = null;
+      State.defense = 10;
+      State.basicAttack = "Chưởng Kích (Sát thương: 20)";
+      document.getElementById("log").innerHTML = '<div class="log-item">[Tick 0] Đã đặt lại trạng thái ban đầu.</div>';
+      renderUI();
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      event.target.classList.add("active");
+      document.getElementById(tabId).classList.add("active");
+    }
+
+    renderUI();
+  </script>
+</body>
+</html>
