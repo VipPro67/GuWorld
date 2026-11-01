@@ -341,9 +341,9 @@ func (s SocialState) Apply(p *Player) {
 
 // CombatConfig groups combat equipment and realtime combat controls.
 type CombatConfig struct {
-	EquippedGus    EquippedGusList     `json:"equipped_gus"`
-	HotbarGus      RealtimeHotbarList  `json:"hotbar_gus,omitempty"`
-	CombatSettings AutoCombatConfig    `json:"combat_settings"`
+	EquippedGus    EquippedGusList    `json:"equipped_gus"`
+	HotbarGus      RealtimeHotbarList `json:"hotbar_gus,omitempty"`
+	CombatSettings AutoCombatConfig   `json:"combat_settings"`
 }
 
 // NewCombatConfig extracts combat config from a Player.

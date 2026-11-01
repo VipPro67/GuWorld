@@ -1519,7 +1519,7 @@ func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protoc
 		state := protocol.EntityState{
 			EntityID: string(entity.ID), Revision: entity.Revision, Kind: string(entity.Kind), PartyID: entity.PartyID,
 			PvPEnabled: entity.PvPEnabled, Radius: entity.Radius,
-			X:          entity.Transform.Position.X, Y: entity.Transform.Position.Y, HP: entity.Vitals.HP, MaxHP: entity.Vitals.MaxHP, Shield: entity.Vitals.Shield,
+			X: entity.Transform.Position.X, Y: entity.Transform.Position.Y, HP: entity.Vitals.HP, MaxHP: entity.Vitals.MaxHP, Shield: entity.Vitals.Shield,
 		}
 		if entity.Transformation.Active || entity.Transformation.IsWindup {
 			state.Transformation = &protocol.TransformationState{

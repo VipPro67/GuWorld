@@ -176,36 +176,36 @@ type Event struct {
 }
 
 type EntityState struct {
-	EntityID      string   `json:"entity_id"`
-	Revision      uint64   `json:"entity_revision"`
-	Kind          string   `json:"kind,omitempty"`
-	PartyID       string   `json:"party_id,omitempty"`
-	PvPEnabled    bool     `json:"pvp_enabled,omitempty"`
-	TemplateID    string   `json:"template_id,omitempty"`
-	Name          string   `json:"name,omitempty"`
-	AIState       string   `json:"ai_state,omitempty"`
-	AggroTarget   string   `json:"aggro_target_id,omitempty"`
-	OwnerID       string   `json:"owner_id,omitempty"`
-	CompanionKind string   `json:"companion_kind,omitempty"`
-	Stance        string   `json:"stance,omitempty"`
-	X             float64  `json:"x"`
-	Y             float64  `json:"y"`
-	HP            float64  `json:"hp"`
-	MaxHP         float64  `json:"max_hp,omitempty"`
-	Shield        float64  `json:"shield,omitempty"`
-	Mana          float64  `json:"mana,omitempty"`
-	MaxMana       float64  `json:"max_mana,omitempty"`
-	Thought       float64  `json:"thought,omitempty"`
-	MaxThought    float64  `json:"max_thought,omitempty"`
-	Cooldowns     []uint64 `json:"cooldowns,omitempty"`
-	CastSkillID   string   `json:"cast_skill_id,omitempty"`
-	CastEndTick   uint64   `json:"cast_end_tick,omitempty"`
-	CastWindup    uint64   `json:"cast_windup_ticks,omitempty"`
-	FormActive    bool     `json:"form_active,omitempty"`
-	Statuses      []string `json:"statuses,omitempty"`
-	Stealthed     bool                 `json:"stealthed,omitempty"`
-	Flying        bool                 `json:"flying,omitempty"`
-	Radius        float64              `json:"radius,omitempty"`
+	EntityID       string               `json:"entity_id"`
+	Revision       uint64               `json:"entity_revision"`
+	Kind           string               `json:"kind,omitempty"`
+	PartyID        string               `json:"party_id,omitempty"`
+	PvPEnabled     bool                 `json:"pvp_enabled,omitempty"`
+	TemplateID     string               `json:"template_id,omitempty"`
+	Name           string               `json:"name,omitempty"`
+	AIState        string               `json:"ai_state,omitempty"`
+	AggroTarget    string               `json:"aggro_target_id,omitempty"`
+	OwnerID        string               `json:"owner_id,omitempty"`
+	CompanionKind  string               `json:"companion_kind,omitempty"`
+	Stance         string               `json:"stance,omitempty"`
+	X              float64              `json:"x"`
+	Y              float64              `json:"y"`
+	HP             float64              `json:"hp"`
+	MaxHP          float64              `json:"max_hp,omitempty"`
+	Shield         float64              `json:"shield,omitempty"`
+	Mana           float64              `json:"mana,omitempty"`
+	MaxMana        float64              `json:"max_mana,omitempty"`
+	Thought        float64              `json:"thought,omitempty"`
+	MaxThought     float64              `json:"max_thought,omitempty"`
+	Cooldowns      []uint64             `json:"cooldowns,omitempty"`
+	CastSkillID    string               `json:"cast_skill_id,omitempty"`
+	CastEndTick    uint64               `json:"cast_end_tick,omitempty"`
+	CastWindup     uint64               `json:"cast_windup_ticks,omitempty"`
+	FormActive     bool                 `json:"form_active,omitempty"`
+	Statuses       []string             `json:"statuses,omitempty"`
+	Stealthed      bool                 `json:"stealthed,omitempty"`
+	Flying         bool                 `json:"flying,omitempty"`
+	Radius         float64              `json:"radius,omitempty"`
 	Transformation *TransformationState `json:"transformation,omitempty"`
 }
 

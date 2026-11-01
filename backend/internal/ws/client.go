@@ -1020,7 +1020,7 @@ func protocolEntityState(entity sim.Entity) protocol.EntityState {
 	state := protocol.EntityState{
 		EntityID: string(entity.ID), Revision: entity.Revision, Kind: string(entity.Kind), PartyID: entity.PartyID,
 		PvPEnabled: entity.PvPEnabled, Radius: entity.Radius,
-		X:          entity.Transform.Position.X, Y: entity.Transform.Position.Y,
+		X: entity.Transform.Position.X, Y: entity.Transform.Position.Y,
 		HP: entity.Vitals.HP, MaxHP: entity.Vitals.MaxHP, Shield: entity.Vitals.Shield,
 	}
 	if entity.Transformation.Active || entity.Transformation.IsWindup {
