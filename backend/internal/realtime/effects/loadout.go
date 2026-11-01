@@ -80,6 +80,7 @@ func SkillInfos(skills []combat.Skill) []SkillInfo {
 			WidthUnits: skill.WidthUnits, InnerRadius: skill.InnerRadius,
 			ManaCost: skill.ManaCost, Range: skill.Range, RadiusUnits: skill.Radius,
 			CooldownTicks: skill.CooldownTicks, WindupTicks: skill.WindupTicks,
+			MoveDistance: skill.MoveDistance, MoveDurationTicks: skill.MoveDurationTicks, MoveBehavior: skill.MoveBehavior,
 			IsToggle:       skill.IsToggle,
 			FormActivation: skill.FormActivation, FormAbility: skill.FormAbility,
 		})
@@ -90,21 +91,24 @@ func SkillInfos(skills []combat.Skill) []SkillInfo {
 // SkillInfo mirrors protocol.SkillInfo without importing protocol (protocol
 // must not depend on effects). Gateway converts this DTO.
 type SkillInfo struct {
-	Slot           uint8
-	ID             string
-	Name           string
-	Mode           string
-	Shape          string
-	AngleDeg       float64
-	LengthUnits    float64
-	WidthUnits     float64
-	InnerRadius    float64
-	ManaCost       float64
-	Range          float64
-	RadiusUnits    float64
-	CooldownTicks  uint64
-	WindupTicks    uint64
-	IsToggle       bool
-	FormActivation bool
-	FormAbility    bool
+	Slot              uint8
+	ID                string
+	Name              string
+	Mode              string
+	Shape             string
+	AngleDeg          float64
+	LengthUnits       float64
+	WidthUnits        float64
+	InnerRadius       float64
+	ManaCost          float64
+	Range             float64
+	RadiusUnits       float64
+	CooldownTicks     uint64
+	WindupTicks       uint64
+	MoveDistance      float64
+	MoveDurationTicks uint64
+	MoveBehavior      string
+	IsToggle          bool
+	FormActivation    bool
+	FormAbility       bool
 }

@@ -523,6 +523,14 @@ func SetVitalGu(c *gin.Context) {
 		})
 		return
 	}
+	if targetGu.RefinementProgress < 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể chọn Cổ trùng chưa luyện hóa hoàn tất làm Bản Mệnh Cổ."})
+		return
+	}
+	if targetGu.Status == "DAMAGED" || targetGu.Durability <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đã bị trọng thương hư hại, không thể chọn làm Bản Mệnh Cổ."})
+		return
+	}
 
 	// Vital Gu is always equipped; refuse if equipping it would exceed the aperture capacity
 	if !targetGu.Equipped {

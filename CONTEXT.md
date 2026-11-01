@@ -166,7 +166,7 @@ _Avoid_: auto-combat mô phỏng theo lượt
 Hiệu ứng chiến đấu cần có hành vi, mục tiêu và thời lượng realtime được định nghĩa rõ; số lượt không tự quy đổi thành giây. Hiệu ứng chưa có hành vi realtime chưa thể dùng trong chiến đấu realtime.
 
 ### Lướt (Dash)
-Chiêu thức di chuyển nhân vật một quãng theo hướng đã khóa khi bắt đầu thi triển. Lướt thuần di chuyển có thể xuyên qua thực thể; lướt va chạm dừng ở kẻ địch đầu tiên và gây sát thương, còn địa hình chặn đường. ROOT/BIND ngăn displacement bắt đầu nhưng không dừng cú lướt đã khởi động; SLOW không làm chậm cú lướt đang chạy, còn hard CC chặn cast và ngắt cú lướt.
+Chiêu thức di chuyển nhân vật một quãng theo hướng đã khóa khi bắt đầu thi triển. Lướt thuần di chuyển có thể xuyên qua thực thể; lướt va chạm dừng ở kẻ địch đầu tiên và gây sát thương, còn địa hình chặn đường. ROOT/BIND ngăn displacement bắt đầu nhưng không dừng cú lướt đã khởi động; SLOW không làm chậm cú lướt đang chạy, còn hard CC chặn cast và ngắt cú lướt. Không thể bắt đầu cú lướt thứ hai trước khi cú hiện tại kết thúc; Tăng Tốc không đổi cú lướt đang chạy.
 _Avoid_: tăng tốc, chạy nhanh
 
 ### Tăng Tốc (Haste)
@@ -201,3 +201,29 @@ _Avoid_: generic killer moves
 ### Hao Hụt Duy Trì Biến Thân (Sustained Form Upkeep)
 Cơ chế tiêu hao Chân Nguyên hoặc Tiên Nguyên liên tục theo nhịp realtime (tick) để duy trì hình thái biến thân, tự động giải trừ khi cạn kiệt năng lượng hoặc bị phá vỡ hình thái.
 _Avoid_: mana drain debuff
+
+## Gu Will Subjugation & Durability (Luyện Hóa Ý Chí & Độ Bền Cổ Trùng)
+
+### Luyện Hóa Ý Chí (Gu Will Subjugation)
+Hành vi Cổ sư vận chuyển Chân Nguyên / Tiên Nguyên để thanh tẩy ý chí hoang dã hoặc ý chí ngoại lai bên trong Cổ trùng, in dấu ấn tâm niệm của bản thân. Chỉ khi tiến độ luyện hóa đạt mức toàn vẹn (100%), Cổ trùng mới thần phục hoàn toàn và cho phép trang bị vào Không Khiếu.
+_Avoid_: Gu Crafting, Hợp Luyện Cổ
+
+### Áp Chế Bản Mệnh Cổ (Vital Gu Will Suppression)
+Quy luật uy áp đẳng cấp trong Cổ Chân Nhân: khi Cổ sư sở hữu Cổ Bản Mệnh có phẩm giai cao hơn phẩm giai Cổ cần luyện từ 2 Rank trở lên, khí tức bản mệnh lập tức trấn áp và bức lui hoàn toàn ý chí dã Cổ, hoàn tất luyện hóa tức khắc mà không cần tiêu hao Chân Nguyên theo đợt.
+_Avoid_: Instant tame cheat
+
+### Suy Thoái Ý Chí Hoang Dã (Wild Will Resurgence)
+Hiện tượng phản phệ tự nhiên xảy ra khi Cổ trùng chưa được luyện hóa hoàn tất (tiến độ dưới 100%) bị bỏ quên trong thời gian dài: ý chí hoang dã trỗi dậy dần dần làm tiêu biến tiến độ luyện hóa đã đạt được, tính toán theo cơ chế lazy evaluation dựa trên thời gian trôi qua.
+_Avoid_: Progress decay debuff
+
+### Độ Bền Cổ Trùng (Gu Durability & Integrity)
+Chỉ số toàn vẹn thể chất và sinh mệnh của Cổ trùng (thang đo 0-100). Bị hao tổn do thi triển kỹ năng cường độ cao, chịu phản chấn giao tranh, chấn động khi Tiên Cổ Phòng nhận sát thương, hoặc khi Cổ sư bị tử vong. Cổ trùng cạn kiệt độ bền sẽ mất khả năng thi triển và rơi vào trạng thái trọng thương.
+_Avoid_: Equipment durability đơn thuần
+
+### Nội Dưỡng Tiêu Hao Độ No (Healing Nourishment Burn)
+Cơ chế tự hồi phục độ bền tự nhiên khi Cổ trùng bị thương nhẹ (độ bền từ 20 trở lên) được nuôi dưỡng trong Không Khiếu không lâm trận; Cổ trùng tăng cường đốt độ no (thức ăn) với tốc độ cao hơn bình thường để tái tạo thương tổn, đánh đổi độ no lấy độ bền.
+_Avoid_: Passive HP regen
+
+### Tu Bổ Cổ Trùng (Gu Restoration & Mending)
+Hành động chủ động dùng Chân Nguyên ôn dưỡng (với chấn thương nhẹ) hoặc phối hợp Dược Thảo, Tiên Nguyên Thạch, nguyên liệu luyện Cổ đồng hệ (khi chấn thương nặng hoặc độ bền dưới 20) để chữa lành kết cấu Cổ trùng, khôi phục linh tính thi triển.
+_Avoid_: Blacksmith repair

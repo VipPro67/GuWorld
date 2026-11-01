@@ -18,6 +18,8 @@ export interface CastDelegate {
   /** Rendered self position (may be null before the first snapshot); telegraph anchor. */
   renderedSelfPosition(): WorldPoint | null;
   pointerWorld(): WorldPoint;
+  movementDirection(): WorldPoint;
+  lastMoveDirection(): WorldPoint | null;
   selectedTargetId(): string | null;
   selectTarget(entityId: string | null): void;
   /**
@@ -76,6 +78,11 @@ export class CastController {
     }
     const self = this.delegate.selfPosition();
     const pointer = this.delegate.pointerWorld();
+    if ((skill.move_distance ?? 0) > 0) {
+      this.cancelAim();
+      this.triggerDash(skill, self, pointer, fromPointer);
+      return;
+    }
     if (!fromPointer) {
       if ((skill.mode === "DIRECTION" || skill.mode === "GROUND") && this.aimingState !== slot) {
         this.enterAim(slot, `${skill.name}: chọn hướng/điểm rồi click để cast · Esc hủy`);
@@ -196,6 +203,45 @@ export class CastController {
     this.aimingState = slot;
     this.delegate.setAiming(slot);
     this.delegate.notice(message);
+  }
+
+  private triggerDash(skill: WorldSkillInfo, self: WorldPoint, pointer: WorldPoint, fromPointer: boolean): void {
+    const moving = this.delegate.movementDirection();
+    if (Math.hypot(moving.x, moving.y) > 0.01) {
+      this.sendDashDirection(skill, self, moving);
+      return;
+    }
+    const target = fromPointer ? this.delegate.entityNear(pointer) : this.currentTarget();
+    if (target) {
+      if (skill.mode === "TARGET") {
+        this.delegate.selectTarget(target.id);
+        this.delegate.sendCast({ slot: skill.slot, mode: skill.mode, target_id: target.id });
+      } else {
+        this.sendDashDirection(skill, self, { x: target.x - self.x, y: target.y - self.y });
+      }
+      return;
+    }
+    const pointerDirection = { x: pointer.x - self.x, y: pointer.y - self.y };
+    if (Math.hypot(pointerDirection.x, pointerDirection.y) > 0.1) {
+      this.sendDashDirection(skill, self, pointerDirection);
+      return;
+    }
+    const last = this.delegate.lastMoveDirection();
+    if (last && Math.hypot(last.x, last.y) > 0.01) {
+      this.sendDashDirection(skill, self, last);
+      return;
+    }
+    this.delegate.notice("Cần chọn hướng lướt");
+  }
+
+  private sendDashDirection(skill: WorldSkillInfo, self: WorldPoint, vector: WorldPoint): void {
+    const length = Math.hypot(vector.x, vector.y);
+    if (length <= 0.01) return;
+    const direction = { x: vector.x / length, y: vector.y / length };
+    const intent: Omit<CastPayload, "seq"> = skill.mode === "GROUND"
+      ? { slot: skill.slot, mode: skill.mode, x: self.x + direction.x * Math.min(skill.move_distance ?? 0, skill.range), y: self.y + direction.y * Math.min(skill.move_distance ?? 0, skill.range) }
+      : { slot: skill.slot, mode: skill.mode, aim_x: direction.x, aim_y: direction.y };
+    this.delegate.sendCast(intent);
   }
 
   private currentTarget(): RuntimeEntity | null {

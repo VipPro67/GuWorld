@@ -371,12 +371,14 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 			}
 			for i := 0; i < int(r.Amount); i++ {
 				newGu := models.GuInstance{
-					InstanceID: "gu-" + uuid.New().String(),
-					GuID:       r.ID,
-					Rank:       rank,
-					Hunger:     100,
-					Status:     "ACTIVE",
-					Equipped:   false,
+					InstanceID:         "gu-" + uuid.New().String(),
+					GuID:               r.ID,
+					Rank:               rank,
+					Hunger:             100,
+					RefinementProgress: 100,
+					Durability:         100,
+					Status:             "ACTIVE",
+					Equipped:           false,
 				}
 				player.GuInventory = append(player.GuInventory, newGu)
 				result.NewGus = append(result.NewGus, newGu)

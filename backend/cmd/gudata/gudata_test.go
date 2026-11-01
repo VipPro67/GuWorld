@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
+
+	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 )
 
 const sampleEffects = `[
@@ -137,6 +140,42 @@ func TestTranspileRealtimeGuCanProcessCatalog(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("transpile failed: %v", err)
+	}
+	contents, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalog realtimeeffects.ProfileCatalog
+	if err := json.Unmarshal(contents, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []struct {
+		id       string
+		rank     int
+		mult     float64
+		duration uint64
+	}{
+		{"GU_GREEN_WIND_WHEEL", 1, 1.35, 2500},
+		{"GU_FAST_BRIDGE_5", 5, 1.5, 3000},
+		{"GU_MIND_WORLD_I", 7, 1.75, 3500},
+	} {
+		found := false
+		for _, profile := range catalog.Profiles {
+			if profile.GUID != want.id || profile.Rank != want.rank {
+				continue
+			}
+			found = true
+			if profile.Active == nil || len(profile.Active.Effects) != 1 {
+				t.Fatalf("%s rank %d: invalid haste active: %+v", want.id, want.rank, profile.Active)
+			}
+			effect := profile.Active.Effects[0]
+			if effect.Type != "STATUS" || effect.StatusID != "HASTE" || effect.MoveMultiplier == nil || *effect.MoveMultiplier != want.mult || effect.DurationMS != want.duration || effect.Debuff == nil || *effect.Debuff || effect.StackPolicy != "REFRESH" || effect.MaxStacks != 1 {
+				t.Fatalf("%s rank %d: invalid haste: %+v", want.id, want.rank, effect)
+			}
+		}
+		if !found {
+			t.Fatalf("missing %s rank %d", want.id, want.rank)
+		}
 	}
 }
 

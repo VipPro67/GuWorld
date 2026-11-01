@@ -70,6 +70,8 @@ function makeHarness(options: {
   selected?: string | null;
   pointer?: WorldPoint;
   joined?: boolean;
+  movement?: WorldPoint;
+  lastMovement?: WorldPoint | null;
 } = {}): Harness {
   let selected = options.selected ?? null;
   const pointer = options.pointer ?? { x: 2, y: 0 };
@@ -88,6 +90,8 @@ function makeHarness(options: {
     selfPosition: () => ({ x: 0, y: 0 }),
     renderedSelfPosition: () => ({ x: 0, y: 0 }),
     pointerWorld: () => pointer,
+    movementDirection: () => options.movement ?? { x: 0, y: 0 },
+    lastMoveDirection: () => options.lastMovement ?? null,
     selectedTargetId: () => selected,
     selectTarget: (entityId) => {
       selected = entityId;
@@ -128,6 +132,30 @@ test("DIRECTION skills enter aim on first press and commit on pointer", () => {
   assert.deepEqual(intents, [{ slot: 1, mode: "DIRECTION", aim_x: 1, aim_y: 0 }]);
   assert.deepEqual(marks, [{ x: 2, y: 0 }]);
   assert.equal(controller.isAiming(), false);
+});
+
+test("dash casts immediately along held movement, ahead of a selected target", () => {
+  const { controller, intents } = makeHarness({
+    skills: [skill({ mode: "TARGET", move_distance: 4, move_duration_ticks: 6 })],
+    entities: [entity()], selected: "m1", movement: { x: 0, y: -1 },
+  });
+  controller.triggerSlot(1);
+  assert.deepEqual(intents, [{ slot: 1, mode: "TARGET", aim_x: 0, aim_y: -1 }]);
+  assert.equal(controller.isAiming(), false);
+});
+
+test("idle dash uses selected target, then last movement when pointer has no direction", () => {
+  const selected = makeHarness({
+    skills: [skill({ mode: "TARGET", move_distance: 4 })], entities: [entity()], selected: "m1",
+  });
+  selected.controller.triggerSlot(1);
+  assert.deepEqual(selected.intents, [{ slot: 1, mode: "TARGET", target_id: "m1" }]);
+
+  const last = makeHarness({
+    skills: [skill({ mode: "SELF", move_distance: 4 })], pointer: { x: 0, y: 0 }, lastMovement: { x: 1, y: 0 },
+  });
+  last.controller.triggerSlot(1);
+  assert.deepEqual(last.intents, [{ slot: 1, mode: "SELF", aim_x: 1, aim_y: 0 }]);
 });
 
 test("TARGET skills with no selection enter aim and announce it", () => {

@@ -68,6 +68,8 @@ type GuSkillProfile struct {
 	SpreadCount     int     `json:"spread_count,omitempty"`
 	SpreadAngleDeg  float64 `json:"spread_angle_deg,omitempty"`
 	MoveDistance    float64 `json:"move_distance,omitempty"`
+	MoveDurationMs  int     `json:"move_duration_ms,omitempty"`
+	MoveBehavior    string  `json:"move_behavior,omitempty"`
 	KnockbackDist   float64 `json:"knockback_dist,omitempty"`
 
 	// 7. Base Payload & Scaling
@@ -89,6 +91,7 @@ type GuSkillProfile struct {
 	StatusMoveMult       *float64 `json:"status_move_mult,omitempty"` // alias
 	StatusMaxStacks      int      `json:"status_max_stacks,omitempty"`
 	StatusStackPolicy    string   `json:"status_stack_policy,omitempty"`
+	StatusDebuff         *bool    `json:"status_debuff,omitempty"`
 	PvPDrCategory        string   `json:"pvp_dr_category,omitempty"`
 
 	// 9. Support & Defense

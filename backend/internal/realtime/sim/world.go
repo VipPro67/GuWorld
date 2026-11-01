@@ -162,13 +162,15 @@ type Entity struct {
 	moveTarget    *Vec2
 	targetTick    uint64
 	lastInputTick uint64
+	lastDirection Vec2
+	dash          *dashState
 }
 
 type InputCommand struct {
-	EntityID        EntityID
-	LeaseToken      string
-	Seq             uint64
-	Move            Vec2
+	EntityID   EntityID
+	LeaseToken string
+	Seq        uint64
+	Move       Vec2
 	// Target is set for a click-to-move intent. It shares the movement sequence
 	// stream with WASD input; a non-zero Move cancels an active target.
 	Target          *Vec2
@@ -697,6 +699,7 @@ func (w *World) Step() Snapshot {
 		entity.lastInputTick = w.tick
 		entity.moveIntent = command.Move
 		if command.Move.X != 0 || command.Move.Y != 0 {
+			entity.lastDirection = command.Move
 			entity.moveTarget = nil
 		}
 	}
@@ -707,6 +710,9 @@ func (w *World) Step() Snapshot {
 	w.tickTribulationHazardsLocked()
 
 	for _, entity := range w.entities {
+		if entity.dash != nil {
+			continue
+		}
 		if entity.Kind == EntityPlayer && w.tick-entity.lastInputTick >= InputLeaseTicks {
 			entity.moveIntent = Vec2{}
 		}
@@ -789,6 +795,7 @@ func (w *World) Step() Snapshot {
 			}
 		}
 	}
+	w.stepDashesLocked()
 
 	snapshot := w.publish()
 	w.completeLifecycleCommands(lifecycleResults)

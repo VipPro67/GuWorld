@@ -279,13 +279,15 @@ func RefineGu(c *gin.Context) {
 		}
 
 		newGuInstance = models.GuInstance{
-			InstanceID: uuid.New().String(),
-			GuID:       recipe.TargetGuID,
-			Rank:       recipe.TargetRank,
-			Hunger:     100,
-			Status:     "ACTIVE",
-			Equipped:   false,
-			IsVital:    hasVitalIngredient,
+			InstanceID:         uuid.New().String(),
+			GuID:               recipe.TargetGuID,
+			Rank:               recipe.TargetRank,
+			Hunger:             100,
+			RefinementProgress: 100,
+			Durability:         100,
+			Status:             "ACTIVE",
+			Equipped:           false,
+			IsVital:            hasVitalIngredient,
 		}
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
@@ -426,12 +428,6 @@ func RefineGu(c *gin.Context) {
 		statusMsg += " [Tâm Đắc]: Cổ nguyên liệu không khớp công thức; lần này không tăng tầng Tâm Đắc."
 	}
 
-	statusesRaw, err := player.Statuses.Value()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize player statuses"})
-		return
-	}
-
 	// 9. Update player status in database
 	// Explicit delete — SyncPlayerGus no longer deletes.
 	if len(consumedGuIDs) > 0 {
@@ -450,13 +446,7 @@ func RefineGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ: " + err.Error()})
 		return
 	}
-	updateQuery := `
-		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7, path_masteries = $8, soul_hp = $9, statuses = $10
-		WHERE id = $11
-	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.PathMasteries, player.SoulHP, statusesRaw, player.ID)
-	if err != nil {
+	if err := updateRefinePlayerResources(tx, &player); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return
 	}

@@ -5,9 +5,40 @@ import type { WorldSkillInfo } from "../network/Protocol.ts";
 /** Draws authoritative range/shape previews while aiming or hovering a skill. */
 export class CastTelegraph {
   private readonly graphics: Phaser.GameObjects.Graphics;
+  private readonly lockedGraphics: Phaser.GameObjects.Graphics;
+  private readonly scene: Phaser.Scene;
+  private lockedTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     this.graphics = scene.add.graphics().setDepth(-6_000);
+    this.lockedGraphics = scene.add.graphics().setDepth(-5_999);
+  }
+
+  /** Server-accepted dash direction remains visible through windup and travel. */
+  public showLockedDash(start: WorldPoint, direction: WorldPoint, distance: number, durationTicks: number): void {
+    this.clearLockedDash();
+    const length = Math.hypot(direction.x, direction.y);
+    if (length <= 0.01 || distance <= 0) return;
+    const from = worldToPixels(start);
+    const end = {
+      x: from.x + direction.x / length * distance * PIXELS_PER_UNIT,
+      y: from.y + direction.y / length * distance * PIXELS_PER_UNIT,
+    };
+    this.lockedGraphics.lineStyle(3, 0x67e8f9, 0.85);
+    this.lockedGraphics.beginPath();
+    this.lockedGraphics.moveTo(from.x, from.y);
+    this.lockedGraphics.lineTo(end.x, end.y);
+    this.lockedGraphics.strokePath();
+    this.lockedGraphics.fillStyle(0x67e8f9, 0.9);
+    this.lockedGraphics.fillCircle(end.x, end.y, 5);
+    this.lockedTimer = this.scene.time.delayedCall(Math.max(50, durationTicks * 50), () => this.clearLockedDash());
+  }
+
+  public clearLockedDash(): void {
+    this.lockedTimer?.remove(false);
+    this.lockedTimer = null;
+    this.lockedGraphics.clear();
   }
 
   /**

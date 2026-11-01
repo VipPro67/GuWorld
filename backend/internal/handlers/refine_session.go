@@ -87,7 +87,9 @@ const refineSessionSelect = `
 
 const refineSessionSelectForUpdate = refineSessionSelect + ` WHERE id=$1 AND player_id=$2 FOR UPDATE`
 
-func scanRefineSessionRow(scanner interface{ Scan(dest ...interface{}) error }) (*refineSessionRow, error) {
+func scanRefineSessionRow(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*refineSessionRow, error) {
 	var s refineSessionRow
 	var selectedGuIDs []byte
 	var guSnapshotRaw, materialsRaw, rateRaw, planRaw, stepResultsRaw []byte
@@ -173,20 +175,20 @@ func publicSessionView(s *refineSessionRow, now time.Time) gin.H {
 	}
 
 	view := gin.H{
-		"id":          s.ID,
-		"status":      s.Status,
-		"recipe_id":   s.RecipeID,
+		"id":           s.ID,
+		"status":       s.Status,
+		"recipe_id":    s.RecipeID,
 		"target_gu_id": s.TargetGuID,
-		"target_rank": s.TargetRank,
-		"variant":     s.Variant,
-		"started_at":  s.StartedAt,
-		"ends_at":     s.EndsAt,
-		"accuracy":    s.Accuracy,
-		"server_now":  now,
-		"steps":       steps,
-		"step":        nil,
+		"target_rank":  s.TargetRank,
+		"variant":      s.Variant,
+		"started_at":   s.StartedAt,
+		"ends_at":      s.EndsAt,
+		"accuracy":     s.Accuracy,
+		"server_now":   now,
+		"steps":        steps,
+		"step":         nil,
 		"next_step_at": nextStepAt,
-		"result":      nil,
+		"result":       nil,
 	}
 
 	if stepToExpose != nil {
@@ -952,18 +954,56 @@ func AbortRefineSession(c *gin.Context) {
 		return
 	}
 
-	// Recompute equipped list from DB state.
+	// Recompute equipped list: prune the saved order down to the still
+	// equipped+ACTIVE Gu instead of rebuilding from inventory order, so the
+	// realtime hotbar assignment (Ô 1–6) is not reset by aborting a session.
 	playerGu, err := db.LoadPlayerGus(tx, authID.String(), false)
 	if err != nil {
 		logger.S.Errorf("AbortRefineSession: load gus error: %v", err)
 		c.JSON(500, gin.H{"error": "Không thể đọc Cổ"})
 		return
 	}
-	equipped := []string{}
+	activeSet := make(map[string]struct{})
 	for _, gu := range models.FilterEquippedActive(playerGu) {
-		equipped = append(equipped, gu.InstanceID)
+		activeSet[gu.InstanceID] = struct{}{}
 	}
-	if _, err := tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, pq.Array(equipped), authID); err != nil {
+	ordered := models.EquippedGusList{}
+	seen := make(map[string]struct{}, len(activeSet))
+	// Deliberately read equipped_gus without FOR UPDATE: the player row is not
+	// locked here and the player_gu updates above were taken first, so adding a
+	// row lock now would invert the players/player_gu lock order used by
+	// EvaluatePlayerHungerTx and risk deadlock. A concurrent writer could be
+	// blind-written; acceptable for this low-frequency flow.
+	var savedOrder models.EquippedGusList
+	if err := tx.QueryRowContext(c.Request.Context(),
+		`SELECT COALESCE(equipped_gus, '[]'::jsonb) FROM players WHERE id=$1`, authID,
+	).Scan(&savedOrder); err != nil {
+		logger.S.Errorf("AbortRefineSession: read equipped order error: %v", err)
+		c.JSON(500, gin.H{"error": "Không thể đọc Cổ trang bị"})
+		return
+	}
+	for _, id := range savedOrder {
+		if _, ok := activeSet[id]; ok {
+			if _, dup := seen[id]; !dup {
+				ordered = append(ordered, id)
+				seen[id] = struct{}{}
+			}
+		}
+	}
+	guIDs := make([]string, 0, len(activeSet))
+	for _, gu := range playerGu {
+		if _, ok := activeSet[gu.InstanceID]; ok {
+			guIDs = append(guIDs, gu.InstanceID)
+		}
+	}
+	for _, id := range guIDs {
+		if _, dup := seen[id]; !dup {
+			ordered = append(ordered, id)
+			seen[id] = struct{}{}
+		}
+	}
+	equipped := ordered
+	if _, err := tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, equipped, authID); err != nil {
 		logger.S.Errorf("AbortRefineSession: update equipped error: %v", err)
 		c.JSON(500, gin.H{"error": "Không thể cập nhật Cổ trang bị"})
 		return

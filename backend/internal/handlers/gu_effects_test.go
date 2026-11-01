@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -102,6 +103,75 @@ func TestCleanupInvalidEquipped(t *testing.T) {
 			t.Fatalf("expected equipped_gus[%d] = %s, got %s", i, id, p.EquippedGus[i])
 		}
 	}
+}
+
+// TestRebuildEquippedGusKeepsHotbarOrderWhileMembersStayValid pins the hotbar
+// contract: the order of players.equipped_gus IS the realtime hotbar slot
+// order (slot = index+1 for the first six). As long as every Gu that the
+// player assigned to a hotbar slot stays equipped and ACTIVE, its position
+// must never move: no re-shuffle, no re-sort, no dedupe side effects.
+func TestRebuildEquippedGusKeepsHotbarOrderWhileMembersStayValid(t *testing.T) {
+	activeEquipped := func(id string) models.GuInstance {
+		return models.GuInstance{InstanceID: id, Status: "ACTIVE", Equipped: true}
+	}
+	newPlayer := func(equipped models.EquippedGusList, gus models.GuInventory) *models.Player {
+		p := &models.Player{GuInventory: gus}
+		p.EquippedGus = equipped
+		return p
+	}
+
+	t.Run("survives unrelated mutations", func(t *testing.T) {
+		p := newPlayer(
+			models.EquippedGusList{"h1", "h2", "h3", "h4", "h5", "h6", "extra"},
+			models.GuInventory{
+				activeEquipped("h1"), activeEquipped("h2"), activeEquipped("h3"),
+				activeEquipped("h4"), activeEquipped("h5"), activeEquipped("h6"),
+				activeEquipped("extra"),
+			},
+		)
+		RebuildEquippedGus(p)
+		want := []string{"h1", "h2", "h3", "h4", "h5", "h6", "extra"}
+		if !reflect.DeepEqual([]string(p.EquippedGus), want) {
+			t.Fatalf("valid hotbar members must keep their slots, got %v", p.EquippedGus)
+		}
+	})
+
+	t.Run("equipping another Gu never shifts assigned slots", func(t *testing.T) {
+		p := newPlayer(
+			models.EquippedGusList{"h1", "h2", "h3", "h4", "h5", "h6", "extra"},
+			models.GuInventory{
+				activeEquipped("h1"), activeEquipped("h2"), activeEquipped("h3"),
+				activeEquipped("h4"), activeEquipped("h5"), activeEquipped("h6"),
+				activeEquipped("extra"), activeEquipped("newcomer"),
+			},
+		)
+		RebuildEquippedGus(p)
+		want := []string{"h1", "h2", "h3", "h4", "h5", "h6", "extra", "newcomer"}
+		if !reflect.DeepEqual([]string(p.EquippedGus), want) {
+			t.Fatalf("new Gu must append at the end, got %v", p.EquippedGus)
+		}
+	})
+
+	t.Run("stale ids are pruned without reordering survivors", func(t *testing.T) {
+		unequipped := func(id string) models.GuInstance { return models.GuInstance{InstanceID: id, Status: "ACTIVE"} }
+		// "ghost" was unequipped earlier but lingers in equipped_gus
+		// (e.g. SLEEPING/SEALED), and "damaged" was force unequipped by
+		// cleanupInvalidEquipped. Survivors must keep order.
+		p := newPlayer(
+			models.EquippedGusList{"h1", "ghost", "h2", "damaged", "h3"},
+			models.GuInventory{
+				activeEquipped("h1"), unequipped("ghost"),
+				activeEquipped("h2"),
+				{InstanceID: "damaged", Status: "DAMAGED"},
+				activeEquipped("h3"),
+			},
+		)
+		RebuildEquippedGus(p)
+		want := []string{"h1", "h2", "h3"}
+		if !reflect.DeepEqual([]string(p.EquippedGus), want) {
+			t.Fatalf("survivors keep relative order, got %v", p.EquippedGus)
+		}
+	})
 }
 
 func TestCleanupInvalidEquippedNoInvalidGus(t *testing.T) {

@@ -369,24 +369,24 @@ func mergeEffectBlocks(authored, legacy []gameplayeffects.Block) []gameplayeffec
 }
 
 type GuDictionaryItem struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	Rank          int             `json:"rank"`
-	Path          []string        `json:"path"`
-	Type          string          `json:"gu_type"`
-	BaseManaCost  float64         `json:"base_mana_cost"`
-	Effects       GuEffects       `json:"effects"`
-	FoodTypes     []string        `json:"food_types"`
-	HungerRate    int             `json:"hunger_rate"`
-	MaxHunger     int             `json:"max_hunger"`
-	Description   string          `json:"description"`
-	Rarity        int             `json:"rarity"`
-	PrimaryRole   string          `json:"primary_role"`
-	CombatRoles   []string        `json:"combat_roles"`
-	CombatTags    []string        `json:"combat_tags"`
-	SupportTags   []string        `json:"support_tags"`
-	BasePrice     float64         `json:"base_price"`
-	ImageURL      string          `json:"image_url"`
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	Rank         int             `json:"rank"`
+	Path         []string        `json:"path"`
+	Type         string          `json:"gu_type"`
+	BaseManaCost float64         `json:"base_mana_cost"`
+	Effects      GuEffects       `json:"effects"`
+	FoodTypes    []string        `json:"food_types"`
+	HungerRate   int             `json:"hunger_rate"`
+	MaxHunger    int             `json:"max_hunger"`
+	Description  string          `json:"description"`
+	Rarity       int             `json:"rarity"`
+	PrimaryRole  string          `json:"primary_role"`
+	CombatRoles  []string        `json:"combat_roles"`
+	CombatTags   []string        `json:"combat_tags"`
+	SupportTags  []string        `json:"support_tags"`
+	BasePrice    float64         `json:"base_price"`
+	ImageURL     string          `json:"image_url"`
 	SkillProfile *GuSkillProfile `json:"skill_profile,omitempty"`
 }
 

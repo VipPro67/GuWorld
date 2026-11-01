@@ -118,6 +118,9 @@ export interface WorldSkillInfo {
   radius_units?: number;
   cooldown_ticks: number;
   windup_ticks: number;
+  move_distance?: number;
+  move_duration_ticks?: number;
+  move_behavior?: "MOVE_ONLY" | "IMPACT";
   is_toggle?: boolean;
   form_activation?: boolean;
   form_ability?: boolean;
@@ -358,6 +361,9 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
       if (raw.radius_units !== undefined && (!isFiniteNumber(raw.radius_units) || raw.radius_units < 0)) {
         throw new Error("World welcome skill radius is invalid");
       }
+      if (raw.move_distance !== undefined && (!isFiniteNumber(raw.move_distance) || raw.move_distance < 0)) throw new Error("World welcome dash distance is invalid");
+      if (raw.move_duration_ticks !== undefined && !isSafeNonNegativeInteger(raw.move_duration_ticks)) throw new Error("World welcome dash duration is invalid");
+      if (raw.move_behavior !== undefined && raw.move_behavior !== "MOVE_ONLY" && raw.move_behavior !== "IMPACT") throw new Error("World welcome dash behavior is invalid");
       const visuals = isRecord(raw.visuals) ? {
         icon: typeof raw.visuals.icon === "string" ? raw.visuals.icon.slice(0, 100) : undefined,
         cast_vfx: typeof raw.visuals.cast_vfx === "string" ? raw.visuals.cast_vfx.slice(0, 100) : undefined,
@@ -374,6 +380,9 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
         mana_cost: raw.mana_cost, range: raw.range,
         radius_units: raw.radius_units as number | undefined,
         cooldown_ticks: raw.cooldown_ticks, windup_ticks: raw.windup_ticks,
+        move_distance: raw.move_distance as number | undefined,
+        move_duration_ticks: raw.move_duration_ticks as number | undefined,
+        move_behavior: raw.move_behavior as WorldSkillInfo["move_behavior"],
         is_toggle: raw.is_toggle === true,
         form_activation: raw.form_activation === true,
         form_ability: raw.form_ability === true,

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "profiles": [
     {
       "gu_id": "FIVE_ELEMENTS_DIVINE_BARRIER_ARRAY",
@@ -4924,6 +4924,8 @@
         "movement_policy": "SLOW",
         "max_targets": 1,
         "move_distance": 4,
+        "move_duration_ms": 300,
+        "move_behavior": "IMPACT",
         "knockback_distance": 2.5,
         "effects": [
           {
@@ -37928,7 +37930,28 @@
     {
       "gu_id": "GU_FAST_BRIDGE_5",
       "rank": 5,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "windup_ms": 100,
+        "recovery_ms": 100,
+        "cooldown_ms": 1200,
+        "range_units": 0,
+        "mana_cost": 10,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "effects": [
+          {
+            "type": "STATUS",
+            "status_id": "HASTE",
+            "duration_ms": 3000,
+            "move_multiplier": 1.5,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "NONE"
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -37947,7 +37970,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/time"
+        "icon": "gu/time",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/light_slash"
       }
     },
     {
@@ -52201,7 +52226,28 @@
     {
       "gu_id": "GU_GREEN_WIND_WHEEL",
       "rank": 1,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "windup_ms": 100,
+        "recovery_ms": 100,
+        "cooldown_ms": 1200,
+        "range_units": 0,
+        "mana_cost": 10,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "effects": [
+          {
+            "type": "STATUS",
+            "status_id": "HASTE",
+            "duration_ms": 2500,
+            "move_multiplier": 1.35,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "NONE"
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -52220,7 +52266,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/wind"
+        "icon": "gu/wind",
+        "cast_vfx": "cast/wind",
+        "impact_vfx": "impact/wind_slash"
       }
     },
     {
@@ -74864,7 +74912,28 @@
     {
       "gu_id": "GU_MIND_WORLD_I",
       "rank": 7,
-      "active": null,
+      "active": {
+        "mode": "SELF",
+        "windup_ms": 100,
+        "recovery_ms": 100,
+        "cooldown_ms": 1200,
+        "range_units": 0,
+        "mana_cost": 10,
+        "movement_policy": "SLOW",
+        "max_targets": 1,
+        "effects": [
+          {
+            "type": "STATUS",
+            "status_id": "HASTE",
+            "duration_ms": 3500,
+            "move_multiplier": 1.75,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "NONE"
+          }
+        ]
+      },
       "passives": [
         {
           "trigger": "ALWAYS_ON",
@@ -74883,7 +74952,9 @@
         }
       ],
       "visuals": {
-        "icon": "gu/force"
+        "icon": "gu/force",
+        "cast_vfx": "cast/strength",
+        "impact_vfx": "impact/heavy_strike"
       }
     },
     {
@@ -118249,10 +118320,6 @@
         "movement_policy": "SLOW",
         "max_targets": 1,
         "effects": [
-          {
-            "type": "DAMAGE",
-            "value": 60
-          },
           {
             "type": "STATUS",
             "status_id": "FREEZE",

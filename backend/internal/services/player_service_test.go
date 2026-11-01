@@ -143,4 +143,3 @@ func TestApplyProjectedStatusLifespanImmunityForRank10(t *testing.T) {
 		t.Fatalf("rank 1 lifespan did not decrease: got %v, want < 100", p1.Lifespan)
 	}
 }
-

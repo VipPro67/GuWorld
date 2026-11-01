@@ -287,4 +287,3 @@ func GetAllRecipes() []RefiningRecipe {
 	copy(res, recipeList)
 	return res
 }
-

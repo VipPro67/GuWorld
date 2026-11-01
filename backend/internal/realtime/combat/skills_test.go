@@ -44,3 +44,15 @@ func TestInvalidSkillsAreRejected(t *testing.T) {
 		t.Fatal("self skill without heal/shield accepted")
 	}
 }
+
+func TestDashDistanceIsBounded(t *testing.T) {
+	skill := Skill{ID: "DASH", Slot: 1, Mode: ModeTarget, Range: 10,
+		MoveDistance: MaxCastRangeUnits, MoveDurationTicks: 6, MoveBehavior: "MOVE_ONLY"}
+	if !skill.Valid() {
+		t.Fatal("dash at maximum distance rejected")
+	}
+	skill.MoveDistance++
+	if skill.Valid() {
+		t.Fatal("dash beyond maximum distance accepted")
+	}
+}

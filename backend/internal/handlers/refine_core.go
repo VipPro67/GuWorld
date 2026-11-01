@@ -309,7 +309,6 @@ func computeRefineRate(q refineQuerier, player *models.Player, recipe models.Ref
 	return snap, nil
 }
 
-
 // fetchRefiningRecipe loads a recipe by its derived recipe_id — memory cache
 // first, DB fallback. Used by both the quick path and refine sessions.
 func fetchRefiningRecipe(q refineQuerier, recipeID string) (models.RefiningRecipe, error) {

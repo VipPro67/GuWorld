@@ -519,14 +519,16 @@ func AdminRemovePlayerGu(c *gin.Context) {
 }
 
 type AdminUpdateGuInstanceRequest struct {
-	Rank            *int     `json:"rank"`
-	Level           *int     `json:"level"`
-	Hunger          *float64 `json:"hunger"`
-	State           *string  `json:"state"`
-	Equipped        *bool    `json:"equipped"`
-	IsVital         *bool    `json:"is_vital"`
-	IsLocked        *bool    `json:"is_locked"`
-	IntegrationTime *float64 `json:"integration_time"`
+	Rank               *int     `json:"rank"`
+	Level              *int     `json:"level"`
+	Hunger             *float64 `json:"hunger"`
+	RefinementProgress *float64 `json:"refinement_progress"`
+	Durability         *float64 `json:"durability"`
+	State              *string  `json:"state"`
+	Equipped           *bool    `json:"equipped"`
+	IsVital            *bool    `json:"is_vital"`
+	IsLocked           *bool    `json:"is_locked"`
+	IntegrationTime    *float64 `json:"integration_time"`
 }
 
 func AdminUpdatePlayerGu(c *gin.Context) {
@@ -614,6 +616,16 @@ func AdminUpdatePlayerGu(c *gin.Context) {
 	if req.Hunger != nil {
 		sets = append(sets, "hunger=$"+strconv.Itoa(argIdx))
 		args = append(args, *req.Hunger)
+		argIdx++
+	}
+	if req.RefinementProgress != nil {
+		sets = append(sets, "refinement_progress=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.RefinementProgress)
+		argIdx++
+	}
+	if req.Durability != nil {
+		sets = append(sets, "durability=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.Durability)
 		argIdx++
 	}
 	if req.State != nil {

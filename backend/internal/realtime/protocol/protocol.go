@@ -20,12 +20,12 @@ const (
 )
 
 const (
-	TypeJoin     = "world.join"
-	TypeWelcome  = "world.welcome"
-	TypeInput    = "world.input"
-	TypeMoveTo   = "world.move_target"
-	TypeCast     = "world.cast"
-	TypeAttack   = "world.attack"
+	TypeJoin            = "world.join"
+	TypeWelcome         = "world.welcome"
+	TypeInput           = "world.input"
+	TypeMoveTo          = "world.move_target"
+	TypeCast            = "world.cast"
+	TypeAttack          = "world.attack"
 	TypeEvents          = "world.events"
 	TypeSnapshot        = "world.snapshot"
 	TypeTransfer        = "world.transfer"
@@ -81,24 +81,27 @@ type Welcome struct {
 // SkillInfo is the server-owned hotbar projection sent on join. Damage and
 // validation stay server-side; the client uses it for mode/name/cooldowns.
 type SkillInfo struct {
-	Slot           uint8         `json:"slot"`
-	ID             string        `json:"id"`
-	Name           string        `json:"name"`
-	Mode           string        `json:"mode"`
-	Shape          string        `json:"shape,omitempty"`
-	AngleDeg       float64       `json:"angle_deg,omitempty"`
-	LengthUnits    float64       `json:"length_units,omitempty"`
-	WidthUnits     float64       `json:"width_units,omitempty"`
-	InnerRadius    float64       `json:"inner_radius,omitempty"`
-	ManaCost       float64       `json:"mana_cost"`
-	Range          float64       `json:"range"`
-	RadiusUnits    float64       `json:"radius_units,omitempty"`
-	CooldownTicks  uint64        `json:"cooldown_ticks"`
-	WindupTicks    uint64        `json:"windup_ticks"`
-	IsToggle       bool          `json:"is_toggle,omitempty"`
-	FormActivation bool          `json:"form_activation,omitempty"`
-	FormAbility    bool          `json:"form_ability,omitempty"`
-	Visuals        *SkillVisuals `json:"visuals,omitempty"`
+	Slot              uint8         `json:"slot"`
+	ID                string        `json:"id"`
+	Name              string        `json:"name"`
+	Mode              string        `json:"mode"`
+	Shape             string        `json:"shape,omitempty"`
+	AngleDeg          float64       `json:"angle_deg,omitempty"`
+	LengthUnits       float64       `json:"length_units,omitempty"`
+	WidthUnits        float64       `json:"width_units,omitempty"`
+	InnerRadius       float64       `json:"inner_radius,omitempty"`
+	ManaCost          float64       `json:"mana_cost"`
+	Range             float64       `json:"range"`
+	RadiusUnits       float64       `json:"radius_units,omitempty"`
+	CooldownTicks     uint64        `json:"cooldown_ticks"`
+	WindupTicks       uint64        `json:"windup_ticks"`
+	MoveDistance      float64       `json:"move_distance,omitempty"`
+	MoveDurationTicks uint64        `json:"move_duration_ticks,omitempty"`
+	MoveBehavior      string        `json:"move_behavior,omitempty"`
+	IsToggle          bool          `json:"is_toggle,omitempty"`
+	FormActivation    bool          `json:"form_activation,omitempty"`
+	FormAbility       bool          `json:"form_ability,omitempty"`
+	Visuals           *SkillVisuals `json:"visuals,omitempty"`
 }
 
 type SkillVisuals struct {

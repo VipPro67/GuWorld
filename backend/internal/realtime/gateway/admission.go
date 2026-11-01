@@ -1593,6 +1593,7 @@ func skillInfos(loadout []combat.Skill) []protocol.SkillInfo {
 			WidthUnits: skill.WidthUnits, InnerRadius: skill.InnerRadius,
 			ManaCost: skill.ManaCost, Range: skill.Range, RadiusUnits: skill.Radius, CooldownTicks: skill.CooldownTicks,
 			WindupTicks: skill.WindupTicks, IsToggle: skill.IsToggle,
+			MoveDistance: skill.MoveDistance, MoveDurationTicks: skill.MoveDurationTicks, MoveBehavior: skill.MoveBehavior,
 			FormActivation: skill.FormActivation, FormAbility: skill.FormAbility,
 			Visuals: visuals,
 		})

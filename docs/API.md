@@ -136,6 +136,9 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/feed-group` |
 | POST | `/inventory/feed-all` | Cho ăn toàn bộ Cổ trùng. Nhận body JSON tùy chọn `{ "scope": "equipped" \| "rest" \| "unequipped" \| "all" }` hoặc `{ "equipped": true \| false }` để lọc theo Cổ trùng đang xuất trận hoặc trong túi. |
 | POST | `/inventory/equip` |
+| POST | `/inventory/subjugate-gu` | Luyện hóa ý chí Cổ trùng (Gu Subjugation). Body `{ "instance_id": "..." }`. Nếu Bản Mệnh Cổ có Rank $\ge$ Rank Cổ cần luyện $+ 2$, ý chí dã Cổ bị áp chế hoàn toàn, đạt ngay 100% (0 mana). Nếu không, tiêu hao `Rank * 25` Chân Nguyên để tăng +25% tiến độ mỗi lần luyện. |
+| POST | `/inventory/nourish-gu` | Ôn dưỡng Cổ trùng (Gu Nourishment). Body `{ "instance_id": "..." }`. Dùng Chân Nguyên (`Rank * 20`) để hồi phục +15.0 độ bền cho Cổ bị tổn thương (`durability >= 20`). |
+| POST | `/inventory/repair-gu` | Tu bổ Cổ trùng (Gu Restoration). Body `{ "instance_id": "..." }`. Tiêu hao Nguyên Thạch (`Rank * 50`) hoặc Tiên Nguyên Thạch (1 viên nếu Tiên Cổ) để tu bổ Cổ bị trọng thương (`durability < 20` hoặc `state = DAMAGED`), phục hồi về độ bền 50.0 và trạng thái `ACTIVE`. |
 | POST | `/inventory/realtime-hotbar` | Gán thứ tự tối đa 6 Cổ đã trang bị vào nút realtime 1–6. Body `{ "gu_instance_ids": ["instance-id", ...] }`; thứ tự mảng là thứ tự phím. Không trang bị/tháo Cổ. Áp dụng sau khi world kết nối lại. |
 | POST | `/inventory/unequip-all` |
 | POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |
@@ -560,6 +563,13 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa phiên bản phục vụ mở rộng horizontal. Kết nối yêu cầu token qua header `Authorization: Bearer <token>` hoặc query parameter `?token=<token>`.
 
 Welcome của realtime world (`world.welcome`) có `movement_speed` (đơn vị map/giây), tốc độ authoritative đã tính từ passive `movement`. Client dùng giá trị này cho local prediction; client cũ có thể bỏ qua trường này.
+
+Skill lướt trong `world.welcome` có `move_distance`, `move_duration_ticks` và
+`move_behavior`. Lệnh `world.cast` có thể gửi `aim_x`/`aim_y` để khóa hướng lướt
+khi bấm chiêu, kể cả khi có `target_id`. Event `CAST_ACCEPTED` trả
+`dash_dir_x`, `dash_dir_y`, `dash_duration_ticks`; `world.snapshot` tiếp tục
+cung cấp vị trí authoritative trong lúc lướt, và `HIT_CONFIRMED` báo va chạm.
+`DASH_ENDED` báo lúc lướt kết thúc hoặc bị chặn để client dừng hiệu ứng chỉ hướng.
 
 ### Các kênh hỗ trợ (Channels):
 | Channel | Direction | Mục đích |

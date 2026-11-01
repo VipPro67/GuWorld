@@ -472,8 +472,8 @@ func grantGu(ctx context.Context, tx *sql.Tx, playerID uuid.UUID, reward Reward)
 	}
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO player_gu
-			(id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, equipped, is_vital, integration_time, growth_hours)
-		VALUES ($1,$2,$3,$4,$4,1,100,'ACTIVE','INVENTORY',false,false,0,0)
+			(id, player_id, gu_id, gu_rank, rank, level, hunger, refinement_progress, durability, state, location, equipped, is_vital, integration_time, growth_hours)
+		VALUES ($1,$2,$3,$4,$4,1,100,0,100,'ACTIVE','INVENTORY',false,false,0,0)
 		ON CONFLICT DO NOTHING
 	`, uuid.NewString(), playerID, reward.ID, rank)
 	return err

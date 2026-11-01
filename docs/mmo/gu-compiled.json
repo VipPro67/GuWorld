@@ -1,5 +1,5 @@
 {
-  "SchemaVersion": 1,
+  "SchemaVersion": 2,
   "Profiles": [
     {
       "GUID": "FIVE_ELEMENTS_DIVINE_BARRIER_ARRAY",
@@ -8970,6 +8970,8 @@
           "PvPDrCategory": "",
           "Cleanse": false,
           "move_distance": 4,
+          "move_duration_ticks": 6,
+          "move_behavior": "IMPACT",
           "knockback_distance": 2.5
         },
         "Effects": [
@@ -71367,7 +71369,52 @@
       "GUID": "GU_FAST_BRIDGE_5",
       "Rank": 5,
       "Slot": 0,
-      "Active": null,
+      "Active": {
+        "Skill": {
+          "ID": "GU_FAST_BRIDGE_5",
+          "Slot": 1,
+          "Mode": "SELF",
+          "Name": "Ngũ Chuyển Độn Kiều Cổ",
+          "ManaCost": 10,
+          "Range": 0,
+          "WindupTicks": 2,
+          "RecoveryTicks": 2,
+          "MovementPolicy": "SLOW",
+          "CooldownTicks": 24,
+          "Damage": 0,
+          "Shield": 0,
+          "Heal": 0,
+          "Radius": 0,
+          "ProjectileSpeed": 0,
+          "ProjectileRadius": 0,
+          "ProjectileTicks": 0,
+          "MaxTargets": 1,
+          "RequiresEnemyTarget": true,
+          "StatusID": "HASTE",
+          "StatusDurationTicks": 60,
+          "StatusPeriodTicks": 0,
+          "StatusDamagePerTick": 0,
+          "StatusHealPerTick": 0,
+          "StatusMoveMultiplier": 1.5,
+          "StatusMaxStacks": 1,
+          "StatusStackPolicy": "REFRESH",
+          "StatusDebuff": false,
+          "PvPDrCategory": "NONE",
+          "Cleanse": false
+        },
+        "Effects": [
+          {
+            "type": "STATUS",
+            "status_id": "HASTE",
+            "duration_ms": 3000,
+            "move_multiplier": 1.5,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "NONE"
+          }
+        ]
+      },
       "FormActivation": null,
       "FormAbility": null,
       "FormManaDrainPerTick": 0,
@@ -71391,7 +71438,9 @@
       ],
       "HiddenPassives": null,
       "Visuals": {
-        "icon": "gu/time"
+        "icon": "gu/time",
+        "cast_vfx": "cast/transformation",
+        "impact_vfx": "impact/light_slash"
       },
       "SourceHash": "c45c8995a9fd44f1eced6043d01182956bc72d114ccc30e8d7d977dd32dd75ec"
     },
@@ -97682,7 +97731,52 @@
       "GUID": "GU_GREEN_WIND_WHEEL",
       "Rank": 1,
       "Slot": 0,
-      "Active": null,
+      "Active": {
+        "Skill": {
+          "ID": "GU_GREEN_WIND_WHEEL",
+          "Slot": 1,
+          "Mode": "SELF",
+          "Name": "Thanh Phong Luân Cổ",
+          "ManaCost": 10,
+          "Range": 0,
+          "WindupTicks": 2,
+          "RecoveryTicks": 2,
+          "MovementPolicy": "SLOW",
+          "CooldownTicks": 24,
+          "Damage": 0,
+          "Shield": 0,
+          "Heal": 0,
+          "Radius": 0,
+          "ProjectileSpeed": 0,
+          "ProjectileRadius": 0,
+          "ProjectileTicks": 0,
+          "MaxTargets": 1,
+          "RequiresEnemyTarget": true,
+          "StatusID": "HASTE",
+          "StatusDurationTicks": 50,
+          "StatusPeriodTicks": 0,
+          "StatusDamagePerTick": 0,
+          "StatusHealPerTick": 0,
+          "StatusMoveMultiplier": 1.35,
+          "StatusMaxStacks": 1,
+          "StatusStackPolicy": "REFRESH",
+          "StatusDebuff": false,
+          "PvPDrCategory": "NONE",
+          "Cleanse": false
+        },
+        "Effects": [
+          {
+            "type": "STATUS",
+            "status_id": "HASTE",
+            "duration_ms": 2500,
+            "move_multiplier": 1.35,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "NONE"
+          }
+        ]
+      },
       "FormActivation": null,
       "FormAbility": null,
       "FormManaDrainPerTick": 0,
@@ -97706,7 +97800,9 @@
       ],
       "HiddenPassives": null,
       "Visuals": {
-        "icon": "gu/wind"
+        "icon": "gu/wind",
+        "cast_vfx": "cast/wind",
+        "impact_vfx": "impact/wind_slash"
       },
       "SourceHash": "81c441069b8d388fd51a341c5e74c66372bff16376691f04c1e51eb95c500afc"
     },
@@ -136539,7 +136635,52 @@
       "GUID": "GU_MIND_WORLD_I",
       "Rank": 7,
       "Slot": 0,
-      "Active": null,
+      "Active": {
+        "Skill": {
+          "ID": "GU_MIND_WORLD_I",
+          "Slot": 1,
+          "Mode": "SELF",
+          "Name": "Tâm Giới Tiên Cổ",
+          "ManaCost": 10,
+          "Range": 0,
+          "WindupTicks": 2,
+          "RecoveryTicks": 2,
+          "MovementPolicy": "SLOW",
+          "CooldownTicks": 24,
+          "Damage": 0,
+          "Shield": 0,
+          "Heal": 0,
+          "Radius": 0,
+          "ProjectileSpeed": 0,
+          "ProjectileRadius": 0,
+          "ProjectileTicks": 0,
+          "MaxTargets": 1,
+          "RequiresEnemyTarget": true,
+          "StatusID": "HASTE",
+          "StatusDurationTicks": 70,
+          "StatusPeriodTicks": 0,
+          "StatusDamagePerTick": 0,
+          "StatusHealPerTick": 0,
+          "StatusMoveMultiplier": 1.75,
+          "StatusMaxStacks": 1,
+          "StatusStackPolicy": "REFRESH",
+          "StatusDebuff": false,
+          "PvPDrCategory": "NONE",
+          "Cleanse": false
+        },
+        "Effects": [
+          {
+            "type": "STATUS",
+            "status_id": "HASTE",
+            "duration_ms": 3500,
+            "move_multiplier": 1.75,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "debuff": false,
+            "pvp_dr_category": "NONE"
+          }
+        ]
+      },
       "FormActivation": null,
       "FormAbility": null,
       "FormManaDrainPerTick": 0,
@@ -136563,7 +136704,9 @@
       ],
       "HiddenPassives": null,
       "Visuals": {
-        "icon": "gu/force"
+        "icon": "gu/force",
+        "cast_vfx": "cast/strength",
+        "impact_vfx": "impact/heavy_strike"
       },
       "SourceHash": "2c1bc636f0d935683db027998386f96fa6f655969e57db6e215cf910d5187a99"
     },
@@ -217491,7 +217634,7 @@
           "RecoveryTicks": 2,
           "MovementPolicy": "SLOW",
           "CooldownTicks": 24,
-          "Damage": 60,
+          "Damage": 0,
           "Shield": 0,
           "Heal": 0,
           "Radius": 0,
@@ -217513,10 +217656,6 @@
           "Cleanse": false
         },
         "Effects": [
-          {
-            "type": "DAMAGE",
-            "value": 60
-          },
           {
             "type": "STATUS",
             "status_id": "FREEZE",
@@ -223401,7 +223540,7 @@
       "RecoveryTicks": 2,
       "MovementPolicy": "SLOW",
       "CooldownTicks": 24,
-      "Damage": 60,
+      "Damage": 0,
       "Shield": 0,
       "Heal": 0,
       "Radius": 0,
@@ -223423,5 +223562,5 @@
       "Cleanse": false
     }
   ],
-  "Hash": "58713b481b608fdda383ee9ecda759397bf80017c21e24780a12beef8ea9bc5b"
+  "Hash": "a58fc9948dc251422b3476b6a49f8aef69f7a7d64f0719156cbfba232c316888"
 }

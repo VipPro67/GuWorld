@@ -345,7 +345,7 @@ func loadRealtimeEquipped(ctx context.Context, queryer interface {
 	rows, err := queryer.QueryContext(ctx, `
 			SELECT id, gu_id, COALESCE(NULLIF(gu_rank, 0), rank, 1), hunger
 		FROM player_gu
-		WHERE player_id = $1 AND equipped = true AND state = 'ACTIVE'
+		WHERE player_id = $1 AND equipped = true AND state = 'ACTIVE' AND durability > 0
 	`, playerID)
 	if err != nil {
 		return nil, err

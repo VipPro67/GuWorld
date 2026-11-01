@@ -1,4 +1,4 @@
-# Realtime Gu authoring schema v1 (PR-18)
+# Realtime Gu authoring schema v2
 
 At world admission, the server keeps the profile's MMO-scale base damage but
 projects the character's path attainment, Dao amplification/conflict, Gu
@@ -37,6 +37,23 @@ refetches the committed inventory.
 even if the global cooldown has already expired. Interrupted casts do not enter
 recovery.
 
+An active dash uses `move_distance`, `move_duration_ms`, and `move_behavior`
+(`MOVE_ONLY` or `IMPACT`) together. Distance and duration are explicit per Gu
+rank profile; distance must be at most 64 units and duration 50–5,000 ms.
+`IMPACT` requires a positive `DAMAGE` effect and hits the first
+eligible hostile on the traveled path; `MOVE_ONLY` passes through entities.
+Terrain stops either dash. A second dash cannot start while one is active.
+Haste remains a positive `STATUS` effect with `move_multiplier > 1`,
+`duration_ms`, `debuff: false`, `stack_policy: REFRESH`, and `max_stacks: 1`. Haste changes
+ordinary movement and never changes an active dash's authored travel.
+Old schema-v1 instant `move_distance` profiles must be migrated to v2.
+Recommended authoring bands for Ranks 1–3, 4–6, and 7–9 are dash distances
+4, 5, and 6 units over 300 ms, and haste values 1.35×/2.5 s, 1.5×/3 s,
+and 1.75×/3.5 s. The compiler uses each authored Gu rank profile; it does
+not create skills or fill missing rank profiles automatically. Authored haste
+examples are Thanh Phong Luân Cổ (Rank 1: 1.35×/2.5 s), Ngũ Chuyển Độn Kiều
+Cổ (Rank 5: 1.5×/3 s), and Tâm Giới Tiên Cổ (Rank 7: 1.75×/3.5 s).
+
 Source profile catalog: `backend/data/mmo/gu/transpiled_profiles.json` (unified catalog covering all Gu, with hand-authored MVP and Alpha profiles integrated). Compiled artifact:
 `docs/mmo/gu-compiled.json` (regenerate, do not hand-edit).
 
@@ -64,7 +81,7 @@ placeholder values are ignored.
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "profiles": [
     {
       "gu_id": "GU_WATER_ARROW",
@@ -113,7 +130,7 @@ placeholder values are ignored.
     `pvp_dr_category`; turns are **not** accepted or auto-converted.
   - Optional STATUS fields: `period_ms` (DoT/HoT interval, 100–10,000),
     `tick_value` (damage when `debuff=true`, heal when false),
-    `move_multiplier` (0–1; 0 blocks movement/casting), `max_stacks` (1–20),
+    `move_multiplier` (0–3; 0 blocks movement), `max_stacks` (1–20),
     `stack_policy` (`REPLACE`/`REFRESH`/`STACK`/`MAX`/`IGNORE`), `debuff`.
   - `CLEANSE` removes debuff statuses.
   - `UNIQUE` is rejected by the compiler (native handler required, PR-19/35).

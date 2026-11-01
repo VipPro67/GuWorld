@@ -764,10 +764,10 @@ func SellToMerchant(c *gin.Context) {
 	}
 	player.PrimevalStones += primeval
 	player.ImmortalStones += immortal
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	// Preserve the saved hotbar order in players.equipped_gus: prune invalid
+	// entries and append newly equipped actives instead of rebuilding from
+	// inventory order (which would reset the realtime hotbar assignment).
+	RebuildEquippedGus(&player)
 	if guSold {
 		if err := db.RemovePlayerGus(tx, removedGuIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lưu được thay đổi Cổ trùng"})

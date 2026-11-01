@@ -6,12 +6,12 @@ import (
 
 func TestResolveStartingRegion(t *testing.T) {
 	tests := []struct {
-		name         string
-		input        string
-		wantRegion   string
-		wantX        int
-		wantY        int
-		wantOk       bool
+		name       string
+		input      string
+		wantRegion string
+		wantX      int
+		wantY      int
+		wantOk     bool
 	}{
 		{
 			name:       "empty defaults to tan_thu_coc_nam_cuong",

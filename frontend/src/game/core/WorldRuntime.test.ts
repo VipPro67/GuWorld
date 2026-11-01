@@ -44,7 +44,10 @@ const welcome = (requestId: string, tick = 10, playerX = 10) => ({
     entity_id: "player-1",
     entity_revision: 0,
     baseline_id: 1,
-    skills: [{ slot: 1, id: "PREVIEW_BOLT", name: "Bolt", mode: "TARGET", mana_cost: 4, range: 9, cooldown_ticks: 30, windup_ticks: 3 }],
+    skills: [
+      { slot: 1, id: "PREVIEW_BOLT", name: "Bolt", mode: "TARGET", mana_cost: 4, range: 9, cooldown_ticks: 30, windup_ticks: 3 },
+      { slot: 2, id: "DASH", name: "Dash", mode: "DIRECTION", mana_cost: 4, range: 9, cooldown_ticks: 30, windup_ticks: 0, move_distance: 4, move_duration_ticks: 6, move_behavior: "MOVE_ONLY" },
+    ],
     snapshot: {
       tick,
       ack_seq: 0,
@@ -109,6 +112,34 @@ test("WorldRuntime joins, predicts movement and handles click targets", async ()
 
   runtime.disconnect();
   assert.equal(runtime.getStatus(), "closed");
+});
+
+test("dash snapshots control self position until DASH_ENDED", async () => {
+  const fake = new FakeSocket();
+  const runtime = new WorldRuntime({ socketOptions: {
+    url: "wss://api.example/api/ws", getToken: () => "token", getTabId: () => "tab", createSocket: () => fake as never,
+  } });
+  const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+  fake.open();
+  const joinRequest = JSON.parse(fake.sent[0]) as { request_id: string };
+  fake.receive(welcome(joinRequest.request_id));
+  await pending;
+  runtime.setMoveVector({ x: 0, y: 1 });
+  fake.receive({ v: 1, type: "world.events", payload: { from_event_id: 1,
+    events: [{ event_id: 1, tick: 10, type: "CAST_ACCEPTED", source_id: "player-1", payload: { skill_id: "DASH", duration_ticks: 0 } }],
+  } });
+  runtime.update(0.1);
+  assert.deepEqual(runtime.getSelfPosition(), { x: 10, y: 10 }, "ordinary movement predicted during dash");
+  fake.receive({ v: 1, type: "world.snapshot", payload: { tick: 11, ack_seq: 1, baseline_id: 1, base_tick: 10, is_baseline: false,
+    entities: [{ entity_id: "player-1", entity_revision: 1, x: 10.7, y: 10, hp: 80 }], removed: [],
+  } });
+  assert.deepEqual(runtime.getSelfPosition(), { x: 10.7, y: 10 }, "dash did not follow authoritative snapshot");
+  fake.receive({ v: 1, type: "world.events", payload: { from_event_id: 2,
+    events: [{ event_id: 2, tick: 11, type: "DASH_ENDED", source_id: "player-1", payload: { skill_id: "DASH" } }],
+  } });
+  runtime.update(0.1);
+  assert.ok(runtime.getSelfPosition().y > 10, "ordinary prediction did not resume after dash");
+  runtime.disconnect();
 });
 
 test("held movement does not step backward when a delayed snapshot arrives", async () => {

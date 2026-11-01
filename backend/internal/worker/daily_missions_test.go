@@ -39,10 +39,10 @@ func (c dummyConn) ExecContext(context.Context, string, []driver.NamedValue) (dr
 
 type dummyStmt struct{}
 
-func (dummyStmt) Close() error                                    { return nil }
-func (dummyStmt) NumInput() int                                   { return -1 }
-func (dummyStmt) Exec([]driver.Value) (driver.Result, error)      { return dummyResult{}, nil }
-func (dummyStmt) Query([]driver.Value) (driver.Rows, error)       { return emptyDailyMissionRows{}, nil }
+func (dummyStmt) Close() error                               { return nil }
+func (dummyStmt) NumInput() int                              { return -1 }
+func (dummyStmt) Exec([]driver.Value) (driver.Result, error) { return dummyResult{}, nil }
+func (dummyStmt) Query([]driver.Value) (driver.Rows, error)  { return emptyDailyMissionRows{}, nil }
 
 type dummyTx struct{}
 
@@ -56,9 +56,9 @@ func (dummyResult) RowsAffected() (int64, error) { return 0, nil }
 
 type emptyDailyMissionRows struct{}
 
-func (emptyDailyMissionRows) Columns() []string              { return []string{"day_key"} }
-func (emptyDailyMissionRows) Close() error                  { return nil }
-func (emptyDailyMissionRows) Next([]driver.Value) error     { return io.EOF }
+func (emptyDailyMissionRows) Columns() []string         { return []string{"day_key"} }
+func (emptyDailyMissionRows) Close() error              { return nil }
+func (emptyDailyMissionRows) Next([]driver.Value) error { return io.EOF }
 
 func TestStartDailyMissionRolloverWorkerNonBlocking(t *testing.T) {
 	var queries int32

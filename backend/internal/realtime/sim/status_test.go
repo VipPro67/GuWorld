@@ -615,7 +615,7 @@ func TestSkillDashAndKnockback(t *testing.T) {
 	player := newCombatPlayer("caster", Vec2{X: 2, Y: 2})
 	dashAndKnockSkill := combat.Skill{
 		ID: "DASH_KNOCK", Slot: 1, Mode: combat.ModeTarget, Name: "Charge",
-		Range: 10, MoveDistance: 2.0, KnockbackDistance: 3.0, Damage: 20,
+		Range: 10, MoveDistance: 4.0, MoveDurationTicks: 6, MoveBehavior: "IMPACT", KnockbackDistance: 3.0, Damage: 20,
 	}
 	player.Combat.Skills[1] = dashAndKnockSkill
 	target := newTargetMonster("target", Vec2{X: 5, Y: 2})
@@ -637,12 +637,12 @@ func TestSkillDashAndKnockback(t *testing.T) {
 	}
 
 	// Step world to complete cast windup
-	collectEvents(t, w, 5)
+	collectEvents(t, w, 8)
 
-	// Check caster dashed forward by ~2 units: from X:2 -> ~X:4
+	// Check caster dashed forward until impact: from X:2 -> ~X:4
 	casterPos := entityPosition(t, w, "caster")
-	if casterPos.X < 3.8 || casterPos.X > 4.2 {
-		t.Fatalf("caster dash failed: pos=%+v, want X ~ 4.0", casterPos)
+	if casterPos.X < 3.5 || casterPos.X > 4.6 {
+		t.Fatalf("caster dash failed: pos=%+v", casterPos)
 	}
 
 	// Check target got knocked back by ~3 units: from X:5 -> ~X:8

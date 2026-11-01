@@ -80,6 +80,8 @@ func schemaPlayerItems() error {
 		FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT,
 		level INTEGER NOT NULL DEFAULT 1,
 		hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
+		refinement_progress DOUBLE PRECISION NOT NULL DEFAULT 100,
+		durability DOUBLE PRECISION NOT NULL DEFAULT 100,
 		state VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
 		location VARCHAR(30) NOT NULL DEFAULT 'INVENTORY',
 		is_locked BOOLEAN NOT NULL DEFAULT false,
@@ -143,6 +145,14 @@ func schemaPlayerItems() error {
 	}
 	if err := execSchema("player_gu_active_equipped_growth_idx", `
 	CREATE INDEX IF NOT EXISTS idx_player_gu_active_equipped_growth ON player_gu (gu_id, gu_rank) WHERE equipped = true AND state = 'ACTIVE';`); err != nil {
+		return err
+	}
+
+	if err := execSchema("player_gu_refinement_and_durability_cols", `
+	ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS refinement_progress DOUBLE PRECISION NOT NULL DEFAULT 100;
+	ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS durability DOUBLE PRECISION NOT NULL DEFAULT 100;
+	UPDATE player_gu SET refinement_progress = 100 WHERE refinement_progress IS NULL OR refinement_progress <= 0;
+	UPDATE player_gu SET durability = 100 WHERE durability IS NULL OR durability <= 0;`); err != nil {
 		return err
 	}
 

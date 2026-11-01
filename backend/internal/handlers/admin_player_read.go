@@ -472,7 +472,7 @@ func AdminListPlayerGus(c *gin.Context) {
 	end := offset + limit
 
 	// Expose persistence fields used by the admin editor, including read-only ownership metadata.
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours, created_at, updated_at, last_fed_at FROM player_gu WHERE player_id=$1 AND location <> 'ACTOR' ORDER BY created_at ASC, id ASC`, playerID)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, gu_id, gu_rank, rank, level, hunger, refinement_progress, durability, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours, created_at, updated_at, last_fed_at FROM player_gu WHERE player_id=$1 AND location <> 'ACTOR' ORDER BY created_at ASC, id ASC`, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})
 		return
@@ -482,10 +482,10 @@ func AdminListPlayerGus(c *gin.Context) {
 	for rows.Next() {
 		var id, guID, state, location string
 		var guRank, rank, level int
-		var hunger, integrationTime, growthHours float64
+		var hunger, refinementProgress, durability, integrationTime, growthHours float64
 		var locked, equipped, vital bool
 		var equippedAt, createdAt, updatedAt, lastFedAt interface{}
-		if err := rows.Scan(&id, &guID, &guRank, &rank, &level, &hunger, &state, &location, &locked, &equipped, &vital, &integrationTime, &equippedAt, &growthHours, &createdAt, &updatedAt, &lastFedAt); err != nil {
+		if err := rows.Scan(&id, &guID, &guRank, &rank, &level, &hunger, &refinementProgress, &durability, &state, &location, &locked, &equipped, &vital, &integrationTime, &equippedAt, &growthHours, &createdAt, &updatedAt, &lastFedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})
 			return
 		}
@@ -496,7 +496,28 @@ func AdminListPlayerGus(c *gin.Context) {
 			name = spec.Name
 		}
 		_ = guRank // returned separately because both rank columns are persisted
-		all = append(all, gin.H{"instance_id": id, "gu_id": guID, "name": name, "gu_rank": guRank, "rank": rank, "level": level, "hunger": hunger, "status": state, "location": location, "is_locked": locked, "equipped": equipped, "is_vital": vital, "integration_time": integrationTime, "equipped_at": equippedAt, "growth_hours": growthHours, "created_at": createdAt, "updated_at": updatedAt, "last_fed_at": lastFedAt})
+		all = append(all, gin.H{
+			"instance_id":         id,
+			"gu_id":               guID,
+			"name":                name,
+			"gu_rank":             guRank,
+			"rank":                rank,
+			"level":               level,
+			"hunger":              hunger,
+			"refinement_progress": refinementProgress,
+			"durability":          durability,
+			"status":              state,
+			"location":            location,
+			"is_locked":           locked,
+			"equipped":            equipped,
+			"is_vital":            vital,
+			"integration_time":    integrationTime,
+			"equipped_at":         equippedAt,
+			"growth_hours":        growthHours,
+			"created_at":          createdAt,
+			"updated_at":          updatedAt,
+			"last_fed_at":         lastFedAt,
+		})
 	}
 	if err := rows.Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})

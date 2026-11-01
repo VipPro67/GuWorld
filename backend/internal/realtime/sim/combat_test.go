@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
@@ -245,7 +246,7 @@ func TestOwnedGuHungerIsChargedByInstanceOnAttempt(t *testing.T) {
 	player := newCombatPlayer("player", Vec2{})
 	player.Combat.Skills[1].GuInstanceID = "instance-a"
 	player.Combat.Skills[2].GuInstanceID = "instance-b"
-	player.Combat.GuHunger[1] = 1
+	player.Combat.GuHunger[1] = 0.1
 	player.Combat.GuHunger[2] = 4
 	player.Combat.Mana = 0
 	if err := w.AddEntity(player); err != nil {
@@ -263,7 +264,7 @@ func TestOwnedGuHungerIsChargedByInstanceOnAttempt(t *testing.T) {
 		t.Fatalf("insufficient mana attempt was not rejected: %+v", events)
 	}
 	state := w.entities["player"].Combat
-	if state.GuHunger[1] != 0 || state.GuUses[1] != 1 || state.GuHunger[2] != 4 || state.GuUses[2] != 0 {
+	if math.Abs(state.GuHunger[1]) > 1e-6 || state.GuUses[1] != 1 || state.GuHunger[2] != 4 || state.GuUses[2] != 0 {
 		t.Fatalf("wrong instance was charged: hunger=%v uses=%v", state.GuHunger, state.GuUses)
 	}
 	if state.GuMasteryUses[1] != 0 {
@@ -276,6 +277,53 @@ func TestOwnedGuHungerIsChargedByInstanceOnAttempt(t *testing.T) {
 	events = collectEvents(t, w, 1)
 	if !hasEvent(events, combat.EventCastRejected) || w.entities["player"].Combat.GuUses[1] != 1 {
 		t.Fatalf("exhausted Gu was charged again: %+v", events)
+	}
+}
+
+func TestGuHungerFractionalCostAndExhaustion(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	player.Combat.Skills[1].GuInstanceID = "gu-fractional"
+	player.Combat.GuHunger[1] = 0.25
+	player.Combat.Mana = 100
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("mob", Vec2{X: 1})); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cast 1: 0.25 -> 0.15
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	collectEvents(t, w, 35)
+	state := w.entities["player"].Combat
+	if math.Abs(state.GuHunger[1]-0.15) > 1e-6 || state.GuUses[1] != 1 {
+		t.Fatalf("after cast 1: hunger=%v want 0.15, uses=%d want 1", state.GuHunger[1], state.GuUses[1])
+	}
+
+	// Cast 2: 0.15 -> 0.05
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 2, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	collectEvents(t, w, 35)
+	state = w.entities["player"].Combat
+	if math.Abs(state.GuHunger[1]-0.05) > 1e-6 || state.GuUses[1] != 2 {
+		t.Fatalf("after cast 2: hunger=%v want 0.05, uses=%d want 2", state.GuHunger[1], state.GuUses[1])
+	}
+
+	// Cast 3: 0.05 < 0.1 -> rejected with gu_exhausted
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 3, Slot: 1, Mode: combat.ModeTarget, TargetID: "mob"}); err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, w, 1)
+	if !hasEvent(events, combat.EventCastRejected) {
+		t.Fatalf("cast 3 with hunger 0.05 must be rejected: %+v", events)
+	}
+	state = w.entities["player"].Combat
+	if math.Abs(state.GuHunger[1]-0.05) > 1e-6 || state.GuUses[1] != 2 {
+		t.Fatalf("rejected cast 3 must not charge hunger: hunger=%v uses=%d", state.GuHunger[1], state.GuUses[1])
 	}
 }
 

@@ -38,6 +38,12 @@ const (
 // gameplay balance value, not a conversion from turn-based turns.
 const SlowMovementMultiplier = 0.5
 
+// DefaultGuHungerCostPerCast is the amount of hunger deducted from the required Gu on each skill cast attempt.
+const DefaultGuHungerCostPerCast = 0.1
+
+// DefaultGuDurabilityCostPerCast is the amount of durability deducted from the required Gu on each skill cast attempt.
+const DefaultGuDurabilityCostPerCast = 0.02
+
 const (
 	PreviewBoltID            = "PREVIEW_BOLT"
 	PreviewWaterID           = "PREVIEW_WATER_ARROW"
@@ -118,6 +124,8 @@ type Skill struct {
 	FormManaDrainPerTick float64       `json:"form_mana_drain_per_tick,omitempty"`
 	FormDefenseBonus     float64       `json:"form_defense_bonus,omitempty"`
 	MoveDistance         float64       `json:"move_distance,omitempty"`
+	MoveDurationTicks    uint64        `json:"move_duration_ticks,omitempty"`
+	MoveBehavior         string        `json:"move_behavior,omitempty"`
 	KnockbackDistance    float64       `json:"knockback_distance,omitempty"`
 	PlayerAtkRatio       float64       `json:"player_atk_ratio,omitempty"`
 	GuPowerRatio         float64       `json:"gu_power_ratio,omitempty"`
@@ -218,15 +226,18 @@ func (skill Skill) Valid() bool {
 	if skill.ProjectileTicks > MaxProjectileTicks || skill.MaxTargets < 0 || skill.MaxTargets > 100 {
 		return false
 	}
+	if !finite(skill.MoveDistance) || skill.MoveDistance < 0 || skill.MoveDistance > MaxCastRangeUnits || (skill.MoveDistance > 0 && (skill.MoveDurationTicks == 0 || (skill.MoveBehavior != "MOVE_ONLY" && skill.MoveBehavior != "IMPACT"))) || (skill.MoveDistance == 0 && (skill.MoveDurationTicks != 0 || skill.MoveBehavior != "")) || (skill.MoveBehavior == "IMPACT" && skill.Damage <= 0) || (skill.MoveBehavior == "MOVE_ONLY" && (skill.Damage != 0 || skill.StatusID != "")) {
+		return false
+	}
 	switch skill.Mode {
 	case ModeTarget:
 		return skill.Range > 0 && skill.Damage >= 0
 	case ModeDirection:
-		return skill.Range > 0 && skill.ProjectileSpeed > 0 && skill.ProjectileRadius > 0 && skill.ProjectileTicks > 0
+		return skill.Range > 0 && ((skill.ProjectileSpeed > 0 && skill.ProjectileRadius > 0 && skill.ProjectileTicks > 0) || skill.MoveDistance > 0)
 	case ModeGround:
-		return skill.Range > 0 && skill.Radius > 0 && skill.Damage >= 0
+		return skill.Range > 0 && (skill.Radius > 0 || skill.MoveDistance > 0) && skill.Damage >= 0
 	case ModeSelf:
-		return skill.Shield >= 0 && skill.Heal >= 0 && (skill.Shield > 0 || skill.Heal > 0 || skill.StatusID != "" || skill.Cleanse)
+		return skill.Shield >= 0 && skill.Heal >= 0 && (skill.Shield > 0 || skill.Heal > 0 || skill.StatusID != "" || skill.Cleanse || skill.MoveDistance > 0)
 	default:
 		return false
 	}

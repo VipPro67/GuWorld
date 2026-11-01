@@ -248,6 +248,30 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, isAgg
 		loser.EquippedGus = newEquipped
 	}
 
+	// Equipped Gus suffer 15.0 durability trauma on death
+	for i := range loser.GuInventory {
+		if loser.GuInventory[i].Equipped {
+			loser.GuInventory[i].Durability = math.Max(0, loser.GuInventory[i].Durability-15.0)
+			if loser.GuInventory[i].Durability == 0 {
+				loser.GuInventory[i].Status = "DAMAGED"
+				loser.GuInventory[i].Equipped = false
+			}
+		}
+	}
+	damagedMap := make(map[string]bool)
+	for _, g := range loser.GuInventory {
+		if g.Status == "DAMAGED" || g.Durability <= 0 {
+			damagedMap[g.InstanceID] = true
+		}
+	}
+	filteredEquipped := make(models.EquippedGusList, 0, len(loser.EquippedGus))
+	for _, id := range loser.EquippedGus {
+		if !damagedMap[id] {
+			filteredEquipped = append(filteredEquipped, id)
+		}
+	}
+	loser.EquippedGus = filteredEquipped
+
 	effectiveStonePct := math.Min(100.0, deathPenaltyConfig.PrimevalStonePct*mult)
 	primevalLoss := math.Floor(loser.PrimevalStones*effectiveStonePct/100*1000) / 1000
 	effectiveImmortalPct := math.Min(100.0, deathPenaltyConfig.ImmortalStonePct*mult)
@@ -308,6 +332,16 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, isAggressor 
 	allGus, _ := db.LoadPlayerGus(tx, loserID.String(), false)
 	_, droppedGus := selectEligibleGus(allGus, mult, satKhiLevel)
 
+	// Degrade durability of equipped Gus by 15.0 on death (for non-memory record flows)
+	_, _ = tx.Exec(`
+		UPDATE player_gu
+		SET durability = GREATEST(0, durability - 15.0),
+		    state = CASE WHEN durability - 15.0 <= 0 THEN 'DAMAGED' ELSE state END,
+		    equipped = CASE WHEN durability - 15.0 <= 0 THEN false ELSE equipped END,
+		    updated_at = NOW()
+		WHERE player_id = $1 AND equipped = true
+	`, *loserID)
+
 	return persistDeathDrop(tx, *loserID, winnerID, isAggressor, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel, deathPos...)
 }
 
@@ -343,6 +377,12 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 		WHERE player_id = $1 AND status = 'ACTIVE' AND death_penalty = 0
 	`, loserID); err != nil {
 		logger.S.Warnf("failed to mark refine session death for %s: %v", loserID, err)
+	}
+
+	// Tiên Cổ Ốc shock damage on death: damages equipped house by 25.0 points
+	var equippedHouseID string
+	if err := tx.QueryRow(`SELECT id::text FROM player_gu_houses WHERE player_id = $1 AND is_equipped = true LIMIT 1`, loserID).Scan(&equippedHouseID); err == nil && equippedHouseID != "" {
+		_, _ = ApplyGuHouseDamage(tx, equippedHouseID, 25.0)
 	}
 
 	// Split stones: Void Destruction vs Ground Loot

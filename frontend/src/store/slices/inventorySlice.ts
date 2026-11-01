@@ -27,6 +27,9 @@ export interface InventorySlice {
   dropGu: (instanceId: string) => Promise<boolean>;
   dropGus: (instanceIds: string[]) => Promise<boolean>;
   equipGu: (instanceId: string, equip: boolean) => Promise<void>;
+  subjugateGu: (instanceId: string) => Promise<boolean>;
+  nourishGu: (instanceId: string) => Promise<boolean>;
+  repairGu: (instanceId: string) => Promise<boolean>;
   unequipAllGu: () => Promise<void>;
   updateGuStatus: (instanceId: string, status: string) => Promise<void>;
   setVitalGu: (instanceId: string) => Promise<void>;
@@ -518,6 +521,112 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       set({ error: err.message });
       get().addLog(`Thao tác trang bị thất bại: ${err.message}`);
       get().addToast(err.message, "error");
+    } finally {
+      get().endAction("player:inventory");
+    }
+  },
+
+  subjugateGu: async (instanceId) => {
+    const { player, token } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return false;
+
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/subjugate-gu`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instance_id: instanceId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Luyện hóa Cổ trùng thất bại.");
+      }
+      if (typeof data.remaining_mana === "number") {
+        const p = get().player;
+        if (p) {
+          set({ player: { ...p, current_mana: data.remaining_mana } });
+        }
+      }
+      await get().fetchGuInventory(true);
+      const msg = data.message || "Luyện hóa Cổ trùng thành công!";
+      get().addLog(msg);
+      get().addToast(msg, "success");
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addLog(`Luyện hóa thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("player:inventory");
+    }
+  },
+
+  nourishGu: async (instanceId) => {
+    const { player, token } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return false;
+
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/nourish-gu`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instance_id: instanceId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Ôn dưỡng Cổ trùng thất bại.");
+      }
+      if (typeof data.remaining_mana === "number") {
+        const p = get().player;
+        if (p) {
+          set({ player: { ...p, current_mana: data.remaining_mana } });
+        }
+      }
+      await get().fetchGuInventory(true);
+      const msg = data.message || "Ôn dưỡng Cổ trùng thành công!";
+      get().addLog(msg);
+      get().addToast(msg, "success");
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addLog(`Ôn dưỡng thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("player:inventory");
+    }
+  },
+
+  repairGu: async (instanceId) => {
+    const { player, token } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return false;
+
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/repair-gu`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instance_id: instanceId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Tu bổ Cổ trùng thất bại.");
+      }
+      await get().fetchGuInventory(true);
+      await get().fetchPlayerProfile();
+      const msg = data.message || "Tu bổ Cổ trùng thành công!";
+      get().addLog(msg);
+      get().addToast(msg, "success");
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addLog(`Tu bổ thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+      return false;
     } finally {
       get().endAction("player:inventory");
     }

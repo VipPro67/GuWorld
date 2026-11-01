@@ -104,6 +104,7 @@ export class WorldScene extends Phaser.Scene {
   private debugHud: RealtimeDebugHUD | null = null;
   private targetIndicator!: Phaser.GameObjects.Graphics;
   private lastMoveAim: WorldPoint = { x: 1, y: 0 };
+  private hasLastMoveAim = false;
   private autoFarmTargetId = "";
   private autoFarmPauseUntil = 0;
   private nextAutoFarmAttackAt = 0;
@@ -328,6 +329,7 @@ export class WorldScene extends Phaser.Scene {
     const movement = this.router.movement();
     if (movement.x !== 0 || movement.y !== 0) {
       this.lastMoveAim = movement;
+      this.hasLastMoveAim = true;
     }
     this.motion.setManualVector(movement);
     this.runtime.setMoveVector(movement);
@@ -525,7 +527,10 @@ export class WorldScene extends Phaser.Scene {
   setJoystickVector(vector: WorldPoint): void {
     this.router.setJoystick(vector);
     const length = Math.hypot(vector.x, vector.y);
-    if (length > 0.01) this.lastMoveAim = { x: vector.x / length, y: vector.y / length };
+    if (length > 0.01) {
+      this.lastMoveAim = { x: vector.x / length, y: vector.y / length };
+      this.hasLastMoveAim = true;
+    }
   }
 
   zoomIn(): number {
@@ -618,6 +623,8 @@ export class WorldScene extends Phaser.Scene {
         return self ? { x: self.x, y: self.y } : null;
       },
       pointerWorld: () => this.pointerWorld(),
+      movementDirection: () => this.router.movement(),
+      lastMoveDirection: () => this.hasLastMoveAim ? this.lastMoveAim : null,
       selectedTargetId: () => this.selectedTargetId,
       selectTarget: (entityId) => {
         // Keep the scene mirror in sync immediately: the target ring and
@@ -658,6 +665,13 @@ export class WorldScene extends Phaser.Scene {
         const skillId = typeof payload.skill_id === "string" ? payload.skill_id : "";
         const skillName = typeof payload.skill_name === "string" && payload.skill_name ? payload.skill_name : "";
         const skill = this.runtime?.getSkills().find((entry) => entry.id === skillId);
+        const dashX = typeof payload.dash_dir_x === "number" ? payload.dash_dir_x : null;
+        const dashY = typeof payload.dash_dir_y === "number" ? payload.dash_dir_y : null;
+        const dashTicks = typeof payload.dash_duration_ticks === "number" ? payload.dash_duration_ticks : skill?.move_duration_ticks;
+        if (event.source_id === this.selfId && skill?.move_distance && dashX !== null && dashY !== null && Number.isFinite(dashX) && Number.isFinite(dashY)) {
+          const self = this.runtime?.getSelfPosition();
+          if (self) this.telegraph.showLockedDash(self, { x: dashX, y: dashY }, skill.move_distance, duration + (dashTicks ?? 0));
+        }
         const displayName = skillName || skill?.name || (skillId && skillId !== "BASIC_ATTACK" ? skillId : "");
         if (displayName && event.source_id) {
           const caster = this.actors.get(event.source_id);
@@ -697,7 +711,14 @@ export class WorldScene extends Phaser.Scene {
         this.notice(payload.skill_id === "BASIC_ATTACK" ? `Đánh thường bị từ chối: ${reason || "thử lại"}` : `Không cast được: ${reason || "bị từ chối"}`);
         return;
       case "CAST_INTERRUPTED":
+        if (event.target_id === this.selfId || event.source_id === this.selfId) this.telegraph.clearLockedDash();
         this.notice("Cast bị ngắt");
+        return;
+      case "DASH_ENDED":
+        if (event.source_id === this.selfId) {
+          this.telegraph.clearLockedDash();
+          if (reason === "interrupted") this.notice("Lướt bị ngắt");
+        }
         return;
       case "MOVE_TARGET_REJECTED":
         this.motion?.stopAll();

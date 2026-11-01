@@ -473,11 +473,11 @@ func (w *World) stepCompanionAI() {
 					w.applyDamageLocked(entity, target, attackDmg, "BASIC_ATTACK")
 					entity.AI.NextAttackTick = w.tick + 20
 					w.emitEvent(combat.Event{
-						Type: combat.EventBasicAttack,
+						Type:     combat.EventBasicAttack,
 						SourceID: string(entity.ID),
 						TargetID: string(target.ID),
-						X: entity.Transform.Position.X,
-						Y: entity.Transform.Position.Y,
+						X:        entity.Transform.Position.X,
+						Y:        entity.Transform.Position.Y,
 					})
 				}
 			}

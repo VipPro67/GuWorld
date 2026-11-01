@@ -25,7 +25,7 @@ func TestCompileCommittedProfiles(t *testing.T) {
 	if compiled.Hash == "" {
 		t.Fatal("compiled catalog hash is empty")
 	}
-	if compiled.Hash != "58713b481b608fdda383ee9ecda759397bf80017c21e24780a12beef8ea9bc5b" {
+	if compiled.Hash != "a58fc9948dc251422b3476b6a49f8aef69f7a7d64f0719156cbfba232c316888" {
 		t.Fatalf("compiled catalog drifted; update this baseline: %s", compiled.Hash)
 	}
 	arrow, ok := compiled.Profile("GU_WATER_ARROW", 1)
@@ -104,7 +104,7 @@ func TestLoadProfileCatalogsRejectsEmptyAndBadPaths(t *testing.T) {
 
 func TestCompilerRejectsBrokenProfiles(t *testing.T) {
 	base := func() ProfileCatalog {
-		return ProfileCatalog{SchemaVersion: 1, Profiles: []GuProfile{{
+		return ProfileCatalog{SchemaVersion: ProfileSchemaVersion, Profiles: []GuProfile{{
 			GUID: "GU_TEST", Rank: 1, Slot: 2,
 			Active: &ActiveProfile{
 				Mode: combat.ModeDirection, WindupMS: 100, CooldownMS: 1000, RangeUnits: 10, ManaCost: 1,
@@ -119,7 +119,7 @@ func TestCompilerRejectsBrokenProfiles(t *testing.T) {
 	}
 
 	cases := map[string]func(*ProfileCatalog){
-		"schema":        func(c *ProfileCatalog) { c.SchemaVersion = 2 },
+		"schema":        func(c *ProfileCatalog) { c.SchemaVersion = 1 },
 		"missing gu":    func(c *ProfileCatalog) { c.Profiles[0].GUID = "GU_MISSING" },
 		"slot range":    func(c *ProfileCatalog) { c.Profiles[0].Slot = 7 },
 		"windup":        func(c *ProfileCatalog) { c.Profiles[0].Active.WindupMS = MaxWindupMS + 1 },
@@ -161,10 +161,74 @@ func TestCompilerRejectsDuplicateSlots(t *testing.T) {
 			},
 		}
 	}
-	catalog := ProfileCatalog{SchemaVersion: 1, Profiles: []GuProfile{profile("GU_A"), profile("GU_B")}}
+	catalog := ProfileCatalog{SchemaVersion: ProfileSchemaVersion, Profiles: []GuProfile{profile("GU_A"), profile("GU_B")}}
 	entries := []GuEntry{{ID: "GU_A", Rank: 1}, {ID: "GU_B", Rank: 1}}
 	if _, err := CompileCatalog(catalog, entries, nil); err == nil {
 		t.Fatal("duplicate slot was accepted")
+	}
+}
+
+func TestDashProfileRequiresExplicitSemanticsAndPerRankStats(t *testing.T) {
+	active := &ActiveProfile{Mode: combat.ModeTarget, WindupMS: 100, CooldownMS: 1000,
+		RangeUnits: 10, MoveDistance: 5, MoveDurationMS: 300, MoveBehavior: "IMPACT",
+		Effects: []EffectProfile{{Type: "DAMAGE", Value: 20}}}
+	compile := func() error {
+		_, err := CompileCatalog(ProfileCatalog{SchemaVersion: ProfileSchemaVersion, Profiles: []GuProfile{{GUID: "GU_DASH", Rank: 4, Slot: 2, Active: active}}},
+			[]GuEntry{{ID: "GU_DASH", Rank: 4, Name: "Dash"}}, nil)
+		return err
+	}
+	if err := compile(); err != nil {
+		t.Fatal(err)
+	}
+	active.MoveDurationMS = 0
+	if err := compile(); err == nil {
+		t.Fatal("dash without duration was accepted")
+	}
+	active.MoveDurationMS = 300
+	active.MoveBehavior = "MOVE_ONLY"
+	if err := compile(); err == nil {
+		t.Fatal("movement-only dash with damage was accepted")
+	}
+	active.Effects = []EffectProfile{{Type: "HEAL", Value: 10}}
+	active.MoveBehavior = "IMPACT"
+	if err := compile(); err == nil {
+		t.Fatal("impact dash without damage was accepted")
+	}
+}
+
+func TestHasteStatusRequiresRefreshSingleStack(t *testing.T) {
+	debuff := false
+	multiplier := 1.5
+	active := &ActiveProfile{Mode: combat.ModeSelf, WindupMS: 100, CooldownMS: 1000,
+		Effects: []EffectProfile{{Type: "STATUS", StatusID: "HASTE", DurationMS: 3000,
+			MoveMultiplier: &multiplier, Debuff: &debuff, PvPDrCategory: "SOFT_CC",
+			StackPolicy: combat.StackRefresh, MaxStacks: 1}}}
+	compile := func() error {
+		_, err := CompileCatalog(ProfileCatalog{SchemaVersion: ProfileSchemaVersion, Profiles: []GuProfile{{GUID: "GU_HASTE", Rank: 4, Slot: 2, Active: active}}},
+			[]GuEntry{{ID: "GU_HASTE", Rank: 4, Name: "Haste"}}, nil)
+		return err
+	}
+	if err := compile(); err != nil {
+		t.Fatal(err)
+	}
+	active.Effects[0].MaxStacks = 0
+	if err := compile(); err == nil {
+		t.Fatal("haste without max_stacks=1 was accepted")
+	}
+	active.Effects[0].MaxStacks = 1
+	active.Effects[0].StackPolicy = ""
+	if err := compile(); err == nil {
+		t.Fatal("haste without REFRESH was accepted")
+	}
+	active.Effects[0].StackPolicy = combat.StackRefresh
+	active.Effects[0].MoveMultiplier = nil
+	if err := compile(); err == nil {
+		t.Fatal("HASTE without movement bonus was accepted")
+	}
+	noBonus := 1.0
+	active.Effects[0].MoveMultiplier = &noBonus
+	if err := compile(); err == nil {
+		t.Fatal("HASTE with multiplier 1 was accepted")
 	}
 }
 

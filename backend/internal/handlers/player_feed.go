@@ -35,6 +35,9 @@ func GetPlayerInventoryGus(c *gin.Context) {
 		}
 	}
 
+	_ = EvaluateWildWillResurgence(db.DB, authID.String())
+	_ = EvaluateGuDurabilityHealing(db.DB, authID.String())
+
 	guInv, err := db.LoadPlayerGus(db.DB, authID.String(), false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Gu inventory: " + err.Error()})

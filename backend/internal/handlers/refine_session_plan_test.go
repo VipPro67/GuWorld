@@ -127,7 +127,7 @@ func TestPublicSessionViewDoesNotLeakAnswers(t *testing.T) {
 	startedAt := time.Now().UTC().Add(-time.Minute)
 	decisions := []refineDecisionRow{{
 		ID: 1, Situation: "Hỏa bùng lên",
-		Options: []string{"Tăng hỏa", "Hạ hỏa", "Giữ nguyên"},
+		Options:      []string{"Tăng hỏa", "Hạ hỏa", "Giữ nguyên"},
 		CorrectIndex: 1, NeutralIndex: 2, Explanation: "x",
 	}}
 	plan, err := buildRefinePlan(stage, nil, decisions, startedAt, startedAt.Add(300*time.Second))

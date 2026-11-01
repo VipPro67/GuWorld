@@ -32,6 +32,9 @@ interface GuInventoryProps {
   onUseSupportGu?: (instanceId: string) => Promise<void>;
   onDropGu?: (instanceId: string) => Promise<boolean>;
   onDropGus?: (instanceIds: string[]) => Promise<boolean>;
+  onSubjugateGu?: (instanceId: string) => Promise<boolean>;
+  onNourishGu?: (instanceId: string) => Promise<boolean>;
+  onRepairGu?: (instanceId: string) => Promise<boolean>;
   onUseItems?: (itemIds: string[]) => Promise<boolean>;
   onUseGus?: (instanceIds: string[]) => Promise<boolean>;
 }
@@ -102,6 +105,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   onUseGus,
   onDropGu,
   onDropGus,
+  onSubjugateGu,
+  onNourishGu,
+  onRepairGu,
 }) => {
   const [selectedGuIds, setSelectedGuIds] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -119,6 +125,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [unequippingAll, setUnequippingAll] = useState<boolean>(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [equippingId, setEquippingId] = useState<string | null>(null);
+  const [subjugatingId, setSubjugatingId] = useState<string | null>(null);
+  const [nourishingId, setNourishingId] = useState<string | null>(null);
+  const [repairingId, setRepairingId] = useState<string | null>(null);
   const [usingId, setUsingId] = useState<string | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [usingGuId, setUsingGuId] = useState<string | null>(null);
@@ -152,6 +161,12 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   // full inventory when the management view is opened.
   const fetchGuInventory = useGameStore((state) => state.fetchGuInventory);
   const guInventoryLoaded = useGameStore((state) => state.guInventoryLoaded);
+  const subjugateStoreFn = useGameStore((state) => state.subjugateGu);
+  const nourishStoreFn = useGameStore((state) => state.nourishGu);
+  const repairStoreFn = useGameStore((state) => state.repairGu);
+  const subjugateFn = onSubjugateGu || subjugateStoreFn;
+  const nourishFn = onNourishGu || nourishStoreFn;
+  const repairFn = onRepairGu || repairStoreFn;
   useEffect(() => {
     if (!guInventoryLoaded) void fetchGuInventory();
   }, [fetchGuInventory, guInventoryLoaded]);
@@ -245,12 +260,22 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const handleSetVital = async (instanceId: string, name: string) => {
     if (!onSetVital) return;
     const targetGu = player.gu_inventory?.find((g) => g.instance_id === instanceId);
-    if (targetGu && targetGu.rank > player.rank) {
-      useGameStore.getState().addToast(
-        `Không thể thiết lập Cổ trùng Rank ${targetGu.rank} vượt quá tu vi hiện tại của đạo hữu (Rank ${player.rank}) làm Bản Mệnh Cổ!`,
-        "error"
-      );
-      return;
+    if (targetGu) {
+      if ((targetGu.refinement_progress ?? 100) < 100) {
+        useGameStore.getState().addToast("Cổ trùng chưa luyện hóa hoàn tất, không thể lập làm Bản Mệnh Cổ!", "error");
+        return;
+      }
+      if ((targetGu.durability ?? 100) <= 0 || targetGu.status === "DAMAGED") {
+        useGameStore.getState().addToast("Cổ trùng đã bị trọng thương hư hại, không thể lập làm Bản Mệnh Cổ!", "error");
+        return;
+      }
+      if (targetGu.rank > player.rank) {
+        useGameStore.getState().addToast(
+          `Không thể thiết lập Cổ trùng Rank ${targetGu.rank} vượt quá tu vi hiện tại của đạo hữu (Rank ${player.rank}) làm Bản Mệnh Cổ!`,
+          "error"
+        );
+        return;
+      }
     }
     const hadVital = player.gu_inventory?.some((g) => g.is_vital) || false;
     const confirmMsg = hadVital
@@ -285,6 +310,19 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const handleEquipClick = async (instanceId: string, equip: boolean) => {
     if (!onEquipToggle) return;
+    if (equip) {
+      const targetGu = (player.gu_inventory || []).find((g) => g.instance_id === instanceId);
+      if (targetGu) {
+        if ((targetGu.refinement_progress ?? 100) < 100) {
+          useGameStore.getState().addToast(`Cổ trùng chưa luyện hóa hoàn tất (${(targetGu.refinement_progress ?? 100).toFixed(0)}%/100%), cần Luyện Hóa trước khi trang bị!`, "error");
+          return;
+        }
+        if ((targetGu.durability ?? 100) <= 0 || targetGu.status === "DAMAGED") {
+          useGameStore.getState().addToast("Cổ trùng đang bị trọng thương hư hại (độ bền 0), cần Tu Bổ trước khi trang bị!", "error");
+          return;
+        }
+      }
+    }
     setEquippingId(instanceId);
     try {
       await onEquipToggle(instanceId, equip);
@@ -1037,6 +1075,12 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   ? Math.min(100, Math.max(0, (minHunger / maxHunger) * 100))
                   : 0;
 
+                const minRefinement = Math.min(...instances.map((i) => i.refinement_progress ?? 100));
+                const minDurability = Math.min(...instances.map((i) => i.durability ?? 100));
+                const hasUnrefined = spec.gu_type !== "Consumable" && minRefinement < 100;
+                const isDamaged = spec.gu_type !== "Consumable" && (minDurability < 100 || instances.some((i) => i.status === "DAMAGED"));
+                const isCriticallyDamaged = spec.gu_type !== "Consumable" && (minDurability < 20 || instances.some((i) => i.status === "DAMAGED"));
+
                 const sleepingCount = instances.filter((i) => i.status === "SLEEPING").length;
                 const sealedCount = instances.filter((i) => i.status === "SEALED").length;
                 const dyingCount = instances.filter((i) => i.status === "DYING").length;
@@ -1074,9 +1118,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     className={`group relative aspect-square w-full rounded-2xl border-2 p-1.5 flex flex-col items-center justify-center transition-all cursor-pointer select-none overflow-hidden ${
                       isSelected
                         ? "border-amber-400 ring-2 ring-amber-400/90 bg-amber-950/40 shadow-[0_0_18px_rgba(251,191,36,0.5)] scale-[1.04]"
+                        : isCriticallyDamaged
+                        ? "border-rose-500/80 shadow-[0_0_12px_rgba(244,63,94,0.35)] bg-rose-950/20"
+                        : hasUnrefined
+                        ? "border-purple-500/70 shadow-[0_0_10px_rgba(168,85,247,0.25)] bg-purple-950/20"
                         : `${rankColors.border} ${rankColors.glow} ${rankColors.bgGradient} hover:scale-[1.03] hover:border-amber-400/80`
                     } ${hasVital ? "ring-2 ring-amber-400/80 shadow-[0_0_12px_rgba(245,158,11,0.35)]" : ""}`}
-                    title={`${spec.name} (Bậc ${spec.rank}) - Bấm xem thông tin & thao tác`}
+                    title={`${spec.name} (Bậc ${spec.rank})
+Độ no: ${minHunger}/${maxHunger} (${Math.round(hungerPercent)}%)
+${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100\n` : ""}${hasUnrefined ? `Luyện hóa: ${minRefinement.toFixed(1)}% (Chưa hoàn tất)\n` : ""}Bấm xem thông tin & thao tác`}
                   >
                     {/* Inner subtle glow/border */}
                     <div className="pointer-events-none absolute inset-0 rounded-2xl border border-white/5 z-0" />
@@ -1085,10 +1135,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     <img
                       src={iconUrl}
                       alt={spec.name}
-                      className="h-10 w-10 sm:h-12 sm:w-12 object-contain z-10 drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] group-hover:scale-110 transition-transform"
+                      className="h-10 w-10 sm:h-12 sm:w-12 object-contain z-10 drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] group-hover:scale-110 transition-transform mb-1"
                     />
 
-                    {/* Top Left Badge */}
+                    {/* Top Left Badges */}
                     {isBatchMode && eligibleGrpGus.length > 0 ? (
                       <div className="absolute top-1.5 left-1.5 z-20">
                         <input
@@ -1098,61 +1148,102 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                           className="rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/50 cursor-pointer pointer-events-none"
                         />
                       </div>
-                    ) : hasVital ? (
-                      <div
-                        className="absolute top-1 left-1 z-20 flex items-center justify-center rounded-full bg-amber-500 text-zinc-950 p-0.5 shadow-sm"
-                        title="Bản Mệnh Cổ"
-                      >
-                        <Sparkles className="w-2.5 h-2.5 text-zinc-950" />
+                    ) : (
+                      <div className="absolute top-1 left-1 z-20 flex items-center gap-1">
+                        {hasVital && (
+                          <div
+                            className="flex items-center justify-center rounded-full bg-amber-500 text-zinc-950 p-0.5 shadow-sm"
+                            title="Bản Mệnh Cổ"
+                          >
+                            <Sparkles className="w-2.5 h-2.5 text-zinc-950" />
+                          </div>
+                        )}
+                        {equippedCount > 0 && !hasVital && (
+                          <div
+                            className="rounded bg-emerald-950/90 text-emerald-400 border border-emerald-500/50 px-1 py-0.2 text-[8px] font-mono font-bold leading-none"
+                            title={`Đang Xuất Trận (${equippedCount})`}
+                          >
+                            ⚔️
+                          </div>
+                        )}
+                        {hasUnrefined && (
+                          <div
+                            className="rounded bg-purple-950/90 text-purple-300 border border-purple-500/60 px-1 py-0.2 text-[8px] font-mono font-bold leading-none shadow"
+                            title={`Tiến độ Luyện Hóa: ${minRefinement.toFixed(0)}% (chưa thuần phục)`}
+                          >
+                            🔥 {Math.floor(minRefinement)}%
+                          </div>
+                        )}
                       </div>
-                    ) : equippedCount > 0 ? (
-                      <div
-                        className="absolute top-1 left-1 z-20 rounded bg-emerald-950/90 text-emerald-400 border border-emerald-500/50 px-1 py-0.2 text-[8px] font-mono font-bold leading-none"
-                        title={`Đang Xuất Trận (${equippedCount})`}
-                      >
-                        ⚔️
-                      </div>
-                    ) : null}
+                    )}
 
-                    {/* Top Right Badge */}
-                    <div className="absolute top-1 right-1 z-20">
+                    {/* Top Right Badges (Rank & Damage Alert) */}
+                    <div className="absolute top-1 right-1 z-20 flex items-center gap-1">
+                      {isCriticallyDamaged && (
+                        <span className="text-[9px] leading-none animate-pulse" title="Cổ trùng bị trọng thương hư hại!">
+                          🩹
+                        </span>
+                      )}
                       <span className="text-[8px] font-mono font-bold px-1 py-0.2 rounded bg-black/80 text-amber-300 border border-amber-500/30 leading-none">
                         B.{spec.rank}
                       </span>
                     </div>
 
-                    {/* Bottom Right Badge (Quantity) */}
-                    {totalCount > 1 && (
-                      <div className="absolute bottom-1 right-1 z-20">
+                    {/* Status Emojis & Quantity (above progress bars) */}
+                    <div className="absolute bottom-3.5 inset-x-2 z-20 flex items-center justify-between leading-none pointer-events-none">
+                      <div className="flex items-center gap-0.5">
+                        {sleepingCount > 0 && <span className="text-[9px]" title="Ngủ đông">💤</span>}
+                        {sealedCount > 0 && <span className="text-[9px]" title="Phong ấn">🔒</span>}
+                        {dyingCount > 0 && <span className="text-[9px] animate-pulse" title="Hấp hối">💀</span>}
+                        {deadCount > 0 && <span className="text-[9px]" title="Đã chết">🪦</span>}
+                      </div>
+                      {totalCount > 1 && (
                         <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-black/85 text-zinc-200 border border-zinc-800 leading-none shadow">
                           x{totalCount}
                         </span>
-                      </div>
-                    )}
-
-                    {/* Bottom Left Status */}
-                    <div className="absolute bottom-1.5 left-1 z-20 flex items-center gap-0.5 leading-none">
-                      {sleepingCount > 0 && <span className="text-[9px]" title="Ngủ đông">💤</span>}
-                      {sealedCount > 0 && <span className="text-[9px]" title="Phong ấn">🔒</span>}
-                      {dyingCount > 0 && <span className="text-[9px] animate-pulse" title="Hấp hối">💀</span>}
-                      {deadCount > 0 && <span className="text-[9px]" title="Đã chết">🪦</span>}
+                      )}
                     </div>
 
-                    {/* Bottom Hunger Line */}
-                    {hasHunger && (
-                      <div className="absolute bottom-0 inset-x-0 h-1 bg-black/75 z-20 overflow-hidden">
+                    {/* Bottom Progress Bars Container */}
+                    <div className="absolute bottom-1.5 inset-x-2 z-20 flex flex-col gap-0.5 pointer-events-none">
+                      {/* Hunger Bar - Clear, visible, inset from corners */}
+                      {hasHunger && (
                         <div
-                          className={`h-full transition-all duration-300 ${
-                            hungerPercent < 20
-                              ? "bg-rose-500 animate-pulse"
-                              : hungerPercent < 50
-                              ? "bg-amber-500"
-                              : "bg-emerald-500"
-                          }`}
-                          style={{ width: `${hungerPercent}%` }}
-                        />
-                      </div>
-                    )}
+                          className="h-1.5 w-full bg-black/90 rounded-full overflow-hidden border border-zinc-800 shadow-sm"
+                          title={`Độ no: ${Math.round(minHunger)}/${maxHunger} (${Math.round(hungerPercent)}%)`}
+                        >
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              hungerPercent < 20
+                                ? "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)] animate-pulse"
+                                : hungerPercent < 50
+                                ? "bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.5)]"
+                                : "bg-emerald-400"
+                            }`}
+                            style={{ width: `${Math.max(4, hungerPercent)}%` }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Durability Bar (shows when damaged < 100) */}
+                      {isDamaged && (
+                        <div
+                          className="h-1 w-full bg-black/90 rounded-full overflow-hidden border border-zinc-800 shadow-sm"
+                          title={`Độ bền: ${Math.round(minDurability)}/100`}
+                        >
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              minDurability < 20
+                                ? "bg-rose-600 animate-pulse shadow-[0_0_6px_rgba(225,29,72,0.8)]"
+                                : minDurability < 50
+                                ? "bg-amber-400"
+                                : "bg-cyan-400"
+                            }`}
+                            style={{ width: `${Math.max(4, Math.min(100, minDurability))}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </button>
                 );
               };
@@ -1340,7 +1431,24 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     {status === "SEALED" && "🔒 Phong Ấn"}
                                     {status === "DYING" && "💀 Hấp Hối"}
                                     {status === "DEAD" && "🪦 Đã Chết"}
+                                    {status === "DAMAGED" && "🩹 Trọng Thương"}
                                   </span>
+
+                                  {spec.gu_type !== "Consumable" && (single.refinement_progress ?? 100) < 100 && (
+                                    <span className="text-[9px] font-mono font-bold text-purple-300 bg-purple-950/60 border border-purple-800/60 px-2 py-0.5 rounded-xl shadow-sm">
+                                      🔥 Luyện: {(single.refinement_progress ?? 100).toFixed(0)}%
+                                    </span>
+                                  )}
+
+                                  {spec.gu_type !== "Consumable" && (single.durability ?? 100) < 100 && (
+                                    <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-xl border shadow-sm ${
+                                      (single.durability ?? 100) < 20 || status === "DAMAGED"
+                                        ? "text-rose-400 bg-rose-950/60 border-rose-800/60 animate-pulse"
+                                        : "text-cyan-300 bg-cyan-950/60 border-cyan-800/60"
+                                    }`}>
+                                      🛡️ Bền: {(single.durability ?? 100).toFixed(0)}/100
+                                    </span>
+                                  )}
 
                                   {hasHunger && (
                                     <div className="flex items-center gap-1.5 bg-zinc-900/80 px-2.5 py-1 rounded-xl border border-zinc-800/80">
@@ -1687,7 +1795,22 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       {status === "SEALED" && "🔒 Phong Ấn"}
                                       {status === "DYING" && "💀 Hấp Hối"}
                                       {status === "DEAD" && "🪦 Đã Chết"}
+                                      {status === "DAMAGED" && "🩹 Trọng Thương"}
                                     </span>
+                                    {spec.gu_type !== "Consumable" && (gu.refinement_progress ?? 100) < 100 && (
+                                      <span className="text-[8px] font-mono font-bold text-purple-300 bg-purple-950/40 border border-purple-800/50 px-1.5 py-0.2 rounded">
+                                        🔥 Luyện: {(gu.refinement_progress ?? 100).toFixed(0)}%
+                                      </span>
+                                    )}
+                                    {spec.gu_type !== "Consumable" && (gu.durability ?? 100) < 100 && (
+                                      <span className={`text-[8px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                                        (gu.durability ?? 100) < 20 || status === "DAMAGED"
+                                          ? "text-rose-400 bg-rose-950/40 border-rose-800/50 animate-pulse"
+                                          : "text-cyan-300 bg-cyan-950/40 border-cyan-800/50"
+                                      }`}>
+                                        🛡️ Bền: {(gu.durability ?? 100).toFixed(0)}/100
+                                      </span>
+                                    )}
                                     {(spec.gu_type !== "Consumable" || (spec.max_hunger && spec.max_hunger > 0)) && (
                                       <div className="flex items-center gap-1.5">
                                         <span className="text-[9px] text-zinc-500 font-mono">Độ no:</span>
@@ -1735,6 +1858,66 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                         }`}
                                       >
                                         {feedingId === gu.instance_id ? "..." : "Cho Ăn"}
+                                      </button>
+                                    )}
+
+                                    {/* Luyện Hóa nếu chưa đủ 100% */}
+                                    {spec.gu_type !== "Consumable" && !isDead && (gu.refinement_progress ?? 100) < 100 && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading || subjugatingId === gu.instance_id}
+                                        onClick={async () => {
+                                          setSubjugatingId(gu.instance_id);
+                                          try {
+                                            await subjugateFn(gu.instance_id);
+                                          } finally {
+                                            setSubjugatingId(null);
+                                          }
+                                        }}
+                                        className="text-[9px] font-bold py-1 px-2.5 bg-purple-950/40 text-purple-300 border border-purple-800/50 hover:bg-purple-900/60 rounded font-mono cursor-pointer"
+                                        title="Luyện hóa ý chí hoang dã"
+                                      >
+                                        {subjugatingId === gu.instance_id ? "..." : "Luyện"}
+                                      </button>
+                                    )}
+
+                                    {/* Ôn Dưỡng nếu bị thương nhẹ */}
+                                    {spec.gu_type !== "Consumable" && !isDead && (gu.durability ?? 100) >= 20 && (gu.durability ?? 100) < 100 && status !== "DAMAGED" && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading || nourishingId === gu.instance_id}
+                                        onClick={async () => {
+                                          setNourishingId(gu.instance_id);
+                                          try {
+                                            await nourishFn(gu.instance_id);
+                                          } finally {
+                                            setNourishingId(null);
+                                          }
+                                        }}
+                                        className="text-[9px] font-bold py-1 px-2.5 bg-cyan-950/40 text-cyan-300 border border-cyan-800/50 hover:bg-cyan-900/60 rounded font-mono cursor-pointer"
+                                        title="Dùng Chân Nguyên ôn dưỡng phục hồi độ bền"
+                                      >
+                                        {nourishingId === gu.instance_id ? "..." : "Ôn Dưỡng"}
+                                      </button>
+                                    )}
+
+                                    {/* Tu Bổ nếu trọng thương */}
+                                    {spec.gu_type !== "Consumable" && !isDead && ((gu.durability ?? 100) < 20 || status === "DAMAGED") && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading || repairingId === gu.instance_id}
+                                        onClick={async () => {
+                                          setRepairingId(gu.instance_id);
+                                          try {
+                                            await repairFn(gu.instance_id);
+                                          } finally {
+                                            setRepairingId(null);
+                                          }
+                                        }}
+                                        className="text-[9px] font-bold py-1 px-2.5 bg-rose-950/40 text-rose-300 border border-rose-800/50 hover:bg-rose-900/60 rounded font-mono cursor-pointer"
+                                        title="Tu bổ khôi phục Cổ trùng trọng thương"
+                                      >
+                                        {repairingId === gu.instance_id ? "..." : "Tu Bổ"}
                                       </button>
                                     )}
 
@@ -2094,36 +2277,115 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 </p>
               )}
 
-              {/* Hunger & Food Info */}
-              {hasHunger && (
-                <div className="bg-zinc-900/50 p-3.5 rounded-xl border border-zinc-850 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-400 font-mono flex items-center gap-1.5">
-                      <Wine className="w-3.5 h-3.5 text-amber-400" /> Độ No:
-                    </span>
-                    <span className="font-mono font-bold text-zinc-200">
-                      {singleGu ? singleGu.hunger : minHunger} / {spec.max_hunger}
-                    </span>
+              {/* Status Gauges: Hunger, Refinement, Durability */}
+              <div className="bg-zinc-900/50 p-3.5 rounded-xl border border-zinc-850 space-y-3">
+                {/* 1. Độ No */}
+                {hasHunger && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-400 font-mono flex items-center gap-1.5">
+                        <Wine className="w-3.5 h-3.5 text-amber-400" /> Độ No:
+                      </span>
+                      <span className="font-mono font-bold text-zinc-200">
+                        {singleGu ? singleGu.hunger : minHunger} / {spec.max_hunger}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          (singleGu ? singleGu.hunger : minHunger) / spec.max_hunger < 0.2
+                            ? "bg-rose-500 animate-pulse"
+                            : (singleGu ? singleGu.hunger : minHunger) / spec.max_hunger < 0.5
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, ((singleGu ? singleGu.hunger : minHunger) / spec.max_hunger) * 100))}%` }}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-500 pt-1 border-t border-zinc-800/40 font-mono">
+                      <span>Thức ăn: <strong className="text-zinc-300">{preferredFoodName}</strong></span>
+                      <span>Kho: <strong className="text-amber-400">{availableFood > 0 ? `${availableFood} món` : canFeedWithResource ? `${availableResource?.balance} ${availableResource?.label}` : "0"}</strong></span>
+                      <span>Đói: <strong className="text-zinc-300">-{spec.hunger_rate}/3h</strong></span>
+                    </div>
                   </div>
-                  <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        (singleGu ? singleGu.hunger : minHunger) / spec.max_hunger < 0.2
-                          ? "bg-rose-500 animate-pulse"
-                          : (singleGu ? singleGu.hunger : minHunger) / spec.max_hunger < 0.5
-                          ? "bg-amber-500"
-                          : "bg-emerald-500"
-                      }`}
-                      style={{ width: `${Math.min(100, Math.max(0, ((singleGu ? singleGu.hunger : minHunger) / spec.max_hunger) * 100))}%` }}
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-500 pt-1 border-t border-zinc-800/40 font-mono">
-                    <span>Thức ăn: <strong className="text-zinc-300">{preferredFoodName}</strong></span>
-                    <span>Kho: <strong className="text-amber-400">{availableFood > 0 ? `${availableFood} món` : canFeedWithResource ? `${availableResource?.balance} ${availableResource?.label}` : "0"}</strong></span>
-                    <span>Đói: <strong className="text-zinc-300">-{spec.hunger_rate}/3h</strong></span>
-                  </div>
-                </div>
-              )}
+                )}
+
+                {/* 2. Tiến Độ Luyện Hóa */}
+                {spec.gu_type !== "Consumable" && (() => {
+                  const currentRefine = singleGu ? (singleGu.refinement_progress ?? 100) : Math.min(...instances.map((i) => i.refinement_progress ?? 100));
+                  const isFullyRefined = currentRefine >= 100;
+                  return (
+                    <div className="space-y-1.5 pt-2 border-t border-zinc-800/60">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-purple-300 font-mono flex items-center gap-1.5 font-bold">
+                          🔥 Luyện Hóa Ý Chí:
+                        </span>
+                        <span className="font-mono font-bold text-purple-200">
+                          {currentRefine.toFixed(1)}% / 100%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            isFullyRefined
+                              ? "bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"
+                              : "bg-gradient-to-r from-purple-500 to-pink-500"
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(0, currentRefine))}%` }}
+                        />
+                      </div>
+                      <div className="text-[10px] font-mono text-zinc-400 flex items-center justify-between">
+                        {isFullyRefined ? (
+                          <span className="text-emerald-400 flex items-center gap-1">✨ Đã thuần phục hoàn toàn, có thể trang bị</span>
+                        ) : (
+                          <span className="text-amber-400 flex items-center gap-1">⚠️ Chưa thuần phục (không thể trang bị, tụt 5%/h nếu bỏ bê)</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 3. Độ Bền / Tổn Thương */}
+                {spec.gu_type !== "Consumable" && (() => {
+                  const currentDur = singleGu ? (singleGu.durability ?? 100) : Math.min(...instances.map((i) => i.durability ?? 100));
+                  const isDamagedState = singleGu ? (singleGu.status === "DAMAGED" || currentDur <= 0) : instances.some(i => i.status === "DAMAGED" || (i.durability ?? 100) <= 0);
+                  return (
+                    <div className="space-y-1.5 pt-2 border-t border-zinc-800/60">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-cyan-300 font-mono flex items-center gap-1.5 font-bold">
+                          🛡️ Độ Bền:
+                        </span>
+                        <span className="font-mono font-bold text-cyan-200">
+                          {currentDur.toFixed(1)} / 100
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            currentDur < 20 || isDamagedState
+                              ? "bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.6)]"
+                              : currentDur < 50
+                              ? "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.4)]"
+                              : "bg-emerald-400"
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(0, currentDur))}%` }}
+                        />
+                      </div>
+                      <div className="text-[10px] font-mono text-zinc-400">
+                        {isDamagedState ? (
+                          <span className="text-rose-400 font-bold flex items-center gap-1">🚨 Trọng thương hư hại (0 độ bền)! Không thể trang bị, cần Tu Bổ.</span>
+                        ) : currentDur < 20 ? (
+                          <span className="text-rose-400 flex items-center gap-1">⚠️ Rạn nứt nghiêm trọng (&lt; 20 độ bền)! Ngừng tự hồi, cần Tu Bổ.</span>
+                        ) : currentDur < 100 ? (
+                          <span className="text-amber-300 flex items-center gap-1">💧 Đang tự phục hồi (+2/h, tốn độ no) hoặc có thể dùng Chân Nguyên Ôn Dưỡng.</span>
+                        ) : (
+                          <span className="text-emerald-400 flex items-center gap-1">✨ Thể xác nguyên vẹn hoàn hảo (100/100).</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
 
               {/* Effects View */}
               {spec.effects && Object.keys(spec.effects).length > 0 && (
@@ -2144,6 +2406,18 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 const canAct = !isDead && status !== "SEALED";
                 const isHungry = singleGu.hunger < spec.max_hunger;
                 const canFeedIndividual = isHungry && !isDead && status !== "SEALED" && (availableFood > 0 || canFeedWithResource);
+
+                const refineProgress = singleGu.refinement_progress ?? 100;
+                const durability = singleGu.durability ?? 100;
+                const isUnrefined = spec.gu_type !== "Consumable" && refineProgress < 100;
+                const isDamaged = spec.gu_type !== "Consumable" && (durability < 20 || status === "DAMAGED");
+                const canNourish = spec.gu_type !== "Consumable" && !isDead && !isDamaged && durability >= 20 && durability < 100;
+
+                const vitalGu = (player.gu_inventory || []).find((g) => g.is_vital);
+                const canVitalSuppress = !!vitalGu && vitalGu.rank >= singleGu.rank + 2;
+                const subjugateManaCost = singleGu.rank * 25;
+                const nourishManaCost = singleGu.rank * 20;
+                const repairStoneCost = singleGu.rank >= 6 ? 1 : singleGu.rank * 50;
 
                 return (
                   <div className="space-y-2 pt-2 border-t border-zinc-900">
@@ -2177,17 +2451,120 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         </button>
                       )}
 
+                      {/* Luyện Hóa Ý Chí */}
+                      {isUnrefined && !isDead && (
+                        <button
+                          type="button"
+                          disabled={actionLoading || subjugatingId === singleGu.instance_id || (!canVitalSuppress && player.current_mana < subjugateManaCost)}
+                          onClick={async () => {
+                            setSubjugatingId(singleGu.instance_id);
+                            try {
+                              await subjugateFn(singleGu.instance_id);
+                            } finally {
+                              setSubjugatingId(null);
+                            }
+                          }}
+                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            canVitalSuppress
+                              ? "bg-gradient-to-r from-purple-700 to-amber-600 hover:from-purple-600 hover:to-amber-500 text-white shadow-[0_0_12px_rgba(245,158,11,0.4)]"
+                              : player.current_mana >= subjugateManaCost
+                              ? "bg-purple-700 hover:bg-purple-600 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]"
+                              : "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-60"
+                          }`}
+                          title={
+                            canVitalSuppress
+                              ? "Bản Mệnh Cổ cao hơn >= 2 bậc, áp chế hoàn toàn đạt ngay 100% (0 Mana)!"
+                              : `Tiêu hao ${subjugateManaCost} Chân Nguyên để tăng +25% tiến độ`
+                          }
+                        >
+                          {subjugatingId === singleGu.instance_id ? "Đang luyện..." : canVitalSuppress ? "👑 Áp Chế (0 Mana)" : `🔥 Luyện Hóa (-${subjugateManaCost} M)`}
+                        </button>
+                      )}
+
+                      {/* Ôn Dưỡng Độ Bền */}
+                      {canNourish && (
+                        <button
+                          type="button"
+                          disabled={actionLoading || nourishingId === singleGu.instance_id || player.current_mana < nourishManaCost}
+                          onClick={async () => {
+                            setNourishingId(singleGu.instance_id);
+                            try {
+                              await nourishFn(singleGu.instance_id);
+                            } finally {
+                              setNourishingId(null);
+                            }
+                          }}
+                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            player.current_mana >= nourishManaCost
+                              ? "bg-cyan-700 hover:bg-cyan-600 text-white shadow-[0_0_10px_rgba(6,182,212,0.3)]"
+                              : "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-60"
+                          }`}
+                          title={`Dùng Chân Nguyên để hồi phục +15.0 độ bền (Tốn ${nourishManaCost} Mana)`}
+                        >
+                          {nourishingId === singleGu.instance_id ? "Đang ôn dưỡng..." : `💧 Ôn Dưỡng (-${nourishManaCost} M)`}
+                        </button>
+                      )}
+
+                      {/* Tu Bổ Cổ Trùng */}
+                      {isDamaged && !isDead && (
+                        <button
+                          type="button"
+                          disabled={
+                            actionLoading ||
+                            repairingId === singleGu.instance_id ||
+                            (singleGu.rank >= 6 ? player.immortal_stones < 1 : player.primeval_stones < repairStoneCost)
+                          }
+                          onClick={async () => {
+                            setRepairingId(singleGu.instance_id);
+                            try {
+                              await repairFn(singleGu.instance_id);
+                            } finally {
+                              setRepairingId(null);
+                            }
+                          }}
+                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-rose-700 hover:bg-rose-600 text-white shadow-[0_0_12px_rgba(244,63,94,0.4)]"
+                          title={`Tu bổ Cổ trùng trọng thương về 50.0 độ bền (Tốn ${singleGu.rank >= 6 ? "1 Tiên Nguyên Thạch" : `${repairStoneCost} Nguyên Thạch`})`}
+                        >
+                          {repairingId === singleGu.instance_id
+                            ? "Đang tu bổ..."
+                            : `🔨 Tu Bổ (${singleGu.rank >= 6 ? "1 TNT" : `${repairStoneCost} NT`})`}
+                        </button>
+                      )}
+
                       {/* Trang bị / Tháo */}
                       {spec.gu_type !== "Consumable" && canAct && onEquipToggle && (
                         <button
                           type="button"
-                          disabled={actionLoading || equippingId === singleGu.instance_id}
-                          onClick={() => handleEquipClick(singleGu.instance_id, !singleGu.equipped)}
+                          disabled={actionLoading || equippingId === singleGu.instance_id || (!singleGu.equipped && (isUnrefined || isDamaged))}
+                          onClick={() => {
+                            if (!singleGu.equipped) {
+                              if (isUnrefined) {
+                                useGameStore.getState().addToast(`Cổ trùng chưa luyện hóa hoàn tất (${refineProgress.toFixed(0)}%/100%), hãy Luyện Hóa trước khi trang bị!`, "error");
+                                return;
+                              }
+                              if (isDamaged) {
+                                useGameStore.getState().addToast("Cổ trùng đang bị trọng thương hư hại (độ bền 0), cần Tu Bổ trước khi trang bị!", "error");
+                                return;
+                              }
+                            }
+                            handleEquipClick(singleGu.instance_id, !singleGu.equipped);
+                          }}
                           className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                             singleGu.equipped
                               ? "bg-amber-950/40 text-amber-300 border border-amber-500/40 hover:bg-amber-900/50"
+                              : isUnrefined || isDamaged
+                              ? "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-60"
                               : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.3)]"
                           }`}
+                          title={
+                            singleGu.equipped
+                              ? "Tháo Cổ khỏi trận"
+                              : isUnrefined
+                              ? "Chưa luyện hóa 100%"
+                              : isDamaged
+                              ? "Cổ bị trọng thương, cần tu bổ"
+                              : "Trang bị Cổ xuất trận"
+                          }
                         >
                           {equippingId === singleGu.instance_id ? "..." : singleGu.equipped ? "🛡️ Tháo Trang Bị" : "⚔️ Trang Bị"}
                         </button>
@@ -2197,11 +2574,29 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                       {onSetVital && !isDead && !singleGu.is_vital && spec.gu_type !== "Consumable" && (
                         <button
                           type="button"
-                          disabled={actionLoading || settingVitalId === singleGu.instance_id || singleGu.rank > player.rank}
-                          onClick={() => handleSetVital(singleGu.instance_id, spec.name)}
-                          title={singleGu.rank > player.rank ? `Yêu cầu tu vi Rank ${singleGu.rank}` : ""}
-                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          disabled={actionLoading || settingVitalId === singleGu.instance_id || singleGu.rank > player.rank || isUnrefined || isDamaged}
+                          onClick={() => {
+                            if (isUnrefined) {
+                              useGameStore.getState().addToast("Cổ trùng chưa luyện hóa hoàn tất, không thể lập làm Bản Mệnh Cổ!", "error");
+                              return;
+                            }
+                            if (isDamaged) {
+                              useGameStore.getState().addToast("Cổ trùng bị trọng thương, cần Tu Bổ trước khi lập làm Bản Mệnh Cổ!", "error");
+                              return;
+                            }
+                            handleSetVital(singleGu.instance_id, spec.name);
+                          }}
+                          title={
                             singleGu.rank > player.rank
+                              ? `Yêu cầu tu vi Rank ${singleGu.rank}`
+                              : isUnrefined
+                              ? "Cần luyện hóa 100%"
+                              : isDamaged
+                              ? "Cần tu bổ trước"
+                              : ""
+                          }
+                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            singleGu.rank > player.rank || isUnrefined || isDamaged
                               ? "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-50"
                               : "bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.3)]"
                           }`}

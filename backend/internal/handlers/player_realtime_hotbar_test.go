@@ -35,3 +35,33 @@ func TestValidateRealtimeHotbarOrderCapsAtSix(t *testing.T) {
 		t.Fatalf("slot limit error=%v", err)
 	}
 }
+
+// TestValidateRealtimeHotbarOrderKeepsSavedAssignedSlots pins the hotbar
+// guarantee for the save endpoint: explicitly requested members must land on
+// exactly the slot the player chose (index+1), and omitted valid members are
+// appended behind them in their previously saved order.
+func TestValidateRealtimeHotbarOrderKeepsSavedAssignedSlots(t *testing.T) {
+	current := []string{"h3", "h1", "h2"}
+	equipped := []string{"h1", "h2", "h3", "h4"}
+
+	got, err := validateRealtimeHotbarOrder([]string{"h1", "h2"}, equipped, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"h1", "h2", "h3", "h4"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("saved order=%v, want %v (h3 must not be re-sorted)", got, want)
+	}
+
+	// Stale currentOrder entry (no longer valid) must disappear; unseen valid
+	// member h4 is appended once, deterministically.
+	currentStale := []string{"h3", "h1", "stale"}
+	got, err = validateRealtimeHotbarOrder([]string{"h1", "h2"}, equipped, currentStale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = []string{"h1", "h2", "h3", "h4"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("stale id must be pruned, got %v", got)
+	}
+}

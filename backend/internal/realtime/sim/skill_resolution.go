@@ -53,6 +53,18 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		caster.Revision++
 		return
 	}
+	if skill.MoveDistance > 0 {
+		recordKillerMoveUse()
+		if !w.hasStatus(caster, "ROOT") && !w.hasStatus(caster, "BIND") && !w.isStunned(caster) {
+			caster.dash = &dashState{skill: skill, direction: pending.Aim, remaining: skill.MoveDistance, ticksLeft: skill.MoveDurationTicks}
+			caster.Revision++
+		}
+		if skill.Cleanse {
+			w.cleanseDebuffsLocked(caster)
+		}
+		w.applySelfSupportLocked(caster, skill)
+		return
+	}
 	switch skill.Mode {
 	case combat.ModeTarget:
 		var target *Entity
@@ -171,26 +183,6 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		w.applyStatusLocked(caster, caster, skill)
 		if skill.Cleanse {
 			w.cleanseDebuffsLocked(caster)
-		}
-	}
-	if skill.MoveDistance > 0 && caster != nil && caster.Vitals.HP > 0 {
-		var dir Vec2
-		if skill.Mode == combat.ModeDirection && math.Hypot(pending.Aim.X, pending.Aim.Y) > 0.01 {
-			aimLen := math.Hypot(pending.Aim.X, pending.Aim.Y)
-			dir = Vec2{X: pending.Aim.X / aimLen, Y: pending.Aim.Y / aimLen}
-		} else if skill.Mode == combat.ModeGround && distance(caster.Transform.Position, pending.Point) > 0.01 {
-			pDist := distance(caster.Transform.Position, pending.Point)
-			dir = Vec2{X: (pending.Point.X - caster.Transform.Position.X) / pDist, Y: (pending.Point.Y - caster.Transform.Position.Y) / pDist}
-		} else {
-			dir = Vec2{X: 1, Y: 0}
-		}
-		dest := Vec2{
-			X: caster.Transform.Position.X + dir.X*skill.MoveDistance,
-			Y: caster.Transform.Position.Y + dir.Y*skill.MoveDistance,
-		}
-		if !w.blocked(dest, caster.Radius) {
-			caster.Transform.Position = dest
-			caster.Revision++
 		}
 	}
 	// Heal and shield always resolve on the caster, matching the existing Gu contract where HEAL/SHIELD operations land on the

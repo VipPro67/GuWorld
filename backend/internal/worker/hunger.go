@@ -439,17 +439,61 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 		}
 	}
 
-	// Rebuild equipped_gus when an equipped Gu died: only ACTIVE equipped Gus
-	// stay in the equipped_gus array.
+	// Prune equipped_gus when an equipped Gu died, preserving the saved hotbar
+	// order: only still-equipped ACTIVE Gus stay in the array.
 	if equippedDeath {
-		if _, err := tx.Exec(`
-			UPDATE players p
-			SET equipped_gus = COALESCE(
-				(SELECT jsonb_agg(pg.id ORDER BY pg.id)
-				 FROM player_gu pg
-				 WHERE pg.player_id = p.id AND pg.equipped AND pg.state = 'ACTIVE'),
-				'[]'::jsonb)
-			WHERE p.id = $1`, playerID); err != nil {
+		var savedOrder models.EquippedGusList
+		if err := tx.QueryRow(`
+			SELECT COALESCE(equipped_gus, '[]'::jsonb) FROM players WHERE id = $1 FOR UPDATE
+		`, playerID).Scan(&savedOrder); err != nil {
+			return err
+		}
+		rows, err := tx.Query(`
+			SELECT id FROM player_gu
+			WHERE player_id = $1 AND equipped = true AND state = 'ACTIVE'
+			ORDER BY created_at ASC, id ASC
+		`, playerID)
+		if err != nil {
+			return err
+		}
+		active := make([]string, 0, 8)
+		for rows.Next() {
+			var instanceID string
+			if err := rows.Scan(&instanceID); err != nil {
+				rows.Close()
+				return err
+			}
+			active = append(active, instanceID)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		activeSet := make(map[string]struct{}, len(active))
+		for _, id := range active {
+			activeSet[id] = struct{}{}
+		}
+		pruned := make(models.EquippedGusList, 0, len(active))
+		seen := make(map[string]struct{}, len(active))
+		for _, id := range savedOrder {
+			if _, ok := activeSet[id]; ok {
+				if _, dup := seen[id]; !dup {
+					pruned = append(pruned, id)
+					seen[id] = struct{}{}
+				}
+			}
+		}
+		for _, id := range active {
+			if _, dup := seen[id]; !dup {
+				pruned = append(pruned, id)
+				seen[id] = struct{}{}
+			}
+		}
+		encoded, err := pruned.Value()
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, encoded, playerID); err != nil {
 			return err
 		}
 	}

@@ -46,7 +46,9 @@ export interface GuInstance {
   gu_id: string;
   rank: number;
   hunger: number;
-  status: string; // "ACTIVE", "SLEEPING", "DEAD"
+  refinement_progress?: number;
+  durability?: number;
+  status: string; // "ACTIVE", "SLEEPING", "DEAD", "DAMAGED"
   equipped: boolean;
   is_vital: boolean;
   is_locked?: boolean;

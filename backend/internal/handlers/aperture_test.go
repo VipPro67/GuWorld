@@ -60,14 +60,14 @@ func TestPointProduceRankFollowsLevelAndGrade(t *testing.T) {
 }
 
 func TestPointProduceItemFormat(t *testing.T) {
- pt := models.ApertureResourcePoint{Level: 2, Grade: "MID"}
- template := ResourcePointTemplate{ProduceKey: "wood_crystal"}
- if got := pointProduceItem(template, pt, false); got != "wood_crystal_rank4" {
-	 t.Fatalf("pointProduceItem = %q, want wood_crystal_rank4", got)
- }
- if got := pointProduceItem(template, pt, true); got != "wood_crystal_rank5" {
-	 t.Fatalf("pointProduceItem rare = %q, want wood_crystal_rank5", got)
- }
+	pt := models.ApertureResourcePoint{Level: 2, Grade: "MID"}
+	template := ResourcePointTemplate{ProduceKey: "wood_crystal"}
+	if got := pointProduceItem(template, pt, false); got != "wood_crystal_rank4" {
+		t.Fatalf("pointProduceItem = %q, want wood_crystal_rank4", got)
+	}
+	if got := pointProduceItem(template, pt, true); got != "wood_crystal_rank5" {
+		t.Fatalf("pointProduceItem rare = %q, want wood_crystal_rank5", got)
+	}
 }
 
 func TestAperturePointVitalityMultiplier(t *testing.T) {

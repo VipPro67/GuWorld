@@ -66,13 +66,13 @@ type CaptureEvent struct {
 }
 
 type CompanionCasualtyEvent struct {
-	ZoneKey      sim.ZoneKey
-	EventID      uint64
-	Tick         uint64
-	Type         string // "INJURED" or "PERMADEATH"
-	ActorID      string
-	PlayerID     uuid.UUID
-	SourceID     sim.EntityID
+	ZoneKey  sim.ZoneKey
+	EventID  uint64
+	Tick     uint64
+	Type     string // "INJURED" or "PERMADEATH"
+	ActorID  string
+	PlayerID uuid.UUID
+	SourceID sim.EntityID
 }
 
 // Region-local rollout loads one independent world per active KHU_VUC/SAFE_ZONE.
@@ -397,17 +397,17 @@ const MaxMonstersPerZone = sim.MaxMonsterSpawnCatalog
 // Manager is a process-local owner for configured zones and their player leases.
 // Authentication and loading trusted player state remain gateway responsibilities.
 type Manager struct {
-	mu                sync.Mutex
-	cond              *sync.Cond
-	zones             map[sim.ZoneKey]*managedZone
-	maps              map[sim.ZoneKey]ZoneMap
-	keys              []sim.ZoneKey
-	runtimeKeys       map[sim.ZoneKey]struct{}
-	owners            map[sim.CharacterID]OwnershipLease
-	maxPlayersPerZone int
-	cancel            context.CancelFunc
-	started           bool
-	closed            bool
+	mu                       sync.Mutex
+	cond                     *sync.Cond
+	zones                    map[sim.ZoneKey]*managedZone
+	maps                     map[sim.ZoneKey]ZoneMap
+	keys                     []sim.ZoneKey
+	runtimeKeys              map[sim.ZoneKey]struct{}
+	owners                   map[sim.CharacterID]OwnershipLease
+	maxPlayersPerZone        int
+	cancel                   context.CancelFunc
+	started                  bool
+	closed                   bool
 	deathHandler             func(context.Context, DeathEvent) error
 	snapshotObserver         func(context.Context, sim.Snapshot)
 	deathQueue               chan DeathEvent
@@ -465,8 +465,8 @@ func newManagerWithMaps(keys []sim.ZoneKey, queueSize, maxPlayersPerZone int, ma
 
 	manager := &Manager{
 		zones: make(map[sim.ZoneKey]*managedZone), maps: maps, keys: ordered,
-		runtimeKeys:       make(map[sim.ZoneKey]struct{}),
-		owners:            make(map[sim.CharacterID]OwnershipLease),
+		runtimeKeys:            make(map[sim.ZoneKey]struct{}),
+		owners:                 make(map[sim.CharacterID]OwnershipLease),
 		maxPlayersPerZone:      maxPlayersPerZone,
 		deathQueue:             make(chan DeathEvent, 256),
 		captureQueue:           make(chan CaptureEvent, 256),

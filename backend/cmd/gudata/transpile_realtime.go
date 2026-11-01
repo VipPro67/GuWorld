@@ -209,7 +209,7 @@ func cmdTranspileRealtimeGu(args []string) error {
 							Type:  "DAMAGE",
 							Value: dmgVal,
 						})
-					} else {
+					} else if custom.StatusID == "" && custom.ShieldBase == 0 && custom.HealBase == 0 {
 						profile.Active.Effects = append(profile.Active.Effects, realtimeeffects.EffectProfile{
 							Type:  "DAMAGE",
 							Value: scaleMMODamage(float64(rank*20), rank),
@@ -887,6 +887,10 @@ func applyCustomSkillProfile(active *realtimeeffects.ActiveProfile, custom model
 	}
 	if custom.MoveDistance > 0 {
 		active.MoveDistance = custom.MoveDistance
+		if custom.MoveDurationMs > 0 {
+			active.MoveDurationMS = uint64(custom.MoveDurationMs)
+		}
+		active.MoveBehavior = custom.MoveBehavior
 	}
 	if custom.KnockbackDist > 0 {
 		active.KnockbackDistance = custom.KnockbackDist
@@ -1036,7 +1040,10 @@ func applyCustomSkillProfile(active *realtimeeffects.ActiveProfile, custom model
 		if maxStacks == 0 {
 			maxStacks = 1
 		}
-		debuff := true
+		debuff := custom.StatusID != "HASTE"
+		if custom.StatusDebuff != nil {
+			debuff = *custom.StatusDebuff
+		}
 		found := false
 		for idx := range active.Effects {
 			if active.Effects[idx].Type == "STATUS" {

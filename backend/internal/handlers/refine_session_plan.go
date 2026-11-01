@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"os"
 	mrand "math/rand"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -63,12 +63,12 @@ type RefinePlanStepConfig struct {
 }
 
 type RefinePlanStep struct {
-	I           int                 `json:"i"`
-	Type        string              `json:"type"`
-	Seed        string              `json:"seed"`
-	Nonce       string              `json:"nonce"`
-	WindowStart time.Time           `json:"window_start"`
-	WindowEnd   time.Time           `json:"window_end"`
+	I           int                  `json:"i"`
+	Type        string               `json:"type"`
+	Seed        string               `json:"seed"`
+	Nonce       string               `json:"nonce"`
+	WindowStart time.Time            `json:"window_start"`
+	WindowEnd   time.Time            `json:"window_end"`
 	Config      RefinePlanStepConfig `json:"config"`
 }
 
@@ -225,7 +225,7 @@ func buildRefinePlan(stage *models.RefineStageTemplate, recipe *models.RefiningR
 			step.Config = RefinePlanStepConfig{
 				Symbols:       symbols,
 				DisplayMs:     stage.SequenceDisplayMs,
-				TargetInputMs: stage.SequenceLength*(stage.SequenceDisplayMs+stage.SequenceInputMs),
+				TargetInputMs: stage.SequenceLength * (stage.SequenceDisplayMs + stage.SequenceInputMs),
 			}
 		case RefineStepTap:
 			center := 0.2 + rng.Float64()*0.6
@@ -241,8 +241,6 @@ func buildRefinePlan(stage *models.RefineStageTemplate, recipe *models.RefiningR
 	}
 	return plan, nil
 }
-
-
 
 // debugRefinePlan enables temporary instrumentation of plan building.
 var debugRefinePlan = len(os.Getenv("REFINE_PLAN_DEBUG")) > 0
@@ -442,4 +440,3 @@ func loadRefineDecisionsDB(q refineRowsQuerier) ([]refineDecisionRow, error) {
 	}
 	return out, rows.Err()
 }
-

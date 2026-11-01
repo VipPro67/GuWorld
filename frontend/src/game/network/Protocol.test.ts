@@ -83,6 +83,19 @@ test("parseWorldWelcomePayload validates matching owner baseline and float mana"
     entity_id: "player-admin",
     entity_revision: 2,
     baseline_id: 1,
+    skills: [{
+      slot: 1,
+      id: "dash",
+      name: "Lướt",
+      mode: "DIRECTION",
+      mana_cost: 10,
+      range: 6,
+      cooldown_ticks: 20,
+      windup_ticks: 2,
+      move_distance: 4,
+      move_duration_ticks: 6,
+      move_behavior: "IMPACT",
+    }],
     snapshot: {
       tick: 50,
       ack_seq: 1,
@@ -108,4 +121,9 @@ test("parseWorldWelcomePayload validates matching owner baseline and float mana"
   assert.equal(parsed.entity_id, "player-admin");
   assert.equal(parsed.movement_speed, 5.6);
   assert.equal(parsed.snapshot.entities[0].mana, 42.123);
+  assert.deepEqual(parsed.skills?.[0] && {
+    distance: parsed.skills[0].move_distance,
+    duration: parsed.skills[0].move_duration_ticks,
+    behavior: parsed.skills[0].move_behavior,
+  }, { distance: 4, duration: 6, behavior: "IMPACT" });
 });

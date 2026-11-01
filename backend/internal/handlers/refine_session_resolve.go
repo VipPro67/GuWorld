@@ -133,13 +133,15 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 			}
 		}
 		newGuInstance = models.GuInstance{
-			InstanceID: uuid.New().String(),
-			GuID:       session.TargetGuID,
-			Rank:       session.TargetRank,
-			Hunger:     100,
-			Status:     "ACTIVE",
-			Equipped:   false,
-			IsVital:    len(vitalIDs) > 0,
+			InstanceID:         uuid.New().String(),
+			GuID:               session.TargetGuID,
+			Rank:               session.TargetRank,
+			Hunger:             100,
+			RefinementProgress: 100,
+			Durability:         100,
+			Status:             "ACTIVE",
+			Equipped:           false,
+			IsVital:            len(vitalIDs) > 0,
 		}
 		// Savepoint around the new-Gu insert for immortal-rank targets: a
 		// concurrent immortal insert elsewhere must degrade this session to
@@ -204,14 +206,9 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 				newLevel := gamefx.PathMasteryLevel(player.PathMasteries["refinement"])
 				msg.WriteString(fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái Luyện Đạo (Cảnh giới: %s).", gain, gamefx.PathMasteryLevelName(newLevel)))
 			}
-			if newGuInstance.Rank >= 6 {
-				guName := newGuInstance.GuID
-				if targetSpec, ok := models.GetGu(newGuInstance.GuID, newGuInstance.Rank); ok {
-					guName = targetSpec.Name
-				}
-				message := fmt.Sprintf("Đạo hữu %s đã luyện chế thành công Cổ Trùng [%s] R%d!", player.Username, guName, newGuInstance.Rank)
-				_ = SendSystemMessage("world", sql.NullString{}, message)
-			}
+			// NOTE: the world-chat announcement for R6+ is deliberately sent
+			// AFTER commit (see post-commit section below) — a rolled-back
+			// resolve must never broadcast.
 		}
 	default: // FAIL_NORMAL / FAIL_SAFE / FAIL_BACKFIRE
 		if isUniqueImmortalFail {
@@ -352,11 +349,6 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 		}
 	}
 
-	statusesRaw, err := player.Statuses.Value()
-	if err != nil {
-		return nil, fmt.Errorf("serialize statuses: %w", err)
-	}
-
 	// Safety net: nothing selected stays locked after resolve.
 	if len(session.SelectedGuIDs) > 0 {
 		if _, err := tx.Exec(`UPDATE player_gu SET is_locked=false, updated_at=NOW() WHERE id = ANY($1::text[])`,
@@ -365,13 +357,8 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 		}
 	}
 
-	if _, err := tx.Exec(`
-		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7, path_masteries = $8, soul_hp = $9, statuses = $10
-		WHERE id = $11`,
-		player.PrimevalStones, player.ImmortalStones, pq.Array(player.EquippedGus), player.HP, player.MaxMana,
-		player.CurrentMana, player.HumanQi, player.PathMasteries, player.SoulHP, statusesRaw, player.ID); err != nil {
-		return nil, fmt.Errorf("update player: %w", err)
+	if err := updateRefinePlayerResources(tx, &player); err != nil {
+		return nil, fmt.Errorf("serialize/update player: %w", err)
 	}
 
 	stepScores := make([]float64, session.Plan.N)
@@ -438,6 +425,18 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 	}
 	notify.Send(db.DB, player.ID, "SYSTEM", notifyTitle, msg.String())
 
+	// World-chat announcement for R6+ immortal Gu — only after the resolve has
+	// committed, so a rolled-back attempt can never broadcast twice (the
+	// infinite chat-spam seen when resolve failed past this point pre-refactor).
+	if outcome == OutcomeSuccess && newGuInstance.Rank >= 6 && newGuInstance.InstanceID != "" {
+		announceName := newGuInstance.GuID
+		if targetSpec, ok := models.GetGu(newGuInstance.GuID, newGuInstance.Rank); ok {
+			announceName = targetSpec.Name
+		}
+		message := fmt.Sprintf("Đạo hữu %s đã luyện chế thành công Cổ Trùng [%s] R%d!", player.Username, announceName, newGuInstance.Rank)
+		_ = SendSystemMessage("world", sql.NullString{}, message)
+	}
+
 	targetName := session.TargetGuID
 	if targetSpec, ok := models.GetGu(session.TargetGuID, session.TargetRank); ok {
 		targetName = targetSpec.Name
@@ -481,6 +480,26 @@ func clamp01(v float64) float64 {
 func (s *refineSessionRow) playerUUID() uuid.UUID {
 	id, _ := uuid.Parse(s.PlayerID)
 	return id
+}
+
+// updateRefinePlayerResources persists the player-side resource changes after
+// a refine settles (quick path and timed session share this exact shape).
+// equipped_gus is a JSONB column: it must be written through EquippedGusList's
+// Valuer (JSON), not as a Postgres array literal.
+func updateRefinePlayerResources(tx *sql.Tx, player *models.Player) error {
+	statusesRaw, err := player.Statuses.Value()
+	if err != nil {
+		return fmt.Errorf("serialize statuses: %w", err)
+	}
+	if _, err := tx.Exec(`
+		UPDATE players
+		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7, path_masteries = $8, soul_hp = $9, statuses = $10
+		WHERE id = $11`,
+		player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana,
+		player.CurrentMana, player.HumanQi, player.PathMasteries, player.SoulHP, statusesRaw, player.ID); err != nil {
+		return err
+	}
+	return nil
 }
 
 // updateVitalGusDying marks vital ingredient Gu into Hấp Hối (unlocked).

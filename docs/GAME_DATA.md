@@ -533,7 +533,12 @@ không bị lặp trong hồ sơ chiêu. Để trống trường này nếu Cổ
 | `projectile_speed` | DOUBLE | 0 = đánh tức thời; >0 = đạn bay (ô/giây) |
 | `pierce` | BOOL | Đạn/tia xuyên qua nhiều mục tiêu |
 | `max_targets` | INT | Số mục tiêu tối đa mỗi lần trúng |
-| `move_distance` | DOUBLE | Lướt/dịch chuyển tức thời (ô); 0 = không |
+| `move_distance` | DOUBLE | Quãng lướt realtime (ô); 0 = không |
+| `move_duration_ms` | INT | Thời gian lướt; bắt buộc khi `move_distance` > 0 |
+| `move_behavior` | VARCHAR | `MOVE_ONLY` (chỉ di chuyển) hoặc `IMPACT` (dừng ở địch đầu tiên và gây sát thương) |
+| `status_move_multiplier` | DOUBLE | Hệ số chạy của `STATUS`; >1 là Tăng Tốc |
+| `status_debuff` | BOOL | `false` cho buff Tăng Tốc |
+| `status_stack_policy`, `status_max_stacks` | VARCHAR, INT | Tăng Tốc dùng `REFRESH` và `1` |
 | `knockback_distance` | DOUBLE | Đẩy lùi mục tiêu khi trúng đòn (ô); 0 = không |
 | `player_atk_ratio` | DOUBLE | Tỷ lệ hưởng theo công kích nhân vật (% Base Attack, mặc định 0.5) |
 | `gu_power_ratio` | DOUBLE | Tỷ lệ hưởng theo uy lực Cổ (% Base Gu Damage, mặc định 1.0) |
@@ -544,7 +549,8 @@ Quy ước chọn mode theo hình:
 - `DIRECTION` + `LINE` → skillshot xuyên (đạn bay hoặc tia tức thời).
 - `GROUND` + `CIRCLE` → AoE đặt xuống đất, có `cast_time_ms` thì người chơi né được.
 - `DIRECTION` + `CONE` → sóng/quạt.
-- `GROUND` + `SINGLE` + `move_distance` > 0 → lướt tới điểm.
+- Profile có `move_distance` > 0 phải ghi rõ `move_duration_ms` và `move_behavior`; `IMPACT` dùng hiệu ứng `DAMAGE` dương.
+- Tăng Tốc dùng `cast_mode: SELF`, `status_id: HASTE`, `duration_ms`, `status_move_multiplier` > 1, `status_debuff: false`, `status_stack_policy: REFRESH`, `status_max_stacks: 1`. Từng dòng Cổ tự ghi giá trị theo Rank.
 - `SELF` → tự buff (khiên/hồi), bắn ngay không cần ngắm.
 
 Cơ chế hiệu ứng thế giới mở (Realtime Status Effects):

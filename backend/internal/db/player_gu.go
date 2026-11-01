@@ -43,21 +43,25 @@ type QueryExecer interface {
 // Mirrors the aperture capacity enforced by the EquipGu handler.
 const MaxEquippedGus = 60
 
-const playerGuColumns = `id, gu_id, gu_rank, hunger, state, equipped, is_vital, integration_time, equipped_at, growth_hours`
+const playerGuColumns = `id, gu_id, gu_rank, hunger, refinement_progress, durability, state, equipped, is_vital, integration_time, equipped_at, growth_hours`
 
 func scanGuRow(rows interface{ Scan(...any) error }) (models.GuInstance, error) {
 	var (
-		gu              models.GuInstance
-		hunger          float64
-		integrationTime float64
-		equippedAt      sql.NullTime
-		growthHours     float64
+		gu                 models.GuInstance
+		hunger             float64
+		refinementProgress float64
+		durability         float64
+		integrationTime    float64
+		equippedAt         sql.NullTime
+		growthHours        float64
 	)
-	if err := rows.Scan(&gu.InstanceID, &gu.GuID, &gu.Rank, &hunger, &gu.Status,
+	if err := rows.Scan(&gu.InstanceID, &gu.GuID, &gu.Rank, &hunger, &refinementProgress, &durability, &gu.Status,
 		&gu.Equipped, &gu.IsVital, &integrationTime, &equippedAt, &growthHours); err != nil {
 		return gu, err
 	}
 	gu.Hunger = int(hunger)
+	gu.RefinementProgress = refinementProgress
+	gu.Durability = durability
 	gu.IntegrationTime = integrationTime
 	if equippedAt.Valid {
 		t := equippedAt.Time
@@ -111,15 +115,25 @@ func AddPlayerGu(tx QueryExecer, playerID string, gu models.GuInstance) error {
 	if gu.EquippedAt != nil {
 		equippedAt = *gu.EquippedAt
 	}
+	refine := gu.RefinementProgress
+	if refine <= 0 && gu.Status != "UNREFINED" {
+		refine = 100
+	}
+	dura := gu.Durability
+	if dura <= 0 && gu.Status != "DEAD" && gu.Status != "DAMAGED" {
+		dura = 100
+	}
 	_, err := tx.Exec(`
-		INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
-		VALUES ($1,$2,$3,$4,$4,1,$5,$6,'INVENTORY',false,$7,$8,$9,$10,$11)
+		INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, refinement_progress, durability, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
+		VALUES ($1,$2,$3,$4,$4,1,$5,$6,$7,$8,'INVENTORY',false,$9,$10,$11,$12,$13)
 		ON CONFLICT (id) DO UPDATE SET
 			player_id = EXCLUDED.player_id,
 			gu_id = EXCLUDED.gu_id,
 			gu_rank = EXCLUDED.gu_rank,
 			rank = EXCLUDED.rank,
 			hunger = EXCLUDED.hunger,
+			refinement_progress = EXCLUDED.refinement_progress,
+			durability = EXCLUDED.durability,
 			state = EXCLUDED.state,
 			equipped = EXCLUDED.equipped,
 			is_vital = EXCLUDED.is_vital,
@@ -127,7 +141,7 @@ func AddPlayerGu(tx QueryExecer, playerID string, gu models.GuInstance) error {
 			equipped_at = EXCLUDED.equipped_at,
 			growth_hours = EXCLUDED.growth_hours,
 			updated_at = NOW()`,
-		gu.InstanceID, playerID, gu.GuID, gu.Rank, gu.Hunger, gu.Status,
+		gu.InstanceID, playerID, gu.GuID, gu.Rank, gu.Hunger, refine, dura, gu.Status,
 		gu.Equipped, gu.IsVital, gu.IntegrationTime, equippedAt, gu.GrowthHours)
 	return err
 }
@@ -204,6 +218,8 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 	n := len(gus)
 	ids := make([]string, n)
 	hunger := make([]int, n)
+	refineProgress := make([]float64, n)
+	durability := make([]float64, n)
 	states := make([]string, n)
 	equipped := make([]bool, n)
 	vital := make([]bool, n)
@@ -214,6 +230,16 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 	for i, gu := range gus {
 		ids[i] = gu.InstanceID
 		hunger[i] = gu.Hunger
+		refine := gu.RefinementProgress
+		if refine <= 0 && gu.Status != "UNREFINED" {
+			refine = 100
+		}
+		refineProgress[i] = refine
+		dura := gu.Durability
+		if dura <= 0 && gu.Status != "DEAD" && gu.Status != "DAMAGED" {
+			dura = 100
+		}
+		durability[i] = dura
 		states[i] = gu.Status
 		equipped[i] = gu.Equipped
 		vital[i] = gu.IsVital
@@ -226,6 +252,8 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 
 	query := `UPDATE player_gu AS pg SET
 		hunger = u.hunger,
+		refinement_progress = u.refinement_progress,
+		durability = u.durability,
 		state = u.state,
 		equipped = u.equipped,
 		is_vital = u.is_vital,
@@ -236,17 +264,19 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 	FROM (
 		SELECT unnest($1::text[]) AS id,
 		       unnest($2::int[]) AS hunger,
-		       unnest($3::text[]) AS state,
-		       unnest($4::bool[]) AS equipped,
-		       unnest($5::bool[]) AS is_vital,
-		       unnest($6::float8[]) AS integration_time,
-		       NULLIF(unnest($7::text[]), '')::timestamptz AS equipped_at,
-		       unnest($8::float8[]) AS growth_hours
-	) AS u(id, hunger, state, equipped, is_vital, integration_time, equipped_at, growth_hours)
+		       unnest($3::float8[]) AS refinement_progress,
+		       unnest($4::float8[]) AS durability,
+		       unnest($5::text[]) AS state,
+		       unnest($6::bool[]) AS equipped,
+		       unnest($7::bool[]) AS is_vital,
+		       unnest($8::float8[]) AS integration_time,
+		       NULLIF(unnest($9::text[]), '')::timestamptz AS equipped_at,
+		       unnest($10::float8[]) AS growth_hours
+	) AS u(id, hunger, refinement_progress, durability, state, equipped, is_vital, integration_time, equipped_at, growth_hours)
 	WHERE pg.id = u.id`
 
 	_, err := tx.Exec(query,
-		pq.Array(ids), pq.Array(hunger), pq.Array(states),
+		pq.Array(ids), pq.Array(hunger), pq.Array(refineProgress), pq.Array(durability), pq.Array(states),
 		pq.Array(equipped), pq.Array(vital), pq.Array(intTimes), pq.Array(equippedAts), pq.Array(growths))
 	return err
 }
@@ -368,6 +398,7 @@ func SyncPlayerGus(tx *sql.Tx, playerID string, before models.GuInventory, after
 
 func sameGuInstance(a, b models.GuInstance) bool {
 	if a.GuID != b.GuID || a.Rank != b.Rank || a.Hunger != b.Hunger ||
+		a.RefinementProgress != b.RefinementProgress || a.Durability != b.Durability ||
 		a.Status != b.Status || a.Equipped != b.Equipped || a.IsVital != b.IsVital ||
 		a.IntegrationTime != b.IntegrationTime || a.GrowthHours != b.GrowthHours {
 		return false
@@ -387,14 +418,26 @@ func UpdatePlayerGu(tx Execer, gu models.GuInstance) error {
 	if gu.EquippedAt != nil {
 		equippedAt = *gu.EquippedAt
 	}
+	refine := gu.RefinementProgress
+	if refine <= 0 && gu.Status != "UNREFINED" {
+		refine = 100
+	}
+	dura := gu.Durability
+	if dura <= 0 && gu.Status != "DEAD" && gu.Status != "DAMAGED" {
+		dura = 100
+	}
 	_, err := tx.Exec(`
 		UPDATE player_gu SET
-			gu_id = $2, gu_rank = $3, rank = $3, hunger = $4, state = $5,
-			equipped = $6, is_vital = $7, integration_time = $8, equipped_at = $9, growth_hours = $10,
+			gu_id = $2, gu_rank = $3, rank = $3, hunger = $4,
+			refinement_progress = $5, durability = $6,
+			state = $7, equipped = $8, is_vital = $9,
+			integration_time = $10, equipped_at = $11, growth_hours = $12,
 			updated_at = NOW()
 		WHERE id = $1`,
-		gu.InstanceID, gu.GuID, gu.Rank, gu.Hunger, gu.Status,
-		gu.Equipped, gu.IsVital, gu.IntegrationTime, equippedAt, gu.GrowthHours)
+		gu.InstanceID, gu.GuID, gu.Rank, gu.Hunger,
+		refine, dura,
+		gu.Status, gu.Equipped, gu.IsVital,
+		gu.IntegrationTime, equippedAt, gu.GrowthHours)
 	return err
 }
 
@@ -410,6 +453,8 @@ func AddPlayerGusBulk(tx Execer, playerID string, gus []models.GuInstance) error
 	guIDs := make([]string, n)
 	ranks := make([]int, n)
 	hunger := make([]int, n)
+	refineProgress := make([]float64, n)
+	durabilities := make([]float64, n)
 	states := make([]string, n)
 	equipped := make([]bool, n)
 	vital := make([]bool, n)
@@ -422,6 +467,16 @@ func AddPlayerGusBulk(tx Execer, playerID string, gus []models.GuInstance) error
 		guIDs[i] = gu.GuID
 		ranks[i] = gu.Rank
 		hunger[i] = gu.Hunger
+		refine := gu.RefinementProgress
+		if refine <= 0 && gu.Status != "UNREFINED" {
+			refine = 100
+		}
+		refineProgress[i] = refine
+		dura := gu.Durability
+		if dura <= 0 && gu.Status != "DEAD" && gu.Status != "DAMAGED" {
+			dura = 100
+		}
+		durabilities[i] = dura
 		states[i] = gu.Status
 		equipped[i] = gu.Equipped
 		vital[i] = gu.IsVital
@@ -434,12 +489,12 @@ func AddPlayerGusBulk(tx Execer, playerID string, gus []models.GuInstance) error
 		}
 	}
 
-	query := `INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
-		SELECT unnest($1::text[]), $2, unnest($3::text[]), unnest($4::int[]), unnest($4::int[]), 1, unnest($5::int[]), unnest($6::text[]), 'INVENTORY', false, unnest($7::bool[]), unnest($8::bool[]), unnest($9::float[]), NULLIF(unnest($10::text[]), '')::timestamptz, unnest($11::float[])`
+	query := `INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, refinement_progress, durability, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
+		SELECT unnest($1::text[]), $2, unnest($3::text[]), unnest($4::int[]), unnest($4::int[]), 1, unnest($5::int[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::text[]), 'INVENTORY', false, unnest($9::bool[]), unnest($10::bool[]), unnest($11::float8[]), NULLIF(unnest($12::text[]), '')::timestamptz, unnest($13::float8[])`
 
 	_, err := tx.Exec(query,
 		pq.Array(ids), playerID,
-		pq.Array(guIDs), pq.Array(ranks), pq.Array(hunger), pq.Array(states),
+		pq.Array(guIDs), pq.Array(ranks), pq.Array(hunger), pq.Array(refineProgress), pq.Array(durabilities), pq.Array(states),
 		pq.Array(equipped), pq.Array(vital), pq.Array(intTimes),
 		pq.Array(equippedAts), pq.Array(growths))
 	return err
@@ -463,6 +518,8 @@ func GuInventoryAggregate(playerRef string) string {
 		'gu_id', pg.gu_id,
 		'rank', pg.gu_rank,
 		'hunger', pg.hunger::int,
+		'refinement_progress', pg.refinement_progress,
+		'durability', pg.durability,
 		'status', pg.state,
 		'equipped', pg.equipped,
 		'is_vital', pg.is_vital,
@@ -481,6 +538,8 @@ func GuInventoryAggregateEquipped(playerRef string) string {
 		'gu_id', pg.gu_id,
 		'rank', pg.gu_rank,
 		'hunger', pg.hunger::int,
+		'refinement_progress', pg.refinement_progress,
+		'durability', pg.durability,
 		'status', pg.state,
 		'equipped', pg.equipped,
 		'is_vital', pg.is_vital,

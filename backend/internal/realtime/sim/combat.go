@@ -290,6 +290,10 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 		reject("unknown_skill")
 		return
 	}
+	if skill.MoveDistance > 0 && caster.dash != nil {
+		reject("already_dashing")
+		return
+	}
 	if command.Mode != skill.Mode {
 		reject("wrong_target_mode")
 		return
@@ -330,7 +334,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 	case combat.ModeTarget:
 		if command.TargetID != "" {
 			target := w.entities[command.TargetID]
-			if target == nil || !w.canApplySkill(caster, target, skill) {
+			if target == nil || (skill.MoveDistance == 0 && !w.canApplySkill(caster, target, skill)) {
 				reject("invalid_target")
 				return
 			}
@@ -338,7 +342,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 				reject("out_of_range")
 				return
 			}
-		} else if math.Hypot(command.Aim.X, command.Aim.Y) <= 0.01 {
+		} else if skill.MoveDistance == 0 && math.Hypot(command.Aim.X, command.Aim.Y) <= 0.01 {
 			reject("invalid_aim")
 			return
 		} else {
@@ -354,20 +358,43 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 			return
 		}
 	case combat.ModeDirection:
-		if math.Hypot(command.Aim.X, command.Aim.Y) <= 0.01 {
+		if skill.MoveDistance == 0 && math.Hypot(command.Aim.X, command.Aim.Y) <= 0.01 {
 			reject("invalid_aim")
 			return
 		}
 	}
-	if (skill.GuInstanceID != "" || len(skill.GuComponentIDs) > 0) && caster.Combat.GuHunger[skill.Slot] < 1 {
+	if skill.MoveDistance > 0 {
+		aim := command.Aim
+		if math.Hypot(aim.X, aim.Y) <= 0.01 && command.TargetID != "" {
+			if target := w.entities[command.TargetID]; target != nil {
+				aim = Vec2{X: target.Transform.Position.X - caster.Transform.Position.X, Y: target.Transform.Position.Y - caster.Transform.Position.Y}
+			}
+		}
+		if math.Hypot(aim.X, aim.Y) <= 0.01 && skill.Mode == combat.ModeGround {
+			aim = Vec2{X: command.Point.X - caster.Transform.Position.X, Y: command.Point.Y - caster.Transform.Position.Y}
+		}
+		if math.Hypot(aim.X, aim.Y) <= 0.01 {
+			aim = caster.moveIntent
+		}
+		if math.Hypot(aim.X, aim.Y) <= 0.01 {
+			aim = caster.lastDirection
+		}
+		length := math.Hypot(aim.X, aim.Y)
+		if length <= 0.01 {
+			reject("invalid_aim")
+			return
+		}
+		pending.Aim = Vec2{X: aim.X / length, Y: aim.Y / length}
+	}
+	if (skill.GuInstanceID != "" || len(skill.GuComponentIDs) > 0) && caster.Combat.GuHunger[skill.Slot] < combat.DefaultGuHungerCostPerCast {
 		reject("gu_exhausted")
 		return
 	}
-	// Gu and composite killer move casts consume one hunger from every required
+	// Gu and composite killer move casts consume DefaultGuHungerCostPerCast (0.1) hunger from every required
 	// Gu on an attempt, before backlash and the mana check. The zone keeps the
 	// balances until the next atomic player checkpoint settles usage by instance.
 	if skill.GuInstanceID != "" || len(skill.GuComponentIDs) > 0 {
-		caster.Combat.GuHunger[skill.Slot]--
+		caster.Combat.GuHunger[skill.Slot] = math.Max(0, caster.Combat.GuHunger[skill.Slot]-combat.DefaultGuHungerCostPerCast)
 		caster.Combat.GuUses[skill.Slot]++
 		caster.Revision++
 	}
@@ -406,6 +433,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 		Type: combat.EventCastAccepted, SourceID: string(caster.ID), TargetID: string(command.TargetID),
 		SkillID: skill.ID, SkillName: skill.Name, X: pending.Point.X, Y: pending.Point.Y, DurationTicks: skill.WindupTicks,
 		CastVFX: skill.Visuals.CastVFX, ProjectileVFX: skill.Visuals.ProjectileVFX, ImpactVFX: skill.Visuals.ImpactVFX,
+		DashDirX: pending.Aim.X, DashDirY: pending.Aim.Y, DashDurationTicks: skill.MoveDurationTicks,
 	})
 }
 
@@ -632,22 +660,22 @@ func (w *World) startCaptureLocked(caster *Entity, command CaptureCommand) {
 	windupTicks := uint64(60) // 3.0s
 	caster.Combat.Pending = &PendingCast{
 		Skill: combat.Skill{
-			ID: "SKILL_ENSLAVE_CHANNELING",
-			Name: "Nô Thú Kết Ấn",
+			ID:             "SKILL_ENSLAVE_CHANNELING",
+			Name:           "Nô Thú Kết Ấn",
 			MovementPolicy: "ROOT",
 		},
-		TargetID: target.ID,
+		TargetID:    target.ID,
 		ResolveTick: w.tick + windupTicks,
-		Seq: command.Seq,
-		IsCapture: true,
+		Seq:         command.Seq,
+		IsCapture:   true,
 		CaptureGuID: command.GuID,
 	}
 	caster.Revision++
 
 	w.emitEvent(combat.Event{
-		Type: combat.EventCaptureStarted,
-		SourceID: string(caster.ID),
-		TargetID: string(target.ID),
+		Type:          combat.EventCaptureStarted,
+		SourceID:      string(caster.ID),
+		TargetID:      string(target.ID),
 		DurationTicks: windupTicks,
 	})
 }

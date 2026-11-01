@@ -127,6 +127,14 @@ func EquipGu(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot equip a DEAD Gu bug"})
 		return
 	}
+	if req.Equip && (targetGu.Status == "DAMAGED" || targetGu.Durability <= 0) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đã bị trọng thương hư hại (độ bền 0), cần tu bổ trước khi trang bị."})
+		return
+	}
+	if req.Equip && targetGu.RefinementProgress < 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng chưa được luyện hóa hoàn tất (tiến độ cần đạt 100%)."})
+		return
+	}
 
 	spec, specOk := models.GetGu(targetGu.GuID, targetGu.Rank)
 	if req.Equip && targetGu.Rank > player.Rank && (targetGu.IsVital || (specOk && strings.EqualFold(spec.Type, "PASSIVE"))) {

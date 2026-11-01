@@ -101,12 +101,12 @@ func computeBeastPower(mon models.MonsterTemplate, rank, subRank int) float64 {
 }
 
 type sectGuardianProfile struct {
-	Name         string
-	Rank         int
-	SubRank      int
-	MaxHP        float64
-	BaseAttack   float64
-	BaseDefense  float64
+	Name        string
+	Rank        int
+	SubRank     int
+	MaxHP       float64
+	BaseAttack  float64
+	BaseDefense float64
 }
 
 // sectGuardianProfileFor creates the realtime guardian profile whose stats

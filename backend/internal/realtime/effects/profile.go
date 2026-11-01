@@ -18,7 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
 )
 
-const ProfileSchemaVersion = 1
+const ProfileSchemaVersion = 2
 
 const (
 	MaxProfileFileBytes = 16 << 20
@@ -72,6 +72,8 @@ type ActiveProfile struct {
 	MaxTargets        int                `json:"max_targets,omitempty"`
 	IsToggle          bool               `json:"is_toggle,omitempty"`
 	MoveDistance      float64            `json:"move_distance,omitempty"`
+	MoveDurationMS    uint64             `json:"move_duration_ms,omitempty"`
+	MoveBehavior      string             `json:"move_behavior,omitempty"`
 	KnockbackDistance float64            `json:"knockback_distance,omitempty"`
 	PlayerAtkRatio    float64            `json:"player_atk_ratio,omitempty"`
 	GuPowerRatio      float64            `json:"gu_power_ratio,omitempty"`
@@ -386,6 +388,9 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 	if !combat.ValidMovementPolicy(active.MovementPolicy) {
 		return nil, fmt.Errorf("%s: unsupported movement_policy %q", path, active.MovementPolicy)
 	}
+	if !finiteFloat(active.MoveDistance) || active.MoveDistance < 0 || active.MoveDistance > combat.MaxCastRangeUnits || (active.MoveDistance > 0 && (active.MoveDurationMS < 50 || active.MoveDurationMS > 5_000 || (active.MoveBehavior != "MOVE_ONLY" && active.MoveBehavior != "IMPACT"))) || (active.MoveDistance == 0 && (active.MoveDurationMS != 0 || active.MoveBehavior != "")) {
+		return nil, fmt.Errorf("%s: invalid dash distance/duration/behavior", path)
+	}
 	if active.RangeUnits > combat.MaxCastRangeUnits {
 		return nil, fmt.Errorf("%s: range exceeds %v world units", path, combat.MaxCastRangeUnits)
 	}
@@ -402,7 +407,7 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 		ManaCost: active.ManaCost, Range: active.RangeUnits,
 		WindupTicks: msToTicks(active.WindupMS), RecoveryTicks: msToTicks(active.RecoveryMS),
 		MovementPolicy: active.MovementPolicy, CooldownTicks: msToTicks(active.CooldownMS),
-		MoveDistance: active.MoveDistance, KnockbackDistance: active.KnockbackDistance,
+		MoveDistance: active.MoveDistance, MoveDurationTicks: msToTicks(active.MoveDurationMS), MoveBehavior: active.MoveBehavior, KnockbackDistance: active.KnockbackDistance,
 		PlayerAtkRatio: active.PlayerAtkRatio, GuPowerRatio: active.GuPowerRatio,
 	}
 	if slot == 8 {
@@ -483,10 +488,22 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 		}
 		compiled.Effects = append(compiled.Effects, effect)
 	}
+	if active.MoveBehavior == "IMPACT" && skill.Damage <= 0 {
+		return nil, fmt.Errorf("%s: IMPACT dash requires DAMAGE", path)
+	}
+	if active.MoveBehavior == "MOVE_ONLY" && skill.Damage > 0 {
+		return nil, fmt.Errorf("%s: MOVE_ONLY dash must not include DAMAGE", path)
+	}
+	if active.MoveBehavior == "MOVE_ONLY" && skill.StatusID != "" {
+		return nil, fmt.Errorf("%s: MOVE_ONLY dash must not include target STATUS", path)
+	}
 	switch active.Mode {
 	case combat.ModeDirection:
 		if active.Projectile == nil {
-			return nil, fmt.Errorf("%s: DIRECTION requires a projectile block", path)
+			if active.MoveDistance == 0 {
+				return nil, fmt.Errorf("%s: DIRECTION requires a projectile block or dash", path)
+			}
+			break
 		}
 		if active.Projectile.SpeedUnitsPerSec <= 0 || active.Projectile.RadiusUnits <= 0 ||
 			active.Projectile.LifetimeTicks == 0 || active.Projectile.LifetimeTicks > combat.MaxProjectileTicks {
@@ -500,7 +517,7 @@ func compileActive(path string, active ActiveProfile, slot int, guID string, ent
 		skill.SpreadAngleDeg = active.Projectile.SpreadAngleDeg
 		skill.MaxTargets = 1
 	case combat.ModeGround:
-		if active.RadiusUnits <= 0 || active.MaxTargets <= 0 || active.MaxTargets > 100 {
+		if active.MoveDistance == 0 && (active.RadiusUnits <= 0 || active.MaxTargets <= 0 || active.MaxTargets > 100) {
 			return nil, fmt.Errorf("%s: GROUND requires radius_units and max_targets 1..100", path)
 		}
 		skill.Radius = active.RadiusUnits
@@ -566,6 +583,12 @@ func validateEffect(path string, effect EffectProfile, active bool) error {
 		}
 		if effect.MoveMultiplier != nil && (*effect.MoveMultiplier < 0 || *effect.MoveMultiplier > 3.0 || !finiteFloat(*effect.MoveMultiplier)) {
 			return fmt.Errorf("%s: status move_multiplier must be 0..3", path)
+		}
+		if effect.StatusID == "HASTE" && (effect.MoveMultiplier == nil || *effect.MoveMultiplier <= 1) {
+			return fmt.Errorf("%s: HASTE requires move_multiplier > 1", path)
+		}
+		if effect.MoveMultiplier != nil && *effect.MoveMultiplier > 1 && ((effect.Debuff == nil || *effect.Debuff) || effect.StackPolicy != combat.StackRefresh || effect.MaxStacks != 1) {
+			return fmt.Errorf("%s: haste requires debuff=false, REFRESH and max_stacks=1", path)
 		}
 		if effect.ManaDrainPerSec < 0 || !finiteFloat(effect.ManaDrainPerSec) {
 			return fmt.Errorf("%s: mana_drain_per_sec must be non-negative", path)

@@ -155,6 +155,8 @@ export class WorldRuntime {
   private joinZoneResolver: (() => string | null) | null = null;
 
   private inputVector: WorldPoint = { x: 0, y: 0 };
+  private activeDash = false;
+  private dashStartTick = 0;
   private lastSentVector: WorldPoint = { x: 0, y: 0 };
   private readonly nowMs: () => number;
   private sentMovementAt = new Map<number, number>();
@@ -187,6 +189,8 @@ export class WorldRuntime {
     try {
       const welcome = await this.socket.connect(join);
       this.welcome = welcome;
+      this.activeDash = false;
+      this.dashStartTick = 0;
       this.speed = welcome.movement_speed ?? this.speed;
       this.predictionSpeed = this.speed;
       this.predictor.setSpeed(this.speed);
@@ -239,6 +243,8 @@ export class WorldRuntime {
     this.welcome = null;
     this.snapshot = null;
     this.selfId = null;
+    this.activeDash = false;
+    this.dashStartTick = 0;
     this.selectedTargetId = null;
     this.combatNotice = "";
     this.uiModal = false;
@@ -334,7 +340,9 @@ export class WorldRuntime {
       }
     }
 
-    if (this.localTarget) {
+    if (this.activeDash && this.clock.estimatedTick() >= this.dashStartTick) {
+      // Dash travel is server owned; held input is still sent for movement after it ends.
+    } else if (this.localTarget) {
       const position = this.predictor.getPosition();
       const dx = this.localTarget.x - position.x;
       const dy = this.localTarget.y - position.y;
@@ -675,6 +683,18 @@ export class WorldRuntime {
           this.combatNotice = "Nội tại ẩn kích hoạt";
         } else if (event.type === "CAST_ACCEPTED") {
           this.combatNotice = "";
+          if (event.source_id === this.selfId) {
+            const skillId = event.payload?.skill_id;
+            if (this.welcome?.skills?.some((skill) => skill.id === skillId && (skill.move_distance ?? 0) > 0)) {
+              this.activeDash = true;
+              const windup = event.payload?.duration_ticks;
+              this.dashStartTick = event.tick + (typeof windup === "number" ? windup : 0);
+            }
+          }
+        } else if (event.type === "DASH_ENDED" && event.source_id === this.selfId) {
+          this.activeDash = false;
+        } else if (event.type === "CAST_INTERRUPTED" && event.source_id === this.selfId) {
+          this.activeDash = false;
         } else if (event.type === "MOVE_TARGET_REJECTED") {
           this.localTarget = null;
           this.pendingTarget = null;
@@ -736,7 +756,9 @@ export class WorldRuntime {
           position.y += projectedY;
         }
       }
-      const correction = this.predictor.softReconcile(position, state.ackSeq, 2, 0.08);
+      const correction = this.activeDash && state.tick >= this.dashStartTick
+        ? this.predictor.softReconcile(position, state.ackSeq, 0, 1)
+        : this.predictor.softReconcile(position, state.ackSeq, 2, 0.08);
       this.lastCorrection = correction.correction;
       if (correction.snapped) this.localTarget = null;
     }

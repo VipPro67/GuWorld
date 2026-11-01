@@ -14,14 +14,14 @@ type FormSkillProfile struct {
 
 // PartialOverlayProfile defines enhancements for a Partial Transformation (e.g. Wolf Skin, Eagle Wings).
 type PartialOverlayProfile struct {
-	FormID             string
-	FormName           string
-	EnhancedBasicDmg   float64
-	BasicAttackStatus  string // e.g. "BLEED"
-	ExtraSkillSlot     int    // e.g. Slot 7 or 8
-	ExtraSkill         combat.Skill
-	SpeedMultiplier    float64
-	DefenseBonus       float64
+	FormID            string
+	FormName          string
+	EnhancedBasicDmg  float64
+	BasicAttackStatus string // e.g. "BLEED"
+	ExtraSkillSlot    int    // e.g. Slot 7 or 8
+	ExtraSkill        combat.Skill
+	SpeedMultiplier   float64
+	DefenseBonus      float64
 }
 
 // StoredSkillState captures human skills and cooldowns before metamorphosis.

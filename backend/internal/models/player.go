@@ -16,16 +16,18 @@ var ErrOptimisticLockConflict = errors.New("concurrent update detected")
 
 // GuInstance represents an individual Gu bug owned by a player.
 type GuInstance struct {
-	InstanceID      string     `json:"instance_id"`
-	GuID            string     `json:"gu_id"`
-	Rank            int        `json:"rank"`
-	Hunger          int        `json:"hunger"`
-	Status          string     `json:"status"` // "ACTIVE", "SLEEPING", "DEAD"
-	Equipped        bool       `json:"equipped"`
-	IsVital         bool       `json:"is_vital"`
-	IntegrationTime float64    `json:"integration_time,omitempty"`
-	EquippedAt      *time.Time `json:"equipped_at,omitempty"`
-	GrowthHours     float64    `json:"growth_hours,omitempty"`
+	InstanceID         string     `json:"instance_id"`
+	GuID               string     `json:"gu_id"`
+	Rank               int        `json:"rank"`
+	Hunger             int        `json:"hunger"`
+	RefinementProgress float64    `json:"refinement_progress"`
+	Durability         float64    `json:"durability"`
+	Status             string     `json:"status"` // "ACTIVE", "SLEEPING", "DEAD", "DAMAGED"
+	Equipped           bool       `json:"equipped"`
+	IsVital            bool       `json:"is_vital"`
+	IntegrationTime    float64    `json:"integration_time,omitempty"`
+	EquippedAt         *time.Time `json:"equipped_at,omitempty"`
+	GrowthHours        float64    `json:"growth_hours,omitempty"`
 }
 
 // GuInventory is a collection of GuInstances owned by a player.

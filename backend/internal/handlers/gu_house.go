@@ -362,3 +362,44 @@ func RepairGuHouse(c *gin.Context) {
 		"message":            "Đã tu sửa Tiên Cổ Ốc về trạng thái hoàn hảo!",
 	})
 }
+
+// ApplyGuHouseDamage inflicts structural damage on a Gu House's durability and transmits
+// shock damage to its core Gu instances (core_gu_instances in player_gu).
+func ApplyGuHouseDamage(tx *sql.Tx, houseID string, damage float64) (float64, error) {
+	if damage <= 0 {
+		return 0, nil
+	}
+	var currentDur float64
+	var coreBytes []byte
+	var playerID uuid.UUID
+	err := tx.QueryRow(`
+		SELECT player_id, current_durability, core_gu_instances
+		FROM player_gu_houses
+		WHERE id = $1 FOR UPDATE
+	`, houseID).Scan(&playerID, &currentDur, &coreBytes)
+	if err != nil {
+		return 0, err
+	}
+	newDur := math.Max(0, currentDur-damage)
+	if _, err := tx.Exec(`UPDATE player_gu_houses SET current_durability = $1, updated_at = NOW() WHERE id = $2`, newDur, houseID); err != nil {
+		return 0, err
+	}
+	// Shock damage transmitted to core Gu instances: 30% of house damage
+	if len(coreBytes) > 0 {
+		var coreIDs []string
+		if err := json.Unmarshal(coreBytes, &coreIDs); err == nil && len(coreIDs) > 0 {
+			guShockDamage := math.Max(1.0, damage*0.3)
+			for _, guID := range coreIDs {
+				_, _ = tx.Exec(`
+					UPDATE player_gu
+					SET durability = GREATEST(0, durability - $1),
+					    state = CASE WHEN durability - $1 <= 0 THEN 'DAMAGED' ELSE state END,
+					    equipped = CASE WHEN durability - $1 <= 0 THEN false ELSE equipped END,
+					    updated_at = NOW()
+					WHERE id = $2 AND player_id = $3
+				`, guShockDamage, guID, playerID)
+			}
+		}
+	}
+	return newDur, nil
+}
