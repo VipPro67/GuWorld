@@ -30,6 +30,22 @@ _Avoid_: Command, Behavior Profile
 Bản sao bất biến của trạng thái chiến đấu actor tại thời điểm trận đấu bắt đầu; simulator chỉ đọc snapshot này và không truy vấn Actor Instance.
 _Avoid_: Actor Instance, live combat state
 
+### Entity Companion
+Thực thể đồng hành (`COMPANION_BEAST` hoặc `VARIANT_NPC`) trong mô phỏng chiến đấu realtime (`sim.World`), liên kết với `OwnerID` người chơi, kế thừa phe phái/tổ đội và có AI thực thi lệnh chiến thuật.
+_Avoid_: EntityMonster, pet record
+
+### Nô Thú Channeling (Enslavement Channeling)
+Hành vi dẫn kênh thi triển Nô Thú Cổ lên quái hoang trong realtime khi HP dưới ngưỡng hoặc bị khống chế để bắt thú thành Actor Instance.
+_Avoid_: Turnbase capture, instant catch
+
+### Lệnh Chiến Thuật (Pet Command Stance)
+Trạng thái chỉ huy realtime mà người chơi áp dụng cho toàn bộ Companion/Minion thuộc quyền sở hữu (`Hộ Vệ / Defend`, `Tập Trung Tiêu Diệt / Focus Target`, `Thu Hồi / Follow`).
+_Avoid_: RTS micro-selection
+
+### Sát Chiêu Bầy Đàn (Swarm Summoning)
+Hành động triệu hồi một đàn thú phụ tá (Minions) tạm thời tham chiến trong khoảng thời gian có hạn, số lượng phụ thuộc vào quy mô Hồn Phách và đẳng cấp Nô Cổ.
+_Avoid_: Permanent pet clone
+
 ## Scouting, Divination & Concealment (Trinh Sát, Suy Diễn & Ẩn Thân)
 
 ### Trinh Sát Cục Bộ (Local Inspection)

@@ -164,7 +164,7 @@ const MODE_BADGE: Record<
   },
 };
 
-const frame = "border border-[#a88952]/70 bg-[#211810f5] text-[#f4e8cb] shadow-[0_8px_28px_rgba(0,0,0,.55),inset_0_1px_rgba(255,238,197,.08)] backdrop-blur-sm";
+const frame = "border border-[var(--mmo-menu-border,#a88952)]/75 bg-[var(--mmo-menu-bg,#211810)]/95 text-[var(--text-primary,#f4e8cb)] shadow-[0_8px_28px_rgba(0,0,0,.55),inset_0_1px_var(--mmo-menu-glow,rgba(255,238,197,.08))] backdrop-blur-sm";
 
 const menuGroups: Array<{ title: string; items: Array<{ label: string; icon: typeof Package; view?: string; panel?: Exclude<MMOPanel, null>; special?: "divination" | "quick-actions" | "teleport-directory" | "teleport-build"; minRank?: number }> }> = [
   { title: "Thế giới", items: [
@@ -536,11 +536,11 @@ export function MMOHud(props: MMOHudProps) {
     <div className="pointer-events-none absolute inset-0 z-20 select-none font-serif">
       {/* Player Frame: Minimized Capsule Mode (Tối ưu cho mobile khi giao tranh) */}
       {playerViewMode === "minimized" && (
-        <div className="pointer-events-auto absolute left-2 top-2 flex items-center gap-1.5 rounded-full border border-[#a88952]/70 bg-[#16100bf2] px-2 py-1 shadow-lg backdrop-blur-md text-xs text-[#f5dfab] z-20">
+        <div className="pointer-events-auto absolute left-2 top-2 flex items-center gap-1.5 rounded-full border border-[var(--mmo-menu-border,#a88952)]/75 bg-[var(--mmo-menu-bg,#16100b)]/95 px-2 py-1 shadow-lg backdrop-blur-md text-xs text-[var(--text-primary,#f5dfab)] z-20">
           <button
             type="button"
             onClick={() => props.onOpenView("character")}
-            className="h-6 w-6 rounded-full overflow-hidden border border-[#d4b478] shrink-0"
+            className="h-6 w-6 rounded-full overflow-hidden border border-[var(--mmo-menu-accent,#d4b478)] shrink-0"
             title="Mở bảng nhân vật"
           >
             {props.player?.avatar_url ? (
@@ -550,10 +550,10 @@ export function MMOHud(props: MMOHudProps) {
             )}
           </button>
           <div className="flex flex-col gap-0.5 w-16">
-            <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden border border-red-950">
+            <div className="h-1.5 w-full bg-[var(--mmo-theme-zinc-950,#0f172a)] rounded-full overflow-hidden border border-red-950">
               <div className="h-full bg-red-500 transition-[width]" style={{ width: `${pct(props.hp, props.maxHp)}%` }} />
             </div>
-            <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden border border-cyan-950">
+            <div className="h-1.5 w-full bg-[var(--mmo-theme-zinc-950,#0f172a)] rounded-full overflow-hidden border border-cyan-950">
               <div className="h-full bg-cyan-400 transition-[width]" style={{ width: `${pct(props.mana, props.maxMana)}%` }} />
             </div>
           </div>
@@ -562,7 +562,7 @@ export function MMOHud(props: MMOHudProps) {
             type="button"
             onClick={() => changePlayerViewMode("compact")}
             title="Mở rộng bảng trạng thái"
-            className="p-0.5 text-[#d8b979] hover:text-white"
+            className="p-0.5 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white"
           >
             <ChevronDown className="h-3.5 w-3.5" />
           </button>
@@ -579,7 +579,7 @@ export function MMOHud(props: MMOHudProps) {
               className="flex items-center gap-1.5 min-w-0 text-left flex-1"
               title="Mở bảng nhân vật"
             >
-              <div className="h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full border border-[#d4b478] bg-[#283522] text-xs font-bold text-amber-100 flex items-center justify-center">
+              <div className="h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full border border-[var(--mmo-menu-accent,#d4b478)] bg-[var(--mmo-theme-surface,#283522)] text-xs font-bold text-amber-100 flex items-center justify-center">
                 {props.player?.avatar_url ? (
                   <img src={props.player.avatar_url} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -587,8 +587,8 @@ export function MMOHud(props: MMOHudProps) {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-bold text-[#ffeac0]">{props.player?.username ?? "Cổ sư"}</div>
-                <div className="text-[9px] text-[#c4a979]">Chuyển {props.player?.rank ?? 1} · {props.player?.sub_rank ?? 1}</div>
+                <div className="truncate text-xs font-bold text-[var(--mmo-menu-accent,#ffeac0)]">{props.player?.username ?? "Cổ sư"}</div>
+                <div className="text-[9px] text-[var(--text-secondary,#c4a979)]">Chuyển {props.player?.rank ?? 1} · {props.player?.sub_rank ?? 1}</div>
               </div>
             </button>
             <div className="flex items-center gap-0.5 shrink-0">
@@ -597,7 +597,7 @@ export function MMOHud(props: MMOHudProps) {
                 type="button"
                 onClick={() => changePlayerViewMode("expanded")}
                 title="Mở rộng chi tiết (Tứ Trụ & Buff)"
-                className="p-1 text-[#d8b979] hover:text-white"
+                className="p-1 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white"
               >
                 <ChevronDown className="h-3.5 w-3.5" />
               </button>
@@ -605,7 +605,7 @@ export function MMOHud(props: MMOHudProps) {
                 type="button"
                 onClick={() => changePlayerViewMode("minimized")}
                 title="Thu nhỏ Capsule"
-                className="p-1 text-[#d8b979] hover:text-white"
+                className="p-1 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white"
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
@@ -614,7 +614,7 @@ export function MMOHud(props: MMOHudProps) {
 
           {/* 2 Thanh kép HP & CN */}
           <div className="mt-1.5 space-y-1 font-sans text-[9px]">
-            <div className="relative h-3 overflow-hidden rounded-full border border-[#9b6654] bg-[#2b1110]">
+            <div className="relative h-3 overflow-hidden rounded-full border border-[#9b6654] bg-[var(--mmo-theme-zinc-950,#2b1110)]">
               <div className="h-full bg-gradient-to-r from-[#8f2c29] to-[#e45e4d] transition-[width]" style={{ width: `${pct(props.hp, props.maxHp)}%` }} />
               {props.shield > 0 && (
                 <div className="absolute top-0 left-0 h-full bg-sky-400/40 border-r border-white transition-[width]" style={{ width: `${Math.min(100, (props.shield / props.maxHp) * 100)}%` }} />
@@ -623,7 +623,7 @@ export function MMOHud(props: MMOHudProps) {
                 HP {Math.round(props.hp)}/{Math.round(props.maxHp)}
               </span>
             </div>
-            <div className="relative h-3 overflow-hidden rounded-full border border-[#6b896f] bg-[#10231d]">
+            <div className="relative h-3 overflow-hidden rounded-full border border-[var(--mmo-menu-border-soft,#6b896f)] bg-[var(--mmo-theme-zinc-950,#10231d)]">
               <div className="h-full bg-gradient-to-r from-[#317764] to-[#74d4ab] transition-[width]" style={{ width: `${pct(props.mana, props.maxMana)}%` }} />
               <span className="absolute inset-0 grid place-items-center font-semibold text-white text-[8px] drop-shadow">
                 CN {formatManaCost(props.mana)}{immortal ? "" : `/${formatManaCost(props.maxMana)}`}
@@ -632,7 +632,7 @@ export function MMOHud(props: MMOHudProps) {
           </div>
 
           {/* 2 Vạch Micro HỒN & NIỆM */}
-          <div className="mt-1 grid grid-cols-2 gap-1.5 font-sans text-[8px] text-[#cdbb9b]">
+          <div className="mt-1 grid grid-cols-2 gap-1.5 font-sans text-[8px] text-[var(--text-secondary,#cdbb9b)]">
             <div className="flex items-center gap-1" title={`Hồn phách: ${Math.round(soulHp)}/${Math.round(maxSoul)} (${soulTier})`}>
               <span className="text-purple-300 font-bold">H:</span>
               <div className="flex-1 h-1.5 bg-black/60 rounded-full overflow-hidden border border-purple-900/60">
@@ -659,7 +659,7 @@ export function MMOHud(props: MMOHudProps) {
               className="flex items-center gap-2 text-left min-w-0 flex-1"
               title="Mở bảng nhân vật"
             >
-              <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-[#d4b478] bg-[#283522] text-sm font-bold text-amber-100 shadow-[0_0_0_2px_#49331f]">
+              <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-[var(--mmo-menu-accent,#d4b478)] bg-[var(--mmo-theme-surface,#283522)] text-sm font-bold text-amber-100 shadow-[0_0_0_2px_var(--mmo-theme-zinc-950,#49331f)]">
                 {props.player?.avatar_url ? (
                   <img src={props.player.avatar_url} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -667,10 +667,10 @@ export function MMOHud(props: MMOHudProps) {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-bold tracking-wide text-[#ffeac0]">
+                <div className="truncate text-[13px] font-bold tracking-wide text-[var(--mmo-menu-accent,#ffeac0)]">
                   {props.player?.username ?? "Cổ sư"}
                 </div>
-                <div className="text-[10px] text-[#c4a979]">
+                <div className="text-[10px] text-[var(--text-secondary,#c4a979)]">
                   Chuyển {props.player?.rank ?? 1} · Cảnh giới {props.player?.sub_rank ?? 1}
                 </div>
               </div>
@@ -681,7 +681,7 @@ export function MMOHud(props: MMOHudProps) {
                 type="button"
                 onClick={() => changePlayerViewMode("compact")}
                 title="Thu gọn"
-                className="p-1 text-[#d8b979] hover:text-white"
+                className="p-1 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white"
               >
                 <ChevronUp className="h-3.5 w-3.5" />
               </button>
@@ -689,7 +689,7 @@ export function MMOHud(props: MMOHudProps) {
                 type="button"
                 onClick={() => changePlayerViewMode("minimized")}
                 title="Thu nhỏ Capsule"
-                className="p-1 text-[#d8b979] hover:text-white"
+                className="p-1 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white"
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
@@ -699,7 +699,7 @@ export function MMOHud(props: MMOHudProps) {
           {/* 4 Thanh Tứ Trụ Năng Lượng */}
           <div className="mt-2 space-y-1 font-sans text-[9px]">
             {/* 1. HP (Khí Huyết) */}
-            <div className="relative h-3.5 overflow-hidden rounded-full border border-[#9b6654] bg-[#2b1110]">
+            <div className="relative h-3.5 overflow-hidden rounded-full border border-[#9b6654] bg-[var(--mmo-theme-zinc-950,#2b1110)]">
               <div
                 className="h-full bg-gradient-to-r from-[#8f2c29] to-[#e45e4d] transition-[width]"
                 style={{ width: `${pct(props.hp, props.maxHp)}%` }}
@@ -722,7 +722,7 @@ export function MMOHud(props: MMOHudProps) {
             )}
 
             {/* 2. Chân Nguyên (Mana) */}
-            <div className="relative h-3.5 overflow-hidden rounded-full border border-[#6b896f] bg-[#10231d]">
+            <div className="relative h-3.5 overflow-hidden rounded-full border border-[var(--mmo-menu-border-soft,#6b896f)] bg-[var(--mmo-theme-zinc-950,#10231d)]">
               {!immortal && (
                 <div
                   className="h-full bg-gradient-to-r from-[#317764] to-[#74d4ab] transition-[width]"
@@ -735,7 +735,7 @@ export function MMOHud(props: MMOHudProps) {
             </div>
 
             {/* 3. Hồn Phách (Linh Hồn) */}
-            <div className="relative h-3 overflow-hidden rounded-full border border-purple-900/60 bg-[#1e102a]">
+            <div className="relative h-3 overflow-hidden rounded-full border border-purple-900/60 bg-[var(--mmo-theme-zinc-950,#1e102a)]">
               <div
                 className="h-full bg-gradient-to-r from-purple-800 to-fuchsia-500 transition-[width]"
                 style={{ width: `${pct(soulHp, maxSoul)}%` }}
@@ -747,7 +747,7 @@ export function MMOHud(props: MMOHudProps) {
             </div>
 
             {/* 4. Niệm Lực (Tâm Niệm) */}
-            <div className="relative h-3 overflow-hidden rounded-full border border-amber-900/60 bg-[#25180c]">
+            <div className="relative h-3 overflow-hidden rounded-full border border-amber-900/60 bg-[var(--mmo-theme-zinc-950,#25180c)]">
               <div
                 className="h-full bg-gradient-to-r from-amber-700 to-yellow-500 transition-[width]"
                 style={{ width: `${pct(thoughts, maxThoughts)}%` }}
@@ -761,23 +761,23 @@ export function MMOHud(props: MMOHudProps) {
 
           {/* Buff & Debuff Tray */}
           {playerStatuses.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1 border-t border-[#b89a66]/20 pt-1.5">
+            <div className="mt-1.5 flex flex-wrap gap-1 border-t border-[var(--mmo-menu-border-soft,#b89a66)]/20 pt-1.5">
               {playerStatuses.map((st) => (
                 <div
                   key={st.id}
-                  className="relative flex items-center gap-0.5 rounded border border-[#a88952]/40 bg-black/60 px-1 py-0.5 text-[8px] text-[#f4e8cb]"
+                  className="relative flex items-center gap-0.5 rounded border border-[var(--mmo-menu-border-soft,#a88952)]/40 bg-black/60 px-1 py-0.5 text-[8px] text-[var(--text-primary,#f4e8cb)]"
                   title={st.source ? `${st.id} (${st.source})` : st.id}
                 >
-                  <Sparkles className="h-2.5 w-2.5 text-amber-300" />
+                  <Sparkles className="h-2.5 w-2.5 text-[var(--mmo-menu-accent,#e4b96c)]" />
                   <span className="truncate max-w-[60px]">{st.id}</span>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="mt-1.5 flex items-center justify-between border-t border-[#b89a66]/25 pt-1.5 text-[10px] text-[#dac69e]">
+          <div className="mt-1.5 flex items-center justify-between border-t border-[var(--mmo-menu-border-soft,#b89a66)]/25 pt-1.5 text-[10px] text-[var(--text-secondary,#dac69e)]">
             <span>Nguyên thạch</span>
-            <span className="font-sans font-semibold text-[#f5d381]">
+            <span className="font-sans font-semibold text-[var(--mmo-menu-accent,#f5d381)]">
               {props.player?.primeval_stones?.toLocaleString("vi-VN") ?? 0}
             </span>
           </div>
@@ -857,14 +857,14 @@ export function MMOHud(props: MMOHudProps) {
             <span className="flex items-center gap-2"><span className="mmo-paper-seal">令</span><BookOpen className="h-3.5 w-3.5" /> Cáo thị nhiệm vụ</span><span>{questsOpen ? "−" : "+"}</span>
           </button>
           {questsOpen && <button type="button" onClick={() => props.onOpenView("achievements")} className="mmo-bamboo-action mx-2 mb-2 w-[calc(100%-1rem)] px-3 py-2 text-left text-[11px]">
-            {mission ? <><div className="font-semibold text-[#3f2a19]">{mission.title ?? "Nhiệm vụ"}</div><div className="mt-1 line-clamp-2 text-[#70583c]">{mission.description ?? "Xem tiến độ nhiệm vụ"}</div><div className="mt-1 font-sans text-[10px] font-semibold text-[#875a2d]">{mission.claimable ? "Có thể nhận thưởng" : `${mission.progress ?? 0}/${mission.target ?? 0}`} · Mở sổ nhiệm vụ</div></> : "Mở sổ nhiệm vụ và thành tựu"}
+            {mission ? <><div className="font-semibold text-[var(--text-primary,#f4e8cb)]">{mission.title ?? "Nhiệm vụ"}</div><div className="mt-1 line-clamp-2 text-[var(--text-secondary,#dcc8a4)]">{mission.description ?? "Xem tiến độ nhiệm vụ"}</div><div className="mt-1 font-sans text-[10px] font-semibold text-[var(--mmo-menu-accent,#e4b96c)]">{mission.claimable ? "Có thể nhận thưởng" : `${mission.progress ?? 0}/${mission.target ?? 0}`} · Mở sổ nhiệm vụ</div></> : "Mở sổ nhiệm vụ và thành tựu"}
           </button>}
         </div>
       )}
 
       {/* Target Frame: Minimized (Ẩn luôn / Thu nhỏ) */}
       {props.target && targetViewMode === "minimized" && (
-        <div className="pointer-events-auto absolute left-2 top-[max(120px,18dvh)] md:left-1/2 md:top-[320px] md:-translate-x-1/2 xl:top-2 flex items-center gap-2 rounded-full border border-[#a88952]/60 bg-[#16100bf2] px-3 py-1 shadow-lg backdrop-blur-md text-xs text-[#f5dfab]">
+        <div className="pointer-events-auto absolute left-2 top-[max(120px,18dvh)] md:left-1/2 md:top-[320px] md:-translate-x-1/2 xl:top-2 flex items-center gap-2 rounded-full border border-[var(--mmo-menu-border,#a88952)]/75 bg-[var(--mmo-menu-bg,#16100b)]/95 px-3 py-1 shadow-lg backdrop-blur-md text-xs text-[var(--text-primary,#f5dfab)]">
           {props.target.kind === "player" ? (
             <Users className="h-3.5 w-3.5 text-sky-400" />
           ) : (
@@ -872,12 +872,12 @@ export function MMOHud(props: MMOHudProps) {
           )}
           <span className="font-semibold max-w-[130px] truncate">{props.target.name || (props.target.kind === "player" ? "Người chơi" : "Mục tiêu")}</span>
           <span className="font-sans text-[10px] text-red-300">{Math.round(props.target.hp)}/{Math.round(props.target.maxHp)}</span>
-          <div className="flex items-center gap-1 border-l border-[#a88952]/40 pl-1.5 ml-0.5">
+          <div className="flex items-center gap-1 border-l border-[var(--mmo-menu-border-soft,#a88952)]/40 pl-1.5 ml-0.5">
             <button
               type="button"
               onClick={() => changeTargetViewMode("compact")}
               title="Hiện bảng mục tiêu"
-              className="p-1 text-[#d8b979] hover:text-white transition"
+              className="p-1 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white transition"
             >
               <Eye className="h-3.5 w-3.5" />
             </button>
@@ -906,7 +906,7 @@ export function MMOHud(props: MMOHudProps) {
                   <div className="flex items-center justify-between gap-1 text-xs">
                     <span className="truncate font-semibold text-sky-200">{props.target.name || "Người chơi"}</span>
                     <div className="flex items-center gap-0.5">
-                      <button type="button" onClick={() => changeTargetViewMode("expanded")} title="Mở rộng chi tiết" className="rounded p-1 text-[#d8b979] hover:bg-white/10 hover:text-white transition"><ChevronDown className="h-3.5 w-3.5" /></button>
+                      <button type="button" onClick={() => changeTargetViewMode("expanded")} title="Mở rộng chi tiết" className="rounded p-1 text-[var(--mmo-menu-accent,#d8b979)] hover:bg-white/10 hover:text-white transition"><ChevronDown className="h-3.5 w-3.5" /></button>
                       <button type="button" onClick={() => changeTargetViewMode("minimized")} title="Ẩn bảng mục tiêu" className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 transition"><EyeOff className="h-3.5 w-3.5" /></button>
                       <button type="button" onClick={props.onClearTarget} aria-label="Bỏ mục tiêu" className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400 transition"><X className="h-3.5 w-3.5" /></button>
                     </div>
@@ -920,20 +920,20 @@ export function MMOHud(props: MMOHudProps) {
                 </div>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded bg-black/70"><div className="h-full bg-gradient-to-r from-red-600 to-rose-400" style={{ width: `${pct(props.target.hp, props.target.maxHp)}%` }} /></div>
-              <div className="mt-1 flex items-center justify-between font-sans text-[10px] text-[#cdbb9b]">
+              <div className="mt-1 flex items-center justify-between font-sans text-[10px] text-[var(--text-secondary,#cdbb9b)]">
                 <span>{Math.round(props.target.hp)}/{Math.round(props.target.maxHp)} HP{props.target.shield > 0 ? ` · Khiên ${Math.round(props.target.shield)}` : ""}</span>
-                <button type="button" onClick={() => changeTargetViewMode("expanded")} className="text-[10px] text-[#d8b979] hover:underline flex items-center gap-0.5 font-serif font-medium">Hành động ▾</button>
+                <button type="button" onClick={() => changeTargetViewMode("expanded")} className="text-[10px] text-[var(--mmo-menu-accent,#d8b979)] hover:underline flex items-center gap-0.5 font-serif font-medium">Hành động ▾</button>
               </div>
-              <div className="mt-2 grid grid-cols-4 gap-1 pt-1.5 border-t border-[#a88952]/30">
+              <div className="mt-2 grid grid-cols-4 gap-1 pt-1.5 border-t border-[var(--mmo-menu-border-soft,#a88952)]/30">
                 <button
                   type="button"
                   onClick={() => {
                     if (props.target?.name) void useGameStore.getState().fetchPlayerProfile(props.target.name);
                   }}
-                  className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded bg-[#2e2319] hover:bg-[#433324] border border-[#a88952]/40 text-[#f5dfab] text-[10px] active:scale-95 transition cursor-pointer"
+                  className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded bg-[var(--mmo-theme-surface,#2e2319)] hover:bg-[var(--mmo-theme-elevated,#433324)] border border-[var(--mmo-menu-border-soft,#a88952)]/40 text-[var(--text-primary,#f5dfab)] text-[10px] active:scale-95 transition cursor-pointer"
                   title="Xem hồ sơ người chơi"
                 >
-                  <Eye className="h-3.5 w-3.5 text-amber-300" />
+                  <Eye className="h-3.5 w-3.5 text-[var(--mmo-menu-accent,#fbbf24)]" />
                   <span>Hồ Sơ</span>
                 </button>
                 <button
@@ -974,12 +974,12 @@ export function MMOHud(props: MMOHudProps) {
           ) : (
             <div>
               <div className="flex items-center gap-2">
-                {targetArt && <span aria-label={`Ảnh ${props.target.name}`} role="img" className="h-11 w-11 shrink-0 rounded-md border border-[#a88952]/60 bg-[#302318] bg-no-repeat" style={{ backgroundImage: `url(${targetArt.src})`, backgroundSize: `${targetArt.columns * 100}% ${targetArt.rows * 100}%`, backgroundPosition: `${targetArt.column / Math.max(1, targetArt.columns - 1) * 100}% ${targetArt.row / Math.max(1, targetArt.rows - 1) * 100}%` }} />}
+                {targetArt && <span aria-label={`Ảnh ${props.target.name}`} role="img" className="h-11 w-11 shrink-0 rounded-md border border-[var(--mmo-menu-border-soft,#a88952)]/60 bg-[var(--mmo-theme-surface,#302318)] bg-no-repeat" style={{ backgroundImage: `url(${targetArt.src})`, backgroundSize: `${targetArt.columns * 100}% ${targetArt.rows * 100}%`, backgroundPosition: `${targetArt.column / Math.max(1, targetArt.columns - 1) * 100}% ${targetArt.row / Math.max(1, targetArt.rows - 1) * 100}%` }} />}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-1 text-xs">
-                    <span className="truncate font-semibold text-[#f5dfab]">{props.target.name || "Quái"}</span>
+                    <span className="truncate font-semibold text-[var(--text-primary,#f5dfab)]">{props.target.name || "Quái"}</span>
                     <div className="flex items-center gap-0.5">
-                      <button type="button" onClick={() => changeTargetViewMode("expanded")} title="Mở rộng thám trắc chi tiết" className="rounded p-1 text-[#d8b979] hover:bg-white/10 hover:text-white transition"><ChevronDown className="h-3.5 w-3.5" /></button>
+                      <button type="button" onClick={() => changeTargetViewMode("expanded")} title="Mở rộng thám trắc chi tiết" className="rounded p-1 text-[var(--mmo-menu-accent,#d8b979)] hover:bg-white/10 hover:text-white transition"><ChevronDown className="h-3.5 w-3.5" /></button>
                       <button type="button" onClick={() => changeTargetViewMode("minimized")} title="Ẩn bảng mục tiêu" className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 transition"><EyeOff className="h-3.5 w-3.5" /></button>
                       <button type="button" onClick={props.onClearTarget} aria-label="Bỏ mục tiêu" className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400 transition"><X className="h-3.5 w-3.5" /></button>
                     </div>
@@ -999,9 +999,9 @@ export function MMOHud(props: MMOHudProps) {
                 </div>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded bg-black/70"><div className="h-full bg-[#d05348]" style={{ width: `${pct(props.target.hp, props.target.maxHp)}%` }} /></div>
-              <div className="mt-1 flex items-center justify-between font-sans text-[10px] text-[#cdbb9b]">
+              <div className="mt-1 flex items-center justify-between font-sans text-[10px] text-[var(--text-secondary,#cdbb9b)]">
                 <span>{Math.round(props.target.hp)}/{Math.round(props.target.maxHp)} HP{props.target.shield > 0 ? ` · Khiên ${Math.round(props.target.shield)}` : ""}</span>
-                <button type="button" onClick={() => changeTargetViewMode("expanded")} className="text-[10px] text-[#d8b979] hover:underline flex items-center gap-0.5 font-serif font-medium">Thám trắc ▾</button>
+                <button type="button" onClick={() => changeTargetViewMode("expanded")} className="text-[10px] text-[var(--mmo-menu-accent,#d8b979)] hover:underline flex items-center gap-0.5 font-serif font-medium">Thám trắc ▾</button>
               </div>
             </div>
           )}
@@ -1141,24 +1141,24 @@ export function MMOHud(props: MMOHudProps) {
                 </div>
               </div>
 
-              <div className="mt-2 flex items-center justify-between rounded-md border border-[#a88952]/30 bg-[#251b14]/70 px-2 py-1 text-[10px]">
-                <span className="flex items-center gap-1.5 text-[#f3ddac]">
-                  <Eye className="h-3 w-3 text-amber-300" />
+              <div className="mt-2 flex items-center justify-between rounded-md border border-[var(--mmo-menu-border-soft,#a88952)]/30 bg-[var(--mmo-theme-surface,#251b14)]/70 px-2 py-1 text-[10px]">
+                <span className="flex items-center gap-1.5 text-[var(--mmo-menu-accent,#f3ddac)]">
+                  <Eye className="h-3 w-3 text-[var(--mmo-menu-accent,#fbbf24)]" />
                   <span>Thần thức:</span>
                   <strong className={investigationStatus.level === "high" ? "text-emerald-300" : investigationStatus.level === "medium" ? "text-amber-300" : "text-rose-400"}>
                     {investigationStatus.badge}
                   </strong>
                 </span>
-                <span className="text-[9px] text-[#bda87f]">Cổ Giới Chi Điển</span>
+                <span className="text-[9px] text-[var(--text-secondary,#bda87f)]">Cổ Giới Chi Điển</span>
               </div>
 
               <div className="mt-2 grid grid-cols-3 gap-1 text-center font-sans">
-                <div className="rounded-lg border border-[#a88952]/30 bg-[#2c2016]/80 p-1.5">
+                <div className="rounded-lg border border-[var(--mmo-menu-border-soft,#a88952)]/30 bg-[var(--mmo-theme-surface,#2c2016)]/80 p-1.5">
                   <div className="flex items-center justify-center gap-0.5 text-[10px] text-zinc-400">
-                    <Swords className="h-3 w-3 text-amber-400" />
+                    <Swords className="h-3 w-3 text-[var(--mmo-menu-accent,#fbbf24)]" />
                     <span>Tấn công</span>
                   </div>
-                  <div className="mt-0.5 font-bold text-xs text-amber-100">
+                  <div className="mt-0.5 font-bold text-xs text-[var(--text-primary,#fff0cd)]">
                     {investigationStatus.level === "low" ? (
                       <span className="text-zinc-500 font-normal">???</span>
                     ) : (
@@ -1166,7 +1166,7 @@ export function MMOHud(props: MMOHudProps) {
                     )}
                   </div>
                 </div>
-                <div className="rounded-lg border border-[#a88952]/30 bg-[#2c2016]/80 p-1.5">
+                <div className="rounded-lg border border-[var(--mmo-menu-border-soft,#a88952)]/30 bg-[var(--mmo-theme-surface,#2c2016)]/80 p-1.5">
                   <div className="flex items-center justify-center gap-0.5 text-[10px] text-zinc-400">
                     <Shield className="h-3 w-3 text-sky-400" />
                     <span>Giáp / Thủ</span>
@@ -1248,9 +1248,9 @@ export function MMOHud(props: MMOHudProps) {
       )}
 
       <div className={`pointer-events-auto absolute right-2 top-2 w-[124px] rounded-2xl p-1.5 sm:w-[172px] ${frame} transition-all duration-200 z-20`}>
-        <div className="flex items-center justify-between gap-1 px-1 text-[11px] text-[#f3ddac]">
+        <div className="flex items-center justify-between gap-1 px-1 text-[11px] text-[var(--mmo-menu-accent,#f3ddac)]">
           <span className="flex min-w-0 items-center gap-1 truncate" title={props.zoneId}>
-            <MapPin className="h-3 w-3 shrink-0 text-amber-400" />
+            <MapPin className="h-3 w-3 shrink-0 text-[var(--mmo-menu-accent,#fbbf24)]" />
             <span className="truncate">
               {zoneMapId === "aperture_tribulation"
                 ? "⚡ Tiên Khiếu (40×40)"
@@ -1265,7 +1265,7 @@ export function MMOHud(props: MMOHudProps) {
               type="button"
               onClick={() => setMinimapCollapsed((prev) => !prev)}
               title={minimapCollapsed ? "Mở radar bản đồ" : "Thu gọn radar bản đồ"}
-              className="p-0.5 text-[#d8b979] hover:text-white"
+              className="p-0.5 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white"
             >
               {minimapCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
             </button>
@@ -1273,9 +1273,9 @@ export function MMOHud(props: MMOHudProps) {
         </div>
         {!minimapCollapsed ? (
           <>
-            <div className="relative mx-auto mt-1.5 aspect-square w-full overflow-hidden rounded-full border-[5px] border-[#80613d] bg-[#213827] shadow-[inset_0_0_35px_#08160c,0_2px_8px_#000]" aria-label={`Radar lân cận, ${nearby.length} đối tượng`}>
+            <div className="relative mx-auto mt-1.5 aspect-square w-full overflow-hidden rounded-full border-[4px] border-[var(--mmo-menu-border,#80613d)] bg-[var(--mmo-theme-zinc-950,#16231c)] shadow-[inset_0_0_35px_rgba(0,0,0,0.85),0_2px_8px_#000]" aria-label={`Radar lân cận, ${nearby.length} đối tượng`}>
               <div className="absolute inset-0 opacity-40 transition-all duration-300" style={{ backgroundImage: "linear-gradient(#8baf7b33 1px, transparent 1px), linear-gradient(90deg, #8baf7b33 1px, transparent 1px)", backgroundSize: `${Math.max(10, Math.min(28, Math.round(360 / radarRange)))}px ${Math.max(10, Math.min(28, Math.round(360 / radarRange)))}px` }} />
-              <div className="absolute left-1/2 top-0 h-full w-px bg-[#e7d3a2]/20" /><div className="absolute left-0 top-1/2 h-px w-full bg-[#e7d3a2]/20" />
+              <div className="absolute left-1/2 top-0 h-full w-px bg-[var(--mmo-menu-accent,#e7d3a2)]/25" /><div className="absolute left-0 top-1/2 h-px w-full bg-[var(--mmo-menu-accent,#e7d3a2)]/25" />
               {nearby.map((entity) => {
                 const entSpec = entity.templateId ? monsterDictionary[entity.templateId] : null;
                 const isBoss = entSpec?.type === "Boss" || entity.name?.includes("Boss") || entity.name?.includes("Thú Vương");
@@ -1332,9 +1332,9 @@ export function MMOHud(props: MMOHudProps) {
               <span className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#f3cd76] shadow-[0_0_8px_#ffda77]" />
               <span className="absolute left-1/2 top-1 -translate-x-1/2 font-sans text-[9px] text-[#ead7a8]">B</span>
             </div>
-            <div className="mt-1 flex items-center justify-between font-sans text-[10px] text-[#cabf9e]">
+            <div className="mt-1 flex items-center justify-between font-sans text-[10px] text-[var(--text-secondary,#cabf9e)]">
               <div className="flex items-center gap-1 font-sans">
-                <span className="font-semibold text-amber-200">{cameraZoom.toFixed(1)}x</span>
+                <span className="font-semibold text-[var(--mmo-menu-accent,#fef08a)]">{cameraZoom.toFixed(1)}x</span>
                 <span className="text-zinc-500">·</span>
                 <span>{nearby.length} gần</span>
               </div>
@@ -1344,7 +1344,7 @@ export function MMOHud(props: MMOHudProps) {
                   aria-label="Phóng to"
                   onClick={handleZoomIn}
                   disabled={cameraZoom >= 1.6}
-                  className="h-6 w-6 flex items-center justify-center rounded bg-black/50 border border-[#a88952]/50 hover:bg-[#a88952]/20 active:scale-95 text-[#f5dfab] disabled:opacity-30 disabled:pointer-events-none transition"
+                  className="h-6 w-6 flex items-center justify-center rounded bg-black/50 border border-[var(--mmo-menu-border-soft,#a88952)]/50 hover:bg-[var(--mmo-theme-surface,#a88952)]/40 active:scale-95 text-[var(--text-primary,#f5dfab)] disabled:opacity-30 disabled:pointer-events-none transition"
                   title="Phóng to bản đồ & camera"
                 >
                   <Plus className="h-3 w-3" />
@@ -1354,7 +1354,7 @@ export function MMOHud(props: MMOHudProps) {
                   aria-label="Thu nhỏ"
                   onClick={handleZoomOut}
                   disabled={cameraZoom <= 0.6}
-                  className="h-6 w-6 flex items-center justify-center rounded bg-black/50 border border-[#a88952]/50 hover:bg-[#a88952]/20 active:scale-95 text-[#f5dfab] disabled:opacity-30 disabled:pointer-events-none transition"
+                  className="h-6 w-6 flex items-center justify-center rounded bg-black/50 border border-[var(--mmo-menu-border-soft,#a88952)]/50 hover:bg-[var(--mmo-theme-surface,#a88952)]/40 active:scale-95 text-[var(--text-primary,#f5dfab)] disabled:opacity-30 disabled:pointer-events-none transition"
                   title="Thu nhỏ bản đồ & camera"
                 >
                   <Minus className="h-3 w-3" />
@@ -1363,7 +1363,7 @@ export function MMOHud(props: MMOHudProps) {
             </div>
           </>
         ) : (
-          <div className="mt-0.5 text-center font-sans text-[9px] text-[#cabf9e]">
+          <div className="mt-0.5 text-center font-sans text-[9px] text-[var(--text-secondary,#cabf9e)]">
             {props.position.x.toFixed(0)}, {props.position.y.toFixed(0)} · {nearby.length} gần
           </div>
         )}
@@ -1781,9 +1781,9 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
             role="dialog"
             aria-label="Danh mục chức năng"
           >
-            <div className="mb-2.5 flex items-center justify-between border-b border-[#b89a66]/30 pb-2 text-sm font-semibold text-[#f6d99f]">
+            <div className="mb-2.5 flex items-center justify-between border-b border-[var(--mmo-menu-border-soft,#b89a66)]/40 pb-2 text-sm font-semibold text-[var(--mmo-menu-accent,#f6d99f)]">
               <div className="flex items-center gap-2">
-                <Menu className="h-4 w-4 text-[#d8b979]" />
+                <Menu className="h-4 w-4 text-[var(--mmo-menu-accent,#d8b979)]" />
                 <span>Danh mục Cổ Giới</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -1794,16 +1794,16 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
                     props.onOpenPanel("settings");
                   }}
                   title="Mở Cài đặt & Tiện ích"
-                  className="flex items-center gap-1 rounded-md border border-[#8f6d40]/40 bg-[#3a291d]/80 px-2 py-0.5 text-[10.5px] font-sans text-[#ead6ad] hover:bg-[#624329] hover:text-white transition"
+                  className="flex items-center gap-1 rounded-md border border-[var(--mmo-menu-border-soft,#8f6d40)]/50 bg-[var(--mmo-theme-surface,#3a291d)]/90 px-2 py-0.5 text-[10.5px] font-sans text-[var(--text-primary,#ead6ad)] hover:bg-[var(--mmo-theme-elevated,#624329)] hover:text-white transition"
                 >
-                  <Settings2 className="h-3 w-3 text-amber-300" />
+                  <Settings2 className="h-3 w-3 text-[var(--mmo-menu-accent,#fbbf24)]" />
                   <span>Cài đặt</span>
                 </button>
                 <button
                   type="button"
                   onClick={props.onCloseMenu}
                   aria-label="Đóng danh mục"
-                  className="rounded-md p-1 hover:bg-white/10 text-[#d8b979] hover:text-white transition"
+                  className="rounded-md p-1 hover:bg-white/10 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white transition"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -1811,7 +1811,7 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
             </div>
             {menuGroups.map((group) => (
               <section key={group.title} className="mb-3 last:mb-0">
-                <h3 className="mb-1 text-[10px] uppercase tracking-[.15em] text-[#bda87f]">{group.title}</h3>
+                <h3 className="mb-1 text-[10px] uppercase tracking-[.15em] text-[var(--mmo-menu-accent,#bda87f)]">{group.title}</h3>
                 <div className="grid grid-cols-2 gap-1">
                   {group.items.map((item) => {
                     const disabled = !!item.minRank && (props.player?.rank ?? 0) < item.minRank;
@@ -1837,10 +1837,10 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
                             setShowTeleportBuild(true);
                           }
                         }}
-                        className="flex min-h-9 items-center gap-2 rounded-md border border-[#8f6d40]/45 bg-[#3a291d]/70 px-2 text-left text-[11px] text-[#ead8b6] hover:bg-[#624329] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex min-h-9 items-center gap-2 rounded-md border border-[var(--mmo-menu-border,#8f6d40)]/50 bg-[var(--mmo-theme-surface,#3a291d)]/80 px-2 text-left text-[11px] text-[var(--text-primary,#ead8b6)] hover:bg-[var(--mmo-theme-elevated,#624329)] hover:border-[var(--mmo-menu-accent,#b89a66)] disabled:cursor-not-allowed disabled:opacity-40"
                         title={disabled ? `Cần đạt ${item.minRank} chuyển` : item.label}
                       >
-                        <item.icon className="h-3.5 w-3.5 shrink-0" />
+                        <item.icon className="h-3.5 w-3.5 shrink-0 text-[var(--mmo-menu-accent,#d8b979)]" />
                         <span className="truncate">{item.label}</span>
                       </button>
                     );
@@ -1856,21 +1856,21 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
         aria-label="Chức năng MMO"
         className={`pointer-events-auto absolute right-2 ${minimapCollapsed ? "top-[48px]" : "top-[168px] sm:top-[215px]"} w-[54px] md:w-auto flex flex-col md:flex-row gap-1 rounded-xl p-1 transition-all duration-200 md:top-auto md:bottom-2 md:right-2 z-20 ${frame}`}
       >
-        <div className="flex md:hidden items-center justify-between px-0.5 pb-0.5 border-b border-[#a88952]/20">
+        <div className="flex md:hidden items-center justify-between px-0.5 pb-0.5 border-b border-[var(--mmo-menu-border-soft,#a88952)]/25">
           <button
             type="button"
             onClick={() => props.onOpenPanel("settings")}
-            className="flex items-center gap-0.5 text-[7.5px] uppercase font-bold text-[#bda87f] hover:text-amber-300 transition"
+            className="flex items-center gap-0.5 text-[7.5px] uppercase font-bold text-[var(--mmo-menu-accent,#bda87f)] hover:text-white transition"
             title="Mở Cài đặt & Tiện ích"
           >
-            <Settings2 className="h-2.5 w-2.5 text-amber-400" />
+            <Settings2 className="h-2.5 w-2.5 text-[var(--mmo-menu-accent,#fbbf24)]" />
             <span>{mobileNavCollapsed ? "Menu" : "Tiện ích"}</span>
           </button>
           <button
             type="button"
             onClick={() => setMobileNavCollapsed((prev) => !prev)}
             title={mobileNavCollapsed ? "Hiện nút chức năng" : "Ẩn nút chức năng"}
-            className="p-0.5 text-[#d8b979] hover:text-white"
+            className="p-0.5 text-[var(--mmo-menu-accent,#d8b979)] hover:text-white"
           >
             {mobileNavCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
           </button>
@@ -1887,8 +1887,8 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
               aria-expanded={item.key === "menu" ? props.menuOpen : undefined}
               className={`flex w-full md:w-10 h-9 md:h-10 flex-col items-center justify-center gap-0.5 rounded-lg border text-[7.5px] md:text-[8px] transition active:scale-95 ${
                 props.activePanel === item.key || (item.key === "menu" && props.menuOpen)
-                  ? "border-[#f4d894] bg-[#805e32] text-white shadow-sm"
-                  : "border-[#8f6d40] bg-[#3a291d] text-[#e7d5ae] hover:bg-[#624329]"
+                  ? "border-[var(--mmo-menu-accent,#f4d894)] bg-[var(--mmo-menu-tab-active,#805e32)] text-white shadow-sm ring-1 ring-[var(--mmo-menu-accent,#f4d894)]/50"
+                  : "border-[var(--mmo-menu-border,#8f6d40)]/70 bg-[var(--mmo-theme-surface,#3a291d)]/90 text-[var(--text-primary,#e7d5ae)] hover:bg-[var(--mmo-theme-elevated,#624329)] hover:border-[var(--mmo-menu-accent,#d4b478)]"
               }`}
             >
               <item.icon className="h-3.5 w-3.5 shrink-0" />
