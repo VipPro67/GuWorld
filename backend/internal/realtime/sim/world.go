@@ -156,6 +156,7 @@ type Entity struct {
 	AI             AIState                  `json:"-"`
 	Combat         CombatState              `json:"-"`
 	Companion      CompanionState           `json:"-"`
+	Transformation TransformationState      `json:"-"`
 
 	moveIntent    Vec2
 	moveTarget    *Vec2

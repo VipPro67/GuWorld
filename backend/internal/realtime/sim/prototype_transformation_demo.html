@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GuWorld: Prototype Cơ Chế Biến Thân & Vòng Lặp 20Hz</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-glow: rgba(88, 166, 255, 0.2);
+      --success: #3fb950;
+      --danger: #f85149;
+      --warning: #d29922;
+      --purple: #bc8cff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+    .container { max-width: 960px; margin: 0 auto; }
+
+    header { margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    h1 { font-size: 24px; color: #f0f6fc; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .badge { background: #238636; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 12px; font-weight: normal; }
+    p.lead { color: var(--text-muted); font-size: 14px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+    .card h2 { font-size: 16px; color: #f0f6fc; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+    /* State display */
+    .stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; }
+    .stat-label { color: var(--text-muted); }
+    .stat-val { font-weight: 600; font-family: ui-monospace, monospace; }
+
+    .bar-container { background: #21262d; border-radius: 6px; height: 14px; overflow: hidden; margin-top: 4px; margin-bottom: 12px; }
+    .bar-fill { height: 100%; transition: width 0.2s ease; }
+    .bar-hp { background: var(--danger); }
+    .bar-form-hp { background: var(--purple); }
+    .bar-mana { background: var(--accent); }
+
+    .log-panel { background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 10px; height: 160px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px; color: #8b949e; }
+    .log-item { margin-bottom: 4px; }
+    .log-item.highlight { color: #58a6ff; font-weight: 600; }
+    .log-item.warn { color: #d29922; }
+    .log-item.danger { color: #f85149; }
+    .log-item.success { color: #3fb950; }
+
+    /* Buttons */
+    .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    button:hover { background: #30363d; border-color: #8b949e; color: #fff; }
+    button.primary { background: #238636; border-color: #2ea043; color: #fff; }
+    button.primary:hover { background: #2ea043; }
+    button.danger { background: #da3633; border-color: #f85149; color: #fff; }
+    button.danger:hover { background: #b62324; }
+    button.warn { background: #9e6a03; border-color: #bb8009; color: #fff; }
+    button.warn:hover { background: #bb8009; }
+
+    /* Tabs */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; gap: 4px; }
+    .tab { padding: 8px 16px; cursor: pointer; border: none; background: transparent; color: var(--text-muted); border-bottom: 2px solid transparent; border-radius: 0; font-size: 13px; font-weight: 600; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .walkthrough-box { background: #0d1117; border-left: 3px solid var(--accent); padding: 12px; border-radius: 0 6px 6px 0; margin-bottom: 16px; font-size: 13px; }
+    .walkthrough-steps { display: flex; flex-direction: column; gap: 10px; }
+    .step-item { display: flex; align-items: center; justify-content: space-between; background: #21262d; padding: 10px 14px; border-radius: 6px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        Prototype: TransformationState & 20Hz Loop
+        <span class="badge">Zone Sim 20Hz</span>
+      </h1>
+      <p class="lead">
+        Demo kiểm chứng mô hình trạng thái Biến Thân: Windup niệm chú & Ngắt chiêu (Hard CC), Lớp máu Form HP & Giảm thương, Hao hụt Tiên Nguyên (Upkeep Drain), và Phản phệ Kiệt Sức khi sụp đổ hình thái.
+      </p>
+    </header>
+
+    <div class="grid">
+      <!-- Cột Trái: Trạng Thái Thực Thể -->
+      <div class="card">
+        <h2>Trạng Thái Cổ Sư (Entity State)</h2>
+
+        <div class="stat-row">
+          <span class="stat-label">Hình Thái (Form State):</span>
+          <span class="stat-val" id="disp-form-name">Dạng Người (Nguyên Thể)</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Bán Kính Va Chạm (Hitbox):</span>
+          <span class="stat-val" id="disp-hitbox">1.0m (Gốc: 1.0m)</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Giáp & Giảm Thương:</span>
+          <span class="stat-val" id="disp-defense">Giáp: 10 | Giảm: 0%</span>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <div class="stat-row">
+            <span class="stat-label">Lớp Máu Biến Thân (Form HP):</span>
+            <span class="stat-val" id="disp-form-hp">0 / 0</span>
+          </div>
+          <div class="bar-container">
+            <div id="bar-form-hp" class="bar-fill bar-form-hp" style="width: 0%;"></div>
+          </div>
+
+          <div class="stat-row">
+            <span class="stat-label">Máu Thực Thể (HP):</span>
+            <span class="stat-val" id="disp-hp">500 / 500</span>
+          </div>
+          <div class="bar-container">
+            <div id="bar-hp" class="bar-fill bar-hp" style="width: 100%;"></div>
+          </div>
+
+          <div class="stat-row">
+            <span class="stat-label">Tiên Nguyên / Mana:</span>
+            <span class="stat-val" id="disp-mana">100 / 100 (-0/giây)</span>
+          </div>
+          <div class="bar-container">
+            <div id="bar-mana" class="bar-fill bar-mana" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <div class="stat-row" style="margin-top: 8px;">
+          <span class="stat-label">Hiệu Ứng Bất Lợi (Debuffs):</span>
+          <span class="stat-val" id="disp-debuffs" style="color: var(--text-muted);">Không có</span>
+        </div>
+      </div>
+
+      <!-- Cột Phải: Nhật Ký & Tick Điều Khiển -->
+      <div class="card">
+        <h2>Nhật Ký Vòng Lặp 20Hz (Combat Event Log)</h2>
+        <div id="log" class="log-panel">
+          <div class="log-item">[Tick 0] Khởi tạo Zone Sim. Thực thể sẵn sàng.</div>
+        </div>
+
+        <div style="margin-top: 14px;">
+          <span style="font-size: 12px; color: var(--text-muted);">Mô phỏng thời gian (Tick 20Hz = 50ms):</span>
+          <div class="btn-group">
+            <button onclick="simTick(1)">+1 Tick (50ms)</button>
+            <button onclick="simTick(10)">+0.5 giây (10 ticks)</button>
+            <button onclick="simTick(20)">+1.0 giây (20 ticks)</button>
+            <button onclick="resetState()" style="margin-left: auto;">Đặt lại ban đầu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Free-play & Scenarios -->
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('freeplay')">🎮 Bảng Tự Do (Free-Play)</button>
+        <button class="tab" onclick="switchTab('scen-happy')">1. Happy Path (Niệm & Giải Trừ)</button>
+        <button class="tab" onclick="switchTab('scen-cc')">2. Hard CC Gián Đoạn Niệm</button>
+        <button class="tab" onclick="switchTab('scen-drain')">3. Cạn Tiên Nguyên (Upkeep)</button>
+        <button class="tab" onclick="switchTab('scen-broken')">4. Bị Đánh Vỡ Form</button>
+      </div>
+
+      <!-- Tab 0: Freeplay -->
+      <div id="tab-freeplay" class="tab-content active">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          Tự do tác động các hành vi lên thực thể để kiểm chứng sự biến chuyển của các lớp chỉ số:
+        </p>
+        <div class="btn-group">
+          <button class="primary" onclick="castViêmHung()">🔥 Niệm Sát Chiêu: Viêm Hùng Biến (Windup 1.5s, Tốn 30 Mana)</button>
+          <button class="danger" onclick="takeDamage(60)">💥 Hứng 60 Sát Thương</button>
+          <button class="danger" onclick="takeDamage(160)">💣 Hứng 160 Sát Thương Nặng</button>
+          <button class="warn" onclick="applyHardCC()">⚡ Đánh Choáng (Hard CC - 2s)</button>
+          <button onclick="revertManually()">🛡️ Chủ Động Hủy Biến Thân</button>
+        </div>
+      </div>
+
+      <!-- Tab 1: Happy Path -->
+      <div id="tab-scen-happy" class="tab-content">
+        <div class="walkthrough-box">
+          <strong>Kịch bản 1: Happy Path (Vận hành lý tưởng)</strong><br>
+          Cổ sư bắt đầu niệm Sát chiêu Viêm Hùng Biến (1.5s niệm chú). Không bị quấy nhiễu, biến thân thành công thành Cự Hùng (Hitbox 1.5m, Form HP 150, Giáp +20, Giảm dame 20%). Duy trì chiến đấu và sau đó chủ động thu hồi biến thân an toàn.
+        </div>
+        <div class="walkthrough-steps">
+          <div class="step-item">
+            <span>Bước 1: Bắt đầu niệm chú (Tiêu hao 30 Mana)</span>
+            <button class="primary" onclick="castViêmHung()">Bắt đầu Niệm</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 2: Chờ thời gian niệm chú trôi qua (30 ticks = 1.5s)</span>
+            <button onclick="simTick(30)">Tua 1.5s (+30 Ticks)</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 3: Nhận sát thương thử nghiệm (Form HP và giảm thương hấp thụ đòn)</span>
+            <button class="danger" onclick="takeDamage(50)">Hứng 50 Sát Thương</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 4: Chủ động hủy biến thân (Trở về dạng người an toàn, không bị suy yếu)</span>
+            <button onclick="revertManually()">Thu Hồi Biến Thân</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Hard CC Interruption -->
+      <div id="tab-scen-cc" class="tab-content">
+        <div class="walkthrough-box" style="border-left-color: var(--warning);">
+          <strong>Kịch bản 2: Hard CC Gián Đoạn Biến Thân</strong><br>
+          Theo quy tắc <em>Gián Đoạn Biến Thân</em> trong CONTEXT.md: Sát thương thường không ngắt niệm biến thân, nhưng khống chế cứng (Hard CC như Choáng/Đóng Băng) sẽ hủy hoàn toàn quá trình biến thân trước khi hoàn tất, khiến Cổ sư mất chi phí mana niệm chú khởi đầu.
+        </div>
+        <div class="walkthrough-steps">
+          <div class="step-item">
+            <span>Bước 1: Bắt đầu niệm chú Sát chiêu</span>
+            <button class="primary" onclick="castViêmHung()">Bắt đầu Niệm</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 2: Niệm được 0.5s thì bị địch đánh Choáng (Stun)</span>
+            <button class="warn" onclick="simTick(10); applyHardCC();">Tua 0.5s & Gây Choáng</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 3: Kiểm tra: Quá trình biến thân bị hủy bỏ, không kích hoạt Form</span>
+            <span style="color: var(--warning); font-size: 12px; font-weight: 600;">Interrupted</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Upkeep Drain -->
+      <div id="tab-scen-drain" class="tab-content">
+        <div class="walkthrough-box" style="border-left-color: var(--danger);">
+          <strong>Kịch bản 3: Cạn Kiệt Tiên Nguyên Khi Duy Trì</strong><br>
+          Mỗi tick 20Hz tiêu hao một lượng Mana duy trì (Upkeep Drain). Nếu Cổ sư không chủ động hủy mà để cạn kiệt toàn bộ Mana, hình thái sẽ tự động sụp đổ và cơ thể chịu trạng thái <strong>Kiệt Sức (Exhausted)</strong> (-30% tốc chạy trong 5s).
+        </div>
+        <div class="walkthrough-steps">
+          <div class="step-item">
+            <span>Bước 1: Biến thân hoàn tất (Viêm Hùng)</span>
+            <button class="primary" onclick="castViêmHung(); simTick(30);">Biến Thân Hoàn Tất</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 2: Duy trì thời gian dài khiến Mana cạn dần (Tua 7 giây = 140 ticks)</span>
+            <button class="danger" onclick="simTick(140)">Tua 7 Giây (Cạn Mana)</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 3: Kiểm tra: Form tự giải trừ, dính debuff Kiệt Sức</span>
+            <span style="color: var(--danger); font-size: 12px; font-weight: 600;">Mana Depleted -> Exhausted</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Form HP Broken -->
+      <div id="tab-scen-broken" class="tab-content">
+        <div class="walkthrough-box" style="border-left-color: var(--purple);">
+          <strong>Kịch bản 4: Bị Đánh Vỡ Form HP</strong><br>
+          Hình thái có 150 Form HP riêng. Khi nhận lượng sát thương vượt quá Form HP, lớp giáp hình thú vỡ nát, lượng sát thương thừa xuyên thấu vào HP nhục thân và Cổ sư chịu phản phệ chấn thương nhục thân.
+        </div>
+        <div class="walkthrough-steps">
+          <div class="step-item">
+            <span>Bước 1: Biến thân hoàn tất (150 Form HP)</span>
+            <button class="primary" onclick="castViêmHung(); simTick(30);">Biến Thân Hoàn Tất</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 2: Hứng chịu đòn sát thương 80 (Form HP giảm còn 70)</span>
+            <button class="danger" onclick="takeDamage(80)">Hứng Đòn 80 Sát Thương</button>
+          </div>
+          <div class="step-item">
+            <span>Bước 3: Hứng tiếp đòn dứt điểm 120 (Vỡ Form! Tràn 50 dame vào HP thực)</span>
+            <button class="danger" onclick="takeDamage(120)">Hứng Đòn 120 (Phá Form)</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================================
+       Pure Portable Transformation Logic Module (Mirrors Go Engine sim/transformation.go)
+       ========================================================================= */
+    const EntityState = {
+      hp: 500,
+      maxHp: 500,
+      mana: 100,
+      maxMana: 100,
+      radius: 1.0,
+      originalRadius: 1.0,
+      defense: 10,
+      isWindup: false,
+      windupEndTick: 0,
+      active: false,
+      formId: "",
+      formName: "Dạng Người",
+      formKind: "",
+      modelScale: 1.0,
+      radiusMult: 1.0,
+      formHp: 0,
+      maxFormHp: 0,
+      formDefense: 0,
+      damageReduction: 0,
+      manaUpkeepPerTick: 0,
+      debuffs: [] // e.g. { id: 'STUN', expireTick: 40 }, { id: 'EXHAUSTION', expireTick: 100 }
+    };
+
+    let currentTick = 0;
+
+    function appendLog(msg, type = "") {
+      const el = document.getElementById("log");
+      const item = document.createElement("div");
+      item.className = "log-item " + type;
+      item.textContent = `[Tick ${currentTick}] ${msg}`;
+      el.appendChild(item);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function renderUI() {
+      document.getElementById("disp-form-name").textContent = EntityState.isWindup 
+        ? `Đang Niệm (${EntityState.formName})` 
+        : (EntityState.active ? EntityState.formName : "Dạng Người (Nguyên Thể)");
+      
+      document.getElementById("disp-hitbox").textContent = `${EntityState.radius.toFixed(2)}m (Gốc: ${EntityState.originalRadius.toFixed(2)}m)`;
+      
+      const totalDef = EntityState.defense + (EntityState.active ? EntityState.formDefense : 0);
+      const redPct = EntityState.active ? (EntityState.damageReduction * 100).toFixed(0) : 0;
+      document.getElementById("disp-defense").textContent = `Giáp: ${totalDef} | Giảm: ${redPct}%`;
+
+      // Form HP
+      document.getElementById("disp-form-hp").textContent = `${Math.ceil(EntityState.formHp)} / ${EntityState.maxFormHp}`;
+      const formHpPct = EntityState.maxFormHp > 0 ? (EntityState.formHp / EntityState.maxFormHp * 100) : 0;
+      document.getElementById("bar-form-hp").style.width = `${formHpPct}%`;
+
+      // HP
+      document.getElementById("disp-hp").textContent = `${Math.ceil(EntityState.hp)} / ${EntityState.maxHp}`;
+      document.getElementById("bar-hp").style.width = `${(EntityState.hp / EntityState.maxHp * 100)}%`;
+
+      // Mana
+      const upkeepSec = (EntityState.manaUpkeepPerTick * 20).toFixed(1);
+      document.getElementById("disp-mana").textContent = `${Math.ceil(EntityState.mana)} / ${EntityState.maxMana} (-${upkeepSec}/giây)`;
+      document.getElementById("bar-mana").style.width = `${(EntityState.mana / EntityState.maxMana * 100)}%`;
+
+      // Debuffs
+      const debuffNames = EntityState.debuffs.map(d => `${d.id} (${((d.expireTick - currentTick)/20).toFixed(1)}s)`).join(", ");
+      const debuffEl = document.getElementById("disp-debuffs");
+      debuffEl.textContent = debuffNames || "Không có";
+      debuffEl.style.color = debuffNames ? "var(--danger)" : "var(--text-muted)";
+    }
+
+    /* Actions */
+    function castViêmHung() {
+      if (EntityState.mana < 30) {
+        appendLog("Không đủ Tiên Nguyên (Cần 30 Mana) để kích hoạt Viêm Hùng Biến!", "warn");
+        return;
+      }
+      EntityState.mana -= 30;
+      EntityState.isWindup = true;
+      EntityState.windupEndTick = currentTick + 30; // 1.5s
+      EntityState.formName = "Viêm Hùng Biến";
+      appendLog("Bắt đầu dẫn khí niệm Sát Chiêu: Viêm Hùng Biến (Thời gian niệm: 1.5s). Tiêu hao 30 Mana.", "highlight");
+      renderUI();
+    }
+
+    function completeTransformation() {
+      EntityState.isWindup = false;
+      EntityState.active = true;
+      EntityState.formId = "FORM_FLAME_BEAR";
+      EntityState.formName = "Thái Cổ Viêm Hùng";
+      EntityState.formKind = "FULL";
+      EntityState.radiusMult = 1.5;
+      EntityState.radius = EntityState.originalRadius * EntityState.radiusMult;
+      EntityState.maxFormHp = 150;
+      EntityState.formHp = 150;
+      EntityState.formDefense = 20;
+      EntityState.damageReduction = 0.20; // Giảm 20% sát thương
+      EntityState.manaUpkeepPerTick = 10 / 20; // 10 Mana mỗi giây = 0.5 per tick
+      appendLog("🔥 Biến thân HOÀN TẤT: Hóa thân thành Thái Cổ Viêm Hùng! Hitbox tăng 1.5m, nhận 150 Form HP, +20 Giáp, -20% Sát thương nhận vào.", "success");
+      renderUI();
+    }
+
+    function simTick(ticks = 1) {
+      for (let i = 0; i < ticks; i++) {
+        currentTick++;
+
+        // 1. Check windup completion
+        if (EntityState.isWindup && currentTick >= EntityState.windupEndTick) {
+          completeTransformation();
+        }
+
+        // 2. Upkeep drain
+        if (EntityState.active && EntityState.manaUpkeepPerTick > 0) {
+          if (EntityState.mana < EntityState.manaUpkeepPerTick) {
+            EntityState.mana = 0;
+            appendLog("Tiên Nguyên cạn kiệt! Không thể tiếp tục duy trì hình thái Thái Cổ Viêm Hùng.", "danger");
+            revertTransformation("mana_depleted", true);
+          } else {
+            EntityState.mana -= EntityState.manaUpkeepPerTick;
+          }
+        }
+
+        // 3. Debuff expiration
+        EntityState.debuffs = EntityState.debuffs.filter(d => currentTick < d.expireTick);
+      }
+      renderUI();
+    }
+
+    function takeDamage(rawAmount) {
+      if (EntityState.hp <= 0) return;
+      let dmg = rawAmount;
+
+      // Armor reduction
+      const totalDef = EntityState.defense + (EntityState.active ? EntityState.formDefense : 0);
+      dmg = Math.max(1, dmg - totalDef);
+
+      // Form % Damage reduction
+      if (EntityState.active && EntityState.damageReduction > 0) {
+        dmg = dmg * (1 - EntityState.damageReduction);
+      }
+
+      appendLog(`Chịu đòn tấn công gốc ${rawAmount} (Sau giáp & giảm thương: ${dmg.toFixed(1)}).`, "warn");
+
+      // Form HP absorbs first
+      if (EntityState.active && EntityState.formHp > 0) {
+        if (EntityState.formHp >= dmg) {
+          EntityState.formHp -= dmg;
+          appendLog(`Lớp máu Form HP hấp thụ toàn bộ ${dmg.toFixed(1)} sát thương! (Form HP còn ${EntityState.formHp.toFixed(1)})`, "highlight");
+          renderUI();
+          return;
+        } else {
+          const absorbed = EntityState.formHp;
+          const overflow = dmg - absorbed;
+          EntityState.formHp = 0;
+          appendLog(`Form HP hấp thụ ${absorbed.toFixed(1)} rồi vỡ nát! Sát thương tràn vào nhục thân: ${overflow.toFixed(1)}.`, "danger");
+          revertTransformation("form_broken", true);
+          EntityState.hp = Math.max(0, EntityState.hp - overflow);
+          renderUI();
+          return;
+        }
+      }
+
+      // Direct HP damage
+      EntityState.hp = Math.max(0, EntityState.hp - dmg);
+      appendLog(`Nhục thân nhận ${dmg.toFixed(1)} sát thương. Máu còn ${EntityState.hp.toFixed(1)}.`, "danger");
+      renderUI();
+    }
+
+    function applyHardCC() {
+      if (EntityState.isWindup) {
+        EntityState.isWindup = false;
+        appendLog("⚡ Dính Hard CC (Choáng) trong thời gian niệm chú! Quá trình Biến Thân bị NGẮT HOÀN TOÀN!", "danger");
+      }
+      EntityState.debuffs.push({ id: "CHOÁNG (STUN)", expireTick: currentTick + 40 }); // 2s
+      renderUI();
+    }
+
+    function revertTransformation(reason, applyExhaustion = false) {
+      if (!EntityState.active && !EntityState.isWindup) return;
+      EntityState.active = false;
+      EntityState.isWindup = false;
+      EntityState.radius = EntityState.originalRadius;
+      EntityState.formHp = 0;
+      EntityState.maxFormHp = 0;
+      EntityState.manaUpkeepPerTick = 0;
+      EntityState.formDefense = 0;
+      EntityState.damageReduction = 0;
+      EntityState.formName = "Dạng Người";
+
+      appendLog(`Giải trừ biến thân [Lý do: ${reason}]. Hitbox phục hồi về ${EntityState.radius}m.`, "highlight");
+
+      if (applyExhaustion) {
+        EntityState.debuffs.push({ id: "KIỆT SỨC (EXHAUSTED)", expireTick: currentTick + 100 }); // 5s
+        appendLog("Cơ thể chịu phản phệ sụp đổ hình thái: Dính debuff KIỆT SỨC (-30% tốc chạy trong 5s)!", "danger");
+      }
+      renderUI();
+    }
+
+    function revertManually() {
+      if (!EntityState.active && !EntityState.isWindup) {
+        appendLog("Không có hình thái biến thân nào đang hoạt động.", "warn");
+        return;
+      }
+      revertTransformation("manual_cancel", false);
+    }
+
+    function resetState() {
+      EntityState.hp = 500;
+      EntityState.mana = 100;
+      EntityState.radius = 1.0;
+      EntityState.originalRadius = 1.0;
+      EntityState.defense = 10;
+      EntityState.isWindup = false;
+      EntityState.active = false;
+      EntityState.formHp = 0;
+      EntityState.maxFormHp = 0;
+      EntityState.formDefense = 0;
+      EntityState.damageReduction = 0;
+      EntityState.manaUpkeepPerTick = 0;
+      EntityState.debuffs = [];
+      EntityState.formName = "Dạng Người";
+      currentTick = 0;
+      document.getElementById("log").innerHTML = '<div class="log-item">[Tick 0] Đã đặt lại Zone Sim về trạng thái ban đầu.</div>';
+      renderUI();
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      event.target.classList.add("active");
+      document.getElementById("tab-" + tabId).classList.add("active");
+      resetState();
+    }
+
+    renderUI();
+  </script>
+</body>
+</html>
