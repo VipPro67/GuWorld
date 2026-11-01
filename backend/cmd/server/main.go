@@ -495,6 +495,65 @@ func main() {
 				}
 				return nil
 			})
+
+			manager.SetCaptureHandler(func(callCtx context.Context, captureEv realtimeworld.CaptureEvent) error {
+				_, err := db.DB.ExecContext(callCtx, `
+					INSERT INTO non_player_actors (
+						id, actor_kind, owner_player_id, template_source, template_id,
+						species, name, rank, hp, max_hp, base_attack, base_defense, speed,
+						count, hunger, max_hunger, loyalty, lifecycle_state, execution_state,
+						behavior_profile, formation_slot
+					)
+					SELECT
+						gen_random_uuid(), 'COMPANION_BEAST', $1, 'MONSTER_TEMPLATE', $2,
+						COALESCE(m.species, $2), COALESCE(m.name, $2), COALESCE(m.rank, $3),
+						COALESCE(m.max_hp, 100), COALESCE(m.max_hp, 100), COALESCE(m.base_attack, 20),
+						COALESCE(m.base_defense, 5), COALESCE(m.speed, 4),
+						1, 0, 100, 80, 'ACTIVE', 'STORED',
+						'PASSIVE', 0
+					FROM (SELECT 1) _
+					LEFT JOIN monster_templates m ON m.id = $2
+				`, captureEv.PlayerID, captureEv.TemplateID, captureEv.MonsterRank)
+				if err != nil {
+					logger.S.Errorf("Realtime capture persistence failed for %s: %v", captureEv.TargetID, err)
+					return err
+				}
+				handlers.PublishPlayerRealtimeEvent(captureEv.PlayerID, handlers.PlayerEventUpdated)
+				logger.S.Infof("Realtime capture successful: player=%s target=%s template=%s", captureEv.PlayerID, captureEv.TargetID, captureEv.TemplateID)
+				return nil
+			})
+
+			manager.SetCompanionCasualtyHandler(func(callCtx context.Context, casEv realtimeworld.CompanionCasualtyEvent) error {
+				actorID, parseErr := uuid.Parse(casEv.ActorID)
+				if parseErr != nil {
+					return nil
+				}
+				if casEv.Type == "PERMADEATH" {
+					_, err := db.DB.ExecContext(callCtx, `
+						UPDATE non_player_actors
+						SET lifecycle_state = 'DEAD', execution_state = 'DEAD', formation_slot = 0, updated_at = NOW(), version = version + 1
+						WHERE id = $1
+					`, actorID)
+					if err != nil {
+						logger.S.Errorf("Realtime companion permadeath persistence failed for %s: %v", casEv.ActorID, err)
+						return err
+					}
+					logger.S.Infof("Realtime companion permadeath: actor=%s", casEv.ActorID)
+				} else {
+					_, err := db.DB.ExecContext(callCtx, `
+						UPDATE non_player_actors
+						SET execution_state = 'INJURED', hp = 1, formation_slot = 0, updated_at = NOW(), version = version + 1
+						WHERE id = $1
+					`, actorID)
+					if err != nil {
+						logger.S.Errorf("Realtime companion injury persistence failed for %s: %v", casEv.ActorID, err)
+						return err
+					}
+					logger.S.Infof("Realtime companion injured: actor=%s", casEv.ActorID)
+				}
+				return nil
+			})
+
 			managerErr = manager.Start(ctx)
 		}
 		if managerErr != nil {

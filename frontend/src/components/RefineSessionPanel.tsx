@@ -308,7 +308,6 @@ export function RefineSessionPanel() {
   const submitRefineStep = useGameStore((s) => s.submitRefineStep);
   const abortRefineSession = useGameStore((s) => s.abortRefineSession);
   const ackRefineSession = useGameStore((s) => s.ackRefineSession);
-  const openRefinePanel = useGameStore((s) => s.openRefinePanel);
   const closeRefinePanel = useGameStore((s) => s.closeRefinePanel);
 
   const offsetMs = useServerOffset(session);
@@ -437,16 +436,9 @@ export function RefineSessionPanel() {
 
   if (finished && session.acknowledged_at) return null;
 
-  if (!panelOpen) {
-    return (
-      <button
-        onClick={openRefinePanel}
-        className="fixed bottom-20 right-4 z-40 px-3 py-2 rounded-full bg-rose-900/80 border border-rose-600/60 text-rose-200 text-xs shadow-lg animate-pulse"
-      >
-        🔥 Phiên luyện đang chạy
-      </button>
-    );
-  }
+  // Người dùng tắt panel → ẩn hẳn khỏi UI ngoài; kiểm tra phiên ở tab Luyện Cổ
+  // (banner trong lò luyện) cũng được.
+  if (!panelOpen) return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[90] md:bottom-4 md:right-4 md:left-auto md:w-[380px]">

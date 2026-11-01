@@ -94,13 +94,21 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 		w.removeStatusLocked(target, "STEALTH")
 	}
 	if target.Kind == EntityPlayer && target.Combat.Pending != nil && !target.Combat.Pending.Skill.FormActivation {
+		isCapture := target.Combat.Pending.IsCapture
 		interrupted := target.Combat.Pending.Skill.ID
+		if isCapture {
+			interrupted = "CAPTURE"
+		}
 		target.Combat.Pending = nil
 		interruptedBy := ""
 		if source != nil {
 			interruptedBy = string(source.ID)
 		}
-		w.emitEvent(combat.Event{Type: combat.EventCastInterrupted, SourceID: interruptedBy, TargetID: string(target.ID), SkillID: interrupted, Reason: "damaged"})
+		if isCapture {
+			w.emitEvent(combat.Event{Type: combat.EventCaptureInterrupted, SourceID: interruptedBy, TargetID: string(target.ID), SkillID: interrupted, Reason: "damaged"})
+		} else {
+			w.emitEvent(combat.Event{Type: combat.EventCastInterrupted, SourceID: interruptedBy, TargetID: string(target.ID), SkillID: interrupted, Reason: "damaged"})
+		}
 	}
 	w.emitEvent(combat.Event{
 		Type: combat.EventDamageApplied, SourceID: sourceID, TargetID: string(target.ID), SkillID: skillID,
@@ -125,6 +133,12 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 	target.Combat.Pending = nil
 	target.AI.Threat = ""
 	target.AI.PatrolTarget = nil
+
+	if target.Kind == EntityCompanion {
+		w.resolveCompanionDeathLocked(target, source, totalDamage)
+		return hpDamage
+	}
+
 	w.emitEvent(combat.Event{Type: combat.EventEntityDied, SourceID: sourceID, TargetID: string(target.ID), SkillID: skillID, X: target.Transform.Position.X, Y: target.Transform.Position.Y, TemplateID: target.AI.TemplateID, MonsterRank: target.AI.Rank, PersistentID: target.AI.PersistentID, TargetKind: string(target.Kind)})
 	if target.Kind == EntityMonster && target.AI.Active {
 		target.AI.State = AIDead
@@ -294,4 +308,85 @@ func (w *World) applyKnockbackLocked(source, target *Entity, dist float64) {
 		target.Transform.Position = dest
 		target.Revision++
 	}
+}
+
+func (w *World) resolveCompanionDeathLocked(companion *Entity, source *Entity, totalDamage float64) {
+	if companion == nil {
+		return
+	}
+	sourceID := ""
+	if source != nil {
+		sourceID = string(source.ID)
+	}
+
+	// 1. Temporary minion from swarm/summon skill (TTL > 0 or empty ActorID)
+	if companion.Companion.TTLRemaining > 0 || companion.Companion.ActorID == "" {
+		w.emitEvent(combat.Event{
+			Type:         combat.EventEntityDied,
+			SourceID:     sourceID,
+			TargetID:     string(companion.ID),
+			PersistentID: companion.Companion.ActorID,
+			TargetKind:   string(companion.Kind),
+			Reason:       "minion_expired",
+		})
+		w.despawnEntityLocked(companion.ID)
+		return
+	}
+
+	// 2. Permanent Companion
+	pBase := 0.40
+	if companion.Companion.ActorKind == "VARIANT_NPC" {
+		pBase = 0.15
+	} else if companion.Companion.Rank >= 4 {
+		pBase = 0.10
+	} else if companion.Companion.Rank >= 2 {
+		pBase = 0.25
+	}
+
+	overkillDelta := 0.0
+	excessDamage := totalDamage - companion.Vitals.MaxHP
+	if excessDamage > companion.Vitals.MaxHP*0.5 {
+		overkillDelta = math.Min(0.30, (excessDamage/companion.Vitals.MaxHP)*0.5)
+	}
+
+	loyaltyBonus := (companion.Companion.Loyalty / 100.0) * 0.20
+	rankBonus := 0.025 * float64(companion.Companion.Rank)
+
+	pPermadeath := math.Max(0.05, math.Min(0.85, pBase+overkillDelta-loyaltyBonus-rankBonus))
+
+	roll := w.rng.Float64()
+	if roll < pPermadeath {
+		w.emitEvent(combat.Event{
+			Type:         combat.EventCompanionPermadeath,
+			SourceID:     sourceID,
+			TargetID:     string(companion.ID),
+			PersistentID: companion.Companion.ActorID,
+			Reason:       "killed_in_action",
+		})
+		w.emitEvent(combat.Event{
+			Type:         combat.EventEntityDied,
+			SourceID:     sourceID,
+			TargetID:     string(companion.ID),
+			PersistentID: companion.Companion.ActorID,
+			TargetKind:   string(companion.Kind),
+			Reason:       "permadeath",
+		})
+	} else {
+		w.emitEvent(combat.Event{
+			Type:         combat.EventCompanionInjured,
+			SourceID:     sourceID,
+			TargetID:     string(companion.ID),
+			PersistentID: companion.Companion.ActorID,
+			Reason:       "critically_injured",
+		})
+		w.emitEvent(combat.Event{
+			Type:         combat.EventEntityDied,
+			SourceID:     sourceID,
+			TargetID:     string(companion.ID),
+			PersistentID: companion.Companion.ActorID,
+			TargetKind:   string(companion.Kind),
+			Reason:       "injured",
+		})
+	}
+	w.despawnEntityLocked(companion.ID)
 }

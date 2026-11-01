@@ -26,11 +26,13 @@ const (
 	TypeMoveTo   = "world.move_target"
 	TypeCast     = "world.cast"
 	TypeAttack   = "world.attack"
-	TypeEvents   = "world.events"
-	TypeSnapshot = "world.snapshot"
-	TypeTransfer = "world.transfer"
-	TypeReject   = "world.reject"
-	TypeResync   = "world.resync"
+	TypeEvents          = "world.events"
+	TypeSnapshot        = "world.snapshot"
+	TypeTransfer        = "world.transfer"
+	TypeReject          = "world.reject"
+	TypeResync          = "world.resync"
+	TypeCapture         = "world.capture"
+	TypeCompanionStance = "world.companion_stance"
 )
 
 var ErrInvalidMessage = errors.New("invalid realtime world message")
@@ -142,6 +144,19 @@ type Attack struct {
 	AimY     float64 `json:"aim_y,omitempty"`
 }
 
+type CaptureIntent struct {
+	Seq      uint64 `json:"seq"`
+	TargetID string `json:"target_id"`
+	GuID     string `json:"gu_id,omitempty"`
+}
+
+type CompanionStanceIntent struct {
+	Seq           uint64 `json:"seq"`
+	CompanionID   string `json:"companion_id,omitempty"`
+	Stance        string `json:"stance"`
+	FocusTargetID string `json:"focus_target_id,omitempty"`
+}
+
 type Reject struct {
 	Code      string `json:"code"`
 	Message   string `json:"message,omitempty"`
@@ -158,32 +173,35 @@ type Event struct {
 }
 
 type EntityState struct {
-	EntityID    string   `json:"entity_id"`
-	Revision    uint64   `json:"entity_revision"`
-	Kind        string   `json:"kind,omitempty"`
-	PartyID     string   `json:"party_id,omitempty"`
-	PvPEnabled  bool     `json:"pvp_enabled,omitempty"`
-	TemplateID  string   `json:"template_id,omitempty"`
-	Name        string   `json:"name,omitempty"`
-	AIState     string   `json:"ai_state,omitempty"`
-	AggroTarget string   `json:"aggro_target_id,omitempty"`
-	X           float64  `json:"x"`
-	Y           float64  `json:"y"`
-	HP          float64  `json:"hp"`
-	MaxHP       float64  `json:"max_hp,omitempty"`
-	Shield      float64  `json:"shield,omitempty"`
-	Mana        float64  `json:"mana,omitempty"`
-	MaxMana     float64  `json:"max_mana,omitempty"`
-	Thought     float64  `json:"thought,omitempty"`
-	MaxThought  float64  `json:"max_thought,omitempty"`
-	Cooldowns   []uint64 `json:"cooldowns,omitempty"`
-	CastSkillID string   `json:"cast_skill_id,omitempty"`
-	CastEndTick uint64   `json:"cast_end_tick,omitempty"`
-	CastWindup  uint64   `json:"cast_windup_ticks,omitempty"`
-	FormActive  bool     `json:"form_active,omitempty"`
-	Statuses    []string `json:"statuses,omitempty"`
-	Stealthed   bool     `json:"stealthed,omitempty"`
-	Flying      bool     `json:"flying,omitempty"`
+	EntityID      string   `json:"entity_id"`
+	Revision      uint64   `json:"entity_revision"`
+	Kind          string   `json:"kind,omitempty"`
+	PartyID       string   `json:"party_id,omitempty"`
+	PvPEnabled    bool     `json:"pvp_enabled,omitempty"`
+	TemplateID    string   `json:"template_id,omitempty"`
+	Name          string   `json:"name,omitempty"`
+	AIState       string   `json:"ai_state,omitempty"`
+	AggroTarget   string   `json:"aggro_target_id,omitempty"`
+	OwnerID       string   `json:"owner_id,omitempty"`
+	CompanionKind string   `json:"companion_kind,omitempty"`
+	Stance        string   `json:"stance,omitempty"`
+	X             float64  `json:"x"`
+	Y             float64  `json:"y"`
+	HP            float64  `json:"hp"`
+	MaxHP         float64  `json:"max_hp,omitempty"`
+	Shield        float64  `json:"shield,omitempty"`
+	Mana          float64  `json:"mana,omitempty"`
+	MaxMana       float64  `json:"max_mana,omitempty"`
+	Thought       float64  `json:"thought,omitempty"`
+	MaxThought    float64  `json:"max_thought,omitempty"`
+	Cooldowns     []uint64 `json:"cooldowns,omitempty"`
+	CastSkillID   string   `json:"cast_skill_id,omitempty"`
+	CastEndTick   uint64   `json:"cast_end_tick,omitempty"`
+	CastWindup    uint64   `json:"cast_windup_ticks,omitempty"`
+	FormActive    bool     `json:"form_active,omitempty"`
+	Statuses      []string `json:"statuses,omitempty"`
+	Stealthed     bool     `json:"stealthed,omitempty"`
+	Flying        bool     `json:"flying,omitempty"`
 }
 
 type Snapshot struct {
@@ -297,6 +315,18 @@ func DecodeClientMessage(data []byte) (Envelope, any, error) {
 			err = message.Validate()
 		}
 		return envelope, message, err
+	case TypeCapture:
+		message, err := DecodePayload[CaptureIntent](envelope)
+		if err == nil {
+			err = message.Validate()
+		}
+		return envelope, message, err
+	case TypeCompanionStance:
+		message, err := DecodePayload[CompanionStanceIntent](envelope)
+		if err == nil {
+			err = message.Validate()
+		}
+		return envelope, message, err
 	case TypeResync:
 		message, err := DecodePayload[Resync](envelope)
 		return envelope, message, err
@@ -311,6 +341,26 @@ func (attack Attack) Validate() error {
 	}
 	if attack.TargetID == "" && math.Hypot(attack.AimX, attack.AimY) <= 0.01 {
 		return fmt.Errorf("%w: basic attack requires a target or aim", ErrInvalidMessage)
+	}
+	return nil
+}
+
+func (c CaptureIntent) Validate() error {
+	if c.Seq == 0 || c.TargetID == "" || len(c.TargetID) > MaxEntityID || strings.TrimSpace(c.TargetID) != c.TargetID {
+		return fmt.Errorf("%w: invalid capture intent", ErrInvalidMessage)
+	}
+	return nil
+}
+
+func (s CompanionStanceIntent) Validate() error {
+	if s.Seq == 0 {
+		return fmt.Errorf("%w: companion stance seq must be positive", ErrInvalidMessage)
+	}
+	if s.Stance != "DEFEND" && s.Stance != "FOCUS" && s.Stance != "FOLLOW" {
+		return fmt.Errorf("%w: invalid companion stance", ErrInvalidMessage)
+	}
+	if s.Stance == "FOCUS" && (s.FocusTargetID == "" || len(s.FocusTargetID) > MaxEntityID) {
+		return fmt.Errorf("%w: focus stance requires valid focus_target_id", ErrInvalidMessage)
 	}
 	return nil
 }

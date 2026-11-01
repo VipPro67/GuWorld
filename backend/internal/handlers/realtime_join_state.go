@@ -91,6 +91,20 @@ type RealtimeJoinState struct {
 	PvPEnabled               bool
 	EquippedGu               []RealtimeEquippedGu
 	KillerMoves              []RealtimeKillerMove
+	Companions               []RealtimeCompanion
+}
+
+type RealtimeCompanion struct {
+	ID        string
+	ActorKind string
+	Name      string
+	Rank      int
+	HP        float64
+	MaxHP     float64
+	Attack    float64
+	Defense   float64
+	Speed     float64
+	Loyalty   float64
 }
 
 // ProjectRealtimeEffects converts the character loadout row projection into
@@ -269,6 +283,31 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		}
 		entry.ShieldScale = gamefx.PathMasteryMultiplier(player.PathMasteries, spec.Path) * shieldDaoMult
 	}
+
+	compRows, compErr := db.DB.QueryContext(ctx, `
+		SELECT id, actor_kind, name, rank, hp, max_hp, base_attack, base_defense, speed, loyalty
+		FROM non_player_actors
+		WHERE owner_player_id = $1
+		  AND actor_kind IN ('COMPANION_BEAST', 'VARIANT_NPC')
+		  AND lifecycle_state = 'ACTIVE'
+		  AND execution_state != 'INJURED'
+		  AND formation_slot > 0
+		ORDER BY formation_slot ASC
+		LIMIT 3
+	`, playerID)
+	if compErr == nil {
+		defer compRows.Close()
+		for compRows.Next() {
+			var comp RealtimeCompanion
+			if err := compRows.Scan(
+				&comp.ID, &comp.ActorKind, &comp.Name, &comp.Rank,
+				&comp.HP, &comp.MaxHP, &comp.Attack, &comp.Defense, &comp.Speed, &comp.Loyalty,
+			); err == nil {
+				state.Companions = append(state.Companions, comp)
+			}
+		}
+	}
+
 	return state, nil
 }
 

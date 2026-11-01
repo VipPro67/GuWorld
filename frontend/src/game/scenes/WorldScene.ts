@@ -1064,7 +1064,8 @@ export class WorldScene extends Phaser.Scene {
       let actor = this.actors.get(entity.id);
       if (!actor) {
         const partyMember = !entity.isSelf && selfParty !== "" && entity.partyId === selfParty;
-        actor = this.createActor(entity.id, entity.isSelf, entity.kind, partyMember, pixels.x, pixels.y);
+        const actorKind: ActorKind = entity.kind === "companion" ? "monster" : entity.kind;
+        actor = this.createActor(entity.id, entity.isSelf, actorKind, partyMember, pixels.x, pixels.y);
         this.actors.set(entity.id, actor);
         if (entity.isSelf) {
           this.selfId = entity.id;

@@ -34,6 +34,23 @@ type AttackCommand struct {
 	Aim        Vec2
 }
 
+type CaptureCommand struct {
+	EntityID   EntityID
+	LeaseToken string
+	Seq        uint64
+	TargetID   EntityID
+	GuID       string
+}
+
+type CompanionStanceCommand struct {
+	EntityID      EntityID
+	LeaseToken    string
+	Seq           uint64
+	CompanionID   EntityID
+	Stance        CompanionStance
+	FocusTargetID EntityID
+}
+
 type PendingCast struct {
 	Skill       combat.Skill
 	TargetID    EntityID
@@ -41,6 +58,8 @@ type PendingCast struct {
 	Point       Vec2
 	ResolveTick uint64
 	Seq         uint64
+	IsCapture   bool
+	CaptureGuID string
 }
 
 // CombatState is server-owned per-player combat state.
@@ -250,7 +269,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 			SkillID: commandSkillID(command.Slot), Reason: reason,
 		})
 	}
-	if caster.Kind != EntityPlayer || caster.Vitals.HP <= 0 {
+	if (caster.Kind != EntityPlayer && caster.Kind != EntityCompanion) || caster.Vitals.HP <= 0 {
 		reject("caster_not_ready")
 		return
 	}
@@ -526,4 +545,128 @@ func (w *World) emitEvent(event combat.Event) {
 
 func commandSkillID(slot uint8) string {
 	return "HOTBAR_" + strconv.Itoa(int(slot))
+}
+
+func (w *World) SubmitCapture(command CaptureCommand) error {
+	if command.EntityID == "" || command.Seq == 0 || command.TargetID == "" || len(command.TargetID) > MaxEntityIDLength {
+		return ErrInvalidInput
+	}
+	cmd := command
+	select {
+	case w.inbox <- InputCommand{EntityID: command.EntityID, LeaseToken: command.LeaseToken, Seq: command.Seq, Capture: &cmd}:
+		return nil
+	default:
+		return ErrQueueFull
+	}
+}
+
+func (w *World) SubmitCompanionStance(command CompanionStanceCommand) error {
+	if command.EntityID == "" || command.Seq == 0 || (command.Stance != StanceDefend && command.Stance != StanceFocus && command.Stance != StanceFollow) {
+		return ErrInvalidInput
+	}
+	cmd := command
+	select {
+	case w.inbox <- InputCommand{EntityID: command.EntityID, LeaseToken: command.LeaseToken, Seq: command.Seq, CompanionStance: &cmd}:
+		return nil
+	default:
+		return ErrQueueFull
+	}
+}
+
+func (w *World) startCaptureLocked(caster *Entity, command CaptureCommand) {
+	if caster == nil {
+		return
+	}
+	reject := func(reason string) {
+		w.emitEvent(combat.Event{
+			Type: combat.EventCastRejected, SourceID: string(caster.ID),
+			Reason: reason,
+		})
+	}
+	if caster.Kind != EntityPlayer || caster.Vitals.HP <= 0 {
+		reject("caster_not_ready")
+		return
+	}
+	if caster.Combat.Pending != nil {
+		reject("already_casting")
+		return
+	}
+	if w.isStunned(caster) {
+		reject("stunned")
+		return
+	}
+	if w.hasStatus(caster, "SILENCE") || w.hasStatus(caster, "GU_SEAL") {
+		reject("silenced")
+		return
+	}
+
+	target := w.entities[command.TargetID]
+	if target == nil || target.Kind != EntityMonster || target.Vitals.HP <= 0 {
+		reject("target_not_ready")
+		return
+	}
+	if !target.AI.Active {
+		reject("target_not_ready")
+		return
+	}
+
+	if distance(caster.Transform.Position, target.Transform.Position) > 5.0 {
+		reject("out_of_range")
+		return
+	}
+
+	hpPct := target.Vitals.HP / target.Vitals.MaxHP
+	hasCC := w.isStunned(target) || w.hasStatus(target, "BIND") || w.hasStatus(target, "ROOT") || w.hasStatus(target, "FREEZE") || w.hasStatus(target, "PETRIFY")
+	if hpPct > 0.25 && !hasCC {
+		reject("monster_not_subdued")
+		return
+	}
+
+	captureManaCost := 20.0
+	if caster.Combat.Mana < captureManaCost {
+		reject("insufficient_mana")
+		return
+	}
+	caster.Combat.Mana -= captureManaCost
+
+	windupTicks := uint64(60) // 3.0s
+	caster.Combat.Pending = &PendingCast{
+		Skill: combat.Skill{
+			ID: "SKILL_ENSLAVE_CHANNELING",
+			Name: "Nô Thú Kết Ấn",
+			MovementPolicy: "ROOT",
+		},
+		TargetID: target.ID,
+		ResolveTick: w.tick + windupTicks,
+		Seq: command.Seq,
+		IsCapture: true,
+		CaptureGuID: command.GuID,
+	}
+	caster.Revision++
+
+	w.emitEvent(combat.Event{
+		Type: combat.EventCaptureStarted,
+		SourceID: string(caster.ID),
+		TargetID: string(target.ID),
+		DurationTicks: windupTicks,
+	})
+}
+
+func (w *World) setCompanionStanceLocked(owner *Entity, command CompanionStanceCommand) {
+	if owner == nil || owner.Kind != EntityPlayer {
+		return
+	}
+	for _, entity := range w.entities {
+		if entity.Kind == EntityCompanion && entity.Companion.OwnerID == owner.ID {
+			if command.CompanionID == "" || entity.ID == command.CompanionID {
+				entity.Companion.Stance = command.Stance
+				if command.Stance == StanceFocus {
+					entity.Companion.FocusTargetID = command.FocusTargetID
+				} else {
+					entity.Companion.FocusTargetID = ""
+				}
+				entity.Revision++
+			}
+		}
+	}
 }

@@ -9,6 +9,8 @@ export type WorldMessageType =
   | "world.move_target"
   | "world.cast"
   | "world.attack"
+  | "world.capture"
+  | "world.companion_stance"
   | "world.events"
   | "world.snapshot"
   | "world.transfer"
@@ -36,7 +38,7 @@ export interface MoveTargetPayload {
 export interface WorldEntityState {
   entity_id: string;
   entity_revision: number;
-  kind?: "player" | "monster";
+  kind?: "player" | "monster" | "companion";
   party_id?: string;
   pvp_enabled?: boolean;
   template_id?: string;
@@ -60,6 +62,21 @@ export interface WorldEntityState {
   stealthed?: boolean;
   flying?: boolean;
   form_active?: boolean;
+  owner_id?: string;
+  companion_kind?: string;
+  stance?: "DEFEND" | "FOCUS" | "FOLLOW";
+}
+
+export interface CapturePayload {
+  seq: number;
+  target_id: string;
+  gu_id?: string;
+}
+
+export interface CompanionStancePayload {
+  seq: number;
+  stance: "DEFEND" | "FOCUS" | "FOLLOW";
+  focus_target_id?: string;
 }
 
 export interface WorldProjectileState {

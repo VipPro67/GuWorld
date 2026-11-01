@@ -48,6 +48,8 @@ type RealtimeWorldAdmission interface {
 	MoveTarget(playerID, controllerID uuid.UUID, target protocol.MoveTarget) error
 	Cast(playerID, controllerID uuid.UUID, cast protocol.Cast) error
 	BasicAttack(playerID, controllerID uuid.UUID, attack protocol.Attack) error
+	Capture(playerID, controllerID uuid.UUID, capture protocol.CaptureIntent) error
+	CompanionStance(playerID, controllerID uuid.UUID, stance protocol.CompanionStanceIntent) error
 	SubscribeSnapshots(playerID, controllerID uuid.UUID) (<-chan sim.Snapshot, func(), error)
 	TransferAtEdge(playerID, controllerID uuid.UUID, position sim.Vec2) (protocol.Transfer, bool, error)
 	BeginHandoff(playerID uuid.UUID) (bool, error)

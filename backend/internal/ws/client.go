@@ -732,6 +732,14 @@ func (c *Client) handleRealtimeInput(msg WSMessage) (int, json.RawMessage) {
 		if err := c.realtimeAdmission.BasicAttack(c.playerID, c.controllerID, command); err != nil {
 			return realtimeAdmissionErrorResponse(err)
 		}
+	case protocol.CaptureIntent:
+		if err := c.realtimeAdmission.Capture(c.playerID, c.controllerID, command); err != nil {
+			return realtimeAdmissionErrorResponse(err)
+		}
+	case protocol.CompanionStanceIntent:
+		if err := c.realtimeAdmission.CompanionStance(c.playerID, c.controllerID, command); err != nil {
+			return realtimeAdmissionErrorResponse(err)
+		}
 	default:
 		return http.StatusBadRequest, json.RawMessage(`{"code":"invalid_world_input","error":"Invalid movement input"}`)
 	}

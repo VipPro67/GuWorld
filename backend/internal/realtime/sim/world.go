@@ -80,9 +80,43 @@ func (key ZoneKey) String() string {
 }
 
 const (
-	EntityPlayer  EntityKind = "player"
-	EntityMonster EntityKind = "monster"
+	EntityPlayer    EntityKind = "player"
+	EntityMonster   EntityKind = "monster"
+	EntityCompanion EntityKind = "companion"
 )
+
+type CompanionStance string
+
+const (
+	StanceDefend CompanionStance = "DEFEND"
+	StanceFocus  CompanionStance = "FOCUS"
+	StanceFollow CompanionStance = "FOLLOW"
+)
+
+type CompanionStateKind string
+
+const (
+	CompanionFollowing CompanionStateKind = "FOLLOWING"
+	CompanionEngaging  CompanionStateKind = "ENGAGING"
+	CompanionReturning CompanionStateKind = "RETURNING"
+)
+
+type CompanionState struct {
+	Active           bool               `json:"active"`
+	OwnerID          EntityID           `json:"owner_id"`
+	OwnerCharacterID CharacterID        `json:"owner_character_id"`
+	ActorID          string             `json:"actor_id"`
+	ActorKind        string             `json:"actor_kind"`
+	Stance           CompanionStance    `json:"stance"`
+	State            CompanionStateKind `json:"state"`
+	FocusTargetID    EntityID           `json:"focus_target_id,omitempty"`
+	FollowRadius     float64            `json:"follow_radius"`
+	LeashRadius      float64            `json:"leash_radius"`
+	AttackRange      float64            `json:"attack_range"`
+	Loyalty          float64            `json:"loyalty"`
+	Rank             int                `json:"rank"`
+	TTLRemaining     uint64             `json:"ttl_remaining,omitempty"`
+}
 
 type Vec2 struct {
 	X float64 `json:"x"`
@@ -121,6 +155,7 @@ type Entity struct {
 	LeaseToken     string                   `json:"-"`
 	AI             AIState                  `json:"-"`
 	Combat         CombatState              `json:"-"`
+	Companion      CompanionState           `json:"-"`
 
 	moveIntent    Vec2
 	moveTarget    *Vec2
@@ -129,15 +164,17 @@ type Entity struct {
 }
 
 type InputCommand struct {
-	EntityID   EntityID
-	LeaseToken string
-	Seq        uint64
-	Move       Vec2
+	EntityID        EntityID
+	LeaseToken      string
+	Seq             uint64
+	Move            Vec2
 	// Target is set for a click-to-move intent. It shares the movement sequence
 	// stream with WASD input; a non-zero Move cancels an active target.
-	Target *Vec2
-	Cast   *CastCommand
-	Attack *AttackCommand
+	Target          *Vec2
+	Cast            *CastCommand
+	Attack          *AttackCommand
+	Capture         *CaptureCommand
+	CompanionStance *CompanionStanceCommand
 }
 
 type lifecycleCommand struct {
@@ -488,13 +525,17 @@ func (w *World) RemoveEntity(entityID EntityID) {
 	w.removeEntityLocked(entityID)
 }
 
-func (w *World) removeEntityLocked(entityID EntityID) {
+func (w *World) despawnEntityLocked(entityID EntityID) {
 	if existing, exists := w.entities[entityID]; exists {
 		if existing.Kind == EntityPlayer {
 			w.activePlayers--
 		}
 		delete(w.entities, entityID)
 	}
+}
+
+func (w *World) removeEntityLocked(entityID EntityID) {
+	w.despawnEntityLocked(entityID)
 	w.publish()
 }
 
@@ -617,6 +658,25 @@ func (w *World) Step() Snapshot {
 			w.startBasicAttackLocked(entity, *command.Attack)
 			continue
 		}
+		if command.Capture != nil {
+			w.startCaptureLocked(entity, *command.Capture)
+			continue
+		}
+		if command.CompanionStance != nil {
+			w.setCompanionStanceLocked(entity, *command.CompanionStance)
+			continue
+		}
+		if entity.Combat.Pending != nil && entity.Combat.Pending.IsCapture && (command.Target != nil || command.Move.X != 0 || command.Move.Y != 0) {
+			entity.Combat.Pending = nil
+			entity.Revision++
+			w.emitEvent(combat.Event{
+				Type:     combat.EventCaptureInterrupted,
+				SourceID: string(entity.ID),
+				TargetID: string(entity.ID),
+				SkillID:  "CAPTURE",
+				Reason:   "moved",
+			})
+		}
 		if command.Target != nil {
 			target := clampMoveTarget(entity.Transform.Position, *command.Target)
 			if w.blocked(target, entity.Radius) {
@@ -641,6 +701,7 @@ func (w *World) Step() Snapshot {
 	}
 
 	w.stepMonsterAI()
+	w.stepCompanionAI()
 	w.tickCombat()
 	w.tickTribulationHazardsLocked()
 
@@ -982,7 +1043,7 @@ func validateEntity(entity Entity) error {
 	if entity.ID == "" || len(entity.ID) > MaxEntityIDLength || strings.TrimSpace(string(entity.ID)) != string(entity.ID) {
 		return fmt.Errorf("%w: invalid id", ErrInvalidEntity)
 	}
-	if entity.Kind != EntityPlayer && entity.Kind != EntityMonster {
+	if entity.Kind != EntityPlayer && entity.Kind != EntityMonster && entity.Kind != EntityCompanion {
 		return fmt.Errorf("%w: invalid kind", ErrInvalidEntity)
 	}
 	if !validCoordinate(entity.Transform.Position.X) || !validCoordinate(entity.Transform.Position.Y) || !finite(entity.Speed) || entity.Speed < 0 || entity.Speed > MaxEntitySpeed || !finite(entity.Radius) || entity.Radius < 0 || entity.Radius > MaxEntityRadius {

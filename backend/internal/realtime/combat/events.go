@@ -16,8 +16,15 @@ const (
 	EventStatusApplied   EventType = "STATUS_APPLIED"
 	EventStatusExpired   EventType = "STATUS_EXPIRED"
 	EventHiddenPassive   EventType = "HIDDEN_PASSIVE_TRIGGERED"
-	EventMoveRejected    EventType = "MOVE_TARGET_REJECTED"
-	EventEntityDied      EventType = "ENTITY_DIED"
+	EventMoveRejected        EventType = "MOVE_TARGET_REJECTED"
+	EventEntityDied          EventType = "ENTITY_DIED"
+	EventCaptureStarted      EventType = "CAPTURE_STARTED"
+	EventCaptureInterrupted  EventType = "CAPTURE_INTERRUPTED"
+	EventCaptureSuccess      EventType = "CAPTURE_SUCCESS"
+	EventCaptureFailed       EventType = "CAPTURE_FAILED"
+	EventSoulBackfire        EventType = "SOUL_BACKFIRE"
+	EventCompanionInjured    EventType = "COMPANION_INJURED"
+	EventCompanionPermadeath EventType = "COMPANION_PERMADEATH"
 )
 
 // Event is emitted by the zone tick owner. IDs are monotonic per zone and are

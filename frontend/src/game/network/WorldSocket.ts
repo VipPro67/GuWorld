@@ -10,6 +10,8 @@ import {
   parseWorldWelcomePayload,
   type CastPayload,
   type BasicAttackPayload,
+  type CapturePayload,
+  type CompanionStancePayload,
   type MoveTargetPayload,
   type WorldEnvelope,
   type WorldEvent,
@@ -238,6 +240,37 @@ export class WorldSocket {
       return seq;
     } catch (error) {
       this.notifyError(asError(error, "basic_attack_send_failed"));
+      return null;
+    }
+  }
+
+  /** Sends a beast capture channeling intent. */
+  public sendCapture(targetId: string, guId?: string): number | null {
+    if (!this.isJoined() || !this.socket) return null;
+    if (!targetId || targetId.length > 80) return null;
+    const seq = this.nextSequence();
+    if (seq === null || !this.socket) return null;
+    const payload: CapturePayload = { seq, target_id: targetId, gu_id: guId };
+    try {
+      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.capture", payload }));
+      return seq;
+    } catch (error) {
+      this.notifyError(asError(error, "capture_send_failed"));
+      return null;
+    }
+  }
+
+  /** Sends a companion tactical stance order. */
+  public sendCompanionStance(stance: "DEFEND" | "FOCUS" | "FOLLOW", focusTargetId?: string): number | null {
+    if (!this.isJoined() || !this.socket) return null;
+    const seq = this.nextSequence();
+    if (seq === null || !this.socket) return null;
+    const payload: CompanionStancePayload = { seq, stance, focus_target_id: focusTargetId };
+    try {
+      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.companion_stance", payload }));
+      return seq;
+    } catch (error) {
+      this.notifyError(asError(error, "companion_stance_send_failed"));
       return null;
     }
   }

@@ -2262,35 +2262,113 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               {/* Group Actions & Individual Instances list for totalCount > 1 */}
               {totalCount > 1 && (
                 <div className="space-y-3 pt-2 border-t border-zinc-900">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block font-bold">
                       Thao Tác Nhóm ({totalCount} con)
                     </span>
-                    {hasHunger && onFeedGroup && (
-                      <button
-                        type="button"
-                        disabled={actionLoading || isCurrentlyFeedingGroup || hungryBugsCount === 0 || (!canFeedWithResource && availableFood === 0)}
-                        onClick={() => {
-                          if (hungryBugsCount === 0) {
-                            useGameStore.getState().addToast("Không có Cổ trùng nào trong nhóm này đang đói.", "info");
-                            return;
-                          }
-                          if (availableFood === 0 && !canFeedWithResource) {
-                            useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
-                            return;
-                          }
-                          handleFeedGroupClick(inspectedGroup.guId, spec.rank);
-                        }}
-                        className={`py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                          canFeedGroup
-                            ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                            : "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-60"
-                        }`}
-                      >
-                        {isCurrentlyFeedingGroup ? "Đang cho ăn..." : `🍽️ Cho Ăn Nhóm (${hungryBugsCount} con đói)`}
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {hasHunger && onFeedGroup && (
+                        <button
+                          type="button"
+                          disabled={actionLoading || isCurrentlyFeedingGroup || hungryBugsCount === 0 || (!canFeedWithResource && availableFood === 0)}
+                          onClick={() => {
+                            if (hungryBugsCount === 0) {
+                              useGameStore.getState().addToast("Không có Cổ trùng nào trong nhóm này đang đói.", "info");
+                              return;
+                            }
+                            if (availableFood === 0 && !canFeedWithResource) {
+                              useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
+                              return;
+                            }
+                            handleFeedGroupClick(inspectedGroup.guId, spec.rank);
+                          }}
+                          className={`py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            canFeedGroup
+                              ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                              : "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-60"
+                          }`}
+                        >
+                          {isCurrentlyFeedingGroup ? "Đang cho ăn..." : `🍽️ Cho Ăn Nhóm (${hungryBugsCount} con đói)`}
+                        </button>
+                      )}
+
+                      {/* Group Consumable Use */}
+                      {spec.gu_type === "Consumable" && (onUseGus || onUseGu) && (() => {
+                        const eligible = instances.filter(isEligibleForUse);
+                        if (eligible.length === 0) return null;
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={actionLoading || (usingGuId !== null && instances.some((g) => g.instance_id === usingGuId))}
+                              onClick={() => {
+                                const target = eligible[0];
+                                if (target) void handleUseGu(target.instance_id);
+                              }}
+                              className="py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.3)] transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              {usingGuId && instances.some((g) => g.instance_id === usingGuId) ? "..." : "✨ Dùng 1 Con"}
+                            </button>
+                            {eligible.length > 1 && onUseGus && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setUseMultipleGuGroupKey(
+                                    inspectedGroup.groupKey === useMultipleGuGroupKey ? null : inspectedGroup.groupKey
+                                  );
+                                  setUseMultipleGuQty(eligible.length);
+                                }}
+                                className="py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 bg-amber-950/40 text-amber-300 border border-amber-600/40 hover:bg-amber-900/50 transition-all cursor-pointer"
+                              >
+                                ✨ Dùng Nhiều
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
+
+                  {/* Quantity picker for multi-use in Inspector */}
+                  {useMultipleGuGroupKey === inspectedGroup.groupKey && (() => {
+                    const eligibleCount = instances.filter(isEligibleForUse).length;
+                    return (
+                      <div className="flex items-center gap-2 p-2.5 border border-amber-900/40 bg-amber-950/20 rounded-xl flex-wrap">
+                        <span className="text-[10px] text-amber-400 font-mono font-bold whitespace-nowrap">Số lượng:</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={eligibleCount}
+                          value={useMultipleGuQty}
+                          onChange={(e) => setUseMultipleGuQty(Math.max(1, Math.min(eligibleCount, parseInt(e.target.value) || 1)))}
+                          className="w-16 bg-zinc-950 border border-amber-900/50 text-amber-300 text-xs font-mono text-center py-1 rounded-lg outline-none focus:border-amber-500/60"
+                        />
+                        <span className="text-[10px] text-zinc-500 font-mono">/ {eligibleCount} đủ điều kiện</span>
+                        <button
+                          type="button"
+                          onClick={() => setUseMultipleGuQty(eligibleCount)}
+                          className="text-[10px] py-1 px-2 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
+                        >
+                          Tất cả
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUseMultipleGus(inspectedGroup.groupKey, instances)}
+                          disabled={actionLoading || usingGuId === "batch"}
+                          className="text-[10px] font-bold py-1 px-3 bg-amber-600 text-white hover:bg-amber-500 rounded font-mono transition-all cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.2)]"
+                        >
+                          {usingGuId === "batch" ? "Đang sử dụng..." : "Xác nhận"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setUseMultipleGuGroupKey(null); setUseMultipleGuQty(1); }}
+                          className="text-[10px] py-1 px-2.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
+                        >
+                          Hủy
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {/* List of individual instances */}
                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -2323,6 +2401,28 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* Consumable Use */}
+                            {spec.gu_type === "Consumable" && (onUseGu || onUseGus) && !isDead && status !== "SEALED" && (
+                              <button
+                                type="button"
+                                disabled={actionLoading || usingGuId === gu.instance_id}
+                                onClick={() => handleUseGu(gu.instance_id)}
+                                className="py-1 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-mono text-[10px] font-bold shadow-[0_0_8px_rgba(245,158,11,0.3)] transition-all cursor-pointer disabled:opacity-50"
+                              >
+                                {usingGuId === gu.instance_id ? "..." : "Sử Dụng"}
+                              </button>
+                            )}
+                            {/* Out of combat support */}
+                            {canUseOutOfCombat(spec) && !isDead && status !== "SEALED" && onUseSupportGu && (
+                              <button
+                                type="button"
+                                disabled={actionLoading || usingGuId === gu.instance_id}
+                                onClick={() => handleUseSupportGu(gu.instance_id)}
+                                className="py-1 px-2 rounded-lg bg-emerald-950/40 text-emerald-300 border border-emerald-800/50 hover:bg-emerald-900/60 font-mono text-[10px] font-bold disabled:opacity-50"
+                              >
+                                {usingGuId === gu.instance_id ? "..." : "🌿 Dùng"}
+                              </button>
+                            )}
                             {hasHunger && isHungry && !isDead && (
                               <button
                                 type="button"

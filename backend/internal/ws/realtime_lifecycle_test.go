@@ -68,6 +68,14 @@ func (f *fakeRealtimeAdmission) BasicAttack(_, _ uuid.UUID, _ protocol.Attack) e
 	return nil
 }
 
+func (f *fakeRealtimeAdmission) Capture(_, _ uuid.UUID, _ protocol.CaptureIntent) error {
+	return nil
+}
+
+func (f *fakeRealtimeAdmission) CompanionStance(_, _ uuid.UUID, _ protocol.CompanionStanceIntent) error {
+	return nil
+}
+
 func (f *fakeRealtimeAdmission) TransferAtEdge(_, _ uuid.UUID, _ sim.Vec2) (protocol.Transfer, bool, error) {
 	return protocol.Transfer{}, false, nil
 }

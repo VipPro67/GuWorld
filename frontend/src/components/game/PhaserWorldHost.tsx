@@ -86,7 +86,7 @@ function buildHud(runtime: WorldRuntime, player: Player | null): HudData | null 
     castName: skills.find((skill) => skill.id === combat.castSkillId)?.name ?? "",
     castProgress,
     target: targetEntity
-      ? { id: targetEntity.id, kind: targetEntity.kind, hp: targetEntity.hp, maxHp: targetEntity.maxHp, shield: targetEntity.shield, name: targetEntity.name, templateId: targetEntity.templateId, aiState: targetEntity.aiState, pvpEnabled: targetEntity.pvpEnabled }
+      ? { id: targetEntity.id, kind: targetEntity.kind, hp: targetEntity.hp, maxHp: targetEntity.maxHp, shield: targetEntity.shield, name: targetEntity.name, templateId: targetEntity.templateId, aiState: targetEntity.aiState, pvpEnabled: targetEntity.pvpEnabled, x: targetEntity.x, y: targetEntity.y, statuses: targetEntity.statuses }
       : null,
     statusText: runtime.getCombatNotice(),
     position: runtime.getSelfPosition(),
@@ -578,6 +578,8 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
             rightClickSlot={currentCombatSettings?.realtime_right_click_slot ?? 0}
             onClearTarget={() => runtimeRef.current?.setSelectedTarget(null)}
             onSelectTarget={(id) => runtimeRef.current?.setSelectedTarget(id)}
+            onCapture={(targetId) => runtimeRef.current?.captureTarget(targetId)}
+            onCompanionStance={(stance) => runtimeRef.current?.setCompanionStance(stance, runtimeRef.current?.getSelectedTargetId() ?? undefined)}
             onMoveJoystick={(vector) => {
               const game = gameRef.current;
               if (!game) return;

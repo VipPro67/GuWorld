@@ -517,6 +517,7 @@ Quái và Cổ trùng **cùng rank là cân bằng** (mất ~3–5 hit để h�
 - **Hai đường luyện:**
   - **Luyện nhanh** (`POST /api/refine`): tức thời, dành cho Cổ mục tiêu có rank **thấp hơn cảnh giới người chơi** và **không phải Tiên Cổ (rank ≥ 6)**. Cổ rank ngang cấp trở lên trả lỗi `REFINE_SESSION_REQUIRED`.
   - **Phiên Luyện Cổ** (`POST /api/refine/sessions`): bắt buộc cho Cổ ngang cấp cảnh giới trở lên và toàn bộ Tiên Cổ. Tài nguyên + Cổ nguyên liệu bị trừ/khóa ngay khi mở phiên (persona cổ bị khóa không thể dùng việc khác); phiên chạy nền theo thời gian thật kể cả khi offline.
+  - **Rút ngắn thời gian theo Chân Ý Luyện Đạo:** tổng thời gian phiên giảm **5%/cấp cảnh giới Luyện Đạo** (Ordinary 100% → Supreme Grandmaster **80%**, cap tại 20%). Chỉ rút ngắn khoảng chờ giữa các bước — cửa sổ thao tác minigame giữ nguyên độ khó. Hệ số được chốt ngay lúc mở phiên (snapshot): tu luyện thêm giữa phiên không đổi thời gian lần đó. Đ.preview trả `time_scale` + `duration_seconds` để UI hiển thị tổng thời gian dự kiến.
 - **Phiên Luyện Cổ theo thời gian:** chia thành N bước theo rank (R1: 3 bước/60s → R9: 7 bước/4 giờ), mỗi bước mở trong cửa sổ ngắn:
   - Bước 1 luôn là **Dẫn Hỏa** (chọn hành động xử lý tình huống lò: đúng 100 điểm / trung tính 50 / sai 0).
   - Bước cuối luôn là **Khai Lò** (Canh Nhịp — click đúng lúc kim đi vào vùng sáng; vùng càng hẹp rank càng cao).
@@ -737,22 +738,40 @@ Trong tab **Cài đặt** của hồ sơ (Aperture), đạo hữu có thể ch�
 - Ngoài ra vẫn có thể đặt **điều kiện dùng** (Luôn / HP thấp / Chân nguyên cao / Máu địch thấp) và **thứ tự ưu tiên** cho từng Cổ trong bộ.
 
 
-### Bắt sủng vật (Monster Capture)
+### Bắt sủng vật & Nô Đạo Realtime (Monster Capture & Enslavement Path)
 
-Trong chiến đấu, đạo hữu có thể bắt quái vật làm sủng vật:
+Trong chiến đấu Realtime (20Hz server authoritative), đạo hữu có thể trực tiếp kết ấn Nô Đạo để thu phục dã thú:
 
-- **Điều kiện:** Quái vật phải có cờ `is_capturable` trong dictionary quái vật — **mọi quái dã ngoại (Normal/Elite) đều bắt được**, trừ khôi lỗi/thạch nhân/tàn niệm/linh thể/cây cỏ (không phải sinh vật sống). Boss, quái Tai Kiếp và Tu Sĩ Nhân Loại **không** bắt được.
-- **Đạo ngân Nô đạo:** tỉ lệ bắt và chỉ số sủng vật bắt được nhân thêm `1 + sqrt(đạo_ngân_Nô_đạo)/100` (dampened: 10.000 đạo ngân = ×2). Chỉ áp từ **Lục Chuyển (rank 6)** trở lên.
-- **Yêu cầu Chuyển:** Cổ trùng bắt buộc phải **Chuyển ≥ Chuyển quái** mới có thể bắt.
-- **Tỉ lệ bắt:** `clamp(template.capture_chance × hpFactor × typeFactor + captureBonus, 1%, 100%)`.
-  ```
-  hpFactor = sqrt(clamp(1 - HP hiện tại / HP tối đa, 0.1, 1))
-  ```
-  - `template.capture_chance`: xác suất gốc trong dữ liệu quái.
-  - `typeFactor`: quái thường `1.0`, `ELITE` `0.6`, Boss và quái tai kiếp `0`.
-  - `captureBonus`: cộng tổng bonus từ Cổ đang trang bị và ACTIVE.
-  - HP đầy vẫn có hệ số sàn `sqrt(0.1)`; quái yếu dễ bắt hơn.
-- **Kết quả:** Roll ngẫu nhiên dưới tỉ lệ bắt đã tính thì thành công; quái trở thành Actor sủng vật persistent và bị xóa khỏi combat. Ngược lại, tiếp tục chiến đấu.
+- **Điều kiện xuất hiện nút Kết Ấn (Bắt thú):**
+  1. Mục tiêu là quái thú dã ngoại (`EntityMonster`) và cho phép bắt (`is_capturable !== false`).
+  2. Quái đã bị áp chế: **HP $\le 25\%$** HOẶC đang chịu khống chế cứng (`STUN`, `FREEZE`, `PETRIFY`, `BIND`, `ROOT`).
+  3. Cự ly tiếp cận: $\le 5.0 - 6.0$m.
+  4. Người chơi sở hữu Cổ Nô Đạo (Cổ có hiệu ứng `CAPTURE_BONUS`, phái `Enslavement Path`, tag `enslave` hoặc Cổ Ngự Xích).
+- **Cơ chế Dẫn Kênh (Channeling 3.0s = 60 ticks):**
+  - Cổ sư tiêu hao 20 Chân nguyên, bước vào trạng thái niệm ấn (bị khóa chân `ROOT`).
+  - **Ngắt niệm (Interrupt):** Nếu Cổ sư di chuyển, bị trúng đòn sát thương từ bất kỳ nguồn nào hoặc trúng khống chế, quá trình kết ấn lập tức bị ngắt.
+- **Xác suất bắt thành công:**
+  - $P_{\text{capture}} = \text{clamp}\big((P_{\text{base}} \times F_{\text{rank}} \times F_{\text{hp}} \times F_{\text{cc}} \times F_{\text{soul}}) + B_{\text{gu}}, \; 0.02, \; 0.95\big)$.
+  - Nếu thất bại trước quái cấp cao, Cổ sư có thể bị **Phản phệ Thần Hồn (Soul Backfire)**: nhận sát thương và Choáng 2 giây.
+  - Nếu thành công, quái biến mất khỏi map realtime và được lưu bền vững vào `non_player_actors`.
+
+### Chỉ huy Chiến Thú trong Realtime (Tactical Stances)
+
+Khi có chiến thú đồng hành (`EntityCompanion`) hiện diện trên bản đồ, thanh lệnh chiến thuật sẽ xuất hiện:
+- **Hộ Vệ (`DEFEND`):** Chiến thú đi theo trong bán kính 4m và tự động tấn công bất kỳ mục tiêu nào dám đe dọa chủ nhân.
+- **Tập Trung (`FOCUS`):** Chiến thú tập trung toàn lực truy kích mục tiêu mà Cổ sư đang nhắm tới.
+- **Thu Hồi / Theo Sau (`FOLLOW`):** Dừng mọi giao tranh, lập tức rút lui về bên cạnh Cổ sư.
+- **Dây xích bảo vệ (Leash 15m):** Nếu bị kéo xa quá 15m khỏi chủ nhân, thú cưng sẽ tự động bỏ giao tranh và chạy về.
+
+### Sinh Tử & Trọng Thương Chiến Thú (Casualty & Recovery)
+
+Khi chiến thú cạn HP trong trận realtime:
+- **Minion tạm thời:** Tan biến khỏi thế giới.
+- **Chiến thú thường trực:** Tung xúc xắc phân giải **Tử Vong Vĩnh Viễn (Permadeath)** vs **Trọng Thương (Injured)** theo công thức:
+  $$P_{\text{permadeath}} = \text{clamp}(P_{\text{base}} + \Delta_{\text{overkill}} - B_{\text{loyalty}} - B_{\text{rank}}, \; 0.05, \; 0.85)$$
+  - Độ trung thành (Loyalty) và phẩm cấp (Rank) cao giúp thú cưng kiên cường vượt qua cửa tử.
+  - Nếu tử trận (`DEAD`): Xóa vĩnh viễn khỏi đội ngũ.
+  - Nếu trọng thương (`INJURED`): Thu hồi về Tiên Khiếu dưỡng thương, cần dùng đan dược cứu chữa hoặc tịnh dưỡng để hồi phục trước khi có thể xuất trận lại.
 
 ### Sủng vật (Pets)
 

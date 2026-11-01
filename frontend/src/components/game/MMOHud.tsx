@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Compass, Crown, Flame, Gem, History, MapPin, Menu, Minus, Package, PawPrint, Plus, ScrollText, Settings2, ShoppingBag, Sparkles, Store, Swords, Trophy, Users, X, Eye, EyeOff, ChevronDown, ChevronUp, Shield, Crosshair, Pickaxe, Gift } from "lucide-react";
+import { BookOpen, Compass, Crown, Flame, Gem, History, MapPin, Menu, Minus, Package, PawPrint, Plus, ScrollText, Settings2, ShoppingBag, Sparkles, Store, Swords, Trophy, Users, X, Eye, EyeOff, ChevronDown, ChevronUp, Shield, Crosshair, Pickaxe, Gift, Footprints } from "lucide-react";
 import type { WorldSkillInfo } from "@/game/network/Protocol";
 import type { RuntimeEntity } from "@/game/core/WorldRuntime";
 import { getMonsterArt } from "@/game/assets/MonsterArt";
@@ -26,7 +26,7 @@ import { getGuIconUrl } from "@/lib/gu-icons";
 
 export interface HudTarget {
   id: string;
-  kind: "player" | "monster";
+  kind: "player" | "monster" | "companion";
   hp: number;
   maxHp: number;
   shield: number;
@@ -34,6 +34,9 @@ export interface HudTarget {
   templateId: string;
   aiState: string;
   pvpEnabled?: boolean;
+  x?: number;
+  y?: number;
+  statuses?: string[];
 }
 
 export interface MMOHudProps {
@@ -75,6 +78,8 @@ export interface MMOHudProps {
   aimingSlot?: number | null;
   onCancelAim?: () => void;
   onHoverSkill?: (slot: number | null) => void;
+  onCapture?: (targetId: string) => void;
+  onCompanionStance?: (stance: "DEFEND" | "FOCUS" | "FOLLOW") => void;
 }
 
 const MODE_LABEL: Record<WorldSkillInfo["mode"], string> = {
@@ -350,6 +355,61 @@ export function MMOHud(props: MMOHudProps) {
       level: "medium",
     };
   }
+
+  // Companion logic (Nô Đạo)
+  const companions = (props.nearby || []).filter(
+    (e) => e.kind === "companion" && (e.ownerId === props.player?.id || e.ownerId === props.nearby.find((s) => s.isSelf)?.id)
+  );
+  const hasCompanion = companions.length > 0;
+  const activeCompanion = companions[0];
+  const [selectedStance, setSelectedStance] = useState<"DEFEND" | "FOCUS" | "FOLLOW">("DEFEND");
+  const currentStance = activeCompanion?.stance || selectedStance;
+
+  // Capture Gu check
+  let hasCaptureGu = false;
+  if (props.player?.gu_inventory) {
+    hasCaptureGu = props.player.gu_inventory.some((gu) => {
+      const spec = guDictionary[gu.gu_id];
+      if (!spec) return false;
+      const pathStr = Array.isArray(spec.path) ? spec.path.join(" ") : "";
+      const combatTags = Array.isArray(spec.combat_tags) ? spec.combat_tags.join(" ") : "";
+      const supportTags = Array.isArray(spec.support_tags) ? spec.support_tags.join(" ") : "";
+      const tagsStr = `${combatTags} ${supportTags}`;
+      const nameStr = spec.name || "";
+      const idStr = spec.id || gu.gu_id || "";
+      return (
+        pathStr.toLowerCase().includes("enslavement") ||
+        tagsStr.toLowerCase().includes("enslave") ||
+        nameStr.toLowerCase().includes("ngự xích") ||
+        nameStr.toLowerCase().includes("nô") ||
+        idStr.includes("CONTROL_CHAIN") ||
+        idStr.includes("ENSLAVE") ||
+        idStr.includes("NO_") ||
+        JSON.stringify(spec.effects || {}).includes("CAPTURE_BONUS")
+      );
+    });
+  }
+
+  // Capture condition check (target subdued: HP <= 25% or CCed, range <= 6.0m, capturable, hasCaptureGu)
+  const targetEntity = props.target;
+  const selfEntity = props.nearby.find((e) => e.isSelf);
+  const distanceToTarget = targetEntity && targetEntity.x !== undefined && targetEntity.y !== undefined && selfEntity
+    ? Math.hypot(targetEntity.x - selfEntity.x, targetEntity.y - selfEntity.y)
+    : (targetEntity && props.position ? Math.hypot((targetEntity.x ?? props.position.x) - props.position.x, (targetEntity.y ?? props.position.y) - props.position.y) : 999);
+  const targetHpPct = targetEntity && targetEntity.maxHp > 0 ? targetEntity.hp / targetEntity.maxHp : 1;
+  const hasTargetCC = targetEntity?.statuses?.some((st) => ["STUN", "FREEZE", "PETRIFY", "BIND", "ROOT"].includes(st)) ?? false;
+  const isSubdued = targetHpPct <= 0.25 || hasTargetCC;
+  const isCapturable = targetEntity?.kind === "monster" && (targetSpec ? targetSpec.is_capturable !== false : true);
+
+  const canCapture = Boolean(
+    targetEntity &&
+    targetEntity.kind === "monster" &&
+    targetEntity.hp > 0 &&
+    isCapturable &&
+    isSubdued &&
+    distanceToTarget <= 6.0 &&
+    hasCaptureGu
+  );
 
   const dailyMissions = useGameStore((state) => state.dailyMissions);
   const fetchDailyMissions = useGameStore((state) => state.fetchDailyMissions);
@@ -1196,6 +1256,17 @@ export function MMOHud(props: MMOHudProps) {
                 </div>
               </div>
 
+              {canCapture && (
+                <button
+                  type="button"
+                  onClick={() => targetEntity && props.onCapture?.(targetEntity.id)}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg border border-amber-400 bg-gradient-to-r from-amber-950 via-emerald-950 to-amber-950 py-1.5 px-3 font-bold text-xs text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.5)] animate-pulse hover:brightness-125 active:scale-95 transition-all cursor-pointer"
+                >
+                  <PawPrint className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Kết Ấn Nô Đạo (Bắt Thú)</span>
+                </button>
+              )}
+
               <div className="mt-2 rounded-lg border border-[#a88952]/25 bg-[#201811]/90 p-2 text-[10px]">
                 <div className="flex items-center justify-between text-zinc-400 mb-1">
                   <span className="flex items-center gap-1 font-semibold text-[#e8d7b3]">
@@ -1648,6 +1719,75 @@ export function MMOHud(props: MMOHudProps) {
           >
             <X className="h-3 w-3" />
             <span>Hủy (Esc)</span>
+          </button>
+        </div>
+      )}
+
+      {/* Companion Stance Bar: ONLY when player has active companion */}
+      {hasCompanion && (
+        <div className="pointer-events-auto absolute bottom-24 md:bottom-28 left-1/2 -translate-x-1/2 flex items-center gap-1 sm:gap-1.5 rounded-lg border border-[#a88952]/50 bg-black/85 px-2.5 py-1 shadow-2xl backdrop-blur z-20">
+          <span className="text-[10px] sm:text-[11px] font-semibold text-amber-200 flex items-center gap-1 mr-1">
+            <PawPrint className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-400" />
+            <span className="max-w-[70px] sm:max-w-none truncate">{activeCompanion?.name || "Chiến Thú"}:</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedStance("DEFEND");
+              props.onCompanionStance?.("DEFEND");
+            }}
+            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] sm:text-xs font-medium transition-all cursor-pointer ${
+              currentStance === "DEFEND"
+                ? "border border-amber-400 bg-amber-900/90 text-amber-100 shadow-[0_0_10px_rgba(245,158,11,0.5)] font-bold"
+                : "border border-zinc-700 bg-zinc-900/70 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500"
+            }`}
+          >
+            <Shield className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            Hộ Vệ
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedStance("FOCUS");
+              props.onCompanionStance?.("FOCUS");
+            }}
+            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] sm:text-xs font-medium transition-all cursor-pointer ${
+              currentStance === "FOCUS"
+                ? "border border-rose-400 bg-rose-900/90 text-rose-100 shadow-[0_0_10px_rgba(244,63,94,0.5)] font-bold"
+                : "border border-zinc-700 bg-zinc-900/70 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500"
+            }`}
+          >
+            <Crosshair className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            Tập Trung
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedStance("FOLLOW");
+              props.onCompanionStance?.("FOLLOW");
+            }}
+            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] sm:text-xs font-medium transition-all cursor-pointer ${
+              currentStance === "FOLLOW"
+                ? "border border-emerald-400 bg-emerald-900/90 text-emerald-100 shadow-[0_0_10px_rgba(16,185,129,0.5)] font-bold"
+                : "border border-zinc-700 bg-zinc-900/70 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500"
+            }`}
+          >
+            <Footprints className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            Thu Hồi
+          </button>
+        </div>
+      )}
+
+      {/* Floating Capture Quick Action Button: ONLY when canCapture is true */}
+      {canCapture && (
+        <div className="pointer-events-auto absolute bottom-36 md:bottom-40 left-1/2 -translate-x-1/2 flex items-center z-20">
+          <button
+            type="button"
+            onClick={() => targetEntity && props.onCapture?.(targetEntity.id)}
+            className="flex items-center gap-2 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-950 via-emerald-950 to-amber-950 px-3.5 py-1.5 sm:px-4 sm:py-2 font-bold text-xs sm:text-sm text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.6)] animate-pulse hover:brightness-125 active:scale-95 transition-all cursor-pointer"
+          >
+            <PawPrint className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400 animate-bounce" />
+            <span>Thu Phục {targetEntity?.name || "Mục Tiêu"} (Nô Đạo)</span>
           </button>
         </div>
       )}

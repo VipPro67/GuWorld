@@ -22,6 +22,10 @@ func (w *World) resolveCastLocked(caster *Entity) {
 	if pending == nil {
 		return
 	}
+	if pending.IsCapture {
+		w.resolveCaptureLocked(caster, pending)
+		return
+	}
 	skill := pending.Skill
 	if skill.SuccessChance > 0 && w.rng.Float64() >= skill.SuccessChance {
 		if skill.BackfireHPPercent > 0 {
@@ -216,5 +220,94 @@ func (w *World) applySelfSupportLocked(caster *Entity, skill combat.Skill) {
 		caster.Vitals.Shield += skill.Shield
 		caster.Revision++
 		w.emitEvent(combat.Event{Type: combat.EventShieldApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: skill.Shield, Shield: caster.Vitals.Shield, HP: caster.Vitals.HP})
+	}
+}
+
+func (w *World) resolveCaptureLocked(caster *Entity, pending *PendingCast) {
+	if caster == nil || caster.Vitals.HP <= 0 {
+		return
+	}
+	target := w.entities[pending.TargetID]
+	if target == nil || target.Vitals.HP <= 0 || target.Kind != EntityMonster {
+		w.emitEvent(combat.Event{
+			Type:     combat.EventCaptureFailed,
+			SourceID: string(caster.ID),
+			TargetID: string(pending.TargetID),
+			Reason:   "target_lost",
+		})
+		return
+	}
+
+	dist := distance(caster.Transform.Position, target.Transform.Position)
+	if dist > 6.0 {
+		w.emitEvent(combat.Event{
+			Type:     combat.EventCaptureFailed,
+			SourceID: string(caster.ID),
+			TargetID: string(target.ID),
+			Reason:   "out_of_range",
+		})
+		return
+	}
+
+	// Calculate capture chance:
+	// P_capture = clamp((P_base * F_rank * F_hp * F_cc * F_soul) + B_gu, 0.02, 0.95)
+	pBase := 0.40
+	if target.AI.Rank >= 4 {
+		pBase = 0.15
+	} else if target.AI.Rank >= 2 {
+		pBase = 0.25
+	}
+
+	casterRank := 1
+	if caster.Companion.Rank > 0 {
+		casterRank = caster.Companion.Rank
+	}
+	rankDiff := casterRank - target.AI.Rank
+	fRank := math.Max(0.2, math.Min(2.0, 1.0+float64(rankDiff)*0.15))
+
+	hpPct := target.Vitals.HP / math.Max(1.0, target.Vitals.MaxHP)
+	fHP := 1.0 + (1.0-hpPct)*0.6
+
+	fCC := 1.0
+	if w.isStunned(target) || w.hasStatus(target, "BIND") || w.hasStatus(target, "ROOT") || w.hasStatus(target, "FREEZE") || w.hasStatus(target, "PETRIFY") {
+		fCC = 1.3
+	}
+
+	fSoul := 1.0
+	bGu := 0.15
+
+	captureChance := math.Max(0.02, math.Min(0.95, (pBase*fRank*fHP*fCC*fSoul)+bGu))
+
+	roll := w.rng.Float64()
+	if roll < captureChance {
+		w.emitEvent(combat.Event{
+			Type:         combat.EventCaptureSuccess,
+			SourceID:     string(caster.ID),
+			TargetID:     string(target.ID),
+			TemplateID:   target.AI.TemplateID,
+			MonsterRank:  target.AI.Rank,
+			PersistentID: target.AI.PersistentID,
+		})
+		w.despawnEntityLocked(target.ID)
+	} else {
+		w.emitEvent(combat.Event{
+			Type:     combat.EventCaptureFailed,
+			SourceID: string(caster.ID),
+			TargetID: string(target.ID),
+			Reason:   "resisted",
+		})
+
+		if target.AI.Rank >= 2 && w.rng.Float64() < 0.35 {
+			backfireDmg := caster.Vitals.MaxHP * 0.10
+			w.applyDamageLocked(target, caster, backfireDmg, "SOUL_BACKFIRE")
+			w.applyStatusLocked(target, caster, combat.Skill{StatusID: "STUN", StatusDurationTicks: 40})
+			w.emitEvent(combat.Event{
+				Type:     combat.EventSoulBackfire,
+				SourceID: string(caster.ID),
+				TargetID: string(target.ID),
+				Amount:   backfireDmg,
+				Reason:   "will_rebound",
+			})
+		}
 	}
 }

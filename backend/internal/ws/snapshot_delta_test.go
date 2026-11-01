@@ -201,6 +201,12 @@ func (r *recordingRealtimeAdmission) Cast(_, _ uuid.UUID, _ protocol.Cast) error
 func (r *recordingRealtimeAdmission) BasicAttack(_, _ uuid.UUID, _ protocol.Attack) error {
 	return nil
 }
+func (r *recordingRealtimeAdmission) Capture(_, _ uuid.UUID, _ protocol.CaptureIntent) error {
+	return nil
+}
+func (r *recordingRealtimeAdmission) CompanionStance(_, _ uuid.UUID, _ protocol.CompanionStanceIntent) error {
+	return nil
+}
 func (r *recordingRealtimeAdmission) TransferAtEdge(_, _ uuid.UUID, _ sim.Vec2) (protocol.Transfer, bool, error) {
 	return protocol.Transfer{}, false, nil
 }

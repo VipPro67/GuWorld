@@ -123,11 +123,17 @@ func (w *World) applyStatusLocked(source, target *Entity, skill combat.Skill) {
 		SkillID: skill.ID, DurationTicks: duration, Amount: 1, Reason: skill.StatusID,
 		X: target.Transform.Position.X, Y: target.Transform.Position.Y,
 	})
-	if target.Kind == EntityPlayer && target.Combat.Pending != nil && target.Combat.Pending.Skill.FormActivation && w.isStunned(target) {
-		interrupted := target.Combat.Pending.Skill.ID
-		target.Combat.Pending = nil
-		target.Revision++
-		w.emitEvent(combat.Event{Type: combat.EventCastInterrupted, SourceID: string(sourceID), TargetID: string(target.ID), SkillID: interrupted, Reason: "hard_cc"})
+	if target.Kind == EntityPlayer && target.Combat.Pending != nil {
+		if target.Combat.Pending.IsCapture && (w.isStunned(target) || w.hasStatus(target, "SILENCE") || w.hasStatus(target, "FREEZE")) {
+			target.Combat.Pending = nil
+			target.Revision++
+			w.emitEvent(combat.Event{Type: combat.EventCaptureInterrupted, SourceID: string(sourceID), TargetID: string(target.ID), SkillID: "CAPTURE", Reason: "crowd_control"})
+		} else if target.Combat.Pending.Skill.FormActivation && w.isStunned(target) {
+			interrupted := target.Combat.Pending.Skill.ID
+			target.Combat.Pending = nil
+			target.Revision++
+			w.emitEvent(combat.Event{Type: combat.EventCastInterrupted, SourceID: string(sourceID), TargetID: string(target.ID), SkillID: interrupted, Reason: "hard_cc"})
+		}
 	}
 }
 

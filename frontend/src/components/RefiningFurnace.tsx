@@ -26,6 +26,9 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 }) => {
   const fetchRecipes = useGameStore((state) => state.fetchRecipes);
   const recipes = useGameStore((state) => state.recipes);
+  const refineSession = useGameStore((state) => state.refineSession);
+  const openRefinePanel = useGameStore((state) => state.openRefinePanel);
+  const sessionActive = !!refineSession && refineSession.status === "ACTIVE";
 
   useEffect(() => {
     fetchRecipes();
@@ -277,7 +280,19 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     ? (selectedRecipe.immortal_essence_stones_cost <= 0 || player.immortal_stones >= selectedRecipe.immortal_essence_stones_cost)
     : false;
 
-  const canRefine = allSlotsFilled && hasRequiredMaterials() && hasEnoughStones && hasEnoughImmortalStones && !actionLoading && !isRefining;
+  const canRefine = allSlotsFilled && hasRequiredMaterials() && hasEnoughStones && hasEnoughImmortalStones && !actionLoading && !isRefining && !sessionActive;
+
+  // Thời gian còn lại của phiên (tính tại lần render gần nhất).
+  const sessionEndShown = useMemo(() => {
+    if (!refineSession) return null;
+    const ends = Date.parse(refineSession.ends_at);
+    if (Number.isNaN(ends)) return null;
+    const remainMs = ends - Date.now();
+    const s = Math.max(0, Math.ceil(remainMs / 1000));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h}g ${m}p` : `${m}p ${s % 60}s`;
+  }, [refineSession]);
 
   // Run Refining Logic
   const handleRefine = async () => {
@@ -788,6 +803,24 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
         <div className="z-10 flex flex-col gap-4">
           {/* Header & Tabs */}
           <div className="shrink-0 space-y-4">
+            {/* Phiên luyện đang chạy: banner trong tab Luyện Cổ */}
+            {sessionActive && refineSession && (
+              <button
+                onClick={openRefinePanel}
+                className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-rose-600/50 bg-rose-950/40 hover:bg-rose-900/40 transition-colors text-left"
+              >
+                <span className="flex items-center gap-2 text-xs text-rose-200">
+                  <Flame className="w-4 h-4 text-rose-400 animate-pulse shrink-0" />
+                  <span>
+                    <span className="font-semibold">Đang có phiên luyện chạy</span>
+                    <span className="text-rose-300/70"> — mục tiêu R{refineSession.target_rank}, điểm {Math.round(refineSession.accuracy * 10) / 10}%</span>
+                  </span>
+                </span>
+                <span className="text-xs font-mono text-amber-300 shrink-0">
+                  {sessionEndShown && `⏳ ${sessionEndShown}`} · Xem phiên ›
+                </span>
+              </button>
+            )}
             <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
               <h3 className="text-md font-bold text-zinc-100 font-serif flex items-center gap-1.5">
                 <Flame className={`w-5 h-5 text-rose-500 ${isRefining ? "animate-bounce" : ""}`} />

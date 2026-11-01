@@ -122,6 +122,9 @@ type RefineRateSnapshot struct {
 	DeathPenalty         float64             `json:"death_penalty"`
 	MasteryMultiplierMax float64             `json:"mastery_multiplier_max"`
 	PityEligible         bool                `json:"pity_eligible"`
+	// TimeScale là hệ số thời gian phiên áp theo cảnh giới Luyện Đạo tại
+	// lúc tạo (1.0 = không giảm; giảm theo RefineSessionTimeScale).
+	TimeScale float64 `json:"time_scale"`
 }
 
 // refineRateInput carries the selection-dependent factors into computeRefineRate.

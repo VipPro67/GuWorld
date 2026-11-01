@@ -355,3 +355,145 @@ func (w *World) QueueDamage(target EntityID, amount float64) (<-chan error, erro
 		return nil, ErrLifecycleQueueFull
 	}
 }
+
+func (w *World) stepCompanionAI() {
+	for _, entity := range w.entities {
+		if entity.Kind != EntityCompanion || entity.Vitals.HP <= 0 {
+			continue
+		}
+
+		owner := w.entities[entity.Companion.OwnerID]
+		if owner == nil || owner.Vitals.HP <= 0 {
+			entity.moveIntent = Vec2{}
+			entity.moveTarget = nil
+			entity.AI.Threat = ""
+			continue
+		}
+
+		distToOwner := distance(entity.Transform.Position, owner.Transform.Position)
+		followRadius := entity.Companion.FollowRadius
+		if followRadius <= 0 {
+			followRadius = 4.0
+		}
+		leashRadius := entity.Companion.LeashRadius
+		if leashRadius <= 0 {
+			leashRadius = 15.0
+		}
+		attackRange := entity.Companion.AttackRange
+		if attackRange <= 0 {
+			attackRange = 2.0
+		}
+
+		// 1. Leash check: return if too far
+		if distToOwner > leashRadius {
+			entity.Companion.State = CompanionReturning
+			entity.AI.Threat = ""
+		}
+
+		// 2. Returning handling
+		if entity.Companion.State == CompanionReturning {
+			if distToOwner <= followRadius {
+				entity.Companion.State = CompanionFollowing
+				entity.moveIntent = Vec2{}
+			} else {
+				dx := owner.Transform.Position.X - entity.Transform.Position.X
+				dy := owner.Transform.Position.Y - entity.Transform.Position.Y
+				length := math.Hypot(dx, dy)
+				if length > 0.01 {
+					entity.moveIntent = Vec2{X: dx / length, Y: dy / length}
+				}
+			}
+			continue
+		}
+
+		// 3. Stance handling
+		if entity.Companion.Stance == StanceFollow {
+			entity.AI.Threat = ""
+			if distToOwner > followRadius {
+				entity.Companion.State = CompanionFollowing
+				dx := owner.Transform.Position.X - entity.Transform.Position.X
+				dy := owner.Transform.Position.Y - entity.Transform.Position.Y
+				length := math.Hypot(dx, dy)
+				if length > 0.01 {
+					entity.moveIntent = Vec2{X: dx / length, Y: dy / length}
+				}
+			} else {
+				entity.moveIntent = Vec2{}
+			}
+			continue
+		}
+
+		var target *Entity
+		if entity.Companion.Stance == StanceFocus && entity.Companion.FocusTargetID != "" {
+			target = w.entities[entity.Companion.FocusTargetID]
+			if target == nil || target.Vitals.HP <= 0 {
+				entity.Companion.FocusTargetID = ""
+				entity.Companion.Stance = StanceDefend
+				target = nil
+			}
+		}
+
+		if target == nil && entity.Companion.Stance == StanceDefend {
+			var nearestThreat *Entity
+			nearestDist := math.Inf(1)
+			for _, other := range w.entities {
+				if other.Kind != EntityMonster || other.Vitals.HP <= 0 || !other.AI.Active {
+					continue
+				}
+				if other.AI.Threat == owner.ID || other.AI.Threat == entity.ID {
+					d := distance(entity.Transform.Position, other.Transform.Position)
+					if d < nearestDist && d <= leashRadius {
+						nearestDist = d
+						nearestThreat = other
+					}
+				}
+			}
+			target = nearestThreat
+		}
+
+		if target != nil {
+			entity.AI.Threat = target.ID
+			entity.Companion.State = CompanionEngaging
+			distToTarget := distance(entity.Transform.Position, target.Transform.Position)
+
+			if distToTarget > attackRange {
+				dx := target.Transform.Position.X - entity.Transform.Position.X
+				dy := target.Transform.Position.Y - entity.Transform.Position.Y
+				length := math.Hypot(dx, dy)
+				if length > 0.01 {
+					entity.moveIntent = Vec2{X: dx / length, Y: dy / length}
+				}
+			} else {
+				entity.moveIntent = Vec2{}
+				if w.tick >= entity.AI.NextAttackTick {
+					attackDmg := entity.AI.AttackDamage
+					if attackDmg <= 0 {
+						attackDmg = 15.0 + float64(entity.Companion.Rank)*5.0
+					}
+					w.applyDamageLocked(entity, target, attackDmg, "BASIC_ATTACK")
+					entity.AI.NextAttackTick = w.tick + 20
+					w.emitEvent(combat.Event{
+						Type: combat.EventBasicAttack,
+						SourceID: string(entity.ID),
+						TargetID: string(target.ID),
+						X: entity.Transform.Position.X,
+						Y: entity.Transform.Position.Y,
+					})
+				}
+			}
+		} else {
+			entity.AI.Threat = ""
+			if distToOwner > followRadius {
+				entity.Companion.State = CompanionFollowing
+				dx := owner.Transform.Position.X - entity.Transform.Position.X
+				dy := owner.Transform.Position.Y - entity.Transform.Position.Y
+				length := math.Hypot(dx, dy)
+				if length > 0.01 {
+					entity.moveIntent = Vec2{X: dx / length, Y: dy / length}
+				}
+			} else {
+				entity.moveIntent = Vec2{}
+			}
+		}
+	}
+}

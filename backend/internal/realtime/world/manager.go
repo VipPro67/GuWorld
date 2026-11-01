@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/spatial"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
@@ -50,6 +52,27 @@ type DeathEvent struct {
 	PersistentID string
 	IsNode       bool
 	TargetKind   string
+}
+
+type CaptureEvent struct {
+	ZoneKey      sim.ZoneKey
+	EventID      uint64
+	Tick         uint64
+	PlayerID     uuid.UUID
+	TargetID     sim.EntityID
+	TemplateID   string
+	MonsterRank  int
+	PersistentID string
+}
+
+type CompanionCasualtyEvent struct {
+	ZoneKey      sim.ZoneKey
+	EventID      uint64
+	Tick         uint64
+	Type         string // "INJURED" or "PERMADEATH"
+	ActorID      string
+	PlayerID     uuid.UUID
+	SourceID     sim.EntityID
 }
 
 // Region-local rollout loads one independent world per active KHU_VUC/SAFE_ZONE.
@@ -385,17 +408,25 @@ type Manager struct {
 	cancel            context.CancelFunc
 	started           bool
 	closed            bool
-	deathHandler      func(context.Context, DeathEvent) error
-	snapshotObserver  func(context.Context, sim.Snapshot)
-	deathQueue        chan DeathEvent
-	deathDone         chan struct{}
-	runCtx            context.Context
-	lazy              bool
-	queueSize         int
-	idleTimeout       time.Duration
-	idleDone          <-chan struct{}
-	evictWG           sync.WaitGroup
-	deathQueueClose   sync.Once
+	deathHandler             func(context.Context, DeathEvent) error
+	snapshotObserver         func(context.Context, sim.Snapshot)
+	deathQueue               chan DeathEvent
+	deathDone                chan struct{}
+	captureHandler           func(context.Context, CaptureEvent) error
+	captureQueue             chan CaptureEvent
+	captureDone              chan struct{}
+	companionCasualtyHandler func(context.Context, CompanionCasualtyEvent) error
+	companionCasualtyQueue   chan CompanionCasualtyEvent
+	companionCasualtyDone    chan struct{}
+	runCtx                   context.Context
+	lazy                     bool
+	queueSize                int
+	idleTimeout              time.Duration
+	idleDone                 <-chan struct{}
+	evictWG                  sync.WaitGroup
+	deathQueueClose          sync.Once
+	captureQueueClose        sync.Once
+	casualtyQueueClose       sync.Once
 }
 
 func NewManager(keys []sim.ZoneKey, queueSize int) (*Manager, error) {
@@ -436,8 +467,13 @@ func newManagerWithMaps(keys []sim.ZoneKey, queueSize, maxPlayersPerZone int, ma
 		zones: make(map[sim.ZoneKey]*managedZone), maps: maps, keys: ordered,
 		runtimeKeys:       make(map[sim.ZoneKey]struct{}),
 		owners:            make(map[sim.CharacterID]OwnershipLease),
-		maxPlayersPerZone: maxPlayersPerZone, deathQueue: make(chan DeathEvent, 256),
-		lazy: lazy, queueSize: queueSize, idleTimeout: 5 * time.Minute,
+		maxPlayersPerZone:      maxPlayersPerZone,
+		deathQueue:             make(chan DeathEvent, 256),
+		captureQueue:           make(chan CaptureEvent, 256),
+		companionCasualtyQueue: make(chan CompanionCasualtyEvent, 256),
+		lazy:                   lazy,
+		queueSize:              queueSize,
+		idleTimeout:            5 * time.Minute,
 	}
 	manager.cond = sync.NewCond(&manager.mu)
 
@@ -706,6 +742,22 @@ func (m *Manager) SetRetryingDeathHandler(handler func(context.Context, DeathEve
 	}
 }
 
+func (m *Manager) SetCaptureHandler(handler func(context.Context, CaptureEvent) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.started {
+		m.captureHandler = handler
+	}
+}
+
+func (m *Manager) SetCompanionCasualtyHandler(handler func(context.Context, CompanionCasualtyEvent) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.started {
+		m.companionCasualtyHandler = handler
+	}
+}
+
 // SetSnapshotObserver installs a non-authoritative observer for published
 // snapshots. It runs on the broadcaster loop, outside the zone tick owner.
 func (m *Manager) SetSnapshotObserver(observer func(context.Context, sim.Snapshot)) {
@@ -738,6 +790,10 @@ func (m *Manager) Start(parent context.Context) error {
 	m.started = true
 	m.deathDone = make(chan struct{})
 	go m.deathWorker(ctx)
+	m.captureDone = make(chan struct{})
+	go m.captureWorker(ctx)
+	m.companionCasualtyDone = make(chan struct{})
+	go m.casualtyWorker(ctx)
 	if m.lazy {
 		m.idleDone = worker.RunEvery(ctx, time.Minute, "Realtime Zone Idle Cleanup", func(context.Context) {
 			m.evictIdle(time.Now())
@@ -957,9 +1013,25 @@ func (m *Manager) Stop(ctx context.Context) error {
 	// before the manager forgets the zone catalog and wakes waiters.
 	m.evictWG.Wait()
 	m.deathQueueClose.Do(func() { close(m.deathQueue) })
+	m.captureQueueClose.Do(func() { close(m.captureQueue) })
+	m.casualtyQueueClose.Do(func() { close(m.companionCasualtyQueue) })
 	if m.deathDone != nil {
 		select {
 		case <-m.deathDone:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if m.captureDone != nil {
+		select {
+		case <-m.captureDone:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if m.companionCasualtyDone != nil {
+		select {
+		case <-m.companionCasualtyDone:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -1325,22 +1397,69 @@ func (m *Manager) broadcastSnapshots(ctx context.Context, zone *managedZone, don
 
 func (m *Manager) enqueueDeaths(zone *managedZone, snapshot sim.Snapshot) {
 	for _, event := range snapshot.Events {
-		if event.Type != "ENTITY_DIED" {
-			continue
+		switch event.Type {
+		case combat.EventCaptureSuccess:
+			m.mu.Lock()
+			hasCaptureHandler := m.captureHandler != nil
+			m.mu.Unlock()
+			if hasCaptureHandler {
+				playerID, err := uuid.Parse(event.SourceID)
+				if err == nil {
+					captureEv := CaptureEvent{
+						ZoneKey:      snapshot.ZoneKey,
+						EventID:      event.ID,
+						Tick:         event.Tick,
+						PlayerID:     playerID,
+						TargetID:     sim.EntityID(event.TargetID),
+						TemplateID:   event.TemplateID,
+						MonsterRank:  event.MonsterRank,
+						PersistentID: event.PersistentID,
+					}
+					select {
+					case m.captureQueue <- captureEv:
+					default:
+						logger.S.Warnf("realtime capture queue full; dropping event %d", event.ID)
+					}
+				}
+			}
+		case combat.EventCompanionInjured, combat.EventCompanionPermadeath:
+			m.mu.Lock()
+			hasCasualtyHandler := m.companionCasualtyHandler != nil
+			m.mu.Unlock()
+			if hasCasualtyHandler && event.PersistentID != "" {
+				casualtyType := "INJURED"
+				if event.Type == combat.EventCompanionPermadeath {
+					casualtyType = "PERMADEATH"
+				}
+				casEv := CompanionCasualtyEvent{
+					ZoneKey:  snapshot.ZoneKey,
+					EventID:  event.ID,
+					Tick:     event.Tick,
+					Type:     casualtyType,
+					ActorID:  event.PersistentID,
+					SourceID: sim.EntityID(event.SourceID),
+				}
+				select {
+				case m.companionCasualtyQueue <- casEv:
+				default:
+					logger.S.Warnf("realtime casualty queue full; dropping event %d", event.ID)
+				}
+			}
+		case "ENTITY_DIED":
+			playerDeath := event.TargetKind == string(sim.EntityPlayer)
+			if !playerDeath && (event.TemplateID == "" || event.SourceID == "") {
+				continue
+			}
+			death := DeathEvent{
+				ZoneKey: snapshot.ZoneKey, Generation: zone.generation,
+				EventID: event.ID, Tick: event.Tick,
+				SourceID: sim.EntityID(event.SourceID), TargetID: sim.EntityID(event.TargetID), TemplateID: event.TemplateID, MonsterRank: event.MonsterRank,
+				PersistentID: event.PersistentID,
+				IsNode:       len(event.TargetID) > 2 && event.TargetID[:2] == "n:",
+				TargetKind:   event.TargetKind,
+			}
+			m.deathQueue <- death
 		}
-		playerDeath := event.TargetKind == string(sim.EntityPlayer)
-		if !playerDeath && (event.TemplateID == "" || event.SourceID == "") {
-			continue
-		}
-		death := DeathEvent{
-			ZoneKey: snapshot.ZoneKey, Generation: zone.generation,
-			EventID: event.ID, Tick: event.Tick,
-			SourceID: sim.EntityID(event.SourceID), TargetID: sim.EntityID(event.TargetID), TemplateID: event.TemplateID, MonsterRank: event.MonsterRank,
-			PersistentID: event.PersistentID,
-			IsNode:       len(event.TargetID) > 2 && event.TargetID[:2] == "n:",
-			TargetKind:   event.TargetKind,
-		}
-		m.deathQueue <- death
 	}
 }
 
@@ -1368,9 +1487,6 @@ func (m *Manager) deathWorker(_ context.Context) {
 			}
 			attempts++
 			if attempts >= maxDeathHandlerAttempts {
-				// Never let one poison death block every later kill in every
-				// zone. The aperture checkpoint/auto-settle worker recovers the
-				// durable tribulation state from the authoritative snapshot.
 				logger.S.Errorf("Realtime death settlement failed after %d attempts (zone=%s target=%s template=%s): %v",
 					attempts, death.ZoneKey.String(), death.TargetID, death.TemplateID, err)
 				break
@@ -1381,6 +1497,89 @@ func (m *Manager) deathWorker(_ context.Context) {
 			}
 		}
 	}
+}
+
+func (m *Manager) captureWorker(_ context.Context) {
+	defer close(m.captureDone)
+	for {
+		captureEv, ok := <-m.captureQueue
+		if !ok {
+			return
+		}
+		m.mu.Lock()
+		handler := m.captureHandler
+		m.mu.Unlock()
+		if handler == nil {
+			continue
+		}
+		callCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if err := handler(callCtx, captureEv); err != nil {
+			logger.S.Errorf("Realtime capture settlement failed: %v", err)
+		}
+		cancel()
+	}
+}
+
+func (m *Manager) casualtyWorker(_ context.Context) {
+	defer close(m.companionCasualtyDone)
+	for {
+		casEv, ok := <-m.companionCasualtyQueue
+		if !ok {
+			return
+		}
+		m.mu.Lock()
+		handler := m.companionCasualtyHandler
+		m.mu.Unlock()
+		if handler == nil {
+			continue
+		}
+		callCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if err := handler(callCtx, casEv); err != nil {
+			logger.S.Errorf("Realtime companion casualty settlement failed: %v", err)
+		}
+		cancel()
+	}
+}
+
+func (m *Manager) SubmitCapture(lease OwnershipLease, command sim.InputCommand) error {
+	if command.Capture == nil {
+		return sim.ErrInvalidInput
+	}
+	return m.submitForLease(lease, command)
+}
+
+func (m *Manager) SubmitCompanionStance(lease OwnershipLease, command sim.InputCommand) error {
+	if command.CompanionStance == nil {
+		return sim.ErrInvalidInput
+	}
+	return m.submitForLease(lease, command)
+}
+
+func (m *Manager) AttachCompanions(lease OwnershipLease, companions []sim.Entity) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.started || m.closed {
+		return ErrManagerNotRunning
+	}
+	active, exists := m.owners[lease.CharacterID]
+	if !exists || active.ZoneKey != lease.ZoneKey || subtle.ConstantTimeCompare([]byte(active.Token), []byte(lease.Token)) != 1 {
+		return ErrInvalidLease
+	}
+	zone := m.zones[active.ZoneKey]
+	if zone == nil {
+		return ErrUnknownZone
+	}
+	for _, comp := range companions {
+		comp.LeaseToken = active.Token
+		result, err := zone.world.QueueAddEntity(comp)
+		if err != nil {
+			return err
+		}
+		if err := waitForZoneMutation(zone, result); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SubmitMoveTarget accepts a bounded click-to-move destination only while the
@@ -1520,6 +1719,14 @@ func (m *Manager) submitForLease(lease OwnershipLease, command sim.InputCommand)
 		command.Attack.EntityID = sim.EntityID(lease.CharacterID)
 		command.Attack.LeaseToken = active.Token
 		return zone.world.SubmitBasicAttack(*command.Attack)
+	case command.Capture != nil:
+		command.Capture.EntityID = sim.EntityID(lease.CharacterID)
+		command.Capture.LeaseToken = active.Token
+		return zone.world.SubmitCapture(*command.Capture)
+	case command.CompanionStance != nil:
+		command.CompanionStance.EntityID = sim.EntityID(lease.CharacterID)
+		command.CompanionStance.LeaseToken = active.Token
+		return zone.world.SubmitCompanionStance(*command.CompanionStance)
 	case command.Target != nil:
 		return zone.world.SubmitMoveTarget(command)
 	default:

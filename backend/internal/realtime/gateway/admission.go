@@ -597,6 +597,51 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		return nil, mapManagerError(err)
 	}
 	attached = true
+	if len(state.Companions) > 0 {
+		companionEntities := make([]sim.Entity, 0, len(state.Companions))
+		for idx, comp := range state.Companions {
+			offset := float64(idx+1) * 1.5
+			compPos := sim.Vec2{X: position.X + offset, Y: position.Y}
+			compHP := comp.HP
+			if compHP <= 0 {
+				compHP = comp.MaxHP
+			}
+			compSpeed := comp.Speed
+			if compSpeed <= 0 {
+				compSpeed = moveSpeed
+			}
+			companionEntities = append(companionEntities, sim.Entity{
+				ID:        sim.EntityID("comp_" + comp.ID),
+				Kind:      sim.EntityCompanion,
+				Name:      comp.Name,
+				Transform: sim.Transform{Position: compPos},
+				Vitals:    sim.Vitals{HP: compHP, MaxHP: comp.MaxHP},
+				Speed:     compSpeed,
+				Radius:    0.4,
+				Faction:   "player",
+				Companion: sim.CompanionState{
+					Active:           true,
+					OwnerID:          sim.EntityID(playerID.String()),
+					OwnerCharacterID: sim.CharacterID(playerID.String()),
+					ActorID:          comp.ID,
+					ActorKind:        comp.ActorKind,
+					Stance:           sim.StanceDefend,
+					State:            sim.CompanionFollowing,
+					FollowRadius:     4.0,
+					LeashRadius:      15.0,
+					AttackRange:      2.0,
+					Loyalty:          comp.Loyalty,
+					Rank:             comp.Rank,
+				},
+				AI: sim.AIState{
+					Active:       true,
+					AttackDamage: comp.Attack,
+					Rank:         comp.Rank,
+				},
+			})
+		}
+		_ = a.manager.AttachCompanions(lease, companionEntities)
+	}
 	zoneMap, _ := a.manager.ZoneMapFor(key)
 	var mana *manaSettlement
 	if !privateCombatZone {
@@ -1073,6 +1118,28 @@ func (a *Admission) BasicAttack(playerID, controllerID uuid.UUID, attack protoco
 	})
 }
 
+func (a *Admission) Capture(playerID, controllerID uuid.UUID, capture protocol.CaptureIntent) error {
+	return a.submitCommand(playerID, controllerID, sim.InputCommand{
+		Seq: capture.Seq,
+		Capture: &sim.CaptureCommand{
+			Seq:      capture.Seq,
+			TargetID: sim.EntityID(capture.TargetID),
+			GuID:     capture.GuID,
+		},
+	})
+}
+
+func (a *Admission) CompanionStance(playerID, controllerID uuid.UUID, stance protocol.CompanionStanceIntent) error {
+	return a.submitCommand(playerID, controllerID, sim.InputCommand{
+		Seq: stance.Seq,
+		CompanionStance: &sim.CompanionStanceCommand{
+			Seq:           stance.Seq,
+			Stance:        sim.CompanionStance(stance.Stance),
+			FocusTargetID: sim.EntityID(stance.FocusTargetID),
+		},
+	})
+}
+
 func (a *Admission) submitCommand(playerID, controllerID uuid.UUID, command sim.InputCommand) error {
 	a.mu.Lock()
 	active, exists := a.sessions[controllerID]
@@ -1087,6 +1154,10 @@ func (a *Admission) submitCommand(playerID, controllerID uuid.UUID, command sim.
 		err = a.manager.SubmitCast(active.lease, command)
 	case command.Attack != nil:
 		err = a.manager.SubmitBasicAttack(active.lease, command)
+	case command.Capture != nil:
+		err = a.manager.SubmitCapture(active.lease, command)
+	case command.CompanionStance != nil:
+		err = a.manager.SubmitCompanionStance(active.lease, command)
 	case command.Target != nil:
 		err = a.manager.SubmitMoveTarget(active.lease, command)
 	default:
@@ -1415,6 +1486,11 @@ func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protoc
 			state.Name = entity.AI.Name
 			state.AIState = string(entity.AI.State)
 			state.AggroTarget = string(entity.AI.Threat)
+		} else if entity.Kind == sim.EntityCompanion {
+			state.Name = entity.Name
+			state.OwnerID = string(entity.Companion.OwnerID)
+			state.CompanionKind = entity.Companion.ActorKind
+			state.Stance = string(entity.Companion.Stance)
 		} else if entity.Name != "" {
 			state.Name = entity.Name
 		}

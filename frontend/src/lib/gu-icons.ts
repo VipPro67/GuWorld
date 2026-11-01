@@ -2,7 +2,7 @@
  * Gu icon resolver with a generated family atlas and legacy icon fallbacks.
  */
 
-import { GU_FAMILY_ICON_SPRITES } from "./gu-family-icons";
+import { GU_FAMILY_ICON_SPRITES } from "./gu-family-icons.ts";
 
 export const AVAILABLE_GU_ICONS: Set<string> = new Set([
   "gu_a_thi",

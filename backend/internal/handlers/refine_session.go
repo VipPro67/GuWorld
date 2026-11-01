@@ -459,8 +459,22 @@ func CreateRefineSession(c *gin.Context) {
 	}
 
 	startedAt := time.Now().UTC()
-	endsAt := startedAt.Add(time.Duration(stage.DurationSeconds) * time.Second)
-	plan, err := buildRefinePlan(stage, &recipe, decisions, startedAt, endsAt)
+	// Cảnh giới Chân Ý Luyện Đạo rút ngắn tổng thời gian phiên (snapshot tại
+	// lúc tạo: −5%/cấp, trần −20%). Cửa sổ thao tác giữ nguyên — thời gian
+	// của minigame không bị làm khó hơn, chỉ rút ngắn khoảng chờ giữa các bước.
+	timeScale := gamefx.RefineSessionTimeScale(rateSnapshot.RefinementRealm)
+	rateSnapshot.TimeScale = timeScale
+	durationSeconds := int(math.Round(float64(stage.DurationSeconds) * timeScale))
+	// Mỗi bước vẫn cần đủ cửa sổ thao tác: duration ≥ window × N.
+	if minDuration := stage.WindowSeconds * stage.StepCount; durationSeconds < minDuration {
+		durationSeconds = minDuration
+	}
+	endsAt := startedAt.Add(time.Duration(durationSeconds) * time.Second)
+
+	// Clone stage với duration đã scale — số bước/window/độ khó giữ nguyên.
+	planStage := *stage
+	planStage.DurationSeconds = durationSeconds
+	plan, err := buildRefinePlan(&planStage, &recipe, decisions, startedAt, endsAt)
 	if err != nil {
 		logger.S.Errorf("CreateRefineSession: buildRefinePlan error: %v", err)
 		c.JSON(500, gin.H{"error": "Không thể sinh lịch luyện"})
@@ -1129,17 +1143,37 @@ func RefinePreview(c *gin.Context) {
 		rateMax = 1
 	}
 
+	// Cảnh giới Chân Ý Luyện Đạo cũng rút ngắn thời gian phiên (trong preview
+	// để UI hiện tổng thời gian dự kiến khi confirm).
+	timeScale := gamefx.RefineSessionTimeScale(rateSnapshot.RefinementRealm)
+	plannedDuration := 0
+	if stage != nil {
+		dur := int(math.Round(float64(stage.DurationSeconds) * timeScale))
+		if minDuration := stage.WindowSeconds * stage.StepCount; dur < minDuration {
+			dur = minDuration
+		}
+		plannedDuration = dur
+	}
+
 	resp := gin.H{
-		"rate_breakdown":      rateSnapshot.Breakdown,
-		"rate_min":            rateMin,
-		"rate_max":            rateMax,
-		"accuracy_max_bonus":  rateSnapshot.AccuracyMaxBonus,
-		"death_penalty":       rateSnapshot.DeathPenalty,
-		"warnings":            warnings,
-		"mana_cost":           manaCost,
+		"rate_breakdown":       rateSnapshot.Breakdown,
+		"rate_min":             rateMin,
+		"rate_max":             rateMax,
+		"accuracy_max_bonus":   rateSnapshot.AccuracyMaxBonus,
+		"death_penalty":        rateSnapshot.DeathPenalty,
+		"warnings":             warnings,
+		"mana_cost":            manaCost,
 		"primeval_stones_cost": recipe.PrimevalStonesCost,
 		"immortal_stones_cost": recipe.ImmortalEssenceStonesCost,
-		"materials":           recipe.RequiredMaterials,
+		"materials":            recipe.RequiredMaterials,
+		"time_scale":           timeScale,
+		"duration_seconds":     plannedDuration,
+		"steps":                0,
+		"window_seconds":       0,
+	}
+	if stage != nil {
+		resp["steps"] = stage.StepCount
+		resp["window_seconds"] = stage.WindowSeconds
 	}
 	c.JSON(200, resp)
 }

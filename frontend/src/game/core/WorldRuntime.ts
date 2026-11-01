@@ -40,7 +40,7 @@ export type WorldRuntimeStatus =
 
 export interface RuntimeEntity {
   id: string;
-  kind: "player" | "monster";
+  kind: "player" | "monster" | "companion";
   partyId: string;
   pvpEnabled: boolean;
   x: number;
@@ -57,6 +57,9 @@ export interface RuntimeEntity {
   flying?: boolean;
   formActive?: boolean;
   statuses?: string[];
+  ownerId?: string;
+  companionKind?: string;
+  stance?: "DEFEND" | "FOCUS" | "FOLLOW";
 }
 
 export interface SelfCombatView {
@@ -390,6 +393,9 @@ export class WorldRuntime {
         flying: entity.flying,
         formActive: entity.form_active,
         statuses: entity.statuses,
+        ownerId: entity.owner_id,
+        companionKind: entity.companion_kind,
+        stance: entity.stance,
       };
       if (entity.entity_id === this.selfId) {
         const position = this.predictor.getPosition();
@@ -627,6 +633,16 @@ export class WorldRuntime {
   public sendBasicAttack(attack: Omit<BasicAttackPayload, "seq">): number | null {
     if (this.status !== "joined") return null;
     return this.socket.sendBasicAttack(attack);
+  }
+
+  public captureTarget(targetId: string, guId?: string): number | null {
+    if (this.status !== "joined") return null;
+    return this.socket.sendCapture(targetId, guId);
+  }
+
+  public setCompanionStance(stance: "DEFEND" | "FOCUS" | "FOLLOW", focusTargetId?: string): number | null {
+    if (this.status !== "joined") return null;
+    return this.socket.sendCompanionStance(stance, focusTargetId);
   }
 
   private bindSocket(): void {

@@ -126,6 +126,15 @@ const (
 	// RefineForcedFailHPLoss is deprecated (ép luyện đã bị loại bỏ:
 	// luyện cổ yêu cầu bí phương 100%). Kept for backward compatibility.
 	RefineForcedFailHPLoss = 30.0
+
+	// RefineRealmTimeDiscountPerLevel giảm tổng thời gian phiên luyện theo
+	// mỗi cấp cảnh giới Luyện Đạo của người chơi (Chân Ý càng cao lò càng
+	// thuần): level 1 → −5%, Supreme Grandmaster (level 4) → −20%.
+	RefineRealmTimeDiscountPerLevel = 0.05
+	// RefineRealmTimeDiscountMax là trần giảm thời gian (không vượt qua trần này).
+	RefineRealmTimeDiscountMax = 0.20
+	// RefineRealmTimeScaleFloor là sàn hệ số thời gian (an toàn cấu hình).
+	RefineRealmTimeScaleFloor = 0.50
 )
 
 // RefinementMasteryBonuses maps refinement path attainment realm (0-4) to success rate bonus.
@@ -176,6 +185,22 @@ func RefinementImmortalPenalty(targetRank int) float64 {
 		return RefinementImmortalPenalties[9]
 	}
 	return RefinementImmortalPenalties[targetRank]
+}
+
+// RefineSessionTimeScale returns the total-duration multiplier for a refine
+// session based on the player's Luyện Đạo attainment level (0-4): mất
+// RefineRealmTimeDiscountPerLevel mỗi cấp, trần RefineRealmTimeDiscountMax.
+// Giữ nguyên (1.0) ở level 0. Snapshot tại lúc tạo phiên.
+func RefineSessionTimeScale(refinementRealm int) float64 {
+	discount := float64(refinementRealm) * RefineRealmTimeDiscountPerLevel
+	if discount > RefineRealmTimeDiscountMax {
+		discount = RefineRealmTimeDiscountMax
+	}
+	scale := 1.0 - discount
+	if scale < RefineRealmTimeScaleFloor {
+		scale = RefineRealmTimeScaleFloor
+	}
+	return scale
 }
 
 // RefinementDaoBonus calculates the bonus rate granted by refinement dao marks and target path points.

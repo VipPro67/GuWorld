@@ -173,6 +173,15 @@ export default function Home() {
     if (currentView === "wiki") router.replace("/wiki");
   }, [currentView, router]);
 
+  // Vô tab Luyện Cổ khi đang có phiên luyện → tự mở panel phiên (WF-REF-07).
+  const hasActiveRefineView = useGameStore((s) => !!s.refineSession && s.refineSession.status === "ACTIVE");
+  const openRefinePanel = useGameStore((s) => s.openRefinePanel);
+  useEffect(() => {
+    if (currentView === "refine" && hasActiveRefineView) {
+      openRefinePanel();
+    }
+  }, [currentView, hasActiveRefineView, openRefinePanel]);
+
   const [dontShowToday, setDontShowToday] = useState(false);
 
   const handleCloseChangelog = () => {
