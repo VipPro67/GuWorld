@@ -165,6 +165,14 @@ _Avoid_: auto-combat mô phỏng theo lượt
 ### Hiệu Ứng Chiến Đấu Realtime (Realtime Combat Effect)
 Hiệu ứng chiến đấu cần có hành vi, mục tiêu và thời lượng realtime được định nghĩa rõ; số lượt không tự quy đổi thành giây. Hiệu ứng chưa có hành vi realtime chưa thể dùng trong chiến đấu realtime.
 
+### Lướt (Dash)
+Chiêu thức di chuyển nhân vật một quãng theo hướng đã khóa khi bắt đầu thi triển. Lướt thuần di chuyển có thể xuyên qua thực thể; lướt va chạm dừng ở kẻ địch đầu tiên và gây sát thương, còn địa hình chặn đường. ROOT/BIND ngăn displacement bắt đầu nhưng không dừng cú lướt đã khởi động; SLOW không làm chậm cú lướt đang chạy, còn hard CC chặn cast và ngắt cú lướt.
+_Avoid_: tăng tốc, chạy nhanh
+
+### Tăng Tốc (Haste)
+Trạng thái tích cực tạm thời làm tăng tốc độ di chuyển nền. Thi triển lại cùng trạng thái làm mới thời hạn mà không cộng dồn cường độ; nhiều trạng thái tăng tốc chỉ lấy hệ số cao nhất và vẫn chịu ảnh hưởng của làm chậm, trói chân cùng trần di chuyển chung.
+_Avoid_: lướt, displacement
+
 ### Dạng Phòng Thủ Tiên Cổ (Defensive Immortal Gu Form)
 Trạng thái biến thân do Tiên Cổ phòng thủ kích hoạt, có thời gian biến thân riêng theo từng Cổ; khi hoàn tất, trạng thái phòng thủ có hiệu lực và tiêu hao mana liên tục cho đến khi tắt hoặc hết mana.
 
@@ -183,8 +191,12 @@ Trạng thái biến đổi một phần cơ thể (như móng, cánh, vảy qua
 _Avoid_: morph buff
 
 ### Dung Nhập Tiên Cổ Phòng (Gu House Integration)
-Hành vi người chơi dung nhập vào Tiên Cổ Phòng đang trang bị, chuyển quyền kiểm soát chiến đấu sang Tiên Cổ Phòng; độ bền của Cổ Phòng nhận sát thương thay nhục thân và xuất chiêu bằng hệ thống Trận Kích.
-_Avoid_: vehicle mount
+Hành vi người chơi dung nhập vào Tiên Cổ Phòng đang trang bị, chuyển quyền kiểm soát chiến đấu sang Tiên Cổ Phòng; độ bền của Cổ Phòng nhận 100% sát thương thay nhục thân cho đến khi vỡ phòng, tiêu hao Tiên Nguyên duy trì tỷ lệ nghịch với độ chênh lệch cảnh giới giữa Cổ Tiên và Rank Cổ Phòng, và kích hoạt bộ Trận Kích chuyên biệt.
+_Avoid_: vehicle mount, robot pilot
+
+### Trận Kích Toàn Diện (Full House Strike Set)
+Hệ thống 6 chiêu thức chiến đấu chuẩn hóa của Tiên Cổ Phòng khi người chơi dung nhập, bao gồm đầy đủ các vai trò: Pháo kích công kích, Xung kích di chuyển, Đại trận phòng hộ, Hồi phục sửa chữa, Thần thông hủy diệt tối hậu, và Lệnh rời khỏi Cổ Phòng.
+_Avoid_: generic killer moves
 
 ### Hao Hụt Duy Trì Biến Thân (Sustained Form Upkeep)
 Cơ chế tiêu hao Chân Nguyên hoặc Tiên Nguyên liên tục theo nhịp realtime (tick) để duy trì hình thái biến thân, tự động giải trừ khi cạn kiệt năng lượng hoặc bị phá vỡ hình thái.
