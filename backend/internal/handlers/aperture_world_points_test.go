@@ -7,6 +7,70 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+func TestApplyTitleYieldBonus(t *testing.T) {
+	cases := []struct {
+		amount int64
+		pct    float64
+		want   int64
+	}{
+		{amount: 100, pct: 5, want: 105},
+		{amount: 10, pct: 5, want: 10},
+		{amount: 7, pct: 5, want: 7},
+		{amount: 100, pct: 0, want: 100},
+		{amount: 0, pct: 5, want: 0},
+	}
+	for _, c := range cases {
+		if got := applyTitleYieldBonus(c.amount, c.pct); got != c.want {
+			t.Fatalf("applyTitleYieldBonus(%d, %.1f) = %d, want %d", c.amount, c.pct, got, c.want)
+		}
+	}
+}
+
+func TestWorldNormalPointCapScalesWithArea(t *testing.T) {
+	cases := []struct {
+		minX, minY, maxX, maxY int
+		want                   int
+	}{
+		{0, 0, 999, 999, 10},    // 1000×1000 → 10 mines
+		{0, 0, 499, 499, 2},     // 500×500 → floor 2
+		{0, 0, 4999, 4999, 16},  // 5000×5000 → capped 16
+		{500, 500, 599, 599, 2}, // tiny map → floor 2
+	}
+	for _, c := range cases {
+		got := worldNormalPointCap(worldRegionSeed{MinX: c.minX, MinY: c.minY, MaxX: c.maxX, MaxY: c.maxY})
+		if got != c.want {
+			t.Fatalf("worldNormalPointCap(%d,%d,%d,%d) = %d, want %d", c.minX, c.minY, c.maxX, c.maxY, got, c.want)
+		}
+	}
+}
+
+func TestWorldRegionSweepNeedsTopUp(t *testing.T) {
+	full := worldRegionSweepRow{
+		Seed:        worldRegionSeed{MinX: 0, MinY: 0, MaxX: 999, MaxY: 999, MaxRank: 5},
+		MonsterRank: 5,
+		HasBoss:     true,
+		Normal:      10,
+		Famous:      1,
+	}
+	if full.needsTopUp() {
+		t.Fatal("a full region must not be topped up")
+	}
+	missingFamous := full
+	missingFamous.Famous = 0
+	if !missingFamous.needsTopUp() {
+		t.Fatal("a rank>=4 region with a boss but no famous mine must be topped up")
+	}
+	fullNormalMissingFamous := worldRegionSweepRow{
+		Seed:    worldRegionSeed{MinX: 0, MinY: 0, MaxX: 999, MaxY: 999, MaxRank: 2},
+		HasBoss: false,
+		Normal:  10,
+		Famous:  0,
+	}
+	if fullNormalMissingFamous.needsTopUp() {
+		t.Fatal("a boss-less low-rank region must not be re-scanned forever")
+	}
+}
+
 func TestWorldPointGradeForRank(t *testing.T) {
 	cases := []struct {
 		rank int

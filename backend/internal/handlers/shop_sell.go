@@ -11,7 +11,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
-	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -82,10 +81,7 @@ func runCaravanSell(c *gin.Context, authID uuid.UUID, lines []merchantSellLine, 
 	}
 	player.PrimevalStones += primeval
 	player.ImmortalStones += immortal
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	RebuildEquippedGus(&player)
 	if guSold {
 		if err := db.RemovePlayerGus(tx, removedGuIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory changes"})

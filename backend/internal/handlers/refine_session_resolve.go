@@ -344,10 +344,7 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 	if outcome == OutcomeSuccess && newGuInstance.InstanceID != "" {
 		player.GuInventory = append(player.GuInventory, newGuInstance)
 	}
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	RebuildEquippedGus(&player)
 
 	if outcome == OutcomeSuccess && newGuInstance.InstanceID != "" {
 		if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "refine:"+newGuInstance.InstanceID, "refine", "", 1); err != nil {

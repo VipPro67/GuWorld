@@ -18,8 +18,13 @@ export function RealtimeHotbarAssignment({ player, onSaved }: { player: Player; 
   const [slots, setSlots] = useState<string[]>(orderedIds.slice(0, visibleSlots));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [dirty, setDirty] = useState(false);
 
-  useEffect(() => setSlots(orderedIds.slice(0, visibleSlots)), [orderKey, visibleSlots]);
+  useEffect(() => {
+    if (!dirty) {
+      setSlots(orderedIds.slice(0, visibleSlots));
+    }
+  }, [orderKey, visibleSlots, dirty]);
 
   const guLabel = (instanceId: string) => {
     const gu = player.gu_inventory.find((entry) => entry.instance_id === instanceId);
@@ -28,19 +33,21 @@ export function RealtimeHotbarAssignment({ player, onSaved }: { player: Player; 
     return `${spec?.name ?? gu.gu_id} · Bậc ${gu.rank}`;
   };
 
-  const save = async () => {
+  const save = async (customSlots?: string[]) => {
+    const toSave = customSlots ?? slots;
     setSaving(true);
     setError("");
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/realtime-hotbar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gu_instance_ids: slots }),
+        body: JSON.stringify({ gu_instance_ids: toSave }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string; message?: string; equipped_gus?: string[] };
       if (!response.ok) throw new Error(body.error || "Không thể lưu hotbar realtime");
       if (Array.isArray(body.equipped_gus)) store.setPlayerFromServer({ equipped_gus: body.equipped_gus });
       store.addToast(body.message || "Đã lưu thứ tự Cổ trên Hotbar", "success");
+      setDirty(false);
       onSaved?.();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
@@ -49,6 +56,18 @@ export function RealtimeHotbarAssignment({ player, onSaved }: { player: Player; 
     } finally {
       setSaving(false);
     }
+  };
+
+  const onSelectSlot = (index: number, targetId: string) => {
+    setDirty(true);
+    const next = [...slots];
+    const existingIdx = next.indexOf(targetId);
+    if (existingIdx !== -1 && existingIdx !== index) {
+      next[existingIdx] = slots[index];
+    }
+    next[index] = targetId;
+    setSlots(next);
+    void save(next);
   };
 
   return (
@@ -69,7 +88,7 @@ export function RealtimeHotbarAssignment({ player, onSaved }: { player: Player; 
           {Array.from({ length: visibleSlots }, (_, index) => (
             <label key={index + 1} className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/25 px-2 py-1.5">
               <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 font-sans text-xs font-semibold text-amber-300">Ô {index + 1}</span>
-              <select value={slots[index] ?? ""} onChange={(event) => setSlots((current) => current.map((id, slot) => slot === index ? event.target.value : id))} className="min-w-0 flex-1 bg-transparent text-xs text-zinc-200 outline-none">
+              <select value={slots[index] ?? ""} onChange={(event) => onSelectSlot(index, event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs text-zinc-200 outline-none">
                 {orderedIds.map((instanceId) => (
                   <option key={instanceId} value={instanceId} className="bg-zinc-900">{guLabel(instanceId)}</option>
                 ))}

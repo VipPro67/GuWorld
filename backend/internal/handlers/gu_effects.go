@@ -107,10 +107,29 @@ func RemoveGuFromInventory(player *models.Player, instanceID string) {
 }
 
 func RebuildEquippedGus(player *models.Player) {
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+	active := models.FilterEquippedActive(player.GuInventory)
+	activeMap := make(map[string]struct{}, len(active))
+	for _, gu := range active {
+		activeMap[gu.InstanceID] = struct{}{}
 	}
+
+	newEquipped := make([]string, 0, len(active))
+	seen := make(map[string]struct{}, len(active))
+	for _, id := range player.EquippedGus {
+		if _, ok := activeMap[id]; ok {
+			if _, already := seen[id]; !already {
+				newEquipped = append(newEquipped, id)
+				seen[id] = struct{}{}
+			}
+		}
+	}
+	for _, gu := range active {
+		if _, already := seen[gu.InstanceID]; !already {
+			newEquipped = append(newEquipped, gu.InstanceID)
+			seen[gu.InstanceID] = struct{}{}
+		}
+	}
+	player.EquippedGus = newEquipped
 }
 
 // ── GENERIC EVENT DISPATCHER ─────────────────────────────────────────────

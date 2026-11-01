@@ -194,6 +194,8 @@ Icon vật phẩm ở túi đồ, danh mục và Thương Đội dùng bộ WebP
 
 `python3 scripts/adjust_game_prices.py` chuẩn hóa `Item.csv.base_price` và `Gu.csv.base_price` theo bảng giá trong script, dùng bậc hiệu lực `max(rank, rarity)` (rarity `0` tiếp tục định giá theo rank). Vì vậy món có rarity cao hơn rank sẽ nhận giá của bậc rarity đó. Có thể scale phí recipe riêng bằng `--recipe-primeval 1.2` và/hoặc `--recipe-immortal 0.8`; hệ số này giữ nguyên chênh lệch giữa từng recipe. Lệnh mặc định chỉ xem trước; thêm `--apply` để ghi CSV. Sau đó import các dataset tương ứng trong Admin để cập nhật database.
 
+`python3 scripts/rebuild_recipes.py` tái tạo toàn bộ công thức trong `backend/data/Recipe.csv`: chọn nguyên li�ệu Tiên Cổ phụ tá bằng cách **xoay vòng deterministic theo `target_gu_id`** (`crc32` seed) trong bucket path × rank thay vì luôn lấy phần tử đầu tiên — nhờ đó một cổ (vd `GU_NINE_TURNS_NURTURE_PILL_I` slot Refinement Path rank 6 của công thức rank 8) không còn bị dính vào hàng trăm công thức của mọi path. Slot cố định xuyên path (Refinement/Qi Path ở rank 6–9) vẫn được giữ theo thiết kế nên nguyên liệu lệch path ở các slot này là chủ ý. Script cũng **đảm bảo mọi Gu rank 6–9 đều có ít nhất 1 công thức**: cổ có mặt trong Gu.csv nhưng thiếu recipe (thường là dữ liệu mới thêm) được sinh bổ sung với `variant = 1`; rank ≥ 10 cố ý bỏ qua (cổ truyền thuyết không luyện). Sau khi chạy script: import bảng Recipe qua Admin tab "Dữ liệu".
+
 ## Registry runtime
 
 - `models.LoadGuRegistry(db.DB)` load `gu_dictionary` vào `models.GuRegistry` khi server start.

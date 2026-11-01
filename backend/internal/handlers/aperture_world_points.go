@@ -32,9 +32,12 @@ import (
 )
 
 const (
-	// worldNormalPointsPerRegion caps plain public mines so the world keeps the
-	// scarcity that makes guarded/famous mountains matter.
-	worldNormalPointsPerRegion = 2
+	// Public mines scale with the map area: roughly one normal mine per
+	// worldCellsPerNormalMine cells, clamped so tiny maps still feel populated
+	// and huge maps do not flood the client.
+	worldCellsPerNormalMine       = 100_000
+	worldNormalPointsPerRegionMin = 2
+	worldNormalPointsPerRegionMax = 16
 	// worldFamousMinRegionRank gates the canon famous mountain (Núi Danh) to
 	// regions whose strongest monster reaches rank 4.
 	worldFamousMinRegionRank = 4
@@ -43,6 +46,24 @@ const (
 	// worldPointSweepInterval is the periodic top-up cadence.
 	worldPointSweepInterval = 10 * time.Minute
 )
+
+// worldNormalPointCap returns the normal-mine cap for a region, scaled by its
+// walkable area (e.g. 1000×1000 → 10 mines).
+func worldNormalPointCap(region worldRegionSeed) int {
+	width := region.MaxX - region.MinX + 1
+	height := region.MaxY - region.MinY + 1
+	if width < 1 || height < 1 {
+		return worldNormalPointsPerRegionMin
+	}
+	capacity := (width * height) / worldCellsPerNormalMine
+	if capacity < worldNormalPointsPerRegionMin {
+		capacity = worldNormalPointsPerRegionMin
+	}
+	if capacity > worldNormalPointsPerRegionMax {
+		capacity = worldNormalPointsPerRegionMax
+	}
+	return capacity
+}
 
 // worldRegionSeed is the geometry/rank snapshot used to place one region's
 // public mines.
@@ -66,14 +87,19 @@ func loadWorldRegionSeed(tx *sql.Tx, regionID string) (worldRegionSeed, error) {
 	if err != nil {
 		return worldRegionSeed{}, err
 	}
-	// Some legacy rows still carry zeroed bounds; fall back to width×height.
+	normalizeWorldRegionBounds(&seed, width, height)
+	return seed, nil
+}
+
+// normalizeWorldRegionBounds repairs legacy rows with zeroed bounds by falling
+// back to the region's width/height.
+func normalizeWorldRegionBounds(seed *worldRegionSeed, width, height int) {
 	if seed.MaxX <= seed.MinX {
 		seed.MinX, seed.MaxX = 0, maxInt(width-1, 0)
 	}
 	if seed.MaxY <= seed.MinY {
 		seed.MinY, seed.MaxY = 0, maxInt(height-1, 0)
 	}
-	return seed, nil
 }
 
 func maxInt(a, b int) int {
@@ -228,7 +254,8 @@ func ensureWorldResourcePoints(ctx context.Context, tx *sql.Tx, regionID string)
 		}
 	}
 	pool := canonWorldTemplatePool(false)
-	for attempts := 0; attempts < worldNormalPointsPerRegion*4 && normalCount < worldNormalPointsPerRegion; attempts++ {
+	normalCap := worldNormalPointCap(region)
+	for attempts := 0; attempts < normalCap*3 && normalCount < normalCap; attempts++ {
 		pick := weightedPointPick(rng, pool, grade)
 		if pick.PointType == "" {
 			break
@@ -256,44 +283,72 @@ func ensureWorldResourcePoints(ctx context.Context, tx *sql.Tx, regionID string)
 	return addedNormal, addedFamous, nil
 }
 
+// worldRegionSweepRow is one eligible region's state for a top-up decision.
+type worldRegionSweepRow struct {
+	Seed        worldRegionSeed
+	Width       int
+	Height      int
+	MonsterRank int
+	HasBoss     bool
+	Normal      int
+	Famous      int
+}
+
+// needsTopUp decides whether the sweep should touch this region. The cap scales
+// with the map area, and the famous mountain needs rank >= 4 plus a real Boss
+// anchor so boss-less regions are not re-scanned forever.
+func (row worldRegionSweepRow) needsTopUp() bool {
+	if row.Normal < worldNormalPointCap(row.Seed) {
+		return true
+	}
+	effectiveRank := row.Seed.MaxRank
+	if row.MonsterRank > effectiveRank {
+		effectiveRank = row.MonsterRank
+	}
+	return effectiveRank >= worldFamousMinRegionRank && row.HasBoss && row.Famous == 0
+}
+
 // EnsureWorldResourcePointsSweep tops up every active wilderness region that is
-// below its caps. The aggregate query keeps idle ticks to a single read once
-// the world is full.
+// below its caps. One aggregate read feeds the whole sweep, so an already-full
+// world costs a single query per tick.
 func EnsureWorldResourcePointsSweep(ctx context.Context) {
 	rows, err := db.DB.QueryContext(ctx, `
-		SELECT r.id
+		SELECT r.id, COALESCE(r.width, 0), COALESCE(r.height, 0),
+		       COALESCE(r.min_x, 0), COALESCE(r.min_y, 0), COALESCE(r.max_x, 0), COALESCE(r.max_y, 0),
+		       COALESCE(r.max_rank, 1),
+		       COALESCE((
+		           SELECT MAX((mc.metadata->>'rank')::int) FROM map_cells mc
+		           WHERE mc.region_id = r.id AND mc.cell_type = 'Monster' AND mc.is_active = true
+		       ), 1),
+		       EXISTS (
+		           SELECT 1 FROM map_cells b
+		           WHERE b.region_id = r.id AND LOWER(b.cell_type) = 'boss' AND b.is_active = true
+		       ),
+		       COUNT(*) FILTER (WHERE COALESCE(p.point_class, 'NORMAL') <> 'FAMOUS'),
+		       COUNT(*) FILTER (WHERE COALESCE(p.point_class, 'NORMAL') = 'FAMOUS')
 		FROM regions r
 		LEFT JOIN aperture_resource_points p
 			ON p.region_id = r.id AND p.scope = 'WORLD'
 		WHERE r.is_active = true
 		  AND UPPER(COALESCE(r.zone_type, '')) IN ('KHU_VUC', 'BOSS_ZONE', 'PVP_ZONE')
-		GROUP BY r.id, r.max_rank
-		HAVING COUNT(*) FILTER (WHERE COALESCE(p.point_class, 'NORMAL') <> 'FAMOUS') < $1
-		    OR (
-		        COUNT(*) FILTER (WHERE COALESCE(p.point_class, 'NORMAL') = 'FAMOUS') = 0
-		        AND GREATEST(
-		            COALESCE(r.max_rank, 1),
-		            COALESCE((
-		                SELECT MAX((mc.metadata->>'rank')::int) FROM map_cells mc
-		                WHERE mc.region_id = r.id AND mc.cell_type = 'Monster' AND mc.is_active = true
-		            ), 1)
-		        ) >= $2
-		        AND EXISTS (
-		            SELECT 1 FROM map_cells b
-		            WHERE b.region_id = r.id AND LOWER(b.cell_type) = 'boss' AND b.is_active = true
-		        )
-		    )
+		GROUP BY r.id
 		ORDER BY r.id
-	`, worldNormalPointsPerRegion, worldFamousMinRegionRank)
+	`)
 	if err != nil {
 		logger.S.Errorf("World resource points sweep: query regions: %v", err)
 		return
 	}
-	regionIDs := []string{}
+	candidates := []string{}
 	for rows.Next() {
-		var regionID string
-		if err := rows.Scan(&regionID); err == nil {
-			regionIDs = append(regionIDs, regionID)
+		var row worldRegionSweepRow
+		if err := rows.Scan(&row.Seed.ID, &row.Width, &row.Height, &row.Seed.MinX, &row.Seed.MinY,
+			&row.Seed.MaxX, &row.Seed.MaxY, &row.Seed.MaxRank, &row.MonsterRank, &row.HasBoss,
+			&row.Normal, &row.Famous); err != nil {
+			continue
+		}
+		normalizeWorldRegionBounds(&row.Seed, row.Width, row.Height)
+		if row.needsTopUp() {
+			candidates = append(candidates, row.Seed.ID)
 		}
 	}
 	rows.Close()
@@ -303,7 +358,7 @@ func EnsureWorldResourcePointsSweep(ctx context.Context) {
 	}
 
 	totalNormal, totalFamous := 0, 0
-	for _, regionID := range regionIDs {
+	for _, regionID := range candidates {
 		if ctx.Err() != nil {
 			return
 		}
@@ -316,7 +371,7 @@ func EnsureWorldResourcePointsSweep(ctx context.Context) {
 		totalFamous += addedFamous
 	}
 	if totalNormal > 0 || totalFamous > 0 {
-		logger.S.Infof("World resource points sweep: seeded %d normal + %d famous mines across %d deficient regions", totalNormal, totalFamous, len(regionIDs))
+		logger.S.Infof("World resource points sweep: seeded %d normal + %d famous mines across %d deficient regions", totalNormal, totalFamous, len(candidates))
 	}
 }
 

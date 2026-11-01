@@ -11,6 +11,7 @@ import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { hasOperation } from "@/lib/effect-blocks";
 import { KillerMovesPanel } from "@/components/KillerMovesPanel";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { getGuRankFrame } from "@/lib/gu-frames";
 
 interface GuInventoryProps {
   player: Player;
@@ -1087,8 +1088,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               />
                             )}
                             <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-cover bg-center shadow-inner ${rankStyle.icon}`} style={guImageStyle}>
+                              <img src={getGuRankFrame(spec.rank)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-fill opacity-85 z-10" />
                               {!spec.image_url && <Flower2 className="h-5 w-5" />}
-                              {hasVital && <span className="absolute bottom-0.5 right-0.5 rounded-full bg-amber-500 p-0.5"><Sparkles className="h-2 w-2 text-zinc-950" /></span>}
+                              {hasVital && <span className="absolute bottom-0.5 right-0.5 rounded-full bg-amber-500 p-0.5 z-20"><Sparkles className="h-2 w-2 text-zinc-950" /></span>}
                             </div>
                             <h4 className={`text-sm font-bold ${rankStyle.text} font-serif flex items-center gap-2`}>
                               {spec.name}

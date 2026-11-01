@@ -8,6 +8,7 @@ import {
   type ActorKind,
 } from "../assets/AssetManifest.ts";
 import { registerActorAnimations } from "../assets/AnimationLibrary.ts";
+import { GU_VFX_CATALOG } from "../combat/GuVFXRegistry.ts";
 
 const TILE_SIZE = 256;
 const ACTOR_SIZE = 48;
@@ -33,6 +34,35 @@ export class PreloadScene extends Phaser.Scene {
         }
       }
     }
+
+    // Preload authored combat & Gu VFX atlases
+    const coreAtlases = [
+      "fx_hit_chem",
+      "fx_hit_dam",
+      "fx_hit_dien",
+      "fx_khien_anh_kim",
+      "fx_thu_giap_da_gpt",
+      "fx_thu_vo_giap_gpt",
+      "fx_hieu_ung_choang",
+      "fx_hieu_ung_doc",
+      "fx_hieu_ung_troi",
+      "fx_hoi_sinh",
+      "fx_gu_hoa_du",
+      "fx_gu_thiem_quang",
+      "fx_gu_dien_nhan_gpt_dau",
+      "fx_gu_thinh_phong_gpt_kich_hoat",
+      "fx_gu_xa_tin_dau_gpt_giu",
+      "fx_thu_set_danh_gpt",
+      "fx_song_gam",
+      "fx_dat_nut",
+    ];
+    for (const key of coreAtlases) {
+      const def = GU_VFX_CATALOG[key];
+      if (def) {
+        this.load.atlas(key, def.textureUrl, def.atlasUrl);
+      }
+    }
+
     const label = this.add.text(16, 16, "Đang khởi tạo thế giới…", {
       fontFamily: "monospace",
       fontSize: "14px",

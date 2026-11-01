@@ -258,10 +258,7 @@ func CreateListing(c *gin.Context) {
 		}
 
 		player.GuInventory = newInventory
-		player.EquippedGus = []string{}
-		for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+		RebuildEquippedGus(&player)
 		req.Quantity = int64(len(guIDsToSell))
 
 		itemDataJSON, err = json.Marshal(gusToSell)

@@ -7,12 +7,14 @@ import { CastController, type CastDelegate, type CastView } from "../cast/CastCo
 import { CastTelegraph } from "../combat/CastTelegraph.ts";
 import { ProjectileView } from "../combat/ProjectileView.ts";
 import { VFXPool, type FloatingTextOptions } from "../combat/VFXPool.ts";
+import { GuVFXManager } from "../combat/GuVFXManager.ts";
 import { EntityAnimator } from "../entities/EntityAnimator.ts";
 import { animationTextureKey, type ActorKind } from "../assets/AssetManifest.ts";
 import { getMonsterArt, loadMonsterArtCell } from "../assets/MonsterArt.ts";
 import { CameraController } from "../world/CameraController.ts";
 import { RealtimeDebugHUD } from "../debug/RealtimeDebugHUD.ts";
 import { findPath } from "../world/PathPlanner.ts";
+import { toWorldMarkerResources } from "@/game/world/markers/resource.ts";
 import { collectMarkers } from "../world/markers/collect.ts";
 import { drawWorldMarker } from "../world/markers/draw.ts";
 import type { WorldEvent, WorldSkillInfo } from "../network/Protocol.ts";
@@ -45,6 +47,7 @@ interface ActorView {
   lastY: number;
   castUntil: number;
   hitUntil: number;
+  ghostHpRatio: number;
 }
 
 const HP_BAR_WIDTH = 42;
@@ -96,6 +99,7 @@ export class WorldScene extends Phaser.Scene {
   private telegraph!: CastTelegraph;
   private projectileView!: ProjectileView;
   private vfx!: VFXPool;
+  private guVfx!: GuVFXManager;
   private cameraController!: CameraController;
   private debugHud: RealtimeDebugHUD | null = null;
   private targetIndicator!: Phaser.GameObjects.Graphics;
@@ -240,6 +244,7 @@ export class WorldScene extends Phaser.Scene {
     this.cast = new CastController(this.createCastDelegate(this.telegraph));
     this.projectileView = new ProjectileView(this);
     this.vfx = new VFXPool(this);
+    this.guVfx = new GuVFXManager(this);
     this.combatUnsubscribe = this.runtime?.onCombatEvents((event) => this.handleCombatEvent(event)) ?? null;
     this.debugHud = this.runtime ? new RealtimeDebugHUD(this, this.runtime) : null;
     this.castRequestUnsubscribe = this.runtime?.onCastRequest((slot) => this.activateHotbarSlot(slot)) ?? null;
@@ -295,6 +300,7 @@ export class WorldScene extends Phaser.Scene {
       this.castRequestUnsubscribe = null;
       this.projectileView.destroy();
       this.vfx.destroy();
+      this.guVfx.destroy();
       this.telegraph.clear();
       this.cameraController.destroy();
       this.targetIndicator.destroy();
@@ -661,6 +667,9 @@ export class WorldScene extends Phaser.Scene {
         }
         if (skill && eventX !== null && eventY !== null) {
           const point = worldToPixels({ x: eventX, y: eventY });
+          if (skillId && skillId !== "BASIC_ATTACK") {
+            this.guVfx.playSkillVFX(skillId, displayName, point.x, point.y - 16);
+          }
           if (skill.mode === "GROUND" || skill.shape) {
             this.vfx.spawnSkillArea(point.x, point.y, skill);
           } else {
@@ -689,9 +698,22 @@ export class WorldScene extends Phaser.Scene {
         return;
       case "DAMAGE_APPLIED": {
         this.markActorHit(event.target_id);
-        if (event.target_id && event.target_id === this.selfId) this.cameraController.shake(0.003);
+        if (event.target_id && event.target_id === this.selfId) this.cameraController.shake(0.005);
         const shieldAbsorbed = typeof payload.shield_absorbed === "number" ? payload.shield_absorbed : 0;
         const hpDamage = typeof payload.hp_damage === "number" ? payload.hp_damage : 0;
+        const shieldRemaining = typeof payload.shield_remaining === "number" ? payload.shield_remaining : 0;
+        const isShieldBroke = shieldAbsorbed > 0 && shieldRemaining <= 0;
+
+        if (eventX !== null && eventY !== null) {
+          const pixels = worldToPixels({ x: eventX, y: eventY });
+          if (shieldAbsorbed > 0 && isShieldBroke) {
+            this.guVfx.playShieldBreak(pixels.x, pixels.y - 20);
+          } else if (shieldAbsorbed > 0) {
+            this.guVfx.playShieldImpact(pixels.x, pixels.y - 20);
+          } else if (hpDamage > 0 || amount > 0) {
+            this.guVfx.playHitImpact(pixels.x, pixels.y - 20, "slash");
+          }
+        }
 
         if (reason === "immune") {
           this.floatText(eventX, eventY, "MIỄN NHIỄM!", "#fde047");
@@ -741,6 +763,7 @@ export class WorldScene extends Phaser.Scene {
         this.floatText(eventX, eventY, `+${formatDamageAmount(amount)}`, "#10b981", { isHeal: true });
         if (eventX !== null && eventY !== null) {
           const pixels = worldToPixels({ x: eventX, y: eventY });
+          this.guVfx.playVFX("fx_hoi_sinh", pixels.x, pixels.y - 30);
           this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x10b981);
         }
         return;
@@ -748,12 +771,24 @@ export class WorldScene extends Phaser.Scene {
         this.floatText(eventX, eventY, `🛡 +${formatDamageAmount(amount)}`, "#38bdf8", { isShield: true });
         if (eventX !== null && eventY !== null) {
           const pixels = worldToPixels({ x: eventX, y: eventY });
+          this.guVfx.playVFX("fx_khien_anh_kim", pixels.x, pixels.y - 24);
           this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x38bdf8);
         }
         return;
       case "STATUS_APPLIED": {
         const status = typeof payload.reason === "string" ? payload.reason : "STATUS";
         this.floatText(eventX, eventY, status, "#c4b5fd");
+        if (eventX !== null && eventY !== null) {
+          const pixels = worldToPixels({ x: eventX, y: eventY });
+          const lower = status.toLowerCase();
+          if (lower.includes("choáng") || lower.includes("stun")) {
+            this.guVfx.playVFX("fx_hieu_ung_choang", pixels.x, pixels.y - 48);
+          } else if (lower.includes("độc") || lower.includes("poison")) {
+            this.guVfx.playVFX("fx_hieu_ung_doc", pixels.x, pixels.y - 24);
+          } else if (lower.includes("trói") || lower.includes("root")) {
+            this.guVfx.playVFX("fx_hieu_ung_troi", pixels.x, pixels.y);
+          }
+        }
         return;
       }
       case "HIDDEN_PASSIVE_TRIGGERED":
@@ -796,6 +831,10 @@ export class WorldScene extends Phaser.Scene {
     const dx = target && sourceEntity ? target.x - sourceEntity.x : (source.animator.getFacingLeft() ? -1 : 1);
     const dy = target && sourceEntity ? target.y - sourceEntity.y : 0;
     source.animator.faceToward(dx);
+
+    const hitX = target ? target.x * PIXELS_PER_UNIT : source.container.x + (dx > 0 ? 24 : -24);
+    const hitY = target ? target.y * PIXELS_PER_UNIT - 24 : source.container.y - 24;
+    this.guVfx.playHitSlash(hitX, hitY, dx, dy);
     this.vfx.spawnSlash(source.container.x, source.container.y - 30, dx, dy);
   }
 
@@ -816,6 +855,14 @@ export class WorldScene extends Phaser.Scene {
     const actor = this.actors.get(entityId);
     if (!actor) return;
     actor.hitUntil = this.time.now + 180;
+    // Punchy hit flash on the sprite for responsive combat feel
+    actor.sprite.setTint(0xffffff);
+    this.time.delayedCall(70, () => {
+      if (actor.sprite.active) actor.sprite.setTint(0xff5555);
+    });
+    this.time.delayedCall(150, () => {
+      if (actor.sprite.active) actor.sprite.clearTint();
+    });
   }
 
   private floatText(
@@ -956,22 +1003,7 @@ export class WorldScene extends Phaser.Scene {
       groundDrops: gs.groundDrops,
       mapPortals: this.map?.id === zoneId ? this.map.portals : [],
       mySectId: gs.mySectStatus?.sect?.id,
-      resourcePoints: ws.resourcePointsRegion === zoneId
-        ? ws.resourcePoints.map((point) => ({
-            id: point.id,
-            region_id: point.region_id ?? null,
-            x: point.x,
-            y: point.y,
-            name: point.name,
-            grade: point.grade,
-            point_class: point.point_class,
-            state: point.state,
-            vitality: point.vitality,
-            stock_total: Object.values(point.stock || {}).reduce((sum, amount) => sum + amount, 0),
-            stock_cap: point.stock_cap,
-            next_item_id: point.next_item_id,
-          }))
-        : [],
+      resourcePoints: ws.resourcePointsRegion === zoneId ? toWorldMarkerResources(ws.resourcePoints) : [],
     });
 
     // Rebuilding every Phaser Text object on each tick is expensive; only redraw
@@ -1081,8 +1113,15 @@ export class WorldScene extends Phaser.Scene {
       const shieldBarChanged = entity.shield !== actor.lastShield || entity.maxHp !== actor.lastMaxHp;
       actor.hpBar.setVisible(entity.kind !== "monster" || engaged || selected);
       actor.shieldBar.setVisible(entity.shield > 0 && (entity.kind === "player" || engaged || selected));
-      if (entity.hp !== actor.lastHp || entity.maxHp !== actor.lastMaxHp || engaged !== actor.lastEngaged || selected !== actor.lastSelected) {
-        this.drawHpBar(actor.hpBar, entity.maxHp > 0 ? entity.hp / entity.maxHp : 0, entity.kind === "monster" ? 0xd05348 : undefined);
+      const targetRatio = entity.maxHp > 0 ? entity.hp / entity.maxHp : 0;
+      if (actor.ghostHpRatio === undefined || actor.ghostHpRatio < targetRatio) {
+        actor.ghostHpRatio = targetRatio;
+      } else if (actor.ghostHpRatio > targetRatio) {
+        actor.ghostHpRatio = Math.max(targetRatio, actor.ghostHpRatio - 0.015);
+      }
+      const hpChanged = entity.hp !== actor.lastHp || entity.maxHp !== actor.lastMaxHp || engaged !== actor.lastEngaged || selected !== actor.lastSelected || Math.abs(actor.ghostHpRatio - targetRatio) > 0.001;
+      if (hpChanged) {
+        this.drawHpBar(actor.hpBar, targetRatio, actor.ghostHpRatio, entity.kind === "monster", targetRatio <= 0.25);
         actor.lastHp = entity.hp;
         actor.lastMaxHp = entity.maxHp;
         actor.lastEngaged = engaged;
@@ -1122,9 +1161,9 @@ export class WorldScene extends Phaser.Scene {
     const container = this.add.container(x, y, [sprite, label, hpBar, shieldBar]);
     const actor: ActorView = {
       container, sprite, animator, label, hpBar, shieldBar, lastHp: -1, lastMaxHp: -1, lastShield: -1, lastEngaged: false, lastSelected: false, templateId: "",
-      lastX: x, lastY: y, castUntil: 0, hitUntil: 0,
+      lastX: x, lastY: y, castUntil: 0, hitUntil: 0, ghostHpRatio: 1,
     };
-    this.drawHpBar(hpBar, 1);
+    this.drawHpBar(hpBar, 1, 1, false, false);
     return actor;
   }
 
@@ -1153,13 +1192,24 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  private drawHpBar(graphics: Phaser.GameObjects.Graphics, ratio: number, color?: number): void {
-    const value = Math.max(0, Math.min(1, ratio));
+  private drawHpBar(graphics: Phaser.GameObjects.Graphics, currentRatio: number, ghostRatio: number, isMonster: boolean, isLowHp: boolean): void {
+    const curVal = Math.max(0, Math.min(1, currentRatio));
+    const ghostVal = Math.max(curVal, Math.min(1, ghostRatio));
     graphics.clear();
-    graphics.fillStyle(0x000000, 0.65);
-    graphics.fillRect(-HP_BAR_WIDTH / 2 - 1, -66, HP_BAR_WIDTH + 2, 6);
-    graphics.fillStyle(color ?? (value > 0.3 ? 0x34d399 : 0xf87171), 1);
-    graphics.fillRect(-HP_BAR_WIDTH / 2, -65, HP_BAR_WIDTH * value, 4);
+    // Outer border container
+    graphics.fillStyle(0x020617, 0.85);
+    graphics.fillRoundedRect(-HP_BAR_WIDTH / 2 - 1, -66, HP_BAR_WIDTH + 2, 6, 2);
+
+    // Damage lag bar (Ghost HP in amber/yellow)
+    if (ghostVal > curVal) {
+      graphics.fillStyle(0xfde047, 0.9);
+      graphics.fillRoundedRect(-HP_BAR_WIDTH / 2, -65, HP_BAR_WIDTH * ghostVal, 4, 1);
+    }
+
+    // Active HP bar
+    const barColor = isMonster ? 0xd05348 : (isLowHp ? 0xef4444 : 0x10b981);
+    graphics.fillStyle(barColor, 1);
+    graphics.fillRoundedRect(-HP_BAR_WIDTH / 2, -65, HP_BAR_WIDTH * curVal, 4, 1);
   }
 
   private drawShieldBar(graphics: Phaser.GameObjects.Graphics, ratio: number): void {

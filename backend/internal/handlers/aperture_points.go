@@ -689,6 +689,15 @@ func decorateAperturePointView(pt *models.ApertureResourcePoint, template Resour
 	pt.YieldPreview = buildApertureYieldPreview(y, pt.ProductionIntervalHours, effectiveRate)
 }
 
+// applyTitleYieldBonus scales a harvested amount by the equipped title's
+// aperture-yield utility bonus (rounded down); 0% leaves it untouched.
+func applyTitleYieldBonus(amount int64, bonusPct float64) int64 {
+	if amount <= 0 || bonusPct <= 0 {
+		return amount
+	}
+	return int64(math.Floor(float64(amount) * (1 + bonusPct/100)))
+}
+
 // buildApertureYieldPreview mirrors gamefx.ComputeApertureYield so the client
 // never re-derives the harvest formula.
 func buildApertureYieldPreview(y gamefx.ApertureYield, intervalHours int, effectiveRate float64) *models.ApertureYieldPreview {
@@ -1041,12 +1050,21 @@ func harvestPointRow(tx *sql.Tx, playerID uuid.UUID, p *models.ApertureResourceP
 		return fmt.Sprintf("%s chưa tích lũy đủ tài nguyên.", p.Name), false, nil
 	}
 
+	// Equipped achievement titles keep their aperture-yield utility bonus on
+	// blessed-land harvests (parity with the retired node flow). Public world
+	// mines run without the owner's bonuses, so they are excluded.
+	titleBonusPct := 0.0
+	if p.Scope != "WORLD" {
+		titleBonusPct = equippedTitleUtilityBonus(tx, playerID.String())
+	}
+
 	grantedNames := make([]string, 0, len(p.Stock))
 	var totalAmount int64
 	for itemID, amount := range p.Stock {
 		if amount <= 0 {
 			continue
 		}
+		amount = applyTitleYieldBonus(amount, titleBonusPct)
 		if amount > 10000000 {
 			amount = 10000000
 		}
@@ -1089,6 +1107,9 @@ func harvestPointRow(tx *sql.Tx, playerID uuid.UUID, p *models.ApertureResourceP
 	if totalAmount > 0 {
 		message += " Nhân Khí +2."
 		addHumanQi(tx, playerID, 2)
+	}
+	if titleBonusPct > 0 && totalAmount > 0 {
+		message += fmt.Sprintf(" Danh hiệu +%.0f%% sản lượng.", titleBonusPct)
 	}
 	if mintedGu != "" {
 		message += " Sinh ra " + mintedGu + "!"

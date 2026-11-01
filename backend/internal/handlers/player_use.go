@@ -572,10 +572,7 @@ func SetVitalGu(c *gin.Context) {
 	}
 
 	// Recalculate equipped_gus
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	RebuildEquippedGus(&player)
 
 	_, err = tx.Exec(`
 		UPDATE players 
@@ -657,9 +654,7 @@ func DropGu(c *gin.Context) {
 		}
 	}
 	player.GuInventory = newInv
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	RebuildEquippedGus(&player)
 	if err := db.RemovePlayerGuForPlayer(tx, player.ID.String(), droppedInstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
 		return
@@ -749,9 +744,7 @@ func DropGus(c *gin.Context) {
 		}
 	}
 	player.GuInventory = newInv
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	RebuildEquippedGus(&player)
 	if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), req.GuInstanceIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})
 		return

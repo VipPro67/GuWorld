@@ -380,10 +380,7 @@ func RefineGu(c *gin.Context) {
 	statusMsg = fmt.Sprintf("%s (Tỉ lệ: %.1f%%)", statusMsg, finalSuccessRate*100.0)
 
 	// Recalculate equipped_gus list
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	RebuildEquippedGus(&player)
 
 	qiGained := 0.0
 

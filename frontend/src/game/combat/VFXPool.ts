@@ -39,22 +39,23 @@ export class VFXPool {
     const jitter = options?.jitterX !== false ? (Math.random() - 0.5) * 16 : 0;
     const startX = x + jitter;
     const startY = y + (options?.offsetY ?? 0);
-    const fontSize = options?.fontSize ?? (options?.isCrit ? "20px" : options?.isSkill ? "13px" : "15px");
+    const fontSize = options?.fontSize ?? (options?.isCrit ? "22px" : options?.isSkill ? "13px" : "15px");
     const fontStyle = options?.isSkill ? "italic" : "bold";
-    const strokeThickness = options?.isCrit ? 4 : 3;
+    const strokeColor = options?.isCrit ? "#451a03" : options?.isShield ? "#082f49" : options?.isHeal ? "#064e3b" : "#020617";
+    const strokeThickness = options?.isCrit ? 5 : 3;
 
     node.setActive(true).setVisible(true);
     node.setText(text)
       .setColor(color)
       .setFontSize(fontSize)
       .setFontStyle(fontStyle)
-      .setStroke("#020617", strokeThickness)
+      .setStroke(strokeColor, strokeThickness)
       .setPosition(startX, startY)
       .setAlpha(1)
       .setDepth(90_000);
 
     if (options?.isCrit) {
-      node.setScale(1.4);
+      node.setScale(1.6);
       this.scene.tweens.add({
         targets: node,
         scale: 1.0,

@@ -17,6 +17,7 @@ Tái tạo toàn bộ 4.479 Bí phương hợp luyện trong backend/data/Recipe
 import csv
 import json
 import re
+import zlib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -108,30 +109,46 @@ def main():
         all_prev = [gid for gid in gus_by_rank.get(prev_rank, []) if gid != target_id]
         return all_prev[0] if all_prev else None
 
-    def pick_distinct_secondary_gu(primary_path, rank, exclude_set):
-        for gid in gus_by_path_rank.get((primary_path, rank), []):
-            if gid not in exclude_set:
-                exclude_set.add(gid)
-                return gid
+    def pick_distinct_secondary_gu(primary_path, rank, exclude_set, target_id):
+        # Xoay vòng ứng viên một cách deterministic theo target_id để các
+        # công thức khác nhau cùng bucket dung nguyên liệu khác nhau, thay vì
+        # luôn chọn cổ đầu tiên (Dưỡng Đan Tiên Cổ từng bị dính vào > 450
+        # công thức rank 8 vì luôn là phần tử đầu của Refinement Path).
+        seed = zlib.crc32(target_id.encode('utf-8'))
+
+        def take(bucket):
+            cands = [gid for gid in bucket if gid not in exclude_set]
+            if not cands:
+                return None
+            chosen = cands[seed % len(cands)]
+            exclude_set.add(chosen)
+            return chosen
+
+        chosen = take(gus_by_path_rank.get((primary_path, rank), []))
+        if chosen:
+            return chosen
         for fallback_p in ['Refinement Path', 'Qi Path', 'Strength Path']:
-            for gid in gus_by_path_rank.get((fallback_p, rank), []):
-                if gid not in exclude_set:
-                    exclude_set.add(gid)
-                    return gid
-        for gid in gus_by_rank.get(rank, []):
-            if gid not in exclude_set:
-                exclude_set.add(gid)
-                return gid
-        return None
+            chosen = take(gus_by_path_rank.get((fallback_p, rank), []))
+            if chosen:
+                return chosen
+        return take(gus_by_rank.get(rank, []))
 
     old_recipes = list(csv.DictReader(open(recipe_file, 'r', encoding='utf-8-sig')))
     new_recipes = []
 
-    for row in old_recipes:
-        target_id = row['target_gu_id']
-        target_rank = int(row['target_rank'])
-        variant = int(row['variant'])
-        
+    # Danh sách công thức gốc từ file cũ, cộng thêm mọi Gu rank 6-9 chưa có
+    # công thức (Gu mới thêm vào Gu.csv sau lần build trước sẽ được phủ kín).
+    covered_targets = {(row['target_gu_id'], int(row['target_rank'])) for row in old_recipes}
+    pending_targets = [
+        (row['target_gu_id'], int(row['target_rank']), int(row['variant']))
+        for row in old_recipes
+    ]
+    for (gid, grk) in sorted(gus_by_id_rank.keys(), key=lambda t: (t[1], t[0])):
+        if 6 <= grk <= 9 and (gid, grk) not in covered_targets:
+            pending_targets.append((gid, grk, 1))
+            covered_targets.add((gid, grk))
+
+    for target_id, target_rank, variant in pending_targets:
         gmeta = gus_by_id_rank.get((target_id, target_rank))
         primary_path = gmeta[1][0] if gmeta else 'Strength Path'
         
@@ -184,7 +201,7 @@ def main():
             if main_gu:
                 req_gus[main_gu] = {"qty": 1, "rank": 3}
                 used_gus.add(main_gu)
-            sub_gu = pick_distinct_secondary_gu(primary_path, 2, used_gus)
+            sub_gu = pick_distinct_secondary_gu(primary_path, 2, used_gus, target_id)
             if sub_gu:
                 req_gus[sub_gu] = {"qty": 1, "rank": 2}
             if mat_a:
@@ -201,10 +218,10 @@ def main():
             if main_gu:
                 req_gus[main_gu] = {"qty": 1, "rank": 4}
                 used_gus.add(main_gu)
-            sub1 = pick_distinct_secondary_gu(primary_path, 4, used_gus)
+            sub1 = pick_distinct_secondary_gu(primary_path, 4, used_gus, target_id)
             if sub1:
                 req_gus[sub1] = {"qty": 1, "rank": 4}
-            sub2 = pick_distinct_secondary_gu(primary_path, 3, used_gus)
+            sub2 = pick_distinct_secondary_gu(primary_path, 3, used_gus, target_id)
             if sub2:
                 req_gus[sub2] = {"qty": 1, "rank": 3}
             if mat_a:
@@ -222,13 +239,13 @@ def main():
             if main_gu:
                 req_gus[main_gu] = {"qty": 1, "rank": 5}
                 used_gus.add(main_gu)
-            g_r5_sub = pick_distinct_secondary_gu(primary_path, 5, used_gus)
+            g_r5_sub = pick_distinct_secondary_gu(primary_path, 5, used_gus, target_id)
             if g_r5_sub:
                 req_gus[g_r5_sub] = {"qty": 1, "rank": 5}
-            g_r4_sub1 = pick_distinct_secondary_gu(primary_path, 4, used_gus)
+            g_r4_sub1 = pick_distinct_secondary_gu(primary_path, 4, used_gus, target_id)
             if g_r4_sub1:
                 req_gus[g_r4_sub1] = {"qty": 1, "rank": 4}
-            g_r4_sub2 = pick_distinct_secondary_gu('Refinement Path', 4, used_gus)
+            g_r4_sub2 = pick_distinct_secondary_gu('Refinement Path', 4, used_gus, target_id)
             if g_r4_sub2:
                 req_gus[g_r4_sub2] = {"qty": 1, "rank": 4}
             if mat_a:
@@ -246,16 +263,16 @@ def main():
             if main_gu:
                 req_gus[main_gu] = {"qty": 1, "rank": 6}
                 used_gus.add(main_gu)
-            g_immortal_r6_sub = pick_distinct_secondary_gu(primary_path, 6, used_gus)
+            g_immortal_r6_sub = pick_distinct_secondary_gu(primary_path, 6, used_gus, target_id)
             if g_immortal_r6_sub:
                 req_gus[g_immortal_r6_sub] = {"qty": 1, "rank": 6}
-            g_r5_sub1 = pick_distinct_secondary_gu(primary_path, 5, used_gus)
+            g_r5_sub1 = pick_distinct_secondary_gu(primary_path, 5, used_gus, target_id)
             if g_r5_sub1:
                 req_gus[g_r5_sub1] = {"qty": 1, "rank": 5}
-            g_r5_sub2 = pick_distinct_secondary_gu('Refinement Path', 5, used_gus)
+            g_r5_sub2 = pick_distinct_secondary_gu('Refinement Path', 5, used_gus, target_id)
             if g_r5_sub2:
                 req_gus[g_r5_sub2] = {"qty": 1, "rank": 5}
-            g_r4_sub = pick_distinct_secondary_gu('Qi Path', 4, used_gus)
+            g_r4_sub = pick_distinct_secondary_gu('Qi Path', 4, used_gus, target_id)
             if g_r4_sub:
                 req_gus[g_r4_sub] = {"qty": 1, "rank": 4}
             if mat_a:
@@ -276,16 +293,16 @@ def main():
             if main_gu:
                 req_gus[main_gu] = {"qty": 1, "rank": 7}
                 used_gus.add(main_gu)
-            g_immortal_r7_sub = pick_distinct_secondary_gu(primary_path, 7, used_gus)
+            g_immortal_r7_sub = pick_distinct_secondary_gu(primary_path, 7, used_gus, target_id)
             if g_immortal_r7_sub:
                 req_gus[g_immortal_r7_sub] = {"qty": 1, "rank": 7}
-            g_immortal_r6_sub1 = pick_distinct_secondary_gu(primary_path, 6, used_gus)
+            g_immortal_r6_sub1 = pick_distinct_secondary_gu(primary_path, 6, used_gus, target_id)
             if g_immortal_r6_sub1:
                 req_gus[g_immortal_r6_sub1] = {"qty": 1, "rank": 6}
-            g_immortal_r6_sub2 = pick_distinct_secondary_gu('Refinement Path', 6, used_gus)
+            g_immortal_r6_sub2 = pick_distinct_secondary_gu('Refinement Path', 6, used_gus, target_id)
             if g_immortal_r6_sub2:
                 req_gus[g_immortal_r6_sub2] = {"qty": 1, "rank": 6}
-            g_r5_sub = pick_distinct_secondary_gu(primary_path, 5, used_gus)
+            g_r5_sub = pick_distinct_secondary_gu(primary_path, 5, used_gus, target_id)
             if g_r5_sub:
                 req_gus[g_r5_sub] = {"qty": 1, "rank": 5}
             if mat_a:
@@ -306,19 +323,19 @@ def main():
             if main_gu:
                 req_gus[main_gu] = {"qty": 1, "rank": 8}
                 used_gus.add(main_gu)
-            g_immortal_r8_sub = pick_distinct_secondary_gu(primary_path, 8, used_gus)
+            g_immortal_r8_sub = pick_distinct_secondary_gu(primary_path, 8, used_gus, target_id)
             if g_immortal_r8_sub:
                 req_gus[g_immortal_r8_sub] = {"qty": 1, "rank": 8}
-            g_immortal_r7_sub1 = pick_distinct_secondary_gu(primary_path, 7, used_gus)
+            g_immortal_r7_sub1 = pick_distinct_secondary_gu(primary_path, 7, used_gus, target_id)
             if g_immortal_r7_sub1:
                 req_gus[g_immortal_r7_sub1] = {"qty": 1, "rank": 7}
-            g_immortal_r7_sub2 = pick_distinct_secondary_gu('Refinement Path', 7, used_gus)
+            g_immortal_r7_sub2 = pick_distinct_secondary_gu('Refinement Path', 7, used_gus, target_id)
             if g_immortal_r7_sub2:
                 req_gus[g_immortal_r7_sub2] = {"qty": 1, "rank": 7}
-            g_immortal_r6_sub = pick_distinct_secondary_gu('Qi Path', 6, used_gus) or pick_distinct_secondary_gu(primary_path, 6, used_gus)
+            g_immortal_r6_sub = pick_distinct_secondary_gu('Qi Path', 6, used_gus, target_id) or pick_distinct_secondary_gu(primary_path, 6, used_gus, target_id)
             if g_immortal_r6_sub:
                 req_gus[g_immortal_r6_sub] = {"qty": 1, "rank": 6}
-            g_r5_sub = pick_distinct_secondary_gu(primary_path, 5, used_gus)
+            g_r5_sub = pick_distinct_secondary_gu(primary_path, 5, used_gus, target_id)
             if g_r5_sub:
                 req_gus[g_r5_sub] = {"qty": 1, "rank": 5}
             if mat_a:

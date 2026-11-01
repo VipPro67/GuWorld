@@ -71,6 +71,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
     realtimeDraftFrom(store.combatSettings ?? player?.combat_settings),
   );
   const [savingCombat, setSavingCombat] = useState(false);
+  const [combatDirty, setCombatDirty] = useState(false);
 
   // General settings state
   const uiPreferences = useUiPreferences();
@@ -84,12 +85,18 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
   }, [store.combatSettings, store.combatSettingsLoading]);
 
   useEffect(() => {
-    setCombatDraft(realtimeDraftFrom(store.combatSettings ?? player?.combat_settings));
-  }, [store.combatSettings, player?.combat_settings]);
+    if (!combatDirty) {
+      setCombatDraft(realtimeDraftFrom(store.combatSettings ?? player?.combat_settings));
+    }
+  }, [store.combatSettings, player?.combat_settings, combatDirty]);
+
+  const updateCombatDraft = (updater: (prev: RealtimeAutomationDraft) => RealtimeAutomationDraft) => {
+    setCombatDirty(true);
+    setCombatDraft(updater);
+  };
 
   const saveCombat = async () => {
     setSavingCombat(true);
-    const source = store.combatSettings ?? player?.combat_settings;
     const settings: AutoCombatConfig = {
       pvp_enabled: combatDraft.pvpEnabled,
       realtime_left_click_slot: combatDraft.leftClickSlot,
@@ -101,7 +108,10 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
       realtime_farm_use_skills: combatDraft.farmUseSkills,
     };
     const ok = await store.saveCombatSettings(settings);
-    if (ok) store.addToast("Đã lưu thiết lập chiến đấu realtime", "success");
+    if (ok) {
+      setCombatDirty(false);
+      store.addToast("Đã lưu thiết lập chiến đấu realtime", "success");
+    }
     setSavingCombat(false);
   };
 
@@ -191,7 +201,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                 className="mt-1 h-4 w-4 accent-rose-500"
                 type="checkbox"
                 checked={combatDraft.pvpEnabled}
-                onChange={(event) => setCombatDraft((value) => ({ ...value, pvpEnabled: event.target.checked }))}
+                onChange={(event) => updateCombatDraft((value) => ({ ...value, pvpEnabled: event.target.checked }))}
               />
             </label>
           </section>
@@ -208,7 +218,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                   className={selectClass}
                   value={combatDraft.leftClickSlot}
                   onChange={(event) =>
-                    setCombatDraft((value) => ({ ...value, leftClickSlot: Number(event.target.value) }))
+                    updateCombatDraft((value) => ({ ...value, leftClickSlot: Number(event.target.value) }))
                   }
                 >
                   <option value={0}>Dùng Cổ đang chọn bằng phím 1–6; nếu chưa chọn thì di chuyển</option>
@@ -225,7 +235,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                   className={selectClass}
                   value={combatDraft.rightClickAction}
                   onChange={(event) =>
-                    setCombatDraft((value) => ({
+                    updateCombatDraft((value) => ({
                       ...value,
                       rightClickAction: event.target.value as "attack" | "skill",
                     }))
@@ -242,7 +252,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                     className={selectClass}
                     value={combatDraft.rightClickSlot}
                     onChange={(event) =>
-                      setCombatDraft((value) => ({ ...value, rightClickSlot: Number(event.target.value) }))
+                      updateCombatDraft((value) => ({ ...value, rightClickSlot: Number(event.target.value) }))
                     }
                   >
                     {Array.from({ length: 6 }, (_, index) => (
@@ -270,7 +280,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                 type="checkbox"
                 checked={combatDraft.autoFarm}
                 onChange={(event) =>
-                  setCombatDraft((value) => ({ ...value, autoFarm: event.target.checked }))
+                  updateCombatDraft((value) => ({ ...value, autoFarm: event.target.checked }))
                 }
               />
             </div>
@@ -284,7 +294,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                   max={32}
                   value={combatDraft.farmRange}
                   onChange={(event) =>
-                    setCombatDraft((value) => ({ ...value, farmRange: Number(event.target.value) }))
+                    updateCombatDraft((value) => ({ ...value, farmRange: Number(event.target.value) }))
                   }
                 />
               </label>
@@ -298,7 +308,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                   step={5}
                   value={combatDraft.farmStopHPPercent}
                   onChange={(event) =>
-                    setCombatDraft((value) => ({
+                    updateCombatDraft((value) => ({
                       ...value,
                       farmStopHPPercent: Number(event.target.value),
                     }))
@@ -315,7 +325,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
                 type="checkbox"
                 checked={combatDraft.farmUseSkills}
                 onChange={(event) =>
-                  setCombatDraft((value) => ({ ...value, farmUseSkills: event.target.checked }))
+                  updateCombatDraft((value) => ({ ...value, farmUseSkills: event.target.checked }))
                 }
               />
               Tự dùng Cổ theo thứ tự hotbar khi đủ mana/hết hồi chiêu

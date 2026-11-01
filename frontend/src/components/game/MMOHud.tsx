@@ -18,8 +18,10 @@ import type { MapPortal } from "@/game/world/MapLoader";
 import { useQuickActionIds, QUICK_ACTIONS_MAP } from "@/lib/mmo-quick-actions";
 import { resolvePlayerViewMode, resolveTargetViewMode, hotbarKeyLabel, updateUiPreferences, useHotbarKeybinds } from "@/lib/ui-preferences";
 import { QuickActionCustomizer } from "./QuickActionCustomizer";
+import { toWorldMarkerResources } from "@/game/world/markers/resource.ts";
 import { collectMarkers, findNearestMarker } from "@/game/world/markers/collect";
 import type { WorldMarker } from "@/game/world/markers/types";
+import { getGuRankFrame } from "@/lib/gu-frames";
 
 export interface HudTarget {
   id: string;
@@ -364,6 +366,8 @@ export function MMOHud(props: MMOHudProps) {
   const zoneMarkersRegion = useWorldStore((state) => state.zoneMarkersRegion);
   const fetchZoneMarkers = useWorldStore((state) => state.fetchZoneMarkers);
   const fetchWorldResourcePoints = useWorldStore((state) => state.fetchWorldResourcePoints);
+  const resourcePoints = useWorldStore((state) => state.resourcePoints);
+  const resourcePointsRegion = useWorldStore((state) => state.resourcePointsRegion);
 
   const [showTeleportDirectory, setShowTeleportDirectory] = useState(false);
   const [showTeleportBuild, setShowTeleportBuild] = useState(false);
@@ -472,6 +476,7 @@ export function MMOHud(props: MMOHudProps) {
     groundDrops,
     mapPortals: props.mapPortals,
     mySectId: mySectStatus?.sect?.id,
+    resourcePoints: resourcePointsRegion === zoneRegionId ? toWorldMarkerResources(resourcePoints) : [],
   });
 
   const closestSect = findNearestMarker(markers, props.position, "sect");
@@ -1579,7 +1584,14 @@ export function MMOHud(props: MMOHudProps) {
                     ⚡
                   </span>
                 ) : null}
-                <div className="flex-1 flex items-center justify-center w-full mt-1 px-0.5">
+                {guSlot?.guId && (
+                  <img
+                    src={getGuRankFrame(guSlot.rank)}
+                    alt=""
+                    className="pointer-events-none absolute inset-0 h-full w-full object-fill opacity-75 z-0"
+                  />
+                )}
+                <div className="flex-1 flex items-center justify-center w-full mt-1 px-0.5 z-10">
                   <span className="line-clamp-2 text-[8px] font-semibold leading-tight tracking-tight">
                     {isFormActivation ? "Biến thân" : isFormAbility ? `Dạng: ${skill?.name}` : guSlot?.name ?? (skill?.name || "Trống")}
                   </span>
@@ -1721,7 +1733,14 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
                   ⚡ Bị động
                 </span>
               ) : null}
-              <div className="flex-1 flex items-center justify-center w-full px-0.5">
+              {guSlot?.guId && (
+                <img
+                  src={getGuRankFrame(guSlot.rank)}
+                  alt=""
+                  className="pointer-events-none absolute inset-0 h-full w-full object-fill opacity-75 z-0"
+                />
+              )}
+              <div className="flex-1 flex items-center justify-center w-full px-0.5 z-10">
                 <span className="line-clamp-2 text-[8px] sm:text-[11px] md:text-xs font-semibold leading-tight tracking-tight">
                   {isFormActivation ? "Biến thân" : isFormAbility ? `Dạng: ${skill?.name}` : guSlot?.name ?? skill?.name ?? "Chưa gán"}
                 </span>

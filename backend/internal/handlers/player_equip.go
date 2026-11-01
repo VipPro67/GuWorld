@@ -354,10 +354,7 @@ func UnequipAllGu(c *gin.Context) {
 		}
 	}
 
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	RebuildEquippedGus(&player)
 
 	_, err = tx.Exec("UPDATE players SET equipped_gus = $1, base_hp = $2, growth_data = $3 WHERE id = $4",
 		player.EquippedGus, player.BaseHP, player.GrowthData, player.ID)
@@ -475,10 +472,7 @@ func UpdateGuStatus(c *gin.Context) {
 	targetGu.Status = req.Status
 
 	// Recalculate equipped_gus list
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
+	RebuildEquippedGus(&player)
 
 	if err := db.UpdatePlayerGu(tx, *targetGu); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu inventory status"})

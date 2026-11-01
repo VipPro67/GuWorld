@@ -1262,23 +1262,29 @@ export function formatRecipeName(recipeId: string): string {
 export const useGameStore = create<GameState>((set, get) => {
   const normalizePlayer = (player: Player | null): Player | null => {
     if (!player) return null;
-    const equippedSet = new Set<string>(player.equipped_gus || []);
-    const vital = player.gu_inventory?.find((g) => g.is_vital);
-    if (vital && vital.status !== "DEAD") equippedSet.add(vital.instance_id);
     const guInventory = (player.gu_inventory || []).map((g) => {
-      const isEquipped = !!g.equipped || !!g.is_vital || equippedSet.has(g.instance_id);
-      if (isEquipped && g.status !== "DEAD") {
-        equippedSet.add(g.instance_id);
-      }
+      const isEquipped = (!!g.equipped || !!g.is_vital) && g.status !== "DEAD";
       return { ...g, equipped: isEquipped };
     });
+    const activeEquippedIds = new Set(guInventory.filter((g) => g.equipped).map((g) => g.instance_id));
+    const ordered: string[] = [];
+    for (const id of player.equipped_gus || []) {
+      if (activeEquippedIds.has(id) && !ordered.includes(id)) {
+        ordered.push(id);
+      }
+    }
+    for (const id of activeEquippedIds) {
+      if (!ordered.includes(id)) {
+        ordered.push(id);
+      }
+    }
     return {
       ...player,
       current_thought: player.current_thought ?? 100,
       max_thought: player.max_thought ?? 100,
       thought_regen_rate: player.thought_regen_rate ?? 1.0,
       gu_inventory: guInventory,
-      equipped_gus: Array.from(equippedSet),
+      equipped_gus: ordered,
     };
   };
 
@@ -1358,9 +1364,13 @@ export const useGameStore = create<GameState>((set, get) => {
       if (Array.isArray(source.equipped_gus)) {
         updates.equipped_gus = source.equipped_gus;
       } else {
-        const equippedSet = new Set<string>();
-        incomingInv.forEach((g) => { if (g.equipped) equippedSet.add(g.instance_id); });
-        updates.equipped_gus = Array.from(equippedSet);
+        const activeIds = new Set(incomingInv.filter((g) => (g.equipped || g.is_vital) && g.status !== "DEAD").map((g) => g.instance_id));
+        const currentEquipped = currentPlayer.equipped_gus || [];
+        const preserved = currentEquipped.filter((id) => activeIds.has(id));
+        for (const id of activeIds) {
+          if (!preserved.includes(id)) preserved.push(id);
+        }
+        updates.equipped_gus = preserved;
       }
     }
     if (source.materials_inventory && typeof source.materials_inventory === "object" && !Array.isArray(source.materials_inventory)) {
