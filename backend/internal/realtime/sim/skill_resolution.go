@@ -103,13 +103,14 @@ func (w *World) resolveCastLocked(caster *Entity) {
 				angle = baseAngle + fraction*spreadAngleRad
 			}
 			dir := Vec2{X: math.Cos(angle), Y: math.Sin(angle)}
-			start := Vec2{X: caster.Transform.Position.X + dir.X*0.7, Y: caster.Transform.Position.Y + dir.Y*0.7}
+			spawnOffset := math.Min(0.7, skill.Range)
+			start := Vec2{X: caster.Transform.Position.X + dir.X*spawnOffset, Y: caster.Transform.Position.Y + dir.Y*spawnOffset}
 			w.nextProjectileID++
 			projectile := &projectile{
 				ID: w.nextProjectileID, SourceID: caster.ID, SkillID: skill.ID, Skill: skill,
-				Position: start,
+				RangeOrigin: caster.Transform.Position, Position: start,
 				Velocity: Vec2{X: dir.X * skill.ProjectileSpeed / TickRate, Y: dir.Y * skill.ProjectileSpeed / TickRate},
-				Radius:   skill.ProjectileRadius, Damage: skill.Damage,
+				Radius:   skill.ProjectileRadius, Damage: skill.Damage, Travelled: spawnOffset, MaxTravel: skill.Range,
 				ExpireTick:      w.tick + skill.ProjectileTicks,
 				PierceRemaining: skill.PierceCount,
 				HitEntities:     make(map[EntityID]bool),

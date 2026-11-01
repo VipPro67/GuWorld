@@ -558,6 +558,36 @@ func TestDirectionProjectileHitsOnce(t *testing.T) {
 	}
 }
 
+func TestDirectionProjectileCannotHitPastSkillRange(t *testing.T) {
+	skill := combat.Skill{
+		ID: "SHORT_PROJECTILE", Slot: 1, Mode: combat.ModeDirection, Name: "short projectile",
+		Range: 5, WindupTicks: 1, CooldownTicks: 100, Damage: 20,
+		ProjectileSpeed: 10, ProjectileRadius: 0.25, ProjectileTicks: 30, PierceCount: 1,
+	}
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{})
+	player.Combat = NewPlayerCombatWithLoadout([]combat.Skill{skill})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("inside", Vec2{X: 4})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(newTargetMonster("outside", Vec2{X: 8})); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SubmitCast(CastCommand{EntityID: "player", Seq: 1, Slot: 1, Mode: combat.ModeDirection, Aim: Vec2{X: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	collectEvents(t, w, 30)
+	if hp := entityHP(t, w, "inside"); hp != 80 {
+		t.Fatalf("projectile failed to hit target inside skill range: hp=%v, want 80", hp)
+	}
+	if hp := entityHP(t, w, "outside"); hp != 100 {
+		t.Fatalf("projectile hit target outside skill range: hp=%v, want 100", hp)
+	}
+}
+
 func TestGroundCastHitsMultipleTargets(t *testing.T) {
 	w, _ := NewWorld("arena", 16)
 	player := newCombatPlayer("player", Vec2{X: 0, Y: 0})

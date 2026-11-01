@@ -103,7 +103,8 @@ placeholder values are ignored.
 - `range_units` uses world units (1 cell = 1 unit). `DIRECTION`/`GROUND`/
   `TARGET` need range > 0; `SELF` uses 0.
 - `projectile` is required for `DIRECTION`: speed > 0, radius > 0,
-  lifetime 1–120 ticks.
+  lifetime 1–120 ticks. Flight also stops at `range_units`; lifetime is an
+  upper bound and cannot extend the damage reach beyond the displayed range.
 - `GROUND` needs `radius_units` and `max_targets` 1–100.
 - Active effects: `DAMAGE`, `SHIELD`, `HEAL`, `STATUS`, `CLEANSE`.
   - `STAT_MOD` is accepted on passives only; an active `STAT_MOD` is rejected

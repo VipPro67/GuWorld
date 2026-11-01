@@ -195,10 +195,13 @@ type projectile struct {
 	SourceID        EntityID
 	SkillID         string
 	Skill           combat.Skill
+	RangeOrigin     Vec2
 	Position        Vec2
 	Velocity        Vec2
 	Radius          float64
 	Damage          float64
+	Travelled       float64
+	MaxTravel       float64
 	ExpireTick      uint64
 	PierceRemaining int
 	HitEntities     map[EntityID]bool

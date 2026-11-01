@@ -180,11 +180,21 @@ func (w *World) tryHiddenPassiveLocked(target *Entity) {
 func (w *World) updateProjectilesLocked() {
 	remaining := w.projectiles[:0]
 	for _, projectile := range w.projectiles {
-		if w.tick > projectile.ExpireTick {
+		if w.tick > projectile.ExpireTick || projectile.MaxTravel <= projectile.Travelled {
 			continue
 		}
 		from := projectile.Position
+		stepDistance := math.Hypot(projectile.Velocity.X, projectile.Velocity.Y)
+		remainingDistance := projectile.MaxTravel - projectile.Travelled
+		reachedMaxRange := stepDistance >= remainingDistance
+		if reachedMaxRange {
+			stepScale := remainingDistance / stepDistance
+			projectile.Velocity.X *= stepScale
+			projectile.Velocity.Y *= stepScale
+			stepDistance = remainingDistance
+		}
 		to := Vec2{X: from.X + projectile.Velocity.X, Y: from.Y + projectile.Velocity.Y}
+		projectile.Travelled += stepDistance
 		projectile.Position = to
 		if w.blocked(to, projectile.Radius) {
 			continue
@@ -204,7 +214,8 @@ func (w *World) updateProjectilesLocked() {
 		hit := false
 		for _, id := range ids {
 			target := w.entities[id]
-			if target.ID == projectile.SourceID || !w.canHarm(source, target) || projectile.HitEntities[target.ID] {
+			if target.ID == projectile.SourceID || distance(projectile.RangeOrigin, target.Transform.Position) > projectile.MaxTravel ||
+				!w.canHarm(source, target) || projectile.HitEntities[target.ID] {
 				continue
 			}
 			if segmentDistance(from, to, target.Transform.Position) <= projectile.Radius+target.Radius {
@@ -228,7 +239,7 @@ func (w *World) updateProjectilesLocked() {
 				}
 			}
 		}
-		if !hit {
+		if !hit && !reachedMaxRange {
 			remaining = append(remaining, projectile)
 		}
 	}

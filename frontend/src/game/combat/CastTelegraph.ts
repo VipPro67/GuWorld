@@ -56,20 +56,20 @@ export class CastTelegraph {
 
       // Arrowhead at the tip
       const arrowLength = Math.max(18, widthPx * 1.2);
-      const arrowTipX = endX + Math.cos(aimAngle) * arrowLength;
-      const arrowTipY = endY + Math.sin(aimAngle) * arrowLength;
-      const arrowWingL_X = endX + perpX * 1.8;
-      const arrowWingL_Y = endY + perpY * 1.8;
-      const arrowWingR_X = endX - perpX * 1.8;
-      const arrowWingR_Y = endY - perpY * 1.8;
+      const arrowTipX = endX;
+      const arrowTipY = endY;
+      const arrowWingL_X = endX - Math.cos(aimAngle) * arrowLength + perpX * 1.8;
+      const arrowWingL_Y = endY - Math.sin(aimAngle) * arrowLength + perpY * 1.8;
+      const arrowWingR_X = endX - Math.cos(aimAngle) * arrowLength - perpX * 1.8;
+      const arrowWingR_Y = endY - Math.sin(aimAngle) * arrowLength - perpY * 1.8;
 
       this.graphics.fillStyle(0x60a5fa, 0.4);
       this.graphics.lineStyle(2, 0x93c5fd, 0.95);
       this.graphics.beginPath();
       this.graphics.moveTo(arrowTipX, arrowTipY);
       this.graphics.lineTo(arrowWingL_X, arrowWingL_Y);
-      this.graphics.lineTo(endX + perpX, endY + perpY);
-      this.graphics.lineTo(endX - perpX, endY - perpY);
+      this.graphics.lineTo(endX - Math.cos(aimAngle) * arrowLength * 0.45 + perpX * 0.65, endY - Math.sin(aimAngle) * arrowLength * 0.45 + perpY * 0.65);
+      this.graphics.lineTo(endX - Math.cos(aimAngle) * arrowLength * 0.45 - perpX * 0.65, endY - Math.sin(aimAngle) * arrowLength * 0.45 - perpY * 0.65);
       this.graphics.lineTo(arrowWingR_X, arrowWingR_Y);
       this.graphics.closePath();
       this.graphics.fillPath();

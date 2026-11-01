@@ -1224,6 +1224,8 @@ Combat được mô phỏng theo tick bởi server realtime. Người chơi ch�
 
 Chiêu realtime dùng các mẫu VFX cast/impact theo Path và effect của profile; kỹ năng có hình học projectile mới có VFX đường bay. Mẫu được ghép với atlas VFX hiện có và cũng áp dụng fallback theo tên cho kỹ năng tương tự chưa gắn với Cổ riêng.
 
+Projectile của chiêu định hướng dừng tại phạm vi `range` của profile; lifetime chỉ giới hạn thời gian bay và không thể làm chiêu gây sát thương vượt quá vòng phạm vi.
+
 Status realtime có thời lượng và lịch tick do server quản lý; điều kiện khống chế, hồi chiêu, tài nguyên và sát thương được kiểm tra authoritative. Tài liệu chi tiết về profile/effect đang chạy nằm trong `docs/GAME_DATA.md` và `docs/mmo/gu-realtime-schema.md`. Những mechanic legacy theo lượt không có ở hai contract này chỉ là lịch sử, không mô tả runtime hiện tại.
 
 Tiên Cổ phòng thủ: bật dạng biến thân bằng nút riêng, có thời gian thi triển theo profile; khống chế cứng ngắt quá trình biến thân, sát thương thường không ngắt. Phòng thủ và tiêu mana liên tục bắt đầu sau khi biến thân hoàn tất; trong dạng biến thân có chiêu riêng, trạng thái tự kết thúc khi tắt hoặc hết mana.
