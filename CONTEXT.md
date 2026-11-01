@@ -173,3 +173,19 @@ Khống chế cứng có thể hủy quá trình biến thân trước khi hoàn
 
 ### Chiêu Thức Dạng Biến Thân (Form Skill)
 Chiêu thức riêng của một dạng biến thân, chỉ có thể dùng khi trạng thái biến thân tương ứng còn hoạt động.
+
+### Biến Thân Hoàn Toàn (Full Metamorphosis)
+Trạng thái biến toàn bộ cơ thể thành thú hoặc ma thần (thường qua Sát Chiêu Biến Hóa Đạo), thay đổi hitbox, chỉ số thuộc tính và hoán đổi thanh kỹ năng chiến đấu sang bộ chiêu thức riêng của hình thái đó.
+_Avoid_: shape-shift buff, avatar swap đơn thuần
+
+### Biến Thân Bộ Phận (Partial Transformation)
+Trạng thái biến đổi một phần cơ thể (như móng, cánh, vảy qua Cổ trùng biến hóa), duy trì bộ kỹ năng thông thường kèm theo chỉ số tăng cường và mở khóa hoặc cường hóa chiêu thức đặc thù tương ứng.
+_Avoid_: morph buff
+
+### Dung Nhập Tiên Cổ Phòng (Gu House Integration)
+Hành vi người chơi dung nhập vào Tiên Cổ Phòng đang trang bị, chuyển quyền kiểm soát chiến đấu sang Tiên Cổ Phòng; độ bền của Cổ Phòng nhận sát thương thay nhục thân và xuất chiêu bằng hệ thống Trận Kích.
+_Avoid_: vehicle mount
+
+### Hao Hụt Duy Trì Biến Thân (Sustained Form Upkeep)
+Cơ chế tiêu hao Chân Nguyên hoặc Tiên Nguyên liên tục theo nhịp realtime (tick) để duy trì hình thái biến thân, tự động giải trừ khi cạn kiệt năng lượng hoặc bị phá vỡ hình thái.
+_Avoid_: mana drain debuff
