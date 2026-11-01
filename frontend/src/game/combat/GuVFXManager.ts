@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { GU_VFX_CATALOG, resolveGuVfx, resolveSkillVfxKey, type VfxDefinition } from "./GuVFXRegistry.ts";
+import { GU_VFX_CATALOG, resolveGuVfx, resolveSkillVfxKey, resolveVisualTemplate, type VfxDefinition } from "./GuVFXRegistry.ts";
+import type { WorldSkillVisuals } from "../network/Protocol.ts";
 
 const MAX_ACTIVE_VFX = 48;
 
@@ -196,13 +197,26 @@ export class GuVFXManager {
     x: number,
     y: number,
     guId?: string | null,
-    rank?: number | null
+    rank?: number | null,
+    visuals?: WorldSkillVisuals
   ): void {
     const resolved = resolveGuVfx(guId, rank, skillId, skillName);
-    this.playVFX(resolved.vfxKey, x, y, {
+    const key = resolveVisualTemplate(visuals?.cast_vfx) ?? resolved.vfxKey;
+    this.playVFX(key, x, y, {
       scale: resolved.scale,
       depth: y + 70,
     });
+  }
+
+  public playImpactVFX(
+    template: string | undefined,
+    x: number,
+    y: number,
+    skillId = "",
+    skillName?: string
+  ): void {
+    const key = resolveVisualTemplate(template) ?? resolveSkillVfxKey(skillId, skillName);
+    this.playVFX(key, x, y, { scale: 1.05, depth: y + 72 });
   }
 
   public destroy(): void {

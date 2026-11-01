@@ -665,16 +665,17 @@ export class WorldScene extends Phaser.Scene {
             this.floatText(caster.lastX, caster.lastY - 14, `「${displayName}」`, "#c084fc", { isSkill: true });
           }
         }
-        if (skill && eventX !== null && eventY !== null) {
+        if (eventX !== null && eventY !== null) {
           const point = worldToPixels({ x: eventX, y: eventY });
           if (skillId && skillId !== "BASIC_ATTACK") {
-            const guId = typeof payload.gu_id === "string" ? payload.gu_id : undefined;
-            const rank = typeof payload.rank === "number" ? payload.rank : undefined;
-            this.guVfx.playSkillVFX(skillId, displayName, point.x, point.y - 16, guId, rank);
+            const castVfx = typeof payload.cast_vfx === "string" ? payload.cast_vfx : skill?.visuals?.cast_vfx;
+            this.guVfx.playSkillVFX(skillId, displayName, point.x, point.y - 16, undefined, undefined, {
+              cast_vfx: castVfx,
+            });
           }
-          if (skill.mode === "GROUND" || skill.shape) {
+          if (skill && (skill.mode === "GROUND" || skill.shape)) {
             this.vfx.spawnSkillArea(point.x, point.y, skill);
-          } else {
+          } else if (skill) {
             this.vfx.spawnTargetMark(point.x, point.y);
           }
         }
@@ -684,6 +685,10 @@ export class WorldScene extends Phaser.Scene {
         this.markActorHit(event.target_id);
         if (eventX !== null && eventY !== null) {
           const pixels = worldToPixels({ x: eventX, y: eventY });
+          const skillId = typeof payload.skill_id === "string" ? payload.skill_id : "";
+          const skill = this.runtime?.getSkills().find((entry) => entry.id === skillId);
+          const impactVfx = typeof payload.impact_vfx === "string" ? payload.impact_vfx : skill?.visuals?.impact_vfx;
+          this.guVfx.playImpactVFX(impactVfx, pixels.x, pixels.y - 20, skillId, skill?.name);
           this.vfx.spawnRing(pixels.x, pixels.y - 8, 0xfbbf24);
         }
         return;
@@ -712,8 +717,6 @@ export class WorldScene extends Phaser.Scene {
             this.guVfx.playShieldBreak(pixels.x, pixels.y - 20);
           } else if (shieldAbsorbed > 0) {
             this.guVfx.playShieldImpact(pixels.x, pixels.y - 20);
-          } else if (hpDamage > 0 || amount > 0) {
-            this.guVfx.playHitImpact(pixels.x, pixels.y - 20, "slash");
           }
         }
 

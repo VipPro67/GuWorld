@@ -108,12 +108,25 @@ type ApertureResourcePoint struct {
 
 	// View-only fields filled by the point handlers so the client never has to
 	// re-derive the harvest formula (they are not database columns).
-	ProduceKey              string                `json:"produce_key,omitempty"`
-	WorkerRace              string                `json:"worker_race,omitempty"`
-	ProductionIntervalHours int                   `json:"production_interval_hours,omitempty"`
-	NextItemID              string                `json:"next_item_id,omitempty"`
-	AssignedWorkers         int                   `json:"assigned_workers,omitempty"`
-	YieldPreview            *ApertureYieldPreview `json:"yield_preview,omitempty"`
+	ProduceKey              string                   `json:"produce_key,omitempty"`
+	WorkerRace              string                   `json:"worker_race,omitempty"`
+	ProductionIntervalHours int                      `json:"production_interval_hours,omitempty"`
+	NextItemID              string                   `json:"next_item_id,omitempty"`
+	AssignedWorkers         int                      `json:"assigned_workers,omitempty"`
+	YieldPreview            *ApertureYieldPreview    `json:"yield_preview,omitempty"`
+	Transplant              *AperturePointTransplant `json:"transplant,omitempty"`
+}
+
+// AperturePointTransplant is the in-flight transplantation ritual of a WORLD
+// resource point into the player's immortal aperture. The mine only leaves the
+// world once the ritual completes, and the ritual only survives while the
+// cultivator keeps standing at the mine.
+type AperturePointTransplant struct {
+	PointID     string    `json:"point_id"`
+	RegionID    string    `json:"region_id"`
+	ManaSpent   float64   `json:"mana_spent"`
+	StartedAt   time.Time `json:"started_at"`
+	CompletesAt time.Time `json:"completes_at"`
 }
 
 type DaoMark struct {

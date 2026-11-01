@@ -206,12 +206,13 @@ type projectile struct {
 
 // ProjectileState is the render-safe projection of a server projectile.
 type ProjectileState struct {
-	ID       uint64  `json:"id"`
-	SourceID string  `json:"source_id"`
-	SkillID  string  `json:"skill_id"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	Radius   float64 `json:"radius"`
+	ID            uint64  `json:"id"`
+	SourceID      string  `json:"source_id"`
+	SkillID       string  `json:"skill_id"`
+	ProjectileVFX string  `json:"projectile_vfx,omitempty"`
+	X             float64 `json:"x"`
+	Y             float64 `json:"y"`
+	Radius        float64 `json:"radius"`
 }
 
 func (w *World) SubmitCast(command CastCommand) error {
@@ -382,6 +383,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 	w.emitEvent(combat.Event{
 		Type: combat.EventCastAccepted, SourceID: string(caster.ID), TargetID: string(command.TargetID),
 		SkillID: skill.ID, SkillName: skill.Name, X: pending.Point.X, Y: pending.Point.Y, DurationTicks: skill.WindupTicks,
+		CastVFX: skill.Visuals.CastVFX, ProjectileVFX: skill.Visuals.ProjectileVFX, ImpactVFX: skill.Visuals.ImpactVFX,
 	})
 }
 

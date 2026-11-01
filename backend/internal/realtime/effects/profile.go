@@ -111,12 +111,7 @@ type EffectProfile struct {
 	IsToggle           bool     `json:"is_toggle,omitempty"`
 }
 
-type VisualProfile struct {
-	Icon          string `json:"icon,omitempty"`
-	CastVFX       string `json:"cast_vfx,omitempty"`
-	ProjectileVFX string `json:"projectile_vfx,omitempty"`
-	ImpactVFX     string `json:"impact_vfx,omitempty"`
-}
+type VisualProfile = combat.VisualProfile
 
 type CompiledActive struct {
 	Skill   combat.Skill
@@ -301,6 +296,7 @@ func CompileCatalog(catalog ProfileCatalog, entries []GuEntry, requiredMVP []Ent
 				return nil, err
 			}
 			compiledProfile.Active = active
+			active.Skill.Visuals = profile.Visuals
 			if profile.Slot > 0 {
 				compiled.DefaultSkills = append(compiled.DefaultSkills, active.Skill)
 			}
@@ -324,6 +320,7 @@ func CompileCatalog(catalog ProfileCatalog, entries []GuEntry, requiredMVP []Ent
 				return nil, err
 			}
 			ability.Skill.FormAbility = true
+			ability.Skill.Visuals = profile.Visuals
 			compiledProfile.FormActivation = &activation
 			compiledProfile.FormAbility = ability
 			compiledProfile.FormManaDrainPerTick = activation.FormManaDrainPerTick

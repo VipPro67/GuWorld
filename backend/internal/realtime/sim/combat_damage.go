@@ -209,7 +209,7 @@ func (w *World) updateProjectilesLocked() {
 			}
 			if segmentDistance(from, to, target.Transform.Position) <= projectile.Radius+target.Radius {
 				projectile.HitEntities[target.ID] = true
-				w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(projectile.SourceID), TargetID: string(target.ID), SkillID: projectile.SkillID, X: target.Transform.Position.X, Y: target.Transform.Position.Y})
+				w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(projectile.SourceID), TargetID: string(target.ID), SkillID: projectile.SkillID, ImpactVFX: projectile.Skill.Visuals.ImpactVFX, X: target.Transform.Position.X, Y: target.Transform.Position.Y})
 				w.applyDamageLocked(source, target, projectile.Damage, projectile.SkillID)
 				if target.Vitals.HP > 0 {
 					w.applyStatusLocked(source, target, projectile.Skill)

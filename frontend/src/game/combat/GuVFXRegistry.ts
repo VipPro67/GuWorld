@@ -14,6 +14,56 @@ export interface VfxDefinition {
   guId?: string;
 }
 
+/** Symbolic profile recipe keys mapped to reusable, authored frame atlases. */
+const VFX_TEMPLATE_ATLASES: Record<string, string> = {
+  "cast/fire": "fx_gu_hoa_du",
+  "cast/water": "fx_thu_nuoc_dang_gpt",
+  "cast/frost": "fx_gu_nguyet_quang",
+  "cast/lightning": "fx_gu_dien_nhan_gpt_dau",
+  "cast/poison": "fx_thu_bot_doc_gpt",
+  "cast/earth": "fx_dat_nut",
+  "cast/light": "fx_cot_sang",
+  "cast/dark": "fx_gu_huyet_nguyet",
+  "cast/sword": "fx_gu_nguyet_quang",
+  "cast/wind": "fx_gu_thinh_phong_gpt_kich_hoat",
+  "cast/strength": "fx_thu_giap_da_gpt",
+  "cast/formation": "fx_dat_nut",
+  "cast/sound": "fx_song_gam",
+  "cast/heal": "fx_hoi_sinh",
+  "cast/water_shield": "fx_khien_anh_kim",
+  "cast/transformation": "fx_thoi_trang_xuan_thu_quyen",
+  "projectiles/fireball": "fx_thu_cau_dung_nham_gpt",
+  "projectiles/spark": "fx_thu_set_danh_gpt",
+  "projectiles/poison_spit": "fx_thu_can_doc_gpt",
+  "projectiles/dark_orb": "fx_gu_huyet_bao",
+  "projectiles/moon_blade": "fx_gu_nguyet_quang",
+  "projectiles/wind_blade": "fx_gu_thinh_phong_gpt_kich_hoat",
+  "projectiles/water_arrow": "fx_thu_nuoc_dang_gpt",
+  "impact/fire_burst": "fx_thu_vung_dung_nham_gpt",
+  "impact/water": "fx_thu_nuoc_dang_gpt",
+  "impact/frost": "fx_gu_nguyet_quang",
+  "impact/lightning_strike": "fx_thu_set_danh_gpt",
+  "impact/poison_cloud": "fx_thu_bot_doc_gpt",
+  "impact/heavy_strike": "fx_hit_dam",
+  "impact/light_slash": "fx_gu_nguyet_quang",
+  "impact/dark_burst": "fx_gu_huyet_bao",
+  "impact/sword_slash": "fx_hit_chem",
+  "impact/wind_slash": "fx_bui_lao",
+  "impact/shield": "fx_khien_anh_kim",
+  "impact/heal": "fx_hoi_sinh",
+  "impact/ground_burst": "fx_dat_nut",
+  "impact/armor": "fx_thu_giap_da_gpt",
+  "impact/sound": "fx_song_gam",
+  "impact/slash": "fx_hit_chem",
+  "impact/strength": "fx_hit_dam",
+};
+
+export function resolveVisualTemplate(template?: string | null): string | null {
+  if (!template) return null;
+  const key = VFX_TEMPLATE_ATLASES[template] ?? template;
+  return GU_VFX_CATALOG[key] ? key : null;
+}
+
 export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
   // === CORE COMBAT & HIT IMPACTS ===
   fx_hit_chem: {

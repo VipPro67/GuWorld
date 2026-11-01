@@ -54,6 +54,14 @@ and reason; they are never loaded as a “skill without effects”.
 
 ## Profile shape
 
+`visuals` is optional presentation metadata; it never changes simulation rules.
+The generated catalog infers reusable cast and impact families from the Gu path,
+name and active effects. `projectile_vfx` is emitted only when the active profile
+has projectile geometry. The frontend maps these symbolic recipe keys onto the
+existing VFX atlas catalog, and non-Gu skills use the same name-based fallback.
+An authored non-placeholder value overrides the inferred family; legacy generic
+placeholder values are ignored.
+
 ```json
 {
   "schema_version": 1,
@@ -75,7 +83,12 @@ and reason; they are never loaded as a “skill without effects”.
       },
       "passives": [],
       "hidden_passives": [],
-      "visuals": {"icon": "gu/water_arrow", "cast_vfx": "cast/water"}
+      "visuals": {
+        "icon": "gu/water_arrow",
+        "cast_vfx": "cast/water",
+        "projectile_vfx": "projectiles/water_arrow",
+        "impact_vfx": "impact/water"
+      }
     }
   ]
 }

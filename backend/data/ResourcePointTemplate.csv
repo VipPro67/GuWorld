@@ -1,13 +1,48 @@
 point_type,name,path,produce_key,produce_interval_hours,base_yield,vitality_drain,vitality_regen_hours,is_food,worker_race,rare_rate,gu_rate,point_class
-HERB_VALLEY,Thung Lũng Linh Thảo,Wood Path,wood_crystal,12,10,8,20,false,HAIRY_MAN,0.15,0.10,NORMAL
-BEAST_PASTURE,Đồng Cỏ Dạ Thú,Food Path,food_essence,12,10,8,20,true,HAIRY_MAN,0.15,0.12,NORMAL
-ORE_VEIN,Mạch Quặng Địa Mạch,Earth Path,earth_soil,12,10,8,20,false,ROCKMAN,0.12,0.08,NORMAL
-SPIRIT_SPRING,Ao Linh Tuyền,Water Path,water_pearl,12,10,8,20,false,FEATHERMAN,0.12,0.08,NORMAL
-GOLD_SAND_SHOAL,Bãi Cát Kim Sa,Metal Path,metal_ore,12,10,8,20,false,ROCKMAN,0.10,0.06,NORMAL
-MOON_BOWL,Bát Nguyệt Cốc,Water Path,water_pearl,12,10,8,20,false,FEATHERMAN,0.15,0.14,NORMAL
-YEAR_ESSENCE_POOL,Dòng Năm Thú,Food Path,food_essence,12,10,8,20,true,HAIRY_MAN,0.15,0.14,NORMAL
-DANG_HON_PEAK,Núi Đãng Hồn,Soul Path,soul_sand,24,10,10,40,false,HAIRY_MAN,0.18,0.35,FAMOUS
-JADE_SNAKE_CAVE,Hẻm Ngọc Huyền Xà,Poison Path,poison_sand,24,10,10,40,false,ROCKMAN,0.18,0.35,FAMOUS
-PHOENIX_PEAK,Núi Phượng Vũ,Fire Path,fire_crystal,24,10,10,40,false,FEATHERMAN,0.16,0.30,FAMOUS
-FROSTY_PEAK,Núi Băng Thủy,Ice Path,ice_crystal,24,10,10,40,false,ROCKMAN,0.15,0.30,FAMOUS
-CORPSE_RIDGE,Thi Cương,Enslavement Path,enslavement_stone,24,10,10,40,false,ROCKMAN,0.15,0.30,FAMOUS
+HERB_VALLEY,Thung Lũng Linh Thảo,Wood Path,wood_crystal,12,10,8,20,false,fur_people,0.15,0.10,NORMAL
+BEAST_PASTURE,Đồng Cỏ Dạ Thú,Food Path,food_essence,12,10,8,20,true,fur_people,0.15,0.12,NORMAL
+ORE_VEIN,Mạch Quặng Địa Mạch,Earth Path,earth_soil,12,10,8,20,false,rockman,0.12,0.08,NORMAL
+SPIRIT_SPRING,Ao Linh Tuyền,Water Path,water_pearl,12,10,8,20,false,feathered,0.12,0.08,NORMAL
+GOLD_SAND_SHOAL,Bãi Cát Kim Sa,Metal Path,metal_ore,12,10,8,20,false,rockman,0.10,0.06,NORMAL
+MOON_BOWL,Bát Nguyệt Cốc,Water Path,water_pearl,12,10,8,20,false,feathered,0.15,0.14,NORMAL
+YEAR_ESSENCE_POOL,Dòng Năm Thú,Food Path,food_essence,12,10,8,20,true,fur_people,0.15,0.14,NORMAL
+DANG_HON_PEAK,Núi Đãng Hồn,Soul Path,soul_sand,24,10,10,40,false,fur_people,0.18,0.35,FAMOUS
+JADE_SNAKE_CAVE,Hẻm Ngọc Huyền Xà,Poison Path,poison_sand,24,10,10,40,false,rockman,0.18,0.35,FAMOUS
+PHOENIX_PEAK,Núi Phượng Vũ,Fire Path,fire_crystal,24,10,10,40,false,feathered,0.16,0.30,FAMOUS
+FROSTY_PEAK,Núi Băng Thủy,Ice Path,ice_crystal,24,10,10,40,false,rockman,0.15,0.30,FAMOUS
+CORPSE_RIDGE,Thi Cương,Enslavement Path,enslavement_stone,24,10,10,40,false,rockman,0.15,0.30,FAMOUS
+QI_STONE_VEIN,Khí Thạch Mạch,Qi Path,qi_stone,12,10,8,20,false,rockman,0.15,0.12,NORMAL
+REFINEMENT_IRON_MINE,Luyện Thiết Lò,Refinement Path,refinement_iron,12,10,8,20,false,rockman,0.15,0.12,NORMAL
+FORMATION_STONE_VALLEY,Trận Thạch Cốc,Formation Path,formation_stone,12,10,8,20,false,rockman,0.12,0.10,NORMAL
+RULE_STONE_FOREST,Quy Tắc Thạch Lâm,Rule Path,rule_stone,12,10,8,20,false,rockman,0.12,0.10,NORMAL
+KILLING_IRON_MINE,Sát Thiết Quặng,Killing Path,killing_iron,12,10,8,20,false,rockman,0.12,0.08,NORMAL
+WIND_STONE_CANYON,Phong Thạch Cốc,Wind Path,wind_stone,12,10,8,20,false,feathered,0.10,0.08,NORMAL
+SPACE_CRYSTAL_RIFT,Hư Không Tinh Mạch,Space Path,space_crystal,12,10,8,20,false,feathered,0.18,0.14,NORMAL
+BLADE_STONE_QUARRY,Đao Thạch Sơn,Blade Path,blade_stone,12,10,8,20,false,rockman,0.12,0.08,NORMAL
+SWORD_STONE_CLIFF,Kiếm Thạch Nhai,Sword Path,sword_stone,12,10,8,20,false,rockman,0.12,0.08,NORMAL
+CREATION_STONE_FIELD,Sinh Cơ Thạch Điền,Creation Path,creation_stone,12,10,8,20,false,rockman,0.12,0.08,NORMAL
+DESTRUCTION_IRON_MINE,Toái Thiết Sơn,Destruction Path,destruction_iron,12,10,8,20,false,rockman,0.12,0.08,NORMAL
+BLOOD_CRYSTAL_POOL,Huyết Tinh Đầm,Blood Path,blood_crystal,12,10,8,20,false,merman,0.15,0.12,NORMAL
+LIGHTNING_CRYSTAL_CLIFF,Lôi Tinh Nhai,Lightning Path,lightning_crystal,12,10,8,20,false,feathered,0.15,0.12,NORMAL
+THEFT_CRYSTAL_CAVE,Diệu Thủ Tinh Động,Theft Path,theft_crystal,12,10,8,20,false,fur_people,0.15,0.10,NORMAL
+DARK_CRYSTAL_ABYSS,Hắc Tinh Uyên,Dark Path,dark_crystal,12,10,8,20,false,ghostman,0.14,0.10,NORMAL
+CLOUD_CRYSTAL_TERRACE,Vân Tinh Đài,Cloud Path,cloud_crystal,12,10,8,20,false,feathered,0.12,0.10,NORMAL
+LIGHT_CRYSTAL_CAVE,Quang Tinh Động,Light Path,light_crystal,12,10,8,20,false,feathered,0.12,0.08,NORMAL
+PHANTOM_CRYSTAL_VALLEY,Huyễn Tinh Cốc,Phantom Path,phantom_crystal,12,10,8,20,false,ghostman,0.12,0.08,NORMAL
+STRENGTH_CRYSTAL_PEAK,Lực Tinh Sơn,Strength Path,strength_crystal,12,10,8,20,false,variant_beastman,0.10,0.08,NORMAL
+TIME_SAND_DUNE,Tuế Nguyệt Sa Khâu,Time Path,time_sand,12,10,8,20,false,feathered,0.18,0.14,NORMAL
+HEAVEN_SAND_SEA,Thiên Tai Sa Hải,Heaven Path,heaven_sand,12,10,8,20,false,feathered,0.15,0.12,NORMAL
+DEATH_SAND_DUNE,Tử Sa Khâu,Death Path,death_sand,12,10,8,20,false,ghostman,0.12,0.10,NORMAL
+STAR_SAND_DESERT,Lưu Tinh Sa Mạc,Star Path,star_sand,12,10,8,20,false,rockman,0.12,0.10,NORMAL
+DREAM_PEARL_POOL,Mộng Điệp Cốc,Dream Path,dream_pearl,12,10,8,20,false,feathered,0.18,0.14,NORMAL
+WISDOM_PEARL_POOL,Trí Tuệ Châu Đàm,Wisdom Path,wisdom_pearl,12,10,8,20,false,fur_people,0.15,0.12,NORMAL
+LUCK_PEARL_POOL,Vận Châu Đàm,Luck Path,luck_pearl,12,10,8,20,false,fur_people,0.15,0.12,NORMAL
+INVESTIGATION_PEARL_POOL,Trinh Sát Châu Đàm,Investigation Path,investigation_pearl,12,10,8,20,false,feathered,0.12,0.10,NORMAL
+SOUND_RESONANCE_CAVE,Âm Ba Cốc,Sound Path,sound_resonance,12,10,8,20,false,fur_people,0.12,0.08,NORMAL
+BONE_SPLINTER_FIELD,Cốt Hải,Bone Path,bone_splinter,12,10,8,20,false,ghostman,0.12,0.08,NORMAL
+EMOTION_SILK_GROVE,Tơ Tình Lâm,Emotion Path,emotion_silk,12,10,8,20,false,fur_people,0.12,0.08,NORMAL
+INFORMATION_STONE_LIBRARY,Tín Thạch Lĩnh,Information Path,information_stone,12,10,8,20,false,inkman,0.10,0.08,NORMAL
+PAINTING_INK_POOL,Mặc Trì,Painting Path,painting_ink,12,10,8,20,false,inkman,0.10,0.06,NORMAL
+TRANSFORMATION_ESSENCE_POOL,Biến Hình Đầm,Transformation Path,transformation_essence,12,10,8,20,false,variant_beastman,0.12,0.08,NORMAL
+LANGYA_REFINEMENT_PEAK,Lang Gia Luyện Giới,Refinement Path,langya_refinement_shard,24,10,10,40,false,rockman,0.18,0.35,FAMOUS
+BLOOD_CRYSTAL_SEA,Huyết Hải,Blood Path,blood_crystal,24,10,10,40,false,merman,0.18,0.35,FAMOUS

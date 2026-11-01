@@ -7,6 +7,7 @@ package handlers
 // traded. Defense structures remain on aperture_resource_nodes.
 
 import (
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
@@ -80,6 +81,25 @@ func loadResourcePointTemplates() map[string]ResourcePointTemplate {
 	return parseResourcePointTemplates(f)
 }
 
+// legacyWorkerRaces maps pre-registry template spellings onto the current
+// Race.csv keys. The labor/population multiplier matches races exactly, so a
+// stale spelling silently costs the player every worker bonus.
+var legacyWorkerRaces = map[string]string{
+	"hairy_man":  "fur_people",
+	"featherman": "feathered",
+	"rock_man":   "rockman",
+}
+
+// normalizeWorkerRace lower-cases a template/DB race key and resolves legacy
+// aliases so it lines up with the Race.csv registry keys.
+func normalizeWorkerRace(race string) string {
+	key := strings.ToLower(strings.TrimSpace(race))
+	if mapped, ok := legacyWorkerRaces[key]; ok {
+		return mapped
+	}
+	return key
+}
+
 func parseResourcePointTemplates(r io.Reader) map[string]ResourcePointTemplate {
 	templates := make(map[string]ResourcePointTemplate)
 	rows, err := csv.NewReader(r).ReadAll()
@@ -115,7 +135,7 @@ func parseResourcePointTemplates(r io.Reader) map[string]ResourcePointTemplate {
 			VitalityDrain:        atoi(at("vitality_drain")),
 			VitalityRegenHours:   atoi(at("vitality_regen_hours")),
 			IsFood:               at("is_food") == "true",
-			WorkerRace:           at("worker_race"),
+			WorkerRace:           normalizeWorkerRace(at("worker_race")),
 			RareRate:             atof(at("rare_rate")),
 			GuRate:               atof(at("gu_rate")),
 			PointClass:           strings.ToUpper(strings.TrimSpace(at("point_class"))),
@@ -577,7 +597,7 @@ func loadAperturePointRewardContext(q interface {
 			var race, intensity string
 			var pop int
 			if vhRows.Scan(&race, &pop, &intensity) == nil {
-				ctx.variantHumans[race] = struct {
+				ctx.variantHumans[normalizeWorkerRace(race)] = struct {
 					population     int
 					laborIntensity string
 				}{population: pop, laborIntensity: intensity}
@@ -919,9 +939,36 @@ func GetWorldResourcePoints(c *gin.Context) {
 		preview := aperturePointYield(emptyCtx, *p, template, 0, 1.0)
 		decorateAperturePointView(p, template, preview, 1.0, 0)
 	}
+
+	// A transplant ritual only survives while its owner keeps standing at the
+	// mine. The panel polls this listing during a ritual, so presence is
+	// re-checked here as well as on the transplant call itself. Done after the
+	// points are touched so every writer locks the point row before the ritual
+	// row (the transplant handler does the same, avoiding a lock inversion).
+	ritualAborted, err := abortPointTransplantWithoutPresence(tx, playerID, regionID, worldX, worldY)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra nghi thức di dời"})
+		return
+	}
+
+	// Surface the in-flight ritual on its point so the client can resume the
+	// countdown after reopening the panel.
+	if ritual, ritualErr := loadPointTransplantRitual(tx, playerID); ritualErr == nil && ritual != nil {
+		for i := range points {
+			if points[i].ID == ritual.PointID {
+				points[i].Transplant = ritual
+			}
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu tích lũy"})
 		return
+	}
+	if ritualAborted {
+		// The listing also runs from the HUD without the panel open, so the
+		// owner must still learn that the essence is gone.
+		notify.Send(db.DB, playerID, "point_transplant", "Nghi Thức Tan",
+			"Nghi thức di dời đã đứt vì đạo hữu rời khỏi mỏ — Tiên Nguyên đã tiêu không thể thu hồi.")
 	}
 	c.JSON(http.StatusOK, points)
 }
@@ -1151,10 +1198,284 @@ func placeTransplantedPointOnGrid(tx *sql.Tx, apertureID string) (int, int, bool
 	return pick[0], pick[1], true
 }
 
-// TransplantWorldResourcePoint moves a public world point into the player's
-// aperture — canon "Immortal Aperture Transplantation / Silent Hill purchase"
-// (arc 2121–2153): the mountain leaves the world and starts benefiting from
-// the blessed land's time-rate and dao marks.
+// ---- Transplantation ritual ---------------------------------------------
+//
+// Canon "Immortal Aperture Transplantation" (arc 2121–2153) is a ritual, not a
+// purchase: the mountain stays in the world while the cultivator burns Tiên
+// Nguyên and keeps standing at the mine. The point only moves into the
+// aperture once the ritual ends; walking away breaks it and the essence that
+// was already burnt is lost.
+
+const (
+	// Base Tiên Nguyên burnt by the ritual at Rank 6, per mine grade. These are
+	// deliberately token amounts: the real price of a transplantation is the
+	// time spent standing at the mine, not the essence.
+	worldTransplantManaLow = 20.0
+	worldTransplantManaMid = 30.0
+	worldTransplantManaTop = 50.0
+	// Every Chuyển above Rank 6 raises the cost by 50% (LOW 20 → 50, TOP 50 →
+	// 125 at Cửu Chuyển). The grade already tracks the region's rank, so both
+	// the mine's grade and the player's rank affect the price.
+	worldTransplantRankStep = 0.5
+	// Base ritual length at Rank 6, per mine grade.
+	worldTransplantRitualLowSecs = 180
+	worldTransplantRitualMidSecs = 300
+	worldTransplantRitualTopSecs = 480
+	// Higher Chuyển speeds the ritual up: −12% per rank, never below 35% of the
+	// base duration and never under a minute.
+	worldTransplantRankSpeedup = 0.12
+	worldTransplantMinSpeedup  = 0.35
+	worldTransplantMinRitual   = 60
+	// worldTransplantGrace bounds how long an overdue ritual keeps its mine
+	// claimed. Past it the ritual is abandoned: the row is deleted (the burnt
+	// Tiên Nguyên is gone) so one stale row can never lock a public mine for
+	// everyone forever.
+	worldTransplantGrace = 10 * time.Minute
+	// worldTransplantSweepInterval is the abandoned-ritual cleanup cadence.
+	worldTransplantSweepInterval = time.Minute
+)
+
+// errWorldPointNotMovable reports that the point left WORLD scope between the
+// ritual start and its completion (another player moved it).
+var errWorldPointNotMovable = errors.New("world point is no longer a public mine")
+
+// normalizeTransplantGrade clamps unknown grades onto the LOW baseline so the
+// cost tables stay total.
+func normalizeTransplantGrade(grade string) string {
+	switch strings.ToUpper(strings.TrimSpace(grade)) {
+	case "MID":
+		return "MID"
+	case "TOP":
+		return "TOP"
+	default:
+		return "LOW"
+	}
+}
+
+// worldTransplantManaCost is the Tiên Nguyên the ritual burns.
+func worldTransplantManaCost(grade string, rank int) float64 {
+	cost := worldTransplantManaLow
+	switch normalizeTransplantGrade(grade) {
+	case "MID":
+		cost = worldTransplantManaMid
+	case "TOP":
+		cost = worldTransplantManaTop
+	}
+	if rank > 6 {
+		cost *= 1 + worldTransplantRankStep*float64(rank-6)
+	}
+	return math.Round(cost)
+}
+
+// worldTransplantRitualSeconds is how long the cultivator must stand at the
+// mine before the mountain uproots.
+func worldTransplantRitualSeconds(grade string, rank int) int {
+	secs := worldTransplantRitualLowSecs
+	switch normalizeTransplantGrade(grade) {
+	case "MID":
+		secs = worldTransplantRitualMidSecs
+	case "TOP":
+		secs = worldTransplantRitualTopSecs
+	}
+	if rank > 6 {
+		speedup := 1 - worldTransplantRankSpeedup*float64(rank-6)
+		if speedup < worldTransplantMinSpeedup {
+			speedup = worldTransplantMinSpeedup
+		}
+		secs = int(math.Round(float64(secs) * speedup))
+	}
+	if secs < worldTransplantMinRitual {
+		secs = worldTransplantMinRitual
+	}
+	return secs
+}
+
+func worldTransplantDuration(grade string, rank int) time.Duration {
+	return time.Duration(worldTransplantRitualSeconds(grade, rank)) * time.Second
+}
+
+// formatTransplantCountdown renders a remaining ritual time for messages.
+func formatTransplantCountdown(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	secs := int(math.Ceil(d.Seconds()))
+	if secs < 60 {
+		return fmt.Sprintf("%d giây", secs)
+	}
+	if secs%60 == 0 {
+		return fmt.Sprintf("%d phút", secs/60)
+	}
+	return fmt.Sprintf("%d phút %d giây", secs/60, secs%60)
+}
+
+// formatTransplantEssence prints a Tiên Nguyên amount without decimals.
+func formatTransplantEssence(amount float64) string {
+	return strconv.FormatFloat(math.Round(amount), 'f', -1, 64)
+}
+
+// worldPointInReach reports whether the cultivator stands in the mine's region
+// and within the harvesting Chebyshev range.
+func worldPointInReach(playerRegion, pointRegion string, playerX, playerY float64, pointX, pointY int) bool {
+	if playerRegion == "" || pointRegion == "" || playerRegion != pointRegion {
+		return false
+	}
+	return math.Max(math.Abs(playerX-float64(pointX)), math.Abs(playerY-float64(pointY))) <= float64(worldHarvestRange)
+}
+
+// loadPointTransplantRitual returns the player's in-flight ritual, if any.
+func loadPointTransplantRitual(tx *sql.Tx, playerID uuid.UUID) (*models.AperturePointTransplant, error) {
+	var ritual models.AperturePointTransplant
+	err := tx.QueryRow(`
+		SELECT point_id::text, region_id, mana_spent, started_at, completes_at
+		FROM aperture_point_transplants WHERE player_id = $1
+	`, playerID).Scan(&ritual.PointID, &ritual.RegionID, &ritual.ManaSpent, &ritual.StartedAt, &ritual.CompletesAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ritual, nil
+}
+
+// clearPointTransplantRitual ends the ritual without moving the mine.
+func clearPointTransplantRitual(tx *sql.Tx, playerID uuid.UUID) error {
+	_, err := tx.Exec(`DELETE FROM aperture_point_transplants WHERE player_id = $1`, playerID)
+	return err
+}
+
+// abortPointTransplantWithoutPresence drops a ritual whose owner no longer
+// stands at the mine. Presence is the mechanic itself, so every world-point
+// listing re-checks it; the burnt essence is never refunded.
+func abortPointTransplantWithoutPresence(tx *sql.Tx, playerID uuid.UUID, playerRegion string, playerX, playerY float64) (bool, error) {
+	ritual, err := loadPointTransplantRitual(tx, playerID)
+	if err != nil || ritual == nil {
+		return false, err
+	}
+	var pointX, pointY int
+	scanErr := tx.QueryRow(`SELECT x, y FROM aperture_resource_points WHERE id = $1`, ritual.PointID).Scan(&pointX, &pointY)
+	if scanErr != nil && scanErr != sql.ErrNoRows {
+		return false, scanErr
+	}
+	if scanErr == nil && worldPointInReach(playerRegion, ritual.RegionID, playerX, playerY, pointX, pointY) {
+		return false, nil
+	}
+	return true, clearPointTransplantRitual(tx, playerID)
+}
+
+// loadPlayerAperturePointSlot returns the player's aperture id and how many
+// resource points already sit inside it.
+func loadPlayerAperturePointSlot(tx *sql.Tx, playerID uuid.UUID) (string, int, error) {
+	var apertureID string
+	var pointCount int
+	err := tx.QueryRow(`
+		SELECT a.id::text, (SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = a.id)
+		FROM immortal_apertures a WHERE a.player_id = $1
+	`, playerID).Scan(&apertureID, &pointCount)
+	return apertureID, pointCount, err
+}
+
+// moveWorldPointIntoAperture parks a WORLD point on the persistent 20×20
+// aperture grid and switches it to APERTURE scope. The mine may have been
+// drained while it waited in the world, so its state is derived from the
+// surviving vitality instead of being forced ACTIVE.
+func moveWorldPointIntoAperture(tx *sql.Tx, apertureID, pointID string) error {
+	gridX, gridY, hasGridCell := placeTransplantedPointOnGrid(tx, apertureID)
+	setClause := `
+		UPDATE aperture_resource_points
+		SET scope = 'APERTURE', aperture_id = $1, region_id = NULL,
+		    last_produced_at = NOW(), updated_at = NOW(),
+		    state = CASE WHEN vitality > 0 THEN 'ACTIVE' ELSE 'EXHAUSTED' END`
+	var res sql.Result
+	var err error
+	if hasGridCell {
+		res, err = tx.Exec(setClause+`, x = $2, y = $3 WHERE id = $4 AND scope = 'WORLD'`, apertureID, gridX, gridY, pointID)
+	} else {
+		res, err = tx.Exec(setClause+` WHERE id = $2 AND scope = 'WORLD'`, apertureID, pointID)
+	}
+	if err != nil {
+		return err
+	}
+	if affected, rowsErr := res.RowsAffected(); rowsErr == nil && affected == 0 {
+		return errWorldPointNotMovable
+	}
+	return nil
+}
+
+// expirePointTransplants deletes rituals that stayed overdue longer than the
+// grace period and returns the owners that lost their ritual. An empty pointID
+// sweeps every mine; otherwise only that mine's abandoned ritual is released
+// so a new claimant can take it.
+func expirePointTransplants(tx *sql.Tx, pointID string) ([]uuid.UUID, error) {
+	query := `
+		DELETE FROM aperture_point_transplants
+		WHERE completes_at < NOW() - ($1 * INTERVAL '1 second')`
+	args := []any{worldTransplantGrace.Seconds()}
+	if pointID != "" {
+		query += ` AND point_id = $2`
+		args = append(args, pointID)
+	}
+	query += ` RETURNING player_id`
+
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	owners := []uuid.UUID{}
+	for rows.Next() {
+		var owner uuid.UUID
+		if err := rows.Scan(&owner); err == nil {
+			owners = append(owners, owner)
+		}
+	}
+	return owners, rows.Err()
+}
+
+// notifyAbandonedTransplants tells every owner whose abandoned ritual was
+// cleaned up that the burnt Tiên Nguyên is gone for good.
+func notifyAbandonedTransplants(owners []uuid.UUID) {
+	for _, owner := range owners {
+		notify.Send(db.DB, owner, "point_transplant", "Nghi Thức Tan",
+			"Nghi thức di dời đã quá hạn và bị hủy — Tiên Nguyên đã tiêu không thể thu hồi. Hãy làm lại nghi thức nếu vẫn còn muốn dời núi.")
+	}
+}
+
+// ExpireStalePointTransplants releases mines claimed by abandoned rituals. It
+// is wired to a periodic worker so an owner who logs out mid-ritual can never
+// lock a public mine for everyone else forever.
+func ExpireStalePointTransplants(ctx context.Context) {
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		logger.S.Errorf("Point transplant sweep: begin: %v", err)
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	owners, err := expirePointTransplants(tx, "")
+	if err != nil {
+		logger.S.Errorf("Point transplant sweep: delete: %v", err)
+		return
+	}
+	if len(owners) == 0 {
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		logger.S.Errorf("Point transplant sweep: commit: %v", err)
+		return
+	}
+	notifyAbandonedTransplants(owners)
+	if len(owners) > 0 {
+		logger.S.Infof("Point transplant sweep: released %d abandoned ritual(s)", len(owners))
+	}
+}
+
+// TransplantWorldResourcePoint runs the canon "Immortal Aperture
+// Transplantation" ritual. The first call starts it (202): Tiên Nguyên is
+// burnt and the mine stays in the world while the cultivator stands at it.
+// A later call after completes_at finishes it (200) and moves the mountain
+// into the aperture. Leaving the mine breaks the ritual and wastes the essence.
 func TransplantWorldResourcePoint(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -1174,12 +1495,134 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var p models.ApertureResourcePoint
+	// Read the payer without a row lock: the burn is an atomic conditional
+	// UPDATE later, and locking the player before the point would invert the
+	// point→player lock order used by CollectWorldResourcePoint (deadlock).
+	var rank int
+	var currentMana float64
+	var playerRegion string
+	var playerX, playerY float64
+	if err := tx.QueryRow(`
+		SELECT rank, COALESCE(current_mana, 0), COALESCE(current_region, ''), COALESCE(world_x, 0), COALESCE(world_y, 0)
+		FROM players WHERE id = $1
+	`, playerID).Scan(&rank, &currentMana, &playerRegion, &playerX, &playerY); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi vị trí đạo hữu"})
+		return
+	}
+
+	now := time.Now()
+	ritual, err := loadPointTransplantRitual(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra nghi thức di dời"})
+		return
+	}
+	// breakRitual ends the ritual (the burnt Tiên Nguyên is never refunded) and
+	// commits, telling the player why. Errors are reported instead of silently
+	// leaving a row that would keep the mine claimed.
+	breakRitual := func(message string, status int) {
+		if err := clearPointTransplantRitual(tx, playerID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hủy nghi thức di dời"})
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái nghi thức"})
+			return
+		}
+		notify.Send(db.DB, playerID, "point_transplant", "Nghi Thức Tan", message)
+		c.JSON(status, gin.H{"error": message})
+	}
+	if ritual != nil {
+		var pointX, pointY int
+		scanErr := tx.QueryRow(`SELECT x, y FROM aperture_resource_points WHERE id = $1`, ritual.PointID).Scan(&pointX, &pointY)
+		if scanErr != nil && scanErr != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+			return
+		}
+		// Presence is the whole mechanic: stepping away (or the mine vanishing)
+		// breaks the ritual, and the burnt essence stays gone.
+		if scanErr == sql.ErrNoRows || !worldPointInReach(playerRegion, ritual.RegionID, playerX, playerY, pointX, pointY) {
+			breakRitual("Nghi thức đứt đoạn vì đạo hữu đã rời khỏi mỏ — Tiên Nguyên tiêu hao không thể thu hồi.", http.StatusBadRequest)
+			return
+		}
+		if ritual.PointID != pointID.String() {
+			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Đạo hữu đang di dời mỏ khác (còn %s).", formatTransplantCountdown(ritual.CompletesAt.Sub(now)))})
+			return
+		}
+		if now.Before(ritual.CompletesAt) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":               fmt.Sprintf("Nghi thức chưa xong — còn %s, hãy đứng yên tại mỏ.", formatTransplantCountdown(ritual.CompletesAt.Sub(now))),
+				"code":                "TRANSPLANT_NOT_READY",
+				"retry_after_seconds": int(math.Ceil(ritual.CompletesAt.Sub(now).Seconds())),
+			})
+			return
+		}
+
+		// Ritual due with the cultivator still present: uproot the mountain.
+		var pointName, pointScope, pointRegion string
+		err = tx.QueryRow(`
+			SELECT name, COALESCE(scope, 'WORLD'), COALESCE(region_id, ''), x, y
+			FROM aperture_resource_points WHERE id = $1 FOR UPDATE
+		`, pointID).Scan(&pointName, &pointScope, &pointRegion, &pointX, &pointY)
+		if err == sql.ErrNoRows {
+			breakRitual("Mỏ đã biến mất khỏi thế giới — nghi thức tan.", http.StatusNotFound)
+			return
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+			return
+		}
+		if pointScope != "WORLD" || pointRegion != ritual.RegionID || !worldPointInReach(playerRegion, pointRegion, playerX, playerY, pointX, pointY) {
+			breakRitual("Mỏ đã bị di dời hoặc đạo hữu đã rời khỏi nơi — nghi thức tan và Tiên Nguyên đã mất.", http.StatusConflict)
+			return
+		}
+		apertureID, pointCount, err := loadPlayerAperturePointSlot(tx, playerID)
+		if err == sql.ErrNoRows {
+			breakRitual("Đạo hữu chưa khai mở Tiên Khiếu — không có đâu để đặt núi!", http.StatusBadRequest)
+			return
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Tiên Khiếu"})
+			return
+		}
+		if pointCount >= aperturePointPointGenCap {
+			// Keep the ritual pending so the player can free a slot and retry;
+			// the abandonment sweeper releases the mine if they never do.
+			c.JSON(http.StatusConflict, gin.H{
+				"error": fmt.Sprintf("Tiên Khiếu đã đủ %d điểm tài nguyên — hãy giải phóng một điểm rồi hoàn tất nghi thức.", aperturePointPointGenCap),
+				"code":  "APERTURE_POINTS_FULL",
+			})
+			return
+		}
+		if err := moveWorldPointIntoAperture(tx, apertureID, pointID.String()); errors.Is(err, errWorldPointNotMovable) {
+			breakRitual("Mỏ đã bị người khác di dời trước — nghi thức tan và Tiên Nguyên đã mất.", http.StatusConflict)
+			return
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi di dời điểm tài nguyên"})
+			return
+		}
+		if err := clearPointTransplantRitual(tx, playerID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kết thúc nghi thức di dời"})
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu di dời"})
+			return
+		}
+		notify.Send(db.DB, playerID, "point_transplant", "Di Dời Núi Linh",
+			fmt.Sprintf("Nghi thức hoàn tất: %s đã rời %s về Tiên Khiếu của đạo hữu! Vùng %s sẽ mọc lại mạch núi khác theo thời gian.", pointName, pointRegion, pointRegion))
+		c.JSON(http.StatusOK, gin.H{
+			"message":   fmt.Sprintf("Di dời %s vào Tiên Khiếu thành công!", pointName),
+			"completed": true,
+		})
+		return
+	}
+
+	// No ritual in flight: validate the mine and start one.
+	var pointName, pointGrade, pointScope string
+	var pointVitality, pointX, pointY int
 	var regionID string
 	err = tx.QueryRow(`
-		SELECT p.id, p.point_type, p.name, p.grade, COALESCE(p.point_class, 'NORMAL'), p.level, p.vitality, COALESCE(p.scope, 'WORLD'), COALESCE(p.region_id, '')
-		FROM aperture_resource_points p WHERE p.id = $1 FOR UPDATE OF p
-	`, pointID).Scan(&p.ID, &p.PointType, &p.Name, &p.Grade, &p.PointClass, &p.Level, &p.Vitality, &p.Scope, &regionID)
+		SELECT name, COALESCE(grade, 'LOW'), COALESCE(scope, 'WORLD'), vitality, COALESCE(region_id, ''), x, y
+		FROM aperture_resource_points WHERE id = $1 FOR UPDATE
+	`, pointID).Scan(&pointName, &pointGrade, &pointScope, &pointVitality, &regionID, &pointX, &pointY)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại"})
 		return
@@ -1187,33 +1630,23 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
 		return
 	}
-	if p.Scope != "WORLD" {
+	if rank < 6 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu chưa thăng tiên (Lục Chuyển) — chưa thể mở nghi thức di dời vào Tiên Khiếu."})
+		return
+	}
+	if pointScope != "WORLD" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Điểm này đã thuộc một Tiên Khiếu."})
 		return
 	}
-	if p.Vitality < 70 {
+	if pointVitality < 70 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Sinh khí điểm tài nguyên dưới 70% — mạch núi suy yếu, không thể di dời. Hãy để nó hồi phục hoặc Bồi Dưỡng."})
 		return
 	}
-	// Moving a mountain is an in-person ritual: enforce the same presence rule
-	// as harvesting so the endpoint cannot be driven from another region.
-	var moverRegion string
-	var moverX, moverY float64
-	if err := tx.QueryRow(`SELECT COALESCE(current_region, ''), COALESCE(world_x, 0), COALESCE(world_y, 0) FROM players WHERE id = $1`, playerID).Scan(&moverRegion, &moverX, &moverY); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi vị trí đạo hữu"})
+	if !worldPointInReach(playerRegion, regionID, playerX, playerY, pointX, pointY) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Phải đứng cùng vùng và cách mỏ tối đa %d ô mới bắt đầu được nghi thức di dời.", worldHarvestRange)})
 		return
 	}
-	if moverRegion != regionID || math.Max(math.Abs(moverX-float64(p.X)), math.Abs(moverY-float64(p.Y))) > float64(worldHarvestRange) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Phải đến nơi (cách %d ô) mới di dời được mỏ này.", worldHarvestRange)})
-		return
-	}
-
-	var apertureIDNotaByte string
-	var pointCount int
-	err = tx.QueryRow(`
-		SELECT a.id::text, (SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = a.id)
-		FROM immortal_apertures a WHERE a.player_id = $1
-	`, playerID).Scan(&apertureIDNotaByte, &pointCount)
+	_, pointCount, err := loadPlayerAperturePointSlot(tx, playerID)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu — không có đâu để đặt núi!"})
 		return
@@ -1225,64 +1658,69 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Khiếu đã có tối đa %d điểm tài nguyên.", aperturePointPointGenCap)})
 		return
 	}
-
-	// Cost: Thác Khiếu Đan (canon transplantation vessel) + stones by grade.
-	kitQty, err := InventorySvc.GetQuantity(tx, playerID.String(), "ITEM_APERTURE_EXPANSION_PILL")
+	// Abandoned rituals on this mine are released first so they cannot block a
+	// new claimant forever (the owner is notified once this transaction is in).
+	releasedOwners, err := expirePointTransplants(tx, pointID.String())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn túi đồ"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi dọn nghi thức di dời cũ"})
 		return
 	}
-	if kitQty < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cần 1 Thác Khiếu Đan (ITEM_APERTURE_EXPANSION_PILL) làm ấn Thuận Truyền để di dời núi."})
+	// A mine already under a live ritual cannot be claimed twice.
+	var claimed bool
+	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM aperture_point_transplants WHERE point_id = $1)`, pointID).Scan(&claimed); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra nghi thức di dời"})
 		return
 	}
-	stonesCost := map[string]int{"LOW": 100, "MID": 200, "TOP": 400}[p.Grade]
-	var stones int
-	if err := tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+	if claimed {
+		c.JSON(http.StatusConflict, gin.H{"error": "Mỏ này đang được người khác làm nghi thức di dời."})
 		return
 	}
-	if stones < stonesCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Nguyên Thạch không đủ để di dời (Yêu cầu: %d, Hiện có: %d).", stonesCost, stones)})
+	cost := worldTransplantManaCost(pointGrade, rank)
+	if currentMana < cost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên cho nghi thức: cần %s, hiện có %s.", formatTransplantEssence(cost), formatTransplantEssence(currentMana))})
 		return
 	}
-
-	if err := InventorySvc.RemoveItem(tx, playerID.String(), "ITEM_APERTURE_EXPANSION_PILL", "materials", 1); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao Thác Khiếu Đan"})
-		return
-	}
-	if _, err := tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, stonesCost, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
-		return
-	}
-	gridX, gridY, hasGridCell := placeTransplantedPointOnGrid(tx, apertureIDNotaByte)
-	if hasGridCell {
-		_, err = tx.Exec(`
-			UPDATE aperture_resource_points
-			SET scope = 'APERTURE', aperture_id = $1, region_id = NULL, x = $2, y = $3,
-			    last_produced_at = NOW(), state = 'ACTIVE', updated_at = NOW()
-			WHERE id = $4
-		`, apertureIDNotaByte, gridX, gridY, pointID)
-	} else {
-		_, err = tx.Exec(`
-			UPDATE aperture_resource_points
-			SET scope = 'APERTURE', aperture_id = $1, region_id = NULL,
-			    last_produced_at = NOW(), state = 'ACTIVE', updated_at = NOW()
-			WHERE id = $2
-		`, apertureIDNotaByte, pointID)
-	}
+	duration := worldTransplantDuration(pointGrade, rank)
+	completesAt := now.Add(duration)
+	// Atomic burn: the conditional UPDATE re-checks the balance under the row
+	// lock, so a concurrent spender can never push the pool below zero.
+	burn, err := tx.Exec(`UPDATE players SET current_mana = current_mana - $1 WHERE id = $2 AND current_mana >= $1`, cost, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi di dời điểm tài nguyên"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên"})
+		return
+	}
+	if affected, rowsErr := burn.RowsAffected(); rowsErr == nil && affected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên cho nghi thức: cần %s.", formatTransplantEssence(cost))})
+		return
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO aperture_point_transplants (player_id, point_id, region_id, mana_spent, started_at, completes_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (player_id) DO UPDATE
+		SET point_id = EXCLUDED.point_id, region_id = EXCLUDED.region_id,
+		    mana_spent = EXCLUDED.mana_spent, started_at = EXCLUDED.started_at,
+		    completes_at = EXCLUDED.completes_at, created_at = NOW()
+	`, playerID, pointID, regionID, cost, now, completesAt); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi bắt đầu nghi thức di dời"})
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu di dời"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu nghi thức di dời"})
 		return
 	}
-	notify.Send(db.DB, playerID, "point_transplant", "Di Dời Núi Linh",
-		fmt.Sprintf("Điểm tài nguyên %s đã rời %s về Tiên Khiếu của đạo hữu! Tiêu tốn 1 Thác Khiếu Đan + %d Tiên Nguyên Thạch. Vùng %s sẽ mọc lại mạch núi khác theo thời gian.", p.Name, regionID, stonesCost, regionID))
-	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Di dời %s vào Tiên Khiếu thành công!", p.Name),
+	notifyAbandonedTransplants(releasedOwners)
+	c.JSON(http.StatusAccepted, gin.H{
+		"message": fmt.Sprintf("Bắt đầu nghi thức di dời %s: tiêu hao %s Tiên Nguyên, đứng tại mỏ %s để hoàn tất. Rời đi sẽ hỏng nghi thức.",
+			pointName, formatTransplantEssence(cost), formatTransplantCountdown(duration)),
+		"started": true,
+		"cost":    cost,
+		"ritual": models.AperturePointTransplant{
+			PointID:     pointID.String(),
+			RegionID:    regionID,
+			ManaSpent:   cost,
+			StartedAt:   now,
+			CompletesAt: completesAt,
+		},
 	})
 }
 

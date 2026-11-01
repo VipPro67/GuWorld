@@ -30,6 +30,9 @@ type Event struct {
 	TargetID       string
 	SkillID        string
 	SkillName      string
+	CastVFX        string
+	ProjectileVFX  string
+	ImpactVFX      string
 	X              float64
 	Y              float64
 	Amount         float64

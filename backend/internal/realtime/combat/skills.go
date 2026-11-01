@@ -102,25 +102,34 @@ type Skill struct {
 	StatusDebuff         bool
 	PvPDrCategory        string
 	Cleanse              bool
-	Shape                Shape   `json:"shape,omitempty"`
-	AngleDeg             float64 `json:"angle_deg,omitempty"`
-	LengthUnits          float64 `json:"length_units,omitempty"`
-	WidthUnits           float64 `json:"width_units,omitempty"`
-	InnerRadius          float64 `json:"inner_radius,omitempty"`
-	PierceCount          int     `json:"pierce_count,omitempty"`
-	SpreadCount          int     `json:"spread_count,omitempty"`
-	SpreadAngleDeg       float64 `json:"spread_angle_deg,omitempty"`
-	ManaDrainPerTick     float64 `json:"mana_drain_per_tick,omitempty"`
-	ThoughtDrainPerTick  float64 `json:"thought_drain_per_tick,omitempty"`
-	IsToggle             bool    `json:"is_toggle,omitempty"`
-	FormActivation       bool    `json:"form_activation,omitempty"`
-	FormAbility          bool    `json:"form_ability,omitempty"`
-	FormManaDrainPerTick float64 `json:"form_mana_drain_per_tick,omitempty"`
-	FormDefenseBonus     float64 `json:"form_defense_bonus,omitempty"`
-	MoveDistance         float64 `json:"move_distance,omitempty"`
-	KnockbackDistance    float64 `json:"knockback_distance,omitempty"`
-	PlayerAtkRatio       float64 `json:"player_atk_ratio,omitempty"`
-	GuPowerRatio         float64 `json:"gu_power_ratio,omitempty"`
+	Shape                Shape         `json:"shape,omitempty"`
+	AngleDeg             float64       `json:"angle_deg,omitempty"`
+	LengthUnits          float64       `json:"length_units,omitempty"`
+	WidthUnits           float64       `json:"width_units,omitempty"`
+	InnerRadius          float64       `json:"inner_radius,omitempty"`
+	PierceCount          int           `json:"pierce_count,omitempty"`
+	SpreadCount          int           `json:"spread_count,omitempty"`
+	SpreadAngleDeg       float64       `json:"spread_angle_deg,omitempty"`
+	ManaDrainPerTick     float64       `json:"mana_drain_per_tick,omitempty"`
+	ThoughtDrainPerTick  float64       `json:"thought_drain_per_tick,omitempty"`
+	IsToggle             bool          `json:"is_toggle,omitempty"`
+	FormActivation       bool          `json:"form_activation,omitempty"`
+	FormAbility          bool          `json:"form_ability,omitempty"`
+	FormManaDrainPerTick float64       `json:"form_mana_drain_per_tick,omitempty"`
+	FormDefenseBonus     float64       `json:"form_defense_bonus,omitempty"`
+	MoveDistance         float64       `json:"move_distance,omitempty"`
+	KnockbackDistance    float64       `json:"knockback_distance,omitempty"`
+	PlayerAtkRatio       float64       `json:"player_atk_ratio,omitempty"`
+	GuPowerRatio         float64       `json:"gu_power_ratio,omitempty"`
+	Visuals              VisualProfile `json:"-"` // presentation-only; never affects simulation rules
+}
+
+// VisualProfile carries symbolic client VFX template keys with a cast skill.
+type VisualProfile struct {
+	Icon          string `json:"icon,omitempty"`
+	CastVFX       string `json:"cast_vfx,omitempty"`
+	ProjectileVFX string `json:"projectile_vfx,omitempty"`
+	ImpactVFX     string `json:"impact_vfx,omitempty"`
 }
 
 // DefaultLoadout returns the six preview slots. Replacing this with a compiled

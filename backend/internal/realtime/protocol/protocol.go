@@ -79,23 +79,31 @@ type Welcome struct {
 // SkillInfo is the server-owned hotbar projection sent on join. Damage and
 // validation stay server-side; the client uses it for mode/name/cooldowns.
 type SkillInfo struct {
-	Slot           uint8   `json:"slot"`
-	ID             string  `json:"id"`
-	Name           string  `json:"name"`
-	Mode           string  `json:"mode"`
-	Shape          string  `json:"shape,omitempty"`
-	AngleDeg       float64 `json:"angle_deg,omitempty"`
-	LengthUnits    float64 `json:"length_units,omitempty"`
-	WidthUnits     float64 `json:"width_units,omitempty"`
-	InnerRadius    float64 `json:"inner_radius,omitempty"`
-	ManaCost       float64 `json:"mana_cost"`
-	Range          float64 `json:"range"`
-	RadiusUnits    float64 `json:"radius_units,omitempty"`
-	CooldownTicks  uint64  `json:"cooldown_ticks"`
-	WindupTicks    uint64  `json:"windup_ticks"`
-	IsToggle       bool    `json:"is_toggle,omitempty"`
-	FormActivation bool    `json:"form_activation,omitempty"`
-	FormAbility    bool    `json:"form_ability,omitempty"`
+	Slot           uint8         `json:"slot"`
+	ID             string        `json:"id"`
+	Name           string        `json:"name"`
+	Mode           string        `json:"mode"`
+	Shape          string        `json:"shape,omitempty"`
+	AngleDeg       float64       `json:"angle_deg,omitempty"`
+	LengthUnits    float64       `json:"length_units,omitempty"`
+	WidthUnits     float64       `json:"width_units,omitempty"`
+	InnerRadius    float64       `json:"inner_radius,omitempty"`
+	ManaCost       float64       `json:"mana_cost"`
+	Range          float64       `json:"range"`
+	RadiusUnits    float64       `json:"radius_units,omitempty"`
+	CooldownTicks  uint64        `json:"cooldown_ticks"`
+	WindupTicks    uint64        `json:"windup_ticks"`
+	IsToggle       bool          `json:"is_toggle,omitempty"`
+	FormActivation bool          `json:"form_activation,omitempty"`
+	FormAbility    bool          `json:"form_ability,omitempty"`
+	Visuals        *SkillVisuals `json:"visuals,omitempty"`
+}
+
+type SkillVisuals struct {
+	Icon          string `json:"icon,omitempty"`
+	CastVFX       string `json:"cast_vfx,omitempty"`
+	ProjectileVFX string `json:"projectile_vfx,omitempty"`
+	ImpactVFX     string `json:"impact_vfx,omitempty"`
 }
 
 type Input struct {
@@ -190,12 +198,13 @@ type Snapshot struct {
 }
 
 type ProjectileState struct {
-	ID       uint64  `json:"id"`
-	SourceID string  `json:"source_id"`
-	SkillID  string  `json:"skill_id"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	Radius   float64 `json:"radius"`
+	ID            uint64  `json:"id"`
+	SourceID      string  `json:"source_id"`
+	SkillID       string  `json:"skill_id"`
+	ProjectileVFX string  `json:"projectile_vfx,omitempty"`
+	X             float64 `json:"x"`
+	Y             float64 `json:"y"`
+	Radius        float64 `json:"radius"`
 }
 
 // Transfer is the server-to-client region handoff notice. TargetX/TargetY are

@@ -169,20 +169,21 @@ func cmdTranspileRealtimeGu(args []string) error {
 				populatedCount++
 			}
 		}
+		customVisuals := realtimeeffects.VisualProfile{}
 		if skillProfileJSON != "" {
 			var custom models.GuSkillProfile
 			if err := json.Unmarshal([]byte(skillProfileJSON), &custom); err == nil {
-				if custom.CastVFX != "" {
-					profile.Visuals.CastVFX = custom.CastVFX
+				if custom.CastVFX != "" && !isPlaceholderVFX(custom.CastVFX) {
+					customVisuals.CastVFX = custom.CastVFX
 				}
-				if custom.ProjectileVFX != "" {
-					profile.Visuals.ProjectileVFX = custom.ProjectileVFX
+				if custom.ProjectileVFX != "" && !isPlaceholderVFX(custom.ProjectileVFX) {
+					customVisuals.ProjectileVFX = custom.ProjectileVFX
 				}
-				if custom.ImpactVFX != "" {
-					profile.Visuals.ImpactVFX = custom.ImpactVFX
+				if custom.ImpactVFX != "" && !isPlaceholderVFX(custom.ImpactVFX) {
+					customVisuals.ImpactVFX = custom.ImpactVFX
 				}
 				if custom.SkillIcon != "" {
-					profile.Visuals.Icon = custom.SkillIcon
+					customVisuals.Icon = custom.SkillIcon
 				}
 				if custom.Slot > 0 {
 					profile.Slot = custom.Slot
@@ -218,6 +219,18 @@ func cmdTranspileRealtimeGu(args []string) error {
 				if profile.Active != nil {
 					applyCustomSkillProfile(profile.Active, custom)
 				}
+			}
+		}
+		profile.Visuals = mergeVisualDefaults(inferVisuals(pathStr, guID, primaryRole, profile.Active), customVisuals)
+		if profile.Active == nil || profile.Active.Projectile == nil {
+			profile.Visuals.ProjectileVFX = ""
+		} else if profile.Visuals.ProjectileVFX == "projectiles/water_arrow" {
+			// The legacy CSV used water_arrow as a blanket default. Keep the
+			// inferred family for non-water projectiles unless a more specific
+			// authored template was supplied.
+			inferred := inferVisuals(pathStr, guID, primaryRole, profile.Active)
+			if inferred.ProjectileVFX != "" && inferred.ProjectileVFX != "projectiles/water_arrow" {
+				profile.Visuals.ProjectileVFX = inferred.ProjectileVFX
 			}
 		}
 		if profile.Active != nil {
@@ -337,7 +350,7 @@ func transpileGuProfile(guID string, rank int, pathStr, primaryRole string, base
 		GUID:    guID,
 		Rank:    rank,
 		Slot:    0, // catalog-only by default; equipped Gu are reslotted dynamically
-		Visuals: inferVisuals(pathStr, guID),
+		Visuals: inferVisuals(pathStr, guID, primaryRole, nil),
 	}
 
 	// Only directly castable action blocks become a hotbar skill. World/domain
@@ -486,6 +499,7 @@ func transpileGuProfile(guID string, rank int, pathStr, primaryRole string, base
 
 	active.Effects = effects
 	profile.Active = active
+	profile.Visuals = inferVisuals(pathStr, guID, primaryRole, active)
 	return profile
 }
 
@@ -688,32 +702,143 @@ func scaleMMODamage(val float64, rank int) float64 {
 	return val
 }
 
-func inferVisuals(pathStr, guID string) realtimeeffects.VisualProfile {
-	p := strings.ToLower(pathStr)
+func inferVisuals(pathStr, guID, primaryRole string, active *realtimeeffects.ActiveProfile) realtimeeffects.VisualProfile {
+	path := strings.ToLower(pathStr)
+	identity := strings.ToLower(guID + " " + primaryRole)
+	combined := path + " " + identity
+	visuals := realtimeeffects.VisualProfile{Icon: "gu/force"}
+	theme := "force"
 	switch {
-	case strings.Contains(p, "fire"), strings.Contains(p, "viêm"):
-		return realtimeeffects.VisualProfile{Icon: "gu/fire", CastVFX: "cast/fire", ProjectileVFX: "projectiles/fireball", ImpactVFX: "impact/fire_burst"}
-	case strings.Contains(p, "water"), strings.Contains(p, "thủy"):
-		return realtimeeffects.VisualProfile{Icon: "gu/water", CastVFX: "cast/water", ProjectileVFX: "projectiles/water_arrow", ImpactVFX: "impact/water"}
-	case strings.Contains(p, "ice"), strings.Contains(p, "frost"), strings.Contains(p, "băng"):
-		return realtimeeffects.VisualProfile{Icon: "gu/ice", CastVFX: "cast/frost", ProjectileVFX: "projectiles/water_arrow", ImpactVFX: "impact/frost"}
-	case strings.Contains(p, "lightning"), strings.Contains(p, "lôi"):
-		return realtimeeffects.VisualProfile{Icon: "gu/lightning", CastVFX: "cast/lightning", ProjectileVFX: "projectiles/spark", ImpactVFX: "impact/lightning_strike"}
-	case strings.Contains(p, "poison"), strings.Contains(p, "độc"):
-		return realtimeeffects.VisualProfile{Icon: "gu/poison", CastVFX: "cast/poison", ProjectileVFX: "projectiles/poison_spit", ImpactVFX: "impact/poison_cloud"}
-	case strings.Contains(p, "strength"), strings.Contains(p, "lực"), strings.Contains(p, "earth"), strings.Contains(p, "thổ"):
-		return realtimeeffects.VisualProfile{Icon: "gu/earth", CastVFX: "cast/earth", ImpactVFX: "impact/heavy_strike"}
-	case strings.Contains(p, "light"), strings.Contains(p, "quang"), strings.Contains(p, "moon"):
-		return realtimeeffects.VisualProfile{Icon: "gu/light", CastVFX: "cast/light", ProjectileVFX: "projectiles/moon_blade", ImpactVFX: "impact/light_slash"}
-	case strings.Contains(p, "dark"), strings.Contains(p, "ám"), strings.Contains(p, "shadow"):
-		return realtimeeffects.VisualProfile{Icon: "gu/dark", CastVFX: "cast/dark", ProjectileVFX: "projectiles/dark_orb", ImpactVFX: "impact/dark_burst"}
-	case strings.Contains(p, "sword"), strings.Contains(p, "blade"), strings.Contains(p, "kiếm"), strings.Contains(p, "đao"):
-		return realtimeeffects.VisualProfile{Icon: "gu/sword", CastVFX: "cast/sword", ImpactVFX: "impact/sword_slash"}
-	case strings.Contains(p, "wind"), strings.Contains(p, "phong"):
-		return realtimeeffects.VisualProfile{Icon: "gu/wind", CastVFX: "cast/wind", ProjectileVFX: "projectiles/wind_blade", ImpactVFX: "impact/wind_slash"}
-	default:
-		return realtimeeffects.VisualProfile{Icon: "gu/placeholder", CastVFX: "cast/placeholder", ProjectileVFX: "projectiles/water_arrow", ImpactVFX: "impact/placeholder"}
+	case containsAny(combined, "fire", "flame", "hỏa", "hoa_du", "viêm"):
+		theme, visuals.Icon = "fire", "gu/fire"
+	case containsAny(combined, "water", "thủy", "thuy", "wave", "tide"):
+		theme, visuals.Icon = "water", "gu/water"
+	case containsAny(combined, "ice", "frost", "băng", "tuyết"):
+		theme, visuals.Icon = "frost", "gu/ice"
+	case containsAny(combined, "lightning", "thunder", "lôi", "loi", "điện", "dien"):
+		theme, visuals.Icon = "lightning", "gu/lightning"
+	case containsAny(combined, "poison", "venom", "độc", "doc"):
+		theme, visuals.Icon = "poison", "gu/poison"
+	case containsAny(combined, "blood", "huyết", "huyet"):
+		theme, visuals.Icon = "blood", "gu/blood"
+	case containsAny(combined, "bone", "cốt", "cot", "skeleton"):
+		theme, visuals.Icon = "bone", "gu/bone"
+	case containsAny(combined, "sword", "blade", "kiếm", "kiem", "đao", "dao", "killing"):
+		theme, visuals.Icon = "sword", "gu/sword"
+	case containsAny(combined, "wind", "phong", "cloud", "gale"):
+		theme, visuals.Icon = "wind", "gu/wind"
+	case containsAny(combined, "dark", "shadow", "ám", "phantom", "theft", "stealth"):
+		theme, visuals.Icon = "dark", "gu/dark"
+	case containsAny(combined, "light", "star", "moon", "quang", "tinh", "sun"):
+		theme, visuals.Icon = "light", "gu/light"
+	case containsAny(combined, "time", "space", "thời", "thoi", "không", "khong", "xuân thu", "xuan thu"):
+		theme, visuals.Icon = "time", "gu/time"
+	case containsAny(combined, "sound", "roar", "âm", "emotion", "music"):
+		theme, visuals.Icon = "sound", "gu/sound"
+	case containsAny(combined, "earth", "strength", "metal", "thổ", "tho", "lực", "luc", "kim"):
+		theme, visuals.Icon = "earth", "gu/earth"
+	case containsAny(combined, "wood", "life", "creation", "healing", "wood", "mộc", "moc"):
+		theme, visuals.Icon = "life", "gu/life"
+	case containsAny(combined, "formation", "rule", "painting", "wisdom", "information", "investigation", "luck", "refinement", "enslavement", "human", "trận", "tran"):
+		theme, visuals.Icon = "formation", "gu/formation"
+	case containsAny(combined, "transformation", "transform", "biến hóa", "bien hoa"):
+		theme, visuals.Icon = "transformation", "gu/transformation"
 	}
+	if active == nil {
+		return visuals
+	}
+
+	visuals.CastVFX, visuals.ImpactVFX = themeVisuals(theme)
+	for _, effect := range active.Effects {
+		switch effect.Type {
+		case "SHIELD":
+			if active.Mode == combat.ModeSelf {
+				visuals.CastVFX = "cast/water_shield"
+			}
+			visuals.ImpactVFX = "impact/shield"
+		case "HEAL", "CLEANSE":
+			if active.Mode == combat.ModeSelf {
+				visuals.CastVFX = "cast/heal"
+			}
+			if effect.Type == "HEAL" {
+				visuals.ImpactVFX = "impact/heal"
+			}
+		case "STATUS":
+			if strings.Contains(strings.ToLower(effect.StatusID), "poison") || strings.Contains(strings.ToLower(effect.StatusID), "bleed") {
+				visuals.ImpactVFX = "impact/poison_cloud"
+			}
+		}
+	}
+	if active.Projectile != nil {
+		visuals.ProjectileVFX = themeProjectile(theme)
+	}
+	return visuals
+}
+
+func themeVisuals(theme string) (cast, impact string) {
+	pairs := map[string][2]string{
+		"fire": {"cast/fire", "impact/fire_burst"}, "water": {"cast/water", "impact/water"},
+		"frost": {"cast/frost", "impact/frost"}, "lightning": {"cast/lightning", "impact/lightning_strike"},
+		"poison": {"cast/poison", "impact/poison_cloud"}, "blood": {"cast/dark", "impact/dark_burst"},
+		"bone": {"cast/earth", "impact/heavy_strike"}, "sword": {"cast/sword", "impact/sword_slash"},
+		"wind": {"cast/wind", "impact/wind_slash"}, "dark": {"cast/dark", "impact/dark_burst"},
+		"light": {"cast/light", "impact/light_slash"}, "time": {"cast/transformation", "impact/light_slash"},
+		"sound": {"cast/sound", "impact/sound"}, "earth": {"cast/earth", "impact/heavy_strike"},
+		"life": {"cast/heal", "impact/heal"}, "formation": {"cast/formation", "impact/ground_burst"},
+		"transformation": {"cast/transformation", "impact/armor"}, "force": {"cast/strength", "impact/heavy_strike"},
+	}
+	if pair, ok := pairs[theme]; ok {
+		return pair[0], pair[1]
+	}
+	return pairs["force"][0], pairs["force"][1]
+}
+
+func themeProjectile(theme string) string {
+	switch theme {
+	case "fire":
+		return "projectiles/fireball"
+	case "lightning":
+		return "projectiles/spark"
+	case "poison":
+		return "projectiles/poison_spit"
+	case "dark", "blood":
+		return "projectiles/dark_orb"
+	case "light", "time":
+		return "projectiles/moon_blade"
+	case "wind", "sword", "bone":
+		return "projectiles/wind_blade"
+	default:
+		return "projectiles/water_arrow"
+	}
+}
+
+func containsAny(value string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func isPlaceholderVFX(key string) bool {
+	return strings.TrimSpace(key) == "" || strings.Contains(strings.ToLower(key), "placeholder")
+}
+
+func mergeVisualDefaults(inferred, custom realtimeeffects.VisualProfile) realtimeeffects.VisualProfile {
+	if custom.Icon != "" {
+		inferred.Icon = custom.Icon
+	}
+	if custom.CastVFX != "" && !isPlaceholderVFX(custom.CastVFX) {
+		inferred.CastVFX = custom.CastVFX
+	}
+	if custom.ProjectileVFX != "" && !isPlaceholderVFX(custom.ProjectileVFX) {
+		inferred.ProjectileVFX = custom.ProjectileVFX
+	}
+	if custom.ImpactVFX != "" && !isPlaceholderVFX(custom.ImpactVFX) {
+		inferred.ImpactVFX = custom.ImpactVFX
+	}
+	return inferred
 }
 
 func applyCustomSkillProfile(active *realtimeeffects.ActiveProfile, custom models.GuSkillProfile) {

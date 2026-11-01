@@ -862,6 +862,9 @@ type worldSnapshotEnvelope struct {
 type worldEventPayload struct {
 	SkillID        string  `json:"skill_id,omitempty"`
 	SkillName      string  `json:"skill_name,omitempty"`
+	CastVFX        string  `json:"cast_vfx,omitempty"`
+	ProjectileVFX  string  `json:"projectile_vfx,omitempty"`
+	ImpactVFX      string  `json:"impact_vfx,omitempty"`
 	X              float64 `json:"x,omitempty"`
 	Y              float64 `json:"y,omitempty"`
 	Amount         float64 `json:"amount,omitempty"`
@@ -959,6 +962,9 @@ func (c *Client) sendWorldEvents(events []combat.Event, generation uint64) {
 		payload := &worldEventPayload{
 			SkillID:        event.SkillID,
 			SkillName:      event.SkillName,
+			CastVFX:        event.CastVFX,
+			ProjectileVFX:  event.ProjectileVFX,
+			ImpactVFX:      event.ImpactVFX,
 			X:              event.X,
 			Y:              event.Y,
 			Amount:         event.Amount,

@@ -233,6 +233,25 @@ func schemaAperture() error {
 		return err
 	}
 
+	// Canon Immortal Aperture Transplantation is a ritual, not a purchase: the
+	// mine stays in the world while the cultivator burns Tiên Nguyên and keeps
+	// standing at it. One in-flight ritual per player and per mine; the unique
+	// point index is the DB-level backstop for the handler's claim check.
+	if err := execSchema("aperture_point_transplants", `
+	CREATE TABLE IF NOT EXISTS aperture_point_transplants (
+		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+		point_id UUID NOT NULL REFERENCES aperture_resource_points(id) ON DELETE CASCADE,
+		region_id VARCHAR(50) NOT NULL,
+		mana_spent DOUBLE PRECISION NOT NULL,
+		started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+		completes_at TIMESTAMP WITH TIME ZONE NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_aperture_point_transplants_point ON aperture_point_transplants (point_id);
+	CREATE INDEX IF NOT EXISTS idx_aperture_point_transplants_due ON aperture_point_transplants (completes_at);`); err != nil {
+		return err
+	}
+
 	// Legacy RESOURCE nodes are replaced by the resource-point economy. The
 	// delete is unconditional because it is a one-way migration: every boot
 	// only defensive players structures survive.

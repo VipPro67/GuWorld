@@ -426,8 +426,11 @@ func worldPointGuardStatus(ctx context.Context, regionID string, x, y int) bool 
 }
 
 // StartWorldResourcePointWorker fills the world once at boot (so mines exist
-// before the first player explores) and then tops regions up periodically.
+// before the first player explores) and then tops regions up periodically. It
+// also releases mines claimed by abandoned transplantation rituals, so an owner
+// who logs out mid-ritual can never lock a public mine for everyone.
 func StartWorldResourcePointWorker(ctx context.Context) {
 	go worker.SafeRun("World Resource Points boot sweep", ctx, EnsureWorldResourcePointsSweep)
 	worker.RunEvery(ctx, worldPointSweepInterval, "World Resource Points", EnsureWorldResourcePointsSweep)
+	worker.RunEvery(ctx, worldTransplantSweepInterval, "Point Transplant Sweep", ExpireStalePointTransplants)
 }

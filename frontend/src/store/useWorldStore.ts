@@ -177,7 +177,10 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         game.addToast(data.error || "Di dời mỏ thất bại.", "error");
         return false;
       }
-      game.addToast(data.message || "Di dời mỏ vào Tiên Khiếu thành công!", "success");
+      // 202 = ritual started (Tiên Nguyên already burnt); 200 = mine moved in.
+      game.addToast(data.message || (data.completed ? "Di dời mỏ vào Tiên Khiếu thành công!" : "Bắt đầu nghi thức di dời."), "success");
+      // The ritual spends Tiên Nguyên immediately, so refresh the pool.
+      void game.refreshPlayerSummary();
       const region = game.player?.current_region || get().resourcePointsRegion || "";
       if (region) void get().fetchWorldResourcePoints(region);
       return true;

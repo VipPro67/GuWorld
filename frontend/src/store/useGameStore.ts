@@ -625,6 +625,18 @@ export interface ApertureResourcePoint {
   next_item_id?: string;
   assigned_workers?: number;
   yield_preview?: ApertureYieldPreview;
+  /** In-flight "move this mine into my aperture" ritual (WORLD points only). */
+  transplant?: AperturePointTransplant;
+}
+
+/** Canon transplantation ritual: Tiên Nguyên is burnt up-front and the mine
+ *  only moves once the cultivator has stood at it for the whole duration. */
+export interface AperturePointTransplant {
+  point_id: string;
+  region_id: string;
+  mana_spent: number;
+  started_at: string;
+  completes_at: string;
 }
 
 export interface AperturePointWorker {

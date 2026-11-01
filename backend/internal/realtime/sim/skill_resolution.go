@@ -69,7 +69,7 @@ func (w *World) resolveCastLocked(caster *Entity) {
 			}
 		}
 		recordKillerMoveUse()
-		w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(target.ID), SkillID: skill.ID, X: target.Transform.Position.X, Y: target.Transform.Position.Y})
+		w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(target.ID), SkillID: skill.ID, ImpactVFX: skill.Visuals.ImpactVFX, X: target.Transform.Position.X, Y: target.Transform.Position.Y})
 		w.applyDamageLocked(caster, target, skill.Damage, skill.ID)
 		if target.Vitals.HP > 0 {
 			w.applyStatusLocked(caster, target, skill)
@@ -116,7 +116,7 @@ func (w *World) resolveCastLocked(caster *Entity) {
 			}
 			w.projectiles = append(w.projectiles, projectile)
 			w.emitEvent(combat.Event{
-				Type: combat.EventProjectileSpawn, SourceID: string(caster.ID), SkillID: skill.ID,
+				Type: combat.EventProjectileSpawn, SourceID: string(caster.ID), SkillID: skill.ID, ProjectileVFX: skill.Visuals.ProjectileVFX,
 				X: start.X, Y: start.Y, DurationTicks: skill.ProjectileTicks,
 			})
 		}
@@ -149,7 +149,7 @@ func (w *World) resolveCastLocked(caster *Entity) {
 			candidates = candidates[:skill.MaxTargets]
 		}
 		for _, hit := range candidates {
-			w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(hit.entity.ID), SkillID: skill.ID, X: hit.entity.Transform.Position.X, Y: hit.entity.Transform.Position.Y})
+			w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(hit.entity.ID), SkillID: skill.ID, ImpactVFX: skill.Visuals.ImpactVFX, X: hit.entity.Transform.Position.X, Y: hit.entity.Transform.Position.Y})
 			w.applyDamageLocked(caster, hit.entity, skill.Damage, skill.ID)
 			if hit.entity.Vitals.HP > 0 {
 				w.applyStatusLocked(caster, hit.entity, skill)

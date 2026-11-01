@@ -938,7 +938,7 @@ func (w *World) publish() Snapshot {
 	projectiles := make([]ProjectileState, 0, len(w.projectiles))
 	for _, current := range w.projectiles {
 		projectiles = append(projectiles, ProjectileState{
-			ID: current.ID, SourceID: string(current.SourceID), SkillID: current.SkillID,
+			ID: current.ID, SourceID: string(current.SourceID), SkillID: current.SkillID, ProjectileVFX: current.Skill.Visuals.ProjectileVFX,
 			X: current.Position.X, Y: current.Position.Y, Radius: current.Radius,
 		})
 	}

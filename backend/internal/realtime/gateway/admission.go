@@ -1399,7 +1399,8 @@ func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protoc
 	for _, projectile := range snapshot.Projectiles {
 		protocolSnapshot.Projectiles = append(protocolSnapshot.Projectiles, protocol.ProjectileState{
 			ID: projectile.ID, SourceID: projectile.SourceID, SkillID: projectile.SkillID,
-			X: projectile.X, Y: projectile.Y, Radius: projectile.Radius,
+			ProjectileVFX: projectile.ProjectileVFX,
+			X:             projectile.X, Y: projectile.Y, Radius: projectile.Radius,
 		})
 	}
 	var entityRevision uint64
@@ -1463,6 +1464,13 @@ func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protoc
 func skillInfos(loadout []combat.Skill) []protocol.SkillInfo {
 	infos := make([]protocol.SkillInfo, 0, len(loadout))
 	for _, skill := range loadout {
+		visuals := &protocol.SkillVisuals{
+			Icon: skill.Visuals.Icon, CastVFX: skill.Visuals.CastVFX,
+			ProjectileVFX: skill.Visuals.ProjectileVFX, ImpactVFX: skill.Visuals.ImpactVFX,
+		}
+		if visuals.Icon == "" && visuals.CastVFX == "" && visuals.ProjectileVFX == "" && visuals.ImpactVFX == "" {
+			visuals = nil
+		}
 		infos = append(infos, protocol.SkillInfo{
 			Slot: uint8(skill.Slot), ID: skill.ID, Name: skill.Name, Mode: string(skill.Mode),
 			Shape: string(skill.Shape), AngleDeg: skill.AngleDeg, LengthUnits: skill.LengthUnits,
@@ -1470,6 +1478,7 @@ func skillInfos(loadout []combat.Skill) []protocol.SkillInfo {
 			ManaCost: skill.ManaCost, Range: skill.Range, RadiusUnits: skill.Radius, CooldownTicks: skill.CooldownTicks,
 			WindupTicks: skill.WindupTicks, IsToggle: skill.IsToggle,
 			FormActivation: skill.FormActivation, FormAbility: skill.FormAbility,
+			Visuals: visuals,
 		})
 	}
 	return infos

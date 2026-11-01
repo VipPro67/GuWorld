@@ -66,6 +66,7 @@ export interface WorldProjectileState {
   id: number;
   source_id: string;
   skill_id: string;
+  projectile_vfx?: string;
   x: number;
   y: number;
   radius: number;
@@ -89,6 +90,14 @@ export interface WorldSkillInfo {
   is_toggle?: boolean;
   form_activation?: boolean;
   form_ability?: boolean;
+  visuals?: WorldSkillVisuals;
+}
+
+export interface WorldSkillVisuals {
+  icon?: string;
+  cast_vfx?: string;
+  projectile_vfx?: string;
+  impact_vfx?: string;
 }
 
 export interface CastPayload {
@@ -263,6 +272,7 @@ export function parseWorldSnapshotPayload(value: unknown): WorldSnapshotPayload 
       }
       return {
         id: raw.id, source_id: raw.source_id, skill_id: raw.skill_id,
+        projectile_vfx: typeof raw.projectile_vfx === "string" ? raw.projectile_vfx.slice(0, 100) : undefined,
         x: raw.x, y: raw.y, radius: raw.radius,
       };
     });
@@ -317,6 +327,12 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
       if (raw.radius_units !== undefined && (!isFiniteNumber(raw.radius_units) || raw.radius_units < 0)) {
         throw new Error("World welcome skill radius is invalid");
       }
+      const visuals = isRecord(raw.visuals) ? {
+        icon: typeof raw.visuals.icon === "string" ? raw.visuals.icon.slice(0, 100) : undefined,
+        cast_vfx: typeof raw.visuals.cast_vfx === "string" ? raw.visuals.cast_vfx.slice(0, 100) : undefined,
+        projectile_vfx: typeof raw.visuals.projectile_vfx === "string" ? raw.visuals.projectile_vfx.slice(0, 100) : undefined,
+        impact_vfx: typeof raw.visuals.impact_vfx === "string" ? raw.visuals.impact_vfx.slice(0, 100) : undefined,
+      } : undefined;
       return {
         slot: raw.slot, id: raw.id, name: raw.name, mode,
         shape: typeof raw.shape === "string" ? raw.shape as WorldSkillInfo["shape"] : undefined,
@@ -330,6 +346,7 @@ export function parseWorldWelcomePayload(value: unknown): WorldWelcomePayload {
         is_toggle: raw.is_toggle === true,
         form_activation: raw.form_activation === true,
         form_ability: raw.form_ability === true,
+        visuals,
       };
     });
   }
