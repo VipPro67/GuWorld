@@ -338,6 +338,12 @@ func AscensionShatter(c *gin.Context) {
 		return
 	}
 
+	// Yêu cầu Nhân Khí tối thiểu để có thể cân bằng 2 khí thiên địa sau khi nát khiếu.
+	if player.HumanQi < AscensionMinHumanQi {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nhân Khí chưa đủ tối thiểu (cần %.0f, hiện có %.0f) để cân bằng 2 khí thiên địa, không thể nát khiếu!", AscensionMinHumanQi, player.HumanQi)})
+		return
+	}
+
 	session, err := loadAscensionSession(tx, &player)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn phiên Thăng Tiên"})

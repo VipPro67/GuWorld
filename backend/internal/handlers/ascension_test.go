@@ -84,3 +84,15 @@ func TestAscensionWorldSpawnerHook(t *testing.T) {
 		t.Fatal("expected ascensionWorldSpawner to be invoked")
 	}
 }
+
+func TestAscensionMinHumanQiRequirement(t *testing.T) {
+	if AscensionMinHumanQi != 100000.0 {
+		t.Errorf("AscensionMinHumanQi = %v, want 100000.0", AscensionMinHumanQi)
+	}
+	if grade := AscensionGradeForHumanQi(AscensionMinHumanQi - 1); grade != "" {
+		t.Errorf("AscensionGradeForHumanQi(min - 1) = %q, want empty string", grade)
+	}
+	if grade := AscensionGradeForHumanQi(AscensionMinHumanQi); grade != "LOW" {
+		t.Errorf("AscensionGradeForHumanQi(min) = %q, want LOW", grade)
+	}
+}

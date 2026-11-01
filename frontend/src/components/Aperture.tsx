@@ -1984,8 +1984,13 @@ function AscensionRitual() {
               Phải trang bị Cổ Bản Mệnh để trấn giữ không khiếu trước khi liều mạng nát khiếu!
             </div>
           )}
+          {humanQi < 100000 && (
+            <div className="text-[10px] text-rose-400 text-center">
+              Nhân Khí chưa đạt 100.000 (tối thiểu định phẩm Phúc Địa Sơ) — chưa thể nát khiếu!
+            </div>
+          )}
           <button
-            disabled={!hasVital || player.current_mana < shatterCost || store.actionLoading}
+            disabled={!hasVital || humanQi < 100000 || player.current_mana < shatterCost || store.actionLoading}
             className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer disabled:cursor-not-allowed transition-all active:scale-95 uppercase tracking-wider"
             onClick={async () => {
               const attempts = session?.step === "SHATTERING" ? session.attempts : 0;
