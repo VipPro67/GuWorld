@@ -62,9 +62,23 @@ export interface WorldEntityState {
   stealthed?: boolean;
   flying?: boolean;
   form_active?: boolean;
+  transformation?: WorldTransformationState;
   owner_id?: string;
   companion_kind?: string;
   stance?: "DEFEND" | "FOCUS" | "FOLLOW";
+}
+
+export interface WorldTransformationState {
+  active: boolean;
+  form_id: string;
+  form_name: string;
+  form_kind: "FULL" | "PARTIAL" | "GU_HOUSE";
+  model_scale: number;
+  collision_radius: number;
+  max_form_hp: number;
+  current_form_hp: number;
+  is_windup: boolean;
+  windup_progress?: number;
 }
 
 export interface CapturePayload {
