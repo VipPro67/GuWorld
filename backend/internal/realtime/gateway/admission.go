@@ -100,7 +100,7 @@ type session struct {
 	movementSpeed       float64
 	mana                *manaSettlement
 	locationRevision    *atomic.Int64
-	hasLocationRevision bool
+	hasLocationRevision *atomic.Bool
 	closing             bool
 	transferring        bool
 	lastTransferAt      time.Time
@@ -256,7 +256,25 @@ func (a *Admission) CheckpointActive() {
 			continue
 		}
 		if err := a.flushState(current); err != nil {
+			if errors.Is(err, persistence.ErrLocationRevisionStale) {
+				logger.S.Warnf("Realtime periodic checkpoint for %s found stale location revision; session superseded: %v", current.playerID, err)
+				a.manager.LeaveCharacter(current.lease)
+				a.mu.Lock()
+				if held, ok := a.sessions[controllerID]; ok && held.lease.Token == current.lease.Token {
+					delete(a.sessions, controllerID)
+				}
+				a.mu.Unlock()
+				continue
+			}
 			logger.S.Errorf("Realtime periodic checkpoint failed for %s: %v", current.playerID, err)
+			if current.closing {
+				a.manager.LeaveCharacter(current.lease)
+				a.mu.Lock()
+				if held, ok := a.sessions[controllerID]; ok && held.lease.Token == current.lease.Token {
+					delete(a.sessions, controllerID)
+				}
+				a.mu.Unlock()
+			}
 			continue
 		}
 		if current.closing {
@@ -472,7 +490,8 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	}
 	locationRevision := &atomic.Int64{}
 	locationRevision.Store(state.WorldLocationRevision)
-	hasLocationRevision := state.HasWorldLocationRevision
+	hasLocationRevision := &atomic.Bool{}
+	hasLocationRevision.Store(state.HasWorldLocationRevision)
 	if stateStore == nil && state.HasWorldLocation && state.MapID == request.ZoneID {
 		baseX, baseY = state.WorldX, state.WorldY
 		position = sim.Vec2{X: baseX, Y: baseY}
@@ -488,7 +507,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		if ok && durable.ZoneID == request.ZoneID && durable.InstanceID == key.InstanceID &&
 			a.manager.ContainsPosition(key, sim.Vec2{X: durable.X, Y: durable.Y}) {
 			locationRevision.Store(durable.LocationRevision)
-			hasLocationRevision = true
+			hasLocationRevision.Store(true)
 			if durable.MapVersion == request.MapVersion && durable.ContentVersion == request.ContentVersion {
 				baseX, baseY = durable.X, durable.Y
 				position = sim.Vec2{X: baseX, Y: baseY}
@@ -674,7 +693,10 @@ func (a *Admission) reapClosingCharacter(playerID uuid.UUID) {
 		}
 	}
 	a.mu.Unlock()
-	if controllerID == uuid.Nil || a.flushState(active) != nil {
+	if controllerID == uuid.Nil {
+		return
+	}
+	if err := a.flushState(active); err != nil && !errors.Is(err, persistence.ErrLocationRevisionStale) {
 		return
 	}
 	a.manager.LeaveCharacter(active.lease)
@@ -1073,6 +1095,14 @@ func (a *Admission) finishFailedTransfer(active session, controllerID uuid.UUID)
 		return
 	}
 	if err := a.flushState(held); err != nil {
+		if errors.Is(err, persistence.ErrLocationRevisionStale) {
+			logger.S.Warnf("Realtime transfer cleanup for %s found stale location revision; releasing lease: %v", active.playerID, err)
+			a.manager.LeaveCharacter(held.lease)
+			a.mu.Lock()
+			delete(a.sessions, controllerID)
+			a.mu.Unlock()
+			return
+		}
 		// Keep the session owned so the periodic checkpoint can retry; a
 		// database outage must not silently drop position/mana/hunger.
 		logger.S.Errorf("Realtime transfer cleanup checkpoint failed for %s: %v", active.playerID, err)
@@ -1216,6 +1246,14 @@ func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 		return
 	}
 	if err := a.flushState(active); err != nil {
+		if errors.Is(err, persistence.ErrLocationRevisionStale) {
+			logger.S.Warnf("Realtime disconnect for %s found stale location revision; location superseded: %v", active.playerID, err)
+			a.manager.LeaveCharacter(active.lease)
+			a.mu.Lock()
+			delete(a.sessions, controllerID)
+			a.mu.Unlock()
+			return
+		}
 		logger.S.Errorf("Realtime disconnect checkpoint failed for %s: %v", active.playerID, err)
 		a.mu.Lock()
 		if held, ok := a.sessions[controllerID]; ok && held.lease.Token == active.lease.Token {
@@ -1325,7 +1363,7 @@ func (a *Admission) flushStateLocked(active session) (bool, bool, error) {
 			MapVersion: active.mapVersion, ContentVersion: active.contentVersion,
 			LegacyX: int(math.Round(legacyX)), LegacyY: int(math.Round(legacyY)),
 			SyncLegacy:          legacyOK,
-			HasLocationRevision: active.hasLocationRevision,
+			HasLocationRevision: active.hasLocationRevision != nil && active.hasLocationRevision.Load(),
 			Combat:              combatCheckpoint(entity.Combat, snapshot.Tick, entity.Vitals.HP),
 		}
 		if active.locationRevision != nil {
@@ -1438,7 +1476,9 @@ func (a *Admission) flushStateLocked(active session) (bool, bool, error) {
 		}
 		if active.locationRevision != nil && revision > 0 {
 			active.locationRevision.Store(revision)
-			active.hasLocationRevision = true
+			if active.hasLocationRevision != nil {
+				active.hasLocationRevision.Store(true)
+			}
 		}
 		if manaStore, ok := a.states.(interface {
 			ApplyManaDelta(context.Context, uuid.UUID, float64) error

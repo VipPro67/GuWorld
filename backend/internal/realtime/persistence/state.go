@@ -67,7 +67,10 @@ type State struct {
 	Combat *CombatState
 }
 
-var ErrInvalidState = errors.New("invalid realtime world state")
+var (
+	ErrInvalidState          = errors.New("invalid realtime world state")
+	ErrLocationRevisionStale = errors.New("location revision is stale or missing")
+)
 
 func (s State) Validate() error {
 	if s.PlayerID == uuid.Nil || s.ZoneID == "" || s.InstanceID == "" {
@@ -459,7 +462,7 @@ func upsert(ctx context.Context, exec interface {
 	err := exec.QueryRowContext(ctx, query, args...).Scan(&revision)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, fmt.Errorf("save realtime world state: location revision is stale or missing for player %s", state.PlayerID)
+			return 0, fmt.Errorf("save realtime world state: location revision is stale or missing for player %s: %w", state.PlayerID, ErrLocationRevisionStale)
 		}
 		return 0, fmt.Errorf("save realtime player location: %w", err)
 	}

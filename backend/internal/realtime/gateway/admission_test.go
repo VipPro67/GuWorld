@@ -522,7 +522,7 @@ func (f *revisionStateStore) Save(ctx context.Context, state persistence.State) 
 
 func (f *revisionStateStore) SaveRevision(_ context.Context, state persistence.State) (int64, error) {
 	if state.LocationRevision != f.revision {
-		return 0, persistence.ErrInvalidState
+		return 0, persistence.ErrLocationRevisionStale
 	}
 	f.revision++
 	f.saved = append(f.saved, state)
@@ -559,6 +559,77 @@ func TestLateCheckpointCannotOverwriteNewerPlayerLocation(t *testing.T) {
 	}
 	if len(store.saved) != 0 {
 		t.Fatalf("stale checkpoint wrote location: %+v", store.saved)
+	}
+}
+
+func TestCheckpointActiveCleansUpStaleRevisionSession(t *testing.T) {
+	playerID, controllerID := uuid.New(), uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
+	manager := startTestManager(t, key, 1)
+	store := &revisionStateStore{
+		revision: 8,
+		state: persistence.State{
+			PlayerID: playerID, RegionID: "forest", ZoneID: "forest", InstanceID: "realtime-preview",
+			X: 4, Y: 5, HP: 70, SafeX: 4, SafeY: 5,
+			MapVersion: "map-1", ContentVersion: "content-1", LocationRevision: 8, HasLocationRevision: true,
+		},
+	}
+	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", HP: 70, BaseHP: 100, HasWorldLocationRevision: true, WorldLocationRevision: 8}, nil
+	})
+	admission.SetStateStore(store)
+	if _, err := admission.Join(context.Background(), playerID, controllerID, protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Advance store revision so session's revision is now stale (e.g. external teleport).
+	store.revision = 9
+	admission.CheckpointActive()
+
+	// The stale session should have been evicted from manager and admission sessions.
+	admission.mu.Lock()
+	_, stillExists := admission.sessions[controllerID]
+	admission.mu.Unlock()
+	if stillExists {
+		t.Fatal("expected stale session to be removed from admission.sessions")
+	}
+	if manager.OwnsCharacter(sim.CharacterID(playerID.String())) {
+		t.Fatal("expected manager to no longer own character after stale session eviction")
+	}
+}
+
+func TestDisconnectCleansUpStaleRevisionSession(t *testing.T) {
+	playerID, controllerID := uuid.New(), uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
+	manager := startTestManager(t, key, 1)
+	store := &revisionStateStore{
+		revision: 8,
+		state: persistence.State{
+			PlayerID: playerID, RegionID: "forest", ZoneID: "forest", InstanceID: "realtime-preview",
+			X: 4, Y: 5, HP: 70, SafeX: 4, SafeY: 5,
+			MapVersion: "map-1", ContentVersion: "content-1", LocationRevision: 8, HasLocationRevision: true,
+		},
+	}
+	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", HP: 70, BaseHP: 100, HasWorldLocationRevision: true, WorldLocationRevision: 8}, nil
+	})
+	admission.SetStateStore(store)
+	if _, err := admission.Join(context.Background(), playerID, controllerID, protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Advance store revision to simulate location already updated in DB before socket closed.
+	store.revision = 9
+	admission.Disconnect(playerID, controllerID)
+
+	admission.mu.Lock()
+	_, stillExists := admission.sessions[controllerID]
+	admission.mu.Unlock()
+	if stillExists {
+		t.Fatal("expected stale session to be immediately removed on disconnect")
+	}
+	if manager.OwnsCharacter(sim.CharacterID(playerID.String())) {
+		t.Fatal("expected manager to no longer own character after disconnect with stale revision")
 	}
 }
 

@@ -221,8 +221,8 @@ func PersistRealtimeTribulationSnapshot(ctx context.Context, playerID uuid.UUID,
 		if strings.HasPrefix(string(entity.ID), "n:") {
 			if _, err := tx.ExecContext(ctx, `
 				UPDATE aperture_resource_points
-				SET vitality = GREATEST(0, $1),
-				    state = CASE WHEN GREATEST(0, $1) <= 0 THEN 'EXHAUSTED' ELSE state END,
+				SET vitality = GREATEST(0, $1::integer),
+				    state = CASE WHEN $1::integer <= 0 THEN 'EXHAUSTED' ELSE state END,
 				    updated_at = NOW()
 				WHERE id = $2
 			`, vitality, persistentID); err != nil {
@@ -232,7 +232,7 @@ func PersistRealtimeTribulationSnapshot(ctx context.Context, playerID uuid.UUID,
 		}
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE tribulation_enemies
-			SET hp = $1, is_dead = ($1 <= 0), updated_at = NOW()
+			SET hp = $1::integer, is_dead = ($1::integer <= 0), updated_at = NOW()
 			WHERE id = $2 AND is_dead = false
 		`, vitality, persistentID); err != nil {
 			return err

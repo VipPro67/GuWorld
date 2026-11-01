@@ -76,12 +76,12 @@ func HandleRealtimePlayerDeath(ctx context.Context, death realtimeworld.DeathEve
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players SET hp=1, current_mana=$1, primeval_stones=$2, immortal_stones=$3,
 			current_region=$4, world_zone_id=$4, world_instance_id='', map_instance_id=NULL,
-			x=$5, y=$6, world_x=$5, world_y=$6, world_safe_x=$5, world_safe_y=$6,
+			x=$5, y=$6, world_x=$7, world_y=$8, world_safe_x=$7, world_safe_y=$8,
 			world_location_revision=world_location_revision+1,
 			version=version+1
-		WHERE id=$7
+		WHERE id=$9
 	`, player.CurrentMana, player.PrimevalStones, player.ImmortalStones,
-		player.CurrentRegion, player.X, player.Y, playerID); err != nil {
+		player.CurrentRegion, player.X, player.Y, player.X, player.Y, playerID); err != nil {
 		return fmt.Errorf("persist realtime death respawn: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -440,10 +440,10 @@ func finalizeRealtimeSpatialRealmDeath(ctx context.Context, tx *sql.Tx, instance
 	if deathPenalty == "SAFE_RESPAWN" {
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE players SET hp=1,current_region=$1,x=$2,y=$3,world_zone_id=$4,world_instance_id=$5,
-				map_instance_id=$6,world_x=$2,world_y=$3,world_safe_x=$2,world_safe_y=$3,
+				map_instance_id=$6,world_x=$8,world_y=$9,world_safe_x=$8,world_safe_y=$9,
 				world_location_revision=world_location_revision+1,version=version+1
 			WHERE id=$7
-		`, realmRegion, entryX, entryY, realmZone, "realm:"+instanceID.String()+":respawn:"+uuid.NewString(), instanceID, playerID); err != nil {
+		`, realmRegion, entryX, entryY, realmZone, "realm:"+instanceID.String()+":respawn:"+uuid.NewString(), instanceID, playerID, entryX, entryY); err != nil {
 			return uuid.Nil, false, fmt.Errorf("respawn spatial realm participant: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
@@ -465,9 +465,9 @@ func finalizeRealtimeSpatialRealmDeath(ctx context.Context, tx *sql.Tx, instance
 	returnZone := realtimeMapID(returnRegion, returnZoneType, returnMap)
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players SET hp=1,current_region=$1,x=$2,y=$3,map_instance_id=NULL,world_zone_id=$4,world_instance_id='',
-			world_x=$2,world_y=$3,world_safe_x=$2,world_safe_y=$3,world_location_revision=world_location_revision+1,
+			world_x=$6,world_y=$7,world_safe_x=$6,world_safe_y=$7,world_location_revision=world_location_revision+1,
 			version=version+1 WHERE id=$5
-	`, returnRegion, returnX, returnY, returnZone, playerID); err != nil {
+	`, returnRegion, returnX, returnY, returnZone, playerID, returnX, returnY); err != nil {
 		return uuid.Nil, false, fmt.Errorf("evict defeated spatial realm participant: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE shared_spatial_instance_members SET exited_at=NOW(),exit_reason='DEATH' WHERE instance_id=$1 AND player_id=$2 AND exited_at IS NULL`, instanceID, playerID); err != nil {
