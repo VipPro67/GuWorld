@@ -55,6 +55,11 @@ export class PreloadScene extends Phaser.Scene {
       "fx_thu_set_danh_gpt",
       "fx_song_gam",
       "fx_dat_nut",
+      "fx_gu_nguyet_quang",
+      "fx_gu_huyet_nguyet",
+      "fx_gu_huyet_bao",
+      "fx_gu_bach_cot",
+      "fx_thoi_trang_xuan_thu_quyen",
     ];
     for (const key of coreAtlases) {
       const def = GU_VFX_CATALOG[key];

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { GU_VFX_CATALOG, resolveSkillVfxKey, type VfxDefinition } from "./GuVFXRegistry.ts";
+import { GU_VFX_CATALOG, resolveGuVfx, resolveSkillVfxKey, type VfxDefinition } from "./GuVFXRegistry.ts";
 
 const MAX_ACTIVE_VFX = 48;
 
@@ -48,6 +48,11 @@ export class GuVFXManager {
       "fx_thu_set_danh_gpt",
       "fx_song_gam",
       "fx_dat_nut",
+      "fx_gu_nguyet_quang",
+      "fx_gu_huyet_nguyet",
+      "fx_gu_huyet_bao",
+      "fx_gu_bach_cot",
+      "fx_thoi_trang_xuan_thu_quyen",
     ];
 
     for (const key of coreKeys) {
@@ -183,12 +188,19 @@ export class GuVFXManager {
   }
 
   /**
-   * Signature Gu skill animation based on skill ID or name.
+   * Signature Gu skill animation based on gu_id, rank, skill ID or name.
    */
-  public playSkillVFX(skillId: string, skillName: string | undefined, x: number, y: number): void {
-    const vfxKey = resolveSkillVfxKey(skillId, skillName);
-    this.playVFX(vfxKey, x, y, {
-      scale: 1.2,
+  public playSkillVFX(
+    skillId: string,
+    skillName: string | undefined,
+    x: number,
+    y: number,
+    guId?: string | null,
+    rank?: number | null
+  ): void {
+    const resolved = resolveGuVfx(guId, rank, skillId, skillName);
+    this.playVFX(resolved.vfxKey, x, y, {
+      scale: resolved.scale,
       depth: y + 70,
     });
   }

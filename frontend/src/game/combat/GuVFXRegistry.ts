@@ -1,5 +1,6 @@
 /**
  * Catalog and mapping for authored Gu World VFX Atlases.
+ * Supports direct resolution by gu_id, rank, and skill identifiers.
  */
 
 export interface VfxDefinition {
@@ -10,6 +11,7 @@ export interface VfxDefinition {
   scale?: number;
   category: "attack" | "shield" | "status" | "gu" | "elemental" | "boss";
   description?: string;
+  guId?: string;
 }
 
 export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
@@ -50,7 +52,8 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
     frameRate: 14,
     scale: 1.15,
     category: "shield",
-    description: "Khiên hào quang ánh kim bảo hộ",
+    description: "Khiên hào quang ánh kim bảo hộ (Bạch Ngọc Cổ / Kim Cương Cổ)",
+    guId: "GU_WHITE_JADE",
   },
   fx_thu_giap_da_gpt: {
     key: "fx_thu_giap_da_gpt",
@@ -60,6 +63,7 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
     scale: 1.1,
     category: "shield",
     description: "Giáp đá thạch cự khiên",
+    guId: "GU_STONE_ARMOR",
   },
   fx_thu_vo_giap_gpt: {
     key: "fx_thu_vo_giap_gpt",
@@ -109,7 +113,57 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
     description: "Cột hào quang hồi máu / hồi sinh",
   },
 
-  // === GU SIGNATURE ABILITIES ===
+  // === GU SIGNATURE ABILITIES (WITH GU_ID RESOLUTION) ===
+  fx_gu_nguyet_quang: {
+    key: "fx_gu_nguyet_quang",
+    textureUrl: "/assets/vfx/fx_gu_nguyet_quang.png",
+    atlasUrl: "/assets/vfx/fx_gu_nguyet_quang.json",
+    frameRate: 16,
+    scale: 1.3,
+    category: "gu",
+    description: "Nguyệt Quang Cổ / Nguyệt Nhận kiếm khí trăng khuyết xanh ngọc",
+    guId: "GU_MOONLIGHT",
+  },
+  fx_gu_huyet_nguyet: {
+    key: "fx_gu_huyet_nguyet",
+    textureUrl: "/assets/vfx/fx_gu_huyet_nguyet.png",
+    atlasUrl: "/assets/vfx/fx_gu_huyet_nguyet.json",
+    frameRate: 16,
+    scale: 1.3,
+    category: "gu",
+    description: "Huyết Nguyệt Cổ kiếm khí trăng máu đỏ thẫm",
+    guId: "GU_BLOOD_MOON",
+  },
+  fx_gu_huyet_bao: {
+    key: "fx_gu_huyet_bao",
+    textureUrl: "/assets/vfx/fx_gu_huyet_bao.png",
+    atlasUrl: "/assets/vfx/fx_gu_huyet_bao.json",
+    frameRate: 14,
+    scale: 1.25,
+    category: "gu",
+    description: "Huyết Bạo / Huyết Đạo bạo phát tung toé",
+    guId: "GU_BLOOD_EXPLOSION",
+  },
+  fx_gu_bach_cot: {
+    key: "fx_gu_bach_cot",
+    textureUrl: "/assets/vfx/fx_gu_bach_cot.png",
+    atlasUrl: "/assets/vfx/fx_gu_bach_cot.json",
+    frameRate: 14,
+    scale: 1.25,
+    category: "gu",
+    description: "Bạch Cốt Mâu / Cốt Đạo đâm xuyên",
+    guId: "GU_WHITE_BONE",
+  },
+  fx_thoi_trang_xuan_thu_quyen: {
+    key: "fx_thoi_trang_xuan_thu_quyen",
+    textureUrl: "/assets/vfx/fx_thoi_trang_xuan_thu_quyen.png",
+    atlasUrl: "/assets/vfx/fx_thoi_trang_xuan_thu_quyen.json",
+    frameRate: 15,
+    scale: 1.25,
+    category: "gu",
+    description: "Xuân Thu Thiền / Thời Đạo quyền kích vặn xoắn thời gian",
+    guId: "GU_SPRING_AUTUMN_CICADA",
+  },
   fx_gu_hoa_du: {
     key: "fx_gu_hoa_du",
     textureUrl: "/assets/vfx/fx_gu_hoa_du.png",
@@ -118,6 +172,7 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
     scale: 1.25,
     category: "gu",
     description: "Hỏa Dực Cổ bộc phát ngọn lửa",
+    guId: "GU_FIRE_WINGS",
   },
   fx_gu_thiem_quang: {
     key: "fx_gu_thiem_quang",
@@ -127,6 +182,7 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
     scale: 1.3,
     category: "gu",
     description: "Thiểm Quang Cổ chớp sáng chói lòa",
+    guId: "GU_FLASH_LIGHT",
   },
   fx_gu_dien_nhan_gpt_dau: {
     key: "fx_gu_dien_nhan_gpt_dau",
@@ -136,6 +192,7 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
     scale: 1.2,
     category: "gu",
     description: "Điện Nhãn Cổ phóng luồng điện quang",
+    guId: "GU_LIGHTNING_EYE",
   },
   fx_gu_thinh_phong_gpt_kich_hoat: {
     key: "fx_gu_thinh_phong_gpt_kich_hoat",
@@ -145,6 +202,7 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
     scale: 1.15,
     category: "gu",
     description: "Thính Phong Cổ gió lốc cuộn quanh",
+    guId: "GU_WIND_HEAR",
   },
   fx_gu_xa_tin_dau_gpt_giu: {
     key: "fx_gu_xa_tin_dau_gpt_giu",
@@ -154,6 +212,7 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
     scale: 1.2,
     category: "gu",
     description: "Xà Tín Cổ độc xà uốn lượn",
+    guId: "GU_SNAKE_TONGUE",
   },
 
   // === ELEMENTAL SPELLS ===
@@ -277,10 +336,131 @@ export const GU_VFX_CATALOG: Record<string, VfxDefinition> = {
 };
 
 /**
+ * Direct mapping dictionary from canonical gu_id or slug to VFX key.
+ */
+export const GU_ID_TO_VFX: Record<string, string> = {
+  // Moonblade / Sword Path
+  GU_MOONLIGHT: "fx_gu_nguyet_quang",
+  nguyet_quang_gu: "fx_gu_nguyet_quang",
+  nguyet_nhan_gu: "fx_gu_nguyet_quang",
+
+  // Blood Path
+  GU_BLOOD_MOON: "fx_gu_huyet_nguyet",
+  huyet_nguyet_gu: "fx_gu_huyet_nguyet",
+  GU_BLOOD_EXPLOSION: "fx_gu_huyet_bao",
+  huyet_bao_gu: "fx_gu_huyet_bao",
+
+  // Bone Path
+  GU_WHITE_BONE: "fx_gu_bach_cot",
+  bach_cot_gu: "fx_gu_bach_cot",
+  bach_cot_mau: "fx_gu_bach_cot",
+
+  // Time Path
+  GU_SPRING_AUTUMN_CICADA: "fx_thoi_trang_xuan_thu_quyen",
+  xuan_thu_thien: "fx_thoi_trang_xuan_thu_quyen",
+
+  // Fire Path
+  GU_FIRE_WINGS: "fx_gu_hoa_du",
+  hoa_du_gu: "fx_gu_hoa_du",
+
+  // Lightning Path
+  GU_LIGHTNING_EYE: "fx_gu_dien_nhan_gpt_dau",
+  dien_nhan_gu: "fx_gu_dien_nhan_gpt_dau",
+  GU_FLASH_LIGHT: "fx_gu_thiem_quang",
+  thiem_quang_gu: "fx_gu_thiem_quang",
+  GU_THUNDER_STRIKE: "fx_thu_set_danh_gpt",
+  loi_phat_gu: "fx_thu_set_danh_gpt",
+
+  // Wind Path
+  GU_WIND_HEAR: "fx_gu_thinh_phong_gpt_kich_hoat",
+  thinh_phong_gu: "fx_gu_thinh_phong_gpt_kich_hoat",
+
+  // Poison Path
+  GU_SNAKE_TONGUE: "fx_gu_xa_tin_dau_gpt_giu",
+  xa_tin_gu: "fx_gu_xa_tin_dau_gpt_giu",
+
+  // Defense / Armor
+  GU_STONE_ARMOR: "fx_thu_giap_da_gpt",
+  giap_da_gu: "fx_thu_giap_da_gpt",
+  GU_WHITE_JADE: "fx_khien_anh_kim",
+  bach_ngoc_gu: "fx_khien_anh_kim",
+
+  // Sound / Force
+  GU_SOUND_ROAR: "fx_song_gam",
+  song_gam_gu: "fx_song_gam",
+};
+
+export interface ResolvedGuVfx {
+  vfxKey: string;
+  scale: number;
+  frameRate: number;
+  category: VfxDefinition["category"];
+}
+
+/**
+ * Resolves VFX based on gu_id and rank, falling back to skill name/id keywords.
+ */
+export function resolveGuVfx(
+  guId?: string | null,
+  rank?: number | null,
+  skillId?: string | null,
+  skillName?: string | null
+): ResolvedGuVfx {
+  let vfxKey = "fx_hit_chem";
+
+  // 1. Direct guId lookup
+  if (guId) {
+    const rawId = guId.trim();
+    const lowerId = rawId.toLowerCase();
+    if (GU_ID_TO_VFX[rawId]) {
+      vfxKey = GU_ID_TO_VFX[rawId];
+    } else if (GU_ID_TO_VFX[lowerId]) {
+      vfxKey = GU_ID_TO_VFX[lowerId];
+    }
+  }
+
+  // 2. Keyword fallback if not resolved yet
+  if (vfxKey === "fx_hit_chem" && (skillId || skillName)) {
+    vfxKey = resolveSkillVfxKey(skillId ?? "", skillName ?? undefined);
+  }
+
+  const def = GU_VFX_CATALOG[vfxKey];
+  const baseScale = def?.scale ?? 1.0;
+  const baseFrameRate = def?.frameRate ?? 14;
+
+  // Rank-based scaling (Rank 1-5 phàm cổ, Rank 6-9 tiên cổ)
+  const r = rank ?? 1;
+  const rankScaleMultiplier = r >= 6 ? 1.25 : r >= 4 ? 1.12 : 1.0;
+  const rankFrameRateBonus = r >= 6 ? 2 : 0;
+
+  return {
+    vfxKey,
+    scale: baseScale * rankScaleMultiplier,
+    frameRate: baseFrameRate + rankFrameRateBonus,
+    category: def?.category ?? "attack",
+  };
+}
+
+/**
  * Returns the best-matching VFX key for a skill name or skill ID.
  */
 export function resolveSkillVfxKey(skillId: string, skillName?: string): string {
   const normalized = `${skillId} ${skillName ?? ""}`.toLowerCase();
+
+  // Moonlight / Sword
+  if (normalized.includes("nguyệt quang") || normalized.includes("nguyệt nhận") || normalized.includes("kiếm")) {
+    return "fx_gu_nguyet_quang";
+  }
+
+  // Blood
+  if (normalized.includes("huyết nguyệt")) return "fx_gu_huyet_nguyet";
+  if (normalized.includes("huyết") || normalized.includes("máu")) return "fx_gu_huyet_bao";
+
+  // Bone
+  if (normalized.includes("cốt") || normalized.includes("xương")) return "fx_gu_bach_cot";
+
+  // Time / Spring Autumn Cicada
+  if (normalized.includes("xuân thu") || normalized.includes("thời gian")) return "fx_thoi_trang_xuan_thu_quyen";
 
   // Fire / Flame
   if (normalized.includes("hỏa") || normalized.includes("lửa") || normalized.includes("hoa_du") || normalized.includes("diễm")) {

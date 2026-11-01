@@ -13,6 +13,43 @@ export type HudViewMode = "expanded" | "compact" | "minimized";
 
 export const HOTBAR_SLOT_COUNT = 12;
 
+export type MenuThemePreset =
+  | "default"
+  | "dark"
+  | "jade"
+  | "ocean"
+  | "crimson"
+  | "purple"
+  | "custom";
+
+export interface MenuColorConfig {
+  preset: MenuThemePreset;
+  customBgColor: string;
+  opacity: number;
+  enableTexture: boolean;
+}
+
+export const MENU_THEME_PRESETS: Array<{
+  id: MenuThemePreset;
+  name: string;
+  color: string;
+  desc: string;
+}> = [
+  { id: "default", name: "Hoàng Giấy", color: "#211810", desc: "Cổ điển trầm ấm" },
+  { id: "dark", name: "Huyền Mặc", color: "#111116", desc: "U minh sâu thẳm" },
+  { id: "jade", name: "Thanh Trúc", color: "#0c1a14", desc: "Ngọc bích tiên môn" },
+  { id: "ocean", name: "Hàn Băng", color: "#0b1522", desc: "U lam tĩnh mịch" },
+  { id: "crimson", name: "Xích Sa", color: "#1e0b0e", desc: "Huyết ma quyền uy" },
+  { id: "purple", name: "Tử Khí", color: "#170e1e", desc: "Tím thẫm tôn quý" },
+];
+
+export const DEFAULT_MENU_COLOR: MenuColorConfig = {
+  preset: "default",
+  customBgColor: "#211810",
+  opacity: 96,
+  enableTexture: true,
+};
+
 export type UiPreferences = {
   quickActions: string[];
   playerViewMode: HudViewMode | "";
@@ -21,6 +58,7 @@ export type UiPreferences = {
   keybinds: Record<number, string>;
   soundEnabled: boolean;
   showOtherPlayerNames: boolean;
+  menuColor: MenuColorConfig;
 };
 
 export const UI_PREFERENCES_KEY = "gu_ui_prefs_v1";
@@ -83,8 +121,43 @@ function normalizeKeybinds(value: unknown): Record<number, string> {
   return { ...defaults, ...keybinds };
 }
 
+function normalizeMenuColor(value: unknown): MenuColorConfig {
+  if (!value || typeof value !== "object") return { ...DEFAULT_MENU_COLOR };
+  const raw = value as Partial<MenuColorConfig>;
+  const validPresets: MenuThemePreset[] = [
+    "default",
+    "dark",
+    "jade",
+    "ocean",
+    "crimson",
+    "purple",
+    "custom",
+  ];
+  const preset =
+    typeof raw.preset === "string" && validPresets.includes(raw.preset as MenuThemePreset)
+      ? (raw.preset as MenuThemePreset)
+      : "default";
+
+  let customBgColor = DEFAULT_MENU_COLOR.customBgColor;
+  if (
+    typeof raw.customBgColor === "string" &&
+    /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(raw.customBgColor)
+  ) {
+    customBgColor = raw.customBgColor;
+  }
+
+  let opacity = DEFAULT_MENU_COLOR.opacity;
+  if (typeof raw.opacity === "number" && !isNaN(raw.opacity)) {
+    opacity = Math.max(50, Math.min(100, Math.round(raw.opacity)));
+  }
+
+  const enableTexture = raw.enableTexture !== false;
+
+  return { preset, customBgColor, opacity, enableTexture };
+}
+
 export function normalizeUiPreferences(value: unknown): UiPreferences {
-  const stored = value && typeof value === "object" ? value as Partial<UiPreferences> : {};
+  const stored = value && typeof value === "object" ? (value as Partial<UiPreferences>) : {};
   return {
     quickActions: normalizeQuickActions(stored.quickActions),
     playerViewMode: isViewMode(stored.playerViewMode) ? stored.playerViewMode : "",
@@ -93,6 +166,7 @@ export function normalizeUiPreferences(value: unknown): UiPreferences {
     keybinds: normalizeKeybinds(stored.keybinds),
     soundEnabled: typeof stored.soundEnabled === "boolean" ? stored.soundEnabled : true,
     showOtherPlayerNames: typeof stored.showOtherPlayerNames === "boolean" ? stored.showOtherPlayerNames : true,
+    menuColor: normalizeMenuColor(stored.menuColor),
   };
 }
 
@@ -136,13 +210,83 @@ function readLegacyPreferences(): Partial<UiPreferences> {
 let cache: UiPreferences | null = null;
 let storageListenerAttached = false;
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const clean = hex.replace("#", "").trim();
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16);
+    const g = parseInt(clean[1] + clean[1], 16);
+    const b = parseInt(clean[2] + clean[2], 16);
+    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return { r, g, b };
+  } else if (clean.length === 6) {
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return { r, g, b };
+  }
+  return null;
+}
+
+export function resolveActiveMenuColor(config?: MenuColorConfig): {
+  hex: string;
+  rgb: { r: number; g: number; b: number };
+  opacity: number;
+  enableTexture: boolean;
+} {
+  const cfg = config ?? getUiPreferences().menuColor;
+  let hex = DEFAULT_MENU_COLOR.customBgColor;
+  if (cfg.preset === "custom") {
+    hex = cfg.customBgColor || DEFAULT_MENU_COLOR.customBgColor;
+  } else {
+    const found = MENU_THEME_PRESETS.find((p) => p.id === cfg.preset);
+    hex = found ? found.color : DEFAULT_MENU_COLOR.customBgColor;
+  }
+  const rgb = hexToRgb(hex) ?? { r: 33, g: 24, b: 16 };
+  const opacity = Math.min(100, Math.max(50, Number(cfg.opacity) || 96));
+  const enableTexture = cfg.enableTexture !== false;
+  return { hex, rgb, opacity, enableTexture };
+}
+
+export function applyMenuThemeToCss(config?: MenuColorConfig) {
+  if (typeof document === "undefined") return;
+  const { hex, rgb, opacity, enableTexture } = resolveActiveMenuColor(config);
+  const root = document.documentElement;
+
+  const alpha1 = (opacity / 100).toFixed(2);
+  const alpha2 = Math.min(1, opacity / 100 + 0.02).toFixed(2);
+
+  const r2 = Math.min(255, rgb.r + 6);
+  const g2 = Math.min(255, rgb.g + 4);
+  const b2 = Math.min(255, rgb.b + 3);
+
+  const hr1 = Math.min(255, Math.round(rgb.r * 1.8 + 20));
+  const hg1 = Math.min(255, Math.round(rgb.g * 1.8 + 15));
+  const hb1 = Math.min(255, Math.round(rgb.b * 1.8 + 10));
+  const hr2 = Math.min(255, Math.round(rgb.r * 1.3 + 10));
+  const hg2 = Math.min(255, Math.round(rgb.g * 1.3 + 8));
+  const hb2 = Math.min(255, Math.round(rgb.b * 1.3 + 5));
+
+  root.style.setProperty("--mmo-menu-bg", hex);
+  root.style.setProperty("--mmo-menu-gradient-1", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha1})`);
+  root.style.setProperty("--mmo-menu-gradient-2", `rgba(${r2}, ${g2}, ${b2}, ${alpha2})`);
+  root.style.setProperty(
+    "--mmo-menu-heading-bg",
+    `linear-gradient(180deg, rgba(${hr1}, ${hg1}, ${hb1}, 0.98), rgba(${hr2}, ${hg2}, ${hb2}, 0.98))`
+  );
+  root.style.setProperty(
+    "--mmo-menu-texture",
+    enableTexture ? 'url("/assets/ui/guworld-rice-paper.webp?v=1")' : "none"
+  );
+}
+
 function attachStorageListener() {
   if (storageListenerAttached || typeof window === "undefined") return;
   storageListenerAttached = true;
   window.addEventListener("storage", (event) => {
     if (event.key !== UI_PREFERENCES_KEY) return;
     cache = null;
-    window.dispatchEvent(new CustomEvent(UI_PREFERENCES_EVENT, { detail: getUiPreferences() }));
+    const current = getUiPreferences();
+    applyMenuThemeToCss(current.menuColor);
+    window.dispatchEvent(new CustomEvent(UI_PREFERENCES_EVENT, { detail: current }));
   });
 }
 
@@ -173,6 +317,7 @@ export function updateUiPreferences(patch: Partial<UiPreferences>): UiPreference
     try {
       localStorage.setItem(UI_PREFERENCES_KEY, JSON.stringify(next));
     } catch { /* Storage can be unavailable in private contexts. */ }
+    applyMenuThemeToCss(next.menuColor);
     window.dispatchEvent(new CustomEvent(UI_PREFERENCES_EVENT, { detail: next }));
   }
   return next;
@@ -182,6 +327,7 @@ export function resetUiPreferences(): UiPreferences {
   return updateUiPreferences({
     quickActions: [...DEFAULT_QUICK_ACTIONS],
     keybinds: defaultHotbarKeybinds(),
+    menuColor: { ...DEFAULT_MENU_COLOR },
   });
 }
 

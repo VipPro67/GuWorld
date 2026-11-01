@@ -668,7 +668,9 @@ export class WorldScene extends Phaser.Scene {
         if (skill && eventX !== null && eventY !== null) {
           const point = worldToPixels({ x: eventX, y: eventY });
           if (skillId && skillId !== "BASIC_ATTACK") {
-            this.guVfx.playSkillVFX(skillId, displayName, point.x, point.y - 16);
+            const guId = typeof payload.gu_id === "string" ? payload.gu_id : undefined;
+            const rank = typeof payload.rank === "number" ? payload.rank : undefined;
+            this.guVfx.playSkillVFX(skillId, displayName, point.x, point.y - 16, guId, rank);
           }
           if (skill.mode === "GROUND" || skill.shape) {
             this.vfx.spawnSkillArea(point.x, point.y, skill);

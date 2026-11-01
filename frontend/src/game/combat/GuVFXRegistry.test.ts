@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GU_VFX_CATALOG, resolveSkillVfxKey } from "./GuVFXRegistry.ts";
+import { GU_VFX_CATALOG, resolveGuVfx, resolveSkillVfxKey } from "./GuVFXRegistry.ts";
 import { getGuRankFrame, getGuRankColor } from "../../lib/gu-frames.ts";
 
 test("GU_VFX_CATALOG covers core combat and skill VFX", () => {
@@ -22,7 +22,26 @@ test("resolveSkillVfxKey resolves known skill keywords to corresponding visual F
   assert.equal(resolveSkillVfxKey("KHIEN_DA", "Giáp Đá Cổ"), "fx_thu_giap_da_gpt");
   assert.equal(resolveSkillVfxKey("KHIEN_VANG", "Kim Cương Hộ Giáp"), "fx_khien_anh_kim");
   assert.equal(resolveSkillVfxKey("HOI_PHUC", "Trị Liệu"), "fx_hoi_sinh");
+  assert.equal(resolveSkillVfxKey("MOON", "Nguyệt Quang Cổ"), "fx_gu_nguyet_quang");
+  assert.equal(resolveSkillVfxKey("BLOOD", "Huyết Nguyệt Cổ"), "fx_gu_huyet_nguyet");
+  assert.equal(resolveSkillVfxKey("BONE", "Bạch Cốt Mâu"), "fx_gu_bach_cot");
   assert.equal(resolveSkillVfxKey("CHUA_BIET", "Kỹ năng thường"), "fx_hit_chem");
+});
+
+test("resolveGuVfx resolves by canonical gu_id and scales with rank", () => {
+  const moon = resolveGuVfx("GU_MOONLIGHT", 1);
+  assert.equal(moon.vfxKey, "fx_gu_nguyet_quang");
+  assert.equal(moon.scale, 1.3);
+
+  const immortalMoon = resolveGuVfx("GU_MOONLIGHT", 6);
+  assert.equal(immortalMoon.vfxKey, "fx_gu_nguyet_quang");
+  assert.ok(immortalMoon.scale > moon.scale, "Immortal rank should receive visual scale bonus");
+
+  const blood = resolveGuVfx("GU_BLOOD_MOON");
+  assert.equal(blood.vfxKey, "fx_gu_huyet_nguyet");
+
+  const cicada = resolveGuVfx("GU_SPRING_AUTUMN_CICADA");
+  assert.equal(cicada.vfxKey, "fx_thoi_trang_xuan_thu_quyen");
 });
 
 test("getGuRankFrame resolves frames for ranks 1 through 9", () => {

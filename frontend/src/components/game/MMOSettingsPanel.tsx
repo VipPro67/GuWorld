@@ -11,13 +11,20 @@ import {
   Volume2,
   Monitor,
   Info,
+  Palette,
+  Check,
 } from "lucide-react";
 import { useGameStore, type AutoCombatConfig, type Player } from "@/store/useGameStore";
 import { QuickActionCustomizer } from "./QuickActionCustomizer";
 import { RealtimeHotbarAssignment } from "./RealtimeHotbarAssignment";
 import { SkillLoadoutEditor, HotbarKeybindEditor } from "./SkillLoadoutEditor";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
-import { resetUiPreferences, updateUiPreferences, useUiPreferences } from "@/lib/ui-preferences";
+import {
+  resetUiPreferences,
+  updateUiPreferences,
+  useUiPreferences,
+  MENU_THEME_PRESETS,
+} from "@/lib/ui-preferences";
 
 export type MMOSettingsTab = "quick_actions" | "combat" | "general";
 
@@ -77,6 +84,7 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
   const uiPreferences = useUiPreferences();
   const soundEnabled = uiPreferences.soundEnabled;
   const showOtherPlayerNames = uiPreferences.showOtherPlayerNames;
+  const menuColor = uiPreferences.menuColor;
 
   useEffect(() => {
     if (!store.combatSettings && !store.combatSettingsLoading) {
@@ -365,6 +373,129 @@ export function MMOSettingsPanel({ initialTab = "quick_actions", onLoadoutSaved 
               <p className="text-[10px] text-zinc-500">
                 Tắt bớt thông tin người chơi khi đông người để tăng tốc độ khung hình.
               </p>
+            </div>
+          </section>
+
+          {/* Tông màu Menu & Bảng giao diện */}
+          <section className="rounded-2xl border border-zinc-900 bg-zinc-900/40 p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Palette className="w-4 h-4 text-amber-400" />
+              <h3 className="font-serif text-sm font-bold text-zinc-100">Tông màu Menu & Bảng chức năng</h3>
+            </div>
+            <p className="text-xs text-zinc-400 mb-3">
+              Tùy chọn màu nền các bảng điều khiển, menu chức năng và khung cửa sổ trong Cổ Giới.
+            </p>
+
+            {/* Presets Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+              {MENU_THEME_PRESETS.map((p) => {
+                const isSelected = menuColor.preset === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      updateUiPreferences({
+                        menuColor: {
+                          ...menuColor,
+                          preset: p.id,
+                        },
+                      });
+                    }}
+                    className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition ${
+                      isSelected
+                        ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400/50"
+                        : "border-zinc-800/80 bg-zinc-950/40 hover:border-zinc-700 hover:bg-zinc-900/50"
+                    }`}
+                  >
+                    <span
+                      className="w-5 h-5 rounded-full shrink-0 border border-white/20 shadow-inner flex items-center justify-center"
+                      style={{ backgroundColor: p.color }}
+                    >
+                      {isSelected && <Check className="w-3 h-3 text-amber-300 stroke-[3]" />}
+                    </span>
+                    <div className="min-w-0">
+                      <div className={`text-xs font-bold leading-tight ${isSelected ? "text-amber-200" : "text-zinc-200"}`}>
+                        {p.name}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 truncate">{p.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tùy chỉnh nâng cao: Tự chọn mã màu, Độ mờ, Vân giấy */}
+            <div className="space-y-3 pt-3 border-t border-zinc-800/80 text-xs">
+              {/* Color Picker tự do */}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-300">Tự chọn màu sắc riêng</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label="Chọn màu nền menu"
+                    value={menuColor.customBgColor || "#211810"}
+                    onChange={(e) => {
+                      updateUiPreferences({
+                        menuColor: {
+                          ...menuColor,
+                          preset: "custom",
+                          customBgColor: e.target.value,
+                        },
+                      });
+                    }}
+                    className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-900 p-0.5 cursor-pointer"
+                  />
+                  <span className="font-mono text-[11px] text-zinc-400 uppercase">
+                    {menuColor.preset === "custom" ? menuColor.customBgColor : "Tùy biến"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Độ đậm màu nền (Opacity) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-zinc-300">
+                  <span>Độ đậm màu nền</span>
+                  <span className="font-mono text-[11px] text-amber-300">{menuColor.opacity ?? 96}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={60}
+                  max={100}
+                  step={2}
+                  value={menuColor.opacity ?? 96}
+                  onChange={(e) => {
+                    updateUiPreferences({
+                      menuColor: {
+                        ...menuColor,
+                        opacity: Number(e.target.value),
+                      },
+                    });
+                  }}
+                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+              </div>
+
+              {/* Bật/Tắt texture giấy gạo */}
+              <label className="flex items-center justify-between text-zinc-300 cursor-pointer pt-1">
+                <div>
+                  <span>Vân giấy gạo cổ phong</span>
+                  <span className="block text-[10px] text-zinc-500">Giữ họa tiết thớ giấy cổ truyền trên bề mặt menu</span>
+                </div>
+                <input
+                  type="checkbox"
+                  className={toggleClass}
+                  checked={menuColor.enableTexture !== false}
+                  onChange={(e) => {
+                    updateUiPreferences({
+                      menuColor: {
+                        ...menuColor,
+                        enableTexture: e.target.checked,
+                      },
+                    });
+                  }}
+                />
+              </label>
             </div>
           </section>
 

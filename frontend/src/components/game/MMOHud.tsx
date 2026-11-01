@@ -21,7 +21,8 @@ import { QuickActionCustomizer } from "./QuickActionCustomizer";
 import { toWorldMarkerResources } from "@/game/world/markers/resource.ts";
 import { collectMarkers, findNearestMarker } from "@/game/world/markers/collect";
 import type { WorldMarker } from "@/game/world/markers/types";
-import { getGuRankFrame } from "@/lib/gu-frames";
+import { getGuRankColor } from "@/lib/gu-frames";
+import { getGuIconUrl } from "@/lib/gu-icons";
 
 export interface HudTarget {
   id: string;
@@ -1584,15 +1585,20 @@ export function MMOHud(props: MMOHudProps) {
                     ⚡
                   </span>
                 ) : null}
-                {guSlot?.guId && (
-                  <img
-                    src={getGuRankFrame(guSlot.rank)}
-                    alt=""
-                    className="pointer-events-none absolute inset-0 h-full w-full object-fill opacity-75 z-0"
+                {guSlot?.guId && getGuRankColor(guSlot.rank) && (
+                  <div
+                    className={`pointer-events-none absolute inset-0 rounded-lg border ${getGuRankColor(guSlot.rank).border}/40 z-0`}
                   />
                 )}
-                <div className="flex-1 flex items-center justify-center w-full mt-1 px-0.5 z-10">
-                  <span className="line-clamp-2 text-[8px] font-semibold leading-tight tracking-tight">
+                <div className="flex-1 flex flex-col items-center justify-center w-full mt-0.5 px-0.5 z-10">
+                  {guSlot?.guId && getGuIconUrl(guSlot.guId, guSlot.name) && (
+                    <img
+                      src={getGuIconUrl(guSlot.guId, guSlot.name)!}
+                      alt=""
+                      className="h-4 w-4 object-contain drop-shadow"
+                    />
+                  )}
+                  <span className="line-clamp-1 text-[7.5px] font-semibold leading-tight tracking-tight">
                     {isFormActivation ? "Biến thân" : isFormAbility ? `Dạng: ${skill?.name}` : guSlot?.name ?? (skill?.name || "Trống")}
                   </span>
                 </div>
@@ -1733,15 +1739,20 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
                   ⚡ Bị động
                 </span>
               ) : null}
-              {guSlot?.guId && (
-                <img
-                  src={getGuRankFrame(guSlot.rank)}
-                  alt=""
-                  className="pointer-events-none absolute inset-0 h-full w-full object-fill opacity-75 z-0"
+              {guSlot?.guId && getGuRankColor(guSlot.rank) && (
+                <div
+                  className={`pointer-events-none absolute inset-0 rounded-xl border ${getGuRankColor(guSlot.rank).border}/40 z-0`}
                 />
               )}
-              <div className="flex-1 flex items-center justify-center w-full px-0.5 z-10">
-                <span className="line-clamp-2 text-[8px] sm:text-[11px] md:text-xs font-semibold leading-tight tracking-tight">
+              <div className="flex-1 flex flex-col items-center justify-center w-full px-0.5 z-10">
+                {guSlot?.guId && getGuIconUrl(guSlot.guId, guSlot.name) && (
+                  <img
+                    src={getGuIconUrl(guSlot.guId, guSlot.name)!}
+                    alt=""
+                    className="h-5 w-5 sm:h-7 sm:w-7 object-contain drop-shadow mb-0.5"
+                  />
+                )}
+                <span className="line-clamp-1 text-[8px] sm:text-[10px] md:text-xs font-semibold leading-tight tracking-tight">
                   {isFormActivation ? "Biến thân" : isFormAbility ? `Dạng: ${skill?.name}` : guSlot?.name ?? skill?.name ?? "Chưa gán"}
                 </span>
               </div>

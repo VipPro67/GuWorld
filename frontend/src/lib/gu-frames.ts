@@ -33,6 +33,7 @@ export function getGuRankColor(rank: number | null | undefined): {
   glow: string;
   text: string;
   badge: string;
+  bgGradient: string;
 } {
   const r = rank ?? 1;
   if (r >= 6) {
@@ -41,6 +42,7 @@ export function getGuRankColor(rank: number | null | undefined): {
       glow: "shadow-[0_0_12px_rgba(217,70,239,0.5)]",
       text: "text-fuchsia-200",
       badge: "bg-fuchsia-950 text-fuchsia-300 border-fuchsia-500",
+      bgGradient: "bg-gradient-to-b from-fuchsia-950/50 via-zinc-950/90 to-black",
     };
   }
   if (r === 5) {
@@ -49,6 +51,7 @@ export function getGuRankColor(rank: number | null | undefined): {
       glow: "shadow-[0_0_10px_rgba(245,158,11,0.5)]",
       text: "text-amber-200",
       badge: "bg-amber-950 text-amber-300 border-amber-500",
+      bgGradient: "bg-gradient-to-b from-amber-950/50 via-zinc-950/90 to-black",
     };
   }
   if (r === 4) {
@@ -57,6 +60,7 @@ export function getGuRankColor(rank: number | null | undefined): {
       glow: "shadow-[0_0_8px_rgba(168,85,247,0.4)]",
       text: "text-purple-200",
       badge: "bg-purple-950 text-purple-300 border-purple-500",
+      bgGradient: "bg-gradient-to-b from-purple-950/50 via-zinc-950/90 to-black",
     };
   }
   if (r === 3) {
@@ -65,6 +69,7 @@ export function getGuRankColor(rank: number | null | undefined): {
       glow: "shadow-[0_0_8px_rgba(56,189,248,0.4)]",
       text: "text-sky-200",
       badge: "bg-sky-950 text-sky-300 border-sky-500",
+      bgGradient: "bg-gradient-to-b from-sky-950/50 via-zinc-950/90 to-black",
     };
   }
   if (r === 2) {
@@ -73,6 +78,7 @@ export function getGuRankColor(rank: number | null | undefined): {
       glow: "shadow-[0_0_6px_rgba(52,211,153,0.35)]",
       text: "text-emerald-200",
       badge: "bg-emerald-950 text-emerald-300 border-emerald-500",
+      bgGradient: "bg-gradient-to-b from-emerald-950/50 via-zinc-950/90 to-black",
     };
   }
   return {
@@ -80,5 +86,6 @@ export function getGuRankColor(rank: number | null | undefined): {
     glow: "shadow-none",
     text: "text-zinc-200",
     badge: "bg-zinc-900 text-zinc-300 border-zinc-600",
+    bgGradient: "bg-gradient-to-b from-zinc-900/50 via-zinc-950/90 to-black",
   };
 }
