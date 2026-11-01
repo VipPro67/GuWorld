@@ -19,13 +19,13 @@ func TestCompileCommittedProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(compiled.Profiles) != 4427 || len(compiled.DefaultSkills) != 5 {
-		t.Fatalf("profiles=%d actives=%d, want 4427/5", len(compiled.Profiles), len(compiled.DefaultSkills))
+	if len(compiled.Profiles) != 4636 || len(compiled.DefaultSkills) != 5 {
+		t.Fatalf("profiles=%d actives=%d, want 4636/5", len(compiled.Profiles), len(compiled.DefaultSkills))
 	}
 	if compiled.Hash == "" {
 		t.Fatal("compiled catalog hash is empty")
 	}
-	if compiled.Hash != "c32d5e89d7539f27255f9b1e435db5495522906a1c7559ca95d49791853aadea" {
+	if compiled.Hash != "58713b481b608fdda383ee9ecda759397bf80017c21e24780a12beef8ea9bc5b" {
 		t.Fatalf("compiled catalog drifted; update this baseline: %s", compiled.Hash)
 	}
 	arrow, ok := compiled.Profile("GU_WATER_ARROW", 1)

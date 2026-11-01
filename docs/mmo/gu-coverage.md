@@ -15,17 +15,17 @@ JSON report can be generated on demand with `-report <path>`; it is not
 committed to keep the repository small. See `docs/mmo/gu-realtime-schema.md` for
 the authored profile schema and compiled MVP artifact.
 
-## Effect audit snapshot (2026-10-25)
+## Effect audit snapshot (2026-11-01)
 
-| Status | Entries |
+| STATUS | Entries |
 | --- | ---: |
-| `SUPPORTED` | 3374 |
-| `NEEDS_REAUTHOR` | 871 |
+| `SUPPORTED` | 3582 |
+| `NEEDS_REAUTHOR` | 872 |
 | `UNSUPPORTED` | 0 |
 | `NOT_ACTIVE` | 182 |
-| **Total** | **4427** |
+| **Total** | **4636** |
 
-- 5,021 blocks / 6,380 operations audited.
+- 5,394 blocks / 6,753 operations audited.
 - `unclassified = 0`: every trigger/operation is explicitly handled.
 - `UNSUPPORTED = 0` at block level because every current block passes the strict
   Block v2 validator. Unknown/removed operations would fail this check instead
@@ -41,10 +41,9 @@ portion and omits the status; it never infers realtime durations from turns.
 Conditional and other unsupported operations still keep the action out of the
 hotbar. Domain/world hooks can remain beside a supported combat action.
 
-Current catalog: 4,427 profile records, 2,794 active profiles, 1,261
-passive-only profiles, and 372 entries without a castable hotbar skill. The
-nine authored overrides preserve the five preview hotbar profiles and the
-additional test/form profiles.
+Current catalog: 4,636 profile records, 2,840 active profiles, and 1,796
+passive-only profiles. The nine authored overrides preserve the five preview
+hotbar profiles and the additional test/form profiles.
 The active-profile coverage test checks every `ON_ACTION` entry in `Gu.csv`
 against the transpiler rules.
 

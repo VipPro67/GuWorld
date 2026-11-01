@@ -2,10 +2,10 @@
 
 ## Current coverage
 
-`transpiled_profiles.json` contains one catalog row for each of the 4,427 Gu
-ranks. The current compile snapshot has 2,794 active skills, 1,261 passive-only
-profiles, and 372 rows with neither an active nor a supported passive. Of the
-rows with `ON_ACTION` source blocks, 300 currently have no active skill; 233 of
+`transpiled_profiles.json` contains one catalog row for each of the 4,636 Gu
+ranks. The current compile snapshot has 2,840 active skills; the remaining 1,796
+`transpiled_profiles.json` rows are passive-only profiles. Of the
+rows with `ON_ACTION` source blocks, 345 currently have no active skill; 254 of
 those contain only legacy `STATUS` operations. The source has 671 `STATUS`
 operations overall, but only explicitly realtime-authored statuses can be
 executed safely.
