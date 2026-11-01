@@ -10,6 +10,8 @@ export interface RefineStepEntry {
   type: "TAP" | "SEQUENCE" | "CHOICE" | "ORDER";
   state: "DONE" | "OPEN" | "LOCKED" | "MISSED";
   score?: number | null;
+  window_start: string;
+  window_end: string;
 }
 
 export interface RefineActiveStep {

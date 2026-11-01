@@ -160,6 +160,10 @@ func publicSessionView(s *refineSessionRow, now time.Time) gin.H {
 		}
 
 		entry := gin.H{"index": st.I, "type": st.Type, "state": state}
+		// Lịch cố định từ started_at — không phải thông tin bí mật, giúp UI
+		// hiển thị giờ mở từng bước.
+		entry["window_start"] = st.WindowStart
+		entry["window_end"] = st.WindowEnd
 		if done {
 			entry["score"] = res.Score
 		} else {

@@ -29,6 +29,31 @@ function useServerOffset(session: RefineSession | null): number {
   return offsetMs;
 }
 
+// Đồng hồ đếm giây dùng chung (tick 1s/tick) — dùng cho countdown tổng & bước sau.
+function useNowTick(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+function formatDuration(msTotal: number): string {
+  const s = Math.max(0, Math.ceil(msTotal / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+function formatServerClock(serverMs: number, offsetMs: number): string {
+  const d = new Date(serverMs + offsetMs); // hiển thị theo giờ local
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function CountdownBar({ windowEnd, offsetMs, durationMs = 20000 }: { windowEnd: string; offsetMs: number; durationMs?: number }) {
   const [left, setLeft] = useState(0);
   useEffect(() => {
@@ -343,15 +368,30 @@ export function RefineSessionPanel() {
   }, [step, session]);
 
   const stepsForTimeline = useMemo(() => {
-    return (session?.steps || []).map((s) => ({
-      label: `B${s.index} · ${STEP_TYPE_LABEL[s.type] ?? s.type}`,
-      completed: s.state === "DONE",
-    }));
-  }, [session?.steps]);
+    return (session?.steps || []).map((s) => {
+      let timeInfo = "";
+      if (s.state === "LOCKED" && s.window_start) {
+        const openMs = Date.parse(s.window_start);
+        if (!Number.isNaN(openMs)) timeInfo = ` · mở ${formatServerClock(openMs, offsetMs)}`;
+      } else if (s.state === "MISSED") {
+        timeInfo = " · lỡ";
+      } else if (s.state === "OPEN" && s.window_end) {
+        const endMs = Date.parse(s.window_end);
+        if (!Number.isNaN(endMs)) timeInfo = ` · đóng ${formatServerClock(endMs, offsetMs)}`;
+      }
+      return {
+        label: `B${s.index} · ${STEP_TYPE_LABEL[s.type] ?? s.type}${timeInfo}`,
+        completed: s.state === "DONE",
+      };
+    });
+  }, [session?.steps, offsetMs]);
   const currentStepIndex = session?.step?.index ?? (session?.status !== "ACTIVE" ? (session?.steps?.length ?? 0) : 0);
 
   if (!session) return null;
   const finished = session.status !== "ACTIVE";
+  // Đồng hồ hiển thị thời gian — gọi hook TRƯỚC mọi return sớm (rules of hooks).
+  const nowTick = useNowTick(!finished && panelOpen);
+
 
   // ── Result overlay ──
   if (finished && session.result && !session.acknowledged_at) {
@@ -417,6 +457,16 @@ export function RefineSessionPanel() {
             🔥 Phiên Luyện Cổ — R{session.target_rank}
           </div>
           <div className="flex items-center gap-2">
+            {!finished && (() => {
+              const endsMs = Date.parse(session.ends_at);
+              if (Number.isNaN(endsMs)) return null;
+              const remain = endsMs - (nowTick + offsetMs);
+              return (
+                <span className="font-mono text-[11px] text-amber-300/90" title="Thời gian còn lại của cả phiên">
+                  ⏳ {formatDuration(remain)}
+                </span>
+              );
+            })()}
             <button onClick={closeRefinePanel} className="text-zinc-400 hover:text-zinc-200 text-lg leading-none" aria-label="Thu nhỏ">
               −
             </button>
@@ -449,9 +499,22 @@ export function RefineSessionPanel() {
             {step.type === "ORDER" && <OrderGame step={step} onSubmit={(p) => void submit(p)} submitting={submitting} />}
           </div>
         ) : session.next_step_at ? (
-          <div className="text-center text-xs text-zinc-500 py-4">
-            Bước kế tiếp mở sau — phiên đang duy trì hỏa hậu trong lúc đạo hữu làm việc khác.
-          </div>
+          (() => {
+            const openMs = Date.parse(session.next_step_at);
+            const openShown = Number.isNaN(openMs) ? null : formatServerClock(openMs, offsetMs);
+            const left = Number.isNaN(openMs) ? 0 : openMs - (nowTick + offsetMs);
+            return (
+              <div className="text-center text-xs text-zinc-400 py-3 space-y-1">
+                <div className="font-mono text-amber-300/90 text-sm">
+                  Bước kế tiếp mở sau <span className="font-bold">{openMs && left > 0 ? formatDuration(left) : "0:00"}</span>
+                  {openShown && <span className="text-zinc-500"> ({openShown})</span>}
+                </div>
+                <div className="text-zinc-500">
+                  Phiên đang duy trì hỏa hậu trong lúc đạo hữu làm việc khác — lỡ cửa sổ bước nào bước đó tính 0 điểm.
+                </div>
+              </div>
+            );
+          })()
         ) : (
           <div className="text-center text-xs text-zinc-500 py-4">Đang chờ server chốt kết quả…</div>
         )}
