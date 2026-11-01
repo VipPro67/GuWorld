@@ -26,6 +26,9 @@ const (
 	EventSoulBackfire        EventType = "SOUL_BACKFIRE"
 	EventCompanionInjured    EventType = "COMPANION_INJURED"
 	EventCompanionPermadeath EventType = "COMPANION_PERMADEATH"
+	EventTransformationStarted EventType = "TRANSFORMATION_STARTED"
+	EventTransformationEnded   EventType = "TRANSFORMATION_ENDED"
+	EventTransformationBroken  EventType = "TRANSFORMATION_BROKEN"
 )
 
 // Event is emitted by the zone tick owner. IDs are monotonic per zone and are

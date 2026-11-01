@@ -37,9 +37,15 @@ interface ActorView {
   label: Phaser.GameObjects.Text;
   hpBar: Phaser.GameObjects.Graphics;
   shieldBar: Phaser.GameObjects.Graphics;
+  formHpBar?: Phaser.GameObjects.Graphics;
+  auraGlow?: Phaser.GameObjects.Graphics;
   lastHp: number;
   lastMaxHp: number;
   lastShield: number;
+  lastFormHp?: number;
+  lastMaxFormHp?: number;
+  lastModelScale?: number;
+  lastFormActive?: boolean;
   lastEngaged: boolean;
   lastSelected: boolean;
   templateId: string;
@@ -1158,6 +1164,44 @@ export class WorldScene extends Phaser.Scene {
         this.drawShieldBar(actor.shieldBar, entity.maxHp > 0 ? entity.shield / entity.maxHp : 0);
         actor.lastShield = entity.shield;
       }
+
+      // Metamorphosis: Model Scale, Aura Glow & Form HP Layer
+      const transformActive = entity.transformation?.active ?? false;
+      const modelScale = transformActive ? (entity.transformation?.model_scale ?? 1.4) : 1.0;
+      if (modelScale !== actor.lastModelScale) {
+        actor.sprite.setScale(modelScale);
+        actor.lastModelScale = modelScale;
+      }
+
+      if (transformActive !== actor.lastFormActive) {
+        actor.lastFormActive = transformActive;
+        if (transformActive && actor.auraGlow) {
+          const formKind = entity.transformation?.form_kind;
+          const auraColor = formKind === "FULL" ? 0xf97316 : (formKind === "GU_HOUSE" ? 0xeab308 : 0xa855f7);
+          actor.auraGlow.clear();
+          actor.auraGlow.fillStyle(auraColor, 0.35);
+          actor.auraGlow.fillCircle(0, -6, 26 * modelScale);
+          actor.auraGlow.lineStyle(2, auraColor, 0.8);
+          actor.auraGlow.strokeCircle(0, -6, 26 * modelScale);
+          actor.auraGlow.setVisible(true);
+        } else if (actor.auraGlow) {
+          actor.auraGlow.clear();
+          actor.auraGlow.setVisible(false);
+        }
+      }
+
+      const formHp = entity.transformation?.current_form_hp ?? 0;
+      const maxFormHp = entity.transformation?.max_form_hp ?? 0;
+      if (actor.formHpBar) {
+        if (transformActive && formHp > 0 && maxFormHp > 0) {
+          actor.formHpBar.setVisible(true);
+          const formHpRatio = Math.max(0, Math.min(1, formHp / maxFormHp));
+          this.drawFormHpBar(actor.formHpBar, formHpRatio);
+        } else {
+          actor.formHpBar.clear();
+          actor.formHpBar.setVisible(false);
+        }
+      }
     }
     for (const [id, actor] of this.actors) {
       if (seen.has(id)) continue;
@@ -1185,9 +1229,11 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
     const hpBar = this.add.graphics();
     const shieldBar = this.add.graphics();
-    const container = this.add.container(x, y, [sprite, label, hpBar, shieldBar]);
+    const formHpBar = this.add.graphics();
+    const auraGlow = this.add.graphics();
+    const container = this.add.container(x, y, [auraGlow, sprite, label, hpBar, shieldBar, formHpBar]);
     const actor: ActorView = {
-      container, sprite, animator, label, hpBar, shieldBar, lastHp: -1, lastMaxHp: -1, lastShield: -1, lastEngaged: false, lastSelected: false, templateId: "",
+      container, sprite, animator, label, hpBar, shieldBar, formHpBar, auraGlow, lastHp: -1, lastMaxHp: -1, lastShield: -1, lastEngaged: false, lastSelected: false, templateId: "",
       lastX: x, lastY: y, castUntil: 0, hitUntil: 0, ghostHpRatio: 1,
     };
     this.drawHpBar(hpBar, 1, 1, false, false);
@@ -1247,6 +1293,16 @@ export class WorldScene extends Phaser.Scene {
     graphics.fillRoundedRect(-HP_BAR_WIDTH / 2 - 1, -58, HP_BAR_WIDTH + 2, 5, 2);
     graphics.fillStyle(0x38bdf8, 1);
     graphics.fillRoundedRect(-HP_BAR_WIDTH / 2, -57, HP_BAR_WIDTH * value, 3, 1);
+  }
+
+  private drawFormHpBar(graphics: Phaser.GameObjects.Graphics, ratio: number): void {
+    const value = Math.max(0, Math.min(1, ratio));
+    graphics.clear();
+    if (value <= 0) return;
+    graphics.fillStyle(0x3b0764, 0.9);
+    graphics.fillRoundedRect(-HP_BAR_WIDTH / 2 - 1, -73, HP_BAR_WIDTH + 2, 5, 2);
+    graphics.fillStyle(0xa855f7, 1);
+    graphics.fillRoundedRect(-HP_BAR_WIDTH / 2, -72, HP_BAR_WIDTH * value, 3, 1);
   }
 
   private syncCamera(): void {

@@ -1019,9 +1019,22 @@ func (c *Client) sendWorldEvents(events []combat.Event, generation uint64) {
 func protocolEntityState(entity sim.Entity) protocol.EntityState {
 	state := protocol.EntityState{
 		EntityID: string(entity.ID), Revision: entity.Revision, Kind: string(entity.Kind), PartyID: entity.PartyID,
-		PvPEnabled: entity.PvPEnabled,
+		PvPEnabled: entity.PvPEnabled, Radius: entity.Radius,
 		X:          entity.Transform.Position.X, Y: entity.Transform.Position.Y,
 		HP: entity.Vitals.HP, MaxHP: entity.Vitals.MaxHP, Shield: entity.Vitals.Shield,
+	}
+	if entity.Transformation.Active || entity.Transformation.IsWindup {
+		state.Transformation = &protocol.TransformationState{
+			Active:          entity.Transformation.Active,
+			FormID:          entity.Transformation.FormID,
+			FormName:        entity.Transformation.FormName,
+			FormKind:        string(entity.Transformation.FormKind),
+			ModelScale:      entity.Transformation.ModelScale,
+			CollisionRadius: entity.Radius,
+			MaxFormHP:       entity.Transformation.MaxFormHP,
+			CurrentFormHP:   entity.Transformation.CurrentFormHP,
+			IsWindup:        entity.Transformation.IsWindup,
+		}
 	}
 	if entity.Kind == sim.EntityMonster {
 		state.TemplateID = entity.AI.TemplateID

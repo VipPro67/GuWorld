@@ -24,12 +24,14 @@ type CombatLoadoutSnapshot struct {
 	KillerMoves []RealtimeKillerMove
 }
 
-// LoadCombatLoadout reads the hotbar order and the stored 9-12 pins, then
-// compiles both into one snapshot. `hotbarOrder` is the players.equipped_gus
-// JSONB read by the caller's character query; the skill loadout column is
+// LoadCombatLoadout reads the hotbar composition and the stored 9-12 pins,
+// then compiles both into one snapshot. `hotbarOrder` is the
+// players.equipped_gus JSONB read by the caller's character query (equipped
+// fallback order), `hotbarSetting` is the explicit players.realtime_hotbar
+// assignment (slot pins, "" = empty slot). The skill loadout column is
 // interpreted inside the module.
-func LoadCombatLoadout(ctx context.Context, q combatLoadoutQueryer, playerID uuid.UUID, hotbarOrder models.EquippedGusList) (CombatLoadoutSnapshot, error) {
-	equipped, err := loadRealtimeEquipped(ctx, q, playerID, hotbarOrder)
+func LoadCombatLoadout(ctx context.Context, q combatLoadoutQueryer, playerID uuid.UUID, hotbarOrder models.EquippedGusList, hotbarSetting models.RealtimeHotbarList) (CombatLoadoutSnapshot, error) {
+	equipped, err := loadRealtimeEquipped(ctx, q, playerID, hotbarOrder, hotbarSetting)
 	if err != nil {
 		return CombatLoadoutSnapshot{}, err
 	}

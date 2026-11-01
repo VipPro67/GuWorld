@@ -66,6 +66,12 @@ func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillI
 	}
 	remaining *= 1 - target.PathResistance[gamefx.CleanPath(path)]
 	remaining = math.Max(1, remaining)
+
+	// Route through Form HP Layer and Form Damage Reduction if metamorphosis is active
+	if target.Transformation.Active {
+		remaining = w.applyFormDamageLocked(target, remaining)
+	}
+
 	totalDamage := remaining
 	shieldAbsorbed := 0.0
 	if target.Vitals.Shield > 0 {

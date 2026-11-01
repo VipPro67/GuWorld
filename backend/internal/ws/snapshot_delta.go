@@ -175,8 +175,25 @@ func entityStateEqual(a, b protocol.EntityState) bool {
 		a.CastWindup != b.CastWindup ||
 		a.FormActive != b.FormActive ||
 		a.Stealthed != b.Stealthed ||
-		a.Flying != b.Flying {
+		a.Flying != b.Flying ||
+		a.Radius != b.Radius {
 		return false
+	}
+	if (a.Transformation == nil) != (b.Transformation == nil) {
+		return false
+	}
+	if a.Transformation != nil && b.Transformation != nil {
+		at, bt := a.Transformation, b.Transformation
+		if at.Active != bt.Active ||
+			at.FormID != bt.FormID ||
+			at.FormKind != bt.FormKind ||
+			at.ModelScale != bt.ModelScale ||
+			at.CollisionRadius != bt.CollisionRadius ||
+			at.MaxFormHP != bt.MaxFormHP ||
+			at.CurrentFormHP != bt.CurrentFormHP ||
+			at.IsWindup != bt.IsWindup {
+			return false
+		}
 	}
 	if len(a.Statuses) != len(b.Statuses) {
 		return false

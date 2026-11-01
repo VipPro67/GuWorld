@@ -131,6 +131,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	}
 	var state RealtimeJoinState
 	var equippedOrder models.EquippedGusList
+	var hotbarSetting models.RealtimeHotbarList
 	var combatSettings models.AutoCombatConfig
 	var regionType string
 	err := db.DB.QueryRowContext(ctx, `
@@ -140,6 +141,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 			p.world_x, p.world_y, p.world_safe_x, p.world_safe_y,
 			p.world_instance_id, p.world_location_revision, p.world_zone_id <> '', p.hp, p.base_hp,
 			p.needs_onboarding, COALESCE(p.party_id::text, ''), COALESCE(p.equipped_gus, '[]'::jsonb),
+			COALESCE(p.realtime_hotbar, '[]'::jsonb),
 			COALESCE(p.username, ''), COALESCE(p.combat_settings, '{}'::jsonb)
 		FROM players p
 		LEFT JOIN region_world_maps rwm ON rwm.region_id = p.current_region
@@ -150,6 +152,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		&state.WorldX, &state.WorldY, &state.WorldSafeX, &state.WorldSafeY,
 		&state.WorldInstanceID, &state.WorldLocationRevision, &state.HasWorldLocation,
 		&state.HP, &state.BaseHP, &state.NeedsOnboarding, &state.PartyID, &equippedOrder,
+		&hotbarSetting,
 		&state.Username, &combatSettings,
 	)
 	if err != nil {
@@ -172,7 +175,7 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 	if err != nil {
 		return RealtimeJoinState{}, err
 	}
-	loadout, err := LoadCombatLoadout(ctx, tx, playerID, equippedOrder)
+	loadout, err := LoadCombatLoadout(ctx, tx, playerID, equippedOrder, hotbarSetting)
 	if err != nil {
 		return RealtimeJoinState{}, err
 	}
@@ -339,47 +342,140 @@ func realtimeMapID(regionID, zoneType, assignedMapID string) string {
 	return "world_map"
 }
 
+// realtimeGuRow is one player_gu row relevant to hotbar composition.
+type realtimeGuRow struct {
+	entry RealtimeEquippedGu
+	// valid means equipped + ACTIVE + alive durability: this Gu may occupy a
+	// hotbar slot right now.
+	valid bool
+}
+
+// HotbarSlots is the number of realtime hotbar slots (1..6). Aliased to the
+// effects compiler constant so REST validation, loadout composition and the
+// gateway share one limit.
+const HotbarSlots = realtimeeffects.MaxHotbarSlots
+
+// orderRealtimeHotbar composes the hotbar slot entries with the explicit
+// realtime_hotbar assignment:
+//   - a pinned slot keeps its static position. A pin on an owned Gu keeps the
+//     slot reserved while the Gu is invalid (sleeping, damaged, unequipped) so
+//     that the Gu reclaims its slot automatically; a pin on a Gu the player no
+//     longer owns is released and the slot becomes fillable;
+//   - Gu not pinned anywhere (equipped + ACTIVE + valid) fill the remaining
+//     slots in hotbarOrder order, then any leftover valid ids by instance id;
+//   - the result never exceeds HotbarSlots entries and trailing unoccupied
+//     slots are trimmed. Interior unoccupied slots stay as zero placeholders
+//     so later pinned slots are never renumbered.
+//
+// Invalid entries (reserved pins) are carried as ID-only placeholders (empty
+// GU) so the compiler neither resolves a profile nor leaks form skills from a
+// Gu that currently cannot act.
+func orderRealtimeHotbar(hotbar models.RealtimeHotbarList, order models.EquippedGusList, gus map[string]realtimeGuRow) []RealtimeEquippedGu {
+	slots := make([]RealtimeEquippedGu, HotbarSlots)
+	occupied := make([]bool, HotbarSlots)
+	consumed := make(map[string]bool, len(gus))
+	for i := 0; i < len(hotbar) && i < HotbarSlots; i++ {
+		id := hotbar[i]
+		if id == "" || consumed[id] {
+			continue
+		}
+		row, ok := gus[id]
+		if !ok {
+			// Gu no longer belongs to the player: drop the pin.
+			continue
+		}
+		consumed[id] = true
+		occupied[i] = true
+		if row.valid {
+			slots[i] = row.entry
+		} else {
+			// Reserved but currently unable to act: keep the slot static with
+			// an ID-only placeholder the resolver will treat as unsupported.
+			slots[i] = RealtimeEquippedGu{InstanceID: id}
+		}
+	}
+
+	remaining := make([]RealtimeEquippedGu, 0, len(gus))
+	for _, id := range order {
+		if len(remaining) >= HotbarSlots {
+			break
+		}
+		if consumed[id] {
+			continue
+		}
+		row, ok := gus[id]
+		if !ok || !row.valid {
+			continue
+		}
+		consumed[id] = true
+		remaining = append(remaining, row.entry)
+	}
+	leftover := make([]string, 0, len(gus))
+	for id, row := range gus {
+		if !consumed[id] && row.valid {
+			leftover = append(leftover, id)
+		}
+	}
+	sort.Strings(leftover)
+	for _, id := range leftover {
+		if len(remaining) >= HotbarSlots {
+			break
+		}
+		remaining = append(remaining, gus[id].entry)
+	}
+
+	next := 0
+	for i := range slots {
+		if occupied[i] {
+			continue
+		}
+		if next >= len(remaining) {
+			break
+		}
+		slots[i] = remaining[next]
+		occupied[i] = true
+		next++
+	}
+
+	// Trim only trailing unoccupied slots so interior holes never renumber the
+	// pinned slots that follow them.
+	last := -1
+	for i := range slots {
+		if occupied[i] {
+			last = i
+		}
+	}
+	return slots[:last+1]
+}
+
 func loadRealtimeEquipped(ctx context.Context, queryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}, playerID uuid.UUID, order models.EquippedGusList) ([]RealtimeEquippedGu, error) {
+}, playerID uuid.UUID, order models.EquippedGusList, hotbar models.RealtimeHotbarList) ([]RealtimeEquippedGu, error) {
 	rows, err := queryer.QueryContext(ctx, `
-			SELECT id, gu_id, COALESCE(NULLIF(gu_rank, 0), rank, 1), hunger
+		SELECT id, gu_id, COALESCE(NULLIF(gu_rank, 0), rank, 1), hunger, equipped, state, durability
 		FROM player_gu
-		WHERE player_id = $1 AND equipped = true AND state = 'ACTIVE' AND durability > 0
+		WHERE player_id = $1
 	`, playerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	byID := map[string]RealtimeEquippedGu{}
+	gus := make(map[string]realtimeGuRow)
 	for rows.Next() {
 		var entry RealtimeEquippedGu
-		if err := rows.Scan(&entry.InstanceID, &entry.GuID, &entry.Rank, &entry.Hunger); err != nil {
+		var equipped bool
+		var state string
+		var durability float64
+		if err := rows.Scan(&entry.InstanceID, &entry.GuID, &entry.Rank, &entry.Hunger, &equipped, &state, &durability); err != nil {
 			return nil, err
 		}
-		byID[entry.InstanceID] = entry
+		gus[entry.InstanceID] = realtimeGuRow{
+			entry: entry,
+			valid: equipped && state == "ACTIVE" && durability > 0,
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	ordered := make([]RealtimeEquippedGu, 0, len(byID))
-	seen := map[string]bool{}
-	for _, instanceID := range order {
-		if entry, ok := byID[instanceID]; ok && !seen[instanceID] {
-			ordered = append(ordered, entry)
-			seen[instanceID] = true
-		}
-	}
-	remaining := make([]RealtimeEquippedGu, 0, len(byID)-len(ordered))
-	for instanceID, entry := range byID {
-		if !seen[instanceID] {
-			remaining = append(remaining, entry)
-		}
-	}
-	sort.Slice(remaining, func(i, j int) bool { return remaining[i].InstanceID < remaining[j].InstanceID })
-	ordered = append(ordered, remaining...)
-	if len(ordered) > 6 {
-		ordered = ordered[:6]
-	}
-	return ordered, nil
+	return orderRealtimeHotbar(hotbar, order, gus), nil
 }

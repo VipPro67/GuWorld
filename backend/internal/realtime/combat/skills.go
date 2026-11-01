@@ -121,6 +121,12 @@ type Skill struct {
 	IsToggle             bool          `json:"is_toggle,omitempty"`
 	FormActivation       bool          `json:"form_activation,omitempty"`
 	FormAbility          bool          `json:"form_ability,omitempty"`
+	FormID               string        `json:"form_id,omitempty"`
+	FormKind             string        `json:"form_kind,omitempty"`
+	FormModelScale       float64       `json:"form_model_scale,omitempty"`
+	FormCollisionRadius  float64       `json:"form_collision_radius,omitempty"`
+	FormMaxHP            float64       `json:"form_max_hp,omitempty"`
+	FormDamageReduction  float64       `json:"form_damage_reduction,omitempty"`
 	FormManaDrainPerTick float64       `json:"form_mana_drain_per_tick,omitempty"`
 	FormDefenseBonus     float64       `json:"form_defense_bonus,omitempty"`
 	MoveDistance         float64       `json:"move_distance,omitempty"`
@@ -237,7 +243,7 @@ func (skill Skill) Valid() bool {
 	case ModeGround:
 		return skill.Range > 0 && (skill.Radius > 0 || skill.MoveDistance > 0) && skill.Damage >= 0
 	case ModeSelf:
-		return skill.Shield >= 0 && skill.Heal >= 0 && (skill.Shield > 0 || skill.Heal > 0 || skill.StatusID != "" || skill.Cleanse || skill.MoveDistance > 0)
+		return skill.Shield >= 0 && skill.Heal >= 0 && (skill.Shield > 0 || skill.Heal > 0 || skill.StatusID != "" || skill.Cleanse || skill.MoveDistance > 0 || skill.ID == "REVERT_METAMORPHOSIS" || skill.FormActivation)
 	default:
 		return false
 	}

@@ -203,8 +203,23 @@ type EntityState struct {
 	CastWindup    uint64   `json:"cast_windup_ticks,omitempty"`
 	FormActive    bool     `json:"form_active,omitempty"`
 	Statuses      []string `json:"statuses,omitempty"`
-	Stealthed     bool     `json:"stealthed,omitempty"`
-	Flying        bool     `json:"flying,omitempty"`
+	Stealthed     bool                 `json:"stealthed,omitempty"`
+	Flying        bool                 `json:"flying,omitempty"`
+	Radius        float64              `json:"radius,omitempty"`
+	Transformation *TransformationState `json:"transformation,omitempty"`
+}
+
+type TransformationState struct {
+	Active          bool    `json:"active"`
+	FormID          string  `json:"form_id,omitempty"`
+	FormName        string  `json:"form_name,omitempty"`
+	FormKind        string  `json:"form_kind,omitempty"`
+	ModelScale      float64 `json:"model_scale,omitempty"`
+	CollisionRadius float64 `json:"collision_radius,omitempty"`
+	MaxFormHP       float64 `json:"max_form_hp,omitempty"`
+	CurrentFormHP   float64 `json:"current_form_hp,omitempty"`
+	IsWindup        bool    `json:"is_windup,omitempty"`
+	WindupProgress  float64 `json:"windup_progress,omitempty"`
 }
 
 type Snapshot struct {

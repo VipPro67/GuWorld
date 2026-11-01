@@ -47,10 +47,56 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		caster.Combat.RecoveryPolicy = skill.MovementPolicy
 	}
 	if skill.FormActivation {
-		caster.Combat.FormActive = true
-		caster.Combat.FormManaDrainPerTick = skill.FormManaDrainPerTick
-		caster.Combat.FormDefenseBonus = skill.FormDefenseBonus
-		caster.Revision++
+		formID := skill.FormID
+		if formID == "" {
+			formID = skill.ID
+		}
+		rec, found := GetTransformationForm(formID)
+		formKind := TransformationFull
+		if skill.FormKind != "" {
+			formKind = TransformationKind(skill.FormKind)
+		} else if found {
+			formKind = rec.FormKind
+		}
+		modelScale := 1.5
+		radiusMult := 1.4
+		maxHP := 150.0
+		formDefense := skill.FormDefenseBonus
+		damageRed := 0.15
+		manaUpkeepSec := skill.FormManaDrainPerTick * float64(TickRate)
+		if found {
+			modelScale = rec.ModelScale
+			radiusMult = rec.CollisionRadiusMult
+			maxHP = rec.MaxFormHP
+			formDefense = rec.FormDefense
+			damageRed = rec.DamageReduction
+			manaUpkeepSec = rec.ManaUpkeepSec
+		}
+		if skill.FormModelScale > 0 {
+			modelScale = skill.FormModelScale
+		}
+		if skill.FormCollisionRadius > 0 {
+			radiusMult = skill.FormCollisionRadius
+		}
+		if skill.FormMaxHP > 0 {
+			maxHP = skill.FormMaxHP
+		}
+		if skill.FormDamageReduction > 0 {
+			damageRed = skill.FormDamageReduction
+		}
+
+		req := FormActivationRequest{
+			FormID:              formID,
+			FormName:            skill.Name,
+			FormKind:            formKind,
+			ModelScale:          modelScale,
+			CollisionRadiusMult: radiusMult,
+			MaxFormHP:           maxHP,
+			FormDefenseBonus:    formDefense,
+			DamageReduction:     damageRed,
+			ManaUpkeepPerSecond: manaUpkeepSec,
+		}
+		w.completeTransformationLocked(caster, req)
 		return
 	}
 	if skill.MoveDistance > 0 {

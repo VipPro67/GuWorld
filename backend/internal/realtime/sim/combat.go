@@ -285,6 +285,12 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 		reject("silenced")
 		return
 	}
+	if caster.Transformation.Active && caster.Transformation.FormKind == TransformationFull {
+		if command.Slot > 6 {
+			reject("form_skill_locked")
+			return
+		}
+	}
 	skill := caster.Combat.Skills[command.Slot]
 	if skill.ID == "" || !skill.Valid() {
 		reject("unknown_skill")
@@ -298,14 +304,11 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 		reject("wrong_target_mode")
 		return
 	}
-	if skill.FormActivation && caster.Combat.FormActive {
-		caster.Combat.FormActive = false
-		caster.Combat.FormManaDrainPerTick = 0
-		caster.Combat.FormDefenseBonus = 0
-		caster.Revision++
+	if skill.ID == "REVERT_METAMORPHOSIS" || (skill.FormActivation && (caster.Combat.FormActive || caster.Transformation.Active)) {
+		w.revertTransformationLocked(caster, "manual_revert", false)
 		return
 	}
-	if skill.FormAbility && !caster.Combat.FormActive {
+	if skill.FormAbility && !caster.Combat.FormActive && !caster.Transformation.Active {
 		reject("form_inactive")
 		return
 	}
@@ -440,7 +443,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 func (w *World) tickCombat() {
 	w.decayShieldsLocked()
 	for _, entity := range w.entities {
-		if entity.Kind != EntityPlayer || !entity.Combat.FormActive || entity.Vitals.HP <= 0 {
+		if entity.Kind != EntityPlayer || !entity.Combat.FormActive || entity.Vitals.HP <= 0 || entity.Transformation.Active {
 			continue
 		}
 		drain := entity.Combat.FormManaDrainPerTick

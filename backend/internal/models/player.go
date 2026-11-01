@@ -395,6 +395,36 @@ func (g GrowthData) Value() (driver.Value, error) {
 type EquippedGusList []string
 type ClearedCellsMap map[string]string
 
+// RealtimeHotbarList stores the player's explicit realtime hotbar assignment.
+// Index 0..5 maps to hotbar slot 1..6; an empty string means the slot is empty
+// (kept empty on purpose) or reserved by a temporarily invalid Gu.
+type RealtimeHotbarList []string
+
+// Scan implements the sql.Scanner interface for RealtimeHotbarList
+func (h *RealtimeHotbarList) Scan(value interface{}) error {
+	if value == nil {
+		*h = RealtimeHotbarList{}
+		return nil
+	}
+	bytes, ok := scanBytes(value)
+	if !ok {
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
+	}
+	return json.Unmarshal(bytes, h)
+}
+
+// Value implements the driver.Valuer interface for RealtimeHotbarList
+func (h RealtimeHotbarList) Value() (driver.Value, error) {
+	if h == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(h)
+	if err != nil {
+		return "[]", err
+	}
+	return string(b), nil
+}
+
 // Scan implements the sql.Scanner interface for EquippedGusList
 func (e *EquippedGusList) Scan(value interface{}) error {
 	if value == nil {

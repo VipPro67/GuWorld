@@ -20,8 +20,11 @@ type realtimeHotbarRequest struct {
 	GuInstanceIDs []string `json:"gu_instance_ids"`
 }
 
-// UpdateRealtimeHotbarOrder assigns each equipped ACTIVE Gu to a hotbar number
-// by saving its order in players.equipped_gus. It does not equip or unequip Gu.
+// UpdateRealtimeHotbarOrder assigns each equipped ACTIVE Gu to a hotbar number.
+// The explicit assignment (slot pins, "" = empty slot) is saved to
+// players.realtime_hotbar; players.equipped_gus keeps its derived order so the
+// Aperture equipped list and hotbar stay consistent. It does not equip or
+// unequip Gu.
 func UpdateRealtimeHotbarOrder(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
@@ -36,6 +39,21 @@ func UpdateRealtimeHotbarOrder(c *gin.Context) {
 	if err := c.ShouldBindJSON(&request); err != nil || len(request.GuInstanceIDs) > maxRealtimeHotbarSlots {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chọn tối đa 6 Cổ trùng cho hotbar realtime"})
 		return
+	}
+	// Trim trailing empty slots: ["a", "", ""] means only slot 1 is pinned.
+	hotbar := make(models.RealtimeHotbarList, 0, len(request.GuInstanceIDs))
+	lastPinned := -1
+	for i, id := range request.GuInstanceIDs {
+		if i >= maxRealtimeHotbarSlots {
+			break
+		}
+		hotbar = append(hotbar, id)
+		if id != "" {
+			lastPinned = i
+		}
+	}
+	if len(hotbar) > lastPinned+1 {
+		hotbar = hotbar[:lastPinned+1]
 	}
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
@@ -79,7 +97,7 @@ func UpdateRealtimeHotbarOrder(c *gin.Context) {
 	}
 	rows.Close()
 
-	ordered, err := validateRealtimeHotbarOrder(request.GuInstanceIDs, active, currentOrder)
+	ordered, err := validateRealtimeHotbarOrder(hotbar, active, currentOrder)
 	if err != nil {
 		message := "Thứ tự hotbar không hợp lệ"
 		switch {
@@ -89,6 +107,8 @@ func UpdateRealtimeHotbarOrder(c *gin.Context) {
 			message = "Chỉ có thể gán Cổ đang trang bị và hoạt động"
 		case errors.Is(err, errHotbarDuplicateGu):
 			message = "Mỗi Cổ chỉ được gán vào một nút"
+		case errors.Is(err, errHotbarInvalidEquippedSet):
+			message = "Dữ liệu Cổ đang trang bị không hợp lệ"
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": message})
 		return
@@ -98,7 +118,14 @@ func UpdateRealtimeHotbarOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thứ tự hotbar"})
 		return
 	}
-	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET equipped_gus = $1::jsonb WHERE id = $2`, encoded, playerID); err != nil {
+	hotbarEncoded, err := hotbar.Value()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thứ tự hotbar"})
+		return
+	}
+	if _, err := tx.ExecContext(c.Request.Context(),
+		`UPDATE players SET equipped_gus = $1::jsonb, realtime_hotbar = $2::jsonb WHERE id = $3`,
+		encoded, hotbarEncoded, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thứ tự hotbar"})
 		return
 	}
@@ -106,11 +133,18 @@ func UpdateRealtimeHotbarOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận thứ tự hotbar"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"equipped_gus": ordered, "message": "Đã gán Cổ trùng vào hotbar realtime"})
+	c.JSON(http.StatusOK, gin.H{"equipped_gus": ordered, "hotbar_gus": hotbar, "message": "Đã gán Cổ trùng vào hotbar realtime"})
 }
 
 func validateRealtimeHotbarOrder(requested, equipped, currentOrder []string) ([]string, error) {
-	if len(requested) > len(equipped) || len(requested) > maxRealtimeHotbarSlots {
+	// Deliberate empty slots ("") do not consume equipped capacity.
+	pinned := make([]string, 0, len(requested))
+	for _, id := range requested {
+		if id != "" {
+			pinned = append(pinned, id)
+		}
+	}
+	if len(pinned) > len(equipped) || len(pinned) > maxRealtimeHotbarSlots {
 		return nil, errHotbarTooManySlots
 	}
 	allowed := make(map[string]struct{}, len(equipped))
@@ -123,6 +157,10 @@ func validateRealtimeHotbarOrder(requested, equipped, currentOrder []string) ([]
 	seen := make(map[string]struct{}, len(requested))
 	ordered := make([]string, 0, len(equipped))
 	for _, id := range requested {
+		if id == "" {
+			// Empty slot: a deliberate hole in the pinned hotbar layout.
+			continue
+		}
 		if _, ok := allowed[id]; !ok {
 			return nil, errHotbarContainsUnequippedGu
 		}

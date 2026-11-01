@@ -1,5 +1,19 @@
 # Game Data
 
+## Transformation Forms (Từ điển Hình Thái Biến Thân)
+
+Bảng từ điển dữ liệu hình thái `TransformationForm.csv` lưu trữ định nghĩa các trạng thái biến thân cho Biến Hóa Đạo (Biến thân bộ phận, Biến thân toàn phần, Dung nhập Tiên Cổ Phòng) được nạp trực tiếp vào Zone Sim 20Hz:
+
+- **Key (FormID)**: Mã định danh hình thái (vd: `FORM_FLAME_BEAR`, `FORM_SIX_ARM_ICE_DEMON`, `FORM_RECKLESS_SAVAGE`, `FORM_WOLF_PARTIAL`, `FORM_TURTLE_PARTIAL`).
+- **FormKind**: Phân loại mức độ biến thân:
+  - `PARTIAL`: Biến thân bộ phận (vuốt, cánh, vảy, mai rùa) giữ nguyên skill bar, tăng cường đòn đánh thường và chỉ số.
+  - `FULL`: Biến thân toàn phần (hóa thú, ma thần) hoán đổi toàn bộ 6 slot kỹ năng (Slot 6: Giải trừ biến thân), khóa các chiêu thức nhân tộc ngoài dạng thú (`form_skill_locked`).
+  - `GU_HOUSE`: Dung nhập Tiên Cổ Phòng, hấp thu 100% sát thương bảo hộ người lái, trang bị bộ Trận Kích chuyên biệt.
+- **ModelScale & CollisionRadiusMult**: Tỉ lệ phóng to hình ảnh thực thể và bán kính va chạm (`entity.Radius = OriginalRadius * CollisionRadiusMult`).
+- **MaxFormHP & DamageReduction**: Lớp máu bảo hộ Form HP và tỉ lệ giảm sát thương. Nhận sát thương trước HP thực; khi Form HP cạn kiệt sẽ kích hoạt `Form Broken`, tràn sát thương thừa vào HP thực và dính debuff `EXHAUSTION` (-30% tốc độ trong 5s).
+- **ManaUpkeepSec**: Tiêu hao chân nguyên/tiên nguyên duy trì mỗi giây (`Upkeep.ManaPerTick = ManaUpkeepSec / 20`). Khi cạn kiệt mana, tự động giải trừ và nhận debuff kiệt sức.
+- **SkillsJSON**: Cấu hình các kỹ năng thay thế cho dạng biến thân toàn phần (hoán đổi slot 1..6).
+
 ## MMO player location
 
 The `players` row owns durable location. `current_region` is the logical
@@ -10,6 +24,22 @@ legacy projection for older gameplay handlers. `player_world_state_v2` stores
 only HP/shield and map/content versions. Existing databases require the
 explicit maintenance script `backend/scripts/migrate_player_world_location.sql`;
 it is not run during startup. See `docs/mmo/recovery.md`.
+
+## Realtime hotbar (Ô 1–6)
+
+`players.realtime_hotbar` is the explicit hotbar setting: an ordered JSONB
+array (max 6) of armed Gu instance ids assigned by the player via
+`POST /api/inventory/realtime-hotbar`; index 0–5 maps to hotbar ô 1–6 and `""`
+is a deliberate empty slot. Pins survive equip/unequip churn: while a pinned
+Gu is temporarily invalid (sleeping/sealed/damaged/unequipped) its slot stays
+empty (reserved), and the Gu reclaims it on revalidation; a pin whose instance
+no longer belongs to the player is released and the slot becomes fillable.
+Unpinned equipped+ACTIVE Gu fill empty slots in `players.equipped_gus` order.
+Composition lives in `handlers/realtime_join_state.go`
+(`orderRealtimeHotbar`, pure + tested), consumed by
+`LoadCombatLoadout` → gateway admission → `world.welcome` skills. The save
+endpoint also keeps `players.equipped_gus` ordered = pinned-first so the
+Aperture equipped list matches the hotbar.
 
 ## Realtime skill loadout
 

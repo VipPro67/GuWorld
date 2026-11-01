@@ -340,6 +340,9 @@ func NewWorldForKeyWithCollisionAndSeed(key ZoneKey, queueSize int, collision Co
 		lifecycleInbox: make(chan lifecycleCommand, queueSize),
 		rng:            rand.New(rand.NewSource(seed)),
 	}
+	if CountTransformationForms() == 0 {
+		_ = LoadTransformationForms("")
+	}
 	w.publish()
 	return w, nil
 }
@@ -707,6 +710,7 @@ func (w *World) Step() Snapshot {
 	w.stepMonsterAI()
 	w.stepCompanionAI()
 	w.tickCombat()
+	w.tickTransformationLocked()
 	w.tickTribulationHazardsLocked()
 
 	for _, entity := range w.entities {

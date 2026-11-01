@@ -65,3 +65,27 @@ func TestValidateRealtimeHotbarOrderKeepsSavedAssignedSlots(t *testing.T) {
 		t.Fatalf("stale id must be pruned, got %v", got)
 	}
 }
+
+// TestValidateRealtimeHotbarOrderAllowsEmptySlots pins the hole semantics:
+// deliberate "" slots do not consume equipped capacity, so a layout such as
+// [a, "", b] with only two equipped Gu is valid.
+func TestValidateRealtimeHotbarOrderAllowsEmptySlots(t *testing.T) {
+	got, err := validateRealtimeHotbarOrder(
+		[]string{"gu-a", "", "gu-b"}, []string{"gu-a", "gu-b"}, []string{"gu-a", "gu-b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"gu-a", "gu-b"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("order=%v, want %v", got, want)
+	}
+
+	// All-empty (cleared) layout is also valid.
+	got, err = validateRealtimeHotbarOrder([]string{""}, []string{"gu-a"}, []string{"gu-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, []string{"gu-a"}) {
+		t.Fatalf("cleared layout must keep equipped set, got %v", got)
+	}
+}

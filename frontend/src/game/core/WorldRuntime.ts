@@ -14,6 +14,7 @@ import type {
   WorldSkillInfo,
   WorldTransferPayload,
   WorldWelcomePayload,
+  WorldTransformationState,
 } from "../network/Protocol.ts";
 import { WORLD_COOLDOWN_SLOTS } from "../network/Protocol.ts";
 import { SelfPredictor } from "../network/Prediction.ts";
@@ -56,6 +57,7 @@ export interface RuntimeEntity {
   stealthed?: boolean;
   flying?: boolean;
   formActive?: boolean;
+  transformation?: WorldTransformationState;
   statuses?: string[];
   ownerId?: string;
   companionKind?: string;
@@ -400,6 +402,7 @@ export class WorldRuntime {
         stealthed: entity.stealthed,
         flying: entity.flying,
         formActive: entity.form_active,
+        transformation: entity.transformation,
         statuses: entity.statuses,
         ownerId: entity.owner_id,
         companionKind: entity.companion_kind,

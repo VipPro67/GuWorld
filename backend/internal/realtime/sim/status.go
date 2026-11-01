@@ -135,6 +135,9 @@ func (w *World) applyStatusLocked(source, target *Entity, skill combat.Skill) {
 			w.emitEvent(combat.Event{Type: combat.EventCastInterrupted, SourceID: string(sourceID), TargetID: string(target.ID), SkillID: interrupted, Reason: "hard_cc"})
 		}
 	}
+	if target.Transformation.IsWindup && w.isStunned(target) {
+		w.interruptTransformationLocked(target, skill.StatusID)
+	}
 }
 
 func (w *World) tickStatuses() {

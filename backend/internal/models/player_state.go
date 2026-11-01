@@ -341,14 +341,16 @@ func (s SocialState) Apply(p *Player) {
 
 // CombatConfig groups combat equipment and realtime combat controls.
 type CombatConfig struct {
-	EquippedGus    EquippedGusList  `json:"equipped_gus"`
-	CombatSettings AutoCombatConfig `json:"combat_settings"`
+	EquippedGus    EquippedGusList     `json:"equipped_gus"`
+	HotbarGus      RealtimeHotbarList  `json:"hotbar_gus,omitempty"`
+	CombatSettings AutoCombatConfig    `json:"combat_settings"`
 }
 
 // NewCombatConfig extracts combat config from a Player.
 func NewCombatConfig(p *Player) CombatConfig {
 	return CombatConfig{
 		EquippedGus:    p.EquippedGus,
+		HotbarGus:      p.HotbarGus,
 		CombatSettings: p.CombatSettings,
 	}
 }
@@ -356,5 +358,6 @@ func NewCombatConfig(p *Player) CombatConfig {
 // Apply writes combat config fields back to a Player.
 func (s CombatConfig) Apply(p *Player) {
 	p.EquippedGus = s.EquippedGus
+	p.HotbarGus = s.HotbarGus
 	p.CombatSettings = s.CombatSettings
 }

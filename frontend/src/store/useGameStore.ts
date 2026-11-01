@@ -230,6 +230,7 @@ export interface Player {
   x: number;
   y: number;
   equipped_gus: string[];
+  hotbar_gus?: string[];
   cleared_cells: Record<string, string>;
   visited_subzones?: string[];
   last_mana_update: string;

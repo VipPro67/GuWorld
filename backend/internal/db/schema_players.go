@@ -56,6 +56,7 @@ func schemaPlayers() error {
 		combat_settings JSONB NOT NULL DEFAULT '{}',
 		realtime_skill_loadout JSONB NOT NULL DEFAULT '[]'::jsonb,
 		realtime_skill_loadout_configured BOOLEAN NOT NULL DEFAULT false,
+		realtime_hotbar JSONB NOT NULL DEFAULT '[]'::jsonb,
 		immortal_state JSONB NOT NULL DEFAULT '{}',
 		last_mana_update TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		last_hunger_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -123,6 +124,10 @@ func schemaPlayers() error {
 	}
 	if err := execSchema("players_realtime_skill_loadout_configured", `
 	ALTER TABLE players ADD COLUMN IF NOT EXISTS realtime_skill_loadout_configured BOOLEAN NOT NULL DEFAULT false;`); err != nil {
+		return err
+	}
+	if err := execSchema("players_realtime_hotbar", `
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS realtime_hotbar JSONB NOT NULL DEFAULT '[]'::jsonb;`); err != nil {
 		return err
 	}
 	if err := execSchema("players_map_instance_idx", `CREATE INDEX IF NOT EXISTS idx_players_map_instance_location ON players (map_instance_id, current_region, x, y);`); err != nil {
