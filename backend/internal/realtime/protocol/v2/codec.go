@@ -645,6 +645,146 @@ func DecodeSnapshotDelta(payload []byte) (SnapshotDelta, error) {
 	return snapshot, decoder.Err()
 }
 
+// SnapshotFull is a reliable baseline/full snapshot carried on the world
+// stream (opcode Snapshot). Deltas stay on datagrams.
+type SnapshotFull struct {
+	Tick        uint32
+	BaselineID  uint16
+	BaseTick    uint32
+	AckSeq      uint64
+	IsBaseline  bool
+	Spawns      []Spawn
+	Removed     []uint16
+	Projectiles []Projectile
+}
+
+// EncodeSnapshotFull builds the stream payload for a baseline/full snapshot.
+func EncodeSnapshotFull(snapshot SnapshotFull) ([]byte, error) {
+	if len(snapshot.Spawns) > 0xFFFF || len(snapshot.Removed) > 0xFFFF || len(snapshot.Projectiles) > 255 {
+		return nil, fmt.Errorf("%w: snapshot full exceeds count limits", ErrInvalid)
+	}
+	encoder := NewEncoder(64 + len(snapshot.Spawns)*96)
+	encoder.U32(snapshot.Tick).U16(snapshot.BaselineID).U32(snapshot.BaseTick).Varint(snapshot.AckSeq)
+	if snapshot.IsBaseline {
+		encoder.U8(1)
+	} else {
+		encoder.U8(0)
+	}
+	encoder.U16(uint16(len(snapshot.Spawns)))
+	for _, spawn := range snapshot.Spawns {
+		EncodeSpawn(encoder, spawn)
+	}
+	encoder.U16(uint16(len(snapshot.Removed)))
+	for _, netID := range snapshot.Removed {
+		encoder.U16(netID)
+	}
+	encoder.U8(uint8(len(snapshot.Projectiles)))
+	for _, projectile := range snapshot.Projectiles {
+		encoder.U16(projectile.ID).U16(projectile.SourceNetID)
+		encoder.String(projectile.SkillID).String(projectile.VFX)
+		encoder.U16(projectile.X).U16(projectile.Y).U8(projectile.RadiusX10)
+	}
+	return encoder.Bytes(), encoder.Err()
+}
+
+// DecodeSnapshotFull parses a stream baseline/full snapshot payload.
+func DecodeSnapshotFull(payload []byte) (SnapshotFull, error) {
+	decoder := NewDecoder(payload)
+	snapshot := SnapshotFull{
+		Tick:       decoder.U32(),
+		BaselineID: decoder.U16(),
+		BaseTick:   decoder.U32(),
+		AckSeq:     decoder.Varint(),
+		IsBaseline: decoder.U8() == 1,
+	}
+	spawnCount := int(decoder.U16())
+	snapshot.Spawns = make([]Spawn, 0, spawnCount)
+	for i := 0; i < spawnCount && decoder.Err() == nil; i++ {
+		snapshot.Spawns = append(snapshot.Spawns, DecodeSpawn(decoder))
+	}
+	removedCount := int(decoder.U16())
+	snapshot.Removed = make([]uint16, 0, removedCount)
+	for i := 0; i < removedCount && decoder.Err() == nil; i++ {
+		snapshot.Removed = append(snapshot.Removed, decoder.U16())
+	}
+	projectileCount := int(decoder.U8())
+	snapshot.Projectiles = make([]Projectile, 0, projectileCount)
+	for i := 0; i < projectileCount && decoder.Err() == nil; i++ {
+		snapshot.Projectiles = append(snapshot.Projectiles, Projectile{
+			ID:          decoder.U16(),
+			SourceNetID: decoder.U16(),
+			SkillID:     decoder.String(),
+			VFX:         decoder.String(),
+			X:           decoder.U16(),
+			Y:           decoder.U16(),
+			RadiusX10:   decoder.U8(),
+		})
+	}
+	return snapshot, decoder.Err()
+}
+
+// Welcome is the binary handshake record. Skills stay JSON (one-time join).
+type Welcome struct {
+	SessionID         string
+	ZoneID            string
+	MapVersion        string
+	ContentVersion    string
+	TickRate          uint16
+	MovementSpeedX100 uint16
+	ServerTick        uint32
+	EntityID          string
+	EntityRevision    uint64
+	BaselineID        uint16
+	MapHash           string
+	SkillsJSON        []byte
+	LoadoutRevision   string
+	Snapshot          []byte
+}
+
+func EncodeWelcome(welcome Welcome) ([]byte, error) {
+	if len(welcome.SkillsJSON) > 0xFFFF {
+		return nil, fmt.Errorf("%w: skills blob too large", ErrInvalid)
+	}
+	if len(welcome.Snapshot) > MaxFrameSize {
+		return nil, fmt.Errorf("%w: welcome snapshot too large", ErrInvalid)
+	}
+	encoder := NewEncoder(128 + len(welcome.SkillsJSON) + len(welcome.Snapshot))
+	encoder.String(welcome.SessionID).String(welcome.ZoneID)
+	encoder.String(welcome.MapVersion).String(welcome.ContentVersion)
+	encoder.U16(welcome.TickRate).U16(welcome.MovementSpeedX100).U32(welcome.ServerTick)
+	encoder.String(welcome.EntityID).Varint(welcome.EntityRevision).U16(welcome.BaselineID)
+	encoder.String(welcome.MapHash)
+	encoder.U16(uint16(len(welcome.SkillsJSON)))
+	encoder.Raw(welcome.SkillsJSON)
+	encoder.String(welcome.LoadoutRevision)
+	encoder.U32(uint32(len(welcome.Snapshot)))
+	encoder.Raw(welcome.Snapshot)
+	return encoder.Bytes(), encoder.Err()
+}
+
+func DecodeWelcome(payload []byte) (Welcome, error) {
+	decoder := NewDecoder(payload)
+	welcome := Welcome{
+		SessionID:         decoder.String(),
+		ZoneID:            decoder.String(),
+		MapVersion:        decoder.String(),
+		ContentVersion:    decoder.String(),
+		TickRate:          decoder.U16(),
+		MovementSpeedX100: decoder.U16(),
+		ServerTick:        decoder.U32(),
+		EntityID:          decoder.String(),
+		EntityRevision:    decoder.Varint(),
+		BaselineID:        decoder.U16(),
+		MapHash:           decoder.String(),
+	}
+	skillsLength := int(decoder.U16())
+	welcome.SkillsJSON = append([]byte(nil), decoder.Bytes(skillsLength)...)
+	welcome.LoadoutRevision = decoder.String()
+	snapshotLength := int(decoder.U32())
+	welcome.Snapshot = append([]byte(nil), decoder.Bytes(snapshotLength)...)
+	return welcome, decoder.Err()
+}
+
 // Spawn is the full metadata record sent once when an entity enters AOI.
 type Spawn struct {
 	NetID         uint16

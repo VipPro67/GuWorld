@@ -556,6 +556,205 @@ export function decodeSnapshotDelta(payload: Uint8Array): SnapshotDelta {
   return snapshot;
 }
 
+export interface Spawn {
+  netId: number;
+  entityId: string;
+  name: string;
+  templateId: string;
+  kind: number;
+  partyId: string;
+  flags: number;
+  radiusX10: number;
+  maxHp: number;
+  maxMana: number;
+  maxThought: number;
+  ownerNetId: number;
+  companionKind: string;
+  stance: number;
+}
+
+export function emptySpawn(netId = 0): Spawn {
+  return {
+    netId,
+    entityId: "",
+    name: "",
+    templateId: "",
+    kind: 0,
+    partyId: "",
+    flags: 0,
+    radiusX10: 0,
+    maxHp: 0,
+    maxMana: 0,
+    maxThought: 0,
+    ownerNetId: 0,
+    companionKind: "",
+    stance: 0,
+  };
+}
+
+export function writeSpawn(writer: Writer, spawn: Spawn): void {
+  writer.u16(spawn.netId);
+  writer.string(spawn.entityId).string(spawn.name).string(spawn.templateId);
+  writer.u8(spawn.kind).string(spawn.partyId).u8(spawn.flags).u8(spawn.radiusX10);
+  writer.varint(spawn.maxHp).varint(spawn.maxMana).varint(spawn.maxThought);
+  writer.u16(spawn.ownerNetId).string(spawn.companionKind).u8(spawn.stance);
+}
+
+export function readSpawn(reader: Reader): Spawn {
+  return {
+    netId: reader.u16(),
+    entityId: reader.string(),
+    name: reader.string(),
+    templateId: reader.string(),
+    kind: reader.u8(),
+    partyId: reader.string(),
+    flags: reader.u8(),
+    radiusX10: reader.u8(),
+    maxHp: reader.varint(),
+    maxMana: reader.varint(),
+    maxThought: reader.varint(),
+    ownerNetId: reader.u16(),
+    companionKind: reader.string(),
+    stance: reader.u8(),
+  };
+}
+
+export interface SnapshotFull {
+  tick: number;
+  baselineId: number;
+  baseTick: number;
+  ackSeq: number;
+  isBaseline: boolean;
+  spawns: Spawn[];
+  removed: number[];
+  projectiles: Projectile[];
+}
+
+export function encodeSnapshotFull(snapshot: SnapshotFull): Uint8Array {
+  if (snapshot.spawns.length > 0xffff || snapshot.removed.length > 0xffff) {
+    throw new CodecError("snapshot full exceeds count limits");
+  }
+  const payload = new Writer(64 + snapshot.spawns.length * 96);
+  payload.u32(snapshot.tick).u16(snapshot.baselineId).u32(snapshot.baseTick).varint(snapshot.ackSeq);
+  payload.u8(snapshot.isBaseline ? 1 : 0);
+  payload.u16(snapshot.spawns.length);
+  for (const spawn of snapshot.spawns) writeSpawn(payload, spawn);
+  payload.u16(snapshot.removed.length);
+  for (const netId of snapshot.removed) payload.u16(netId);
+  if (snapshot.projectiles.length > 255) throw new CodecError("too many projectiles");
+  payload.u8(snapshot.projectiles.length);
+  for (const projectile of snapshot.projectiles) {
+    payload
+      .u16(projectile.id)
+      .u16(projectile.sourceNetId)
+      .string(projectile.skillId)
+      .string(projectile.vfx)
+      .u16(projectile.x)
+      .u16(projectile.y)
+      .u8(projectile.radiusX10);
+  }
+  return payload.bytes();
+}
+
+export function decodeSnapshotFull(payload: Uint8Array): SnapshotFull {
+  const reader = new Reader(payload);
+  const snapshot: SnapshotFull = {
+    tick: reader.u32(),
+    baselineId: reader.u16(),
+    baseTick: reader.u32(),
+    ackSeq: reader.varint(),
+    isBaseline: reader.u8() === 1,
+    spawns: [],
+    removed: [],
+    projectiles: [],
+  };
+  const spawnCount = reader.u16();
+  for (let i = 0; i < spawnCount; i += 1) snapshot.spawns.push(readSpawn(reader));
+  const removedCount = reader.u16();
+  for (let i = 0; i < removedCount; i += 1) snapshot.removed.push(reader.u16());
+  const projectileCount = reader.u8();
+  for (let i = 0; i < projectileCount; i += 1) {
+    snapshot.projectiles.push({
+      id: reader.u16(),
+      sourceNetId: reader.u16(),
+      skillId: reader.string(),
+      vfx: reader.string(),
+      x: reader.u16(),
+      y: reader.u16(),
+      radiusX10: reader.u8(),
+    });
+  }
+  if (reader.failed) throw new CodecError("truncated snapshot full");
+  return snapshot;
+}
+
+export interface Welcome {
+  sessionId: string;
+  zoneId: string;
+  mapVersion: string;
+  contentVersion: string;
+  tickRate: number;
+  movementSpeedX100: number;
+  serverTick: number;
+  entityId: string;
+  entityRevision: number;
+  baselineId: number;
+  mapHash: string;
+  skillsJson: Uint8Array;
+  loadoutRevision: string;
+  snapshot: Uint8Array;
+}
+
+export function encodeWelcome(welcome: Welcome): Uint8Array {
+  if (welcome.skillsJson.length > 0xffff) throw new CodecError("skills blob too large");
+  const payload = new Writer(128 + welcome.skillsJson.length + welcome.snapshot.length);
+  payload
+    .string(welcome.sessionId)
+    .string(welcome.zoneId)
+    .string(welcome.mapVersion)
+    .string(welcome.contentVersion)
+    .u16(welcome.tickRate)
+    .u16(welcome.movementSpeedX100)
+    .u32(welcome.serverTick)
+    .string(welcome.entityId)
+    .varint(welcome.entityRevision)
+    .u16(welcome.baselineId)
+    .string(welcome.mapHash)
+    .u16(welcome.skillsJson.length);
+  payload.raw(welcome.skillsJson);
+  payload.string(welcome.loadoutRevision);
+  payload.u32(welcome.snapshot.length);
+  payload.raw(welcome.snapshot);
+  return payload.bytes();
+}
+
+export function decodeWelcome(payload: Uint8Array): Welcome {
+  const reader = new Reader(payload);
+  const welcome: Welcome = {
+    sessionId: reader.string(),
+    zoneId: reader.string(),
+    mapVersion: reader.string(),
+    contentVersion: reader.string(),
+    tickRate: reader.u16(),
+    movementSpeedX100: reader.u16(),
+    serverTick: reader.u32(),
+    entityId: reader.string(),
+    entityRevision: reader.varint(),
+    baselineId: reader.u16(),
+    mapHash: reader.string(),
+    skillsJson: new Uint8Array(0),
+    loadoutRevision: "",
+    snapshot: new Uint8Array(0),
+  };
+  const skillsLength = reader.u16();
+  welcome.skillsJson = reader.raw(skillsLength);
+  welcome.loadoutRevision = reader.string();
+  const snapshotLength = reader.u32();
+  welcome.snapshot = reader.raw(snapshotLength);
+  if (reader.failed) throw new CodecError("truncated welcome");
+  return welcome;
+}
+
 export function encodeMoveTarget(seq: number, x: number, y: number): Uint8Array {
   const payload = new Writer(8);
   payload.varint(seq).u16(quantize(x)).u16(quantize(y));

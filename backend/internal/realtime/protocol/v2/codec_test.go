@@ -205,6 +205,54 @@ func TestEventsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWelcomeAndFullSnapshotRoundTrip(t *testing.T) {
+	full := SnapshotFull{
+		Tick: 1234, BaselineID: 7, BaseTick: 1234, AckSeq: 99, IsBaseline: true,
+		Spawns: []Spawn{{
+			NetID: 12, EntityID: "uuid-1", Name: "Người chơi", TemplateID: "gu_master",
+			Kind: 0, PartyID: "party-1", Flags: 1, RadiusX10: 4,
+			MaxHP: 1000, MaxMana: 500, MaxThought: 120,
+		}},
+		Removed:     []uint16{5},
+		Projectiles: []Projectile{{ID: 3, SourceNetID: 12, SkillID: "bolt", VFX: "fire", X: 100, Y: 200, RadiusX10: 2}},
+	}
+	payload, err := EncodeSnapshotFull(full)
+	if err != nil {
+		t.Fatalf("encode full: %v", err)
+	}
+	decoded, err := DecodeSnapshotFull(payload)
+	if err != nil {
+		t.Fatalf("decode full: %v", err)
+	}
+	if len(decoded.Spawns) != 1 || decoded.Spawns[0].Name != "Người chơi" || decoded.Spawns[0].MaxMana != 500 {
+		t.Fatalf("spawn roundtrip = %+v", decoded.Spawns)
+	}
+	if len(decoded.Projectiles) != 1 || decoded.Projectiles[0].SkillID != "bolt" {
+		t.Fatalf("projectiles roundtrip = %+v", decoded.Projectiles)
+	}
+
+	welcome := Welcome{
+		SessionID: "session-1", ZoneID: "forest#realtime-preview",
+		MapVersion: "regions-v1", ContentVersion: "region-content-v1",
+		TickRate: 20, MovementSpeedX100: 560, ServerTick: 1234,
+		EntityID: "uuid-1", EntityRevision: 44, BaselineID: 7,
+		MapHash: "hash", SkillsJSON: []byte(`[{"slot":1}]`),
+		LoadoutRevision: "rev-1", Snapshot: payload,
+	}
+	welcomePayload, err := EncodeWelcome(welcome)
+	if err != nil {
+		t.Fatalf("encode welcome: %v", err)
+	}
+	gotWelcome, err := DecodeWelcome(welcomePayload)
+	if err != nil {
+		t.Fatalf("decode welcome: %v", err)
+	}
+	if gotWelcome.ZoneID != welcome.ZoneID || gotWelcome.MovementSpeedX100 != 560 ||
+		string(gotWelcome.SkillsJSON) != `[{"slot":1}]` || len(gotWelcome.Snapshot) != len(payload) {
+		t.Fatalf("welcome roundtrip = %+v", gotWelcome)
+	}
+}
+
 func TestGoldenSnapshotDelta(t *testing.T) {
 	snapshot := SnapshotDelta{
 		Tick:       1234,

@@ -8,8 +8,12 @@ import {
   decodeDatagram,
   decodeInput,
   decodeSnapshotDelta,
+  decodeSnapshotFull,
+  decodeWelcome,
   encodeInput,
   encodeSnapshotDelta,
+  encodeSnapshotFull,
+  encodeWelcome,
   emptyDeltaEntity,
   quantize,
   type DeltaEntity,
@@ -107,6 +111,65 @@ test("full entity roundtrip keeps every masked field", () => {
   assert.equal(decoded.projectiles[0].skillId, "blood_moon_gu");
   assert.equal(decoded.projectiles[0].x, 320);
   assert.equal(decoded.hasProjectiles, true);
+});
+
+test("welcome and full snapshot roundtrip", () => {
+  const full = {
+    tick: 1234,
+    baselineId: 7,
+    baseTick: 1234,
+    ackSeq: 99,
+    isBaseline: true,
+    spawns: [
+      {
+        netId: 12,
+        entityId: "uuid-1",
+        name: "Người chơi",
+        templateId: "gu_master",
+        kind: 0,
+        partyId: "party-1",
+        flags: 1,
+        radiusX10: 4,
+        maxHp: 1000,
+        maxMana: 500,
+        maxThought: 120,
+        ownerNetId: 0,
+        companionKind: "",
+        stance: 0,
+      },
+    ],
+    removed: [5],
+    projectiles: [
+      { id: 3, sourceNetId: 12, skillId: "bolt", vfx: "fire", x: 100, y: 200, radiusX10: 2 },
+    ],
+  };
+  const encodedFull = encodeSnapshotFull(full);
+  const decodedFull = decodeSnapshotFull(encodedFull);
+  assert.equal(decodedFull.spawns[0].name, "Người chơi");
+  assert.equal(decodedFull.spawns[0].maxMana, 500);
+  assert.equal(decodedFull.projectiles[0].skillId, "bolt");
+
+  const welcome = {
+    sessionId: "session-1",
+    zoneId: "forest#realtime-preview",
+    mapVersion: "regions-v1",
+    contentVersion: "region-content-v1",
+    tickRate: 20,
+    movementSpeedX100: 560,
+    serverTick: 1234,
+    entityId: "uuid-1",
+    entityRevision: 44,
+    baselineId: 7,
+    mapHash: "hash",
+    skillsJson: new TextEncoder().encode('[{"slot":1}]'),
+    loadoutRevision: "rev-1",
+    snapshot: encodedFull,
+  };
+  const decodedWelcome = decodeWelcome(encodeWelcome(welcome));
+  assert.equal(decodedWelcome.zoneId, welcome.zoneId);
+  assert.equal(decodedWelcome.movementSpeedX100, 560);
+  assert.equal(new TextDecoder().decode(decodedWelcome.skillsJson), '[{"slot":1}]');
+  assert.deepEqual(decodedWelcome.snapshot, encodedFull);
 });
 
 test("golden vector matches the Go codec byte-for-byte", () => {
