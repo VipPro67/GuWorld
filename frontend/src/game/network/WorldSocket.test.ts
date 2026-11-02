@@ -97,8 +97,7 @@ test("WorldSocket joins, buffers snapshots, and sequences normalized input", asy
   const input = JSON.parse(fake.sent[1]) as { payload: { seq: number; move: { x: number; y: number } } };
   assert.equal(input.payload.seq, 1);
   assert.ok(Math.abs(input.payload.move.x - Math.SQRT1_2) < 1e-12);
-  assert.equal(client.sendMoveTarget({ x: 12.5, y: 8 }), 2);
-  const moveTarget = JSON.parse(fake.sent[2]) as {
+  assert.equal(client.sendMoveTarget({ x: 12.5, y: 8 }), 2);  const moveTarget = JSON.parse(fake.sent[2]) as {
     type: string;
     payload: { seq: number; x: number; y: number };
   };
@@ -203,6 +202,24 @@ test("WorldSocket ignores legacy hub frames on the shared socket", async () => {
 
   fake.receive({ type: "event", channel: "chat:world", data: { content: "hello" } });
   assert.deepEqual(errors, []);
+});
+
+test("WorldSocket seeds the input sequence from a resumed welcome ack", async () => {
+  const fake = new FakeSocket();
+  const client = new WorldSocket({
+    url: "wss://api.example/api/ws",
+    getToken: () => "token-value",
+    createSocket: () => fake as unknown as ReturnType<NonNullable<WorldSocketOptions["createSocket"]>>,
+  });
+  const pending = client.connect(join);
+  fake.open();
+  const request = JSON.parse(fake.sent[0]) as { request_id: string };
+  const welcome = ownerWelcome(request.request_id);
+  welcome.payload.snapshot.ack_seq = 50;
+  fake.receive(welcome);
+  await pending;
+
+  assert.equal(client.sendInput({ x: 1, y: 0 }), 51);
 });
 
 test("WorldSocket still reports unsupported versions for world frames", async () => {

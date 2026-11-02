@@ -386,6 +386,9 @@ export class WorldSocket {
         const welcome = parseWorldWelcomePayload(envelope.payload);
         const applied = this.buffer.apply(welcome.snapshot);
         if (applied.status !== "applied") throw new Error("Welcome baseline could not be applied");
+        // A resumed session keeps the server-side ack; continue the input
+        // sequence above it or sim drops every packet until wraparound (#318).
+        if (welcome.snapshot.ack_seq > this.nextInputSeq) this.nextInputSeq = welcome.snapshot.ack_seq;
         this.lastSnapshotAt = Date.now();
         this.welcome = welcome;
         this.clearJoinTimeout();
