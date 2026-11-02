@@ -138,6 +138,7 @@ test("welcome and full snapshot roundtrip", () => {
         stance: 0,
       },
     ],
+    states: [],
     removed: [5],
     projectiles: [
       { id: 3, sourceNetId: 12, skillId: "bolt", vfx: "fire", x: 100, y: 200, radiusX10: 2 },

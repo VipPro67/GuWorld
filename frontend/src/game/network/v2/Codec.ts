@@ -626,6 +626,7 @@ export interface SnapshotFull {
   ackSeq: number;
   isBaseline: boolean;
   spawns: Spawn[];
+  states: DeltaEntity[];
   removed: number[];
   projectiles: Projectile[];
 }
@@ -639,6 +640,9 @@ export function encodeSnapshotFull(snapshot: SnapshotFull): Uint8Array {
   payload.u8(snapshot.isBaseline ? 1 : 0);
   payload.u16(snapshot.spawns.length);
   for (const spawn of snapshot.spawns) writeSpawn(payload, spawn);
+  if (snapshot.states.length > 0xffff) throw new CodecError("too many baseline states");
+  payload.u16(snapshot.states.length);
+  for (const state of snapshot.states) writeDeltaEntity(payload, state);
   payload.u16(snapshot.removed.length);
   for (const netId of snapshot.removed) payload.u16(netId);
   if (snapshot.projectiles.length > 255) throw new CodecError("too many projectiles");
@@ -665,11 +669,14 @@ export function decodeSnapshotFull(payload: Uint8Array): SnapshotFull {
     ackSeq: reader.varint(),
     isBaseline: reader.u8() === 1,
     spawns: [],
+    states: [],
     removed: [],
     projectiles: [],
   };
   const spawnCount = reader.u16();
   for (let i = 0; i < spawnCount; i += 1) snapshot.spawns.push(readSpawn(reader));
+  const stateCount = reader.u16();
+  for (let i = 0; i < stateCount; i += 1) snapshot.states.push(readDeltaEntity(reader));
   const removedCount = reader.u16();
   for (let i = 0; i < removedCount; i += 1) snapshot.removed.push(reader.u16());
   const projectileCount = reader.u8();

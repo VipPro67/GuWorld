@@ -654,6 +654,7 @@ type SnapshotFull struct {
 	AckSeq      uint64
 	IsBaseline  bool
 	Spawns      []Spawn
+	States      []DeltaEntity
 	Removed     []uint16
 	Projectiles []Projectile
 }
@@ -673,6 +674,13 @@ func EncodeSnapshotFull(snapshot SnapshotFull) ([]byte, error) {
 	encoder.U16(uint16(len(snapshot.Spawns)))
 	for _, spawn := range snapshot.Spawns {
 		EncodeSpawn(encoder, spawn)
+	}
+	if len(snapshot.States) > 0xFFFF {
+		return nil, fmt.Errorf("%w: too many baseline states", ErrInvalid)
+	}
+	encoder.U16(uint16(len(snapshot.States)))
+	for _, state := range snapshot.States {
+		EncodeDeltaEntity(encoder, state)
 	}
 	encoder.U16(uint16(len(snapshot.Removed)))
 	for _, netID := range snapshot.Removed {
@@ -701,6 +709,11 @@ func DecodeSnapshotFull(payload []byte) (SnapshotFull, error) {
 	snapshot.Spawns = make([]Spawn, 0, spawnCount)
 	for i := 0; i < spawnCount && decoder.Err() == nil; i++ {
 		snapshot.Spawns = append(snapshot.Spawns, DecodeSpawn(decoder))
+	}
+	stateCount := int(decoder.U16())
+	snapshot.States = make([]DeltaEntity, 0, stateCount)
+	for i := 0; i < stateCount && decoder.Err() == nil; i++ {
+		snapshot.States = append(snapshot.States, DecodeDeltaEntity(decoder))
 	}
 	removedCount := int(decoder.U16())
 	snapshot.Removed = make([]uint16, 0, removedCount)

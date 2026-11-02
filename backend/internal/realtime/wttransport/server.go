@@ -180,12 +180,14 @@ func (w *worldSession) sendWelcome(welcome protocol.Welcome) error {
 		w.registry.assign(sim.EntityID(entity.EntityID))
 	}
 	spawns := make([]v2.Spawn, 0, len(snapshot.Entities))
+	states := make([]v2.DeltaEntity, 0, len(snapshot.Entities))
 	for _, entity := range snapshot.Entities {
 		netID, _ := w.registry.byEntity[sim.EntityID(entity.EntityID)]
 		spawn := spawnFromProtocol(entity, netID, w.registry)
 		w.spawned[netID] = true
 		w.visible[netID] = true
 		spawns = append(spawns, spawn)
+		states = append(states, deltaFromProtocol(entity, netID))
 	}
 	full := v2.SnapshotFull{
 		Tick:        uint32(snapshot.Tick),
@@ -194,6 +196,7 @@ func (w *worldSession) sendWelcome(welcome protocol.Welcome) error {
 		AckSeq:      snapshot.AckSeq,
 		IsBaseline:  true,
 		Spawns:      spawns,
+		States:      states,
 		Projectiles: projectilesFromProtocol(snapshot.Projectiles, w.registry),
 	}
 	fullPayload, err := v2.EncodeSnapshotFull(full)
@@ -286,13 +289,15 @@ func (w *worldSession) sendSnapshot(snapshot sim.Snapshot) error {
 	if tick%baselineTicks == 0 {
 		w.baselineID++
 		spawns := make([]v2.Spawn, 0, len(current))
+		states := make([]v2.DeltaEntity, 0, len(current))
 		for _, entity := range snapshot.Entities {
 			netID := w.registry.byEntity[sim.EntityID(entity.ID)]
 			spawns = append(spawns, spawnFromSim(entity, netID, w.registry))
+			states = append(states, deltaFromSim(entity, netID))
 		}
 		payload, err := v2.EncodeSnapshotFull(v2.SnapshotFull{
 			Tick: tick, BaselineID: w.baselineID, BaseTick: tick, AckSeq: ack,
-			IsBaseline: true, Spawns: spawns, Removed: removed, Projectiles: projectiles,
+			IsBaseline: true, Spawns: spawns, States: states, Removed: removed, Projectiles: projectiles,
 		})
 		if err != nil {
 			return err
@@ -308,13 +313,15 @@ func (w *worldSession) sendSnapshot(snapshot sim.Snapshot) error {
 	if err != nil || len(datagram) > v2.MaxDatagramSize {
 		// Overflow: send the same tick as a reliable full snapshot frame.
 		spawns := make([]v2.Spawn, 0, len(current))
+		states := make([]v2.DeltaEntity, 0, len(current))
 		for _, entity := range snapshot.Entities {
 			netID := w.registry.byEntity[sim.EntityID(entity.ID)]
 			spawns = append(spawns, spawnFromSim(entity, netID, w.registry))
+			states = append(states, deltaFromSim(entity, netID))
 		}
 		fullPayload, encodeErr := v2.EncodeSnapshotFull(v2.SnapshotFull{
 			Tick: tick, BaselineID: w.baselineID, BaseTick: tick, AckSeq: ack,
-			IsBaseline: false, Spawns: spawns, Removed: removed, Projectiles: projectiles,
+			IsBaseline: false, Spawns: spawns, States: states, Removed: removed, Projectiles: projectiles,
 		})
 		if encodeErr != nil {
 			return encodeErr
@@ -433,14 +440,16 @@ func (w *worldSession) sendBaseline() error {
 		return nil
 	}
 	spawns := make([]v2.Spawn, 0, len(snapshot.Entities))
+	states := make([]v2.DeltaEntity, 0, len(snapshot.Entities))
 	for _, entity := range snapshot.Entities {
 		netID := w.registry.assign(sim.EntityID(entity.ID))
 		spawns = append(spawns, spawnFromSim(entity, netID, w.registry))
+		states = append(states, deltaFromSim(entity, netID))
 	}
 	w.baselineID++
 	payload, err := v2.EncodeSnapshotFull(v2.SnapshotFull{
 		Tick: uint32(snapshot.Tick), BaselineID: w.baselineID, BaseTick: uint32(snapshot.Tick),
-		IsBaseline: true, Spawns: spawns,
+		IsBaseline: true, Spawns: spawns, States: states,
 		Projectiles: projectilesFromSim(snapshot.Projectiles, w.registry),
 	})
 	if err != nil {
