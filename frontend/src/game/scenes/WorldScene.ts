@@ -1169,7 +1169,7 @@ export class WorldScene extends Phaser.Scene {
       const transformActive = entity.transformation?.active ?? false;
       const modelScale = transformActive ? (entity.transformation?.model_scale ?? 1.4) : 1.0;
       if (modelScale !== actor.lastModelScale) {
-        actor.sprite.setScale(modelScale);
+        actor.animator.setModelScale(modelScale);
         actor.lastModelScale = modelScale;
       }
 

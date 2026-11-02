@@ -11,6 +11,7 @@ export class EntityAnimator {
   private staticTexture = "";
   private baseScaleX: number;
   private baseScaleY: number;
+  private modelScale = 1;
 
   constructor(sprite: Phaser.GameObjects.Sprite, kind: ActorKind) {
     this.sprite = sprite;
@@ -66,12 +67,18 @@ export class EntityAnimator {
     this.animatePose(this.current);
   }
 
+  public setModelScale(scale: number): void {
+    if (this.modelScale === scale) return;
+    this.modelScale = scale;
+    this.animatePose(this.current);
+  }
+
   private animatePose(animation: ActorAnimation): void {
     const tweens = this.sprite.scene.tweens;
     tweens.killTweensOf(this.sprite);
-    this.sprite.setPosition(0, 0).setRotation(0).setAlpha(1).setScale(this.baseScaleX, this.baseScaleY);
-    const scaleX = this.baseScaleX;
-    const scaleY = this.baseScaleY;
+    const scaleX = this.baseScaleX * this.modelScale;
+    const scaleY = this.baseScaleY * this.modelScale;
+    this.sprite.setPosition(0, 0).setRotation(0).setAlpha(1).setScale(scaleX, scaleY);
     switch (animation) {
       case "idle":
         tweens.add({ targets: this.sprite, y: -1.5, scaleY: scaleY * 1.025, duration: 650, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });

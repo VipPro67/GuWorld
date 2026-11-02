@@ -2,3 +2,7 @@
 # https://opennext.js.org/cloudflare/caching#static-assets-caching
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
+
+# Public game art uses stable filenames, so keep the browser TTL bounded.
+/assets/*
+  Cache-Control: public,max-age=2592000

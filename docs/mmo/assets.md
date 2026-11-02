@@ -7,6 +7,20 @@ there are no copied assets, logos, maps or third-party sprites. Every generated
 texture is project-owned and safe to replace with a packed atlas later without
 changing runtime animation keys.
 
+## Browser cache
+
+- Game art and UI files under `frontend/public/assets/` are cached by the browser
+  for 30 days (`Cache-Control: public, max-age=2592000`). This is set in both
+  `frontend/next.config.ts` (Next standalone) and `frontend/public/_headers`
+  (Cloudflare static assets). Normal repeat visits can reuse those files without
+  a network request; a manual F5 may still send a conditional request and get
+  a small `304 Not Modified` response.
+- Asset URLs currently have stable filenames. Replacing a file at the same path
+  can leave its old version in a browser for up to 30 days. Use a new filename
+  or a bumped `?v=` query when an art update must appear immediately.
+- Map JSON under `frontend/public/game/maps/` remains on the default revalidation
+  policy because the client checks map content against the server's hash.
+
 ## Manifest
 
 - `frontend/src/game/assets/AssetManifest.ts`
