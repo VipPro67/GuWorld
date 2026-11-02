@@ -19,6 +19,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/quic-go/webtransport-go"
+	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/protocol"
 	v2 "github.com/vippro67/GuWorld/backend/internal/realtime/protocol/v2"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
@@ -210,6 +211,10 @@ func TestWebTransportJoinWelcomeInputAndSnapshot(t *testing.T) {
 			Combat:    sim.CombatState{Mana: 40, MaxMana: 100, Thought: 5, MaxThought: 10},
 			AckSeq:    7,
 		}},
+		Events: []combat.Event{{
+			ID: 1, Tick: 11, Type: combat.EventDamageApplied,
+			SourceID: playerID.String(), Amount: 12, HP: 90,
+		}},
 	}
 	datagram, err := session.ReceiveDatagram(ctx)
 	if err != nil {
@@ -229,6 +234,18 @@ func TestWebTransportJoinWelcomeInputAndSnapshot(t *testing.T) {
 	entity := delta.Entities[0]
 	if entity.HP != 90 || entity.Shield != 5 || entity.Mana != 40 || dequantized(entity.X) != 11 {
 		t.Fatalf("entity delta = %+v", entity)
+	}
+
+	eventsOp, eventsPayload, err := readFrame(stream)
+	if err != nil || eventsOp != v2.OpEvents {
+		t.Fatalf("events frame op=%d err=%v", eventsOp, err)
+	}
+	_, events, err := v2.DecodeEvents(eventsPayload)
+	if err != nil {
+		t.Fatalf("events decode: %v", err)
+	}
+	if len(events) != 1 || v2.EventTypeName(events[0].TypeID) != "DAMAGE_APPLIED" || events[0].Source != 1 {
+		t.Fatalf("events = %+v", events)
 	}
 }
 

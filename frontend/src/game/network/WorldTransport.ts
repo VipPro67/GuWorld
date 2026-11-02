@@ -25,8 +25,10 @@ import {
   VERSION,
   decodeDatagram,
   decodeSnapshotDelta,
+  decodeEvents,
   decodeSnapshotFull,
   decodeWelcome,
+  EVENT_TYPE_NAMES,
   dequantize,
   encodeAttack,
   encodeCapture,
@@ -448,6 +450,35 @@ export class WorldTransport implements WorldTransportLike {
           this.notifyError(asWorldError(error, "invalid_spawn"));
         }
         break;
+      case Op.Events: {
+        try {
+          const { events } = decodeEvents(payload);
+          for (const event of events) {
+            const source = this.netToSpawn.get(event.source)?.entityId;
+            const target = this.netToSpawn.get(event.target)?.entityId;
+            let body: Record<string, unknown> | undefined;
+            if (event.payload.length > 0) {
+              try {
+                body = JSON.parse(new TextDecoder().decode(event.payload)) as Record<string, unknown>;
+              } catch {
+                body = undefined;
+              }
+            }
+            const worldEvent: WorldEvent = {
+              event_id: event.eventId,
+              tick: event.tick,
+              type: EVENT_TYPE_NAMES[event.typeId] ?? "UNKNOWN",
+              source_id: source,
+              target_id: target,
+              payload: body,
+            };
+            this.eventListeners.forEach((listener) => listener(worldEvent));
+          }
+        } catch (error) {
+          this.notifyError(asWorldError(error, "invalid_events"));
+        }
+        break;
+      }
       case Op.Reject: {
         const rejectPayload = decodeReject(payload);
         this.rejectListeners.forEach((listener) => listener(rejectPayload));

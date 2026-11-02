@@ -804,6 +804,43 @@ export function encodeStance(input: { seq: number; stance: number; focusNetId: n
   return encodeFrame(Op.Stance, payload.bytes());
 }
 
+export const EVENT_TYPE_NAMES: Record<number, string> = {
+  1: "CAST_ACCEPTED", 2: "CAST_REJECTED", 3: "BASIC_ATTACK", 4: "CAST_INTERRUPTED",
+  5: "DASH_ENDED", 6: "PROJECTILE_SPAWNED", 7: "HIT_CONFIRMED", 8: "DAMAGE_APPLIED",
+  9: "HEAL_APPLIED", 10: "SHIELD_APPLIED", 11: "STATUS_APPLIED", 12: "STATUS_EXPIRED",
+  13: "HIDDEN_PASSIVE_TRIGGERED", 14: "MOVE_TARGET_REJECTED", 15: "ENTITY_DIED",
+  16: "CAPTURE_STARTED", 17: "CAPTURE_INTERRUPTED", 18: "CAPTURE_SUCCESS", 19: "CAPTURE_FAILED",
+  20: "SOUL_BACKFIRE", 21: "COMPANION_INJURED", 22: "COMPANION_PERMADEATH",
+  23: "TRANSFORMATION_STARTED", 24: "TRANSFORMATION_ENDED", 25: "TRANSFORMATION_BROKEN",
+};
+
+export interface DecodedEvent {
+  eventId: number;
+  tick: number;
+  typeId: number;
+  source: number;
+  target: number;
+  payload: Uint8Array;
+}
+
+export function decodeEvents(payload: Uint8Array): { fromEventId: number; events: DecodedEvent[] } {
+  const reader = new Reader(payload);
+  const fromEventId = reader.varint();
+  const count = reader.u8();
+  const events: DecodedEvent[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const eventId = reader.varint();
+    const tick = reader.varint();
+    const typeId = reader.u8();
+    const source = reader.u16();
+    const target = reader.u16();
+    const length = reader.u16();
+    events.push({ eventId, tick, typeId, source, target, payload: reader.raw(length) });
+  }
+  if (reader.failed) throw new CodecError("truncated events");
+  return { fromEventId, events };
+}
+
 export function encodeJoin(request: { zoneId: string; mapVersion: string; contentVersion: string; requestId: number }): Uint8Array {
   const writer = new Writer(64);
   writer.string(request.zoneId).string(request.mapVersion).string(request.contentVersion).u32(request.requestId);

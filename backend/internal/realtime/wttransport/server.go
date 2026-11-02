@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/quic-go/webtransport-go"
+	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/protocol"
 	v2 "github.com/vippro67/GuWorld/backend/internal/realtime/protocol/v2"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
@@ -81,6 +82,8 @@ type worldSession struct {
 	lastTick   uint32
 
 	lastSnapshot sim.Snapshot
+	lastEventID  uint64
+	eventSeq     uint64
 	snapshotMu   sync.RWMutex
 }
 
@@ -244,6 +247,10 @@ func (w *worldSession) snapshotLoop(ctx context.Context, feed <-chan sim.Snapsho
 				logger.S.Debugf("WebTransport snapshot to %s stopped: %v", w.playerID, err)
 				return
 			}
+			if err := w.sendEvents(snapshot.Events); err != nil {
+				logger.S.Debugf("WebTransport events to %s stopped: %v", w.playerID, err)
+				return
+			}
 		}
 	}
 }
@@ -330,6 +337,57 @@ func (w *worldSession) sendSnapshot(snapshot sim.Snapshot) error {
 	}
 	w.lastTick = tick
 	return w.session.SendDatagram(datagram)
+}
+
+func (w *worldSession) sendEvents(events []combat.Event) error {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]v2.Event, 0, len(events))
+	for _, event := range events {
+		w.eventSeq++
+		eventID := event.ID
+		if eventID == 0 {
+			eventID = w.eventSeq
+		}
+		payload, err := json.Marshal(map[string]any{
+			"skill_id": event.SkillID, "skill_name": event.SkillName,
+			"cast_vfx": event.CastVFX, "projectile_vfx": event.ProjectileVFX, "impact_vfx": event.ImpactVFX,
+			"x": event.X, "y": event.Y, "amount": event.Amount,
+			"shield_absorbed": event.ShieldAbsorbed, "hp_damage": event.HPDamage,
+			"hp": event.HP, "shield": event.Shield, "duration_ticks": event.DurationTicks,
+			"dash_dir_x": event.DashDirX, "dash_dir_y": event.DashDirY,
+			"dash_duration_ticks": event.DashDurationTicks, "reason": event.Reason,
+			"template_id": event.TemplateID, "monster_rank": event.MonsterRank,
+			"persistent_id": event.PersistentID, "target_kind": event.TargetKind,
+		})
+		if err != nil {
+			continue
+		}
+		sourceNetID := uint16(0)
+		if source, ok := w.registry.byEntity[sim.EntityID(event.SourceID)]; ok {
+			sourceNetID = source
+		}
+		targetNetID := uint16(0)
+		if target, ok := w.registry.byEntity[sim.EntityID(event.TargetID)]; ok {
+			targetNetID = target
+		}
+		out = append(out, v2.Event{
+			EventID: eventID, Tick: event.Tick, TypeID: v2.EventTypeID(string(event.Type)),
+			Source: sourceNetID, Target: targetNetID, Payload: payload,
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	payload, err := v2.EncodeEvents(w.lastEventID, out)
+	if err != nil {
+		return err
+	}
+	if len(out) > 0 {
+		w.lastEventID = out[len(out)-1].EventID
+	}
+	return w.writeFrame(v2.OpEvents, payload)
 }
 
 func (w *worldSession) datagramLoop(ctx context.Context) {

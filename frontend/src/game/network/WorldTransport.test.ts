@@ -15,6 +15,7 @@ import {
   Op,
   quantize,
   type DeltaEntity,
+  Writer,
   type SnapshotFull,
 } from "./v2/Codec.ts";
 
@@ -117,6 +118,43 @@ test("joins over WebTransport and exposes the baseline snapshot", async () => {
   const datagram = decodeDatagram(fake.sentDatagrams[0]);
   assert.equal(datagram.op, DatagramOp.Input);
   assert.deepEqual(decodeInput(datagram.payload), { seq: 1, moveX: 127, moveY: 0 });
+});
+
+test("delivers combat events on the reliable stream", async () => {
+  const fake = fakeTransport();
+  const client = new WorldTransport({
+    url: "https://localhost:8443/api/wt",
+    getToken: () => "token",
+    createTransport: () => fake.transport,
+  });
+  const pending = client.connect({ zone_id: "forest", map_version: "map-1", content_version: "content-1" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  fake.pushFrame(encodeFrame(Op.Welcome, encodeWelcome({
+    sessionId: "s1", zoneId: "forest", mapVersion: "map-1", contentVersion: "content-1",
+    tickRate: 20, movementSpeedX100: 500, serverTick: 100, entityId: "player-1",
+    entityRevision: 3, baselineId: 1, mapHash: "", skillsJson: new Uint8Array(0),
+    loadoutRevision: "", snapshot: encodeSnapshotFull(baseline()),
+  })));
+  await pending;
+
+  const received: Array<{ type: string; source?: string; amount?: number }> = [];
+  client.onEvents((event) => received.push({
+    type: event.type,
+    source: event.source_id,
+    amount: typeof event.payload?.amount === "number" ? event.payload.amount : undefined,
+  }));
+
+  const payload = new Writer();
+  payload.varint(0).u8(1).varint(101).varint(100).u8(8).u16(7).u16(0);
+  const body = new TextEncoder().encode('{"amount":12}');
+  payload.u16(body.length).raw(body);
+  fake.pushFrame(encodeFrame(Op.Events, payload.bytes()));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.equal(received.length, 1);
+  assert.equal(received[0].type, "DAMAGE_APPLIED");
+  assert.equal(received[0].source, "player-1");
+  assert.equal(received[0].amount, 12);
 });
 
 test("applies snapshot deltas from datagrams", async () => {
