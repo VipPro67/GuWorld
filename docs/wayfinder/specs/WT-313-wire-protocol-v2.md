@@ -76,7 +76,8 @@ bits 5..0 = opcode
 |---|---|---|---|
 | `0x01` | `INPUT` | C→S | §5.3 |
 | `0x02` | `SNAPSHOT_DELTA` | S→C | §5.7 |
-| `0x03` | `PING` | C→S | `u64 client_ms` (RTT đo chủ động) |
+| `0x03` | `PING` | C→S | `u64 client_ms` (RTT đo chủ động, 1 Hz khi rảnh) |
+| `0x04` | `PONG` | S→C | `u64 client_ms`, `u32 server_tick` (echo để client tính RTT/jitter kể cả khi đứng yên) |
 
 **Quy tắc kích thước:** trước khi ghi, cả hai phía **bắt buộc** kiểm tra `encoded_len <= datagrams.maxDatagramSize` (server: `quic.Config` negotiated size; client: `transport.datagrams.maxDatagramSize`, Safari hard-code **1024**). Vượt ngưỡng:
 - Client `INPUT`: không xảy ra (gói cố định ≤ 12 B).
