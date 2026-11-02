@@ -314,3 +314,115 @@ test("turning away from a wall resumes immediate local movement", async () => {
   assert.ok(runtime.getSelfPosition().y > before + 0.2);
   runtime.disconnect();
 });
+
+const waitUntil = async (predicate: () => boolean, timeoutMs = 3_000): Promise<void> => {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) throw new Error("timed out waiting for condition");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+};
+
+test("WorldRuntime retries a join while the previous controller still owns the lease", async () => {
+  const sockets: FakeSocket[] = [];
+  const runtime = new WorldRuntime({
+    socketOptions: {
+      url: "wss://api.example/api/ws",
+      getToken: () => "token",
+      getTabId: () => "tab",
+      createSocket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket as never;
+      },
+    },
+  });
+
+  const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+  const first = sockets[0];
+  first.open();
+  const firstRequest = JSON.parse(first.sent[0]) as { request_id: string };
+  first.receive({
+    v: 1,
+    type: "world.reject",
+    request_id: firstRequest.request_id,
+    payload: { code: "realtime_character_already_owned", message: "Character already has an active realtime controller" },
+  });
+
+  assert.equal(await pending, null);
+  assert.equal(runtime.getStatus(), "connecting", "a stale lease must retry instead of parking in error");
+  assert.equal(runtime.getErrorCode(), "realtime_character_already_owned");
+
+  await waitUntil(() => sockets.length === 2);
+  const second = sockets[1];
+  second.open();
+  const secondRequest = JSON.parse(second.sent[0]) as { request_id: string };
+  second.receive(welcome(secondRequest.request_id));
+
+  await waitUntil(() => runtime.getStatus() === "joined");
+  assert.equal(runtime.getErrorCode(), "");
+  runtime.disconnect();
+});
+
+test("WorldRuntime stops retrying on a non-retryable join rejection", async () => {
+  const fake = new FakeSocket();
+  const runtime = new WorldRuntime({
+    socketOptions: {
+      url: "wss://api.example/api/ws",
+      getToken: () => "token",
+      getTabId: () => "tab",
+      createSocket: () => fake as never,
+    },
+  });
+
+  const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+  fake.open();
+  const joinRequest = JSON.parse(fake.sent[0]) as { request_id: string };
+  fake.receive({
+    v: 1,
+    type: "world.reject",
+    request_id: joinRequest.request_id,
+    payload: { code: "realtime_map_mismatch", message: "Requested map does not match the character's current region" },
+  });
+
+  assert.equal(await pending, null);
+  assert.equal(runtime.getStatus(), "error");
+  assert.equal(runtime.getErrorCode(), "realtime_map_mismatch");
+  runtime.disconnect();
+});
+
+test("disconnect cancels a scheduled join retry", async () => {
+  const sockets: FakeSocket[] = [];
+  const runtime = new WorldRuntime({
+    socketOptions: {
+      url: "wss://api.example/api/ws",
+      getToken: () => "token",
+      getTabId: () => "tab",
+      createSocket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket as never;
+      },
+    },
+  });
+
+  const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+  const first = sockets[0];
+  first.open();
+  const joinRequest = JSON.parse(first.sent[0]) as { request_id: string };
+  first.receive({
+    v: 1,
+    type: "world.reject",
+    request_id: joinRequest.request_id,
+    payload: { code: "realtime_character_already_owned", message: "busy" },
+  });
+  assert.equal(await pending, null);
+  assert.equal(runtime.getStatus(), "connecting");
+
+  runtime.disconnect();
+  assert.equal(runtime.getStatus(), "closed");
+
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  assert.equal(sockets.length, 1, "a disconnected runtime must not open another socket");
+  assert.equal(runtime.getStatus(), "closed");
+});

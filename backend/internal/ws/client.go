@@ -26,9 +26,14 @@ import (
 )
 
 const (
-	writeWait               = 10 * time.Second
-	pongWait                = 60 * time.Second
-	pingPeriod              = (pongWait * 9) / 10
+	writeWait = 10 * time.Second
+	// A half-open socket must be detected in seconds, not minutes: the world
+	// socket holds the character lease, so a dead peer blocks the player's next
+	// join until it is reaped. Ping every 3s and expire after 10s without a
+	// pong; the read deadline is also refreshed on any inbound frame so a client
+	// that is still sending inputs is not killed for a stalled write.
+	pongWait                = 10 * time.Second
+	pingPeriod              = 3 * time.Second
 	maxMessageSize          = 1048576 // 1 MB
 	maxConnectionsPerPlayer = 3
 	realtimeInputQueueSize  = 64
@@ -70,6 +75,7 @@ var upgrader = websocket.Upgrader{
 // Client represents a connected WebSocket client.
 type Client struct {
 	playerID            uuid.UUID
+	kind                string
 	conn                *websocket.Conn
 	send                chan []byte
 	snapshots           chan []byte
@@ -142,8 +148,14 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	if len(admission) > 0 {
 		realtimeAdmission = admission[0]
 	}
+	isWorldOnly := r != nil && r.URL.Query().Get("purpose") == "world"
+	kind := clientKindUI
+	if isWorldOnly {
+		kind = clientKindWorld
+	}
 	client := &Client{
 		playerID:          playerID,
+		kind:              kind,
 		controllerID:      uuid.New(),
 		realtimeAdmission: realtimeAdmission,
 		conn:              conn,
@@ -164,8 +176,6 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	client.hub.register <- client
 	handlers.TouchPlayerActivity(client.playerID)
 	handlers.EnsureWorldPosLoaded(client.playerID.String())
-
-	isWorldOnly := r != nil && r.URL.Query().Get("purpose") == "world"
 
 	if !isWorldOnly {
 		// Auto-subscribe to player-specific and global channels for web UI
@@ -264,6 +274,10 @@ func (c *Client) readPump() {
 		}
 		c.wsMessagesIn.Add(1)
 		c.wsBytesIn.Add(int64(len(message)))
+		// Any inbound frame proves the peer is alive. Refresh here as well as on
+		// pong so a client that keeps sending input survives a stalled write or a
+		// delayed ping.
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 
 		var wsMsg WSMessage
 		if err := json.Unmarshal(message, &wsMsg); err != nil {
@@ -1392,6 +1406,10 @@ func (c *Client) Close() {
 			close(c.done)
 		}
 		c.stopRealtimeSnapshotStream()
+		// Free the per-player connection slot before settling the lease: the
+		// settlement flushes to the database, and a reconnect must not be
+		// rejected by the connection limiter while it runs.
+		ReleaseConnection(c.playerID, c.clientIP)
 		c.realtimeMu.Lock()
 		if c.realtimeAdmission != nil {
 			c.realtimeAdmission.Disconnect(c.playerID, c.controllerID)
@@ -1400,8 +1418,16 @@ func (c *Client) Close() {
 		if c.conn != nil {
 			c.closeErr = c.conn.Close()
 		}
-		ReleaseConnection(c.playerID, c.clientIP)
 	})
+}
+
+// sessionKind reports which session slot this connection occupies. UI is the
+// default so callers that never set a kind behave as before.
+func (c *Client) sessionKind() string {
+	if c.kind == "" {
+		return clientKindUI
+	}
+	return c.kind
 }
 
 // GetSubscriptions returns a copy of current channel subscriptions.

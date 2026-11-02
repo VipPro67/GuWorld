@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,8 @@ type fakeRealtimeAdmission struct {
 	castPlayer       uuid.UUID
 	castController   uuid.UUID
 	castValue        protocol.Cast
+
+	mu sync.Mutex
 }
 
 func TestMonsterSnapshotCarriesPresentationAndAggro(t *testing.T) {
@@ -96,7 +99,17 @@ func (f *fakeRealtimeAdmission) Leave(_, _ uuid.UUID) error {
 	return f.leaveErr
 }
 
-func (f *fakeRealtimeAdmission) Disconnect(_, _ uuid.UUID) { f.disconnects++ }
+func (f *fakeRealtimeAdmission) Disconnect(_, _ uuid.UUID) {
+	f.mu.Lock()
+	f.disconnects++
+	f.mu.Unlock()
+}
+
+func (f *fakeRealtimeAdmission) disconnectCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.disconnects
+}
 
 func TestRealtimeLifecycleUsesAuthenticatedConnectionIdentity(t *testing.T) {
 	playerID, controllerID := uuid.New(), uuid.New()

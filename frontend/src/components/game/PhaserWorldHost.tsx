@@ -134,6 +134,10 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   const gameRef = useRef<Phaser.Game | null>(null);
   const destroyRef = useRef<DestroyGame | null>(null);
   const runtimeRef = useRef<WorldRuntime | null>(null);
+  // Set once another tab claims the gameplay session. A replaced tab must never
+  // reconnect: every attempt would be rejected by the server tab guard and
+  // would spam the join rate limiter.
+  const tabReplacedRef = useRef(false);
   const recoveringMismatchRef = useRef(false);
   const onExitRef = useRef(onExit);
   useEffect(() => {
@@ -150,6 +154,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   const [attempt, setAttempt] = useState(0);
 
   const retry = useCallback(() => {
+    if (tabReplacedRef.current) return;
     setStatus("loading");
     setErrorMessage("");
     setPanel(null);
@@ -183,6 +188,21 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
     }
   }, [runtimeStatus, status]);
 
+  // A newer tab takes over the gameplay session. The server-side tab guard only
+  // rejects the HTTP upgrade, so the already-open world socket must be closed
+  // explicitly or the replaced tab keeps controlling the character.
+  useEffect(() => {
+    const disconnectReplacedTab = () => {
+      tabReplacedRef.current = true;
+      runtimeRef.current?.disconnect();
+      setRuntimeStatus("error");
+      setStatus("error");
+      setErrorMessage("Phiên chơi này đã được thay thế bởi tab mới. Hãy đóng tab này.");
+    };
+    window.addEventListener("game:tab-replaced", disconnectReplacedTab);
+    return () => window.removeEventListener("game:tab-replaced", disconnectReplacedTab);
+  }, []);
+
   useEffect(() => {
     if (!worldActive) {
       setMenuOpen(false);
@@ -213,11 +233,11 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
       lastReconnectTokenRef.current = worldReconnectToken;
       return;
     }
+    if (tabReplacedRef.current) return;
 
     const currentSerialized = JSON.stringify(player?.equipped_gus ?? []);
     const region = player?.world_zone_id?.trim() || player?.current_region || "";
     const instance = player?.world_instance_id?.trim() || "";
-
     const regionChanged = lastRegionRef.current !== "" && lastRegionRef.current !== region;
     const instanceChanged = lastInstanceRef.current !== instance;
     const gusChanged = lastEquippedGusRef.current !== currentSerialized;
@@ -416,6 +436,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   }, [currentCombatSettings]);
 
   const reconnect = useCallback(async () => {
+    if (tabReplacedRef.current) return;
     const runtime = runtimeRef.current;
     if (!runtime) {
       retry();

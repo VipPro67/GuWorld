@@ -133,9 +133,11 @@ export class WebSocketManager {
         const tabId = typeof window !== "undefined" ? sessionStorage.getItem("gu_gameplay_tab_id") : null;
         const query = `token=${encodeURIComponent(token)}${tabId ? `&tab_id=${encodeURIComponent(tabId)}` : ""}`;
         const wsUrl = `${this.url}?${query}`;
-        this.ws = new WebSocket(wsUrl);
+        const socket = new WebSocket(wsUrl);
+        this.ws = socket;
 
-        this.ws.onopen = () => {
+        socket.onopen = () => {
+          if (this.ws !== socket) return;
           const event = { reconnected: this.hasOpened };
           this.hasOpened = true;
           this.reconnectAttempts = 0;
@@ -156,15 +158,19 @@ export class WebSocketManager {
           resolve();
         };
 
-        this.ws.onmessage = (event: MessageEvent<string>) => {
+        socket.onmessage = (event: MessageEvent<string>) => {
+          if (this.ws !== socket) return;
           this.handleMessage(event.data);
         };
 
-        this.ws.onerror = (error) => {
+        socket.onerror = (error) => {
+          if (this.ws !== socket) return;
           console.warn("[WebSocket] error:", error);
         };
 
-        this.ws.onclose = () => {
+        socket.onclose = () => {
+          // A superseded socket must not tear down its replacement.
+          if (this.ws !== socket) return;
           this.stopHeartbeat();
           this.connectPromise = null;
           this.ws = null;
@@ -399,7 +405,18 @@ export class WebSocketManager {
   private reconnectWithStaleToken() {
     this.stopHeartbeat();
     this.connectPromise = null;
+    // Close the half-open socket before opening a replacement. Leaving it open
+    // keeps a phantom server-side client that eats a connection slot and keeps
+    // the player reported as online.
+    const stale = this.ws;
     this.ws = null;
+    if (stale) {
+      try {
+        stale.close(4001, "stale session");
+      } catch {
+        // ignore
+      }
+    }
     if (!this.isExplicitClose && this.token) {
       this.scheduleReconnect();
     }

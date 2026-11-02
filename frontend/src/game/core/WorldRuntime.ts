@@ -31,6 +31,17 @@ import type { MapPortal } from "../world/MapLoader.ts";
 // protocol message indicates a half-open socket, not ordinary snapshot jitter.
 const STALE_WORLD_CONNECTION_MS = 3_000;
 const STALE_WORLD_RECONNECT_COOLDOWN_MS = 5_000;
+// A reconnect can lose the race against the previous socket releasing the
+// character lease, so admission answers 409 and the client must retry instead
+// of parking in a terminal error state.
+const JOIN_RETRYABLE_CODES = new Set(["realtime_character_already_owned", "realtime_lease_stale"]);
+const JOIN_SLOW_RETRY_CODES = new Set(["realtime_join_rate_limited", "realtime_zone_full"]);
+const JOIN_RETRY_BASE_MS = 300;
+const JOIN_RETRY_MAX_MS = 2_000;
+const MAX_JOIN_RETRIES = 7;
+const JOIN_SLOW_RETRY_BASE_MS = 5_000;
+const JOIN_SLOW_RETRY_MAX_MS = 15_000;
+const MAX_JOIN_SLOW_RETRIES = 3;
 
 export type WorldRuntimeStatus =
   | "idle"
@@ -169,6 +180,9 @@ export class WorldRuntime {
   private inputAccumulator = 0;
   private sendAccumulator = 0;
   private lastStaleReconnectAt = 0;
+  private joinRetryAttempt = 0;
+  private joinRetryMode: "fast" | "slow" = "fast";
+  private joinRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: WorldRuntimeOptions = {}) {
     this.socketOptions = options.socketOptions;
@@ -181,6 +195,18 @@ export class WorldRuntime {
   }
 
   public async connect(join: WorldJoinPayload): Promise<WorldWelcomePayload | null> {
+    if (this.status === "connecting" && this.joinRetryTimer !== null) {
+      // A retry is already scheduled. Clearing it here would strand the runtime
+      // with no socket and no timer.
+      return null;
+    }
+    this.joinRetryAttempt = 0;
+    this.joinRetryMode = "fast";
+    this.clearJoinRetry();
+    return this.joinSession(join);
+  }
+
+  private async joinSession(join: WorldJoinPayload): Promise<WorldWelcomePayload | null> {
     if (this.status === "connecting") return null;
     this.lastJoin = join;
     this.errorMessage = "";
@@ -199,19 +225,74 @@ export class WorldRuntime {
       this.selfId = welcome.entity_id;
       this.clock.sync(welcome.server_tick, welcome.tick_rate);
       this.applySnapshot(this.socket.getSnapshot());
+      this.joinRetryAttempt = 0;
+      this.joinRetryMode = "fast";
       this.status = "joined";
       this.emit();
       return welcome;
     } catch (error) {
+      const code = error instanceof WorldSocketError ? error.code : "world_connect_failed";
+      const message = error instanceof Error ? error.message : "Không thể vào world realtime";
+      if (
+        (JOIN_RETRYABLE_CODES.has(code) || JOIN_SLOW_RETRY_CODES.has(code)) &&
+        this.scheduleJoinRetry(code)
+      ) {
+        return null;
+      }
       this.status = "error";
-      this.errorMessage = error instanceof Error ? error.message : "Không thể vào world realtime";
-      this.errorCode = error instanceof WorldSocketError ? error.code : "world_connect_failed";
+      this.errorMessage = message;
+      this.errorCode = code;
       this.emit();
       return null;
     }
   }
 
+  /**
+   * Schedule another join attempt. Returns false when the budget for this code
+   * class is exhausted, so the caller can fall through to a terminal error.
+   */
+  private scheduleJoinRetry(code: string): boolean {
+    const slow = JOIN_SLOW_RETRY_CODES.has(code);
+    const mode = slow ? "slow" : "fast";
+    if (this.joinRetryMode !== mode) {
+      // A different failure class gets its own budget.
+      this.joinRetryMode = mode;
+      this.joinRetryAttempt = 0;
+    }
+    const baseMs = slow ? JOIN_SLOW_RETRY_BASE_MS : JOIN_RETRY_BASE_MS;
+    const maxMs = slow ? JOIN_SLOW_RETRY_MAX_MS : JOIN_RETRY_MAX_MS;
+    const maxAttempts = slow ? MAX_JOIN_SLOW_RETRIES : MAX_JOIN_RETRIES;
+    if (this.joinRetryAttempt >= maxAttempts) return false;
+    this.joinRetryAttempt += 1;
+    this.clearJoinRetry();
+    // Stay in "connecting" so the player sees a reconnect instead of a dead
+    // error screen while the stale controller releases the lease.
+    this.status = "connecting";
+    this.errorCode = code;
+    this.errorMessage = "";
+    this.emit();
+    const delay = Math.min(baseMs * Math.pow(1.6, this.joinRetryAttempt - 1), maxMs);
+    this.joinRetryTimer = setTimeout(() => {
+      this.joinRetryTimer = null;
+      void this.reopen();
+    }, delay);
+    return true;
+  }
+
+  private clearJoinRetry(): void {
+    if (this.joinRetryTimer === null) return;
+    clearTimeout(this.joinRetryTimer);
+    this.joinRetryTimer = null;
+  }
+
   public async reconnect(): Promise<WorldWelcomePayload | null> {
+    this.joinRetryAttempt = 0;
+    this.joinRetryMode = "fast";
+    this.clearJoinRetry();
+    return this.reopen();
+  }
+
+  private async reopen(): Promise<WorldWelcomePayload | null> {
     const join = this.lastJoin;
     this.disconnect();
     if (!join) return null;
@@ -222,7 +303,7 @@ export class WorldRuntime {
     }
     this.socket = new WorldSocket(this.socketOptions);
     this.bindSocket();
-    return this.connect(nextJoin);
+    return this.joinSession(nextJoin);
   }
 
   /**
@@ -237,6 +318,7 @@ export class WorldRuntime {
   }
 
   public disconnect(): void {
+    this.clearJoinRetry();
     for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
     this.socket.disconnect();
     this.clock.reset();

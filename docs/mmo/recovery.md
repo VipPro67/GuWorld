@@ -34,6 +34,12 @@ changes location.
 - **Leave/disconnect**: the gateway snapshots the owned entity, persists
   MMO position to `players` and HP/shield + versions to the checkpoint before releasing the lease. Reconnect creates a
   fresh entity and receives a full `world.welcome` baseline; input ack resets.
+  A reconnect that reaches admission before the previous socket has released the
+  lease gets `409 realtime_character_already_owned`; the client retries with
+  backoff, and the hub closes the superseded world socket on takeover so the
+  lease is released within seconds. A half-open socket is dropped after 10s
+  without a pong (server pings every 3s, and any inbound frame refreshes the
+  deadline) instead of 60-114s.
 - **Periodic checkpoint**: the server runs a coarse 10s worker that batches all
   live player entities per zone through one transaction. It never runs inside
   the zone tick and does not save dead players.

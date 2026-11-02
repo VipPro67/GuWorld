@@ -65,7 +65,7 @@ func TestHub_SubscribeAndBroadcast(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	hub.mu.RLock()
-	if _, ok := hub.clients[playerID]; ok {
+	if _, ok := hub.clients[clientKey{playerID: playerID, kind: clientKindUI}]; ok {
 		t.Fatal("client should have been unregistered")
 	}
 	hub.mu.RUnlock()

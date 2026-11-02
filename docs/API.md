@@ -564,6 +564,13 @@ WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa p
 
 Welcome của realtime world (`world.welcome`) có `movement_speed` (đơn vị map/giây), tốc độ authoritative đã tính từ passive `movement`. Client dùng giá trị này cho local prediction; client cũ có thể bỏ qua trường này.
 
+### Vòng đời kết nối
+
+- Mỗi player tối đa 3 kết nối; riêng socket world (`?purpose=world`) là **độc quyền**: kết nối world mới sẽ takeover và đóng kết nối cũ. Việc nhả character lease chạy nền, nên lần join đầu sau takeover vẫn có thể nhận `409 realtime_character_already_owned`; client tự retry với backoff (300 ms → 2 s, tối đa 7 lần) tới khi vào được.
+- Socket UI không độc quyền — nhiều tab không đá nhau và `IsConnected` đếm theo kết nối còn sống. Giới hạn đã biết: mỗi kênh vẫn chỉ giao cho socket đăng ký sau cùng của player.
+- Server ping mỗi 3 giây và cắt kết nối sau 10 giây không có pong; read deadline cũng được refresh khi nhận bất kỳ frame nào, nên nửa-mở (mất mạng, sleep) được dọn trong khoảng 10 giây thay vì vài phút.
+- Tab bị thay thế sẽ đóng luôn socket world của tab cũ, không chỉ socket UI, và tab đó không tự reconnect nữa.
+
 Skill lướt trong `world.welcome` có `move_distance`, `move_duration_ticks` và
 `move_behavior`. Lệnh `world.cast` có thể gửi `aim_x`/`aim_y` để khóa hướng lướt
 khi bấm chiêu, kể cả khi có `target_id`. Event `CAST_ACCEPTED` trả
