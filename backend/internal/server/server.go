@@ -48,6 +48,7 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodGet, "/monitor/requests/summary", "monitoring.read", handlers.AdminGetRequestSummary, "", "", false, "", false, false, false},
 		{http.MethodGet, "/monitor/admin-operations", "monitoring.read", handlers.AdminGetOperationMetrics, "", "", false, "", false, false, false},
 		{http.MethodGet, "/monitor/realtime", "monitoring.read", handlers.AdminGetRealtimeStats, "", "", false, "", false, false, false},
+		{http.MethodGet, "/monitor/realtime/clients", "monitoring.read", handlers.AdminGetRealtimeClientMetrics, "", "", false, "", false, false, false},
 		{http.MethodGet, "/monitor/requests/traces", "monitoring.read", handlers.AdminGetRequestTraces, "", "", false, "", false, false, false},
 		{http.MethodGet, "/monitor/requests/traces/:id", "monitoring.read", handlers.AdminGetRequestTraceDetail, "", "", false, "", false, false, false},
 		{http.MethodPost, "/monitor/requests/reset", "monitoring.reset", handlers.AdminResetRequestMetrics, "admin.reset_request_metrics", "request_metrics", false, "", false, false, false},
@@ -488,6 +489,10 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 			}
 			ws.ServeWs(shub, c.Writer, c.Request, playerID, ip, worldAdmission)
 		})
+
+		// Realtime baseline telemetry uploaded by the Phaser client every 10s.
+		// Server-side identity wins; the body only carries measurements.
+		api.POST("/realtime/metrics", middleware.AuthRequired(), middleware.RateLimitByPlayer(20, time.Minute), handlers.SubmitRealtimeClientMetrics)
 
 		// Public endpoints — per IP
 		api.GET("/dictionary", middleware.RateLimitByIP(120, time.Minute), handlers.GetDictionary)

@@ -551,6 +551,7 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 | --- | --- | --- |
 | GET | `/admin/monitor/system` | Báo cáo chi tiết hệ thống: CPU % (process & system), NumCPU, Goroutines, CgoCalls, Go MemStats (Alloc, Heap, Stack, GC pause), DB Connection Pool, Redis health & latency, WebSocket clients/channels, Process Uptime. |
 | GET | `/admin/monitor/realtime` | Telemetry từng instance realtime (permission `monitoring.read`): `map_loaded` (map đã kiểm tra lúc startup), `running` (world/runner đang tồn tại), `evicting` (đang teardown vì idle), tick/entity/player/subscriber, `last_step_ms`, kích thước/hash map, `monster_spawns` (tổng điểm spawn trong map) và `active_monsters` (entity quái đang materialize gần player). Instance rỗng vẫn xuất hiện với `running=false`; world được tạo lazy khi có lease đầu tiên và giải phóng sau 5 phút idle. |
+| GET | `/admin/monitor/realtime/clients` | Baseline telemetry **phía client** do trình duyệt upload mỗi 10s (permission `monitoring.read`): mỗi player một report mới nhất (ring tối đa 512 player), gồm inter-arrival snapshot (avg/p95/histogram), render delay, hard snap/blend, latency/jitter/estimated loss, byte in/out, input đã gửi, số resync và cửa sổ sự kiện reconnect (`stale`, `join_retry`, `socket_closed`, mã lỗi). Report cũ hơn bị thay thế; `rejected_reports` đếm payload không hợp lệ. |
 | GET | `/admin/monitor/requests/summary` | Thống kê request toàn diện: Tổng số request, in-flight requests, RPS (cửa sổ trượt 60s), phân bố mã trạng thái (2xx/3xx/4xx/5xx), độ trễ (min/max/avg/p50/p90/p99), top endpoint được gọi nhiều nhất và top endpoint chậm nhất. |
 | GET | `/admin/monitor/admin-operations` | Counter trong memory cho vận hành admin: 403 theo permission, mutation lỗi theo action, destructive action, import failure, audit write failure, legacy `is_admin` fallback và permission resolution error. Yêu cầu `monitoring.read`; counter reset khi process restart hoặc gọi endpoint reset. |
 | GET | `/admin/monitor/requests/traces` | Tra cứu server-side 500 HTTP request và WebSocket session trace gần nhất. HTTP upgrade của `/api/ws` vẫn là một request riêng; phiên WS được ghi khi đóng với thời lượng, message/byte vào-ra, close code/reason, player, IP và user-agent. Trace WS dùng `method=WS`, `status=101`; chỉ được thêm vào ring trace và không làm thay đổi tổng request, RPS, latency hay endpoint aggregation HTTP. Hỗ trợ `page`, `page_size`, allowlisted `sort`, `direction`, `method`, `status`, `path`, `min_duration_ms`, `search`; trả `{data,traces,total,page,page_size}` (`traces` là alias tương thích). |
@@ -563,6 +564,35 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa phiên bản phục vụ mở rộng horizontal. Kết nối yêu cầu token qua header `Authorization: Bearer <token>` hoặc query parameter `?token=<token>`.
 
 Welcome của realtime world (`world.welcome`) có `movement_speed` (đơn vị map/giây), tốc độ authoritative đã tính từ passive `movement`. Client dùng giá trị này cho local prediction; client cũ có thể bỏ qua trường này.
+
+### Baseline telemetry phía client
+
+Trong lúc đang ở trong world, client gửi mỗi 10 giây một cửa sổ đo lên `POST /api/realtime/metrics` (Auth, tối đa 30 request/phút/IP). Đây là kênh đo nền cho việc chuyển transport WebSocket → WebTransport, không ảnh hưởng gameplay: lỗi upload bị bỏ qua im lặng.
+
+Body (mọi trường tuỳ chọn, server tự kẹp giá trị âm/NaN):
+
+```json
+{
+  "zone": "Southern_Border",
+  "status": "joined",
+  "network": "wifi|4g|unknown",
+  "user_agent": "...",
+  "windows": [{
+    "window_started_at": 0, "window_duration_ms": 10000,
+    "tick_rate": 20, "entities": 12, "snapshots": 200,
+    "snapshot_gap_avg_ms": 50.1, "snapshot_gap_p95_ms": 71,
+    "snapshot_gap_hist": [0,0,0,0,0,0,0,0],
+    "render_delay_avg_ms": 82.4, "hard_snaps": 0, "blend_count": 3,
+    "latency_avg_ms": 24.5, "latency_max_ms": 91, "latency_clamped": 0,
+    "jitter_ms": 4.2, "estimated_lost": 1,
+    "messages_in": 260, "bytes_in": 145000, "bytes_out": 900,
+    "inputs_sent": 100, "resyncs": 0, "reconnects": 0, "stale_reconnects": 0
+  }],
+  "events": [{ "kind": "join_retry", "code": "realtime_zone_full", "at": 0 }]
+}
+```
+
+Server trả `204`; response rỗng. Danh tính (player, tab, IP) do server điền, client không gửi.
 
 ### Vòng đời kết nối
 

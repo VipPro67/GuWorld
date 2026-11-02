@@ -72,9 +72,12 @@ export class WorldSocket {
   private errorListeners = new Set<(error: Error) => void>();
   private messageCount = 0;
   private byteCount = 0;
+  private messagesSent = 0;
+  private bytesSent = 0;
   private snapshotCount = 0;
   private lastMessageAt = 0;
   private lastSnapshotAt = 0;
+  private lastCloseCode = 0;
 
   constructor(options: WorldSocketOptions = {}) {
     this.options = options;
@@ -122,7 +125,7 @@ export class WorldSocket {
           payload: join,
         };
         try {
-          socket.send(JSON.stringify(envelope));
+          this.sendText(JSON.stringify(envelope), socket);
         } catch (error) {
           this.failJoin(rejectJoin, error, "join_send_failed");
         }
@@ -133,7 +136,8 @@ export class WorldSocket {
       socket.onerror = () => {
         this.notifyError(new WorldSocketError("Kết nối realtime gặp lỗi", "socket_error"));
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        this.lastCloseCode = event.code;
         if (this.connecting) {
           this.failJoin(rejectJoin, new Error("WebSocket closed before world.join completed"), "socket_closed");
         }
@@ -168,7 +172,7 @@ export class WorldSocket {
     const vector = move ? normalizeVector(move) : undefined;
     const payload: WorldInputPayload = { seq, move: vector };
     try {
-      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.input", payload }));
+      this.sendText(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.input", payload }));
       return payload.seq;
     } catch (error) {
       this.notifyError(asError(error, "input_send_failed"));
@@ -188,7 +192,7 @@ export class WorldSocket {
     if (seq === null || !this.socket) return null;
     const payload: MoveTargetPayload = { seq, x: target.x, y: target.y };
     try {
-      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.move_target", payload }));
+      this.sendText(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.move_target", payload }));
       return payload.seq;
     } catch (error) {
       this.notifyError(asError(error, "move_target_send_failed"));
@@ -215,7 +219,7 @@ export class WorldSocket {
     if (seq === null || !this.socket) return null;
     const payload: CastPayload = { ...cast, seq };
     try {
-      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.cast", payload }));
+      this.sendText(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.cast", payload }));
       return seq;
     } catch (error) {
       this.notifyError(asError(error, "cast_send_failed"));
@@ -236,7 +240,7 @@ export class WorldSocket {
     if (seq === null || !this.socket) return null;
     const payload: BasicAttackPayload = { ...attack, seq };
     try {
-      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.attack", payload }));
+      this.sendText(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.attack", payload }));
       return seq;
     } catch (error) {
       this.notifyError(asError(error, "basic_attack_send_failed"));
@@ -252,7 +256,7 @@ export class WorldSocket {
     if (seq === null || !this.socket) return null;
     const payload: CapturePayload = { seq, target_id: targetId, gu_id: guId };
     try {
-      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.capture", payload }));
+      this.sendText(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.capture", payload }));
       return seq;
     } catch (error) {
       this.notifyError(asError(error, "capture_send_failed"));
@@ -267,7 +271,7 @@ export class WorldSocket {
     if (seq === null || !this.socket) return null;
     const payload: CompanionStancePayload = { seq, stance, focus_target_id: focusTargetId };
     try {
-      this.socket.send(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.companion_stance", payload }));
+      this.sendText(JSON.stringify({ v: WORLD_PROTOCOL_VERSION, type: "world.companion_stance", payload }));
       return seq;
     } catch (error) {
       this.notifyError(asError(error, "companion_stance_send_failed"));
@@ -280,13 +284,25 @@ export class WorldSocket {
     return () => this.eventListeners.delete(callback);
   }
 
-  public getMetrics(): { messages: number; bytes: number; snapshots: number; lastMessageAt: number; lastSnapshotAt: number } {
+  public getMetrics(): {
+    messages: number;
+    bytes: number;
+    messagesSent: number;
+    bytesSent: number;
+    snapshots: number;
+    lastMessageAt: number;
+    lastSnapshotAt: number;
+    lastCloseCode: number;
+  } {
     return {
       messages: this.messageCount,
       bytes: this.byteCount,
+      messagesSent: this.messagesSent,
+      bytesSent: this.bytesSent,
       snapshots: this.snapshotCount,
       lastMessageAt: this.lastMessageAt,
       lastSnapshotAt: this.lastSnapshotAt,
+      lastCloseCode: this.lastCloseCode,
     };
   }
 
@@ -454,6 +470,14 @@ export class WorldSocket {
 
   private notifyError(error: Error): void {
     this.errorListeners.forEach((listener) => listener(error));
+  }
+
+  /** Single send path so the baseline collector can count real bytes sent. */
+  private sendText(data: string, socket: SocketLike | null = this.socket): void {
+    if (!socket) throw new Error("World socket is not connected");
+    socket.send(data);
+    this.messagesSent += 1;
+    this.bytesSent += data.length;
   }
 }
 

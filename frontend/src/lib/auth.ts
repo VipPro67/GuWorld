@@ -1,4 +1,4 @@
-import { BACKEND_URL } from "@/lib/config";
+import { BACKEND_URL } from "./config.ts";
 
 /**
  * Shared authentication helpers for browser-side fetch.

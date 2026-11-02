@@ -1,8 +1,11 @@
+import { WorldSocket, WorldSocketError, type WorldSocketOptions } from "../network/WorldSocket.ts";
+import { BACKEND_URL } from "../../lib/config.ts";
+import { authFetch } from "../../lib/auth.ts";
 import {
-  WorldSocket,
-  WorldSocketError,
-  type WorldSocketOptions,
-} from "../network/WorldSocket.ts";
+  RealtimeMetricsCollector,
+  type RealtimeMetricsLive,
+  type RealtimeMetricsUpload,
+} from "../network/RealtimeMetrics.ts";
 import type { BufferedWorldState } from "../network/SnapshotBuffer.ts";
 import type {
   BasicAttackPayload,
@@ -183,6 +186,12 @@ export class WorldRuntime {
   private joinRetryAttempt = 0;
   private joinRetryMode: "fast" | "slow" = "fast";
   private joinRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly metrics = new RealtimeMetricsCollector();
+  private lastSocketMessagesIn = 0;
+  private lastSocketBytesIn = 0;
+  private lastSocketBytesOut = 0;
+  private lastMetricsUploadAt = 0;
+  private reconnectReason = "manual";
 
   constructor(options: WorldRuntimeOptions = {}) {
     this.socketOptions = options.socketOptions;
@@ -228,6 +237,7 @@ export class WorldRuntime {
       this.joinRetryAttempt = 0;
       this.joinRetryMode = "fast";
       this.status = "joined";
+      this.metrics.mark("joined", welcome.zone_id);
       this.emit();
       return welcome;
     } catch (error) {
@@ -239,6 +249,7 @@ export class WorldRuntime {
       ) {
         return null;
       }
+      this.metrics.mark("join_failed", code);
       this.status = "error";
       this.errorMessage = message;
       this.errorCode = code;
@@ -252,6 +263,7 @@ export class WorldRuntime {
    * class is exhausted, so the caller can fall through to a terminal error.
    */
   private scheduleJoinRetry(code: string): boolean {
+    this.metrics.mark("join_retry", code);
     const slow = JOIN_SLOW_RETRY_CODES.has(code);
     const mode = slow ? "slow" : "fast";
     if (this.joinRetryMode !== mode) {
@@ -285,7 +297,8 @@ export class WorldRuntime {
     this.joinRetryTimer = null;
   }
 
-  public async reconnect(): Promise<WorldWelcomePayload | null> {
+  public async reconnect(reason = "manual"): Promise<WorldWelcomePayload | null> {
+    this.reconnectReason = reason;
     this.joinRetryAttempt = 0;
     this.joinRetryMode = "fast";
     this.clearJoinRetry();
@@ -294,6 +307,14 @@ export class WorldRuntime {
 
   private async reopen(): Promise<WorldWelcomePayload | null> {
     const join = this.lastJoin;
+    const stale = this.reconnectReason === "stale";
+    this.reconnectReason = "manual";
+    this.flushSocketMetrics();
+    const previousMetrics = this.socket.getMetrics();
+    this.metrics.onReconnect(stale);
+    if (previousMetrics.lastCloseCode > 0) {
+      this.metrics.mark("socket_closed", String(previousMetrics.lastCloseCode));
+    }
     this.disconnect();
     if (!join) return null;
     let nextJoin = join;
@@ -302,6 +323,7 @@ export class WorldRuntime {
       nextJoin = { ...join, zone_id: resolvedZone };
     }
     this.socket = new WorldSocket(this.socketOptions);
+    this.resetSocketMetrics();
     this.bindSocket();
     return this.joinSession(nextJoin);
   }
@@ -319,6 +341,7 @@ export class WorldRuntime {
 
   public disconnect(): void {
     this.clearJoinRetry();
+    this.flushSocketMetrics();
     for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
     this.socket.disconnect();
     this.clock.reset();
@@ -335,6 +358,8 @@ export class WorldRuntime {
     this.lastCorrection = 0;
     this.sentMovementAt.clear();
     this.oneWayLatencyMs = 0;
+    this.resetSocketMetrics();
+    this.lastMetricsUploadAt = 0;
     this.stopSeq = 0;
     this.pendingTarget = null;
     this.status = "closed";
@@ -420,7 +445,7 @@ export class WorldRuntime {
         // connection error UI lets the player retry rather than leaving
         // movement falsely JOINED.
         this.lastStaleReconnectAt = now;
-        void this.reconnect();
+        void this.reconnect("stale");
       }
     }
 
@@ -442,6 +467,7 @@ export class WorldRuntime {
     }
 
     if (this.status !== "joined") return;
+    this.maybeUploadMetrics();
     this.inputAccumulator += dt;
     this.sendAccumulator += dt;
     if (this.inputVector.x === 0 && this.inputVector.y === 0) {
@@ -621,7 +647,17 @@ export class WorldRuntime {
     selfX: number;
     selfY: number;
     lastCorrection: number;
-    network: { messages: number; bytes: number; snapshots: number; lastMessageAt: number; lastSnapshotAt: number };
+    network: {
+      messages: number;
+      bytes: number;
+      messagesSent: number;
+      bytesSent: number;
+      snapshots: number;
+      lastMessageAt: number;
+      lastSnapshotAt: number;
+      lastCloseCode: number;
+    };
+    metrics: RealtimeMetricsLive;
   } {
     const self = this.getSelfPosition();
     return {
@@ -634,6 +670,7 @@ export class WorldRuntime {
       selfY: self.y,
       lastCorrection: this.lastCorrection,
       network: this.socket.getMetrics(),
+      metrics: this.metrics.peek(),
     };
   }
 
@@ -742,6 +779,7 @@ export class WorldRuntime {
     this.unsubscribers.push(
       this.socket.onSnapshot((state) => this.applySnapshot(state)),
       this.socket.onResyncRequired((reason) => {
+        this.metrics.onResync();
         this.status = "error";
         this.errorMessage = `Mất đồng bộ snapshot: ${reason}`;
         this.errorCode = "snapshot_resync_required";
@@ -793,6 +831,15 @@ export class WorldRuntime {
 
   private applySnapshot(state: BufferedWorldState | null): void {
     if (!state) return;
+    this.flushSocketMetrics();
+    const tickRate = this.clock.getTickRate();
+    this.metrics.onSnapshot({
+      atMs: this.nowMs(),
+      tick: state.tick,
+      tickRate,
+      entities: state.entities.length,
+      renderDelayMs: tickRate > 0 ? Math.max(0, (this.clock.estimatedTick() - state.tick) * 1000 / tickRate) : 0,
+    });
     const previous = this.snapshot;
     this.updateMovementLatency(state.ackSeq);
     this.snapshot = state;
@@ -845,6 +892,7 @@ export class WorldRuntime {
         ? this.predictor.softReconcile(position, state.ackSeq, 0, 1)
         : this.predictor.softReconcile(position, state.ackSeq, 2, 0.08);
       this.lastCorrection = correction.correction;
+      this.metrics.onCorrection(correction.snapped, correction.correction, stillMoving);
       if (correction.snapped) this.localTarget = null;
     }
     this.interpolator.push(
@@ -855,6 +903,7 @@ export class WorldRuntime {
   }
 
   private recordMovementSend(seq: number): void {
+    this.metrics.onInput();
     this.sentMovementAt.set(seq, this.nowMs());
     if (this.sentMovementAt.size > 64) this.sentMovementAt.delete(this.sentMovementAt.keys().next().value!);
   }
@@ -868,7 +917,55 @@ export class WorldRuntime {
     }
     if (latestSentAt === undefined) return;
     const sample = Math.min(MAX_SELF_LATENCY_MS, Math.max(0, (this.nowMs() - latestSentAt) / 2));
+    this.metrics.onLatency(sample, sample >= MAX_SELF_LATENCY_MS);
     this.oneWayLatencyMs = this.oneWayLatencyMs === 0 ? sample : this.oneWayLatencyMs * 0.75 + sample * 0.25;
+  }
+
+  /** Adds the bytes/messages received since the last snapshot to the window. */
+  private flushSocketMetrics(): void {
+    const metrics = this.socket.getMetrics();
+    const messagesIn = Math.max(0, metrics.messages - this.lastSocketMessagesIn);
+    const bytesIn = Math.max(0, metrics.bytes - this.lastSocketBytesIn);
+    const bytesOut = Math.max(0, metrics.bytesSent - this.lastSocketBytesOut);
+    this.lastSocketMessagesIn = metrics.messages;
+    this.lastSocketBytesIn = metrics.bytes;
+    this.lastSocketBytesOut = metrics.bytesSent;
+    if (messagesIn > 0 || bytesIn > 0 || bytesOut > 0) {
+      this.metrics.onTraffic(messagesIn, bytesIn, bytesOut);
+    }
+  }
+
+  private resetSocketMetrics(): void {
+    this.lastSocketMessagesIn = 0;
+    this.lastSocketBytesIn = 0;
+    this.lastSocketBytesOut = 0;
+  }
+
+  private maybeUploadMetrics(): void {
+    const now = this.nowMs();
+    if (this.lastMetricsUploadAt === 0) {
+      this.lastMetricsUploadAt = now;
+      return;
+    }
+    if (now - this.lastMetricsUploadAt < 10_000) return;
+    this.lastMetricsUploadAt = now;
+    this.flushSocketMetrics();
+    const upload = this.metrics.drain({ zone: this.lastJoin?.zone_id ?? "", status: this.status });
+    if (!upload) return;
+    void this.uploadMetrics(upload);
+  }
+
+  private async uploadMetrics(upload: RealtimeMetricsUpload): Promise<void> {
+    try {
+      await authFetch(`${BACKEND_URL}/api/realtime/metrics`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(upload),
+        timeoutMs: 5_000,
+      });
+    } catch {
+      // Baseline telemetry is best effort; it must never affect gameplay.
+    }
   }
 
   private emit(): void {

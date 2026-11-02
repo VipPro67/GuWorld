@@ -43,11 +43,15 @@ export class RealtimeDebugHUD {
     const stats = this.runtime.getDebugStats();
     const age = stats.network.lastSnapshotAt > 0 ? `${Date.now() - stats.network.lastSnapshotAt}ms` : "—";
     const kb = stats.network.bytes / 1024;
+    const m = stats.metrics;
     this.text.setText([
       `F3 DEBUG · ${stats.status.toUpperCase()}`,
       `tick ${stats.tick} @ ${stats.tickRate}Hz · entities ${stats.entities} · projectiles ${stats.projectiles}`,
       `self ${stats.selfX.toFixed(2)}, ${stats.selfY.toFixed(2)} · correction ${stats.lastCorrection.toFixed(2)}u`,
       `net msgs ${stats.network.messages} · snapshots ${stats.network.snapshots} · ${kb.toFixed(1)}KB · snap ${age}`,
+      `gap avg ${m.gapAvgMs.toFixed(1)}ms p95 ${m.gapP95Ms.toFixed(1)}ms · render delay ${m.renderDelayAvgMs.toFixed(1)}ms`,
+      `latency ${m.latencyAvgMs.toFixed(1)}ms · jitter ${m.jitterMs.toFixed(1)}ms · lost ~${m.estimatedLost}`,
+      `snaps hard ${m.hardSnaps} · blend ${m.blendCount} · out ${(m.bytesOut / 1024).toFixed(1)}KB`,
       `fps ${Math.round(this.scene.game.loop.actualFps)}`,
     ].join("\n"));
   }
