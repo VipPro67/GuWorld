@@ -803,3 +803,9 @@ export function encodeStance(input: { seq: number; stance: number; focusNetId: n
   payload.varint(input.seq).u8(input.stance).u16(input.focusNetId);
   return encodeFrame(Op.Stance, payload.bytes());
 }
+
+export function encodeJoin(request: { zoneId: string; mapVersion: string; contentVersion: string; requestId: number }): Uint8Array {
+  const writer = new Writer(64);
+  writer.string(request.zoneId).string(request.mapVersion).string(request.contentVersion).u32(request.requestId);
+  return writer.bytes();
+}

@@ -106,6 +106,8 @@ Frontend:
 | Variable | Mục đích |
 | --- | --- |
 | `NEXT_PUBLIC_BACKEND_URL` | Backend base URL; mặc định `http://localhost:8080`. |
+| `NEXT_PUBLIC_REALTIME_TRANSPORT` | `ws` (mặc định) hoặc `wt` để dùng WorldTransport/WebTransport. |
+| `NEXT_PUBLIC_REALTIME_URL` | URL WT đầy đủ, ví dụ `https://rt.cogioi.io.vn/api/wt`; mặc định suy ra từ backend (HTTPS + `/api/wt`). |
 | `NEXT_PUBLIC_MMO_ZONE_ID` | Zone dự phòng cho preview/test. Khi đăng nhập, client ưu tiên `current_region` của nhân vật để chọn map KHU_VUC/SAFE_ZONE tương ứng. |
 | `NEXT_PUBLIC_MMO_MAP_URL` | URL map JSON client tải; mặc định `/game/maps/<zone>.json`. File này phải giống bản trong `backend/data/mmo/maps/`. |
 

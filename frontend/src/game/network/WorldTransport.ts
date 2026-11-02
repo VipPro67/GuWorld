@@ -1,0 +1,768 @@
+import { BACKEND_URL } from "../../lib/config.ts";
+import { WorldSocketError } from "./WorldSocket.ts";
+import type { WorldTransportLike } from "./Transport.ts";
+import type {
+  BasicAttackPayload,
+  CapturePayload,
+  CastPayload,
+  CompanionStancePayload,
+  WorldEntityState,
+  WorldEvent,
+  WorldJoinPayload,
+  WorldRejectPayload,
+  WorldSnapshotPayload,
+  WorldTransferPayload,
+  WorldWelcomePayload,
+} from "./Protocol.ts";
+import type { BufferedWorldState } from "./SnapshotBuffer.ts";
+import { SnapshotBuffer } from "./SnapshotBuffer.ts";
+import {
+  DatagramOp,
+  MAX_DATAGRAM_SIZE,
+  Op,
+  Reader,
+  STREAM_WORLD,
+  VERSION,
+  decodeDatagram,
+  decodeSnapshotDelta,
+  decodeSnapshotFull,
+  decodeWelcome,
+  dequantize,
+  encodeAttack,
+  encodeCapture,
+  encodeCast,
+  encodeFrame,
+  encodeInput,
+  encodeJoin,
+  encodeMoveTarget,
+  encodeStance,
+  readSpawn,
+  type DeltaEntity,
+  type Spawn,
+} from "./v2/Codec.ts";
+
+interface WebTransportDatagramDuplexLike {
+  readable: ReadableStream<Uint8Array>;
+  writable: WritableStream<Uint8Array>;
+  maxDatagramSize: number;
+}
+
+interface WebTransportStreamLike {
+  readable: ReadableStream<Uint8Array>;
+  writable: WritableStream<Uint8Array>;
+}
+
+interface WebTransportLike {
+  ready: Promise<void>;
+  closed: Promise<{ closeCode?: number; reason?: string }>;
+  datagrams: WebTransportDatagramDuplexLike;
+  createBidirectionalStream(): Promise<WebTransportStreamLike>;
+  close(info?: { closeCode?: number; reason?: string }): void;
+}
+
+type WebTransportCtor = new (url: string) => WebTransportLike;
+
+export interface WorldTransportOptions {
+  url?: string;
+  getToken?: () => string | null;
+  getTabId?: () => string | null;
+  createTransport?: (url: string) => WebTransportLike;
+}
+
+const JOIN_TIMEOUT_MS = 10_000;
+
+/** Protocol v2 client over WebTransport; mirrors WorldSocket's public API. */
+export class WorldTransport implements WorldTransportLike {
+  private readonly options: WorldTransportOptions;
+  private readonly buffer = new SnapshotBuffer();
+  private transport: WebTransportLike | null = null;
+  private streamWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  private datagramWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  private incoming: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
+  private welcome: WorldWelcomePayload | null = null;
+  private joined = false;
+  private explicitClose = false;
+  private nextInputSeq = 0;
+  private nextRequestId = 1;
+  private joinTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  private netToSpawn = new Map<number, Spawn>();
+  private entityByNet = new Map<number, WorldEntityState>();
+  private netByEntity = new Map<string, number>();
+
+  private snapshotListeners = new Set<(state: BufferedWorldState) => void>();
+  private eventListeners = new Set<(event: WorldEvent) => void>();
+  private rejectListeners = new Set<(reject: WorldRejectPayload) => void>();
+  private transferListeners = new Set<(transfer: WorldTransferPayload) => void>();
+  private resyncListeners = new Set<(reason: string) => void>();
+  private errorListeners = new Set<(error: Error) => void>();
+
+  private messageCount = 0;
+  private byteCount = 0;
+  private messagesSent = 0;
+  private bytesSent = 0;
+  private snapshotCount = 0;
+  private lastMessageAt = 0;
+  private lastSnapshotAt = 0;
+  private lastCloseCode = 0;
+
+  constructor(options: WorldTransportOptions = {}) {
+    this.options = options;
+  }
+
+  public async connect(join: WorldJoinPayload): Promise<WorldWelcomePayload> {
+    if (this.joined) return this.welcome as WorldWelcomePayload;
+    const token = this.options.getToken?.() ?? readStorage("localStorage", "gu_auth_token");
+    if (!token) throw new WorldSocketError("Chưa có token đăng nhập", "missing_auth_token");
+    const url = buildTransportURL(
+      this.options.url,
+      token,
+      this.options.getTabId?.() ?? readStorage("sessionStorage", "gu_gameplay_tab_id"),
+    );
+    const factory = this.options.createTransport;
+    const TransportCtor = defaultTransportFactory();
+    if (!factory && !TransportCtor) {
+      throw new WorldSocketError("Trình duyệt không hỗ trợ WebTransport", "webtransport_unsupported");
+    }
+    const transport = factory ? factory(url) : new (TransportCtor as WebTransportCtor)(url);
+    this.transport = transport;
+    this.explicitClose = false;
+    this.nextInputSeq = 0;
+    this.incoming = new Uint8Array(0);
+    this.buffer.reset();
+
+    const pending = new Promise<WorldWelcomePayload>((resolve, reject) => {
+      this.joinTimeout = setTimeout(() => {
+        this.failJoin(reject, new WorldSocketError("Máy chủ không phản hồi yêu cầu vào world", "join_timeout"));
+        this.disconnect();
+      }, JOIN_TIMEOUT_MS);
+      transport.closed
+        .then((info: { closeCode?: number; reason?: string }) => {
+          this.lastCloseCode = info?.closeCode ?? 0;
+          if (!this.joined && this.joinTimeout !== null) {
+            this.failJoin(reject, new WorldSocketError(`WebTransport đóng (${this.lastCloseCode})`, "socket_closed"));
+          }
+          this.handleClosed();
+        })
+        .catch(() => this.handleClosed());
+      void this.openSession(transport, join, resolve, reject);
+    });
+    return pending;
+  }
+
+  private async openSession(
+    transport: WebTransportLike,
+    join: WorldJoinPayload,
+    resolve: (welcome: WorldWelcomePayload) => void,
+    reject: (error: Error) => void,
+  ): Promise<void> {
+    try {
+      await transport.ready;
+      this.datagramWriter = transport.datagrams.writable.getWriter();
+      const stream = await transport.createBidirectionalStream();
+      this.streamWriter = stream.writable.getWriter();
+      const handshake = new Uint8Array(5);
+      handshake[0] = STREAM_WORLD;
+      handshake.set([0x47, 0x57, 0x54, VERSION], 1);
+      const joinFrame = encodeFrame(
+        Op.Join,
+        encodeJoin({
+          zoneId: join.zone_id,
+          mapVersion: join.map_version,
+          contentVersion: join.content_version,
+          requestId: this.nextRequestId++,
+        }),
+      );
+      await this.writeBytes(concat(handshake, joinFrame));
+      void this.readFrames(stream.readable.getReader(), resolve, reject);
+      void this.readDatagrams(transport.datagrams.readable.getReader());
+    } catch (error) {
+      this.failJoin(reject, asWorldError(error, "transport_connect_failed"));
+      this.disconnect();
+    }
+  }
+
+  public isJoined(): boolean {
+    return this.joined;
+  }
+
+  public getWelcome(): WorldWelcomePayload | null {
+    return this.welcome;
+  }
+
+  public getSnapshot(): BufferedWorldState | null {
+    return this.buffer.getState();
+  }
+
+  public sendInput(move?: { x: number; y: number }): number | null {
+    if (!this.joined || !this.datagramWriter) return null;
+    if (move && (!Number.isFinite(move.x) || !Number.isFinite(move.y))) return null;
+    const seq = ++this.nextInputSeq;
+    const normalized = move ? normalizeVector(move) : { x: 0, y: 0 };
+    void this.sendDatagram(
+      encodeInput({
+        seq,
+        moveX: Math.max(-127, Math.min(127, Math.round(normalized.x * 127))),
+        moveY: Math.max(-127, Math.min(127, Math.round(normalized.y * 127))),
+      }),
+    );
+    return seq;
+  }
+
+  public sendMoveTarget(target: { x: number; y: number }): number | null {
+    if (!this.joined) return null;
+    if (!Number.isFinite(target.x) || !Number.isFinite(target.y)) return null;
+    const seq = ++this.nextInputSeq;
+    void this.sendFrame(encodeMoveTarget(seq, target.x, target.y));
+    return seq;
+  }
+
+  public sendCast(cast: Omit<CastPayload, "seq">): number | null {
+    if (!this.joined) return null;
+    const seq = ++this.nextInputSeq;
+    const targetNetId = cast.target_id ? (this.netByEntity.get(cast.target_id) ?? 0) : 0;
+    void this.sendFrame(
+      encodeCast({
+        seq,
+        slot: cast.slot,
+        mode: castModeCode(cast.mode),
+        targetNetId,
+        aimX: cast.aim_x,
+        aimY: cast.aim_y,
+        x: cast.x,
+        y: cast.y,
+      }),
+    );
+    return seq;
+  }
+
+  public sendBasicAttack(attack: Omit<BasicAttackPayload, "seq">): number | null {
+    if (!this.joined) return null;
+    const seq = ++this.nextInputSeq;
+    const targetNetId = attack.target_id ? (this.netByEntity.get(attack.target_id) ?? 0) : 0;
+    void this.sendFrame(encodeAttack({ seq, targetNetId, aimX: attack.aim_x, aimY: attack.aim_y }));
+    return seq;
+  }
+
+  public sendCapture(targetId: string, guId?: string): number | null {
+    if (!this.joined) return null;
+    const targetNetId = this.netByEntity.get(targetId) ?? 0;
+    if (targetNetId === 0) return null;
+    const seq = ++this.nextInputSeq;
+    void this.sendFrame(encodeCapture({ seq, targetNetId, guId }));
+    return seq;
+  }
+
+  public sendCompanionStance(stance: "DEFEND" | "FOCUS" | "FOLLOW", focusTargetId?: string): number | null {
+    if (!this.joined) return null;
+    const seq = ++this.nextInputSeq;
+    const focusNetId = focusTargetId ? (this.netByEntity.get(focusTargetId) ?? 0) : 0;
+    void this.sendFrame(encodeStance({ seq, stance: stanceCode(stance), focusNetId }));
+    return seq;
+  }
+
+  public onEvents(callback: (event: WorldEvent) => void): () => void {
+    this.eventListeners.add(callback);
+    return () => this.eventListeners.delete(callback);
+  }
+
+  public onSnapshot(callback: (state: BufferedWorldState) => void): () => void {
+    this.snapshotListeners.add(callback);
+    return () => this.snapshotListeners.delete(callback);
+  }
+
+  public onReject(callback: (reject: WorldRejectPayload) => void): () => void {
+    this.rejectListeners.add(callback);
+    return () => this.rejectListeners.delete(callback);
+  }
+
+  public onTransfer(callback: (transfer: WorldTransferPayload) => void): () => void {
+    this.transferListeners.add(callback);
+    return () => this.transferListeners.delete(callback);
+  }
+
+  public onResyncRequired(callback: (reason: string) => void): () => void {
+    this.resyncListeners.add(callback);
+    return () => this.resyncListeners.delete(callback);
+  }
+
+  public onError(callback: (error: Error) => void): () => void {
+    this.errorListeners.add(callback);
+    return () => this.errorListeners.delete(callback);
+  }
+
+  public disconnect(): void {
+    this.explicitClose = true;
+    this.joined = false;
+    this.welcome = null;
+    this.clearJoinTimeout();
+    try {
+      if (this.streamWriter) {
+        void this.streamWriter.write(encodeFrame(Op.Leave, new Uint8Array(0))).catch(() => {});
+      }
+    } catch {
+      // best effort
+    }
+    try {
+      this.transport?.close({ closeCode: 0, reason: "client disconnected" });
+    } catch {
+      // best effort
+    }
+    this.streamWriter = null;
+    this.datagramWriter = null;
+    this.transport = null;
+    this.buffer.reset();
+    this.netToSpawn.clear();
+    this.entityByNet.clear();
+    this.netByEntity.clear();
+  }
+
+  public getMetrics(): {
+    messages: number;
+    bytes: number;
+    messagesSent: number;
+    bytesSent: number;
+    snapshots: number;
+    lastMessageAt: number;
+    lastSnapshotAt: number;
+    lastCloseCode: number;
+  } {
+    return {
+      messages: this.messageCount,
+      bytes: this.byteCount,
+      messagesSent: this.messagesSent,
+      bytesSent: this.bytesSent,
+      snapshots: this.snapshotCount,
+      lastMessageAt: this.lastMessageAt,
+      lastSnapshotAt: this.lastSnapshotAt,
+      lastCloseCode: this.lastCloseCode,
+    };
+  }
+
+  // ---- internals ---------------------------------------------------------
+
+  private async readFrames(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    resolve: (welcome: WorldWelcomePayload) => void,
+    reject: (error: Error) => void,
+  ): Promise<void> {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        this.messageCount += 1;
+        this.byteCount += value.byteLength;
+        this.lastMessageAt = Date.now();
+        this.incoming = concat(this.incoming, value);
+        for (;;) {
+          const parsed = this.tryParseFrame();
+          if (!parsed) break;
+          this.handleFrame(parsed.op, parsed.payload, resolve, reject);
+        }
+      }
+    } catch (error) {
+      this.notifyError(asWorldError(error, "transport_read_failed"));
+    }
+    if (this.joined) this.handleClosed();
+  }
+
+  private tryParseFrame(): { op: number; payload: Uint8Array } | null {
+    if (this.incoming.length < 5) return null;
+    const view = new DataView(this.incoming.buffer, this.incoming.byteOffset, this.incoming.byteLength);
+    const length = view.getUint32(0, true);
+    if (length < 1 || this.incoming.length < 4 + length) return null;
+    const op = this.incoming[4];
+    const payload = this.incoming.slice(5, 4 + length);
+    this.incoming = this.incoming.slice(4 + length) as Uint8Array;
+    return { op, payload };
+  }
+
+  private handleFrame(
+    op: number,
+    payload: Uint8Array,
+    resolve: (welcome: WorldWelcomePayload) => void,
+    reject: (error: Error) => void,
+  ): void {
+    switch (op) {
+      case Op.Welcome: {
+        try {
+          const welcome = decodeWelcome(payload);
+          const full = decodeSnapshotFull(welcome.snapshot);
+          this.applyBaseline(full);
+          const snapshot = this.toSnapshotPayload(full, true);
+          const applied = this.buffer.apply(snapshot);
+          if (applied.status !== "applied") throw new Error("Welcome baseline could not be applied");
+          const skills = welcome.skillsJson.length > 0
+            ? JSON.parse(new TextDecoder().decode(welcome.skillsJson))
+            : [];
+          this.welcome = {
+            session_id: welcome.sessionId,
+            zone_id: welcome.zoneId,
+            map_version: welcome.mapVersion,
+            content_version: welcome.contentVersion,
+            tick_rate: welcome.tickRate,
+            movement_speed: welcome.movementSpeedX100 / 100,
+            server_tick: welcome.serverTick,
+            entity_id: welcome.entityId,
+            entity_revision: welcome.entityRevision,
+            baseline_id: welcome.baselineId,
+            map_hash: welcome.mapHash || undefined,
+            skills,
+            loadout_revision: welcome.loadoutRevision || undefined,
+            snapshot,
+          };
+          this.joined = true;
+          this.clearJoinTimeout();
+          this.snapshotCount += 1;
+          this.lastSnapshotAt = Date.now();
+          this.emitSnapshot(applied.state);
+          resolve(this.welcome);
+        } catch (error) {
+          this.failJoin(reject, asWorldError(error, "invalid_welcome"));
+        }
+        break;
+      }
+      case Op.Snapshot: {
+        try {
+          const full = decodeSnapshotFull(payload);
+          if (full.isBaseline) this.applyBaseline(full);
+          const applied = this.buffer.apply(this.toSnapshotPayload(full, full.isBaseline));
+          if (applied.status === "resync_required") {
+            this.resyncListeners.forEach((listener) => listener(applied.reason));
+            break;
+          }
+          if (applied.status !== "applied") break;
+          this.snapshotCount += 1;
+          this.lastSnapshotAt = Date.now();
+          this.emitSnapshot(applied.state);
+        } catch (error) {
+          this.notifyError(asWorldError(error, "invalid_snapshot"));
+        }
+        break;
+      }
+      case Op.Spawn:
+        try {
+          this.applySpawnPayload(payload);
+        } catch (error) {
+          this.notifyError(asWorldError(error, "invalid_spawn"));
+        }
+        break;
+      case Op.Reject: {
+        const rejectPayload = decodeReject(payload);
+        this.rejectListeners.forEach((listener) => listener(rejectPayload));
+        if (!this.joined) {
+          this.failJoin(reject, new WorldSocketError(rejectPayload.message || rejectPayload.code, rejectPayload.code));
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  private async readDatagrams(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        this.messageCount += 1;
+        this.byteCount += value.byteLength;
+        this.lastMessageAt = Date.now();
+        const { op, payload } = decodeDatagram(value);
+        if (op !== DatagramOp.SnapshotDelta) continue;
+        this.applyDelta(decodeSnapshotDelta(payload));
+      }
+    } catch (error) {
+      this.notifyError(asWorldError(error, "transport_datagram_failed"));
+    }
+  }
+
+  private applyBaseline(full: {
+    spawns: Spawn[];
+    states: DeltaEntity[];
+  }): void {
+    this.netToSpawn.clear();
+    this.entityByNet.clear();
+    this.netByEntity.clear();
+    for (const spawn of full.spawns) {
+      this.netToSpawn.set(spawn.netId, spawn);
+      this.netByEntity.set(spawn.entityId, spawn.netId);
+    }
+    const states = new Map<number, DeltaEntity>();
+    for (const state of full.states) states.set(state.netId, state);
+    for (const spawn of full.spawns) {
+      const state = states.get(spawn.netId);
+      if (state) this.entityByNet.set(spawn.netId, entityFrom(spawn, state));
+    }
+  }
+
+  private applySpawnPayload(payload: Uint8Array): void {
+    const reader = new Reader(payload);
+    const count = reader.u8();
+    for (let i = 0; i < count; i += 1) {
+      const spawn = readSpawn(reader);
+      this.netToSpawn.set(spawn.netId, spawn);
+      this.netByEntity.set(spawn.entityId, spawn.netId);
+    }
+  }
+
+  private applyDelta(delta: {
+    tick: number;
+    baselineId: number;
+    ackSeq: number;
+    entities: DeltaEntity[];
+    removed: number[];
+  }): void {
+    for (const state of delta.entities) {
+      const spawn = this.netToSpawn.get(state.netId);
+      if (!spawn) continue;
+      this.entityByNet.set(state.netId, mergeEntity(spawn, this.entityByNet.get(state.netId), state));
+    }
+    const removedIds: string[] = [];
+    for (const netId of delta.removed) {
+      const spawn = this.netToSpawn.get(netId);
+      if (spawn) removedIds.push(spawn.entityId);
+      this.netToSpawn.delete(netId);
+      this.entityByNet.delete(netId);
+      if (spawn) this.netByEntity.delete(spawn.entityId);
+    }
+    const snapshot: WorldSnapshotPayload = {
+      tick: delta.tick,
+      ack_seq: delta.ackSeq,
+      baseline_id: delta.baselineId,
+      base_tick: this.buffer.getState()?.baseTick ?? delta.tick,
+      is_baseline: false,
+      entities: delta.entities
+        .map((state) => this.entityByNet.get(state.netId))
+        .filter((entity): entity is WorldEntityState => Boolean(entity)),
+      removed: removedIds,
+      projectiles: [],
+    };
+    const applied = this.buffer.apply(snapshot);
+    if (applied.status === "resync_required") {
+      this.resyncListeners.forEach((listener) => listener(applied.reason));
+      return;
+    }
+    if (applied.status !== "applied") return;
+    this.snapshotCount += 1;
+    this.lastSnapshotAt = Date.now();
+    this.emitSnapshot(applied.state);
+  }
+
+  private toSnapshotPayload(
+    full: { tick: number; baselineId: number; ackSeq: number; spawns: Spawn[]; states: DeltaEntity[] },
+    isBaseline: boolean,
+  ): WorldSnapshotPayload {
+    const states = new Map<number, DeltaEntity>();
+    for (const state of full.states) states.set(state.netId, state);
+    const entities: WorldEntityState[] = [];
+    for (const spawn of full.spawns) {
+      const state = states.get(spawn.netId);
+      if (state) entities.push(entityFrom(spawn, state));
+    }
+    return {
+      tick: full.tick,
+      ack_seq: full.ackSeq,
+      baseline_id: full.baselineId,
+      base_tick: full.tick,
+      is_baseline: isBaseline,
+      entities,
+      projectiles: [],
+    };
+  }
+
+  private emitSnapshot(state: BufferedWorldState): void {
+    this.snapshotListeners.forEach((listener) => listener(state));
+  }
+
+  private async sendFrame(frame: Uint8Array): Promise<void> {
+    try {
+      await this.writeBytes(frame);
+    } catch (error) {
+      this.notifyError(asWorldError(error, "send_failed"));
+    }
+  }
+
+  private async writeBytes(bytes: Uint8Array): Promise<void> {
+    if (!this.streamWriter) return;
+    this.messagesSent += 1;
+    this.bytesSent += bytes.byteLength;
+    await this.streamWriter.write(bytes);
+  }
+
+  private async sendDatagram(datagram: Uint8Array): Promise<void> {
+    if (!this.datagramWriter || datagram.byteLength > MAX_DATAGRAM_SIZE) return;
+    this.messagesSent += 1;
+    this.bytesSent += datagram.byteLength;
+    try {
+      await this.datagramWriter.write(datagram);
+    } catch (error) {
+      this.notifyError(asWorldError(error, "send_datagram_failed"));
+    }
+  }
+
+  private handleClosed(): void {
+    if (this.explicitClose) return;
+    this.joined = false;
+    this.welcome = null;
+    this.streamWriter = null;
+    this.datagramWriter = null;
+    this.notifyError(new WorldSocketError("Kết nối realtime đã đóng", "socket_closed"));
+  }
+
+  private failJoin(reject: (error: Error) => void, error: Error): void {
+    if (this.joinTimeout === null) return;
+    this.clearJoinTimeout();
+    reject(error);
+    this.notifyError(error);
+  }
+
+  private clearJoinTimeout(): void {
+    if (this.joinTimeout !== null) {
+      clearTimeout(this.joinTimeout);
+      this.joinTimeout = null;
+    }
+  }
+
+  private notifyError(error: Error): void {
+    this.errorListeners.forEach((listener) => listener(error));
+  }
+}
+
+function defaultTransportFactory(): WebTransportCtor | null {
+  const ctor = (globalThis as unknown as { WebTransport?: WebTransportCtor }).WebTransport;
+  return typeof ctor === "function" ? ctor : null;
+}
+
+function buildTransportURL(baseURL: string | undefined, token: string, tabId: string | null): string {
+  const configured = (process.env.NEXT_PUBLIC_REALTIME_URL ?? "").trim();
+  const fallback = `${BACKEND_URL.replace(/^http/, "https")}/api/wt`;
+  const url = new URL(baseURL ?? (configured || fallback));
+  url.searchParams.set("token", token);
+  if (tabId) url.searchParams.set("tab_id", tabId);
+  return url.toString();
+}
+
+function readStorage(storageName: "localStorage" | "sessionStorage", key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window[storageName].getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeVector(vector: { x: number; y: number }): { x: number; y: number } {
+  const magnitude = Math.hypot(vector.x, vector.y);
+  if (magnitude === 0) return { x: 0, y: 0 };
+  const scale = magnitude > 1 ? 1 / magnitude : 1;
+  return { x: vector.x * scale, y: vector.y * scale };
+}
+
+function concat(left: Uint8Array, right: Uint8Array): Uint8Array {
+  const out = new Uint8Array(left.length + right.length);
+  out.set(left);
+  out.set(right, left.length);
+  return out;
+}
+
+function castModeCode(mode: string): number {
+  switch (mode) {
+    case "DIRECTION":
+      return 1;
+    case "GROUND":
+      return 2;
+    case "SELF":
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function stanceCode(stance: "DEFEND" | "FOCUS" | "FOLLOW"): number {
+  switch (stance) {
+    case "FOCUS":
+      return 1;
+    case "FOLLOW":
+      return 2;
+    default:
+      return 0;
+  }
+}
+
+function kindName(code: number): "player" | "monster" | "companion" {
+  if (code === 1) return "monster";
+  if (code === 2) return "companion";
+  return "player";
+}
+
+function stanceName(code: number): "DEFEND" | "FOCUS" | "FOLLOW" {
+  if (code === 1) return "FOCUS";
+  if (code === 2) return "FOLLOW";
+  return "DEFEND";
+}
+
+function entityFrom(spawn: Spawn, state: DeltaEntity): WorldEntityState {
+  return {
+    entity_id: spawn.entityId,
+    entity_revision: state.revision,
+    kind: kindName(spawn.kind),
+    party_id: spawn.partyId || undefined,
+    pvp_enabled: (spawn.flags & 1) !== 0,
+    template_id: spawn.templateId || undefined,
+    name: spawn.name || undefined,
+    x: dequantize(state.x),
+    y: dequantize(state.y),
+    hp: state.hp,
+    max_hp: spawn.maxHp || undefined,
+    shield: state.shield || undefined,
+    mana: state.mana,
+    max_mana: spawn.maxMana || undefined,
+    thought: state.thought,
+    max_thought: spawn.maxThought || undefined,
+    stealthed: (spawn.flags & 2) !== 0 || undefined,
+    flying: (spawn.flags & 4) !== 0 || undefined,
+    form_active: (spawn.flags & 8) !== 0 || undefined,
+    companion_kind: spawn.companionKind || undefined,
+    stance: spawn.companionKind ? stanceName(spawn.stance) : undefined,
+  };
+}
+
+function mergeEntity(
+  spawn: Spawn,
+  previous: WorldEntityState | undefined,
+  state: DeltaEntity,
+): WorldEntityState {
+  const next: WorldEntityState = { ...(previous ?? entityFrom(spawn, state)), entity_revision: state.revision };
+  if (state.mask & 1) {
+    next.x = dequantize(state.x);
+    next.y = dequantize(state.y);
+  }
+  if (state.mask & 2) {
+    if (state.vitalsSub & 1) next.hp = state.hp;
+    if (state.vitalsSub & 2) next.shield = state.shield;
+    if (state.vitalsSub & 4) next.mana = state.mana;
+    if (state.vitalsSub & 8) next.thought = state.thought;
+  }
+  if (state.mask & 32) {
+    next.pvp_enabled = (state.flags & 1) !== 0;
+    next.stealthed = (state.flags & 2) !== 0 || undefined;
+    next.flying = (state.flags & 4) !== 0 || undefined;
+    next.form_active = (state.flags & 8) !== 0 || undefined;
+  }
+  return next;
+}
+
+function decodeReject(payload: Uint8Array): WorldRejectPayload {
+  const reader = new Reader(payload);
+  const code = reader.string();
+  const message = reader.string();
+  const retryable = reader.u8() === 1;
+  return { code: code || "realtime_world_rejected", message: message || undefined, retryable };
+}
+
+function asWorldError(error: unknown, code: string): WorldSocketError {
+  return new WorldSocketError(error instanceof Error ? error.message : String(error), code);
+}

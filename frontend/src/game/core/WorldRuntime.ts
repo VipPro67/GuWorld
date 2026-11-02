@@ -1,4 +1,6 @@
 import { WorldSocket, WorldSocketError, type WorldSocketOptions } from "../network/WorldSocket.ts";
+import { WorldTransport, type WorldTransportOptions } from "../network/WorldTransport.ts";
+import type { WorldTransportLike } from "../network/Transport.ts";
 import { BACKEND_URL } from "../../lib/config.ts";
 import { authFetch } from "../../lib/auth.ts";
 import {
@@ -139,8 +141,17 @@ const INPUT_KEEPALIVE_INTERVAL = 0.15;
  * Owns the realtime network session for the Phaser scene. Snapshots are read on
  * the render side only; the scene never mutates authoritative state.
  */
+const TRANSPORT_MODE = (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT ?? "ws").toLowerCase();
+
+function createRealtimeSocket(options: WorldSocketOptions | undefined): WorldTransportLike {
+  if (TRANSPORT_MODE === "wt") {
+    return new WorldTransport(options as WorldTransportOptions);
+  }
+  return new WorldSocket(options);
+}
+
 export class WorldRuntime {
-  private socket: WorldSocket;
+  private socket: WorldTransportLike;
   private readonly socketOptions: WorldSocketOptions | undefined;
   private speed: number;
   private predictionSpeed: number;
@@ -196,7 +207,7 @@ export class WorldRuntime {
   constructor(options: WorldRuntimeOptions = {}) {
     this.socketOptions = options.socketOptions;
     this.nowMs = options.nowMs ?? Date.now;
-    this.socket = new WorldSocket(this.socketOptions);
+    this.socket = createRealtimeSocket(this.socketOptions);
     this.speed = options.speed ?? DEFAULT_SPEED;
     this.predictionSpeed = this.speed;
     this.predictor.setSpeed(this.speed);
@@ -322,7 +333,7 @@ export class WorldRuntime {
     if (resolvedZone && resolvedZone !== join.zone_id) {
       nextJoin = { ...join, zone_id: resolvedZone };
     }
-    this.socket = new WorldSocket(this.socketOptions);
+    this.socket = createRealtimeSocket(this.socketOptions);
     this.resetSocketMetrics();
     this.bindSocket();
     return this.joinSession(nextJoin);
