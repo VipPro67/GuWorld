@@ -259,7 +259,7 @@ func (w *World) moveMonsterTowardLocked(monster *Entity, target Vec2) {
 func (w *World) selectMonsterTargetLocked(monster *Entity) *Entity {
 	if monster.AI.FixedTarget != "" {
 		target := w.entities[monster.AI.FixedTarget]
-		if target != nil && target.Vitals.HP > 0 && !w.hasStatus(target, "STEALTH") && w.canHarm(monster, target) {
+		if target != nil && target.Vitals.HP > 0 && !target.Suspended && !w.hasStatus(target, "STEALTH") && w.canHarm(monster, target) {
 			return target
 		}
 		return nil
@@ -269,7 +269,7 @@ func (w *World) selectMonsterTargetLocked(monster *Entity) *Entity {
 	bestThreat := 0.0
 	for candidateID, threat := range monster.AI.ThreatTable {
 		candidate := w.entities[candidateID]
-		if candidate == nil || candidate.Vitals.HP <= 0 || w.hasStatus(candidate, "STEALTH") || !w.canHarm(monster, candidate) {
+		if candidate == nil || candidate.Vitals.HP <= 0 || candidate.Suspended || w.hasStatus(candidate, "STEALTH") || !w.canHarm(monster, candidate) {
 			delete(monster.AI.ThreatTable, candidateID)
 			continue
 		}
@@ -290,7 +290,7 @@ func (w *World) selectMonsterTargetLocked(monster *Entity) *Entity {
 	var nearest *Entity
 	var nearestDistance float64
 	for _, candidate := range w.entities {
-		if candidate.ID == monster.ID || candidate.Vitals.HP <= 0 || w.hasStatus(candidate, "STEALTH") || !w.canHarm(monster, candidate) {
+		if candidate.ID == monster.ID || candidate.Vitals.HP <= 0 || candidate.Suspended || w.hasStatus(candidate, "STEALTH") || !w.canHarm(monster, candidate) {
 			continue
 		}
 		distance := math.Hypot(candidate.Transform.Position.X-monster.Transform.Position.X, candidate.Transform.Position.Y-monster.Transform.Position.Y)

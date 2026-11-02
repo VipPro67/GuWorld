@@ -152,8 +152,8 @@ func TestAdmissionAllowsEveryPlayerAndEnforcesManagerCapacity(t *testing.T) {
 	if _, err := admission.Join(context.Background(), playerID, uuid.New(), request); admissionErrorCode(err) != "realtime_zone_full" {
 		t.Fatalf("second player should be limited by zone capacity: %v", err)
 	}
-	if _, err := admission.Join(context.Background(), otherPlayerID, uuid.New(), request); admissionErrorCode(err) != "realtime_character_already_owned" {
-		t.Fatalf("duplicate controller join error: %v", err)
+	if _, err := admission.Join(context.Background(), otherPlayerID, uuid.New(), request); err != nil {
+		t.Fatalf("duplicate controller for a live player should take over instead of 409: %v", err)
 	}
 }
 

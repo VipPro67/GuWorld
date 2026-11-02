@@ -922,6 +922,9 @@ func main() {
 		worker.RunEvery(ctx, 10*time.Second, "realtime-checkpoint", func(context.Context) {
 			realtimeAdmission.CheckpointActive()
 		})
+		worker.RunEvery(ctx, time.Second, "realtime-suspend-sweeper", func(context.Context) {
+			realtimeAdmission.SweepSuspended()
+		})
 		worker.RunEvery(ctx, 5*time.Second, "sect-war-disconnect-settlement", handlers.SweepDisconnectedSectWars)
 		worker.RunEvery(ctx, 5*time.Second, "arena-disconnect-settlement", handlers.SweepDisconnectedArenas)
 	}

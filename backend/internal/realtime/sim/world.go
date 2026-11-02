@@ -153,6 +153,7 @@ type Entity struct {
 	Revision       uint64                   `json:"revision"`
 	AckSeq         uint64                   `json:"ack_seq,omitempty"`
 	LeaseToken     string                   `json:"-"`
+	Suspended      bool                     `json:"-"`
 	AI             AIState                  `json:"-"`
 	Combat         CombatState              `json:"-"`
 	Companion      CompanionState           `json:"-"`
@@ -565,6 +566,27 @@ func (w *World) QueueSetLeaseToken(entityID EntityID, leaseToken string) (<-chan
 			return ErrInvalidEntity
 		}
 		entity.LeaseToken = leaseToken
+		return nil
+	}, result: make(chan error, 1)}
+	select {
+	case w.lifecycleInbox <- request:
+		return request.result, nil
+	default:
+		return nil, ErrLifecycleQueueFull
+	}
+}
+
+// QueueSetSuspended marks a character as temporarily disconnected. Suspended
+// entities keep their state (statuses/cooldowns still tick) but take no damage
+// and are ignored by monster targeting until the client resumes or the grace
+// window expires.
+func (w *World) QueueSetSuspended(entityID EntityID, suspended bool) (<-chan error, error) {
+	request := lifecycleCommand{apply: func() error {
+		entity := w.entities[entityID]
+		if entity == nil {
+			return ErrInvalidEntity
+		}
+		entity.Suspended = suspended
 		return nil
 	}, result: make(chan error, 1)}
 	select {

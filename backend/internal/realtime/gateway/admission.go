@@ -29,7 +29,17 @@ const (
 	maxTrackedJoinPlayers = 10_000
 	playerSpeed           = 4.0
 	playerRadius          = 0.4
+	// Reconnect grace: keep the character/lease alive after the socket dies so
+	// a WiFi↔4G switch or page reload can resume instead of racing a 409.
+	openZoneSuspendGrace    = 15 * time.Second
+	privateZoneSuspendGrace = 30 * time.Second
 )
+
+// suspendKey identifies one tab's resumable session (ticket #318).
+type suspendKey struct {
+	playerID uuid.UUID
+	tabID    string
+}
 
 func realtimePlayerSpeed(speed float64) float64 {
 	if speed <= 0 {
@@ -82,6 +92,7 @@ type Admission struct {
 
 	mu                sync.Mutex
 	sessions          map[uuid.UUID]session
+	suspended         map[suspendKey]session
 	joinAttempts      map[uuid.UUID][]time.Time
 	tribulationZones  TribulationZoneLoader
 	combatZones       CombatInstanceZoneLoader
@@ -91,6 +102,7 @@ type Admission struct {
 
 type session struct {
 	playerID            uuid.UUID
+	tabID               string
 	regionID            string
 	lease               realtimeworld.OwnershipLease
 	mapVersion          string
@@ -111,6 +123,7 @@ type session struct {
 	mapHeight           float64
 	persistState        bool
 	persistCombatState  bool
+	expiresAt           time.Time
 }
 
 // edgeTransferCooldown prevents border ping-pong when a player holds movement
@@ -142,7 +155,9 @@ func NewAdmission(cfg config.Config, manager *realtimeworld.Manager, load JoinSt
 	}
 	admission := &Admission{
 		config: cfg, manager: manager, load: load,
-		sessions: make(map[uuid.UUID]session), joinAttempts: make(map[uuid.UUID][]time.Time),
+		sessions:     make(map[uuid.UUID]session),
+		suspended:    make(map[suspendKey]session),
+		joinAttempts: make(map[uuid.UUID][]time.Time),
 	}
 	admission.paused.Store(cfg.AdmissionPaused)
 	return admission
@@ -172,6 +187,10 @@ func (a *Admission) Drain() int {
 	for controllerID, current := range a.sessions {
 		active[controllerID] = current
 	}
+	suspended := make(map[suspendKey]session, len(a.suspended))
+	for key, current := range a.suspended {
+		suspended[key] = current
+	}
 	a.mu.Unlock()
 	drained := 0
 	for controllerID, current := range active {
@@ -194,13 +213,30 @@ func (a *Admission) Drain() int {
 		delete(a.sessions, controllerID)
 		a.mu.Unlock()
 	}
+	for key, current := range suspended {
+		a.manager.SetCharacterSuspended(current.lease, false)
+		a.manager.LeaveCharacter(current.lease)
+		drained++
+		a.mu.Lock()
+		if held, ok := a.suspended[key]; ok && held.lease.Token == current.lease.Token {
+			delete(a.suspended, key)
+		}
+		a.mu.Unlock()
+	}
 	return drained
 }
 
 func (a *Admission) ActiveSessionCount() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return len(a.sessions)
+	return len(a.sessions) + len(a.suspended)
+}
+
+// SuspendedCount reports sessions waiting for a reconnect (admin/tests).
+func (a *Admission) SuspendedCount() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.suspended)
 }
 
 func (a *Admission) SetStateStore(store WorldStateStore) {
@@ -290,7 +326,20 @@ func (a *Admission) CheckpointActive() {
 	}
 }
 
+// Join is the legacy entry point without a tab identity. It keeps old callers
+// working; WebSocket clients use JoinWithTab so a reconnect can resume.
 func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, request protocol.JoinRequest) (any, error) {
+	return a.join(ctx, playerID, controllerID, "", request)
+}
+
+// JoinWithTab admits a controller and, when tabID matches a suspended session
+// inside the grace window, resumes the existing entity instead of claiming a
+// new one. A different tab for the same player takes the lease over.
+func (a *Admission) JoinWithTab(ctx context.Context, playerID, controllerID uuid.UUID, tabID string, request protocol.JoinRequest) (any, error) {
+	return a.join(ctx, playerID, controllerID, strings.TrimSpace(tabID), request)
+}
+
+func (a *Admission) join(ctx context.Context, playerID, controllerID uuid.UUID, tabID string, request protocol.JoinRequest) (any, error) {
 	if a.manager == nil {
 		reason := handlers.RealtimeRuntimeError()
 		if reason == "" {
@@ -329,6 +378,23 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		return a.joinResponse(active, controllerID)
 	}
 	a.mu.Unlock()
+	if tabID != "" {
+		if response, resumed, err := a.resumeSuspendedSession(playerID, controllerID, tabID, request); err != nil {
+			return nil, err
+		} else if resumed {
+			return response, nil
+		}
+		if response, taken, err := a.takeoverSuspendedSession(playerID, controllerID, tabID, request); err != nil {
+			return nil, err
+		} else if taken {
+			return response, nil
+		}
+	}
+	if response, taken, err := a.takeoverLiveSession(playerID, controllerID, tabID, request); err != nil {
+		return nil, err
+	} else if taken {
+		return response, nil
+	}
 	if !a.allowJoinAttempt(playerID, time.Now()) {
 		return nil, admissionError(429, "realtime_join_rate_limited", "Too many realtime join attempts")
 	}
@@ -667,7 +733,7 @@ func (a *Admission) Join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		mana = &manaSettlement{last: playerCombat.Mana}
 	}
 	active := session{
-		playerID: playerID, regionID: state.RegionID, lease: lease, mapVersion: request.MapVersion, contentVersion: request.ContentVersion,
+		playerID: playerID, tabID: tabID, regionID: state.RegionID, lease: lease, mapVersion: request.MapVersion, contentVersion: request.ContentVersion,
 		skills: skills, loadoutRevision: loadoutRevision, movementSpeed: moveSpeed,
 		mana:             mana,
 		locationRevision: locationRevision, hasLocationRevision: hasLocationRevision,
@@ -1227,6 +1293,235 @@ func (a *Admission) SubscribeSnapshots(playerID, controllerID uuid.UUID) (<-chan
 	return feed, unsubscribe, nil
 }
 
+func (a *Admission) sessionMatchesRequest(active session, request protocol.JoinRequest) bool {
+	return active.mapVersion == request.MapVersion &&
+		active.contentVersion == request.ContentVersion &&
+		active.lease.ZoneKey.MapID == request.ZoneID
+}
+
+func suspendGrace(active session) time.Duration {
+	if active.persistCombatState || active.regionID == "aperture_tribulation" {
+		return privateZoneSuspendGrace
+	}
+	return openZoneSuspendGrace
+}
+
+// resumeSuspendedSession reattaches a controller to a suspended session when
+// the same tab reconnects inside the grace window.
+func (a *Admission) resumeSuspendedSession(playerID, controllerID uuid.UUID, tabID string, request protocol.JoinRequest) (any, bool, error) {
+	key := suspendKey{playerID: playerID, tabID: tabID}
+	a.mu.Lock()
+	candidate, exists := a.suspended[key]
+	a.mu.Unlock()
+	if !exists {
+		return nil, false, nil
+	}
+	if time.Now().After(candidate.expiresAt) || !a.sessionMatchesRequest(candidate, request) {
+		a.finalizeSuspended(key, candidate)
+		return nil, false, nil
+	}
+	oldToken := candidate.lease.Token
+	lease, err := a.manager.ReplaceCharacterLease(candidate.lease, controllerID.String())
+	if err != nil {
+		logger.S.Warnf("Realtime resume for %s lost its lease: %v", playerID, err)
+		return nil, false, nil
+	}
+	_ = a.manager.SetCharacterSuspended(lease, false)
+	candidate.lease = lease
+	candidate.tabID = tabID
+	candidate.closing = false
+	candidate.transferring = false
+	candidate.expiresAt = time.Time{}
+
+	a.mu.Lock()
+	if held, ok := a.suspended[key]; ok && held.lease.Token == oldToken {
+		delete(a.suspended, key)
+	}
+	a.sessions[controllerID] = candidate
+	a.mu.Unlock()
+	response, err := a.joinResponse(candidate, controllerID)
+	return response, err == nil, err
+}
+
+// takeoverSuspendedSession hands a suspended session to a different tab. The
+// old tab is expected to be replaced (4001) by the socket/hub layer.
+func (a *Admission) takeoverSuspendedSession(playerID, controllerID uuid.UUID, tabID string, request protocol.JoinRequest) (any, bool, error) {
+	a.mu.Lock()
+	var key suspendKey
+	var candidate session
+	found := false
+	for candidateKey, current := range a.suspended {
+		if current.playerID == playerID && candidateKey.tabID != tabID {
+			key, candidate, found = candidateKey, current, true
+			break
+		}
+	}
+	a.mu.Unlock()
+	if !found {
+		return nil, false, nil
+	}
+	if !a.sessionMatchesRequest(candidate, request) {
+		a.finalizeSuspended(key, candidate)
+		return nil, false, nil
+	}
+	oldToken := candidate.lease.Token
+	lease, err := a.manager.ReplaceCharacterLease(candidate.lease, controllerID.String())
+	if err != nil {
+		a.finalizeSuspended(key, candidate)
+		return nil, false, nil
+	}
+	_ = a.manager.SetCharacterSuspended(lease, false)
+	candidate.lease = lease
+	candidate.tabID = tabID
+	candidate.closing = false
+	candidate.transferring = false
+	candidate.expiresAt = time.Time{}
+
+	a.mu.Lock()
+	if held, ok := a.suspended[key]; ok && held.lease.Token == oldToken {
+		delete(a.suspended, key)
+	}
+	a.sessions[controllerID] = candidate
+	a.mu.Unlock()
+	response, err := a.joinResponse(candidate, controllerID)
+	return response, err == nil, err
+}
+
+// takeoverLiveSession replaces a still-connected controller. This removes the
+// old disconnect race that produced 409 realtime_character_already_owned.
+func (a *Admission) takeoverLiveSession(playerID, controllerID uuid.UUID, tabID string, request protocol.JoinRequest) (any, bool, error) {
+	a.mu.Lock()
+	var previousID uuid.UUID
+	var previous session
+	found := false
+	for id, current := range a.sessions {
+		if current.playerID == playerID && id != controllerID {
+			previousID, previous, found = id, current, true
+			break
+		}
+	}
+	a.mu.Unlock()
+	if !found {
+		return nil, false, nil
+	}
+	if !a.sessionMatchesRequest(previous, request) {
+		a.finalizeActiveSession(previousID, previous)
+		return nil, false, nil
+	}
+	oldToken := previous.lease.Token
+	lease, err := a.manager.ReplaceCharacterLease(previous.lease, controllerID.String())
+	if err != nil {
+		a.finalizeActiveSession(previousID, previous)
+		return nil, false, nil
+	}
+	_ = a.manager.SetCharacterSuspended(lease, false)
+	previous.lease = lease
+	previous.tabID = tabID
+	previous.closing = false
+	previous.transferring = false
+	previous.expiresAt = time.Time{}
+
+	a.mu.Lock()
+	if held, ok := a.sessions[previousID]; ok && held.lease.Token == oldToken {
+		delete(a.sessions, previousID)
+	}
+	a.sessions[controllerID] = previous
+	a.mu.Unlock()
+	response, err := a.joinResponse(previous, controllerID)
+	return response, err == nil, err
+}
+
+// suspendSession parks a disconnected controller inside the grace window.
+func (a *Admission) suspendSession(controllerID uuid.UUID, active session) {
+	active.expiresAt = time.Now().Add(suspendGrace(active))
+	a.mu.Lock()
+	delete(a.sessions, controllerID)
+	a.suspended[suspendKey{playerID: active.playerID, tabID: active.tabID}] = active
+	a.mu.Unlock()
+	if err := a.manager.SetCharacterSuspended(active.lease, true); err != nil {
+		logger.S.Warnf("Realtime suspend for %s could not mark the entity: %v", active.playerID, err)
+	}
+}
+
+// SweepSuspended finalizes sessions whose grace expired. Driven by the worker.
+func (a *Admission) SweepSuspended() int {
+	now := time.Now()
+	type expired struct {
+		key     suspendKey
+		session session
+	}
+	var due []expired
+	a.mu.Lock()
+	for key, current := range a.suspended {
+		if !current.expiresAt.IsZero() && now.After(current.expiresAt) {
+			delete(a.suspended, key)
+			due = append(due, expired{key: key, session: current})
+		}
+	}
+	a.mu.Unlock()
+	for _, item := range due {
+		a.finalizeSuspended(item.key, item.session)
+	}
+	return len(due)
+}
+
+func (a *Admission) finalizeSuspended(key suspendKey, active session) {
+	if err := a.flushState(active); err != nil {
+		if errors.Is(err, persistence.ErrLocationRevisionStale) {
+			logger.S.Warnf("Realtime suspended session for %s was superseded: %v", active.playerID, err)
+			a.manager.LeaveCharacter(active.lease)
+			a.mu.Lock()
+			if held, ok := a.suspended[key]; ok && held.lease.Token == active.lease.Token {
+				delete(a.suspended, key)
+			}
+			a.mu.Unlock()
+			return
+		}
+		logger.S.Errorf("Realtime suspend checkpoint failed for %s: %v", active.playerID, err)
+		a.mu.Lock()
+		if held, ok := a.suspended[key]; ok && held.lease.Token == active.lease.Token {
+			held.expiresAt = time.Now().Add(10 * time.Second)
+			a.suspended[key] = held
+		}
+		a.mu.Unlock()
+		return
+	}
+	_ = a.manager.SetCharacterSuspended(active.lease, false)
+	a.manager.LeaveCharacter(active.lease)
+	a.mu.Lock()
+	if held, ok := a.suspended[key]; ok && held.lease.Token == active.lease.Token {
+		delete(a.suspended, key)
+	}
+	a.mu.Unlock()
+}
+
+func (a *Admission) finalizeActiveSession(controllerID uuid.UUID, active session) {
+	if err := a.flushState(active); err != nil {
+		if errors.Is(err, persistence.ErrLocationRevisionStale) {
+			logger.S.Warnf("Realtime takeover for %s found a stale checkpoint: %v", active.playerID, err)
+			a.manager.LeaveCharacter(active.lease)
+			a.mu.Lock()
+			delete(a.sessions, controllerID)
+			a.mu.Unlock()
+			return
+		}
+		logger.S.Errorf("Realtime takeover checkpoint failed for %s: %v", active.playerID, err)
+		a.mu.Lock()
+		if held, ok := a.sessions[controllerID]; ok && held.lease.Token == active.lease.Token {
+			held.closing = true
+			a.sessions[controllerID] = held
+		}
+		a.mu.Unlock()
+		return
+	}
+	a.manager.LeaveCharacter(active.lease)
+	a.mu.Lock()
+	if held, ok := a.sessions[controllerID]; ok && held.lease.Token == active.lease.Token {
+		delete(a.sessions, controllerID)
+	}
+	a.mu.Unlock()
+}
+
 func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 	a.mu.Lock()
 	active, exists := a.sessions[controllerID]
@@ -1243,6 +1538,30 @@ func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 			a.sessions[controllerID] = held
 		}
 		a.mu.Unlock()
+		return
+	}
+	if active.tabID != "" {
+		// Park the session for resume instead of releasing the lease. The
+		// sweeper finalizes it when the grace window expires.
+		if err := a.flushState(active); err != nil {
+			if errors.Is(err, persistence.ErrLocationRevisionStale) {
+				logger.S.Warnf("Realtime disconnect for %s found stale location revision; location superseded: %v", active.playerID, err)
+				a.manager.LeaveCharacter(active.lease)
+				a.mu.Lock()
+				delete(a.sessions, controllerID)
+				a.mu.Unlock()
+				return
+			}
+			logger.S.Errorf("Realtime disconnect checkpoint failed for %s: %v", active.playerID, err)
+			a.mu.Lock()
+			if held, ok := a.sessions[controllerID]; ok && held.lease.Token == active.lease.Token {
+				held.closing = true
+				a.sessions[controllerID] = held
+			}
+			a.mu.Unlock()
+			return
+		}
+		a.suspendSession(controllerID, active)
 		return
 	}
 	if err := a.flushState(active); err != nil {

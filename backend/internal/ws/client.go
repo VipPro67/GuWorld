@@ -103,6 +103,7 @@ type Client struct {
 	snapshotStateMu     sync.Mutex
 	deltaTracker        *SnapshotDeltaTracker
 	controllerID        uuid.UUID
+	tabID               string
 	realtimeAdmission   RealtimeWorldAdmission
 	lastTransferReject  atomic.Int64
 
@@ -149,6 +150,13 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 		realtimeAdmission = admission[0]
 	}
 	isWorldOnly := r != nil && r.URL.Query().Get("purpose") == "world"
+	tabID := ""
+	if r != nil {
+		tabID = strings.TrimSpace(r.URL.Query().Get("tab_id"))
+		if len(tabID) > 100 {
+			tabID = ""
+		}
+	}
 	kind := clientKindUI
 	if isWorldOnly {
 		kind = clientKindWorld
@@ -157,6 +165,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 		playerID:          playerID,
 		kind:              kind,
 		controllerID:      uuid.New(),
+		tabID:             tabID,
 		realtimeAdmission: realtimeAdmission,
 		conn:              conn,
 		send:              make(chan []byte, 1024),
@@ -1143,7 +1152,11 @@ func (c *Client) handleRealtimeLifecycle(msg WSMessage) (int, json.RawMessage) {
 			return http.StatusBadRequest, json.RawMessage(`{"code":"invalid_world_join","error":"zone_id is required"}`)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-		response, err = c.realtimeAdmission.Join(ctx, c.playerID, c.controllerID, request)
+		if tabAdmission, ok := c.realtimeAdmission.(RealtimeWorldTabAdmission); ok && c.tabID != "" {
+			response, err = tabAdmission.JoinWithTab(ctx, c.playerID, c.controllerID, c.tabID, request)
+		} else {
+			response, err = c.realtimeAdmission.Join(ctx, c.playerID, c.controllerID, request)
+		}
 		cancel()
 	case "world.leave":
 		err = c.realtimeAdmission.Leave(c.playerID, c.controllerID)

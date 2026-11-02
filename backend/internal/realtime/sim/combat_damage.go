@@ -17,7 +17,7 @@ import (
 // applyDamageLocked is the single server-side damage path. Shields absorb first,
 // then HP; a player's windup is interrupted by incoming damage.
 func (w *World) applyDamageLocked(source, target *Entity, amount float64, skillID string) float64 {
-	if target == nil || target.Vitals.HP <= 0 || !finite(amount) || amount <= 0 {
+	if target == nil || target.Vitals.HP <= 0 || target.Suspended || !finite(amount) || amount <= 0 {
 		return 0
 	}
 	sourceID := ""

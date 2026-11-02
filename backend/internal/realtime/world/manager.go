@@ -1872,6 +1872,45 @@ func (m *Manager) ownedPlayerCountLocked(key sim.ZoneKey) int {
 	return count
 }
 
+// SetCharacterSuspended toggles the reconnect grace state on the entity owned by
+// the lease. A suspended entity keeps its authoritative state but takes no
+// damage and is ignored by monster targeting.
+func (m *Manager) SetCharacterSuspended(lease OwnershipLease, suspended bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.started || m.closed {
+		return ErrManagerNotRunning
+	}
+	active, exists := m.owners[lease.CharacterID]
+	if !exists || active.ZoneKey != lease.ZoneKey || subtle.ConstantTimeCompare([]byte(active.Token), []byte(lease.Token)) != 1 {
+		return ErrInvalidLease
+	}
+	if !active.HasEntity {
+		return nil
+	}
+	zone := m.zones[active.ZoneKey]
+	if zone == nil {
+		return ErrUnknownZone
+	}
+	var result <-chan error
+	for {
+		var queueErr error
+		result, queueErr = zone.world.QueueSetSuspended(sim.EntityID(active.CharacterID), suspended)
+		if queueErr == nil {
+			break
+		}
+		if !errors.Is(queueErr, sim.ErrLifecycleQueueFull) {
+			return queueErr
+		}
+		select {
+		case <-zone.done:
+			return ErrManagerNotRunning
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	return waitForZoneMutation(zone, result)
+}
+
 // ReplaceCharacterLease is the reconnect path. Only the holder of the current
 // lease token can replace the controller; a stale tab cannot take ownership.
 func (m *Manager) ReplaceCharacterLease(current OwnershipLease, newControllerID string) (OwnershipLease, error) {

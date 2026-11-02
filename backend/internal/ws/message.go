@@ -59,3 +59,10 @@ type RealtimeWorldAdmission interface {
 	Leave(playerID, controllerID uuid.UUID) error
 	Disconnect(playerID, controllerID uuid.UUID)
 }
+
+// RealtimeWorldTabAdmission is implemented by the gateway so a reconnect can
+// resume the same tab's suspended session (ticket #318). Older fakes that only
+// implement RealtimeWorldAdmission keep working.
+type RealtimeWorldTabAdmission interface {
+	JoinWithTab(ctx context.Context, playerID, controllerID uuid.UUID, tabID string, request protocol.JoinRequest) (any, error)
+}
