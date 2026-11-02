@@ -26,17 +26,22 @@ type RealtimeClientWindow struct {
 	TickRate         int     `json:"tick_rate"`
 	Entities         int     `json:"entities"`
 	Snapshots        int     `json:"snapshots"`
+	SnapshotRateHz   float64 `json:"snapshot_rate_hz"`
 	SnapshotGapAvgMs float64 `json:"snapshot_gap_avg_ms"`
 	SnapshotGapP95Ms float64 `json:"snapshot_gap_p95_ms"`
+	SnapshotGapP99Ms float64 `json:"snapshot_gap_p99_ms"`
+	SnapshotGapMaxMs float64 `json:"snapshot_gap_max_ms"`
 	SnapshotGapHist  []int64 `json:"snapshot_gap_hist"`
 	RenderDelayAvgMs float64 `json:"render_delay_avg_ms"`
 	HardSnaps        int     `json:"hard_snaps"`
 	BlendCount       int     `json:"blend_count"`
 	LatencyAvgMs     float64 `json:"latency_avg_ms"`
 	LatencyMaxMs     float64 `json:"latency_max_ms"`
+	LatencySamples   int     `json:"latency_samples"`
 	LatencyClamped   int     `json:"latency_clamped"`
 	JitterMs         float64 `json:"jitter_ms"`
 	EstimatedLost    int     `json:"estimated_lost"`
+	Stalls           int     `json:"stalls"`
 	MessagesIn       int     `json:"messages_in"`
 	BytesIn          int64   `json:"bytes_in"`
 	BytesOut         int64   `json:"bytes_out"`
@@ -195,8 +200,10 @@ func sanitizeClientReport(report *RealtimeClientReport) error {
 		window.TickRate = minInt(maxInt(window.TickRate, 0), 240)
 		window.HardSnaps = maxInt(window.HardSnaps, 0)
 		window.BlendCount = maxInt(window.BlendCount, 0)
+		window.LatencySamples = maxInt(window.LatencySamples, 0)
 		window.LatencyClamped = maxInt(window.LatencyClamped, 0)
 		window.EstimatedLost = maxInt(window.EstimatedLost, 0)
+		window.Stalls = maxInt(window.Stalls, 0)
 		window.MessagesIn = maxInt(window.MessagesIn, 0)
 		window.InputsSent = maxInt(window.InputsSent, 0)
 		window.Resyncs = maxInt(window.Resyncs, 0)
@@ -204,8 +211,11 @@ func sanitizeClientReport(report *RealtimeClientReport) error {
 		window.StaleReconnects = maxInt(window.StaleReconnects, 0)
 		window.BytesIn = maxInt64(window.BytesIn, 0)
 		window.BytesOut = maxInt64(window.BytesOut, 0)
+		window.SnapshotRateHz = sanitizeFloat(window.SnapshotRateHz)
 		window.SnapshotGapAvgMs = sanitizeFloat(window.SnapshotGapAvgMs)
 		window.SnapshotGapP95Ms = sanitizeFloat(window.SnapshotGapP95Ms)
+		window.SnapshotGapP99Ms = sanitizeFloat(window.SnapshotGapP99Ms)
+		window.SnapshotGapMaxMs = sanitizeFloat(window.SnapshotGapMaxMs)
 		window.RenderDelayAvgMs = sanitizeFloat(window.RenderDelayAvgMs)
 		window.LatencyAvgMs = sanitizeFloat(window.LatencyAvgMs)
 		window.LatencyMaxMs = sanitizeFloat(window.LatencyMaxMs)

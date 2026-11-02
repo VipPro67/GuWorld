@@ -22,6 +22,23 @@ test("collector derives gap stats, jitter and estimated loss from snapshot arriv
   assert.equal(upload.zone, "Southern_Border");
 });
 
+test("collector separates stalls from packet loss and jitter", () => {
+  const collector = new RealtimeMetricsCollector();
+  const base = 2_000;
+  collector.onSnapshot({ atMs: base, tick: 200, tickRate: 20, entities: 2, renderDelayMs: 10 });
+  collector.onSnapshot({ atMs: base + 50, tick: 201, tickRate: 20, entities: 2, renderDelayMs: 10 });
+  collector.onSnapshot({ atMs: base + 3_050, tick: 260, tickRate: 20, entities: 2, renderDelayMs: 10 });
+
+  const upload = collector.drain({ zone: "z", status: "joined" });
+  assert.ok(upload);
+  const window = upload.windows[0];
+  assert.equal(window.stalls, 1, "3s gap is a stall, not loss");
+  assert.equal(window.estimated_lost, 0, "stall must not be counted as lost snapshots");
+  assert.equal(window.snapshot_gap_max_ms, 3000);
+  assert.equal(window.jitter_ms, 0, "stall gap is excluded from jitter");
+  assert.equal(window.latency_samples, 0);
+});
+
 test("collector counts hard snaps and blends without inflating both", () => {
   const collector = new RealtimeMetricsCollector();
   collector.onCorrection(true, 4.2, true);

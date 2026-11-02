@@ -14,17 +14,22 @@ export interface RealtimeMetricsWindow {
   tick_rate: number;
   entities: number;
   snapshots: number;
+  snapshot_rate_hz: number;
   snapshot_gap_avg_ms: number;
   snapshot_gap_p95_ms: number;
+  snapshot_gap_p99_ms: number;
+  snapshot_gap_max_ms: number;
   snapshot_gap_hist: number[];
   render_delay_avg_ms: number;
   hard_snaps: number;
   blend_count: number;
   latency_avg_ms: number;
   latency_max_ms: number;
+  latency_samples: number;
   latency_clamped: number;
   jitter_ms: number;
   estimated_lost: number;
+  stalls: number;
   messages_in: number;
   bytes_in: number;
   bytes_out: number;
@@ -51,12 +56,16 @@ export interface RealtimeMetricsUpload {
 
 export interface RealtimeMetricsLive {
   snapshots: number;
+  rateHz: number;
   gapAvgMs: number;
   gapP95Ms: number;
+  gapP99Ms: number;
+  gapMaxMs: number;
   renderDelayAvgMs: number;
   latencyAvgMs: number;
   jitterMs: number;
   estimatedLost: number;
+  stalls: number;
   hardSnaps: number;
   blendCount: number;
   bytesIn: number;
@@ -67,6 +76,10 @@ export interface RealtimeMetricsLive {
 const GAP_BUCKETS_MS = [20, 40, 60, 80, 100, 150, 250, 500] as const;
 const MAX_GAP_SAMPLES = 240;
 const MAX_EVENTS = 24;
+// Gaps beyond this are treated as stalls (tab suspended, reconnect, GC) and
+// excluded from packet-loss/jitter math; a 5s tab pause must not read as 100
+// lost snapshots.
+const STALL_GAP_MS = 250;
 
 export class RealtimeMetricsCollector {
   private windowStartMs = 0;
@@ -85,6 +98,8 @@ export class RealtimeMetricsCollector {
   private jitterSum = 0;
   private jitterCount = 0;
   private estimatedLost = 0;
+  private stalls = 0;
+  private maxGapMs = 0;
   private messagesIn = 0;
   private bytesIn = 0;
   private bytesOut = 0;
@@ -116,14 +131,19 @@ export class RealtimeMetricsCollector {
         this.gapsMs.push(gap);
         if (this.gapsMs.length > MAX_GAP_SAMPLES) this.gapsMs.shift();
         this.hist[this.gapBucket(gap)] += 1;
-        if (this.lastGapMs !== null) {
-          this.jitterSum += Math.abs(gap - this.lastGapMs);
-          this.jitterCount += 1;
-        }
-        this.lastGapMs = gap;
-        const expected = 1000 / Math.max(1, this.tickRate);
-        if (gap > expected * 1.5) {
-          this.estimatedLost += Math.max(0, Math.round(gap / expected) - 1);
+        if (gap > this.maxGapMs) this.maxGapMs = gap;
+        if (gap > STALL_GAP_MS) {
+          this.stalls += 1;
+        } else {
+          if (this.lastGapMs !== null) {
+            this.jitterSum += Math.abs(gap - this.lastGapMs);
+            this.jitterCount += 1;
+          }
+          this.lastGapMs = gap;
+          const expected = 1000 / Math.max(1, this.tickRate);
+          if (gap > expected * 1.5) {
+            this.estimatedLost += Math.max(0, Math.round(gap / expected) - 1);
+          }
         }
       }
     }
@@ -192,17 +212,22 @@ export class RealtimeMetricsCollector {
       tick_rate: this.tickRate,
       entities: this.entities,
       snapshots: this.snapshots,
+      snapshot_rate_hz: round2(duration > 0 ? (this.snapshots * 1000) / duration : 0),
       snapshot_gap_avg_ms: round2(gapAvg),
       snapshot_gap_p95_ms: round2(percentile(gaps, 0.95)),
+      snapshot_gap_p99_ms: round2(percentile(gaps, 0.99)),
+      snapshot_gap_max_ms: round2(this.maxGapMs),
       snapshot_gap_hist: [...this.hist],
       render_delay_avg_ms: round2(this.snapshots > 0 ? this.renderDelaySum / this.snapshots : 0),
       hard_snaps: this.hardSnaps,
       blend_count: this.blendCount,
       latency_avg_ms: round2(this.latencyCount > 0 ? this.latencySum / this.latencyCount : 0),
       latency_max_ms: round2(this.latencyMax),
+      latency_samples: this.latencyCount,
       latency_clamped: this.latencyClamped,
       jitter_ms: round2(this.jitterCount > 0 ? this.jitterSum / this.jitterCount : 0),
       estimated_lost: this.estimatedLost,
+      stalls: this.stalls,
       messages_in: this.messagesIn,
       bytes_in: this.bytesIn,
       bytes_out: this.bytesOut,
@@ -228,12 +253,16 @@ export class RealtimeMetricsCollector {
   public peek(): RealtimeMetricsLive {
     return {
       snapshots: this.snapshots,
+      rateHz: round2(this.windowStartMs > 0 && this.snapshots > 0 ? (this.snapshots * 1000) / Math.max(1, Date.now() - this.windowStartMs) : 0),
       gapAvgMs: round2(this.gapsMs.length > 0 ? this.gapsMs.reduce((sum, gap) => sum + gap, 0) / this.gapsMs.length : 0),
       gapP95Ms: round2(percentile(this.gapsMs, 0.95)),
+      gapP99Ms: round2(percentile(this.gapsMs, 0.99)),
+      gapMaxMs: round2(this.maxGapMs),
       renderDelayAvgMs: round2(this.snapshots > 0 ? this.renderDelaySum / this.snapshots : 0),
       latencyAvgMs: round2(this.latencyCount > 0 ? this.latencySum / this.latencyCount : 0),
       jitterMs: round2(this.jitterCount > 0 ? this.jitterSum / this.jitterCount : 0),
       estimatedLost: this.estimatedLost,
+      stalls: this.stalls,
       hardSnaps: this.hardSnaps,
       blendCount: this.blendCount,
       bytesIn: this.bytesIn,
@@ -258,6 +287,8 @@ export class RealtimeMetricsCollector {
     this.jitterSum = 0;
     this.jitterCount = 0;
     this.estimatedLost = 0;
+    this.stalls = 0;
+    this.maxGapMs = 0;
     this.messagesIn = 0;
     this.bytesIn = 0;
     this.bytesOut = 0;

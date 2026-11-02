@@ -580,11 +580,14 @@ Body (mọi trường tuỳ chọn, server tự kẹp giá trị âm/NaN):
   "windows": [{
     "window_started_at": 0, "window_duration_ms": 10000,
     "tick_rate": 20, "entities": 12, "snapshots": 200,
+    "snapshot_rate_hz": 20.1,
     "snapshot_gap_avg_ms": 50.1, "snapshot_gap_p95_ms": 71,
+    "snapshot_gap_p99_ms": 96, "snapshot_gap_max_ms": 310,
     "snapshot_gap_hist": [0,0,0,0,0,0,0,0],
     "render_delay_avg_ms": 82.4, "hard_snaps": 0, "blend_count": 3,
-    "latency_avg_ms": 24.5, "latency_max_ms": 91, "latency_clamped": 0,
-    "jitter_ms": 4.2, "estimated_lost": 1,
+    "latency_avg_ms": 24.5, "latency_max_ms": 91, "latency_samples": 120,
+    "latency_clamped": 0,
+    "jitter_ms": 4.2, "estimated_lost": 1, "stalls": 0,
     "messages_in": 260, "bytes_in": 145000, "bytes_out": 900,
     "inputs_sent": 100, "resyncs": 0, "reconnects": 0, "stale_reconnects": 0
   }],
@@ -596,7 +599,10 @@ Server trả `204`; response rỗng. Danh tính (player, tab, IP) do server đi�
 
 ### Vòng đời kết nối
 
-- Mỗi player tối đa 3 kết nối; riêng socket world (`?purpose=world`) là **độc quyền**: kết nối world mới sẽ takeover và đóng kết nối cũ. Việc nhả character lease chạy nền, nên lần join đầu sau takeover vẫn có thể nhận `409 realtime_character_already_owned`; client tự retry với backoff (300 ms → 2 s, tối đa 7 lần) tới khi vào được.
+- Mỗi player tối đa 3 kết nối; riêng socket world (`?purpose=world`) là **độc quyền**: kết nối world mới sẽ takeover và đóng kết nối cũ. Takeover dùng `ReplaceCharacterLease` nên **không còn race `409 realtime_character_already_owned`** khi mở tab mới hoặc reconnect.
+- **Resume sau mất mạng:** khi socket world đóng, phiên được giữ `suspended` theo cặp `(player, tab_id)`: **15 s** cho zone mở, **30 s** cho instance riêng (combat/tribulation/practice/arena). Join lại cùng `tab_id` trong cửa sổ này nhận lại đúng entity/vị trí/HP mà không load lại từ DB; hết hạn mới checkpoint và nhả lease. Trong lúc suspended, nhân vật không nhận damage và không bị quái nhắm, nhưng status/cooldown/hunger vẫn tick.
+- **`tab_id`** lấy từ query `?tab_id=<uuid>` (cùng giá trị `sessionStorage.gu_gameplay_tab_id`). Tab khác cùng tài khoản sẽ takeover phiên đang treo và tab cũ nhận trạng thái bị thay thế.
+- Client **seed `seq` input từ `snapshot.ack_seq` của `world.welcome`** (không reset về 0) để sim không bỏ toàn bộ input sau resume.
 - Socket UI không độc quyền — nhiều tab không đá nhau và `IsConnected` đếm theo kết nối còn sống. Giới hạn đã biết: mỗi kênh vẫn chỉ giao cho socket đăng ký sau cùng của player.
 - Server ping mỗi 3 giây và cắt kết nối sau 10 giây không có pong; read deadline cũng được refresh khi nhận bất kỳ frame nào, nên nửa-mở (mất mạng, sleep) được dọn trong khoảng 10 giây thay vì vài phút.
 - Tab bị thay thế sẽ đóng luôn socket world của tab cũ, không chỉ socket UI, và tab đó không tự reconnect nữa.

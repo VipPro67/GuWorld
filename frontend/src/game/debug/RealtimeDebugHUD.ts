@@ -49,9 +49,9 @@ export class RealtimeDebugHUD {
       `tick ${stats.tick} @ ${stats.tickRate}Hz · entities ${stats.entities} · projectiles ${stats.projectiles}`,
       `self ${stats.selfX.toFixed(2)}, ${stats.selfY.toFixed(2)} · correction ${stats.lastCorrection.toFixed(2)}u`,
       `net msgs ${stats.network.messages} · snapshots ${stats.network.snapshots} · ${kb.toFixed(1)}KB · snap ${age}`,
-      `gap avg ${m.gapAvgMs.toFixed(1)}ms p95 ${m.gapP95Ms.toFixed(1)}ms · render delay ${m.renderDelayAvgMs.toFixed(1)}ms`,
-      `latency ${m.latencyAvgMs.toFixed(1)}ms · jitter ${m.jitterMs.toFixed(1)}ms · lost ~${m.estimatedLost}`,
-      `snaps hard ${m.hardSnaps} · blend ${m.blendCount} · out ${(m.bytesOut / 1024).toFixed(1)}KB`,
+      `rate ${m.rateHz.toFixed(1)}/s · gap avg ${m.gapAvgMs.toFixed(1)} p95 ${m.gapP95Ms.toFixed(1)} p99 ${m.gapP99Ms.toFixed(1)} max ${m.gapMaxMs.toFixed(0)}ms`,
+      `delay ${m.renderDelayAvgMs.toFixed(1)}ms · latency ${m.latencyAvgMs.toFixed(1)}ms · jitter ${m.jitterMs.toFixed(1)}ms`,
+      `lost ~${m.estimatedLost} · stalls ${m.stalls} · snaps hard ${m.hardSnaps} · blend ${m.blendCount} · out ${(m.bytesOut / 1024).toFixed(1)}KB`,
       `fps ${Math.round(this.scene.game.loop.actualFps)}`,
     ].join("\n"));
   }
