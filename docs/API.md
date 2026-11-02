@@ -804,3 +804,9 @@ Bật bằng `WT_ENABLED=true` + `TLS_CERT_FILE`/`TLS_KEY_FILE`; `WT_ADDR` mặc
 - **Baseline**: `welcome.snapshot` + mỗi 40 tick (2 s) là full snapshot trên stream; delta mỗi tick đi datagram.
 - **Resume**: đóng session → server giữ phiên `suspended` 15 s (zone mở) / 30 s (instance riêng); join lại cùng `tab_id` nhận lại entity. Tab khác takeover.
 - Codec: `backend/internal/realtime/protocol/v2` và `frontend/src/game/network/v2` (golden vector chung).
+
+### WebTransport v2 — events & phạm vi hiện tại
+
+- Combat events đi trên world stream (opcode `events`) sau mỗi snapshot có event: header `from_event_id`, mỗi event gồm `event_id`, `tick`, `type_id` (bảng enum cố định trong `protocol/v2/events.go`), `source/target net_id`, `payload` JSON snake_case (skill_id, amount, reason, duration_ticks...).
+- Client `WorldTransport` phát các event này qua `onEvents`; `WorldRuntime` dùng lại nguyên logic combat feedback.
+- **Giới hạn hiện tại:** world socket đã chạy WT; các kênh UI (`chat`, `trade`, `notification`, `refine`, `arena`, `catalog`) vẫn dùng `/api/ws` (`wsManager`) cho tới khi `UIStream` + shared `RealtimeClient` được nối. Đây là việc còn lại để xoá hẳn WS.
