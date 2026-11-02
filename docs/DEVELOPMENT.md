@@ -68,6 +68,8 @@ Các biến thường dùng:
 | Variable | Mục đích |
 | --- | --- |
 | `PORT` | Port backend, mặc định `8080`. |
+| `WT_ENABLED`, `WT_ADDR` | Bật WebTransport song song WS (dev). `WT_ENABLED=true` cần `TLS_CERT_FILE` + `TLS_KEY_FILE`; `WT_ADDR` mặc định `:8443` (TCP HTTPS + UDP QUIC). |
+| `TLS_CERT_FILE`, `TLS_KEY_FILE` | Cert/key PEM cho HTTPS + WebTransport khi `WT_ENABLED=true`. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | Kết nối PostgreSQL; có default local trong `db.Connect()`. |
 | `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS` | Timeout câu lệnh/chờ lock PostgreSQL cho request path; mặc định lần lượt 15000/10000 ms. |
 | `DB_MIGRATION_STATEMENT_TIMEOUT_MS`, `DB_MIGRATION_LOCK_TIMEOUT_MS` | Timeout riêng cho từng câu lệnh/lock của `InitSchema` lúc boot (backfill/consolidate trên bảng lớn); mặc định 300000/10000 ms. Request path vẫn giữ timeout chặt. |

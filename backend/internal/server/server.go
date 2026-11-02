@@ -460,7 +460,7 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 	// Skip websocket route.
 	r.Use(compress.Compress(
 		compress.WithExcludeFunc(func(c *gin.Context) bool {
-			return c.Request.URL.Path == "/api/ws"
+			return c.Request.URL.Path == "/api/ws" || c.Request.URL.Path == "/api/wt"
 		}),
 	))
 

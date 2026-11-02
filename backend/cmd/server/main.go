@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +20,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/webtransport-go"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -33,6 +38,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/realtime/persistence"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/sim"
 	realtimeworld "github.com/vippro67/GuWorld/backend/internal/realtime/world"
+	"github.com/vippro67/GuWorld/backend/internal/realtime/wttransport"
 	"github.com/vippro67/GuWorld/backend/internal/server"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
@@ -935,19 +941,93 @@ func main() {
 		port = "8080"
 	}
 
-	srv := &http.Server{
-		Addr:              ":" + port,
-		Handler:           r,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
+	var (
+		httpServer *http.Server
+		wtServer   *webtransport.Server
+		udpConn    net.PacketConn
+	)
 
-	go func() {
-		logger.S.Infof("Cultivation Backend listening on port %s", port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.S.Fatalf("Server failed to start: %v", err)
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("WT_ENABLED")), "true") {
+		wtAddr := strings.TrimSpace(os.Getenv("WT_ADDR"))
+		if wtAddr == "" {
+			wtAddr = ":8443"
 		}
-	}()
+		certFile := strings.TrimSpace(os.Getenv("TLS_CERT_FILE"))
+		keyFile := strings.TrimSpace(os.Getenv("TLS_KEY_FILE"))
+		switch {
+		case certFile == "" || keyFile == "":
+			logger.S.Errorf("WT_ENABLED requires TLS_CERT_FILE and TLS_KEY_FILE; falling back to plain HTTP")
+		case realtimeAdmission == nil:
+			logger.S.Errorf("WT_ENABLED requires the realtime admission runtime; falling back to plain HTTP")
+		default:
+			cert, certErr := tls.LoadX509KeyPair(certFile, keyFile)
+			if certErr != nil {
+				logger.S.Errorf("load WebTransport certificate: %v; falling back to plain HTTP", certErr)
+				break
+			}
+			tlsTCP := &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2", "http/1.1"}}
+			tlsH3 := http3.ConfigureTLSConfig(&tls.Config{Certificates: []tls.Certificate{cert}})
+			h3 := &http3.Server{
+				Handler:   r,
+				TLSConfig: tlsH3,
+				QUICConfig: &quic.Config{
+					MaxIdleTimeout:                   90 * time.Second,
+					KeepAlivePeriod:                  20 * time.Second,
+					MaxIncomingStreams:               16,
+					MaxIncomingUniStreams:            16,
+					MaxStreamReceiveWindow:           256 << 10,
+					MaxConnectionReceiveWindow:       2 << 20,
+					EnableDatagrams:                  true,
+					EnableStreamResetPartialDelivery: true,
+				},
+			}
+			wt := &webtransport.Server{H3: h3, CheckOrigin: realtimeOriginChecker()}
+			udpAddr, resolveErr := net.ResolveUDPAddr("udp", wtAddr)
+			if resolveErr != nil {
+				logger.S.Errorf("resolve WT_ADDR: %v; falling back to plain HTTP", resolveErr)
+				break
+			}
+			udp, listenErr := net.ListenUDP("udp", udpAddr)
+			if listenErr != nil {
+				logger.S.Errorf("listen WebTransport UDP %s: %v; falling back to plain HTTP", wtAddr, listenErr)
+				break
+			}
+			server.RegisterRealtimeWT(r, wttransport.New(realtimeAdmission, wt).Handle)
+			wtServer, udpConn = wt, udp
+			go func() {
+				if err := wt.Serve(udp); err != nil && !errors.Is(err, net.ErrClosed) {
+					logger.S.Errorf("WebTransport server stopped: %v", err)
+				}
+			}()
+			httpServer = &http.Server{
+				Addr:              wtAddr,
+				Handler:           r,
+				TLSConfig:         tlsTCP,
+				ReadHeaderTimeout: 10 * time.Second,
+				IdleTimeout:       120 * time.Second,
+			}
+			go func() {
+				logger.S.Infof("Cultivation Backend listening on %s (HTTPS + WebTransport)", wtAddr)
+				if err := httpServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+					logger.S.Fatalf("Server failed to start: %v", err)
+				}
+			}()
+		}
+	}
+	if httpServer == nil {
+		httpServer = &http.Server{
+			Addr:              ":" + port,
+			Handler:           r,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
+		go func() {
+			logger.S.Infof("Cultivation Backend listening on port %s", port)
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logger.S.Fatalf("Server failed to start: %v", err)
+			}
+		}()
+	}
 
 	<-ctx.Done()
 	logger.S.Info("Shutting down gracefully...")
@@ -955,8 +1035,14 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.S.Fatalf("Server forced to shutdown: %v", err)
+	}
+	if wtServer != nil {
+		_ = wtServer.Close()
+	}
+	if udpConn != nil {
+		_ = udpConn.Close()
 	}
 	if realtimeAdmission != nil {
 		for realtimeAdmission.ActiveSessionCount() > 0 && shutdownCtx.Err() == nil {
@@ -1160,4 +1246,31 @@ func resolveGuCSVPath() string {
 		current = parent
 	}
 	return "data/Gu.csv"
+}
+
+// realtimeOriginChecker reuses the CORS allowlist for WebTransport. Browsers
+// omit Origin on same-origin navigation, which stays allowed.
+func realtimeOriginChecker() func(*http.Request) bool {
+	raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	if raw == "" {
+		raw = strings.TrimSpace(os.Getenv("WS_ALLOWED_ORIGINS"))
+	}
+	allowed := make([]string, 0)
+	for _, item := range strings.Split(raw, ",") {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			allowed = append(allowed, trimmed)
+		}
+	}
+	return func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		for _, item := range allowed {
+			if strings.EqualFold(item, origin) {
+				return true
+			}
+		}
+		return false
+	}
 }

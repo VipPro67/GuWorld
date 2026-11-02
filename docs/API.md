@@ -794,3 +794,13 @@ world-position broadcast radius is not used as the monster activation radius.
 ```
 
 The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The targeted WebSocket channel `world:combat` carries `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `monster_attack_started`, `monster_attack`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, `monster_respawned`, and `monster_updated` (admin runtime edits). `monster_attack` includes `target_id`, actual HP damage, remaining HP/shield and whether the target was defeated; monster contact no longer creates a turn-based `active_combat` encounter.
+
+## Realtime WebTransport — `CONNECT /api/wt` (Auth, song song giai đoạn chuyển đổi)
+
+Bật bằng `WT_ENABLED=true` + `TLS_CERT_FILE`/`TLS_KEY_FILE`; `WT_ADDR` mặc định `:8443` phục vụ **HTTPS (TCP)** và **QUIC/WebTransport (UDP)** trong cùng process. Endpoint dùng chung `CORS_ALLOWED_ORIGINS` cho `CheckOrigin`. Token lấy từ query `?token=` (browser không gửi cookie trong WT) và `tab_id` cho resume.
+
+- **World stream**: mở bidirectional stream, gửi `0x01` + `"GWT"` + version `2`, sau đó frame `u32 len | u8 opcode | payload` (`u32` đã bao gồm opcode). Opcode: join/welcome/leave/transfer/reject/events/snapshot/spawn/move_target/cast/attack/capture/stance/resync.
+- **Datagram**: 1 byte header `version(2b)|opcode(6b)`; input, snapshot delta, ping/pong. Snapshot delta > `maxDatagramSize` (1024 B) tự động tràn sang frame `snapshot` trên stream.
+- **Baseline**: `welcome.snapshot` + mỗi 40 tick (2 s) là full snapshot trên stream; delta mỗi tick đi datagram.
+- **Resume**: đóng session → server giữ phiên `suspended` 15 s (zone mở) / 30 s (instance riêng); join lại cùng `tab_id` nhận lại entity. Tab khác takeover.
+- Codec: `backend/internal/realtime/protocol/v2` và `frontend/src/game/network/v2` (golden vector chung).

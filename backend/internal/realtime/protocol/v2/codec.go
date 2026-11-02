@@ -887,3 +887,115 @@ func DecodeEvents(payload []byte) (fromEventID uint64, events []Event, err error
 	}
 	return fromEventID, events, decoder.Err()
 }
+
+// Action payloads sent by the client on the world stream.
+
+type MoveTargetAction struct {
+	Seq uint64
+	X   uint16
+	Y   uint16
+}
+
+func DecodeMoveTargetAction(payload []byte) (MoveTargetAction, error) {
+	decoder := NewDecoder(payload)
+	action := MoveTargetAction{Seq: decoder.Varint(), X: decoder.U16(), Y: decoder.U16()}
+	return action, decoder.Err()
+}
+
+type CastAction struct {
+	Seq         uint64
+	Slot        uint8
+	Mode        uint8
+	TargetNetID uint16
+	AimX        int16
+	AimY        int16
+	X           uint16
+	Y           uint16
+}
+
+func DecodeCastAction(payload []byte) (CastAction, error) {
+	decoder := NewDecoder(payload)
+	action := CastAction{
+		Seq: decoder.Varint(), Slot: decoder.U8(), Mode: decoder.U8(), TargetNetID: decoder.U16(),
+		AimX: int16(decoder.U16()), AimY: int16(decoder.U16()),
+		X: decoder.U16(), Y: decoder.U16(),
+	}
+	return action, decoder.Err()
+}
+
+type AttackAction struct {
+	Seq         uint64
+	TargetNetID uint16
+	AimX        int16
+	AimY        int16
+}
+
+func DecodeAttackAction(payload []byte) (AttackAction, error) {
+	decoder := NewDecoder(payload)
+	action := AttackAction{
+		Seq: decoder.Varint(), TargetNetID: decoder.U16(),
+		AimX: int16(decoder.U16()), AimY: int16(decoder.U16()),
+	}
+	return action, decoder.Err()
+}
+
+type CaptureAction struct {
+	Seq         uint64
+	TargetNetID uint16
+	GuID        string
+}
+
+func DecodeCaptureAction(payload []byte) (CaptureAction, error) {
+	decoder := NewDecoder(payload)
+	action := CaptureAction{Seq: decoder.Varint(), TargetNetID: decoder.U16(), GuID: decoder.String()}
+	return action, decoder.Err()
+}
+
+type StanceAction struct {
+	Seq        uint64
+	Stance     uint8
+	FocusNetID uint16
+}
+
+func DecodeStanceAction(payload []byte) (StanceAction, error) {
+	decoder := NewDecoder(payload)
+	action := StanceAction{Seq: decoder.Varint(), Stance: decoder.U8(), FocusNetID: decoder.U16()}
+	return action, decoder.Err()
+}
+
+// EncodeReject builds the stream payload for a join/action rejection.
+func EncodeReject(code, message string, retryable bool) ([]byte, error) {
+	encoder := NewEncoder(32)
+	encoder.String(code).String(message)
+	if retryable {
+		encoder.U8(1)
+	} else {
+		encoder.U8(0)
+	}
+	return encoder.Bytes(), encoder.Err()
+}
+
+// JoinRequest is the world-stream handshake payload.
+type JoinRequest struct {
+	ZoneID         string
+	MapVersion     string
+	ContentVersion string
+	RequestID      uint32
+}
+
+func EncodeJoin(request JoinRequest) ([]byte, error) {
+	encoder := NewEncoder(64)
+	encoder.String(request.ZoneID).String(request.MapVersion).String(request.ContentVersion).U32(request.RequestID)
+	return encoder.Bytes(), encoder.Err()
+}
+
+func DecodeJoin(payload []byte) (JoinRequest, error) {
+	decoder := NewDecoder(payload)
+	request := JoinRequest{
+		ZoneID:         decoder.String(),
+		MapVersion:     decoder.String(),
+		ContentVersion: decoder.String(),
+		RequestID:      decoder.U32(),
+	}
+	return request, decoder.Err()
+}
