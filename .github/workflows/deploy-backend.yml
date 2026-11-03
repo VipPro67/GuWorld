@@ -7,7 +7,6 @@ on:
     paths:
       - 'backend/**'
       - 'docker-compose.yml'
-      - 'Caddyfile'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
@@ -95,6 +94,30 @@ jobs:
             docker compose pull backend
 
             docker compose up -d --no-deps backend
+
+            # Wait for the new process to answer HTTPS on 127.0.0.1:8443.
+            # --resolve keeps SNI/Host aligned with the certificate while
+            # bypassing DNS/Cloudflare for the origin check.
+            for i in $(seq 1 30); do
+              if curl -fsS --max-time 3 \
+                --resolve api.cogioi.io.vn:443:127.0.0.1 \
+                https://api.cogioi.io.vn/api/health >/dev/null; then
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "Backend health check failed" >&2
+                docker compose logs --tail=100 backend >&2
+                exit 1
+              fi
+              sleep 2
+            done
+
+            # QUIC reachability: the HTTP/3 alt-svc advertisement and UDP
+            # listener. Fails loudly if the UDP port was not published.
+            curl -fsS --max-time 5 --http3-only \
+              --resolve api.cogioi.io.vn:443:127.0.0.1 \
+              https://api.cogioi.io.vn/api/health >/dev/null || \
+              echo "WARN: HTTP/3 probe failed; check UDP 443 firewall/publish"
 
             docker image prune -f
 

@@ -26,8 +26,8 @@ function createHarness(request) {
           return request(...args);
         },
       };
-      if (name === "@/lib/websocket") return {
-        wsManager: {
+      if (name === "@/lib/realtime/UIRealtimeManager") return {
+        uiRealtimeManager: {
           request: () => assert.fail("chat mutations must not depend on or retry over WS"),
         },
       };

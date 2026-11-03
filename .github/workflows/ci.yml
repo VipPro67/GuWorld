@@ -29,16 +29,16 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Format (realtime surface)
         working-directory: backend
-        run: test -z "$(gofmt -l internal/realtime internal/ws internal/handlers/monitor.go internal/server/server.go cmd/server cmd/mmo_slice cmd/mmo_bench cmd/gudata internal/db/schema_realtime.go)"
+        run: test -z "$(gofmt -l internal/realtime internal/uihub internal/handlers/monitor.go internal/server/server.go cmd/server cmd/mmo_slice cmd/mmo_bench cmd/gudata internal/db/schema_realtime.go)"
       - name: Vet
         working-directory: backend
         run: go vet ./...
       - name: Test
         working-directory: backend
         run: go test ./...
-      - name: Race (realtime/ws)
+      - name: Race (realtime/uihub)
         working-directory: backend
-        run: go test -race ./internal/realtime/... ./internal/ws/...
+        run: go test -race ./internal/realtime/... ./internal/uihub/...
       - name: Realtime Gu coverage (strict)
         working-directory: backend
         run: go run ./cmd/gudata audit-realtime -data data -strict -csv /tmp/gu-coverage.csv

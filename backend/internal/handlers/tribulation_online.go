@@ -10,21 +10,21 @@ import (
 )
 
 var (
-	wsConnectedMu sync.RWMutex
-	wsConnectedFn func(playerID uuid.UUID) bool
+	realtimeConnectedMu sync.RWMutex
+	realtimeConnectedFn func(playerID uuid.UUID) bool
 )
 
-// SetWSConnectedProvider sets the provider function for checking live WebSocket connections.
-func SetWSConnectedProvider(fn func(playerID uuid.UUID) bool) {
-	wsConnectedMu.Lock()
-	defer wsConnectedMu.Unlock()
-	wsConnectedFn = fn
+// SetRealtimeConnectedProvider sets the provider function for checking live realtime sessions.
+func SetRealtimeConnectedProvider(fn func(playerID uuid.UUID) bool) {
+	realtimeConnectedMu.Lock()
+	defer realtimeConnectedMu.Unlock()
+	realtimeConnectedFn = fn
 }
 
 func isWSConnected(playerID uuid.UUID) bool {
-	wsConnectedMu.RLock()
-	fn := wsConnectedFn
-	wsConnectedMu.RUnlock()
+	realtimeConnectedMu.RLock()
+	fn := realtimeConnectedFn
+	realtimeConnectedMu.RUnlock()
 	if fn == nil {
 		return false
 	}
@@ -33,13 +33,13 @@ func isWSConnected(playerID uuid.UUID) bool {
 
 // isPlayerOnline reports whether the player has been active within the online window.
 // It checks 3 tiers:
-// 1. Live WebSocket connection in ws.Hub (instant O(1), zero DB query).
-// 2. In-memory recent activity from WebSocket pings/messages (lastActivityStore.recent).
+// 1. Live realtime session in the UI hub (instant O(1), zero DB query).
+// 2. In-memory recent activity from realtime pings/messages (lastActivityStore.recent).
 // 3. Persistent players.last_activity in PostgreSQL (fallback).
 func isPlayerOnline(playerID string) bool {
 	uid, err := uuid.Parse(playerID)
 	if err == nil {
-		// Tier 1: Real-time WebSocket connection
+		// Tier 1: Real-time session
 		if isWSConnected(uid) {
 			return true
 		}

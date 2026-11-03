@@ -9,8 +9,9 @@ services:
       POSTGRES_DB: gu_db
       TZ: Asia/Ho_Chi_Minh
     command: ["postgres", "-c", "timezone=Asia/Ho_Chi_Minh"]
+    # Loopback only: the backend reaches this over the compose network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,8 +23,9 @@ services:
     image: redis:7-alpine
     container_name: guworld-redis
     restart: always
+    # Loopback only: the backend reaches this over the compose network.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
 
@@ -31,8 +33,10 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/vippro67/guworld-backend:latest}
     container_name: guworld-backend
     restart: always
+    # 443/tcp is HTTPS (REST + WebTransport upgrade); 443/udp is QUIC/WebTransport.
     ports:
-      - "127.0.0.1:8080:8080"
+      - "443:8443/tcp"
+      - "443:8443/udp"
     env_file:
       - ./backend/.env
     environment:
@@ -45,25 +49,30 @@ services:
       - AUTH_COOKIE_DOMAIN=.cogioi.io.vn
       - AUTH_COOKIE_SECURE=true
       - AUTH_COOKIE_SAMESITE=none
-      - WS_ALLOWED_ORIGINS=http://localhost:3000,https://cogioi.io.vn,https://www.cogioi.io.vn,https://api.cogioi.io.vn
+      # HTTPS + WebTransport in the same Go process (Caddy removed).
+      - TLS_ENABLED=${TLS_ENABLED:-true}
+      - TLS_ADDR=:8443
+      - WT_ENABLED=${WT_ENABLED:-true}
+      - WT_ADDR=:8443
+      - TLS_CERT_FILE=/data/certs/fullchain.pem
+      - TLS_KEY_FILE=/data/certs/privkey.pem
+    volumes:
+      # Certificates live on the host (certbot/acme.sh) and are mounted read-only.
+      - ./certs:/data/certs:ro
     depends_on:
       redis:
         condition: service_started
-
-  # caddy:
-  #   image: caddy:2-alpine
-  #   container_name: guworld-caddy
-  #   restart: always
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #     - "443:443/udp"
-  #   volumes:
-  #     - ./Caddyfile:/etc/caddy/Caddyfile
-  #     - caddy_data:/data
-  #     - caddy_config:/config
-  #   depends_on:
-  #     - backend
+      db:
+        condition: service_started
+    # Give in-flight WebTransport sessions time to receive close code 4010 and
+    # for the HTTP server to drain before Docker sends SIGKILL.
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsSk https://127.0.0.1:8443/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
 
   # alloy:
   #   image: grafana/alloy:latest
@@ -86,5 +95,3 @@ services:
 volumes:
   redis_data:
   postgres_data:
-  caddy_data:
-  caddy_config:

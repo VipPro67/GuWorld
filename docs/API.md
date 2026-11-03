@@ -169,7 +169,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/refine/sessions/:id/abort` | Hủy phiên: hoàn `floor(qty/2)` nguyên liệu (không hoàn mana/đá), Cổ nguyên liệu về Hấp Hối (`DYING`). Lần 2 trả trạng thái hiện có. |
 | POST | `/refine/sessions/:id/ack` | Đánh dấu đã xem kết quả (cờ UI, giữ `ok:true`). |
 
-Realtime: Kênh WS `refine` nhận `{type:"refine.session", session, revision}` khi tạo/submit/resolve/abort.
+Realtime: Kênh UI `refine` trên stream `0x02` nhận `{type:"refine.session", session, revision}` khi tạo/submit/resolve/abort.
 
 Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404), `REFINE_SESSION_REQUIRED` (400), `REFINE_STEP_NOT_OPEN` (409), `REFINE_STEP_CLOSED` (410), `REFINE_STEP_ALREADY_DONE` (409), `REFINE_NONCE_INVALID` (409), `REFINE_PAYLOAD_INVALID` (400), `REFINE_GU_LOCKED` (409), `REFINE_CONFIG_MISSING` (503), `REFINE_IMMORTAL_CONFLICT` (409).
 | POST | `/combat/practice` | Tạo phiên tập luyện realtime riêng trên `realtime_preview`; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Không tiêu hao HP/Chân Nguyên thật và trả `{instance_id,zone_id,origin_zone_id,is_practice}` để client nối vào zone. |
@@ -351,8 +351,8 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 | GET | `/chat/mail/inbox` |
 | GET | `/chat/mail/conversations` | Danh sách 100 hội thoại gần nhất, tin cuối và số tin chưa đọc. |
 | GET | `/chat/mail/thread?username=...` | 50 tin gần nhất của cuộc trò chuyện, đánh dấu tin nhận được là đã đọc; mỗi tin có `sender_rank` để tô màu tên người gửi. |
-| POST | `/chat/bao-hoang/send` | Gửi tin nhắn chat. Trả về `{ message }`; thông tin player (Nguyên Thạch, Nhân Khí) đồng bộ qua WebSocket `player.updated`. |
-| GET | `/chat/bao-hoang/messages?channel=world\|general\|sect\|region` | Mỗi tin có `sender_rank` để giao diện tô màu tên theo rank. `region` tự lấy khu vực và instance hiện tại từ player; `scope_only=1` chỉ trả khóa WebSocket hiện tại để đồng bộ đăng ký. Chat khu vực miễn phí và không nhận region do client chỉ định. |
+| POST | `/chat/bao-hoang/send` | Gửi tin nhắn chat. Trả về `{ message }`; thông tin player (Nguyên Thạch, Nhân Khí) đồng bộ qua realtime channel `player.updated`. |
+| GET | `/chat/bao-hoang/messages?channel=world\|general\|sect\|region` | Mỗi tin có `sender_rank` để giao diện tô màu tên theo rank. `region` tự lấy khu vực và instance hiện tại từ player; `scope_only=1` chỉ trả khóa realtime hiện tại để đồng bộ đăng ký. Chat khu vực miễn phí và không nhận region do client chỉ định. |
 
 | POST | `/soul/refine` |
 | GET | `/instance/active` |
@@ -549,25 +549,30 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/admin/monitor/system` | Báo cáo chi tiết hệ thống: CPU % (process & system), NumCPU, Goroutines, CgoCalls, Go MemStats (Alloc, Heap, Stack, GC pause), DB Connection Pool, Redis health & latency, WebSocket clients/channels, Process Uptime. |
+| GET | `/admin/monitor/system` | Báo cáo chi tiết hệ thống: CPU % (process & system), NumCPU, Goroutines, CgoCalls, Go MemStats (Alloc, Heap, Stack, GC pause), DB Connection Pool, Redis health & latency, realtime UI clients/channels, Process Uptime. |
 | GET | `/admin/monitor/realtime` | Telemetry từng instance realtime (permission `monitoring.read`): `map_loaded` (map đã kiểm tra lúc startup), `running` (world/runner đang tồn tại), `evicting` (đang teardown vì idle), tick/entity/player/subscriber, `last_step_ms`, kích thước/hash map, `monster_spawns` (tổng điểm spawn trong map) và `active_monsters` (entity quái đang materialize gần player). Instance rỗng vẫn xuất hiện với `running=false`; world được tạo lazy khi có lease đầu tiên và giải phóng sau 5 phút idle. |
 | GET | `/admin/monitor/realtime/clients` | Baseline telemetry **phía client** do trình duyệt upload mỗi 10s (permission `monitoring.read`): mỗi player một report mới nhất (ring tối đa 512 player), gồm inter-arrival snapshot (avg/p95/histogram), render delay, hard snap/blend, latency/jitter/estimated loss, byte in/out, input đã gửi, số resync và cửa sổ sự kiện reconnect (`stale`, `join_retry`, `socket_closed`, mã lỗi). Report cũ hơn bị thay thế; `rejected_reports` đếm payload không hợp lệ. |
 | GET | `/admin/monitor/requests/summary` | Thống kê request toàn diện: Tổng số request, in-flight requests, RPS (cửa sổ trượt 60s), phân bố mã trạng thái (2xx/3xx/4xx/5xx), độ trễ (min/max/avg/p50/p90/p99), top endpoint được gọi nhiều nhất và top endpoint chậm nhất. |
 | GET | `/admin/monitor/admin-operations` | Counter trong memory cho vận hành admin: 403 theo permission, mutation lỗi theo action, destructive action, import failure, audit write failure, legacy `is_admin` fallback và permission resolution error. Yêu cầu `monitoring.read`; counter reset khi process restart hoặc gọi endpoint reset. |
-| GET | `/admin/monitor/requests/traces` | Tra cứu server-side 500 HTTP request và WebSocket session trace gần nhất. HTTP upgrade của `/api/ws` vẫn là một request riêng; phiên WS được ghi khi đóng với thời lượng, message/byte vào-ra, close code/reason, player, IP và user-agent. Trace WS dùng `method=WS`, `status=101`; chỉ được thêm vào ring trace và không làm thay đổi tổng request, RPS, latency hay endpoint aggregation HTTP. Hỗ trợ `page`, `page_size`, allowlisted `sort`, `direction`, `method`, `status`, `path`, `min_duration_ms`, `search`; trả `{data,traces,total,page,page_size}` (`traces` là alias tương thích). |
+| GET | `/admin/monitor/requests/traces` | Tra cứu server-side HTTP request trace gần nhất (bao gồm request `CONNECT /api/wt`). WebSocket session tracing đã bị xoá cùng transport WS; không còn trace `method=WS`. Hỗ trợ `page`, `page_size`, allowlisted `sort`, `direction`, `method`, `status`, `path`, `min_duration_ms`, `search`; trả `{data,traces,total,page,page_size}` (`traces` là alias tương thích). |
 | GET | `/admin/gu-history` | Lịch sử Cổ trùng server-side: `page`, `page_size`, `search`, `event_type`, allowlisted `sort`, `direction`; trả `logs`, `total`, `page`, `page_size`. |
-| GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một trace theo `trace_id`. HTTP trace có method, path/query đã lọc, status, latency, `response_bytes`, client IP, player ID/username, user-agent, error, `content_length`, JSON `request_body` đã redact cùng `body_truncated`, và `response_body` tối đa 8 KiB cùng `response_body_truncated`. WS trace có `ws_messages_in/out`, `ws_bytes_in/out`, `ws_close_code/reason` và `ws_actions[]` (action, received, accepted, rejected, errors, latency TB/max, status, error code cuối, cùng từ chối gameplay như cast/move bị server tick bác). Action chỉ ghi loại/tổng hợp kết quả, không lưu payload. Với input/cast/attack, accepted là server nhận lệnh vào hàng xử lý; kết quả gameplay async được bổ sung riêng khi có event từ authoritative tick. Các trace chỉ lưu trong memory và hiển thị tại tab **Giám sát** của Admin. |
+| GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một trace theo `trace_id`. HTTP trace có method, path/query đã lọc, status, latency, `response_bytes`, client IP, player ID/username, user-agent, error, `content_length`, JSON `request_body` đã redact cùng `body_truncated`, và `response_body` tối đa 8 KiB cùng `response_body_truncated`. Các trace chỉ lưu trong memory và hiển thị tại tab **Giám sát** của Admin. |
 | POST | `/admin/monitor/requests/reset` | Đặt lại toàn bộ request/admin-operation metrics và xóa danh sách request trace gần nhất. |
 
-## Realtime Communication — WebSocket `GET /api/ws` (Auth)
+## Realtime Communication — WebTransport `CONNECT /api/wt` (Auth)
 
-WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa phiên bản phục vụ mở rộng horizontal. Kết nối yêu cầu token qua header `Authorization: Bearer <token>` hoặc query parameter `?token=<token>`.
+WebTransport là transport realtime duy nhất (WebSocket và SSE đã bị xoá). Mỗi tab mở **một** phiên QUIC tới `https://<host>/api/wt` rồi multiplex:
+- stream `0x01` cho world (binary v2),
+- stream `0x02` cho UI (NDJSON: channel/pub-sub, request/command, ping/pong),
+- QUIC datagrams cho input/snapshot delta.
+
+Kết nối yêu cầu token qua query `?token=<token>` (browser không gửi cookie trong WT) và `?tab_id=<uuid>` cho resume/takeover. Server dùng Redis Pub/Sub để fan-out sự kiện UI giữa các instance; Redis không còn phục vụ socket WS.
 
 Welcome của realtime world (`world.welcome`) có `movement_speed` (đơn vị map/giây), tốc độ authoritative đã tính từ passive `movement`. Client dùng giá trị này cho local prediction; client cũ có thể bỏ qua trường này.
 
 ### Baseline telemetry phía client
 
-Trong lúc đang ở trong world, client gửi mỗi 10 giây một cửa sổ đo lên `POST /api/realtime/metrics` (Auth, tối đa 30 request/phút/IP). Đây là kênh đo nền cho việc chuyển transport WebSocket → WebTransport, không ảnh hưởng gameplay: lỗi upload bị bỏ qua im lặng.
+Trong lúc đang ở trong world, client gửi mỗi 10 giây một cửa sổ đo lên `POST /api/realtime/metrics` (Auth, tối đa 30 request/phút/IP). Đây là kênh đo nền cho realtime, không ảnh hưởng gameplay: lỗi upload bị bỏ qua im lặng.
 
 Body (mọi trường tuỳ chọn, server tự kẹp giá trị âm/NaN):
 
@@ -599,13 +604,15 @@ Server trả `204`; response rỗng. Danh tính (player, tab, IP) do server đi�
 
 ### Vòng đời kết nối
 
-- Mỗi player tối đa 3 kết nối; riêng socket world (`?purpose=world`) là **độc quyền**: kết nối world mới sẽ takeover và đóng kết nối cũ. Takeover dùng `ReplaceCharacterLease` nên **không còn race `409 realtime_character_already_owned`** khi mở tab mới hoặc reconnect.
-- **Resume sau mất mạng:** khi socket world đóng, phiên được giữ `suspended` theo cặp `(player, tab_id)`: **15 s** cho zone mở, **30 s** cho instance riêng (combat/tribulation/practice/arena). Join lại cùng `tab_id` trong cửa sổ này nhận lại đúng entity/vị trí/HP mà không load lại từ DB; hết hạn mới checkpoint và nhả lease. Trong lúc suspended, nhân vật không nhận damage và không bị quái nhắm, nhưng status/cooldown/hunger vẫn tick.
-- **`tab_id`** lấy từ query `?tab_id=<uuid>` (cùng giá trị `sessionStorage.gu_gameplay_tab_id`). Tab khác cùng tài khoản sẽ takeover phiên đang treo và tab cũ nhận trạng thái bị thay thế.
+- Một phiên WebTransport mỗi tab, chia sẻ giữa world stream (`0x01`) và UI stream (`0x02`), nên mở/đóng UI không tạo QUIC handshake mới.
+- **World độc quyền:** kết nối world mới takeover và server đóng session cũ bằng close code `4000` (`superseded_same_tab`). Tab khác cùng tài khoản nhận `4001` (`session_replaced`) và **dừng reconnect**; UI hiện trạng thái tab bị thay thế.
+- **Resume sau mất mạng:** khi world stream/session đóng, phiên được giữ `suspended` theo cặp `(player, tab_id)`: **15 s** cho zone mở, **30 s** cho instance riêng (combat/tribulation/practice/arena). Join lại cùng `tab_id` trong cửa sổ này nhận lại đúng entity/vị trí/HP mà không load lại từ DB; hết hạn mới checkpoint và nhả lease. Trong lúc suspended, nhân vật không nhận damage và không bị quái nhắm, nhưng status/cooldown/hunger vẫn tick.
+- **`tab_id`** lấy từ query `?tab_id=<uuid>` (cùng giá trị `sessionStorage.gu_gameplay_tab_id`). `TabIdCoordinator` phát hiện tab bị nhân bản (Chrome duplicate tab sao chép `sessionStorage`) và xoay `tab_id` trước khi kết nối.
 - Client **seed `seq` input từ `snapshot.ack_seq` của `world.welcome`** (không reset về 0) để sim không bỏ toàn bộ input sau resume.
-- Socket UI không độc quyền — nhiều tab không đá nhau và `IsConnected` đếm theo kết nối còn sống. Giới hạn đã biết: mỗi kênh vẫn chỉ giao cho socket đăng ký sau cùng của player.
-- Server ping mỗi 3 giây và cắt kết nối sau 10 giây không có pong; read deadline cũng được refresh khi nhận bất kỳ frame nào, nên nửa-mở (mất mạng, sleep) được dọn trong khoảng 10 giây thay vì vài phút.
-- Tab bị thay thế sẽ đóng luôn socket world của tab cũ, không chỉ socket UI, và tab đó không tự reconnect nữa.
+- UI stream không độc quyền — nhiều tab không đá nhau; `IsConnected` đếm theo subscription còn sống. Mỗi kênh giao cho sink đăng ký sau cùng của player.
+- Server ping qua UI stream mỗi 30 giây; client không nhận pong trong 10 giây thì đóng stream và reconnect. QUIC idle timeout 90 s, keep-alive 20 s; watchdog world 3 s không snapshot sẽ reconnect.
+- Close code vận hành: `4000` superseded same tab (im lặng), `4001` session replaced (dừng), `4002` protocol mismatch (dừng, yêu cầu tải lại), `4003` join timeout (retry), `4008` rate limited (retry chậm), `4010` server draining (retry với backoff, không phải tab-replaced). Server gửi `4010` khi shutdown/deploy và chờ tối đa 5 s cho session đóng.
+- Browser không có `WebTransport` bị coi là `unsupported` cho cả phiên: không retry, giữ HTTP-only (chợ/tu luyện/inventory/chat HTTP), bản đồ world bị khóa.
 
 Skill lướt trong `world.welcome` có `move_distance`, `move_duration_ticks` và
 `move_behavior`. Lệnh `world.cast` có thể gửi `aim_x`/`aim_y` để khóa hướng lướt
@@ -630,11 +637,11 @@ cung cấp vị trí authoritative trong lúc lướt, và `HIT_CONFIRMED` báo 
 | `match:<match_id>` | S→C | Khung hình (frame) mô phỏng đấu trường thời gian thực, 20Hz. Server chỉ gửi cho người chơi có mặt trong trận đó. |
 | `notification` | S→C | Thông báo mới (chuông thông báo) |
 
-### Lệnh WorldMap qua WebSocket
+### Lệnh WorldMap qua UI stream
 
-Các truy vấn ô và đối tượng dùng cùng kết nối WebSocket để giảm HTTP request
+Các truy vấn ô và đối tượng dùng UI stream (`0x02`) để giảm HTTP request
 khi kéo camera. Di chuyển MMO dùng giao thức realtime `world.move_target`,
-không dùng lệnh đường đi legacy. Client gửi envelope
+không dùng lệnh đường đi legacy. Client gửi NDJSON
 `{type:"command", channel, request_id, payload}` và nhận
 `{type:"command.result", channel, request_id, ok, status, data}`. Các lệnh hiện có:
 
@@ -642,12 +649,12 @@ không dùng lệnh đường đi legacy. Client gửi envelope
 | --- | --- | --- |
 | `world.cells_rect` | `{min_x,min_y,max_x,max_y}` | `GET /explore/cells/rect` |
 | `world.objects` | `{}` | `GET /explore/objects` |
-| `match.input` | `{seq, move:{dx,dy}, casts:[{gu_id,rank,mode,ax,ay,target_id}]}` | Không có (chỉ WebSocket) |
+| `match.input` | `{seq, move:{dx,dy}, casts:[{gu_id,rank,mode,ax,ay,target_id}]}` | Không có (chỉ realtime) |
 
-Danh tính người chơi luôn lấy từ phiên WebSocket đã xác thực, không lấy từ
-payload. Các HTTP endpoint vẫn được giữ làm fallback khi WebSocket chưa kết nối.
+Danh tính người chơi luôn lấy từ phiên WebTransport đã xác thực, không lấy từ
+payload. Các HTTP endpoint vẫn được giữ làm fallback khi UI stream chưa kết nối.
 
-> SSE endpoint cũ không còn được đăng ký trong router hiện tại. Client phải dùng `/api/ws`; các HTTP endpoint vẫn là fallback cho thao tác/snapshot.
+> SSE và WebSocket đều không còn được đăng ký trong router. Client phải dùng `/api/wt`; các HTTP endpoint vẫn là fallback cho thao tác/snapshot.
 
 ## Thông báo (Notification) — Auth
 
@@ -793,20 +800,22 @@ world-position broadcast radius is not used as the monster activation radius.
 {"command_id":"uuid","gu_instance_id":"uuid","target":{"kind":"monster","id":"monster-instance-uuid"}}
 ```
 
-The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The targeted WebSocket channel `world:combat` carries `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `monster_attack_started`, `monster_attack`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, `monster_respawned`, and `monster_updated` (admin runtime edits). `monster_attack` includes `target_id`, actual HP damage, remaining HP/shield and whether the target was defeated; monster contact no longer creates a turn-based `active_combat` encounter.
+The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The target combat events travel on the realtime world stream (opcode `events`) and carry `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `monster_attack_started`, `monster_attack`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, `monster_respawned`, and `monster_updated` (admin runtime edits). `monster_attack` includes `target_id`, actual HP damage, remaining HP/shield and whether the target was defeated; monster contact no longer creates a turn-based `active_combat` encounter.
 
-## Realtime WebTransport — `CONNECT /api/wt` (Auth, song song giai đoạn chuyển đổi)
+## WebTransport v2 — wire protocol chi tiết
 
-Bật bằng `WT_ENABLED=true` + `TLS_CERT_FILE`/`TLS_KEY_FILE`; `WT_ADDR` mặc định `:8443` phục vụ **HTTPS (TCP)** và **QUIC/WebTransport (UDP)** trong cùng process. Endpoint dùng chung `CORS_ALLOWED_ORIGINS` cho `CheckOrigin`. Token lấy từ query `?token=` (browser không gửi cookie trong WT) và `tab_id` cho resume.
+Bật bằng `TLS_ENABLED=true` (hoặc `WT_ENABLED=true`) + `TLS_CERT_FILE`/`TLS_KEY_FILE`; `TLS_ADDR`/`WT_ADDR` mặc định `:8443` phục vụ **HTTPS (TCP)** và **QUIC/WebTransport (UDP)** trong cùng process. Endpoint dùng chung `CORS_ALLOWED_ORIGINS` cho `CheckOrigin`. Token lấy từ query `?token=` và `tab_id` cho resume.
 
-- **World stream**: mở bidirectional stream, gửi `0x01` + `"GWT"` + version `2`, sau đó frame `u32 len | u8 opcode | payload` (`u32` đã bao gồm opcode). Opcode: join/welcome/leave/transfer/reject/events/snapshot/spawn/move_target/cast/attack/capture/stance/resync.
+- **World stream (`0x01`)**: mở bidirectional stream, gửi `0x01` + `"GWT"` + version `2`, sau đó frame `u32 len | u8 opcode | payload` (`u32` đã bao gồm opcode). Opcode: join/welcome/leave/transfer/reject/events/snapshot/spawn/move_target/cast/attack/capture/stance/resync.
+- **UI stream (`0x02`)**: NDJSON trên bidirectional stream. Client gửi `subscribe`, `unsubscribe`, `command`, `ping`; server trả `event` (theo `channel`), `command.result`, `response`, `error`, `pong`. Kênh được auto-subscribe theo player (`player`, `notification`, `trade`, `refine`, `combat`, `arena`, `catalog`, chat công khai/khu vực/tông môn/private) và kiểm tra scope trước khi đăng ký.
+- **Close code**: `4000` superseded same tab, `4001` session replaced, `4002` protocol mismatch, `4003` join timeout, `4008` rate limited, `4010` server draining.
 - **Datagram**: 1 byte header `version(2b)|opcode(6b)`; input, snapshot delta, ping/pong. Snapshot delta > `maxDatagramSize` (1024 B) tự động tràn sang frame `snapshot` trên stream.
 - **Baseline**: `welcome.snapshot` + mỗi 40 tick (2 s) là full snapshot trên stream; delta mỗi tick đi datagram.
 - **Resume**: đóng session → server giữ phiên `suspended` 15 s (zone mở) / 30 s (instance riêng); join lại cùng `tab_id` nhận lại entity. Tab khác takeover.
 - Codec: `backend/internal/realtime/protocol/v2` và `frontend/src/game/network/v2` (golden vector chung).
 
-### WebTransport v2 — events & phạm vi hiện tại
+### Events
 
 - Combat events đi trên world stream (opcode `events`) sau mỗi snapshot có event: header `from_event_id`, mỗi event gồm `event_id`, `tick`, `type_id` (bảng enum cố định trong `protocol/v2/events.go`), `source/target net_id`, `payload` JSON snake_case (skill_id, amount, reason, duration_ticks...).
 - Client `WorldTransport` phát các event này qua `onEvents`; `WorldRuntime` dùng lại nguyên logic combat feedback.
-- **Giới hạn hiện tại:** world socket đã chạy WT; các kênh UI (`chat`, `trade`, `notification`, `refine`, `arena`, `catalog`) vẫn dùng `/api/ws` (`wsManager`) cho tới khi `UIStream` + shared `RealtimeClient` được nối. Đây là việc còn lại để xoá hẳn WS.
+- UI channel events dùng cùng shape envelope JSON như trước (`{type:"event",channel,data}`) nhưng đi qua UI stream; không còn socket WS riêng.

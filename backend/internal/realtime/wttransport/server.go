@@ -1,6 +1,6 @@
 // Package wttransport serves the authoritative realtime world over
-// WebTransport. It is the v2 counterpart of internal/ws and intentionally
-// depends only on the admission surface, not on the WebSocket hub.
+// WebTransport. It depends only on the admission surface and the UI event bus,
+// never on a network connection type.
 package wttransport
 
 import (
@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,31 +39,77 @@ type Admission interface {
 }
 
 const (
-	joinFrameTimeout = 10 * time.Second
-	baselineTicks    = 40
+	joinFrameTimeout        = 10 * time.Second
+	baselineTicks           = 40
+	CloseCodeServerDraining = 4010
 )
 
-// Server upgrades WebTransport requests and runs one world session each.
+type edgeTransferAdmission interface {
+	TransferAtEdge(playerID, controllerID uuid.UUID, position sim.Vec2) (protocol.Transfer, bool, error)
+}
+
+// Server upgrades WebTransport requests and runs one world/UI session each.
 type Server struct {
 	admission Admission
 	wt        *webtransport.Server
+	ui        UIOptions
+	mu        sync.Mutex
+	sessions  map[*webtransport.Session]struct{}
+	draining  atomic.Bool
 }
 
 func New(admission Admission, wt *webtransport.Server) *Server {
-	return &Server{admission: admission, wt: wt}
+	return &Server{
+		admission: admission,
+		wt:        wt,
+		sessions:  make(map[*webtransport.Session]struct{}),
+	}
 }
 
 // Handle must run after authentication; playerID/tabID come from the
 // authenticated request, never from the join payload.
 func (s *Server) Handle(w http.ResponseWriter, r *http.Request, playerID uuid.UUID, tabID string) {
+	if s.draining.Load() {
+		http.Error(w, "server draining", http.StatusServiceUnavailable)
+		return
+	}
 	session, err := s.wt.Upgrade(w, r)
 	if err != nil {
 		logger.S.Warnf("WebTransport upgrade failed for %s: %v", playerID, err)
 		http.Error(w, "webtransport upgrade failed", http.StatusBadRequest)
 		return
 	}
+	s.mu.Lock()
+	if s.sessions == nil {
+		s.sessions = make(map[*webtransport.Session]struct{})
+	}
+	s.sessions[session] = struct{}{}
+	s.mu.Unlock()
 	controllerID := uuid.New()
 	go s.serve(session, playerID, controllerID, tabID)
+}
+
+// Drain marks the server as draining (rejecting new sessions with 503) and
+// sends application close code 4010 ("server_draining") to all live sessions.
+func (s *Server) Drain() int {
+	s.draining.Store(true)
+	s.mu.Lock()
+	active := make([]*webtransport.Session, 0, len(s.sessions))
+	for sess := range s.sessions {
+		active = append(active, sess)
+	}
+	s.mu.Unlock()
+	for _, sess := range active {
+		_ = sess.CloseWithError(CloseCodeServerDraining, "server_draining")
+	}
+	return len(active)
+}
+
+// ActiveSessions reports how many WebTransport sessions are still open.
+func (s *Server) ActiveSessions() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.sessions)
 }
 
 type worldSession struct {
@@ -81,22 +128,65 @@ type worldSession struct {
 	baselineID uint16
 	lastTick   uint32
 
-	lastSnapshot sim.Snapshot
-	lastEventID  uint64
-	eventSeq     uint64
-	snapshotMu   sync.RWMutex
+	lastSnapshot       sim.Snapshot
+	lastEventID        uint64
+	eventSeq           uint64
+	lastTransferReject time.Time
+	snapshotMu         sync.RWMutex
 }
 
-func (s *Server) serve(session *webtransport.Session, playerID, controllerID uuid.UUID, tabID string) {
-	defer session.CloseWithError(0, "session ended")
+func (s *Server) serve(session *webtransport.Session, playerID, initialControllerID uuid.UUID, tabID string) {
+	defer func() {
+		s.mu.Lock()
+		delete(s.sessions, session)
+		s.mu.Unlock()
+		_ = session.CloseWithError(0, "session ended")
+	}()
 	ctx := session.Context()
 
-	stream, err := session.AcceptStream(ctx)
-	if err != nil {
-		logger.S.Warnf("WebTransport accept stream failed: %v", err)
+	var wg sync.WaitGroup
+	firstWorld := true
+	for {
+		stream, err := session.AcceptStream(ctx)
+		if err != nil {
+			break
+		}
+		var streamType [1]byte
+		if _, err := io.ReadFull(stream, streamType[:]); err != nil {
+			_ = stream.Close()
+			continue
+		}
+		switch streamType[0] {
+		case v2.StreamWorld:
+			controllerID := initialControllerID
+			if !firstWorld {
+				controllerID = uuid.New()
+			}
+			firstWorld = false
+			wg.Add(1)
+			go func(st *webtransport.Stream, cid uuid.UUID) {
+				defer wg.Done()
+				s.serveWorldStream(ctx, session, st, playerID, cid, tabID)
+			}(stream, controllerID)
+		case v2.StreamUI:
+			wg.Add(1)
+			go func(st *webtransport.Stream) {
+				defer wg.Done()
+				s.serveUIStream(ctx, st, playerID)
+			}(stream)
+		default:
+			_ = stream.Close()
+		}
+	}
+	wg.Wait()
+}
+
+func (s *Server) serveWorldStream(ctx context.Context, session *webtransport.Session, stream *webtransport.Stream, playerID, controllerID uuid.UUID, tabID string) {
+	defer func() { _ = stream.Close() }()
+	if s.admission == nil {
 		return
 	}
-	logger.S.Debugf("WebTransport stream accepted for %s", playerID)
+	logger.S.Debugf("WebTransport world stream accepted for %s", playerID)
 	world := &worldSession{
 		server: s, session: session, stream: stream,
 		playerID: playerID, controllerID: controllerID, tabID: tabID,
@@ -138,29 +228,30 @@ func (s *Server) serve(session *webtransport.Session, playerID, controllerID uui
 	}
 	defer unsubscribe()
 
+	worldCtx, cancelWorld := context.WithCancel(ctx)
 	var workers sync.WaitGroup
 	workers.Add(2)
 	go func() {
 		defer workers.Done()
-		world.datagramLoop(ctx)
+		world.datagramLoop(worldCtx)
 	}()
 	go func() {
 		defer workers.Done()
-		world.snapshotLoop(ctx, feed)
+		world.snapshotLoop(worldCtx, feed)
 	}()
 
-	// Frame loop runs on the accept goroutine.
-	world.frameLoop(ctx)
-	session.CloseWithError(0, "world stream closed")
+	// Frame loop runs on the stream goroutine.
+	world.frameLoop(worldCtx)
+	cancelWorld()
 	workers.Wait()
 }
 
 func (w *worldSession) readJoin() (v2.JoinRequest, error) {
-	handshake := make([]byte, 5)
+	handshake := make([]byte, 4)
 	if _, err := io.ReadFull(w.stream, handshake); err != nil {
 		return v2.JoinRequest{}, err
 	}
-	if handshake[0] != v2.StreamWorld || string(handshake[1:4]) != v2.Magic || handshake[4] != v2.Version {
+	if string(handshake[0:3]) != v2.Magic || handshake[3] != v2.Version {
 		return v2.JoinRequest{}, fmt.Errorf("unsupported world stream handshake")
 	}
 	op, payload, err := readFrame(w.stream)
@@ -232,6 +323,8 @@ func (w *worldSession) sendWelcome(welcome protocol.Welcome) error {
 }
 
 func (w *worldSession) snapshotLoop(ctx context.Context, feed <-chan sim.Snapshot) {
+	edgeAdm, hasEdgeTransfer := w.server.admission.(edgeTransferAdmission)
+	selfCharID := sim.CharacterID(w.playerID.String())
 	for {
 		select {
 		case <-ctx.Done():
@@ -243,6 +336,37 @@ func (w *worldSession) snapshotLoop(ctx context.Context, feed <-chan sim.Snapsho
 			w.snapshotMu.Lock()
 			w.lastSnapshot = snapshot
 			w.snapshotMu.Unlock()
+			if hasEdgeTransfer {
+				for _, entity := range snapshot.Entities {
+					if entity.CharacterID == selfCharID {
+						transfer, crossing, transferErr := edgeAdm.TransferAtEdge(w.playerID, w.controllerID, entity.Transform.Position)
+						if transferErr != nil {
+							if coded, ok := transferErr.(interface{ ErrorCode() string }); ok && coded.ErrorCode() == "realtime_transfer_denied" {
+								if time.Since(w.lastTransferReject) > 10*time.Second {
+									w.lastTransferReject = time.Now()
+									w.writeReject(coded.ErrorCode(), transferErr.Error(), false)
+								}
+							}
+						} else if crossing {
+							payload, err := v2.EncodeTransfer(v2.Transfer{
+								FromZoneID: transfer.FromZoneID,
+								ToZoneID:   transfer.ToZoneID,
+								TransferID: transfer.TransferID,
+								TargetX:    quantizeSafe(transfer.TargetX),
+								TargetY:    quantizeSafe(transfer.TargetY),
+								LegacyX:    int32(transfer.LegacyX),
+								LegacyY:    int32(transfer.LegacyY),
+								HP:         clampCount(transfer.HP),
+							})
+							if err == nil {
+								_ = w.writeFrame(v2.OpTransfer, payload)
+							}
+							return
+						}
+						break
+					}
+				}
+			}
 			if err := w.sendSnapshot(snapshot); err != nil {
 				logger.S.Debugf("WebTransport snapshot to %s stopped: %v", w.playerID, err)
 				return

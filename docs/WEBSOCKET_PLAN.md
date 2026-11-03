@@ -1,5 +1,11 @@
 # WebSocket Implementation Plan
 
+> **HISTORICAL — no longer applicable.** WebSocket has been removed; realtime now
+> runs over WebTransport (`CONNECT /api/wt`) with the transport-neutral hub in
+> `backend/internal/uihub`. `backend/internal/ws` and `frontend/src/lib/websocket.ts`
+> no longer exist. This document is kept as a record of the earlier design. See
+> `docs/wayfinder/IMPLEMENTATION_PROGRESS.md` and `docs/PRODUCTION_DEPLOY.md`.
+
 ## Overview
 Replace SSE (Server-Sent Events) with WebSocket for real-time communication. Use Redis Pub/Sub for horizontal scaling and reliable message delivery.
 

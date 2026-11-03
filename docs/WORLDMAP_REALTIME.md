@@ -1,6 +1,6 @@
 # WorldMap Realtime — Thiết kế & Lộ trình
 
-> **Tài liệu thiết kế lịch sử.** Các bảng và đoạn dưới đây ghi lại baseline/thời điểm viết, không mô tả luồng đang chạy. Phaser authoritative MMO hiện dùng realtime WebSocket/AOI; route polling `GET /api/explore/players` đã được gỡ vì không còn consumer.
+> **Tài liệu thiết kế lịch sử.** Các bảng và đoạn dưới đây ghi lại baseline/thời điểm viết, không mô tả luồng đang chạy. Phaser authoritative MMO hiện dùng realtime WebTransport/AOI; route polling `GET /api/explore/players` đã được gỡ vì không còn consumer.
 
 Mục tiêu: WorldMap gần như realtime cho **200–2000 player online** trên **một server**
 (Golang + Gin + PostgreSQL), đồng thời dựng nền tảng dễ mở rộng cho **combat thủ công**

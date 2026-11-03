@@ -25,3 +25,6 @@
 
 # External game assets kept in public for local reference only
 /frontend/public/cotienlo-reference-assets/
+
+# Production TLS certificates (bind-mounted into the backend container).
+/certs/

@@ -22,12 +22,12 @@ import { GameLoadingScreen } from "@/components/GameLoadingScreen";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliation";
 import { updateUiPreferences } from "@/lib/ui-preferences";
-import { wsManager } from "@/lib/websocket";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { installHttpFallbackPolling } from "@/lib/http-fallback";
 import { BasicFeatureNavigation } from "@/components/game/BasicFeatureNavigation";
 
-const subscribeConnection = (notify: () => void) => wsManager.onConnectionChange(notify);
-const getConnection = () => wsManager.getConnectionState();
+const subscribeConnection = (notify: () => void) => uiRealtimeManager.onConnectionChange(notify);
+const getConnection = () => uiRealtimeManager.getConnectionState();
 const getServerConnection = () => "disconnected" as const;
 
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
@@ -220,7 +220,7 @@ export default function Home() {
     if (!playerId) return;
 
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible" && wsManager.isConnected()) {
+      if (document.visibilityState === "visible" && uiRealtimeManager.isConnected()) {
         void fetchPlayerStatus(playerId);
       }
     }, 90000);
@@ -233,7 +233,7 @@ export default function Home() {
     if (!playerId) return;
     let nextPlayerRefresh = 0;
     return installHttpFallbackPolling({
-      connection: wsManager,
+      connection: uiRealtimeManager,
       activityTarget: window,
       visibilityTarget: document,
       isOnline: () => navigator.onLine !== false,
@@ -386,7 +386,7 @@ export default function Home() {
           onNavigate={setView}
           onReconnect={() => {
             setView("mmo-world");
-            wsManager.retryConnection();
+            uiRealtimeManager.retryConnection();
             useGameStore.getState().requestWorldReconnect();
           }}
         />

@@ -41,8 +41,8 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/realtime/wttransport"
 	"github.com/vippro67/GuWorld/backend/internal/server"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/internal/uihub"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
-	"github.com/vippro67/GuWorld/backend/internal/ws"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -658,12 +658,11 @@ func main() {
 		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)
 	}
 
-	// Initialize WebSocket Hub and Redis Pub/Sub
-	shub := ws.InitShardedHub()
-	ws.InitConnectionLimiter(3, 10) // Max 3 connections per player, 10 per IP
+	// Initialize realtime UI hub and Redis Pub/Sub
+	shub := uihub.InitShardedHub()
 	if cache.Client != nil {
 		cache.InitCircuitBreaker() // Initialize Redis circuit breaker
-		ws.StartRedisSubscribers(shub)
+		uihub.StartRedisSubscribers(shub)
 	}
 
 	realtimeAdmission := realtimegateway.NewAdmission(realtimeConfig, realtimeWorldManager, nil)
@@ -940,74 +939,119 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	tlsEnabled := envBool("TLS_ENABLED")
+	wtEnabled := tlsEnabled || envBool("WT_ENABLED")
+	tlsAddr := strings.TrimSpace(os.Getenv("TLS_ADDR"))
+	if tlsAddr == "" {
+		tlsAddr = ":8443"
+	}
+	wtAddr := strings.TrimSpace(os.Getenv("WT_ADDR"))
+	if wtAddr == "" {
+		wtAddr = tlsAddr
+	}
 
 	var (
 		httpServer *http.Server
 		wtServer   *webtransport.Server
+		wtHandler  *wttransport.Server
 		udpConn    net.PacketConn
 	)
 
-	if strings.EqualFold(strings.TrimSpace(os.Getenv("WT_ENABLED")), "true") {
-		wtAddr := strings.TrimSpace(os.Getenv("WT_ADDR"))
-		if wtAddr == "" {
-			wtAddr = ":8443"
-		}
+	if wtEnabled {
 		certFile := strings.TrimSpace(os.Getenv("TLS_CERT_FILE"))
 		keyFile := strings.TrimSpace(os.Getenv("TLS_KEY_FILE"))
-		switch {
-		case certFile == "" || keyFile == "":
-			logger.S.Errorf("WT_ENABLED requires TLS_CERT_FILE and TLS_KEY_FILE; falling back to plain HTTP")
-		case realtimeAdmission == nil:
-			logger.S.Errorf("WT_ENABLED requires the realtime admission runtime; falling back to plain HTTP")
-		default:
-			cert, certErr := tls.LoadX509KeyPair(certFile, keyFile)
-			if certErr != nil {
-				logger.S.Errorf("load WebTransport certificate: %v; falling back to plain HTTP", certErr)
-				break
-			}
-			tlsTCP := &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2", "http/1.1"}}
-			tlsH3 := http3.ConfigureTLSConfig(&tls.Config{Certificates: []tls.Certificate{cert}})
-			h3 := &http3.Server{
-				Handler:   r,
-				TLSConfig: tlsH3,
-				QUICConfig: &quic.Config{
-					MaxIdleTimeout:                   90 * time.Second,
-					KeepAlivePeriod:                  20 * time.Second,
-					MaxIncomingStreams:               16,
-					MaxIncomingUniStreams:            16,
-					MaxStreamReceiveWindow:           256 << 10,
-					MaxConnectionReceiveWindow:       2 << 20,
-					EnableDatagrams:                  true,
-					EnableStreamResetPartialDelivery: true,
-				},
-			}
-			wt := &webtransport.Server{H3: h3, CheckOrigin: realtimeOriginChecker()}
-			udpAddr, resolveErr := net.ResolveUDPAddr("udp", wtAddr)
-			if resolveErr != nil {
-				logger.S.Errorf("resolve WT_ADDR: %v; falling back to plain HTTP", resolveErr)
-				break
-			}
-			udp, listenErr := net.ListenUDP("udp", udpAddr)
-			if listenErr != nil {
-				logger.S.Errorf("listen WebTransport UDP %s: %v; falling back to plain HTTP", wtAddr, listenErr)
-				break
-			}
-			server.RegisterRealtimeWT(r, wttransport.New(realtimeAdmission, wt).Handle)
-			wtServer, udpConn = wt, udp
-			go func() {
-				if err := wt.Serve(udp); err != nil && !errors.Is(err, net.ErrClosed) {
-					logger.S.Errorf("WebTransport server stopped: %v", err)
+		if certFile == "" || keyFile == "" {
+			logger.S.Fatalf("TLS_ENABLED/WT_ENABLED requires TLS_CERT_FILE and TLS_KEY_FILE")
+		}
+		if realtimeAdmission == nil {
+			logger.S.Fatalf("TLS_ENABLED/WT_ENABLED requires the realtime admission runtime")
+		}
+		cert, certErr := tls.LoadX509KeyPair(certFile, keyFile)
+		if certErr != nil {
+			logger.S.Fatalf("load WebTransport certificate: %v", certErr)
+		}
+		tlsTCP := &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2", "http/1.1"}}
+		tlsH3 := http3.ConfigureTLSConfig(&tls.Config{Certificates: []tls.Certificate{cert}})
+		h3 := &http3.Server{
+			Handler:   r,
+			TLSConfig: tlsH3,
+			QUICConfig: &quic.Config{
+				MaxIdleTimeout:                   90 * time.Second,
+				KeepAlivePeriod:                  20 * time.Second,
+				MaxIncomingStreams:               16,
+				MaxIncomingUniStreams:            16,
+				MaxStreamReceiveWindow:           256 << 10,
+				MaxConnectionReceiveWindow:       2 << 20,
+				EnableDatagrams:                  true,
+				EnableStreamResetPartialDelivery: true,
+			},
+		}
+		wt := &webtransport.Server{H3: h3, CheckOrigin: realtimeOriginChecker()}
+		udpAddr, resolveErr := net.ResolveUDPAddr("udp", wtAddr)
+		if resolveErr != nil {
+			logger.S.Fatalf("resolve WT_ADDR: %v", resolveErr)
+		}
+		udp, listenErr := net.ListenUDP("udp", udpAddr)
+		if listenErr != nil {
+			logger.S.Fatalf("listen WebTransport UDP %s: %v", wtAddr, listenErr)
+		}
+		wtHandler = wttransport.New(realtimeAdmission, wt).WithUIOptions(wttransport.UIOptions{
+			Hub: shub,
+			SectLookup: func(playerID uuid.UUID) string {
+				if db.DB == nil {
+					return ""
 				}
-			}()
+				var sectID string
+				if err := db.DB.QueryRow("SELECT sect_id FROM sect_members WHERE player_id = $1", playerID).Scan(&sectID); err != nil {
+					return ""
+				}
+				return sectID
+			},
+			RegionScope: func(playerID uuid.UUID) (string, error) {
+				return handlers.CurrentRegionChatScope(playerID.String())
+			},
+			InitialEvents: func(playerID uuid.UUID) [][]byte {
+				var events [][]byte
+				if snapshot, err := handlers.LoadPlayerRealtimeSnapshot(playerID); err == nil {
+					if msg, err := json.Marshal(struct {
+						Type    string                          `json:"type"`
+						Channel string                          `json:"channel"`
+						Data    handlers.PlayerRealtimeSnapshot `json:"data"`
+					}{Type: "event", Channel: "player", Data: snapshot}); err == nil {
+						events = append(events, msg)
+					}
+				}
+				if trade, err := handlers.LoadActiveTrade(playerID); err == nil && trade != nil {
+					if msg, err := json.Marshal(struct {
+						Type    string `json:"type"`
+						Channel string `json:"channel"`
+						Data    any    `json:"data"`
+					}{Type: "event", Channel: "trade", Data: map[string]any{"trade": trade}}); err == nil {
+						events = append(events, msg)
+					}
+				}
+				return events
+			},
+			TouchActivity: handlers.TouchPlayerActivity,
+		})
+		server.RegisterRealtimeWT(r, wtHandler.Handle)
+		wtServer, udpConn = wt, udp
+		go func() {
+			if err := wt.Serve(udp); err != nil && !errors.Is(err, net.ErrClosed) {
+				logger.S.Errorf("WebTransport server stopped: %v", err)
+			}
+		}()
+
+		if tlsEnabled {
 			httpServer = &http.Server{
-				Addr:              wtAddr,
+				Addr:              tlsAddr,
 				Handler:           r,
 				TLSConfig:         tlsTCP,
 				ReadHeaderTimeout: 10 * time.Second,
 				IdleTimeout:       120 * time.Second,
 			}
 			go func() {
-				logger.S.Infof("Cultivation Backend listening on %s (HTTPS + WebTransport)", wtAddr)
+				logger.S.Infof("Cultivation Backend listening on %s (HTTPS + WebTransport on %s/udp)", tlsAddr, wtAddr)
 				if err := httpServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 					logger.S.Fatalf("Server failed to start: %v", err)
 				}
@@ -1022,7 +1066,7 @@ func main() {
 			IdleTimeout:       120 * time.Second,
 		}
 		go func() {
-			logger.S.Infof("Cultivation Backend listening on port %s", port)
+			logger.S.Infof("Cultivation Backend listening on port %s (plain HTTP)", port)
 			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.S.Fatalf("Server failed to start: %v", err)
 			}
@@ -1032,7 +1076,17 @@ func main() {
 	<-ctx.Done()
 	logger.S.Info("Shutting down gracefully...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if wtHandler != nil {
+		if closed := wtHandler.Drain(); closed > 0 {
+			logger.S.Infof("Sent 4010 server_draining to %d active WebTransport sessions", closed)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for wtHandler.ActiveSessions() > 0 && time.Now().Before(deadline) {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
@@ -1068,6 +1122,15 @@ func main() {
 	shub.Stop(shutdownCtx)
 
 	logger.S.Info("Server exited cleanly")
+}
+
+func envBool(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 // resolveRealtimeMapPath supports both documented startup locations: running

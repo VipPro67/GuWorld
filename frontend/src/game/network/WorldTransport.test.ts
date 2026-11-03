@@ -10,6 +10,7 @@ import {
   dequantize,
   encodeSnapshotDelta,
   encodeSnapshotFull,
+  encodeTransfer,
   encodeWelcome,
   encodeFrame,
   Op,
@@ -182,8 +183,9 @@ test("applies snapshot deltas from datagrams", async () => {
   moved.hp = 70;
   moved.revision = 4;
   const delta = encodeSnapshotDelta({
-    tick: 101, baselineId: 1, ackSeq: 5, hasProjectiles: false,
-    entities: [moved], removed: [], projectiles: [],
+    tick: 101, baselineId: 1, ackSeq: 5, hasProjectiles: true,
+    entities: [moved], removed: [],
+    projectiles: [{ id: 3, sourceNetId: 7, skillId: "moon_blade", vfx: "slash", x: quantize(14), y: quantize(15), radiusX10: 5 }],
   });
   fake.pushDatagram(delta);
   await new Promise((resolve) => setTimeout(resolve, 10));
@@ -193,4 +195,17 @@ test("applies snapshot deltas from datagrams", async () => {
   assert.equal(snapshot?.entities[0].entity_revision, 4);
   assert.equal(snapshot?.entities[0].hp, 70);
   assert.equal(dequantize(quantize(snapshot!.entities[0].x)), 20);
+  assert.equal(snapshot?.projectiles?.length, 1);
+  assert.equal(snapshot?.projectiles?.[0].source_id, "player-1");
+  assert.equal(snapshot?.projectiles?.[0].skill_id, "moon_blade");
+  assert.equal(snapshot?.projectiles?.[0].radius, 0.5);
+
+  const transfers: Array<{ to: string; legacyX: number; legacyY: number; hp: number }> = [];
+  client.onTransfer((t) => transfers.push({ to: t.to_zone_id, legacyX: t.legacy_x, legacyY: t.legacy_y, hp: t.hp }));
+  fake.pushFrame(encodeFrame(Op.Transfer, encodeTransfer({
+    fromZoneId: "forest", toZoneId: "valley", transferId: "tr-1",
+    targetX: quantize(4), targetY: quantize(8), legacyX: -12, legacyY: 45, hp: 70,
+  })));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.deepEqual(transfers, [{ to: "valley", legacyX: -12, legacyY: 45, hp: 70 }]);
 });

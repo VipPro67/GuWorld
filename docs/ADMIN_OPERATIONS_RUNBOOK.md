@@ -192,6 +192,6 @@ docker compose -f docker-compose.local.yml restart backend
    `DB_NAME`. Với Redis ngoài compose: dùng `redis-cli` theo host/TLS của môi
    trường; tránh đặt password trực tiếp trên command line/history.
 4. Sau recovery, kiểm tra `/api/admin/monitor/system`, error rate, worker backlog,
-   WebSocket và một read/write smoke test. Đối chiếu log
+   WebTransport và một read/write smoke test. Đối chiếu log
    `admin_permission_resolution_error`: lỗi DB permission phải trả `503`, không
    được diễn giải là người dùng thiếu quyền.

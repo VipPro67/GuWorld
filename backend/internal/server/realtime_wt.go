@@ -14,9 +14,8 @@ import (
 // from the world join payload.
 type RealtimeWTHandler func(w http.ResponseWriter, r *http.Request, playerID uuid.UUID, tabID string)
 
-// RegisterRealtimeWT mounts the WebTransport endpoint next to /api/ws so both
-// transports can run during development. It is registered after SetupRouter
-// because the WebTransport server itself is created in main.
+// RegisterRealtimeWT mounts the WebTransport endpoint. It is registered after
+// SetupRouter because the WebTransport server itself is created in main.
 func RegisterRealtimeWT(engine *gin.Engine, handler RealtimeWTHandler) {
 	if engine == nil || handler == nil {
 		return

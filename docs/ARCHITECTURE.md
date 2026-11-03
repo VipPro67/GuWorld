@@ -5,10 +5,14 @@
 ```text
 Browser / Next.js UI
   -> Zustand domain slices (state + API client)
-  -> HTTP `/api/*` or authenticated `/api/ws`
+  -> HTTP `/api/*` or one authenticated WebTransport session `CONNECT /api/wt`
+       (stream 0x01 world, stream 0x02 UI NDJSON, QUIC datagrams)
   -> Gin handlers -> shared service (where present) -> PostgreSQL
-  -> Redis cache/pub-sub, WebSocket hub and polling/batch workers
+  -> Redis cache/pub-sub, `internal/uihub` realtime sinks and polling/batch workers
 ```
+
+WebTransport is the only realtime transport. WebSocket, SSE and Caddy have been
+removed; TLS and QUIC are served by the Go process itself.
 
 Gameplay rules remain primarily in handlers. The wired shared services are `PlayerService`, `InventoryService`, `RecipeService`, `QuestService` and `AchievementService`; this is an incremental split, not a universal service/repository layer. Check `handlers/services.go` and the package before assuming another service exists.
 
@@ -23,8 +27,9 @@ The canonical full-row player projection and collection revision live in `intern
 3. Seeds only runtime prerequisites (sentinel dictionaries, starting hub, system players and backfills). Gameplay dictionaries are imported from Admin; quest is currently the one CSV exception refreshed during schema initialization.
 4. Connects to required Redis, configures the rate limiter and clears dictionary cache keys.
 5. Loads Gu, item, constitution, race, status, monster, zone, quest and instance registries from PostgreSQL.
-6. Wires shared services, starts background workers, the sharded WebSocket hub and Redis subscribers.
-7. Starts Gin on `PORT` (default `8080`) and shuts down through `context.Context` on SIGINT/SIGTERM.
+6. Wires shared services, starts background workers, the sharded `internal/uihub` sinks and Redis subscribers.
+7. Starts the HTTP server: plain HTTP on `PORT` (default `8080`) in dev, or — when `TLS_ENABLED`/`WT_ENABLED` is set — HTTPS on `TLS_ADDR` and QUIC/WebTransport on `WT_ADDR` in the same process (default `:8443`). Missing certs or realtime runtime stops startup; there is no plain-HTTP fallback.
+8. Shuts down through `context.Context` on SIGINT/SIGTERM and drains WebTransport sessions with close code `4010`.
 
 ## Backend folders
 
@@ -38,7 +43,9 @@ The canonical full-row player projection and collection revision live in `intern
 | `backend/internal/services` | Existing shared player, inventory, recipe, quest and achievement operations, plus player time/status projection. |
 | `backend/internal/playerstate` | Canonical player row projection, snapshot views, collection revision and lazy repairs. |
 | `backend/internal/middleware` | Authentication, rate limits and request context. |
-| `backend/internal/cache`, `backend/internal/ws` | Redis and realtime WebSocket infrastructure. |
+| `backend/internal/cache`, `backend/internal/uihub` | Redis and transport-neutral realtime UI event sinks (shared by Redis fan-out and `/api/wt`). |
+| `backend/internal/realtime/wttransport` | WebTransport server: session multiplexing, world/UI streams, datagrams, drain. |
+| `backend/internal/realtime/sim`, `backend/internal/realtime/effects` | Authoritative zone simulation and Gu realtime effect compilation. |
 | `backend/internal/worker` | Polling, simulation and batch persistence loops. |
 | `backend/data/*.csv` | Canonical import/export files for gameplay data. |
 
@@ -55,8 +62,9 @@ The canonical full-row player projection and collection revision live in `intern
 ## State and networking
 
 - Protected HTTP calls use cookie credentials. `NEXT_PUBLIC_BACKEND_URL` defaults to `http://localhost:8080`.
-- `/api/ws` is the primary realtime transport. The hub supports player events, world position/cell deltas, trade and chat channels via Redis pub/sub when available.
-- World-map queries remain HTTP for snapshots, rectangular cell fetches and actions; WebSocket events keep nearby state fresh between snapshots.
+- `CONNECT /api/wt` is the only realtime transport: one WebTransport session per tab multiplexes a world stream (`0x01`, binary v2), a UI stream (`0x02`, NDJSON pub/sub and RPC) and QUIC datagrams for input/snapshot deltas. `internal/uihub` fans out player, trade, chat, notification and other UI channels from Redis Pub/Sub.
+- World-map queries remain HTTP for snapshots, rectangular cell fetches and actions; the world stream keeps nearby state fresh between snapshots. HTTP endpoints stay available as fallback for non-realtime actions.
+- A browser without WebTransport is treated as unsupported for the whole session (no retry loop): HTTP features keep working and the world map stays locked. See [PRODUCTION_DEPLOY.md](PRODUCTION_DEPLOY.md) for the TLS/QUIC origin setup.
 - The Zustand root composes domain slices for inventory, combat, exploration, aperture, marketplace, sect, party, notifications, achievements, pets, gacha, betting and other systems.
 
 ## Player state and movement

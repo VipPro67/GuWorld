@@ -50,7 +50,7 @@ Current status on this branch:
 | Check | Status | Evidence |
 | --- | --- | --- |
 | Go format/vet/tests | PASS | `go test ./...`, `go vet ./...` |
-| Realtime/ws race | PASS | `go test -race ./internal/realtime/... ./internal/ws/...` |
+| Realtime/uihub race | PASS | `go test -race ./internal/realtime/... ./internal/uihub/...` |
 | Gu coverage CSV parity | PASS | strict audit; CSV unchanged |
 | Compiled Gu catalog parity | PASS | 46 profiles, combined hash |
 | Map server/client parity | PASS | preview + 4 Alpha maps |

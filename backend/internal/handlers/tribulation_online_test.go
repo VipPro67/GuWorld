@@ -12,13 +12,13 @@ func TestIsPlayerOnline_WSProvider(t *testing.T) {
 	wsConnected := false
 
 	// Inject custom WS provider
-	SetWSConnectedProvider(func(id uuid.UUID) bool {
+	SetRealtimeConnectedProvider(func(id uuid.UUID) bool {
 		if id == playerID {
 			return wsConnected
 		}
 		return false
 	})
-	defer SetWSConnectedProvider(nil)
+	defer SetRealtimeConnectedProvider(nil)
 
 	// Initially offline
 	if isPlayerOnline(playerID.String()) {
@@ -42,10 +42,10 @@ func TestIsPlayerOnline_RecentActivity(t *testing.T) {
 	playerID := uuid.New()
 
 	// Ensure WS provider returns false
-	SetWSConnectedProvider(func(id uuid.UUID) bool {
+	SetRealtimeConnectedProvider(func(id uuid.UUID) bool {
 		return false
 	})
-	defer SetWSConnectedProvider(nil)
+	defer SetRealtimeConnectedProvider(nil)
 
 	// Initially offline
 	if isPlayerOnline(playerID.String()) {

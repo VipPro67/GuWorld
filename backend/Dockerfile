@@ -20,11 +20,11 @@ FROM alpine:3.22
 WORKDIR /app
 
 # Cài đặt chứng chỉ SSL và Timezone
-RUN apk --no-cache add ca-certificates tzdata \
-    && addgroup -S app \
-    && adduser -S -G app app \
-    && mkdir -p /app/storage/images \
-    && chown -R app:app /app
+RUN apk --no-cache add ca-certificates tzdata curl \
+    && addgroup -S -g 10001 app \
+    && adduser -S -G app -u 10001 app \
+    && mkdir -p /app/storage/images /data/certs \
+    && chown -R app:app /app /data/certs
 
 ENV TZ=Asia/Ho_Chi_Minh
 
@@ -34,6 +34,7 @@ COPY --from=builder /app/data ./data
 
 USER app
 
-EXPOSE 8080
+# 8080: plain HTTP (dev/health), 8443: HTTPS over TCP and QUIC/WebTransport over UDP.
+EXPOSE 8080 8443 8443/udp
 
 CMD ["./guworld_server"]

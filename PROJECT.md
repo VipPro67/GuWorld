@@ -8,7 +8,7 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 
 ## Kiến trúc hiện tại
 
-- `backend/cmd/server/main.go`: entrypoint backend, load `.env`, kết nối PostgreSQL/Redis, khởi tạo schema, load các registry từ DB, chạy worker và Gin router/WebSocket hub.
+- `backend/cmd/server/main.go`: entrypoint backend, load `.env`, kết nối PostgreSQL/Redis, khởi tạo schema, load các registry từ DB, chạy worker, Gin router và WebTransport server (HTTPS + QUIC trong cùng process).
 - `backend/internal/server/server.go`: khai báo toàn bộ route `/api`.
 - `backend/internal/db/db.go` + `backend/internal/db/schema_*.go`: khởi tạo schema idempotent, gồm DDL tương thích cho database đã tồn tại và seed hệ thống tối thiểu. Dự án không dùng migration framework có version; một số thay đổi dữ liệu vẫn có script triển khai riêng. Dictionary gameplay được import qua Admin.
 - `backend/internal/models`: struct domain cho player, Cổ, item, recipe, combat, aperture, monster, cell, feedback, killer move.
@@ -67,8 +67,8 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 
 - Shop NPC buy/sell.
 - Bảo Hoàng Thiên: listing market/auction/trade, bid, buy, cancel, settle expired auctions.
-- P2P trade: initiate/accept/decline/cancel/offer/lock/confirm + cập nhật realtime qua WebSocket.
-- Chat/mail private, Bảo Hoàng chat và sự kiện realtime qua WebSocket.
+- P2P trade: initiate/accept/decline/cancel/offer/lock/confirm + cập nhật realtime qua WebTransport.
+- Chat/mail private, Bảo Hoàng chat và sự kiện realtime qua WebTransport (UI stream `0x02`).
 - Wallet, topup package/order, PayOS webhook, premium package shop, admin wallet/topup listing.
 
 ### Môn phái, mỏ, arena, feedback

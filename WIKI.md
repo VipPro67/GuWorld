@@ -902,11 +902,11 @@ Hệ thống phân định rõ rệt giữa ba cơ chế khám phá:
 - Khi bán Cổ vào đơn thu mua, người bán phải chọn đủ các cá thể Cổ đúng loại và đúng hạng; Cổ bản mệnh, đang trang bị, bị khóa hoặc đã chết không thể giao dịch. Đơn Bí phương chỉ giao dịch từng bản một.
 - Có thể bán nhiều Cổ cùng loại và cùng hạng trong một lần. Số lượng và danh sách Cổ được chọn đồng bộ hai chiều; nút **Tối Đa** tự chọn toàn bộ cá thể hợp lệ trong giới hạn của đơn.
 - Có đặt giá, mua, hủy và kết toán đấu giá hết hạn.
-- Có chat Bảo Hoàng và tin nhắn real-time qua WebSocket.
+- Có chat Bảo Hoàng và tin nhắn real-time qua WebTransport.
 
 ### Thông báo
 
-- Chuông thông báo (góc trên phải) báo tin mới theo thời gian thực qua WebSocket.
+- Chuông thông báo (góc trên phải) báo tin mới theo thời gian thực qua WebTransport.
 - Thông báo khi: Cổ chết đói (kể cả bản mệnh cổ), tử đạo đánh rơi tài sản (thông báo chi tiết lượng tài nguyên rơi tại chỗ và lượng bị Thiên Đạo tiêu hủy vĩnh viễn), nhặt chiến lợi phẩm, ai mua hàng của bạn, ai đặt giá đấu giá, thắng đấu giá, đấu giá hết hạn.
 - Hỗ trợ đánh dấu đã đọc từng mục hoặc tất cả.
 
@@ -921,7 +921,7 @@ Hệ thống phân định rõ rệt giữa ba cơ chế khám phá:
 
 - Hai Cổ sư có thể khởi tạo, chấp nhận/từ chối, đề nghị, khóa và xác nhận.
 - Đề nghị hỗ trợ nguyên thạch, Tiên Nguyên Thạch, Cổ, vật liệu và **Bí phương**.
-- Có WebSocket trade events — nhận cập nhật giao dịch real-time.
+- Có WebTransport trade events — nhận cập nhật giao dịch real-time.
 
 ### Ví, nạp tiền và gói quý
 
@@ -1246,7 +1246,7 @@ Sơ Giai Đao Khí (chọn mục tiêu), Thủy Tiễn (xuyên theo hướng), S
 ## 16. Chat, mail và feedback
 
 - Mail riêng: gửi và xem inbox.
-- Bảo Hoàng chat theo channel, fetch message và subscribe WebSocket. Hệ thống tích hợp bộ lọc chặn spam (giới hạn thời gian gửi 1.5s, cấm trùng lặp tin nhắn trong 10s, cấm lặp từ hoặc chuỗi ký tự liên tiếp) và chặn từ ngữ tục tĩu nhạy cảm.
+- Bảo Hoàng chat theo channel, fetch message và subscribe qua WebTransport. Hệ thống tích hợp bộ lọc chặn spam (giới hạn thời gian gửi 1.5s, cấm trùng lặp tin nhắn trong 10s, cấm lặp từ hoặc chuỗi ký tự liên tiếp) và chặn từ ngữ tục tĩu nhạy cảm.
 - Feedback (Thỉnh Thiên Đạo): mỗi sớ trình là một topic. Xem danh sách, gửi góp ý, bình chọn, góp ý (comment), cập nhật trạng thái/developer response.
 - **Quyền theo trạng thái topic:**
   - `pending` (chờ duyệt): không bình chọn, không góp ý.

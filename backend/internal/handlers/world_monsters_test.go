@@ -56,7 +56,7 @@ func installMonsterTransitionTest(t *testing.T, monster WorldMonster, now time.T
 	casWorldMonster = func(_ context.Context, _, _ cache.WorldMonster, _ int64, _, _, _, _ int, _ time.Duration) (bool, error) {
 		return casOK, nil
 	}
-	SetWSConnectedProvider(func(id uuid.UUID) bool { return id == playerID })
+	SetRealtimeConnectedProvider(func(id uuid.UUID) bool { return id == playerID })
 	events := make([]WorldCombatEvent, 0, 1)
 	WorldCombatBroadcaster = func(_ string, payload []byte, _ map[uuid.UUID]struct{}) {
 		var event WorldCombatEvent
@@ -68,7 +68,7 @@ func installMonsterTransitionTest(t *testing.T, monster WorldMonster, now time.T
 	t.Cleanup(func() {
 		worldPosIndex, worldMonstersInBucket, casWorldMonster = previousIndex, previousLoader, previousCAS
 		WorldCombatBroadcaster = previousBroadcaster
-		SetWSConnectedProvider(nil)
+		SetRealtimeConnectedProvider(nil)
 	})
 	return &events
 }
@@ -352,9 +352,9 @@ func installMonsterWorkerTestState(t *testing.T, entries []WorldPosEntry, connec
 		mu.Unlock()
 		return nil, nil
 	}
-	SetWSConnectedProvider(func(id uuid.UUID) bool { return connected[id] })
+	SetRealtimeConnectedProvider(func(id uuid.UUID) bool { return connected[id] })
 	t.Cleanup(func() {
-		SetWSConnectedProvider(nil)
+		SetRealtimeConnectedProvider(nil)
 		worldPosIndex = previousIndex
 		worldMonstersInBucket = previousLoader
 	})

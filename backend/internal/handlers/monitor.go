@@ -17,25 +17,25 @@ import (
 )
 
 var (
-	serverStartTime  = time.Now()
-	wsStatsMu        sync.RWMutex
-	wsStatsFn        func() (clients int, channels int)
-	realtimeStatsMu  sync.RWMutex
-	realtimeStatsFn  func() any
-	realtimeStatsErr string
+	serverStartTime      = time.Now()
+	realtimeEventStatsMu sync.RWMutex
+	realtimeEventStatsFn func() (clients int, channels int)
+	realtimeStatsMu      sync.RWMutex
+	realtimeStatsFn      func() any
+	realtimeStatsErr     string
 )
 
-// SetWSStatsProvider sets the provider function for WebSocket statistics.
-func SetWSStatsProvider(fn func() (int, int)) {
-	wsStatsMu.Lock()
-	defer wsStatsMu.Unlock()
-	wsStatsFn = fn
+// SetRealtimeEventStatsProvider sets the provider function for UI event subscriptions.
+func SetRealtimeEventStatsProvider(fn func() (int, int)) {
+	realtimeEventStatsMu.Lock()
+	defer realtimeEventStatsMu.Unlock()
+	realtimeEventStatsFn = fn
 }
 
-func getWSStats() (int, int) {
-	wsStatsMu.RLock()
-	fn := wsStatsFn
-	wsStatsMu.RUnlock()
+func getRealtimeEventStats() (int, int) {
+	realtimeEventStatsMu.RLock()
+	fn := realtimeEventStatsFn
+	realtimeEventStatsMu.RUnlock()
 	if fn == nil {
 		return 0, 0
 	}
@@ -116,20 +116,20 @@ type ServerMetadata struct {
 	UptimeSec int64  `json:"uptime_sec"`
 }
 
-// WebSocketStatsResponse represents WebSocket hub metrics.
-type WebSocketStatsResponse struct {
+// RealtimeStatsResponse represents realtime UI subscription metrics.
+type RealtimeStatsResponse struct {
 	ConnectedClients int `json:"connected_clients"`
 	ActiveChannels   int `json:"active_channels"`
 }
 
 // FullSystemStats aggregates all subsystems into a single status report.
 type FullSystemStats struct {
-	Server    ServerMetadata         `json:"server"`
-	CPU       monitor.CPUMetrics     `json:"cpu"`
-	Memory    monitor.MemoryMetrics  `json:"memory"`
-	Database  DBStatsResponse        `json:"database"`
-	Redis     RedisStatsResponse     `json:"redis"`
-	WebSocket WebSocketStatsResponse `json:"websocket"`
+	Server   ServerMetadata        `json:"server"`
+	CPU      monitor.CPUMetrics    `json:"cpu"`
+	Memory   monitor.MemoryMetrics `json:"memory"`
+	Database DBStatsResponse       `json:"database"`
+	Redis    RedisStatsResponse    `json:"redis"`
+	Realtime RealtimeStatsResponse `json:"realtime"`
 }
 
 // collectSystemStats builds the complete system diagnostic state.
@@ -184,20 +184,20 @@ func collectSystemStats() FullSystemStats {
 		redisResp.Error = "Redis client not initialized"
 	}
 
-	// WebSocket stats
-	wsClients, wsChannels := getWSStats()
-	wsResp := WebSocketStatsResponse{
-		ConnectedClients: wsClients,
-		ActiveChannels:   wsChannels,
+	// Realtime UI subscription stats
+	realtimeClients, realtimeChannels := getRealtimeEventStats()
+	realtimeResp := RealtimeStatsResponse{
+		ConnectedClients: realtimeClients,
+		ActiveChannels:   realtimeChannels,
 	}
 
 	return FullSystemStats{
-		Server:    serverMeta,
-		CPU:       cpuMetrics,
-		Memory:    memMetrics,
-		Database:  dbResp,
-		Redis:     redisResp,
-		WebSocket: wsResp,
+		Server:   serverMeta,
+		CPU:      cpuMetrics,
+		Memory:   memMetrics,
+		Database: dbResp,
+		Redis:    redisResp,
+		Realtime: realtimeResp,
 	}
 }
 

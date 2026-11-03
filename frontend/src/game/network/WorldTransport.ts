@@ -1,5 +1,13 @@
 import { BACKEND_URL } from "../../lib/config.ts";
-import { WorldSocketError } from "./WorldSocket.ts";
+import {
+  realtimeClient,
+  type RealtimeClient,
+  type WebTransportDatagramDuplexLike,
+  type WebTransportLike,
+  type WebTransportCtor,
+} from "../../lib/realtime/RealtimeClient.ts";
+import type { WebTransportStreamLike } from "../../lib/realtime/UIStream.ts";
+import { WorldRealtimeError } from "./WorldRealtimeError.ts";
 import type { WorldTransportLike } from "./Transport.ts";
 import type {
   BasicAttackPayload,
@@ -9,6 +17,7 @@ import type {
   WorldEntityState,
   WorldEvent,
   WorldJoinPayload,
+  WorldProjectileState,
   WorldRejectPayload,
   WorldSnapshotPayload,
   WorldTransferPayload,
@@ -24,9 +33,11 @@ import {
   STREAM_WORLD,
   VERSION,
   decodeDatagram,
+  decodePongDatagram,
   decodeSnapshotDelta,
   decodeEvents,
   decodeSnapshotFull,
+  decodeTransfer,
   decodeWelcome,
   EVENT_TYPE_NAMES,
   dequantize,
@@ -37,49 +48,35 @@ import {
   encodeInput,
   encodeJoin,
   encodeMoveTarget,
+  encodePingDatagram,
   encodeStance,
   readSpawn,
   type DeltaEntity,
+  type Projectile,
   type Spawn,
 } from "./v2/Codec.ts";
-
-interface WebTransportDatagramDuplexLike {
-  readable: ReadableStream<Uint8Array>;
-  writable: WritableStream<Uint8Array>;
-  maxDatagramSize: number;
-}
-
-interface WebTransportStreamLike {
-  readable: ReadableStream<Uint8Array>;
-  writable: WritableStream<Uint8Array>;
-}
-
-interface WebTransportLike {
-  ready: Promise<void>;
-  closed: Promise<{ closeCode?: number; reason?: string }>;
-  datagrams: WebTransportDatagramDuplexLike;
-  createBidirectionalStream(): Promise<WebTransportStreamLike>;
-  close(info?: { closeCode?: number; reason?: string }): void;
-}
-
-type WebTransportCtor = new (url: string) => WebTransportLike;
 
 export interface WorldTransportOptions {
   url?: string;
   getToken?: () => string | null;
   getTabId?: () => string | null;
   createTransport?: (url: string) => WebTransportLike;
+  client?: RealtimeClient;
 }
 
 const JOIN_TIMEOUT_MS = 10_000;
 
-/** Protocol v2 client over WebTransport; mirrors WorldSocket's public API. */
+/** Protocol v2 client over WebTransport; the only world transport. */
 export class WorldTransport implements WorldTransportLike {
   private readonly options: WorldTransportOptions;
   private readonly buffer = new SnapshotBuffer();
   private transport: WebTransportLike | null = null;
+  private ownsTransport = false;
+  private releaseSharedWorld: (() => void) | null = null;
   private streamWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  private streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private datagramWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  private datagramReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private incoming: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
   private welcome: WorldWelcomePayload | null = null;
   private joined = false;
@@ -107,6 +104,7 @@ export class WorldTransport implements WorldTransportLike {
   private lastMessageAt = 0;
   private lastSnapshotAt = 0;
   private lastCloseCode = 0;
+  private lastRttMs = 0;
 
   constructor(options: WorldTransportOptions = {}) {
     this.options = options;
@@ -115,45 +113,90 @@ export class WorldTransport implements WorldTransportLike {
   public async connect(join: WorldJoinPayload): Promise<WorldWelcomePayload> {
     if (this.joined) return this.welcome as WorldWelcomePayload;
     const token = this.options.getToken?.() ?? readStorage("localStorage", "gu_auth_token");
-    if (!token) throw new WorldSocketError("Chưa có token đăng nhập", "missing_auth_token");
-    const url = buildTransportURL(
-      this.options.url,
-      token,
-      this.options.getTabId?.() ?? readStorage("sessionStorage", "gu_gameplay_tab_id"),
-    );
-    const factory = this.options.createTransport;
-    const TransportCtor = defaultTransportFactory();
-    if (!factory && !TransportCtor) {
-      throw new WorldSocketError("Trình duyệt không hỗ trợ WebTransport", "webtransport_unsupported");
-    }
-    const transport = factory ? factory(url) : new (TransportCtor as WebTransportCtor)(url);
-    this.transport = transport;
+    if (!token) throw new WorldRealtimeError("Chưa có token đăng nhập", "missing_auth_token");
+
     this.explicitClose = false;
     this.nextInputSeq = 0;
     this.incoming = new Uint8Array(0);
     this.buffer.reset();
 
+    const useSharedClient = Boolean(this.options.client) || !this.options.createTransport;
+    if (!useSharedClient) {
+      const url = buildTransportURL(
+        this.options.url,
+        token,
+        this.options.getTabId?.() ?? readStorage("sessionStorage", "gu_gameplay_tab_id"),
+      );
+      const factory = this.options.createTransport;
+      const TransportCtor = defaultTransportFactory();
+      if (!factory && !TransportCtor) {
+        throw new WorldRealtimeError("Trình duyệt không hỗ trợ WebTransport", "webtransport_unsupported");
+      }
+      this.transport = factory ? factory(url) : new (TransportCtor as WebTransportCtor)(url);
+      this.ownsTransport = true;
+    } else {
+      this.ownsTransport = false;
+    }
+
     const pending = new Promise<WorldWelcomePayload>((resolve, reject) => {
       this.joinTimeout = setTimeout(() => {
-        this.failJoin(reject, new WorldSocketError("Máy chủ không phản hồi yêu cầu vào world", "join_timeout"));
+        this.failJoin(reject, new WorldRealtimeError("Máy chủ không phản hồi yêu cầu vào world", "join_timeout"));
         this.disconnect();
       }, JOIN_TIMEOUT_MS);
-      transport.closed
-        .then((info: { closeCode?: number; reason?: string }) => {
-          this.lastCloseCode = info?.closeCode ?? 0;
-          if (!this.joined && this.joinTimeout !== null) {
-            this.failJoin(reject, new WorldSocketError(`WebTransport đóng (${this.lastCloseCode})`, "socket_closed"));
-          }
-          this.handleClosed();
-        })
-        .catch(() => this.handleClosed());
-      void this.openSession(transport, join, resolve, reject);
+      if (useSharedClient) {
+        void this.openSharedSession(this.options.client ?? realtimeClient, token, join, resolve, reject);
+      } else if (this.transport) {
+        const transport = this.transport;
+        this.attachCloseWatcher(transport, reject);
+        void this.openSession(transport, null, join, resolve, reject);
+      }
     });
     return pending;
   }
 
+  private attachCloseWatcher(transport: WebTransportLike, reject: (error: Error) => void): void {
+    transport.closed
+      .then((info: { closeCode?: number; reason?: string }) => {
+        if (this.transport !== transport) return;
+        this.lastCloseCode = info?.closeCode ?? 0;
+        if (!this.joined && this.joinTimeout !== null) {
+          this.failJoin(reject, new WorldRealtimeError(`WebTransport đóng (${this.lastCloseCode})`, "socket_closed"));
+        }
+        this.handleClosed();
+      })
+      .catch(() => {
+        if (this.transport === transport) this.handleClosed();
+      });
+  }
+
+  private async openSharedSession(
+    client: RealtimeClient,
+    token: string,
+    join: WorldJoinPayload,
+    resolve: (welcome: WorldWelcomePayload) => void,
+    reject: (error: Error) => void,
+  ): Promise<void> {
+    try {
+      const acquired = await client.openWorldStream(token);
+      if (this.explicitClose) {
+        acquired.release();
+        return;
+      }
+      this.transport = acquired.session;
+      this.releaseSharedWorld = acquired.release;
+      this.attachCloseWatcher(acquired.session, reject);
+      await this.openSession(acquired.session, acquired.stream, join, resolve, reject);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const code = message.includes("WebTransport") ? "webtransport_unsupported" : "transport_connect_failed";
+      this.failJoin(reject, new WorldRealtimeError(message, code));
+      this.disconnect();
+    }
+  }
+
   private async openSession(
     transport: WebTransportLike,
+    preopenedStream: WebTransportStreamLike | null,
     join: WorldJoinPayload,
     resolve: (welcome: WorldWelcomePayload) => void,
     reject: (error: Error) => void,
@@ -161,7 +204,7 @@ export class WorldTransport implements WorldTransportLike {
     try {
       await transport.ready;
       this.datagramWriter = transport.datagrams.writable.getWriter();
-      const stream = await transport.createBidirectionalStream();
+      const stream = preopenedStream ?? await transport.createBidirectionalStream();
       this.streamWriter = stream.writable.getWriter();
       const handshake = new Uint8Array(5);
       handshake[0] = STREAM_WORLD;
@@ -176,8 +219,10 @@ export class WorldTransport implements WorldTransportLike {
         }),
       );
       await this.writeBytes(concat(handshake, joinFrame));
-      void this.readFrames(stream.readable.getReader(), resolve, reject);
-      void this.readDatagrams(transport.datagrams.readable.getReader());
+      this.streamReader = stream.readable.getReader();
+      this.datagramReader = transport.datagrams.readable.getReader();
+      void this.readFrames(this.streamReader, resolve, reject);
+      void this.readDatagrams(this.datagramReader);
     } catch (error) {
       this.failJoin(reject, asWorldError(error, "transport_connect_failed"));
       this.disconnect();
@@ -263,6 +308,15 @@ export class WorldTransport implements WorldTransportLike {
     return seq;
   }
 
+  public sendPing(clientMs = Date.now()): void {
+    if (!this.joined || !this.datagramWriter) return;
+    void this.sendDatagram(encodePingDatagram(clientMs));
+  }
+
+  public getLastRttMs(): number {
+    return this.lastRttMs;
+  }
+
   public onEvents(callback: (event: WorldEvent) => void): () => void {
     this.eventListeners.add(callback);
     return () => this.eventListeners.delete(callback);
@@ -298,25 +352,60 @@ export class WorldTransport implements WorldTransportLike {
     this.joined = false;
     this.welcome = null;
     this.clearJoinTimeout();
+    const writer = this.streamWriter;
+    this.streamWriter = null;
     try {
-      if (this.streamWriter) {
-        void this.streamWriter.write(encodeFrame(Op.Leave, new Uint8Array(0))).catch(() => {});
+      if (writer) {
+        void writer.write(encodeFrame(Op.Leave, new Uint8Array(0)))
+          .then(() => writer.close())
+          .catch(() => {});
       }
     } catch {
       // best effort
     }
-    try {
-      this.transport?.close({ closeCode: 0, reason: "client disconnected" });
-    } catch {
-      // best effort
+    this.releaseStreamLocks();
+    if (this.releaseSharedWorld) {
+      const release = this.releaseSharedWorld;
+      this.releaseSharedWorld = null;
+      release();
     }
-    this.streamWriter = null;
-    this.datagramWriter = null;
+    if (this.ownsTransport) {
+      try {
+        this.transport?.close({ closeCode: 0, reason: "client disconnected" });
+      } catch {
+        // best effort
+      }
+    }
     this.transport = null;
+    this.ownsTransport = false;
     this.buffer.reset();
     this.netToSpawn.clear();
     this.entityByNet.clear();
     this.netByEntity.clear();
+  }
+
+  private releaseStreamLocks(): void {
+    const dgWriter = this.datagramWriter;
+    this.datagramWriter = null;
+    try {
+      dgWriter?.releaseLock();
+    } catch {
+      // ignore
+    }
+    const dgReader = this.datagramReader;
+    this.datagramReader = null;
+    try {
+      dgReader?.releaseLock();
+    } catch {
+      // ignore
+    }
+    const stReader = this.streamReader;
+    this.streamReader = null;
+    try {
+      void stReader?.cancel().catch(() => {});
+    } catch {
+      // ignore
+    }
   }
 
   public getMetrics(): {
@@ -479,11 +568,33 @@ export class WorldTransport implements WorldTransportLike {
         }
         break;
       }
+      case Op.Transfer: {
+        try {
+          const transfer = decodeTransfer(payload);
+          this.netToSpawn.clear();
+          this.entityByNet.clear();
+          this.netByEntity.clear();
+          const transferPayload: WorldTransferPayload = {
+            from_zone_id: transfer.fromZoneId || undefined,
+            to_zone_id: transfer.toZoneId,
+            transfer_id: transfer.transferId || undefined,
+            target_x: dequantize(transfer.targetX),
+            target_y: dequantize(transfer.targetY),
+            legacy_x: transfer.legacyX,
+            legacy_y: transfer.legacyY,
+            hp: transfer.hp,
+          };
+          this.transferListeners.forEach((listener) => listener(transferPayload));
+        } catch (error) {
+          this.notifyError(asWorldError(error, "invalid_transfer"));
+        }
+        break;
+      }
       case Op.Reject: {
         const rejectPayload = decodeReject(payload);
         this.rejectListeners.forEach((listener) => listener(rejectPayload));
         if (!this.joined) {
-          this.failJoin(reject, new WorldSocketError(rejectPayload.message || rejectPayload.code, rejectPayload.code));
+          this.failJoin(reject, new WorldRealtimeError(rejectPayload.message || rejectPayload.code, rejectPayload.code));
         }
         break;
       }
@@ -502,8 +613,19 @@ export class WorldTransport implements WorldTransportLike {
         this.byteCount += value.byteLength;
         this.lastMessageAt = Date.now();
         const { op, payload } = decodeDatagram(value);
-        if (op !== DatagramOp.SnapshotDelta) continue;
-        this.applyDelta(decodeSnapshotDelta(payload));
+        if (op === DatagramOp.SnapshotDelta) {
+          this.applyDelta(decodeSnapshotDelta(payload));
+        } else if (op === DatagramOp.Pong) {
+          try {
+            const { clientMs } = decodePongDatagram(payload);
+            const rtt = Date.now() - clientMs;
+            if (rtt >= 0 && Number.isFinite(rtt)) {
+              this.lastRttMs = rtt;
+            }
+          } catch {
+            // ignore malformed pong
+          }
+        }
       }
     } catch (error) {
       this.notifyError(asWorldError(error, "transport_datagram_failed"));
@@ -545,6 +667,7 @@ export class WorldTransport implements WorldTransportLike {
     ackSeq: number;
     entities: DeltaEntity[];
     removed: number[];
+    projectiles: Projectile[];
   }): void {
     for (const state of delta.entities) {
       const spawn = this.netToSpawn.get(state.netId);
@@ -569,7 +692,7 @@ export class WorldTransport implements WorldTransportLike {
         .map((state) => this.entityByNet.get(state.netId))
         .filter((entity): entity is WorldEntityState => Boolean(entity)),
       removed: removedIds,
-      projectiles: [],
+      projectiles: this.mapProjectiles(delta.projectiles),
     };
     const applied = this.buffer.apply(snapshot);
     if (applied.status === "resync_required") {
@@ -583,7 +706,7 @@ export class WorldTransport implements WorldTransportLike {
   }
 
   private toSnapshotPayload(
-    full: { tick: number; baselineId: number; ackSeq: number; spawns: Spawn[]; states: DeltaEntity[] },
+    full: { tick: number; baselineId: number; ackSeq: number; spawns: Spawn[]; states: DeltaEntity[]; projectiles: Projectile[] },
     isBaseline: boolean,
   ): WorldSnapshotPayload {
     const states = new Map<number, DeltaEntity>();
@@ -600,8 +723,20 @@ export class WorldTransport implements WorldTransportLike {
       base_tick: full.tick,
       is_baseline: isBaseline,
       entities,
-      projectiles: [],
+      projectiles: this.mapProjectiles(full.projectiles),
     };
+  }
+
+  private mapProjectiles(projectiles: Projectile[]): WorldProjectileState[] {
+    return projectiles.map((p) => ({
+      id: p.id,
+      source_id: this.netToSpawn.get(p.sourceNetId)?.entityId ?? "",
+      skill_id: p.skillId,
+      projectile_vfx: p.vfx || undefined,
+      x: dequantize(p.x),
+      y: dequantize(p.y),
+      radius: p.radiusX10 / 10,
+    }));
   }
 
   private emitSnapshot(state: BufferedWorldState): void {
@@ -639,8 +774,13 @@ export class WorldTransport implements WorldTransportLike {
     this.joined = false;
     this.welcome = null;
     this.streamWriter = null;
-    this.datagramWriter = null;
-    this.notifyError(new WorldSocketError("Kết nối realtime đã đóng", "socket_closed"));
+    this.releaseStreamLocks();
+    if (this.releaseSharedWorld) {
+      const release = this.releaseSharedWorld;
+      this.releaseSharedWorld = null;
+      release();
+    }
+    this.notifyError(new WorldRealtimeError("Kết nối realtime đã đóng", "socket_closed"));
   }
 
   private failJoin(reject: (error: Error) => void, error: Error): void {
@@ -794,6 +934,6 @@ function decodeReject(payload: Uint8Array): WorldRejectPayload {
   return { code: code || "realtime_world_rejected", message: message || undefined, retryable };
 }
 
-function asWorldError(error: unknown, code: string): WorldSocketError {
-  return new WorldSocketError(error instanceof Error ? error.message : String(error), code);
+function asWorldError(error: unknown, code: string): WorldRealtimeError {
+  return new WorldRealtimeError(error instanceof Error ? error.message : String(error), code);
 }

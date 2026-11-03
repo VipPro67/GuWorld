@@ -68,8 +68,9 @@ Các biến thường dùng:
 | Variable | Mục đích |
 | --- | --- |
 | `PORT` | Port backend, mặc định `8080`. |
-| `WT_ENABLED`, `WT_ADDR` | Bật WebTransport song song WS (dev). `WT_ENABLED=true` cần `TLS_CERT_FILE` + `TLS_KEY_FILE`; `WT_ADDR` mặc định `:8443` (TCP HTTPS + UDP QUIC). |
-| `TLS_CERT_FILE`, `TLS_KEY_FILE` | Cert/key PEM cho HTTPS + WebTransport khi `WT_ENABLED=true`. |
+| `TLS_ENABLED`, `TLS_ADDR` | Bật HTTPS trong Go. `TLS_ENABLED=true` phục vụ HTTPS trên `TLS_ADDR` (mặc định `:8443`) và bắt buộc `TLS_CERT_FILE` + `TLS_KEY_FILE`; thiếu cert thì process dừng, không fallback HTTP. Dev để trống và dùng `PORT`. |
+| `WT_ENABLED`, `WT_ADDR` | Bật QUIC/WebTransport. `WT_ENABLED=true` cần cert/key như trên; `WT_ADDR` mặc định `:8443` (UDP). `TLS_ENABLED=true` cũng bật WT nếu chưa đặt `WT_ENABLED`. |
+| `TLS_CERT_FILE`, `TLS_KEY_FILE` | Cert/key PEM (fullchain + privkey) cho HTTPS + WebTransport. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | Kết nối PostgreSQL; có default local trong `db.Connect()`. |
 | `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS` | Timeout câu lệnh/chờ lock PostgreSQL cho request path; mặc định lần lượt 15000/10000 ms. |
 | `DB_MIGRATION_STATEMENT_TIMEOUT_MS`, `DB_MIGRATION_LOCK_TIMEOUT_MS` | Timeout riêng cho từng câu lệnh/lock của `InitSchema` lúc boot (backfill/consolidate trên bảng lớn); mặc định 300000/10000 ms. Request path vẫn giữ timeout chặt. |
@@ -99,15 +100,14 @@ Các biến thường dùng:
 
 DB đã khởi tạo trước khi thêm các cột `world_*` cần backup, drain realtime/movement, rồi chạy thủ công `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/scripts/migrate_player_world_location.sql` trước khi nâng backend. Không chạy script khi server cũ còn nhận movement hoặc checkpoint.
 
-Authenticated WS protocol v1 nhận `world.input` sau khi client chờ `world.welcome`: server xác thực sequence/vector, giới hạn 30 input/giây mỗi kết nối, xếp qua queue riêng tối đa 64 lệnh rồi mới gửi vào queue mô phỏng có giới hạn. Input không kèm player ID; identity lấy từ phiên đăng nhập và controller lease. Snapshot preview 20 Hz chỉ chứa entity trong AOI tròn bán kính 32 world units, có delta từ baseline định kỳ, `removed` và `ack_seq`; queue per-session coalesce trạng thái mới nhất. Client interpolation/resync và budget byte chưa làm xong.
+Authenticated realtime world stream trên WebTransport nhận `world.input` sau khi client chờ `world.welcome`: server xác thực sequence/vector, giới hạn 30 input/giây mỗi kết nối, xếp qua queue riêng tối đa 64 lệnh rồi mới gửi vào queue mô phỏng có giới hạn. Input không kèm player ID; identity lấy từ phiên đăng nhập và controller lease. Snapshot preview 20 Hz chỉ chứa entity trong AOI tròn bán kính 32 world units, có delta từ baseline định kỳ, `removed` và `ack_seq`; queue per-session coalesce trạng thái mới nhất.
 
 Frontend:
 
 | Variable | Mục đích |
 | --- | --- |
-| `NEXT_PUBLIC_BACKEND_URL` | Backend base URL; mặc định `http://localhost:8080`. |
-| `NEXT_PUBLIC_REALTIME_TRANSPORT` | `ws` (mặc định) hoặc `wt` để dùng WorldTransport/WebTransport; WT không hỗ trợ hoặc lỗi kết nối sẽ thử WS và giữ WS cho các lần reconnect trong runtime đó. Lỗi admission/auth/content không tự đổi transport. |
-| `NEXT_PUBLIC_REALTIME_URL` | URL WT đầy đủ, ví dụ `https://rt.cogioi.io.vn/api/wt`; mặc định suy ra từ backend (HTTPS + `/api/wt`). |
+| `NEXT_PUBLIC_BACKEND_URL` | Backend base URL; mặc định `http://localhost:8080`. Production dùng `https://api.cogioi.io.vn`. |
+| `NEXT_PUBLIC_REALTIME_URL` | URL WT đầy đủ, ví dụ `https://rt.cogioi.io.vn/api/wt`; mặc định suy ra từ backend (HTTPS + `/api/wt`). WebTransport là transport realtime duy nhất; không còn cờ chọn WS. |
 | `NEXT_PUBLIC_MMO_ZONE_ID` | Zone dự phòng cho preview/test. Khi đăng nhập, client ưu tiên `current_region` của nhân vật để chọn map KHU_VUC/SAFE_ZONE tương ứng. |
 | `NEXT_PUBLIC_MMO_MAP_URL` | URL map JSON client tải; mặc định `/game/maps/<zone>.json`. File này phải giống bản trong `backend/data/mmo/maps/`. |
 
@@ -115,16 +115,18 @@ Map/content versions follow the shipped map release and are not environment
 variables; the backend and frontend use the same built-in values.
 
 Frontend business screens do not require a world connection. While the world or
-UI socket is unavailable, the basic feature navigation remains accessible. When
-the UI WebSocket is down, HTTP reads refresh trade and the open chat every 5 seconds
+UI realtime stream is unavailable, the basic feature navigation remains accessible. When
+the UI stream is down, HTTP reads refresh trade and the open chat every 5 seconds
 after the previous round completes; player status, Gu inventory, recipes and unread
 notification count refresh at most once per 15 seconds. Polling pauses in hidden
-or offline tabs, stops after tab replacement/unmount, and stops when UI WS recovers.
+or offline tabs, stops after tab replacement/unmount, and stops when UI realtime recovers.
 Bao Hoang chat sends use HTTP once, with no replay through another transport after
 an uncertain mutation result. World movement/combat still require realtime.
-WS handshakes time out after 10 seconds, pending requests reject on connection
+WebTransport handshakes time out after 10 seconds, pending requests reject on connection
 loss, and the basic navigation's reconnect button or a browser online event can
-restart an exhausted reconnect budget for an active session.
+restart an exhausted reconnect budget for an active session. A browser without
+WebTransport is treated as unsupported for the whole session (no retry loop);
+it keeps HTTP features and the world map stays locked.
 
 Sau đăng nhập và onboarding, Phaser 4.2.1 là gameplay world duy nhất; `dashboard`/`world-map` cũ chỉ
 còn là view ID tương thích, các component map turn-based đã bị gỡ khỏi frontend và không fallback
@@ -184,24 +186,32 @@ Tổng hợp giới hạn còn lại của PR-01…PR-36: `docs/mmo/remaining-li
 
 ## Run with Docker Compose
 
-Bạn có thể khởi chạy nhanh toàn bộ môi trường backend (bao gồm Go app, PostgreSQL, Redis và Caddy làm reverse proxy) bằng Docker Compose:
+Chạy môi trường backend local (Go app, PostgreSQL, Redis, plain HTTP) bằng file
+compose local:
 
 ```bash
-docker-compose up --build
+docker compose -f docker-compose.local.yml up --build
 ```
 
-Production Compose lấy DB/JWT/OAuth từ `backend/.env` và thông tin Grafana từ
-root `.env`; không commit hai file này. Redis production chỉ ở trong Compose
-network. `docker-compose.local.yml` bind Redis vào loopback để tiện phát triển.
+File này bind backend vào `127.0.0.1:8080`, không có TLS/Caddy. Để thử
+WebTransport local, dùng cert tin cậy và chạy binary với `TLS_ENABLED=true` (xem
+mục cuối của `docs/PRODUCTION_DEPLOY.md`).
 
-Lệnh này sẽ tự động:
+`docker-compose.yml` là cấu hình **production**: Go phục vụ HTTPS trên
+`TLS_ADDR` và QUIC/WebTransport trên `WT_ADDR` (mặc định `:8443`, publish ra
+host `443/tcp` + `443/udp`). Nó cần `certs/fullchain.pem` +
+`certs/privkey.pem`, `POSTGRES_PASSWORD` trong root `.env`, và DB/JWT/OAuth
+trong `backend/.env`. Không commit hai file env hoặc cert. Production DB/Redis
+chỉ ở trong Compose network; local profile bind Redis vào loopback.
+
+Checklist đầy đủ (DNS, firewall UDP, cert, smoke test, rollback):
+[`docs/PRODUCTION_DEPLOY.md`](PRODUCTION_DEPLOY.md).
+
+Cả hai profile đều:
 1. Tải và cấu hình PostgreSQL (`gu_db`) và Redis.
-2. Build Go backend dựa trên `backend/Dockerfile`; CSV nguồn nằm trong `backend/data/` để quản trị viên import khi cần.
-3. Khởi chạy Caddy Server để làm reverse proxy và tự động cấp chứng chỉ SSL (HTTPS) cho tên miền `api.cogioi.io.vn` (cấu hình trong `Caddyfile`).
-4. Khởi chạy Grafana Alloy container (`guworld-alloy`) kết nối tới Docker Socket để tự động thu thập stdout/stderr logs của toàn bộ container và đẩy về Grafana Cloud Loki & Prometheus.
-5. Sử dụng cơ chế healthcheck để trì hoãn khởi động Go app cho đến khi PostgreSQL đã hoàn toàn sẵn sàng nhận kết nối.
-
-API backend sau đó sẽ lắng nghe tại `http://localhost:8080` (truy cập cục bộ từ host) và được expose ra ngoài qua Caddy tại `https://api.cogioi.io.vn`.
+2. Build/chạy Go backend từ `backend/Dockerfile`; CSV nguồn nằm trong `backend/data/` để quản trị viên import khi cần.
+3. Healthcheck để trì hoãn backend cho đến khi PostgreSQL sẵn sàng.
+4. (Production) mount cert read-only và drain WebTransport với close code `4010` khi shutdown.
 
 ## Run backend (Manual)
 

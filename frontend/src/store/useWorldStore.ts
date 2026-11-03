@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { BACKEND_URL } from "@/lib/config";
 import { authFetch } from "@/lib/auth";
 import { useGameStore, type ApertureResourcePoint } from "@/store/useGameStore";
-import { wsManager } from "@/lib/websocket";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 
 export interface NearbyVeinInfo {
   id: string;
@@ -88,9 +88,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         return res.json();
       };
       let data: unknown;
-      if (wsManager.isConnected()) {
+      if (uiRealtimeManager.isConnected()) {
         try {
-          data = await wsManager.request<unknown>("world.cells_rect", { min_x: minX, min_y: minY, max_x: maxX, max_y: maxY });
+          data = await uiRealtimeManager.request<unknown>("world.cells_rect", { min_x: minX, min_y: minY, max_x: maxX, max_y: maxY });
         } catch {
           data = await fetchHttp();
         }

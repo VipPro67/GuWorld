@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { wsManager } from "@/lib/websocket";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { useGameStore } from "@/store/useGameStore";
 import {
   MessageSquare,
@@ -161,7 +161,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
 
   useEffect(() => {
     if (!player?.id) return;
-    return wsManager.subscribe(`chat:private:${player.id}`, (payload: ApiResponseData) => onPrivateChatEvent(payload));
+    return uiRealtimeManager.subscribe(`chat:private:${player.id}`, (payload: ApiResponseData) => onPrivateChatEvent(payload));
   }, [player?.id, onPrivateChatEvent]);
 
   const handleSendChat = async (e: React.FormEvent) => {

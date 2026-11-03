@@ -1,5 +1,11 @@
 # GuWorld WebSocket + Redis Optimization Plan
 
+> **HISTORICAL — no longer applicable.** WebSocket was removed in the WebTransport
+> cutover. `backend/internal/ws` and `frontend/src/lib/websocket.ts` no longer
+> exist; the realtime UI hub now lives in `backend/internal/uihub` and is served
+> over `/api/wt`. File paths below document the old implementation only. See
+> `docs/wayfinder/IMPLEMENTATION_PROGRESS.md` and `docs/PRODUCTION_DEPLOY.md`.
+
 **Created**: 2026-09-10
 **Status**: ✅ ALL PHASES COMPLETE (19/19 tasks)
 

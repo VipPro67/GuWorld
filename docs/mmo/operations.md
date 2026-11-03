@@ -6,7 +6,7 @@ Backend job:
 - `gofmt` check on the realtime surface;
 - `go vet ./...`;
 - `go test ./...`;
-- `go test -race ./internal/realtime/... ./internal/ws/...`;
+- `go test -race ./internal/realtime/... ./internal/uihub/...`;
 - `gudata audit-realtime -strict` (unclassified/MVP failures block CI);
 - `gudata compile-realtime-gu` over the combined MVP+Alpha catalogs (invalid
   profile/payload blocks CI).
@@ -74,8 +74,8 @@ staging-canary and on-call evidence.
   once a minute, so teardown may happen up to ~1 minute later). A pending claim
   that is still loading character state keeps the instance alive. Watch
   `running` and process RSS to confirm idle maps are released.
-- Existing admin monitor endpoints cover system/request traces and WebSocket
-  stats.
+- Existing admin monitor endpoints cover system/request traces and realtime UI
+  subscription stats.
 - Client **F3** debug HUD shows tick/FPS/network counters/prediction correction.
 - Startup logs record map hash, monster count, instance count and compiled Gu
   profile hash.

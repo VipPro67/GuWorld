@@ -1,5 +1,9 @@
 # Đặc Tả Giao Thức Đồng Bộ Realtime (Wire Protocol) & Hiển Thị Client Cho Biến Thân
 
+> **Lưu ý:** transport hiện tại là WebTransport (`CONNECT /api/wt`), không còn
+> WebSocket. Sơ đồ dưới đây giữ tên cũ cho mục đích lịch sử; xem `docs/API.md`
+> và `docs/wayfinder/specs/WT-313-wire-protocol-v2.md` cho wire protocol v2.
+
 ## 1. Tổng Quan Kiến Trúc
 Tài liệu này đặc tả chi tiết giao thức truyền tải sự kiện nhị phân / JSON giữa Server Zone Sim 20Hz (`backend/internal/realtime/`) và Client Game Canvas/React UI (`frontend/src/game/`).
 

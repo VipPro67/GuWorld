@@ -1012,3 +1012,39 @@ func DecodeJoin(payload []byte) (JoinRequest, error) {
 	}
 	return request, decoder.Err()
 }
+
+// Transfer is the region border handoff notice (opcode OpTransfer).
+type Transfer struct {
+	FromZoneID string
+	ToZoneID   string
+	TransferID string
+	TargetX    uint16
+	TargetY    uint16
+	LegacyX    int32
+	LegacyY    int32
+	HP         uint64
+}
+
+func EncodeTransfer(transfer Transfer) ([]byte, error) {
+	encoder := NewEncoder(64)
+	encoder.String(transfer.FromZoneID).String(transfer.ToZoneID).String(transfer.TransferID)
+	encoder.U16(transfer.TargetX).U16(transfer.TargetY)
+	encoder.U32(uint32(transfer.LegacyX)).U32(uint32(transfer.LegacyY))
+	encoder.Varint(transfer.HP)
+	return encoder.Bytes(), encoder.Err()
+}
+
+func DecodeTransfer(payload []byte) (Transfer, error) {
+	decoder := NewDecoder(payload)
+	transfer := Transfer{
+		FromZoneID: decoder.String(),
+		ToZoneID:   decoder.String(),
+		TransferID: decoder.String(),
+		TargetX:    decoder.U16(),
+		TargetY:    decoder.U16(),
+		LegacyX:    int32(decoder.U32()),
+		LegacyY:    int32(decoder.U32()),
+		HP:         decoder.Varint(),
+	}
+	return transfer, decoder.Err()
+}

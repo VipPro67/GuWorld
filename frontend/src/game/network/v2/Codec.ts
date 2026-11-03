@@ -846,3 +846,62 @@ export function encodeJoin(request: { zoneId: string; mapVersion: string; conten
   writer.string(request.zoneId).string(request.mapVersion).string(request.contentVersion).u32(request.requestId);
   return writer.bytes();
 }
+
+export interface TransferWire {
+  fromZoneId: string;
+  toZoneId: string;
+  transferId: string;
+  targetX: number;
+  targetY: number;
+  legacyX: number;
+  legacyY: number;
+  hp: number;
+}
+
+export function encodeTransfer(transfer: TransferWire): Uint8Array {
+  const writer = new Writer(64);
+  writer
+    .string(transfer.fromZoneId)
+    .string(transfer.toZoneId)
+    .string(transfer.transferId)
+    .u16(transfer.targetX)
+    .u16(transfer.targetY)
+    .u32(transfer.legacyX >>> 0)
+    .u32(transfer.legacyY >>> 0)
+    .varint(transfer.hp);
+  return writer.bytes();
+}
+
+export function decodeTransfer(payload: Uint8Array): TransferWire {
+  const reader = new Reader(payload);
+  const transfer: TransferWire = {
+    fromZoneId: reader.string(),
+    toZoneId: reader.string(),
+    transferId: reader.string(),
+    targetX: reader.u16(),
+    targetY: reader.u16(),
+    legacyX: reader.u32() | 0,
+    legacyY: reader.u32() | 0,
+    hp: reader.varint(),
+  };
+  if (reader.failed) throw new CodecError("truncated transfer");
+  return transfer;
+}
+
+export function encodePingDatagram(clientMs: number): Uint8Array {
+  const writer = new Writer(8);
+  writer.u64(Math.max(0, Math.floor(clientMs)));
+  const body = writer.bytes();
+  const out = new Uint8Array(1 + body.length);
+  out.set(datagramHeader(DatagramOp.Ping));
+  out.set(body, 1);
+  return out;
+}
+
+export function decodePongDatagram(payload: Uint8Array): { clientMs: number; serverTick: number } {
+  const reader = new Reader(payload);
+  const clientMs = Number(reader.u64());
+  const serverTick = reader.u32();
+  if (reader.failed) throw new CodecError("truncated pong");
+  return { clientMs, serverTick };
+}

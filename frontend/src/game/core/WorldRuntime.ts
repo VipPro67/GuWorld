@@ -1,4 +1,4 @@
-import { WorldSocket, WorldSocketError, type WorldSocketOptions } from "../network/WorldSocket.ts";
+import { WorldRealtimeError } from "../network/WorldRealtimeError.ts";
 import { WorldTransport, type WorldTransportOptions } from "../network/WorldTransport.ts";
 import type { WorldTransportLike } from "../network/Transport.ts";
 import { BACKEND_URL } from "../../lib/config.ts";
@@ -47,11 +47,6 @@ const MAX_JOIN_RETRIES = 7;
 const JOIN_SLOW_RETRY_BASE_MS = 5_000;
 const JOIN_SLOW_RETRY_MAX_MS = 15_000;
 const MAX_JOIN_SLOW_RETRIES = 3;
-// Only transport failures may downgrade. Admission/auth/content rejections must
-// remain visible instead of opening a second controller through another path.
-const WT_FALLBACK_CODES = new Set([
-  "webtransport_unsupported", "transport_connect_failed", "socket_closed", "join_timeout",
-]);
 
 export type WorldRuntimeStatus =
   | "idle"
@@ -100,9 +95,9 @@ export interface SelfCombatView {
 }
 
 export interface WorldRuntimeOptions {
-  socketOptions?: WorldSocketOptions;
-  transportMode?: "ws" | "wt";
   transportOptions?: WorldTransportOptions;
+  /** Overrides transport construction. Tests inject a fake transport here. */
+  transportFactory?: () => WorldTransportLike;
   /** Fallback speed in world units per second for servers without movement_speed. */
   speed?: number;
   nowMs?: () => number;
@@ -148,13 +143,10 @@ const INPUT_KEEPALIVE_INTERVAL = 0.15;
  * Owns the realtime network session for the Phaser scene. Snapshots are read on
  * the render side only; the scene never mutates authoritative state.
  */
-const TRANSPORT_MODE = (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT ?? "ws").toLowerCase();
-
 export class WorldRuntime {
   private socket: WorldTransportLike;
-  private readonly socketOptions: WorldSocketOptions | undefined;
   private readonly transportOptions: WorldTransportOptions | undefined;
-  private transportMode: "ws" | "wt";
+  private readonly transportFactory: (() => WorldTransportLike) | undefined;
   private joinGeneration = 0;
   private speed: number;
   private predictionSpeed: number;
@@ -209,9 +201,8 @@ export class WorldRuntime {
   private reconnectReason = "manual";
 
   constructor(options: WorldRuntimeOptions = {}) {
-    this.socketOptions = options.socketOptions;
-    this.transportOptions = options.transportOptions ?? options.socketOptions;
-    this.transportMode = options.transportMode ?? (TRANSPORT_MODE === "wt" ? "wt" : "ws");
+    this.transportOptions = options.transportOptions;
+    this.transportFactory = options.transportFactory;
     this.nowMs = options.nowMs ?? Date.now;
     this.socket = this.createSocket();
     this.speed = options.speed ?? DEFAULT_SPEED;
@@ -242,27 +233,7 @@ export class WorldRuntime {
     this.status = "connecting";
     this.emit();
     try {
-      let welcome: WorldWelcomePayload;
-      try {
-        welcome = await this.socket.connect(join);
-      } catch (error) {
-        if (generation !== this.joinGeneration) return null;
-        if (this.transportMode !== "wt" || !(error instanceof WorldSocketError) || !WT_FALLBACK_CODES.has(error.code)) {
-          throw error;
-        }
-        for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
-        this.socket.disconnect();
-        // Keep the downgrade for this runtime's reconnects; a blocked UDP path
-        // should not add another WT timeout every time the player changes zone.
-        this.transportMode = "ws";
-        this.socket = this.createSocket();
-        this.resetSocketMetrics();
-        this.bindSocket();
-        this.errorMessage = "";
-        this.errorCode = "";
-        this.metrics.mark("transport_fallback", "ws");
-        welcome = await this.socket.connect(join);
-      }
+      const welcome = await this.socket.connect(join);
       if (generation !== this.joinGeneration) return null;
       this.welcome = welcome;
       this.activeDash = false;
@@ -281,7 +252,7 @@ export class WorldRuntime {
       return welcome;
     } catch (error) {
       if (generation !== this.joinGeneration) return null;
-      const code = error instanceof WorldSocketError ? error.code : "world_connect_failed";
+      const code = error instanceof WorldRealtimeError ? error.code : "world_connect_failed";
       const message = error instanceof Error ? error.message : "Không thể vào world realtime";
       if (
         (JOIN_RETRYABLE_CODES.has(code) || JOIN_SLOW_RETRY_CODES.has(code)) &&
@@ -408,9 +379,8 @@ export class WorldRuntime {
   }
 
   private createSocket(): WorldTransportLike {
-    return this.transportMode === "wt"
-      ? new WorldTransport(this.transportOptions)
-      : new WorldSocket(this.socketOptions);
+    if (this.transportFactory) return this.transportFactory();
+    return new WorldTransport(this.transportOptions);
   }
 
   public setMoveVector(vector: WorldPoint): void {
@@ -834,12 +804,8 @@ export class WorldRuntime {
         this.emit();
       }),
       this.socket.onError((error) => {
-        // A failed WT handshake is handled by joinSession's downgrade. Keep
-        // the host in its connecting state until the WS attempt settles.
-        if (this.status === "connecting" && this.transportMode === "wt" &&
-            error instanceof WorldSocketError && WT_FALLBACK_CODES.has(error.code)) return;
         this.errorMessage = error.message;
-        this.errorCode = error instanceof WorldSocketError ? error.code : "world_socket_error";
+        this.errorCode = error instanceof WorldRealtimeError ? error.code : "world_socket_error";
         this.emit();
         for (const listener of this.errorListeners) listener(error);
       }),

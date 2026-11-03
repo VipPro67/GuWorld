@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
-import { wsManager } from "@/lib/websocket";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import type { GuInstance, GroundDrop, Player, FeedResponse } from "@/store/useGameStore";
 import { LatestRequestGate } from "@/lib/player-reconciliation";
 
@@ -967,9 +967,9 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         if (!response.ok) return;
         return response.json() as Promise<{ drops?: GroundDrop[] }>;
       };
-      if (viewport && wsManager.isConnected()) {
+      if (viewport && uiRealtimeManager.isConnected()) {
         try {
-          data = await wsManager.request<{ drops?: GroundDrop[] }>("world.drops", {
+          data = await uiRealtimeManager.request<{ drops?: GroundDrop[] }>("world.drops", {
             x: Math.floor(viewport.x),
             y: Math.floor(viewport.y),
             radius: Math.max(0, Math.floor(viewport.radius)),

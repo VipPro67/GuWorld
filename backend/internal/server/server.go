@@ -14,14 +14,16 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
+	"github.com/vippro67/GuWorld/backend/internal/uihub"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
-	"github.com/vippro67/GuWorld/backend/internal/ws"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 const slowRequestThreshold = 5 * time.Second
+
+var serverStartedAt = time.Now()
 
 type adminRouteSpec struct {
 	method                   string
@@ -365,9 +367,18 @@ func requestLogging() gin.HandlerFunc {
 	}
 }
 
+// RealtimeWorldAdmission is the gateway surface the router needs for handoff
+// and location-aware middleware. The transport itself lives in wttransport.
+type RealtimeWorldAdmission interface {
+	BeginHandoff(playerID uuid.UUID) (bool, error)
+	AbortHandoff(playerID uuid.UUID)
+	FinishHandoff(playerID uuid.UUID)
+	PlayerLocation(playerID uuid.UUID) (regionID string, x, y int, ok bool)
+}
+
 // SetupRouter initializes the Gin router with middlewares and routes
-func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmission) *gin.Engine {
-	var worldAdmission ws.RealtimeWorldAdmission
+func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmission) *gin.Engine {
+	var worldAdmission RealtimeWorldAdmission
 	if len(realtimeAdmission) > 0 {
 		worldAdmission = realtimeAdmission[0]
 	}
@@ -391,13 +402,13 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 		middleware.SetRealtimeTribulationEnemyReader(nil)
 	}
 	if shub != nil {
-		handlers.SetWSStatsProvider(shub.GetStats)
-		handlers.SetWSConnectedProvider(shub.IsConnected)
+		handlers.SetRealtimeEventStatsProvider(shub.GetStats)
+		handlers.SetRealtimeConnectedProvider(shub.IsConnected)
 		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
+			shub.BroadcastToTargets(uihub.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
 		handlers.WorldCombatBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
+			shub.BroadcastToTargets(uihub.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
 	}
 	worker.PlayerEventPublisher = func(playerID uuid.UUID, eventType string, domains ...string) {
@@ -457,10 +468,10 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 	})
 
 	// Compress responses with Brotli/Gzip/Zstd based on client Accept-Encoding.
-	// Skip websocket route.
+	// The WebTransport upgrade needs an uncompressed CONNECT response.
 	r.Use(compress.Compress(
 		compress.WithExcludeFunc(func(c *gin.Context) bool {
-			return c.Request.URL.Path == "/api/ws" || c.Request.URL.Path == "/api/wt"
+			return c.Request.URL.Path == "/api/wt"
 		}),
 	))
 
@@ -470,25 +481,24 @@ func SetupRouter(shub *ws.ShardedHub, realtimeAdmission ...ws.RealtimeWorldAdmis
 	// API routes
 	api := r.Group("/api")
 	{
-		// WebSocket route
-		api.GET("/ws", middleware.AuthRequired(), func(c *gin.Context) {
-			if shub == nil {
-				c.JSON(503, gin.H{"error": "WebSocket hub not initialized"})
-				return
+		// Health & protocol version gate (WT-309 §1.2, WT-315 §5.2).
+		api.GET("/health", func(c *gin.Context) {
+			buildID := strings.TrimSpace(os.Getenv("APP_VERSION"))
+			if buildID == "" {
+				buildID = "dev"
 			}
-			playerID, exists := middleware.GetPlayerID(c)
-			if !exists {
-				c.JSON(401, gin.H{"error": "Unauthorized"})
-				return
-			}
-			// Check connection rate limit
-			ip := c.ClientIP()
-			if !ws.IsConnectionAllowed(playerID, ip) {
-				c.JSON(http.StatusTooManyRequests, gin.H{"error": "Quá nhiều kết nối WebSocket. Vui lòng đóng các tab khác và thử lại!"})
-				return
-			}
-			ws.ServeWs(shub, c.Writer, c.Request, playerID, ip, worldAdmission)
+			c.JSON(http.StatusOK, gin.H{
+				"status":           "ok",
+				"version":          buildID,
+				"build_id":         buildID,
+				"protocol_version": 2,
+				"min_client_build": strings.TrimSpace(os.Getenv("MIN_CLIENT_BUILD")),
+				"uptime_sec":       int64(time.Since(serverStartedAt).Seconds()),
+			})
 		})
+
+		// WebTransport is the only realtime transport. Upgrade requests are
+		// mounted by RegisterRealtimeWT once the QUIC server exists.
 
 		// Realtime baseline telemetry uploaded by the Phaser client every 10s.
 		// Server-side identity wins; the body only carries measurements.

@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
-import { wsManager } from "@/lib/websocket";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 
 export interface ChatSlice {
   inbox: ApiResponseData[];
@@ -74,7 +74,7 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     get().subscribeEvents();
   },
 
-  subscribeRegionChat: (channelKey) => wsManager.subscribe(channelKey, (payload: ApiResponseData) => {
+  subscribeRegionChat: (channelKey) => uiRealtimeManager.subscribe(channelKey, (payload: ApiResponseData) => {
     set((state: ApiResponseData) => {
       const existing = state.chatMessages.region || [];
       const incoming = payload?.message ? [...existing, payload.message] : payload?.messages;

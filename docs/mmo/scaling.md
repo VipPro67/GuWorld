@@ -38,7 +38,7 @@
 - Dedicated worker processes per zone; all instances are goroutines in one Go
   process.
 - Cross-process lease registry / fencing (Redis/DB) and stale-owner recovery.
-- Gateway routing a WebSocket to the zone-owner process; no session directory.
+- Gateway routing a realtime session to the zone-owner process; no session directory.
 - Per-zone graceful drain without stopping the manager (`Stop` is global;
   admission `Drain` releases every session).
 - Cross-process portal/party transfer and transfer storms.

@@ -12,8 +12,8 @@ import type {
 } from "./Protocol.ts";
 
 /**
- * Transport-agnostic surface consumed by WorldRuntime. Both WorldSocket (v1
- * JSON/WS) and WorldTransport (v2 binary/WebTransport) implement it.
+ * Transport-agnostic surface consumed by WorldRuntime. WebTransport
+ * (v2 binary) is the only production implementation.
  */
 export interface WorldTransportLike {
   connect(join: WorldJoinPayload): Promise<WorldWelcomePayload>;

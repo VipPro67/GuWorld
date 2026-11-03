@@ -1,147 +1,128 @@
-# Tiến độ thi công WebTransport — 2026-11-02
+# Tiến độ thi công WebTransport — 2026-11-03
 
-> Mục tiêu: thay WebSocket bằng WebTransport cho realtime, bỏ Caddy, TLS/QUIC trong Go.
+> Mục tiêu: WebTransport là transport realtime **duy nhất**, bỏ Caddy và WebSocket.
 > Map quyết định: [#303](https://github.com/VipPro67/GuWorld/issues/303) (đã đóng). Spec: `docs/wayfinder/specs/WT-*.md`.
-> File này là điểm tiếp tục cho phiên sau. Cập nhật lần cuối: 2026-11-02.
+> File này là điểm tiếp tục cho phiên sau. Cập nhật lần cuối: 2026-11-03.
 
 ## TL;DR
 
-- **World socket đã chạy được trên WebTransport** (join, welcome, input, snapshot, cast/attack/capture/stance, spawn, resume, combat events), bật bằng `WT_ENABLED=true` ở backend + `NEXT_PUBLIC_REALTIME_TRANSPORT=wt` ở frontend.
-- **WS vẫn còn** cho UI channels (chat/trade/notify/refine/arena/catalog) và vẫn là transport mặc định. Chưa xoá WS.
-- Còn **4 bước** để xoá hẳn WS: hub sinks + UIStream → shared RealtimeClient → RPC UI → cutover/xoá WS.
-- Toàn bộ test xanh: backend `go test ./...`; frontend `npm test` **203 pass**, `tsc`, lint, build.
+- **WebSocket và Caddy đã bị xoá khỏi code/infra.** Realtime chỉ còn WebTransport:
+  - Stream `0x01` (`StreamWorld`, binary v2): join, welcome, input datagram, snapshot delta/full,
+    projectiles, transfer (`Op.Transfer`), cast/attack/capture/stance, spawn, resume, combat events,
+    PING/PONG datagram, graceful drain `4010 server_draining`.
+  - Stream `0x02` (`StreamUI`, NDJSON): auto-subscribe + subscribe/unsubscribe/ping/command cho
+    chat/trade/notify/refine/arena/catalog qua `uihub.Hub` / `uihub.ShardedHub` (sink-only).
+  - Shared `RealtimeClient` (singleton ref-count `acquireWorld()` / `acquireUI()`, grace 30 s,
+    duplicate-tab `BroadcastChannel` rotate `tab_id`, close code `4000`/`4001`/`4002`/`4010`).
+  - Browser không có WebTransport → terminal `unsupported` cho cả phiên, không retry; giữ HTTP-only.
+- **Không còn `NEXT_PUBLIC_REALTIME_TRANSPORT`, không còn `/api/ws`, không còn `internal/ws`.**
+  Redis Pub/Sub vẫn fan-out sự kiện UI vào `internal/uihub`.
+- **TLS/QUIC trong Go:** `TLS_ENABLED=true` phục vụ HTTPS (`TLS_ADDR`) + WT (`WT_ADDR`);
+  `TLS_ENABLED`/`WT_ENABLED` thiếu cert hoặc realtime runtime ⇒ process dừng (fail fast).
+- Test xanh: backend `go test ./...`; frontend `npm test` **215 pass**, `tsc --noEmit`, `eslint`.
+- **Còn lại:** deploy cert thật + smoke production theo `docs/PRODUCTION_DEPLOY.md`.
 
-## Commit đã hoàn thành
+## Commit & hạng mục đã hoàn thành
 
-| Commit | Nội dung |
+| Commit / Hạng mục | Nội dung |
 |---|---|
 | `a105f38e` | Baseline metrics stall-aware (`stalls`, p99/max/rate), rate limit theo player |
 | `48d59d7f` | Codec v2 Go + TS + golden vector chung |
 | `1a162140` | Resume session (grace 15/30 s, takeover, entity suspended) |
-| `9fb637b3` | `cmd/wtspike` (prototype đo WT/WS) + pin quic-go v0.62/webtransport v0.13/certmagic |
+| `9fb637b3` | `cmd/wtspike` (prototype đo WT/WS) + pin quic-go v0.62/webtransport v0.13 |
 | `d513da6e` | Client seed `seq` từ `welcome.ack_seq` sau resume |
 | `0c3c5328` | Codec `WELCOME` + `SnapshotFull` (Go+TS) |
 | `11a84164` | **WT server** `internal/realtime/wttransport` + `/api/wt` + `WT_ENABLED` |
 | `10f0fe08` | Baseline v2 mang entity state (vị trí/HP/mana/revision) |
-| `8b59ccba` | **WT client** `WorldTransport` + interface `WorldTransportLike`, chọn qua env |
+| `8b59ccba` | **WT client** `WorldTransport` + interface `WorldTransportLike` |
 | `3acc5ccf` | Forward combat events qua WT (enum 25 loại + payload JSON) |
 | `31240f9c` | Docs event stream + phạm vi còn lại |
-
-Ngoài ra có các commit của người dùng xen kẽ (assets/caching, WT-316…) — không đụng.
+| `44385ac8` | Giữ tính năng HTTP cơ bản hoạt động khi mất kết nối realtime |
+| **Bước 1 (Xong)** | Hub sinks + `wttransport/ui.go` (`0x02` NDJSON) + multiplex nhiều BiDi stream trên 1 WT session |
+| **Bước 2 (Xong)** | Shared `RealtimeClient` + `UIStream`, `WorldTransport` & UI manager dùng chung 1 WT session, `TabIdCoordinator`, xoá 4 kênh chết `world:pos/cell/cells/combat` |
+| **Bước 3 (Xong)** | RPC UI (`world.cells_rect`, `world.drops`, `chat.send`) qua HTTP fallback + map projectiles trên `WorldTransport` |
+| **Bước 4 — code (Xong)** | Xoá `internal/ws` client/limiter, thay bằng `internal/uihub` sink-only; xoá `/api/ws`; xoá `WorldSocket`, `websocket.ts`; rename sang `UIRealtimeManager`/`uiRealtimeManager`; `WorldRuntime` WT-only; TLS + WT trong `main.go`; drain 4010 + chờ session đóng |
+| **Bước 4 — infra (Xong)** | Xoá `Caddyfile`; compose publish `443:8443/tcp+udp`, DB/Redis loopback, mount `./certs`, healthcheck HTTPS, `stop_grace_period`; Dockerfile `EXPOSE 8443 8443/udp`; deploy workflow health/HTTP3 probe; `.env.example` TLS/WT |
+| **Bước 4 — docs (Xong)** | `README`, `docs/DEVELOPMENT.md`, `docs/API.md`, `docs/PRODUCTION_DEPLOY.md`, file tiến độ này |
 
 ## Kiến trúc hiện tại
 
 ```
 Backend (Go)
-├── :8080 plain HTTP (mặc định, WS + REST)
-└── WT_ENABLED=true
-    └── WT_ADDR=:8443 : http.Server TLS (REST + /api/ws wss)
-                        webtransport.Server UDP (CONNECT /api/wt)
-                        └── internal/realtime/wttransport → gateway.Admission
-                            ├── world stream (binary v2)
-                            ├── datagram input/delta
-                            └── events (Op.Events)
+├── TLS_ENABLED=true
+│   ├── TLS_ADDR=:8443 : http.Server TLS (REST + CONNECT /api/wt)
+│   └── WT_ADDR=:8443  : webtransport.Server UDP
+│       └── internal/realtime/wttransport
+│           ├── Stream 0x01 (world binary v2) → gateway.Admission
+│           ├── Stream 0x02 (ui NDJSON)       → internal/uihub (sink-only)
+│           ├── Datagram input/ping           → gateway.Admission
+│           └── Datagram snapshot delta       ← sim.Snapshot
+└── Dev (không TLS): plain HTTP :8080, REST/UI only; WT cần TLS
 
 Frontend
-├── NEXT_PUBLIC_REALTIME_TRANSPORT=ws (default) → WorldSocket (v1 JSON/WS)
-└── =wt → WorldTransport (v2 binary/WebTransport), cùng interface WorldTransportLike
-    └── WorldRuntime không đổi logic gameplay
+└── RealtimeClient (1 WebTransport session / tab, grace 30 s)
+    ├── WorldTransport       (Stream 0x01 + Datagrams)
+    └── UIRealtimeManager    (Stream 0x02 NDJSON)
 ```
 
-- Env mới: `WT_ENABLED`, `WT_ADDR`, `TLS_CERT_FILE`, `TLS_KEY_FILE`; frontend `NEXT_PUBLIC_REALTIME_TRANSPORT`, `NEXT_PUBLIC_REALTIME_URL`.
+- Env backend: `TLS_ENABLED`, `TLS_ADDR`, `WT_ENABLED`, `WT_ADDR`, `TLS_CERT_FILE`, `TLS_KEY_FILE`.
+- Env frontend: `NEXT_PUBLIC_REALTIME_URL` (tuỳ chọn); mặc định suy ra từ `NEXT_PUBLIC_BACKEND_URL` + `/api/wt`.
 - Route WT: `CONNECT /api/wt` (Auth, `?token=`, `?tab_id=`), `CheckOrigin` dùng chung `CORS_ALLOWED_ORIGINS`.
 - Codec: `backend/internal/realtime/protocol/v2` ↔ `frontend/src/game/network/v2/Codec.ts` (golden vector `82d204...`).
+- Redis: `uihub.StartRedisSubscribers` vẫn subscribe `player:*`, `refine:*`, `chat:*`, `trade:*`, `combat:*`, `notif:*`, arena, `catalog:*`.
 
 ## Đã kiểm chứng
 
-- Go: `go test ./...` pass; `go test -race ./internal/realtime/wttransport ./internal/realtime/gateway ./internal/realtime/sim ./internal/ws` pass.
-- Integration WT thật (client webtransport-go ↔ server): handshake → join → welcome baseline → input datagram → snapshot delta → **events frame**.
-- Frontend: `npm test` 203 pass (gồm join/baseline/delta/events WT), `npx tsc --noEmit`, `npm run lint`, `npm run build`.
-- Resume: test cùng tab giữ entity, hết grace nhả lease, tab khác takeover, suspended không ăn damage/không bị AI nhắm.
+- Go: `go test ./...` pass; targeted `-race` trên `wttransport`, `gateway`, `sim`, `uihub` pass.
+- Integration WT thật (client `webtransport-go` ↔ server): handshake → join → welcome baseline →
+  input datagram → snapshot delta → events frame; 1 session mở đồng thời UI stream + world stream,
+  nhận broadcast `chat:world` và `trade:<id>` từ `uihub`.
+- Frontend: `npm test` 215 pass (gồm `UIStream.test.ts`, `RealtimeClient.test.ts`,
+  `WorldRuntime.test.ts` với `transportFactory`, store fallback HTTP), `npm run typecheck`, `npm run lint`.
 
-## Việc cần làm tiếp (theo thứ tự)
+## Việc cần làm tiếp (production rollout)
 
-### 1. Hub sinks + UI stream (server) — bắt buộc để bỏ WS
-Mục tiêu: message channel hiện broadcast tới `*ws.Client` cũng tới sink WT.
+1. Trỏ DNS: `api.cogioi.io.vn` proxied, `rt.cogioi.io.vn` **DNS-only**.
+2. Mở TCP 443 + UDP 443 trên Lightsail; sysctl UDP buffer; gỡ Caddy host.
+3. Cấp cert Let's Encrypt cho cả `api` + `rt`, copy vào `./certs/fullchain.pem` / `privkey.pem`.
+4. `docker compose up -d`, kiểm tra log HTTPS + WT, chạy smoke test mục 4 của
+   `docs/PRODUCTION_DEPLOY.md`.
+5. Đo resume 3 s/10 s p95 < 2 s trên WiFi/4G thật.
+6. Commit các thay đổi chưa commit trên branch `deploy`.
 
-- `backend/internal/ws/hub.go`
-  - Thêm `type MessageSink interface{ Deliver([]byte) }` (hoặc `func([]byte)`).
-  - `Hub.sinks map[ChannelName]map[uuid.UUID]MessageSink`.
-  - Trong `run()` case broadcast: sau vòng `subs`, gửi payload cho sink (cùng Exclude/Targets).
-  - `SubscribeSink(playerID, channel, sink)` / `UnsubscribeSink(playerID, channel)`.
-  - Xoá sink khi client disconnect? UI sink tự unsubscribe; thêm `UnsubscribeAllSinks(playerID)`.
-- `backend/internal/ws/sharded_hub.go`: route `SubscribeSink`/`UnsubscribeSink` theo channel shard (dùng hàm hash hiện có).
-- `backend/internal/realtime/wttransport/ui.go` (mới):
-  - Nhận bidi stream có byte đầu `0x02` (`StreamUI`).
-  - Đọc NDJSON từng dòng: `{type:"subscribe"|"unsubscribe"|"ping"|"command", channel, data, request_id}`.
-  - Subscribe → `shub.SubscribeSink(playerID, channel, sink)`; sink ghi `{"type":"event","channel":"<ch>","data":<payload-json>}\n`.
-  - Auto-subscribe giống WS UI: `player:<id>`, `refine:<id>`, `trade:<id>`, `notif:<id>`, `combat:<id>`, `chat:world`, `chat:general`, sect channel.
-  - `command`: v1 trả `{"type":"error","request_id":...,"message":"use HTTP"}`; client fallback HTTP.
-  - `ping` → `{"type":"pong"}`.
-- `wttransport.Server.Handle`: nếu stream đầu tiên là `0x02` thay vì `0x01`, chạy UI loop (hiện chỉ chấp nhận world stream). Có thể tách `HandleUI`.
-- Test: fake hub/sink + NDJSON, đảm bảo subscribe nhận event và unsubscribe dừng.
+## Cách chạy thử WT local
 
-**Xong khi:** chat/trade/notify nhận qua WT UI stream trong integration test; không cần `/api/ws` cho UI.
-
-### 2. Shared `RealtimeClient` (frontend) — đúng #311 (1 session/tab)
-Vấn đề hiện tại: WT world mở session riêng; UI vẫn WS → 2 kết nối/tab, trái #311.
-
-- Tạo `frontend/src/lib/realtime/RealtimeClient.ts`:
-  - singleton, ref-count `acquireWorld()` / `acquireUI()`, grace 30 s.
-  - mở 1 `WebTransport` session, tạo world stream (`0x01`) + ui stream (`0x02`).
-  - `WorldTransport` nhận session/stream từ client thay vì tự `new WebTransport`.
-  - `wsManager` khi `NEXT_PUBLIC_REALTIME_TRANSPORT=wt` dùng UI stream; giữ API `subscribe/request/isConnected/acquireConnection/onOpen`.
-  - `request`: gửi `command` + `request_id`; nếu server trả `error use HTTP` thì throw để caller fallback HTTP hiện có.
-- Duplicate tab (BroadcastChannel rotate `tab_id`) theo #318 §5.
-- Test: fake transport, đảm bảo 1 session, 2 stream, ref-count/grace.
-
-**Xong khi:** mở game 1 tab chỉ có 1 session WT; UI + world dùng chung; `wsManager` không còn tạo WebSocket khi mode wt.
-
-### 3. RPC UI qua WT hoặc HTTP
-- `chat.send`, `world.cells_rect`, `world.drops`, `world.objects`, `match.input`: chọn HTTP fallback (đã có sẵn ở store) hoặc implement command trên UI stream.
-- Đảm bảo `chatSlice.sendMessage`, `useWorldStore.fetchNearbyCells`, `inventorySlice` hoạt động khi mode wt (test store).
-- Notification/refine đã auto-subscribe qua sink.
-
-### 4. Cutover & xoá WS
-- Deploy cert thật (`rt.cogioi.io.vn` hoặc `spike`) + `WT_ENABLED=true` + env frontend.
-- Smoke: join, chạy, cast, damage, chat, trade, notify, resume 3 s/10 s, mở tab thứ 2.
-- Xoá `/api/ws` route, `internal/ws` code (hoặc giữ hub cho sink rồi bỏ dần), `frontend/src/lib/websocket.ts` WebSocket internals.
-- Cập nhật `Caddyfile` (xoá), compose, docs (`README`, `DEVELOPMENT`, `API`), `.env.example`.
-- Theo kế hoạch cutover `docs/wayfinder/specs/WT-309-rollout-rollback.md`.
-
-## Cách chạy thử WT hôm nay
-
-Backend:
 ```bash
 cd backend/cmd/wtspike && ./gen-cert.sh /tmp/wtcert && cd ../..
 WT_ENABLED=true WT_ADDR=:8443 \
 TLS_CERT_FILE=/tmp/wtcert/srv.crt TLS_KEY_FILE=/tmp/wtcert/srv.key \
 go run ./cmd/server
 ```
+
 Frontend `.env.local`:
+
 ```bash
-NEXT_PUBLIC_REALTIME_TRANSPORT=wt
 NEXT_PUBLIC_REALTIME_URL=https://localhost:8443/api/wt
 ```
-Lưu ý: Chrome yêu cầu cert tin cậy **cho QUIC**; cert tự ký bị `ERR_QUIC_CERT_ROOT_NOT_KNOWN`. Dùng cert Let's Encrypt thật (xem `backend/cmd/wtspike/README.md` mục Option B) hoặc policy `CACertificates` (Chrome 132+).
 
-## Giới hạn/known issues
+Chrome yêu cầu cert tin cậy **cho QUIC**; cert tự ký bị
+`ERR_QUIC_CERT_ROOT_NOT_KNOWN`. Dùng cert Let's Encrypt thật hoặc policy
+`CACertificates` (Chrome 132+). Hướng dẫn production đầy đủ:
+[`docs/PRODUCTION_DEPLOY.md`](../PRODUCTION_DEPLOY.md).
 
-- WT client chưa map projectiles/transfer (server chưa gửi transfer qua WT; projectile bị bỏ ở client).
-- `WorldTransport` chưa gửi PING/PONG (RTT đang lấy từ ack input; server đã hỗ trợ PONG).
-- Server WT chưa gửi `TRANSFER`; edge transfer hiện dựa vào reconnect/resume.
-- UI channels vẫn WS; `Hub` chỉ giao cho `*Client`.
-- Chưa có graceful drain `4010`; shutdown hiện đóng TCP rồi `wt.Close()`.
-- Chưa bật `WT_ENABLED` production; chưa có cert `rt.cogioi.io.vn`.
+## Giới hạn/known issues còn lại
+
+- Chưa chạy smoke production với cert `rt.cogioi.io.vn` (thuộc rollout infra).
+- Chưa đo p95 resume trên mạng thật.
 - Không claim scale/50 người; guard vẫn `MMO_MAX_PLAYERS_PER_ZONE` (default 5).
 
 ## Checklist trước khi tuyên bố “đã thay WS”
 
-- [ ] UI stream WT nhận chat/trade/notify/refine/arena/catalog.
-- [ ] 1 session/tab (world + ui), tab thứ 2 takeover.
-- [ ] RPC UI hoạt động (WT hoặc HTTP fallback).
-- [ ] Projects/transfer đầy đủ (hoặc cắt khỏi gameplay).
-- [ ] Resume 3 s/10 s p95 < 2 s.
-- [ ] `/api/ws` trả 404/410; không còn `new WebSocket(` trong `frontend/src`.
-- [ ] Cert `rt` DNS-only + `WT_ENABLED=true` production; smoke WiFi/4G.
-- [ ] Docs + compose + `.env.example` cập nhật; Caddyfile xoá.
+- [x] UI stream WT nhận chat/trade/notify/refine/arena/catalog.
+- [x] 1 session/tab (world + ui), tab thứ 2 takeover + rotate `tab_id` khi duplicate tab.
+- [x] RPC UI hoạt động (WT hoặc HTTP fallback).
+- [x] Projectiles & `TRANSFER` đầy đủ trên WT + graceful drain `4010` + `/api/health`.
+- [x] `/api/ws` bị xoá; không còn `new WebSocket(` trong `frontend/src`.
+- [x] Docs + compose + `.env.example` cập nhật; `Caddyfile` đã xoá.
+- [ ] Cert `rt` DNS-only + `TLS_ENABLED=true` production; smoke WiFi/4G.
+- [ ] Resume 3 s/10 s p95 < 2 s đo thực tế trên mạng.

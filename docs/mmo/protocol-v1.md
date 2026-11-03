@@ -1,5 +1,10 @@
 # Realtime World Protocol v1
 
+> **Historical.** Protocol v1 over `/api/ws` has been replaced by protocol v2
+> over WebTransport (`CONNECT /api/wt`). See
+> `docs/wayfinder/specs/WT-313-wire-protocol-v2.md`. This document is kept as a
+> record of the earlier contract.
+
 This is the first shared wire contract for the Phaser client and Go world
 runtime. It is separate from the existing `match.input` arena protocol and the
 legacy `world.move_path` API.

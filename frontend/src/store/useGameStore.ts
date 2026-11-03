@@ -4,7 +4,7 @@ import type { RequiredGus } from "@/lib/gu-dict";
 import { manaRegenPerTick, nativeNumericValue } from "@/lib/effect-blocks";
 import type { EffectDictionaryEntry, EffectEnvelope } from "@/lib/effect-blocks";
 import { useUIStore } from "@/store/useUIStore";
-import { wsManager } from "@/lib/websocket";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { authFetch, setUnauthorizedHandler } from "@/lib/auth";
 import { fetchWithDedupe } from "@/lib/fetch";
 import { BACKEND_URL } from "@/lib/config";
@@ -1770,10 +1770,10 @@ export const useGameStore = create<GameState>((set, get) => {
     set({ playerEventsConnected: true });
 
     // Acquire connection with reference counting
-    const releaseConnection = wsManager.acquireConnection(token);
+    const releaseConnection = uiRealtimeManager.acquireConnection(token);
 
     try {
-      const unsubscribeOpen = wsManager.onOpen(({ reconnected }) => {
+      const unsubscribeOpen = uiRealtimeManager.onOpen(({ reconnected }) => {
         set({ playerEventsRetries: 0 });
         if (reconnected) {
           void get().reconcilePlayer(true);
@@ -1783,12 +1783,12 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for refine session updates (phiên luyện cổ chạy nền)
-      const unsubscribeRefine = wsManager.subscribe("refine", (rawPayload: ApiResponseData) => {
+      const unsubscribeRefine = uiRealtimeManager.subscribe("refine", (rawPayload: ApiResponseData) => {
         get().applyRefineSessionEvent(rawPayload);
       });
 
       // Listen for player updates
-      const unsubscribePlayer = wsManager.subscribe("player", (rawPayload: ApiResponseData) => {
+      const unsubscribePlayer = uiRealtimeManager.subscribe("player", (rawPayload: ApiResponseData) => {
         try {
           const payload = rawPayload as PlayerRealtimeEvent;
           const eventData = payload?.patch || payload?.data || rawPayload;
@@ -1909,12 +1909,12 @@ export const useGameStore = create<GameState>((set, get) => {
               : get().manaSnapshot,
           }));
         } catch (err) {
-          console.error("Failed to process player websocket event", err);
+          console.error("Failed to process player realtime event", err);
         }
       });
 
       // Listen for trade updates
-      const unsubscribeTrade = wsManager.subscribe("trade", (payload: ApiResponseData) => {
+      const unsubscribeTrade = uiRealtimeManager.subscribe("trade", (payload: ApiResponseData) => {
         try {
           const prevTrade = get().activeTrade;
           const newTrade = payload?.trade ?? null;
@@ -1933,53 +1933,8 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
-      // Listen for world position
-      wsManager.subscribe("world:pos", (payload: ApiResponseData) => {
-        try {
-          if (payload && payload.id) {
-            window.dispatchEvent(new CustomEvent("gu_world_pos", { detail: payload }));
-          }
-        } catch (err) {
-          console.error("Failed to process world position event", err);
-        }
-      });
-
-      // Listen for world cell
-      wsManager.subscribe("world:cell", (payload: ApiResponseData) => {
-        try {
-          if (payload) {
-            window.dispatchEvent(new CustomEvent("gu_world_cell", { detail: payload }));
-          }
-        } catch (err) {
-          console.error("Failed to process world cell event", err);
-        }
-      });
-
-      // Listen for world:cells — per-player cell snapshots pushed after movement
-      wsManager.subscribe("world:cells", (payload: ApiResponseData) => {
-        try {
-          if (payload?.cells) {
-            window.dispatchEvent(new CustomEvent("gu_world_cells", { detail: payload }));
-          }
-        } catch (err) {
-          console.error("Failed to process world cells event", err);
-        }
-      });
-
-      // Server-authoritative ordinary-monster state. The world store performs
-      // event-id deduplication and revision ordering before mutating entities.
-      wsManager.subscribe("world:combat", (payload: ApiResponseData) => {
-        try {
-          if (payload?.event_id) {
-            window.dispatchEvent(new CustomEvent("gu_world_combat", { detail: payload }));
-          }
-        } catch (err) {
-          console.error("Failed to process world combat event", err);
-        }
-      });
-
       // Listen for chat:world
-      wsManager.subscribe("chat:world", (payload: ApiResponseData) => {
+      uiRealtimeManager.subscribe("chat:world", (payload: ApiResponseData) => {
         try {
           // Handle append-only updates (single new message)
           if (payload?.message && !Array.isArray(payload?.messages)) {
@@ -2038,7 +1993,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
       // Bảo Hoàng Thiên is restricted to players owning both required Gu.
       const unsubscribeGeneralChat = hasConnectingHeaven && hasDivineSense
-        ? wsManager.subscribe("chat:general", (payload: ApiResponseData) => {
+        ? uiRealtimeManager.subscribe("chat:general", (payload: ApiResponseData) => {
         try {
           // Handle append-only updates (single new message)
           if (payload?.message && !Array.isArray(payload?.messages)) {
@@ -2092,7 +2047,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const sectStatus = get().mySectStatus;
       const sectId = sectStatus?.member?.sect_id ?? sectStatus?.sect?.id;
       const sectChannel = sectId ? `chat:sect:${sectId}` : null;
-      const unsubscribeSectChat = sectChannel ? wsManager.subscribe(sectChannel, (payload: ApiResponseData) => {
+      const unsubscribeSectChat = sectChannel ? uiRealtimeManager.subscribe(sectChannel, (payload: ApiResponseData) => {
         try {
           // Handle append-only updates (single new message)
           if (payload?.message && !Array.isArray(payload?.messages)) {
@@ -2141,7 +2096,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }) : () => {};
 
       // Listen for notification
-      wsManager.subscribe("notification", (payload: ApiResponseData) => {
+      uiRealtimeManager.subscribe("notification", (payload: ApiResponseData) => {
         try {
           get()._onNotificationEvent(payload);
         } catch (err) {
@@ -2150,7 +2105,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for death_arena events
-      const unsubscribeDeathArena = wsManager.subscribe("death_arena", (payload: ApiResponseData) => {
+      const unsubscribeDeathArena = uiRealtimeManager.subscribe("death_arena", (payload: ApiResponseData) => {
         try {
           const eventType = payload?.type;
           const eventData = payload?.data;
@@ -2186,7 +2141,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for martial_arena events
-      const unsubscribeMartialArena = wsManager.subscribe("martial_arena", (payload: ApiResponseData) => {
+      const unsubscribeMartialArena = uiRealtimeManager.subscribe("martial_arena", (payload: ApiResponseData) => {
         try {
           const eventType = payload?.type;
           const eventData = payload?.data;
@@ -2215,7 +2170,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
-      const unsubscribeCatalog = wsManager.subscribe("catalog", (payload: ApiResponseData) => {
+      const unsubscribeCatalog = uiRealtimeManager.subscribe("catalog", (payload: ApiResponseData) => {
         const event = payload?.data || payload;
         if (event?.type === "catalog.updated" && event?.catalog === "recipes") {
           // Keep the last valid recipes visible while revalidating the changed catalog.
@@ -2250,7 +2205,7 @@ export const useGameStore = create<GameState>((set, get) => {
         cleanup();
         (window as ApiResponseData).__gu_ws_cleanup = null;
       } else {
-        wsManager.disconnect();
+        uiRealtimeManager.disconnect();
       }
     } catch {
       // ignore

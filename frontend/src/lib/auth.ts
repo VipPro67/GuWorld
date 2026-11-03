@@ -1,4 +1,5 @@
 import { BACKEND_URL } from "./config.ts";
+import { TabIdCoordinator } from "./realtime/RealtimeClient.ts";
 
 /**
  * Shared authentication helpers for browser-side fetch.
@@ -34,18 +35,20 @@ export const getCookie = (name: string): string | null => {
   return match ? decodeURIComponent(match[1]) : null;
 };
 
+let tabReplaceListenerAttached = false;
+let tabIdCoordinator: TabIdCoordinator | null = null;
+
 const gameplayTabId = (): string => {
   if (typeof window === "undefined") return "";
-  const key = "gu_gameplay_tab_id";
-  let id = sessionStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    sessionStorage.setItem(key, id);
+  if (!tabIdCoordinator) {
+    tabIdCoordinator = new TabIdCoordinator();
   }
-  if (!sessionStorage.getItem("gu_tab_replace_listener")) {
-    sessionStorage.setItem("gu_tab_replace_listener", "1");
+  const id = tabIdCoordinator.ensureTabId();
+  if (!tabReplaceListenerAttached) {
+    tabReplaceListenerAttached = true;
     window.addEventListener("storage", (event) => {
-      if (event.key !== "gu_active_gameplay_tab_id" || !event.newValue || event.newValue === id) return;
+      const currentId = sessionStorage.getItem("gu_gameplay_tab_id") || id;
+      if (event.key !== "gu_active_gameplay_tab_id" || !event.newValue || event.newValue === currentId) return;
       window.dispatchEvent(new CustomEvent("game:tab-replaced"));
       if (!sessionStorage.getItem("gu_tab_replaced_notice")) {
         sessionStorage.setItem("gu_tab_replaced_notice", "1");

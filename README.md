@@ -21,6 +21,7 @@ GuWorld là web game RPG text-based lấy cảm hứng từ hệ thống tu luy�
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Kiến trúc thư mục, luồng khởi động và module runtime. |
 | [`docs/GAME_DATA.md`](./docs/GAME_DATA.md) | Nguồn dữ liệu CSV/seed và registry runtime. |
 | [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) | Cách chạy, biến môi trường, kiểm tra nhanh. |
+| [`docs/PRODUCTION_DEPLOY.md`](./docs/PRODUCTION_DEPLOY.md) | Checklist production: DNS, TLS, firewall, cert, WebTransport, rollback và smoke test. |
 | [`frontend/README.md`](./frontend/README.md) | Ghi chú riêng cho frontend. |
 
 Các tài liệu thiết kế/roadmap chỉ mô tả hướng phát triển. Các tài liệu trong bảng trên là điểm bắt đầu để đối chiếu hành vi đang chạy.
@@ -30,10 +31,21 @@ Các tài liệu thiết kế/roadmap chỉ mô tả hướng phát triển. Cá
 ### Docker Compose (Khuyên dùng cho Backend)
 
 ```bash
-docker-compose up --build
+docker compose -f docker-compose.local.yml up --build
 ```
 
-Lệnh này khởi chạy Go backend, PostgreSQL, Redis và reverse proxy. Backend nghe tại `:8080`, tự khởi tạo schema cùng dữ liệu hệ thống tối thiểu. Sau lần cài mới, quản trị viên phải import dữ liệu gameplay từ tab **Dữ liệu**; `Quest.csv` hiện là ngoại lệ được đồng bộ khi khởi tạo schema.
+Lệnh này khởi chạy Go backend, PostgreSQL và Redis ở chế độ local (plain HTTP
+`:8080`, không TLS, không Caddy). Production dùng `docker-compose.yml`: Go phục
+vụ HTTPS (TCP/443) và WebTransport (UDP/443) trong cùng process; Caddy và
+WebSocket đã bị xoá. Compose production cần `certs/fullchain.pem` +
+`certs/privkey.pem` (đọc bởi GID `10001`) và host phải mở TCP/UDP 443 — xem
+[`docs/PRODUCTION_DEPLOY.md`](./docs/PRODUCTION_DEPLOY.md). Muốn chạy local
+không TLS bằng binary, đặt `TLS_ENABLED=false`, `WT_ENABLED=false` và dùng
+`go run ./cmd/server` (plain HTTP `:8080`); WebTransport cần HTTPS/cert tin cậy
+nên chế độ plain chỉ dùng để phát triển REST/UI. Backend tự khởi tạo schema cùng
+dữ liệu hệ thống tối thiểu. Sau lần cài mới, quản trị viên phải import dữ liệu
+gameplay từ tab **Dữ liệu**; `Quest.csv` hiện là ngoại lệ được đồng bộ khi khởi
+tạo schema.
 
 Thông tin DB/JWT/OAuth phải đặt trong `backend/.env`; thông tin Grafana Alloy đặt
 trong root `.env`. Không lưu credential trong Compose hoặc Git. Khi dùng Redis

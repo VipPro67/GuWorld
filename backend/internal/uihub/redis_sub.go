@@ -1,4 +1,4 @@
-package ws
+package uihub
 
 import (
 	"context"
@@ -11,15 +11,12 @@ import (
 )
 
 // StartRedisSubscribers spawns goroutines to listen to Redis Pub/Sub channels
-// and forward messages to the Sharded WebSocket Hub.
+// and forward messages to the sharded UI hub.
 func StartRedisSubscribers(shub *ShardedHub) {
 	go subscribePattern(shub, "player:*")
 	go subscribePattern(shub, "refine:*")
 	go subscribePattern(shub, "chat:*")
 	go subscribePattern(shub, "trade:*")
-	go subscribePattern(shub, "world:pos")
-	go subscribePattern(shub, "world:cell")
-	go subscribePattern(shub, "world:cells:*")
 	go subscribePattern(shub, "combat:*")
 	go subscribePattern(shub, "notif:*")
 	go subscribePattern(shub, "death_arena:*")
@@ -33,23 +30,21 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 
 	for {
 		if shub == nil {
-			return // Hub is stopping
+			return
 		}
 
 		if cache.Client == nil {
 			time.Sleep(5 * time.Second)
-			backoffDelay = 1 * time.Second // Reset backoff
+			backoffDelay = 1 * time.Second
 			continue
 		}
 
 		pubsub := cache.Client.PSubscribe(context.Background(), pattern)
-		// Wait for subscription to be created before moving on.
 		_, err := pubsub.Receive(context.Background())
 		if err != nil {
 			logger.S.Warnf("Failed to subscribe to pattern %s: %v", pattern, err)
 			pubsub.Close()
 
-			// Exponential backoff with jitter
 			jitter := time.Duration(float64(backoffDelay) * (0.5 + 0.5*float64(time.Now().UnixNano()%1000)/1000.0))
 			time.Sleep(jitter)
 			backoffDelay = min(backoffDelay*2, maxBackoffDelay)
@@ -57,19 +52,11 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 		}
 
 		logger.S.Infof("Subscribed to Redis pattern: %s", pattern)
-		backoffDelay = 1 * time.Second // Reset backoff on successful subscribe
+		backoffDelay = 1 * time.Second
 
 		ch := pubsub.Channel()
-
-		// Receive loop
 		for msg := range ch {
 			clientChannel, clientMsg := formatClientEvent(msg.Channel, []byte(msg.Payload))
-
-			if isPlayerScopedChannel(msg.Channel) {
-				shub.BroadcastToChannel(ChannelName(msg.Channel), clientMsg, uuid.Nil)
-				continue
-			}
-
 			shub.BroadcastToChannel(ChannelName(msg.Channel), clientMsg, uuid.Nil)
 			if clientChannel != msg.Channel {
 				shub.BroadcastToChannel(ChannelName(clientChannel), clientMsg, uuid.Nil)
@@ -78,24 +65,13 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 
 		pubsub.Close()
 
-		// If we reach here, the channel was closed (e.g., Redis disconnect)
 		if shub != nil {
 			logger.S.Warnf("Redis subscription for %s closed, reconnecting...", pattern)
-			// Exponential backoff with jitter
 			jitter := time.Duration(float64(backoffDelay) * (0.5 + 0.5*float64(time.Now().UnixNano()%1000)/1000.0))
 			time.Sleep(jitter)
 			backoffDelay = min(backoffDelay*2, maxBackoffDelay)
 		}
 	}
-}
-
-func isPlayerScopedChannel(channel string) bool {
-	for _, prefix := range []string{"player:", "combat:", "trade:", "notif:", "refine:"} {
-		if len(channel) >= len(prefix) && channel[:len(prefix)] == prefix {
-			return true
-		}
-	}
-	return false
 }
 
 func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) {
@@ -115,16 +91,12 @@ func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) 
 		clientChannel = "death_arena"
 	case len(redisChannel) >= 14 && redisChannel[:14] == "martial_arena:":
 		clientChannel = "martial_arena"
-	case len(redisChannel) >= 11 && redisChannel[:11] == "world:cells:":
-		clientChannel = "world:cells"
 	case len(redisChannel) >= 8 && redisChannel[:8] == "catalog:":
 		clientChannel = "catalog"
 	default:
-		clientChannel = redisChannel // "chat:world", "chat:general", "world:pos", "world:cell"
+		clientChannel = redisChannel
 	}
 
-	// Avoid double JSON marshaling: rawPayload is already JSON from Redis
-	// Construct the event envelope without re-marshaling the payload
 	event := struct {
 		Type    string          `json:"type"`
 		Channel string          `json:"channel"`
