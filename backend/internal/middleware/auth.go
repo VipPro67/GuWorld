@@ -187,135 +187,138 @@ func activeTab(playerID uuid.UUID) string {
 	return tabID
 }
 
+// AuthResult is the identity resolved from an authenticated request.
+type AuthResult struct {
+	PlayerID   uuid.UUID
+	Username   string
+	UsedCookie bool
+}
+
+// AuthenticateRequest validates the bearer token, active session and gameplay
+// tab of a request. It returns the resolved identity, or an HTTP status and
+// message describing the failure.
+//
+// AuthRequired and the WebTransport CONNECT handler share this check. The
+// WebTransport server needs the raw http.ResponseWriter, so that endpoint is
+// mounted outside gin and cannot run AuthRequired as middleware.
+func AuthenticateRequest(r *http.Request) (*AuthResult, int, string) {
+	usedCookie := false
+	tokenStr := ""
+	var err error
+	// Prefer the Authorization header: the frontend always sends the current
+	// token from localStorage there, while duplicate/stale cookies (e.g. after
+	// a DB reset) could otherwise shadow it.
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+			return nil, http.StatusUnauthorized, "Authorization header format must be: Bearer <token>"
+		}
+		tokenStr = parts[1]
+	} else {
+		// Query param: EventSource and WebTransport cannot set custom headers.
+		tokenStr = r.URL.Query().Get("token")
+		if tokenStr == "" {
+			cookie, cookieErr := r.Cookie("gu_auth_token")
+			if cookieErr != nil || cookie.Value == "" {
+				return nil, http.StatusUnauthorized, "Authentication cookie or Authorization header required"
+			}
+			tokenStr = cookie.Value
+			usedCookie = true
+		}
+	}
+
+	claims, err := auth.ValidateToken(tokenStr)
+	if err != nil {
+		return nil, http.StatusUnauthorized, "Invalid or expired authorization token"
+	}
+
+	playerID, err := uuid.Parse(claims.PlayerID)
+	if err != nil {
+		return nil, http.StatusUnauthorized, "Invalid player identity in token"
+	}
+	if db.DB == nil {
+		return nil, http.StatusServiceUnavailable, "Authentication database unavailable"
+	}
+
+	// Fast path: check Redis session cache to avoid a PostgreSQL roundtrip on every authenticated API call.
+	var dbSessionID string
+	var banned bool
+	var bannedUntil sql.NullTime
+	sessionCacheKey := "auth:session:" + playerID.String()
+	if errCache := cache.GetJSON(sessionCacheKey, &dbSessionID); errCache != nil || dbSessionID == "" {
+		if cached, ok := getLocalSession(playerID.String()); ok {
+			dbSessionID = cached
+		} else {
+			err = db.DB.QueryRowContext(r.Context(), "SELECT COALESCE(active_session_id, ''), is_banned, banned_until FROM players WHERE id=$1", playerID).Scan(&dbSessionID, &banned, &bannedUntil)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				stats := db.DB.Stats()
+				logger.L.Error("authentication_database_error",
+					zap.String("player_id", playerID.String()), zap.Error(err),
+					zap.Int("open_connections", stats.OpenConnections), zap.Int("in_use_connections", stats.InUse),
+					zap.Int("idle_connections", stats.Idle), zap.Int64("pool_wait_count", stats.WaitCount),
+					zap.Duration("pool_wait_duration", stats.WaitDuration))
+				return nil, http.StatusServiceUnavailable, "Authentication database unavailable"
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				// The frontend interceptor logs out on 401, which also clears any stale cookie.
+				return nil, http.StatusUnauthorized, "Tài khoản không tồn tại hoặc đã bị xóa."
+			}
+			_ = cache.SetJSON(sessionCacheKey, dbSessionID, sessionCacheTTL)
+			setLocalSession(playerID.String(), dbSessionID)
+		}
+	}
+
+	// Bans always rotate active_session_id and invalidate the cache, so a
+	// banned token normally fails the session check below. Re-checking the
+	// flag on the DB path keeps the block authoritative even when a stale
+	// session id survives in cache.
+	if banned && (!bannedUntil.Valid || bannedUntil.Time.After(time.Now())) {
+		return nil, http.StatusForbidden, "Tài khoản đã bị khóa. Vui lòng liên hệ bộ phận hỗ trợ."
+	}
+
+	// Validate session_id matches the active session in database
+	if claims.SessionID != dbSessionID {
+		return nil, http.StatusUnauthorized, SessionKickedError
+	}
+
+	// Admin pages may be open alongside the single gameplay tab. The claim
+	// endpoint is also exempt so a newly opened gameplay tab can replace it.
+	path := r.URL.Path
+	if !strings.HasPrefix(path, "/api/admin/") && path != "/api/admin" && path != "/api/auth/claim-tab" && path != "/api/wt" {
+		tabID := r.Header.Get("X-Player-Tab-ID")
+		if tabID == "" {
+			tabID = r.URL.Query().Get("tab_id") // WebSocket/EventSource cannot set custom headers.
+		}
+		if tabID == "" {
+			return nil, http.StatusConflict, "Thiếu mã tab chơi. Vui lòng tải lại trang."
+		}
+		active := activeTab(playerID)
+		if active != "" && active != tabID {
+			return nil, http.StatusConflict, "Tab chơi này đã bị thay thế bởi tab mới."
+		}
+		if active == "" {
+			ClaimActiveTab(playerID, tabID)
+		}
+	}
+
+	return &AuthResult{PlayerID: playerID, Username: claims.Username, UsedCookie: usedCookie}, 0, ""
+}
+
 // AuthRequired is a Gin middleware that enforces authentication
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		usedCookie := false
-		tokenStr := ""
-		var err error
-		// Prefer the Authorization header: the frontend always sends the
-		// current token from localStorage there, while duplicate/stale cookies
-		// (e.g. after a DB reset) could otherwise shadow it via c.Cookie().
-		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" {
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be: Bearer <token>"})
-				c.Abort()
-				return
-			}
-			tokenStr = parts[1]
-		} else {
-			// Try query param (for EventSource which cannot send headers)
-			tokenStr = c.Query("token")
-			if tokenStr == "" {
-				tokenStr, err = c.Cookie("gu_auth_token")
-				if err != nil || tokenStr == "" {
-					c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication cookie or Authorization header required"})
-					c.Abort()
-					return
-				}
-				usedCookie = true
-			}
-		}
-		claims, err := auth.ValidateToken(tokenStr)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired authorization token"})
+		identity, status, message := AuthenticateRequest(c.Request)
+		if identity == nil {
+			c.JSON(status, gin.H{"error": message})
 			c.Abort()
 			return
 		}
 
-		playerID, err := uuid.Parse(claims.PlayerID)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid player identity in token"})
-			c.Abort()
-			return
-		}
-		if db.DB == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
-			c.Abort()
-			return
-		}
+		c.Set("player_id", identity.PlayerID)
+		c.Set("username", identity.Username)
 
-		// Fast path: check Redis session cache to avoid a PostgreSQL roundtrip on every authenticated API call.
-		var dbSessionID string
-		var banned bool
-		var bannedUntil sql.NullTime
-		sessionCacheKey := "auth:session:" + playerID.String()
-		if errCache := cache.GetJSON(sessionCacheKey, &dbSessionID); errCache != nil || dbSessionID == "" {
-			if cached, ok := getLocalSession(playerID.String()); ok {
-				dbSessionID = cached
-			} else {
-				err = db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(active_session_id, ''), is_banned, banned_until FROM players WHERE id=$1", playerID).Scan(&dbSessionID, &banned, &bannedUntil)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
-					stats := db.DB.Stats()
-					logger.L.Error("authentication_database_error",
-						zap.String("player_id", playerID.String()), zap.Error(err),
-						zap.Int("open_connections", stats.OpenConnections), zap.Int("in_use_connections", stats.InUse),
-						zap.Int("idle_connections", stats.Idle), zap.Int64("pool_wait_count", stats.WaitCount),
-						zap.Duration("pool_wait_duration", stats.WaitDuration))
-					c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
-					c.Abort()
-					return
-				}
-				if errors.Is(err, sql.ErrNoRows) {
-					// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
-					// Let's just return 401. The frontend interceptor will call logout().
-					c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
-					c.Abort()
-					return
-				}
-				_ = cache.SetJSON(sessionCacheKey, dbSessionID, sessionCacheTTL)
-				setLocalSession(playerID.String(), dbSessionID)
-			}
-		}
-
-		// Bans always rotate active_session_id and invalidate the cache, so a
-		// banned token normally fails the session check below. Re-checking the
-		// flag on the DB path keeps the block authoritative even when a stale
-		// session id survives in cache.
-		if banned && (!bannedUntil.Valid || bannedUntil.Time.After(time.Now())) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Tài khoản đã bị khóa. Vui lòng liên hệ bộ phận hỗ trợ."})
-			c.Abort()
-			return
-		}
-
-		// Validate session_id matches the active session in database
-		if claims.SessionID != dbSessionID {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": SessionKickedError})
-			c.Abort()
-			return
-		}
-
-		// Admin pages may be open alongside the single gameplay tab. The claim
-		// endpoint is also exempt so a newly opened gameplay tab can replace it.
-		path := c.Request.URL.Path
-		if !strings.HasPrefix(path, "/api/admin/") && path != "/api/admin" && path != "/api/auth/claim-tab" {
-			tabID := c.GetHeader("X-Player-Tab-ID")
-			if tabID == "" {
-				tabID = c.Query("tab_id") // WebSocket/EventSource cannot set custom headers.
-			}
-			if tabID == "" {
-				c.JSON(http.StatusConflict, gin.H{"error": "Thiếu mã tab chơi. Vui lòng tải lại trang."})
-				c.Abort()
-				return
-			}
-			active := activeTab(playerID)
-			if active != "" && active != tabID {
-				c.JSON(http.StatusConflict, gin.H{"error": "Tab chơi này đã bị thay thế bởi tab mới."})
-				c.Abort()
-				return
-			}
-			if active == "" {
-				ClaimActiveTab(playerID, tabID)
-			}
-		}
-
-		// Store variables in context
-		c.Set("player_id", playerID)
-		c.Set("username", claims.Username)
-
-		if usedCookie {
+		if identity.UsedCookie {
 			csrfProtection(c)
 			if c.IsAborted() {
 				return

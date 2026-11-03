@@ -187,8 +187,10 @@ export class WorldTransport implements WorldTransportLike {
       this.attachCloseWatcher(acquired.session, reject);
       await this.openSession(acquired.session, acquired.stream, join, resolve, reject);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const code = message.includes("WebTransport") ? "webtransport_unsupported" : "transport_connect_failed";
+      const raw = error instanceof Error ? error.message : String(error);
+      const isUnsupported = raw.includes("WebTransport") && !raw.toLowerCase().includes("handshake");
+      const code = isUnsupported ? "webtransport_unsupported" : "transport_connect_failed";
+      const message = formatRealtimeErrorMessage(raw);
       this.failJoin(reject, new WorldRealtimeError(message, code));
       this.disconnect();
     }
@@ -934,6 +936,15 @@ function decodeReject(payload: Uint8Array): WorldRejectPayload {
   return { code: code || "realtime_world_rejected", message: message || undefined, retryable };
 }
 
+function formatRealtimeErrorMessage(rawMessage: string): string {
+  const lower = rawMessage.toLowerCase();
+  if (lower.includes("opening handshake failed") || lower.includes("failed to establish a quic connection")) {
+    return "Không thể kết nối WebTransport (Opening handshake failed). Hãy kiểm tra: 1) Mở https://localhost:8443/api/health trên trình duyệt để kiểm tra/tin cậy chứng chỉ TLS dev. 2) Cấu hình CORS_ALLOWED_ORIGINS trong backend đã có origin frontend chưa. 3) Cổng UDP 8443 (HTTP/3) không bị chặn.";
+  }
+  return rawMessage;
+}
+
 function asWorldError(error: unknown, code: string): WorldRealtimeError {
-  return new WorldRealtimeError(error instanceof Error ? error.message : String(error), code);
+  const raw = error instanceof Error ? error.message : String(error);
+  return new WorldRealtimeError(formatRealtimeErrorMessage(raw), code);
 }

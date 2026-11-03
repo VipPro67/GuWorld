@@ -497,8 +497,9 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 			})
 		})
 
-		// WebTransport is the only realtime transport. Upgrade requests are
-		// mounted by RegisterRealtimeWT once the QUIC server exists.
+		// WebTransport is the only realtime transport. CONNECT /api/wt is
+		// dispatched outside gin by WithRealtimeWT, because gin's wrapped
+		// ResponseWriter breaks the HTTP/3 upgrade.
 
 		// Realtime baseline telemetry uploaded by the Phaser client every 10s.
 		// Server-side identity wins; the body only carries measurements.

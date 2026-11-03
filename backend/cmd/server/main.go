@@ -1034,7 +1034,9 @@ func main() {
 			},
 			TouchActivity: handlers.TouchPlayerActivity,
 		})
-		server.RegisterRealtimeWT(r, wtHandler.Handle)
+		// Mount the CONNECT endpoint outside gin so webtransport-go receives
+		// the raw HTTP/3 ResponseWriter.
+		h3.Handler = server.WithRealtimeWT(r, wtHandler.Handle)
 		wtServer, udpConn = wt, udp
 		go func() {
 			if err := wt.Serve(udp); err != nil && !errors.Is(err, net.ErrClosed) {

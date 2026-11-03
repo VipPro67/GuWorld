@@ -33,6 +33,12 @@ export interface BroadcastChannelLike {
   close(): void;
 }
 
+export type TabClaimer = (token: string, tabId: string) => Promise<void>;
+let defaultTabClaimer: TabClaimer | null = null;
+export function setTabClaimer(claimer: TabClaimer | null): void {
+  defaultTabClaimer = claimer;
+}
+
 export interface RealtimeClientOptions {
   url?: string;
   graceMs?: number;
@@ -42,6 +48,7 @@ export interface RealtimeClientOptions {
   createTransport?: (url: string) => WebTransportLike;
   createBroadcastChannel?: (name: string) => BroadcastChannelLike | null;
   onTabReplaced?: () => void;
+  tabCoordinator?: TabIdCoordinator;
 }
 
 export interface AcquiredWorldSession {
@@ -189,11 +196,15 @@ export class RealtimeClient {
   constructor(options: RealtimeClientOptions = {}) {
     this.options = options;
     this.graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
-    this.tabCoordinator = new TabIdCoordinator({
-      getTabId: options.getTabId,
-      setTabId: options.setTabId,
-      createBroadcastChannel: options.createBroadcastChannel,
-    });
+    this.tabCoordinator = options.tabCoordinator ?? (
+      options.getTabId || options.setTabId || options.createBroadcastChannel
+        ? new TabIdCoordinator({
+            getTabId: options.getTabId,
+            setTabId: options.setTabId,
+            createBroadcastChannel: options.createBroadcastChannel,
+          })
+        : defaultTabCoordinator
+    );
   }
 
   public getWorldRefCount(): number {
@@ -314,6 +325,13 @@ export class RealtimeClient {
 
     this.activeToken = resolvedToken;
     const tabId = this.tabCoordinator.ensureTabId();
+    if (defaultTabClaimer) {
+      try {
+        await defaultTabClaimer(resolvedToken, tabId);
+      } catch (err) {
+        console.warn("[RealtimeClient] tab claim preflight failed:", err);
+      }
+    }
     const url = buildRealtimeWTURL(this.options.url, resolvedToken, tabId);
     const factory = this.options.createTransport;
     const TransportCtor = defaultWebTransportCtor();
@@ -485,4 +503,5 @@ function writeStorage(storageName: "localStorage" | "sessionStorage", key: strin
   }
 }
 
+export const defaultTabCoordinator = new TabIdCoordinator();
 export const realtimeClient = new RealtimeClient();

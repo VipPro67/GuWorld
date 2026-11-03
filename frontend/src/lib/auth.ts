@@ -1,5 +1,5 @@
 import { BACKEND_URL } from "./config.ts";
-import { TabIdCoordinator } from "./realtime/RealtimeClient.ts";
+import { defaultTabCoordinator, setTabClaimer } from "./realtime/RealtimeClient.ts";
 
 /**
  * Shared authentication helpers for browser-side fetch.
@@ -36,14 +36,10 @@ export const getCookie = (name: string): string | null => {
 };
 
 let tabReplaceListenerAttached = false;
-let tabIdCoordinator: TabIdCoordinator | null = null;
 
 const gameplayTabId = (): string => {
   if (typeof window === "undefined") return "";
-  if (!tabIdCoordinator) {
-    tabIdCoordinator = new TabIdCoordinator();
-  }
-  const id = tabIdCoordinator.ensureTabId();
+  const id = defaultTabCoordinator.ensureTabId();
   if (!tabReplaceListenerAttached) {
     tabReplaceListenerAttached = true;
     window.addEventListener("storage", (event) => {
@@ -60,6 +56,8 @@ const gameplayTabId = (): string => {
 };
 
 let claimedTabSession = "";
+let claimInFlight: Promise<void> | null = null;
+
 const isAdminRequest = (input: RequestInfo | URL): boolean => {
   try {
     return new URL(String(input), window.location.origin).pathname.startsWith("/api/admin/");
@@ -82,18 +80,33 @@ const safePathname = (input: RequestInfo | URL): string => {
 const ensureGameplayTabClaim = async (token: string, tabId: string): Promise<void> => {
   const claimKey = `${token}:${tabId}`;
   if (claimedTabSession === claimKey) return;
-  const response = await fetch(`${BACKEND_URL}/api/auth/claim-tab`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "X-Player-Tab-ID": tabId },
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(payload?.error || "Không thể mở phiên chơi ở tab này.");
+  if (claimInFlight) {
+    await claimInFlight;
+    if (claimedTabSession === claimKey) return;
   }
-  claimedTabSession = claimKey;
-  localStorage.setItem("gu_active_gameplay_tab_id", tabId);
+  claimInFlight = (async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/claim-tab`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "X-Player-Tab-ID": tabId },
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || "Không thể mở phiên chơi ở tab này.");
+      }
+      claimedTabSession = claimKey;
+      localStorage.setItem("gu_active_gameplay_tab_id", tabId);
+    } finally {
+      claimInFlight = null;
+    }
+  })();
+  return claimInFlight;
 };
+
+if (typeof window !== "undefined") {
+  setTabClaimer(ensureGameplayTabClaim);
+}
 
 /** Build Authorization + CSRF headers from localStorage / cookies. */
 export const authHeaders = (method?: string): Record<string, string> => {
