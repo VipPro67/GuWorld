@@ -106,13 +106,25 @@ Frontend:
 | Variable | Mục đích |
 | --- | --- |
 | `NEXT_PUBLIC_BACKEND_URL` | Backend base URL; mặc định `http://localhost:8080`. |
-| `NEXT_PUBLIC_REALTIME_TRANSPORT` | `ws` (mặc định) hoặc `wt` để dùng WorldTransport/WebTransport. |
+| `NEXT_PUBLIC_REALTIME_TRANSPORT` | `ws` (mặc định) hoặc `wt` để dùng WorldTransport/WebTransport; WT không hỗ trợ hoặc lỗi kết nối sẽ thử WS và giữ WS cho các lần reconnect trong runtime đó. Lỗi admission/auth/content không tự đổi transport. |
 | `NEXT_PUBLIC_REALTIME_URL` | URL WT đầy đủ, ví dụ `https://rt.cogioi.io.vn/api/wt`; mặc định suy ra từ backend (HTTPS + `/api/wt`). |
 | `NEXT_PUBLIC_MMO_ZONE_ID` | Zone dự phòng cho preview/test. Khi đăng nhập, client ưu tiên `current_region` của nhân vật để chọn map KHU_VUC/SAFE_ZONE tương ứng. |
 | `NEXT_PUBLIC_MMO_MAP_URL` | URL map JSON client tải; mặc định `/game/maps/<zone>.json`. File này phải giống bản trong `backend/data/mmo/maps/`. |
 
 Map/content versions follow the shipped map release and are not environment
 variables; the backend and frontend use the same built-in values.
+
+Frontend business screens do not require a world connection. While the world or
+UI socket is unavailable, the basic feature navigation remains accessible. When
+the UI WebSocket is down, HTTP reads refresh trade and the open chat every 5 seconds
+after the previous round completes; player status, Gu inventory, recipes and unread
+notification count refresh at most once per 15 seconds. Polling pauses in hidden
+or offline tabs, stops after tab replacement/unmount, and stops when UI WS recovers.
+Bao Hoang chat sends use HTTP once, with no replay through another transport after
+an uncertain mutation result. World movement/combat still require realtime.
+WS handshakes time out after 10 seconds, pending requests reject on connection
+loss, and the basic navigation's reconnect button or a browser online event can
+restart an exhausted reconnect budget for an active session.
 
 Sau đăng nhập và onboarding, Phaser 4.2.1 là gameplay world duy nhất; `dashboard`/`world-map` cũ chỉ
 còn là view ID tương thích, các component map turn-based đã bị gỡ khỏi frontend và không fallback

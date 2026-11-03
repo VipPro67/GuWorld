@@ -1,4 +1,4 @@
-import { BACKEND_URL } from "./config";
+import { BACKEND_URL } from "./config.ts";
 const DEFAULT_WS_URL = BACKEND_URL.replace(/^http/, "ws") + "/api/ws";
 
 export interface WSMessage {
@@ -11,13 +11,17 @@ export interface WSMessage {
   status?: number;
 }
 
+export type WebSocketConnectionState = "disconnected" | "connecting" | "connected";
+
 export interface WebSocketOpenEvent {
   reconnected: boolean;
 }
 
 export class WebSocketRequestError extends Error {
-  constructor(message: string, public readonly status = 0) {
+  public readonly status: number;
+  constructor(message: string, status = 0) {
     super(message);
+    this.status = status;
     this.name = "WebSocketRequestError";
   }
 }
@@ -43,6 +47,10 @@ export class WebSocketManager {
   private pendingRequests = new Map<string, { resolve: (data: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private openListeners = new Set<(event: WebSocketOpenEvent) => void>();
   private hasOpened = false;
+  private connectionState: WebSocketConnectionState = "disconnected";
+  private connectionListeners = new Set<(state: WebSocketConnectionState) => void>();
+  private cancelConnect: ((error: Error) => void) | null = null;
+  private connectionGeneration = 0;
 
   constructor(url: string = DEFAULT_WS_URL) {
     this.url = url;
@@ -54,6 +62,23 @@ export class WebSocketManager {
 
   public isConnected(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  public getConnectionState(): WebSocketConnectionState {
+    return this.connectionState;
+  }
+
+  public onConnectionChange(callback: (state: WebSocketConnectionState) => void): () => void {
+    this.connectionListeners.add(callback);
+    return () => this.connectionListeners.delete(callback);
+  }
+
+  private setConnectionState(state: WebSocketConnectionState) {
+    if (state === this.connectionState) return;
+    this.connectionState = state;
+    for (const listener of this.connectionListeners) {
+      try { listener(state); } catch (error) { console.error("[WebSocket] Connection callback failed:", error); }
+    }
   }
 
   public setOnTokenRefresh(callback: () => void) {
@@ -72,22 +97,19 @@ export class WebSocketManager {
 
   // Acquire a WebSocket connection with reference counting
   public acquireConnection(token?: string): () => void {
-    if (token) {
-      this.token = token;
-    }
+    const connectionToken = token || this.token;
     this.connectionRefCounts++;
-    if (this.connectionRefCounts === 1) {
-      // First subscriber, establish connection
-      if (!this.token) {
-        console.warn("[WebSocket] Cannot acquire connection without token");
-        return () => this.releaseConnection();
-      }
-      this.connect(this.token).catch((err) => {
-        console.error("[WebSocket] Failed to acquire connection:", err);
-        this.releaseConnection();
-      });
+    const generation = this.connectionGeneration;
+    let released = false;
+    if (this.connectionRefCounts === 1 && connectionToken) {
+      // The caller owns the reference until cleanup, including while offline.
+      void this.connect(connectionToken).catch((error) => console.warn("[WebSocket] Connection unavailable:", error));
     }
-    return () => this.releaseConnection();
+    return () => {
+      if (released || generation !== this.connectionGeneration) return;
+      released = true;
+      this.releaseConnection();
+    };
   }
 
   // Release a WebSocket connection reference
@@ -96,9 +118,10 @@ export class WebSocketManager {
     if (this.connectionRefCounts <= 0) {
       this.connectionRefCounts = 0;
       if (!this.isExplicitClose) {
+        const generation = this.connectionGeneration;
         // Wait a bit before disconnecting to allow new subscribers
         setTimeout(() => {
-          if (this.connectionRefCounts === 0) {
+          if (this.connectionRefCounts === 0 && generation === this.connectionGeneration) {
             this.disconnect();
           }
         }, 30000);
@@ -106,99 +129,106 @@ export class WebSocketManager {
     }
   }
 
+  public retryConnection(): void {
+    if (this.isExplicitClose || !this.token || this.connectionRefCounts === 0 || this.isConnected() || this.connectPromise) return;
+    this.reconnectAttempts = 0;
+    void this.connect(this.token).catch(() => { /* normal reconnect handles failure */ });
+  }
+
   public connect(token: string): Promise<void> {
-    if (this.isConnected() && this.token === token) {
-      return Promise.resolve();
-    }
+    if (this.isConnected() && this.token === token) return Promise.resolve();
+    if (this.connectPromise && this.token === token) return this.connectPromise;
 
-    this.token = token;
     this.isExplicitClose = false;
-
-    if (this.connectPromise) {
-      return this.connectPromise;
+    this.token = token;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
+    this.cancelConnect?.(new WebSocketRequestError("Kết nối WebSocket đã thay đổi"));
+    this.stopHeartbeat();
+    const previous = this.ws;
+    this.ws = null;
+    try { previous?.close(); } catch { /* already closed */ }
+    this.rejectPendingRequests(new WebSocketRequestError("Kết nối WebSocket đã đóng"));
 
-    this.connectPromise = new Promise<void>((resolve, reject) => {
-      try {
-        if (this.ws) {
-          try {
-            this.ws.close();
-          } catch {
-            // ignore
-          }
-          this.ws = null;
-          this.rejectPendingRequests(new WebSocketRequestError("Kết nối WebSocket đã đóng"));
-        }
-
-        const tabId = typeof window !== "undefined" ? sessionStorage.getItem("gu_gameplay_tab_id") : null;
-        const query = `token=${encodeURIComponent(token)}${tabId ? `&tab_id=${encodeURIComponent(tabId)}` : ""}`;
-        const wsUrl = `${this.url}?${query}`;
-        const socket = new WebSocket(wsUrl);
-        this.ws = socket;
-
-        socket.onopen = () => {
-          if (this.ws !== socket) return;
-          const event = { reconnected: this.hasOpened };
-          this.hasOpened = true;
-          this.reconnectAttempts = 0;
-          this.startHeartbeat();
-
-          // Re-subscribe any channels already registered in subscriptions map
-          this.resubscribeChannels();
-
-          for (const listener of this.openListeners) {
-            try {
-              listener(event);
-            } catch (error) {
-              console.error("[WebSocket] OPEN lifecycle callback failed:", error);
-            }
-          }
-
-          this.connectPromise = null;
-          resolve();
-        };
-
-        socket.onmessage = (event: MessageEvent<string>) => {
-          if (this.ws !== socket) return;
-          this.handleMessage(event.data);
-        };
-
-        socket.onerror = (error) => {
-          if (this.ws !== socket) return;
-          console.warn("[WebSocket] error:", error);
-        };
-
-        socket.onclose = () => {
-          // A superseded socket must not tear down its replacement.
-          if (this.ws !== socket) return;
-          this.stopHeartbeat();
-          this.connectPromise = null;
-          this.ws = null;
-
-          if (!this.isExplicitClose) {
-            this.scheduleReconnect();
-          }
-        };
-      } catch (err) {
-        this.connectPromise = null;
-        reject(err);
-      }
+    let resolveConnect!: () => void;
+    let rejectConnect!: (error: Error) => void;
+    const promise = new Promise<void>((resolve, reject) => {
+      resolveConnect = resolve;
+      rejectConnect = reject;
     });
+    this.connectPromise = promise;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const settle = (error?: Error) => {
+      if (this.connectPromise !== promise) return;
+      if (timer) clearTimeout(timer);
+      this.connectPromise = null;
+      this.cancelConnect = null;
+      if (error) rejectConnect(error); else resolveConnect();
+    };
+    this.cancelConnect = settle;
+    this.setConnectionState("connecting");
 
-    return this.connectPromise;
+    try {
+      const tabId = typeof window !== "undefined" ? sessionStorage.getItem("gu_gameplay_tab_id") : null;
+      const query = `token=${encodeURIComponent(token)}${tabId ? `&tab_id=${encodeURIComponent(tabId)}` : ""}`;
+      const socket = new WebSocket(`${this.url}?${query}`);
+      this.ws = socket;
+      const loseConnection = (error: Error) => {
+        if (this.ws !== socket) return;
+        this.ws = null;
+        this.stopHeartbeat();
+        settle(error);
+        this.rejectPendingRequests(error);
+        this.setConnectionState("disconnected");
+        try { socket.close(); } catch { /* already closed */ }
+        this.scheduleReconnect();
+      };
+      timer = setTimeout(() => loseConnection(new WebSocketRequestError("WebSocket connect timeout")), 10000);
+      socket.onopen = () => {
+        if (this.ws !== socket) return;
+        const event = { reconnected: this.hasOpened };
+        this.hasOpened = true;
+        this.reconnectAttempts = 0;
+        settle();
+        this.startHeartbeat();
+        this.resubscribeChannels();
+        this.setConnectionState("connected");
+        for (const listener of this.openListeners) {
+          try { listener(event); } catch (error) { console.error("[WebSocket] OPEN lifecycle callback failed:", error); }
+        }
+      };
+      socket.onmessage = (event: MessageEvent<string>) => {
+        if (this.ws === socket) this.handleMessage(event.data);
+      };
+      socket.onerror = () => loseConnection(new WebSocketRequestError("Không thể kết nối WebSocket"));
+      socket.onclose = () => loseConnection(new WebSocketRequestError("Kết nối WebSocket đã đóng"));
+    } catch (error) {
+      settle(error instanceof Error ? error : new WebSocketRequestError(String(error)));
+      this.setConnectionState("disconnected");
+      this.scheduleReconnect();
+    }
+    return promise;
   }
 
   public disconnect() {
     this.isExplicitClose = true;
     this.connectionRefCounts = 0;
+    this.connectionGeneration++;
+    const error = new WebSocketRequestError("Kết nối WebSocket đã đóng");
+    this.cancelConnect?.(error);
+    this.rejectPendingRequests(error);
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
     this.stopHeartbeat();
-    if (this.ws) {
+    const socket = this.ws;
+    this.ws = null;
+    if (socket) {
       try {
-        this.ws.close();
+        socket.close();
       } catch {
         // ignore
       }
@@ -206,6 +236,7 @@ export class WebSocketManager {
     }
     this.connectPromise = null;
     this.hasOpened = false;
+    this.setConnectionState("disconnected");
     // Clear all subscriptions
     this.subscriptions.clear();
     this.subscriptionRefCounts.clear();
@@ -223,7 +254,7 @@ export class WebSocketManager {
     this.subscriptions.get(channel)!.add(callback as (data: unknown) => void);
 
     return () => {
-      const newRef = currentRef - 1;
+      const newRef = Math.max(0, (this.subscriptionRefCounts.get(channel) || 0) - 1);
       this.subscriptionRefCounts.set(channel, newRef);
 
       const subs = this.subscriptions.get(channel);
@@ -255,7 +286,8 @@ export class WebSocketManager {
     }
   }
 
-  public request<T>(channel: string, payload?: unknown, timeoutMs = 30000): Promise<T> {    if (!this.isConnected()) return Promise.reject(new WebSocketRequestError("WebSocket chưa kết nối"));
+  public request<T>(channel: string, payload?: unknown, timeoutMs = 30000): Promise<T> {
+    if (!this.isConnected()) return Promise.reject(new WebSocketRequestError("WebSocket chưa kết nối"));
     const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -404,7 +436,8 @@ export class WebSocketManager {
 
   private reconnectWithStaleToken() {
     this.stopHeartbeat();
-    this.connectPromise = null;
+    this.cancelConnect?.(new WebSocketRequestError("Kết nối WebSocket hết phản hồi"));
+    this.rejectPendingRequests(new WebSocketRequestError("Kết nối WebSocket hết phản hồi"));
     // Close the half-open socket before opening a replacement. Leaving it open
     // keeps a phantom server-side client that eats a connection slot and keeps
     // the player reported as online.
@@ -417,6 +450,7 @@ export class WebSocketManager {
         // ignore
       }
     }
+    this.setConnectionState("disconnected");
     if (!this.isExplicitClose && this.token) {
       this.scheduleReconnect();
     }
@@ -443,6 +477,7 @@ export class WebSocketManager {
     this.reconnectAttempts++;
 
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       if (!this.isExplicitClose && this.token) {
         // Trigger token refresh if available before reconnecting
         if (this.onTokenRefresh) {
@@ -464,4 +499,5 @@ export const wsManager = new WebSocketManager();
 
 if (typeof window !== "undefined") {
   window.addEventListener("game:tab-replaced", () => wsManager.disconnect());
+  window.addEventListener("online", () => wsManager.retryConnection());
 }

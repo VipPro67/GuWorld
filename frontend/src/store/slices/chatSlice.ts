@@ -243,8 +243,22 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     if (!token || !get().beginAction("chat")) return false;
     set({ error: null });
     try {
-      const data = await wsManager.request<{ message?: string }>("chat.send", { content, channel });
+      // Keep sends independent of realtime connectivity. Replaying an uncertain
+      // WS command over HTTP could send twice and charge the chat fee twice.
+      const response = await authFetch(`${BACKEND_URL}/api/chat/bao-hoang/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, channel }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gửi tin nhắn thất bại");
       get().addLog(data.message || "Đã phát truyền tin nhắn!");
+      // Without WS, neither the new message nor its currency cost is pushed.
+      // A read failure must not make an already committed send look retryable.
+      await Promise.allSettled([
+        get().fetchBaoHoangMessages(channel),
+        get().reconcilePlayer(),
+      ]);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

@@ -47,6 +47,11 @@ const MAX_JOIN_RETRIES = 7;
 const JOIN_SLOW_RETRY_BASE_MS = 5_000;
 const JOIN_SLOW_RETRY_MAX_MS = 15_000;
 const MAX_JOIN_SLOW_RETRIES = 3;
+// Only transport failures may downgrade. Admission/auth/content rejections must
+// remain visible instead of opening a second controller through another path.
+const WT_FALLBACK_CODES = new Set([
+  "webtransport_unsupported", "transport_connect_failed", "socket_closed", "join_timeout",
+]);
 
 export type WorldRuntimeStatus =
   | "idle"
@@ -96,6 +101,8 @@ export interface SelfCombatView {
 
 export interface WorldRuntimeOptions {
   socketOptions?: WorldSocketOptions;
+  transportMode?: "ws" | "wt";
+  transportOptions?: WorldTransportOptions;
   /** Fallback speed in world units per second for servers without movement_speed. */
   speed?: number;
   nowMs?: () => number;
@@ -143,22 +150,19 @@ const INPUT_KEEPALIVE_INTERVAL = 0.15;
  */
 const TRANSPORT_MODE = (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT ?? "ws").toLowerCase();
 
-function createRealtimeSocket(options: WorldSocketOptions | undefined): WorldTransportLike {
-  if (TRANSPORT_MODE === "wt") {
-    return new WorldTransport(options as WorldTransportOptions);
-  }
-  return new WorldSocket(options);
-}
-
 export class WorldRuntime {
   private socket: WorldTransportLike;
   private readonly socketOptions: WorldSocketOptions | undefined;
+  private readonly transportOptions: WorldTransportOptions | undefined;
+  private transportMode: "ws" | "wt";
+  private joinGeneration = 0;
   private speed: number;
   private predictionSpeed: number;
   private readonly clock = new WorldClock();
   private readonly predictor = new SelfPredictor();
   private readonly interpolator = new RemoteInterpolator();
   private readonly listeners = new Set<() => void>();
+  private readonly errorListeners = new Set<(error: Error) => void>();
   private readonly combatListeners = new Set<(event: WorldEvent) => void>();
   private readonly castRequestListeners = new Set<(slot: number) => void>();
   private readonly transferListeners = new Set<(transfer: WorldTransferPayload) => void>();
@@ -206,8 +210,10 @@ export class WorldRuntime {
 
   constructor(options: WorldRuntimeOptions = {}) {
     this.socketOptions = options.socketOptions;
+    this.transportOptions = options.transportOptions ?? options.socketOptions;
+    this.transportMode = options.transportMode ?? (TRANSPORT_MODE === "wt" ? "wt" : "ws");
     this.nowMs = options.nowMs ?? Date.now;
-    this.socket = createRealtimeSocket(this.socketOptions);
+    this.socket = this.createSocket();
     this.speed = options.speed ?? DEFAULT_SPEED;
     this.predictionSpeed = this.speed;
     this.predictor.setSpeed(this.speed);
@@ -228,6 +234,7 @@ export class WorldRuntime {
 
   private async joinSession(join: WorldJoinPayload): Promise<WorldWelcomePayload | null> {
     if (this.status === "connecting") return null;
+    const generation = ++this.joinGeneration;
     this.lastJoin = join;
     this.errorMessage = "";
     this.errorCode = "";
@@ -235,7 +242,28 @@ export class WorldRuntime {
     this.status = "connecting";
     this.emit();
     try {
-      const welcome = await this.socket.connect(join);
+      let welcome: WorldWelcomePayload;
+      try {
+        welcome = await this.socket.connect(join);
+      } catch (error) {
+        if (generation !== this.joinGeneration) return null;
+        if (this.transportMode !== "wt" || !(error instanceof WorldSocketError) || !WT_FALLBACK_CODES.has(error.code)) {
+          throw error;
+        }
+        for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
+        this.socket.disconnect();
+        // Keep the downgrade for this runtime's reconnects; a blocked UDP path
+        // should not add another WT timeout every time the player changes zone.
+        this.transportMode = "ws";
+        this.socket = this.createSocket();
+        this.resetSocketMetrics();
+        this.bindSocket();
+        this.errorMessage = "";
+        this.errorCode = "";
+        this.metrics.mark("transport_fallback", "ws");
+        welcome = await this.socket.connect(join);
+      }
+      if (generation !== this.joinGeneration) return null;
       this.welcome = welcome;
       this.activeDash = false;
       this.dashStartTick = 0;
@@ -252,6 +280,7 @@ export class WorldRuntime {
       this.emit();
       return welcome;
     } catch (error) {
+      if (generation !== this.joinGeneration) return null;
       const code = error instanceof WorldSocketError ? error.code : "world_connect_failed";
       const message = error instanceof Error ? error.message : "Không thể vào world realtime";
       if (
@@ -333,7 +362,7 @@ export class WorldRuntime {
     if (resolvedZone && resolvedZone !== join.zone_id) {
       nextJoin = { ...join, zone_id: resolvedZone };
     }
-    this.socket = createRealtimeSocket(this.socketOptions);
+    this.socket = this.createSocket();
     this.resetSocketMetrics();
     this.bindSocket();
     return this.joinSession(nextJoin);
@@ -351,6 +380,7 @@ export class WorldRuntime {
   }
 
   public disconnect(): void {
+    this.joinGeneration += 1;
     this.clearJoinRetry();
     this.flushSocketMetrics();
     for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
@@ -375,6 +405,12 @@ export class WorldRuntime {
     this.pendingTarget = null;
     this.status = "closed";
     this.emit();
+  }
+
+  private createSocket(): WorldTransportLike {
+    return this.transportMode === "wt"
+      ? new WorldTransport(this.transportOptions)
+      : new WorldSocket(this.socketOptions);
   }
 
   public setMoveVector(vector: WorldPoint): void {
@@ -753,7 +789,8 @@ export class WorldRuntime {
   }
 
   public onError(listener: (error: Error) => void): () => void {
-    return this.socket.onError(listener);
+    this.errorListeners.add(listener);
+    return () => this.errorListeners.delete(listener);
   }
 
   public onTransfer(listener: (transfer: WorldTransferPayload) => void): () => void {
@@ -797,9 +834,14 @@ export class WorldRuntime {
         this.emit();
       }),
       this.socket.onError((error) => {
+        // A failed WT handshake is handled by joinSession's downgrade. Keep
+        // the host in its connecting state until the WS attempt settles.
+        if (this.status === "connecting" && this.transportMode === "wt" &&
+            error instanceof WorldSocketError && WT_FALLBACK_CODES.has(error.code)) return;
         this.errorMessage = error.message;
         this.errorCode = error instanceof WorldSocketError ? error.code : "world_socket_error";
         this.emit();
+        for (const listener of this.errorListeners) listener(error);
       }),
       this.socket.onTransfer((transfer) => {
         this.combatNotice = `Đang chuyển vùng: ${transfer.to_zone_id}`;

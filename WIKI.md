@@ -7,6 +7,7 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại, di
 - Cổ sư đăng ký bằng username/email/password hoặc đăng nhập Google nếu cấu hình OAuth.
 - **Khóa tài khoản (`players.ban`)**: tài khoản bị khóa (có thời hạn hoặc vĩnh viễn) không thể đăng nhập và bị đẩy khỏi phiên đang chơi; đăng nhập trả về lý do khóa. Admin cũng có thể chỉ **hạn chế chat** (không gửi được chat Bảo Hoàng/private mail) hoặc chặn thiết bị. Hệ thống tự động khóa khi một thiết bị vượt ngưỡng nhiều tài khoản hoặc lạm dụng referral.
 - Hồ sơ hỗ trợ bio, avatar, đổi mật khẩu và cơ chế ngụy trang thông tin công khai.
+- **Khi mất kết nối thế giới:** thanh **Chức năng** vẫn cho mở nhân vật, túi đồ, tu luyện, luyện Cổ, cửa hàng, Chợ Tiên và các bảng cơ bản qua HTTP nếu máy chủ HTTP còn truy cập được. Chat vẫn gửi được; tin nhắn của kênh đang mở và giao dịch được cập nhật định kỳ khi mất kênh realtime. Di chuyển và chiến đấu ngoài thế giới cần kết nối realtime. Bấm **Kết nối lại** để trở về thế giới và thử lại.
 - **Đổi Đạo Hiệu (Hạn chế & Đại Đạo Phản Phệ)**:
   - **Nhất Chuyển & Nhị Chuyển (Rank 1 - 2)**: Tự do đổi tên miễn phí, không tốn tài nguyên hay chịu phản phệ.
   - **Tam Chuyển (Rank 3)**: Tốn **5.000 Nguyên Thạch**.

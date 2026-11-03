@@ -113,13 +113,15 @@ function realtimeControls(settings: AutoCombatConfig | null | undefined) {
 interface PhaserWorldHostProps {
   onExit?: () => void;
   worldActive?: boolean;
+  onConnectionChange?: (connected: boolean) => void;
+  fallbackChatActive?: boolean;
 }
 
 /**
  * Owns the single Phaser canvas and realtime session. Phaser is imported lazily
  * so server rendering never touches `window`.
  */
-export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostProps) {
+export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange, fallbackChatActive = false }: PhaserWorldHostProps) {
   const setView = useUIStore((state) => state.setView);
   const player = useGameStore((state) => state.player);
   const worldReconnectToken = useGameStore((state) => state.worldReconnectToken);
@@ -152,6 +154,11 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
   const [panel, setPanel] = useState<MMOPanel>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const worldConnected = status === "ready" && runtimeStatus === "joined" && hud !== null;
+
+  useEffect(() => {
+    onConnectionChange?.(worldConnected);
+  }, [worldConnected, onConnectionChange]);
 
   const retry = useCallback(() => {
     if (tabReplacedRef.current) return;
@@ -641,7 +648,7 @@ export function PhaserWorldHost({ onExit, worldActive = true }: PhaserWorldHostP
           />
         )}
 
-        {hud && panel === null && worldActive && <GlobalChatOverlay placement="mmo" />}
+        {!fallbackChatActive && hud && panel === null && worldActive && <GlobalChatOverlay placement="mmo" />}
 
       </div>
     </MMOErrorBoundary>

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WorldRuntime } from "./WorldRuntime.ts";
+import { WorldSocketError } from "../network/WorldSocket.ts";
+import { encodeFrame, Op, Writer } from "../network/v2/Codec.ts";
 
 class FakeSocket {
   readyState = 0;
@@ -425,4 +427,135 @@ test("disconnect cancels a scheduled join retry", async () => {
   await new Promise((resolve) => setTimeout(resolve, 600));
   assert.equal(sockets.length, 1, "a disconnected runtime must not open another socket");
   assert.equal(runtime.getStatus(), "closed");
+});
+
+test("WT connection failure falls back to WS and keeps WS for reconnects", async () => {
+  const sockets: FakeSocket[] = [];
+  let transportAttempts = 0;
+  let transportCloses = 0;
+  const runtime = new WorldRuntime({
+    transportMode: "wt",
+    transportOptions: {
+      getToken: () => "token",
+      createTransport: () => {
+        transportAttempts += 1;
+        return {
+          ready: Promise.reject(new Error("UDP blocked")),
+          closed: new Promise(() => {}),
+          datagrams: { readable: new ReadableStream(), writable: new WritableStream(), maxDatagramSize: 1200 },
+          createBidirectionalStream: async () => ({ readable: new ReadableStream(), writable: new WritableStream() }),
+          close: () => { transportCloses += 1; },
+        };
+      },
+    },
+    socketOptions: {
+      getToken: () => "token",
+      createSocket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket as never;
+      },
+    },
+  });
+  const errors: Error[] = [];
+  runtime.onError((error) => errors.push(error));
+  try {
+    const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+    await waitUntil(() => sockets.length === 1);
+    assert.ok(transportCloses >= 1, "WT must be closed before opening the fallback controller");
+    sockets[0].open();
+    const request = JSON.parse(sockets[0].sent[0]) as { request_id: string };
+    sockets[0].receive(welcome(request.request_id));
+    assert.equal((await pending)?.zone_id, "starter");
+    assert.equal(runtime.getStatus(), "joined");
+    assert.equal(runtime.getErrorCode(), "");
+    assert.equal(errors.length, 0, "a recoverable WT failure must not display the terminal error UI");
+    sockets[0].onerror?.(new Event("error"));
+    assert.equal(errors.length, 1, "error listeners must survive the transport replacement");
+
+    const reconnected = runtime.reconnect();
+    assert.equal(sockets.length, 2);
+    sockets[1].open();
+    const nextRequest = JSON.parse(sockets[1].sent[0]) as { request_id: string };
+    sockets[1].receive(welcome(nextRequest.request_id));
+    assert.ok(await reconnected);
+    assert.equal(transportAttempts, 1, "reconnect must not retry a known blocked WT path");
+  } finally {
+    runtime.disconnect();
+  }
+});
+
+test("unsupported WT falls back but disconnect cancels a pending downgrade", async () => {
+  for (const cancel of [false, true]) {
+    const sockets: FakeSocket[] = [];
+    const runtime = new WorldRuntime({
+      transportMode: "wt",
+      transportOptions: {
+        getToken: () => "token",
+        createTransport: () => { throw new WorldSocketError("Unsupported", "webtransport_unsupported"); },
+      },
+      socketOptions: {
+        getToken: () => "token",
+        createSocket: () => {
+          const socket = new FakeSocket();
+          sockets.push(socket);
+          return socket as never;
+        },
+      },
+    });
+    try {
+      const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+      if (cancel) {
+        runtime.disconnect();
+        assert.equal(await pending, null);
+        assert.equal(sockets.length, 0, "a replaced/disconnected tab must not open a fallback connection");
+        assert.equal(runtime.getStatus(), "closed");
+      } else {
+        await waitUntil(() => sockets.length === 1);
+        sockets[0].close();
+        assert.equal(await pending, null);
+        assert.equal(runtime.getStatus(), "error", "both unavailable transports leave the HTTP UI usable");
+      }
+    } finally {
+      runtime.disconnect();
+    }
+  }
+});
+
+test("WT authentication, session replacement and content rejection never downgrade", async () => {
+  for (const code of ["unauthorized", "session_replaced", "realtime_map_mismatch"]) {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    let wsAttempts = 0;
+    const runtime = new WorldRuntime({
+      transportMode: "wt",
+      transportOptions: {
+        getToken: () => "token",
+        createTransport: () => ({
+          ready: Promise.resolve(),
+          closed: new Promise(() => {}),
+          datagrams: { readable: new ReadableStream(), writable: new WritableStream(), maxDatagramSize: 1200 },
+          createBidirectionalStream: async () => ({
+            readable: new ReadableStream<Uint8Array>({ start(value) { controller = value; } }),
+            writable: new WritableStream(),
+          }),
+          close() {},
+        }),
+      },
+      socketOptions: {
+        getToken: () => "token",
+        createSocket: () => { wsAttempts += 1; return new FakeSocket() as never; },
+      },
+    });
+    try {
+      const pending = runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+      await waitUntil(() => controller !== undefined);
+      controller.enqueue(encodeFrame(Op.Reject, new Writer().string(code).string("Rejected").u8(0).bytes()));
+      assert.equal(await pending, null);
+      assert.equal(runtime.getStatus(), "error");
+      assert.equal(runtime.getErrorCode(), code);
+      assert.equal(wsAttempts, 0, "an application rejection must not bypass admission through WS");
+    } finally {
+      runtime.disconnect();
+    }
+  }
 });

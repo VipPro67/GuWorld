@@ -1773,15 +1773,8 @@ export const useGameStore = create<GameState>((set, get) => {
     const releaseConnection = wsManager.acquireConnection(token);
 
     try {
-      wsManager.connect(token).then(() => {
-        set({ playerEventsRetries: 0 });
-      }).catch((err) => {
-        console.warn("[WebSocket] Connection failed", err);
-        set({ playerEventsConnected: false });
-        releaseConnection();
-      });
-
       const unsubscribeOpen = wsManager.onOpen(({ reconnected }) => {
+        set({ playerEventsRetries: 0 });
         if (reconnected) {
           void get().reconcilePlayer(true);
           // Đồng bộ lại phiên luyện sau khi WS reconnect (WF-REF-05 §17).

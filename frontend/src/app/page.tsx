@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,13 @@ import { GameLoadingScreen } from "@/components/GameLoadingScreen";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliation";
 import { updateUiPreferences } from "@/lib/ui-preferences";
+import { wsManager } from "@/lib/websocket";
+import { installHttpFallbackPolling } from "@/lib/http-fallback";
+import { BasicFeatureNavigation } from "@/components/game/BasicFeatureNavigation";
+
+const subscribeConnection = (notify: () => void) => wsManager.onConnectionChange(notify);
+const getConnection = () => wsManager.getConnectionState();
+const getServerConnection = () => "disconnected" as const;
 
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
 const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
@@ -52,6 +59,8 @@ const PhaserWorldHost = dynamic(() => import("@/components/game/PhaserWorldHost"
 
 export default function Home() {
   const router = useRouter();
+  const [worldConnected, setWorldConnected] = useState(false);
+  const connection = useSyncExternalStore(subscribeConnection, getConnection, getServerConnection);
   const [
     player,
     isLoading,
@@ -200,6 +209,7 @@ export default function Home() {
   }, [initializeSession, fetchDictionary]);
 
   const playerId = player?.id;
+  useEffect(() => { setWorldConnected(false); }, [playerId]);
   useEffect(() => {
     if (!playerId) return;
     return installPlayerLifecycleReconciliation(window, document, () => void reconcilePlayer(true));
@@ -210,13 +220,43 @@ export default function Home() {
     if (!playerId) return;
 
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && wsManager.isConnected()) {
         void fetchPlayerStatus(playerId);
       }
     }, 90000);
 
     return () => clearInterval(interval);
   }, [playerId, fetchPlayerStatus]);
+
+  // Push outages must not strand business screens or incoming trade updates.
+  useEffect(() => {
+    if (!playerId) return;
+    let nextPlayerRefresh = 0;
+    return installHttpFallbackPolling({
+      connection: wsManager,
+      activityTarget: window,
+      visibilityTarget: document,
+      isOnline: () => navigator.onLine !== false,
+      refresh: async () => {
+        const state = useGameStore.getState();
+        if (state.player?.id !== playerId || !state.token) return;
+        const tasks: Promise<unknown>[] = [state.fetchActiveTrade()];
+        if (Date.now() >= nextPlayerRefresh) {
+          nextPlayerRefresh = Date.now() + 15000;
+          tasks.push(state.reconcilePlayer(true), state.fetchUnreadNotificationsCount());
+        }
+        if (state.chatOpen) {
+          if (state.activeChannel === "private") {
+            tasks.push(state.fetchPrivateConversations());
+            if (state.activePrivateUsername) tasks.push(state.fetchPrivateThread(state.activePrivateUsername));
+          } else {
+            tasks.push(state.fetchBaoHoangMessages(state.activeChannel));
+          }
+        }
+        await Promise.allSettled(tasks);
+      },
+    });
+  }, [playerId]);
 
   // 3. Trade realtime subscription. This replaces the old /api/trade/active polling loop.
   const isPlayerReady = !!player;
@@ -340,6 +380,18 @@ export default function Home() {
           {player && <NotificationBell />}
         </div>
       </header>}
+      {isGameWorldView && (!worldConnected || connection !== "connected") && (
+        <BasicFeatureNavigation
+          worldConnected={worldConnected}
+          onNavigate={setView}
+          onReconnect={() => {
+            setView("mmo-world");
+            wsManager.retryConnection();
+            useGameStore.getState().requestWorldReconnect();
+          }}
+        />
+      )}
+      {isGameWorldView && !worldConnected && <GlobalChatOverlay />}
       {/* Main Content Area */}
       <main className={`w-full ${isGameWorldView ? "flex-1 min-h-0 max-w-none px-0 mx-0 overflow-hidden flex flex-col" : "flex-grow flex items-start justify-center max-w-[1600px] px-2 sm:px-8 mx-auto"}`}>
         {!player ? (
@@ -363,7 +415,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
-            <PhaserWorldHost worldActive={isGameWorldSurface || currentView === "practice-room"} onExit={() => setView("character")} />
+            <PhaserWorldHost worldActive={isGameWorldSurface || currentView === "practice-room"} onExit={() => setView("character")} onConnectionChange={setWorldConnected} fallbackChatActive={!worldConnected} />
             {!isGameWorldSurface && (
               <div className={`absolute inset-0 z-40 flex items-center justify-center ${isFullBleedView ? "" : "bg-black/75 backdrop-blur-sm md:p-4"}`}>
                 <section
