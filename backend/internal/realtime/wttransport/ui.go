@@ -315,44 +315,29 @@ func expandUIChannels(playerID uuid.UUID, channel string) []uihub.ChannelName {
 	idStr := playerID.String()
 	switch channel {
 	case "player":
-		return []uihub.ChannelName{uihub.ChannelName("player"), uihub.ChannelName("player:" + idStr)}
+		return []uihub.ChannelName{uihub.ChannelName("player:" + idStr)}
 	case "refine":
-		return []uihub.ChannelName{uihub.ChannelName("refine"), uihub.ChannelName("refine:" + idStr)}
+		return []uihub.ChannelName{uihub.ChannelName("refine:" + idStr)}
 	case "trade":
-		return []uihub.ChannelName{uihub.ChannelName("trade"), uihub.ChannelName("trade:" + idStr)}
+		return []uihub.ChannelName{uihub.ChannelName("trade:" + idStr)}
 	case "notification":
-		return []uihub.ChannelName{uihub.ChannelName("notification"), uihub.ChannelName("notif:" + idStr)}
+		return []uihub.ChannelName{uihub.ChannelName("notif:" + idStr)}
 	case "combat":
-		return []uihub.ChannelName{uihub.ChannelName("combat"), uihub.ChannelName("combat:" + idStr)}
+		return []uihub.ChannelName{uihub.ChannelName("combat:" + idStr)}
 	default:
 		return []uihub.ChannelName{uihub.ChannelName(channel)}
 	}
 }
 
 func normalizeClientChannel(redisChannel string) string {
-	switch {
-	case strings.HasPrefix(redisChannel, "player:"):
-		return "player"
-	case strings.HasPrefix(redisChannel, "refine:"):
-		return "refine"
-	case strings.HasPrefix(redisChannel, "trade:"):
-		return "trade"
-	case strings.HasPrefix(redisChannel, "notif:"):
-		return "notification"
-	case strings.HasPrefix(redisChannel, "combat:"):
-		return "combat"
-	case strings.HasPrefix(redisChannel, "death_arena:"):
-		return "death_arena"
-	case strings.HasPrefix(redisChannel, "martial_arena:"):
-		return "martial_arena"
-	case strings.HasPrefix(redisChannel, "catalog:"):
-		return "catalog"
-	default:
-		return redisChannel
-	}
+	ch, _ := uihub.NormalizeClientChannel(redisChannel)
+	return ch
 }
 
 func (s *Server) allowUISubscribe(playerID uuid.UUID, channel string) bool {
+	if channel == "chat:private" {
+		return false
+	}
 	idStr := playerID.String()
 	for _, prefix := range []string{"player:", "refine:", "trade:", "notif:", "combat:", "chat:private:"} {
 		if strings.HasPrefix(channel, prefix) {
@@ -372,14 +357,22 @@ func (s *Server) allowUISubscribe(playerID uuid.UUID, channel string) bool {
 	return true
 }
 
+var eventEnvelopePrefix = []byte(`{"type":"event","channel":"`)
+
 func ensureEventEnvelope(channel string, payload []byte) []byte {
 	trimmed := bytes.TrimSpace(payload)
+	if bytes.HasPrefix(trimmed, eventEnvelopePrefix) && json.Valid(trimmed) {
+		out := make([]byte, len(trimmed)+1)
+		copy(out, trimmed)
+		out[len(trimmed)] = '\n'
+		return out
+	}
 	var probe struct {
 		Type    string          `json:"type"`
 		Channel string          `json:"channel"`
 		Data    json.RawMessage `json:"data"`
 	}
-	if err := json.Unmarshal(trimmed, &probe); err == nil && probe.Type == "event" && probe.Channel != "" {
+	if bytes.Contains(trimmed, []byte(`"type"`)) && json.Unmarshal(trimmed, &probe) == nil && probe.Type == "event" && probe.Channel != "" {
 		out := make([]byte, len(trimmed)+1)
 		copy(out, trimmed)
 		out[len(trimmed)] = '\n'

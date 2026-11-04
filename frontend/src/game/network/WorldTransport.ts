@@ -1,6 +1,7 @@
 import { diagnoseConnectionFailure } from "./ConnectionDiagnostics.ts";
 import { BACKEND_URL } from "../../lib/config.ts";
 import {
+  buildRealtimeWTURL,
   realtimeClient,
   RealtimeUnsupportedError,
   type RealtimeClient,
@@ -34,6 +35,7 @@ import {
   Reader,
   STREAM_WORLD,
   VERSION,
+  Writer,
   decodeDatagram,
   decodePongDatagram,
   decodeSnapshotDelta,
@@ -67,6 +69,8 @@ export interface WorldTransportOptions {
 }
 
 const JOIN_TIMEOUT_MS = 10_000;
+const RESYNC_COOLDOWN_MS = 1_000;
+const sharedTextDecoder = new TextDecoder();
 
 /** Protocol v2 client over WebTransport; the only world transport. */
 export class WorldTransport implements WorldTransportLike {
@@ -80,12 +84,14 @@ export class WorldTransport implements WorldTransportLike {
   private datagramWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private datagramReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private incoming: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
+  private incomingOffset = 0;
   private welcome: WorldWelcomePayload | null = null;
   private joined = false;
   private explicitClose = false;
   private nextInputSeq = 0;
   private nextRequestId = 1;
   private joinTimeout: ReturnType<typeof setTimeout> | null = null;
+  private lastResyncSentAt = 0;
 
   private netToSpawn = new Map<number, Spawn>();
   private entityByNet = new Map<number, WorldEntityState>();
@@ -120,11 +126,13 @@ export class WorldTransport implements WorldTransportLike {
     this.explicitClose = false;
     this.nextInputSeq = 0;
     this.incoming = new Uint8Array(0);
+    this.incomingOffset = 0;
+    this.lastResyncSentAt = 0;
     this.buffer.reset();
 
     const useSharedClient = Boolean(this.options.client) || !this.options.createTransport;
     if (!useSharedClient) {
-      const url = buildTransportURL(
+      const url = buildRealtimeWTURL(
         this.options.url,
         token,
         this.options.getTabId?.() ?? readStorage("sessionStorage", "gu_gameplay_tab_id"),
@@ -458,12 +466,13 @@ export class WorldTransport implements WorldTransportLike {
         this.messageCount += 1;
         this.byteCount += value.byteLength;
         this.lastMessageAt = Date.now();
-        this.incoming = concat(this.incoming, value);
+        this.appendIncoming(value);
         for (;;) {
           const parsed = this.tryParseFrame();
           if (!parsed) break;
           this.handleFrame(parsed.op, parsed.payload, resolve, reject);
         }
+        this.compactIncoming();
       }
     } catch (error) {
       this.notifyError(asWorldError(error, "transport_read_failed"));
@@ -471,14 +480,38 @@ export class WorldTransport implements WorldTransportLike {
     if (this.joined) this.handleClosed();
   }
 
+  private appendIncoming(chunk: Uint8Array): void {
+    const unread = this.incoming.subarray(this.incomingOffset);
+    if (unread.length === 0) {
+      this.incoming = chunk;
+      this.incomingOffset = 0;
+      return;
+    }
+    this.incoming = concat(unread, chunk);
+    this.incomingOffset = 0;
+  }
+
+  private compactIncoming(): void {
+    if (this.incomingOffset === 0) return;
+    if (this.incomingOffset >= this.incoming.length) {
+      this.incoming = new Uint8Array(0);
+      this.incomingOffset = 0;
+    } else if (this.incomingOffset >= 4096) {
+      this.incoming = this.incoming.slice(this.incomingOffset);
+      this.incomingOffset = 0;
+    }
+  }
+
   private tryParseFrame(): { op: number; payload: Uint8Array } | null {
-    if (this.incoming.length < 5) return null;
-    const view = new DataView(this.incoming.buffer, this.incoming.byteOffset, this.incoming.byteLength);
+    const available = this.incoming.length - this.incomingOffset;
+    if (available < 5) return null;
+    const view = new DataView(this.incoming.buffer, this.incoming.byteOffset + this.incomingOffset, available);
     const length = view.getUint32(0, true);
-    if (length < 1 || this.incoming.length < 4 + length) return null;
-    const op = this.incoming[4];
-    const payload = this.incoming.slice(5, 4 + length);
-    this.incoming = this.incoming.slice(4 + length) as Uint8Array;
+    if (length < 1 || available < 4 + length) return null;
+    const base = this.incomingOffset;
+    const op = this.incoming[base + 4];
+    const payload = this.incoming.subarray(base + 5, base + 4 + length);
+    this.incomingOffset = base + 4 + length;
     return { op, payload };
   }
 
@@ -498,7 +531,7 @@ export class WorldTransport implements WorldTransportLike {
           const applied = this.buffer.apply(snapshot);
           if (applied.status !== "applied") throw new Error("Welcome baseline could not be applied");
           const skills = welcome.skillsJson.length > 0
-            ? JSON.parse(new TextDecoder().decode(welcome.skillsJson))
+            ? JSON.parse(sharedTextDecoder.decode(welcome.skillsJson))
             : [];
           this.welcome = {
             session_id: welcome.sessionId,
@@ -533,6 +566,9 @@ export class WorldTransport implements WorldTransportLike {
           if (full.isBaseline) this.applyBaseline(full);
           const applied = this.buffer.apply(this.toSnapshotPayload(full, full.isBaseline));
           if (applied.status === "resync_required") {
+            if (!full.isBaseline && this.requestResync(applied.reason)) {
+              break;
+            }
             this.resyncListeners.forEach((listener) => listener(applied.reason));
             break;
           }
@@ -561,7 +597,7 @@ export class WorldTransport implements WorldTransportLike {
             let body: Record<string, unknown> | undefined;
             if (event.payload.length > 0) {
               try {
-                body = JSON.parse(new TextDecoder().decode(event.payload)) as Record<string, unknown>;
+                body = JSON.parse(sharedTextDecoder.decode(event.payload)) as Record<string, unknown>;
               } catch {
                 body = undefined;
               }
@@ -660,7 +696,7 @@ export class WorldTransport implements WorldTransportLike {
     for (const state of full.states) states.set(state.netId, state);
     for (const spawn of full.spawns) {
       const state = states.get(spawn.netId);
-      if (state) this.entityByNet.set(spawn.netId, entityFrom(spawn, state));
+      if (state) this.entityByNet.set(spawn.netId, entityFrom(spawn, state, this.netToSpawn));
     }
   }
 
@@ -685,12 +721,16 @@ export class WorldTransport implements WorldTransportLike {
     for (const state of delta.entities) {
       const spawn = this.netToSpawn.get(state.netId);
       if (!spawn) continue;
-      this.entityByNet.set(state.netId, mergeEntity(spawn, this.entityByNet.get(state.netId), state));
+      this.entityByNet.set(state.netId, mergeEntity(spawn, this.entityByNet.get(state.netId), state, this.netToSpawn));
     }
     const removedIds: string[] = [];
+    const seenRemoved = new Set<string>();
     for (const netId of delta.removed) {
       const spawn = this.netToSpawn.get(netId);
-      if (spawn) removedIds.push(spawn.entityId);
+      if (spawn && !seenRemoved.has(spawn.entityId)) {
+        seenRemoved.add(spawn.entityId);
+        removedIds.push(spawn.entityId);
+      }
       this.netToSpawn.delete(netId);
       this.entityByNet.delete(netId);
       if (spawn) this.netByEntity.delete(spawn.entityId);
@@ -709,6 +749,9 @@ export class WorldTransport implements WorldTransportLike {
     };
     const applied = this.buffer.apply(snapshot);
     if (applied.status === "resync_required") {
+      if (this.requestResync(applied.reason)) {
+        return;
+      }
       this.resyncListeners.forEach((listener) => listener(applied.reason));
       return;
     }
@@ -718,24 +761,72 @@ export class WorldTransport implements WorldTransportLike {
     this.emitSnapshot(applied.state);
   }
 
+  private requestResync(reason: string): boolean {
+    if (!this.joined || !this.streamWriter) return false;
+    const now = Date.now();
+    if (now - this.lastResyncSentAt < RESYNC_COOLDOWN_MS) return true;
+    this.lastResyncSentAt = now;
+    const writer = new Writer(1 + reason.length);
+    const reasonBytes = new TextEncoder().encode(reason.slice(0, 120));
+    writer.u8(reasonBytes.length).raw(reasonBytes);
+    void this.sendFrame(encodeFrame(Op.Resync, writer.bytes()));
+    return true;
+  }
+
   private toSnapshotPayload(
-    full: { tick: number; baselineId: number; ackSeq: number; spawns: Spawn[]; states: DeltaEntity[]; projectiles: Projectile[] },
+    full: {
+      tick: number;
+      baselineId: number;
+      baseTick: number;
+      ackSeq: number;
+      spawns: Spawn[];
+      states: DeltaEntity[];
+      removed?: number[];
+      projectiles: Projectile[];
+    },
     isBaseline: boolean,
   ): WorldSnapshotPayload {
-    const states = new Map<number, DeltaEntity>();
-    for (const state of full.states) states.set(state.netId, state);
-    const entities: WorldEntityState[] = [];
     for (const spawn of full.spawns) {
-      const state = states.get(spawn.netId);
-      if (state) entities.push(entityFrom(spawn, state));
+      this.netToSpawn.set(spawn.netId, spawn);
+      this.netByEntity.set(spawn.entityId, spawn.netId);
+    }
+    const entities: WorldEntityState[] = [];
+    if (isBaseline) {
+      const states = new Map<number, DeltaEntity>();
+      for (const state of full.states) states.set(state.netId, state);
+      for (const spawn of full.spawns) {
+        const state = states.get(spawn.netId);
+        if (state) entities.push(entityFrom(spawn, state, this.netToSpawn));
+      }
+    } else {
+      for (const state of full.states) {
+        const spawn = this.netToSpawn.get(state.netId);
+        if (!spawn) continue;
+        const merged = mergeEntity(spawn, this.entityByNet.get(state.netId), state, this.netToSpawn);
+        this.entityByNet.set(state.netId, merged);
+        entities.push(merged);
+      }
+    }
+    const removedIds: string[] = [];
+    const seenRemoved = new Set<string>();
+    for (const netId of full.removed ?? []) {
+      const spawn = this.netToSpawn.get(netId);
+      if (spawn && !seenRemoved.has(spawn.entityId)) {
+        seenRemoved.add(spawn.entityId);
+        removedIds.push(spawn.entityId);
+      }
+      this.netToSpawn.delete(netId);
+      this.entityByNet.delete(netId);
+      if (spawn) this.netByEntity.delete(spawn.entityId);
     }
     return {
       tick: full.tick,
       ack_seq: full.ackSeq,
       baseline_id: full.baselineId,
-      base_tick: full.tick,
+      base_tick: isBaseline ? full.tick : (full.baseTick || this.buffer.getState()?.baseTick || full.tick),
       is_baseline: isBaseline,
       entities,
+      removed: removedIds.length > 0 ? removedIds : undefined,
       projectiles: this.mapProjectiles(full.projectiles),
     };
   }
@@ -820,15 +911,6 @@ function defaultTransportFactory(): WebTransportCtor | null {
   return typeof ctor === "function" ? ctor : null;
 }
 
-function buildTransportURL(baseURL: string | undefined, token: string, tabId: string | null): string {
-  const configured = (process.env.NEXT_PUBLIC_REALTIME_URL ?? "").trim();
-  const fallback = `${BACKEND_URL.replace(/^http/, "https")}/api/wt`;
-  const url = new URL(baseURL ?? (configured || fallback));
-  url.searchParams.set("token", token);
-  if (tabId) url.searchParams.set("tab_id", tabId);
-  return url.toString();
-}
-
 function readStorage(storageName: "localStorage" | "sessionStorage", key: string): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -888,7 +970,38 @@ function stanceName(code: number): "DEFEND" | "FOCUS" | "FOLLOW" {
   return "DEFEND";
 }
 
-function entityFrom(spawn: Spawn, state: DeltaEntity): WorldEntityState {
+function aiStateName(code: number): string | undefined {
+  switch (code) {
+    case 1:
+      return "idle";
+    case 2:
+      return "patrol";
+    case 3:
+      return "aggro";
+    case 4:
+      return "chase";
+    case 5:
+      return "attack";
+    case 6:
+      return "leash";
+    case 7:
+      return "dead";
+    case 8:
+      return "respawn";
+    default:
+      return undefined;
+  }
+}
+
+function entityFrom(spawn: Spawn, state: DeltaEntity, netToSpawn: Map<number, Spawn>): WorldEntityState {
+  const ownerId = spawn.ownerNetId ? netToSpawn.get(spawn.ownerNetId)?.entityId : undefined;
+  const aiState = state.hasExt && (state.ext & 1) ? aiStateName(state.aiState) : undefined;
+  const aggroTargetId = state.hasExt && (state.ext & 2) && state.aggroNetId
+    ? netToSpawn.get(state.aggroNetId)?.entityId
+    : undefined;
+  const stance = state.hasExt && (state.ext & 16)
+    ? stanceName(state.stance)
+    : (spawn.companionKind ? stanceName(spawn.stance) : undefined);
   return {
     entity_id: spawn.entityId,
     entity_revision: state.revision,
@@ -897,6 +1010,8 @@ function entityFrom(spawn: Spawn, state: DeltaEntity): WorldEntityState {
     pvp_enabled: (spawn.flags & 1) !== 0,
     template_id: spawn.templateId || undefined,
     name: spawn.name || undefined,
+    ai_state: aiState,
+    aggro_target_id: aggroTargetId,
     x: dequantize(state.x),
     y: dequantize(state.y),
     hp: state.hp,
@@ -906,11 +1021,14 @@ function entityFrom(spawn: Spawn, state: DeltaEntity): WorldEntityState {
     max_mana: spawn.maxMana || undefined,
     thought: state.thought,
     max_thought: spawn.maxThought || undefined,
+    cast_end_tick: (state.mask & 16) ? state.castEndTick : undefined,
+    cast_windup_ticks: (state.mask & 16) ? state.castWindup : undefined,
     stealthed: (spawn.flags & 2) !== 0 || undefined,
     flying: (spawn.flags & 4) !== 0 || undefined,
     form_active: (spawn.flags & 8) !== 0 || undefined,
+    owner_id: ownerId,
     companion_kind: spawn.companionKind || undefined,
-    stance: spawn.companionKind ? stanceName(spawn.stance) : undefined,
+    stance,
   };
 }
 
@@ -918,8 +1036,12 @@ function mergeEntity(
   spawn: Spawn,
   previous: WorldEntityState | undefined,
   state: DeltaEntity,
+  netToSpawn: Map<number, Spawn>,
 ): WorldEntityState {
-  const next: WorldEntityState = { ...(previous ?? entityFrom(spawn, state)), entity_revision: state.revision };
+  const next: WorldEntityState = { ...(previous ?? entityFrom(spawn, state, netToSpawn)) };
+  if (state.mask & 4) {
+    next.entity_revision = state.revision;
+  }
   if (state.mask & 1) {
     next.x = dequantize(state.x);
     next.y = dequantize(state.y);
@@ -930,11 +1052,26 @@ function mergeEntity(
     if (state.vitalsSub & 4) next.mana = state.mana;
     if (state.vitalsSub & 8) next.thought = state.thought;
   }
+  if (state.mask & 16) {
+    next.cast_end_tick = state.castEndTick || undefined;
+    next.cast_windup_ticks = state.castWindup || undefined;
+  }
   if (state.mask & 32) {
     next.pvp_enabled = (state.flags & 1) !== 0;
     next.stealthed = (state.flags & 2) !== 0 || undefined;
     next.flying = (state.flags & 4) !== 0 || undefined;
     next.form_active = (state.flags & 8) !== 0 || undefined;
+  }
+  if (state.hasExt) {
+    if (state.ext & 1) {
+      next.ai_state = aiStateName(state.aiState);
+    }
+    if (state.ext & 2) {
+      next.aggro_target_id = state.aggroNetId ? netToSpawn.get(state.aggroNetId)?.entityId : undefined;
+    }
+    if (state.ext & 16) {
+      next.stance = stanceName(state.stance);
+    }
   }
   return next;
 }

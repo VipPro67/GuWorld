@@ -586,6 +586,8 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 		player.Use(middleware.RequireOnboarded())
 		player.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
+			player.GET("/respawn-choice", handlers.GetPendingRespawn)
+			player.POST("/respawn-choice", handlers.ChooseRespawn)
 			player.GET("/status/:id", handlers.GetPlayerStatus)
 			player.GET("/inventory/gus", handlers.GetPlayerInventoryGus)
 			player.GET("/stats", handlers.GetPlayerStatsHandler)

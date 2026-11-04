@@ -68,6 +68,17 @@ func HandleRealtimePlayerDeath(ctx context.Context, death realtimeworld.DeathEve
 	})
 	reduceSatKhiOnDeath(tx, playerID)
 	respawn := ResolveDeathRespawn(deathRegion, deathX, deathY)
+	respawnOptions, err := json.Marshal(deathRespawnOptions(playerID, deathRegion, deathX, deathY))
+	if err != nil {
+		return fmt.Errorf("encode death respawn options: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO player_pending_respawns (player_id,options,created_at,expires_at)
+		VALUES ($1,$2,NOW(),NOW()+INTERVAL '10 minutes')
+		ON CONFLICT (player_id) DO UPDATE SET options=EXCLUDED.options,created_at=NOW(),expires_at=EXCLUDED.expires_at
+	`, playerID, respawnOptions); err != nil {
+		return fmt.Errorf("persist death respawn choices: %w", err)
+	}
 	placePlayerAt(&player, respawn.Region, respawn.X, respawn.Y)
 	player.HP = 1
 	if err := db.SyncPlayerGus(tx, playerID.String(), beforeGus, player.GuInventory); err != nil {

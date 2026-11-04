@@ -1906,6 +1906,7 @@ func (a *Admission) joinResponse(active session, controllerID uuid.UUID) (protoc
 		TickRate: sim.TickRate, MovementSpeed: active.movementSpeed, ServerTick: snapshot.Tick, EntityID: string(active.lease.CharacterID),
 		EntityRevision: entityRevision, BaselineID: 1, MapHash: a.manager.MapHash(active.lease.ZoneKey),
 		Skills: skillInfos(active.skills), LoadoutRevision: active.loadoutRevision, Snapshot: snapshotJSON,
+		RawSnapshot: snapshot,
 	}, nil
 }
 

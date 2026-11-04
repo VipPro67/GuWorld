@@ -57,9 +57,9 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 
 		ch := pubsub.Channel()
 		for msg := range ch {
-			clientChannel, clientMsg := formatClientEvent(msg.Channel, []byte(msg.Payload))
+			clientChannel, clientMsg, broadcastNormalized := formatClientEvent(msg.Channel, []byte(msg.Payload))
 			shub.BroadcastToChannel(ChannelName(msg.Channel), clientMsg, uuid.Nil)
-			if clientChannel != msg.Channel {
+			if broadcastNormalized && clientChannel != msg.Channel {
 				shub.BroadcastToChannel(ChannelName(clientChannel), clientMsg, uuid.Nil)
 			}
 		}
@@ -75,28 +75,35 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 	}
 }
 
-func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) {
-	var clientChannel string
+// NormalizeClientChannel maps a Redis/hub channel name to the logical channel
+// name exposed to UI clients. The second return value reports whether events
+// published to a sub-channel may also fan out to the shared prefix channel
+// (true only for global/public domains, never for player-scoped channels).
+func NormalizeClientChannel(redisChannel string) (string, bool) {
 	switch {
 	case len(redisChannel) >= 7 && redisChannel[:7] == "player:":
-		clientChannel = "player"
+		return "player", false
 	case len(redisChannel) >= 7 && redisChannel[:7] == "refine:":
-		clientChannel = "refine"
+		return "refine", false
 	case len(redisChannel) >= 6 && redisChannel[:6] == "trade:":
-		clientChannel = "trade"
+		return "trade", false
 	case len(redisChannel) >= 6 && redisChannel[:6] == "notif:":
-		clientChannel = "notification"
+		return "notification", false
 	case len(redisChannel) >= 7 && redisChannel[:7] == "combat:":
-		clientChannel = "combat"
+		return "combat", false
 	case len(redisChannel) >= 12 && redisChannel[:12] == "death_arena:":
-		clientChannel = "death_arena"
+		return "death_arena", true
 	case len(redisChannel) >= 14 && redisChannel[:14] == "martial_arena:":
-		clientChannel = "martial_arena"
+		return "martial_arena", true
 	case len(redisChannel) >= 8 && redisChannel[:8] == "catalog:":
-		clientChannel = "catalog"
+		return "catalog", true
 	default:
-		clientChannel = redisChannel
+		return redisChannel, false
 	}
+}
+
+func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte, bool) {
+	clientChannel, broadcastNormalized := NormalizeClientChannel(redisChannel)
 
 	event := struct {
 		Type    string          `json:"type"`
@@ -110,7 +117,7 @@ func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) 
 
 	out, err := json.Marshal(event)
 	if err != nil {
-		return clientChannel, rawPayload
+		return clientChannel, rawPayload, broadcastNormalized
 	}
-	return clientChannel, out
+	return clientChannel, out, broadcastNormalized
 }

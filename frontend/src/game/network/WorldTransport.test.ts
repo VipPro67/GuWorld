@@ -209,3 +209,49 @@ test("applies snapshot deltas from datagrams", async () => {
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.deepEqual(transfers, [{ to: "valley", legacyX: -12, legacyY: 45, hp: 70 }]);
 });
+
+test("preserves revision on partial deltas and requests Op.Resync on baseline mismatch", async () => {
+  const fake = fakeTransport();
+  const client = new WorldTransport({
+    url: "https://localhost:8443/api/wt",
+    getToken: () => "token",
+    createTransport: () => fake.transport,
+  });
+  const pending = client.connect({ zone_id: "forest", map_version: "map-1", content_version: "content-1" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  fake.pushFrame(encodeFrame(Op.Welcome, encodeWelcome({
+    sessionId: "s1", zoneId: "forest", mapVersion: "map-1", contentVersion: "content-1",
+    tickRate: 20, movementSpeedX100: 500, serverTick: 100, entityId: "player-1",
+    entityRevision: 3, baselineId: 1, mapHash: "", skillsJson: new Uint8Array(0),
+    loadoutRevision: "", snapshot: encodeSnapshotFull(baseline()),
+  })));
+  await pending;
+
+  const resyncErrors: string[] = [];
+  client.onResyncRequired((reason) => resyncErrors.push(reason));
+
+  // Partial delta without Mask.Revision keeps previous entity_revision=3.
+  const posOnly = emptyState(7);
+  posOnly.mask = Mask.Position;
+  posOnly.x = quantize(15);
+  posOnly.y = quantize(34);
+  fake.pushDatagram(encodeSnapshotDelta({
+    tick: 101, baselineId: 1, ackSeq: 1, hasProjectiles: false,
+    entities: [posOnly], removed: [], projectiles: [],
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(client.getSnapshot()?.tick, 101);
+  assert.equal(client.getSnapshot()?.entities[0].entity_revision, 3);
+  assert.equal(resyncErrors.length, 0);
+
+  // Delta referencing unknown baselineId=2 triggers Op.Resync on stream instead of fatal error.
+  const framesBefore = fake.sentFrames.length;
+  fake.pushDatagram(encodeSnapshotDelta({
+    tick: 102, baselineId: 2, ackSeq: 1, hasProjectiles: false,
+    entities: [], removed: [], projectiles: [],
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(resyncErrors.length, 0, "should send Op.Resync instead of failing immediately");
+  assert.equal(fake.sentFrames.length, framesBefore + 1);
+  assert.equal(fake.sentFrames.at(-1)?.[4], Op.Resync);
+});

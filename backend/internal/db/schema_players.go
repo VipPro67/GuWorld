@@ -114,6 +114,15 @@ func schemaPlayers() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("player_pending_respawns", `
+	CREATE TABLE IF NOT EXISTS player_pending_respawns (
+		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+		options JSONB NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '10 minutes'
+	);`); err != nil {
+		return err
+	}
 	if err := execSchema("players_username_case_insensitive_unique", `
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_players_username_lower_unique ON players (LOWER(username));`); err != nil {
 		return fmt.Errorf("cannot enforce case-insensitive username uniqueness; resolve existing usernames that differ only by letter case first: %w", err)

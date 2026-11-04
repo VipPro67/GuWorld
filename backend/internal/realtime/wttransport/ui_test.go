@@ -194,6 +194,14 @@ func TestUIStreamSubscribeUnsubscribePingAndCommand(t *testing.T) {
 		t.Fatalf("expected notification event, got %+v", notifEv)
 	}
 
+	// Subscribe "player" logical channel -> maps strictly to player:<id>, never unscoped "player".
+	if _, err := clientConn.Write([]byte(`{"type":"subscribe","channel":"player"}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	if hub.HasSubscriber(playerID, uihub.ChannelName("player")) {
+		t.Fatal("must not subscribe player to unscoped shared 'player' channel")
+	}
+
 	// Closing client stream unsubscribes all sinks.
 	_ = clientConn.Close()
 	<-done

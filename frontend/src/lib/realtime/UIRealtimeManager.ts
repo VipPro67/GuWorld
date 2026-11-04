@@ -131,15 +131,30 @@ export class RealtimeUIManager {
       this.connectionRefCounts = 0;
       if (!this.isExplicitClose) {
         const generation = this.connectionGeneration;
-        // Keep the shared session alive briefly so switching views does not
-        // create a new QUIC handshake.
+        // Keep the UI stream alive briefly so switching views does not reopen a
+        // stream; when idle expires, release only the UI stream and preserve
+        // registered channel listeners for the next acquireConnection().
         setTimeout(() => {
-          if (this.connectionRefCounts === 0 && generation === this.connectionGeneration) {
-            this.disconnect();
+          if (this.connectionRefCounts === 0 && generation === this.connectionGeneration && !this.isExplicitClose) {
+            this.closeIdleStream();
           }
         }, IDLE_DISCONNECT_MS);
       }
     }
+  }
+
+  private closeIdleStream() {
+    const error = new RealtimeRequestError("Kết nối realtime tạm nghỉ");
+    this.cancelConnect?.(error);
+    this.rejectPendingRequests(error);
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.stopHeartbeat();
+    this.closeUIStream();
+    this.connectPromise = null;
+    this.setConnectionState("disconnected");
   }
 
   public retryConnection(): void {

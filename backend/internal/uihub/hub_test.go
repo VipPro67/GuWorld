@@ -102,3 +102,28 @@ func TestShardedHub_TargetsAndStats(t *testing.T) {
 		t.Fatalf("active channels = %d, want 1", channels)
 	}
 }
+
+func TestFormatClientEvent_ScopesPrivateVsGlobalChannels(t *testing.T) {
+	playerID := uuid.New()
+	for _, tc := range []struct {
+		redisCh       string
+		wantClientCh  string
+		wantBroadcast bool
+	}{
+		{redisCh: "player:" + playerID.String(), wantClientCh: "player", wantBroadcast: false},
+		{redisCh: "refine:" + playerID.String(), wantClientCh: "refine", wantBroadcast: false},
+		{redisCh: "trade:" + playerID.String(), wantClientCh: "trade", wantBroadcast: false},
+		{redisCh: "notif:" + playerID.String(), wantClientCh: "notification", wantBroadcast: false},
+		{redisCh: "combat:" + playerID.String(), wantClientCh: "combat", wantBroadcast: false},
+		{redisCh: "death_arena:match-1", wantClientCh: "death_arena", wantBroadcast: true},
+		{redisCh: "martial_arena:match-2", wantClientCh: "martial_arena", wantBroadcast: true},
+		{redisCh: "catalog:items", wantClientCh: "catalog", wantBroadcast: true},
+		{redisCh: "chat:world", wantClientCh: "chat:world", wantBroadcast: false},
+	} {
+		clientCh, _, broadcastNormalized := formatClientEvent(tc.redisCh, []byte(`{"ok":true}`))
+		if clientCh != tc.wantClientCh || broadcastNormalized != tc.wantBroadcast {
+			t.Fatalf("formatClientEvent(%q) = (%q, %v), want (%q, %v)",
+				tc.redisCh, clientCh, broadcastNormalized, tc.wantClientCh, tc.wantBroadcast)
+		}
+	}
+}

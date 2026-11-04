@@ -75,6 +75,9 @@ export class CodecError extends Error {
   }
 }
 
+const sharedEncoder = new TextEncoder();
+const sharedDecoder = new TextDecoder();
+
 export class Writer {
   private buffer: Uint8Array;
   private view: DataView;
@@ -124,7 +127,7 @@ export class Writer {
   }
 
   public string(value: string): this {
-    const bytes = new TextEncoder().encode(value);
+    const bytes = sharedEncoder.encode(value);
     if (bytes.length > 0xffff) throw new CodecError("string too long");
     this.u16(bytes.length);
     this.raw(bytes);
@@ -212,7 +215,7 @@ export class Reader {
     const length = this.u16();
     if (this.failed) return "";
     if (!this.need(length)) return "";
-    const value = new TextDecoder().decode(this.bytes.subarray(this.offset, this.offset + length));
+    const value = sharedDecoder.decode(this.bytes.subarray(this.offset, this.offset + length));
     this.offset += length;
     return value;
   }

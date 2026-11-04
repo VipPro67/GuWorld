@@ -76,6 +76,7 @@ type Welcome struct {
 	Skills          []SkillInfo     `json:"skills,omitempty"`
 	LoadoutRevision string          `json:"loadout_revision,omitempty"`
 	Snapshot        json.RawMessage `json:"snapshot"`
+	RawSnapshot     any             `json:"-"`
 }
 
 // SkillInfo is the server-owned hotbar projection sent on join. Damage and

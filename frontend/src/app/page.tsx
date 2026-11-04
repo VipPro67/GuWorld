@@ -13,6 +13,7 @@ import { LevelZeroView } from "@/components/LevelZeroView";
 import { Sparkles, X, Handshake, Store } from "@/lib/icons";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { NotificationBell } from "@/components/NotificationBell";
+import { RespawnChoiceModal } from "@/components/RespawnChoiceModal";
 import { MaintenanceView } from "@/components/MaintenanceView";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import { DivinationModal } from "@/components/DivinationModal";
@@ -877,6 +878,8 @@ export default function Home() {
       )}
 
       {activeTrade && activeTrade.status === "ACCEPTED" && <TradeRoomModal />}
+
+      <RespawnChoiceModal />
 
       {/* Dead Player Overlay — cõi chết is derived from lifespan on the server */}
       {player && player.lifespan <= 0 && (

@@ -86,6 +86,7 @@ export class TabIdCoordinator {
   private readonly generateId: () => string;
   private channel: BroadcastChannelLike | null = null;
   private conflictDetected = false;
+  private readonly conflictListeners = new Set<(rotatedTabId: string) => void>();
 
   constructor(options: {
     instanceId?: string;
@@ -93,11 +94,15 @@ export class TabIdCoordinator {
     setTabId?: (tabId: string) => void;
     generateId?: () => string;
     createBroadcastChannel?: (name: string) => BroadcastChannelLike | null;
+    onConflictRotated?: (rotatedTabId: string) => void;
   } = {}) {
     this.generateId = options.generateId ?? randomUUID;
     this.instanceId = options.instanceId ?? this.generateId();
     this.getTabId = options.getTabId ?? (() => readStorage("sessionStorage", "gu_gameplay_tab_id"));
     this.setTabId = options.setTabId ?? ((id: string) => writeStorage("sessionStorage", "gu_gameplay_tab_id", id));
+    if (options.onConflictRotated) {
+      this.conflictListeners.add(options.onConflictRotated);
+    }
     const factory = options.createBroadcastChannel ?? defaultBroadcastChannel;
     this.channel = factory(TAB_CHANNEL_NAME);
     if (this.channel) {
@@ -105,6 +110,11 @@ export class TabIdCoordinator {
         this.handleMessage(event.data);
       };
     }
+  }
+
+  public onConflictRotated(listener: (rotatedTabId: string) => void): () => void {
+    this.conflictListeners.add(listener);
+    return () => this.conflictListeners.delete(listener);
   }
 
   public ensureTabId(): string {
@@ -127,8 +137,13 @@ export class TabIdCoordinator {
     }
 
     if (this.conflictDetected) {
-      current = this.generateId();
-      this.setTabId(current);
+      const latest = this.getTabId();
+      if (latest && latest !== current) {
+        current = latest;
+      } else {
+        current = this.generateId();
+        this.setTabId(current);
+      }
       this.conflictDetected = false;
     }
     return current;
@@ -167,6 +182,13 @@ export class TabIdCoordinator {
       this.conflictDetected = true;
       const rotated = this.generateId();
       this.setTabId(rotated);
+      for (const listener of this.conflictListeners) {
+        try {
+          listener(rotated);
+        } catch {
+          // ignore
+        }
+      }
     }
   }
 }
@@ -184,6 +206,7 @@ export class RealtimeClient {
   private session: WebTransportLike | null = null;
   private connectPromise: Promise<WebTransportLike> | null = null;
   private activeToken: string | null = null;
+  private activeTabId: string | null = null;
   private worldRefs = 0;
   private uiRefs = 0;
   private generation = 0;
@@ -205,6 +228,11 @@ export class RealtimeClient {
           })
         : defaultTabCoordinator
     );
+    this.tabCoordinator.onConflictRotated((rotatedTabId) => {
+      if (this.session && this.activeTabId && this.activeTabId !== rotatedTabId) {
+        this.closeCurrentSession(0, "tab_id rotated");
+      }
+    });
   }
 
   public getWorldRefCount(): number {
@@ -339,6 +367,7 @@ export class RealtimeClient {
 
     this.activeToken = resolvedToken;
     const tabId = this.tabCoordinator.ensureTabId();
+    this.activeTabId = tabId;
     if (defaultTabClaimer) {
       try {
         await defaultTabClaimer(resolvedToken, tabId);

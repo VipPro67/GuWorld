@@ -1498,6 +1498,7 @@ Khi hạ gục người chơi trong thế giới mở PvP, người thắng nh�
 
 Hồi sinh sau khi tử đạo trong combat:
 - Đạo hữu tử đạo sẽ hồi sinh tại **HUB/SAFE_ZONE an toàn gần nhất** (ưu tiên HUB, fallback SAFE ZONE) **trong Đại Vực tử vong** (không bị kéo sang Đại Vực khác); khi không có HUB/SAFE ZONE hợp lệ trên tầng đó thì hồi sinh tại **vị trí tử vong**.
+- Trong 10 phút sau khi kết toán, giao diện cho phép chọn lại điểm đến: khu an toàn, sơn môn của tông môn đang gia nhập, hoặc một tọa độ ngẫu nhiên trong khu vực vừa tử đạo. Lựa chọn tông môn chỉ hiện khi nhân vật là thành viên; lựa chọn này dùng một lần.
 - Sau khi hồi sinh, nạn nhân PvP nhận trạng thái **Miễn Chiến PvP 10 phút** (chủ động khai chiến sẽ phá vỡ).
 
 Sau khi phần thưởng combat đã lưu, máy chủ vẫn hoàn tất việc đánh dấu quái bị hạ với context riêng có timeout ngắn, kể cả khi kết nối HTTP của người chơi đã ngắt.

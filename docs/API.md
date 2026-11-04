@@ -672,6 +672,8 @@ payload. Các HTTP endpoint vẫn được giữ làm fallback khi UI stream ch�
 | GET | `/player/notifications/unread-count` | Số thông báo chưa đọc. Trả `{unread}`. |
 | POST | `/player/notifications/read` | Đánh dấu đã đọc theo `{ids: [...]}`. |
 | POST | `/player/notifications/read-all` | Đánh dấu tất cả đã đọc. |
+| GET | `/player/respawn-choice` | Lấy lựa chọn hồi sinh thế giới đang chờ (nếu có), trả `{pending, options}`. Lựa chọn tồn tại 10 phút sau khi chết. |
+| POST | `/player/respawn-choice` | Xác nhận một điểm hồi sinh đã được server cung cấp bằng `{kind: "safe" | "sect" | "random"}`. Dùng một lần; tọa độ do server quyết định. |
 
 Các loại `type` thông báo: `gu_death`, `vital_gu_death` (cổ chết đói), `death_drop` (tử đạo mất tài sản), `loot_gained` (PvP nhặt chiến lợi phẩm), `combat_loot` (nhặt đồ sau khi thắng quái), `market_sold`/`market_bought` (mua bán), `auction_bid` (ai đặt giá), `auction_won`/`auction_sold`/`auction_expired` (đấu giá).
 

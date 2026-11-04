@@ -341,6 +341,41 @@ test("TabIdCoordinator rotates duplicated tab_id via BroadcastChannel", () => {
   tab2.close();
 });
 
+test("UIRealtimeManager preserves channel subscriptions across idle release and re-acquire", async (t: TestContext) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  const fake = createFakeTransport();
+  const client = new RealtimeClient({
+    url: "https://localhost:8443/api/wt",
+    graceMs: 60_000,
+    getToken: () => "jwt-token",
+    getTabId: () => "tab-1",
+    createTransport: () => fake.transport,
+  });
+  const uiManager = new RealtimeUIManager({ realtimeClient: client });
+  const received: unknown[] = [];
+  uiManager.subscribe("chat:world", (data) => received.push(data));
+
+  const release1 = uiManager.acquireConnection("jwt-token");
+  await uiManager.connect("jwt-token");
+  assert.equal(uiManager.isConnected(), true);
+
+  release1();
+  t.mock.timers.tick(30_000);
+  assert.equal(uiManager.isConnected(), false, "idle timer closes UI stream");
+
+  const release2 = uiManager.acquireConnection("jwt-token");
+  await uiManager.connect("jwt-token");
+  assert.equal(uiManager.isConnected(), true, "re-acquiring reopens UI stream");
+  assert.equal(fake.streams.length, 2);
+
+  fake.streams[1].pushText('{"type":"event","channel":"chat:world","data":{"msg":"after-idle"}}\n');
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(received, [{ msg: "after-idle" }]);
+
+  release2();
+  uiManager.disconnect();
+});
+
 test("useWorldStore.fetchNearbyCells and inventorySlice.fetchGroundDrops fall back to HTTP when uiRealtimeManager is active", async (t: TestContext) => {
   const fake = createFakeTransport();
   const client = new RealtimeClient({

@@ -34,19 +34,21 @@ type fakeAdmission struct {
 
 func (f *fakeAdmission) JoinWithTab(_ context.Context, playerID, _ uuid.UUID, _ string, _ protocol.JoinRequest) (any, error) {
 	f.joined = true
-	snapshot := protocol.Snapshot{
-		Tick: 10, BaselineID: 1, BaseTick: 10, IsBaseline: true,
-		Entities: []protocol.EntityState{{
-			EntityID: playerID.String(), Name: "Tester", Kind: "player",
-			X: 10, Y: 20, HP: 100, MaxHP: 100, Mana: 50, MaxMana: 100, Revision: 1,
+	rawSnap := sim.Snapshot{
+		Tick: 10,
+		Entities: []sim.Entity{{
+			ID: sim.EntityID(playerID.String()), CharacterID: sim.CharacterID(playerID.String()),
+			Name: "Tester", Kind: sim.EntityPlayer, Revision: 1,
+			Transform: sim.Transform{Position: sim.Vec2{X: 10, Y: 20}},
+			Vitals:    sim.Vitals{HP: 100, MaxHP: 100},
+			Combat:    sim.CombatState{Mana: 50, MaxMana: 100},
 		}},
 	}
-	raw, _ := json.Marshal(snapshot)
 	return protocol.Welcome{
 		SessionID: "session-1", ZoneID: "forest#realtime-preview",
 		MapVersion: "map-1", ContentVersion: "content-1", TickRate: 20,
 		MovementSpeed: 5, ServerTick: 10, EntityID: playerID.String(),
-		EntityRevision: 1, BaselineID: 1, Snapshot: raw,
+		EntityRevision: 1, BaselineID: 1, RawSnapshot: rawSnap,
 	}, nil
 }
 
@@ -247,9 +249,88 @@ func TestWebTransportJoinWelcomeInputAndSnapshot(t *testing.T) {
 	if len(events) != 1 || v2.EventTypeName(events[0].TypeID) != "DAMAGE_APPLIED" || events[0].Source != 1 {
 		t.Fatalf("events = %+v", events)
 	}
+	var eventBody map[string]any
+	if err := json.Unmarshal(events[0].Payload, &eventBody); err != nil {
+		t.Fatalf("unmarshal event payload: %v", err)
+	}
+	if _, hasEmptySkill := eventBody["skill_id"]; hasEmptySkill {
+		t.Fatalf("expected omitempty event payload, got %s", string(events[0].Payload))
+	}
 }
 
 func dequantized(value uint16) float64 { return v2.Dequantize(value) }
+
+func TestDiffDeltaEntityAndNetRegistryLifecycle(t *testing.T) {
+	reg := newNetRegistry()
+	monsterID := sim.EntityID("monster-wolf-1")
+	playerID := sim.EntityID("player-1")
+	playerNet := reg.assign(playerID)
+	monsterNet := reg.assign(monsterID)
+
+	monster := sim.Entity{
+		ID:        monsterID,
+		Kind:      sim.EntityMonster,
+		Radius:    0.6,
+		Revision:  1,
+		Transform: sim.Transform{Position: sim.Vec2{X: 15, Y: 25}},
+		Vitals:    sim.Vitals{HP: 200, MaxHP: 200},
+		AI: sim.AIState{
+			TemplateID: "wolf_alpha",
+			Name:       "Sói Đầu Đàn",
+			State:      sim.AIChase,
+			Threat:     playerID,
+		},
+	}
+
+	spawn := spawnFromSim(monster, monsterNet, reg)
+	if spawn.TemplateID != "wolf_alpha" || spawn.Name != "Sói Đầu Đàn" {
+		t.Fatalf("spawnFromSim monster = %+v, want template wolf_alpha and name Sói Đầu Đàn", spawn)
+	}
+
+	baseDelta := deltaFromSim(monster, monsterNet, reg)
+	if !baseDelta.HasExt || baseDelta.AIState == 0 || baseDelta.AggroNetID != playerNet {
+		t.Fatalf("deltaFromSim monster ext = %+v, want AIState and AggroNetID=%d", baseDelta, playerNet)
+	}
+
+	// Stationary entity with no changes is omitted from delta.
+	if _, changed := diffDeltaEntity(baseDelta, baseDelta, true, baseDelta); changed {
+		t.Fatal("expected unchanged entity to produce changed=false")
+	}
+
+	// Moving entity without vital changes only sets MaskPosition (and MaskRevision).
+	moved := monster
+	moved.Transform.Position.X = 16.5
+	moved.Revision = 2
+	movedDelta := deltaFromSim(moved, monsterNet, reg)
+	diff1, changed1 := diffDeltaEntity(baseDelta, baseDelta, true, movedDelta)
+	if !changed1 || diff1.Mask&v2.MaskPosition == 0 || diff1.Mask&v2.MaskVitals != 0 {
+		t.Fatalf("moved diff = %+v, want MaskPosition without MaskVitals", diff1)
+	}
+
+	// Returning back to baseline position still emits MaskPosition against prevState, then quiesces.
+	returned := monster
+	returned.Revision = 2
+	returnedDelta := deltaFromSim(returned, monsterNet, reg)
+	diff2, changed2 := diffDeltaEntity(baseDelta, movedDelta, true, returnedDelta)
+	if !changed2 || diff2.Mask&v2.MaskPosition == 0 {
+		t.Fatalf("return-to-baseline diff = %+v, want MaskPosition", diff2)
+	}
+
+	// Verify netRegistry release and projectile pruning prevent exhaustion.
+	reg.releaseEntity(monsterNet)
+	if _, ok := reg.target(monsterNet); ok {
+		t.Fatal("expected released entity netID to be removed")
+	}
+	for i := uint64(1); i <= 70000; i++ {
+		id := reg.projectileID(i)
+		if id == 0 {
+			t.Fatalf("projectileID returned 0 at iteration %d", i)
+		}
+		if i%1000 == 0 {
+			reg.pruneProjectiles(nil)
+		}
+	}
+}
 
 func itoa(value int) string {
 	if value == 0 {
