@@ -1,6 +1,8 @@
+import { diagnoseConnectionFailure } from "./ConnectionDiagnostics.ts";
 import { BACKEND_URL } from "../../lib/config.ts";
 import {
   realtimeClient,
+  RealtimeUnsupportedError,
   type RealtimeClient,
   type WebTransportDatagramDuplexLike,
   type WebTransportLike,
@@ -188,9 +190,13 @@ export class WorldTransport implements WorldTransportLike {
       await this.openSession(acquired.session, acquired.stream, join, resolve, reject);
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error);
-      const isUnsupported = raw.includes("WebTransport") && !raw.toLowerCase().includes("handshake");
+      const isUnsupported = error instanceof RealtimeUnsupportedError;
       const code = isUnsupported ? "webtransport_unsupported" : "transport_connect_failed";
-      const message = formatRealtimeErrorMessage(raw);
+      const pendingJoin = this.joinTimeout;
+      if (pendingJoin === null) return;
+      clearTimeout(pendingJoin); // Reserve the bounded health probe before reporting the failure.
+      const message = isUnsupported ? raw : await diagnoseConnectionFailure(error, client.getEndpointURL());
+      if (this.joinTimeout !== pendingJoin) return;
       this.failJoin(reject, new WorldRealtimeError(message, code));
       this.disconnect();
     }
@@ -226,7 +232,12 @@ export class WorldTransport implements WorldTransportLike {
       void this.readFrames(this.streamReader, resolve, reject);
       void this.readDatagrams(this.datagramReader);
     } catch (error) {
-      this.failJoin(reject, asWorldError(error, "transport_connect_failed"));
+      const pendingJoin = this.joinTimeout;
+      if (pendingJoin === null) return;
+      clearTimeout(pendingJoin); // Reserve the bounded health probe before reporting the failure.
+      const message = await diagnoseConnectionFailure(error, this.options.url ?? (process.env.NEXT_PUBLIC_REALTIME_URL || `${BACKEND_URL.replace(/^http/, "https")}/api/wt`));
+      if (this.joinTimeout !== pendingJoin) return;
+      this.failJoin(reject, new WorldRealtimeError(message, "transport_connect_failed"));
       this.disconnect();
     }
   }
@@ -939,7 +950,16 @@ function decodeReject(payload: Uint8Array): WorldRejectPayload {
 function formatRealtimeErrorMessage(rawMessage: string): string {
   const lower = rawMessage.toLowerCase();
   if (lower.includes("opening handshake failed") || lower.includes("failed to establish a quic connection")) {
-    return "Không thể kết nối WebTransport (Opening handshake failed). Hãy kiểm tra: 1) Mở https://localhost:8443/api/health trên trình duyệt để kiểm tra/tin cậy chứng chỉ TLS dev. 2) Cấu hình CORS_ALLOWED_ORIGINS trong backend đã có origin frontend chưa. 3) Cổng UDP 8443 (HTTP/3) không bị chặn.";
+    return [
+      "Chưa kết nối được WebTransport tới backend: bước bắt tay HTTP/3 thất bại.",
+      "Chưa xác định được nguyên nhân; lỗi này không đủ để kết luận backend đã dừng.",
+      "Mở /api/health trên địa chỉ backend đang cấu hình để kiểm tra:",
+      "• Có cảnh báo chứng chỉ: kiểm tra chứng chỉ TLS dev và độ tin cậy của chứng chỉ.",
+      "• Không truy cập được health: kiểm tra backend, địa chỉ và cổng HTTPS. Trình duyệt cũng có thể chặn do TLS hoặc CORS.",
+      "• Health trả thành công: HTTPS hoạt động, nhưng chưa chứng minh HTTP/3 hoạt động. Kiểm tra endpoint WebTransport, origin frontend trong CORS_ALLOWED_ORIGINS và cổng UDP của endpoint.",
+      "Xem Console/Network và log backend để xác định lỗi TLS, từ chối Origin hoặc HTTP/3.",
+      `Chi tiết trình duyệt: ${rawMessage}`,
+    ].join("\n");
   }
   return rawMessage;
 }
