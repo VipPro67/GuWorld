@@ -186,24 +186,36 @@ test("world resource points become mine markers within the 6-cell range", () => 
   assert.equal(famous.interaction?.label, "Chưa có tài nguyên");
 });
 
-test("resource markers from another region are filtered out", () => {
+test("resource markers preserve transplant ritual state and calculations", () => {
+  const completesAt = new Date(Date.now() + 180000).toISOString();
   const markers = collectMarkers({
     regionId: "bach_cot_son",
     resourcePoints: [
       {
-        id: "point-3",
-        region_id: "am_hon_sa_vuc",
-        x: 1,
-        y: 1,
-        name: "Mạch Quặng",
-        grade: "MID",
+        id: "point-transplant",
+        region_id: "bach_cot_son",
+        x: 15,
+        y: 15,
+        name: "Thung Lũng Linh Thảo",
+        grade: "LOW",
         point_class: "NORMAL",
         state: "ACTIVE",
-        vitality: 100,
-        stock_total: 5,
-        stock_cap: 30,
+        vitality: 90,
+        stock_total: 10,
+        stock_cap: 40,
+        transplant: {
+          point_id: "point-transplant",
+          region_id: "bach_cot_son",
+          mana_spent: 20,
+          started_at: new Date().toISOString(),
+          completes_at: completesAt,
+        },
       },
     ],
   });
-  assert.deepEqual(markers, []);
+
+  const marker = markers.find((m) => m.id === "point-transplant");
+  assert.ok(marker);
+  assert.equal(marker.resource?.transplant?.mana_spent, 20);
+  assert.equal(marker.resource?.transplant?.completes_at, completesAt);
 });

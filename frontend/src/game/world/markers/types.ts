@@ -1,5 +1,5 @@
 import type { MapPortal } from "../MapLoader";
-import type { GroundDrop } from "@/store/useGameStore";
+import type { GroundDrop, AperturePointTransplant } from "@/store/useGameStore";
 import type { NearbyVeinInfo } from "@/store/useWorldStore";
 
 /**
@@ -53,6 +53,7 @@ export interface WorldMarkerResource {
   stock_total: number;
   stock_cap: number;
   next_item_id?: string;
+  transplant?: AperturePointTransplant;
 }
 
 export interface WorldMarkerCell {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Compass, Crown, Flame, Gem, History, MapPin, Menu, Minus, Package, PawPrint, Plus, ScrollText, Settings2, ShoppingBag, Sparkles, Store, Swords, Trophy, Users, X, Eye, EyeOff, ChevronDown, ChevronUp, Shield, Crosshair, Pickaxe, Gift, Footprints } from "lucide-react";
+import { BookOpen, Compass, Crown, Flame, Gem, History, Loader2, MapPin, Menu, Minus, Package, PawPrint, Plus, ScrollText, Settings2, ShoppingBag, Sparkles, Store, Swords, Trophy, Users, X, Eye, EyeOff, ChevronDown, ChevronUp, Shield, Crosshair, Pickaxe, Gift, Footprints } from "lucide-react";
 import type { WorldSkillInfo } from "@/game/network/Protocol";
 import type { RuntimeEntity } from "@/game/core/WorldRuntime";
 import { getMonsterArt } from "@/game/assets/MonsterArt";
@@ -19,7 +19,7 @@ import type { MapPortal } from "@/game/world/MapLoader";
 import { useQuickActionIds, QUICK_ACTIONS_MAP } from "@/lib/mmo-quick-actions";
 import { resolvePlayerViewMode, resolveTargetViewMode, hotbarKeyLabel, updateUiPreferences, useHotbarKeybinds } from "@/lib/ui-preferences";
 import { QuickActionCustomizer } from "./QuickActionCustomizer";
-import { toWorldMarkerResources } from "@/game/world/markers/resource.ts";
+import { toWorldMarkerResources, transplantManaCost, transplantRitualSeconds, formatDuration, formatClock } from "@/game/world/markers/resource.ts";
 import { collectMarkers, findNearestMarker } from "@/game/world/markers/collect";
 import type { WorldMarker } from "@/game/world/markers/types";
 import { getGuRankColor } from "@/lib/gu-frames";
@@ -437,6 +437,17 @@ export function MMOHud(props: MMOHudProps) {
   const fetchWorldResourcePoints = useWorldStore((state) => state.fetchWorldResourcePoints);
   const resourcePoints = useWorldStore((state) => state.resourcePoints);
   const resourcePointsRegion = useWorldStore((state) => state.resourcePointsRegion);
+  const collectWorldResourcePoint = useWorldStore((state) => state.collectWorldResourcePoint);
+  const transplantWorldResourcePoint = useWorldStore((state) => state.transplantWorldResourcePoint);
+
+  const [resourceBusy, setResourceBusy] = useState(false);
+  const [showTransplantConfirm, setShowTransplantConfirm] = useState(false);
+  const [hudNow, setHudNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setHudNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [showTeleportDirectory, setShowTeleportDirectory] = useState(false);
   const [showTeleportBuild, setShowTeleportBuild] = useState(false);
@@ -573,6 +584,7 @@ export function MMOHud(props: MMOHudProps) {
   const closestDrop = findNearestMarker(markers, props.position, "drop");
   const closestVein = findNearestMarker(markers, props.position, "vein");
   const closestTp = findNearestMarker(markers, props.position, "teleport");
+  const closestResource = findNearestMarker(markers, props.position, "resource");
   const distanceTo = (marker: { x: number; y: number } | null) =>
     marker ? Math.hypot(marker.x - props.position.x, marker.y - props.position.y) : 0;
 
@@ -1479,8 +1491,8 @@ export function MMOHud(props: MMOHudProps) {
       {props.statusText && <div className="absolute bottom-[125px] left-1/2 -translate-x-1/2 rounded border border-violet-300/30 bg-black/75 px-3 py-1 font-sans text-[11px] text-violet-100 sm:bottom-[140px] md:bottom-36 shadow-lg z-20">{props.statusText}</div>}
       {props.castProgress !== null && <div className="absolute bottom-[90px] left-1/2 w-[min(90vw,320px)] -translate-x-1/2 sm:bottom-[105px] md:bottom-28 z-20"><div className="mb-1 text-center text-xs text-amber-100">{props.castName}</div><div className="h-2 overflow-hidden rounded bg-black/70 shadow-inner"><div className="h-full bg-amber-400" style={{ width: `${pct(props.castProgress, 1)}%` }} /></div></div>}
 
-      {/* Proximity Interaction Prompts (Nguyên Tuyền, Tiên Tuyền, Chiến Lợi Phẩm, Truyền Tống Trận, Tông Môn) */}
-      {(closestDrop || closestVein || closestTp || closestSect) && (
+      {/* Proximity Interaction Prompts (Nguyên Tuyền, Tiên Tuyền, Chiến Lợi Phẩm, Truyền Tống Trận, Tông Môn, Mỏ Tài Nguyên) */}
+      {(closestDrop || closestVein || closestTp || closestSect || closestResource) && (
         <div className="pointer-events-auto absolute bottom-[145px] left-1/2 -translate-x-1/2 sm:bottom-[160px] md:bottom-44 flex flex-col items-center gap-1.5 z-20 max-w-[min(94vw,360px)]">
           {closestSect && (() => {
             const isMySect = closestSect.sect?.isMine ?? false;
@@ -1615,8 +1627,216 @@ export function MMOHud(props: MMOHudProps) {
               </button>
             </div>
           )}
+
+          {closestResource && (() => {
+            const res = closestResource.resource;
+            const stockTotal = res?.stock_total ?? 0;
+            const stockCap = res?.stock_cap ?? 0;
+            const vitality = res?.vitality ?? 100;
+            const grade = res?.grade ?? "LOW";
+            const famous = res?.point_class === "FAMOUS";
+            const ready = (res?.state === "ACTIVE" || !res?.state) && stockTotal > 0;
+            const ritual = res?.transplant;
+            const ritualDueAt = ritual ? new Date(ritual.completes_at).getTime() : 0;
+            const ritualActive = Boolean(ritual) && hudNow < ritualDueAt;
+            const ritualRemaining = ritual ? Math.max(0, Math.ceil((ritualDueAt - hudNow) / 1000)) : 0;
+            const canFinishRitual = Boolean(ritual) && !ritualActive;
+            const playerRank = props.player?.rank ?? 1;
+            const isImmortal = playerRank >= 6;
+            const costMana = transplantManaCost(grade, playerRank);
+            const durationSecs = transplantRitualSeconds(grade, playerRank);
+
+            return (
+              <div className={`flex flex-col gap-1.5 rounded-2xl border ${famous ? "border-amber-500/80 bg-[#1e1308f2]" : "border-emerald-500/70 bg-[#071c12f2]"} p-2.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 w-full`}>
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${famous ? "bg-amber-500/20 border-amber-400/40 text-amber-300" : "bg-emerald-500/20 border-emerald-400/40 text-emerald-300"} border`}>
+                      <Pickaxe className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 text-xs font-serif font-bold truncate">
+                        <span className={famous ? "text-amber-200" : "text-emerald-200"}>{closestResource.name}</span>
+                        <span className={`rounded border px-1 text-[9px] ${famous ? "bg-amber-950/80 border-amber-500/50 text-amber-300" : "bg-emerald-950/80 border-emerald-500/40 text-emerald-300"}`}>
+                          {famous ? "★ Danh Sơn" : grade === "TOP" ? "Thượng phẩm" : grade === "MID" ? "Trung phẩm" : "Hạ phẩm"}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-[#a7d4ba] truncate">
+                        Tồn: <strong className="text-amber-300">{stockTotal}</strong>/{stockCap} · Sinh khí {vitality}% ({distanceTo(closestResource).toFixed(1)} ô)
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => props.onOpenPanel("resources")}
+                    title="Mở danh sách mỏ tài nguyên"
+                    className="shrink-0 p-1 text-zinc-400 hover:text-amber-200 transition cursor-pointer"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {ritualActive && (
+                  <div className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-500/30 rounded px-2 py-0.5 text-center">
+                    ⏳ Đang làm nghi thức di dời · Còn {formatClock(ritualRemaining)}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    disabled={!ready || resourceBusy}
+                    onClick={async () => {
+                      if (resourceBusy || !ready) return;
+                      setResourceBusy(true);
+                      await collectWorldResourcePoint(closestResource.id);
+                      setResourceBusy(false);
+                    }}
+                    className={`flex-1 rounded-xl px-2.5 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer flex items-center justify-center gap-1 ${
+                      ready && !resourceBusy
+                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/50"
+                        : "bg-zinc-800/80 border border-zinc-700/60 text-zinc-400 cursor-not-allowed opacity-60"
+                    }`}
+                    title={!ready ? "Chưa có tài nguyên để khai thác" : "Thu hoạch tài nguyên từ mỏ"}
+                  >
+                    {resourceBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gem className="h-3 w-3" />}
+                    <span>Khai thác</span>
+                  </button>
+
+                  {isImmortal ? (
+                    ritualActive ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="flex-1 rounded-xl bg-amber-900/60 border border-amber-600/50 px-2.5 py-1 text-xs font-serif font-bold text-amber-200/80 cursor-not-allowed text-center"
+                      >
+                        Nghi thức: {formatClock(ritualRemaining)}
+                      </button>
+                    ) : canFinishRitual ? (
+                      <button
+                        type="button"
+                        disabled={resourceBusy}
+                        onClick={async () => {
+                          setResourceBusy(true);
+                          await transplantWorldResourcePoint(closestResource.id);
+                          setResourceBusy(false);
+                        }}
+                        className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 border border-amber-300 px-2.5 py-1 text-xs font-serif font-bold text-zinc-950 shadow-md active:scale-95 transition cursor-pointer flex items-center justify-center gap-1 animate-pulse"
+                        title="Hoàn tất nghi thức di dời mỏ vào Tiên Khiếu"
+                      >
+                        {resourceBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        <span>Hoàn tất di dời</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={resourceBusy || vitality < 70}
+                        onClick={() => setShowTransplantConfirm(true)}
+                        className={`flex-1 rounded-xl px-2 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer flex items-center justify-center gap-1 ${
+                          vitality >= 70 && !resourceBusy
+                            ? "bg-gradient-to-r from-amber-700 to-yellow-700 hover:from-amber-600 hover:to-yellow-600 border border-amber-400/50"
+                            : "bg-zinc-800/80 border border-zinc-700/60 text-zinc-400 cursor-not-allowed opacity-60"
+                        }`}
+                        title={vitality < 70 ? "Sinh khí dưới 70% không thể di dời" : `Tiêu hao ${costMana} Tiên Nguyên, cần hộ pháp ${formatDuration(durationSecs)}`}
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        <span>Vào Tiên Khiếu</span>
+                      </button>
+                    )
+                  ) : (
+                    <span
+                      className="flex-1 rounded-xl bg-zinc-800/80 border border-zinc-700/60 px-2 py-1 text-[11px] font-serif text-zinc-400 text-center cursor-not-allowed"
+                      title="Chỉ Cổ Tiên (Rank ≥ 6) mới có Tiên Khiếu để di dời mỏ"
+                    >
+                      🔒 Lục Chuyển
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
+
+      {/* Confirmation Modal for Transplant Ritual */}
+      {showTransplantConfirm && closestResource && (() => {
+        const res = closestResource.resource;
+        const grade = res?.grade ?? "LOW";
+        const vitality = res?.vitality ?? 100;
+        const playerRank = props.player?.rank ?? 1;
+        const costMana = transplantManaCost(grade, playerRank);
+        const durationSecs = transplantRitualSeconds(grade, playerRank);
+        const currentMana = props.player?.current_mana ?? 0;
+        const hasMana = currentMana >= costMana;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 pointer-events-auto">
+            <div className="w-full max-w-sm rounded-2xl border border-amber-500/70 bg-[#1c1208]/95 p-4 text-[#fae5b8] shadow-2xl backdrop-blur-md font-serif animate-in fade-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
+                <div className="font-bold text-sm text-amber-200 flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-amber-400" /> Di Dời Về Tiên Khiếu
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTransplantConfirm(false)}
+                  className="p-1 text-zinc-400 hover:text-white transition cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-3 space-y-2 text-xs">
+                <div>
+                  Đạo hữu muốn bắt đầu nghi thức di dời <strong className="text-amber-300">{closestResource.name}</strong> về Tiên Khiếu?
+                </div>
+                <div className="rounded-lg border border-amber-500/30 bg-black/40 p-2.5 space-y-1 text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Tiêu hao Tiên Nguyên:</span>
+                    <span className={`font-bold ${hasMana ? "text-amber-300" : "text-rose-400"}`}>
+                      {costMana} (Hiện có: {Math.floor(currentMana)})
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Thời gian hộ pháp:</span>
+                    <span className="text-amber-200">{formatDuration(durationSecs)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Sinh khí mỏ:</span>
+                    <span className="text-emerald-400">{vitality}%</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-amber-300/80 italic">
+                  ⚠️ Lưu ý: Trong suốt thời gian nghi thức, đạo hữu phải đứng tại mỏ (phạm vi ≤ 6 ô). Rời đi sẽ khiến nghi thức tan biến và Tiên Nguyên đã tiêu không được hoàn lại.
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTransplantConfirm(false)}
+                  className="rounded-xl border border-zinc-600 bg-zinc-800/80 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  disabled={!hasMana || resourceBusy || vitality < 70}
+                  onClick={async () => {
+                    setResourceBusy(true);
+                    setShowTransplantConfirm(false);
+                    await transplantWorldResourcePoint(closestResource.id);
+                    setResourceBusy(false);
+                  }}
+                  className="rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 border border-amber-400/50 px-3.5 py-1.5 text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer flex items-center gap-1.5"
+                >
+                  {resourceBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  <span>Bắt Đầu Nghi Thức</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Mobile Combat Hub: 2-Row Cluster + Big Attack Button (Tối ưu ngón cái tay phải, không bị che/tràn màn hình) */}
       <div className="pointer-events-auto absolute bottom-2 right-2 flex items-end gap-1.5 md:hidden z-20 select-none">

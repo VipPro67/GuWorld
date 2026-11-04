@@ -375,7 +375,8 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 
 **Hệ số rank cao hơn** (`HigherRankManaMultiplier(guRank, userRank)`, theo chênh lệch rank Cổ − rank người dùng):
 
-- **Cổ phàm (rank 1–5):** theo bảng `{1, 2, 5, 20, 100}` cho gap `{0,1,2,3,4}` — ví dụ rank 1 dùng Cổ rank 5 (gap 4) tốn **100×** Chân Nguyên.
+- **Cổ phàm (rank 1–5):** theo bảng `{1, 2, 5, 20, 100}` cho gap `{0,1,2,3,4}` — ví dụ rank 1 dùng Cổ rank 5 (gap 4) tốn **100×** Chân Nguyên. 
+Rank 2 sài rank 3 thì tốn 5/2 lượng chân nguyên. cùng rank thì luôn hệ số 1. rank 5 sài rank 1 thì 1/100( giảm tiêu hao)
 - **Cổ Tiên (rank ≥ 6):** mỗi bậc chênh lệch nhân ×100 (`100^gap`) — rank 6 dùng Cổ rank 7 tốn ×100, rank 6 dùng rank 8 tốn ×10.000.
 
 - `refine_mana_tier` (passive Cổ cùng rank đang trang bị, lấy bậc cao nhất) giảm 50% chi phí dùng Cổ và đổi hệ số hồi Chân Nguyên bằng đá trong auto-battle (`0.4 + tier*0.1`, mặc định `1.0`).

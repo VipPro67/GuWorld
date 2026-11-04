@@ -10,7 +10,7 @@ import { VFXPool, type FloatingTextOptions } from "../combat/VFXPool.ts";
 import { GuVFXManager } from "../combat/GuVFXManager.ts";
 import { EntityAnimator } from "../entities/EntityAnimator.ts";
 import { animationTextureKey, type ActorKind } from "../assets/AssetManifest.ts";
-import { getMonsterArt, loadMonsterArtCell } from "../assets/MonsterArt.ts";
+import { getMonsterArt, loadMonsterArtCell, loadStandaloneMonsterArt } from "../assets/MonsterArt.ts";
 import { CameraController } from "../world/CameraController.ts";
 import { RealtimeDebugHUD } from "../debug/RealtimeDebugHUD.ts";
 import { findPath } from "../world/PathPlanner.ts";
@@ -39,6 +39,10 @@ interface ActorView {
   shieldBar: Phaser.GameObjects.Graphics;
   formHpBar?: Phaser.GameObjects.Graphics;
   auraGlow?: Phaser.GameObjects.Graphics;
+  statusFx: Phaser.GameObjects.Graphics;
+  statusFxActive: boolean;
+  statusFxNextUpdate: number;
+  formArtId?: string;
   lastHp: number;
   lastMaxHp: number;
   lastShield: number;
@@ -59,6 +63,22 @@ interface ActorView {
 const HP_BAR_WIDTH = 42;
 const BASIC_ATTACK_RANGE = 2.2;
 const AUTO_FARM_ATTACK_INTERVAL_MS = 500;
+const STATUS_PRIORITY = ["STUN", "PETRIFY", "FREEZE", "SLEEP", "BIND", "ROOT", "FEAR", "CONFUSE", "BLIND", "SILENCE", "CHARM", "POISON", "BURN", "BLEED", "STEALTH", "FLYING", "HASTE", "INVINCIBLE", "SLOW", "SLOW1", "WEAK", "ARMOR_BREAK", "SLOW_DAMAGE", "SOUL_WOUND", "GU_SEAL", "THOUGHT_CHAOS", "DAO_CONFLICT", "BACKLASH", "ESSENCE_LEAK", "FORGET_EGO", "FORGET_REALITY", "REVIVE_LOCK", "EVASION", "REGEN", "ATK_UP", "DEF_UP", "THORNS", "DAMAGE_REDUCTION_UP", "LAST_STAND", "PHI_HANH", "TAUNT"];
+const STATUS_COLORS: Record<string, number> = {
+  STUN: 0xfde047, PETRIFY: 0x94a3b8, FREEZE: 0x7dd3fc, SLEEP: 0xa78bfa, BIND: 0x84cc16,
+  ROOT: 0x65a30d, FEAR: 0xc084fc, CONFUSE: 0xf472b6, BLIND: 0xfacc15, SILENCE: 0xe879f9,
+  CHARM: 0xfb7185, POISON: 0x4ade80, BURN: 0xfb923c, BLEED: 0xef4444, STEALTH: 0xc4b5fd,
+  FLYING: 0x7dd3fc, HASTE: 0x22d3ee, INVINCIBLE: 0xfacc15, SLOW: 0x60a5fa, SLOW1: 0x38bdf8,
+  WEAK: 0xc084fc, ARMOR_BREAK: 0xf97316, SLOW_DAMAGE: 0x64748b, SOUL_WOUND: 0xa855f7,
+  GU_SEAL: 0x7c3aed, THOUGHT_CHAOS: 0xec4899, DAO_CONFLICT: 0xdc2626, BACKLASH: 0xf43f5e,
+  ESSENCE_LEAK: 0x06b6d4, FORGET_EGO: 0x818cf8, FORGET_REALITY: 0x6366f1, REVIVE_LOCK: 0x475569,
+  EVASION: 0x34d399, REGEN: 0x22c55e, ATK_UP: 0xef4444, DEF_UP: 0x38bdf8, THORNS: 0x16a34a,
+  DAMAGE_REDUCTION_UP: 0x0ea5e9, LAST_STAND: 0xf59e0b, PHI_HANH: 0x14b8a6, TAUNT: 0xf97316,
+};
+
+function statusAccent(id: string): number {
+  return STATUS_COLORS[id] ?? 0xa78bfa;
+}
 
 function formatDamageAmount(amount: number): string {
   if (amount <= 0) return "0";
@@ -79,6 +99,7 @@ export class WorldScene extends Phaser.Scene {
   private motion!: MotionController;
   private cast!: CastController;
   private readonly actors = new Map<string, ActorView>();
+  private readonly formByEntity = new Map<string, string>();
   private readonly requestedMonsterArt = new Set<string>();
   private readonly failedMonsterArtUntil = new Map<string, number>();
   private monsterArtGeneration = 0;
@@ -320,6 +341,7 @@ export class WorldScene extends Phaser.Scene {
       this.failedMonsterArtUntil.clear();
       for (const cleanup of this.cleanups.splice(0)) cleanup();
       this.actors.clear();
+      this.formByEntity.clear();
     });
 
     if (!this.runtime) this.spawnPreviewActors();
@@ -726,6 +748,28 @@ export class WorldScene extends Phaser.Scene {
           if (reason === "interrupted") this.notice("Lướt bị ngắt");
         }
         return;
+      case "TELEPORT": {
+        const fromX = typeof payload.from_x === "number" ? payload.from_x : null;
+        const fromY = typeof payload.from_y === "number" ? payload.from_y : null;
+        if (fromX !== null && fromY !== null) {
+          const from = worldToPixels({ x: fromX, y: fromY });
+          this.vfx.spawnRing(from.x, from.y - 8, 0xa78bfa);
+        }
+        if (eventX !== null && eventY !== null) {
+          const to = worldToPixels({ x: eventX, y: eventY });
+          this.vfx.spawnRing(to.x, to.y - 8, 0xa78bfa);
+        }
+        return;
+      }
+      case "TRANSFORMATION_STARTED": {
+        const formId = typeof payload.skill_id === "string" ? payload.skill_id : "";
+        if (event.source_id && formId) this.formByEntity.set(event.source_id, formId);
+        return;
+      }
+      case "TRANSFORMATION_ENDED":
+      case "TRANSFORMATION_BROKEN":
+        if (event.source_id) this.formByEntity.delete(event.source_id);
+        return;
       case "MOVE_TARGET_REJECTED":
         this.motion?.stopAll();
         this.notice(reason ? `Đường đi bị chặn: ${reason}` : "Đường đi bị chặn");
@@ -819,6 +863,12 @@ export class WorldScene extends Phaser.Scene {
             this.guVfx.playVFX("fx_hieu_ung_doc", pixels.x, pixels.y - 24);
           } else if (lower.includes("trói") || lower.includes("root")) {
             this.guVfx.playVFX("fx_hieu_ung_troi", pixels.x, pixels.y);
+          } else if (lower.includes("haste") || lower.includes("tăng tốc")) {
+            this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x67e8f9);
+          } else if (lower.includes("flying") || lower.includes("flight") || lower.includes("bay")) {
+            this.vfx.spawnRing(pixels.x, pixels.y - 8, 0x7dd3fc);
+          } else if (lower.includes("stealth") || lower.includes("invisibility") || lower.includes("tàng hình")) {
+            this.vfx.spawnRing(pixels.x, pixels.y - 8, 0xc4b5fd);
           }
         }
         return;
@@ -1101,7 +1151,7 @@ export class WorldScene extends Phaser.Scene {
       }
       const dx = pixels.x - actor.lastX;
       const moved = Math.hypot(dx, pixels.y - actor.lastY) > 0.5;
-      actor.animator.update(this.time.now, moved, entity.hp <= 0, actor.castUntil, actor.hitUntil, dx);
+      actor.animator.update(this.time.now, moved && !entity.flying, entity.hp <= 0, actor.castUntil, actor.hitUntil, dx);
       actor.lastX = pixels.x;
       actor.lastY = pixels.y;
       let renderY = pixels.y;
@@ -1110,6 +1160,14 @@ export class WorldScene extends Phaser.Scene {
       }
       actor.container.setPosition(pixels.x, renderY);
       actor.container.setDepth(pixels.y);
+      const hasStatusFx = entity.hp > 0 && !!(entity.flying || entity.stealthed || entity.hasted && moved || entity.shield > 0 || entity.statuses?.length);
+      if (hasStatusFx && this.time.now >= actor.statusFxNextUpdate) {
+        this.drawActorStatusFx(actor.statusFx, entity, moved, dx);
+        actor.statusFxNextUpdate = this.time.now + 100;
+      } else if (!hasStatusFx && actor.statusFxActive) {
+        actor.statusFx.clear();
+      }
+      actor.statusFxActive = hasStatusFx;
       if (entity.kind === "monster" && entity.hp <= 0) {
         if (actor.container.visible && actor.container.alpha > 0.4) {
           this.tweens.add({
@@ -1166,7 +1224,9 @@ export class WorldScene extends Phaser.Scene {
       }
 
       // Metamorphosis: Model Scale, Aura Glow & Form HP Layer
-      const transformActive = entity.transformation?.active ?? false;
+      const transformActive = entity.transformation?.active ?? entity.formActive ?? false;
+      const formId = transformActive ? entity.transformation?.form_id || this.formByEntity.get(entity.id) || entity.templateId : "";
+      this.applyFormArt(actor, formId);
       const modelScale = transformActive ? (entity.transformation?.model_scale ?? 1.4) : 1.0;
       if (modelScale !== actor.lastModelScale) {
         actor.animator.setModelScale(modelScale);
@@ -1175,6 +1235,7 @@ export class WorldScene extends Phaser.Scene {
 
       if (transformActive !== actor.lastFormActive) {
         actor.lastFormActive = transformActive;
+        this.vfx.spawnRing(pixels.x, pixels.y - 12, transformActive ? 0xc084fc : 0x94a3b8);
         if (transformActive && actor.auraGlow) {
           const formKind = entity.transformation?.form_kind;
           const auraColor = formKind === "FULL" ? 0xf97316 : (formKind === "GU_HOUSE" ? 0xeab308 : 0xa855f7);
@@ -1207,6 +1268,7 @@ export class WorldScene extends Phaser.Scene {
       if (seen.has(id)) continue;
       actor.container.destroy(true);
       this.actors.delete(id);
+      this.formByEntity.delete(id);
       if (id === this.selfId) {
         this.selfId = null;
         this.cameraController.stopFollow();
@@ -1231,13 +1293,84 @@ export class WorldScene extends Phaser.Scene {
     const shieldBar = this.add.graphics();
     const formHpBar = this.add.graphics();
     const auraGlow = this.add.graphics();
-    const container = this.add.container(x, y, [auraGlow, sprite, label, hpBar, shieldBar, formHpBar]);
+    const statusFx = this.add.graphics();
+    const container = this.add.container(x, y, [auraGlow, statusFx, sprite, label, hpBar, shieldBar, formHpBar]);
     const actor: ActorView = {
-      container, sprite, animator, label, hpBar, shieldBar, formHpBar, auraGlow, lastHp: -1, lastMaxHp: -1, lastShield: -1, lastEngaged: false, lastSelected: false, templateId: "",
+      container, sprite, animator, label, hpBar, shieldBar, formHpBar, auraGlow, statusFx, statusFxActive: false, statusFxNextUpdate: 0, lastHp: -1, lastMaxHp: -1, lastShield: -1, lastEngaged: false, lastSelected: false, templateId: "",
       lastX: x, lastY: y, castUntil: 0, hitUntil: 0, ghostHpRatio: 1,
     };
     this.drawHpBar(hpBar, 1, 1, false, false);
     return actor;
+  }
+
+  private drawActorStatusFx(fx: Phaser.GameObjects.Graphics, entity: ReturnType<WorldRuntime["getEntities"]>[number], moved: boolean, dx: number): void {
+    fx.clear();
+    if (entity.hp <= 0) return;
+    const phase = this.time.now / 220;
+    if (entity.flying) {
+      fx.lineStyle(2, 0x7dd3fc, 0.5 + Math.sin(phase) * 0.18);
+      fx.strokeEllipse(0, 2, 52, 15);
+      for (let i = 0; i < 3; i++) {
+        const x = Math.sin(phase + i * 2.1) * 23;
+        fx.fillStyle(0xc4f1ff, 0.5);
+        fx.fillCircle(x, 10 + Math.cos(phase + i * 2.1) * 5, 2);
+      }
+    }
+    if (entity.stealthed) {
+      fx.lineStyle(1.5, 0xc4b5fd, 0.35 + Math.sin(phase * 0.7) * 0.16);
+      fx.strokeEllipse(0, -34, 38, 60);
+      fx.strokeEllipse(0, -34, 46, 68);
+    }
+    if (entity.shield > 0) {
+      fx.lineStyle(1.5, 0x38bdf8, 0.25 + Math.sin(phase) * 0.08);
+      fx.strokeEllipse(0, -31, 49, 66);
+    }
+    if (entity.hasted && moved) {
+      const behind = dx < 0 ? 1 : -1;
+      fx.lineStyle(2, 0x67e8f9, 0.7);
+      for (let i = 0; i < 3; i++) {
+        const y = -14 - i * 13 + Math.sin(phase + i) * 3;
+        fx.lineBetween(behind * (18 + i * 6), y, behind * (39 + i * 9), y - 3);
+      }
+    }
+    const statuses = entity.statuses ?? [];
+    if (statuses.includes("FORM_WOLF_PARTIAL")) {
+      fx.fillStyle(0xe2e8f0, 0.8);
+      fx.fillTriangle(-13, -59, -8, -76, -3, -60);
+      fx.fillTriangle(3, -60, 8, -76, 13, -59);
+      fx.lineStyle(2, 0xe2e8f0, 0.85);
+      fx.lineBetween(-12, -7, -20, -2);
+      fx.lineBetween(-16, -7, -24, -2);
+      fx.lineBetween(12, -7, 20, -2);
+      fx.lineBetween(16, -7, 24, -2);
+    }
+    if (statuses.includes("FORM_TURTLE_PARTIAL")) {
+      fx.fillStyle(0x8b5e34, 0.52);
+      fx.fillEllipse(0, -32, 45, 37);
+      fx.lineStyle(2, 0xd6a45e, 0.9);
+      fx.strokeEllipse(0, -32, 45, 37);
+      fx.lineBetween(-18, -32, 18, -32);
+      fx.lineBetween(0, -49, 0, -14);
+    }
+    const primary = STATUS_PRIORITY.find((id) => statuses.includes(id));
+    if (primary && !entity.stealthed && !entity.flying) {
+      const color = statusAccent(primary);
+      const wobble = Math.sin(phase) * 2;
+      fx.lineStyle(primary === "STUN" || primary === "FREEZE" ? 2.5 : 1.7, color, 0.48);
+      if (primary === "STUN" || primary === "SLEEP" || primary === "FEAR" || primary === "CONFUSE") fx.strokeCircle(0, -78 + wobble, primary === "STUN" ? 7 : 6);
+      else if (primary === "FREEZE" || primary === "PETRIFY" || primary === "GU_SEAL") fx.strokeRect(-22, -66, 44, 54);
+      else if (primary === "BIND" || primary === "ROOT" || primary === "TAUNT") fx.strokeEllipse(0, -25, 50, 22);
+      else if (primary === "POISON") { fx.fillStyle(color, 0.25); fx.fillCircle(-14, -49, 4); fx.fillCircle(13, -39, 5); fx.strokeEllipse(0, -32, 42, 58); }
+      else if (primary === "BURN" || primary === "BLEED" || primary === "BACKLASH") { fx.strokeEllipse(-16, -57, 8, 14); fx.strokeEllipse(16, -54, 8, 14); fx.strokeEllipse(0, -32, 42, 58); }
+      else if (primary === "BLIND" || primary === "SILENCE" || primary === "CHARM") { fx.strokeCircle(0, -52, 7); fx.lineBetween(-6, -46, 6, -58); fx.strokeEllipse(0, -32, 42, 58); }
+      else fx.strokeEllipse(0, -32, 42, 58);
+    }
+    const secondary = statuses.filter((id) => id !== primary && id !== "FLYING" && id !== "STEALTH").slice(0, 5);
+    secondary.forEach((id, index) => {
+      const color = statusAccent(id);
+      fx.fillStyle(color, 0.85);
+      fx.fillCircle(-12 + index * 6, -78 + Math.sin(phase + index) * 1.5, 2.4);
+    });
   }
 
   private applyMonsterArt(actor: ActorView, templateId: string): void {
@@ -1263,6 +1396,36 @@ export class WorldScene extends Phaser.Scene {
       this.requestedMonsterArt.delete(key);
       this.failedMonsterArtUntil.set(key, this.time.now + 10_000);
     });
+  }
+
+  private applyFormArt(actor: ActorView, formId: string): void {
+    const atlasArtId = formId === "FORM_FLAME_BEAR" ? "monster_iron_bear" : "";
+    const standaloneSrc = formId === "FORM_SIX_ARM_ICE_DEMON"
+      ? "/assets/world/form-six-arm-ice-demon.webp"
+      : formId === "FORM_RECKLESS_SAVAGE"
+        ? "/assets/world/form-reckless-savage.webp"
+        : "";
+    const artId = atlasArtId || standaloneSrc;
+    if (actor.formArtId === artId) return;
+    actor.formArtId = artId;
+    if (!artId) {
+      actor.animator.clearStaticTexture();
+      return;
+    }
+    const key = `form-art-${artId}`;
+    if (this.textures.exists(key)) {
+      actor.animator.setStaticTexture(key);
+      return;
+    }
+    const cell = atlasArtId ? getMonsterArt(atlasArtId) : null;
+    if (!cell && !standaloneSrc) return;
+    const generation = this.monsterArtGeneration;
+    const artLoad = cell ? loadMonsterArtCell(cell) : loadStandaloneMonsterArt(standaloneSrc);
+    void artLoad.then((canvas) => {
+      if (!this.sys.isActive() || generation !== this.monsterArtGeneration || actor.formArtId !== artId) return;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, canvas);
+      if (actor.sprite.active) actor.animator.setStaticTexture(key);
+    }).catch(() => undefined);
   }
 
   private drawHpBar(graphics: Phaser.GameObjects.Graphics, currentRatio: number, ghostRatio: number, isMonster: boolean, isLowHp: boolean): void {

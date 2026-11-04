@@ -622,7 +622,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         throw new Error(data.error || "Tu bổ Cổ trùng thất bại.");
       }
       await get().fetchGuInventory(true);
-      await get().fetchPlayerProfile();
+      await get().refreshPlayerSummary();
       const msg = data.message || "Tu bổ Cổ trùng thành công!";
       get().addLog(msg);
       get().addToast(msg, "success");

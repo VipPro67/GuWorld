@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import type { ActorAnimation, ActorKind } from "../assets/AssetManifest.ts";
+import { animationTextureKey, type ActorAnimation, type ActorKind } from "../assets/AssetManifest.ts";
 import { actorAnimationKey } from "../assets/AnimationLibrary.ts";
 
 /** Maps server movement/combat state to generated actor animations. */
@@ -65,6 +65,17 @@ export class EntityAnimator {
     this.baseScaleX = this.sprite.scaleX;
     this.baseScaleY = this.sprite.scaleY;
     this.animatePose(this.current);
+  }
+
+  public clearStaticTexture(): void {
+    if (!this.staticTexture) return;
+    this.staticTexture = "";
+    this.sprite.setTexture(animationTextureKey(this.kind, "idle", 0));
+    this.sprite.setDisplaySize(52, 66);
+    this.baseScaleX = this.sprite.scaleX;
+    this.baseScaleY = this.sprite.scaleY;
+    this.current = "death";
+    this.play("idle");
   }
 
   public setModelScale(scale: number): void {

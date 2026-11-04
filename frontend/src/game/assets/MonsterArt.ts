@@ -22,6 +22,32 @@ export function getMonsterArt(templateId: string): MonsterArtCell | null {
 
 const imageLoads = new Map<string, Promise<HTMLImageElement>>();
 
+export function loadStandaloneMonsterArt(src: string): Promise<HTMLCanvasElement> {
+  let imageLoad = imageLoads.get(src);
+  if (!imageLoad) {
+    imageLoad = new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error(`Could not load monster art: ${src}`));
+      image.src = src;
+    });
+    imageLoads.set(src, imageLoad);
+    void imageLoad.catch(() => imageLoads.delete(src));
+  }
+  return imageLoad.then((image) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 320;
+    canvas.height = 320;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas context unavailable");
+    const scale = Math.min(320 / image.width, 320 / image.height);
+    const width = image.width * scale;
+    const height = image.height * scale;
+    context.drawImage(image, (320 - width) / 2, (320 - height) / 2, width, height);
+    return canvas;
+  });
+}
+
 export function loadMonsterArtCell(cell: MonsterArtCell): Promise<HTMLCanvasElement> {
   let imageLoad = imageLoads.get(cell.src);
   if (!imageLoad) {

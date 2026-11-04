@@ -520,8 +520,8 @@ Quái và Cổ trùng **cùng rank là cân bằng** (mất ~3–5 hit để h�
   - **Chấn động Tiên Cổ Phòng**: Khi Tiên Cổ Phòng chịu sát thương, 30% sát thương truyền vào các Cổ trận nhãn (`core_gu_instances`) làm giảm độ bền tương ứng.
   - **Hao mòn khi thi triển**: Mỗi lần tung chiêu tiêu hao 0.02 độ bền Cổ trùng (kết toán checkpoint định kỳ). Tiêu hao độ no giảm xuống còn **0.1 độ no/lần tung chiêu**.
   - **Hồi phục tự nhiên (Nội Dưỡng Tiêu Hao Độ No)**: Cổ có độ bền $\ge 20$ và $< 100$ tự đốt độ no để trị thương với tốc độ **+2.0 độ bền/giờ** (tiêu hao 5.0 độ no/giờ, tức 2.5 độ no / 1.0 độ bền).
-  - **Ôn Dưỡng (`POST /api/inventory/nourish-gu`)**: Khi độ bền $\ge 20$, Cổ Sư có thể truyền Chân Nguyên (`Rank * 20`) để hồi phục ngay **+15.0 độ bền**.
-  - **Tu Bổ (`POST /api/inventory/repair-gu`)**: Khi độ bền $< 20$ hoặc trạng thái `DAMAGED`, Cổ ngừng tự hồi phục. Cần dùng Nguyên Thạch (`Rank * 50`) hoặc 1 Tiên Nguyên Thạch (với Tiên Cổ Rank 6+) để Tu Bổ về **50.0 độ bền** và đưa về trạng thái `ACTIVE`.
+  - **Ôn Dưỡng (`POST /api/inventory/nourish-gu`)**: Khi độ bền $\ge 20$, Cổ Sư có thể truyền Chân Nguyên để hồi phục ngay **+15.0 độ bền**; chi phí là `10 × W(rank Cổ) / W(rank người chơi)`.
+  - **Tu Bổ (`POST /api/inventory/repair-gu`)**: Khi độ bền $< 20$ hoặc trạng thái `DAMAGED`, Cổ ngừng tự hồi phục. Tiêu hao `5 × W(rank Cổ) / W(rank người chơi)` Chân Nguyên để Tu Bổ về **50.0 độ bền** và đưa về trạng thái `ACTIVE`. `W(Rank)` theo thang sức mạnh Chân Nguyên `{1,2,5,20,100,1000,10000,100000,1000000}` (Rank 1–9); ví dụ rank người chơi 5 + Cổ rank 5 tốn 5 mana Tu Bổ / 10 mana Ôn Dưỡng; rank người chơi 4 + Cổ rank 3 tốn 1,25 / 2,5.
 
 ## 5. Vật phẩm và nguyên liệu
 
@@ -629,6 +629,8 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 > Các Cổ có Tăng Tốc trong combat: Thanh Phong Luân Cổ (Nhất Chuyển: 1,35× trong 2,5 giây), Ngũ Chuyển Độn Kiều Cổ (1,5× trong 3 giây), Tâm Giới Tiên Cổ (Thất Chuyển: 1,75× trong 3,5 giây). Dùng lại cùng buff sẽ làm mới thời hạn; nhiều buff Tăng Tốc khác nhau lấy hệ số cao nhất.
 
 > Quái trên map realtime hiển thị tên và ảnh đúng theo mẫu; khi truy đuổi hoặc tấn công người chơi, thanh máu chuyển đỏ. Thanh máu trên đầu nhân vật và quái vật tích hợp **Damage Lag Bar** (thanh trễ vàng/trắng trượt mượt sau khi trừ máu) và cảnh báo nhấp nháy đỏ khi máu dưới 25%. Khi có khiên, thanh khiên lam ngọc hiển thị phía trên thanh máu; khiên bị đánh trúng sẽ phát tia sáng kim quang (`fx_khien_anh_kim`), và khi cạn khiên sẽ kích hoạt hoạt ảnh vỡ giáp vụn nát (`fx_thu_vo_giap_gpt`). Đòn đánh thường có hoạt ảnh chém năng lượng định hướng và làm chớp trắng/đỏ sprite mục tiêu. Kỹ năng Cổ trùng phát hoạt ảnh VFX tương ứng theo thuộc tính (Hỏa Dực, Thiểm Quang, Điện Nhãn, Thính Phong, Lôi Phạt, Độc Xà, v.v.). Các ô Cổ trên Hotbar và Túi Cổ được bao bọc bởi **Khung Phẩm Cấp Đạo Hồn** chuẩn hóa từ Chuyển 1 đến Chuyển 9. Bảng mục tiêu có ảnh quái và HP. Số sát thương nổi là lượng HP thực mất sau khi trừ khiên; “chặn” chỉ xuất hiện khi khiên hấp thụ toàn bộ đòn đánh.
+
+> Trên map realtime, Tăng Tốc để lại vệt gió khi di chuyển, Bay có dáng lơ lửng, không phát bước đi, cùng vòng khí và điểm sáng dưới chân, Tàng Hình có viền tím mờ, còn khiên tạo đường sáng quanh nhân vật. Biến hình phát vòng sáng lúc bật/tắt và giữ hào quang khi còn hiệu lực; Viêm Hùng, Lục Tí Tuyết Băng Ma Vương và Cuồng Man Thú Thần có hình dạng riêng, Lang Bì phủ tai/móng vuốt và Quy Giáp hiện mai rùa. Sự kiện dịch chuyển realtime phát vòng sáng ở điểm đi và điểm đến khi server gửi tọa độ; chiêu di chuyển được server xác nhận vẫn dùng VFX cast riêng của kỹ năng.
 
 > **Khiên ảo có hạn:** khiên của người chơi tan dần **10% giá trị hiện tại mỗi giây** (dưới 1 thì về 0), nên khiên tích lũy không còn tồn tại vĩnh viễn. Khiên còn lại trong checkpoint cũng tiếp tục tan theo thời gian offline, nên đăng nhập lại không khôi phục nguyên lớp khiên cũ.
 

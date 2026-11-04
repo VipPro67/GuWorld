@@ -65,6 +65,7 @@ export interface RuntimeEntity {
   isSelf: boolean;
   stealthed?: boolean;
   flying?: boolean;
+  hasted?: boolean;
   formActive?: boolean;
   transformation?: WorldTransformationState;
   statuses?: string[];
@@ -501,6 +502,7 @@ export class WorldRuntime {
         aggroTargetId: entity.aggro_target_id ?? "",
         stealthed: entity.stealthed,
         flying: entity.flying,
+        hasted: entity.hasted,
         formActive: entity.form_active,
         transformation: entity.transformation,
         statuses: entity.statuses,

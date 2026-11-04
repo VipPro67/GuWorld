@@ -11,6 +11,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -279,6 +280,7 @@ func (w *worldSession) sendWelcome(welcome protocol.Welcome) error {
 	if err != nil {
 		return fmt.Errorf("decode welcome snapshot: %w", err)
 	}
+	snapshot = snapshotForObserver(snapshot, sim.CharacterID(w.playerID.String()))
 	w.snapshotMu.Lock()
 	w.lastSnapshot = snapshot
 	w.snapshotMu.Unlock()
@@ -448,6 +450,7 @@ func (w *worldSession) snapshotLoop(ctx context.Context, feed <-chan sim.Snapsho
 			w.snapshotMu.Lock()
 			w.lastSnapshot = snapshot
 			w.snapshotMu.Unlock()
+			observerView := snapshotForObserver(snapshot, selfCharID)
 			if hasEdgeTransfer {
 				for _, entity := range snapshot.Entities {
 					if entity.CharacterID == selfCharID {
@@ -479,16 +482,70 @@ func (w *worldSession) snapshotLoop(ctx context.Context, feed <-chan sim.Snapsho
 					}
 				}
 			}
-			if err := w.sendSnapshot(snapshot); err != nil {
+			if err := w.sendSnapshot(observerView); err != nil {
 				logger.S.Debugf("WebTransport snapshot to %s stopped: %v", w.playerID, err)
 				return
 			}
-			if err := w.sendEvents(snapshot.Events); err != nil {
+			if err := w.sendEvents(observerView.Events); err != nil {
 				logger.S.Debugf("WebTransport events to %s stopped: %v", w.playerID, err)
 				return
 			}
 		}
 	}
+}
+
+func snapshotForObserver(snapshot sim.Snapshot, selfID sim.CharacterID) sim.Snapshot {
+	partyID := ""
+	for _, entity := range snapshot.Entities {
+		if entity.CharacterID == selfID || string(entity.ID) == string(selfID) {
+			partyID = entity.PartyID
+			break
+		}
+	}
+	hidden := make(map[string]bool)
+	for _, entity := range snapshot.Entities {
+		if entity.Kind != sim.EntityPlayer || (!hasStatus(entity, "STEALTH") && !hasStatus(entity, "INVISIBILITY")) {
+			continue
+		}
+		isSelf := entity.CharacterID == selfID || string(entity.ID) == string(selfID)
+		isAlly := partyID != "" && entity.PartyID == partyID
+		if !isSelf && !isAlly {
+			hidden[string(entity.ID)] = true
+		}
+	}
+	if len(hidden) == 0 {
+		return snapshot
+	}
+	view := snapshot
+	view.Entities = make([]sim.Entity, 0, len(snapshot.Entities)-len(hidden))
+	for _, entity := range snapshot.Entities {
+		if !hidden[string(entity.ID)] {
+			view.Entities = append(view.Entities, entity)
+		}
+	}
+	view.Events = make([]combat.Event, 0, len(snapshot.Events))
+	for _, event := range snapshot.Events {
+		if hidden[event.SourceID] || hidden[event.TargetID] {
+			continue
+		}
+		view.Events = append(view.Events, event)
+	}
+	view.Projectiles = make([]sim.ProjectileState, 0, len(snapshot.Projectiles))
+	for _, projectile := range snapshot.Projectiles {
+		if !hidden[projectile.SourceID] {
+			view.Projectiles = append(view.Projectiles, projectile)
+		}
+	}
+	return view
+}
+
+func hasStatus(entity sim.Entity, id string) bool {
+	for _, status := range entity.Combat.Statuses {
+		if status.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *worldSession) sendSnapshot(snapshot sim.Snapshot) error {
@@ -615,6 +672,8 @@ type wireEventPayload struct {
 	ImpactVFX         string  `json:"impact_vfx,omitempty"`
 	X                 float64 `json:"x,omitempty"`
 	Y                 float64 `json:"y,omitempty"`
+	FromX             float64 `json:"from_x,omitempty"`
+	FromY             float64 `json:"from_y,omitempty"`
 	Amount            float64 `json:"amount,omitempty"`
 	ShieldAbsorbed    float64 `json:"shield_absorbed,omitempty"`
 	HPDamage          float64 `json:"hp_damage,omitempty"`
@@ -650,6 +709,8 @@ func (w *worldSession) sendEvents(events []combat.Event) error {
 			ImpactVFX:         event.ImpactVFX,
 			X:                 event.X,
 			Y:                 event.Y,
+			FromX:             event.FromX,
+			FromY:             event.FromY,
 			Amount:            event.Amount,
 			ShieldAbsorbed:    event.ShieldAbsorbed,
 			HPDamage:          event.HPDamage,
@@ -1104,6 +1165,9 @@ func flagsFromSim(entity sim.Entity) uint8 {
 			if status.ID == "FLYING" || status.ID == "FLIGHT" {
 				flags |= 1 << 2
 			}
+			if status.ID == "HASTE" && status.MoveMultiplier > 1 {
+				flags |= 1 << 4
+			}
 		}
 	}
 	if entity.Combat.FormActive {
@@ -1125,6 +1189,9 @@ func spawnFromSim(entity sim.Entity, netID uint16, registry *netRegistry) v2.Spa
 			name = entity.AI.Name
 		}
 	}
+	if entity.Kind == sim.EntityPlayer && entity.Transformation.Active {
+		templateID = entity.Transformation.FormID
+	}
 	ownerNetID, _ := registry.lookup(sim.EntityID(entity.Companion.OwnerID))
 	return v2.Spawn{
 		NetID: netID, EntityID: entityID, Name: name, TemplateID: templateID,
@@ -1142,7 +1209,7 @@ func spawnFromSim(entity sim.Entity, netID uint16, registry *netRegistry) v2.Spa
 func deltaFromSim(entity sim.Entity, netID uint16, registry *netRegistry) v2.DeltaEntity {
 	out := v2.DeltaEntity{
 		NetID:     netID,
-		Mask:      v2.MaskPosition | v2.MaskVitals | v2.MaskRevision | v2.MaskFlags,
+		Mask:      v2.MaskPosition | v2.MaskVitals | v2.MaskRevision | v2.MaskFlags | v2.MaskStatuses,
 		X:         quantizeSafe(entity.Transform.Position.X),
 		Y:         quantizeSafe(entity.Transform.Position.Y),
 		VitalsSub: v2.VitalHP | v2.VitalShield | v2.VitalMana | v2.VitalThought,
@@ -1152,6 +1219,11 @@ func deltaFromSim(entity sim.Entity, netID uint16, registry *netRegistry) v2.Del
 		Thought:   clampCount(entity.Combat.Thought),
 		Revision:  entity.Revision,
 		Flags:     flagsFromSim(entity),
+	}
+	for _, status := range entity.Combat.Statuses {
+		if code := v2.StatusCode(status.ID); code != 0 {
+			out.Statuses = append(out.Statuses, code)
+		}
 	}
 	if entity.Combat.Pending != nil {
 		out.Mask |= v2.MaskCast
@@ -1217,6 +1289,10 @@ func diffDeltaEntity(base, prev v2.DeltaEntity, hasPrev bool, curr v2.DeltaEntit
 	if curr.Flags != base.Flags || curr.Flags != prev.Flags {
 		diff.Mask |= v2.MaskFlags
 		diff.Flags = curr.Flags
+	}
+	if !slices.Equal(curr.Statuses, base.Statuses) || !slices.Equal(curr.Statuses, prev.Statuses) {
+		diff.Mask |= v2.MaskStatuses
+		diff.Statuses = append([]uint8(nil), curr.Statuses...)
 	}
 
 	currCasting := curr.Mask&v2.MaskCast != 0

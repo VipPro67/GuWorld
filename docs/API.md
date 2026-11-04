@@ -137,8 +137,8 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/feed-all` | Cho ăn toàn bộ Cổ trùng. Nhận body JSON tùy chọn `{ "scope": "equipped" \| "rest" \| "unequipped" \| "all" }` hoặc `{ "equipped": true \| false }` để lọc theo Cổ trùng đang xuất trận hoặc trong túi. |
 | POST | `/inventory/equip` |
 | POST | `/inventory/subjugate-gu` | Luyện hóa ý chí Cổ trùng (Gu Subjugation). Body `{ "instance_id": "..." }`. Nếu Bản Mệnh Cổ có Rank $\ge$ Rank Cổ cần luyện $+ 2$, ý chí dã Cổ bị áp chế hoàn toàn, đạt ngay 100% (0 mana). Nếu không, tiêu hao `Rank * 25` Chân Nguyên để tăng +25% tiến độ mỗi lần luyện. |
-| POST | `/inventory/nourish-gu` | Ôn dưỡng Cổ trùng (Gu Nourishment). Body `{ "instance_id": "..." }`. Dùng Chân Nguyên (`Rank * 20`) để hồi phục +15.0 độ bền cho Cổ bị tổn thương (`durability >= 20`). |
-| POST | `/inventory/repair-gu` | Tu bổ Cổ trùng (Gu Restoration). Body `{ "instance_id": "..." }`. Tiêu hao Nguyên Thạch (`Rank * 50`) hoặc Tiên Nguyên Thạch (1 viên nếu Tiên Cổ) để tu bổ Cổ bị trọng thương (`durability < 20` hoặc `state = DAMAGED`), phục hồi về độ bền 50.0 và trạng thái `ACTIVE`. |
+| POST | `/inventory/nourish-gu` | Ôn dưỡng Cổ trùng (Gu Nourishment). Body `{ "instance_id": "..." }`. Dùng Chân Nguyên bằng `10 * W(gu_rank) / W(player_rank)` để hồi phục +15.0 độ bền cho Cổ bị tổn thương (`durability >= 20`). |
+| POST | `/inventory/repair-gu` | Tu bổ Cổ trùng (Gu Restoration). Body `{ "instance_id": "..." }`. Tiêu hao Chân Nguyên bằng `5 * W(gu_rank) / W(player_rank)` để tu bổ Cổ bị trọng thương (`durability < 20` hoặc `state = DAMAGED`), phục hồi về độ bền 50.0 và trạng thái `ACTIVE`. W(Rank) = `{1,2,5,20,100,1000,10000,100000,1000000}` cho Rank 1–9. |
 | POST | `/inventory/realtime-hotbar` | Lưu thiết lập hotbar realtime: mảng tối đa 6 phần tử vào `players.realtime_hotbar` — vị trí mảng = ô 1–6, `""` = ô trống, phần tử phải là instance Cổ đang trang bị + ACTIVE (validated). Thiết lập là *explicit setting*: Cổ được gán giữ nguyên ô kể cả khi trang bị/tháo Cổ khác; ô trống giữa layout không đổi số (các ô sau không bị đẩy số); Cổ tạm mất hợp lệ (ngủ/trọng thương/hết bền) được giữ chỗ và tự chiếm lại ô khi hợp lệ trở lại; Cổ đã bán/trao/dead-release được bỏ pin. Đồng thời cập nhật `players.equipped_gus` (thứ tự danh sách trang bị). Body `{ "gu_instance_ids": ["id", "", "id", ...] }`, response `{ "equipped_gus", "hotbar_gus" }`. Không trang bị/tháo Cổ. Áp dụng sau khi world kết nối lại. |
 | POST | `/inventory/unequip-all` |
 | POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |
@@ -567,6 +567,10 @@ WebTransport là transport realtime duy nhất (WebSocket và SSE đã bị xoá
 - QUIC datagrams cho input/snapshot delta.
 
 Kết nối yêu cầu token qua query `?token=<token>` (browser không gửi cookie trong WT) và `?tab_id=<uuid>` cho resume/takeover. Server dùng Redis Pub/Sub để fan-out sự kiện UI giữa các instance; Redis không còn phục vụ socket WS.
+
+Với player đang biến hình tại thời điểm spawn/baseline, `template_id` trong spawn chứa `form_id`. Sự kiện `TRANSFORMATION_STARTED` mang `skill_id` là `form_id`; `TRANSFORMATION_ENDED` hoặc `TRANSFORMATION_BROKEN` kết thúc hình thái trên client.
+
+Realtime snapshot v2 mang tập status đang hoạt động trong `MaskStatuses`; code ID ổn định 1–43 được ánh xạ sang tên status ở client, còn flags dành cho PvP/stealth/flying/form/haste. Server lọc player Tàng Hình khỏi snapshot và event của đối thủ; bản thân và đồng đội vẫn nhận được trạng thái với mức hiển thị tương ứng. Baseline dựng lại VFX duy trì mà không phát burst kích hoạt. Event `TELEPORT` (ID 26) dùng payload `from_x`, `from_y`, `x`, `y` (tọa độ world); server phát event này khi một gameplay teleport được nối vào sim.
 
 Welcome của realtime world (`world.welcome`) có `movement_speed` (đơn vị map/giây), tốc độ authoritative đã tính từ passive `movement`. Client dùng giá trị này cho local prediction; client cũ có thể bỏ qua trường này.
 

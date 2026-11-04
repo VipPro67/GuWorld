@@ -1,5 +1,6 @@
 import type { WorldEntityState, WorldProjectileState, WorldSnapshotPayload } from "./Protocol.ts";
 import { dequantize, type DeltaEntity, type Projectile, type Spawn } from "./v2/Codec.ts";
+import { statusId } from "./v2/status.ts";
 
 type FullSnapshot = {
   tick: number;
@@ -122,7 +123,9 @@ function entityFrom(spawn: Spawn, state: DeltaEntity, spawns: Map<number, Spawn>
     max_hp: spawn.maxHp || undefined, shield: state.shield || undefined, mana: state.mana, max_mana: spawn.maxMana || undefined,
     thought: state.thought, max_thought: spawn.maxThought || undefined, cast_end_tick: (state.mask & 16) ? state.castEndTick : undefined,
     cast_windup_ticks: (state.mask & 16) ? state.castWindup : undefined, stealthed: (spawn.flags & 2) !== 0 || undefined,
-    flying: (spawn.flags & 4) !== 0 || undefined, form_active: (spawn.flags & 8) !== 0 || undefined, owner_id: ownerId,
+    statuses: state.statuses.map(statusId).filter((id): id is string => !!id),
+    flying: (spawn.flags & 4) !== 0 || undefined, form_active: (spawn.flags & 8) !== 0 || undefined,
+    hasted: (spawn.flags & 16) !== 0 || undefined, owner_id: ownerId,
     companion_kind: spawn.companionKind || undefined, stance,
   };
 }
@@ -138,9 +141,11 @@ function mergeEntity(spawn: Spawn, previous: WorldEntityState | undefined, state
     if (state.vitalsSub & 8) next.thought = state.thought;
   }
   if (state.mask & 16) { next.cast_end_tick = state.castEndTick || undefined; next.cast_windup_ticks = state.castWindup || undefined; }
+  if (state.mask & 8) next.statuses = state.statuses.map(statusId).filter((id): id is string => !!id);
   if (state.mask & 32) {
     next.pvp_enabled = (state.flags & 1) !== 0; next.stealthed = (state.flags & 2) !== 0 || undefined;
     next.flying = (state.flags & 4) !== 0 || undefined; next.form_active = (state.flags & 8) !== 0 || undefined;
+    next.hasted = (state.flags & 16) !== 0 || undefined;
   }
   if (state.hasExt) {
     if (state.ext & 1) next.ai_state = aiStateName(state.aiState);

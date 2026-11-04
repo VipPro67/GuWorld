@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
-	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 // EvaluateGuDurabilityHealing passively restores durability for Gus with durability >= 20 and < 100,
@@ -47,8 +46,25 @@ type NourishGuRequest struct {
 	InstanceID string `json:"instance_id" binding:"required"`
 }
 
+var durabilityManaRankWeights = [...]float64{1, 2, 5, 20, 100, 1_000, 10_000, 100_000, 1_000_000}
+
+func durabilityManaCost(playerRank, guRank int, baseCost float64) float64 {
+	if playerRank < 1 {
+		playerRank = 1
+	} else if playerRank > len(durabilityManaRankWeights) {
+		playerRank = len(durabilityManaRankWeights)
+	}
+	if guRank < 1 {
+		guRank = 1
+	} else if guRank > len(durabilityManaRankWeights) {
+		guRank = len(durabilityManaRankWeights)
+	}
+	return baseCost * durabilityManaRankWeights[guRank-1] / durabilityManaRankWeights[playerRank-1]
+}
+
 // NourishGu actively channels player mana to nourish an injured Gu (durability >= 20).
-// Consumes mana = targetRank * 20, restores +15.0 durability (max 100.0).
+// Consumes 10 mana at equal rank 5, scaled by Gu rank power / player rank power.
+// Restores +15.0 durability (max 100.0).
 func NourishGu(c *gin.Context) {
 	var req NourishGuRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -77,21 +93,13 @@ func NourishGu(c *gin.Context) {
 		return
 	}
 
-	guInv, err := db.LoadPlayerGus(tx, authID.String(), true)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách Cổ trùng"})
+	targetGu, err := db.LoadPlayerGuForUpdate(tx, authID.String(), req.InstanceID)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng này trong Không Khiếu"})
 		return
 	}
-
-	var targetGu *models.GuInstance
-	for i := range guInv {
-		if guInv[i].InstanceID == req.InstanceID {
-			targetGu = &guInv[i]
-			break
-		}
-	}
-	if targetGu == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng này trong Không Khiếu"})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải Cổ trùng cần ôn dưỡng"})
 		return
 	}
 
@@ -108,7 +116,7 @@ func NourishGu(c *gin.Context) {
 		return
 	}
 
-	manaCost := float64(targetGu.Rank * 20)
+	manaCost := durabilityManaCost(player.Rank, targetGu.Rank, 10)
 	if player.CurrentMana < manaCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Chân Nguyên để Ôn Dưỡng (cần %.0f, hiện có %.1f)", manaCost, player.CurrentMana)})
 		return
@@ -146,7 +154,7 @@ type RepairGuRequest struct {
 	InstanceID string `json:"instance_id" binding:"required"`
 }
 
-// RepairGu restores heavily damaged Gus (durability < 20 or state == 'DAMAGED') using Primeval Stones / Immortal Stones.
+// RepairGu restores heavily damaged Gus (durability < 20 or state == 'DAMAGED') using mana.
 // Sets durability back to 50.0 and state to 'ACTIVE'.
 func RepairGu(c *gin.Context) {
 	var req RepairGuRequest
@@ -168,9 +176,9 @@ func RepairGu(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var primevalStones, immortalStones float64
-	if err := tx.QueryRow(`SELECT primeval_stones, immortal_stones FROM players WHERE id = $1 FOR UPDATE`, authID).Scan(&primevalStones, &immortalStones); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể nạp thông tin người chơi"})
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể nạp thông tin Chân Nguyên"})
 		return
 	}
 
@@ -193,28 +201,15 @@ func RepairGu(c *gin.Context) {
 		return
 	}
 
-	if targetGu.Rank >= 6 {
-		cost := 1.0
-		if immortalStones < cost {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên Thạch để tu bổ Tiên Cổ (cần %.0f)", cost)})
-			return
-		}
-		immortalStones -= cost
-		if _, err := tx.Exec(`UPDATE players SET immortal_stones = $1 WHERE id = $2`, immortalStones, authID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ Tiên Nguyên Thạch"})
-			return
-		}
-	} else {
-		cost := float64(targetGu.Rank * 50)
-		if primevalStones < cost {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để tu bổ (cần %.0f)", cost)})
-			return
-		}
-		primevalStones -= cost
-		if _, err := tx.Exec(`UPDATE players SET primeval_stones = $1 WHERE id = $2`, primevalStones, authID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ Nguyên Thạch"})
-			return
-		}
+	manaCost := durabilityManaCost(player.Rank, targetGu.Rank, 5)
+	if player.CurrentMana < manaCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Chân Nguyên để tu bổ (cần %.2f, hiện có %.2f)", manaCost, player.CurrentMana)})
+		return
+	}
+	player.CurrentMana -= manaCost
+	if _, err := tx.Exec(`UPDATE players SET current_mana = $1, last_mana_tick = NOW() WHERE id = $2`, player.CurrentMana, player.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ Chân Nguyên để tu bổ"})
+		return
 	}
 
 	targetGu.Durability = 50.0
@@ -231,9 +226,11 @@ func RepairGu(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":     "Tu bổ Cổ trùng thành công, đã khôi phục nguyên khí căn bản!",
-		"instance_id": targetGu.InstanceID,
-		"durability":  50.0,
-		"status":      "ACTIVE",
+		"message":        "Tu bổ Cổ trùng thành công, đã khôi phục nguyên khí căn bản!",
+		"instance_id":    targetGu.InstanceID,
+		"durability":     50.0,
+		"status":         "ACTIVE",
+		"mana_spent":     manaCost,
+		"remaining_mana": player.CurrentMana,
 	})
 }

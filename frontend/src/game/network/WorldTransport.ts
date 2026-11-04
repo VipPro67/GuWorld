@@ -690,7 +690,7 @@ export class WorldTransport implements WorldTransportLike {
     removed: number[];
     projectiles: Projectile[];
   }): void {
-    const snapshot = this.projection.projectDelta(delta, this.buffer.getState()?.baseTick ?? delta.tick);
+    const snapshot = this.projection.projectDelta({ ...delta, states: delta.entities }, this.buffer.getState()?.baseTick ?? delta.tick);
     const applied = this.buffer.apply(snapshot);
     if (applied.status === "resync_required") {
       if (this.requestResync(applied.reason)) return;

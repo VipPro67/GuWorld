@@ -27,6 +27,7 @@ const (
 	EventTransformationStarted uint8 = 23
 	EventTransformationEnded   uint8 = 24
 	EventTransformationBroken  uint8 = 25
+	EventTeleport              uint8 = 26
 )
 
 var eventTypeIDs = map[string]uint8{
@@ -43,6 +44,7 @@ var eventTypeIDs = map[string]uint8{
 	"COMPANION_INJURED": EventCompanionInjured, "COMPANION_PERMADEATH": EventCompanionPermadeath,
 	"TRANSFORMATION_STARTED": EventTransformationStarted, "TRANSFORMATION_ENDED": EventTransformationEnded,
 	"TRANSFORMATION_BROKEN": EventTransformationBroken,
+	"TELEPORT":              EventTeleport,
 }
 
 var eventTypeNames = func() map[uint8]string {

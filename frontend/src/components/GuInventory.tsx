@@ -44,6 +44,12 @@ const getPathColor = (path: string): string => {
   return `${c.bg} ${c.text} ${c.border}`;
 };
 
+const DURABILITY_MANA_RANK_WEIGHTS = [1, 2, 5, 20, 100, 1_000, 10_000, 100_000, 1_000_000];
+const durabilityManaCost = (playerRank: number, guRank: number, baseCost: number) => {
+  const rankWeight = (rank: number) => DURABILITY_MANA_RANK_WEIGHTS[Math.min(Math.max(rank, 1), DURABILITY_MANA_RANK_WEIGHTS.length) - 1] || 1;
+  return baseCost * rankWeight(guRank) / rankWeight(playerRank);
+};
+
 const feedResourceInfo = (foodId: string, player: Player, rank: number) => {
   switch (foodId) {
     case "primeval_stone": return { label: "Nguyên Thạch", balance: player.primeval_stones || 0, cost: 2 ** rank, preserveOne: false };
@@ -1885,7 +1891,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                     {spec.gu_type !== "Consumable" && !isDead && (gu.durability ?? 100) >= 20 && (gu.durability ?? 100) < 100 && status !== "DAMAGED" && (
                                       <button
                                         type="button"
-                                        disabled={actionLoading || nourishingId === gu.instance_id}
+                                        disabled={actionLoading || nourishingId === gu.instance_id || player.current_mana < durabilityManaCost(player.rank, gu.rank, 10)}
                                         onClick={async () => {
                                           setNourishingId(gu.instance_id);
                                           try {
@@ -1895,7 +1901,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                           }
                                         }}
                                         className="text-[9px] font-bold py-1 px-2.5 bg-cyan-950/40 text-cyan-300 border border-cyan-800/50 hover:bg-cyan-900/60 rounded font-mono cursor-pointer"
-                                        title="Dùng Chân Nguyên ôn dưỡng phục hồi độ bền"
+                                        title={`Dùng ${durabilityManaCost(player.rank, gu.rank, 10)} Chân Nguyên ôn dưỡng phục hồi độ bền`}
                                       >
                                         {nourishingId === gu.instance_id ? "..." : "Ôn Dưỡng"}
                                       </button>
@@ -1905,7 +1911,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                     {spec.gu_type !== "Consumable" && !isDead && ((gu.durability ?? 100) < 20 || status === "DAMAGED") && (
                                       <button
                                         type="button"
-                                        disabled={actionLoading || repairingId === gu.instance_id}
+                                        disabled={actionLoading || repairingId === gu.instance_id || player.current_mana < durabilityManaCost(player.rank, gu.rank, 5)}
                                         onClick={async () => {
                                           setRepairingId(gu.instance_id);
                                           try {
@@ -1915,7 +1921,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                           }
                                         }}
                                         className="text-[9px] font-bold py-1 px-2.5 bg-rose-950/40 text-rose-300 border border-rose-800/50 hover:bg-rose-900/60 rounded font-mono cursor-pointer"
-                                        title="Tu bổ khôi phục Cổ trùng trọng thương"
+                                        title={`Tốn ${durabilityManaCost(player.rank, gu.rank, 5)} Chân Nguyên để tu bổ khôi phục Cổ trùng trọng thương`}
                                       >
                                         {repairingId === gu.instance_id ? "..." : "Tu Bổ"}
                                       </button>
@@ -2416,8 +2422,8 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                 const vitalGu = (player.gu_inventory || []).find((g) => g.is_vital);
                 const canVitalSuppress = !!vitalGu && vitalGu.rank >= singleGu.rank + 2;
                 const subjugateManaCost = singleGu.rank * 25;
-                const nourishManaCost = singleGu.rank * 20;
-                const repairStoneCost = singleGu.rank >= 6 ? 1 : singleGu.rank * 50;
+                const nourishManaCost = durabilityManaCost(player.rank, singleGu.rank, 10);
+                const repairManaCost = durabilityManaCost(player.rank, singleGu.rank, 5);
 
                 return (
                   <div className="space-y-2 pt-2 border-t border-zinc-900">
@@ -2512,7 +2518,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           disabled={
                             actionLoading ||
                             repairingId === singleGu.instance_id ||
-                            (singleGu.rank >= 6 ? player.immortal_stones < 1 : player.primeval_stones < repairStoneCost)
+                            player.current_mana < repairManaCost
                           }
                           onClick={async () => {
                             setRepairingId(singleGu.instance_id);
@@ -2523,11 +2529,11 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                             }
                           }}
                           className="py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-rose-700 hover:bg-rose-600 text-white shadow-[0_0_12px_rgba(244,63,94,0.4)]"
-                          title={`Tu bổ Cổ trùng trọng thương về 50.0 độ bền (Tốn ${singleGu.rank >= 6 ? "1 Tiên Nguyên Thạch" : `${repairStoneCost} Nguyên Thạch`})`}
+                          title={`Tu bổ Cổ trùng trọng thương về 50.0 độ bền (Tốn ${repairManaCost} Chân Nguyên)`}
                         >
                           {repairingId === singleGu.instance_id
                             ? "Đang tu bổ..."
-                            : `🔨 Tu Bổ (${singleGu.rank >= 6 ? "1 TNT" : `${repairStoneCost} NT`})`}
+                            : `🔨 Tu Bổ (-${repairManaCost} M)`}
                         </button>
                       )}
 

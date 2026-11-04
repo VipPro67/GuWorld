@@ -61,6 +61,7 @@ export interface WorldEntityState {
   statuses?: string[];
   stealthed?: boolean;
   flying?: boolean;
+  hasted?: boolean;
   form_active?: boolean;
   transformation?: WorldTransformationState;
   owner_id?: string;

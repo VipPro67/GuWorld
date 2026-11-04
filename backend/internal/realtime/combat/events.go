@@ -29,6 +29,7 @@ const (
 	EventTransformationStarted EventType = "TRANSFORMATION_STARTED"
 	EventTransformationEnded   EventType = "TRANSFORMATION_ENDED"
 	EventTransformationBroken  EventType = "TRANSFORMATION_BROKEN"
+	EventTeleport              EventType = "TELEPORT"
 )
 
 // Event is emitted by the zone tick owner. IDs are monotonic per zone and are
@@ -46,6 +47,8 @@ type Event struct {
 	ImpactVFX         string
 	X                 float64
 	Y                 float64
+	FromX             float64
+	FromY             float64
 	Amount            float64
 	ShieldAbsorbed    float64
 	HPDamage          float64
