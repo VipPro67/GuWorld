@@ -124,10 +124,10 @@ func ChooseRespawn(c *gin.Context) {
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), `
 		UPDATE players SET hp=1,current_region=$1,world_zone_id=$1,world_instance_id='',map_instance_id=NULL,
-			x=$2,y=$3,world_x=$2,world_y=$3,world_safe_x=$2,world_safe_y=$3,
+			x=$2,y=$3,world_x=$4,world_y=$5,world_safe_x=$6,world_safe_y=$7,
 			world_location_revision=world_location_revision+1,version=version+1
-		WHERE id=$4
-	`, chosen.Region, chosen.X, chosen.Y, playerID); err != nil {
+		WHERE id=$8
+	`, chosen.Region, chosen.X, chosen.Y, float64(chosen.X), float64(chosen.Y), float64(chosen.X), float64(chosen.Y), playerID); err != nil {
 		logger.S.Errorf("respawn choice: update player location player=%s region=%q x=%d y=%d: %v", playerID, chosen.Region, chosen.X, chosen.Y, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí hồi sinh"})
 		return

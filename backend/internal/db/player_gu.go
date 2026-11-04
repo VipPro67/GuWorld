@@ -98,6 +98,22 @@ func LoadPlayerGus(q Queryer, playerID string, equippedOnly bool) (models.GuInve
 	return inventory, rows.Err()
 }
 
+// LoadPlayerGuForUpdate loads and locks one Gu owned by a player, excluding
+// Gus assigned to actors. The row lock keeps inventory mutations for this Gu
+// serialized with operations such as repair.
+func LoadPlayerGuForUpdate(q Queryer, playerID, instanceID string) (*models.GuInstance, error) {
+	gu, err := scanGuRow(q.QueryRow(
+		`SELECT `+playerGuColumns+` FROM player_gu
+		 WHERE player_id = $1 AND id = $2 AND location IS DISTINCT FROM 'ACTOR'
+		 FOR UPDATE`,
+		playerID, instanceID,
+	))
+	if err != nil {
+		return nil, err
+	}
+	return &gu, nil
+}
+
 // AddPlayerGu inserts a single Gu instance owned by a player, upserting on id conflict.
 // When the new instance is equipped, it first counts the player's already-equipped
 // Gus and refuses to equip beyond MaxEquippedGus to avoid over-equipping.

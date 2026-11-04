@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"math"
 	"net/http"
@@ -173,21 +174,13 @@ func RepairGu(c *gin.Context) {
 		return
 	}
 
-	guInv, err := db.LoadPlayerGus(tx, authID.String(), true)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách Cổ trùng"})
+	targetGu, err := db.LoadPlayerGuForUpdate(tx, authID.String(), req.InstanceID)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng này trong Không Khiếu"})
 		return
 	}
-
-	var targetGu *models.GuInstance
-	for i := range guInv {
-		if guInv[i].InstanceID == req.InstanceID {
-			targetGu = &guInv[i]
-			break
-		}
-	}
-	if targetGu == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng này trong Không Khiếu"})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải Cổ trùng cần tu bổ"})
 		return
 	}
 
