@@ -207,8 +207,10 @@ type World struct {
 	collision Collision
 	allowPvP  bool
 
-	dormantWhenEmpty bool
-	activePlayers    int
+	dormantWhenEmpty  bool
+	activePlayers     int
+	monsterGraceTicks uint64
+	monsterGraceUntil uint64
 
 	// The tick owner mutates entities; setup-only direct methods also take
 	// stateMu, while running lifecycle changes enter through lifecycleInbox.
@@ -386,6 +388,14 @@ func (w *World) SetDormantWhenEmpty(dormant bool) {
 	w.dormantWhenEmpty = dormant
 }
 
+// SetMonsterActivationGrace delays monster AI after the first player enters a
+// zone. Configure it before the zone runner starts.
+func (w *World) SetMonsterActivationGrace(ticks uint64) {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	w.monsterGraceTicks = ticks
+}
+
 func (w *World) DormantWhenEmpty() bool {
 	w.stateMu.Lock()
 	defer w.stateMu.Unlock()
@@ -505,6 +515,9 @@ func (w *World) addEntityLocked(entity Entity) error {
 	copy := entity
 	copy.moveIntent = Vec2{}
 	if copy.Kind == EntityPlayer {
+		if w.activePlayers == 0 && w.monsterGraceTicks > 0 {
+			w.monsterGraceUntil = w.tick + w.monsterGraceTicks
+		}
 		w.activePlayers++
 	}
 	w.entities[entity.ID] = &copy
@@ -658,7 +671,6 @@ func (w *World) Step() Snapshot {
 		w.completeLifecycleCommands(lifecycleResults)
 		return snapshot
 	}
-
 	commands := w.collectCommands()
 	sort.Slice(commands, func(i, j int) bool {
 		if commands[i].EntityID == commands[j].EntityID {
@@ -729,7 +741,9 @@ func (w *World) Step() Snapshot {
 		}
 	}
 
-	w.stepMonsterAI()
+	if w.tick > w.monsterGraceUntil {
+		w.stepMonsterAI()
+	}
 	w.stepCompanionAI()
 	w.tickCombat()
 	w.tickTransformationLocked()

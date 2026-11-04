@@ -682,6 +682,9 @@ func main() {
 				return sim.ZoneKey{}, realtimeworld.ZoneMap{}, active, err
 			}
 			base.Monsters = spawns
+			// Give the player five seconds to finish loading into the private
+			// tribulation map before its monsters begin acquiring targets.
+			base.MonsterActivationGraceTicks = 100 // realtime zones run at 20 Hz
 			// The tribulation encounter is a private, single-player map. Send
 			// every monster and node to the client (and every checkpoint) so a
 			// kill can never be hidden outside the public AOI radius.

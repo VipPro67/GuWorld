@@ -178,18 +178,19 @@ const (
 
 // ZoneMap carries the immutable map artifact used by one configured zone.
 type ZoneMap struct {
-	Collision     sim.Collision
-	Spawns        []sim.Vec2
-	Monsters      []MonsterSpawn
-	Portals       []Portal
-	PvP           bool
-	Safe          bool
-	Hash          string
-	Width         int
-	Height        int
-	LegacyOriginX float64
-	LegacyOriginY float64
-	LegacyScale   float64
+	Collision                   sim.Collision
+	Spawns                      []sim.Vec2
+	Monsters                    []MonsterSpawn
+	MonsterActivationGraceTicks uint64
+	Portals                     []Portal
+	PvP                         bool
+	Safe                        bool
+	Hash                        string
+	Width                       int
+	Height                      int
+	LegacyOriginX               float64
+	LegacyOriginY               float64
+	LegacyScale                 float64
 	// ViewRadius overrides the default AOI radius for private zones whose
 	// authored map is smaller than or equal to the encounter. Zero keeps the
 	// public AOI default.
@@ -560,6 +561,7 @@ func buildManagedZone(key sim.ZoneKey, queueSize int, zoneMap ZoneMap) (*managed
 	}
 	world.SetPvPEnabled(zoneMap.PvP)
 	world.SetDormantWhenEmpty(true)
+	world.SetMonsterActivationGrace(zoneMap.MonsterActivationGraceTicks)
 	if err := world.ConfigureMonsterSpawns(entities); err != nil {
 		return nil, fmt.Errorf("configure monster spawns in zone %s: %w", key.String(), err)
 	}
