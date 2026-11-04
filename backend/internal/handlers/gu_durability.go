@@ -131,7 +131,7 @@ func NourishGu(c *gin.Context) {
 		return
 	}
 
-	if _, err := tx.Exec(`UPDATE players SET current_mana = $1, last_mana_tick = NOW() WHERE id = $2`, player.CurrentMana, player.ID); err != nil {
+	if _, err := tx.Exec(`UPDATE players SET current_mana = $1, last_mana_update = NOW() WHERE id = $2`, player.CurrentMana, player.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Chân Nguyên"})
 		return
 	}
@@ -207,7 +207,7 @@ func RepairGu(c *gin.Context) {
 		return
 	}
 	player.CurrentMana -= manaCost
-	if _, err := tx.Exec(`UPDATE players SET current_mana = $1, last_mana_tick = NOW() WHERE id = $2`, player.CurrentMana, player.ID); err != nil {
+	if _, err := tx.Exec(`UPDATE players SET current_mana = $1, last_mana_update = NOW() WHERE id = $2`, player.CurrentMana, player.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ Chân Nguyên để tu bổ"})
 		return
 	}
