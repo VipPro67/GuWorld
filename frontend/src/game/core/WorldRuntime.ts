@@ -25,6 +25,7 @@ import { WORLD_COOLDOWN_SLOTS } from "../network/Protocol.ts";
 import { SelfPredictor } from "../network/Prediction.ts";
 import { RemoteInterpolator } from "../network/RemoteInterpolator.ts";
 import { WorldClock } from "./WorldClock.ts";
+import { WorldJoinRetryPolicy } from "./WorldJoinRetryPolicy.ts";
 import {
   clampMoveTarget,
   normalizeWorldVector,
@@ -39,14 +40,6 @@ const STALE_WORLD_RECONNECT_COOLDOWN_MS = 5_000;
 // A reconnect can lose the race against the previous socket releasing the
 // character lease, so admission answers 409 and the client must retry instead
 // of parking in a terminal error state.
-const JOIN_RETRYABLE_CODES = new Set(["realtime_character_already_owned", "realtime_lease_stale"]);
-const JOIN_SLOW_RETRY_CODES = new Set(["realtime_join_rate_limited", "realtime_zone_full"]);
-const JOIN_RETRY_BASE_MS = 300;
-const JOIN_RETRY_MAX_MS = 2_000;
-const MAX_JOIN_RETRIES = 7;
-const JOIN_SLOW_RETRY_BASE_MS = 5_000;
-const JOIN_SLOW_RETRY_MAX_MS = 15_000;
-const MAX_JOIN_SLOW_RETRIES = 3;
 
 export type WorldRuntimeStatus =
   | "idle"
@@ -190,8 +183,7 @@ export class WorldRuntime {
   private inputAccumulator = 0;
   private sendAccumulator = 0;
   private lastStaleReconnectAt = 0;
-  private joinRetryAttempt = 0;
-  private joinRetryMode: "fast" | "slow" = "fast";
+  private readonly joinRetryPolicy = new WorldJoinRetryPolicy();
   private joinRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly metrics = new RealtimeMetricsCollector();
   private lastSocketMessagesIn = 0;
@@ -217,8 +209,7 @@ export class WorldRuntime {
       // with no socket and no timer.
       return null;
     }
-    this.joinRetryAttempt = 0;
-    this.joinRetryMode = "fast";
+    this.joinRetryPolicy.reset();
     this.clearJoinRetry();
     return this.joinSession(join);
   }
@@ -244,8 +235,7 @@ export class WorldRuntime {
       this.selfId = welcome.entity_id;
       this.clock.sync(welcome.server_tick, welcome.tick_rate);
       this.applySnapshot(this.socket.getSnapshot());
-      this.joinRetryAttempt = 0;
-      this.joinRetryMode = "fast";
+      this.joinRetryPolicy.reset();
       this.status = "joined";
       this.metrics.mark("joined", welcome.zone_id);
       this.emit();
@@ -254,10 +244,7 @@ export class WorldRuntime {
       if (generation !== this.joinGeneration) return null;
       const code = error instanceof WorldRealtimeError ? error.code : "world_connect_failed";
       const message = error instanceof Error ? error.message : "Không thể vào world realtime";
-      if (
-        (JOIN_RETRYABLE_CODES.has(code) || JOIN_SLOW_RETRY_CODES.has(code)) &&
-        this.scheduleJoinRetry(code)
-      ) {
+      if (this.scheduleJoinRetry(code)) {
         return null;
       }
       this.metrics.mark("join_failed", code);
@@ -274,19 +261,9 @@ export class WorldRuntime {
    * class is exhausted, so the caller can fall through to a terminal error.
    */
   private scheduleJoinRetry(code: string): boolean {
+    const delay = this.joinRetryPolicy.nextDelay(code);
+    if (delay === null) return false;
     this.metrics.mark("join_retry", code);
-    const slow = JOIN_SLOW_RETRY_CODES.has(code);
-    const mode = slow ? "slow" : "fast";
-    if (this.joinRetryMode !== mode) {
-      // A different failure class gets its own budget.
-      this.joinRetryMode = mode;
-      this.joinRetryAttempt = 0;
-    }
-    const baseMs = slow ? JOIN_SLOW_RETRY_BASE_MS : JOIN_RETRY_BASE_MS;
-    const maxMs = slow ? JOIN_SLOW_RETRY_MAX_MS : JOIN_RETRY_MAX_MS;
-    const maxAttempts = slow ? MAX_JOIN_SLOW_RETRIES : MAX_JOIN_RETRIES;
-    if (this.joinRetryAttempt >= maxAttempts) return false;
-    this.joinRetryAttempt += 1;
     this.clearJoinRetry();
     // Stay in "connecting" so the player sees a reconnect instead of a dead
     // error screen while the stale controller releases the lease.
@@ -294,7 +271,6 @@ export class WorldRuntime {
     this.errorCode = code;
     this.errorMessage = "";
     this.emit();
-    const delay = Math.min(baseMs * Math.pow(1.6, this.joinRetryAttempt - 1), maxMs);
     this.joinRetryTimer = setTimeout(() => {
       this.joinRetryTimer = null;
       void this.reopen();
@@ -310,8 +286,7 @@ export class WorldRuntime {
 
   public async reconnect(reason = "manual"): Promise<WorldWelcomePayload | null> {
     this.reconnectReason = reason;
-    this.joinRetryAttempt = 0;
-    this.joinRetryMode = "fast";
+    this.joinRetryPolicy.reset();
     this.clearJoinRetry();
     return this.reopen();
   }

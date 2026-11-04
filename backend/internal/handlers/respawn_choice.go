@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type respawnChoice struct {
@@ -111,12 +112,23 @@ func ChooseRespawn(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Điểm hồi sinh không khả dụng"})
 		return
 	}
+	var regionExists bool
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM regions WHERE id=$1 AND is_active=TRUE)`, chosen.Region).Scan(&regionExists); err != nil {
+		logger.S.Errorf("respawn choice: validate region player=%s region=%q: %v", playerID, chosen.Region, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác thực khu vực hồi sinh"})
+		return
+	}
+	if !regionExists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Khu vực hồi sinh không còn khả dụng; hãy chọn điểm khác"})
+		return
+	}
 	if _, err := tx.ExecContext(c.Request.Context(), `
 		UPDATE players SET hp=1,current_region=$1,world_zone_id=$1,world_instance_id='',map_instance_id=NULL,
 			x=$2,y=$3,world_x=$2,world_y=$3,world_safe_x=$2,world_safe_y=$3,
 			world_location_revision=world_location_revision+1,version=version+1
 		WHERE id=$4
 	`, chosen.Region, chosen.X, chosen.Y, playerID); err != nil {
+		logger.S.Errorf("respawn choice: update player location player=%s region=%q x=%d y=%d: %v", playerID, chosen.Region, chosen.X, chosen.Y, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí hồi sinh"})
 		return
 	}
@@ -162,6 +174,7 @@ func deathRespawnOptions(playerID uuid.UUID, deathRegion string, deathX, deathY 
 	var sectX, sectY int
 	if err := db.DB.QueryRow(`
 		SELECT s.region,s.map_x,s.map_y FROM sect_members sm JOIN sects s ON s.id=sm.sect_id
+		JOIN regions r ON r.id=s.region AND r.is_active=TRUE
 		WHERE sm.player_id=$1
 	`, playerID).Scan(&sectRegion, &sectX, &sectY); err == nil {
 		options = append(options, respawnChoice{Kind: "sect", Label: "Tông môn", Region: sectRegion, X: sectX, Y: sectY})

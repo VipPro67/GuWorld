@@ -92,6 +92,9 @@ export const createNotificationsSlice: StateCreator<ApiResponseData, ApiResponse
 
   _onNotificationEvent: (payload: PlayerNotification) => {
     if (!payload?.id) return;
+    if (payload.type === "death_drop" && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("player-death-respawn-choice"));
+    }
     set((state: ApiResponseData) => {
       const exists = state.notifications.some((n: PlayerNotification) => n.id === payload.id);
       if (exists) return {};

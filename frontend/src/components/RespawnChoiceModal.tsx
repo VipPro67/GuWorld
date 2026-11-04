@@ -30,7 +30,7 @@ export function RespawnChoiceModal() {
       setPending(Boolean(data.pending));
       setOptions(Array.isArray(data.options) ? data.options : []);
     } catch {
-      // Retry on the next poll; the choice is persisted server-side.
+      // The choice is persisted server-side; retry on notification or tab return.
     }
   }, [player, token]);
 
@@ -40,13 +40,9 @@ export function RespawnChoiceModal() {
       return;
     }
     void load();
-    // Respawn choices are only created on death. Keep a modest foreground
-    // check so the modal appears promptly, and stop spending requests in a
-    // background tab.
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load();
-    }, 15000);
-    return () => window.clearInterval(timer);
+    const onDeathNotification = () => void load();
+    window.addEventListener("player-death-respawn-choice", onDeathNotification);
+    return () => window.removeEventListener("player-death-respawn-choice", onDeathNotification);
   }, [player?.id, token, load]);
 
   useEffect(() => {

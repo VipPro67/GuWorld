@@ -17,10 +17,8 @@ import type {
   CapturePayload,
   CastPayload,
   CompanionStancePayload,
-  WorldEntityState,
   WorldEvent,
   WorldJoinPayload,
-  WorldProjectileState,
   WorldRejectPayload,
   WorldSnapshotPayload,
   WorldTransferPayload,
@@ -28,6 +26,7 @@ import type {
 } from "./Protocol.ts";
 import type { BufferedWorldState } from "./SnapshotBuffer.ts";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
+import { WorldStateProjection } from "./WorldStateProjection.ts";
 import {
   DatagramOp,
   MAX_DATAGRAM_SIZE,
@@ -93,9 +92,7 @@ export class WorldTransport implements WorldTransportLike {
   private joinTimeout: ReturnType<typeof setTimeout> | null = null;
   private lastResyncSentAt = 0;
 
-  private netToSpawn = new Map<number, Spawn>();
-  private entityByNet = new Map<number, WorldEntityState>();
-  private netByEntity = new Map<string, number>();
+  private readonly projection = new WorldStateProjection();
 
   private snapshotListeners = new Set<(state: BufferedWorldState) => void>();
   private eventListeners = new Set<(event: WorldEvent) => void>();
@@ -288,7 +285,7 @@ export class WorldTransport implements WorldTransportLike {
   public sendCast(cast: Omit<CastPayload, "seq">): number | null {
     if (!this.joined) return null;
     const seq = ++this.nextInputSeq;
-    const targetNetId = cast.target_id ? (this.netByEntity.get(cast.target_id) ?? 0) : 0;
+    const targetNetId = cast.target_id ? (this.projection.netId(cast.target_id) ?? 0) : 0;
     void this.sendFrame(
       encodeCast({
         seq,
@@ -307,14 +304,14 @@ export class WorldTransport implements WorldTransportLike {
   public sendBasicAttack(attack: Omit<BasicAttackPayload, "seq">): number | null {
     if (!this.joined) return null;
     const seq = ++this.nextInputSeq;
-    const targetNetId = attack.target_id ? (this.netByEntity.get(attack.target_id) ?? 0) : 0;
+    const targetNetId = attack.target_id ? (this.projection.netId(attack.target_id) ?? 0) : 0;
     void this.sendFrame(encodeAttack({ seq, targetNetId, aimX: attack.aim_x, aimY: attack.aim_y }));
     return seq;
   }
 
   public sendCapture(targetId: string, guId?: string): number | null {
     if (!this.joined) return null;
-    const targetNetId = this.netByEntity.get(targetId) ?? 0;
+    const targetNetId = this.projection.netId(targetId) ?? 0;
     if (targetNetId === 0) return null;
     const seq = ++this.nextInputSeq;
     void this.sendFrame(encodeCapture({ seq, targetNetId, guId }));
@@ -324,7 +321,7 @@ export class WorldTransport implements WorldTransportLike {
   public sendCompanionStance(stance: "DEFEND" | "FOCUS" | "FOLLOW", focusTargetId?: string): number | null {
     if (!this.joined) return null;
     const seq = ++this.nextInputSeq;
-    const focusNetId = focusTargetId ? (this.netByEntity.get(focusTargetId) ?? 0) : 0;
+    const focusNetId = focusTargetId ? (this.projection.netId(focusTargetId) ?? 0) : 0;
     void this.sendFrame(encodeStance({ seq, stance: stanceCode(stance), focusNetId }));
     return seq;
   }
@@ -400,9 +397,7 @@ export class WorldTransport implements WorldTransportLike {
     this.transport = null;
     this.ownsTransport = false;
     this.buffer.reset();
-    this.netToSpawn.clear();
-    this.entityByNet.clear();
-    this.netByEntity.clear();
+    this.projection.reset();
   }
 
   private releaseStreamLocks(): void {
@@ -526,8 +521,8 @@ export class WorldTransport implements WorldTransportLike {
         try {
           const welcome = decodeWelcome(payload);
           const full = decodeSnapshotFull(welcome.snapshot);
-          this.applyBaseline(full);
-          const snapshot = this.toSnapshotPayload(full, true);
+          this.projection.applyBaseline(full);
+          const snapshot = this.projection.projectFull(full, true, full.tick);
           const applied = this.buffer.apply(snapshot);
           if (applied.status !== "applied") throw new Error("Welcome baseline could not be applied");
           const skills = welcome.skillsJson.length > 0
@@ -563,8 +558,8 @@ export class WorldTransport implements WorldTransportLike {
       case Op.Snapshot: {
         try {
           const full = decodeSnapshotFull(payload);
-          if (full.isBaseline) this.applyBaseline(full);
-          const applied = this.buffer.apply(this.toSnapshotPayload(full, full.isBaseline));
+          if (full.isBaseline) this.projection.applyBaseline(full);
+          const applied = this.buffer.apply(this.projection.projectFull(full, full.isBaseline, this.buffer.getState()?.baseTick ?? full.tick));
           if (applied.status === "resync_required") {
             if (!full.isBaseline && this.requestResync(applied.reason)) {
               break;
@@ -592,8 +587,8 @@ export class WorldTransport implements WorldTransportLike {
         try {
           const { events } = decodeEvents(payload);
           for (const event of events) {
-            const source = this.netToSpawn.get(event.source)?.entityId;
-            const target = this.netToSpawn.get(event.target)?.entityId;
+            const source = this.projection.entityId(event.source);
+            const target = this.projection.entityId(event.target);
             let body: Record<string, unknown> | undefined;
             if (event.payload.length > 0) {
               try {
@@ -620,9 +615,7 @@ export class WorldTransport implements WorldTransportLike {
       case Op.Transfer: {
         try {
           const transfer = decodeTransfer(payload);
-          this.netToSpawn.clear();
-          this.entityByNet.clear();
-          this.netByEntity.clear();
+          this.projection.reset();
           const transferPayload: WorldTransferPayload = {
             from_zone_id: transfer.fromZoneId || undefined,
             to_zone_id: transfer.toZoneId,
@@ -681,33 +674,12 @@ export class WorldTransport implements WorldTransportLike {
     }
   }
 
-  private applyBaseline(full: {
-    spawns: Spawn[];
-    states: DeltaEntity[];
-  }): void {
-    this.netToSpawn.clear();
-    this.entityByNet.clear();
-    this.netByEntity.clear();
-    for (const spawn of full.spawns) {
-      this.netToSpawn.set(spawn.netId, spawn);
-      this.netByEntity.set(spawn.entityId, spawn.netId);
-    }
-    const states = new Map<number, DeltaEntity>();
-    for (const state of full.states) states.set(state.netId, state);
-    for (const spawn of full.spawns) {
-      const state = states.get(spawn.netId);
-      if (state) this.entityByNet.set(spawn.netId, entityFrom(spawn, state, this.netToSpawn));
-    }
-  }
-
   private applySpawnPayload(payload: Uint8Array): void {
     const reader = new Reader(payload);
     const count = reader.u8();
-    for (let i = 0; i < count; i += 1) {
-      const spawn = readSpawn(reader);
-      this.netToSpawn.set(spawn.netId, spawn);
-      this.netByEntity.set(spawn.entityId, spawn.netId);
-    }
+    const spawns: Spawn[] = [];
+    for (let i = 0; i < count; i += 1) spawns.push(readSpawn(reader));
+    this.projection.addSpawns(spawns);
   }
 
   private applyDelta(delta: {
@@ -718,40 +690,10 @@ export class WorldTransport implements WorldTransportLike {
     removed: number[];
     projectiles: Projectile[];
   }): void {
-    for (const state of delta.entities) {
-      const spawn = this.netToSpawn.get(state.netId);
-      if (!spawn) continue;
-      this.entityByNet.set(state.netId, mergeEntity(spawn, this.entityByNet.get(state.netId), state, this.netToSpawn));
-    }
-    const removedIds: string[] = [];
-    const seenRemoved = new Set<string>();
-    for (const netId of delta.removed) {
-      const spawn = this.netToSpawn.get(netId);
-      if (spawn && !seenRemoved.has(spawn.entityId)) {
-        seenRemoved.add(spawn.entityId);
-        removedIds.push(spawn.entityId);
-      }
-      this.netToSpawn.delete(netId);
-      this.entityByNet.delete(netId);
-      if (spawn) this.netByEntity.delete(spawn.entityId);
-    }
-    const snapshot: WorldSnapshotPayload = {
-      tick: delta.tick,
-      ack_seq: delta.ackSeq,
-      baseline_id: delta.baselineId,
-      base_tick: this.buffer.getState()?.baseTick ?? delta.tick,
-      is_baseline: false,
-      entities: delta.entities
-        .map((state) => this.entityByNet.get(state.netId))
-        .filter((entity): entity is WorldEntityState => Boolean(entity)),
-      removed: removedIds,
-      projectiles: this.mapProjectiles(delta.projectiles),
-    };
+    const snapshot = this.projection.projectDelta(delta, this.buffer.getState()?.baseTick ?? delta.tick);
     const applied = this.buffer.apply(snapshot);
     if (applied.status === "resync_required") {
-      if (this.requestResync(applied.reason)) {
-        return;
-      }
+      if (this.requestResync(applied.reason)) return;
       this.resyncListeners.forEach((listener) => listener(applied.reason));
       return;
     }
@@ -771,76 +713,6 @@ export class WorldTransport implements WorldTransportLike {
     writer.u8(reasonBytes.length).raw(reasonBytes);
     void this.sendFrame(encodeFrame(Op.Resync, writer.bytes()));
     return true;
-  }
-
-  private toSnapshotPayload(
-    full: {
-      tick: number;
-      baselineId: number;
-      baseTick: number;
-      ackSeq: number;
-      spawns: Spawn[];
-      states: DeltaEntity[];
-      removed?: number[];
-      projectiles: Projectile[];
-    },
-    isBaseline: boolean,
-  ): WorldSnapshotPayload {
-    for (const spawn of full.spawns) {
-      this.netToSpawn.set(spawn.netId, spawn);
-      this.netByEntity.set(spawn.entityId, spawn.netId);
-    }
-    const entities: WorldEntityState[] = [];
-    if (isBaseline) {
-      const states = new Map<number, DeltaEntity>();
-      for (const state of full.states) states.set(state.netId, state);
-      for (const spawn of full.spawns) {
-        const state = states.get(spawn.netId);
-        if (state) entities.push(entityFrom(spawn, state, this.netToSpawn));
-      }
-    } else {
-      for (const state of full.states) {
-        const spawn = this.netToSpawn.get(state.netId);
-        if (!spawn) continue;
-        const merged = mergeEntity(spawn, this.entityByNet.get(state.netId), state, this.netToSpawn);
-        this.entityByNet.set(state.netId, merged);
-        entities.push(merged);
-      }
-    }
-    const removedIds: string[] = [];
-    const seenRemoved = new Set<string>();
-    for (const netId of full.removed ?? []) {
-      const spawn = this.netToSpawn.get(netId);
-      if (spawn && !seenRemoved.has(spawn.entityId)) {
-        seenRemoved.add(spawn.entityId);
-        removedIds.push(spawn.entityId);
-      }
-      this.netToSpawn.delete(netId);
-      this.entityByNet.delete(netId);
-      if (spawn) this.netByEntity.delete(spawn.entityId);
-    }
-    return {
-      tick: full.tick,
-      ack_seq: full.ackSeq,
-      baseline_id: full.baselineId,
-      base_tick: isBaseline ? full.tick : (full.baseTick || this.buffer.getState()?.baseTick || full.tick),
-      is_baseline: isBaseline,
-      entities,
-      removed: removedIds.length > 0 ? removedIds : undefined,
-      projectiles: this.mapProjectiles(full.projectiles),
-    };
-  }
-
-  private mapProjectiles(projectiles: Projectile[]): WorldProjectileState[] {
-    return projectiles.map((p) => ({
-      id: p.id,
-      source_id: this.netToSpawn.get(p.sourceNetId)?.entityId ?? "",
-      skill_id: p.skillId,
-      projectile_vfx: p.vfx || undefined,
-      x: dequantize(p.x),
-      y: dequantize(p.y),
-      radius: p.radiusX10 / 10,
-    }));
   }
 
   private emitSnapshot(state: BufferedWorldState): void {
@@ -991,89 +863,6 @@ function aiStateName(code: number): string | undefined {
     default:
       return undefined;
   }
-}
-
-function entityFrom(spawn: Spawn, state: DeltaEntity, netToSpawn: Map<number, Spawn>): WorldEntityState {
-  const ownerId = spawn.ownerNetId ? netToSpawn.get(spawn.ownerNetId)?.entityId : undefined;
-  const aiState = state.hasExt && (state.ext & 1) ? aiStateName(state.aiState) : undefined;
-  const aggroTargetId = state.hasExt && (state.ext & 2) && state.aggroNetId
-    ? netToSpawn.get(state.aggroNetId)?.entityId
-    : undefined;
-  const stance = state.hasExt && (state.ext & 16)
-    ? stanceName(state.stance)
-    : (spawn.companionKind ? stanceName(spawn.stance) : undefined);
-  return {
-    entity_id: spawn.entityId,
-    entity_revision: state.revision,
-    kind: kindName(spawn.kind),
-    party_id: spawn.partyId || undefined,
-    pvp_enabled: (spawn.flags & 1) !== 0,
-    template_id: spawn.templateId || undefined,
-    name: spawn.name || undefined,
-    ai_state: aiState,
-    aggro_target_id: aggroTargetId,
-    x: dequantize(state.x),
-    y: dequantize(state.y),
-    hp: state.hp,
-    max_hp: spawn.maxHp || undefined,
-    shield: state.shield || undefined,
-    mana: state.mana,
-    max_mana: spawn.maxMana || undefined,
-    thought: state.thought,
-    max_thought: spawn.maxThought || undefined,
-    cast_end_tick: (state.mask & 16) ? state.castEndTick : undefined,
-    cast_windup_ticks: (state.mask & 16) ? state.castWindup : undefined,
-    stealthed: (spawn.flags & 2) !== 0 || undefined,
-    flying: (spawn.flags & 4) !== 0 || undefined,
-    form_active: (spawn.flags & 8) !== 0 || undefined,
-    owner_id: ownerId,
-    companion_kind: spawn.companionKind || undefined,
-    stance,
-  };
-}
-
-function mergeEntity(
-  spawn: Spawn,
-  previous: WorldEntityState | undefined,
-  state: DeltaEntity,
-  netToSpawn: Map<number, Spawn>,
-): WorldEntityState {
-  const next: WorldEntityState = { ...(previous ?? entityFrom(spawn, state, netToSpawn)) };
-  if (state.mask & 4) {
-    next.entity_revision = state.revision;
-  }
-  if (state.mask & 1) {
-    next.x = dequantize(state.x);
-    next.y = dequantize(state.y);
-  }
-  if (state.mask & 2) {
-    if (state.vitalsSub & 1) next.hp = state.hp;
-    if (state.vitalsSub & 2) next.shield = state.shield;
-    if (state.vitalsSub & 4) next.mana = state.mana;
-    if (state.vitalsSub & 8) next.thought = state.thought;
-  }
-  if (state.mask & 16) {
-    next.cast_end_tick = state.castEndTick || undefined;
-    next.cast_windup_ticks = state.castWindup || undefined;
-  }
-  if (state.mask & 32) {
-    next.pvp_enabled = (state.flags & 1) !== 0;
-    next.stealthed = (state.flags & 2) !== 0 || undefined;
-    next.flying = (state.flags & 4) !== 0 || undefined;
-    next.form_active = (state.flags & 8) !== 0 || undefined;
-  }
-  if (state.hasExt) {
-    if (state.ext & 1) {
-      next.ai_state = aiStateName(state.aiState);
-    }
-    if (state.ext & 2) {
-      next.aggro_target_id = state.aggroNetId ? netToSpawn.get(state.aggroNetId)?.entityId : undefined;
-    }
-    if (state.ext & 16) {
-      next.stance = stanceName(state.stance);
-    }
-  }
-  return next;
 }
 
 function decodeReject(payload: Uint8Array): WorldRejectPayload {
