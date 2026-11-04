@@ -261,16 +261,12 @@ export default function Home() {
 
   }, [isPlayerReady]);
 
-  // Merchant proximity only needs refresh while the world is open.
+  // Load merchant proximity when entering/changing world region. The merchant
+  // panel refreshes its own list while open; polling here duplicated requests
+  // for players standing idle on the world page.
   useEffect(() => {
     if (!playerId || !isGameWorldSurface) return;
     void fetchMerchants();
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void fetchMerchants();
-      }
-    }, 30000);
-    return () => clearInterval(interval);
   }, [playerId, player?.current_region, isGameWorldSurface, fetchMerchants]);
 
   const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";

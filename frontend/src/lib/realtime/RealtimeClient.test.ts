@@ -376,7 +376,7 @@ test("UIRealtimeManager preserves channel subscriptions across idle release and 
   uiManager.disconnect();
 });
 
-test("useWorldStore.fetchNearbyCells and inventorySlice.fetchGroundDrops fall back to HTTP when uiRealtimeManager is active", async (t: TestContext) => {
+test("useWorldStore.fetchNearbyCells and inventorySlice.fetchGroundDrops use UI WebTransport commands", async (t: TestContext) => {
   const fake = createFakeTransport();
   const client = new RealtimeClient({
     url: "https://localhost:8443/api/wt",
@@ -392,16 +392,19 @@ test("useWorldStore.fetchNearbyCells and inventorySlice.fetchGroundDrops fall ba
   await uiManager.connect("jwt-token");
   const uiStream = fake.streams[0];
 
-  // Auto-reply "error: use HTTP" whenever a command frame is written to the UI stream.
+  // Reply with the command result that the WT UI stream returns from the server.
   const origRequest = uiManager.request.bind(uiManager);
   uiManager.request = (<T>(channel: string, payload?: unknown, timeoutMs?: number): Promise<T> => {
     const p = origRequest<T>(channel, payload, timeoutMs);
     setTimeout(() => {
       const lastRaw = uiStream.written.at(-1);
       if (!lastRaw) return;
-      const parsed = JSON.parse(new TextDecoder().decode(lastRaw).trim()) as { type?: string; request_id?: string };
+      const parsed = JSON.parse(new TextDecoder().decode(lastRaw).trim()) as { type?: string; channel?: string; request_id?: string };
       if (parsed.type === "command" && parsed.request_id) {
-        uiStream.pushText(`${JSON.stringify({ type: "error", request_id: parsed.request_id, message: "use HTTP" })}\n`);
+        const data = parsed.channel === "world.cells_rect"
+          ? [{ x: 5, y: 6, cell_type: "Forest", content: "Rừng" }]
+          : { drops: [{ id: "drop-1", x: 5, y: 6 }] };
+        uiStream.pushText(`${JSON.stringify({ type: "command.result", request_id: parsed.request_id, ok: true, status: 200, data })}\n`);
       }
     }, 0);
     return p;
@@ -410,13 +413,7 @@ test("useWorldStore.fetchNearbyCells and inventorySlice.fetchGroundDrops fall ba
   const httpUrls: string[] = [];
   const fakeAuthFetch = async (url: string) => {
     httpUrls.push(url);
-    if (url.includes("/api/explore/cells/rect")) {
-      return new Response(JSON.stringify([{ x: 5, y: 6, cell_type: "Forest", content: "Rừng" }]), { status: 200 });
-    }
-    if (url.includes("/api/world/drops")) {
-      return new Response(JSON.stringify({ drops: [{ id: "drop-1", x: 5, y: 6 }] }), { status: 200 });
-    }
-    return new Response("{}", { status: 404 });
+    return new Response("{}", { status: 500 });
   };
 
   // 1. Test useWorldStore.fetchNearbyCells
@@ -451,7 +448,7 @@ test("useWorldStore.fetchNearbyCells and inventorySlice.fetchGroundDrops fall ba
   const ok = await (worldState.fetchNearbyCells as (x: number, y: number, r: number) => Promise<boolean>)(5, 6, 2);
   assert.equal(ok, true);
   assert.equal((worldState.nearbyCells as unknown[]).length, 1);
-  assert.ok(httpUrls.some((u) => u.includes("/api/explore/cells/rect")));
+  assert.equal(httpUrls.length, 0);
 
   // 2. Test inventorySlice.fetchGroundDrops
   const invSource = await readFile(new URL("../../store/slices/inventorySlice.ts", import.meta.url), "utf8");
@@ -481,7 +478,7 @@ test("useWorldStore.fetchNearbyCells and inventorySlice.fetchGroundDrops fall ba
 
   await (invState.fetchGroundDrops as (vp: { x: number; y: number; radius: number }) => Promise<void>)({ x: 5, y: 6, radius: 3 });
   assert.deepEqual(invState.groundDrops, [{ id: "drop-1", x: 5, y: 6 }]);
-  assert.ok(httpUrls.some((u) => u.includes("/api/world/drops?x=5&y=6&radius=3")));
+  assert.equal(httpUrls.length, 0);
 
   uiManager.disconnect();
 });

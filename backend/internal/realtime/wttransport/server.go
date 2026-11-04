@@ -1129,11 +1129,11 @@ func spawnFromSim(entity sim.Entity, netID uint16, registry *netRegistry) v2.Spa
 	return v2.Spawn{
 		NetID: netID, EntityID: entityID, Name: name, TemplateID: templateID,
 		Kind: kindCode(entity.Kind), PartyID: entity.PartyID, Flags: flagsFromSim(entity),
-		RadiusX10:  uint8(math.Round(math.Min(25.5, entity.Radius) * 10)),
-		MaxHP:      clampCount(entity.Vitals.MaxHP),
-		MaxMana:    clampCount(entity.Combat.MaxMana),
-		MaxThought: clampCount(entity.Combat.MaxThought),
-		OwnerNetID: ownerNetID,
+		RadiusX10:     uint8(math.Round(math.Min(25.5, entity.Radius) * 10)),
+		MaxHP:         clampCount(entity.Vitals.MaxHP),
+		MaxMana:       clampCount(entity.Combat.MaxMana),
+		MaxThought:    clampCount(entity.Combat.MaxThought),
+		OwnerNetID:    ownerNetID,
 		CompanionKind: entity.Companion.ActorKind,
 		Stance:        stanceCode(string(entity.Companion.Stance)),
 	}

@@ -40,8 +40,22 @@ export function RespawnChoiceModal() {
       return;
     }
     void load();
-    const timer = window.setInterval(() => void load(), 2500);
+    // Respawn choices are only created on death. Keep a modest foreground
+    // check so the modal appears promptly, and stop spending requests in a
+    // background tab.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 15000);
     return () => window.clearInterval(timer);
+  }, [player?.id, token, load]);
+
+  useEffect(() => {
+    if (!player || !token) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [player?.id, token, load]);
 
   const choose = async (kind: string) => {

@@ -8,6 +8,7 @@ import { getMonsterArt } from "@/game/assets/MonsterArt";
 import { formatManaCost } from "@/lib/gu-mana";
 import { useGameStore, guSpecFor, type Player } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { translatePath } from "@/lib/translate";
 import { NotificationBell } from "@/components/NotificationBell";
 import { VirtualJoystick } from "./VirtualJoystick";
@@ -487,6 +488,20 @@ export function MMOHud(props: MMOHudProps) {
     void fetchZoneMarkers(zoneRegionId);
     if (zoneRegionId && zoneRegionId !== "aperture_tribulation") void fetchWorldResourcePoints(zoneRegionId);
   }, [props.connected, props.worldActive, props.player?.id, zoneRegionId, fetchGroundDrops, fetchNearbyCells, fetchZoneMarkers, fetchWorldResourcePoints]);
+
+  // UI event subscriptions replay on reconnect, but events missed while
+  // offline do not restore the current viewport snapshot. Re-read those two
+  // projections once when the WT UI stream opens again.
+  useEffect(() => {
+    const unsubscribeOpen = uiRealtimeManager.onOpen(() => {
+      if (!props.connected || props.worldActive === false || !props.player || !uiRealtimeManager.isConnected()) return;
+      const { x, y } = positionRef.current;
+      worldFetchCenterRef.current = { x, y };
+      void fetchGroundDrops({ x: Math.round(x), y: Math.round(y), radius: WORLD_VIEWPORT_RADIUS });
+      void fetchNearbyCells(Math.round(x), Math.round(y), WORLD_VIEWPORT_RADIUS);
+    });
+    return unsubscribeOpen;
+  }, [props.connected, props.worldActive, props.player?.id, fetchGroundDrops, fetchNearbyCells]);
 
   // Keep the world viewport around the player without a periodic poll. The
   // previous 8s/30s timers also re-centred drops and cells while walking; this

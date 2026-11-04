@@ -84,6 +84,12 @@ func TestUIStreamSubscribeUnsubscribePingAndCommand(t *testing.T) {
 	srv := New(nil, nil).WithUIOptions(UIOptions{
 		Hub:        hub,
 		SectLookup: func(uuid.UUID) string { return "sect-lotus" },
+		Command: func(_ uuid.UUID, command string, _ json.RawMessage) (int, json.RawMessage) {
+			if command == "world.drops" {
+				return http.StatusOK, json.RawMessage(`{"drops":[]}`)
+			}
+			return http.StatusNotFound, json.RawMessage(`{"error":"Unknown UI command"}`)
+		},
 	})
 
 	clientConn, serverConn := net.Pipe()
@@ -142,13 +148,16 @@ func TestUIStreamSubscribeUnsubscribePingAndCommand(t *testing.T) {
 		t.Fatalf("pong = %+v", got)
 	}
 
-	// Command -> error use HTTP.
+	// Command -> correlated result from the configured UI command dispatcher.
 	if _, err := clientConn.Write([]byte(`{"type":"command","channel":"world.drops","request_id":"req-42"}` + "\n")); err != nil {
 		t.Fatal(err)
 	}
 	cmdResp := readLine()
-	if cmdResp["type"] != "error" || cmdResp["request_id"] != "req-42" || cmdResp["message"] != "use HTTP" {
+	if cmdResp["type"] != "command.result" || cmdResp["request_id"] != "req-42" || cmdResp["ok"] != true || cmdResp["status"] != float64(http.StatusOK) {
 		t.Fatalf("command response = %+v", cmdResp)
+	}
+	if data, ok := cmdResp["data"].(map[string]any); !ok || data["drops"] == nil {
+		t.Fatalf("command data = %+v", cmdResp["data"])
 	}
 
 	// Subscribe custom channel -> receives broadcast.

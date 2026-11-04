@@ -965,32 +965,11 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
     if (viewport) set({ lastDropViewport: viewport });
     const requestRevision = ++groundDropRequestRevision;
     try {
-      const query = viewport
-        ? `?x=${Math.floor(viewport.x)}&y=${Math.floor(viewport.y)}&radius=${Math.max(0, Math.floor(viewport.radius))}`
-        : "";
-      let data: { drops?: GroundDrop[] };
-      const fetchHttp = async () => {
-        const response = await authFetch(`${BACKEND_URL}/api/world/drops${query}`);
-        if (!response.ok) return;
-        return response.json() as Promise<{ drops?: GroundDrop[] }>;
-      };
-      if (viewport && uiRealtimeManager.isConnected()) {
-        try {
-          data = await uiRealtimeManager.request<{ drops?: GroundDrop[] }>("world.drops", {
-            x: Math.floor(viewport.x),
-            y: Math.floor(viewport.y),
-            radius: Math.max(0, Math.floor(viewport.radius)),
-          });
-        } catch {
-          const fallback = await fetchHttp();
-          if (!fallback) return;
-          data = fallback;
-        }
-      } else {
-        const fallback = await fetchHttp();
-        if (!fallback) return;
-        data = fallback;
-      }
+      const data = await uiRealtimeManager.request<{ drops?: GroundDrop[] }>("world.drops", viewport ? {
+        x: Math.floor(viewport.x),
+        y: Math.floor(viewport.y),
+        radius: Math.max(0, Math.floor(viewport.radius)),
+      } : {});
       if (requestRevision === groundDropRequestRevision) {
         const drops = data.drops || [];
         set({ groundDrops: drops });

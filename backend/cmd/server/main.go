@@ -997,6 +997,14 @@ func main() {
 		}
 		wtHandler = wttransport.New(realtimeAdmission, wt).WithUIOptions(wttransport.UIOptions{
 			Hub: shub,
+			Command: func(playerID uuid.UUID, command string, payload json.RawMessage) (int, json.RawMessage) {
+				switch command {
+				case "world.cells_rect", "world.drops":
+					return handlers.HandleWorldWSCommand(playerID, command, payload)
+				default:
+					return http.StatusNotFound, json.RawMessage(`{"error":"Unknown UI command"}`)
+				}
+			},
 			SectLookup: func(playerID uuid.UUID) string {
 				if db.DB == nil {
 					return ""

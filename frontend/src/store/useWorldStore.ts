@@ -129,22 +129,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     const maxY = Math.round(y + boundedRadius);
 
     try {
-      const fetchHttp = async () => {
-        const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${minX}&min_y=${minY}&max_x=${maxX}&max_y=${maxY}`;
-        const res = await authFetch(url);
-        if (!res.ok) throw new Error("Could not fetch nearby cells");
-        return res.json();
-      };
-      let data: unknown;
-      if (uiRealtimeManager.isConnected()) {
-        try {
-          data = await uiRealtimeManager.request<unknown>("world.cells_rect", { min_x: minX, min_y: minY, max_x: maxX, max_y: maxY });
-        } catch {
-          data = await fetchHttp();
-        }
-      } else {
-        data = await fetchHttp();
-      }
+      const data: unknown = await uiRealtimeManager.request<unknown>("world.cells_rect", { min_x: minX, min_y: minY, max_x: maxX, max_y: maxY });
       if (!Array.isArray(data)) return false;
 
       const cells: NearbyCell[] = data.map((item: Record<string, unknown>) => ({

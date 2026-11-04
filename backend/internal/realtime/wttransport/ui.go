@@ -30,6 +30,7 @@ type conditionalUIHub interface {
 // UIOptions configures optional domain hooks for the WebTransport UI stream.
 type UIOptions struct {
 	Hub           UIHub
+	Command       func(playerID uuid.UUID, command string, payload json.RawMessage) (int, json.RawMessage)
 	SectLookup    func(playerID uuid.UUID) string
 	RegionScope   func(playerID uuid.UUID) (string, error)
 	InitialEvents func(playerID uuid.UUID) [][]byte
@@ -277,14 +278,40 @@ func (s *Server) ServeUIStream(ctx context.Context, rw io.ReadWriter, playerID u
 		case "ping":
 			sink.sendRaw([]byte(`{"type":"pong"}`))
 		case "command":
+			if strings.TrimSpace(msg.RequestID) == "" {
+				continue
+			}
+			status := http.StatusNotImplemented
+			result := json.RawMessage(`{"error":"UI commands are not configured"}`)
+			if s.ui.Command != nil {
+				payload := msg.Payload
+				if len(payload) == 0 {
+					payload = msg.Data
+				}
+				if len(payload) == 0 {
+					payload = json.RawMessage(`{}`)
+				}
+				status, result = s.ui.Command(playerID, msg.Channel, payload)
+			}
+			if status < 100 || status > 599 {
+				status = http.StatusInternalServerError
+				result = json.RawMessage(`{"error":"Invalid command response"}`)
+			}
+			if len(result) == 0 || !json.Valid(result) {
+				result = json.RawMessage(`{"error":"Invalid command response"}`)
+			}
 			resp, err := json.Marshal(struct {
-				Type      string `json:"type"`
-				RequestID string `json:"request_id,omitempty"`
-				Message   string `json:"message"`
+				Type      string          `json:"type"`
+				RequestID string          `json:"request_id,omitempty"`
+				OK        bool            `json:"ok"`
+				Status    int             `json:"status"`
+				Data      json.RawMessage `json:"data"`
 			}{
-				Type:      "error",
+				Type:      "command.result",
 				RequestID: msg.RequestID,
-				Message:   "use HTTP",
+				OK:        status >= http.StatusOK && status < http.StatusMultipleChoices,
+				Status:    status,
+				Data:      result,
 			})
 			if err == nil {
 				sink.sendRaw(resp)

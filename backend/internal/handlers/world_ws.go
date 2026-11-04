@@ -10,7 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
-// HandleWorldWSCommand dispatches authenticated WebSocket commands directly to domain logic
+// HandleWorldWSCommand dispatches authenticated realtime UI commands directly to domain logic
 // without fabricating HTTP requests or contexts.
 func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMessage) (int, json.RawMessage) {
 	var limit int
@@ -55,14 +55,17 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 
 	case "world.drops":
 		var req struct {
-			X      int `json:"x"`
-			Y      int `json:"y"`
-			Radius int `json:"radius"`
+			X      *int `json:"x"`
+			Y      *int `json:"y"`
+			Radius *int `json:"radius"`
 		}
 		if err := json.Unmarshal(payload, &req); err != nil {
 			return http.StatusBadRequest, json.RawMessage(`{"error":"Invalid drop viewport"}`)
 		}
-		status, result = ExecuteGetTileGroundDrops(context.Background(), playerID, &req.X, &req.Y, &req.Radius)
+		if (req.X == nil) != (req.Y == nil) || (req.Radius != nil && req.X == nil) || (req.Radius != nil && *req.Radius < 0) {
+			return http.StatusBadRequest, json.RawMessage(`{"error":"Invalid drop viewport"}`)
+		}
+		status, result = ExecuteGetTileGroundDrops(context.Background(), playerID, req.X, req.Y, req.Radius)
 
 	case "world.objects":
 		status, result = ExecuteGetExploreObjects()
