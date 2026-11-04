@@ -519,7 +519,7 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
 
               {connectionFailed ? (
                 <>
-                  <p className="max-h-28 overflow-auto break-words rounded-lg border border-red-200/10 bg-red-950/25 px-3 py-2.5 text-sm leading-relaxed text-red-100/75">
+                  <p className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-red-200/10 bg-red-950/25 px-3 py-2.5 text-sm leading-relaxed text-red-100/75">
                     {errorMessage || "Kết nối thế giới chưa sẵn sàng. Hãy thử kết nối lại."}
                   </p>
                   <div className="mt-5 flex flex-wrap gap-2">

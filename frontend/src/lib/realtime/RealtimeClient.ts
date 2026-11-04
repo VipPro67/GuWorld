@@ -303,6 +303,20 @@ export class RealtimeClient {
     }
   }
 
+  public getEndpointURL(): string {
+    try {
+      const endpoint = new URL(buildRealtimeWTURL(this.options.url, "", null));
+      endpoint.search = "";
+      endpoint.hash = "";
+      endpoint.username = "";
+      endpoint.password = "";
+      return endpoint.toString();
+    } catch {
+      // The diagnostic helper reports invalid configuration without exposing it.
+      return "";
+    }
+  }
+
   public async ensureSession(token?: string | null): Promise<WebTransportLike> {
     if (this.terminalStop) {
       throw new Error("Phiên realtime đã bị dừng");
