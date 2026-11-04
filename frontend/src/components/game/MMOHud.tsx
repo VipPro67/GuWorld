@@ -24,6 +24,13 @@ import type { WorldMarker } from "@/game/world/markers/types";
 import { getGuRankColor } from "@/lib/gu-frames";
 import { getGuIconUrl } from "@/lib/gu-icons";
 
+// World entities are fetched for this square around the player. The viewport
+// follows the player by distance, not by timer: refetch only after walking far
+// enough to leave the cached rectangle.
+const WORLD_VIEWPORT_RADIUS = 28;
+const WORLD_VIEWPORT_REFRESH_DISTANCE = 16;
+const WORLD_VIEWPORT_REFRESH_DEBOUNCE_MS = 500;
+
 export interface HudTarget {
   id: string;
   kind: "player" | "monster" | "companion";
@@ -456,53 +463,60 @@ export function MMOHud(props: MMOHudProps) {
   useEffect(() => {
     if (zoneMapId === "aperture_tribulation") {
       void fetchActiveTribulation(true);
-      // Keep the settlement counter aligned with the authoritative event while
-      // the player is inside the encounter. The in-map radar count is only a
-      // local view and must never be used as "quái còn lại".
-      const timer = window.setInterval(() => {
-        void fetchActiveTribulation(true);
-      }, 5000);
-      return () => window.clearInterval(timer);
+      // Settlement counters update through the `player` channel with the
+      // "tribulation" domain; no timer is needed.
+      return;
     }
     setTribulationPanelExpanded(false);
   }, [zoneMapId, fetchActiveTribulation]);
 
-  // Poll world state without restarting the timers every time the player moves.
-  // Drops are time-sensitive; cells change much less often and are fetched on
-  // a slower cadence to avoid repeating the large rectangle query.
+  // Load world state once per zone/player; later changes arrive as
+  // `world:drops`, `world:cell` and `world:points` events.
   const positionRef = useRef(props.position);
+  const worldFetchCenterRef = useRef<{ x: number; y: number } | null>(null);
+  const worldRefreshTimerRef = useRef<number | null>(null);
   useEffect(() => {
     positionRef.current = props.position;
   }, [props.position]);
   useEffect(() => {
     if (!props.connected || props.worldActive === false || !props.player) return;
-    const fetchDrops = () => {
-      const { x, y } = positionRef.current;
-      const px = Math.round(x);
-      const py = Math.round(y);
-      void fetchGroundDrops({ x: px, y: py, radius: 28 });
-    };
-    const fetchCells = () => {
-      const { x, y } = positionRef.current;
-      void fetchNearbyCells(Math.round(x), Math.round(y), 28);
-    };
-    fetchDrops();
-    fetchCells();
+    const { x, y } = positionRef.current;
+    worldFetchCenterRef.current = { x, y };
+    void fetchGroundDrops({ x: Math.round(x), y: Math.round(y), radius: WORLD_VIEWPORT_RADIUS });
+    void fetchNearbyCells(Math.round(x), Math.round(y), WORLD_VIEWPORT_RADIUS);
     void fetchZoneMarkers(zoneRegionId);
     if (zoneRegionId && zoneRegionId !== "aperture_tribulation") void fetchWorldResourcePoints(zoneRegionId);
-    const dropsTimer = window.setInterval(fetchDrops, 8000);
-    const cellsTimer = window.setInterval(fetchCells, 30000);
-    const markersTimer = window.setInterval(() => void fetchZoneMarkers(zoneRegionId), 30000);
-    const resourceTimer = window.setInterval(() => {
-      if (zoneRegionId && zoneRegionId !== "aperture_tribulation") void fetchWorldResourcePoints(zoneRegionId);
-    }, 30000);
-    return () => {
-      window.clearInterval(dropsTimer);
-      window.clearInterval(cellsTimer);
-      window.clearInterval(markersTimer);
-      window.clearInterval(resourceTimer);
-    };
   }, [props.connected, props.worldActive, props.player?.id, zoneRegionId, fetchGroundDrops, fetchNearbyCells, fetchZoneMarkers, fetchWorldResourcePoints]);
+
+  // Keep the world viewport around the player without a periodic poll. The
+  // previous 8s/30s timers also re-centred drops and cells while walking; this
+  // distance check preserves that behaviour and debounces the refetch.
+  useEffect(() => {
+    if (!props.connected || props.worldActive === false || !props.player) return;
+    const { x, y } = props.position;
+    const center = worldFetchCenterRef.current;
+    if (!center) {
+      worldFetchCenterRef.current = { x, y };
+      return;
+    }
+    if (Math.hypot(x - center.x, y - center.y) < WORLD_VIEWPORT_REFRESH_DISTANCE) return;
+    worldFetchCenterRef.current = { x, y };
+    if (worldRefreshTimerRef.current !== null) return;
+    worldRefreshTimerRef.current = window.setTimeout(() => {
+      worldRefreshTimerRef.current = null;
+      const next = worldFetchCenterRef.current;
+      if (!next) return;
+      void fetchGroundDrops({ x: Math.round(next.x), y: Math.round(next.y), radius: WORLD_VIEWPORT_RADIUS });
+      void fetchNearbyCells(Math.round(next.x), Math.round(next.y), WORLD_VIEWPORT_RADIUS);
+    }, WORLD_VIEWPORT_REFRESH_DEBOUNCE_MS);
+  }, [props.position, props.connected, props.worldActive, props.player?.id, fetchGroundDrops, fetchNearbyCells]);
+
+  useEffect(() => () => {
+    if (worldRefreshTimerRef.current !== null) {
+      window.clearTimeout(worldRefreshTimerRef.current);
+      worldRefreshTimerRef.current = null;
+    }
+  }, []);
 
   const handleInvitePlayer = async (username: string) => {
     let party = useGameStore.getState().party;

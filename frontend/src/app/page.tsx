@@ -215,18 +215,9 @@ export default function Home() {
     return installPlayerLifecycleReconciliation(window, document, () => void reconcilePlayer(true));
   }, [playerId, reconcilePlayer]);
 
-  // 2. Sparse authoritative status sync for player progression and inventory.
-  useEffect(() => {
-    if (!playerId) return;
-
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible" && uiRealtimeManager.isConnected()) {
-        void fetchPlayerStatus(playerId);
-      }
-    }, 90000);
-
-    return () => clearInterval(interval);
-  }, [playerId, fetchPlayerStatus]);
+  // 2. Authoritative status reconciliation is event-driven (`player` channel)
+  // with an HTTP fallback poller while the realtime session is down, so no
+  // timer is needed while WebTransport is connected.
 
   // Push outages must not strand business screens or incoming trade updates.
   useEffect(() => {

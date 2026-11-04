@@ -16,13 +16,18 @@ export const SpatialRealmHUD: React.FC = () => {
   const [isExpiringSoon, setIsExpiringSoon] = useState<boolean>(false);
 
   useEffect(() => {
-    // Poll active spatial realm every 20s
+    // Initial load only: enter/exit publishes the "spatial_realm" player domain.
     void fetchActiveSpatialRealm();
-    const interval = setInterval(() => {
-      void fetchActiveSpatialRealm();
-    }, 20000);
-    return () => clearInterval(interval);
   }, [fetchActiveSpatialRealm]);
+
+  // Clear the HUD locally when the realm expires instead of polling every 20s.
+  useEffect(() => {
+    if (!activeSpatialRealm?.expires_at) return;
+    const expiresAt = new Date(activeSpatialRealm.expires_at).getTime();
+    if (!Number.isFinite(expiresAt)) return;
+    const timer = setTimeout(() => { void fetchActiveSpatialRealm(); }, Math.max(1000, expiresAt - Date.now() + 1000));
+    return () => clearTimeout(timer);
+  }, [activeSpatialRealm?.expires_at, fetchActiveSpatialRealm]);
 
   useEffect(() => {
     if (!activeSpatialRealm?.expires_at) {

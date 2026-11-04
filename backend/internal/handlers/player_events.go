@@ -25,6 +25,12 @@ const (
 	ItemInventoryDomain PlayerEventDomain = "item_inventory"
 	RecipesDomain       PlayerEventDomain = "recipes"
 	CombatStatsDomain   PlayerEventDomain = "combat_stats"
+	// Progression domains let UI screens replace their polling timers with
+	// event-driven refreshes: clients refetch only when the owning state
+	// actually changed.
+	TribulationDomain  PlayerEventDomain = "tribulation"
+	SpatialRealmDomain PlayerEventDomain = "spatial_realm"
+	AscensionDomain    PlayerEventDomain = "ascension"
 )
 
 var playerEventRevision atomic.Int64

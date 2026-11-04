@@ -8,6 +8,8 @@ import { LatestRequestGate } from "@/lib/player-reconciliation";
 let fetchGuInventoryPromise: Promise<void> | null = null;
 const guInventoryRequests = new LatestRequestGate();
 let groundDropRequestRevision = 0;
+let groundDropRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let groundDropExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 
 export interface GroundDropViewport {
   x: number;
@@ -40,6 +42,9 @@ export interface InventorySlice {
   useItems: (itemIds: string[]) => Promise<boolean>;
   groundDrops: GroundDrop[];
   fetchGroundDrops: (viewport?: GroundDropViewport) => Promise<void>;
+  /** Last viewport fetched; world:drops events refetch this projection. */
+  lastDropViewport: GroundDropViewport | null;
+  applyWorldDropsEvent: (event: { region_id?: string }) => void;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
   merchants: MerchantView[];
   merchantAtVillage: boolean;
@@ -101,6 +106,7 @@ export interface MerchantQuoteItem {
 export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, InventorySlice> = (set, get) => ({
   guInventoryLoaded: false,
   groundDrops: [],
+  lastDropViewport: null,
   merchants: [],
   merchantAtVillage: false,
 
@@ -956,6 +962,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   },
 
   fetchGroundDrops: async (viewport) => {
+    if (viewport) set({ lastDropViewport: viewport });
     const requestRevision = ++groundDropRequestRevision;
     try {
       const query = viewport
@@ -985,11 +992,45 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         data = fallback;
       }
       if (requestRevision === groundDropRequestRevision) {
-        set({ groundDrops: data.drops || [] });
+        const drops = data.drops || [];
+        set({ groundDrops: drops });
+        // Drops expire and lose protection on their own. The old 8s poll used
+        // to clear them; reschedule a one-shot refresh at the next transition.
+        if (groundDropExpiryTimer) {
+          clearTimeout(groundDropExpiryTimer);
+          groundDropExpiryTimer = null;
+        }
+        const center = viewport ?? get().lastDropViewport;
+        let nextChange = Number.POSITIVE_INFINITY;
+        for (const drop of drops) {
+          for (const iso of [drop.expires_at, drop.protected_until]) {
+            if (!iso) continue;
+            const at = new Date(iso).getTime();
+            if (Number.isFinite(at) && at > Date.now() && at < nextChange) nextChange = at;
+          }
+        }
+        if (center && Number.isFinite(nextChange)) {
+          groundDropExpiryTimer = setTimeout(() => {
+            groundDropExpiryTimer = null;
+            void get().fetchGroundDrops(center);
+          }, Math.max(1000, nextChange - Date.now() + 1000));
+        }
       }
     } catch (e) {
       console.error("fetchGroundDrops error:", e);
     }
+  },
+
+  applyWorldDropsEvent: (event) => {
+    const currentRegion = get().player?.current_region;
+    if (!event?.region_id || (currentRegion && event.region_id !== currentRegion)) return;
+    const viewport = get().lastDropViewport;
+    if (!viewport) return;
+    if (groundDropRefreshTimer) clearTimeout(groundDropRefreshTimer);
+    groundDropRefreshTimer = setTimeout(() => {
+      groundDropRefreshTimer = null;
+      void get().fetchGroundDrops(viewport);
+    }, 250);
   },
 
   lootGroundDrop: async (dropId) => {

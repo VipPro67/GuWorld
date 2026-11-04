@@ -1232,7 +1232,15 @@ const PLAYER_EVENT_TYPES = [
 
 type PlayerEventType = (typeof PLAYER_EVENT_TYPES)[number];
 
-type PlayerEventDomain = "player" | "gu_inventory" | "item_inventory" | "recipes" | "combat_stats";
+type PlayerEventDomain =
+  | "player"
+  | "gu_inventory"
+  | "item_inventory"
+  | "recipes"
+  | "combat_stats"
+  | "tribulation"
+  | "spatial_realm"
+  | "ascension";
 
 type PlayerRealtimeEvent = {
   type: PlayerEventType;
@@ -1797,6 +1805,16 @@ export const useGameStore = create<GameState>((set, get) => {
           const incomingRevision = typeof (payload?.state_revision ?? eventData?.state_revision) === "number"
             ? (payload?.state_revision ?? eventData.state_revision)
             : undefined;
+          const changedDomains = new Set<PlayerEventDomain>(payload?.changed_domains || []);
+          // Progression screens used to poll on a timer. These domains are
+          // published after the owning transaction commits, so refresh them
+          // before the player-revision gate: a session/state change does not
+          // always bump players.state_revision.
+          if (eventType !== "session.kicked") {
+            if (changedDomains.has("tribulation")) void get().fetchActiveTribulation(true);
+            if (changedDomains.has("spatial_realm")) void get().fetchActiveSpatialRealm();
+            if (changedDomains.has("ascension")) void get().fetchAscensionSession();
+          }
           if (eventType !== "session.kicked" && !shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision)) {
             return;
           }
@@ -1815,7 +1833,6 @@ export const useGameStore = create<GameState>((set, get) => {
             lastPlayerEventRevision.set(currentPlayer.id, payload.revision);
           }
 
-          const changedDomains = new Set(payload.changed_domains || []);
           const hasAuthoritativePatch = payload.patch !== undefined || payload.data !== undefined;
           const invalidatesStatus =
             changedDomains.has("combat_stats") ||
@@ -2170,6 +2187,10 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
+      const unsubscribeWorldDrops = uiRealtimeManager.subscribe("world:drops", (payload: ApiResponseData) => {
+        get().applyWorldDropsEvent(payload as { region_id?: string });
+      });
+
       const unsubscribeCatalog = uiRealtimeManager.subscribe("catalog", (payload: ApiResponseData) => {
         const event = payload?.data || payload;
         if (event?.type === "catalog.updated" && event?.catalog === "recipes") {
@@ -2188,6 +2209,7 @@ export const useGameStore = create<GameState>((set, get) => {
         unsubscribeSectChat();
         unsubscribeDeathArena();
         unsubscribeMartialArena();
+        unsubscribeWorldDrops();
         unsubscribeCatalog();
         releaseConnection();
       };

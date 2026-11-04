@@ -11,6 +11,8 @@ import { MMOBusinessPanels, type MMOPanel } from "./MMOBusinessPanels";
 import type { WorldSkillInfo } from "@/game/network/Protocol";
 import { useGameStore, guSpecFor, type AutoCombatConfig, type Player } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
+import { useWorldStore, type WorldChangedEvent } from "@/store/useWorldStore";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import type { MapPortal } from "@/game/world/MapLoader";
 
 const GlobalChatOverlay = dynamic(
@@ -145,6 +147,22 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
   useEffect(() => {
     onExitRef.current = onExit;
   }, [onExit]);
+
+  // World-map events replace the old 30s cell/marker polling and the 10s/30s
+  // resource-point polling. Subscriptions are ref-counted and replayed on
+  // reconnect by the shared UI stream.
+  useEffect(() => {
+    const unsubscribeCells = uiRealtimeManager.subscribe("world:cell", (payload) => {
+      useWorldStore.getState().applyWorldCellEvent(payload as WorldChangedEvent);
+    });
+    const unsubscribePoints = uiRealtimeManager.subscribe("world:points", (payload) => {
+      useWorldStore.getState().applyWorldPointsEvent(payload as WorldChangedEvent);
+    });
+    return () => {
+      unsubscribeCells();
+      unsubscribePoints();
+    };
+  }, []);
 
   const [status, setStatus] = useState<HostStatus>("loading");
   const [runtimeStatus, setRuntimeStatus] = useState<WorldRuntimeStatus>("idle");

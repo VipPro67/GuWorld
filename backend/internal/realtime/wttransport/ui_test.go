@@ -122,6 +122,17 @@ func TestUIStreamSubscribeUnsubscribePingAndCommand(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+	for _, channel := range []string{"world:cell", "world:drops", "world:points"} {
+		if !hub.HasSubscriber(playerID, uihub.ChannelName(channel)) {
+			t.Fatalf("expected auto-subscription to %s", channel)
+		}
+	}
+	// World change events replace the client polling timers.
+	hub.Broadcast(uihub.ChannelName("world:cell"), []byte(`{"type":"cleared","region_id":"r1","x":3,"y":4}`))
+	worldEv := readLine()
+	if worldEv["type"] != "event" || worldEv["channel"] != "world:cell" {
+		t.Fatalf("world:cell event = %+v", worldEv)
+	}
 
 	// Ping -> Pong.
 	if _, err := clientConn.Write([]byte(`{"type":"ping"}` + "\n")); err != nil {

@@ -227,6 +227,7 @@ func LootGroundDrop(c *gin.Context) {
 	if time.Now().After(expiresAt) {
 		_, _ = tx.Exec("DELETE FROM map_ground_drops WHERE id = $1", dropUUID)
 		_ = tx.Commit()
+		publishWorldDropsChanged(dropRegion, dropX, dropY)
 		c.JSON(http.StatusGone, gin.H{"error": "Chiến lợi phẩm đã bị thời gian làm hư hại hoàn toàn"})
 		return
 	}
@@ -279,6 +280,7 @@ func LootGroundDrop(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
 	}
+	publishWorldDropsChanged(dropRegion, dropX, dropY)
 
 	summaryMsg := joinDropList(logs)
 

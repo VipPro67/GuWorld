@@ -22,6 +22,7 @@ func StartRedisSubscribers(shub *ShardedHub) {
 	go subscribePattern(shub, "death_arena:*")
 	go subscribePattern(shub, "martial_arena:*")
 	go subscribePattern(shub, "catalog:*")
+	go subscribePattern(shub, "world:*")
 }
 
 func subscribePattern(shub *ShardedHub, pattern string) {

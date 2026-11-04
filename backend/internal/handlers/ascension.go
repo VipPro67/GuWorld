@@ -422,7 +422,7 @@ func AscensionShatter(c *gin.Context) {
 	}
 
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 
 	msg := fmt.Sprintf("Trùng kích nát khiếu thất bại! (Tỉ lệ vỡ: %.0f%%) Không khiếu rung chuyển dữ dội, hãy dồn chân nguyên tiếp.", chance*100)
 	if shattered {
@@ -541,7 +541,7 @@ func AscensionTemper(c *gin.Context) {
 				return
 			}
 			ClearPendingPlayerQueues(player.ID.String())
-			PublishPlayerSnapshot(&player, PlayerEventUpdated)
+			PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 			c.JSON(http.StatusOK, gin.H{"success": false, "session": session, "message": "Nhân Khí dưới ngưỡng tối thiểu 100.000 — không thể cân bằng 2 khí thiên địa. Thăng tiên thất bại!"})
 			return
 		}
@@ -579,7 +579,7 @@ func AscensionTemper(c *gin.Context) {
 	}
 
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 
 	msg := "Khảo nghiệm tâm tính vượt qua. Hãy tiếp tục điều hòa 2 khí thiên địa."
 	if session.Step == AscensionStepCalamity {
@@ -725,7 +725,7 @@ func AscensionEngageCalamity(c *gin.Context) {
 		return
 	}
 
-	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "ĐỊA TAI BẢN YẾU đã giáng lâm ngay bên cạnh ngươi trên đại lục! Hãy tiêu diệt nó để ngưng tụ Tiên Khiếu!",
@@ -748,7 +748,7 @@ func CompleteAscensionCalamityForPlayer(ctx context.Context, playerID uuid.UUID)
 		return err
 	}
 
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 	_ = notify.Send(db.DB, playerID, "ascension_calamity_victory", "ĐỊA TAI ĐÃ BỊ ĐÁNH TAN!", "Đại kiếp đã qua, ba khí Thiên Địa Nhân đã hòa quyện. Hãy mau chóng Thả Cổ bản mệnh để ngưng tụ Tiên Khiếu!")
 	return nil
 }
@@ -884,7 +884,7 @@ func AscensionRelease(c *gin.Context) {
 			return
 		}
 		ClearPendingPlayerQueues(player.ID.String())
-		PublishPlayerSnapshot(&player, PlayerEventUpdated)
+		PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 		c.JSON(http.StatusOK, gin.H{"success": false, "session": session, "message": "Thăng tiên thất bại!"})
 		return
 	}
@@ -943,7 +943,7 @@ func AscensionRelease(c *gin.Context) {
 	SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Đạo hữu %s đã THĂNG TIÊN thành công — Lục Chuyển Cổ Tiên, Phúc Địa %s! Người người ngưỡng mộ", player.Account.Username, AscensionGradeName(grade)))
 
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,

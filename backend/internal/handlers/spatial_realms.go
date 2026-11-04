@@ -723,7 +723,7 @@ func syncSpatialPlayer(playerID uuid.UUID, region string, x, y int, instanceID u
 		inst = instanceID.String()
 	}
 	broadcastWorldPos(WorldPosEvent{ID: playerID.String(), Username: username, AvatarURL: avatar, X: x, Y: y, Region: region, MapID: worldMapIDForRegion(region), InstanceID: inst, TS: time.Now().UnixMilli(), ScopeResolved: true})
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, SpatialRealmDomain)
 }
 
 // ClaimAltarRequest specifies the altar being claimed by the player.
@@ -1171,7 +1171,7 @@ func ClaimInheritanceAltar(c *gin.Context) {
 	if handedOff {
 		middleware.FinishRealtimeHandoff(playerID)
 	}
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, SpatialRealmDomain)
 
 	if meta.Tier == "IMMORTAL" {
 		_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Chúc mừng đạo hữu %s đã thông qua khảo nghiệm, đắc được Chân Truyền [%s]!", player.Username, meta.AltarName))

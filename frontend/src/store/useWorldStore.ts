@@ -46,6 +46,13 @@ export interface MapMarkerView {
   detail?: Record<string, unknown>;
 }
 
+export interface WorldChangedEvent {
+  type?: string;
+  region_id?: string;
+  x?: number;
+  y?: number;
+}
+
 interface WorldStoreState {
   nearbyCells: NearbyCell[];
   zoneMarkers: MapMarkerView[];
@@ -53,6 +60,8 @@ interface WorldStoreState {
   /** Public mines of the current region (WORLD-scope resource points). */
   resourcePoints: ApertureResourcePoint[];
   resourcePointsRegion: string | null;
+  /** Last rectangle queried for cells; world events reuse it to refetch. */
+  lastCellsViewport: { x: number; y: number; radius: number } | null;
   loading: boolean;
   error: string | null;
 
@@ -62,6 +71,44 @@ interface WorldStoreState {
   collectWorldResourcePoint: (pointId: string) => Promise<boolean>;
   transplantWorldResourcePoint: (pointId: string) => Promise<boolean>;
   harvestVein: (veinId: string) => Promise<boolean>;
+  /** Event-driven replacement for the old 30s cell/marker polling. */
+  applyWorldCellEvent: (event: WorldChangedEvent) => void;
+  /** Event-driven replacement for the old 10s/30s resource-point polling. */
+  applyWorldPointsEvent: (event: WorldChangedEvent) => void;
+}
+
+let cellsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let pointsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let cellsExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Veins disappear when expires_at passes. The old 30s cell poll used to drop
+// them; a one-shot timer keeps the map correct without polling.
+function scheduleCellsExpiryRefresh(
+  get: () => WorldStoreState,
+  cells: NearbyCell[],
+  viewport: { x: number; y: number; radius: number },
+) {
+  if (cellsExpiryTimer) {
+    clearTimeout(cellsExpiryTimer);
+    cellsExpiryTimer = null;
+  }
+  let nextExpiry = Number.POSITIVE_INFINITY;
+  for (const cell of cells) {
+    if (!cell.vein?.expires_at) continue;
+    const at = new Date(cell.vein.expires_at).getTime();
+    if (Number.isFinite(at) && at > Date.now() && at < nextExpiry) nextExpiry = at;
+  }
+  if (!Number.isFinite(nextExpiry)) return;
+  cellsExpiryTimer = setTimeout(() => {
+    cellsExpiryTimer = null;
+    void get().fetchNearbyCells(viewport.x, viewport.y, viewport.radius);
+  }, Math.max(1000, nextExpiry - Date.now() + 1000));
+}
+
+function worldEventMatchesRegion(regionID: string | undefined): boolean {
+  if (!regionID) return false;
+  const currentRegion = useGameStore.getState().player?.current_region;
+  return !currentRegion || currentRegion === regionID;
 }
 
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
@@ -70,6 +117,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   zoneMarkersRegion: null,
   resourcePoints: [],
   resourcePointsRegion: null,
+  lastCellsViewport: null,
   loading: false,
   error: null,
 
@@ -110,7 +158,8 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         vein: item.vein as NearbyVeinInfo | undefined,
       }));
 
-      set({ nearbyCells: cells });
+      set({ nearbyCells: cells, lastCellsViewport: { x: Math.round(x), y: Math.round(y), radius: boundedRadius } });
+      scheduleCellsExpiryRefresh(get, cells, { x: Math.round(x), y: Math.round(y), radius: boundedRadius });
       return true;
     } catch (err) {
       console.warn("fetchNearbyCells failed:", err);
@@ -207,5 +256,28 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       useGameStore.getState().addToast(err instanceof Error ? err.message : "Thu hoạch Nguyên Tuyền thất bại.", "error");
       return false;
     }
+  },
+
+  applyWorldCellEvent: (event: WorldChangedEvent) => {
+    if (!worldEventMatchesRegion(event?.region_id)) return;
+    const viewport = get().lastCellsViewport;
+    if (!viewport) return;
+    if (cellsRefreshTimer) clearTimeout(cellsRefreshTimer);
+    cellsRefreshTimer = setTimeout(() => {
+      cellsRefreshTimer = null;
+      void get().fetchNearbyCells(viewport.x, viewport.y, viewport.radius);
+      void get().fetchZoneMarkers(event.region_id!);
+    }, 250);
+  },
+
+  applyWorldPointsEvent: (event: WorldChangedEvent) => {
+    if (!worldEventMatchesRegion(event?.region_id)) return;
+    const region = get().resourcePointsRegion || useGameStore.getState().player?.current_region || event?.region_id || "";
+    if (!region) return;
+    if (pointsRefreshTimer) clearTimeout(pointsRefreshTimer);
+    pointsRefreshTimer = setTimeout(() => {
+      pointsRefreshTimer = null;
+      void get().fetchWorldResourcePoints(region);
+    }, 250);
   },
 }));

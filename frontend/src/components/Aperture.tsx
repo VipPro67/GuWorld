@@ -1887,11 +1887,8 @@ function AscensionRitual() {
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => {
-    if (session?.step !== "CALAMITY") return;
-    const t = setInterval(() => store.fetchAscensionSession(), 3000);
-    return () => clearInterval(t);
-  }, [session?.step]);
+  // Step changes arrive on the `player` channel with the "ascension" domain,
+  // so the old 3s session poll is no longer needed.
 
   if (!player) return null;
 

@@ -71,6 +71,24 @@ Frontend
 - Codec: `backend/internal/realtime/protocol/v2` ↔ `frontend/src/game/network/v2/Codec.ts` (golden vector `82d204...`).
 - Redis: `uihub.StartRedisSubscribers` vẫn subscribe `player:*`, `refine:*`, `chat:*`, `trade:*`, `combat:*`, `notif:*`, arena, `catalog:*`.
 
+## Phase 1 — push thay polling (2026-11-04)
+
+Các timer HTTP định kỳ trên màn hình thế giới đã được thay bằng event:
+
+- `world:*` được subscribe từ Redis (`uihub.StartRedisSubscribers`) và auto-subscribe
+  trên UI stream (`world:cell`, `world:drops`, `world:points`).
+- `world:drops` phát sau commit khi rơi/nhặt/hết hạn/Admin sửa drop.
+- `world:points` phát sau commit khi seed/thu hoạch/di dời mỏ thế giới.
+- `player` event mang domain `tribulation` / `spatial_realm` / `ascension`;
+  client refetch đúng màn hình khi domain đổi.
+- Đã xoá poll: player status 90 s, ascension session 3 s, tribulation 5 s,
+  drops 8 s, cells/markers 30 s, resource points 30 s, spatial realm 20 s.
+- Viewport drops/cells vẫn bám người chơi: refetch theo khoảng cách di chuyển
+  (16 ô, debounce 500 ms) thay vì timer 8 s/30 s.
+- Poll còn giữ có lý do: presence của nghi thức di dời (10 s, server-authoritative),
+  nodes/aperture HP khi tribulation đang chạy (15 s), passive stats 30 s, merchants 30 s,
+  admin panels, và `installHttpFallbackPolling` khi mất WebTransport.
+
 ## Đã kiểm chứng
 
 - Go: `go test ./...` pass; targeted `-race` trên `wttransport`, `gateway`, `sim`, `uihub` pass.

@@ -320,7 +320,7 @@ func HandleRealtimeTribulationDeath(ctx context.Context, death realtimeworld.Dea
 	if handoffStatus == 0 {
 		finishHandoff()
 	}
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, TribulationDomain)
 	notify.Send(db.DB, playerID, "tribulation_victory", "Vượt Kiếp Thành Công", result.Message)
 	logger.S.Infof("Realtime tribulation auto-settled for %s: %s", playerID, result.Message)
 	return nil
@@ -365,7 +365,7 @@ func HandleRealtimeTribulationPlayerDeath(ctx context.Context, death realtimewor
 	if status == 0 {
 		finishHandoff()
 	}
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, TribulationDomain)
 	notify.Send(db.DB, playerID, "tribulation_defeat", "Kiệt Sức Trong Tiên Khiếu",
 		"Đạo hữu đã kiệt sức trước quái tai kiếp và được đưa về vị trí cũ. Không rơi rớt vật phẩm.")
 	logger.S.Infof("Realtime tribulation defeat exit for %s (realtime=%v)", playerID, realtimeTransfer)
@@ -417,7 +417,7 @@ func RealtimeExitTribulation(c *gin.Context) {
 	if status == 0 {
 		finishHandoff()
 	}
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, TribulationDomain)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":           "Đã rời khỏi Tiên Khiếu trở về thế giới thực!",

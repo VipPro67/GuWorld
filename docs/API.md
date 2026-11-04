@@ -632,10 +632,18 @@ cung cấp vị trí authoritative trong lúc lướt, và `HIT_CONFIRMED` báo 
 | `chat:private:<player_id>` | Hai chiều | Thông báo tin nhắn 1:1 chỉ cho chủ player ID đó; server tự đăng ký và chặn subscribe ID người khác. |
 | `trade` | S→C | Trạng thái giao dịch realtime |
 | `world:pos` | S→C | Vị trí người chơi di chuyển trên bản đồ lớn; payload mang `region_id` và fan-out theo AOI cùng khu vực |
-| `world:cell` | S→C | Sự kiện Boss/tài nguyên bị tiêu diệt hoặc hồi sinh; payload mang `region_id`, client apply theo tọa độ global kể cả khi viewport cắt qua ranh giới khu vực |
+| `world:cell` | S→C | Sự kiện Boss/tài nguyên bị tiêu diệt hoặc hồi sinh; payload mang `region_id`, client refetch viewport cells/markers đang mở thay vì poll 30 s |
+| `world:drops` | S→C | Chiến lợi phẩm rơi/nhặt/hết hạn/Admin sửa; payload `{type,region_id,x,y}`, client refetch viewport drops thay vì poll 8 s |
+| `world:points` | S→C | Mỏ tài nguyên thế giới được seed/thu hoạch/di dời; payload `{type,region_id,x,y}`, client refetch danh sách mỏ của region thay vì poll 10–30 s |
 | `combat` | S→C | Biến động chiến đấu realtime |
 | `match:<match_id>` | S→C | Khung hình (frame) mô phỏng đấu trường thời gian thực, 20Hz. Server chỉ gửi cho người chơi có mặt trong trận đó. |
 | `notification` | S→C | Thông báo mới (chuông thông báo) |
+
+Ba kênh `world:*` và các kênh player-scoped (`player`, `refine`, `trade`,
+`notif`, `combat`, chat/arena/catalog) được server auto-subscribe khi mở UI
+stream. Sự kiện `player` mang thêm domain tiến trình (`tribulation`,
+`spatial_realm`, `ascension`) để màn hình tương ứng refetch đúng một lần khi
+state đổi, thay cho timer định kỳ.
 
 ### Lệnh WorldMap qua UI stream
 

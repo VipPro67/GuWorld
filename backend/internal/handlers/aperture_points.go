@@ -1057,6 +1057,7 @@ func CollectWorldResourcePoint(c *gin.Context) {
 		return
 	}
 	if granted {
+		publishWorldPointsChanged(regionID, p.X, p.Y)
 		notify.Send(db.DB, playerID, "world_point_harvest", "Khai Thác Thế Giới", message)
 	}
 	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{"message": message})
@@ -1606,6 +1607,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu di dời"})
 			return
 		}
+		publishWorldPointsChanged(pointRegion, pointX, pointY)
 		notify.Send(db.DB, playerID, "point_transplant", "Di Dời Núi Linh",
 			fmt.Sprintf("Nghi thức hoàn tất: %s đã rời %s về Tiên Khiếu của đạo hữu! Vùng %s sẽ mọc lại mạch núi khác theo thời gian.", pointName, pointRegion, pointRegion))
 		c.JSON(http.StatusOK, gin.H{

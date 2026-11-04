@@ -154,6 +154,7 @@ func AdminUpdateMapGroundDrop(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật map drop", "id": updatedID})
+	publishWorldDropsChanged(regionID, *req.X, *req.Y)
 }
 
 func AdminDeleteMapGroundDrop(c *gin.Context) {
@@ -165,16 +166,20 @@ func AdminDeleteMapGroundDrop(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID map drop không hợp lệ"})
 		return
 	}
-	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM map_ground_drops WHERE id=$1`, dropID)
+	var regionID string
+	var x, y int
+	err = db.DB.QueryRowContext(c.Request.Context(), `
+		DELETE FROM map_ground_drops WHERE id=$1
+		RETURNING region_id, x, y`, dropID).Scan(&regionID, &x, &y)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy map drop"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa map drop"})
 		return
 	}
-	deleted, _ := result.RowsAffected()
-	if deleted == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy map drop"})
-		return
-	}
+	publishWorldDropsChanged(regionID, x, y)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa map drop"})
 }
 
@@ -232,6 +237,7 @@ func AdminReturnMapGroundDrop(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"})
 		return
 	}
+	publishWorldDropsChanged(regionID, x, y)
 
 	summary := joinDropList(logs)
 	if summary == "" {

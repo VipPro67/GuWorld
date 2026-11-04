@@ -107,6 +107,9 @@ func HandleRealtimePlayerDeath(ctx context.Context, death realtimeworld.DeathEve
 		middleware.FinishRealtimeHandoff(playerID)
 	}
 	setWorldPosFromPlayer(&player)
+	if dropSummary != "" {
+		publishWorldDropsChanged(deathRegion, deathX, deathY)
+	}
 	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
 	if winnerID != nil {
 		// Transactional notification inserts are intentionally not broadcast

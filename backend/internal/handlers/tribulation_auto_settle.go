@@ -95,7 +95,7 @@ func autoSettleTribulationEventIfCleared(ctx context.Context, eventID, playerID 
 		return fmt.Errorf("settle cleared tribulation (%d): %w", status, settleErr)
 	}
 	finishHandoff()
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, TribulationDomain)
 	notify.Send(db.DB, playerID, "tribulation_victory", "Vượt Kiếp Thành Công", result.Message)
 	logger.S.Infof("Auto-settled cleared tribulation %s for %s: %s", eventID, playerID, result.Message)
 	return nil

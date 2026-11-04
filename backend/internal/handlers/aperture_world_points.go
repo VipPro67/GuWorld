@@ -388,6 +388,9 @@ func sweepOneWorldRegion(ctx context.Context, regionID string) (int, int, error)
 	if err := tx.Commit(); err != nil {
 		return 0, 0, err
 	}
+	if addedNormal+addedFamous > 0 {
+		publishWorldPointsChanged(regionID, 0, 0)
+	}
 	return addedNormal, addedFamous, nil
 }
 
