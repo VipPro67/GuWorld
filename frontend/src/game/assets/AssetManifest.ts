@@ -14,6 +14,23 @@ export interface ActorAsset {
 
 export const ANIMATION_STATES: ActorAnimation[] = ["idle", "walk", "cast", "hit", "death"];
 
+/** Images needed for the first Phaser world load. Shared by preload and boot warmup. */
+export const WORLD_IMAGE_URLS = [
+  "/assets/world/ground-moss.webp",
+  "/assets/world/cultivator.webp",
+  "/assets/world/spirit-beast.webp",
+] as const;
+
+export const CORE_VFX_ATLAS_KEYS = [
+  "fx_hit_chem", "fx_hit_dam", "fx_hit_dien", "fx_khien_anh_kim",
+  "fx_thu_giap_da_gpt", "fx_thu_vo_giap_gpt", "fx_hieu_ung_choang",
+  "fx_hieu_ung_doc", "fx_hieu_ung_troi", "fx_hoi_sinh", "fx_gu_hoa_du",
+  "fx_gu_thiem_quang", "fx_gu_dien_nhan_gpt_dau", "fx_gu_thinh_phong_gpt_kich_hoat",
+  "fx_gu_xa_tin_dau_gpt_giu", "fx_thu_set_danh_gpt", "fx_song_gam",
+  "fx_dat_nut", "fx_gu_nguyet_quang", "fx_gu_huyet_nguyet", "fx_gu_huyet_bao",
+  "fx_gu_bach_cot", "fx_thoi_trang_xuan_thu_quyen",
+] as const;
+
 export const ACTOR_ASSETS: Record<ActorKind, ActorAsset> = {
   player: {
     kind: "player",

@@ -205,8 +205,15 @@ export default function Home() {
 
   // 1. Session Restoration on Mount
   useEffect(() => {
-    fetchDictionary();
-    initializeSession();
+    // Warm the browser image cache at the same time as dictionary/session
+    // startup. Phaser will consume the same URLs when its world scene mounts.
+    void fetchDictionary();
+    void initializeSession();
+    void import("@/game/assets/warmupWorldAssets").then(({ warmupWorldAssets }) => {
+      warmupWorldAssets();
+    }).catch((error: unknown) => {
+      console.warn("[Assets] Could not warm the world image cache:", error);
+    });
   }, [initializeSession, fetchDictionary]);
 
   const playerId = player?.id;

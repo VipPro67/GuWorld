@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import {
   ACTOR_ASSETS,
   ANIMATION_STATES,
+  CORE_VFX_ATLAS_KEYS,
+  WORLD_IMAGE_URLS,
   VFX_ASSETS,
   animationTextureKey,
   type ActorAnimation,
@@ -24,9 +26,9 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image("tile-ground", "/assets/world/ground-moss.webp");
+    this.load.image("tile-ground", WORLD_IMAGE_URLS[0]);
     for (const kind of ["player", "monster", "npc"] as ActorKind[]) {
-      const source = kind === "monster" ? "/assets/world/spirit-beast.webp" : "/assets/world/cultivator.webp";
+      const source = kind === "monster" ? WORLD_IMAGE_URLS[2] : WORLD_IMAGE_URLS[1];
       for (const animation of ANIMATION_STATES) {
         const frames = ACTOR_ASSETS[kind].animations[animation];
         for (let frame = 0; frame < frames; frame += 1) {
@@ -36,32 +38,7 @@ export class PreloadScene extends Phaser.Scene {
     }
 
     // Preload authored combat & Gu VFX atlases
-    const coreAtlases = [
-      "fx_hit_chem",
-      "fx_hit_dam",
-      "fx_hit_dien",
-      "fx_khien_anh_kim",
-      "fx_thu_giap_da_gpt",
-      "fx_thu_vo_giap_gpt",
-      "fx_hieu_ung_choang",
-      "fx_hieu_ung_doc",
-      "fx_hieu_ung_troi",
-      "fx_hoi_sinh",
-      "fx_gu_hoa_du",
-      "fx_gu_thiem_quang",
-      "fx_gu_dien_nhan_gpt_dau",
-      "fx_gu_thinh_phong_gpt_kich_hoat",
-      "fx_gu_xa_tin_dau_gpt_giu",
-      "fx_thu_set_danh_gpt",
-      "fx_song_gam",
-      "fx_dat_nut",
-      "fx_gu_nguyet_quang",
-      "fx_gu_huyet_nguyet",
-      "fx_gu_huyet_bao",
-      "fx_gu_bach_cot",
-      "fx_thoi_trang_xuan_thu_quyen",
-    ];
-    for (const key of coreAtlases) {
+    for (const key of CORE_VFX_ATLAS_KEYS) {
       const def = GU_VFX_CATALOG[key];
       if (def) {
         this.load.atlas(key, def.textureUrl, def.atlasUrl);
