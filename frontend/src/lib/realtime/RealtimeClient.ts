@@ -1,5 +1,6 @@
 import { BACKEND_URL } from "../config.ts";
 import { UIStream, type WebTransportStreamLike } from "./UIStream.ts";
+import { WebSocketTransport } from "./WebSocketTransport.ts";
 
 export interface WebTransportDatagramDuplexLike {
   readable: ReadableStream<Uint8Array>;
@@ -41,11 +42,13 @@ export function setTabClaimer(claimer: TabClaimer | null): void {
 
 export interface RealtimeClientOptions {
   url?: string;
+  wsURL?: string;
   graceMs?: number;
   getToken?: () => string | null;
   getTabId?: () => string | null;
   setTabId?: (tabId: string) => void;
   createTransport?: (url: string) => WebTransportLike;
+  createWebSocketTransport?: (url: string) => WebTransportLike;
   createBroadcastChannel?: (name: string) => BroadcastChannelLike | null;
   onTabReplaced?: () => void;
   tabCoordinator?: TabIdCoordinator;
@@ -71,6 +74,7 @@ export const CLOSE_CODE_RATE_LIMITED = 4008;
 export const CLOSE_CODE_SERVER_DRAINING = 4010;
 
 const DEFAULT_GRACE_MS = 30_000;
+const WT_CONNECT_TIMEOUT_MS = 3_000;
 const TAB_CHANNEL_NAME = "gu-gameplay-tab";
 
 /**
@@ -204,6 +208,9 @@ export class RealtimeClient {
   private readonly tabCoordinator: TabIdCoordinator;
 
   private session: WebTransportLike | null = null;
+  private sessionKind: "wt" | "ws" | null = null;
+  private readonly transportKinds = new WeakMap<WebTransportLike, "wt" | "ws">();
+  private fallbackPromise: Promise<WebTransportLike> | null = null;
   private connectPromise: Promise<WebTransportLike> | null = null;
   private activeToken: string | null = null;
   private activeTabId: string | null = null;
@@ -301,8 +308,15 @@ export class RealtimeClient {
   public async openWorldStream(token?: string): Promise<AcquiredWorldSession> {
     const release = this.acquireWorld(token);
     try {
-      const session = await this.ensureSession(token ?? this.resolveToken());
-      const stream = await session.createBidirectionalStream();
+      let session = await this.ensureSession(token ?? this.resolveToken());
+      let stream: WebTransportStreamLike;
+      try {
+        stream = await session.createBidirectionalStream();
+      } catch (error) {
+        if (this.transportKinds.get(session) !== "wt" || this.terminalStop) throw error;
+        session = await this.switchToWebSocket(session);
+        stream = await session.createBidirectionalStream();
+      }
       return { session, stream, release };
     } catch (error) {
       release();
@@ -313,10 +327,19 @@ export class RealtimeClient {
   public async openUIStream(token?: string): Promise<AcquiredUISession> {
     const release = this.acquireUI(token);
     try {
-      const session = await this.ensureSession(token ?? this.resolveToken());
-      const rawStream = await session.createBidirectionalStream();
-      const uiStream = new UIStream(rawStream);
-      await uiStream.open();
+      let session = await this.ensureSession(token ?? this.resolveToken());
+      let uiStream: UIStream;
+      try {
+        const rawStream = await session.createBidirectionalStream();
+        uiStream = new UIStream(rawStream);
+        await uiStream.open();
+      } catch (error) {
+        if (this.transportKinds.get(session) !== "wt" || this.terminalStop) throw error;
+        session = await this.switchToWebSocket(session);
+        const rawStream = await session.createBidirectionalStream();
+        uiStream = new UIStream(rawStream);
+        await uiStream.open();
+      }
       return {
         session,
         uiStream,
@@ -353,12 +376,12 @@ export class RealtimeClient {
     if (!resolvedToken) {
       throw new Error("Chưa có token đăng nhập");
     }
+    if (this.connectPromise && this.activeToken === resolvedToken) {
+      return this.connectPromise;
+    }
     if (this.session && this.activeToken === resolvedToken) {
       await this.session.ready;
       return this.session;
-    }
-    if (this.connectPromise && this.activeToken === resolvedToken) {
-      return this.connectPromise;
     }
 
     if (this.session && this.activeToken !== resolvedToken) {
@@ -368,51 +391,63 @@ export class RealtimeClient {
     this.activeToken = resolvedToken;
     const tabId = this.tabCoordinator.ensureTabId();
     this.activeTabId = tabId;
-    if (defaultTabClaimer) {
-      try {
-        await defaultTabClaimer(resolvedToken, tabId);
-      } catch (err) {
-        console.warn("[RealtimeClient] tab claim preflight failed:", err);
-      }
-    }
-    const url = buildRealtimeWTURL(this.options.url, resolvedToken, tabId);
-    const factory = this.options.createTransport;
-    const TransportCtor = defaultWebTransportCtor();
-    if (!factory && !TransportCtor) {
-      // WT-312: unsupported is terminal for the whole session, never retried.
-      this.terminalStop = true;
-      this.cancelGraceTimer();
-      this.worldRefs = 0;
-      this.uiRefs = 0;
-      throw new RealtimeUnsupportedError();
-    }
-
-    const transport = factory ? factory(url) : new (TransportCtor as WebTransportCtor)(url);
-    this.session = transport;
-
+    const generation = this.generation;
     const promise = (async () => {
-      try {
-        await transport.ready;
-        return transport;
-      } catch (error) {
-        if (this.session === transport) {
-          this.session = null;
-          this.connectPromise = null;
+      if (defaultTabClaimer) {
+        try {
+          await defaultTabClaimer(resolvedToken, tabId);
+        } catch (err) {
+          console.warn("[RealtimeClient] tab claim preflight failed:", err);
         }
-        throw error;
       }
+      const url = buildRealtimeWTURL(this.options.url, resolvedToken, tabId);
+      const factory = this.options.createTransport;
+      const TransportCtor = defaultWebTransportCtor();
+      let transport: WebTransportLike | null = null;
+      let kind: "wt" | "ws" = "wt";
+      try {
+        if (factory || TransportCtor) {
+          transport = factory ? factory(url) : new (TransportCtor as WebTransportCtor)(url);
+          this.session = transport;
+          try {
+            let timeout: ReturnType<typeof setTimeout> | null = null;
+            await Promise.race([
+              transport.ready,
+              new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("WebTransport connect timeout")), WT_CONNECT_TIMEOUT_MS); }),
+            ]).finally(() => { if (timeout !== null) clearTimeout(timeout); });
+          } catch {
+            transport.close();
+            if (this.session === transport) this.session = null;
+            transport = null;
+          }
+        }
+      } catch {
+        transport = null;
+      }
+      if (!transport) {
+        kind = "ws";
+        const wsURL = buildRealtimeWSURL(this.options.wsURL, this.options.url, resolvedToken, tabId);
+        transport = this.options.createWebSocketTransport?.(wsURL) ?? new WebSocketTransport(wsURL);
+        await transport.ready;
+      }
+      if (this.generation !== generation || this.activeToken !== resolvedToken || this.activeTabId !== tabId) {
+        transport.close();
+        throw new Error("Realtime session changed while connecting");
+      }
+      this.session = transport;
+      this.sessionKind = kind;
+      this.transportKinds.set(transport, kind);
+      transport.closed
+        .then((info) => this.handleTransportClosed(transport, info?.closeCode ?? 0, info?.reason ?? ""))
+        .catch(() => this.handleTransportClosed(transport, 0, "transport closed with error"));
+      return transport;
     })();
     this.connectPromise = promise;
-
-    transport.closed
-      .then((info) => {
-        this.handleTransportClosed(transport, info?.closeCode ?? 0, info?.reason ?? "");
-      })
-      .catch(() => {
-        this.handleTransportClosed(transport, 0, "transport closed with error");
-      });
-
-    return promise;
+    try { return await promise; }
+    catch (error) {
+      if (this.connectPromise === promise) this.connectPromise = null;
+      throw error;
+    }
   }
 
   public disconnect(closeCode = 0, reason = "client disconnected"): void {
@@ -424,9 +459,49 @@ export class RealtimeClient {
     this.closeCurrentSession(closeCode, reason);
   }
 
+  private async switchToWebSocket(failed: WebTransportLike): Promise<WebTransportLike> {
+    if (this.session !== failed) {
+      if (this.fallbackPromise) return this.fallbackPromise;
+      if (this.session && this.sessionKind === "ws") return this.session;
+      if (this.session || this.transportKinds.get(failed) !== "wt" || this.terminalStop) {
+        throw new Error("Realtime session changed while opening stream");
+      }
+    }
+    if (this.fallbackPromise) return this.fallbackPromise;
+    const token = this.activeToken;
+    const tabId = this.activeTabId;
+    const generation = this.generation;
+    if (!token) throw new Error("Chưa có token đăng nhập");
+    this.closeCurrentSession(0, "WebTransport stream unavailable");
+    const promise = (async () => {
+      const wsURL = buildRealtimeWSURL(this.options.wsURL, this.options.url, token, tabId);
+      const transport = this.options.createWebSocketTransport?.(wsURL) ?? new WebSocketTransport(wsURL);
+      await transport.ready;
+      if (this.generation !== generation || this.activeToken !== token || this.activeTabId !== tabId) {
+        transport.close();
+        throw new Error("Realtime session changed while connecting");
+      }
+      this.session = transport;
+      this.sessionKind = "ws";
+      this.transportKinds.set(transport, "ws");
+      transport.closed
+        .then((info) => this.handleTransportClosed(transport, info?.closeCode ?? 0, info?.reason ?? ""))
+        .catch(() => this.handleTransportClosed(transport, 0, "transport closed with error"));
+      return transport;
+    })();
+    this.fallbackPromise = promise;
+    this.connectPromise = promise;
+    try { return await promise; }
+    catch (error) {
+      if (this.connectPromise === promise) this.connectPromise = null;
+      throw error;
+    } finally { if (this.fallbackPromise === promise) this.fallbackPromise = null; }
+  }
+
   private closeCurrentSession(closeCode: number, reason: string): void {
     const current = this.session;
     this.session = null;
+    this.sessionKind = null;
     this.connectPromise = null;
     if (current) {
       try {
@@ -443,6 +518,7 @@ export class RealtimeClient {
       return;
     }
     this.session = null;
+    this.sessionKind = null;
     this.connectPromise = null;
     this.lastCloseCode = closeCode;
 
@@ -500,6 +576,21 @@ export function buildRealtimeWTURL(baseURL: string | undefined, token: string, t
   const configured = (process.env.NEXT_PUBLIC_REALTIME_URL ?? "").trim();
   const fallback = `${BACKEND_URL.replace(/^http/, "https")}/api/wt`;
   const url = new URL(baseURL ?? (configured || fallback));
+  url.searchParams.set("token", token);
+  if (tabId) url.searchParams.set("tab_id", tabId);
+  return url.toString();
+}
+
+export function buildRealtimeWSURL(baseURL: string | undefined, wtURL: string | undefined, token: string, tabId: string | null): string {
+  const configured = (process.env.NEXT_PUBLIC_REALTIME_WS_URL ?? "").trim();
+  const configuredWT = (process.env.NEXT_PUBLIC_REALTIME_URL ?? "").trim();
+  const endpoint = baseURL || configured || (wtURL || configuredWT
+    ? buildRealtimeWTURL(wtURL, "", null)
+    : `${BACKEND_URL}/api/ws`);
+  const url = new URL(endpoint);
+  if (url.protocol === "https:") url.protocol = "wss:";
+  else if (url.protocol === "http:") url.protocol = "ws:";
+  if (url.pathname.endsWith("/api/wt")) url.pathname = url.pathname.slice(0, -2) + "ws";
   url.searchParams.set("token", token);
   if (tabId) url.searchParams.set("tab_id", tabId);
   return url.toString();

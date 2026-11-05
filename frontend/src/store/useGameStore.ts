@@ -2137,8 +2137,10 @@ export const useGameStore = create<GameState>((set, get) => {
               return { deathArenaBracket: updated };
             });
           } else if (eventType === "round_advanced" || eventType === "tournament_started") {
-            get().fetchDeathArenaBracket();
-            get().fetchDeathArenaCurrent();
+            if (useUIStore.getState().currentView === "death-arena") {
+              get().fetchDeathArenaBracket();
+              get().fetchDeathArenaCurrent();
+            }
           } else if (eventType === "tournament_finished") {
             set((state) => {
               if (!state.deathArenaTournament) return {};
@@ -2150,7 +2152,9 @@ export const useGameStore = create<GameState>((set, get) => {
                 },
               };
             });
-            get().fetchDeathArenaBracket();
+            if (useUIStore.getState().currentView === "death-arena") {
+              get().fetchDeathArenaBracket();
+            }
           }
         } catch (err) {
           console.error("Failed to process death arena event", err);
@@ -2176,11 +2180,15 @@ export const useGameStore = create<GameState>((set, get) => {
               return { martialBracket: updated };
             });
           } else if (eventType === "round_advanced" || eventType === "tournament_started") {
-            get().fetchMartialBracket();
-            get().fetchMartialCurrent();
+            if (useUIStore.getState().currentView === "martial-arena") {
+              get().fetchMartialBracket();
+              get().fetchMartialCurrent();
+            }
           } else if (eventType === "tournament_finished") {
-            get().fetchMartialBracket();
-            get().fetchMartialCurrent();
+            if (useUIStore.getState().currentView === "martial-arena") {
+              get().fetchMartialBracket();
+              get().fetchMartialCurrent();
+            }
           }
         } catch (err) {
           console.error("Failed to process martial arena event", err);

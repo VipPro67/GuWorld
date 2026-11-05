@@ -147,12 +147,10 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
       if (activeChannel === "region") void fetchBaoHoangMessages("region");
     };
     void syncRegion();
-    const timer = window.setInterval(syncRegion, 60000);
     const onVisible = () => { if (document.visibilityState === "visible") void syncRegion(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
-      window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
       regionChatSubscription.current?.unsubscribe();
       regionChatSubscription.current = null;

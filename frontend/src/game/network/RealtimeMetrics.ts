@@ -2,7 +2,7 @@
  * Client-side realtime baseline collector (ticket #308).
  *
  * Aggregates one window of transport health samples in the Phaser runtime and
- * drains it every 10s for upload to /api/realtime/metrics. Deliberately
+ * drains it periodically for upload to /api/realtime/metrics. Deliberately
  * allocation-light: it must never perturb the render loop it measures.
  */
 

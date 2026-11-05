@@ -70,6 +70,7 @@ Các biến thường dùng:
 | `PORT` | Port backend, mặc định `8080`. |
 | `TLS_ENABLED`, `TLS_ADDR` | Bật HTTPS trong Go. `TLS_ENABLED=true` phục vụ HTTPS trên `TLS_ADDR` (mặc định `:8443`) và bắt buộc `TLS_CERT_FILE` + `TLS_KEY_FILE`; thiếu cert thì process dừng, không fallback HTTP. Dev để trống và dùng `PORT`. |
 | `WT_ENABLED`, `WT_ADDR` | Bật QUIC/WebTransport. `WT_ENABLED=true` cần cert/key như trên; `WT_ADDR` mặc định `:8443` (UDP). `TLS_ENABLED=true` cũng bật WT nếu chưa đặt `WT_ENABLED`. |
+| `WS_FALLBACK_ENABLED` | Bật route WebSocket `/api/ws` cho world và UI realtime, mặc định bật; đặt `false` để tắt khẩn cấp. |
 | `TLS_CERT_FILE`, `TLS_KEY_FILE` | Cert/key PEM (fullchain + privkey) cho HTTPS + WebTransport. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | Kết nối PostgreSQL; có default local trong `db.Connect()`. |
 | `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS` | Timeout câu lệnh/chờ lock PostgreSQL cho request path; mặc định lần lượt 15000/10000 ms. |
@@ -107,7 +108,8 @@ Frontend:
 | Variable | Mục đích |
 | --- | --- |
 | `NEXT_PUBLIC_BACKEND_URL` | Backend base URL; mặc định `http://localhost:8080`. Production dùng `https://api.cogioi.io.vn`. |
-| `NEXT_PUBLIC_REALTIME_URL` | URL WT đầy đủ, ví dụ `https://rt.cogioi.io.vn/api/wt`; mặc định suy ra từ backend (HTTPS + `/api/wt`). WebTransport là transport realtime duy nhất; không còn cờ chọn WS. |
+| `NEXT_PUBLIC_REALTIME_URL` | URL WT đầy đủ, ví dụ `https://rt.cogioi.io.vn/api/wt`; mặc định suy ra từ backend (HTTPS + `/api/wt`). Client thử WT trước. |
+| `NEXT_PUBLIC_REALTIME_WS_URL` | URL WebSocket fallback; nếu có URL WT cấu hình thì dùng cùng host và đổi sang `/api/ws`, nếu không thì suy ra từ `NEXT_PUBLIC_BACKEND_URL`. Production host phải phục vụ TCP/TLS. |
 | `NEXT_PUBLIC_MMO_ZONE_ID` | Zone dự phòng cho preview/test. Khi đăng nhập, client ưu tiên `current_region` của nhân vật để chọn map KHU_VUC/SAFE_ZONE tương ứng. |
 | `NEXT_PUBLIC_MMO_MAP_URL` | URL map JSON client tải; mặc định `/game/maps/<zone>.json`. File này phải giống bản trong `backend/data/mmo/maps/`. |
 
@@ -122,11 +124,7 @@ notification count refresh at most once per 15 seconds. Polling pauses in hidden
 or offline tabs, stops after tab replacement/unmount, and stops when UI realtime recovers.
 Bao Hoang chat sends use HTTP once, with no replay through another transport after
 an uncertain mutation result. World movement/combat still require realtime.
-WebTransport handshakes time out after 10 seconds, pending requests reject on connection
-loss, and the basic navigation's reconnect button or a browser online event can
-restart an exhausted reconnect budget for an active session. A browser without
-WebTransport is treated as unsupported for the whole session (no retry loop);
-it keeps HTTP features and the world map stays locked.
+Client chuyển sang WebSocket khi WebTransport không được hỗ trợ hoặc không thiết lập được kết nối. World và UI dùng chung một kết nối đã chọn trong mỗi tab. Khi mất kết nối, các request đang chờ bị từ chối; nút kết nối lại hoặc sự kiện online có thể khởi động lại ngân sách retry. Trình duyệt không dùng được cả hai transport vẫn có các chức năng HTTP, còn world map bị khóa.
 
 Sau đăng nhập và onboarding, Phaser 4.2.1 là gameplay world duy nhất; `dashboard`/`world-map` cũ chỉ
 còn là view ID tương thích, các component map turn-based đã bị gỡ khỏi frontend và không fallback

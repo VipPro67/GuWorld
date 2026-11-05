@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"github.com/quic-go/webtransport-go"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/protocol"
@@ -49,23 +50,38 @@ type edgeTransferAdmission interface {
 	TransferAtEdge(playerID, controllerID uuid.UUID, position sim.Vec2) (protocol.Transfer, bool, error)
 }
 
+type worldDatagrams interface {
+	SendDatagram([]byte) error
+	ReceiveDatagram(context.Context) ([]byte, error)
+}
+
+type worldStream interface {
+	io.ReadWriteCloser
+	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
+}
+
 // Server upgrades WebTransport requests and runs one world/UI session each.
 type Server struct {
-	admission Admission
-	wt        *webtransport.Server
-	ui        UIOptions
-	mu        sync.Mutex
-	sessions  map[*webtransport.Session]struct{}
-	draining  atomic.Bool
+	admission  Admission
+	wt         *webtransport.Server
+	ui         UIOptions
+	mu         sync.Mutex
+	sessions   map[*webtransport.Session]struct{}
+	wsSessions map[*websocket.Conn]struct{}
+	draining   atomic.Bool
 }
 
 func New(admission Admission, wt *webtransport.Server) *Server {
 	return &Server{
-		admission: admission,
-		wt:        wt,
-		sessions:  make(map[*webtransport.Session]struct{}),
+		admission:  admission,
+		wt:         wt,
+		sessions:   make(map[*webtransport.Session]struct{}),
+		wsSessions: make(map[*websocket.Conn]struct{}),
 	}
 }
+
+func (s *Server) SetWebTransportServer(wt *webtransport.Server) { s.wt = wt }
 
 // Handle must run after authentication; playerID/tabID come from the
 // authenticated request, never from the join payload.
@@ -103,20 +119,29 @@ func (s *Server) Drain() int {
 	for _, sess := range active {
 		_ = sess.CloseWithError(CloseCodeServerDraining, "server_draining")
 	}
-	return len(active)
+	s.mu.Lock()
+	wsActive := make([]*websocket.Conn, 0, len(s.wsSessions))
+	for conn := range s.wsSessions {
+		wsActive = append(wsActive, conn)
+	}
+	s.mu.Unlock()
+	for _, conn := range wsActive {
+		_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(int(CloseCodeServerDraining), "server_draining"), time.Now().Add(time.Second))
+	}
+	return len(active) + len(wsActive)
 }
 
 // ActiveSessions reports how many WebTransport sessions are still open.
 func (s *Server) ActiveSessions() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.sessions)
+	return len(s.sessions) + len(s.wsSessions)
 }
 
 type worldSession struct {
 	server       *Server
-	session      *webtransport.Session
-	stream       *webtransport.Stream
+	session      worldDatagrams
+	stream       worldStream
 	playerID     uuid.UUID
 	controllerID uuid.UUID
 	tabID        string
@@ -185,7 +210,7 @@ func (s *Server) serve(session *webtransport.Session, playerID, initialControlle
 	wg.Wait()
 }
 
-func (s *Server) serveWorldStream(ctx context.Context, session *webtransport.Session, stream *webtransport.Stream, playerID, controllerID uuid.UUID, tabID string) {
+func (s *Server) serveWorldStream(ctx context.Context, session worldDatagrams, stream worldStream, playerID, controllerID uuid.UUID, tabID string) {
 	defer func() { _ = stream.Close() }()
 	if s.admission == nil {
 		return
@@ -588,7 +613,11 @@ func (w *worldSession) sendSnapshot(snapshot sim.Snapshot) error {
 	w.visible = current
 
 	tick := uint32(snapshot.Tick)
-	if tick%baselineTicks == 0 || w.resyncRequested.Swap(false) {
+	needsWSResync := false
+	if ws, ok := w.session.(*websocketSession); ok {
+		needsWSResync = ws.needsResync.Swap(false)
+	}
+	if tick%baselineTicks == 0 || w.resyncRequested.Swap(false) || needsWSResync {
 		removed := make([]uint16, 0, len(w.pendingRemoved))
 		for netID := range w.pendingRemoved {
 			removed = append(removed, netID)

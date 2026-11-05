@@ -36,13 +36,11 @@ docker compose -f docker-compose.local.yml up --build
 
 Lệnh này khởi chạy Go backend, PostgreSQL và Redis ở chế độ local (plain HTTP
 `:8080`, không TLS, không Caddy). Production dùng `docker-compose.yml`: Go phục
-vụ HTTPS (TCP/443) và WebTransport (UDP/443) trong cùng process; Caddy và
-WebSocket đã bị xoá. Compose production cần `certs/fullchain.pem` +
+vụ HTTPS/WebSocket (TCP/443) và WebTransport (UDP/443) trong cùng process. Client ưu tiên WebTransport và dùng WebSocket fallback khi WT không thiết lập được. Compose production cần `certs/fullchain.pem` +
 `certs/privkey.pem` (đọc bởi GID `10001`) và host phải mở TCP/UDP 443 — xem
 [`docs/PRODUCTION_DEPLOY.md`](./docs/PRODUCTION_DEPLOY.md). Muốn chạy local
 không TLS bằng binary, đặt `TLS_ENABLED=false`, `WT_ENABLED=false` và dùng
-`go run ./cmd/server` (plain HTTP `:8080`); WebTransport cần HTTPS/cert tin cậy
-nên chế độ plain chỉ dùng để phát triển REST/UI. Backend tự khởi tạo schema cùng
+`go run ./cmd/server` (plain HTTP `:8080`); WebSocket fallback có thể dùng `ws://localhost:8080/api/ws` khi dev không bật WT. WebTransport cần HTTPS/cert tin cậy. Backend tự khởi tạo schema cùng
 dữ liệu hệ thống tối thiểu. Sau lần cài mới, quản trị viên phải import dữ liệu
 gameplay từ tab **Dữ liệu**; `Quest.csv` hiện là ngoại lệ được đồng bộ khi khởi
 tạo schema.

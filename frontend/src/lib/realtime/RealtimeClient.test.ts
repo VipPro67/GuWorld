@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test, type TestContext } from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { BACKEND_URL } from "../config.ts";
 import { WorldTransport } from "../../game/network/WorldTransport.ts";
 import {
   Mask,
@@ -22,6 +23,7 @@ import {
   CLOSE_CODE_SESSION_REPLACED,
   RealtimeClient,
   TabIdCoordinator,
+  buildRealtimeWSURL,
   type BroadcastChannelLike,
   type WebTransportLike,
 } from "./RealtimeClient.ts";
@@ -194,6 +196,106 @@ test("RealtimeClient shares 1 WebTransport session across WorldTransport (0x01) 
     uiManager.disconnect();
   } finally {
     globalThis.WebSocket = originalWS;
+  }
+});
+
+test("RealtimeClient selects one WebSocket session when WebTransport handshake fails", async () => {
+  const fallback = createFakeTransport();
+  let wsURL = "";
+  const client = new RealtimeClient({
+    url: "https://rt.example.test/api/wt",
+    getToken: () => "jwt-token",
+    getTabId: () => "tab-1",
+    createTransport: () => { throw new Error("HTTP/3 unavailable"); },
+    createWebSocketTransport: (url) => { wsURL = url; return fallback.transport; },
+  });
+  const ui = await client.openUIStream("jwt-token");
+  const world = await client.openWorldStream("jwt-token");
+  assert.match(wsURL, /^wss:\/\/rt\.example\.test\/api\/ws\?/);
+  assert.match(wsURL, /token=jwt-token/);
+  assert.equal(ui.session, world.session);
+  assert.equal(fallback.streams.length, 2);
+  world.release();
+  ui.release();
+  client.disconnect();
+});
+
+test("RealtimeClient switches the shared session when WT stream creation fails", async () => {
+  const failedWT = createFakeTransport();
+  failedWT.transport.createBidirectionalStream = async () => { throw new Error("stream unavailable"); };
+  const fallback = createFakeTransport();
+  let fallbackCount = 0;
+  const client = new RealtimeClient({
+    url: "https://rt.example.test/api/wt",
+    getToken: () => "jwt-token",
+    getTabId: () => "tab-1",
+    createTransport: () => failedWT.transport,
+    createWebSocketTransport: () => { fallbackCount++; return fallback.transport; },
+  });
+  const ui = await client.openUIStream("jwt-token");
+  const world = await client.openWorldStream("jwt-token");
+  assert.equal(failedWT.getCloseCalls(), 1);
+  assert.equal(fallbackCount, 1);
+  assert.equal(ui.session, fallback.transport);
+  assert.equal(world.session, fallback.transport);
+  world.release();
+  ui.release();
+  client.disconnect();
+});
+
+test("concurrent world and UI stream failures open one fallback socket", async () => {
+  const failedWT = createFakeTransport();
+  failedWT.transport.createBidirectionalStream = async () => { throw new Error("stream unavailable"); };
+  const fallback = createFakeTransport();
+  let fallbackCount = 0;
+  const client = new RealtimeClient({
+    url: "https://rt.example.test/api/wt",
+    getToken: () => "jwt-token",
+    getTabId: () => "tab-1",
+    createTransport: () => failedWT.transport,
+    createWebSocketTransport: () => { fallbackCount++; return fallback.transport; },
+  });
+  const [ui, world] = await Promise.all([
+    client.openUIStream("jwt-token"),
+    client.openWorldStream("jwt-token"),
+  ]);
+  assert.equal(fallbackCount, 1);
+  assert.equal(ui.session, world.session);
+  ui.release();
+  world.release();
+  client.disconnect();
+});
+
+test("WebSocket endpoint override takes precedence over WebTransport endpoint", () => {
+  const previous = process.env.NEXT_PUBLIC_REALTIME_WS_URL;
+  process.env.NEXT_PUBLIC_REALTIME_WS_URL = "wss://backup.example.test/socket";
+  try {
+    assert.equal(
+      buildRealtimeWSURL(undefined, "https://primary.example.test/api/wt", "token", "tab"),
+      "wss://backup.example.test/socket?token=token&tab_id=tab",
+    );
+  } finally {
+    if (previous === undefined) delete process.env.NEXT_PUBLIC_REALTIME_WS_URL;
+    else process.env.NEXT_PUBLIC_REALTIME_WS_URL = previous;
+  }
+});
+
+test("WebSocket default follows the backend HTTP scheme when WT is not configured", () => {
+  const oldWS = process.env.NEXT_PUBLIC_REALTIME_WS_URL;
+  const oldWT = process.env.NEXT_PUBLIC_REALTIME_URL;
+  process.env.NEXT_PUBLIC_REALTIME_WS_URL = "";
+  process.env.NEXT_PUBLIC_REALTIME_URL = "";
+  try {
+    const url = new URL(buildRealtimeWSURL(undefined, undefined, "token", "tab"));
+    const backend = new URL(BACKEND_URL);
+    assert.equal(url.protocol, backend.protocol === "https:" ? "wss:" : "ws:");
+    assert.equal(url.host, backend.host);
+    assert.equal(url.pathname, "/api/ws");
+  } finally {
+    if (oldWS === undefined) delete process.env.NEXT_PUBLIC_REALTIME_WS_URL;
+    else process.env.NEXT_PUBLIC_REALTIME_WS_URL = oldWS;
+    if (oldWT === undefined) delete process.env.NEXT_PUBLIC_REALTIME_URL;
+    else process.env.NEXT_PUBLIC_REALTIME_URL = oldWT;
   }
 });
 

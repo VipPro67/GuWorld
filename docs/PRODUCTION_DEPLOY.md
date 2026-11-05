@@ -1,8 +1,6 @@
-# Production deployment — HTTPS + WebTransport (no Caddy, no WebSocket)
+# Production deployment — HTTPS + WebTransport + WebSocket fallback
 
-Tài liệu này là checklist triển khai production cho GuWorld sau khi WebTransport
-là transport realtime duy nhất. Caddy, WebSocket và `/api/ws` đã bị xoá; Go phục
-vụ HTTPS (TCP/443) và QUIC/WebTransport (UDP/443) trong cùng process.
+Go phục vụ HTTPS và WebSocket trên TCP cùng QUIC/WebTransport trên UDP. Client ưu tiên WebTransport và dùng `/api/ws` khi không thiết lập được kết nối WT. `WS_FALLBACK_ENABLED=false` tắt route WS để rollback khẩn cấp.
 
 ## 1. Kiến trúc đích
 
@@ -10,9 +8,11 @@ vụ HTTPS (TCP/443) và QUIC/WebTransport (UDP/443) trong cùng process.
 Internet
 ├── TCP 443 ──► Cloudflare (api.cogioi.io.vn, proxied)
 │                └──► Lightsail :443 ──► container :8443 (http.Server, h1/h2)
-│                       REST /api/*, /api/health, CONNECT /api/wt
+│                       REST /api/*, /api/health, WebSocket /api/ws
+├── TCP 443 ──► rt.cogioi.io.vn (DNS-only)
+│                └──► Lightsail :443/tcp ──► container :8443/tcp (WebSocket /api/ws)
 └── UDP 443 ──► rt.cogioi.io.vn (DNS-only, không qua Cloudflare)
-                 └──► Lightsail :443/udp ──► container :8443/udp (webtransport-go)
+                 └──► Lightsail :443/udp ──► container :8443/udp (WebTransport CONNECT /api/wt)
 ```
 
 - `TLS_ENABLED=true`: bật HTTPS trên `TLS_ADDR` (mặc định `:8443`) và WT trên
@@ -21,7 +21,7 @@ Internet
 - Dev không đặt `TLS_ENABLED`/`WT_ENABLED`: backend chạy plain HTTP trên `PORT`
   (`:8080`), phù hợp `go run ./cmd/server` + frontend `localhost:3000`.
 - Frontend mặc định suy ra WT URL từ `NEXT_PUBLIC_BACKEND_URL` (đổi `https`) +
-  `/api/wt`; override bằng `NEXT_PUBLIC_REALTIME_URL`.
+  `/api/wt`; override bằng `NEXT_PUBLIC_REALTIME_URL`. WS URL mặc định dùng cùng host, đổi sang `wss` và `/api/ws`; có thể đặt `NEXT_PUBLIC_REALTIME_WS_URL` riêng.
 
 ## 2. Chuẩn bị một lần
 

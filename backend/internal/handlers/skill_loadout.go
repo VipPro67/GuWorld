@@ -342,8 +342,14 @@ func loadCombatHouseStrikes(ctx context.Context, q combatLoadoutQueryer, playerI
 				Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpDamage, Value: damage, Path: action.MainPath}},
 			}}
 		} else {
-			probe := move
-			probe.Components = []realtimeeffects.KillerMoveComponent{{InstanceID: action.ID, Hunger: 1}}
+			probe := realtimeeffects.KillerMove{
+				ProfileVersion: move.ProfileVersion, ID: move.ID, Name: move.Name, Rank: move.Rank,
+				Components:         []realtimeeffects.KillerMoveComponent{{InstanceID: action.ID, Hunger: 1}},
+				ExpectedComponents: 1, Effects: move.Effects, ManaCost: move.ManaCost,
+				SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
+				BackfireStatus: move.BackfireStatus, Complexity: move.Complexity,
+				WindupMS: move.RealtimeWindupMS, CooldownMS: move.RealtimeCooldownMS,
+			}
 			if len(realtimeeffects.BuildKillerMoveSkills([]realtimeeffects.KillerMove{probe})) != 1 {
 				resolution.candidate.Reason = "Trận Kích chưa có executor realtime tương thích"
 				resolutions = append(resolutions, resolution)

@@ -471,7 +471,7 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 	// The WebTransport upgrade needs an uncompressed CONNECT response.
 	r.Use(compress.Compress(
 		compress.WithExcludeFunc(func(c *gin.Context) bool {
-			return c.Request.URL.Path == "/api/wt"
+			return c.Request.URL.Path == "/api/wt" || c.Request.URL.Path == "/api/ws"
 		}),
 	))
 

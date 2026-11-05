@@ -608,11 +608,13 @@ func compileKillerMoveCombatProfile(
 			}
 		}
 	}
-	targetType = "SELF"
-	if hasTargetEffect && hasSelfEffect {
-		targetType = "SINGLE+SELF"
-	} else if hasTargetEffect {
-		targetType = "SINGLE"
+	if hasTargetEffect || hasSelfEffect {
+		targetType = "SELF"
+		if hasTargetEffect && hasSelfEffect {
+			targetType = "SINGLE+SELF"
+		} else if hasTargetEffect {
+			targetType = "SINGLE"
+		}
 	}
 
 	backfirePct := math.Max(0.08, 0.28-float64(pathMasteryLevel)*0.035-(harmony-0.6)*0.20)

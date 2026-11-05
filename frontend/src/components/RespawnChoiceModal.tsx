@@ -22,7 +22,7 @@ export function RespawnChoiceModal() {
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    if (!player || !token) return;
+    if (!player?.id || !token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/respawn-choice`);
       if (!response.ok) return;
@@ -32,7 +32,7 @@ export function RespawnChoiceModal() {
     } catch {
       // The choice is persisted server-side; retry on notification or tab return.
     }
-  }, [player, token]);
+  }, [player?.id, token]);
 
   useEffect(() => {
     if (!player || !token) {

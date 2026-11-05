@@ -1,5 +1,9 @@
 # Tiến độ thi công WebTransport — 2026-11-03
 
+> **Cập nhật 2026-11-05:** Đã thống nhất thiết kế mở lại WebSocket làm fallback
+> mặc định khi WT không hỗ trợ hoặc lỗi kết nối transport. Hiện thực vẫn WT-only;
+> xem [kế hoạch WT + WS fallback](./WT-WS-FALLBACK-PLAN.md).
+
 > Mục tiêu: WebTransport là transport realtime **duy nhất**, bỏ Caddy và WebSocket.
 > Map quyết định: [#303](https://github.com/VipPro67/GuWorld/issues/303) (đã đóng). Spec: `docs/wayfinder/specs/WT-*.md`.
 > File này là điểm tiếp tục cho phiên sau. Cập nhật lần cuối: 2026-11-03.

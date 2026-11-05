@@ -5,14 +5,13 @@
 ```text
 Browser / Next.js UI
   -> Zustand domain slices (state + API client)
-  -> HTTP `/api/*` or one authenticated WebTransport session `CONNECT /api/wt`
-       (stream 0x01 world, stream 0x02 UI NDJSON, QUIC datagrams)
+  -> HTTP `/api/*` or one authenticated realtime session per tab
+       (WebTransport `/api/wt` preferred; WebSocket `/api/ws` fallback)
   -> Gin handlers -> shared service (where present) -> PostgreSQL
   -> Redis cache/pub-sub, `internal/uihub` realtime sinks and polling/batch workers
 ```
 
-WebTransport is the only realtime transport. WebSocket, SSE and Caddy have been
-removed; TLS and QUIC are served by the Go process itself.
+WebTransport is preferred. WebSocket carries the same world v2 and UI NDJSON protocols when WT cannot connect. Both use the same admission and authoritative simulation. TLS and QUIC are served by the Go process.
 
 Gameplay rules remain primarily in handlers. The wired shared services are `PlayerService`, `InventoryService`, `RecipeService`, `QuestService` and `AchievementService`; this is an incremental split, not a universal service/repository layer. Check `handlers/services.go` and the package before assuming another service exists.
 
@@ -43,8 +42,8 @@ The canonical full-row player projection and collection revision live in `intern
 | `backend/internal/services` | Existing shared player, inventory, recipe, quest and achievement operations, plus player time/status projection. |
 | `backend/internal/playerstate` | Canonical player row projection, snapshot views, collection revision and lazy repairs. |
 | `backend/internal/middleware` | Authentication, rate limits and request context. |
-| `backend/internal/cache`, `backend/internal/uihub` | Redis and transport-neutral realtime UI event sinks (shared by Redis fan-out and `/api/wt`). |
-| `backend/internal/realtime/wttransport` | WebTransport server: session multiplexing, world/UI streams, datagrams, drain. |
+| `backend/internal/cache`, `backend/internal/uihub` | Redis and transport-neutral realtime UI event sinks (shared by Redis fan-out and both realtime routes). |
+| `backend/internal/realtime/wttransport` | WebTransport and WebSocket session handling: world/UI streams, datagrams, drain. |
 | `backend/internal/realtime/sim`, `backend/internal/realtime/effects` | Authoritative zone simulation and Gu realtime effect compilation. |
 | `backend/internal/worker` | Polling, simulation and batch persistence loops. |
 | `backend/data/*.csv` | Canonical import/export files for gameplay data. |
@@ -62,9 +61,9 @@ The canonical full-row player projection and collection revision live in `intern
 ## State and networking
 
 - Protected HTTP calls use cookie credentials. `NEXT_PUBLIC_BACKEND_URL` defaults to `http://localhost:8080`.
-- `CONNECT /api/wt` is the only realtime transport: one WebTransport session per tab multiplexes a world stream (`0x01`, binary v2), a UI stream (`0x02`, NDJSON pub/sub and RPC) and QUIC datagrams for input/snapshot deltas. `internal/uihub` fans out player, trade, chat, notification and other UI channels from Redis Pub/Sub.
+- The client tries WebTransport `/api/wt` first, then WebSocket `/api/ws` if transport establishment fails. One session per tab carries a world stream (`0x01`, binary v2), a UI stream (`0x02`, NDJSON pub/sub and RPC), and input/snapshot datagrams or equivalent WS frames. `internal/uihub` fans out UI channels from Redis Pub/Sub.
 - World-map queries remain HTTP for snapshots, rectangular cell fetches and actions; the world stream keeps nearby state fresh between snapshots. HTTP endpoints stay available as fallback for non-realtime actions.
-- A browser without WebTransport is treated as unsupported for the whole session (no retry loop): HTTP features keep working and the world map stays locked. See [PRODUCTION_DEPLOY.md](PRODUCTION_DEPLOY.md) for the TLS/QUIC origin setup.
+- A browser without WebTransport tries WebSocket. If neither connects, HTTP features keep working and the world map stays locked. See [PRODUCTION_DEPLOY.md](PRODUCTION_DEPLOY.md) for the TLS/QUIC origin setup.
 - The Zustand root composes domain slices for inventory, combat, exploration, aperture, marketplace, sect, party, notifications, achievements, pets, gacha, betting and other systems.
 
 ## Player state and movement

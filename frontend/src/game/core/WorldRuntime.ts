@@ -943,7 +943,7 @@ export class WorldRuntime {
       this.lastMetricsUploadAt = now;
       return;
     }
-    if (now - this.lastMetricsUploadAt < 10_000) return;
+    if (now - this.lastMetricsUploadAt < 60_000) return;
     this.lastMetricsUploadAt = now;
     this.flushSocketMetrics();
     const upload = this.metrics.drain({ zone: this.lastJoin?.zone_id ?? "", status: this.status });

@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/quic-go/quic-go"
@@ -945,6 +946,7 @@ func main() {
 	}
 	tlsEnabled := envBool("TLS_ENABLED")
 	wtEnabled := tlsEnabled || envBool("WT_ENABLED")
+	wsFallbackEnabled := !strings.EqualFold(strings.TrimSpace(os.Getenv("WS_FALLBACK_ENABLED")), "false")
 	tlsAddr := strings.TrimSpace(os.Getenv("TLS_ADDR"))
 	if tlsAddr == "" {
 		tlsAddr = ":8443"
@@ -961,45 +963,8 @@ func main() {
 		udpConn    net.PacketConn
 	)
 
-	if wtEnabled {
-		certFile := strings.TrimSpace(os.Getenv("TLS_CERT_FILE"))
-		keyFile := strings.TrimSpace(os.Getenv("TLS_KEY_FILE"))
-		if certFile == "" || keyFile == "" {
-			logger.S.Fatalf("TLS_ENABLED/WT_ENABLED requires TLS_CERT_FILE and TLS_KEY_FILE")
-		}
-		if realtimeAdmission == nil {
-			logger.S.Fatalf("TLS_ENABLED/WT_ENABLED requires the realtime admission runtime")
-		}
-		cert, certErr := tls.LoadX509KeyPair(certFile, keyFile)
-		if certErr != nil {
-			logger.S.Fatalf("load WebTransport certificate: %v", certErr)
-		}
-		tlsTCP := &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2", "http/1.1"}}
-		tlsH3 := http3.ConfigureTLSConfig(&tls.Config{Certificates: []tls.Certificate{cert}})
-		h3 := &http3.Server{
-			Handler:   r,
-			TLSConfig: tlsH3,
-			QUICConfig: &quic.Config{
-				MaxIdleTimeout:                   90 * time.Second,
-				KeepAlivePeriod:                  20 * time.Second,
-				MaxIncomingStreams:               16,
-				MaxIncomingUniStreams:            16,
-				MaxStreamReceiveWindow:           256 << 10,
-				MaxConnectionReceiveWindow:       2 << 20,
-				EnableDatagrams:                  true,
-				EnableStreamResetPartialDelivery: true,
-			},
-		}
-		wt := &webtransport.Server{H3: h3, CheckOrigin: realtimeOriginChecker()}
-		udpAddr, resolveErr := net.ResolveUDPAddr("udp", wtAddr)
-		if resolveErr != nil {
-			logger.S.Fatalf("resolve WT_ADDR: %v", resolveErr)
-		}
-		udp, listenErr := net.ListenUDP("udp", udpAddr)
-		if listenErr != nil {
-			logger.S.Fatalf("listen WebTransport UDP %s: %v", wtAddr, listenErr)
-		}
-		wtHandler = wttransport.New(realtimeAdmission, wt).WithUIOptions(wttransport.UIOptions{
+	if realtimeAdmission != nil {
+		wtHandler = wttransport.New(realtimeAdmission, nil).WithUIOptions(wttransport.UIOptions{
 			Hub: shub,
 			Command: func(playerID uuid.UUID, command string, payload json.RawMessage) (int, json.RawMessage) {
 				switch command {
@@ -1046,6 +1011,68 @@ func main() {
 			},
 			TouchActivity: handlers.TouchPlayerActivity,
 		})
+		if wsFallbackEnabled {
+			r.GET("/api/ws", func(c *gin.Context) {
+				if !realtimeOriginChecker()(c.Request) {
+					c.Status(http.StatusForbidden)
+					return
+				}
+				identity, status, message := middleware.AuthenticateRequest(c.Request)
+				if identity == nil {
+					c.String(status, message)
+					return
+				}
+				tabID := strings.TrimSpace(c.Query("tab_id"))
+				if len(tabID) > 100 {
+					tabID = ""
+				}
+				if tabID != "" {
+					middleware.ClaimActiveTab(identity.PlayerID, tabID)
+				}
+				_ = wtHandler.HandleWebSocket(c.Writer, c.Request, identity.PlayerID, tabID, realtimeOriginChecker())
+			})
+		}
+	}
+
+	if wtEnabled {
+		certFile := strings.TrimSpace(os.Getenv("TLS_CERT_FILE"))
+		keyFile := strings.TrimSpace(os.Getenv("TLS_KEY_FILE"))
+		if certFile == "" || keyFile == "" {
+			logger.S.Fatalf("TLS_ENABLED/WT_ENABLED requires TLS_CERT_FILE and TLS_KEY_FILE")
+		}
+		if realtimeAdmission == nil {
+			logger.S.Fatalf("TLS_ENABLED/WT_ENABLED requires the realtime admission runtime")
+		}
+		cert, certErr := tls.LoadX509KeyPair(certFile, keyFile)
+		if certErr != nil {
+			logger.S.Fatalf("load WebTransport certificate: %v", certErr)
+		}
+		tlsTCP := &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2", "http/1.1"}}
+		tlsH3 := http3.ConfigureTLSConfig(&tls.Config{Certificates: []tls.Certificate{cert}})
+		h3 := &http3.Server{
+			Handler:   r,
+			TLSConfig: tlsH3,
+			QUICConfig: &quic.Config{
+				MaxIdleTimeout:                   90 * time.Second,
+				KeepAlivePeriod:                  20 * time.Second,
+				MaxIncomingStreams:               16,
+				MaxIncomingUniStreams:            16,
+				MaxStreamReceiveWindow:           256 << 10,
+				MaxConnectionReceiveWindow:       2 << 20,
+				EnableDatagrams:                  true,
+				EnableStreamResetPartialDelivery: true,
+			},
+		}
+		wt := &webtransport.Server{H3: h3, CheckOrigin: realtimeOriginChecker()}
+		udpAddr, resolveErr := net.ResolveUDPAddr("udp", wtAddr)
+		if resolveErr != nil {
+			logger.S.Fatalf("resolve WT_ADDR: %v", resolveErr)
+		}
+		udp, listenErr := net.ListenUDP("udp", udpAddr)
+		if listenErr != nil {
+			logger.S.Fatalf("listen WebTransport UDP %s: %v", wtAddr, listenErr)
+		}
+		wtHandler.SetWebTransportServer(wt)
 		// Mount the CONNECT endpoint outside gin so webtransport-go receives
 		// the raw HTTP/3 ResponseWriter.
 		h3.Handler = server.WithRealtimeWT(r, wtHandler.Handle)
@@ -1092,7 +1119,7 @@ func main() {
 
 	if wtHandler != nil {
 		if closed := wtHandler.Drain(); closed > 0 {
-			logger.S.Infof("Sent 4010 server_draining to %d active WebTransport sessions", closed)
+			logger.S.Infof("Sent 4010 server_draining to %d active realtime sessions", closed)
 		}
 		deadline := time.Now().Add(5 * time.Second)
 		for wtHandler.ActiveSessions() > 0 && time.Now().Before(deadline) {
