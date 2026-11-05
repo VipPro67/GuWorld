@@ -33,6 +33,7 @@ export function KillerMovesPanel() {
   const [previewError, setPreviewError] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [acceptedPreview, setAcceptedPreview] = useState("");
   const [viewMode, setViewMode] = useState<"spells" | "houses">("spells");
 
   useEffect(() => { void fetch(); }, [fetch]);
@@ -43,7 +44,7 @@ export function KillerMovesPanel() {
 
   const selectedGuIDs = useMemo(() => new Set([mainId, ...components]), [mainId, components]);
   const availableEffects = useMemo(
-    () => effects.filter((effect) => selectedGuIDs.has(effect.source_instance_id)),
+    () => effects.filter((effect) => selectedGuIDs.has(effect.source_instance_id) && (effect.realtime_supported || effect.trigger === "ON_USE")),
     [effects, selectedGuIDs],
   );
   const selectedEffectOptions = useMemo(
@@ -103,8 +104,9 @@ export function KillerMovesPanel() {
     if (!draft || !preview || !name.trim()) return;
     setSaving(true);
     try {
-      if (await create({ ...draft, name: name.trim() })) {
+      if (await create({ ...draft, name: name.trim(), preview_fingerprint: preview.preview_fingerprint, accept_adjustments: acceptedPreview === preview.preview_fingerprint })) {
         setName(""); setComponents([]); setSelectedEffects([]); setPreview(null);
+        setAcceptedPreview("");
       }
     } finally { setSaving(false); }
   };
@@ -228,7 +230,7 @@ export function KillerMovesPanel() {
             {availableEffects.length === 0 ? <div className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-600">Cổ đã chọn chưa có hiệu ứng được hỗ trợ.</div> : <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
               {availableEffects.map((effect) => <div key={effect.key} draggable onDragStart={(event) => event.dataTransfer.setData("text/killer-move-effect", effect.key)} className="group flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 cursor-grab active:cursor-grabbing">
                 <GripVertical className="h-4 w-4 shrink-0 text-zinc-600" />
-                <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold text-zinc-200">{effect.label}</div><div className="truncate text-[10px] text-zinc-500">{effect.source_name} · {effect.operation.value ? `Giá trị ${effect.operation.value}` : effect.operation.status_id || effect.operation.sub_type || effect.operation.op}</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold text-zinc-200">{effect.label}</div><div className="truncate text-[10px] text-zinc-500">{effect.source_name} · {effect.realtime_supported ? "Realtime" : effect.realtime_unavailable_reason || "Ngoài combat"} · {effect.operation.value ? `Giá trị ${effect.operation.value}` : effect.operation.status_id || effect.operation.sub_type || effect.operation.op}</div></div>
                 <button aria-label="Thêm hiệu ứng" onClick={() => addEffect(effect.key)} disabled={selectedEffects.includes(effect.key) || selectedEffects.length>=8} className="rounded-md border border-zinc-700 p-1 text-zinc-400 hover:border-amber-600 hover:text-amber-300 disabled:opacity-30"><Plus className="h-3.5 w-3.5" /></button>
               </div>)}
             </div>}
@@ -251,11 +253,16 @@ export function KillerMovesPanel() {
             <div className="rounded-lg bg-zinc-900 p-2"><div className="text-zinc-500">Rủi ro phản phệ</div><div className="mt-0.5 font-mono text-rose-400">Mất {formatPercent(preview.combat_profile?.backfire_hp_pct || 0.12)} HP</div></div>
             {preview.effect_scale < 0.999 && <div className="col-span-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-amber-200">Uy lực effect sau cân bằng: {formatPercent(preview.effect_scale)}</div>}
             {preview.warnings?.map((warning) => <div key={warning} className="col-span-2 flex gap-1.5 text-amber-300"><ShieldAlert className="h-3.5 w-3.5 shrink-0" />{warning}</div>)}
+            {!preview.realtime_supported && <div className="col-span-2 rounded-lg border border-orange-900/50 bg-orange-950/20 p-2 text-orange-200">{preview.realtime_unavailable_reason || "Chiêu chỉ có thể dùng ngoài combat."}</div>}
           </div>}
           {previewError && <p className="mb-3 text-[11px] text-red-300">{previewError}</p>}
+          {preview && preview.effect_scale < 0.999 && <label className="mb-3 flex items-start gap-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-[11px] text-amber-100">
+            <input type="checkbox" checked={acceptedPreview === preview.preview_fingerprint} onChange={(event) => setAcceptedPreview(event.target.checked ? preview.preview_fingerprint : "")} className="mt-0.5 accent-amber-500" />
+            <span>Tôi đã xem và chấp nhận các effect được tự cân còn {formatPercent(preview.effect_scale)}.</span>
+          </label>}
           <div className="mt-auto space-y-2">
             <input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="Đặt tên sát chiêu" className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-amber-500" />
-            <button onClick={() => void saveMove()} disabled={saving || !preview || !name.trim() || moves.length>=maxSaved} className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2.5 text-xs font-bold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-4 w-4" />{saving ? "Đang lưu…" : "Lưu Sát Chiêu"}</button>
+            <button onClick={() => void saveMove()} disabled={saving || !preview || (!preview.realtime_supported && (preview.has_realtime_effects || !preview.has_outside_combat_effect)) || !name.trim() || moves.length>=maxSaved || (preview.effect_scale < 0.999 && acceptedPreview !== preview.preview_fingerprint)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2.5 text-xs font-bold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-4 w-4" />{saving ? "Đang lưu…" : "Lưu Sát Chiêu"}</button>
           </div>
         </section>
       </div>

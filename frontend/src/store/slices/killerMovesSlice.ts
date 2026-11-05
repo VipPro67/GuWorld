@@ -29,9 +29,13 @@ export interface KillerMoveEffectOption {
     status_id?: string;
     stat?: string;
   };
+  realtime_supported?: boolean;
+  realtime_unavailable_reason?: string;
 }
 
 export interface KillerMoveCombatProfile {
+  profile_version?: number;
+  effect_label?: string;
   id?: string;
   name?: string;
   rank: number;
@@ -53,9 +57,12 @@ export interface KillerMoveCombatProfile {
   success_chance: number;
   backfire_hp_pct: number;
   backfire_status?: string;
+  realtime_effects?: Array<unknown>;
 }
 
 export interface GuHouseCombatProfile {
+  profile_version?: number;
+  preview_fingerprint?: string;
   id?: string;
   name?: string;
   rank: number;
@@ -87,6 +94,8 @@ export interface GuHouseDraft {
   name: string;
   core_gu_instance_ids: string[];
   aux_gu_count: number;
+  action_effect_keys?: Record<string, string>;
+  preview_fingerprint?: string;
 }
 
 export interface KillerMoveRecord {
@@ -119,6 +128,8 @@ export interface KillerMoveDraft {
   main_gu_instance_id: string;
   component_instance_ids: string[];
   selected_effect_keys: string[];
+  preview_fingerprint?: string;
+  accept_adjustments?: boolean;
 }
 
 export interface KillerMovePreview {
@@ -135,6 +146,11 @@ export interface KillerMovePreview {
   mana_cost: number;
   combat_profile?: KillerMoveCombatProfile;
   warnings: string[];
+  realtime_supported: boolean;
+  realtime_unavailable_reason?: string;
+  has_realtime_effects: boolean;
+  has_outside_combat_effect: boolean;
+  preview_fingerprint: string;
 }
 
 export type CombatSkillKind = "move" | "house";

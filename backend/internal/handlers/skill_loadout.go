@@ -68,6 +68,22 @@ func supportedKillerMove(move realtimeeffects.KillerMove) (bool, string) {
 	if len(move.Components) == 0 {
 		return false, "Cổ thành phần không khả dụng hoặc đã kiệt sức"
 	}
+	hasRealtimeEffect, hasOutsideCombatEffect := false, false
+	for _, block := range move.Effects {
+		hasRealtimeEffect = hasRealtimeEffect || block.Trigger == gameplayeffects.TriggerOnAction
+		hasOutsideCombatEffect = hasOutsideCombatEffect || block.Trigger == gameplayeffects.TriggerOnUse
+	}
+	if !hasRealtimeEffect && hasOutsideCombatEffect {
+		return false, "Sát chiêu này chỉ dùng ngoài combat"
+	}
+	if move.ProfileVersion < 2 {
+		if len(move.Effects) != 1 || move.Effects[0].Trigger != gameplayeffects.TriggerOnAction {
+			return false, "Profile cũ có nhiều effect realtime; hãy tạo lại sát chiêu để dùng phiên bản profile mới"
+		}
+	}
+	if move.BackfireStatus != "" {
+		return false, "Profile cũ yêu cầu status phản phệ chưa có executor realtime; hãy tạo lại sát chiêu"
+	}
 	// Hunger is a runtime resource: a starving component must not block
 	// re-ordering the loadout. Admission still rejects the cast until fed.
 	probe := move
@@ -193,6 +209,7 @@ func loadCombatKillerMoves(ctx context.Context, q combatLoadoutQueryer, playerID
 			COALESCE(combat_profile->>'backfire_status',''),
 			COALESCE((combat_profile->>'realtime_windup_ms')::bigint,0),
 			COALESCE((combat_profile->>'realtime_cooldown_ms')::bigint,0),
+			COALESCE((combat_profile->>'profile_version')::int,0),
 			creation_path_mastery_level,mastery_xp
 		FROM player_killer_moves WHERE player_id=$1 AND is_equipped=true
 		ORDER BY updated_at DESC,id
@@ -211,7 +228,7 @@ func loadCombatKillerMoves(ctx context.Context, q combatLoadoutQueryer, playerID
 		var rawComponents, rawEffects []byte
 		if err := rows.Scan(&move.ID, &move.Name, &move.Rank, &move.Path, &rawComponents, &rawEffects,
 			&move.ManaCost, &move.SuccessChance, &move.Complexity, &move.BackfireHPPercent, &move.BackfireStatus,
-			&move.RealtimeWindupMS, &move.RealtimeCooldownMS, &move.CreationMasteryLevel, &move.MasteryXP); err != nil {
+			&move.RealtimeWindupMS, &move.RealtimeCooldownMS, &move.ProfileVersion, &move.CreationMasteryLevel, &move.MasteryXP); err != nil {
 			_ = rows.Close()
 			return nil, fmt.Errorf("scan equipped realtime killer move: %w", err)
 		}
@@ -269,10 +286,9 @@ func loadCombatKillerMoves(ctx context.Context, q combatLoadoutQueryer, playerID
 	return resolutions, nil
 }
 
-// loadCombatHouseStrikes projects the equipped Tiên Cổ Ốc Trận Kích actions into
-// the same 9-12 slot pool. House actions are damage strikes authored by the
-// house compiler, so they are synthesized into one ON_ACTION damage block that
-// the strict realtime killer-move compiler can consume unchanged.
+// loadCombatHouseStrikes projects equipped Tiên Cổ Ốc Trận Kích actions into
+// the shared 9-12 pool. New house actions carry versioned realtime effect
+// blocks; legacy rows retain their original synthesized damage strike.
 func loadCombatHouseStrikes(ctx context.Context, q combatLoadoutQueryer, playerID uuid.UUID) ([]combatSkillResolution, error) {
 	var rawProfile []byte
 	err := q.QueryRowContext(ctx, `
@@ -294,10 +310,11 @@ func loadCombatHouseStrikes(ctx context.Context, q combatLoadoutQueryer, playerI
 			continue
 		}
 		move := RealtimeKillerMove{
-			ID: action.ID, Name: action.Name, Rank: action.Rank, Path: action.MainPath,
+			ProfileVersion: action.ProfileVersion, ID: action.ID, Name: action.Name, Rank: action.Rank, Path: action.MainPath,
 			ExpectedComponents: 1, ManaCost: action.ManaCost, SuccessChance: action.SuccessChance,
 			BackfireHPPercent: action.BackfireHPPercent, BackfireStatus: action.BackfireStatus,
 			Complexity: 1, RealtimeWindupMS: action.RealtimeWindupMS, RealtimeCooldownMS: action.RealtimeCooldownMS,
+			Effects:     action.RealtimeEffects,
 			HouseStrike: true,
 		}
 		if move.RealtimeWindupMS == 0 || move.RealtimeCooldownMS == 0 {
@@ -310,19 +327,29 @@ func loadCombatHouseStrikes(ctx context.Context, q combatLoadoutQueryer, playerI
 				Kind: "house", ID: action.ID, Name: action.Name, Rank: action.Rank, Path: action.MainPath,
 			},
 		}
-		damage := action.BaseDamage * action.DamageMult
-		if !strings.EqualFold(action.TargetType, "SINGLE") || damage <= 0 || action.SuccessChance <= 0 {
-			resolution.candidate.Reason = "Trận Kích chưa có dạng mục tiêu đơn hỗ trợ realtime"
-			resolutions = append(resolutions, resolution)
-			continue
+		if len(move.Effects) == 0 {
+			// Legacy house rows persist only aggregate values. Keep their original
+			// synthesized strike intact; new rows carry explicit realtime effects.
+			damage := action.BaseDamage * action.DamageMult
+			if !strings.EqualFold(action.TargetType, "SINGLE") || damage <= 0 || action.SuccessChance <= 0 {
+				resolution.candidate.Reason = "Trận Kích cũ chưa có dạng mục tiêu đơn hỗ trợ realtime"
+				resolutions = append(resolutions, resolution)
+				continue
+			}
+			move.Effects = []gameplayeffects.Block{{
+				Trigger:    gameplayeffects.TriggerOnAction,
+				Target:     gameplayeffects.Target{Selector: gameplayeffects.TargetSingle},
+				Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpDamage, Value: damage, Path: action.MainPath}},
+			}}
+		} else {
+			probe := move
+			probe.Components = []realtimeeffects.KillerMoveComponent{{InstanceID: action.ID, Hunger: 1}}
+			if len(realtimeeffects.BuildKillerMoveSkills([]realtimeeffects.KillerMove{probe})) != 1 {
+				resolution.candidate.Reason = "Trận Kích chưa có executor realtime tương thích"
+				resolutions = append(resolutions, resolution)
+				continue
+			}
 		}
-		move.Effects = []gameplayeffects.Block{{
-			Trigger: gameplayeffects.TriggerOnAction,
-			Target:  gameplayeffects.Target{Selector: gameplayeffects.TargetSingle},
-			Operations: []gameplayeffects.Operation{{
-				Op: gameplayeffects.OpDamage, Value: damage, Path: action.MainPath,
-			}},
-		}}
 		resolution.move = move
 		resolutions = append(resolutions, resolution)
 	}

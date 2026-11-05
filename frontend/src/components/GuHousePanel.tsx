@@ -14,11 +14,13 @@ export function GuHousePanel() {
   const toggleEquip = useGameStore((s) => s.toggleEquipGuHouse);
   const repairHouse = useGameStore((s) => s.repairGuHouse);
   const gus = useGameStore((s) => s.killerMoveGus);
+  const effects = useGameStore((s) => s.killerMoveEffects);
   const guDictionary = useGameStore((s) => s.guDictionary);
 
   const [name, setName] = useState("");
   const [selectedCoreIDs, setSelectedCoreIDs] = useState<string[]>([]);
   const [auxGuCount, setAuxGuCount] = useState<number>(30);
+  const [actionEffectKeys, setActionEffectKeys] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<GuHouseCombatProfile | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -43,6 +45,7 @@ export function GuHousePanel() {
         name: name || "Tiên Cổ Ốc",
         core_gu_instance_ids: selectedCoreIDs,
         aux_gu_count: auxGuCount,
+        action_effect_keys: actionEffectKeys,
       }).then((res) => {
         if (active) setPreview(res);
       });
@@ -51,14 +54,20 @@ export function GuHousePanel() {
       active = false;
       clearTimeout(timer);
     };
-  }, [selectedCoreIDs, auxGuCount, name, previewGuHouse]);
+  }, [selectedCoreIDs, auxGuCount, actionEffectKeys, name, previewGuHouse]);
+
+  const effectsForCore = (id: string) => effects.filter((effect) => effect.source_instance_id === id && effect.realtime_supported);
 
   const toggleCoreGu = (id: string) => {
     if (selectedCoreIDs.includes(id)) {
       setSelectedCoreIDs((prev) => prev.filter((item) => item !== id));
+      setActionEffectKeys((prev) => { const next = { ...prev }; delete next[id]; return next; });
     } else {
       if (selectedCoreIDs.length >= 5) return;
       setSelectedCoreIDs((prev) => [...prev, id]);
+      const options = effectsForCore(id);
+      const chosen = options.find((effect) => effect.operation.op === "DAMAGE") || options[0];
+      if (chosen) setActionEffectKeys((prev) => ({ ...prev, [id]: chosen.key }));
     }
   };
 
@@ -69,11 +78,14 @@ export function GuHousePanel() {
       name: name.trim(),
       core_gu_instance_ids: selectedCoreIDs,
       aux_gu_count: auxGuCount,
+      action_effect_keys: actionEffectKeys,
+      preview_fingerprint: preview?.preview_fingerprint,
     });
     setCreating(false);
     if (success) {
       setName("");
       setSelectedCoreIDs([]);
+      setActionEffectKeys({});
       setAuxGuCount(30);
     }
   };
@@ -86,6 +98,7 @@ export function GuHousePanel() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-950/40 text-amber-400">
             <Castle className="h-5 w-5" />
           </div>
+
           <div>
             <h3 className="text-base font-bold text-amber-200">Tiên Cổ Ốc (Immortal Gu House)</h3>
             <p className="text-xs text-zinc-400">
@@ -151,6 +164,23 @@ export function GuHousePanel() {
             )}
           </div>
 
+          {selectedCoreIDs.length > 0 && <div>
+            <label className="text-xs text-zinc-400">Chọn Trận Kích cho từng hạch tâm</label>
+            <div className="mt-2 space-y-2">
+              {selectedCoreIDs.map((id) => {
+                const gu = gus.find((entry) => entry.instance_id === id);
+                const choices = effectsForCore(id);
+                return <div key={id} className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 p-2">
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-300">{gu ? (guDictionary[gu.gu_id]?.name || gu.gu_id) : id}</span>
+                  {choices.length === 0 ? <span className="text-[10px] text-amber-300">Chưa có effect realtime khả dụng</span> : <select value={actionEffectKeys[id] || ""} onChange={(event) => setActionEffectKeys((prev) => ({ ...prev, [id]: event.target.value }))} className="max-w-[60%] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200">
+                    <option value="">Không gán Trận Kích</option>
+                    {choices.map((effect) => <option key={effect.key} value={effect.key}>{effect.label} · {effect.operation.value ? effect.operation.value : effect.operation.op}</option>)}
+                  </select>}
+                </div>;
+              })}
+            </div>
+          </div>}
+
           <div>
             <div className="flex items-center justify-between">
               <label className="text-xs text-zinc-400">Số lượng Phàm Cổ làm vỏ ốc</label>
@@ -190,12 +220,16 @@ export function GuHousePanel() {
               <div className="text-[11px] text-zinc-400">
                 Tích hợp {preview.actions?.length || 0} Trận Kích (Sát chiêu đặc hữu của Tiên Cổ Ốc).
               </div>
+              {preview.actions?.map((action) => <div key={action.id} className="flex justify-between rounded-lg bg-zinc-900/70 px-2 py-1.5 text-[10px]">
+                <span className="text-zinc-300">{action.name}</span>
+                <span className="text-amber-200">{action.effect_label || (action.target_type === "SINGLE" ? `Đơn mục tiêu · ${action.base_damage || 0}` : `Hỗ trợ · khiên ${action.base_shield || 0} · hồi ${action.base_healing || 0}`)}</span>
+              </div>)}
             </div>
           )}
 
           <button
             onClick={() => void handleCreate()}
-            disabled={creating || selectedCoreIDs.length < 2 || !name.trim()}
+            disabled={creating || selectedCoreIDs.length < 2 || !name.trim() || !preview?.preview_fingerprint || !preview.actions?.length}
             className="w-full rounded-xl bg-amber-600 py-2.5 text-xs font-bold text-white shadow-lg shadow-amber-950/40 hover:bg-amber-500 disabled:opacity-40"
           >
             {creating ? "Đang đúc kết…" : "Đúc Kết Tiên Cổ Ốc"}

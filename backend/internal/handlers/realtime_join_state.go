@@ -38,6 +38,7 @@ type RealtimeKillerMoveComponent struct {
 }
 
 type RealtimeKillerMove struct {
+	ProfileVersion       int
 	ID                   string
 	Name                 string
 	Rank                 int
@@ -117,7 +118,7 @@ func (move RealtimeKillerMove) ProjectRealtimeEffects() realtimeeffects.KillerMo
 		components = append(components, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: component.Hunger})
 	}
 	return realtimeeffects.KillerMove{
-		ID: move.ID, Name: move.Name, Rank: move.Rank, Components: components,
+		ProfileVersion: move.ProfileVersion, ID: move.ID, Name: move.Name, Rank: move.Rank, Components: components,
 		ExpectedComponents: move.ExpectedComponents, Effects: move.Effects, ManaCost: move.ManaCost,
 		SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
 		BackfireStatus: move.BackfireStatus, Complexity: move.Complexity, DamageScale: move.DamageScale,

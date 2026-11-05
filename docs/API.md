@@ -147,16 +147,16 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/use-support` | Dùng Cổ hồi máu ngoài combat (bất kỳ Cổ không phải Tiêu Hao có block `ON_ACTION` `HEAL`/`FLAT`); xử lý `ON_USE` và hồi HP từ `active.heal_flat`. Body: `{ "gu_instance_id": "..." }`. |
 | POST | `/inventory/drop` |
 | POST | `/inventory/drop-batch` |
-| GET | `/killer-moves/options` | Cổ người chơi trong `player_gu` và effect combat/ON_USE được phép kéo vào công thức. |
+| GET | `/killer-moves/options` | Cổ người chơi trong `player_gu` và các effect realtime được hỗ trợ; hồi `ON_USE` ngoài combat vẫn được đánh dấu riêng. Các lựa chọn mới cho build realtime gồm damage TARGET, heal/shield/cleanse SELF. |
 | GET | `/killer-moves` | Danh sách sát chiêu đã lưu, độ thành thạo, trạng thái thiếu Cổ, timing realtime và `realtime_supported`/lý do khóa. Sát chiêu đã trang bị và Trận Kích của Tiên Cổ Ốc đang xuất chiến cùng dùng bốn ô hotbar 9–12; thứ tự lưu qua `/combat/skill-loadout`. |
-| POST | `/killer-moves/preview` | Tính thử công thức. Body: `{ "main_gu_instance_id", "component_instance_ids": [], "selected_effect_keys": [] }`. Trả ngân sách, hệ số effect, độ hòa hợp, chi phí và tỉ lệ thành công. |
-| POST | `/killer-moves` | Lưu sát chiêu. Body preview cộng `name`; giới hạn 12 sát chiêu lưu và 4 sát chiêu trang bị. |
+| POST | `/killer-moves/preview` | Tính thử công thức và biên dịch cùng compiler realtime dùng khi vào combat. Trả ngân sách, hệ số effect, độ hòa hợp, chi phí, `realtime_supported`, lý do và `preview_fingerprint`. |
+| POST | `/killer-moves` | Lưu profile đã preview; body thêm `name`, `preview_fingerprint` và `accept_adjustments` nếu effect bị tự cân. Fingerprint cũ hoặc build không compile được bị từ chối. Tối đa 12 sát chiêu lưu, 4 sát chiêu trang bị. |
 | POST | `/killer-moves/:id/equip` | Bật/tắt trang bị. Mỗi Cổ thành phần phải còn đúng instance/rank trong `player_gu`. |
 | POST | `/killer-moves/:id/use` | Dùng ngoài combat nếu công thức có effect hồi phục `ON_USE`; hao Chân Nguyên và mỗi Cổ thành phần giảm 1 độ no. Nếu thành công, cộng Chân Ý path hạch tâm theo rank Cổ chính; response có thêm `path`, `path_gain`, `path_masteries`. |
 | DELETE | `/killer-moves/:id` | Xóa sát chiêu của người chơi hiện tại. |
 | GET | `/gu-houses` | Danh sách Tiên Cổ Ốc đã đúc kết, độ bền hiện tại và trạng thái xuất chiến. |
-| POST | `/gu-houses/preview` | Tính thử chỉ số Tiên Cổ Ốc (Máu, Giáp, Kháng sát thương, Trận Kích). Body: `{ "name", "core_gu_instance_ids": [], "aux_gu_count": int }`. |
-| POST | `/gu-houses` | Đúc kết Tiên Cổ Ốc mới. Cần từ 2 đến 5 Tiên Cổ Rank 6+ làm hạch tâm. |
+| POST | `/gu-houses/preview` | Preview chỉ số phòng và các Trận Kích. Body gồm `{ "name", "core_gu_instance_ids": [], "aux_gu_count": int, "action_effect_keys": { "<gu_instance_id>": "<effect_key>" } }`; mỗi action dùng effect realtime của Cổ hạch tâm tương ứng. Trả `preview_fingerprint`. |
+| POST | `/gu-houses` | Đúc kết Tiên Cổ Ốc mới. Cần 2–5 Tiên Cổ Rank 6+ và fingerprint khớp preview; profile Trận Kích được snapshot trong `house_profile`. |
 | POST | `/gu-houses/:id/equip` | Bật/tắt trạng thái xuất chiến của Tiên Cổ Ốc. Khi trang bị sẽ che chắn trọn vẹn cho Cổ Tiên trong combat. |
 | POST | `/gu-houses/:id/repair` | Tu sửa hồi phục độ bền Tiên Cổ Ốc về 100% bằng Nguyên Thạch. |
 | POST | `/refine` | Luyện Cổ đường nhanh (chỉ cổ target rank < rank người chơi và < 6; ngược lại trả **400** `REFINE_SESSION_REQUIRED`). Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`), không được `is_locked` (**409** `REFINE_GU_LOCKED`). Target rank ≥ 6 trùng toàn server → **409** (kể cả race thua khi concurrent). |

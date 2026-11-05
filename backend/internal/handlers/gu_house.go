@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -12,7 +14,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -23,9 +27,11 @@ const (
 )
 
 type guHouseDraftRequest struct {
-	Name              string   `json:"name"`
-	CoreGuInstanceIDs []string `json:"core_gu_instance_ids"`
-	AuxGuCount        int      `json:"aux_gu_count"`
+	Name               string            `json:"name"`
+	CoreGuInstanceIDs  []string          `json:"core_gu_instance_ids"`
+	AuxGuCount         int               `json:"aux_gu_count"`
+	ActionEffectKeys   map[string]string `json:"action_effect_keys,omitempty"`
+	PreviewFingerprint string            `json:"preview_fingerprint,omitempty"`
 }
 
 type guHouseRecord struct {
@@ -42,6 +48,7 @@ type guHouseRecord struct {
 }
 
 func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftRequest) (models.GuHouseCombatProfile, int, error) {
+	req.Name = strings.TrimSpace(req.Name)
 	if len(req.CoreGuInstanceIDs) < guHouseMinCoreGus || len(req.CoreGuInstanceIDs) > guHouseMaxCoreGus {
 		return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Tiên Cổ Ốc cần từ %d đến %d Tiên Cổ hạch tâm", guHouseMinCoreGus, guHouseMaxCoreGus)
 	}
@@ -87,6 +94,61 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 			if len(spec.Path) > 0 {
 				actionPath = gamefx.CleanPath(spec.Path[0])
 			}
+			if req.ActionEffectKeys != nil {
+				key := req.ActionEffectKeys[id]
+				if key == "" {
+					continue
+				}
+				options, optionErr := getKillerMoveEffectOptions(gu)
+				if optionErr != nil {
+					return models.GuHouseCombatProfile{}, 0, optionErr
+				}
+				var selected *killerMoveEffectOption
+				for optionIndex := range options {
+					if options[optionIndex].Key == key && options[optionIndex].RealtimeSupported {
+						selected = &options[optionIndex]
+						break
+					}
+				}
+				if selected == nil {
+					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích đã chọn không hợp lệ hoặc chưa có executor realtime")
+				}
+				operation := selected.Operation
+				target := selected.Target
+				operation.Target = &target
+				effect := gameplayeffects.Block{ID: "HOUSE_" + key, Trigger: gameplayeffects.TriggerOnAction, Target: target, Operations: []gameplayeffects.Operation{operation}}
+				targetType := "SELF"
+				if operation.Op == gameplayeffects.OpDamage {
+					targetType = "SINGLE"
+				}
+				action := models.KillerMoveCombatProfile{
+					ProfileVersion: 2, EffectLabel: selected.Label, ID: id, Name: fmt.Sprintf("Trận Kích: %s", spec.Name), Rank: gu.Rank,
+					MainPath: actionPath, AllPaths: []string{actionPath}, TargetType: targetType,
+					RealtimeWindupMS: windupMS, RealtimeCooldownMS: cooldownMS, Priority: 1,
+					ManaCost: spec.BaseManaCost * 1.5, SuccessChance: 0.95, RealtimeEffects: []gameplayeffects.Block{effect},
+				}
+				compiled := realtimeeffects.BuildKillerMoveSkills([]realtimeeffects.KillerMove{{
+					ProfileVersion: 2, ID: action.ID, Name: action.Name, Rank: action.Rank,
+					Components:         []realtimeeffects.KillerMoveComponent{{InstanceID: gu.InstanceID, Hunger: 1}},
+					ExpectedComponents: 1, Effects: action.RealtimeEffects, ManaCost: action.ManaCost,
+					SuccessChance: action.SuccessChance, Complexity: 1,
+					WindupMS: action.RealtimeWindupMS, CooldownMS: action.RealtimeCooldownMS,
+				}})
+				if len(compiled) != 1 {
+					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích %q không vượt qua compiler realtime", selected.Label)
+				}
+				switch operation.Op {
+				case gameplayeffects.OpDamage:
+					action.BaseDamage = operation.Value
+					action.DamageMult = 1
+				case gameplayeffects.OpHeal:
+					action.BaseHealing = operation.Value
+				case gameplayeffects.OpShield:
+					action.BaseShield = operation.Value
+				}
+				actions = append(actions, action)
+				continue
+			}
 			actions = append(actions, models.KillerMoveCombatProfile{
 				ID:               id,
 				Name:             fmt.Sprintf("Trận Kích: %s", spec.Name),
@@ -109,6 +171,7 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 	reduction := math.Min(0.35, 0.10+float64(len(coreGuIDs))*0.05)
 
 	profile := models.GuHouseCombatProfile{
+		ProfileVersion:  2,
 		Name:            req.Name,
 		Rank:            highestRank,
 		CoreGuIDs:       coreGuIDs,
@@ -121,8 +184,16 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 		ZeroBackfire:    true,
 		Actions:         actions,
 	}
+	profile.PreviewFingerprint = guHousePreviewHash(profile)
 
 	return profile, highestRank, nil
+}
+
+func guHousePreviewHash(profile models.GuHouseCombatProfile) string {
+	profile.PreviewFingerprint = ""
+	raw, _ := json.Marshal(profile)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 func ListGuHouses(c *gin.Context) {
@@ -228,8 +299,17 @@ func CreateGuHouse(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.PreviewFingerprint == "" || req.PreviewFingerprint != profile.PreviewFingerprint {
+		c.JSON(http.StatusConflict, gin.H{"error": "Bản preview Cổ Ốc đã thay đổi; hãy xem lại profile trước khi lưu"})
+		return
+	}
+	if req.ActionEffectKeys != nil && len(profile.Actions) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chọn ít nhất một Trận Kích realtime trước khi đúc kết Tiên Cổ Ốc"})
+		return
+	}
 
 	coreBytes, _ := json.Marshal(req.CoreGuInstanceIDs)
+	profile.PreviewFingerprint = ""
 	profBytes, _ := json.Marshal(profile)
 
 	var houseID string

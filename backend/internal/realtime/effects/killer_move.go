@@ -23,6 +23,7 @@ type KillerMoveComponent struct {
 }
 
 type KillerMove struct {
+	ProfileVersion     int
 	ID                 string
 	Name               string
 	Rank               int
@@ -81,27 +82,17 @@ func compileKillerMove(move KillerMove, slot int) (combat.Skill, bool) {
 		move.BackfireStatus != "" || !finite(move.ManaCost) || move.ManaCost < 0 {
 		return combat.Skill{}, false
 	}
-	block := move.Effects[0]
-	if block.Trigger != gameplayeffects.TriggerOnAction || len(block.Conditions) != 0 || len(block.Operations) != 1 {
-		return combat.Skill{}, false
-	}
-	op := block.Operations[0]
-	target := block.Target
-	if op.Target != nil {
-		target = *op.Target
-	}
 	skill := combat.Skill{
 		ID: "KILLER_MOVE_" + move.ID, Slot: slot, Name: move.Name, ManaCost: move.ManaCost,
 		SuccessChance: move.SuccessChance, BackfireHPPercent: move.BackfireHPPercent,
-		Range: 9, MaxTargets: 1, RequiresEnemyTarget: true,
+		Range: 9, MaxTargets: 1,
 	}
 	if !move.HouseStrike {
 		skill.KillerMoveID = move.ID
 	}
-	if move.DamageScale > 0 {
-		skill.Damage = move.DamageScale
-	} else {
-		skill.Damage = 1
+	damageScale := move.DamageScale
+	if damageScale <= 0 {
+		damageScale = 1
 	}
 	minHunger := math.MaxFloat64
 	for _, component := range move.Components {
@@ -114,40 +105,66 @@ func compileKillerMove(move KillerMove, slot int) (combat.Skill, bool) {
 		}
 	}
 	skill.GuHunger = minHunger
+	if move.ProfileVersion < 2 {
+		if len(move.Effects) != 1 || move.Effects[0].Trigger != gameplayeffects.TriggerOnAction {
+			return combat.Skill{}, false
+		}
+	}
 
-	switch op.Op {
-	case gameplayeffects.OpDamage:
-		if target.Selector != gameplayeffects.TargetSingle || !finite(op.Value) || op.Value <= 0 || op.Turns != 0 {
+	hasTargetEffect, hasSelfEffect, hasCleanse := false, false, false
+	for _, block := range move.Effects {
+		// ON_USE remains an out-of-combat action and is deliberately omitted
+		// from the realtime profile. Every ON_ACTION block must be executable.
+		if block.Trigger != gameplayeffects.TriggerOnAction {
+			continue
+		}
+		if len(block.Conditions) != 0 || len(block.Operations) != 1 {
 			return combat.Skill{}, false
 		}
-		skill.Mode = combat.ModeTarget
-		skill.Damage = op.Value * skill.Damage
-	case gameplayeffects.OpHeal:
-		if target.Selector != gameplayeffects.TargetSelf || !finite(op.Value) || op.Value <= 0 || op.Turns != 0 || op.SubType == "PERCENT" {
+		op := block.Operations[0]
+		target := block.Target
+		if op.Target != nil {
+			target = *op.Target
+		}
+		switch op.Op {
+		case gameplayeffects.OpDamage:
+			if target.Selector != gameplayeffects.TargetSingle || !finite(op.Value) || op.Value <= 0 || op.Turns != 0 {
+				return combat.Skill{}, false
+			}
+			hasTargetEffect = true
+			skill.Damage += op.Value * damageScale
+		case gameplayeffects.OpHeal:
+			if target.Selector != gameplayeffects.TargetSelf || !finite(op.Value) || op.Value <= 0 || op.Turns != 0 || op.SubType == "PERCENT" {
+				return combat.Skill{}, false
+			}
+			hasSelfEffect = true
+			skill.Heal += op.Value * damageScale
+		case gameplayeffects.OpShield:
+			if target.Selector != gameplayeffects.TargetSelf || !finite(op.Value) || op.Value <= 0 || op.Turns != 0 {
+				return combat.Skill{}, false
+			}
+			hasSelfEffect = true
+			skill.Shield += op.Value * damageScale
+		case gameplayeffects.OpCleanse:
+			if target.Selector != gameplayeffects.TargetSelf || op.Turns != 0 {
+				return combat.Skill{}, false
+			}
+			hasSelfEffect = true
+			hasCleanse = true
+			skill.Cleanse = true
+		default:
 			return combat.Skill{}, false
 		}
-		skill.Mode = combat.ModeSelf
-		skill.RequiresEnemyTarget = false
-		skill.Range = 0
-		skill.Heal = op.Value
-	case gameplayeffects.OpShield:
-		if target.Selector != gameplayeffects.TargetSelf || !finite(op.Value) || op.Value <= 0 || op.Turns != 0 {
-			return combat.Skill{}, false
-		}
-		skill.Mode = combat.ModeSelf
-		skill.RequiresEnemyTarget = false
-		skill.Range = 0
-		skill.Shield = op.Value
-	case gameplayeffects.OpCleanse:
-		if target.Selector != gameplayeffects.TargetSelf || op.Turns != 0 {
-			return combat.Skill{}, false
-		}
-		skill.Mode = combat.ModeSelf
-		skill.RequiresEnemyTarget = false
-		skill.Range = 0
-		skill.Cleanse = true
-	default:
+	}
+	if (!hasTargetEffect && !hasSelfEffect) || (hasCleanse && hasTargetEffect) {
 		return combat.Skill{}, false
+	}
+	if hasTargetEffect {
+		skill.Mode = combat.ModeTarget
+		skill.RequiresEnemyTarget = true
+	} else {
+		skill.Mode = combat.ModeSelf
+		skill.Range = 0
 	}
 
 	// Realtime windup and cooldown are authored here from rank/complexity, not

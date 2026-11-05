@@ -127,7 +127,9 @@ func (w *World) resolveCastLocked(caster *Entity) {
 				return w.canApplySkill(caster, candidate, skill)
 			})
 			if target == nil {
-				break
+				// Targeted composites must not apply their self-support payload
+				// when no hostile target was actually hit.
+				return
 			}
 		}
 		recordKillerMoveUse()
