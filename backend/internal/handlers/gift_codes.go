@@ -408,7 +408,7 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 			}
 			switch {
 			case added <= 0:
-				result.Notes = append(result.Notes, "Tiên Khiếu đã đủ 8 điểm tài nguyên nên phần thưởng điểm bị bỏ qua.")
+				result.Notes = append(result.Notes, fmt.Sprintf("Tiên Khiếu đã đủ %d điểm tài nguyên nên phần thưởng điểm bị bỏ qua.", aperturePointPointGenCap))
 			case added < requested:
 				result.Notes = append(result.Notes, fmt.Sprintf("Tiên Khiếu chỉ còn chỗ cho %d/%d điểm tài nguyên.", added, requested))
 			}

@@ -53,6 +53,7 @@ interface ActorView {
   lastEngaged: boolean;
   lastSelected: boolean;
   templateId: string;
+  characterArtId?: string;
   lastX: number;
   lastY: number;
   castUntil: number;
@@ -1147,6 +1148,21 @@ export class WorldScene extends Phaser.Scene {
         if (entity.isSelf) {
           this.selfId = entity.id;
           this.cameraController.follow(actor.container);
+        }
+      }
+      if (entity.kind === "player") {
+        const normalizedName = (entity.name || "").toLocaleLowerCase();
+        const characterArtId = entity.isSelf
+          ? "fang-yuan"
+          : normalizedName.includes("bạch ngưng băng") || normalizedName.includes("bai ning bing")
+            ? "bai-ning-bing"
+            : "";
+        if (characterArtId && actor.characterArtId !== characterArtId) {
+          const textureKey = `character-${characterArtId}`;
+          if (this.textures.exists(textureKey)) {
+            actor.animator.setStaticTexture(textureKey, 38, 72);
+            actor.characterArtId = characterArtId;
+          }
         }
       }
       const dx = pixels.x - actor.lastX;

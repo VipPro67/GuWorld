@@ -35,7 +35,7 @@ import (
 
 const (
 	MaxPointLevel            = 5
-	aperturePointPointGenCap = 8
+	aperturePointPointGenCap = 16
 )
 
 // ResourcePointTemplate mirrors one row of data/ResourcePointTemplate.csv.
@@ -999,9 +999,12 @@ func CollectWorldResourcePoint(c *gin.Context) {
 	var regionID string
 	var stockJSON []byte
 	err = tx.QueryRow(`
-		SELECT p.id, COALESCE(p.aperture_id, NULL), COALESCE(p.scope, 'WORLD'), COALESCE(p.region_id, ''), p.x, p.y, p.vitality, p.stock, p.last_produced_at
+		SELECT p.id, COALESCE(p.aperture_id, NULL), COALESCE(p.scope, 'WORLD'), COALESCE(p.region_id, ''),
+		       p.point_type, p.name, p.path, p.grade, COALESCE(p.point_class, 'NORMAL'), p.level,
+		       p.x, p.y, p.vitality, p.stock, p.stock_cap, p.last_produced_at, p.state
 		FROM aperture_resource_points p WHERE p.id = $1 FOR UPDATE OF p
-	`, pointID).Scan(&p.ID, &apertureID, &p.Scope, &regionID, &p.X, &p.Y, &p.Vitality, &stockJSON, &p.LastProducedAt)
+	`, pointID).Scan(&p.ID, &apertureID, &p.Scope, &regionID, &p.PointType, &p.Name, &p.Path, &p.Grade, &p.PointClass, &p.Level,
+		&p.X, &p.Y, &p.Vitality, &stockJSON, &p.StockCap, &p.LastProducedAt, &p.State)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại"})
 		return

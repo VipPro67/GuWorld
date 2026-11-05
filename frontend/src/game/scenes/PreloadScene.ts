@@ -27,6 +27,8 @@ export class PreloadScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("tile-ground", WORLD_IMAGE_URLS[0]);
+    this.load.image("character-fang-yuan", "/assets/characters/fang-yuan.png");
+    this.load.image("character-bai-ning-bing", "/assets/characters/bai-ning-bing.png");
     for (const kind of ["player", "monster", "npc"] as ActorKind[]) {
       const source = kind === "monster" ? WORLD_IMAGE_URLS[2] : WORLD_IMAGE_URLS[1];
       for (const animation of ANIMATION_STATES) {

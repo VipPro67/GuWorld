@@ -57,11 +57,11 @@ export class EntityAnimator {
     this.sprite.setFlipX(this.facingLeft);
   }
 
-  public setStaticTexture(key: string): void {
+  public setStaticTexture(key: string, displayWidth = 58, displayHeight = 58): void {
     if (this.staticTexture === key) return;
     this.staticTexture = key;
     this.sprite.stop();
-    this.sprite.setTexture(key).setDisplaySize(58, 58);
+    this.sprite.setTexture(key).setDisplaySize(displayWidth, displayHeight);
     this.baseScaleX = this.sprite.scaleX;
     this.baseScaleY = this.sprite.scaleY;
     this.animatePose(this.current);
