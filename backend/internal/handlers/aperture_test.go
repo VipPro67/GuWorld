@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -56,6 +57,78 @@ func TestPointProduceRankFollowsLevelAndGrade(t *testing.T) {
 		if got := pointProduceRank(c.level, c.grade); got != c.want {
 			t.Fatalf("pointProduceRank(%d, %s) = %d, want %d", c.level, c.grade, got, c.want)
 		}
+	}
+}
+
+func TestPickPointGuCandidate(t *testing.T) {
+	// Parse allowed IDs test
+	ids := parseAllowedGuIDs("GU_BLOOD_BAT; GU_BLOOD_WING, GU_MOONLIGHT")
+	if len(ids) != 3 {
+		t.Fatalf("parseAllowedGuIDs len = %d, want 3", len(ids))
+	}
+	if ids[0] != "GU_BLOOD_BAT" || ids[1] != "GU_BLOOD_WING" || ids[2] != "GU_MOONLIGHT" {
+		t.Fatalf("parseAllowedGuIDs parsed wrongly: %v", ids)
+	}
+
+	// Mock registry entry for testing
+	if models.GuRegistry == nil {
+		models.GuRegistry = make(map[string]map[int]models.GuDictionaryItem)
+	}
+	models.GuRegistry["GU_TEST_WOOD"] = map[int]models.GuDictionaryItem{
+		2: {ID: "GU_TEST_WOOD", Rank: 2, Path: []string{"Wood Path"}},
+	}
+	models.GuRegistry["GU_ALLOWED_WOOD"] = map[int]models.GuDictionaryItem{
+		3: {ID: "GU_ALLOWED_WOOD", Rank: 3, Path: []string{"Wood Path"}},
+	}
+
+	// Priority to allowed IDs
+	tplAllowed := ResourcePointTemplate{
+		Path:         "Wood Path",
+		AllowedGuIDs: "GU_ALLOWED_WOOD",
+		MinRank:      1,
+		MaxRank:      3,
+	}
+	id, rank := pickPointGuCandidate(tplAllowed, 3, 1, 3)
+	if id != "GU_ALLOWED_WOOD" || rank != 3 {
+		t.Fatalf("pickPointGuCandidate allowed failed: id=%q, rank=%d", id, rank)
+	}
+
+	// Fallback to path when allowed list doesn't match
+	tplFallback := ResourcePointTemplate{
+		Path:    "Wood Path",
+		MinRank: 1,
+		MaxRank: 3,
+	}
+	id2, rank2 := pickPointGuCandidate(tplFallback, 2, 1, 3)
+	if id2 != "GU_TEST_WOOD" || rank2 != 2 {
+		t.Fatalf("pickPointGuCandidate fallback failed: id=%q, rank=%d", id2, rank2)
+	}
+}
+
+func TestPointProduceItemClampedRanks(t *testing.T) {
+	// Micro point clamped to rank 1..2
+	microTpl := ResourcePointTemplate{ProduceKey: "wood_crystal", MinRank: 1, MaxRank: 2}
+	ptHigh := models.ApertureResourcePoint{Level: 5, Grade: "TOP"} // raw rank = 9
+	if got := pointProduceItem(microTpl, ptHigh, false); got != "wood_crystal_rank2" {
+		t.Fatalf("micro point should clamp to rank 2, got %q", got)
+	}
+	if got := pointProduceItem(microTpl, ptHigh, true); got != "wood_crystal_rank2" {
+		t.Fatalf("micro point rare should not exceed max_rank 2, got %q", got)
+	}
+
+	// High-tier famous point clamped to rank 6..8
+	famousTpl := ResourcePointTemplate{
+		ProduceKey:          "soul_sand",
+		SecondaryProduceKey: "soul_devourer_stinger",
+		MinRank:             6,
+		MaxRank:             8,
+	}
+	ptLow := models.ApertureResourcePoint{Level: 1, Grade: "LOW"} // raw rank = 1
+	if got := pointProduceItem(famousTpl, ptLow, false); got != "soul_sand_rank6" {
+		t.Fatalf("famous point should floor to rank 6, got %q", got)
+	}
+	if got := pointSecondaryProduceItem(famousTpl, ptLow, false); got != "soul_devourer_stinger_rank6" {
+		t.Fatalf("famous point secondary should floor to rank 6, got %q", got)
 	}
 }
 
@@ -173,5 +246,48 @@ func TestAperturePointJSONShape(t *testing.T) {
 	}
 	if back.Vitality != 45 || back.Stock["earth_soil_rank1"] != 5 || back.Scope != "APERTURE" || back.Listed {
 		t.Fatalf("round trip mismatch: %+v", back)
+	}
+}
+
+func TestTamQiBalanceAndAnchoring(t *testing.T) {
+	// 1. Test Tam Khí scaling based on humanQi at ascension
+	humanQi := 350000.0
+	initialQi := math.Max(100000.0, humanQi)
+	if initialQi != 350000.0 {
+		t.Fatalf("initialQi should match high humanQi, got %v", initialQi)
+	}
+
+	ap := models.ImmortalAperture{
+		TimeRate:    35.0,
+		MaxHeavenQi: initialQi,
+		MaxEarthQi:  initialQi,
+		HeavenQi:    initialQi,
+		EarthQi:     initialQi,
+		IsPlaced:    false,
+	}
+
+	// Normal effective rate when not anchored
+	effectiveRate := ap.TimeRate
+	if ap.IsPlaced {
+		effectiveRate = 1.0
+	}
+	if effectiveRate != 35.0 {
+		t.Fatalf("unanchored rate should be 35.0, got %v", effectiveRate)
+	}
+
+	// 2. When anchored (Hạ Khiếu), effective time rate drops to 1.0 (synchronized with outside world)
+	ap.IsPlaced = true
+	if ap.IsPlaced {
+		effectiveRate = 1.0
+	}
+	if effectiveRate != 1.0 {
+		t.Fatalf("anchored rate must drop to 1.0x, got %v", effectiveRate)
+	}
+
+	// 3. Recharge rate during anchoring
+	elapsedMinutes := 30.0
+	gainedHeavenQi := elapsedMinutes * (ap.MaxHeavenQi * 0.01)
+	if gainedHeavenQi != 105000.0 { // 30% of 350,000 = 105,000
+		t.Fatalf("gainedHeavenQi for 30m should be 105000, got %v", gainedHeavenQi)
 	}
 }

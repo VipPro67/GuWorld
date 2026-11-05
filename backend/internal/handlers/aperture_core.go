@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
@@ -44,9 +45,9 @@ func GetImmortalAperture(c *gin.Context) {
 	var ap models.ImmortalAperture
 	var createdAt, updatedAt time.Time
 	err = db.DB.QueryRow(`
-		SELECT id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state, dao_marks, created_at, updated_at
+		SELECT id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state, dao_marks, COALESCE(heaven_qi, 100000), COALESCE(earth_qi, 100000), COALESCE(max_heaven_qi, 100000), COALESCE(max_earth_qi, 100000), COALESCE(is_placed, false), placed_region, placed_x, placed_y, placed_at, created_at, updated_at
 		FROM immortal_apertures WHERE player_id = $1
-	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &ap.DaoMarks, &createdAt, &updatedAt)
+	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &ap.DaoMarks, &ap.HeavenQi, &ap.EarthQi, &ap.MaxHeavenQi, &ap.MaxEarthQi, &ap.IsPlaced, &ap.PlacedRegion, &ap.PlacedX, &ap.PlacedY, &ap.PlacedAt, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		// Auto-create aperture (fallback for legacy players) — grade rolled from current Nhân Khí
@@ -131,6 +132,10 @@ func GetImmortalAperture(c *gin.Context) {
 			}
 		}
 		effectiveTimeRate = ap.TimeRate * tsm
+		if ap.IsPlaced {
+			// Hạ khiếu: nhánh sông Quang Âm hòa nhập ngoại giới -> giảm tốc về 1.0 (hoãn kiếp nạn, giảm tốc già hóa)
+			effectiveTimeRate = 1.0
+		}
 	}
 
 	// Project internal_years_passed forward based on real time elapsed since updated_at.
@@ -203,11 +208,19 @@ func createAperture(tx *sql.Tx, playerID string, humanQi, currentMana float64) (
 	q := math.Min(1.0, humanQi/100000.0)
 	ap := buildApertureByGrade(playerID, rollApertureGrade(q))
 	ap.ImmortalEssence = int(currentMana)
+
+	// Tam Khí Cân Bằng: Nhân Khí lúc Thăng Tiên định hình trần Thiên Khí và Địa Khí khởi đầu!
+	initialQi := math.Max(100000.0, humanQi)
+	ap.MaxHeavenQi = initialQi
+	ap.MaxEarthQi = initialQi
+	ap.HeavenQi = initialQi
+	ap.EarthQi = initialQi
+
 	err := tx.QueryRow(`
-		INSERT INTO immortal_apertures (player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, state)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO immortal_apertures (player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, state, heaven_qi, earth_qi, max_heaven_qi, max_earth_qi)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id, created_at, updated_at
-	`, ap.PlayerID, ap.Grade, ap.TimeRate, ap.ApertureHP, ap.MaxApertureHP, ap.AreaSize, ap.ImmortalEssence, ap.EssenceProductionPerYear, ap.InternalYearsPassed, ap.NextTribulationYear, ap.State).Scan(&ap.ID, &ap.CreatedAt, &ap.UpdatedAt)
+	`, ap.PlayerID, ap.Grade, ap.TimeRate, ap.ApertureHP, ap.MaxApertureHP, ap.AreaSize, ap.ImmortalEssence, ap.EssenceProductionPerYear, ap.InternalYearsPassed, ap.NextTribulationYear, ap.State, ap.HeavenQi, ap.EarthQi, ap.MaxHeavenQi, ap.MaxEarthQi).Scan(&ap.ID, &ap.CreatedAt, &ap.UpdatedAt)
 	if err != nil {
 		return models.ImmortalAperture{}, err
 	}
@@ -365,4 +378,162 @@ func GetApertureNodes(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, nodes)
+}
+
+// AnchorAperture places (anchors) an immortal aperture onto a world map cell.
+// This synchronizes internal time with the outside world (effective time rate drops to 1.0),
+// hoãn kiếp nạn, and begins absorbing heaven/earth qi from the world.
+func AnchorAperture(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		return
+	}
+	defer tx.Rollback()
+
+	var player models.Player
+	err = tx.QueryRow(`
+		SELECT id, rank, COALESCE(current_region, ''), COALESCE(x, 500), COALESCE(y, 500)
+		FROM players WHERE id = $1 FOR UPDATE
+	`, playerID).Scan(&player.ID, &player.Rank, &player.CurrentRegion, &player.X, &player.Y)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Cổ sư không tồn tại"})
+		return
+	}
+
+	if player.Rank < 6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ Cổ Tiên (Rank 6+) mới có thể Hạ Khiếu."})
+		return
+	}
+
+	var ap models.ImmortalAperture
+	err = tx.QueryRow(`
+		SELECT id, is_placed, state, heaven_qi, earth_qi, max_heaven_qi, max_earth_qi
+		FROM immortal_apertures WHERE player_id = $1 FOR UPDATE
+	`, playerID).Scan(&ap.ID, &ap.IsPlaced, &ap.State, &ap.HeavenQi, &ap.EarthQi, &ap.MaxHeavenQi, &ap.MaxEarthQi)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chưa khai mở Tiên Khiếu"})
+		return
+	}
+
+	if ap.IsPlaced {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Khiếu đang trong trạng thái Hạ Khiếu."})
+		return
+	}
+
+	if ap.State == "DESTROYED" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Khiếu đã bị hủy diệt, không thể Hạ Khiếu."})
+		return
+	}
+
+	// Update immortal_apertures placement
+	_, err = tx.Exec(`
+		UPDATE immortal_apertures
+		SET is_placed = true, placed_region = $1, placed_x = $2, placed_y = $3, placed_at = NOW(), updated_at = NOW()
+		WHERE id = $4
+	`, player.CurrentRegion, float64(player.X), float64(player.Y), ap.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái Hạ Khiếu"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu Hạ Khiếu"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Hạ Khiếu thành công tại %s (%d, %d). Tiên Khiếu đã cắm rễ vào đại địa, dòng sông Quang Âm đồng bộ với ngoại giới (tốc độ thời gian giảm về 1.0x). Đang hấp thụ Thiên Khí và Địa Khí...",
+			player.CurrentRegion, player.X, player.Y),
+		"is_placed":     true,
+		"placed_region": player.CurrentRegion,
+		"placed_x":      player.X,
+		"placed_y":      player.Y,
+	})
+}
+
+// UnanchorAperture retracts the immortal aperture back into the immortal's body,
+// concluding the anchoring session and crediting absorbed heaven & earth qi.
+func UnanchorAperture(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		return
+	}
+	defer tx.Rollback()
+
+	var ap models.ImmortalAperture
+	var placedAt *time.Time
+	err = tx.QueryRow(`
+		SELECT id, is_placed, state, heaven_qi, earth_qi, max_heaven_qi, max_earth_qi, placed_at
+		FROM immortal_apertures WHERE player_id = $1 FOR UPDATE
+	`, playerID).Scan(&ap.ID, &ap.IsPlaced, &ap.State, &ap.HeavenQi, &ap.EarthQi, &ap.MaxHeavenQi, &ap.MaxEarthQi, &placedAt)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chưa khai mở Tiên Khiếu"})
+		return
+	}
+
+	if !ap.IsPlaced {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Khiếu hiện không trong trạng thái Hạ Khiếu."})
+		return
+	}
+
+	elapsedMinutes := 0.0
+	if placedAt != nil {
+		elapsedMinutes = time.Since(*placedAt).Minutes()
+		if elapsedMinutes < 0 {
+			elapsedMinutes = 0
+		}
+	}
+
+	// Nạp Tam Khí: mỗi phút hạ khiếu nạp lại +1% trần max_heaven_qi và max_earth_qi
+	gainedHeavenQi := elapsedMinutes * (ap.MaxHeavenQi * 0.01)
+	gainedEarthQi := elapsedMinutes * (ap.MaxEarthQi * 0.01)
+
+	newHeavenQi := math.Min(ap.MaxHeavenQi, ap.HeavenQi+gainedHeavenQi)
+	newEarthQi := math.Min(ap.MaxEarthQi, ap.EarthQi+gainedEarthQi)
+
+	newState := ap.State
+	if newState == "UNBALANCED" && newHeavenQi > 0 && newEarthQi > 0 {
+		newState = "STABLE"
+	}
+
+	_, err = tx.Exec(`
+		UPDATE immortal_apertures
+		SET is_placed = false, placed_region = NULL, placed_x = NULL, placed_y = NULL, placed_at = NULL,
+		    heaven_qi = $1, earth_qi = $2, state = $3, updated_at = NOW()
+		WHERE id = $4
+	`, newHeavenQi, newEarthQi, newState, ap.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thu hồi Tiên Khiếu"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu thu hồi"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Thu Khiếu thành công. Đã nạp +%.0f Thiên Khí và +%.0f Địa Khí. Tốc độ thời gian Tiên Khiếu đã khôi phục bình thường.",
+			gainedHeavenQi, gainedEarthQi),
+		"heaven_qi":     newHeavenQi,
+		"earth_qi":      newEarthQi,
+		"max_heaven_qi": ap.MaxHeavenQi,
+		"max_earth_qi":  ap.MaxEarthQi,
+		"state":         newState,
+		"is_placed":     false,
+	})
 }

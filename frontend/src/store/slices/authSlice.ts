@@ -7,6 +7,8 @@ import { AUTHENTICATED_SESSION } from "@/store/useGameStore";
 import type { AuthResponse, Player } from "@/store/useGameStore";
 import { invalidateCache } from "@/lib/fetch";
 import { getUiPreferences } from "@/lib/ui-preferences";
+import { resetInventorySliceModuleState } from "@/store/slices/inventorySlice";
+import { resetProfileSliceModuleState } from "@/store/slices/profileSlice";
 
 export interface AuthSlice {
   login: (email: string, password: string) => Promise<boolean>;
@@ -253,6 +255,8 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     get().unsubscribeTradeEvents();
     get().unsubscribeBaoHoangMessages();
     invalidateCache();
+    resetInventorySliceModuleState();
+    resetProfileSliceModuleState();
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
     set({
       player: null,

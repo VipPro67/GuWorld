@@ -234,6 +234,13 @@ func InitSchema() error {
 	if _, err := schemaDB().Exec(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`); err != nil {
 		logger.S.Warnf("failed to create pg_trgm extension: %v", err)
 	}
+	// pg_stat_statements provides per-query timing data for profiling slow
+	// queries. Requires shared_preload_libraries=pg_stat_statements in PG config.
+	// Failure is non-fatal: the extension is unavailable on vanilla PG without
+	// the preload; request traffic is not affected.
+	if _, err := schemaDB().Exec(`CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";`); err != nil {
+		logger.S.Debugf("pg_stat_statements not available (needs shared_preload_libraries): %v", err)
+	}
 	// Immutable wrapper around unaccent so it can be used in index expressions.
 	// unaccent() itself is STABLE and cannot be indexed directly.
 	if _, err := schemaDB().Exec(`

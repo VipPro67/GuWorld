@@ -29,6 +29,10 @@ func StartWorldIndexSyncWorker(ctx context.Context) {
 		}
 		worldPosIndex.Reconcile(entries)
 		lastEntryCount = len(entries)
+		// Prune stale entries from the flying registry so it doesn't grow
+		// unbounded for players who disconnect without explicitly clearing their
+		// flying status.
+		flyingPlayers.pruneExpired(time.Now())
 	}
 
 	// Warm the fast path immediately (off the startup path), then reconcile on

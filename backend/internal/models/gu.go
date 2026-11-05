@@ -1136,7 +1136,8 @@ func FindGuByNameOrID(query string, targetRank int) (GuDictionaryItem, bool) {
 // resource-point economy to roll wild Gu worms of a point's path (canon:
 // Moon Bowl produces moon path Gu worms, ch. 1303).
 func GuCandidatesForPath(pathKey string, rank int) []string {
-	clean := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(pathKey, " path")))
+	clean := strings.ToLower(strings.TrimSpace(pathKey))
+	clean = strings.TrimSpace(strings.TrimSuffix(clean, " path"))
 	if clean == "" {
 		return nil
 	}

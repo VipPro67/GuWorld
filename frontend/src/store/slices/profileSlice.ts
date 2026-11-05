@@ -12,6 +12,16 @@ const pendingStatusFetches = new Map<string, Promise<void>>();
 const STATUS_FETCH_TTL_MS = 3000;
 let refreshPlayerSummaryPromise: Promise<void> | null = null;
 
+/**
+ * Resets module-level caches that must not leak between logout/login cycles.
+ * Called from the logout action in authSlice.
+ */
+export function resetProfileSliceModuleState() {
+  lastStatusFetchTimes.clear();
+  pendingStatusFetches.clear();
+  refreshPlayerSummaryPromise = null;
+}
+
 export interface ProfileSlice {
   inspectedProfile: ApiResponseData | null;
   inspectedUsernameQuery: string | null;

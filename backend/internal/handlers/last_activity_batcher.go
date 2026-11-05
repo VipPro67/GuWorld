@@ -81,26 +81,21 @@ func (s *lastActivityStore) StartFlusher(ctx context.Context, flushInterval time
 
 func (s *lastActivityStore) flush() {
 	s.mu.Lock()
-	if len(s.dirty) == 0 {
-		// Prune old entries from recent map
-		for id, t := range s.recent {
-			if time.Since(t) > 15*time.Minute {
-				delete(s.recent, id)
-			}
+	// Prune stale entries from the recent map on every flush, regardless of
+	// whether there is dirty work to do. Without this the map accumulates all
+	// ever-active players for the life of the process under constant traffic.
+	for id, t := range s.recent {
+		if time.Since(t) > 15*time.Minute {
+			delete(s.recent, id)
 		}
+	}
+	if len(s.dirty) == 0 {
 		s.mu.Unlock()
 		return
 	}
 	// Swap out the dirty map so the lock is held for minimum time.
 	snapshot := s.dirty
 	s.dirty = make(map[uuid.UUID]time.Time, len(snapshot))
-
-	// Prune old entries from recent map
-	for id, t := range s.recent {
-		if time.Since(t) > 15*time.Minute {
-			delete(s.recent, id)
-		}
-	}
 	s.mu.Unlock()
 
 	if len(snapshot) == 0 {

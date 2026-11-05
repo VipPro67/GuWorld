@@ -46,6 +46,10 @@ type worldBucketKey struct {
 	bx, by            int
 }
 
+// bucketXY is the scope-free spatial key used by the secondary gridNoScope
+// index, supporting legacy Nearby() calls that don't carry a mapID.
+type bucketXY struct{ bx, by int }
+
 // ActiveWorldBucket is a bounded snapshot used by shared world workers. X/Y
 // identify a representative active player; Region prevents workers from
 // ticking entities merely because another region overlaps in coordinates.
@@ -68,16 +72,23 @@ type positionIndex struct {
 	mu     sync.RWMutex
 	bucket int
 	byID   map[string]*WorldPosEntry
-	grid   map[worldBucketKey]map[string]*WorldPosEntry
+	// grid is the primary spatial index keyed by (mapID, instanceID, bx, by).
+	// Used by NearbyInScope when a mapID is provided.
+	grid map[worldBucketKey]map[string]*WorldPosEntry
+	// gridNoScope is a secondary index keyed only by (bx, by) for the legacy
+	// Nearby() call path that provides no mapID. Avoids the O(all_buckets) scan
+	// that the scoped path would otherwise cause when mapID == "".
+	gridNoScope map[bucketXY]map[string]*WorldPosEntry
 }
 
 var worldPosIndex = newPositionIndex(WorldPosIndexBucket)
 
 func newPositionIndex(bucket int) *positionIndex {
 	return &positionIndex{
-		bucket: bucket,
-		byID:   make(map[string]*WorldPosEntry),
-		grid:   make(map[worldBucketKey]map[string]*WorldPosEntry),
+		bucket:      bucket,
+		byID:        make(map[string]*WorldPosEntry),
+		grid:        make(map[worldBucketKey]map[string]*WorldPosEntry),
+		gridNoScope: make(map[bucketXY]map[string]*WorldPosEntry),
 	}
 }
 
@@ -114,6 +125,13 @@ func (idx *positionIndex) Set(e WorldPosEntry) {
 				delete(idx.grid, oldKey)
 			}
 		}
+		oldXY := bucketXY{bx: oldKey.bx, by: oldKey.by}
+		if b := idx.gridNoScope[oldXY]; b != nil {
+			delete(b, e.ID)
+			if len(b) == 0 {
+				delete(idx.gridNoScope, oldXY)
+			}
+		}
 	}
 
 	entry := e
@@ -125,6 +143,13 @@ func (idx *positionIndex) Set(e WorldPosEntry) {
 		idx.grid[key] = b
 	}
 	b[e.ID] = &entry
+	xy := bucketXY{bx: key.bx, by: key.by}
+	bns := idx.gridNoScope[xy]
+	if bns == nil {
+		bns = make(map[string]*WorldPosEntry)
+		idx.gridNoScope[xy] = bns
+	}
+	bns[e.ID] = &entry
 }
 
 // Get returns the current entry for a player id.
@@ -169,16 +194,12 @@ func (idx *positionIndex) NearbyInScope(x, y, r int, excludeID, mapID, instanceI
 		for by := kmin.by; by <= kmax.by; by++ {
 			var bucketEntries map[string]*WorldPosEntry
 			if mapID != "" || instanceID != "" {
+				// Scoped lookup: O(1) map key lookup.
 				bucketEntries = idx.grid[worldBucketKey{mapID: mapID, instanceID: instanceID, bx: bx, by: by}]
 			} else {
-				bucketEntries = make(map[string]*WorldPosEntry)
-				for key, bucket := range idx.grid {
-					if key.bx == bx && key.by == by {
-						for id, entry := range bucket {
-							bucketEntries[id] = entry
-						}
-					}
-				}
+				// No-scope lookup: use the secondary index keyed by (bx, by)
+				// only — O(players in bucket) instead of O(all buckets).
+				bucketEntries = idx.gridNoScope[bucketXY{bx: bx, by: by}]
 			}
 			for _, e := range bucketEntries {
 				if e == nil || e.ID == excludeID {
@@ -208,6 +229,7 @@ func (idx *positionIndex) NearbyInScope(x, y, r int, excludeID, mapID, instanceI
 func (idx *positionIndex) Reconcile(entries []WorldPosEntry) {
 	byID := make(map[string]*WorldPosEntry, len(entries))
 	grid := make(map[worldBucketKey]map[string]*WorldPosEntry)
+	gridNoScope := make(map[bucketXY]map[string]*WorldPosEntry)
 
 	for i := range entries {
 		e := entries[i]
@@ -220,12 +242,20 @@ func (idx *positionIndex) Reconcile(entries []WorldPosEntry) {
 			grid[key] = b
 		}
 		b[e.ID] = &e
+		xy := bucketXY{bx: key.bx, by: key.by}
+		bns := gridNoScope[xy]
+		if bns == nil {
+			bns = make(map[string]*WorldPosEntry)
+			gridNoScope[xy] = bns
+		}
+		bns[e.ID] = &e
 	}
 
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	idx.byID = byID
 	idx.grid = grid
+	idx.gridNoScope = gridNoScope
 }
 
 // Len returns the number of entries currently tracked.
@@ -342,6 +372,14 @@ func setWorldPosFromPlayer(p *models.Player) {
 }
 
 func mapInstanceIDForPlayer(playerID string) string {
+	// Fast path: the position index is loaded from the DB (including
+	// map_instance_id) by the sync worker and updated eagerly on movement. Use
+	// it to avoid a DB round-trip on every viewport/nearby query.
+	if e, ok := worldPosIndex.Get(playerID); ok {
+		return e.InstanceID
+	}
+	// Fallback: index is cold (e.g. right after server start, before first sync)
+	// or the player is not yet in the index (e.g. just registered).
 	if db.DB == nil || playerID == "" {
 		return ""
 	}
@@ -387,6 +425,19 @@ func (r *flyingRegistry) isFlying(playerID string, now time.Time) bool {
 	until, ok := r.until[playerID]
 	r.mu.RUnlock()
 	return ok && until.After(now)
+}
+
+// pruneExpired removes entries whose flying window has already passed. Called
+// from the world index sync worker so the map doesn't grow unbounded for
+// players who disconnect without clearing their flying status.
+func (r *flyingRegistry) pruneExpired(now time.Time) {
+	r.mu.Lock()
+	for id, until := range r.until {
+		if now.After(until) {
+			delete(r.until, id)
+		}
+	}
+	r.mu.Unlock()
 }
 
 // syncPlayerFlying refreshes a player's flying entry after a position commit

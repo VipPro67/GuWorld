@@ -11,6 +11,23 @@ let groundDropRequestRevision = 0;
 let groundDropRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let groundDropExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * Resets module-level state that must not survive a logout/login cycle.
+ * Called from the logout action in authSlice.
+ */
+export function resetInventorySliceModuleState() {
+  fetchGuInventoryPromise = null;
+  groundDropRequestRevision = 0;
+  if (groundDropRefreshTimer !== null) {
+    clearTimeout(groundDropRefreshTimer);
+    groundDropRefreshTimer = null;
+  }
+  if (groundDropExpiryTimer !== null) {
+    clearTimeout(groundDropExpiryTimer);
+    groundDropExpiryTimer = null;
+  }
+}
+
 export interface GroundDropViewport {
   x: number;
   y: number;

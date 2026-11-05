@@ -27,6 +27,10 @@ func schemaAperture() error {
 		chaos_calamity_count INTEGER NOT NULL DEFAULT 0,
 		state VARCHAR(30) NOT NULL DEFAULT 'STABLE',
 		dao_marks JSONB NOT NULL DEFAULT '{"strength": 0}',
+		heaven_qi DOUBLE PRECISION NOT NULL DEFAULT 100000,
+		earth_qi DOUBLE PRECISION NOT NULL DEFAULT 100000,
+		max_heaven_qi DOUBLE PRECISION NOT NULL DEFAULT 100000,
+		max_earth_qi DOUBLE PRECISION NOT NULL DEFAULT 100000,
 		is_placed BOOLEAN NOT NULL DEFAULT FALSE,
 		placed_region VARCHAR(50) REFERENCES regions(id) ON DELETE SET NULL,
 		placed_x DOUBLE PRECISION,
@@ -41,6 +45,17 @@ func schemaAperture() error {
 	);`); err != nil {
 		return err
 	}
+	// Add Tam-Qi (Heaven Qi & Earth Qi) columns to existing deployments.
+	if err := execSchema("immortal_apertures_tam_qi_columns", `
+		ALTER TABLE immortal_apertures
+			ADD COLUMN IF NOT EXISTS heaven_qi DOUBLE PRECISION NOT NULL DEFAULT 100000,
+			ADD COLUMN IF NOT EXISTS earth_qi DOUBLE PRECISION NOT NULL DEFAULT 100000,
+			ADD COLUMN IF NOT EXISTS max_heaven_qi DOUBLE PRECISION NOT NULL DEFAULT 100000,
+			ADD COLUMN IF NOT EXISTS max_earth_qi DOUBLE PRECISION NOT NULL DEFAULT 100000;
+	`); err != nil {
+		return err
+	}
+
 	// Existing deployments may already have immortal_apertures from before the
 	// return location fields were introduced. CREATE TABLE IF NOT EXISTS does
 	// not evolve those tables, so add the columns explicitly for upgrades.

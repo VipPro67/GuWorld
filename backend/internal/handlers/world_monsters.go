@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/http"
 	"sort"
 	"strconv"
@@ -218,20 +219,35 @@ func pickGuardTemplate(regionID string) string {
 	}
 	guardTemplateMu.Unlock()
 
-	// Pick a random normal monster from the same region
-	var monsterID string
-	err := db.DB.QueryRowContext(context.Background(), `
+	// Build a candidate list in-memory from the spawn table for this region,
+	// then pick randomly in Go — avoids ORDER BY RANDOM() full-scan on every
+	// cache miss (once per minute per region).
+	rows, err := db.DB.QueryContext(context.Background(), `
 		SELECT monster_id FROM monster_spawns
-		WHERE region_id=$1 AND is_active=TRUE AND is_boss_spawn=FALSE
-		ORDER BY RANDOM() LIMIT 1`, regionID).Scan(&monsterID)
+		WHERE region_id=$1 AND is_active=TRUE AND is_boss_spawn=FALSE`, regionID)
 	if err != nil {
 		return ""
 	}
-	if monsterID != "" {
-		guardTemplateMu.Lock()
-		guardTemplateCache[regionID] = guardTemplatePick{id: monsterID, expires: time.Now().Add(time.Minute)}
-		guardTemplateMu.Unlock()
+	defer rows.Close()
+
+	var candidates []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil && id != "" {
+			// Only include templates that are loaded into the registry.
+			if _, ok := models.MonsterRegistry[id]; ok {
+				candidates = append(candidates, id)
+			}
+		}
 	}
+	if len(candidates) == 0 {
+		return ""
+	}
+
+	monsterID := candidates[rand.Intn(len(candidates))]
+	guardTemplateMu.Lock()
+	guardTemplateCache[regionID] = guardTemplatePick{id: monsterID, expires: time.Now().Add(time.Minute)}
+	guardTemplateMu.Unlock()
 	return monsterID
 }
 

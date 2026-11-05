@@ -44,6 +44,10 @@ type ResourcePointTemplate struct {
 	Name                 string
 	Path                 string  // canonical aperture path label, e.g. "Wood Path"
 	ProduceKey           string  // item family prefix, e.g. "wood_crystal"
+	SecondaryProduceKey  string  // secondary item family prefix, e.g. mineral companion or dual drop
+	Category             string  // MINERAL_VEIN | HERB_GARDEN | BEAST_PASTURE
+	MinRank              int     // minimum produce rank ceiling (default 1)
+	MaxRank              int     // maximum produce rank ceiling (default 9)
 	ProduceIntervalHours int     // internal hours between production ticks
 	BaseYield            float64 // base units per interval, before multipliers
 	VitalityDrain        int     // vitality lost per harvest
@@ -52,6 +56,7 @@ type ResourcePointTemplate struct {
 	WorkerRace           string  // variant-human race tending the point
 	RareRate             float64 // chance a produced interval is one tier higher
 	GuRate               float64 // chance each harvest rolls a wild Gu worm (rank 1-6 by difficulty)
+	AllowedGuIDs         string  // semicolon-separated specific Gu IDs eligible to hatch
 	PointClass           string  // NORMAL | FAMOUS (canon famous mountains / heaven-earth secret realms)
 }
 
@@ -125,11 +130,32 @@ func parseResourcePointTemplates(r io.Reader) map[string]ResourcePointTemplate {
 			}
 			return ""
 		}
+		minRank := atoi(at("min_rank"))
+		if minRank <= 0 {
+			minRank = 1
+		}
+		maxRank := atoi(at("max_rank"))
+		if maxRank <= 0 {
+			maxRank = 9
+		}
+		cat := strings.ToUpper(strings.TrimSpace(at("category")))
+		if cat == "" {
+			cat = "MINERAL_VEIN"
+		}
+		secKey := strings.TrimSpace(at("secondary_produce_key"))
+		if secKey == "" {
+			secKey = at("produce_key")
+		}
+
 		t := ResourcePointTemplate{
 			PointType:            at("point_type"),
 			Name:                 at("name"),
 			Path:                 at("path"),
 			ProduceKey:           at("produce_key"),
+			SecondaryProduceKey:  secKey,
+			Category:             cat,
+			MinRank:              minRank,
+			MaxRank:              maxRank,
 			ProduceIntervalHours: atoi(at("produce_interval_hours")),
 			BaseYield:            atof(at("base_yield")),
 			VitalityDrain:        atoi(at("vitality_drain")),
@@ -138,6 +164,7 @@ func parseResourcePointTemplates(r io.Reader) map[string]ResourcePointTemplate {
 			WorkerRace:           normalizeWorkerRace(at("worker_race")),
 			RareRate:             atof(at("rare_rate")),
 			GuRate:               atof(at("gu_rate")),
+			AllowedGuIDs:         strings.TrimSpace(at("allowed_gu_ids")),
 			PointClass:           strings.ToUpper(strings.TrimSpace(at("point_class"))),
 		}
 		if t.PointType != "" {
@@ -149,15 +176,56 @@ func parseResourcePointTemplates(r io.Reader) map[string]ResourcePointTemplate {
 
 // ---- item helpers -------------------------------------------------------
 
+// clampProduceRank clamps a raw tier into the template's configured [MinRank, MaxRank] span.
+func clampProduceRank(t ResourcePointTemplate, rank int) int {
+	minRank := t.MinRank
+	if minRank <= 0 {
+		minRank = 1
+	}
+	maxRank := t.MaxRank
+	if maxRank <= 0 {
+		maxRank = 9
+	}
+	if rank < minRank {
+		return minRank
+	}
+	if rank > maxRank {
+		return maxRank
+	}
+	return rank
+}
+
 // pointProduceItem returns the item id produced by a point for one interval.
-// The produced tier rises with the point level and instance grade; the rare
-// chance can bump one interval to the next tier.
+// The produced tier rises with the point level and instance grade, clamped by
+// the template's min/max rank limits; the rare chance can bump one interval to
+// the next tier up to max_rank.
 func pointProduceItem(t ResourcePointTemplate, pt models.ApertureResourcePoint, rare bool) string {
-	rank := pointProduceRank(pt.Level, pt.Grade)
+	rank := clampProduceRank(t, pointProduceRank(pt.Level, pt.Grade))
 	if rare {
-		rank = min(9, rank+1)
+		maxRank := t.MaxRank
+		if maxRank <= 0 {
+			maxRank = 9
+		}
+		rank = min(maxRank, rank+1)
 	}
 	return fmt.Sprintf("%s_rank%d", t.ProduceKey, rank)
+}
+
+// pointSecondaryProduceItem returns the secondary item id produced by a point.
+func pointSecondaryProduceItem(t ResourcePointTemplate, pt models.ApertureResourcePoint, rare bool) string {
+	key := t.SecondaryProduceKey
+	if key == "" {
+		key = t.ProduceKey
+	}
+	rank := clampProduceRank(t, pointProduceRank(pt.Level, pt.Grade))
+	if rare {
+		maxRank := t.MaxRank
+		if maxRank <= 0 {
+			maxRank = 9
+		}
+		rank = min(maxRank, rank+1)
+	}
+	return fmt.Sprintf("%s_rank%d", key, rank)
 }
 
 func pointProduceRank(level int, grade string) int {
@@ -520,6 +588,17 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 		if pt.State == "EXHAUSTED" {
 			mult = 0
 		}
+
+		// Tam Khí balance: mỏ trong Tiên Khiếu chỉ sản xuất khi Thiên Khí và Địa Khí còn dồi dào
+		if pt.ApertureID != nil && *pt.ApertureID != "" {
+			var hQi, eQi float64
+			if err := tx.QueryRow(`SELECT COALESCE(heaven_qi, 100000), COALESCE(earth_qi, 100000) FROM immortal_apertures WHERE id = $1`, *pt.ApertureID).Scan(&hQi, &eQi); err == nil {
+				if hQi <= 0 || eQi <= 0 {
+					mult = 0 // Cạn kiệt Thiên/Địa Khí -> đình trệ sản xuất cho đến khi Hạ Khiếu nạp khí
+				}
+			}
+		}
+
 		produced := perInterval * mult * intervals
 		perItemTemplate := template
 		rareItem := pointProduceItem(perItemTemplate, *pt, false)
@@ -527,25 +606,77 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 		if pt.Stock == nil {
 			pt.Stock = models.AperturePointStock{}
 		}
+
+		hasSecondary := perItemTemplate.SecondaryProduceKey != "" && perItemTemplate.SecondaryProduceKey != perItemTemplate.ProduceKey
+		mainProduced := produced
+		secProduced := 0.0
+		mainRareBump := rareBump
+		secRareBump := 0.0
+		if hasSecondary {
+			mainProduced = produced * 0.80
+			secProduced = produced * 0.20
+			mainRareBump = rareBump * 0.80
+			secRareBump = rareBump * 0.20
+		}
+
 		current := pt.Stock[rareItem]
 		freeCap := float64(pt.StockCap) - float64(current)
 		if freeCap > 0 {
-			added := math.Floor(math.Min(produced, freeCap))
-			if produced > freeCap {
+			added := math.Floor(math.Min(mainProduced, freeCap))
+			if mainProduced > freeCap {
 				changed = true
 			}
 			if added > 0 {
 				pt.Stock[rareItem] = current + int64(added)
 				// Rare bump lands on the next-tier item.
-				if rareBump > 0 {
+				if mainRareBump > 0 {
 					nextFree := float64(pt.StockCap) - float64(pt.Stock[rareItemNext])
 					if nextFree > 0 {
-						rareUnits := rareBump * mult * intervals
+						rareUnits := mainRareBump * mult * intervals
 						pt.Stock[rareItemNext] += int64(math.Floor(math.Min(rareUnits, nextFree)))
 					}
 				}
 				changed = true
 			}
+		}
+
+		// Secondary produce allocation (dual drop)
+		if hasSecondary && secProduced > 0 {
+			secItem := pointSecondaryProduceItem(perItemTemplate, *pt, false)
+			secItemNext := pointSecondaryProduceItem(perItemTemplate, *pt, true)
+			secCurrent := pt.Stock[secItem]
+			secFreeCap := float64(pt.StockCap) - float64(secCurrent)
+			if secFreeCap > 0 {
+				secAdded := math.Floor(math.Min(secProduced, secFreeCap))
+				if secAdded > 0 {
+					pt.Stock[secItem] = secCurrent + int64(secAdded)
+					if secRareBump > 0 {
+						secNextFree := float64(pt.StockCap) - float64(pt.Stock[secItemNext])
+						if secNextFree > 0 {
+							secRareUnits := secRareBump * mult * intervals
+							pt.Stock[secItemNext] += int64(math.Floor(math.Min(secRareUnits, secNextFree)))
+						}
+					}
+					changed = true
+				}
+			}
+		}
+
+		// Khấu trừ Thiên Địa Khí của Tiên Khiếu tương ứng với quy mô mỏ khi sản xuất thành công
+		if mult > 0 && produced > 0 && pt.ApertureID != nil && *pt.ApertureID != "" {
+			qiDrain := 50.0
+			if template.PointClass == "FAMOUS" {
+				qiDrain = 500.0
+			}
+			totalDrain := qiDrain * intervals
+			_, _ = tx.Exec(`
+				UPDATE immortal_apertures
+				SET heaven_qi = GREATEST(0, heaven_qi - $1),
+				    earth_qi = GREATEST(0, earth_qi - $1),
+				    state = CASE WHEN heaven_qi - $1 <= 0 OR earth_qi - $1 <= 0 THEN 'UNBALANCED' ELSE state END,
+				    updated_at = NOW()
+				WHERE id = $2
+			`, totalDrain, *pt.ApertureID)
 		}
 		pt.LastProducedAt = now
 		changed = true
@@ -1847,9 +1978,78 @@ func harvestAperturePoint(tx *sql.Tx, playerID uuid.UUID, apertureID string, poi
 	return harvestPointRow(tx, playerID, &p)
 }
 
+// parseAllowedGuIDs splits a semicolon- or comma-separated list of Gu IDs.
+func parseAllowedGuIDs(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ';' || r == ','
+	})
+	res := make([]string, 0, len(parts))
+	for _, p := range parts {
+		clean := strings.TrimSpace(p)
+		if clean != "" {
+			res = append(res, clean)
+		}
+	}
+	return res
+}
+
+// pickPointGuCandidate selects a wild Gu worm candidate, prioritizing the
+// template's allowed specific Gu IDs and clamping to [minGuRank, maxGuRank].
+func pickPointGuCandidate(template ResourcePointTemplate, guRank, minGuRank, maxGuRank int) (string, int) {
+	allowed := parseAllowedGuIDs(template.AllowedGuIDs)
+	if len(allowed) > 0 {
+		// 1. Check if any allowed Gu exists at exact guRank
+		candidates := make([]string, 0, len(allowed))
+		for _, id := range allowed {
+			if _, ok := models.GetGu(id, guRank); ok {
+				candidates = append(candidates, id)
+			}
+		}
+		if len(candidates) > 0 {
+			return candidates[rand.Intn(len(candidates))], guRank
+		}
+		// 2. Fallback within allowed list for any rank within [minGuRank, maxGuRank]
+		for r := maxGuRank; r >= minGuRank; r-- {
+			for _, id := range allowed {
+				if _, ok := models.GetGu(id, r); ok {
+					candidates = append(candidates, id)
+				}
+			}
+			if len(candidates) > 0 {
+				return candidates[rand.Intn(len(candidates))], r
+			}
+		}
+	}
+
+	// 3. Fallback to path-wide candidates at guRank
+	candidates := models.GuCandidatesForPath(template.Path, guRank)
+	if len(candidates) > 0 {
+		return candidates[rand.Intn(len(candidates))], guRank
+	}
+
+	// 4. Fallback downward to minGuRank
+	for r := guRank - 1; r >= minGuRank; r-- {
+		candidates = models.GuCandidatesForPath(template.Path, r)
+		if len(candidates) > 0 {
+			return candidates[rand.Intn(len(candidates))], r
+		}
+	}
+
+	// 5. Ultimate fallback to rank 1 of that path
+	candidates = models.GuCandidatesForPath(template.Path, 1)
+	if len(candidates) > 0 {
+		return candidates[rand.Intn(len(candidates))], 1
+	}
+
+	return "", 0
+}
+
 // rollPointGuWorm hatches at most one wild Gu worm per harvest. Weighted tier
-// roll: 1–3 phổ biến, 4–5 hiếm dần, 6 (Tiên Cổ) theo `immortalChance` (cực
-// hiếm; rank ≥ 7 không sinh tự nhiên).
+// roll clamped by the point's [min_rank, max_rank]: 1–3 phổ biến, 4–5 hiếm dần,
+// 6 (Tiên Cổ) theo `immortalChance` (cực hiếm; rank ≥ 7 không sinh tự nhiên).
 func rollPointGuWorm(tx *sql.Tx, playerID uuid.UUID, template ResourcePointTemplate, pt models.ApertureResourcePoint, immortalChance float64) string {
 	if template.GuRate <= 0 {
 		return ""
@@ -1862,6 +2062,20 @@ func rollPointGuWorm(tx *sql.Tx, playerID uuid.UUID, template ResourcePointTempl
 	if roll > guChance {
 		return ""
 	}
+
+	// Determine rank limits for this point (wild Gu cannot exceed rank 6)
+	maxGuRank := template.MaxRank
+	if maxGuRank <= 0 || maxGuRank > 6 {
+		maxGuRank = 6
+	}
+	minGuRank := template.MinRank
+	if minGuRank <= 0 {
+		minGuRank = 1
+	}
+	if minGuRank > maxGuRank {
+		minGuRank = maxGuRank
+	}
+
 	// Rank tier roll within the allowed ceiling (≤ 6).
 	pick := rand.Float64()
 	guRank := 1
@@ -1883,18 +2097,19 @@ func rollPointGuWorm(tx *sql.Tx, playerID uuid.UUID, template ResourcePointTempl
 			guRank = 5
 		}
 	}
-	candidates := models.GuCandidatesForPath(template.Path, guRank)
-	if len(candidates) == 0 {
-		if guRank > 1 {
-			candidates = models.GuCandidatesForPath(template.Path, 1)
-		}
-		if len(candidates) == 0 {
-			return ""
-		}
-		guRank = 1
+
+	if guRank > maxGuRank {
+		guRank = maxGuRank
 	}
-	guID := candidates[rand.Intn(len(candidates))]
-	spec, ok := models.GetGu(guID, guRank)
+	if guRank < minGuRank {
+		guRank = minGuRank
+	}
+
+	guID, finalRank := pickPointGuCandidate(template, guRank, minGuRank, maxGuRank)
+	if guID == "" || finalRank <= 0 {
+		return ""
+	}
+	spec, ok := models.GetGu(guID, finalRank)
 	if !ok {
 		return ""
 	}
@@ -1902,7 +2117,7 @@ func rollPointGuWorm(tx *sql.Tx, playerID uuid.UUID, template ResourcePointTempl
 	if err := db.AddPlayerGu(tx, playerID.String(), newGu); err != nil {
 		return ""
 	}
-	return fmt.Sprintf("%s (rank %d)", spec.Name, guRank)
+	return fmt.Sprintf("%s (rank %d)", spec.Name, finalRank)
 }
 
 // addHumanQi credits a small Nhân Khí reward for harvesting.
@@ -2028,7 +2243,7 @@ func RevitalizeAperturePoint(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại điểm tài nguyên không hợp lệ"})
 		return
 	}
-	itemID := fmt.Sprintf("%s_rank%d", template.ProduceKey, pointProduceRank(pt.Level, pt.Grade))
+	itemID := fmt.Sprintf("%s_rank%d", template.ProduceKey, clampProduceRank(template, pointProduceRank(pt.Level, pt.Grade)))
 	unitsNeeded := int64(math.Ceil(float64(100-pt.Vitality) * 6.0))
 
 	have, err := InventorySvc.GetQuantity(tx, playerID.String(), itemID)

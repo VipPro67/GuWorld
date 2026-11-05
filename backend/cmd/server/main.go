@@ -648,6 +648,7 @@ func main() {
 	worker.StartDailyMissionRolloverWorker(ctx, db.DB, 5*time.Minute)
 	handlers.StartLastActivityFlusher(ctx)
 	worker.StartBatchPersister(ctx, 5*time.Second)
+	worker.StartStatusExpiryWorker(ctx, db.DB, 5*time.Minute)
 	// Aperture production accrues lazily on the resource-point handlers;
 	// refinement queues are drained by their dedicated worker (docs §6).
 	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute) // Phase 2: society simulation tick
