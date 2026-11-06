@@ -4,6 +4,7 @@ import { BACKEND_URL } from "@/lib/config";
 import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import type { GuInstance, GroundDrop, Player, FeedResponse } from "@/store/useGameStore";
 import { LatestRequestGate } from "@/lib/player-reconciliation";
+import { executeGameAction } from "@/store/actionGateway";
 
 let fetchGuInventoryPromise: Promise<void> | null = null;
 const guInventoryRequests = new LatestRequestGate();
@@ -166,117 +167,48 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   },
 
   feedGu: async (guInstanceId) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:inventory")) return;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ gu_instance_id: guInstanceId }),
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Không thể cho ăn.");
-      }
-
-      const data: FeedResponse = await response.json();
-      get().applyInventoryFromResponse(data);
-      get().addLog(data.message);
-      get().addToast(data.message, "success");
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Cho Cổ ăn thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-    } finally {
-      get().endAction("player:inventory");
-    }
+    await executeGameAction<FeedResponse>(get, set, {
+      endpoint: "/api/inventory/feed",
+      method: "POST",
+      body: { gu_instance_id: guInstanceId },
+      actionLock: "player:inventory",
+      errorMessage: "Không thể cho ăn.",
+      onSuccess: (data) => {
+        get().applyInventoryFromResponse(data);
+        get().addLog(data.message);
+        get().addToast(data.message, "success");
+      },
+    });
   },
 
   feedGuGroup: async (guId, rank) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:inventory")) return;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed-group`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ gu_id: guId, ...(rank ? { rank } : {}) }),
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Không thể cho ăn hàng loạt.");
-      }
-
-      const data: FeedResponse = await response.json();
-      get().applyInventoryFromResponse(data);
-      get().addLog(data.message);
-      get().addToast(data.message, "success");
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Cho ăn hàng loạt thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-    } finally {
-      get().endAction("player:inventory");
-    }
+    await executeGameAction<FeedResponse>(get, set, {
+      endpoint: "/api/inventory/feed-group",
+      method: "POST",
+      body: { gu_id: guId, ...(rank ? { rank } : {}) },
+      actionLock: "player:inventory",
+      errorMessage: "Không thể cho ăn hàng loạt.",
+      onSuccess: (data) => {
+        get().applyInventoryFromResponse(data);
+        get().addLog(data.message);
+        get().addToast(data.message, "success");
+      },
+    });
   },
 
   feedAllGu: async (scope?: "all" | "equipped" | "rest" | "unequipped") => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:inventory")) return;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed-all`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(scope ? { scope } : {}),
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Không thể cho tất cả Cổ trùng ăn.");
-      }
-
-      const data: FeedResponse = await response.json();
-      get().applyInventoryFromResponse(data);
-      get().addLog(data.message);
-      get().addToast(data.message, "success");
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Cho tất cả Cổ trùng ăn thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-    } finally {
-      get().endAction("player:inventory");
-    }
+    await executeGameAction<FeedResponse>(get, set, {
+      endpoint: "/api/inventory/feed-all",
+      method: "POST",
+      body: scope ? { scope } : {},
+      actionLock: "player:inventory",
+      errorMessage: "Không thể cho tất cả Cổ trùng ăn.",
+      onSuccess: (data) => {
+        get().applyInventoryFromResponse(data);
+        get().addLog(data.message);
+        get().addToast(data.message, "success");
+      },
+    });
   },
 
   buyShopItem: async (itemId, quantity, rank = 0) => {
@@ -587,72 +519,44 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   },
 
   nourishGu: async (instanceId) => {
-    const { player, token } = get();
-    if (!player || !token || !get().beginAction("player:inventory")) return false;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/inventory/nourish-gu`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instance_id: instanceId }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Ôn dưỡng Cổ trùng thất bại.");
-      }
-      if (typeof data.remaining_mana === "number") {
-        const p = get().player;
-        if (p) {
-          set({ player: { ...p, current_mana: data.remaining_mana } });
+    const res = await executeGameAction<{ remaining_mana?: number; message?: string }>(get, set, {
+      endpoint: "/api/inventory/nourish-gu",
+      method: "POST",
+      body: { instance_id: instanceId },
+      actionLock: "player:inventory",
+      errorMessage: "Ôn dưỡng Cổ trùng thất bại.",
+      onSuccess: async (data) => {
+        if (typeof data.remaining_mana === "number") {
+          const p = get().player;
+          if (p) {
+            set({ player: { ...p, current_mana: data.remaining_mana } });
+          }
         }
-      }
-      await get().fetchGuInventory(true);
-      const msg = data.message || "Ôn dưỡng Cổ trùng thành công!";
-      get().addLog(msg);
-      get().addToast(msg, "success");
-      return true;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Ôn dưỡng thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-      return false;
-    } finally {
-      get().endAction("player:inventory");
-    }
+        await get().fetchGuInventory(true);
+        const msg = data.message || "Ôn dưỡng Cổ trùng thành công!";
+        get().addLog(msg);
+        get().addToast(msg, "success");
+      },
+    });
+    return res.ok;
   },
 
   repairGu: async (instanceId) => {
-    const { player, token } = get();
-    if (!player || !token || !get().beginAction("player:inventory")) return false;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/inventory/repair-gu`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instance_id: instanceId }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Tu bổ Cổ trùng thất bại.");
-      }
-      await get().fetchGuInventory(true);
-      await get().refreshPlayerSummary();
-      const msg = data.message || "Tu bổ Cổ trùng thành công!";
-      get().addLog(msg);
-      get().addToast(msg, "success");
-      return true;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Tu bổ thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-      return false;
-    } finally {
-      get().endAction("player:inventory");
-    }
+    const res = await executeGameAction<{ message?: string }>(get, set, {
+      endpoint: "/api/inventory/repair-gu",
+      method: "POST",
+      body: { instance_id: instanceId },
+      actionLock: "player:inventory",
+      errorMessage: "Tu bổ Cổ trùng thất bại.",
+      onSuccess: async (data) => {
+        await get().fetchGuInventory(true);
+        await get().refreshPlayerSummary();
+        const msg = data.message || "Tu bổ Cổ trùng thành công!";
+        get().addLog(msg);
+        get().addToast(msg, "success");
+      },
+    });
+    return res.ok;
   },
 
   unequipAllGu: async () => {

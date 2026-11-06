@@ -22,6 +22,9 @@ func SetRealtimeConnectedProvider(fn func(playerID uuid.UUID) bool) {
 }
 
 func isWSConnected(playerID uuid.UUID) bool {
+	if obs := GetRealtimeObserver(); obs != nil {
+		return obs.IsConnected(playerID)
+	}
 	realtimeConnectedMu.RLock()
 	fn := realtimeConnectedFn
 	realtimeConnectedMu.RUnlock()

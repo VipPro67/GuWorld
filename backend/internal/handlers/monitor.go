@@ -33,6 +33,9 @@ func SetRealtimeEventStatsProvider(fn func() (int, int)) {
 }
 
 func getRealtimeEventStats() (int, int) {
+	if obs := GetRealtimeObserver(); obs != nil {
+		return obs.GetEventStats()
+	}
 	realtimeEventStatsMu.RLock()
 	fn := realtimeEventStatsFn
 	realtimeEventStatsMu.RUnlock()
