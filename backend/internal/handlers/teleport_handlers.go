@@ -994,12 +994,26 @@ func TravelTeleport(c *gin.Context) {
 		)
 	`, dest.ID, player.ID, source.RegionID, source.X, source.Y, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
 
-	// 7. Move the player and apply the regional wall debuff.
-	debuffMsg := applyDestination(tx, &player, dest.RegionID, dest.X, dest.Y)
+	// 7. Move the player and apply the regional wall debuff via authoritative spatial transition.
+	transition, errMove := ExecuteSpatialTransition(c.Request.Context(), tx, &player, movementSpec{
+		kind:               movementTeleport,
+		x:                  dest.X,
+		y:                  dest.Y,
+		hasTarget:          true,
+		targetRegion:       dest.RegionID,
+		realtimeAuthorized: realtimeTransfer,
+	}, publishPartyRealtimeEvent)
+	if errMove != nil {
+		if respondMovementError(c, errMove) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+		return
+	}
 
 	logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
-	if debuffMsg != "" {
-		logMsg += " " + debuffMsg
+	if transition.DebuffMessage != "" {
+		logMsg += " " + transition.DebuffMessage
 	}
 
 	logger.S.Infof("[Pháp Trận] Người chơi %s (ID: %s) truyền tống qua pháp trận từ [%s] (%s: %d, %d) đến [%s] (%s: %d, %d) - Tiêu hao: %d %s", player.Username, player.ID, source.Name, source.RegionID, source.X, source.Y, dest.Name, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
@@ -1028,36 +1042,6 @@ func TravelTeleport(c *gin.Context) {
 		Success:   true,
 	})
 
-	_, err = tx.Exec(`
-		UPDATE players
-		SET current_region = $1, x = $2, y = $3, primeval_stones = $4, immortal_stones = $5, statuses = $6
-		WHERE id = $7
-	`, player.CurrentRegion, player.X, player.Y, player.PrimevalStones, player.ImmortalStones, player.Statuses, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu vị trí mới của nhân vật"})
-		return
-	}
-	if realtimeTransfer {
-		// The destination must be projection-complete before the zone lease is
-		// released; otherwise admission would keep the old world_zone_id and
-		// reject the reconnect with realtime_map_mismatch. All region maps use
-		// the identity legacy transform (origin 0, scale 1), so players.x/y are
-		// also the destination map-local coordinates.
-		_, err = tx.Exec(`
-			UPDATE players
-			SET world_zone_id = $1, world_instance_id = '',
-			    world_x = $2, world_y = $3, world_safe_x = $2, world_safe_y = $3,
-			    world_location_revision = world_location_revision + 1
-			WHERE id = $4
-		`, player.CurrentRegion, player.X, player.Y, player.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu vị trí realtime của nhân vật"})
-			return
-		}
-	}
-
-	syncedMembers := SyncPartyMembersLocation(tx, &player)
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận truyền tống"})
 		return
@@ -1070,8 +1054,7 @@ func TravelTeleport(c *gin.Context) {
 		realtimeFinished = true
 	}
 
-	broadcastPlayerWorldPos(&player)
-	publishPartyMovement(syncedMembers, publishPartyRealtimeEvent)
+	transition.PublishPostCommit()
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":           logMsg,

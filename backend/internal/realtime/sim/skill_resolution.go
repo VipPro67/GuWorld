@@ -8,13 +8,13 @@ import (
 )
 
 // Skill resolution engine. resolveCastLocked owns the authoritative rules for
-// turning a windup-finished cast into state deltas: success/backfire chance,
-// target acquisition per skill mode, projectile spawning, AoE shape filtering
-// (isInsideGroundArea, defined in combat_geometry.go), movement dash and
-// caster-side heal/shield support. It mutates the zone through the shared
-// locked helpers on *World so every side effect (events, revisions, threat,
-// statuses) stays on one code path.
-
+// turning a windup-finished cast into state deltas via a structured execution pipeline:
+//  1. Cast Pre-Check & Lifecycle (success/backfire, killer move usage, recovery locking)
+//  2. Form & Transformation Resolution
+//  3. Motion & Displacement Resolution (Dash/Blink)
+//  4. Delivery Resolution (Target raycast, Direction projectiles, Ground geometry)
+//  5. Unified Target Payload Application (Damage, Status, Cleanse, Knockback)
+//  6. Self-Support Application (Caster Heal & Shield)
 func (w *World) resolveCastLocked(caster *Entity) {
 	pending := caster.Combat.Pending
 	caster.Combat.Pending = nil
@@ -47,185 +47,33 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		caster.Combat.RecoveryPolicy = skill.MovementPolicy
 	}
 	if skill.FormActivation {
-		formID := skill.FormID
-		if formID == "" {
-			formID = skill.ID
-		}
-		rec, found := GetTransformationForm(formID)
-		formKind := TransformationFull
-		if skill.FormKind != "" {
-			formKind = TransformationKind(skill.FormKind)
-		} else if found {
-			formKind = rec.FormKind
-		}
-		modelScale := 1.5
-		radiusMult := 1.4
-		maxHP := 150.0
-		formDefense := skill.FormDefenseBonus
-		damageRed := 0.15
-		manaUpkeepSec := skill.FormManaDrainPerTick * float64(TickRate)
-		if found {
-			modelScale = rec.ModelScale
-			radiusMult = rec.CollisionRadiusMult
-			maxHP = rec.MaxFormHP
-			formDefense = rec.FormDefense
-			damageRed = rec.DamageReduction
-			manaUpkeepSec = rec.ManaUpkeepSec
-		}
-		if skill.FormModelScale > 0 {
-			modelScale = skill.FormModelScale
-		}
-		if skill.FormCollisionRadius > 0 {
-			radiusMult = skill.FormCollisionRadius
-		}
-		if skill.FormMaxHP > 0 {
-			maxHP = skill.FormMaxHP
-		}
-		if skill.FormDamageReduction > 0 {
-			damageRed = skill.FormDamageReduction
-		}
-
-		req := FormActivationRequest{
-			FormID:              formID,
-			FormName:            skill.Name,
-			FormKind:            formKind,
-			ModelScale:          modelScale,
-			CollisionRadiusMult: radiusMult,
-			MaxFormHP:           maxHP,
-			FormDefenseBonus:    formDefense,
-			DamageReduction:     damageRed,
-			ManaUpkeepPerSecond: manaUpkeepSec,
-		}
-		w.completeTransformationLocked(caster, req)
+		w.resolveFormActivationLocked(caster, skill)
 		return
 	}
 	if skill.MoveDistance > 0 {
 		recordKillerMoveUse()
-		if !w.hasStatus(caster, "ROOT") && !w.hasStatus(caster, "BIND") && !w.isStunned(caster) {
-			caster.dash = &dashState{skill: skill, direction: pending.Aim, remaining: skill.MoveDistance, ticksLeft: skill.MoveDurationTicks}
-			caster.Revision++
-		}
-		if skill.Cleanse {
-			w.cleanseDebuffsLocked(caster)
-		}
+		w.resolveMotionSkillLocked(caster, pending, skill)
 		w.applySelfSupportLocked(caster, skill)
 		return
 	}
 	switch skill.Mode {
 	case combat.ModeTarget:
-		var target *Entity
-		if pending.TargetID != "" {
-			target = w.entities[pending.TargetID]
-			if target == nil || !w.canApplySkill(caster, target, skill) || distance(caster.Transform.Position, target.Transform.Position) > skill.Range {
-				w.emitEvent(combat.Event{Type: combat.EventCastRejected, SourceID: string(caster.ID), SkillID: skill.ID, Reason: "target_lost"})
-				return
-			}
-		} else {
-			aim := Vec2{X: pending.Point.X - caster.Transform.Position.X, Y: pending.Point.Y - caster.Transform.Position.Y}
-			reach := math.Min(skill.Range, math.Hypot(aim.X, aim.Y))
-			target = w.firstCollisionAlongAim(caster, aim, reach, combat.AimedHitPadding, func(candidate *Entity) bool {
-				return w.canApplySkill(caster, candidate, skill)
-			})
-			if target == nil {
-				// Targeted composites must not apply their self-support payload
-				// when no hostile target was actually hit.
-				return
-			}
-		}
-		recordKillerMoveUse()
-		w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(target.ID), SkillID: skill.ID, ImpactVFX: skill.Visuals.ImpactVFX, X: target.Transform.Position.X, Y: target.Transform.Position.Y})
-		w.applyDamageLocked(caster, target, skill.Damage, skill.ID)
-		if target.Vitals.HP > 0 {
-			w.applyStatusLocked(caster, target, skill)
-			if skill.Cleanse {
-				w.cleanseDebuffsLocked(target)
-			}
-			if skill.KnockbackDistance > 0 && target.ID != caster.ID {
-				w.applyKnockbackLocked(caster, target, skill.KnockbackDistance)
-			}
-		}
-	case combat.ModeDirection:
-		length := math.Hypot(pending.Aim.X, pending.Aim.Y)
-		if length <= 0.01 {
-			w.emitEvent(combat.Event{Type: combat.EventCastRejected, SourceID: string(caster.ID), SkillID: skill.ID, Reason: "invalid_aim"})
+		target, ok := w.resolveTargetModeLocked(caster, pending, skill)
+		if !ok || target == nil {
 			return
 		}
-		direction := Vec2{X: pending.Aim.X / length, Y: pending.Aim.Y / length}
-		baseAngle := math.Atan2(direction.Y, direction.X)
-		spreadCount := skill.SpreadCount
-		if spreadCount <= 0 {
-			spreadCount = 1
-		}
-		spreadAngleRad := skill.SpreadAngleDeg * math.Pi / 180
-		if spreadAngleRad <= 0 && spreadCount > 1 {
-			spreadAngleRad = 30 * math.Pi / 180
-		}
-		for i := 0; i < spreadCount; i++ {
-			angle := baseAngle
-			if spreadCount > 1 {
-				fraction := float64(i)/float64(spreadCount-1) - 0.5
-				angle = baseAngle + fraction*spreadAngleRad
-			}
-			dir := Vec2{X: math.Cos(angle), Y: math.Sin(angle)}
-			spawnOffset := math.Min(0.7, skill.Range)
-			start := Vec2{X: caster.Transform.Position.X + dir.X*spawnOffset, Y: caster.Transform.Position.Y + dir.Y*spawnOffset}
-			w.nextProjectileID++
-			projectile := &projectile{
-				ID: w.nextProjectileID, SourceID: caster.ID, SkillID: skill.ID, Skill: skill,
-				RangeOrigin: caster.Transform.Position, Position: start,
-				Velocity: Vec2{X: dir.X * skill.ProjectileSpeed / TickRate, Y: dir.Y * skill.ProjectileSpeed / TickRate},
-				Radius:   skill.ProjectileRadius, Damage: skill.Damage, Travelled: spawnOffset, MaxTravel: skill.Range,
-				ExpireTick:      w.tick + skill.ProjectileTicks,
-				PierceRemaining: skill.PierceCount,
-				HitEntities:     make(map[EntityID]bool),
-			}
-			w.projectiles = append(w.projectiles, projectile)
-			w.emitEvent(combat.Event{
-				Type: combat.EventProjectileSpawn, SourceID: string(caster.ID), SkillID: skill.ID, ProjectileVFX: skill.Visuals.ProjectileVFX,
-				X: start.X, Y: start.Y, DurationTicks: skill.ProjectileTicks,
-			})
-		}
+		recordKillerMoveUse()
+		w.applyTargetPayloadLocked(caster, target, skill)
+
+	case combat.ModeDirection:
+		w.resolveDirectionModeLocked(caster, pending, skill)
+
 	case combat.ModeGround:
-		type candidate struct {
-			entity   *Entity
-			distance float64
+		targets := w.resolveGroundModeLocked(caster, pending, skill)
+		for _, target := range targets {
+			w.applyTargetPayloadLocked(caster, target, skill)
 		}
-		candidates := make([]candidate, 0)
-		for _, target := range w.entities {
-			if !w.canHarm(caster, target) {
-				continue
-			}
-			if w.hasStatus(target, "FLYING") {
-				continue
-			}
-			if !isInsideGroundArea(caster.Transform.Position, pending.Point, pending.Aim, target.Transform.Position, target.Radius, skill) {
-				continue
-			}
-			targetDistance := distance(target.Transform.Position, pending.Point)
-			candidates = append(candidates, candidate{entity: target, distance: targetDistance})
-		}
-		sort.Slice(candidates, func(i, j int) bool {
-			if candidates[i].distance != candidates[j].distance {
-				return candidates[i].distance < candidates[j].distance
-			}
-			return candidates[i].entity.ID < candidates[j].entity.ID
-		})
-		if skill.MaxTargets > 0 && len(candidates) > skill.MaxTargets {
-			candidates = candidates[:skill.MaxTargets]
-		}
-		for _, hit := range candidates {
-			w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(hit.entity.ID), SkillID: skill.ID, ImpactVFX: skill.Visuals.ImpactVFX, X: hit.entity.Transform.Position.X, Y: hit.entity.Transform.Position.Y})
-			w.applyDamageLocked(caster, hit.entity, skill.Damage, skill.ID)
-			if hit.entity.Vitals.HP > 0 {
-				w.applyStatusLocked(caster, hit.entity, skill)
-				if skill.Cleanse {
-					w.cleanseDebuffsLocked(hit.entity)
-				}
-				if skill.KnockbackDistance > 0 && hit.entity.ID != caster.ID {
-					w.applyKnockbackLocked(caster, hit.entity, skill.KnockbackDistance)
-				}
-			}
-		}
+
 	case combat.ModeSelf:
 		recordKillerMoveUse()
 		w.applyStatusLocked(caster, caster, skill)
@@ -234,9 +82,197 @@ func (w *World) resolveCastLocked(caster *Entity) {
 		}
 	}
 	// Heal and shield always resolve on the caster, matching the existing Gu contract where HEAL/SHIELD operations land on the
-	// acting character even
-	// when the Gu's target mode is TARGET, DIRECTION or GROUND.
+	// acting character even when the Gu's target mode is TARGET, DIRECTION or GROUND.
 	w.applySelfSupportLocked(caster, skill)
+}
+
+// applyTargetPayloadLocked is the single authoritative applier for on-hit payloads:
+// confirms hit event, deals damage, applies statuses, executes cleanse and applies knockback.
+func (w *World) applyTargetPayloadLocked(caster, target *Entity, skill combat.Skill) {
+	if caster == nil || target == nil {
+		return
+	}
+	w.emitEvent(combat.Event{
+		Type:      combat.EventHitConfirmed,
+		SourceID:  string(caster.ID),
+		TargetID:  string(target.ID),
+		SkillID:   skill.ID,
+		ImpactVFX: skill.Visuals.ImpactVFX,
+		X:         target.Transform.Position.X,
+		Y:         target.Transform.Position.Y,
+	})
+	w.applyDamageLocked(caster, target, skill.Damage, skill.ID)
+	if target.Vitals.HP > 0 {
+		w.applyStatusLocked(caster, target, skill)
+		if skill.Cleanse {
+			w.cleanseDebuffsLocked(target)
+		}
+		if skill.KnockbackDistance > 0 && target.ID != caster.ID {
+			w.applyKnockbackLocked(caster, target, skill.KnockbackDistance)
+		}
+	}
+}
+
+func (w *World) resolveFormActivationLocked(caster *Entity, skill combat.Skill) {
+	formID := skill.FormID
+	if formID == "" {
+		formID = skill.ID
+	}
+	rec, found := GetTransformationForm(formID)
+	formKind := TransformationFull
+	if skill.FormKind != "" {
+		formKind = TransformationKind(skill.FormKind)
+	} else if found {
+		formKind = rec.FormKind
+	}
+	modelScale := 1.5
+	radiusMult := 1.4
+	maxHP := 150.0
+	formDefense := skill.FormDefenseBonus
+	damageRed := 0.15
+	manaUpkeepSec := skill.FormManaDrainPerTick * float64(TickRate)
+	if found {
+		modelScale = rec.ModelScale
+		radiusMult = rec.CollisionRadiusMult
+		maxHP = rec.MaxFormHP
+		formDefense = rec.FormDefense
+		damageRed = rec.DamageReduction
+		manaUpkeepSec = rec.ManaUpkeepSec
+	}
+	if skill.FormModelScale > 0 {
+		modelScale = skill.FormModelScale
+	}
+	if skill.FormCollisionRadius > 0 {
+		radiusMult = skill.FormCollisionRadius
+	}
+	if skill.FormMaxHP > 0 {
+		maxHP = skill.FormMaxHP
+	}
+	if skill.FormDamageReduction > 0 {
+		damageRed = skill.FormDamageReduction
+	}
+
+	req := FormActivationRequest{
+		FormID:              formID,
+		FormName:            skill.Name,
+		FormKind:            formKind,
+		ModelScale:          modelScale,
+		CollisionRadiusMult: radiusMult,
+		MaxFormHP:           maxHP,
+		FormDefenseBonus:    formDefense,
+		DamageReduction:     damageRed,
+		ManaUpkeepPerSecond: manaUpkeepSec,
+	}
+	w.completeTransformationLocked(caster, req)
+}
+
+func (w *World) resolveMotionSkillLocked(caster *Entity, pending *PendingCast, skill combat.Skill) {
+	if !w.hasStatus(caster, "ROOT") && !w.hasStatus(caster, "BIND") && !w.isStunned(caster) {
+		caster.dash = &dashState{skill: skill, direction: pending.Aim, remaining: skill.MoveDistance, ticksLeft: skill.MoveDurationTicks}
+		caster.Revision++
+	}
+	if skill.Cleanse {
+		w.cleanseDebuffsLocked(caster)
+	}
+}
+
+func (w *World) resolveTargetModeLocked(caster *Entity, pending *PendingCast, skill combat.Skill) (*Entity, bool) {
+	if pending.TargetID != "" {
+		target := w.entities[pending.TargetID]
+		if target == nil || !w.canApplySkill(caster, target, skill) || distance(caster.Transform.Position, target.Transform.Position) > skill.Range {
+			w.emitEvent(combat.Event{Type: combat.EventCastRejected, SourceID: string(caster.ID), SkillID: skill.ID, Reason: "target_lost"})
+			return nil, false
+		}
+		return target, true
+	}
+	aim := Vec2{X: pending.Point.X - caster.Transform.Position.X, Y: pending.Point.Y - caster.Transform.Position.Y}
+	reach := math.Min(skill.Range, math.Hypot(aim.X, aim.Y))
+	target := w.firstCollisionAlongAim(caster, aim, reach, combat.AimedHitPadding, func(candidate *Entity) bool {
+		return w.canApplySkill(caster, candidate, skill)
+	})
+	if target == nil {
+		// Targeted composites must not apply their self-support payload when no hostile target was hit.
+		return nil, false
+	}
+	return target, true
+}
+
+func (w *World) resolveDirectionModeLocked(caster *Entity, pending *PendingCast, skill combat.Skill) {
+	length := math.Hypot(pending.Aim.X, pending.Aim.Y)
+	if length <= 0.01 {
+		w.emitEvent(combat.Event{Type: combat.EventCastRejected, SourceID: string(caster.ID), SkillID: skill.ID, Reason: "invalid_aim"})
+		return
+	}
+	direction := Vec2{X: pending.Aim.X / length, Y: pending.Aim.Y / length}
+	baseAngle := math.Atan2(direction.Y, direction.X)
+	spreadCount := skill.SpreadCount
+	if spreadCount <= 0 {
+		spreadCount = 1
+	}
+	spreadAngleRad := skill.SpreadAngleDeg * math.Pi / 180
+	if spreadAngleRad <= 0 && spreadCount > 1 {
+		spreadAngleRad = 30 * math.Pi / 180
+	}
+	for i := 0; i < spreadCount; i++ {
+		angle := baseAngle
+		if spreadCount > 1 {
+			fraction := float64(i)/float64(spreadCount-1) - 0.5
+			angle = baseAngle + fraction*spreadAngleRad
+		}
+		dir := Vec2{X: math.Cos(angle), Y: math.Sin(angle)}
+		spawnOffset := math.Min(0.7, skill.Range)
+		start := Vec2{X: caster.Transform.Position.X + dir.X*spawnOffset, Y: caster.Transform.Position.Y + dir.Y*spawnOffset}
+		w.nextProjectileID++
+		projectile := &projectile{
+			ID: w.nextProjectileID, SourceID: caster.ID, SkillID: skill.ID, Skill: skill,
+			RangeOrigin: caster.Transform.Position, Position: start,
+			Velocity: Vec2{X: dir.X * skill.ProjectileSpeed / TickRate, Y: dir.Y * skill.ProjectileSpeed / TickRate},
+			Radius:   skill.ProjectileRadius, Damage: skill.Damage, Travelled: spawnOffset, MaxTravel: skill.Range,
+			ExpireTick:      w.tick + skill.ProjectileTicks,
+			PierceRemaining: skill.PierceCount,
+			HitEntities:     make(map[EntityID]bool),
+		}
+		w.projectiles = append(w.projectiles, projectile)
+		w.emitEvent(combat.Event{
+			Type: combat.EventProjectileSpawn, SourceID: string(caster.ID), SkillID: skill.ID, ProjectileVFX: skill.Visuals.ProjectileVFX,
+			X: start.X, Y: start.Y, DurationTicks: skill.ProjectileTicks,
+		})
+	}
+}
+
+func (w *World) resolveGroundModeLocked(caster *Entity, pending *PendingCast, skill combat.Skill) []*Entity {
+	type candidate struct {
+		entity   *Entity
+		distance float64
+	}
+	candidates := make([]candidate, 0)
+	for _, target := range w.entities {
+		if !w.canHarm(caster, target) {
+			continue
+		}
+		if w.hasStatus(target, "FLYING") {
+			continue
+		}
+		if !isInsideGroundArea(caster.Transform.Position, pending.Point, pending.Aim, target.Transform.Position, target.Radius, skill) {
+			continue
+		}
+		targetDistance := distance(target.Transform.Position, pending.Point)
+		candidates = append(candidates, candidate{entity: target, distance: targetDistance})
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].distance != candidates[j].distance {
+			return candidates[i].distance < candidates[j].distance
+		}
+		return candidates[i].entity.ID < candidates[j].entity.ID
+	})
+	if skill.MaxTargets > 0 && len(candidates) > skill.MaxTargets {
+		candidates = candidates[:skill.MaxTargets]
+	}
+	result := make([]*Entity, len(candidates))
+	for i, c := range candidates {
+		result[i] = c.entity
+	}
+	return result
 }
 
 // applySelfSupportLocked is the single out-of-target healing/shield path for

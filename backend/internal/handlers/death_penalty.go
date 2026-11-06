@@ -333,14 +333,7 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, isAggressor 
 	_, droppedGus := selectEligibleGus(allGus, mult, satKhiLevel)
 
 	// Degrade durability of equipped Gus by 15.0 on death (for non-memory record flows)
-	_, _ = tx.Exec(`
-		UPDATE player_gu
-		SET durability = GREATEST(0, durability - 15.0),
-		    state = CASE WHEN durability - 15.0 <= 0 THEN 'DAMAGED' ELSE state END,
-		    equipped = CASE WHEN durability - 15.0 <= 0 THEN false ELSE equipped END,
-		    updated_at = NOW()
-		WHERE player_id = $1 AND equipped = true
-	`, *loserID)
+	_, _ = db.ApplyEquippedGuDurabilityDegradation(tx, loserID.String(), 15.0)
 
 	return persistDeathDrop(tx, *loserID, winnerID, isAggressor, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel, deathPos...)
 }

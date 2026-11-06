@@ -65,46 +65,7 @@ type combatSkillResolution struct {
 }
 
 func supportedKillerMove(move realtimeeffects.KillerMove) (bool, string) {
-	if len(move.Components) == 0 {
-		return false, "Cổ thành phần không khả dụng hoặc đã kiệt sức"
-	}
-	hasRealtimeEffect, hasOutsideCombatEffect := false, false
-	for _, block := range move.Effects {
-		hasRealtimeEffect = hasRealtimeEffect || block.Trigger == gameplayeffects.TriggerOnAction
-		hasOutsideCombatEffect = hasOutsideCombatEffect || block.Trigger == gameplayeffects.TriggerOnUse
-	}
-	if !hasRealtimeEffect && hasOutsideCombatEffect {
-		return false, "Sát chiêu này chỉ dùng ngoài combat"
-	}
-	if move.ProfileVersion < 2 {
-		if len(move.Effects) != 1 || move.Effects[0].Trigger != gameplayeffects.TriggerOnAction {
-			return false, "Profile cũ có nhiều effect realtime; hãy tạo lại sát chiêu để dùng phiên bản profile mới"
-		}
-	}
-	if move.BackfireStatus != "" {
-		return false, "Profile cũ yêu cầu status phản phệ chưa có executor realtime; hãy tạo lại sát chiêu"
-	}
-	// Hunger is a runtime resource: a starving component must not block
-	// re-ordering the loadout. Admission still rejects the cast until fed.
-	probe := move
-	probe.Components = make([]realtimeeffects.KillerMoveComponent, 0, len(move.Components))
-	for _, component := range move.Components {
-		hunger := component.Hunger
-		if hunger < 1 {
-			hunger = 1
-		}
-		probe.Components = append(probe.Components, realtimeeffects.KillerMoveComponent{
-			InstanceID: component.InstanceID, Hunger: hunger,
-		})
-	}
-	if probe.DamageScale <= 0 {
-		probe.DamageScale = 1
-	}
-	compiled := realtimeeffects.BuildKillerMoveSkills([]realtimeeffects.KillerMove{probe})
-	if len(compiled) != 1 {
-		return false, "Chiêu chưa có executor realtime"
-	}
-	return true, ""
+	return realtimeeffects.ValidateKillerMoveSupport(move)
 }
 
 // resolveCombatSkills loads every equipped killer move plus the strike actions

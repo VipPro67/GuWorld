@@ -68,14 +68,7 @@ func (w *World) stepDashesLocked() {
 					advance := math.Max(0, math.Min(safeDistance, contact-0.001))
 					caster.Transform.Position = Vec2{X: from.X + dash.direction.X*advance, Y: from.Y + dash.direction.Y*advance}
 					caster.Revision++
-					w.emitEvent(combat.Event{Type: combat.EventHitConfirmed, SourceID: string(caster.ID), TargetID: string(target.ID), SkillID: dash.skill.ID, ImpactVFX: dash.skill.Visuals.ImpactVFX, X: target.Transform.Position.X, Y: target.Transform.Position.Y})
-					w.applyDamageLocked(caster, target, dash.skill.Damage, dash.skill.ID)
-					if target.Vitals.HP > 0 {
-						w.applyStatusLocked(caster, target, dash.skill)
-						if dash.skill.KnockbackDistance > 0 {
-							w.applyKnockbackLocked(caster, target, dash.skill.KnockbackDistance)
-						}
-					}
+					w.applyTargetPayloadLocked(caster, target, dash.skill)
 					stopped = true
 					break
 				}

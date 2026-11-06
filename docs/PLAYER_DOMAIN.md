@@ -15,7 +15,7 @@ Use this guide when changing a player route, durable player state, player-visibl
 | Stats, status, recharge | `backend/internal/handlers/player_stats.go`, `player_status.go`, `player_recharge.go` | Check projection and resource update behavior together when changing returned player state. |
 | Gu and item actions | `backend/internal/handlers/player_equip.go`, `player_use.go`, `player_feed.go`, `player_gu_use.go` | Use `InventoryService` for shared material inventory operations where applicable; Gu persistence also has its own tables/helpers. |
 | Dao marks | `backend/internal/handlers/player_daongan.go` | Verify related aperture persistence and revision behavior when changing durable marks. |
-| Player movement | `backend/internal/handlers/movement.go` | Player-initiated cell changes use the shared validation, destination, transaction, and publication flow. Server-driven placement is intentionally separate. |
+| Player movement | `backend/internal/handlers/movement.go` | Player-initiated cell changes use the shared `ExecuteSpatialTransition` flow (covering guard validation, atomic coordinates/revision/v2-state persistence, party sync, and post-commit publication). Server-driven placement is intentionally separate. |
 | Player realtime events | `backend/internal/handlers/player_events.go` | Preserve post-commit publication and event/revision contracts. |
 | Frontend player state | `frontend/src/store/useGameStore.ts`, then the owning file under `frontend/src/store/slices/` | Trace the API action and response application; preserve optimistic rollback and central auth handling. |
 
@@ -27,7 +27,7 @@ Shared handler services are initialized in `backend/internal/handlers/services.g
 2. Classify the data being changed: canonical `players` row, a player collection/table, a derived response projection, or transient/realtime state. Inspect the matching schema and existing writer before changing persistence.
 3. For a full player snapshot, use `playerstate.Load`/`Scan` or the appropriate `PlayerService` loader. `Options.Gu` selects Gu scope only; materials, Dao-mark hydration, and expired-status repair are included by `playerstate.Load`. A narrow projection is appropriate when the caller needs only specific fields; do not duplicate the full canonical projection or collection revision.
 4. For a mutation, keep all related reads and writes on the transaction/query handle for that operation. Preserve existing atomicity, revision updates, and after-commit event publication. When multiple player rows must be locked, follow the established UUID ordering in the owning flow.
-5. For a player-initiated move, extend the movement policy/chain in `movement.go`; do not create a parallel endpoint-specific guard sequence. Keep server-directed placement on its separate path when appropriate.
+5. For a player-initiated move, route through `ExecuteSpatialTransition` in `movement.go`; do not create a parallel endpoint-specific guard sequence or ad-hoc coordinate update. Keep server-directed placement on its separate path when appropriate.
 6. If the response changes frontend player state, follow the corresponding store action and response merge. Keep authentication in `authFetch` and retain rollback for optimistic changes.
 7. Add or update a test beside the owning package. Run `cd backend && go test ./...` for backend behavior; for frontend changes run `cd frontend && npm run lint` and `npm run build`. For concurrency-sensitive backend changes, also run `cd backend && go test -race ./...`.
 

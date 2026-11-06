@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type PortalTransferReq struct {
@@ -83,13 +82,14 @@ func PortalTransfer(c *gin.Context) {
 		newY = 1000
 	}
 
-	if errMove := checkMovement(tx, &player, movementSpec{
+	transition, errMove := ExecuteSpatialTransition(c.Request.Context(), tx, &player, movementSpec{
 		kind:         movementPortal,
 		x:            newX,
 		y:            newY,
 		hasTarget:    true,
 		targetRegion: req.TargetZoneID,
-	}); errMove != nil {
+	}, publishPartyRealtimeEvent)
+	if errMove != nil {
 		if respondMovementError(c, errMove) {
 			return
 		}
@@ -97,33 +97,17 @@ func PortalTransfer(c *gin.Context) {
 		return
 	}
 
-	debuffMsg := applyDestination(tx, &player, req.TargetZoneID, newX, newY)
-
-	_, err = tx.Exec(`
-		UPDATE players
-		SET current_region = $1, x = $2, y = $3, statuses = $4
-		WHERE id = $5
-	`, player.CurrentRegion, player.X, player.Y, player.Statuses, player.ID)
-	if err != nil {
-		logger.S.Errorf("PortalTransfer update failed for player=%s: %v", player.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí nhân vật"})
-		return
-	}
-
-	syncedMembers := SyncPartyMembersLocation(tx, &player)
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận chuyển vùng"})
 		return
 	}
 
 	logMsg := fmt.Sprintf("🌀 Đã tiến vào %s (%d, %d).", targetName, newX, newY)
-	if debuffMsg != "" {
-		logMsg += " " + debuffMsg
+	if transition.DebuffMessage != "" {
+		logMsg += " " + transition.DebuffMessage
 	}
 
-	broadcastPlayerWorldPos(&player)
-	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
-	publishPartyMovement(syncedMembers, publishPartyRealtimeEvent)
+	transition.PublishPostCommit()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

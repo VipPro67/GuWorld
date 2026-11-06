@@ -45,9 +45,12 @@ func EvaluateGuDurabilityHealing(q db.QueryExecer, playerID string) error {
 	return err
 }
 
-type NourishGuRequest struct {
+type GuRestorationRequest struct {
 	InstanceID string `json:"instance_id" binding:"required"`
 }
+
+type NourishGuRequest = GuRestorationRequest
+type RepairGuRequest = GuRestorationRequest
 
 var durabilityManaRankWeights = [...]float64{1, 2, 5, 20, 100, 1_000, 10_000, 100_000, 1_000_000}
 
@@ -65,111 +68,8 @@ func durabilityManaCost(playerRank, guRank int, baseCost float64) float64 {
 	return baseCost * durabilityManaRankWeights[guRank-1] / durabilityManaRankWeights[playerRank-1]
 }
 
-// NourishGu actively channels player mana to nourish an injured Gu (durability >= 20).
-// Consumes 10 mana at equal rank 5, scaled by Gu rank power / player rank power.
-// Restores +15.0 durability (max 100.0).
-func NourishGu(c *gin.Context) {
-	var req NourishGuRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ: " + err.Error()})
-		return
-	}
-
-	authID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Chưa đăng nhập"})
-		return
-	}
-
-	var targetGu *models.GuInstance
-	var manaCost, newDurability float64
-	var errStatus int
-	var errMsg string
-
-	updatedPlayer, err := MutatePlayer(authID, PlayerMutationOptions{
-		Scope:        playerstate.GuEquipped,
-		EventDomains: []PlayerEventDomain{PlayerDomain, GuInventoryDomain},
-	}, func(tx *sql.Tx, player *models.Player) error {
-		_ = EvaluateGuDurabilityHealing(tx, authID.String())
-
-		var loadErr error
-		targetGu, loadErr = db.LoadPlayerGuForUpdate(tx, authID.String(), req.InstanceID)
-		if loadErr == sql.ErrNoRows {
-			errStatus = http.StatusNotFound
-			errMsg = "Không tìm thấy Cổ trùng này trong Không Khiếu"
-			return loadErr
-		}
-		if loadErr != nil {
-			errStatus = http.StatusInternalServerError
-			errMsg = "Không thể tải Cổ trùng cần ôn dưỡng"
-			return loadErr
-		}
-
-		if targetGu.Status == "DEAD" {
-			errStatus = http.StatusBadRequest
-			errMsg = "Cổ trùng đã chết, không thể ôn dưỡng"
-			return fmt.Errorf("%s", errMsg)
-		}
-		if targetGu.Status == "DAMAGED" || targetGu.Durability < 20 {
-			errStatus = http.StatusBadRequest
-			errMsg = "Cổ trùng bị trọng thương hư hại (độ bền < 20), không thể ôn dưỡng bằng Chân Nguyên mà cần Tu Bổ"
-			return fmt.Errorf("%s", errMsg)
-		}
-		if targetGu.Durability >= 100 {
-			errStatus = http.StatusBadRequest
-			errMsg = "Cổ trùng đã ở trạng thái hoàn hảo (độ bền 100%), không cần ôn dưỡng"
-			return fmt.Errorf("%s", errMsg)
-		}
-
-		manaCost = durabilityManaCost(player.Rank, targetGu.Rank, 10)
-		if player.CurrentMana < manaCost {
-			errStatus = http.StatusBadRequest
-			errMsg = fmt.Sprintf("Không đủ Chân Nguyên để Ôn Dưỡng (cần %.0f, hiện có %.1f)", manaCost, player.CurrentMana)
-			return fmt.Errorf("%s", errMsg)
-		}
-
-		player.CurrentMana -= manaCost
-		player.LastManaUpdate = time.Now()
-		newDurability = math.Min(100.0, targetGu.Durability+15.0)
-		targetGu.Durability = newDurability
-
-		if updateErr := db.UpdatePlayerGu(tx, *targetGu); updateErr != nil {
-			errStatus = http.StatusInternalServerError
-			errMsg = "Không thể cập nhật độ bền Cổ trùng"
-			return updateErr
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		if errStatus == 0 {
-			errStatus = http.StatusInternalServerError
-		}
-		if errMsg == "" {
-			errMsg = err.Error()
-		}
-		c.JSON(errStatus, gin.H{"error": errMsg})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":        fmt.Sprintf("Ôn dưỡng thành công! Độ bền tăng lên %.1f/100", newDurability),
-		"instance_id":    targetGu.InstanceID,
-		"durability":     newDurability,
-		"mana_spent":     manaCost,
-		"remaining_mana": updatedPlayer.CurrentMana,
-	})
-}
-
-type RepairGuRequest struct {
-	InstanceID string `json:"instance_id" binding:"required"`
-}
-
-// RepairGu restores heavily damaged Gus (durability < 20 or state == 'DAMAGED') using mana.
-// Sets durability back to 50.0 and state to 'ACTIVE'.
-func RepairGu(c *gin.Context) {
-	var req RepairGuRequest
+func handleGuRestoration(c *gin.Context, isRepair bool) {
+	var req GuRestorationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ: " + err.Error()})
 		return
@@ -190,6 +90,8 @@ func RepairGu(c *gin.Context) {
 		Scope:        playerstate.GuEquipped,
 		EventDomains: []PlayerEventDomain{PlayerDomain, GuInventoryDomain},
 	}, func(tx *sql.Tx, player *models.Player) error {
+		_ = EvaluateGuDurabilityHealing(tx, authID.String())
+
 		var loadErr error
 		targetGu, loadErr = db.LoadPlayerGuForUpdate(tx, authID.String(), req.InstanceID)
 		if loadErr == sql.ErrNoRows {
@@ -199,32 +101,60 @@ func RepairGu(c *gin.Context) {
 		}
 		if loadErr != nil {
 			errStatus = http.StatusInternalServerError
-			errMsg = "Không thể tải Cổ trùng cần tu bổ"
+			errMsg = "Không thể tải Cổ trùng cần xử lý"
 			return loadErr
 		}
 
 		if targetGu.Status == "DEAD" {
 			errStatus = http.StatusBadRequest
-			errMsg = "Cổ trùng đã chết, không thể tu bổ"
-			return fmt.Errorf("%s", errMsg)
-		}
-		if targetGu.Durability >= 20 && targetGu.Status != "DAMAGED" {
-			errStatus = http.StatusBadRequest
-			errMsg = "Cổ trùng chưa bị tổn hại nghiêm trọng (độ bền >= 20), hãy Ôn Dưỡng bằng Chân Nguyên"
+			if isRepair {
+				errMsg = "Cổ trùng đã chết, không thể tu bổ"
+			} else {
+				errMsg = "Cổ trùng đã chết, không thể ôn dưỡng"
+			}
 			return fmt.Errorf("%s", errMsg)
 		}
 
-		manaCost = durabilityManaCost(player.Rank, targetGu.Rank, 5)
+		if isRepair {
+			if targetGu.Durability >= 20 && targetGu.Status != "DAMAGED" {
+				errStatus = http.StatusBadRequest
+				errMsg = "Cổ trùng chưa bị tổn hại nghiêm trọng (độ bền >= 20), hãy Ôn Dưỡng bằng Chân Nguyên"
+				return fmt.Errorf("%s", errMsg)
+			}
+			manaCost = durabilityManaCost(player.Rank, targetGu.Rank, 5)
+		} else {
+			if targetGu.Status == "DAMAGED" || targetGu.Durability < 20 {
+				errStatus = http.StatusBadRequest
+				errMsg = "Cổ trùng bị trọng thương hư hại (độ bền < 20), không thể ôn dưỡng bằng Chân Nguyên mà cần Tu Bổ"
+				return fmt.Errorf("%s", errMsg)
+			}
+			if targetGu.Durability >= 100 {
+				errStatus = http.StatusBadRequest
+				errMsg = "Cổ trùng đã ở trạng thái hoàn hảo (độ bền 100%), không cần ôn dưỡng"
+				return fmt.Errorf("%s", errMsg)
+			}
+			manaCost = durabilityManaCost(player.Rank, targetGu.Rank, 10)
+		}
+
 		if player.CurrentMana < manaCost {
 			errStatus = http.StatusBadRequest
-			errMsg = fmt.Sprintf("Không đủ Chân Nguyên để tu bổ (cần %.2f, hiện có %.2f)", manaCost, player.CurrentMana)
+			actionName := "ôn dưỡng"
+			if isRepair {
+				actionName = "tu bổ"
+			}
+			errMsg = fmt.Sprintf("Không đủ Chân Nguyên để %s (cần %.1f, hiện có %.1f)", actionName, manaCost, player.CurrentMana)
 			return fmt.Errorf("%s", errMsg)
 		}
 
 		player.CurrentMana -= manaCost
 		player.LastManaUpdate = time.Now()
-		targetGu.Durability = 50.0
-		targetGu.Status = "ACTIVE"
+
+		if isRepair {
+			targetGu.Durability = 50.0
+			targetGu.Status = "ACTIVE"
+		} else {
+			targetGu.Durability = math.Min(100.0, targetGu.Durability+15.0)
+		}
 
 		if updateErr := db.UpdatePlayerGu(tx, *targetGu); updateErr != nil {
 			errStatus = http.StatusInternalServerError
@@ -246,12 +176,35 @@ func RepairGu(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":        "Tu bổ Cổ trùng thành công, đã khôi phục nguyên khí căn bản!",
-		"instance_id":    targetGu.InstanceID,
-		"durability":     50.0,
-		"status":         "ACTIVE",
-		"mana_spent":     manaCost,
-		"remaining_mana": updatedPlayer.CurrentMana,
-	})
+	if isRepair {
+		c.JSON(http.StatusOK, gin.H{
+			"message":        "Tu bổ Cổ trùng thành công, đã khôi phục nguyên khí căn bản!",
+			"instance_id":    targetGu.InstanceID,
+			"durability":     targetGu.Durability,
+			"status":         targetGu.Status,
+			"mana_spent":     manaCost,
+			"remaining_mana": updatedPlayer.CurrentMana,
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"message":        fmt.Sprintf("Ôn dưỡng thành công! Độ bền tăng lên %.1f/100", targetGu.Durability),
+			"instance_id":    targetGu.InstanceID,
+			"durability":     targetGu.Durability,
+			"mana_spent":     manaCost,
+			"remaining_mana": updatedPlayer.CurrentMana,
+		})
+	}
+}
+
+// NourishGu actively channels player mana to nourish an injured Gu (durability >= 20).
+// Consumes 10 mana at equal rank 5, scaled by Gu rank power / player rank power.
+// Restores +15.0 durability (max 100.0).
+func NourishGu(c *gin.Context) {
+	handleGuRestoration(c, false)
+}
+
+// RepairGu restores heavily damaged Gus (durability < 20 or state == 'DAMAGED') using mana.
+// Sets durability back to 50.0 and state to 'ACTIVE'.
+func RepairGu(c *gin.Context) {
+	handleGuRestoration(c, true)
 }

@@ -470,14 +470,7 @@ func ApplyGuHouseDamage(tx *sql.Tx, houseID string, damage float64) (float64, er
 		if err := json.Unmarshal(coreBytes, &coreIDs); err == nil && len(coreIDs) > 0 {
 			guShockDamage := math.Max(1.0, damage*0.3)
 			for _, guID := range coreIDs {
-				_, _ = tx.Exec(`
-					UPDATE player_gu
-					SET durability = GREATEST(0, durability - $1),
-					    state = CASE WHEN durability - $1 <= 0 THEN 'DAMAGED' ELSE state END,
-					    equipped = CASE WHEN durability - $1 <= 0 THEN false ELSE equipped END,
-					    updated_at = NOW()
-					WHERE id = $2 AND player_id = $3
-				`, guShockDamage, guID, playerID)
+				_, _ = db.ApplyGuDurabilityDegradation(tx, playerID.String(), guID, guShockDamage)
 			}
 		}
 	}

@@ -174,7 +174,7 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 			if op.Target != nil {
 				target = *op.Target
 			}
-			realtimeSupported := block.Trigger == gameplayeffects.TriggerOnAction && killerMoveRealtimeOperationAllowed(op, target)
+			realtimeSupported := block.Trigger == gameplayeffects.TriggerOnAction && realtimeeffects.RealtimeOperationAllowed(op, target)
 			outsideCombatSupported := block.Trigger == gameplayeffects.TriggerOnUse && killerMoveOutsideCombatOperationAllowed(op, target)
 			if !realtimeSupported && !outsideCombatSupported {
 				continue
@@ -192,26 +192,6 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 	// definition has no authoring blocks, it is not offered for player mixing.
 	return result, nil
 }
-
-func killerMoveRealtimeOperationAllowed(op gameplayeffects.Operation, target gameplayeffects.Target) bool {
-	if op.Turns != 0 {
-		return false
-	}
-	switch op.Op {
-	case gameplayeffects.OpDamage:
-		return target.Selector == gameplayeffects.TargetSingle && finiteKillerMoveNumber(op.Value) && op.Value > 0
-	case gameplayeffects.OpHeal:
-		return target.Selector == gameplayeffects.TargetSelf && finiteKillerMoveNumber(op.Value) && op.Value > 0 && !strings.EqualFold(op.SubType, "PERCENT")
-	case gameplayeffects.OpShield:
-		return target.Selector == gameplayeffects.TargetSelf && finiteKillerMoveNumber(op.Value) && op.Value > 0
-	case gameplayeffects.OpCleanse:
-		return target.Selector == gameplayeffects.TargetSelf
-	default:
-		return false
-	}
-}
-
-func finiteKillerMoveNumber(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 
 func killerMoveEffectKey(instanceID string, blockIndex, operationIndex int) string {
 	return fmt.Sprintf("%s:%d:%d", instanceID, blockIndex, operationIndex)
@@ -466,53 +446,22 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 	for _, component := range components {
 		moveComponents = append(moveComponents, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: owned[component.InstanceID].Hunger})
 	}
-	compiled := realtimeeffects.BuildKillerMoveSkills([]realtimeeffects.KillerMove{{
+	_, reason, ok := realtimeeffects.CompileKillerMoveWithDiagnostic(realtimeeffects.KillerMove{
 		ProfileVersion: profile.ProfileVersion, ID: "preview", Name: "preview", Rank: main.Rank, Components: moveComponents, ExpectedComponents: len(components),
 		Effects: blocks, ManaCost: manaCost, SuccessChance: success, Complexity: complexity,
 		BackfireHPPercent: profile.BackfireHPPercent, BackfireStatus: profile.BackfireStatus,
 		WindupMS: profile.RealtimeWindupMS, CooldownMS: profile.RealtimeCooldownMS,
-	}})
-	preview.RealtimeSupported = len(compiled) == 1
+	}, 9)
+	preview.RealtimeSupported = ok
 	if !preview.RealtimeSupported {
 		if !preview.HasRealtimeEffects && preview.HasOutsideCombatEffect {
 			preview.RealtimeReason = "Sát chiêu này chỉ dùng ngoài combat"
 		} else {
-			preview.RealtimeReason = killerMovePreviewReason(blocks)
+			preview.RealtimeReason = reason
 		}
 	}
 	preview.PreviewFingerprint = killerMovePreviewHash(preview)
 	return preview, main, nil
-}
-
-func killerMovePreviewReason(blocks []gameplayeffects.Block) string {
-	hasRealtime, hasDamage, hasCleanse := false, false, false
-	for _, block := range blocks {
-		if block.Trigger != gameplayeffects.TriggerOnAction {
-			continue
-		}
-		hasRealtime = true
-		if len(block.Conditions) != 0 {
-			return "Effect có điều kiện chưa có executor realtime"
-		}
-		for _, op := range block.Operations {
-			target := block.Target
-			if op.Target != nil {
-				target = *op.Target
-			}
-			if !killerMoveRealtimeOperationAllowed(op, target) {
-				return "Effect chưa có executor realtime hoặc còn thời lượng theo lượt"
-			}
-			hasDamage = hasDamage || op.Op == gameplayeffects.OpDamage
-			hasCleanse = hasCleanse || op.Op == gameplayeffects.OpCleanse
-		}
-	}
-	if !hasRealtime {
-		return "Cần ít nhất một effect ON_ACTION để thi triển realtime"
-	}
-	if hasDamage && hasCleanse {
-		return "Thanh tẩy chỉ có thể ghép với các effect SELF, không ghép với damage mục tiêu"
-	}
-	return "Profile không hợp lệ với contract combat realtime hiện tại"
 }
 
 func killerMovePreviewHash(preview killerMovePreview) string {

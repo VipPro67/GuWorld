@@ -184,3 +184,24 @@ func TestDashUsesHeldMovementAndLocksDirectionAtCast(t *testing.T) {
 		t.Fatalf("dash direction changed after acceptance: %+v", position)
 	}
 }
+
+func TestKnockbackStopsAtWall(t *testing.T) {
+	w, _ := NewWorld("arena", 16)
+	player := newCombatPlayer("player", Vec2{X: 13, Y: 8})
+	target := newTargetMonster("target", Vec2{X: 14, Y: 8})
+	if err := w.AddEntity(player); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddEntity(target); err != nil {
+		t.Fatal(err)
+	}
+
+	w.stateMu.Lock()
+	w.applyKnockbackLocked(w.entities["player"], w.entities["target"], 10.0)
+	w.stateMu.Unlock()
+
+	pos := entityPosition(t, w, "target")
+	if pos.X > 15.0-target.Radius || pos.X < 14.0 {
+		t.Fatalf("knockback exceeded wall bounds or failed: pos=%+v", pos)
+	}
+}

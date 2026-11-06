@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -22,6 +23,10 @@ type PlayerMutationOptions struct {
 	SkipManaEvaluation bool
 	// SkipSnapshotPublish skips post-commit player snapshot publication (rare).
 	SkipSnapshotPublish bool
+	// SkipPlayerRowUpdate skips updating the players table columns if only child collections were modified.
+	SkipPlayerRowUpdate bool
+	// IncludeCollections updates JSONB collections (equipped_gus, statuses, body_mods) on the player row.
+	IncludeCollections bool
 }
 
 // MutatePlayer executes fn within a dedicated database transaction.
@@ -67,29 +72,68 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 	}
 
 	// Persist updated player row
-	_, err = tx.Exec(`
-		UPDATE players
-		SET current_mana = $1, max_mana = $2, last_mana_update = $3,
-		    hp = $4, base_hp = $5, soul_hp = $6,
-		    rank = $7, sub_rank = $8, wall_progress = $9, human_qi = $10,
-		    primeval_stones = $11, immortal_stones = $12,
-		    aperture_stress = $13, last_cultivate_time = $14, lifespan = $15,
-		    time_speed_multiplier = $16, current_thought = $17,
-		    version = version + 1,
-		    state_revision = COALESCE(state_revision, 0) + 1
-		WHERE id = $18
-	`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
-		player.HP, player.BaseHP, player.SoulHP,
-		player.Rank, player.SubRank, player.WallProgress, player.HumanQi,
-		player.PrimevalStones, player.ImmortalStones,
-		player.ApertureStress, player.LastCultivateTime, player.Lifespan,
-		player.TimeSpeedMultiplier, player.CurrentThought,
-		player.ID)
-	if err != nil {
-		return nil, fmt.Errorf("persist player mutation: %w", err)
+	if !opts.SkipPlayerRowUpdate {
+		if opts.IncludeCollections {
+			equippedGusJSON, _ := json.Marshal(player.EquippedGus)
+			statusesJSON, _ := json.Marshal(player.Statuses)
+			bodyModsJSON, _ := json.Marshal(player.BodyMods)
+			_, err = tx.Exec(`
+				UPDATE players
+				SET current_mana = $1, max_mana = $2, last_mana_update = $3,
+				    hp = $4, base_hp = $5, soul_hp = $6,
+				    rank = $7, sub_rank = $8, wall_progress = $9, human_qi = $10,
+				    primeval_stones = $11, immortal_stones = $12,
+				    aperture_stress = $13, last_cultivate_time = $14, lifespan = $15,
+				    time_speed_multiplier = $16, current_thought = $17,
+				    equipped_gus = $18, statuses = $19, body_mods = $20,
+				    version = version + 1,
+				    state_revision = COALESCE(state_revision, 0) + 1
+				WHERE id = $21
+			`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
+				player.HP, player.BaseHP, player.SoulHP,
+				player.Rank, player.SubRank, player.WallProgress, player.HumanQi,
+				player.PrimevalStones, player.ImmortalStones,
+				player.ApertureStress, player.LastCultivateTime, player.Lifespan,
+				player.TimeSpeedMultiplier, player.CurrentThought,
+				equippedGusJSON, statusesJSON, bodyModsJSON,
+				player.ID)
+		} else {
+			_, err = tx.Exec(`
+				UPDATE players
+				SET current_mana = $1, max_mana = $2, last_mana_update = $3,
+				    hp = $4, base_hp = $5, soul_hp = $6,
+				    rank = $7, sub_rank = $8, wall_progress = $9, human_qi = $10,
+				    primeval_stones = $11, immortal_stones = $12,
+				    aperture_stress = $13, last_cultivate_time = $14, lifespan = $15,
+				    time_speed_multiplier = $16, current_thought = $17,
+				    version = version + 1,
+				    state_revision = COALESCE(state_revision, 0) + 1
+				WHERE id = $18
+			`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
+				player.HP, player.BaseHP, player.SoulHP,
+				player.Rank, player.SubRank, player.WallProgress, player.HumanQi,
+				player.PrimevalStones, player.ImmortalStones,
+				player.ApertureStress, player.LastCultivateTime, player.Lifespan,
+				player.TimeSpeedMultiplier, player.CurrentThought,
+				player.ID)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("persist player mutation: %w", err)
+		}
+		player.Version++
+		player.StateRevision++
+	} else {
+		// When player row update is skipped (e.g. child collection only), still bump state revision for cache invalidation
+		_, err = tx.Exec(`
+			UPDATE players
+			SET state_revision = COALESCE(state_revision, 0) + 1
+			WHERE id = $1
+		`, player.ID)
+		if err != nil {
+			return nil, fmt.Errorf("bump state revision: %w", err)
+		}
+		player.StateRevision++
 	}
-	player.Version++
-	player.StateRevision++
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit player mutation: %w", err)

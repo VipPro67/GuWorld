@@ -306,12 +306,10 @@ func (w *World) applyKnockbackLocked(source, target *Entity, dist float64) {
 		dy = 0
 		l = 1
 	}
-	dest := Vec2{
-		X: target.Transform.Position.X + (dx/l)*dist,
-		Y: target.Transform.Position.Y + (dy/l)*dist,
-	}
-	if !w.blocked(dest, target.Radius) {
-		target.Transform.Position = dest
+	direction := Vec2{X: dx / l, Y: dy / l}
+	finalPos, _ := w.sweepDisplacementLocked(target.Transform.Position, direction, dist, target.Radius)
+	if finalPos != target.Transform.Position {
+		target.Transform.Position = finalPos
 		target.Revision++
 	}
 }

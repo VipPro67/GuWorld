@@ -621,3 +621,44 @@ func TransferGuOwnership(tx Execer, instanceID, fromPlayerID, toPlayerID string)
 	}
 	return nil
 }
+
+// ApplyGuDurabilityDegradation degrades durability of a specific Gu instance, clamping at 0,
+// transitioning state to 'DAMAGED' and unequipping if durability reaches 0.
+func ApplyGuDurabilityDegradation(q Execer, playerID, guID string, delta float64) (sql.Result, error) {
+	return q.Exec(`
+		UPDATE player_gu
+		SET durability = GREATEST(0, durability - $1),
+		    state = CASE WHEN durability - $1 <= 0 THEN 'DAMAGED' ELSE state END,
+		    equipped = CASE WHEN durability - $1 <= 0 THEN false ELSE equipped END,
+		    updated_at = NOW()
+		WHERE id = $2 AND player_id = $3
+	`, delta, guID, playerID)
+}
+
+// ApplyEquippedGuDurabilityDegradation degrades durability of all equipped Gus for a player,
+// clamping at 0, transitioning state to 'DAMAGED' and unequipping if durability reaches 0.
+func ApplyEquippedGuDurabilityDegradation(q Execer, playerID string, delta float64) (sql.Result, error) {
+	return q.Exec(`
+		UPDATE player_gu
+		SET durability = GREATEST(0, durability - $1),
+		    state = CASE WHEN durability - $1 <= 0 THEN 'DAMAGED' ELSE state END,
+		    equipped = CASE WHEN durability - $1 <= 0 THEN false ELSE equipped END,
+		    updated_at = NOW()
+		WHERE player_id = $2 AND equipped = true
+	`, delta, playerID)
+}
+
+// SettleGuCombatUsage degrades hunger and durability of a Gu instance after combat settlement,
+// clamping at 0, transitioning state to 'DAMAGED' and unequipping if durability reaches 0.
+func SettleGuCombatUsage(tx *sql.Tx, playerID, guID string, hungerDelta, durabilityDelta float64) (sql.Result, error) {
+	return tx.Exec(`
+		UPDATE player_gu SET
+			hunger = GREATEST(0, hunger - $1),
+			durability = GREATEST(0, durability - $2),
+			state = CASE WHEN durability - $2 <= 0 THEN 'DAMAGED' ELSE state END,
+			equipped = CASE WHEN durability - $2 <= 0 THEN false ELSE equipped END,
+			updated_at = NOW()
+		WHERE id = $3 AND player_id = $4
+	`, hungerDelta, durabilityDelta, guID, playerID)
+}
+

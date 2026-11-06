@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"math/rand"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -122,22 +121,9 @@ func ChooseRespawn(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Khu vực hồi sinh không còn khả dụng; hãy chọn điểm khác"})
 		return
 	}
-	if _, err := tx.ExecContext(c.Request.Context(), `
-		UPDATE players SET hp=1,current_region=$1,world_zone_id=$1,world_instance_id='',map_instance_id=NULL,
-			x=$2,y=$3,world_x=$4,world_y=$5,world_safe_x=$6,world_safe_y=$7,
-			world_location_revision=world_location_revision+1,version=version+1
-		WHERE id=$8
-	`, chosen.Region, chosen.X, chosen.Y, float64(chosen.X), float64(chosen.Y), float64(chosen.X), float64(chosen.Y), playerID); err != nil {
-		logger.S.Errorf("respawn choice: update player location player=%s region=%q x=%d y=%d: %v", playerID, chosen.Region, chosen.X, chosen.Y, err)
+	if err := RelocatePlayerRespawn(c.Request.Context(), tx, playerID, chosen.Region, chosen.X, chosen.Y); err != nil {
+		logger.S.Errorf("respawn choice: relocate player=%s region=%q x=%d y=%d: %v", playerID, chosen.Region, chosen.X, chosen.Y, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí hồi sinh"})
-		return
-	}
-	if _, err := tx.ExecContext(c.Request.Context(), `
-		INSERT INTO player_world_state_v2 (player_id,hp,shield,map_version,content_version,updated_at)
-		VALUES ($1,1,0,'','',NOW()) ON CONFLICT (player_id)
-		DO UPDATE SET hp=1,shield=0,updated_at=NOW()
-	`, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái hồi sinh"})
 		return
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM player_pending_respawns WHERE player_id=$1`, playerID); err != nil {
@@ -150,14 +136,7 @@ func ChooseRespawn(c *gin.Context) {
 	}
 	middleware.FinishRealtimeHandoff(playerID)
 	finished = true
-	var username, avatarURL string
-	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT username,COALESCE(avatar_url,'') FROM players WHERE id=$1`, playerID).Scan(&username, &avatarURL); err == nil {
-		mapID := "world_map"
-		if zone := ZoneByID(chosen.Region); zone != nil && zone.WorldMapID != "" {
-			mapID = zone.WorldMapID
-		}
-		worldPosIndex.Set(WorldPosEntry{ID: playerID.String(), Username: username, AvatarURL: avatarURL, X: chosen.X, Y: chosen.Y, Region: chosen.Region, MapID: mapID, TS: time.Now().UnixMilli()})
-	}
+	PublishRespawnWorldPosition(c.Request.Context(), playerID, chosen.Region, chosen.X, chosen.Y)
 	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
 	c.JSON(http.StatusOK, gin.H{"success": true, "region": chosen.Region, "x": chosen.X, "y": chosen.Y})
 }

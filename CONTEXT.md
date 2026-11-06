@@ -152,9 +152,9 @@ _Avoid_: Mine slot, mỏ cá nhân, mỏ cố định
 Bản đọc nhất quán của hàng `players` cùng các tập con được chọn (toàn bộ Gu, Gu đang trang bị, vật phẩm, đạo ngân) và revision bộ sưu tập; thứ tự cột, cách gắn tập con và lỗi không tìm thấy chỉ được định nghĩa ở một module.
 _Avoid_: player DTO, player object
 
-### Chuỗi Di Chuyển (Movement Chain)
-Chuỗi kiểm tra và ghi đích dùng chung cho mọi cách người chơi đổi ô: quyền điều khiển realtime → biên giới → sống/chết → chiến đấu → trưởng tổ đội → chính sách vùng → đích → áp chế giới vực → ghi vị trí → kéo tổ đội → phát sự kiện.
-_Avoid_: move handler, teleport logic
+### Chuỗi Di Chuyển (Movement Chain / Spatial Transition)
+Module chuyển dịch không gian nguyên tử và nhất quán dùng chung cho mọi cách người chơi đổi ô: quyền điều khiển realtime → biên giới → sống/chết → chiến đấu → trưởng tổ đội → chính sách vùng → đích → áp chế giới vực → cập nhật vị trí đồng bộ (`players`, `world_location_revision`, `player_world_state_v2`) → kéo tổ đội → phát sự kiện post-commit.
+_Avoid_: move handler, teleport logic, ad-hoc coordinate update
 
 ## Realtime Combat & Techniques (Chiến Đấu Thời Gian Thực & Chiêu Thức)
 
@@ -168,6 +168,10 @@ Hiệu ứng chiến đấu cần có hành vi, mục tiêu và thời lượng 
 ### Lướt (Dash)
 Chiêu thức di chuyển nhân vật một quãng theo hướng đã khóa khi bắt đầu thi triển. Lướt thuần di chuyển có thể xuyên qua thực thể; lướt va chạm dừng ở kẻ địch đầu tiên và gây sát thương, còn địa hình chặn đường. ROOT/BIND ngăn displacement bắt đầu nhưng không dừng cú lướt đã khởi động; SLOW không làm chậm cú lướt đang chạy, còn hard CC chặn cast và ngắt cú lướt. Không thể bắt đầu cú lướt thứ hai trước khi cú hiện tại kết thúc; Tăng Tốc không đổi cú lướt đang chạy.
 _Avoid_: tăng tốc, chạy nhanh
+
+### Đẩy Lùi (Knockback)
+Xung lực dịch chuyển mục tiêu theo đường thẳng ra xa nguồn phát lực, sử dụng cùng thuật toán quét bước va chạm (sweep substepping & bisection) với Lướt, dừng lại an toàn tại mép chướng ngại vật thay vì dịch chuyển tức thời hay xuyên qua tường mỏng.
+_Avoid_: instant teleport, blink
 
 ### Tăng Tốc (Haste)
 Trạng thái tích cực tạm thời làm tăng tốc độ di chuyển nền. Thi triển lại cùng trạng thái làm mới thời hạn mà không cộng dồn cường độ; nhiều trạng thái tăng tốc chỉ lấy hệ số cao nhất và vẫn chịu ảnh hưởng của làm chậm, trói chân cùng trần di chuyển chung.

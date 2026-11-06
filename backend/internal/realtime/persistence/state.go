@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
@@ -214,15 +215,7 @@ func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state Sta
 		}
 		hungerDelta := float64(uses) * combat.DefaultGuHungerCostPerCast
 		durabilityDelta := float64(uses) * combat.DefaultGuDurabilityCostPerCast
-		result, err := tx.ExecContext(ctx, `
-			UPDATE player_gu SET
-				hunger = GREATEST(0, hunger - $1),
-				durability = GREATEST(0, durability - $2),
-				state = CASE WHEN durability - $2 <= 0 THEN 'DAMAGED' ELSE state END,
-				equipped = CASE WHEN durability - $2 <= 0 THEN false ELSE equipped END,
-				updated_at = NOW()
-			WHERE id = $3 AND player_id = $4
-		`, hungerDelta, durabilityDelta, instanceID, state.PlayerID)
+		result, err := db.SettleGuCombatUsage(tx, state.PlayerID.String(), instanceID, hungerDelta, durabilityDelta)
 		if err != nil {
 			return 0, fmt.Errorf("settle Gu hunger for %s: %w", instanceID, err)
 		}

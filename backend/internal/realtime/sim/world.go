@@ -987,6 +987,43 @@ func (w *World) blocked(position Vec2, radius float64) bool {
 	return w.collision != nil && w.collision.Blocked(position, radius)
 }
 
+// sweepDisplacementLocked traces displacement from a starting point along a normalized direction
+// up to maxDistance using MaxMovementSubstep and bisection raycasting against world collision.
+// It returns the furthest unblocked position and whether a wall was contacted.
+func (w *World) sweepDisplacementLocked(from, direction Vec2, maxDistance, radius float64) (Vec2, bool) {
+	if maxDistance <= 0.0001 || !finite(direction.X) || !finite(direction.Y) {
+		return from, false
+	}
+	steps := int(math.Ceil(maxDistance / MaxMovementSubstep))
+	if steps < 1 {
+		steps = 1
+	}
+	stepDistance := maxDistance / float64(steps)
+	current := from
+	hitWall := false
+
+	for i := 0; i < steps; i++ {
+		to := Vec2{X: current.X + direction.X*stepDistance, Y: current.Y + direction.Y*stepDistance}
+		if w.blocked(to, radius) {
+			low, high := 0.0, stepDistance
+			for attempt := 0; attempt < 12; attempt++ {
+				mid := (low + high) / 2
+				candidate := Vec2{X: current.X + direction.X*mid, Y: current.Y + direction.Y*mid}
+				if w.blocked(candidate, radius) {
+					high = mid
+				} else {
+					low = mid
+				}
+			}
+			current = Vec2{X: current.X + direction.X*low, Y: current.Y + direction.Y*low}
+			hitWall = true
+			break
+		}
+		current = to
+	}
+	return current, hitWall
+}
+
 // Snapshot returns a detached copy that is safe to read from gateway goroutines.
 // Tick returns the current simulation tick. It is a read-only lookup used by
 // the gateway to translate durable tick deadlines on rejoin.
