@@ -67,6 +67,21 @@ func schemaAperture() error {
 	`); err != nil {
 		return err
 	}
+
+	// Existing deployments may already have immortal_apertures from before the
+	// placement, cleansing, and tribulation pending fields were introduced.
+	if err := execSchema("immortal_apertures_placement_columns", `
+		ALTER TABLE immortal_apertures
+			ADD COLUMN IF NOT EXISTS is_placed BOOLEAN NOT NULL DEFAULT FALSE,
+			ADD COLUMN IF NOT EXISTS placed_region VARCHAR(50) REFERENCES regions(id) ON DELETE SET NULL,
+			ADD COLUMN IF NOT EXISTS placed_x DOUBLE PRECISION,
+			ADD COLUMN IF NOT EXISTS placed_y DOUBLE PRECISION,
+			ADD COLUMN IF NOT EXISTS placed_at TIMESTAMP WITH TIME ZONE,
+			ADD COLUMN IF NOT EXISTS last_cleanse_at TIMESTAMP WITH TIME ZONE,
+			ADD COLUMN IF NOT EXISTS tribulation_pending_at TIMESTAMP WITH TIME ZONE;
+	`); err != nil {
+		return err
+	}
 	// Keep the atlas anchor independently from return_region: regions may be
 	// removed (which clears return_region through its FK) while an aperture
 	// still needs a deterministic nearest-safe-region fallback.
@@ -134,7 +149,6 @@ func schemaAperture() error {
 		return err
 	}
 
-	// Ensure tribulation_pending_at column exists in case the table was created earlier.
 	if err := execSchema("aperture_resource_nodes", `
 	CREATE TABLE IF NOT EXISTS aperture_resource_nodes (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

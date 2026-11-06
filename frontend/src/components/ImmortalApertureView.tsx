@@ -368,10 +368,13 @@ export const ImmortalApertureView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "dao") {
+    if (activeTab === "overview") {
+      if (!aperture) fetchAperture(true);
+    } else if (activeTab === "dao") {
       fetchDaoMarks();
       fetchDaoNgan();
     } else if (activeTab === "map") {
+      if (!aperture) fetchAperture(true);
       fetchApertureNodes();
       fetchAperturePoints();
     } else if (activeTab === "points") {
@@ -391,12 +394,12 @@ export const ImmortalApertureView: React.FC = () => {
   const handleReloadAll = async () => {
     setIsReloading(true);
     await Promise.all([
-      fetchAperture(),
-      fetchDaoMarks(),
-      fetchDaoNgan(),
-      fetchApertureNodes(),
+      fetchAperture(true),
+      fetchDaoMarks(true),
+      fetchDaoNgan(true),
+      fetchApertureNodes(true),
       fetchAperturePoints(true),
-      fetchActiveTribulation(),
+      fetchActiveTribulation(true),
       fetchVariantHumans(),
     ]);
     setIsReloading(false);
@@ -765,6 +768,18 @@ return (
       {/* Tab Contents */}
       <div className="grid grid-cols-1 gap-6">
         {/* TAB 1: OVERVIEW */}
+        {activeTab === "overview" && !aperture && (
+          <div className="flex flex-col items-center justify-center p-12 bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl text-center space-y-4">
+            <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
+            <p className="text-slate-300 font-medium">Đang tải thông tin Tiên Khiếu...</p>
+            <button
+              onClick={() => fetchAperture(true)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-semibold transition"
+            >
+              Tải lại
+            </button>
+          </div>
+        )}
         {activeTab === "overview" && aperture && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Core Stats Card */}
@@ -960,6 +975,18 @@ return (
         )}
 
         {/* TAB 2: RESOURCE GRID MAP */}
+        {activeTab === "map" && !aperture && (
+          <div className="flex flex-col items-center justify-center p-12 bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl text-center space-y-4">
+            <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
+            <p className="text-slate-300 font-medium">Đang tải bản đồ Tiên Khiếu...</p>
+            <button
+              onClick={() => fetchAperture(true)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-semibold transition"
+            >
+              Tải lại
+            </button>
+          </div>
+        )}
         {activeTab === "map" && aperture && (
           <div className="space-y-6">
             {/* Aperture Stability Card */}

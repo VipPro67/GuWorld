@@ -149,11 +149,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture`);
-        if (response.status === 401) {
-          logout();
-          return;
-        }
         if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = errData.error || "Lỗi tải Tiên Khiếu.";
+          get().addToast(errMsg, "error");
           set({ aperture: null });
           return;
         }
