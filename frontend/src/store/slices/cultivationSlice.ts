@@ -1,3 +1,4 @@
+import { executeGameAction } from "@/store/actionGateway";
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
@@ -181,180 +182,86 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   refineGu: async (recipeId, selectedInstanceIds) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:cultivation")) return null;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/refine`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          recipe_id: recipeId,
-          selected_gu_instance_ids: selectedInstanceIds,
-        }),
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Hợp luyện thất bại.");
-      }
-
-      get().applyInventoryFromResponse(data);
-      get().addLog(data.message);
-      get().addToast(data.message, data.status === "success" ? "success" : "error");
-      return data;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Hợp luyện thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-      return { status: "failed", message: err.message };
-    } finally {
-      get().endAction("player:cultivation");
+    const res = await executeGameAction<{ status: "success" | "failed"; message: string; new_gu?: GuInstance; rate_breakdown?: RefineRateBreakdown }>(get, set, {
+      endpoint: "/api/refine",
+      actionLock: "player:cultivation",
+      body: {
+        recipe_id: recipeId,
+        selected_gu_instance_ids: selectedInstanceIds,
+      },
+      errorMessage: "Hợp luyện thất bại.",
+    });
+    if (res.ok && res.data) {
+      return res.data;
     }
+    return { status: "failed", message: res.error || "Hợp luyện thất bại." };
   },
 
   deduceRecipe: async (recipeId) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:cultivation")) return null;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/refine/deduce`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          recipe_id: recipeId,
-        }),
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Thôi diễn thất bại.");
-      }
-
-      get().applyInventoryFromResponse(data);
-      // update completion rate in local recipes state
-      set((state: ApiResponseData) => ({
-        recipes: state.recipes.map((r: ApiResponseData) =>
-          r.id === recipeId ? { ...r, completion_rate: data.completion_rate } : r
-        ),
-      }));
-
-      get().addLog(data.message);
-      get().addToast(data.message, "success");
-      return { success: true, message: data.message, completion_rate: data.completion_rate };
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addLog(`Thôi diễn thất bại: ${err.message}`);
-      get().addToast(err.message, "error");
-      return { success: false, message: err.message, completion_rate: 0 };
-    } finally {
-      get().endAction("player:cultivation");
+    const res = await executeGameAction<{ success: boolean; message: string; completion_rate: number }>(get, set, {
+      endpoint: "/api/refine/deduce",
+      actionLock: "player:cultivation",
+      body: { recipe_id: recipeId },
+      onSuccess: (data) => {
+        set((state: ApiResponseData) => ({
+          recipes: state.recipes.map((r: ApiResponseData) =>
+            r.id === recipeId ? { ...r, completion_rate: data.completion_rate } : r
+          ),
+        }));
+      },
+      errorMessage: "Thôi diễn thất bại.",
+    });
+    if (res.ok && res.data) {
+      return { success: true, message: res.data.message, completion_rate: res.data.completion_rate };
     }
+    return { success: false, message: res.error || "Thôi diễn thất bại.", completion_rate: 0 };
   },
 
   breakWall: async (manaSpend) => {
-    const { player, token, logout } = get();
-    if (!player || !token) return null;
-    // Client-side validation to prevent unnecessary requests
+    const { player } = get();
+    if (!player) return null;
     if (manaSpend < 0 || manaSpend > Math.floor(player.current_mana)) {
       set({ error: "Số lượng Chân Nguyên không hợp lệ." });
       return null;
     }
-    if (!get().beginAction("player:cultivation")) return null;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/cultivate/break-wall`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mana_spend: manaSpend}),
-      });
-
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
-      const data = await response.json();
-      if (!response.ok) { throw new Error(data.error || "Trùng kích thất bại."); }
-
-      get().applyInventoryFromResponse(data);
-      get().addLog(data.message || "Trùng kích hoàn tất.");
-      return { success: data.success, message: data.message };
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Trùng kích lỗi: ${err.message}`);
-      return { success: false, message: err.message };
-    } finally { get().endAction("player:cultivation"); }
+    const res = await executeGameAction<{ success: boolean; message: string }>(get, set, {
+      endpoint: "/api/cultivate/break-wall",
+      actionLock: "player:cultivation",
+      body: { mana_spend: manaSpend },
+      errorMessage: "Trùng kích thất bại.",
+    });
+    if (res.ok && res.data) {
+      return { success: res.data.success, message: res.data.message };
+    }
+    return { success: false, message: res.error || "Trùng kích thất bại." };
   },
 
   rechargeWithStones: async (stones) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:cultivation")) return null;
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/player/recharge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ player_id: player.id, stones: stones }),
-      });
-
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Nạp nguyên thạch thất bại.");
-
-      get().addLog(data.message || "Nạp nguyên thạch thành công.");
-      return { success: true, message: data.message };
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Nạp nguyên thạch lỗi: ${err.message}`);
-      return { success: false, message: err.message };
-    } finally {
-      get().endAction("player:cultivation");
+    const { player } = get();
+    if (!player) return null;
+    const res = await executeGameAction<{ message: string }>(get, set, {
+      endpoint: "/api/player/recharge",
+      actionLock: "player:cultivation",
+      body: { player_id: player.id, stones },
+      errorMessage: "Nạp nguyên thạch thất bại.",
+    });
+    if (res.ok && res.data) {
+      return { success: true, message: res.data.message };
     }
+    return { success: false, message: res.error || "Nạp nguyên thạch thất bại." };
   },
 
   useRelicGu: async (relicKey) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:cultivation")) return null;
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/cultivate/use-relic-gu`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ relic_key: relicKey }),
-      });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
-      const data = await response.json();
-      if (!response.ok) { throw new Error(data.error || "Không thể dùng Cổ Xá Lợi."); }
-      get().applyInventoryFromResponse(data);
-      get().addLog(data.message || "Đã sử dụng Cổ Xá Lợi.");
-      return { success: true, message: data.message };
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Dùng Cổ Xá Lợi lỗi: ${err.message}`);
-      return { success: false, message: err.message };
-    } finally { get().endAction("player:cultivation"); }
+    const res = await executeGameAction<{ message: string }>(get, set, {
+      endpoint: "/api/cultivate/use-relic-gu",
+      actionLock: "player:cultivation",
+      body: { relic_key: relicKey },
+      errorMessage: "Không thể dùng Cổ Xá Lợi.",
+    });
+    if (res.ok && res.data) {
+      return { success: true, message: res.data.message };
+    }
+    return { success: false, message: res.error || "Không thể dùng Cổ Xá Lợi." };
   },
 
   ascensionSession: null,

@@ -169,45 +169,27 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   feedGu: async (guInstanceId) => {
     await executeGameAction<FeedResponse>(get, set, {
       endpoint: "/api/inventory/feed",
-      method: "POST",
       body: { gu_instance_id: guInstanceId },
       actionLock: "player:inventory",
       errorMessage: "Không thể cho ăn.",
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message);
-        get().addToast(data.message, "success");
-      },
     });
   },
 
   feedGuGroup: async (guId, rank) => {
     await executeGameAction<FeedResponse>(get, set, {
       endpoint: "/api/inventory/feed-group",
-      method: "POST",
       body: { gu_id: guId, ...(rank ? { rank } : {}) },
       actionLock: "player:inventory",
       errorMessage: "Không thể cho ăn hàng loạt.",
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message);
-        get().addToast(data.message, "success");
-      },
     });
   },
 
   feedAllGu: async (scope?: "all" | "equipped" | "rest" | "unequipped") => {
     await executeGameAction<FeedResponse>(get, set, {
       endpoint: "/api/inventory/feed-all",
-      method: "POST",
       body: scope ? { scope } : {},
       actionLock: "player:inventory",
       errorMessage: "Không thể cho tất cả Cổ trùng ăn.",
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message);
-        get().addToast(data.message, "success");
-      },
     });
   },
 
@@ -218,16 +200,8 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       endpoint: "/api/shop/buy",
       actionLock: "player:inventory",
       body: { player_id: player.id, item_id: itemId, quantity, rank },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message || "Mua hàng thành công!");
-      },
       errorMessage: "Giao dịch thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Mua hàng thất bại: ${res.error}`);
-      return false;
-    }
     return res.ok;
   },
 
@@ -238,16 +212,8 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       endpoint: "/api/shop/sell",
       actionLock: "player:inventory",
       body: { player_id: player.id, item_id: itemId, quantity, item_type: itemType, rank },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message || "Bán hàng thành công!");
-      },
       errorMessage: "Bán hàng thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Bán hàng thất bại: ${res.error}`);
-      return false;
-    }
     return res.ok;
   },
 
@@ -258,16 +224,8 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       endpoint: "/api/shop/sell-bulk",
       actionLock: "player:inventory",
       body: { player_id: player.id, items },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message || "Bán hàng thành công!");
-      },
       errorMessage: "Bán hàng thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Bán hàng thất bại: ${res.error}`);
-      return false;
-    }
     return res.ok;
   },
 
@@ -311,17 +269,8 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       endpoint: "/api/merchant/sell",
       actionLock: "player:inventory",
       body: { merchant_id: merchantId, items },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message || "Bán hàng thành công!");
-      },
-      successToast: (data) => data.message || "Bán hàng thành công!",
       errorMessage: "Bán hàng thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Bán cho thương nhân thất bại: ${res.error}`);
-      return false;
-    }
     return res.ok;
   },
 
@@ -330,17 +279,8 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       endpoint: "/api/merchant/buy",
       actionLock: "player:inventory",
       body: { merchant_id: merchantId, items },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message || "Mua hàng thành công!");
-      },
-      successToast: (data) => data.message || "Mua hàng thành công!",
       errorMessage: "Mua hàng thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Mua từ thương nhân thất bại: ${res.error}`);
-      return false;
-    }
     return res.ok;
   },
 
@@ -349,16 +289,8 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       endpoint: "/api/inventory/drop",
       actionLock: "player:inventory",
       body: { gu_instance_id: instanceId },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message || "Đã vứt Cổ trùng.");
-      },
       errorMessage: "Vứt Cổ thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Vứt Cổ thất bại: ${res.error}`);
-      return false;
-    }
     return res.ok;
   },
   dropGus: async (instanceIds) => {
@@ -366,34 +298,17 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       endpoint: "/api/inventory/drop-batch",
       actionLock: "player:inventory",
       body: { gu_instance_ids: instanceIds },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message || "Đã vứt Cổ trùng hàng loạt.");
-      },
       errorMessage: "Vứt Cổ thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Vứt Cổ hàng loạt thất bại: ${res.error}`);
-      return false;
-    }
     return res.ok;
   },
   equipGu: async (instanceId, equip) => {
-    const res = await executeGameAction<{ message?: string }>(get, set, {
+    await executeGameAction<{ message?: string }>(get, set, {
       endpoint: "/api/inventory/equip",
       actionLock: "player:inventory",
       body: { instance_id: instanceId, equip },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        const successMsg = data.message || (equip ? "Trang bị Cổ trùng thành công!" : "Tháo Cổ trùng thành công!");
-        get().addLog(successMsg);
-      },
-      successToast: (data) => data.message || (equip ? "Trang bị Cổ trùng thành công!" : "Tháo Cổ trùng thành công!"),
       errorMessage: "Thao tác trang bị thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Thao tác trang bị thất bại: ${res.error}`);
-    }
   },
 
   subjugateGu: async (instanceId) => {
@@ -464,109 +379,56 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   },
 
   unequipAllGu: async () => {
-    const res = await executeGameAction<{ message?: string }>(get, set, {
+    await executeGameAction<{ message?: string }>(get, set, {
       endpoint: "/api/inventory/unequip-all",
       actionLock: "player:inventory",
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        if (data.message) {
-          get().addLog(data.message);
-        }
-      },
-      successToast: (data) => data.message || "Tháo toàn bộ Cổ trùng thành công!",
       errorMessage: "Tháo cổ trùng thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Tháo cổ trùng thất bại: ${res.error}`);
-    }
   },
 
   updateGuStatus: async (instanceId, status) => {
-    const res = await executeGameAction<{ message?: string }>(get, set, {
+    await executeGameAction<{ message?: string }>(get, set, {
       endpoint: "/api/inventory/status",
       actionLock: "player:inventory",
       body: { instance_id: instanceId, status },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        get().addLog(data.message || "Cập nhật trạng thái Cổ trùng thành công!");
-      },
       errorMessage: "Cập nhật trạng thái thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Lỗi cập nhật trạng thái: ${res.error}`);
-    }
   },
 
   setVitalGu: async (instanceId) => {
-    const res = await executeGameAction<{ message?: string }>(get, set, {
+    await executeGameAction<{ message?: string }>(get, set, {
       endpoint: "/api/inventory/set-vital",
       actionLock: "player:inventory",
       body: { gu_instance_id: instanceId },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        const successMsg = data.message || "Thiết lập Bản Mệnh Cổ thành công!";
-        get().addLog(successMsg);
-      },
-      successToast: (data) => data.message || "Thiết lập Bản Mệnh Cổ thành công!",
       errorMessage: "Thiết lập Bản Mệnh Cổ thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Lỗi thiết lập Bản Mệnh Cổ: ${res.error}`);
-    }
   },
 
   useGu: async (instanceId) => {
-    const res = await executeGameAction<{ message?: string }>(get, set, {
+    await executeGameAction<{ message?: string }>(get, set, {
       endpoint: "/api/inventory/use-gu",
       actionLock: "player:inventory",
       body: { gu_instance_id: instanceId },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        const successMsg = data.message || "Sử dụng Cổ trùng thành công!";
-        get().addLog(successMsg);
-      },
-      successToast: (data) => data.message || "Sử dụng Cổ trùng thành công!",
       errorMessage: "Sử dụng Cổ trùng thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Lỗi sử dụng Cổ trùng: ${res.error}`);
-    }
   },
 
   useSupportGu: async (instanceId) => {
-    const res = await executeGameAction<{ message?: string }>(get, set, {
+    await executeGameAction<{ message?: string }>(get, set, {
       endpoint: "/api/inventory/use-support",
       actionLock: "player:inventory",
       body: { gu_instance_id: instanceId },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        const successMsg = data.message || "Sử dụng Cổ Hỗ Trợ thành công!";
-        get().addLog(successMsg);
-      },
-      successToast: (data) => data.message || "Sử dụng Cổ Hỗ Trợ thành công!",
       errorMessage: "Sử dụng Cổ Hỗ Trợ thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Sử dụng Cổ Hỗ Trợ thất bại: ${res.error}`);
-    }
   },
 
   useItem: async (itemId) => {
-    const res = await executeGameAction<{ message?: string }>(get, set, {
+    await executeGameAction<{ message?: string }>(get, set, {
       endpoint: "/api/player/use-item",
       actionLock: "player:inventory",
       body: { item_id: itemId },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        const successMsg = data.message || "Sử dụng vật phẩm thành công!";
-        get().addLog(successMsg);
-      },
-      successToast: (data) => data.message || "Sử dụng vật phẩm thành công!",
       errorMessage: "Sử dụng vật phẩm thất bại.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Sử dụng vật phẩm thất bại: ${res.error}`);
-    }
   },
 
   useItems: async (itemIds) => {
@@ -575,67 +437,24 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       endpoint: "/api/player/use-items",
       actionLock: "player:inventory",
       body: { item_ids: itemIds },
-      onSuccess: (data) => {
-        get().applyInventoryFromResponse(data);
-        const successMsg = data.message || "Đã sử dụng vật phẩm.";
-        get().addLog(successMsg);
-      },
-      successToast: (data) => data.message || "Đã sử dụng vật phẩm.",
       errorMessage: "Không thể sử dụng vật phẩm.",
     });
-    if (!res.ok && res.error) {
-      get().addLog(`Sử dụng vật phẩm thất bại: ${res.error}`);
-      return false;
-    }
     return res.ok;
   },
 
   useGus: async (instanceIds) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !instanceIds?.length || !get().beginAction("player:inventory")) return false;
-
-    set({ error: null });
-    let successCount = 0;
-    let failedCount = 0;
-
+    if (!instanceIds?.length) return false;
+    let allOk = true;
     for (const guInstanceId of instanceIds) {
-      try {
-        const response = await authFetch(`${BACKEND_URL}/api/inventory/use-gu`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ gu_instance_id: guInstanceId }),
-        });
-
-        if (response.status === 401) {
-          logout();
-          throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-        }
-
-        const data = await response.json();
-        if (!response.ok) {
-          failedCount += 1;
-          get().addToast(data.error || `Không thể sử dụng Cổ trùng ${guInstanceId}.`, "error");
-          continue;
-        }
-
-        get().applyInventoryFromResponse(data);
-        const successMsg = data.message || `Đã sử dụng Cổ trùng ${guInstanceId}.`;
-        get().addLog(successMsg);
-        get().addToast(successMsg, "success");
-        successCount += 1;
-      } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-        failedCount += 1;
-        set({ error: err.message });
-        get().addLog(`Sử dụng Cổ trùng thất bại: ${err.message}`);
-        get().addToast(err.message, "error");
-      }
+      const res = await executeGameAction<{ message?: string }>(get, set, {
+        endpoint: "/api/inventory/use-gu",
+        actionLock: "player:inventory",
+        body: { gu_instance_id: guInstanceId },
+        errorMessage: `Không thể sử dụng Cổ trùng ${guInstanceId}.`,
+      });
+      if (!res.ok) allOk = false;
     }
-
-    get().endAction("player:inventory");
-    return successCount > 0 && failedCount === 0;
+    return allOk;
   },
 
   fetchGroundDrops: async (viewport) => {

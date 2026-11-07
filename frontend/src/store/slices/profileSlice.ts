@@ -1,3 +1,4 @@
+import { executeGameAction } from "@/store/actionGateway";
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
@@ -283,37 +284,14 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
   clearInspectedProfile: () => set({ inspectedProfile: null, inspectedUsernameQuery: null }),
 
   updateProfileSettings: async (settings) => {
-    const { token, addToast } = get();
-    if (!token || !get().beginAction("player:profile")) return false;
-
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/player/profile/settings`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(settings),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to update profile settings");
-      }
-
-      get().setPlayerFromServer(data.player);
-      addToast(data.message || "Cập nhật hồ sơ thành công!", "success");
-      return true;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      console.error("Profile settings update failed:", err.message);
-      get().addToast("Lỗi cập nhật hồ sơ.", "error");
-      set({ error: err.message });
-      addToast(`Cập nhật thất bại: ${err.message}`, "error");
-      return false;
-    } finally {
-      get().endAction("player:profile");
-    }
+    const res = await executeGameAction<{ player: Player; message?: string }>(get, set, {
+      endpoint: "/api/player/profile/settings",
+      method: "PUT",
+      actionLock: "player:profile",
+      body: settings,
+      errorMessage: "Cập nhật hồ sơ thất bại.",
+    });
+    return res.ok;
   },
 
   uploadAvatar: async (file: File) => {

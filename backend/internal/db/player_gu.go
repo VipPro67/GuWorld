@@ -661,4 +661,3 @@ func SettleGuCombatUsage(tx *sql.Tx, playerID, guID string, hungerDelta, durabil
 		WHERE id = $3 AND player_id = $4
 	`, hungerDelta, durabilityDelta, guID, playerID)
 }
-

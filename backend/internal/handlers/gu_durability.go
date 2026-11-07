@@ -90,8 +90,6 @@ func handleGuRestoration(c *gin.Context, isRepair bool) {
 		Scope:        playerstate.GuEquipped,
 		EventDomains: []PlayerEventDomain{PlayerDomain, GuInventoryDomain},
 	}, func(tx *sql.Tx, player *models.Player) error {
-		_ = EvaluateGuDurabilityHealing(tx, authID.String())
-
 		var loadErr error
 		targetGu, loadErr = db.LoadPlayerGuForUpdate(tx, authID.String(), req.InstanceID)
 		if loadErr == sql.ErrNoRows {

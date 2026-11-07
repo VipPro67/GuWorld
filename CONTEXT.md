@@ -156,6 +156,10 @@ _Avoid_: player DTO, player object
 Module chuyển dịch không gian nguyên tử và nhất quán dùng chung cho mọi cách người chơi đổi ô: quyền điều khiển realtime → biên giới → sống/chết → chiến đấu → trưởng tổ đội → chính sách vùng → đích → áp chế giới vực → cập nhật vị trí đồng bộ (`players`, `world_location_revision`, `player_world_state_v2`) → kéo tổ đội → phát sự kiện post-commit.
 _Avoid_: move handler, teleport logic, ad-hoc coordinate update
 
+### Chuỗi Đột Biến Người Chơi (Player Mutation Pipeline)
+Module thực thi các đột biến trạng thái người chơi nguyên tử và nhất quán dùng chung cho mọi hành vi gameplay làm thay đổi chỉ số hoặc tài sản nhân vật: mở transaction `sql.Tx` & khóa dòng `FOR UPDATE` → chiếu nạp Player Snapshot → tính toán thụ động (mana / ôn dưỡng độ bền) → thực thi closure đột biến nghiệp vụ → cập nhật đầy đủ các cột khả biến với bước tăng đơn điệu `version` và `state_revision` → commit nguyên tử → phát sự kiện đồng bộ post-commit qua Redis / SSE.
+_Avoid_: ad-hoc SQL update, unversioned mutation, manual snapshot broadcast
+
 ## Realtime Combat & Techniques (Chiến Đấu Thời Gian Thực & Chiêu Thức)
 
 ### Chiến Đấu Thời Gian Thực (Realtime Combat)

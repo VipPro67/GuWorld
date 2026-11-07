@@ -7,8 +7,10 @@ export interface GameActionOptions<TResponse> {
   body?: unknown;
   headers?: Record<string, string>;
   actionLock?: string;
-  successToast?: string | ((data: TResponse) => string | null);
+  successToast?: string | boolean | ((data: TResponse) => string | null);
   errorMessage?: string;
+  logMessage?: string | boolean | ((data: TResponse) => string | null);
+  skipReconciliation?: boolean;
   onSuccess?: (data: TResponse) => void | Promise<void>;
   optimisticUpdate?: () => void;
   rollback?: () => void;
@@ -25,17 +27,21 @@ export interface ActionGatewayStore {
   beginAction?: (key: string) => boolean;
   endAction?: (key: string) => void;
   addToast?: (message: string, type?: "success" | "error" | "info" | "warning") => void;
+  addLog?: (message: string) => void;
+  applyInventoryFromResponse?: (data: unknown) => void;
+  setPlayerFromServer?: (player: unknown) => boolean;
   error?: string | null;
   [key: string]: unknown;
 }
 
 /**
- * Executes a player action through a unified gateway:
+ * Executes a player action through a unified, deep action gateway:
  * - Checks active authentication token.
  * - Handles action concurrency locking (beginAction / endAction).
  * - Executes optimistic updates with automatic rollback on error.
  * - Centralizes HTTP call dispatch and JSON error message parsing.
- * - Emits toast notifications for failures and success messages.
+ * - Automatically reconciles server player/inventory responses with local state.
+ * - Emits toast notifications and activity logs for success and failures.
  * - Eliminates redundant 401 checks in slices (handled centrally in authFetch).
  */
 export async function executeGameAction<TResponse = unknown>(
@@ -43,7 +49,7 @@ export async function executeGameAction<TResponse = unknown>(
   set: (state: Partial<ActionGatewayStore>) => void,
   options: GameActionOptions<TResponse>
 ): Promise<GameActionResult<TResponse>> {
-  const { token, beginAction, endAction, addToast } = get();
+  const { token, beginAction, endAction, addToast, addLog, applyInventoryFromResponse, setPlayerFromServer } = get();
   if (!token) {
     return { ok: false, error: "Chưa đăng nhập" };
   }
@@ -96,14 +102,55 @@ export async function executeGameAction<TResponse = unknown>(
       data = (await res.json()) as TResponse;
     }
 
-    if (data !== undefined && options.onSuccess) {
-      await options.onSuccess(data);
-    }
+    if (data !== undefined) {
+      const dataObj = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : null;
 
-    if (options.successToast && addToast) {
-      const msg = typeof options.successToast === "function" ? options.successToast(data as TResponse) : options.successToast;
-      if (msg) {
-        addToast(msg, "success");
+      // 1. Automatic state reconciliation
+      if (!options.skipReconciliation && dataObj) {
+        if (
+          typeof applyInventoryFromResponse === "function" &&
+          (dataObj.player ||
+            dataObj.gu_inventory ||
+            dataObj.materials_inventory ||
+            dataObj.current_mana !== undefined ||
+            dataObj.primeval_stones !== undefined ||
+            dataObj.wall_progress !== undefined)
+        ) {
+          applyInventoryFromResponse(data);
+        } else if (typeof setPlayerFromServer === "function" && dataObj.player) {
+          setPlayerFromServer(dataObj.player);
+        }
+      }
+
+      // 2. Caller-specified custom onSuccess callback
+      if (options.onSuccess) {
+        await options.onSuccess(data);
+      }
+
+      const defaultMsg = typeof dataObj?.message === "string" ? dataObj.message : null;
+
+      // 3. Activity log emission
+      if (options.logMessage !== false && addLog) {
+        const log = typeof options.logMessage === "function"
+          ? options.logMessage(data)
+          : typeof options.logMessage === "string"
+            ? options.logMessage
+            : defaultMsg;
+        if (log) {
+          addLog(log);
+        }
+      }
+
+      // 4. Toast notification emission
+      if (options.successToast !== false && addToast) {
+        const toast = typeof options.successToast === "function"
+          ? options.successToast(data)
+          : typeof options.successToast === "string"
+            ? options.successToast
+            : defaultMsg;
+        if (toast) {
+          addToast(toast, "success");
+        }
       }
     }
 
