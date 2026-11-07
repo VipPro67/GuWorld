@@ -11,6 +11,7 @@ import {
 } from "../assets/AssetManifest.ts";
 import { registerActorAnimations } from "../assets/AnimationLibrary.ts";
 import { GU_VFX_CATALOG } from "../combat/GuVFXRegistry.ts";
+import { createLandscapeTextures } from "../assets/LandscapeAssets.ts";
 
 const TILE_SIZE = 256;
 const ACTOR_SIZE = 48;
@@ -57,6 +58,7 @@ export class PreloadScene extends Phaser.Scene {
 
   create(): void {
     if (!this.textures.exists("tile-ground")) this.createGroundTexture();
+    createLandscapeTextures(this);
     this.createTokenTexture("token-player", 0x34d399, 0x065f46);
     this.createTokenTexture("token-remote", 0x60a5fa, 0x1e3a8a);
     this.createTokenTexture("token-monster", 0xf87171, 0x7f1d1d);

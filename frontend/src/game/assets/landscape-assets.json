@@ -1,0 +1,36 @@
+{
+  "themes": {
+    "nam_cuong": { "ground": 1510173, "groundLights": [1972261, 2374186, 2691885], "deep": 1050387, "mid": 3426106, "light": 6382170, "accent": 9275991 },
+    "dong_hai": { "ground": 1190954, "groundLights": [1581367, 1911357, 2505533], "deep": 1050909, "mid": 3562067, "light": 6847094, "accent": 10267267 },
+    "tay_mac": { "ground": 2695964, "groundLights": [3417888, 3817507, 4406566], "deep": 1511187, "mid": 5918256, "light": 8415046, "accent": 10190928 },
+    "bac_nguyen": { "ground": 2103074, "groundLights": [2691113, 3159339, 3166266], "deep": 1317401, "mid": 4932935, "light": 7962730, "accent": 10724473 },
+    "trung_chau": { "ground": 1973281, "groundLights": [2633770, 3151660, 3351346], "deep": 1275927, "mid": 4604742, "light": 8416361, "accent": 10381436 }
+  },
+  "assets": {
+    "nc.pine": { "theme": "nam_cuong", "shape": "pine", "label": "Tùng núi", "width": 74, "height": 96 },
+    "nc.broadleaf": { "theme": "nam_cuong", "shape": "tree", "label": "Cổ mộc", "width": 86, "height": 92 },
+    "nc.stone": { "theme": "nam_cuong", "shape": "rock", "label": "Đá núi", "width": 78, "height": 54 },
+    "nc.stream": { "theme": "nam_cuong", "shape": "water", "label": "Mạch suối", "width": 112, "height": 64 },
+    "nc.ancestral-marker": { "theme": "nam_cuong", "shape": "marker", "label": "Thạch ký cổ tộc", "width": 48, "height": 82 },
+    "dh.coastal-pine": { "theme": "dong_hai", "shape": "palm", "label": "Cây ven đảo", "width": 82, "height": 96 },
+    "dh.coastal-rock": { "theme": "dong_hai", "shape": "rock", "label": "Đá bờ biển", "width": 82, "height": 56 },
+    "dh.tidal-pool": { "theme": "dong_hai", "shape": "water", "label": "Vũng triều", "width": 112, "height": 66 },
+    "dh.driftwood": { "theme": "dong_hai", "shape": "driftwood", "label": "Gỗ dạt bờ", "width": 88, "height": 48 },
+    "dh.coral": { "theme": "dong_hai", "shape": "flower", "label": "San hô cạn", "width": 54, "height": 52 },
+    "tm.dune": { "theme": "tay_mac", "shape": "dune", "label": "Đụn cát", "width": 112, "height": 64 },
+    "tm.deadwood": { "theme": "tay_mac", "shape": "tree", "label": "Cây khô sa mạc", "width": 78, "height": 88 },
+    "tm.oasis": { "theme": "tay_mac", "shape": "oasis", "label": "Thủy đàm ốc đảo", "width": 116, "height": 78 },
+    "tm.ruin": { "theme": "tay_mac", "shape": "ruin", "label": "Tàn tích cổ", "width": 88, "height": 88 },
+    "tm.cairn": { "theme": "tay_mac", "shape": "rock", "label": "Thạch chồng", "width": 62, "height": 52 },
+    "bn.tussock": { "theme": "bac_nguyen", "shape": "grass", "label": "Bụi cỏ thảo nguyên", "width": 72, "height": 52 },
+    "bn.yurt": { "theme": "bac_nguyen", "shape": "yurt", "label": "Lều bộ lạc", "width": 104, "height": 88 },
+    "bn.firepit": { "theme": "bac_nguyen", "shape": "firepit", "label": "Bếp lửa bộ lạc", "width": 48, "height": 46 },
+    "bn.stone": { "theme": "bac_nguyen", "shape": "rock", "label": "Đá nguyên", "width": 76, "height": 54 },
+    "bn.wildflower": { "theme": "bac_nguyen", "shape": "flower", "label": "Hoa dại", "width": 54, "height": 50 },
+    "tc.flower": { "theme": "trung_chau", "shape": "flower", "label": "Hoa linh cốc", "width": 58, "height": 56 },
+    "tc.pillar": { "theme": "trung_chau", "shape": "pillar", "label": "Bia đá môn phái", "width": 46, "height": 88 },
+    "tc.training-banner": { "theme": "trung_chau", "shape": "banner", "label": "Phướn luyện đạo", "width": 54, "height": 100 },
+    "tc.bamboo": { "theme": "trung_chau", "shape": "bamboo", "label": "Trúc linh", "width": 72, "height": 104 },
+    "tc.stone": { "theme": "trung_chau", "shape": "rock", "label": "Đá sơn cốc", "width": 74, "height": 52 }
+  }
+}

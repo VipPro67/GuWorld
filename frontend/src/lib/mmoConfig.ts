@@ -5,11 +5,24 @@ const value = (raw: string | undefined): string => (raw ?? "").trim();
 // aligned with backend/internal/realtime/config/config.go.
 const mapVersion = "regions-v1";
 const contentVersion = "region-content-v1";
+const starterMapVersion = "regions-v2";
+const starterContentVersion = "landscape-v1";
+
+const STARTER_MAP_IDS = new Set([
+  "tan_thu_coc_nam_cuong",
+  "tan_thu_coc_dong_hai",
+  "tan_thu_coc_tay_mac",
+  "tan_thu_coc_bac_nguyen",
+  "tan_thu_coc_trung_chau",
+]);
 
 export function versionsForMMOZone(zoneId: string): { mapVersion: string; contentVersion: string } {
   const mapId = value(zoneId).split("#", 1)[0];
   if (mapId === "world_map") {
     return { mapVersion: "legacy-converted-v2", contentVersion: "legacy-regions-v2" };
+  }
+  if (STARTER_MAP_IDS.has(mapId)) {
+    return { mapVersion: starterMapVersion, contentVersion: starterContentVersion };
   }
   return { mapVersion, contentVersion };
 }

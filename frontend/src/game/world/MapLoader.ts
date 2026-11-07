@@ -7,6 +7,14 @@ export interface MapSpawn {
   y: number;
 }
 
+export interface MapSceneryObject {
+  name: string;
+  assetId: string;
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface MapLayerJSON {
   type: string;
   name: string;
@@ -67,6 +75,8 @@ export class LoadedWorldMap {
   public readonly ground: number[];
   public readonly solid: boolean[];
   public readonly spawns: MapSpawn[];
+  public readonly scenery: MapSceneryObject[];
+  public readonly sceneryTheme: string;
   public readonly portals: MapPortal[];
   public readonly legacyRegions: LegacyRegion[];
   public readonly legacyPOIs: LegacyPOI[];
@@ -82,6 +92,8 @@ export class LoadedWorldMap {
     this.ground = [];
     this.solid = [];
     this.spawns = [];
+    this.scenery = [];
+    this.sceneryTheme = propertyString(raw.properties, "scenery_theme") ?? "";
     this.portals = [];
     this.legacyRegions = [];
     this.legacyPOIs = [];
@@ -135,6 +147,21 @@ export class LoadedWorldMap {
             throw new Error("Map spawn is outside the map");
           }
           this.spawns.push({ name: object.name ?? "", kind: object.type, x: object.x, y: object.y });
+        }
+      } else if (layer.type === "objectgroup" && layer.name === "scenery" && Array.isArray(layer.objects)) {
+        for (const object of layer.objects) {
+          const assetId = propertyString(object.properties, "asset_id");
+          if (!assetId || !Number.isFinite(object.x) || !Number.isFinite(object.y)) {
+            throw new Error("Map scenery object is missing asset_id or valid coordinates");
+          }
+          const x = object.x / PIXELS_PER_UNIT;
+          const y = object.y / PIXELS_PER_UNIT;
+          if (x < 0 || y < 0 || x >= raw.width || y >= raw.height) {
+            throw new Error(`Map scenery object ${object.name ?? assetId} is outside the map`);
+          }
+          const scale = propertyNumber(object.properties, "scale") ?? 1;
+          if (scale < 0.5 || scale > 2) throw new Error(`Map scenery object ${object.name ?? assetId} has an invalid scale`);
+          this.scenery.push({ name: object.name ?? "", assetId, x, y, scale });
         }
       } else if (layer.type === "objectgroup" && layer.name === "legacy_regions" && Array.isArray(layer.objects)) {
         for (const object of layer.objects) {

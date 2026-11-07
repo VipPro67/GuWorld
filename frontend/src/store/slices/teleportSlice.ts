@@ -208,7 +208,11 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(data.message || "Truyền tống thành công!", "success");
       get().addLog(data.message || "Truyền tống thành công!");
       if (data.player) {
-        get().setPlayerFromServer(data.player);
+        get().setPlayerFromServer({
+          ...data.player,
+          world_zone_id: data.player.current_region,
+          world_instance_id: "",
+        });
       }
       if (data.realtime_transfer) {
         // The backend released the realtime lease after persisting the
@@ -274,7 +278,11 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(data.message || "Sửa chữa thành công!", "success");
       get().addLog(data.message || "Sửa chữa thành công!");
       if (data.player) {
-        get().setPlayerFromServer(data.player);
+        get().setPlayerFromServer({
+          ...data.player,
+          world_zone_id: data.player.current_region,
+          world_instance_id: "",
+        });
       }
       await get().fetchMyTeleportArrays();
       await get().fetchTeleportDirectory();
@@ -306,7 +314,11 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(data.message || "Rút tiền thành công!", "success");
       get().addLog(data.message || "Rút tiền thành công!");
       if (data.player) {
-        get().setPlayerFromServer(data.player);
+        get().setPlayerFromServer({
+          ...data.player,
+          world_zone_id: data.player.current_region,
+          world_instance_id: "",
+        });
       }
       await get().fetchMyTeleportArrays();
       return true;
@@ -337,7 +349,11 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(data.message || "Thu hồi trận pháp thành công!", "success");
       get().addLog(data.message || "Thu hồi trận pháp thành công!");
       if (data.player) {
-        get().setPlayerFromServer(data.player);
+        get().setPlayerFromServer({
+          ...data.player,
+          world_zone_id: data.player.current_region,
+          world_instance_id: "",
+        });
       }
       await get().fetchMyTeleportArrays();
       await get().fetchTeleportDirectory();

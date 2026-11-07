@@ -225,6 +225,7 @@ export interface Player {
   current_region: string;
   world_zone_id?: string;
   world_instance_id?: string;
+  map_instance_id?: string | null;
   dao_marks: Record<string, number>;
   path_masteries: Record<string, number>;
   x: number;

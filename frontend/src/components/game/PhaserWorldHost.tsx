@@ -119,6 +119,28 @@ interface PhaserWorldHostProps {
   fallbackChatActive?: boolean;
 }
 
+function resolveEffectiveZoneID(player: Player | null | undefined, fallbackZoneId: string = mmoClientConfig.zoneId): string {
+  if (!player) return fallbackZoneId;
+  const region = player.current_region?.trim() || "";
+  const worldZone = player.world_zone_id?.trim() || "";
+  const worldInstance = player.world_instance_id?.trim() || "";
+
+  // Map độ kiếp Tiên Khiếu chỉ hợp lệ khi current_region cũng là aperture_tribulation
+  if (worldZone === "aperture_tribulation" && region !== "aperture_tribulation") {
+    return region || fallbackZoneId;
+  }
+  // Combat/arena session chỉ hợp lệ khi world_instance_id có tiền tố combat:
+  if (worldZone.startsWith("combat:") && !worldInstance.startsWith("combat:")) {
+    return region || fallbackZoneId;
+  }
+  // Spatial Realm (Bí cảnh) chỉ hợp lệ khi world_instance_id có tiền tố realm:
+  if (worldZone.startsWith("realm:") && !worldInstance.startsWith("realm:")) {
+    return region || fallbackZoneId;
+  }
+
+  return worldZone || region || fallbackZoneId;
+}
+
 /**
  * Owns the single Phaser canvas and realtime session. Phaser is imported lazily
  * so server rendering never touches `window`.
@@ -236,7 +258,7 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
   }, [worldActive]);
 
   const lastEquippedGusRef = useRef<string>(JSON.stringify(player?.equipped_gus ?? []));
-  const activeZoneID = player?.world_zone_id?.trim() || player?.current_region || "";
+  const activeZoneID = resolveEffectiveZoneID(player);
   const lastRegionRef = useRef<string>(activeZoneID);
   const activeInstanceID = player?.world_instance_id?.trim() || "";
   const lastInstanceRef = useRef<string>(activeInstanceID);
@@ -261,7 +283,7 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
     if (tabReplacedRef.current) return;
 
     const currentSerialized = JSON.stringify(player?.equipped_gus ?? []);
-    const region = player?.world_zone_id?.trim() || player?.current_region || "";
+    const region = resolveEffectiveZoneID(player);
     const instance = player?.world_instance_id?.trim() || "";
     const regionChanged = lastRegionRef.current !== "" && lastRegionRef.current !== region;
     const instanceChanged = lastInstanceRef.current !== instance;
@@ -308,7 +330,7 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
     runtime?.setUiModal(panel !== null || menuOpen || isDivinationModalOpen || !worldActive);
     runtime?.setJoinZoneResolver(() => {
       const current = useGameStore.getState().player;
-      return current?.world_zone_id?.trim() || current?.current_region?.trim() || null;
+      return resolveEffectiveZoneID(current) || null;
     });
     runtimeRef.current = runtime;
     let cancelled = false;
@@ -412,7 +434,7 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
         gameRef.current = game;
         setStatus("ready");
         if (runtime && canJoinMMOZone) {
-          const zoneId = playerRef.current?.world_zone_id?.trim() || playerRef.current?.current_region?.trim() || mmoClientConfig.zoneId;
+          const zoneId = resolveEffectiveZoneID(playerRef.current);
           if (!zoneId) {
             setRuntimeStatus("error");
             setErrorMessage("Nhân vật chưa có KHU_VUC để vào bản đồ realtime");
@@ -475,7 +497,7 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
       await state.fetchPlayerStatus(playerId, true);
     }
     const current = useGameStore.getState().player;
-    const resolvedZone = current?.world_zone_id?.trim() || current?.current_region?.trim();
+    const resolvedZone = resolveEffectiveZoneID(current);
     if (resolvedZone) {
       await runtime.reconnectTo(resolvedZone);
     } else {
@@ -496,7 +518,7 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
         : canJoinMMOZone
           ? "Đang khởi tạo kết nối"
           : "Chế độ xem trước";
-  const connectionRegion = zoneId || player?.world_zone_id || player?.current_region || mmoClientConfig.zoneId;
+  const connectionRegion = zoneId || resolveEffectiveZoneID(player);
 
   return (
     <MMOErrorBoundary>

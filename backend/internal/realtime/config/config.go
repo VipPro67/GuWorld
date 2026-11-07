@@ -17,17 +17,32 @@ const defaultGuProfiles = "data/mmo/gu/transpiled_profiles.json"
 // Keep them aligned with backend/data/mmo/maps and frontend/public/game/maps.
 const DefaultMapVersion = "regions-v1"
 const DefaultContentVersion = "region-content-v1"
+const StarterMapVersion = "regions-v2"
+const StarterContentVersion = "landscape-v1"
 const LegacyWorldMapVersion = "legacy-converted-v2"
 const LegacyWorldContentVersion = "legacy-regions-v2"
 
 // VersionsForMap returns the immutable artifact contract for a shipped map.
-// The four secret realms still use the converted legacy world_map as their
-// spatial base; all generated regional maps use the current release contract.
+// The five landscape maps have their own release; secret realms still use the
+// converted legacy world_map as their spatial base.
 func VersionsForMap(mapID string) (mapVersion, contentVersion string) {
-	if strings.Split(strings.TrimSpace(mapID), "#")[0] == "world_map" {
+	baseMapID := strings.Split(strings.TrimSpace(mapID), "#")[0]
+	if isStarterMap(baseMapID) {
+		return StarterMapVersion, StarterContentVersion
+	}
+	if baseMapID == "world_map" {
 		return LegacyWorldMapVersion, LegacyWorldContentVersion
 	}
 	return DefaultMapVersion, DefaultContentVersion
+}
+
+func isStarterMap(mapID string) bool {
+	switch mapID {
+	case "tan_thu_coc_nam_cuong", "tan_thu_coc_dong_hai", "tan_thu_coc_tay_mac", "tan_thu_coc_bac_nguyen", "tan_thu_coc_trung_chau":
+		return true
+	default:
+		return false
+	}
 }
 
 // Config is the process-level runtime configuration for realtime world sessions.
@@ -101,9 +116,7 @@ func (c Config) AllowsWorldJoin(playerID, zoneID, mapVersion, contentVersion str
 	if expectedContentVersion == "" {
 		expectedContentVersion = DefaultContentVersion
 	}
-	if mapID == "world_map" {
-		expectedMapVersion, expectedContentVersion = LegacyWorldMapVersion, LegacyWorldContentVersion
-	}
+	expectedMapVersion, expectedContentVersion = VersionsForMap(mapID)
 	return c.AllowsJoin(playerID, zoneID) && mapVersion == expectedMapVersion && contentVersion == expectedContentVersion
 }
 

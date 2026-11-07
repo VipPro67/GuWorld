@@ -229,6 +229,7 @@ func applyDestination(tx *sql.Tx, player *models.Player, region string, x, y int
 	oldRegion := player.CurrentRegion
 	if region != "" {
 		player.CurrentRegion = region
+		player.WorldZoneID = region
 	}
 	player.X = x
 	player.Y = y
@@ -243,6 +244,7 @@ func applyDestination(tx *sql.Tx, player *models.Player, region string, x, y int
 func placePlayerAt(player *models.Player, region string, x, y int) {
 	if region != "" {
 		player.CurrentRegion = region
+		player.WorldZoneID = region
 	}
 	player.X = x
 	player.Y = y
@@ -272,6 +274,7 @@ func ExecuteSpatialTransition(ctx context.Context, tx *sql.Tx, player *models.Pl
 	}
 
 	debuffMsg := applyDestination(tx, player, spec.targetRegion, spec.x, spec.y)
+	player.WorldZoneID = player.CurrentRegion
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players

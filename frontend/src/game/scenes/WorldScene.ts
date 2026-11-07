@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import type { WorldRuntime, RuntimeEntity } from "../core/WorldRuntime.ts";
 import { InputRouter } from "../input/InputRouter.ts";
 import { LoadedWorldMap, computeWorldMapHash, loadWorldMap } from "../world/MapLoader.ts";
+import { MapSceneryRenderer } from "../world/MapSceneryRenderer.ts";
+import { landscapeTextureKey, landscapeThemeForMap, type LandscapeTheme } from "../assets/LandscapeAssets.ts";
 import { MotionController } from "../motion/MotionController.ts";
 import { CastController, type CastDelegate, type CastView } from "../cast/CastController.ts";
 import { CastTelegraph } from "../combat/CastTelegraph.ts";
@@ -81,6 +83,12 @@ function statusAccent(id: string): number {
   return STATUS_COLORS[id] ?? 0xa78bfa;
 }
 
+function asLandscapeTheme(value: string): LandscapeTheme | null {
+  return value === "nam_cuong" || value === "dong_hai" || value === "tay_mac" || value === "bac_nguyen" || value === "trung_chau"
+    ? value
+    : null;
+}
+
 function formatDamageAmount(amount: number): string {
   if (amount <= 0) return "0";
   if (amount >= 100) return Math.round(amount).toLocaleString("vi-VN");
@@ -116,6 +124,7 @@ export class WorldScene extends Phaser.Scene {
   private lastWorldObjectsSyncAt = 0;
   private lastMarkerSignature = "";
   private map: LoadedWorldMap | null = null;
+  private sceneryRenderer!: MapSceneryRenderer;
   private mapHash: string | null = null;
   private mapStatus: "idle" | "loading" | "ready" | "error" = "idle";
   private mapError = "";
@@ -249,6 +258,7 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setDepth(-10_000);
     this.terrain = this.add.graphics().setDepth(-9_500);
+    this.sceneryRenderer = new MapSceneryRenderer(this);
     this.legacyOverlay = this.add.graphics().setDepth(-9_400);
     this.boundary = this.add.graphics().setDepth(-9_000);
     this.drawBoundary(PREVIEW_WORLD_WIDTH, PREVIEW_WORLD_HEIGHT);
@@ -328,6 +338,7 @@ export class WorldScene extends Phaser.Scene {
       this.castRequestUnsubscribe?.();
       this.castRequestUnsubscribe = null;
       this.projectileView.destroy();
+      this.sceneryRenderer.destroy();
       this.vfx.destroy();
       this.guVfx.destroy();
       this.telegraph.clear();
@@ -370,6 +381,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateAutoFarm(_time, entities);
     this.syncActors(entities);
     this.syncCamera();
+    if (this.map) this.sceneryRenderer.sync(this.cameras.main.worldView, this.time.now);
     this.drawPathMarker(entities);
     this.drawTargetRing();
     this.drawTargetIndicator(entities);
@@ -997,6 +1009,9 @@ export class WorldScene extends Phaser.Scene {
 
   private applyMap(map: LoadedWorldMap): void {
     this.background.setSize(map.pixelWidth, map.pixelHeight);
+    const theme = landscapeThemeForMap(map.id) ?? asLandscapeTheme(map.sceneryTheme);
+    this.background.setTexture(theme ? landscapeTextureKey(theme) : "tile-ground");
+    this.sceneryRenderer.setObjects(map.scenery);
     this.boundary.clear();
     this.drawBoundary(map.pixelWidth, map.pixelHeight);
     this.terrain.clear();
