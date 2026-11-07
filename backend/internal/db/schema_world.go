@@ -198,6 +198,9 @@ func schemaWorld() error {
 		expires_at TIMESTAMPTZ NOT NULL,
 		UNIQUE (region_id, x, y)
 	);
+	-- CREATE TABLE IF NOT EXISTS does not repair an older table's constraints.
+	-- Reuse the fresh-install constraint's index name to avoid a redundant index.
+	CREATE UNIQUE INDEX IF NOT EXISTS primeval_veins_region_id_x_y_key ON primeval_veins (region_id, x, y);
 	CREATE INDEX IF NOT EXISTS idx_primeval_veins_region ON primeval_veins (region_id, x, y);
 	CREATE INDEX IF NOT EXISTS idx_primeval_veins_expires ON primeval_veins (expires_at);`); err != nil {
 		return err
