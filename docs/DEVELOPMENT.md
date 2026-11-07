@@ -236,8 +236,12 @@ migration như một bước riêng trước khi đưa replica mới nhận traf
 
 ## Run frontend
 
+Frontend pin Node 22 qua `.nvmrc` (khớp `frontend/Dockerfile`) để tránh lỗi
+esbuild `ETXTBSY` khi CI dùng Node 24. Chạy `nvm use` trước khi cài dependency.
+
 ```bash
 cd frontend
+nvm use
 npm install
 npm run dev
 ```
