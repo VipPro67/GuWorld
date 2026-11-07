@@ -92,7 +92,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
               <p className="text-[11px] text-zinc-400 font-mono">
                 {source ? (
                   <>
-                    Điểm gốc: <span className="text-amber-400 font-bold">{source.name}</span> ({source.x}, {source.y}) — Vực: {source.region_id}
+                    Điểm gốc: <span className="text-amber-400 font-bold">{source.name}</span> ({source.x}, {source.y}) — Vực: {source.region_name || source.region_id}
                   </>
                 ) : (
                   "Đang xác định điểm kết nối không gian..."

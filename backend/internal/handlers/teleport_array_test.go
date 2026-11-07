@@ -355,3 +355,127 @@ func TestFormationMasteryEffects(t *testing.T) {
 		t.Fatalf("expected 200 mastery gain for tier 3, got %d", gainGM)
 	}
 }
+
+func TestLargeZoneAndCrossRegionTeleport(t *testing.T) {
+	// Setup mock zones in zoneReg
+	zoneReg.mu.Lock()
+	oldZones := zoneReg.zones
+	oldByID := zoneReg.byID
+	zoneReg.byID = make(map[string]*models.Region)
+	zoneReg.zones = []models.Region{
+		{ID: "dai_vuc_nam_cuong", Name: "Đại Vực Nam Cương", ZoneType: ZoneTypeLarge, WorldMapID: "world_map", MinX: 0, MinY: 0, MaxX: 5000, MaxY: 5000},
+		{ID: "am_luu_cu_hac", Name: "Âm Lưu Cự Hác", ParentID: "dai_vuc_nam_cuong", ZoneType: ZoneTypeNamed, WorldMapID: "am_luu_cu_hac", AtlasX: 1000, AtlasY: 0, MinX: 0, MinY: 0, MaxX: 1000, MaxY: 1000},
+		{ID: "bach_cot_son", Name: "Bạch Cốt Sơn", ParentID: "dai_vuc_nam_cuong", ZoneType: ZoneTypeNamed, WorldMapID: "bach_cot_son", AtlasX: 3000, AtlasY: 1000, MinX: 0, MinY: 0, MaxX: 1000, MaxY: 1000},
+		{ID: "dai_vuc_tay_mac", Name: "Đại Vực Tây Mạc", ZoneType: ZoneTypeLarge, WorldMapID: "world_map", MinX: 0, MinY: 5000, MaxX: 5000, MaxY: 10000},
+		{ID: "cuong_cat_gioi_bich_tay", Name: "Cuống Cát Giới Bích - Tây", ParentID: "dai_vuc_tay_mac", ZoneType: ZoneTypeNamed, WorldMapID: "cuong_cat_gioi_bich_tay", AtlasX: 0, AtlasY: 5000, MinX: 0, MinY: 0, MaxX: 1000, MaxY: 1000},
+	}
+	for i := range zoneReg.zones {
+		zoneReg.byID[zoneReg.zones[i].ID] = &zoneReg.zones[i]
+	}
+	zoneReg.mu.Unlock()
+
+	defer func() {
+		zoneReg.mu.Lock()
+		zoneReg.zones = oldZones
+		zoneReg.byID = oldByID
+		zoneReg.mu.Unlock()
+	}()
+
+	// 1. Check largeZoneForRegion
+	lzAmLuu := largeZoneForRegion("am_luu_cu_hac")
+	if lzAmLuu == nil || lzAmLuu.ID != "dai_vuc_nam_cuong" {
+		t.Fatalf("expected am_luu_cu_hac to resolve to dai_vuc_nam_cuong, got: %v", lzAmLuu)
+	}
+	lzBachCot := largeZoneForRegion("bach_cot_son")
+	if lzBachCot == nil || lzBachCot.ID != "dai_vuc_nam_cuong" {
+		t.Fatalf("expected bach_cot_son to resolve to dai_vuc_nam_cuong, got: %v", lzBachCot)
+	}
+	lzCuongCat := largeZoneForRegion("cuong_cat_gioi_bich_tay")
+	if lzCuongCat == nil || lzCuongCat.ID != "dai_vuc_tay_mac" {
+		t.Fatalf("expected cuong_cat_gioi_bich_tay to resolve to dai_vuc_tay_mac, got: %v", lzCuongCat)
+	}
+
+	// 2. Check greatRegionID
+	if greatRegionID("am_luu_cu_hac") != "dai_vuc_nam_cuong" {
+		t.Fatalf("unexpected greatRegionID for am_luu_cu_hac: %s", greatRegionID("am_luu_cu_hac"))
+	}
+	if greatRegionID("bach_cot_son") != "dai_vuc_nam_cuong" {
+		t.Fatalf("unexpected greatRegionID for bach_cot_son: %s", greatRegionID("bach_cot_son"))
+	}
+	if greatRegionID("cuong_cat_gioi_bich_tay") != "dai_vuc_tay_mac" {
+		t.Fatalf("unexpected greatRegionID for cuong_cat_gioi_bich_tay: %s", greatRegionID("cuong_cat_gioi_bich_tay"))
+	}
+
+	// 3. Check regionWorldPos
+	x1, y1 := regionWorldPos("am_luu_cu_hac", 316, 18)
+	if x1 != 1316 || y1 != 18 {
+		t.Fatalf("expected world pos (1316, 18), got (%d, %d)", x1, y1)
+	}
+	x2, y2 := regionWorldPos("bach_cot_son", 163, 91)
+	if x2 != 3163 || y2 != 1091 {
+		t.Fatalf("expected world pos (3163, 1091), got (%d, %d)", x2, y2)
+	}
+
+	// 4. Check evaluateTeleportLink same great region
+	ownerID := uuid.New()
+	player := &models.Player{Account: models.Account{ID: ownerID}}
+	srcArray := models.TeleportArray{
+		ID:                uuid.New().String(),
+		RegionID:          "am_luu_cu_hac",
+		X:                 316,
+		Y:                 18,
+		Tier:              models.TeleportTier2,
+		MaxRange:          10000,
+		IsCrossRegion:     false,
+		DirectionType:     models.TeleportDirectionTwoWay,
+		AccessPolicy:      models.TeleportAccessPublic,
+		CurrentDurability: 50,
+		IsActive:          true,
+	}
+	destSameRegion := models.TeleportArray{
+		ID:                uuid.New().String(),
+		RegionID:          "bach_cot_son",
+		X:                 163,
+		Y:                 91,
+		Tier:              models.TeleportTier1,
+		MaxRange:          1000,
+		IsCrossRegion:     false,
+		DirectionType:     models.TeleportDirectionTwoWay,
+		AccessPolicy:      models.TeleportAccessPublic,
+		CurrentDurability: 50,
+		IsActive:          true,
+	}
+	item := evaluateTeleportLink(player, nil, &srcArray, &destSameRegion)
+	if item.IsCrossRegionJump {
+		t.Fatalf("expected IsCrossRegionJump = false for two regions in dai_vuc_nam_cuong")
+	}
+	if !item.CanUse {
+		t.Fatalf("expected Tier 2 (10,000 range) to reach bach_cot_son (dist %d), got error: %s", item.Distance, item.Reason)
+	}
+	// Distance = max(|3163-1316|, |1091-18|) = max(1847, 1073) = 1847
+	if item.Distance != 1847 {
+		t.Fatalf("expected distance 1847, got %d", item.Distance)
+	}
+
+	// 5. Check evaluateTeleportLink cross great region
+	destDiffRegion := models.TeleportArray{
+		ID:                uuid.New().String(),
+		RegionID:          "cuong_cat_gioi_bich_tay",
+		X:                 47,
+		Y:                 987,
+		Tier:              models.TeleportTier1,
+		MaxRange:          1000,
+		IsCrossRegion:     false,
+		DirectionType:     models.TeleportDirectionTwoWay,
+		AccessPolicy:      models.TeleportAccessPublic,
+		CurrentDurability: 50,
+		IsActive:          true,
+	}
+	itemCross := evaluateTeleportLink(player, nil, &srcArray, &destDiffRegion)
+	if !itemCross.IsCrossRegionJump {
+		t.Fatalf("expected IsCrossRegionJump = true for nam_cuong -> tay_mac")
+	}
+	if itemCross.CanUse {
+		t.Fatalf("expected Tier 2 (non-cross-region) array to fail cross-region jump")
+	}
+}

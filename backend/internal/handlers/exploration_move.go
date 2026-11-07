@@ -46,10 +46,21 @@ func largeZoneForRegion(regionID string) *models.Region {
 	if regionID == "" {
 		return nil
 	}
-	for _, ancestorID := range regionScopeIDs(regionID) {
-		if zone := ZoneByID(ancestorID); zone != nil && zone.ZoneType == ZoneTypeLarge {
+	ensureZonesLoaded()
+	seen := make(map[string]struct{}, 8)
+	for curr := regionID; curr != ""; {
+		if _, dup := seen[curr]; dup {
+			break
+		}
+		seen[curr] = struct{}{}
+		zone := ZoneByID(curr)
+		if zone == nil {
+			break
+		}
+		if zone.ZoneType == ZoneTypeLarge {
 			return zone
 		}
+		curr = zone.ParentID
 	}
 	zone := ZoneByID(regionID)
 	if zone == nil {
@@ -61,19 +72,17 @@ func largeZoneForRegion(regionID string) *models.Region {
 	if strings.EqualFold(zone.ZoneType, ZoneTypeSecret) || strings.EqualFold(zone.ZoneType, ZoneTypeDungeon) {
 		return nil
 	}
-	refX, refY := zone.EntryX, zone.EntryY
+	refX, refY := zone.AtlasX+zone.EntryX, zone.AtlasY+zone.EntryY
 	if refX == 0 && refY == 0 {
-		refX = (zone.MinX + zone.MaxX) / 2
-		refY = (zone.MinY + zone.MaxY) / 2
+		refX = zone.AtlasX + (zone.MinX+zone.MaxX)/2
+		refY = zone.AtlasY + (zone.MinY+zone.MaxY)/2
 	}
 	if refX != 0 || refY != 0 {
-		ensureZonesLoaded()
 		zoneReg.mu.RLock()
 		defer zoneReg.mu.RUnlock()
-		mapID := zone.WorldMapID
 		for i := range zoneReg.zones {
 			z := &zoneReg.zones[i]
-			if z.ZoneType == ZoneTypeLarge && (mapID == "" || z.WorldMapID == "" || z.WorldMapID == mapID) && zoneContains(z, refX, refY) {
+			if z.ZoneType == ZoneTypeLarge && zoneContains(z, refX, refY) {
 				return z
 			}
 		}

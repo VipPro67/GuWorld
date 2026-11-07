@@ -377,7 +377,13 @@ func greatRegionID(regionID string) string {
 // in the same great region can be compared by real distance.
 func regionWorldPos(regionID string, x, y int) (int, int) {
 	if zone := ZoneByID(regionID); zone != nil {
-		return zone.MinX + x, zone.MinY + y
+		if zone.AtlasX != 0 || zone.AtlasY != 0 {
+			return zone.AtlasX + x, zone.AtlasY + y
+		}
+		if zone.MinX != 0 || zone.MinY != 0 {
+			return zone.MinX + x, zone.MinY + y
+		}
+		return zone.AtlasX + x, zone.AtlasY + y
 	}
 	return x, y
 }
