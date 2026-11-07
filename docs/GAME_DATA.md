@@ -294,7 +294,7 @@ Tạo ngay khi hoàn tất khâu Thả Cổ của nghi thức Thăng Tiên (lên
 - `rank_start_year` — năm bắt đầu rank hiện tại (dùng làm mốc tính lịch giáng lâm tai kiếp)
 - `earth_calamity_count`, `heavenly_tribulation_count`, `grand_tribulation_count`, `myriad_tribulation_count`, `chaos_calamity_count` — bộ đếm kiếp nạn
 - `tribulation_pending_at` (TIMESTAMPTZ, NULL) — thời điểm tai kiếp bắt đầu bị "giữ" vì người chơi offline; dùng để tính phạt giảm thưởng Đạo Ngân (quá 24 giờ → còn 50%)
-- `last_cleanse_at` (TIMESTAMPTZ, NULL) — mốc Thanh Đạo Tẩy Thể gần nhất; cooldown 12 giờ giữa các lần bóc tách Đạo Ngân ngoại hệ
+- `last_cleanse_at` (TIMESTAMPTZ, NULL) — mốc Thanh Đạo Tẩy Thể gần nhất; cooldown 1 giờ giữa các lần bóc tách Đạo Ngân ngoại hệ
 - `state` — STABLE / TRIBULATION_PENDING / TRIBULATION_ACTIVE / DAMAGED / DESTROYED
 
 > **Hằng số thời gian nội bộ:** 1 năm ngoại giới = **36.000 giây (10 giờ) đời thật** khi `time_speed_multiplier = 1`; 1 năm nội bộ Tiên Khiếu = **36.000 giây đời thật ÷ (`time_rate` × `time_speed_multiplier`)**. Sản lượng nền của Tiên Khiếu là `essence_production_per_year` sau mỗi năm nội bộ, nên tốc độ nền mỗi giờ đời thật là `essence_production_per_year ÷ 10 × time_rate × time_speed_multiplier`; Cổ, thể chất, tuổi thọ và hiệu ứng khóa hồi phục vẫn được áp dụng sau đó. Kiếp nạn đầu tiên đến vào năm nội bộ thứ 10 → chờ khoảng `10 × 36.000 ÷ time_rate` giây đời thật (khoảng 2–10 giờ, tùy phẩm cấp Tiên Khiếu). Kiếp đang ACTIVE quá **6 giờ đời thật** (chỉ tính thời gian online) tự động kết toán thất bại.

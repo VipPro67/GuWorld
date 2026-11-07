@@ -700,7 +700,7 @@ export const ImmortalApertureView: React.FC = () => {
   );
   const cleanseTarget = foreignDaoPaths.find((p) => p.path === cleansePath) || foreignDaoPaths[0] || null;
   const cleanseAvailable = cleanseTarget?.amount ?? 0;
-  const cleanseEffective = Math.min(cleanseMarks, cleanseAvailable, 10000);
+  const cleanseEffective = Math.min(cleanseMarks, cleanseAvailable);
   const cleanseStoneCost = Math.ceil(cleanseEffective / 100);
   const cleanseRefundQty = Math.floor((cleanseEffective * 0.3) / 1000);
   const cleanseRefundMarks = cleanseRefundQty * 1000;
@@ -1819,7 +1819,7 @@ return (
                     onClick={() => {
                       if (foreignDaoPaths.length > 0) {
                         setCleansePath(foreignDaoPaths[0].path);
-                        setCleanseMarks(Math.min(foreignDaoPaths[0].amount, 10000));
+                        setCleanseMarks(foreignDaoPaths[0].amount);
                         setShowCleanseModal(true);
                       } else {
                         addToast("Tiên Khiếu đã thuần khiết, không có Đạo Ngân ngoại hệ để tẩy.", "info");
@@ -1851,7 +1851,7 @@ return (
                             onChange={(e) => {
                               setCleansePath(e.target.value);
                               const t = foreignDaoPaths.find((p) => p.path === e.target.value);
-                              setCleanseMarks(Math.min(t?.amount ?? 0, 10000));
+                              setCleanseMarks(t?.amount ?? 0);
                             }}
                             className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-purple-500"
                           >
@@ -1871,7 +1871,7 @@ return (
                           <input
                             type="range"
                             min={0}
-                            max={Math.min(cleanseAvailable, 10000)}
+                            max={cleanseAvailable}
                             step={100}
                             value={cleanseEffective}
                             onChange={(e) => setCleanseMarks(Number(e.target.value))}
@@ -1900,7 +1900,7 @@ return (
                         <p className="text-[11px] text-slate-500 leading-relaxed">
                           Tiêu hao <b>1 Tiên Nguyên Thạch / 100 Đạo Ngân tạp</b>. Hoàn trả 30% giá trị dưới dạng <b>Đạo Tài</b> của lưu phái tương ứng ({cleanseRefundQty.toLocaleString()} món
                           {cleanseTarget ? ` ${translatePath(cleanseTarget.path)}` : ""}, mỗi món bổ sung 1.000 Đạo Ngân khi sử dụng).
-                          Bế quan hồi phục 12 giờ giữa mỗi lần đại tẩy thể. Tối đa 10.000 Đạo Ngân / lần.
+                          Bế quan hồi phục 1 giờ giữa mỗi lần đại tẩy thể.
                         </p>
                       </div>
 

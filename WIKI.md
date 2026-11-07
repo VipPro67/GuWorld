@@ -420,7 +420,7 @@ $$\text{EcologyPurityFactor} = \max\left(0.25,\ 1.0 - (0.70 - P) \times 1.25\rig
 **Thanh Đạo Tẩy Thể**: dùng Tiên Nguyên Thạch để bóc tách Đạo Ngân ngoại hệ, nâng cao Độ Thuần Khiết:
 - Chi phí: **1 Tiên Nguyên Thạch / 100 Đạo Ngân tạp**.
 - Hoàn trả **30%** giá trị dưới dạng **Đạo Tài** của lưu phái tương ứng: `floor(30% × marks / 1.000)` món `dao_material_<path>`. Mỗi món khi sử dụng bổ sung **1.000 Đạo Ngân** đúng phái đó vào Tiên Khiếu.
-- Bế quan hồi phục **12 giờ** giữa các lần, tối đa **10.000 Đạo Ngân/lần**. Không thể tẩy phái chủ đạo.
+- Bế quan hồi phục **1 giờ** giữa các lần, không giới hạn lượng Đạo Ngân mỗi lần tẩy. Không thể tẩy phái chủ đạo.
 
 ## 4. Cổ trùng và bọc đồ
 
