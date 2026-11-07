@@ -184,25 +184,7 @@ func schemaWorld() error {
 	// Primeval veins are dynamic world-map resource points. They stay out of
 	// map_cells because they spawn/expire on their own schedule and carry a
 	// shared accumulation pool instead of a static cell definition.
-	if err := execSchema("primeval_veins", `
-	CREATE TABLE IF NOT EXISTS primeval_veins (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
-		x INT NOT NULL,
-		y INT NOT NULL,
-		vein_type VARCHAR(20) NOT NULL DEFAULT 'mortal' CHECK (vein_type IN ('mortal','immortal')),
-		rarity VARCHAR(50) NOT NULL,
-		accumulated_since TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		produced_minutes INT NOT NULL DEFAULT 0,
-		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		expires_at TIMESTAMPTZ NOT NULL,
-		UNIQUE (region_id, x, y)
-	);
-	-- CREATE TABLE IF NOT EXISTS does not repair an older table's constraints.
-	-- Reuse the fresh-install constraint's index name to avoid a redundant index.
-	CREATE UNIQUE INDEX IF NOT EXISTS primeval_veins_region_id_x_y_key ON primeval_veins (region_id, x, y);
-	CREATE INDEX IF NOT EXISTS idx_primeval_veins_region ON primeval_veins (region_id, x, y);
-	CREATE INDEX IF NOT EXISTS idx_primeval_veins_expires ON primeval_veins (expires_at);`); err != nil {
+	if err := execSchema("primeval_veins", primevalVeinsSchema); err != nil {
 		return err
 	}
 
