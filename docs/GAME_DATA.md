@@ -882,6 +882,23 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 
 **Nguyên Tuyền (primeval vein):** bảng `primeval_veins` (`region_id`, `x`, `y`, `vein_type` `mortal`/`immortal`, `rarity`, `accumulated_since`, `produced_minutes`, `expires_at`). Mỗi mỏ có bể chung: ai đứng trong phạm vi 3 ô cũng thu hoạch được, nhận hết phần đã tích rồi bể reset. Trần tích lũy **1 ngày sản lượng**; trần vòng đời theo phẩm chất (Thường 7 / Hiếm 10 / Sử Thi 14 / Truyền Thuyết 21 / Siêu Cấp 30 ngày sản lượng); mỏ sống tối đa **30 ngày**. Phàm Tuyền nhả `mine_chest`; Tiên Tuyền nhả `mine_chest_immortal` (tỉ lệ rương decay 50%/2h, sàn 20% base — `veinChestDecay`, `handlers/primeval_vein.go`). Worker spawn tối đa **31 phàm + 5 tiên** (tiên chỉ ở vùng `min_rank ≥ 5`; mỗi đại vực ~1/5 cap), mỗi 30 phút bù 1 mỏ/loại. Boss rơi Cổ trùng `GU_SPRING_EGG` (Tuyền Đản Cổ) với tỉ lệ 1%; dùng Cổ này kích hoạt effect `SPRING_EGG_HATCH` để cấy Phàm Tuyền tại chỗ. Người chơi cấy bằng Cổ/vật phẩm **không** bị giới hạn cap 31 Phàm Tuyền toàn cục hay cap đại vực (cap chỉ áp cho worker tự spawn); vẫn chặn ô đã có địa điểm, vùng an toàn và bí cảnh.
 
+**Tương thích DB cũ của Nguyên Tuyền:** `InitSchema` bảo đảm unique index `primeval_veins_region_id_x_y_key` trên `(region_id, x, y)` cả khi bảng đã tồn tại. `CREATE TABLE IF NOT EXISTS` không tự thêm constraint cho bảng cũ; thiếu index này khiến `SPRING_EGG_HATCH` và worker tạo mỏ lỗi PostgreSQL `42P10` tại `ON CONFLICT (region_id, x, y)`. Khởi động lại backend với bản sửa để áp dụng DDL. Trước khi triển khai trên DB cũ, kiểm tra toạ độ trùng:
+
+```sql
+SELECT region_id, x, y, COUNT(*)
+FROM primeval_veins
+GROUP BY region_id, x, y
+HAVING COUNT(*) > 1;
+```
+
+Nếu có dòng trùng, cần xử lý có chủ đích trước khi tạo index; startup sẽ báo lỗi thay vì tự xoá mỏ và mất sản lượng đã tích. Có thể áp dụng riêng DDL sau trên DB không có toạ độ trùng:
+
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS primeval_veins_region_id_x_y_key
+ON primeval_veins (region_id, x, y);
+```
+
+
 Seed fallback trong `schema_dictionaries.go` dùng cùng key với CSV và không tạo
 namespace mới. Khác biệt seed/CSV phải được kiểm tra parity; đáng chú ý
 `death_drop_mult` và `pvp_immune` hiện bị `encoding/json` bỏ qua.
