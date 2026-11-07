@@ -61,6 +61,7 @@ type TiledObject struct {
 	Width      float64         `json:"width,omitempty"`
 	Height     float64         `json:"height,omitempty"`
 	Point      bool            `json:"point,omitempty"`
+	Rotation   float64         `json:"rotation,omitempty"`
 	Properties []TiledProperty `json:"properties,omitempty"`
 }
 
@@ -153,6 +154,11 @@ func Build(raw TiledMapJSON) (*Map, error) {
 	var spawns []Spawn
 	var portals []Portal
 	for _, layer := range raw.Layers {
+		for _, object := range layer.Objects {
+			if !finite(object.Rotation) || math.Abs(object.Rotation) > 360 {
+				return nil, fmt.Errorf("%w: object %q has invalid rotation", ErrInvalidMap, object.Name)
+			}
+		}
 		switch layer.Type {
 		case "tilelayer":
 			if len(layer.Data) != 0 && len(layer.Data) != raw.Width*raw.Height {

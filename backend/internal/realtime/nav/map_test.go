@@ -335,6 +335,9 @@ func TestBuildRejectsUnsafeMaps(t *testing.T) {
 			m.Layers = nil
 		},
 		"collision length": func(m *TiledMapJSON) { m.Layers[0].Data = m.Layers[0].Data[:4] },
+		"invalid scenery rotation": func(m *TiledMapJSON) {
+			m.Layers = append(m.Layers, TiledLayer{Type: "objectgroup", Name: "scenery", Objects: []TiledObject{{Name: "tree", X: 2, Y: 2, Rotation: 361}}})
+		},
 		"spawn in wall": func(m *TiledMapJSON) {
 			m.Layers[0].Data[5] = 1
 			m.Layers = append(m.Layers, TiledLayer{Type: "objectgroup", Name: "spawns", Objects: []TiledObject{{Type: "player", X: 1.5, Y: 1.5}}})
