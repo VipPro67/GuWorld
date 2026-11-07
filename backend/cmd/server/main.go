@@ -1244,7 +1244,16 @@ func expandRealtimeZoneIDs(configured map[string]struct{}, mapDir, mapVersion, c
 			skipped++
 			continue
 		}
-		if (mapVersion != "" && header.Version != mapVersion) || (contentVersion != "" && header.ContentVersion != contentVersion) {
+		expectedMapVersion, expectedContentVersion := realtimeconfig.VersionsForMap(id)
+		// Most public maps follow the configured release defaults. A small set
+		// of shipped maps may have an independent content release (for example,
+		// starter landscapes); use that map-specific contract when it differs
+		// from the defaults, while preserving configured versions for the rest.
+		if expectedMapVersion == realtimeconfig.LegacyWorldMapVersion ||
+			(expectedMapVersion == realtimeconfig.DefaultMapVersion && expectedContentVersion == realtimeconfig.DefaultContentVersion) {
+			expectedMapVersion, expectedContentVersion = mapVersion, contentVersion
+		}
+		if (expectedMapVersion != "" && header.Version != expectedMapVersion) || (expectedContentVersion != "" && header.ContentVersion != expectedContentVersion) {
 			skipped++
 			continue
 		}

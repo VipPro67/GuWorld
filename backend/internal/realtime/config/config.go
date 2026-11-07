@@ -116,7 +116,9 @@ func (c Config) AllowsWorldJoin(playerID, zoneID, mapVersion, contentVersion str
 	if expectedContentVersion == "" {
 		expectedContentVersion = DefaultContentVersion
 	}
-	expectedMapVersion, expectedContentVersion = VersionsForMap(mapID)
+	if isStarterMap(mapID) || mapID == "world_map" {
+		expectedMapVersion, expectedContentVersion = VersionsForMap(mapID)
+	}
 	return c.AllowsJoin(playerID, zoneID) && mapVersion == expectedMapVersion && contentVersion == expectedContentVersion
 }
 
