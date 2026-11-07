@@ -6,7 +6,7 @@ const value = (raw: string | undefined): string => (raw ?? "").trim();
 const mapVersion = "regions-v1";
 const contentVersion = "region-content-v1";
 const starterMapVersion = "regions-v2";
-const starterContentVersion = "landscape-v1";
+const starterContentVersion = "landscape-v2";
 
 const STARTER_MAP_IDS = new Set([
   "tan_thu_coc_nam_cuong",

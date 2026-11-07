@@ -19,6 +19,8 @@ export interface LandscapeAssetDefinition {
   label: string;
   width: number;
   height: number;
+  renderScale?: number;
+  originY?: number;
 }
 
 const PALETTES = landscapeManifest.themes as Record<LandscapeTheme, Palette>;
@@ -50,27 +52,29 @@ export function createLandscapeTextures(scene: Phaser.Scene): void {
 function createGroundTexture(scene: Phaser.Scene, theme: LandscapeTheme, palette: Palette): void {
   const key = landscapeTextureKey(theme);
   if (scene.textures.exists(key)) return;
-  const size = 256;
+  const size = 512;
   const graphics = scene.add.graphics();
   graphics.fillStyle(palette.ground, 1).fillRect(0, 0, size, size);
-  // Calm, irregular pixel clusters keep the repeated terrain dark and readable.
+  // Large, low-contrast patches read as soil and vegetation instead of a field
+  // of tiny noise when the camera is at the normal 1x zoom.
   let seed = theme.split("").reduce((value, char) => value * 31 + char.charCodeAt(0), 7) >>> 0;
   const random = (): number => {
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 0x1_0000_0000;
   };
-  for (let index = 0; index < 250; index += 1) {
-    const x = Math.floor(random() * (size / 4)) * 4;
-    const y = Math.floor(random() * (size / 4)) * 4;
+  for (let index = 0; index < 32; index += 1) {
+    const x = 20 + Math.floor(random() * (size - 40));
+    const y = 20 + Math.floor(random() * (size - 40));
     const color = palette.groundLights[Math.floor(random() * palette.groundLights.length)];
-    const width = 4 + Math.floor(random() * 3) * 4;
-    const height = 4 + Math.floor(random() * 2) * 4;
-    graphics.fillStyle(color, 0.58).fillRect(x, y, width, height);
+    const width = 22 + Math.floor(random() * 54);
+    const height = 14 + Math.floor(random() * 34);
+    graphics.fillStyle(color, 0.18 + random() * 0.10).fillEllipse(x, y, width, height);
   }
-  for (let index = 0; index < 40; index += 1) {
+  for (let index = 0; index < 18; index += 1) {
     const x = Math.floor(random() * (size / 4)) * 4;
     const y = Math.floor(random() * (size / 4)) * 4;
-    graphics.fillStyle(palette.deep, 0.5).fillRect(x, y, 4, 4);
+    const color = index % 3 === 0 ? palette.deep : palette.groundLights[index % palette.groundLights.length];
+    graphics.fillStyle(color, 0.24).fillEllipse(x, y, 8 + (index % 3) * 4, 5 + (index % 2) * 3);
   }
   graphics.generateTexture(key, size, size);
   graphics.destroy();
@@ -86,100 +90,161 @@ function createPropTexture(scene: Phaser.Scene, key: string, definition: Landsca
   const mid = palette.mid;
   const light = palette.light;
   const accent = palette.accent;
-  const px = (x: number, y: number, w: number, h: number, color: number, alpha = 1): void => {
-    g.fillStyle(color, alpha).fillRect(x, y, w, h);
+  const point = (x: number, y: number): Phaser.Math.Vector2 => new Phaser.Math.Vector2(x * width, y * height);
+  const polygon = (points: Array<[number, number]>, color: number, alpha = 1): void => {
+    g.fillStyle(color, alpha).fillPoints(points.map(([x, y]) => point(x, y)), true);
   };
-  px(8, height - 12, width - 16, 8, 0x080d0b, 0.34);
+  const ellipse = (x: number, y: number, w: number, h: number, color: number, alpha = 1): void => {
+    g.fillStyle(color, alpha).fillEllipse(x * width, y * height, w * width, h * height);
+  };
+  const rect = (x: number, y: number, w: number, h: number, color: number, alpha = 1, radius = 0): void => {
+    g.fillStyle(color, alpha);
+    if (radius > 0) g.fillRoundedRect(x * width, y * height, w * width, h * height, radius);
+    else g.fillRect(x * width, y * height, w * width, h * height);
+  };
+  const line = (x1: number, y1: number, x2: number, y2: number, color: number, thickness = 2, alpha = 1): void => {
+    g.lineStyle(thickness, color, alpha).lineBetween(x1 * width, y1 * height, x2 * width, y2 * height);
+  };
+  ellipse(0.5, 0.91, 0.78, 0.12, 0x080d0b, 0.38);
   switch (definition.shape) {
     case "pine":
-      px(width / 2 - 8, height - 33, 16, 29, dark);
-      for (const [x, y, w, h] of [[15, 35, 44, 34], [21, 20, 32, 35], [27, 8, 20, 30]]) px(x, y, w, h, dark);
-      px(20, 39, 34, 24, mid); px(27, 25, 22, 25, mid); px(31, 13, 12, 24, light);
-      px(23, 44, 10, 8, light, 0.7); px(38, 31, 9, 8, light, 0.6);
+      rect(0.43, 0.59, 0.14, 0.31, dark, 1, 4);
+      polygon([[0.5, 0.06], [0.19, 0.45], [0.81, 0.45]], dark);
+      polygon([[0.5, 0.22], [0.10, 0.66], [0.90, 0.66]], dark);
+      polygon([[0.5, 0.38], [0.03, 0.82], [0.97, 0.82]], dark);
+      polygon([[0.5, 0.12], [0.29, 0.42], [0.59, 0.42]], mid);
+      polygon([[0.5, 0.29], [0.23, 0.62], [0.72, 0.62]], mid);
+      polygon([[0.5, 0.46], [0.18, 0.77], [0.80, 0.77]], mid);
+      line(0.42, 0.60, 0.32, 0.74, light, 2, 0.7);
+      line(0.58, 0.45, 0.69, 0.58, light, 2, 0.6);
       break;
     case "tree":
-      px(width / 2 - 8, height - 33, 16, 31, dark);
-      px(14, 31, 27, 35, dark); px(32, 23, 30, 38, dark); px(25, 13, 29, 35, dark); px(8, 40, 24, 23, dark);
-      px(19, 34, 21, 26, mid); px(36, 27, 21, 28, mid); px(29, 19, 20, 25, light);
-      px(25, 38, 9, 7, accent, 0.75); px(42, 31, 8, 6, light, 0.8);
+      rect(0.43, 0.58, 0.15, 0.33, dark, 1, 5);
+      polygon([[0.50, 0.54], [0.31, 0.79], [0.14, 0.90], [0.39, 0.86], [0.51, 0.94], [0.63, 0.84], [0.87, 0.90], [0.68, 0.75]], dark);
+      ellipse(0.34, 0.43, 0.47, 0.45, dark);
+      ellipse(0.62, 0.39, 0.50, 0.49, dark);
+      ellipse(0.50, 0.25, 0.51, 0.48, dark);
+      ellipse(0.33, 0.43, 0.31, 0.30, mid);
+      ellipse(0.61, 0.38, 0.33, 0.31, mid);
+      ellipse(0.49, 0.25, 0.32, 0.30, mid);
+      ellipse(0.39, 0.34, 0.12, 0.11, light, 0.75);
+      ellipse(0.64, 0.31, 0.11, 0.10, accent, 0.74);
+      ellipse(0.50, 0.19, 0.10, 0.09, light, 0.64);
       break;
     case "rock":
-      px(14, 27, width - 28, height - 42, dark); px(21, 17, width - 42, height - 36, dark);
-      px(19, 25, width - 40, height - 43, mid); px(29, 19, width - 54, 18, light);
-      px(25, 40, 13, 5, dark, 0.55); px(width - 31, 32, 10, 5, dark, 0.5);
+      polygon([[0.12, 0.79], [0.20, 0.45], [0.39, 0.19], [0.58, 0.27], [0.76, 0.38], [0.91, 0.76], [0.80, 0.87], [0.28, 0.91]], dark);
+      polygon([[0.20, 0.73], [0.29, 0.46], [0.43, 0.30], [0.58, 0.37], [0.73, 0.46], [0.81, 0.73], [0.68, 0.81], [0.32, 0.82]], mid);
+      polygon([[0.30, 0.48], [0.43, 0.30], [0.58, 0.37], [0.48, 0.49], [0.39, 0.60]], light, 0.84);
+      polygon([[0.60, 0.42], [0.75, 0.50], [0.80, 0.72], [0.69, 0.78]], dark, 0.42);
+      line(0.49, 0.52, 0.45, 0.71, dark, 2, 0.6);
       break;
     case "water":
-      px(12, 17, width - 24, height - 30, dark); px(7, 23, width - 14, height - 34, mid);
-      px(17, 25, width - 34, 6, light, 0.72); px(25, 38, width - 50, 4, accent, 0.62);
-      px(18, 52, 12, 5, dark); px(width - 35, 21, 10, 8, dark);
+      ellipse(0.50, 0.57, 0.90, 0.61, dark);
+      ellipse(0.49, 0.55, 0.80, 0.49, mid);
+      ellipse(0.49, 0.55, 0.62, 0.31, 0x356d76, 0.88);
+      ellipse(0.40, 0.48, 0.28, 0.05, light, 0.82);
+      ellipse(0.65, 0.60, 0.18, 0.035, accent, 0.75);
+      ellipse(0.28, 0.69, 0.12, 0.06, dark, 0.78);
+      ellipse(0.77, 0.39, 0.10, 0.05, dark, 0.72);
       break;
     case "marker":
     case "pillar":
-      px(width / 2 - 15, height - 24, 30, 14, dark); px(width / 2 - 11, 13, 22, height - 36, dark);
-      px(width / 2 - 8, 19, 16, height - 40, mid); px(width / 2 - 7, 22, 5, height - 45, light);
-      px(width / 2 - 18, 10, 36, 12, dark); px(width / 2 - 14, 7, 28, 8, light);
-      px(width / 2 - 3, 36, 7, 18, accent, 0.9);
+      polygon([[0.27, 0.89], [0.33, 0.81], [0.67, 0.81], [0.74, 0.89]], dark);
+      polygon([[0.37, 0.79], [0.37, 0.24], [0.43, 0.16], [0.60, 0.16], [0.65, 0.24], [0.65, 0.79]], dark);
+      polygon([[0.42, 0.76], [0.42, 0.27], [0.47, 0.22], [0.57, 0.22], [0.60, 0.28], [0.60, 0.76]], mid);
+      polygon([[0.32, 0.20], [0.39, 0.12], [0.63, 0.12], [0.69, 0.20]], dark);
+      line(0.47, 0.34, 0.55, 0.42, accent, 3, 0.9);
+      line(0.55, 0.42, 0.47, 0.53, accent, 3, 0.9);
+      line(0.47, 0.53, 0.55, 0.63, accent, 3, 0.9);
+      line(0.43, 0.72, 0.59, 0.72, light, 2, 0.7);
       break;
     case "palm":
-      px(width / 2 - 6, 34, 13, height - 46, dark); px(width / 2 - 2, 43, 5, height - 54, light);
-      px(12, 20, 28, 9, dark); px(35, 13, 31, 9, dark); px(23, 7, 11, 34, dark); px(46, 25, 27, 9, dark);
-      px(17, 22, 25, 5, mid); px(38, 15, 24, 5, mid); px(26, 12, 5, 23, light); px(49, 27, 20, 5, mid);
+      line(0.50, 0.88, 0.47, 0.42, dark, Math.max(7, width * 0.11));
+      line(0.47, 0.44, 0.50, 0.85, light, Math.max(2, width * 0.025), 0.7);
+      polygon([[0.47, 0.43], [0.12, 0.22], [0.36, 0.36], [0.44, 0.40]], dark);
+      polygon([[0.48, 0.41], [0.28, 0.04], [0.48, 0.34], [0.51, 0.39]], mid);
+      polygon([[0.50, 0.40], [0.87, 0.12], [0.60, 0.40], [0.53, 0.43]], dark);
+      polygon([[0.52, 0.43], [0.96, 0.45], [0.61, 0.49], [0.54, 0.46]], mid);
+      polygon([[0.46, 0.45], [0.09, 0.61], [0.42, 0.49], [0.48, 0.47]], mid);
+      ellipse(0.51, 0.43, 0.13, 0.10, accent);
       break;
     case "driftwood":
-      px(12, 19, width - 24, 14, dark); px(21, 15, width - 34, 8, mid); px(17, 28, 24, 7, light);
-      px(width - 26, 12, 8, 20, dark); px(24, 32, 9, 6, dark);
+      polygon([[0.11, 0.61], [0.23, 0.43], [0.70, 0.48], [0.89, 0.34], [0.82, 0.60], [0.70, 0.72], [0.27, 0.70]], dark);
+      polygon([[0.18, 0.56], [0.29, 0.47], [0.69, 0.52], [0.82, 0.41], [0.73, 0.59], [0.31, 0.64]], mid);
+      line(0.30, 0.54, 0.61, 0.57, light, 3, 0.7);
+      ellipse(0.28, 0.54, 0.08, 0.08, dark);
       break;
     case "dune":
-      px(12, 24, width - 24, 27, dark); px(7, 31, width - 14, 21, mid);
-      px(18, 25, width - 36, 8, light); px(28, 39, width - 56, 5, accent, 0.75);
+      ellipse(0.50, 0.69, 0.91, 0.39, dark);
+      ellipse(0.47, 0.61, 0.84, 0.41, mid);
+      ellipse(0.40, 0.56, 0.58, 0.24, light, 0.72);
+      line(0.19, 0.67, 0.69, 0.68, accent, 2, 0.78);
       break;
     case "oasis":
-      px(11, 23, width - 22, height - 31, dark); px(17, 28, width - 34, height - 39, 0x172f30);
-      px(26, 35, width - 52, 5, light, 0.78); px(34, 48, width - 66, 4, accent, 0.8);
-      px(8, 19, 19, 8, mid); px(width - 28, 33, 18, 8, mid);
+      ellipse(0.50, 0.59, 0.92, 0.66, dark);
+      ellipse(0.50, 0.57, 0.79, 0.54, 0x625c3a);
+      ellipse(0.50, 0.57, 0.65, 0.39, 0x265c5c);
+      ellipse(0.43, 0.49, 0.30, 0.06, light, 0.85);
+      ellipse(0.67, 0.62, 0.18, 0.04, accent, 0.82);
+      for (const [x, y] of [[0.18, 0.40], [0.82, 0.56], [0.25, 0.76], [0.75, 0.31]]) ellipse(x, y, 0.15, 0.11, mid);
       break;
     case "ruin":
-      px(13, 16, width - 26, height - 29, dark); px(20, 22, 12, height - 36, mid);
-      px(width - 32, 25, 12, height - 39, mid); px(27, 20, width - 54, 10, light);
-      px(32, 44, 12, 7, accent, 0.65); px(width - 38, 50, 8, 6, dark);
+      polygon([[0.12, 0.78], [0.19, 0.64], [0.35, 0.67], [0.38, 0.29], [0.49, 0.25], [0.53, 0.66], [0.70, 0.65], [0.74, 0.35], [0.84, 0.40], [0.88, 0.78]], dark);
+      polygon([[0.17, 0.74], [0.24, 0.68], [0.33, 0.70], [0.36, 0.37], [0.43, 0.32], [0.47, 0.70], [0.68, 0.70], [0.72, 0.43], [0.79, 0.46], [0.82, 0.75]], mid);
+      line(0.25, 0.72, 0.32, 0.72, light, 2, 0.65);
+      line(0.57, 0.71, 0.65, 0.71, accent, 2, 0.65);
+      polygon([[0.38, 0.37], [0.43, 0.32], [0.47, 0.40], [0.44, 0.44]], light, 0.75);
       break;
     case "grass":
-      px(12, height - 22, width - 24, 9, dark, 0.8);
-      px(18, 22, 7, height - 42, mid); px(29, 12, 6, height - 32, light); px(40, 18, 7, height - 38, mid);
-      px(50, 26, 6, height - 46, light); px(width - 24, 20, 6, height - 40, mid);
-      px(14, 28, 16, 5, light); px(38, 24, 14, 5, accent, 0.9); px(55, 31, 12, 5, light);
+      ellipse(0.5, 0.83, 0.82, 0.14, dark, 0.72);
+      for (const [x, y, dx] of [[0.22, 0.77, -0.10], [0.34, 0.74, 0.06], [0.46, 0.75, -0.02], [0.59, 0.78, 0.10], [0.73, 0.74, 0.03], [0.84, 0.78, -0.07]]) {
+        line(x, y, x + dx, 0.20 + (x % 0.15) * 0.3, (x * 100) % 2 < 1 ? mid : light, 3);
+        line(x, y - 0.03, x - dx * 0.7, y - 0.20, accent, 2, 0.8);
+      }
       break;
     case "yurt":
-      px(15, 34, width - 30, height - 47, dark); px(22, 25, width - 44, 20, dark);
-      px(20, 37, width - 40, height - 52, mid); px(29, 29, width - 58, 13, accent);
-      px(width / 2 - 7, 48, 14, height - 62, dark); px(width / 2 - 4, 51, 8, height - 65, light);
-      px(width / 2 - 3, 18, 6, 12, light);
+      ellipse(0.50, 0.72, 0.74, 0.32, dark);
+      ellipse(0.50, 0.52, 0.70, 0.43, mid);
+      polygon([[0.18, 0.54], [0.34, 0.30], [0.50, 0.19], [0.67, 0.31], [0.82, 0.55]], dark);
+      polygon([[0.26, 0.53], [0.38, 0.34], [0.50, 0.25], [0.63, 0.35], [0.74, 0.53]], accent);
+      rect(0.42, 0.57, 0.17, 0.31, dark, 1, 5);
+      rect(0.46, 0.62, 0.09, 0.27, 0x171d17, 1, 4);
+      line(0.22, 0.55, 0.78, 0.55, light, 2, 0.7);
+      polygon([[0.47, 0.25], [0.50, 0.14], [0.53, 0.25]], light);
       break;
     case "firepit":
-      px(9, 21, width - 18, 13, dark); px(15, 15, width - 30, 13, mid);
-      px(width / 2 - 5, 7, 10, 20, accent); px(width / 2 - 2, 12, 5, 11, 0xf0bc70);
-      px(15, 36, width - 30, 4, light, 0.7);
+      ellipse(0.50, 0.72, 0.78, 0.36, dark);
+      ellipse(0.50, 0.69, 0.58, 0.22, 0x171816);
+      for (const [x, y] of [[0.22, 0.69], [0.34, 0.57], [0.50, 0.55], [0.66, 0.58], [0.78, 0.70], [0.61, 0.82], [0.38, 0.82]]) ellipse(x, y, 0.20, 0.18, x < 0.5 ? mid : light);
+      polygon([[0.50, 0.62], [0.37, 0.40], [0.48, 0.11], [0.55, 0.35], [0.66, 0.44], [0.55, 0.63]], accent);
+      polygon([[0.51, 0.58], [0.45, 0.41], [0.52, 0.25], [0.59, 0.44]], 0xf0bc70);
       break;
     case "flower":
-      px(12, height - 17, width - 24, 5, dark, 0.8);
-      for (const [x, y] of [[17, 24], [31, 15], [43, 28], [25, 36], [47, 11]]) {
-        px(x + 4, y + 7, 4, height - y - 24, mid);
-        px(x, y + 2, 12, 5, accent); px(x + 3, y - 1, 6, 11, light);
-        px(x + 4, y + 2, 4, 4, 0xc8a96b);
+      ellipse(0.50, 0.84, 0.74, 0.12, dark, 0.72);
+      for (const [x, y] of [[0.28, 0.55], [0.45, 0.39], [0.63, 0.57], [0.38, 0.69], [0.72, 0.32]]) {
+        line(x, y + 0.05, x - 0.03, 0.83, mid, 2);
+        ellipse(x - 0.04, y + 0.06, 0.12, 0.07, light);
+        ellipse(x + 0.04, y + 0.11, 0.10, 0.06, mid);
+        ellipse(x, y, 0.18, 0.15, accent);
+        ellipse(x, y, 0.07, 0.07, 0xc8a96b);
       }
       break;
     case "banner":
-      px(width / 2 - 3, 11, 6, height - 22, dark); px(10, 16, width - 16, 32, dark);
-      px(15, 19, width - 25, 25, accent); px(20, 23, 10, 15, light);
-      px(width / 2 - 2, height - 12, 4, 7, light);
+      rect(0.47, 0.11, 0.06, 0.78, dark, 1, 3);
+      line(0.30, 0.17, 0.76, 0.17, light, 3);
+      polygon([[0.50, 0.20], [0.91, 0.27], [0.85, 0.57], [0.50, 0.51]], dark);
+      polygon([[0.54, 0.24], [0.85, 0.30], [0.80, 0.51], [0.54, 0.47]], accent);
+      polygon([[0.62, 0.29], [0.69, 0.36], [0.62, 0.44], [0.58, 0.36]], light, 0.86);
+      rect(0.37, 0.87, 0.27, 0.06, dark, 1, 4);
       break;
     case "bamboo":
-      for (const x of [16, 31, 47, 59]) {
-        px(x, 12 + (x % 3) * 4, 6, height - 29, dark);
-        px(x + 2, 17 + (x % 3) * 4, 2, height - 40, light);
-        for (let y = 32; y < height - 18; y += 22) px(x - 1, y, 8, 3, mid);
+      for (const [x, top, bend] of [[0.23, 0.18, -0.06], [0.40, 0.08, 0.03], [0.58, 0.15, 0.05], [0.76, 0.25, -0.02]]) {
+        rect(x - 0.035, top, 0.07, 0.70 - top, dark, 1, 5);
+        rect(x - 0.009, top + 0.04, 0.018, 0.62 - top, light, 0.72, 2);
+        for (const y of [0.40, 0.61, 0.79]) line(x - 0.04, y, x + 0.04, y, mid, 2);
+        polygon([[x, top + 0.22], [x + bend - 0.18, top + 0.13], [x + bend, top + 0.12], [x + 0.02, top + 0.25]], mid);
+        polygon([[x, top + 0.43], [x + 0.17, top + 0.34], [x + 0.27, top + 0.34], [x + 0.03, top + 0.48]], light, 0.72);
       }
-      px(12, 34, 18, 5, mid); px(41, 25, 18, 5, mid); px(34, 52, 18, 5, light);
       break;
   }
   g.generateTexture(key, width, height);

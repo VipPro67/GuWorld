@@ -13,6 +13,7 @@ export interface MapSceneryObject {
   x: number;
   y: number;
   scale: number;
+  rotation: number;
 }
 
 export interface MapLayerJSON {
@@ -26,6 +27,7 @@ export interface MapLayerJSON {
     type?: string;
     x: number;
     y: number;
+    rotation?: number;
     width?: number;
     height?: number;
     properties?: Array<{ name: string; value: unknown }>;
@@ -161,7 +163,11 @@ export class LoadedWorldMap {
           }
           const scale = propertyNumber(object.properties, "scale") ?? 1;
           if (scale < 0.5 || scale > 2) throw new Error(`Map scenery object ${object.name ?? assetId} has an invalid scale`);
-          this.scenery.push({ name: object.name ?? "", assetId, x, y, scale });
+          const rotation = object.rotation ?? 0;
+          if (!Number.isFinite(rotation) || Math.abs(rotation) > 360) {
+            throw new Error(`Map scenery object ${object.name ?? assetId} has an invalid rotation`);
+          }
+          this.scenery.push({ name: object.name ?? "", assetId, x, y, scale, rotation });
         }
       } else if (layer.type === "objectgroup" && layer.name === "legacy_regions" && Array.isArray(layer.objects)) {
         for (const object of layer.objects) {

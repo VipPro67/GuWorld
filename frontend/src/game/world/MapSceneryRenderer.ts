@@ -84,8 +84,9 @@ export class MapSceneryRenderer {
       const image = this.pool.pop() ?? this.scene.add.image(pixels.x, pixels.y, texture);
       image.setTexture(texture);
       image.setPosition(pixels.x, pixels.y);
-      image.setOrigin(0.5, 0.88);
-      image.setScale(object.scale);
+      image.setOrigin(0.5, definition?.originY ?? 0.88);
+      image.setScale(object.scale * (definition?.renderScale ?? 1));
+      image.setRotation(Phaser.Math.DegToRad(object.rotation));
       image.setDepth(pixels.y - 0.1);
       image.setVisible(true);
       image.setActive(true);

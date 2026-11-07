@@ -39,7 +39,9 @@ for (const [mapId, theme] of Object.entries(starterMaps)) {
   }
   const properties = Object.fromEntries((map.properties ?? []).map((property) => [property.name, property.value]));
   if (map.map_id !== mapId) errors.push(`${mapId}: map_id mismatch`);
-  if (!map.map_version || !map.content_version) errors.push(`${mapId}: map/content version is missing`);
+  if (map.map_version !== "regions-v2" || map.content_version !== "landscape-v2") {
+    errors.push(`${mapId}: expected regions-v2 / landscape-v2, got ${map.map_version} / ${map.content_version}`);
+  }
   if (properties.scenery_theme !== theme || !manifest.themes[theme]) errors.push(`${mapId}: scenery theme must be ${theme}`);
 
   const sceneryLayers = (map.layers ?? []).filter((layer) => layer.type === "objectgroup" && layer.name === "scenery");
@@ -52,12 +54,14 @@ for (const [mapId, theme] of Object.entries(starterMaps)) {
     const asset = manifest.assets[props.asset_id];
     if (!asset) errors.push(`${mapId}: unknown asset_id ${String(props.asset_id)}`);
     else if (asset.theme !== theme) errors.push(`${mapId}/${object.name}: asset theme ${asset.theme} does not match ${theme}`);
+    else if (typeof asset.renderScale !== "number" || asset.renderScale < 1 || asset.renderScale > 2) errors.push(`${mapId}/${object.name}: invalid asset renderScale`);
     if (props.collision_mode !== "decor") errors.push(`${mapId}/${object.name}: scenery must declare collision_mode=decor`);
     if (!Number.isFinite(object.x) || !Number.isFinite(object.y) || object.x < 0 || object.y < 0 || object.x >= map.width * map.tilewidth || object.y >= map.height * map.tileheight) {
       errors.push(`${mapId}/${object.name}: scenery position is outside the Tiled pixel bounds`);
     }
     const scale = props.scale ?? 1;
     if (typeof scale !== "number" || scale < 0.5 || scale > 2) errors.push(`${mapId}/${object.name}: invalid scale`);
+    if (object.rotation !== undefined && (!Number.isFinite(object.rotation) || Math.abs(object.rotation) > 360)) errors.push(`${mapId}/${object.name}: invalid rotation`);
   }
 
   const spawnLayer = (map.layers ?? []).find((layer) => layer.type === "objectgroup" && layer.name === "spawns");

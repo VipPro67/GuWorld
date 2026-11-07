@@ -1250,7 +1250,7 @@ NPC `MINER` và `FARMER` tăng sản lượng node phù hợp; NPC `REFINER` tă
 
 #### Cảnh quan các khu tân thủ (Tiled)
 
-Năm artifact `tan_thu_coc_*.json` có `properties.scenery_theme` và một object layer `scenery`. Mỗi object khai báo `asset_id` ổn định từ `frontend/src/game/assets/landscape-assets.json`, `scale` trong khoảng 0.5–2 và `collision_mode=decor`. Object placement mới dùng tọa độ pixel Tiled và runtime chia cho 24 px/world unit; spawn/collision cũ tiếp tục dùng tọa độ world unit. Các prop đợt đầu chỉ trang trí; vật cản gameplay vẫn phải được vẽ vào layer `collision`. Runtime cull prop theo camera, dùng buffer một viewport và tái sử dụng sprite.
+Năm artifact `tan_thu_coc_*.json` có `properties.scenery_theme` và một object layer `scenery`. Mỗi object khai báo `asset_id` ổn định từ `frontend/src/game/assets/landscape-assets.json`, `scale` trong khoảng 0.5–2, `collision_mode=decor` và có thể có `rotation` theo độ. Manifest giữ thêm `renderScale` và `originY` để điều chỉnh kích cỡ/điểm neo theo loại asset mà không đổi world coordinates. Object placement mới dùng tọa độ pixel Tiled và runtime chia cho 24 px/world unit; spawn/collision cũ tiếp tục dùng tọa độ world unit. Các prop đợt đầu chỉ trang trí; vật cản gameplay vẫn phải được vẽ vào layer `collision`. Runtime cull prop theo camera, dùng buffer một viewport và tái sử dụng sprite.
 
 Chạy `cd frontend && npm run validate:landscape` để kiểm tra asset ID, theme, tọa độ, buffer spawn 64 world unit, giới hạn artifact 8 MiB và byte parity giữa map backend/client. Khi thay đổi vị trí spawn gameplay, tăng `map_version`; khi chỉ đổi cảnh quan, tăng `content_version`.
 

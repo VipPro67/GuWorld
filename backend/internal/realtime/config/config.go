@@ -18,7 +18,7 @@ const defaultGuProfiles = "data/mmo/gu/transpiled_profiles.json"
 const DefaultMapVersion = "regions-v1"
 const DefaultContentVersion = "region-content-v1"
 const StarterMapVersion = "regions-v2"
-const StarterContentVersion = "landscape-v1"
+const StarterContentVersion = "landscape-v2"
 const LegacyWorldMapVersion = "legacy-converted-v2"
 const LegacyWorldContentVersion = "legacy-regions-v2"
 
