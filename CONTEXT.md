@@ -35,7 +35,7 @@ Thực thể đồng hành (`COMPANION_BEAST` hoặc `VARIANT_NPC`) trong mô ph
 _Avoid_: EntityMonster, pet record
 
 ### Nô Thú Channeling (Enslavement Channeling)
-Hành vi dẫn kênh thi triển Nô Thú Cổ lên quái hoang trong realtime khi HP dưới ngưỡng hoặc bị khống chế để bắt thú thành Actor Instance.
+Hành vi dẫn kênh thi triển Nô Thú Cổ lên quái hoang còn sống trong realtime để bắt thú thành Actor Instance; HP thấp hoặc khống chế làm tăng xác suất nhưng không bắt buộc để bắt đầu.
 _Avoid_: Turnbase capture, instant catch
 
 ### Lệnh Chiến Thuật (Pet Command Stance)

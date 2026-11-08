@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -92,6 +94,7 @@ type RealtimeJoinState struct {
 	PartyID                   string
 	PvPEnabled                bool
 	EquippedGu                []RealtimeEquippedGu
+	CaptureGuBonuses          map[string]float64
 	KillerMoves               []RealtimeKillerMove
 	Companions                []RealtimeCompanion
 	EquippedGuHouse           *models.GuHouseCombatProfile
@@ -127,6 +130,61 @@ func (move RealtimeKillerMove) ProjectRealtimeEffects() realtimeeffects.KillerMo
 		BackfireStatus: move.BackfireStatus, Complexity: move.Complexity, DamageScale: move.DamageScale,
 		WindupMS: move.RealtimeWindupMS, CooldownMS: move.RealtimeCooldownMS, HouseStrike: move.HouseStrike,
 	}
+}
+
+func realtimeCaptureGuBonuses(inventory models.GuInventory) (map[string]float64, error) {
+	bonuses := make(map[string]float64)
+	for _, instance := range inventory {
+		if !instance.Equipped || instance.Status != "ACTIVE" || instance.Hunger < 5 || instance.InstanceID == "" {
+			continue
+		}
+		spec, ok := models.GetGu(instance.GuID, instance.Rank)
+		if !ok {
+			spec, ok = models.GetGuAny(instance.GuID)
+		}
+		if !ok {
+			continue
+		}
+
+		capability, hasBonus := models.GuCapability(instance, "CAPTURE_BONUS")
+		if !hasBonus && !guSupportsCapture(spec) {
+			continue
+		}
+		bonus := 0.0
+		if hasBonus && len(capability.Params) > 0 {
+			var params struct {
+				Value float64 `json:"value"`
+			}
+			if err := json.Unmarshal(capability.Params, &params); err != nil {
+				return nil, fmt.Errorf("decode capture bonus for Gu %s: %w", instance.GuID, err)
+			}
+			bonus = params.Value
+		}
+		if math.IsNaN(bonus) || math.IsInf(bonus, 0) || bonus < 0 || bonus > 1 {
+			return nil, fmt.Errorf("capture bonus for Gu %s is outside 0..1", instance.GuID)
+		}
+		bonuses[instance.InstanceID] = bonus
+	}
+	return bonuses, nil
+}
+
+func guSupportsCapture(spec models.GuDictionaryItem) bool {
+	for _, path := range spec.Path {
+		if strings.Contains(strings.ToLower(path), "enslavement") {
+			return true
+		}
+	}
+	for _, tag := range append(append([]string(nil), spec.CombatTags...), spec.SupportTags...) {
+		if strings.Contains(strings.ToLower(tag), "enslave") {
+			return true
+		}
+	}
+	name := strings.ToLower(spec.Name)
+	if strings.Contains(name, "ngự xích") || strings.Contains(name, "nô") {
+		return true
+	}
+	id := strings.ToUpper(spec.ID)
+	return strings.Contains(id, "CONTROL_CHAIN") || strings.Contains(id, "ENSLAVE") || strings.Contains(id, "NO_")
 }
 
 func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoinState, error) {
@@ -184,6 +242,10 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 		return RealtimeJoinState{}, err
 	}
 	state.EquippedGu = loadout.EquippedGu
+	state.CaptureGuBonuses, err = realtimeCaptureGuBonuses(player.GuInventory)
+	if err != nil {
+		return RealtimeJoinState{}, err
+	}
 	state.KillerMoves = loadout.KillerMoves
 	if err := tx.Commit(); err != nil {
 		return RealtimeJoinState{}, err

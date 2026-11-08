@@ -357,7 +357,7 @@ func (w *World) resolveCaptureLocked(caster *Entity, pending *PendingCast) {
 	}
 
 	fSoul := 1.0
-	bGu := 0.15
+	bGu := caster.CaptureGuBonuses[pending.CaptureGuID]
 
 	captureChance := math.Max(0.02, math.Min(0.95, (pBase*fRank*fHP*fCC*fSoul)+bGu))
 

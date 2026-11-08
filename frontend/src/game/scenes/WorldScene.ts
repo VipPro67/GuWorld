@@ -7,6 +7,7 @@ import { landscapeTextureKey, landscapeThemeForMap, type LandscapeTheme } from "
 import { MotionController } from "../motion/MotionController.ts";
 import { CastController, type CastDelegate, type CastView } from "../cast/CastController.ts";
 import { CastTelegraph } from "../combat/CastTelegraph.ts";
+import { captureNoticeForEvent } from "../combat/capture-notice.ts";
 import { ProjectileView } from "../combat/ProjectileView.ts";
 import { VFXPool, type FloatingTextOptions } from "../combat/VFXPool.ts";
 import { GuVFXManager } from "../combat/GuVFXManager.ts";
@@ -764,9 +765,22 @@ export class WorldScene extends Phaser.Scene {
         }
         return;
       }
-      case "CAST_REJECTED":
-        this.notice(payload.skill_id === "BASIC_ATTACK" ? `Đánh thường bị từ chối: ${reason || "thử lại"}` : `Không cast được: ${reason || "bị từ chối"}`);
+      case "CAST_REJECTED": {
+        const captureNotice = captureNoticeForEvent(event);
+        this.notice(captureNotice ?? (payload.skill_id === "BASIC_ATTACK" ? `Đánh thường bị từ chối: ${reason || "thử lại"}` : `Không cast được: ${reason || "bị từ chối"}`));
         return;
+      }
+      case "CAPTURE_STARTED":
+      case "CAPTURE_INTERRUPTED":
+      case "CAPTURE_SUCCESS":
+      case "CAPTURE_FAILED":
+      case "SOUL_BACKFIRE": {
+        if (event.source_id === this.selfId) {
+          const captureNotice = captureNoticeForEvent(event);
+          if (captureNotice) this.notice(captureNotice);
+        }
+        return;
+      }
       case "CAST_INTERRUPTED":
         if (event.target_id === this.selfId || event.source_id === this.selfId) this.telegraph.clearLockedDash();
         this.notice("Cast bị ngắt");
@@ -1688,4 +1702,3 @@ function isTextField(target: EventTarget | Element | null): boolean {
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
-

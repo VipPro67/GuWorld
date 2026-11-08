@@ -237,6 +237,35 @@ test("WorldRuntime joins, predicts movement and handles click targets", async ()
   assert.equal(runtime.getStatus(), "closed");
 });
 
+test("WorldRuntime shows capture progress and outcome notices", async () => {
+  const fake = new FakeTransport();
+  const runtime = new WorldRuntime({ transportFactory: () => fake });
+  await runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+
+  fake.emitEvent({ event_id: 1, tick: 10, type: "CAPTURE_STARTED", source_id: "player-1" });
+  assert.equal(runtime.getCombatNotice(), "Đang kết ấn Nô Đạo...");
+  fake.emitEvent({
+    event_id: 2,
+    tick: 70,
+    type: "CAPTURE_FAILED",
+    source_id: "player-1",
+    payload: { reason: "resisted" },
+  });
+  assert.equal(runtime.getCombatNotice(), "Thu phục thất bại: dã thú đã chống cự.");
+  fake.emitEvent({ event_id: 3, tick: 130, type: "CAPTURE_SUCCESS", source_id: "player-1" });
+  assert.equal(runtime.getCombatNotice(), "Đã thu phục thành công!");
+  fake.emitEvent({
+    event_id: 4,
+    tick: 131,
+    type: "CAST_REJECTED",
+    source_id: "player-1",
+    payload: { skill_id: "SKILL_ENSLAVE_CHANNELING", reason: "capture_gu_required" },
+  });
+  assert.equal(runtime.getCombatNotice(), "Cần trang bị Cổ Nô Đạo còn hoạt động để thu phục.");
+
+  runtime.disconnect();
+});
+
 test("dash snapshots control self position until DASH_ENDED", async () => {
   const fake = new FakeTransport();
   const runtime = new WorldRuntime({ transportFactory: () => fake });

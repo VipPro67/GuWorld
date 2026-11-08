@@ -433,6 +433,7 @@ func TestAdmissionBuildsOwnedGuLoadoutAndCastsRealtimeSkill(t *testing.T) {
 	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
 		return handlers.RealtimeJoinState{
 			MapID: "forest", RegionID: "forest", X: 0, Y: 0, HP: 100, BaseHP: 100, Rank: 3, CurrentMana: 20, MaxMana: 80, BaseAttack: 30,
+			CaptureGuBonuses: map[string]float64{"capture-gu-instance": 0.2},
 			EquippedGu: []handlers.RealtimeEquippedGu{
 				{InstanceID: "inst-frost", GuID: "GU_WHITE_FROST", Rank: 3, Hunger: 10, Usable: true, ManaCost: 2.5, DamageScale: 1.5},
 				{InstanceID: "inst-arrow", GuID: "GU_WATER_ARROW", Rank: 1, Hunger: 10, Usable: true, ManaCost: 0.25, DamageScale: 2},
@@ -459,6 +460,19 @@ func TestAdmissionBuildsOwnedGuLoadoutAndCastsRealtimeSkill(t *testing.T) {
 	}
 	if welcome.LoadoutRevision == "" {
 		t.Fatal("welcome is missing the loadout revision")
+	}
+	snapshot, err := manager.Snapshot(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	playerHasCaptureBonus := false
+	for _, entity := range snapshot.Entities {
+		if entity.ID == sim.EntityID(playerID.String()) {
+			playerHasCaptureBonus = entity.CaptureGuBonuses["capture-gu-instance"] == 0.2
+		}
+	}
+	if !playerHasCaptureBonus {
+		t.Fatal("admission did not attach the server-side capture Gu bonus")
 	}
 	if err := admission.Cast(playerID, controllerID, protocol.Cast{Seq: 1, Slot: 1, Mode: "TARGET", TargetID: "m:0"}); err != nil {
 		t.Fatal(err)

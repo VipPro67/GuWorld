@@ -637,7 +637,9 @@ func (w *World) startCaptureLocked(caster *Entity, command CaptureCommand) {
 	reject := func(reason string) {
 		w.emitEvent(combat.Event{
 			Type: combat.EventCastRejected, SourceID: string(caster.ID),
-			Reason: reason,
+			TargetID: string(command.TargetID),
+			SkillID:  "SKILL_ENSLAVE_CHANNELING",
+			Reason:   reason,
 		})
 	}
 	if caster.Kind != EntityPlayer || caster.Vitals.HP <= 0 {
@@ -667,15 +669,13 @@ func (w *World) startCaptureLocked(caster *Entity, command CaptureCommand) {
 		return
 	}
 
-	if distance(caster.Transform.Position, target.Transform.Position) > 5.0 {
+	if distance(caster.Transform.Position, target.Transform.Position) > 6.0 {
 		reject("out_of_range")
 		return
 	}
 
-	hpPct := target.Vitals.HP / target.Vitals.MaxHP
-	hasCC := w.isStunned(target) || w.hasStatus(target, "BIND") || w.hasStatus(target, "ROOT") || w.hasStatus(target, "FREEZE") || w.hasStatus(target, "PETRIFY")
-	if hpPct > 0.25 && !hasCC {
-		reject("monster_not_subdued")
+	if _, ok := caster.CaptureGuBonuses[command.GuID]; !ok {
+		reject("capture_gu_required")
 		return
 	}
 

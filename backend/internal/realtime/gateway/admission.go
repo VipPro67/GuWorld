@@ -676,6 +676,7 @@ func (a *Admission) join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		PartyID:           state.PartyID,
 		PvPEnabled:        state.PvPEnabled,
 		Combat:            playerCombat,
+		CaptureGuBonuses:  state.CaptureGuBonuses,
 		EquippedGuHouse:   state.EquippedGuHouse,
 		GuHouseDurability: state.EquippedGuHouseDurability,
 	}

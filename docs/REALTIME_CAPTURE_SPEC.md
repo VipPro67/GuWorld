@@ -2,7 +2,7 @@
 
 ## 1. Tổng Quan Quy Trình
 
-Cơ chế thu phục dã thú trong chiến đấu Realtime (20Hz zone sim) thay thế hoàn toàn hệ thống turnbase cũ. Cổ sư phải trực tiếp tiếp cận quái vật trên bản đồ thế giới, áp chế sinh lực quái, và tiến hành dẫn kênh (Channeling) kết ấn Nô Đạo.
+Cơ chế thu phục dã thú trong chiến đấu Realtime (20Hz zone sim) thay thế hoàn toàn hệ thống turnbase cũ. Cổ sư phải trực tiếp tiếp cận quái vật trên bản đồ thế giới và tiến hành dẫn kênh (Channeling) kết ấn Nô Đạo. Không cần giảm HP hoặc khống chế quái trước; các điều kiện này chỉ ảnh hưởng xác suất bắt.
 
 ```mermaid
 sequenceDiagram
@@ -15,9 +15,9 @@ sequenceDiagram
 
     Client->>Gateway: Envelope { type: "world.capture", target_id, gu_id }
     Gateway->>Zone: Enqueue Capture Intent
-    Zone->>Zone: Validate (% HP <= 25% or CC, Range <= 5m, Mana >= 20)
+    Zone->>Zone: Validate (capture Gu equipped, Range <= 6m, Mana >= 20)
     alt Không đủ điều kiện
-        Zone-->>Gateway: Event { type: "CAST_REJECTED", reason: "target_not_ready" }
+        Zone-->>Gateway: Event { type: "CAST_REJECTED", reason: "capture_gu_required / out_of_range / insufficient_mana" }
         Gateway-->>Client: Hiển thị từ chối / Không thể bắt
     else Đủ điều kiện
         Zone->>Zone: Set Caster Pending (3.0s = 60 ticks, Root movement)
@@ -80,17 +80,18 @@ const (
 
 ## 3. Điều Kiện Bắt Đầu Dẫn Kênh (Pre-conditions)
 
-Khi nhận `CaptureIntent`, `Zone Sim` kiểm tra đồng thời 6 điều kiện trong tick:
+Khi nhận `CaptureIntent`, `Zone Sim` kiểm tra 4 nhóm điều kiện trong tick:
 1. **Trạng thái Cổ sư**: `HP > 0`, không bị Choáng (`isStunned == false`), không bị Câm lặng (`isSilenced == false`), không đang trong trạng thái niệm chiêu khác (`Combat.Pending == nil`).
-2. **Trạng thái Mục tiêu**: Tồn tại trong zone, `HP > 0`, `Kind == EntityMonster`, `AI.Template.IsCapturable == true`.
-3. **Ngưỡng Áp Chế**:
-   - $\text{HP Pct} \le 25\%$ **HOẶC** Quái đang trúng hiệu ứng khống chế cứng (`STUN`, `FREEZE`, `PETRIFY`, `BIND`).
-4. **Cự Ly**: $\text{Distance}(\text{Caster}, \text{Target}) \le 5.0\text{m}$.
-5. **Cổ Trùng & Chân Nguyên**: Cổ sư sở hữu Nô Thú Cổ tương thích và đủ Chân nguyên (mặc định 20 Mana).
+2. **Trạng thái Mục tiêu**: Tồn tại trong zone, `HP > 0`, `Kind == EntityMonster`, đang hoạt động.
+3. **Cự Ly**: $\text{Distance}(\text{Caster}, \text{Target}) \le 6.0\text{m}$.
+4. **Cổ Trùng & Chân Nguyên**: `gu_id` phải thuộc Cổ Nô Đạo đang trang bị, trạng thái `ACTIVE`, độ no tối thiểu 5; Chân nguyên đủ 20 Mana. Server tra cứu capability từ dữ liệu Cổ, không tin bonus do client tự khai báo.
+
+Quái có thể bị thu phục ở mọi mức HP khi còn sống. Hạ HP hoặc khống chế cứng (`STUN`, `FREEZE`, `PETRIFY`, `BIND`, `ROOT`) làm tăng xác suất bắt.
 
 Nếu thỏa mãn:
 - Gán `caster.Combat.Pending = &PendingCast{ Mode: ModeCapture, TargetID: target.ID, ResolveTick: w.tick + 60, MovementPolicy: "ROOT" }`.
 - Phát sự kiện `CAPTURE_STARTED` (thời lượng 60 ticks = 3.0 giây).
+- Client hiển thị thông báo bắt đầu, thành công, thất bại hoặc bị gián đoạn từ các event tương ứng.
 
 ---
 

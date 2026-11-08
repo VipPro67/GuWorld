@@ -160,6 +160,7 @@ type Entity struct {
 	Companion         CompanionState               `json:"-"`
 	Transformation    TransformationState          `json:"-"`
 	EquippedGuHouse   *models.GuHouseCombatProfile `json:"-"`
+	CaptureGuBonuses  map[string]float64           `json:"-"`
 	GuHouseDurability float64                      `json:"-"`
 	GuHouseWearDamage float64                      `json:"-"`
 

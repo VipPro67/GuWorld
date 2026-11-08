@@ -1,4 +1,5 @@
 import { WorldRealtimeError } from "../network/WorldRealtimeError.ts";
+import { captureNoticeForEvent } from "../combat/capture-notice.ts";
 import { WorldTransport, type WorldTransportOptions } from "../network/WorldTransport.ts";
 import type { WorldTransportLike } from "../network/Transport.ts";
 import { BACKEND_URL } from "../../lib/config.ts";
@@ -871,7 +872,10 @@ export class WorldRuntime {
         for (const listener of this.transferListeners) listener(transfer);
       }),
       this.socket.onEvents((event) => {
-        if (event.type === "CAST_REJECTED") {
+        const captureNotice = captureNoticeForEvent(event);
+        if (event.source_id === this.selfId && captureNotice) {
+          this.combatNotice = captureNotice;
+        } else if (event.type === "CAST_REJECTED") {
           const reason = typeof event.payload?.reason === "string" ? event.payload.reason : "rejected";
           this.combatNotice = `Cast: ${reason}`;
         } else if (event.type === "STATUS_APPLIED") {
