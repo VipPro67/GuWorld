@@ -368,3 +368,53 @@ func TestCompanionAIAndDeath(t *testing.T) {
 		t.Errorf("expected EventCompanionInjured or EventCompanionPermadeath event in %+v", events)
 	}
 }
+
+func TestDefendingCompanionsAttackMonsterAggroingOwner(t *testing.T) {
+	world, err := NewWorldForKeyWithSeed(ZoneKey{MapID: "arena", InstanceID: "companion-defense", RulesetVersion: "v1"}, 16, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player := Entity{
+		ID: "p1", Kind: EntityPlayer, Vitals: Vitals{HP: 100, MaxHP: 100},
+		Transform: Transform{Position: Vec2{X: 10, Y: 10}}, Radius: 0.5,
+	}
+	monster := newTestMonster("m1", Vec2{X: 10.8, Y: 10}, 100)
+	monster.Vitals = Vitals{HP: 500, MaxHP: 500}
+	companions := []Entity{
+		{
+			ID: "comp1", Kind: EntityCompanion, Vitals: Vitals{HP: 50, MaxHP: 50},
+			Transform: Transform{Position: Vec2{X: 9.5, Y: 10.5}}, Speed: 4, Radius: 0.5,
+			Companion: CompanionState{Active: true, OwnerID: player.ID, Stance: StanceDefend, FollowRadius: 4, LeashRadius: 15, AttackRange: 2, Rank: 1},
+		},
+		{
+			ID: "comp2", Kind: EntityCompanion, Vitals: Vitals{HP: 50, MaxHP: 50},
+			Transform: Transform{Position: Vec2{X: 10.5, Y: 10.5}}, Speed: 4, Radius: 0.5,
+			Companion: CompanionState{Active: true, OwnerID: player.ID, Stance: StanceDefend, FollowRadius: 4, LeashRadius: 15, AttackRange: 2, Rank: 1},
+		},
+	}
+	entities := append([]Entity{player, monster}, companions...)
+	if err := world.AddEntities(entities); err != nil {
+		t.Fatal(err)
+	}
+
+	attackingCompanions := map[EntityID]bool{}
+	playerWasHit := false
+	for range 20 {
+		for _, event := range world.Step().Events {
+			if event.Type == combat.EventBasicAttack && event.TargetID == string(monster.ID) {
+				attackingCompanions[EntityID(event.SourceID)] = true
+			}
+			if event.Type == combat.EventDamageApplied && event.TargetID == string(player.ID) && event.SourceID == string(monster.ID) {
+				playerWasHit = true
+			}
+		}
+	}
+	if !playerWasHit {
+		t.Fatal("monster never attacked its nearby owner target")
+	}
+	for _, companion := range companions {
+		if !attackingCompanions[companion.ID] {
+			t.Errorf("defending companion %q did not attack the monster", companion.ID)
+		}
+	}
+}

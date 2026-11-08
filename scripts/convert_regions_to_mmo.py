@@ -239,7 +239,7 @@ def main():
 
         # 2. Spawn archetype packs from MonsterSpawn.csv, weighted by Region.csv
         # cell_type_weights. Every child map (including SAFE_ZONE) honours its
-        # authored Monster ratio; SAFE_ZONE monsters are made passive at runtime.
+        # authored Monster ratio; safe rulesets only disable player-vs-player damage.
         region_archetypes = [s for _, s in monster_spawns.get(region_id, []) if s.get("monster_id")]
         region_min_rank = number(row, "min_rank", 1)
         region_max_rank = number(row, "max_rank", 9)

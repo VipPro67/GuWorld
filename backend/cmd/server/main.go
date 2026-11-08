@@ -77,6 +77,19 @@ func init() {
 	os.Setenv("TZ", "Asia/Ho_Chi_Minh")
 }
 
+func realtimeMonsterSpawn(spawn nav.Spawn, template models.MonsterTemplate) realtimeworld.MonsterSpawn {
+	stats := realtimeai.DefaultStats(template.Type)
+	return realtimeworld.MonsterSpawn{
+		TemplateID: template.ID, Rank: spawn.Rank, Name: template.Name, X: spawn.X, Y: spawn.Y,
+		MaxHP: template.MaxHP, AttackDamage: template.BaseAttack, Defense: template.BaseDefense,
+		Speed: stats.Speed, Radius: stats.Radius,
+		AggroRadius: stats.AggroRadius, LeashRadius: stats.LeashRadius,
+		AttackRange: stats.AttackRange, PatrolRadius: stats.PatrolRadius,
+		AttackCooldownTicks: stats.AttackCooldownTicks, RespawnTicks: stats.RespawnTicks,
+		SplashRadius: stats.SplashRadius, SplashDamage: stats.SplashDamage,
+	}
+}
+
 func main() {
 	var envLoaded bool
 	var loadedEnvPath string
@@ -369,17 +382,7 @@ func main() {
 							logger.S.Warnf("Realtime map %q monster spawn %q references unknown monster_id %q", key.MapID, spawn.Name, spawn.MonsterID)
 							continue
 						}
-						stats := realtimeai.DefaultStats(template.Type)
-						monsters = append(monsters, realtimeworld.MonsterSpawn{
-							TemplateID: template.ID, Rank: spawn.Rank, Name: template.Name, X: spawn.X, Y: spawn.Y,
-							MaxHP: template.MaxHP, AttackDamage: template.BaseAttack, Defense: template.BaseDefense,
-							Speed: stats.Speed, Radius: stats.Radius,
-							AggroRadius: stats.AggroRadius, LeashRadius: stats.LeashRadius,
-							AttackRange: stats.AttackRange, PatrolRadius: stats.PatrolRadius,
-							AttackCooldownTicks: stats.AttackCooldownTicks, RespawnTicks: stats.RespawnTicks,
-							SplashRadius: stats.SplashRadius, SplashDamage: stats.SplashDamage,
-							Passive: loadedMap.Ruleset == "safe",
-						})
+						monsters = append(monsters, realtimeMonsterSpawn(spawn, template))
 					}
 				}
 				portals := make([]realtimeworld.Portal, 0, len(loadedMap.Portals))

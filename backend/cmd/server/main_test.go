@@ -11,7 +11,42 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
+	"github.com/vippro67/GuWorld/backend/internal/realtime/nav"
 )
+
+func TestSafeMapMonsterSpawnsAreHostile(t *testing.T) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not locate server test source")
+	}
+	mapPath := filepath.Join(filepath.Dir(sourceFile), "../../data/mmo/maps/tan_thu_coc_nam_cuong.json")
+	loadedMap, err := nav.LoadFile(mapPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loadedMap.Ruleset != "safe" {
+		t.Fatalf("starter map ruleset=%q, want safe", loadedMap.Ruleset)
+	}
+
+	var monsterSpawns int
+	for _, spawn := range loadedMap.Spawns {
+		if spawn.Kind != "monster" {
+			continue
+		}
+		monsterSpawns++
+		template := models.MonsterTemplate{ID: spawn.MonsterID, Name: spawn.MonsterID, Type: "normal", MaxHP: 100, BaseAttack: 10}
+		got := realtimeMonsterSpawn(spawn, template)
+		if got.Passive {
+			t.Errorf("safe-map monster %q is still passive", spawn.MonsterID)
+		}
+		if got.AggroRadius <= 0 {
+			t.Errorf("safe-map monster %q has no aggro radius", spawn.MonsterID)
+		}
+	}
+	if monsterSpawns == 0 {
+		t.Fatal("starter map has no monster spawns to validate")
+	}
+}
 
 func TestRealtimeCaptureInsertUsesMonsterTemplateColumns(t *testing.T) {
 	_, sourceFile, _, ok := runtime.Caller(0)

@@ -72,7 +72,8 @@ The file is a small Tiled-compatible subset:
 - Monster pack density follows `Region.csv` `pool_weights.cell_type_weights`:
   the Monster share is compared to the 30/100 KHU_VUC reference and scaled by
   map area; each pack picks its archetype from `MonsterSpawn.csv` weighted by
-  `chance`. `SAFE_ZONE` packs carry `passive=true` at runtime (no auto-aggro).
+  `chance`. System monsters actively acquire nearby players in every ruleset;
+  `SAFE_ZONE` still disables player-vs-player damage.
 - The sample `realtime_preview` map is 64×48 with border walls, obstacle blocks,
   player/monster/NPC spawns and a vertical path.
 

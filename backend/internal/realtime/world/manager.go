@@ -374,8 +374,8 @@ type MonsterSpawn struct {
 	RespawnTicks        uint32
 	SplashRadius        float64
 	SplashDamage        float64
-	// Passive monsters (SAFE_ZONE content) never initiate combat. They keep
-	// their retaliation table so a player can opt into a training fight.
+	// Explicitly passive monsters never initiate combat but can retaliate when
+	// a player attacks first.
 	Passive bool
 	// PersistentID links a replayed realtime entity to its durable row
 	// (tribulation_enemies.id or aperture_resource_nodes.id).
