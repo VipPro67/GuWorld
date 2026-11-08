@@ -239,3 +239,14 @@ _Avoid_: Passive HP regen
 ### Tu Bổ Cổ Trùng (Gu Restoration & Mending)
 Hành động chủ động dùng Chân Nguyên ôn dưỡng (với chấn thương nhẹ) hoặc phối hợp Dược Thảo, Tiên Nguyên Thạch, nguyên liệu luyện Cổ đồng hệ (khi chấn thương nặng hoặc độ bền dưới 20) để chữa lành kết cấu Cổ trùng, khôi phục linh tính thi triển.
 _Avoid_: Blacksmith repair
+
+## Observability, Tracing & Diagnostics (Hệ Thống Quan Sát, Truy Vết & Chẩn Đoán)
+
+### Khối Thu Nạp Lỗi (Error Intake Module)
+Module sâu nằm tại seam của HTTP handler, chịu trách nhiệm chuẩn hóa phân loại lỗi (domain error vs system error), ghi nhận c.Error(err) cho middleware, phát log có cấu trúc mang ngữ cảnh đến Zap, và trả về phản hồi an toàn cho client kèm mã Trace ID. Ngăn chặn triệt để việc nuốt lỗi hoặc lộ cấu trúc DB nội bộ ra ngoài.
+_Avoid_: Ad-hoc c.JSON(500), generic raw string error
+
+### Mã Truy Vết Ngữ Cảnh (Contextual Trace Identifier / Trace ID)
+Chuỗi định danh duy nhất cho một chu trình xử lý (HTTP request, WebTransport frame, worker tick), được tạo lập ngay tại intake seam, tiêm vào Go context.Context, đính kèm vào header phản hồi X-Trace-ID (được expose qua CORS), truyền tải đến client toast và lưu trong bộ nhớ đệm chẩn đoán của server. Cho phép liên kết 1-1 giữa thông báo lỗi trên UI của người chơi với log chi tiết và trace trên bảng điều khiển Quản trị.
+_Avoid_: Client-side generated random error, untraceable exception
+

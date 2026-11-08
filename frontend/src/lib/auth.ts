@@ -177,6 +177,18 @@ export const authFetch = async (
     credentials: "include",
     signal,
   });
+
+  const traceId = response.headers.get("X-Trace-ID");
+  if (traceId) {
+    Object.defineProperty(response, "traceId", { value: traceId, configurable: true, writable: true });
+  }
+
+  const requestURL = String(input);
+  if (!response.ok && typeof window !== "undefined") {
+    const errorTrace = traceId ? ` [Trace: ${traceId}]` : "";
+    console.warn(`[HTTP ${response.status}] ${requestURL}${errorTrace}`);
+  }
+
   if (response.status === 409 && typeof window !== "undefined") {
     const payload = await response.clone().json().catch(() => null) as { error?: string } | null;
     if (payload?.error?.includes("bị thay thế bởi tab mới")) {
@@ -186,7 +198,6 @@ export const authFetch = async (
       }
     }
   }
-  const requestURL = String(input);
   if (response.status === 403 && typeof window !== "undefined" && requestURL.includes("/api/admin/") && !requestURL.includes("/api/admin/me")) {
     const denied = await response.clone().json().catch(() => null) as { permission?: unknown } | null;
     if (typeof denied?.permission === "string") {

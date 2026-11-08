@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { useUIStore, ToastMessage } from "@/store/useUIStore";
-import { CheckCircle2, AlertTriangle, Info, X } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Info, X, Copy, Check } from "lucide-react";
 
 export const ToastContainer: React.FC = () => {
   const toasts = useUIStore((s) => s.toasts);
@@ -29,7 +29,20 @@ interface ToastItemProps {
 }
 
 const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
-  const { message, type } = toast;
+  const { message, type, traceId } = toast;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyTrace = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!traceId) return;
+    try {
+      await navigator.clipboard.writeText(traceId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   // Configuration based on toast type
   const configs = {
@@ -82,6 +95,17 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
         <p className="text-[11px] sm:text-sm font-mono font-medium text-zinc-200 leading-snug sm:leading-relaxed break-words">
           {message}
         </p>
+        {traceId && (
+          <button
+            type="button"
+            onClick={handleCopyTrace}
+            className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-colors"
+            title="Nhấn để sao chép mã Trace ID tra cứu lỗi"
+          >
+            <span>Trace: #{traceId}</span>
+            {copied ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5 text-zinc-500" />}
+          </button>
+        )}
       </div>
 
       {/* Close button */}

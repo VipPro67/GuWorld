@@ -29,10 +29,15 @@ const (
 
 var traceSeq uint64
 
-func generateTraceID() string {
+// GenerateTraceID generates a unique hex trace identifier.
+func GenerateTraceID() string {
 	seq := atomic.AddUint64(&traceSeq, 1)
 	now := time.Now().UnixNano()
 	return fmt.Sprintf("%08x%04x", uint32(now), uint16(seq))
+}
+
+func generateTraceID() string {
+	return GenerateTraceID()
 }
 
 // loggingResponseWriter wraps gin.ResponseWriter to capture the response body.
@@ -585,7 +590,8 @@ func (t *RequestTracker) FilterTraces(opts FilterOptions) FilterResult {
 			continue
 		}
 		if searchLower != "" {
-			match := strings.Contains(strings.ToLower(trace.PlayerID), searchLower) ||
+			match := strings.Contains(strings.ToLower(trace.ID), searchLower) ||
+				strings.Contains(strings.ToLower(trace.PlayerID), searchLower) ||
 				strings.Contains(strings.ToLower(trace.Username), searchLower) ||
 				strings.Contains(strings.ToLower(trace.ClientIP), searchLower) ||
 				strings.Contains(strings.ToLower(trace.Path), searchLower)
@@ -693,6 +699,31 @@ func (t *RequestTracker) Reset() {
 	t.tracesMu.Unlock()
 }
 
+// RecordWorkerEvent registers background worker executions, failures or panics in the diagnostic ring.
+func RecordWorkerEvent(workerName string, err error, duration time.Duration) {
+	status := http.StatusOK
+	errMsg := ""
+	if err != nil {
+		status = http.StatusInternalServerError
+		errMsg = err.Error()
+	}
+	traceID := GenerateTraceID()
+	durMs := float64(duration.Nanoseconds()) / 1e6
+
+	GlobalTracker.RecordTraceOnly(RequestTrace{
+		ID:           traceID,
+		Timestamp:    time.Now().Add(-duration),
+		Method:       "WORKER",
+		Path:         "worker:" + workerName,
+		Route:        "worker:" + workerName,
+		Status:       status,
+		DurationMs:   round2(durMs),
+		ClientIP:     "127.0.0.1",
+		Error:        errMsg,
+		ErrorMessage: errMsg,
+	})
+}
+
 // Middleware creates a Gin middleware that records request performance and traces.
 func Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -700,9 +731,17 @@ func Middleware() gin.HandlerFunc {
 		atomic.AddInt64(&GlobalTracker.activeRequests, 1)
 		defer atomic.AddInt64(&GlobalTracker.activeRequests, -1)
 
-		// Fast, non-blocking trace ID generation
-		traceID := generateTraceID()
-		c.Set("trace_id", traceID)
+		// Reuse existing trace ID if set by trace intake middleware, or generate a fresh one
+		traceID := ""
+		if existing, ok := c.Get("trace_id"); ok {
+			if s, ok := existing.(string); ok && s != "" {
+				traceID = s
+			}
+		}
+		if traceID == "" {
+			traceID = GenerateTraceID()
+			c.Set("trace_id", traceID)
+		}
 		c.Header("X-Trace-ID", traceID)
 		requestBody, bodyTruncated := captureRequestBody(c.Request)
 		c.Set("request_body", requestBody)

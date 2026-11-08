@@ -1206,7 +1206,7 @@ interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlic
 
 
   // Toast System Actions (state lives in useUIStore)
-  addToast: (message: string, type?: "success" | "error" | "info", duration?: number) => void;
+  addToast: (message: string, type?: "success" | "error" | "info", duration?: number, traceId?: string) => void;
   removeToast: (id: string) => void;
 
   // Confirm Dialog Actions (state lives in useUIStore)
@@ -1747,9 +1747,9 @@ export const useGameStore = create<GameState>((set, get) => {
 
   setView: (view) => useUIStore.getState().setView(view),
   setShowChangelog: (v) => useUIStore.getState().setShowChangelog(v),
-  addToast: (message, type = "info", duration = 4000) => {
+  addToast: (message, type = "info", duration = 4000, traceId?: string) => {
     const formatted = translateIDs(message);
-    useUIStore.getState().addToast(formatted, type, duration);
+    useUIStore.getState().addToast(formatted, type, duration, traceId);
   },
   removeToast: (id) => useUIStore.getState().removeToast(id),
   showConfirm: async (message, options) => {

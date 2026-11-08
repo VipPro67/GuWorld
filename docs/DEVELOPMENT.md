@@ -284,21 +284,34 @@ worker.RunEvery(ctx, 3*time.Hour, "Hunger Worker", func(ctx context.Context) {
 // Same recovery, for work that runs outside RunEvery (startup pre-runs, or
 // loops that must flush on shutdown).
 worker.SafeRun("Batch Persister", ctx, flushAll)
+
+// Error-returning variant: non-nil errors and panics are recorded into
+// the admin diagnostic trace ring buffer (monitor.RecordWorkerEvent).
+worker.RunEveryE(ctx, time.Minute, "Custom Worker", func(ctx context.Context) error {
+	return doWork(ctx)
+})
 ```
 
 Rules:
 
-- A panic inside a tick is logged with a stack trace and the loop keeps running. Never
+- A panic inside a tick is logged with a stack trace and the loop keeps running. Panics
+  and `RunEveryE` error returns are recorded in the admin monitor trace ring buffer. Never
   hand-roll a `for { select { case <-ctx.Done(): ... case <-ticker.C: ... } }` loop:
   it has no recovery, and a panic in a worker goroutine takes the whole process down.
 - Always pass `ctx`; `RunEvery` stops on cancellation.
 - Workers that must flush on shutdown (batch persister, last-activity batcher) or that
-  need a `done` channel keep their own loop, but wrap the tick body in `SafeRun`.
+  need a `done` channel keep their own loop, but wrap the tick body in `SafeRun` (or `SafeRunE`).
 - Work that a tick hands off (because it opens a transaction or runs heavy CPU) goes to a
   bounded pool rather than running inline, so one slow item cannot blow the tick budget.
   Example: `dispatchWorldMonsterAttack` (`handlers/world_monsters.go`) reserves a slot on
   a buffered channel and applies a realtime monster attack under `SafeRun` in a goroutine;
   when the pool is full the attack is deferred to its next cooldown instead of queueing.
+
+### Observability & Debugging
+
+- **Trace ID**: Mỗi request HTTP và tick worker có một Trace ID độc bản (`X-Trace-ID`), tự động liên kết từ Client Toast -> HTTP Response -> Middleware -> Context Logger -> Admin Monitor.
+- `DEBUG_ERRORS=true`: Khi bật biến môi trường này hoặc ở môi trường dev (`PROD_ENV != production`), response lỗi 500 từ `httperr` sẽ đính kèm trường `"debug"` chứa chi tiết raw error từ DB/runtime. Ở production, raw error được giấu an toàn và chỉ ghi lại tại backend Zap log + monitor trace.
+- Tra cứu Trace: Trên giao diện Admin (tab "Giám sát"), nhập mã Trace ID vào ô tìm kiếm để xem toàn bộ thông tin chi tiết của request/worker gặp lỗi.
 
 ## Quản lý dữ liệu gameplay
 

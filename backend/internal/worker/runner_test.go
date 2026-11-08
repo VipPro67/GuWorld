@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -48,5 +49,31 @@ func TestSafeRunRecovers(t *testing.T) {
 	})
 	if !called {
 		t.Fatal("SafeRun did not call fn")
+	}
+}
+
+func TestSafeRunEAndEventRecorder(t *testing.T) {
+	var recordedName string
+	var recordedErr error
+	SetWorkerEventRecorder(func(workerName string, err error, duration time.Duration) {
+		recordedName = workerName
+		recordedErr = err
+	})
+	defer SetWorkerEventRecorder(nil)
+
+	// Test error recording
+	SafeRunE("test-worker-err", context.Background(), func(context.Context) error {
+		return errors.New("something went wrong")
+	})
+	if recordedName != "test-worker-err" || recordedErr == nil || recordedErr.Error() != "something went wrong" {
+		t.Fatalf("Expected recorded error, got name=%s err=%v", recordedName, recordedErr)
+	}
+
+	// Test panic recording
+	SafeRunE("test-worker-panic", context.Background(), func(context.Context) error {
+		panic("disaster")
+	})
+	if recordedName != "test-worker-panic" || recordedErr == nil || recordedErr.Error() != "panic: disaster" {
+		t.Fatalf("Expected recorded panic, got name=%s err=%v", recordedName, recordedErr)
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -41,13 +42,13 @@ func getBuildingCost(buildingName string, targetLevel int) int64 {
 func UpgradeSectBuilding(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		httperr.AbortUnauthorized(c, "Unauthorized")
 		return
 	}
 
 	var req UpgradeBuildingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		httperr.AbortBadRequest(c, "Yêu cầu không hợp lệ", err)
 		return
 	}
 
@@ -56,13 +57,13 @@ func UpgradeSectBuilding(c *gin.Context) {
 		"treasury": true, "training_ground": true,
 	}
 	if !validBuildings[req.BuildingName] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Kiến trúc không hợp lệ!"})
+		httperr.AbortBadRequest(c, "Kiến trúc không hợp lệ!")
 		return
 	}
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.AbortInternal(c, "Lỗi kết nối cơ sở dữ liệu", err)
 		return
 	}
 	defer tx.Rollback()
@@ -70,7 +71,7 @@ func UpgradeSectBuilding(c *gin.Context) {
 	var sectID, callerRank string
 	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		httperr.AbortBadRequest(c, "Đạo hữu không thuộc tông môn nào!", err)
 		return
 	}
 
@@ -153,7 +154,7 @@ func UpgradeSectBuilding(c *gin.Context) {
 	_, err = tx.Exec(`UPDATE sects SET level = $1, funds = funds - $2, buildings = $3 WHERE id = $4`, newLevel, reqFunds, newBuildings, sectID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect"})
+		httperr.AbortInternal(c, "Lỗi cập nhật kiến trúc tông môn", err)
 		return
 	}
 
@@ -172,7 +173,7 @@ func UpgradeSectBuilding(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.AbortInternal(c, "Lỗi lưu giao dịch nâng cấp tông môn", err)
 		return
 	}
 

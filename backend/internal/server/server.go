@@ -274,6 +274,23 @@ func adminRouteSpecs() []adminRouteSpec {
 	}
 }
 
+// traceIntakeMiddleware establishes the trace context at the transport intake seam.
+// It ensures that every request has a validated trace ID propagated in the Gin context,
+// the standard Go request context, and the outgoing X-Trace-ID response header.
+func traceIntakeMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		traceID := strings.TrimSpace(c.GetHeader("X-Trace-ID"))
+		if traceID == "" || len(traceID) > 64 {
+			traceID = monitor.GenerateTraceID()
+		}
+		c.Set("trace_id", traceID)
+		c.Header("X-Trace-ID", traceID)
+		ctx := logger.WithTraceID(c.Request.Context(), traceID)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
 // requestLogging logs the start and end of every request so that hung
 // handlers are visible (Gin's own logger only prints after completion).
 // It also flags requests that exceed slowRequestThreshold.
@@ -418,10 +435,14 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 		}
 		handlers.PublishPlayerRealtimeEvent(playerID, eventType, typedDomains...)
 	}
+	worker.SetWorkerEventRecorder(monitor.RecordWorkerEvent)
+
 	gin.DefaultWriter = logger.GinWriter()
 	r := gin.New()
 	r.Use(gin.Recovery())
 
+	// Trace intake must run first so trace_id is bound to both context and headers.
+	r.Use(traceIntakeMiddleware())
 	// Capture the response before requestLogging reads the values from the context.
 	r.Use(requestLogging())
 	r.Use(monitor.Middleware())
@@ -455,8 +476,8 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 		} else if allowedOriginsStr == "*" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		}
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Admin-Reason, X-Admin-Confirmation-Target, Idempotency-Key, Authorization, X-Player-Tab-ID, accept, origin, Cache-Control, X-Requested-With, If-None-Match, If-Match")
-		c.Writer.Header().Set("Access-Control-Expose-Headers", "ETag, Content-Length, Content-Disposition")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Admin-Reason, X-Admin-Confirmation-Target, Idempotency-Key, Authorization, X-Player-Tab-ID, X-Trace-ID, accept, origin, Cache-Control, X-Requested-With, If-None-Match, If-Match")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "ETag, Content-Length, Content-Disposition, X-Trace-ID")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
 		if c.Request.Method == "OPTIONS" {

@@ -317,6 +317,7 @@ func AuthRequired() gin.HandlerFunc {
 
 		c.Set("player_id", identity.PlayerID)
 		c.Set("username", identity.Username)
+		c.Request = c.Request.WithContext(logger.WithPlayerID(c.Request.Context(), identity.PlayerID.String()))
 
 		if identity.UsedCookie {
 			csrfProtection(c)

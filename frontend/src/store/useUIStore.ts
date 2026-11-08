@@ -7,6 +7,7 @@ export interface ToastMessage {
   message: string;
   type: "success" | "error" | "info";
   duration?: number;
+  traceId?: string;
 }
 
 export interface ConfirmDialogState {
@@ -18,7 +19,7 @@ export interface ConfirmDialogState {
 
 interface UIStoreState {
   toasts: ToastMessage[];
-  addToast: (message: string, type?: "success" | "error" | "info", duration?: number) => void;
+  addToast: (message: string, type?: "success" | "error" | "info", duration?: number, traceId?: string) => void;
   removeToast: (id: string) => void;
   confirmDialog: ConfirmDialogState;
   showConfirm: (message: string, options?: { confirmText?: string; cancelText?: string }) => Promise<boolean>;
@@ -37,10 +38,10 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
   showChangelog: false,
   confirmDialog: { open: false, message: "", confirmText: "Xác nhận", cancelText: "Hủy" },
 
-  addToast: (message, type = "info", duration = 4000) => {
+  addToast: (message, type = "info", duration = 4000, traceId?: string) => {
     const id = Math.random().toString(36).substring(2, 9);
     set((state) => ({
-      toasts: [...state.toasts, { id, message, type, duration }],
+      toasts: [...state.toasts, { id, message, type, duration, traceId }],
     }));
     setTimeout(() => {
       get().removeToast(id);

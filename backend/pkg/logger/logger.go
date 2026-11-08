@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -9,10 +10,91 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+type contextKey string
+
+const (
+	TraceIDKey  contextKey = "trace_id"
+	PlayerIDKey contextKey = "player_id"
+)
+
 var (
 	L *zap.Logger        = zap.NewNop()
 	S *zap.SugaredLogger = zap.NewNop().Sugar()
 )
+
+// WithTraceID embeds a trace ID into the given context.
+func WithTraceID(ctx context.Context, traceID string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, TraceIDKey, traceID)
+}
+
+// TraceIDFromContext retrieves a trace ID from context, or returns empty string.
+func TraceIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if val, ok := ctx.Value(TraceIDKey).(string); ok {
+		return val
+	}
+	return ""
+}
+
+// WithPlayerID embeds a player ID into the given context.
+func WithPlayerID(ctx context.Context, playerID string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, PlayerIDKey, playerID)
+}
+
+// PlayerIDFromContext retrieves a player ID from context, or returns empty string.
+func PlayerIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if val, ok := ctx.Value(PlayerIDKey).(string); ok {
+		return val
+	}
+	return ""
+}
+
+// FromContext returns a SugaredLogger contextualized with trace_id and player_id if present.
+func FromContext(ctx context.Context) *zap.SugaredLogger {
+	if ctx == nil || S == nil {
+		return S
+	}
+	var fields []interface{}
+	if tid := TraceIDFromContext(ctx); tid != "" {
+		fields = append(fields, "trace_id", tid)
+	}
+	if pid := PlayerIDFromContext(ctx); pid != "" {
+		fields = append(fields, "player_id", pid)
+	}
+	if len(fields) == 0 {
+		return S
+	}
+	return S.With(fields...)
+}
+
+// LFromContext returns a Zap Logger contextualized with trace_id and player_id if present.
+func LFromContext(ctx context.Context) *zap.Logger {
+	if ctx == nil || L == nil {
+		return L
+	}
+	var fields []zap.Field
+	if tid := TraceIDFromContext(ctx); tid != "" {
+		fields = append(fields, zap.String("trace_id", tid))
+	}
+	if pid := PlayerIDFromContext(ctx); pid != "" {
+		fields = append(fields, zap.String("player_id", pid))
+	}
+	if len(fields) == 0 {
+		return L
+	}
+	return L.With(fields...)
+}
 
 type ginWriter struct{}
 
