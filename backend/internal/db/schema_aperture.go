@@ -544,6 +544,105 @@ func schemaAperture() error {
 		return err
 	}
 
+	// World Gateway Portals: created when an Immortal anchors (Hạ Khiếu) into the world.
+	if err := execSchema("aperture_portals", `
+	CREATE TABLE IF NOT EXISTS aperture_portals (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		owner_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		region_id VARCHAR(50) NOT NULL REFERENCES regions(id),
+		x DOUBLE PRECISION NOT NULL,
+		y DOUBLE PRECISION NOT NULL,
+		name VARCHAR(100) NOT NULL,
+		access_policy VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+		access_key_hash VARCHAR(255),
+		concealment_power INT NOT NULL DEFAULT 0,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		CONSTRAINT uq_aperture_active_portal UNIQUE (aperture_id)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_portals_region_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_portals_region ON aperture_portals (region_id, is_active);`); err != nil {
+		return err
+	}
+
+	// Guest Roster: tracks players present inside an immortal aperture.
+	if err := execSchema("aperture_guest_roster", `
+	CREATE TABLE IF NOT EXISTS aperture_guest_roster (
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		role VARCHAR(20) NOT NULL DEFAULT 'VISITOR',
+		granted_by UUID NOT NULL REFERENCES players(id),
+		entered_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		PRIMARY KEY (aperture_id, player_id)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_guest_roster_player_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_guest_roster_player ON aperture_guest_roster (player_id);`); err != nil {
+		return err
+	}
+
+	// Tribulation Co-op Participants: tracks helpers defending an aperture.
+	if err := execSchema("tribulation_coop_participants", `
+	CREATE TABLE IF NOT EXISTS tribulation_coop_participants (
+		event_id UUID NOT NULL REFERENCES tribulation_events(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		rank INT NOT NULL,
+		primary_path VARCHAR(50) NOT NULL DEFAULT '',
+		agreed_bounty_immortal_stones INT NOT NULL DEFAULT 0,
+		is_alive BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		PRIMARY KEY (event_id, player_id)
+	);`); err != nil {
+		return err
+	}
+
+	// Aperture Alliance Contracts: Information-path contracts between host and guest.
+	if err := execSchema("aperture_alliance_contracts", `
+	CREATE TABLE IF NOT EXISTS aperture_alliance_contracts (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		host_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		guest_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		contract_tier VARCHAR(20) NOT NULL DEFAULT 'MINOR',
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+	);`); err != nil {
+		return err
+	}
+
+	// Aperture Land Spirits: manifests when host dies or an aperture becomes unowned.
+	if err := execSchema("aperture_land_spirits", `
+	CREATE TABLE IF NOT EXISTS aperture_land_spirits (
+		aperture_id UUID PRIMARY KEY REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		spirit_name VARCHAR(100) NOT NULL,
+		obsession_type VARCHAR(50) NOT NULL DEFAULT 'PATH_MASTERY',
+		obsession_desc TEXT NOT NULL DEFAULT '',
+		target_req_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		is_claimed BOOLEAN NOT NULL DEFAULT FALSE,
+		claimed_by UUID REFERENCES players(id) ON DELETE SET NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+	);`); err != nil {
+		return err
+	}
+
+	// Runtime region prerequisite for aperture interior
+	if err := execSchema("seed_aperture_interior_region", `
+		INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, paths, rules)
+		VALUES ('aperture_interior','Tiên Khiếu','Tiểu thế giới Tiên Khiếu độc lập của Cổ Tiên.',40,40,6,9,TRUE,'APERTURE',0,0,40,40,10,10,'{}'::jsonb,'[]'::jsonb,'{"pvp_mode":"SAFE_ZONE"}'::jsonb)
+		ON CONFLICT (id) DO NOTHING;
+		INSERT INTO region_world_maps (region_id, world_map_id)
+		VALUES ('aperture_interior', 'world_map')
+		ON CONFLICT (region_id) DO NOTHING;
+	`); err != nil {
+		return err
+	}
+
 	return nil
 }
 

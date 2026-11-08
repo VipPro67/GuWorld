@@ -257,6 +257,16 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 | POST | `/immortal-aperture/time-rate` |
 | POST | `/immortal-aperture/labor` |
 | POST | `/immortal-aperture/cleanse-dao-marks` | Thanh Đạo Tẩy Thể — bóc tách Đạo Ngân ngoại hệ (body `{path, marks}`), tiêu hao Tiên Nguyên Thạch, hoàn trả 30% dưới dạng Đạo Tài (`refund_item`, `refund_qty`, `refund_marks`), cooldown 1 giờ, không giới hạn lượng mỗi lần. |
+| POST | `/immortal-aperture/anchor` | Hạ Khiếu (Rank ≥ 6): neo Tiên Khiếu vào địa mạch hiện tại, mở Môn Hộ thế giới (`aperture_portals`), nhục thân tiến vào bên trong tọa trấn (`aperture:<id>` tại ô (10, 10)). Sông Quang Âm đồng bộ 1.0x, nạp +1% max Thiên Khí và Địa Khí mỗi phút. Body: `{ portal_name, access_policy }`. |
+| POST | `/immortal-aperture/unanchor` | Thu Khiếu: thu hồi Tiên Khiếu vào nhục thân, đóng Môn Hộ, thân thể trở lại tọa độ đặt khiếu ngoại giới. 3 khóa an toàn: chặn nếu còn khách trong khiếu (`guestCount > 0`), chặn nếu đang trong phiên realtime, chặn nếu đang độ kiếp. |
+| GET | `/immortal-aperture/portal` | Trả thông tin Môn Hộ thế giới đang hoạt động của chủ khiếu. |
+| POST | `/immortal-aperture/portal` | Cập nhật tên và chính sách ra vào của Môn Hộ (`OPEN`, `PARTY`, `SECT`, `HIDDEN`). |
+| POST | `/immortal-aperture/portals/:portalId/enter` | Khách bước qua Môn Hộ tiến vào bên trong Tiên Khiếu (yêu cầu đứng cùng khu vực, cự ly ≤ 3 ô, thỏa mãn access policy). Ghi danh vào `aperture_guest_roster` vai trò `VISITOR`. |
+| POST | `/immortal-aperture/leave` | Khách bước qua Môn Hộ rời khỏi Tiên Khiếu trở lại thế giới thực (Chủ khiếu không thể dùng endpoint này mà phải Thu Khiếu). |
+| GET | `/immortal-aperture/guests` | Danh sách ngoại khách đang có mặt bên trong Tiên Khiếu (`aperture_guest_roster`). |
+| POST | `/immortal-aperture/guests/:guestId/role` | Chủ khiếu phân quyền vai trò cho khách: `VISITOR` (khách thường), `ASSISTANT` (hộ pháp trợ kiếp), `PRISONER` (tù nhân phong ấn). |
+| POST | `/immortal-aperture/guests/:guestId/evict` | Chủ khiếu trục xuất khách ra ngoài qua Môn Hộ thế giới. |
+| POST | `/immortal-aperture/guests/:guestId/contract` | Lập Minh Ước Tín Đạo giữa chủ khiếu và khách (`MINOR`, `MAJOR`, `ABSOLUTE`) ngăn chặn tạo phản. |
 | POST | `/immortal-aperture/nodes/:id/repair` |
 | POST | `/immortal-aperture/nodes/repair-all` |
 | POST | `/immortal-aperture/nodes/:id/upgrade` |

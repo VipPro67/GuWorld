@@ -105,6 +105,7 @@ const RADAR_MARKER_CLASS: Record<WorldMarker["kind"], string> = {
   portal: "h-3 w-3 rounded-full bg-blue-400 border border-white shadow-[0_0_8px_#38bdf8] animate-pulse",
   sect: "h-3.5 w-3.5 rounded border text-[8px]",
   resource: "h-3 w-3 rotate-45 rounded-sm bg-emerald-400 border border-emerald-950 shadow-[0_0_7px_#10b981]",
+  aperture_portal: "h-3 w-3 rounded-full bg-amber-500 border border-yellow-200 shadow-[0_0_8px_#f59e0b] animate-pulse",
 };
 
 function radarMarkerSpec(marker: WorldMarker): { className: string; glyph: string; title: string } {
@@ -136,6 +137,9 @@ function radarMarkerSpec(marker: WorldMarker): { className: string; glyph: strin
       glyph: "",
       title: `${famous ? "Núi Danh" : "Mỏ"}: ${marker.name} · ${marker.resource?.stock_total ?? 0}/${marker.resource?.stock_cap ?? 0}`,
     };
+  }
+  if (marker.kind === "aperture_portal") {
+    return { className: RADAR_MARKER_CLASS.aperture_portal, glyph: "⛩️", title: `Môn Hộ Tiên Khiếu: ${marker.name}` };
   }
   return { className: RADAR_MARKER_CLASS.teleport, glyph: "", title: `Truyền Tống: ${marker.name}` };
 }
@@ -578,6 +582,8 @@ export function MMOHud(props: MMOHudProps) {
 
   const mySectStatus = useGameStore((state) => state.mySectStatus);
   const attackSect = useGameStore((state) => state.attackSect);
+  const enterPortal = useGameStore((state) => state.enterPortal);
+  const leaveAperture = useGameStore((state) => state.leaveAperture);
 
   // Single marker view-model: the radar and the proximity prompts below read the
   // same array the Phaser world layer draws, so they cannot drift apart.
@@ -596,6 +602,7 @@ export function MMOHud(props: MMOHudProps) {
   const closestVein = findNearestMarker(markers, props.position, "vein");
   const closestTp = findNearestMarker(markers, props.position, "teleport");
   const closestResource = findNearestMarker(markers, props.position, "resource");
+  const closestAperturePortal = findNearestMarker(markers, props.position, "aperture_portal");
   const distanceTo = (marker: { x: number; y: number } | null) =>
     marker ? Math.hypot(marker.x - props.position.x, marker.y - props.position.y) : 0;
 
@@ -1529,8 +1536,8 @@ export function MMOHud(props: MMOHudProps) {
       {props.statusText && <div className="absolute bottom-[125px] left-1/2 -translate-x-1/2 rounded border border-violet-300/30 bg-black/75 px-3 py-1 font-sans text-[11px] text-violet-100 sm:bottom-[140px] md:bottom-36 shadow-lg z-20">{props.statusText}</div>}
       {props.castProgress !== null && <div className="absolute bottom-[90px] left-1/2 w-[min(90vw,320px)] -translate-x-1/2 sm:bottom-[105px] md:bottom-28 z-20"><div className="mb-1 text-center text-xs text-amber-100">{props.castName}</div><div className="h-2 overflow-hidden rounded bg-black/70 shadow-inner"><div className="h-full bg-amber-400" style={{ width: `${pct(props.castProgress, 1)}%` }} /></div></div>}
 
-      {/* Proximity Interaction Prompts (Nguyên Tuyền, Tiên Tuyền, Chiến Lợi Phẩm, Truyền Tống Trận, Tông Môn, Mỏ Tài Nguyên) */}
-      {(closestDrop || closestVein || closestTp || closestSect || closestResource) && (
+      {/* Proximity Interaction Prompts (Nguyên Tuyền, Tiên Tuyền, Chiến Lợi Phẩm, Truyền Tống Trận, Tông Môn, Mỏ Tài Nguyên, Môn Hộ Tiên Khiếu) */}
+      {(closestDrop || closestVein || closestTp || closestSect || closestResource || closestAperturePortal || props.player?.current_region === "aperture_interior" || props.player?.current_region?.startsWith("aperture:")) && (
         <div className="pointer-events-auto absolute bottom-[145px] left-1/2 -translate-x-1/2 sm:bottom-[160px] md:bottom-44 flex flex-col items-center gap-1.5 z-20 max-w-[min(94vw,360px)]">
           {closestSect && (() => {
             const isMySect = closestSect.sect?.isMine ?? false;
@@ -1793,6 +1800,56 @@ export function MMOHud(props: MMOHudProps) {
               </div>
             );
           })()}
+
+          {closestAperturePortal && (
+            <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-amber-500/70 bg-[#1e1308e6] px-3.5 py-1.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 w-full">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-300">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-serif font-bold text-amber-200 truncate">
+                    ⛩️ {closestAperturePortal.name}
+                  </div>
+                  <div className="text-[10px] text-amber-300/80 truncate">
+                    Cự ly: {distanceTo(closestAperturePortal).toFixed(1)} ô • {closestAperturePortal.aperturePortal?.accessPolicy || "OPEN"}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void enterPortal(closestAperturePortal.id)}
+                className="shrink-0 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 border border-amber-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
+              >
+                Bước Vào
+              </button>
+            </div>
+          )}
+
+          {(props.player?.current_region === "aperture_interior" || props.player?.current_region?.startsWith("aperture:")) && (
+            <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-purple-500/70 bg-[#180a2ae6] px-3.5 py-1.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 w-full">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/20 border border-purple-400/40 text-purple-300">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-serif font-bold text-purple-200 truncate">
+                    Tiên Khiếu Giới Vực
+                  </div>
+                  <div className="text-[10px] text-purple-300/80 truncate">
+                    Môn Hộ trở lại thế giới thực
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void leaveAperture()}
+                className="shrink-0 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 border border-purple-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
+              >
+                Rời Khiếu
+              </button>
+            </div>
+          )}
         </div>
       )}
 

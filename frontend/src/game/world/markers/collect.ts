@@ -71,6 +71,29 @@ function teleportMarker(marker: MapMarkerView): WorldMarker {
   };
 }
 
+function aperturePortalMarker(marker: MapMarkerView): WorldMarker {
+  const detail = (marker.detail ?? {}) as { access_policy?: string; concealment_power?: number; owner_id?: string };
+  return {
+    id: marker.id,
+    kind: "aperture_portal",
+    region: marker.region_id,
+    x: marker.x,
+    y: marker.y,
+    name: marker.name || "Môn Hộ Tiên Khiếu",
+    tone: "rare",
+    interaction: {
+      radiusCells: MARKER_INTERACTION_RADIUS.aperture_portal,
+      label: "Bước vào",
+      action: { type: "enter-portal", targetId: marker.id },
+    },
+    aperturePortal: {
+      accessPolicy: detail.access_policy ?? "OPEN",
+      concealmentPower: detail.concealment_power ?? 0,
+      ownerId: detail.owner_id ?? "",
+    },
+  };
+}
+
 /**
  * Normalises every map source into WorldMarker[]. Order matters: structured
  * markers are collected before loose cells so a dedupe by (kind, x, y) keeps the
@@ -91,6 +114,7 @@ export function collectMarkers(sources: MarkerSources): WorldMarker[] {
     if (marker.region_id && marker.region_id !== region) continue;
     if (marker.kind === "sect") push(sectMarker(marker, sources.mySectId));
     else if (marker.kind === "teleport") push(teleportMarker(marker));
+    else if (marker.kind === "aperture_portal") push(aperturePortalMarker(marker));
   }
 
   for (const cell of sources.cells ?? []) {

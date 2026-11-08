@@ -167,6 +167,27 @@ function drawResource(ctx: MarkerDrawContext, marker: WorldMarker): void {
   });
 }
 
+function drawAperturePortal(ctx: MarkerDrawContext, marker: WorldMarker): void {
+  const g = ctx.graphics;
+  const px = marker.x * PIXELS_PER_UNIT;
+  const py = marker.y * PIXELS_PER_UNIT;
+
+  g.fillStyle(0xd97706, 0.25);
+  g.fillCircle(px, py - 6, 28);
+  g.lineStyle(2, 0xfbbf24, 0.95);
+  g.strokeCircle(px, py - 6, 28);
+  g.lineStyle(1, 0xfef3c7, 0.7);
+  g.strokeCircle(px, py - 6, 33);
+  g.fillStyle(0xf59e0b, 0.95);
+  g.fillCircle(px, py - 6, 6);
+
+  ctx.addLabel(px, py - 38, `⛩️ ${marker.name}`, {
+    size: "11px",
+    color: "#fef3c7",
+    background: "#78350fdd",
+  });
+}
+
 export function drawWorldMarker(ctx: MarkerDrawContext, marker: WorldMarker): void {
   switch (marker.kind) {
     case "vein":
@@ -186,6 +207,9 @@ export function drawWorldMarker(ctx: MarkerDrawContext, marker: WorldMarker): vo
       break;
     case "resource":
       drawResource(ctx, marker);
+      break;
+    case "aperture_portal":
+      drawAperturePortal(ctx, marker);
       break;
   }
 }

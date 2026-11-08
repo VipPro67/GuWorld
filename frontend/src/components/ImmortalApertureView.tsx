@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { operationsBy } from "@/lib/effect-blocks";
-import { useGameStore, ApertureResourceNode, ApertureResourcePoint, TribulationEnemy } from "@/store/useGameStore";
+import { useGameStore, ApertureResourceNode, ApertureResourcePoint, TribulationEnemy, ApertureGuest } from "@/store/useGameStore";
 import {
   Shield,
   Activity,
@@ -32,6 +32,7 @@ import {
   ShieldAlert,
   BookOpen,
   Gem,
+  Settings2,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 import { formatNumber, calculateTribulationProgress } from "@/lib/utils";
@@ -289,6 +290,16 @@ export const ImmortalApertureView: React.FC = () => {
     fetchDictionary,
     dictionaryLoaded,
     guDictionary,
+    portal,
+    guests,
+    fetchPortal,
+    managePortal,
+    anchorAperture,
+    unanchorAperture,
+    fetchGuests,
+    setGuestRole,
+    evictGuest,
+    signAllianceContract,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "map" | "points" | "dao" | "tribulation" | "variant_humans">("overview");
@@ -298,6 +309,18 @@ export const ImmortalApertureView: React.FC = () => {
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
   const [showHealMenu, setShowHealMenu] = useState(false);
+
+  // Aperture Anchoring & Portal / Guest State
+  const [showAnchorModal, setShowAnchorModal] = useState<boolean>(false);
+  const [anchorPortalName, setAnchorPortalName] = useState<string>("Môn Hộ Tiên Khiếu");
+  const [anchorAccessPolicy, setAnchorAccessPolicy] = useState<string>("OPEN");
+  const [showPortalManageModal, setShowPortalManageModal] = useState<boolean>(false);
+  const [portalManageName, setPortalManageName] = useState<string>("");
+  const [portalManagePolicy, setPortalManagePolicy] = useState<string>("OPEN");
+  const [showUnanchorModal, setShowUnanchorModal] = useState<boolean>(false);
+  const [showGuestModal, setShowGuestModal] = useState<boolean>(false);
+  const [contractGuest, setContractGuest] = useState<ApertureGuest | null>(null);
+  const [contractTier, setContractTier] = useState<string>("MAJOR");
 
   const [daoGroupFilter, setDaoGroupFilter] = useState<string>("ALL");
   const [daoSearch, setDaoSearch] = useState<string>("" );
@@ -365,7 +388,23 @@ export const ImmortalApertureView: React.FC = () => {
     fetchDaoNgan();
     fetchAperturePoints();
     fetchActiveTribulation();
+    fetchPortal();
+    fetchGuests();
   }, []);
+
+  useEffect(() => {
+    if (aperture?.id) {
+      fetchPortal();
+      fetchGuests();
+    }
+  }, [aperture?.id, aperture?.is_placed]);
+
+  useEffect(() => {
+    if (portal) {
+      setPortalManageName(portal.name || "Môn Hộ Tiên Khiếu");
+      setPortalManagePolicy(portal.access_policy || "OPEN");
+    }
+  }, [portal]);
 
   useEffect(() => {
     if (activeTab === "overview") {
@@ -401,6 +440,8 @@ export const ImmortalApertureView: React.FC = () => {
       fetchAperturePoints(true),
       fetchActiveTribulation(true),
       fetchVariantHumans(),
+      fetchPortal(),
+      fetchGuests(),
     ]);
     setIsReloading(false);
   };
@@ -748,6 +789,104 @@ return (
         </div>
       </div>
 
+      {/* Placement & Tam Khí Status Banner (Canon Reverend Insanity) */}
+      <div className="bg-slate-900/90 border border-slate-700/60 rounded-2xl p-4 shadow-lg backdrop-blur-md">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${
+              aperture?.is_placed
+                ? "bg-emerald-950/60 border-emerald-500/50 text-emerald-300"
+                : "bg-amber-950/60 border-amber-500/50 text-amber-300"
+            }`}>
+              <span>{aperture?.is_placed ? "⛩️ Hạ Khiếu (Tọa Lạc)" : "✨ Tiên Thể (Trên Người)"}</span>
+              {aperture?.is_placed && (
+                <span className="text-slate-400 font-mono text-[11px]">
+                  • {aperture.placed_region || portal?.region_id || "Địa Mạch"} ({aperture.placed_x ?? portal?.x ?? 500}, {aperture.placed_y ?? portal?.y ?? 500})
+                </span>
+              )}
+            </div>
+
+            <div className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-cyan-950/50 border border-cyan-500/40 text-cyan-300 flex items-center gap-1.5">
+              <Hourglass className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Sông Quang Âm: <strong>{aperture?.is_placed ? "1.0x (Đồng Bộ Ngoại Giới)" : `x${aperture?.time_rate ?? 10} lần`}</strong></span>
+            </div>
+
+            {aperture?.is_placed && (
+              <div className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-950/50 border border-purple-500/40 text-purple-300 flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-purple-400" />
+                <span>Ngoại Khách: <strong>{guests.length}</strong></span>
+              </div>
+            )}
+          </div>
+
+          {/* Tam Khí Gauges & Controls */}
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-cyan-400 font-semibold flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> Thiên Khí:
+              </span>
+              <span className="font-mono text-slate-200">
+                {Math.round(aperture?.heaven_qi ?? 1000)} / {Math.round(aperture?.max_heaven_qi ?? 1000)}
+              </span>
+              <div className="w-16 h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                <div
+                  className="h-full bg-cyan-400 transition-all duration-300"
+                  style={{ width: `${Math.min(100, ((aperture?.heaven_qi ?? 1000) / (aperture?.max_heaven_qi ?? 1000)) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400 font-semibold flex items-center gap-1">
+                <Layers className="w-3.5 h-3.5" /> Địa Khí:
+              </span>
+              <span className="font-mono text-slate-200">
+                {Math.round(aperture?.earth_qi ?? 1000)} / {Math.round(aperture?.max_earth_qi ?? 1000)}
+              </span>
+              <div className="w-16 h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                <div
+                  className="h-full bg-amber-500 transition-all duration-300"
+                  style={{ width: `${Math.min(100, ((aperture?.earth_qi ?? 1000) / (aperture?.max_earth_qi ?? 1000)) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Quick Action Buttons */}
+            <div className="flex items-center gap-2">
+              {!aperture?.is_placed ? (
+                <button
+                  onClick={() => setShowAnchorModal(true)}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md border border-emerald-400/40 transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                >
+                  ⛩️ Hạ Khiếu
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowPortalManageModal(true)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold rounded-xl transition flex items-center gap-1 cursor-pointer"
+                  >
+                    ⛩️ Môn Hộ
+                  </button>
+                  <button
+                    onClick={() => setShowGuestModal(true)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/40 text-xs font-semibold rounded-xl transition flex items-center gap-1 cursor-pointer"
+                  >
+                    👥 Khách ({guests.length})
+                  </button>
+                  <button
+                    onClick={() => setShowUnanchorModal(true)}
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-rose-700 to-amber-700 hover:from-rose-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-md border border-rose-500/40 transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                  >
+                    ⛩️ Thu Khiếu
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Tabs Navigation */}
       <GameTabs
         items={[
@@ -969,6 +1108,200 @@ return (
                 //     Tiên Khiếu hòa bình. 1 giờ thực sẽ trôi qua {aperture.time_rate / 10} năm Tiên Khiếu.
                 //   </p>
                 // </div>
+              )}
+            </div>
+
+            {/* World Gateway & Anchoring Card (Canon) */}
+            <div className="col-span-1 md:col-span-3 bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                  <span className="text-xl">⛩️</span>
+                  Môn Hộ Thế Giới & Địa Mạch Hạ Khiếu
+                </h2>
+                <div className="flex items-center gap-2">
+                  {!aperture.is_placed ? (
+                    <button
+                      onClick={() => setShowAnchorModal(true)}
+                      className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg border border-emerald-400/40 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>⛩️</span>
+                      <span>Hạ Khiếu Mở Cổng</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setShowPortalManageModal(true)}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Settings2 className="w-3.5 h-3.5" />
+                        <span>Cấu Hình Môn Hộ</span>
+                      </button>
+                      <button
+                        onClick={() => setShowUnanchorModal(true)}
+                        className="px-3.5 py-2 bg-gradient-to-r from-rose-700 to-amber-700 hover:from-rose-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-lg border border-rose-500/40 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>⛩️</span>
+                        <span>Thu Khiếu Về Thể</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {!aperture.is_placed ? (
+                <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2 text-xs text-slate-300 leading-relaxed">
+                  <p className="font-semibold text-amber-300 flex items-center gap-1.5">
+                    <Info className="w-4 h-4 text-amber-400" />
+                    Quy Chuẩn Cổ Chân Nhân — Tiên Khiếu trên thân thể:
+                  </p>
+                  <p>
+                    Hiện tại Tiên Khiếu đang nương tựa trong nhục thân Cổ Tiên. Trên bản đồ thế giới <strong>không tồn tại lối vào hay môn hộ độc lập</strong>. 
+                    Khi ở trạng thái này, dòng sông Quang Âm chảy xiết với tốc độ <strong>x{aperture.time_rate}</strong> giúp sản xuất tài nguyên và tu luyện nhanh chóng, nhưng sẽ tiêu hao dần Thiên Địa Khí.
+                  </p>
+                  <p className="text-slate-400">
+                    Thực hiện <strong>Hạ Khiếu</strong> sẽ neo Tiên Khiếu cắm rễ vào địa mạch hiện tại, mở Môn Hộ thế giới cho phép đồng đạo hoặc khách tiến vào, đồng thời nhục thân Cổ Tiên sẽ ở bên trong tọa trấn và liên tục nạp lại Thiên Địa Khí.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                    <div className="text-slate-400 text-xs font-semibold">Tên Môn Hộ</div>
+                    <div className="text-base font-bold text-amber-300 mt-1 truncate">
+                      {portal?.name || "Môn Hộ Tiên Khiếu"}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                    <div className="text-slate-400 text-xs font-semibold">Tọa Lạc Ngoại Giới</div>
+                    <div className="text-base font-bold text-cyan-300 mt-1 truncate">
+                      {portal?.region_id || aperture.placed_region || "Địa Mạch"} ({portal?.x ?? aperture.placed_x ?? 500}, {portal?.y ?? aperture.placed_y ?? 500})
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                    <div className="text-slate-400 text-xs font-semibold">Chính Sách Ra Vào</div>
+                    <div className="text-base font-bold text-emerald-400 mt-1">
+                      {portal?.access_policy === "OPEN" ? "🌐 Tự Do (Mở)" :
+                       portal?.access_policy === "PARTY" ? "🛡️ Chỉ Tổ Đội" :
+                       portal?.access_policy === "SECT" ? "🏛️ Chỉ Tông Môn" :
+                       portal?.access_policy === "HIDDEN" ? "👁️ Ẩn Mật" : portal?.access_policy || "OPEN"}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                    <div className="text-slate-400 text-xs font-semibold">Tốc Độ Nạp Khí</div>
+                    <div className="text-base font-bold text-emerald-300 mt-1 flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      <span>+1% trần/phút</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Guest Matrix Card */}
+            <div className="col-span-1 md:col-span-3 bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-purple-400" />
+                    Quản Lý Ngoại Khách & Trận Pháp Hộ Khiếu ({guests.length})
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Kiểm soát những người đang hiện diện trong tiểu thế giới Tiên Khiếu. Thiết lập vai trò, ký Minh Ước Tín Đạo hoặc Trục Xuất.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowGuestModal(true)}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Xem Chi Tiết & Phân Quyền</span>
+                </button>
+              </div>
+
+              {guests.length === 0 ? (
+                <div className="p-6 bg-slate-950/40 rounded-xl border border-slate-800/80 text-center space-y-1">
+                  <p className="text-slate-400 text-xs font-medium">Hiện không có ngoại khách nào bên trong Tiên Khiếu.</p>
+                  <p className="text-slate-500 text-[11px]">Khi Hạ Khiếu và mở Môn Hộ, cổ sư khác có thể bước vào thăm quan hoặc trợ trận độ kiếp.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                      <tr>
+                        <th className="p-3">Cổ Sư</th>
+                        <th className="p-3">Chuyển Số (Rank)</th>
+                        <th className="p-3">Vai Trò Khiếu Vực</th>
+                        <th className="p-3">Áp Lực Đạo Ngân</th>
+                        <th className="p-3 text-right">Thao Tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {guests.map((g) => {
+                        const guestRank = g.rank || 1;
+                        const rankDiff = guestRank - rank;
+                        const hasStress = rankDiff > 0;
+                        const stressDamage = rankDiff * 250;
+
+                        return (
+                          <tr key={g.player_id} className="hover:bg-slate-850/40 transition">
+                            <td className="p-3 font-bold text-slate-100 flex items-center gap-2">
+                              <span>{guestRank >= 6 ? "🌟" : "👤"}</span>
+                              <span>{g.username || g.player_id.substring(0, 8)}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                guestRank >= 6 ? "bg-amber-950 border border-amber-500/40 text-amber-300" : "bg-slate-800 text-slate-300"
+                              }`}>
+                                Rank {guestRank}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <select
+                                value={g.role}
+                                onChange={async (e) => {
+                                  await setGuestRole(g.player_id, e.target.value);
+                                }}
+                                className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                              >
+                                <option value="VISITOR">Khách Thường (VISITOR)</option>
+                                <option value="ASSISTANT">Hộ Pháp Trợ Kiếp (ASSISTANT)</option>
+                                <option value="PRISONER">Tù Nhân Phong Ấn (PRISONER)</option>
+                              </select>
+                            </td>
+                            <td className="p-3">
+                              {hasStress ? (
+                                <span className="text-rose-400 font-semibold flex items-center gap-1" title="Cần yêu cầu khách áp chế khí tức hoặc ký Minh Ước">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                                  <span>+{stressDamage} HP/s</span>
+                                </span>
+                              ) : (
+                                <span className="text-emerald-400 font-medium">Bình Thường</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-right space-x-2">
+                              <button
+                                onClick={() => setContractGuest(g)}
+                                className="px-2.5 py-1 bg-purple-900/50 hover:bg-purple-800/60 border border-purple-500/40 text-purple-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                Minh Ước
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  await evictGuest(g.player_id);
+                                }}
+                                className="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/40 text-rose-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                Trục Xuất
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
@@ -1362,6 +1695,36 @@ return (
                           phím <span className="text-amber-300 font-mono font-bold">Q / W / E / R / T / Y</span> để thi triển các chiêu thức Cổ đã trang bị để tiêu diệt Boss Kiếp Nạn và bảo vệ các cứ điểm tài nguyên!
                         </p>
                       </div>
+
+                      {/* Co-op Tribulation Assistance Details */}
+                      {guests.length > 0 && (() => {
+                        const assistants = guests.filter((g) => g.role === "ASSISTANT");
+                        let coopMult = 1.0;
+                        for (const g of assistants) {
+                          const deltaR = Math.max(0, (g.rank || 1) - rank);
+                          coopMult += 0.4 + 0.3 * deltaR;
+                        }
+
+                        return (
+                          <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/40 text-[11px] text-purple-200 leading-relaxed space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="font-bold text-purple-300 flex items-center gap-1.5">
+                                <Users className="w-4 h-4 text-purple-400" />
+                                Trợ Trận Độ Kiếp ({assistants.length} Hộ Pháp)
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-purple-900/60 border border-purple-400/30 text-amber-300 font-bold font-mono text-[10px]">
+                                Kiếp Lực ×{coopMult.toFixed(1)}
+                              </span>
+                            </div>
+                            <p className="text-slate-300">
+                              Hộ pháp hỗ trợ chống đỡ tai kiếp. Toàn bộ <strong>100% Đạo Ngân</strong> ({activeTribulation.event.reward_dao_marks} Đạo Ngân) thuộc về Chủ Khiếu; Hộ pháp nhận Tiên Nguyên Thạch theo thù lao thỏa thuận.
+                            </p>
+                            <div className="p-2 rounded-lg bg-black/40 border border-purple-900/50 text-[10px] text-amber-300/90">
+                              ⚠️ <strong>Thiên Đạo Thích Ứng & Biến Dị:</strong> Thiên Đạo nhận biết ngoại nhân can thiệp, kiếp nạn sẽ gia tăng quái dị biến và sản sinh lưu phái tương khắc với Hộ Pháp!
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button
@@ -2929,6 +3292,375 @@ return (
           </div>
         )}
       </div>
+      {/* MODAL 1: HẠ KHIẾU (ANCHOR APERTURE) */}
+      {showAnchorModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-emerald-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <span className="text-lg">⛩️</span>
+                Hạ Khiếu — Mở Môn Hộ Thế Giới
+              </h3>
+              <button onClick={() => setShowAnchorModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-slate-300 font-bold">Tên Môn Hộ</label>
+                <input
+                  type="text"
+                  value={anchorPortalName}
+                  onChange={(e) => setAnchorPortalName(e.target.value)}
+                  placeholder="Ví dụ: Môn Hộ Tiên Khiếu [Tên]"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-slate-300 font-bold">Chính Sách Ra Vào Môn Hộ</label>
+                <select
+                  value={anchorAccessPolicy}
+                  onChange={(e) => setAnchorAccessPolicy(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                >
+                  <option value="OPEN">🌐 Tự Do (Mọi Cổ sư đều có thể bước qua Môn Hộ)</option>
+                  <option value="PARTY">🛡️ Tổ Đội (Chỉ đồng đội trong nhóm của Chủ Khiếu)</option>
+                  <option value="SECT">🏛️ Tông Môn (Chỉ đồng môn cùng Tông Môn)</option>
+                  <option value="HIDDEN">👁️ Ẩn Mật (Giấu khỏi danh bạ bản đồ thế giới)</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2 text-[11px] text-slate-300 leading-relaxed">
+                <p className="font-bold text-amber-300 flex items-center gap-1.5">
+                  <Info className="w-4 h-4 text-amber-400" />
+                  Quy Tắc Hạ Khiếu (Cổ Chân Nhân):
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                  <li>Neo Tiên Khiếu vào địa mạch khu vực hiện tại, sinh ra Môn Hộ thế giới.</li>
+                  <li><strong>Nhục thân Cổ Tiên sẽ tiến vào trong Tiên Khiếu</strong> để tọa trấn và không thể chu du ngoại giới cho đến khi Thu Khiếu.</li>
+                  <li>Sông Quang Âm tạm hoãn về <strong>1.0x</strong> (đồng bộ ngoại giới), nạp lại +1% Thiên Khí và Địa Khí mỗi phút.</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAnchorModal(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await anchorAperture(anchorPortalName, anchorAccessPolicy);
+                    if (ok) setShowAnchorModal(false);
+                  }}
+                  disabled={actionLoading}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Đang Hạ Khiếu..." : "Xác Nhận Hạ Khiếu"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL 2: CẤU HÌNH MÔN HỘ (PORTAL MANAGE) */}
+      {showPortalManageModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Settings2 className="w-5 h-5 text-amber-400" />
+                Cấu Hình Môn Hộ Thế Giới
+              </h3>
+              <button onClick={() => setShowPortalManageModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-slate-300 font-bold">Tên Môn Hộ</label>
+                <input
+                  type="text"
+                  value={portalManageName}
+                  onChange={(e) => setPortalManageName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-slate-300 font-bold">Chính Sách Ra Vào</label>
+                <select
+                  value={portalManagePolicy}
+                  onChange={(e) => setPortalManagePolicy(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                >
+                  <option value="OPEN">🌐 Tự Do (Mở cho tất cả)</option>
+                  <option value="PARTY">🛡️ Tổ Đội (Chỉ thành viên nhóm)</option>
+                  <option value="SECT">🏛️ Tông Môn (Chỉ đệ tử cùng môn)</option>
+                  <option value="HIDDEN">👁️ Ẩn Mật (Giấu khỏi radar)</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPortalManageModal(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await managePortal(portalManageName, portalManagePolicy);
+                    if (ok) setShowPortalManageModal(false);
+                  }}
+                  disabled={actionLoading}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-bold rounded-xl shadow-lg transition cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Đang lưu..." : "Lưu Cấu Hình"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL 3: THU KHIẾU (UNANCHOR APERTURE) */}
+      {showUnanchorModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-rose-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <span className="text-lg">⛩️</span>
+                Thu Khiếu Về Thể
+              </h3>
+              <button onClick={() => setShowUnanchorModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {guests.length > 0 && (
+                <div className="p-3 bg-rose-950/60 border border-rose-500/50 rounded-xl text-rose-200 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5 text-rose-300">
+                    <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    Không Thể Thu Khiếu Khi Còn Ngoại Khách ({guests.length} người):
+                  </p>
+                  <p className="text-[11px] leading-relaxed">
+                    Đạo Ngân của khách có thể xé rách vách ngăn Tiên Khiếu nếu thu hồi đột ngột. Hãy yêu cầu khách bước qua Môn Hộ ra ngoài hoặc thực hiện Trục Xuất trước khi thu khiếu.
+                  </p>
+                </div>
+              )}
+
+              {aperture?.state === "TRIBULATION_ACTIVE" && (
+                <div className="p-3 bg-rose-950/60 border border-rose-500/50 rounded-xl text-rose-200">
+                  <p className="font-bold flex items-center gap-1.5 text-rose-300">
+                    <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    Đang Trong Quá Trình Độ Kiếp:
+                  </p>
+                  <p className="text-[11px] leading-relaxed">
+                    Không thể thu hồi Tiên Khiếu khi tai kiếp chưa tiêu tán hoàn toàn.
+                  </p>
+                </div>
+              )}
+
+              <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5 text-[11px] text-slate-300 leading-relaxed">
+                <p className="font-bold text-amber-300">Kết Quả Thu Khiếu:</p>
+                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                  <li>Môn Hộ thế giới sẽ khép lại ngay lập tức.</li>
+                  <li>Tiên Khiếu thu hồi an toàn vào nhục thân Cổ Tiên.</li>
+                  <li>Sông Quang Âm khôi phục tốc độ chảy xiết ban đầu (<strong>x{aperture?.time_rate ?? 10}</strong>).</li>
+                  <li>Thân thể Cổ Tiên trở lại tọa độ đặt khiếu ngoại giới: <strong>{portal?.region_id || aperture?.placed_region || "Ngoại Giới"} ({portal?.x ?? aperture?.placed_x ?? 500}, {portal?.y ?? aperture?.placed_y ?? 500})</strong>.</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUnanchorModal(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await unanchorAperture();
+                    if (ok) setShowUnanchorModal(false);
+                  }}
+                  disabled={actionLoading || guests.length > 0 || aperture?.state === "TRIBULATION_ACTIVE"}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-rose-700 to-amber-700 hover:from-rose-600 hover:to-amber-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition cursor-pointer"
+                >
+                  {actionLoading ? "Đang Thu Khiếu..." : "Xác Nhận Thu Khiếu"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL 4: QUẢN LÝ NGOẠI KHÁCH (GUEST MATRIX MODAL) */}
+      {showGuestModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-purple-500/50 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-400" />
+                Danh Sách Ngoại Khách Trong Tiên Khiếu ({guests.length})
+              </h3>
+              <button onClick={() => setShowGuestModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+              {guests.length === 0 ? (
+                <div className="p-8 bg-slate-950/60 rounded-xl border border-slate-800 text-center space-y-2">
+                  <p className="text-slate-400 font-medium">Hiện không có ngoại khách nào trong Tiên Khiếu.</p>
+                  <p className="text-slate-500 text-[11px]">Cổ sư bước qua Môn Hộ sẽ hiển thị tại danh sách này.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {guests.map((g) => {
+                    const guestRank = g.rank || 1;
+                    const rankDiff = guestRank - rank;
+                    const hasStress = rankDiff > 0;
+                    const stressDamage = rankDiff * 250;
+
+                    return (
+                      <div key={g.player_id} className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-slate-100">{g.username || g.player_id.substring(0, 8)}</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              guestRank >= 6 ? "bg-amber-950 border border-amber-500/40 text-amber-300" : "bg-slate-800 text-slate-300"
+                            }`}>
+                              Rank {guestRank}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                            <span>Vào lúc: {new Date(g.entered_at).toLocaleTimeString()}</span>
+                            {hasStress && (
+                              <span className="text-rose-400 font-bold flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-rose-400" />
+                                Áp lực Đạo Ngân: +{stressDamage} HP/s
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={g.role}
+                            onChange={async (e) => {
+                              await setGuestRole(g.player_id, e.target.value);
+                            }}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                          >
+                            <option value="VISITOR">Khách Thường</option>
+                            <option value="ASSISTANT">Hộ Pháp Trợ Kiếp</option>
+                            <option value="PRISONER">Tù Nhân Phong Ấn</option>
+                          </select>
+
+                          <button
+                            onClick={() => setContractGuest(g)}
+                            className="px-3 py-1.5 bg-purple-900/60 hover:bg-purple-800/70 border border-purple-500/40 text-purple-300 rounded-lg text-xs font-semibold transition cursor-pointer"
+                          >
+                            Minh Ước
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              await evictGuest(g.player_id);
+                            }}
+                            className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/40 text-rose-300 rounded-lg text-xs font-semibold transition cursor-pointer"
+                          >
+                            Trục Xuất
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-800 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowGuestModal(false)}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL 5: MINH ƯỚC TÍN ĐẠO (SIGN CONTRACT MODAL) */}
+      {contractGuest && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[110] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-purple-500/60 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                Lập Minh Ước Tín Đạo
+              </h3>
+              <button onClick={() => setContractGuest(null)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <p className="text-slate-300 leading-relaxed">
+                Thiết lập khế ước Tín Đạo với <strong>{contractGuest.username || contractGuest.player_id.substring(0, 8)}</strong> để ngăn chặn tạo phản và bảo hộ Tiên Khiếu.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-slate-300 font-bold">Cấp Độ Minh Ước</label>
+                <select
+                  value={contractTier}
+                  onChange={(e) => setContractTier(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-purple-500 cursor-pointer"
+                >
+                  <option value="MINOR">Tiểu Minh Ước (Ngăn ngừa xung đột cơ bản)</option>
+                  <option value="MAJOR">Đại Minh Ước (Phản phệ 30% Đạo Ngân nếu làm loạn)</option>
+                  <option value="ABSOLUTE">Tử Sinh Huyết Thệ (Tiêu diệt 100% tu vi nếu phản bội)</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-purple-950/30 border border-purple-900/50 rounded-xl text-[11px] text-purple-200/90 leading-relaxed">
+                Minh ước Tín Đạo được bảo hộ bởi đại đạo thiên địa. Nếu đối phương có hành vi tổn hại đến phúc địa hoặc tấn công Chủ Khiếu, khế ước sẽ lập tức kích hoạt phản phệ tàn khốc!
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setContractGuest(null)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await signAllianceContract(contractGuest.player_id, contractTier);
+                    if (ok) setContractGuest(null);
+                  }}
+                  disabled={actionLoading}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg transition cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Đang Lập Ước..." : "Ký Minh Ước"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </GamePanel>
   );
 };

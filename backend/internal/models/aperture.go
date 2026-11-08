@@ -669,3 +669,67 @@ func CalculateTribulationReward(rank int, tribType string) int64 {
 		return 250
 	}
 }
+
+// AperturePortal represents the physical gateway in the outer world when anchored.
+type AperturePortal struct {
+	ID               string    `json:"id"`
+	ApertureID       string    `json:"aperture_id"`
+	OwnerID          string    `json:"owner_id"`
+	RegionID         string    `json:"region_id"`
+	X                float64   `json:"x"`
+	Y                float64   `json:"y"`
+	Name             string    `json:"name"`
+	AccessPolicy     string    `json:"access_policy"` // OPEN, PARTY, SECT, KEY, APPROVAL, HIDDEN
+	AccessKeyHash    *string   `json:"access_key_hash,omitempty"`
+	ConcealmentPower int       `json:"concealment_power"`
+	IsActive         bool      `json:"is_active"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// ApertureGuest represents a player present inside an immortal aperture.
+type ApertureGuest struct {
+	ApertureID string    `json:"aperture_id"`
+	PlayerID   string    `json:"player_id"`
+	Username   string    `json:"username,omitempty"`
+	Rank       int       `json:"rank,omitempty"`
+	Role       string    `json:"role"` // VISITOR, ASSISTANT, PRISONER
+	GrantedBy  string    `json:"granted_by"`
+	EnteredAt  time.Time `json:"entered_at"`
+}
+
+// TribulationCoopParticipant tracks a player assisting in active tribulation.
+type TribulationCoopParticipant struct {
+	EventID                    string    `json:"event_id"`
+	PlayerID                   string    `json:"player_id"`
+	Username                   string    `json:"username,omitempty"`
+	Rank                       int       `json:"rank"`
+	PrimaryPath                string    `json:"primary_path"`
+	AgreedBountyImmortalStones int       `json:"agreed_bounty_immortal_stones"`
+	IsAlive                    bool      `json:"is_alive"`
+	CreatedAt                  time.Time `json:"created_at"`
+}
+
+// ApertureAllianceContract represents an Information-path agreement between host and guest.
+type ApertureAllianceContract struct {
+	ID           string    `json:"id"`
+	ApertureID   string    `json:"aperture_id"`
+	HostID       string    `json:"host_id"`
+	GuestID      string    `json:"guest_id"`
+	ContractTier string    `json:"contract_tier"` // MINOR, MAJOR, ABSOLUTE
+	IsActive     bool      `json:"is_active"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// ApertureLandSpirit represents the spirit guardian of an unowned blessed land.
+type ApertureLandSpirit struct {
+	ApertureID    string          `json:"aperture_id"`
+	SpiritName    string          `json:"spirit_name"`
+	ObsessionType string          `json:"obsession_type"` // PATH_MASTERY, SACRIFICE_BEASTS, DEFEAT_GUARDIAN
+	ObsessionDesc string          `json:"obsession_desc"`
+	TargetReqJSON json.RawMessage `json:"target_req_json"`
+	IsClaimed     bool            `json:"is_claimed"`
+	ClaimedBy     *string         `json:"claimed_by,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}

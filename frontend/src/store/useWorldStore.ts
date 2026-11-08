@@ -246,12 +246,15 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   applyWorldCellEvent: (event: WorldChangedEvent) => {
     if (!worldEventMatchesRegion(event?.region_id)) return;
     const viewport = get().lastCellsViewport;
-    if (!viewport) return;
     if (cellsRefreshTimer) clearTimeout(cellsRefreshTimer);
     cellsRefreshTimer = setTimeout(() => {
       cellsRefreshTimer = null;
-      void get().fetchNearbyCells(viewport.x, viewport.y, viewport.radius);
-      void get().fetchZoneMarkers(event.region_id!);
+      if (viewport) {
+        void get().fetchNearbyCells(viewport.x, viewport.y, viewport.radius);
+      }
+      if (event?.region_id) {
+        void get().fetchZoneMarkers(event.region_id);
+      }
     }, 250);
   },
 

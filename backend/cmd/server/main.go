@@ -760,6 +760,39 @@ func main() {
 					PartyIDOverride: partyIDOverride,
 				}, true, nil
 			}
+			const aperturePrefix = "aperture:"
+			if strings.HasPrefix(state.WorldInstanceID, aperturePrefix) {
+				routeSuffix := strings.TrimPrefix(state.WorldInstanceID, aperturePrefix)
+				instanceToken, _, _ := strings.Cut(routeSuffix, ":")
+				instanceID, parseErr := uuid.Parse(instanceToken)
+				if parseErr != nil || state.MapInstanceID != instanceID.String() {
+					return realtimegateway.CombatInstanceZone{}, false, nil
+				}
+				var exists bool
+				checkErr := db.DB.QueryRowContext(loadCtx, `
+					SELECT EXISTS (
+						SELECT 1 FROM immortal_apertures WHERE id = $1 AND player_id = $2 AND is_placed = true
+						UNION
+						SELECT 1 FROM aperture_guest_roster r
+						JOIN aperture_portals p ON p.aperture_id = r.aperture_id AND p.is_active = true
+						WHERE r.aperture_id = $1 AND r.player_id = $2
+					)
+				`, instanceID, playerID).Scan(&exists)
+				if checkErr != nil || !exists {
+					return realtimegateway.CombatInstanceZone{}, false, nil
+				}
+				base, found := realtimeWorldManager.BaseZoneMap("aperture_interior")
+				if !found {
+					return realtimegateway.CombatInstanceZone{}, false, fmt.Errorf("aperture map 'aperture_interior' is not configured")
+				}
+				base.Safe = true
+				base.PvP = false
+				base.Portals = nil
+				return realtimegateway.CombatInstanceZone{
+					Key: sim.ZoneKey{MapID: "aperture_interior", InstanceID: instanceID.String(), RulesetVersion: "v1"},
+					Map: base,
+				}, true, nil
+			}
 			const prefix = "combat:"
 			if !strings.HasPrefix(state.WorldInstanceID, prefix) {
 				return realtimegateway.CombatInstanceZone{}, false, nil

@@ -250,3 +250,34 @@ _Avoid_: Ad-hoc c.JSON(500), generic raw string error
 Chuỗi định danh duy nhất cho một chu trình xử lý (HTTP request, WebTransport frame, worker tick), được tạo lập ngay tại intake seam, tiêm vào Go context.Context, đính kèm vào header phản hồi X-Trace-ID (được expose qua CORS), truyền tải đến client toast và lưu trong bộ nhớ đệm chẩn đoán của server. Cho phép liên kết 1-1 giữa thông báo lỗi trên UI của người chơi với log chi tiết và trace trên bảng điều khiển Quản trị.
 _Avoid_: Client-side generated random error, untraceable exception
 
+## Immortal Aperture Ecosystem & Co-op Tribulation (Hệ Sinh Thái Tiên Khiếu & Trợ Trận Độ Kiếp)
+
+### Môn Hộ Tiên Khiếu (Aperture World Gateway)
+Thực thể cổng không gian vật lý duy nhất xuất hiện trên bản đồ thế giới Ngũ Vực tại tọa độ `(X, Y, Region)` khi Cổ Tiên thực hiện Hạ Khiếu (`AnchorAperture`). Cổ Tiên và Tiên Khiếu là nhất thể không thể tách rời: khi không hạ khiếu, Tiên Khiếu ngự trị trong thân thể Cổ Tiên (không có mặt trên bản đồ thế giới); khi Hạ Khiếu cắm rễ vào địa mạch, Cổ Tiên cư ngụ BÊN TRONG Tiên Khiếu để tọa trấn và không thể xuất hiện hay di chuyển tự do ngoài thế giới thực. Môn Hộ là lối liên kết duy nhất cho phép ngoại nhân bái phỏng theo các chính sách kiểm soát (`OPEN`, `PARTY`, `SECT`, `KEY`, `HIDDEN`). Muốn trở lại thế giới thực chu du, Cổ Tiên bắt buộc phải Thu Khiếu (`UnanchorAperture`).
+_Avoid_: Private UI teleport, instant invisible portal, phân thân đứng ngoài thế giới canh khiếu
+
+### Tiên Khiếu Giới Vực (Aperture Domain Instance)
+Không gian tiểu thế giới độc lập thuộc quyền sở hữu của Cổ Tiên trong Zone Sim, có hệ thống thời gian sông Quang Âm riêng và lưới tài nguyên sinh thái. Khách được cấp quyền bước vào thông qua Môn Hộ chịu sự giám sát của ma trận phân quyền (`GUEST_ROLE`: `VISITOR`, `ASSISTANT`, `PRISONER`).
+_Avoid_: Generic dungeon map, public open zone
+
+### Áp Lực Đạo Ngân Tiên Khiếu (Aperture Dao Stress)
+Ứng lực ma sát và tải trọng quy tắc đè nặng lên vách ngăn Tiên Khiếu khi dung nạp một Cổ Tiên ngoại lai có phẩm cấp Rank hoặc mật độ Đạo Ngân vượt trội hơn phẩm cấp Tiên Khiếu bản địa. Nếu không thi triển sát chiêu thu liễm Đạo Ngân, áp lực này sẽ gây rạn nứt cấu trúc và suy giảm sinh lực Tiên Khiếu (`aperture_hp`).
+_Avoid_: Generic level restriction, soft level cap
+
+### Trợ Trận Độ Kiếp (Co-op Tribulation Assistance)
+Hành vi mời gọi hoặc cho phép các Cổ Tiên khác cùng hiện diện trong Tiên Khiếu Giới Vực để hiệp đồng tác chiến chống lại tai kiếp (Địa Tai, Thiên Kiếp, Hạo Kiếp) khi đợt độ kiếp được kích hoạt.
+_Avoid_: Raid party thông thường, public world boss
+
+### Thiên Đạo Thích Ứng & Biến Dị (Reactive Heaven's Will Mutation)
+Cơ chế tự động tăng cường độ nguy hiểm của Thiên Đạo khi phát hiện nhiều Cổ Tiên cùng độ kiếp trong một Tiên Khiếu: nhân hệ số HP/Công/Thủ của quái tai kiếp theo tổng thực lực tổ đội, đồng thời kích phát đợt kiếp nạn hỗn loạn (`Chaos Calamity Wave`) mang Đạo Ngân tương khắc với lưu phái của người trợ trận.
+_Avoid_: Static boss scaling, flat damage buff
+
+### Duy Ngã Độc Tôn (Aperture Lord Sovereignty)
+Quyền uy tối thượng và bùa lợi toàn diện của Chủ Khiếu khi giao tranh ngay bên trong Tiên Khiếu của chính mình: giảm tiêu hao Tiên Nguyên khi vận chuyển chiêu thức, tăng tốc độ hồi phục chân nguyên/tiên nguyên, gia tăng sát thương và sở hữu thẩm quyền trục xuất khách vi phạm giao kèo.
+_Avoid_: Admin godmode, simple realm buff
+
+### Phúc Địa Vô Chủ (Unowned Blessed Land)
+Trạng thái tiểu thế giới còn sót lại sau khi Chủ Khiếu tử vong hoặc vẫn lạc trong lúc Hạ Khiếu: nhục thân tan rã, cổng Môn Hộ cố định vĩnh viễn ngoài thế giới, quyền quản lý chuyển giao cho Địa Linh chấp niệm bảo vệ di sản và đưa ra điều kiện thử thách để tìm kiếm chủ nhân mới.
+_Avoid_: Expired instance, despawned zone
+
+

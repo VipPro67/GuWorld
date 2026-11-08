@@ -412,7 +412,8 @@ func (a *Admission) join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		return nil, admissionError(409, "realtime_map_mismatch", "Requested map does not match the character's current region")
 	}
 	isSpatialRealm := strings.HasPrefix(state.WorldInstanceID, "realm:")
-	if state.MapInstanceID != "" && !isSpatialRealm {
+	isApertureInstance := strings.HasPrefix(state.WorldInstanceID, "aperture:")
+	if state.MapInstanceID != "" && !isSpatialRealm && !isApertureInstance {
 		return nil, admissionError(409, "realtime_instance_conflict", "Character is already assigned to another map instance")
 	}
 	if state.NeedsOnboarding {
@@ -490,27 +491,36 @@ func (a *Admission) join(ctx context.Context, playerID, controllerID uuid.UUID, 
 		privateCombatZone = combatZone.Isolated
 		privateCombatSpawn = combatZone.SpawnPosition
 		persistCombatState = combatZone.PersistCombatState
-	} else if isSpatialRealm {
+	} else if isSpatialRealm || isApertureInstance {
 		a.mu.Lock()
 		loader := a.combatZones
 		a.mu.Unlock()
 		if loader == nil {
+			if isApertureInstance {
+				return nil, admissionError(503, "realtime_aperture_unavailable", "The realtime aperture instance loader is not configured")
+			}
 			return nil, admissionError(503, "realtime_spatial_realm_unavailable", "The realtime spatial realm loader is not configured")
 		}
 		realmZone, found, loadErr := loader(joinCtx, playerID, state)
 		if loadErr != nil {
-			logger.S.Errorf("Realtime spatial realm load failed for player %s: %v", playerID, loadErr)
+			logger.S.Errorf("Realtime instance load failed for player %s: %v", playerID, loadErr)
+			if isApertureInstance {
+				return nil, admissionError(503, "realtime_aperture_unavailable", "The realtime aperture instance could not be loaded")
+			}
 			return nil, admissionError(503, "realtime_spatial_realm_unavailable", "The realtime spatial realm could not be loaded")
 		}
 		if !found || realmZone.Key.MapID != request.ZoneID || realmZone.Key.InstanceID == "" {
+			if isApertureInstance {
+				return nil, admissionError(409, "realtime_aperture_inactive", "No active aperture instance exists for this character")
+			}
 			return nil, admissionError(409, "realtime_spatial_realm_inactive", "No active realtime spatial realm exists for this character")
 		}
 		if err := a.manager.RegisterZoneMap(realmZone.Key, realmZone.Map); err != nil {
 			if errors.Is(err, realtimeworld.ErrZoneFull) {
 				return nil, admissionError(429, "realtime_zone_full", "Realtime zone instances are at capacity")
 			}
-			logger.S.Errorf("Realtime spatial realm map registration failed for player %s: %v", playerID, err)
-			return nil, admissionError(503, "realtime_spatial_realm_unavailable", "The realtime spatial realm map could not be configured")
+			logger.S.Errorf("Realtime instance map registration failed for player %s: %v", playerID, err)
+			return nil, admissionError(503, "realtime_instance_unavailable", "The realtime instance map could not be configured")
 		}
 		key = realmZone.Key
 		if realmZone.PartyIDOverride != "" {

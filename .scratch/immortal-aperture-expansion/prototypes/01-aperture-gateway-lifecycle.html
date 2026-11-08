@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype 01: Quy Chuẩn Môn Hộ Hạ Khiếu & Hiện Diện Thế Giới</title>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #eab308;
+      --accent-glow: rgba(234, 179, 8, 0.25);
+      --danger: #ef4444;
+      --success: #22c55e;
+      --info: #38bdf8;
+      --border: #475569;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-primary); color: var(--text-main); line-height: 1.5; padding: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+    header { border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    h1 { font-size: 1.6rem; color: var(--accent); margin-bottom: 6px; }
+    .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+
+    .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid-layout { grid-template-columns: 1fr; } }
+
+    .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+    .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+    .state-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; font-weight: bold; }
+    .badge-anchored { background: var(--accent); color: #000; }
+    .badge-retracted { background: var(--bg-card); color: var(--text-muted); }
+    .badge-danger { background: var(--danger); color: #fff; }
+
+    .stat-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: 0.9rem; }
+    .stat-label { color: var(--text-muted); }
+    .stat-val { font-weight: 600; }
+
+    .log-box { background: #090d16; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; height: 160px; overflow-y: auto; font-size: 0.82rem; font-family: monospace; color: #38bdf8; }
+    .log-item { margin-bottom: 4px; }
+    .log-err { color: #f87171; }
+    .log-ok { color: #4ade80; }
+    .log-warn { color: #facc15; }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    button {
+      background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border);
+      padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.88rem; font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    button:hover:not(:disabled) { background: var(--accent); color: #000; border-color: var(--accent); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.btn-primary { background: #d97706; border-color: #f59e0b; color: white; }
+    button.btn-primary:hover:not(:disabled) { background: #b45309; }
+    button.btn-danger { background: #991b1b; border-color: #dc2626; color: white; }
+    button.btn-danger:hover:not(:disabled) { background: #7f1d1d; }
+
+    /* Tabs & Scenarios */
+    .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 14px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; border-radius: 4px; }
+    .tab-btn.active { background: var(--bg-card); color: var(--accent); font-weight: 600; }
+    .scenario-desc { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; }
+    .step-list { display: flex; flex-direction: column; gap: 8px; }
+    .step-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Prototype 01: Quy Chuẩn Môn Hộ Hạ Khiếu & Vòng Đời Hiện Diện Thế Giới</h1>
+    <div class="subtitle">
+      Khảo nghiệm mô hình máy trạng thái (State Machine): Cổ Tiên Hạ Khiếu sinh Môn Hộ thực thể trên bản đồ thế giới, thiết lập chính sách truy cập, cơ chế che giấu thiên cơ và khóa an toàn thu khiếu.
+    </div>
+  </header>
+
+  <!-- State & Realtime Dashboard -->
+  <div class="grid-layout">
+    <!-- Panel 1: World & Portal State -->
+    <div class="card">
+      <div class="card-title">
+        <span>🌍 Hiện Diện Thế Giới (World Map: Nam Cương)</span>
+        <span id="apertureStateBadge" class="state-badge badge-retracted">Chưa Hạ Khiếu</span>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Cổ Tiên Bản Thể (Chủ Khiếu):</span>
+        <span class="stat-val" id="valHostStatus">Đang ở ngoài map (X: 125, Y: 80)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Thực Thể Môn Hộ (Portal):</span>
+        <span class="stat-val" id="valPortalEntity">Chưa xuất hiện</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Chính Sách Ra Vào (Access Policy):</span>
+        <span class="stat-val" id="valPolicy">OPEN (Tự do bái phỏng)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Điểm Che Giấu Thiên Cơ:</span>
+        <span class="stat-val" id="valConcealment">0 (Công khai hoàn toàn)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Khách Đang Ở Trong Khiếu:</span>
+        <span class="stat-val" id="valGuestCount" style="color: #38bdf8;">0 người</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Trạng Thái Độ Kiếp / Giao Tranh:</span>
+        <span class="stat-val" id="valCombatState">Bình yên vô sự</span>
+      </div>
+    </div>
+
+    <!-- Panel 2: In-Aperture State -->
+    <div class="card">
+      <div class="card-title">
+        <span>🌌 Trạng Thái Bên Trong Tiên Khiếu</span>
+        <span id="valTimeRate" class="state-badge badge-anchored">35.0x (Tự thân)</span>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Dòng Sông Quang Âm:</span>
+        <span class="stat-val" id="valTimeDesc">Thời gian chảy gấp 35 lần ngoại giới</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Thiên Khí / Địa Khí:</span>
+        <span class="stat-val" id="valQiLevel">45,000 / 100,000 (Cần nạp thêm)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Thời Gian Hạ Khiếu Tích Lũy:</span>
+        <span class="stat-val" id="valAnchoredDuration">0 phút</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Độ Bền Vách Ngăn (Aperture HP):</span>
+        <span class="stat-val" id="valApertureHP" style="color: var(--success);">100,000 / 100,000 (Toàn vẹn)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diagnostic Action Log -->
+  <div class="card">
+    <div class="card-title">📜 Nhật Ký Sự Kiện Thời Gian Thực (State Transition Log)</div>
+    <div class="log-box" id="logBox">
+      <div class="log-item log-ok">[Khởi tạo] Hệ thống mô phỏng Tiên Khiếu sẵn sàng. Cổ Tiên Rank 6 (Nam Cương, Tọa độ X: 125, Y: 80).</div>
+    </div>
+  </div>
+
+  <!-- Interactive Controls: Guided Scenarios & Free-Play -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('scenario1')">Kịch Bản 1: Hạ Khiếu & Thu Khiếu Tiêu Chuẩn</button>
+      <button class="tab-btn" onclick="switchTab('scenario2')">Kịch Bản 2: Chính Sách Môn Hộ & Che Giấu Thiên Cơ</button>
+      <button class="tab-btn" onclick="switchTab('scenario3')">Kịch Bản 3: Khóa An Toàn Chặn Thu Khiếu</button>
+      <button class="tab-btn" onclick="switchTab('freeplay')">🎮 Chế Độ Tự Do (Free-Play)</button>
+    </div>
+
+    <!-- Scenario 1 Content -->
+    <div id="tab-scenario1" class="tab-content">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> Cổ Tiên hạ khiếu cắm rễ vào đại địa Nam Cương, đồng bộ sông Quang Âm về 1.0x, nạp Thiên Địa Khí, sau đó thu khiếu an toàn hoàn nguyên về cơ thể.
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Thi triển Hạ Khiếu (Cắm rễ sinh Môn Hộ, chọn bước vào trong khiếu)</span>
+          <button class="btn-primary" onclick="actAnchor('ENTER_APERTURE', 'OPEN')">Thực Hiện Hạ Khiếu</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Hấp thụ Tam Khí (Mô phỏng trôi qua 10 phút ngoài thế giới)</span>
+          <button onclick="actAdvanceTime(10)">Tua Nhanh 10 Phút</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 3: Chủ khiếu bước ra Môn Hộ bảo vệ cửa</span>
+          <button onclick="actStepHost('GUARD_OUTSIDE')">Chủ Khiếu Ra Cửa</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 4: Thu Khiếu về cơ thể</span>
+          <button class="btn-primary" onclick="actUnanchor()">Thu Hồi Tiên Khiếu</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 2 Content -->
+    <div id="tab-scenario2" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> Khảo nghiệm cơ chế Ẩn Thân Thiên Cơ (Concealment) và lọc khách theo Tông Môn (SECT Policy).
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Hạ Khiếu ở chế độ Ẩn Thân (Thi triển Sát Chiêu Ám Đạo 80 điểm)</span>
+          <button class="btn-primary" onclick="actAnchor('GUARD_OUTSIDE', 'SECT', 80)">Hạ Khiếu Ẩn Thân</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Người lạ (Trinh sát 50) đi qua ô Môn Hộ</span>
+          <button onclick="actScanPortal(50, false)">Người Lạ Quét Ô (Trinh Sát: 50)</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 3: Trí Đạo Cổ Tiên (Trinh sát 95) suy diễn thiên cơ</span>
+          <button onclick="actScanPortal(95, false)">Trí Đạo Quét Ô (Trinh Sát: 95)</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 4: Đồng môn cùng Tông Môn xin vào Môn Hộ</span>
+          <button onclick="actGuestEnter('Đồng Môn Lý Tầm', true)">Đồng Môn Bước Vào</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 3 Content -->
+    <div id="tab-scenario3" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> Kiểm chứng các rào cản ngăn chặn thu khiếu trái phép (cấm thu khi còn khách hoặc đang chiến đấu/độ kiếp).
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Hạ Khiếu và cho 1 vị khách vào tham quan</span>
+          <button class="btn-primary" onclick="actSetupWithGuest()">Thiết Lập Khiếu Có Khách</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Cố tình bấm Thu Khiếu khi khách vẫn đang ở trong</span>
+          <button class="btn-danger" onclick="actUnanchor()">Cố Tình Thu Khiếu (Bị Chặn)</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 3: Mời hoặc Trục Xuất khách ra ngoài</span>
+          <button onclick="actEvictGuest()">Trục Xuất Khách Ra Cửa</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 4: Thu Khiếu an toàn khi khách = 0</span>
+          <button class="btn-primary" onclick="actUnanchor()">Thu Khiếu An Toàn</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Free-Play Content -->
+    <div id="tab-freeplay" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        Tự do điều phối các hành động của state machine để kiểm tra mọi tình huống ngoại biên:
+      </div>
+      <div class="btn-group">
+        <button class="btn-primary" onclick="actAnchor('ENTER_APERTURE', 'OPEN', 0)">Hạ Khiếu (Công Khai)</button>
+        <button class="btn-primary" onclick="actAnchor('GUARD_OUTSIDE', 'SECT', 80)">Hạ Khiếu (Ẩn Thân 80 / Tông Môn)</button>
+        <button class="btn-danger" onclick="actUnanchor()">Thu Hồi Tiên Khiếu</button>
+        <button onclick="actAdvanceTime(15)">Tua Thời Gian (+15 phút)</button>
+        <button onclick="actGuestEnter('Cổ Tiên Khách ' + (state.guests.length+1), true)">Thêm Khách Vào Khiếu</button>
+        <button onclick="actEvictGuest()">Đưa 1 Khách Ra Ngoài</button>
+        <button onclick="toggleCombat()">Chuyển Trạng Thái Giao Tranh</button>
+        <button onclick="resetModel()">🔄 Đặt Lại Trạng Thái Ban Đầu</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Pure Logic Model / State Machine
+  const initialModel = {
+    isAnchored: false,
+    region: "Nam Cương",
+    x: 125,
+    y: 80,
+    hostLocation: "WORLD", // "WORLD" or "INSIDE_APERTURE"
+    accessPolicy: "OPEN", // "OPEN", "PARTY", "SECT", "KEY", "HIDDEN"
+    concealmentPower: 0,
+    portalEntityActive: false,
+    guests: [],
+    inCombatOrTribulation: false,
+    timeRate: 35.0,
+    heavenQi: 45000,
+    earthQi: 45000,
+    maxQi: 100000,
+    anchoredMinutes: 0,
+    apertureHP: 100000
+  };
+
+  let state = { ...initialModel, guests: [] };
+
+  function log(msg, type = "ok") {
+    const box = document.getElementById("logBox");
+    const div = document.createElement("div");
+    div.className = "log-item log-" + type;
+    const time = new Date().toLocaleTimeString();
+    div.innerText = `[${time}] ${msg}`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function render() {
+    // Badges & Labels
+    const badge = document.getElementById("apertureStateBadge");
+    if (state.isAnchored) {
+      badge.className = "state-badge badge-anchored";
+      badge.innerText = "Đã Hạ Khiếu (Cắm Rễ)";
+    } else {
+      badge.className = "state-badge badge-retracted";
+      badge.innerText = "Chưa Hạ Khiếu";
+    }
+
+    document.getElementById("valHostStatus").innerText = state.hostLocation === "WORLD"
+      ? `Đang đứng canh Môn Hộ tại thế giới (${state.region}, X: ${state.x}, Y: ${state.y})`
+      : `Đang tọa trấn bên trong Tiên Khiếu`;
+
+    document.getElementById("valPortalEntity").innerText = state.portalEntityActive
+      ? `Tồn tại Môn Hộ thực thể tại (${state.x}, ${state.y})`
+      : `Không có`;
+
+    document.getElementById("valPolicy").innerText = `${state.accessPolicy}`;
+    document.getElementById("valConcealment").innerText = state.concealmentPower > 0
+      ? `${state.concealmentPower} (Được che giấu thiên cơ)`
+      : `0 (Công khai)`;
+
+    document.getElementById("valGuestCount").innerText = `${state.guests.length} người (${state.guests.join(", ") || "Trống"})`;
+    document.getElementById("valCombatState").innerText = state.inCombatOrTribulation
+      ? "⚠️ ĐANG GIAO TRANH / ĐỘ KIẾP"
+      : "Bình yên vô sự";
+
+    document.getElementById("valTimeRate").innerText = `${state.timeRate.toFixed(1)}x (${state.isAnchored ? "Đồng bộ ngoại giới" : "Tự thân"})`;
+    document.getElementById("valTimeDesc").innerText = state.isAnchored
+      ? "Sông Quang Âm chảy chậm lại bằng 1.0x với Ngũ Vực để nạp địa mạch"
+      : `Thời gian trôi gấp ${state.timeRate} lần thế giới`;
+
+    document.getElementById("valQiLevel").innerText = `${Math.floor(state.heavenQi).toLocaleString()} / ${state.maxQi.toLocaleString()}`;
+    document.getElementById("valAnchoredDuration").innerText = `${state.anchoredMinutes} phút`;
+    document.getElementById("valApertureHP").innerText = `${state.apertureHP.toLocaleString()} / 100,000`;
+  }
+
+  // Pure Reducer Actions
+  function actAnchor(hostChoice = "ENTER_APERTURE", policy = "OPEN", concealment = 0) {
+    if (state.isAnchored) {
+      log("Lỗi: Tiên Khiếu đã đang trong trạng thái Hạ Khiếu!", "err");
+      return;
+    }
+    state.isAnchored = true;
+    state.portalEntityActive = true;
+    state.accessPolicy = policy;
+    state.concealmentPower = concealment;
+    state.timeRate = 1.0;
+    state.hostLocation = hostChoice === "ENTER_APERTURE" ? "INSIDE_APERTURE" : "WORLD";
+    state.anchoredMinutes = 0;
+    log(`Hạ Khiếu thành công tại ${state.region} (${state.x}, ${state.y})! Môn Hộ thực thể đã sinh ra. Tốc độ thời gian giảm về 1.0x để thông linh cùng thiên địa.`, "ok");
+    render();
+  }
+
+  function actAdvanceTime(minutes) {
+    if (!state.isAnchored) {
+      log("Cần Hạ Khiếu mới có thể nạp Tam Khí qua dòng thời gian!", "warn");
+      return;
+    }
+    state.anchoredMinutes += minutes;
+    const gained = minutes * (state.maxQi * 0.01);
+    state.heavenQi = Math.min(state.maxQi, state.heavenQi + gained);
+    state.earthQi = Math.min(state.maxQi, state.earthQi + gained);
+    log(`Thời gian trôi qua ${minutes} phút. Tiên Khiếu đã nạp +${gained} Thiên Khí và +${gained} Địa Khí.`, "ok");
+    render();
+  }
+
+  function actStepHost(targetLoc) {
+    if (!state.isAnchored) {
+      log("Chưa hạ khiếu, không có môn hộ để bước qua!", "warn");
+      return;
+    }
+    state.hostLocation = targetLoc;
+    log(`Chủ khiếu đã bước qua Môn Hộ: Hiện tại ${targetLoc === "WORLD" ? "ở ngoài thế giới" : "ở trong Tiên Khiếu"}.`, "ok");
+    render();
+  }
+
+  function actScanPortal(scoutingScore, isSectMember) {
+    if (!state.portalEntityActive) {
+      log("Không tìm thấy Môn Hộ (Chưa hạ khiếu)!", "err");
+      return;
+    }
+    if (scoutingScore < state.concealmentPower) {
+      log(`Quét thất bại: Điểm trinh sát (${scoutingScore}) < Điểm che giấu (${state.concealmentPower}). Môn Hộ hoàn toàn vô hình trước mắt!`, "err");
+      return;
+    }
+    log(`Trinh Sát Thành Công: Phát hiện Môn Hộ Tiên Khiếu tại (${state.x}, ${state.y})! Chính sách: ${state.accessPolicy}.`, "ok");
+  }
+
+  function actGuestEnter(guestName, isAuthorized) {
+    if (!state.portalEntityActive) {
+      log("Môn Hộ không hoạt động!", "err");
+      return;
+    }
+    if (state.accessPolicy === "SECT" && !isAuthorized) {
+      log(`Truy cập bị từ chối: Môn Hộ đặt chế độ [SECT], ${guestName} không phải đồng môn!`, "err");
+      return;
+    }
+    state.guests.push(guestName);
+    log(`Cổ Tiên [${guestName}] đã bước qua Môn Hộ vào trong Tiên Khiếu an toàn.`, "ok");
+    render();
+  }
+
+  function actEvictGuest() {
+    if (state.guests.length === 0) {
+      log("Bên trong Tiên Khiếu không có khách nào!", "warn");
+      return;
+    }
+    const removed = state.guests.pop();
+    log(`Đã đưa khách [${removed}] bước ra ngoài cổng thế giới.`, "ok");
+    render();
+  }
+
+  function actUnanchor() {
+    if (!state.isAnchored) {
+      log("Tiên Khiếu hiện không ở trạng thái Hạ Khiếu!", "err");
+      return;
+    }
+
+    // Safety Constraint 1: Guests
+    if (state.guests.length > 0) {
+      log(`⛔ CHẶN THU KHIẾU: Còn ${state.guests.length} khách bên trong Tiên Khiếu! Thu khiếu lúc này sẽ gây xé rách Đạo Ngân Tiên Khiếu.`, "err");
+      return;
+    }
+
+    // Safety Constraint 2: Combat / Tribulation
+    if (state.inCombatOrTribulation) {
+      log("⛔ CHẶN THU KHIẾU: Đang trong trạng thái Giao Tranh hoặc Độ Kiếp!", "err");
+      return;
+    }
+
+    // Successful Unanchor
+    state.isAnchored = false;
+    state.portalEntityActive = false;
+    state.timeRate = 35.0; // Restore personal time stream
+    state.hostLocation = "WORLD"; // Host ejected to world coordinates
+    log(`Thu Hồi Tiên Khiếu Thành Công! Môn Hộ thế giới đóng lại. Tốc độ dòng sông Quang Âm khôi phục ${state.timeRate}x. Thân thể trở về đại địa.`, "ok");
+    render();
+  }
+
+  function actSetupWithGuest() {
+    resetModel();
+    actAnchor('ENTER_APERTURE', 'OPEN', 0);
+    actGuestEnter('Đạo Hữu Tiêu Diêu', true);
+  }
+
+  function toggleCombat() {
+    state.inCombatOrTribulation = !state.inCombatOrTribulation;
+    log(`Chuyển trạng thái chiến đấu: ${state.inCombatOrTribulation ? "ĐANG GIAO TRANH" : "KẾT THÚC GIAO TRANH"}`, state.inCombatOrTribulation ? "warn" : "ok");
+    render();
+  }
+
+  function resetModel() {
+    state = { ...initialModel, guests: [] };
+    log("Đã lập lại trạng thái khởi đầu.", "warn");
+    render();
+  }
+
+  function switchTab(tabId) {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
+    event.target.classList.add("active");
+    document.getElementById("tab-" + tabId).style.display = "block";
+  }
+
+  // Initial render
+  render();
+</script>
+</body>
+</html>

@@ -117,10 +117,10 @@ func TestExpandRealtimeZoneIDsFiltersMismatchedMapVersions(t *testing.T) {
 	}
 
 	expanded := expandRealtimeZoneIDs(map[string]struct{}{"*": {}}, "data/mmo/maps", "regions-v1", "region-content-v1")
-	if len(expanded) != 127 {
-		t.Fatalf("expanded zone count=%d, want the 127 rollout maps (125 world regions + aperture_tribulation + realtime_preview)", len(expanded))
+	if len(expanded) != 128 {
+		t.Fatalf("expanded zone count=%d, want the 128 rollout maps (125 world regions + aperture_tribulation + aperture_interior + realtime_preview)", len(expanded))
 	}
-	for _, regionID := range []string{"thanh_mao_son", "tan_thu_coc_nam_cuong", "hub_thuong_gia_thanh", "aperture_tribulation", "realtime_preview"} {
+	for _, regionID := range []string{"thanh_mao_son", "tan_thu_coc_nam_cuong", "hub_thuong_gia_thanh", "aperture_tribulation", "aperture_interior", "realtime_preview"} {
 		if _, ok := expanded[regionID]; !ok {
 			t.Fatalf("expanded zones missing region map %q", regionID)
 		}

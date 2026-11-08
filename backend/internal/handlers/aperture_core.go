@@ -8,9 +8,12 @@ import (
 	"math/rand"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -381,13 +384,55 @@ func GetApertureNodes(c *gin.Context) {
 }
 
 // AnchorAperture places (anchors) an immortal aperture onto a world map cell.
-// This synchronizes internal time with the outside world (effective time rate drops to 1.0),
-// hoãn kiếp nạn, and begins absorbing heaven/earth qi from the world.
+// According to Reverend Insanity canon, the host and aperture are unified:
+// anchoring roots the aperture into the world, spawns an active World Gateway (Môn Hộ),
+// and places the host INSIDE their aperture (they cannot roam the outer world while anchored).
 func AnchorAperture(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
+	}
+
+	var req struct {
+		PortalName   string `json:"portal_name"`
+		AccessPolicy string `json:"access_policy"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	if req.PortalName == "" {
+		req.PortalName = "Môn Hộ Tiên Khiếu"
+	}
+	validPolicies := map[string]bool{
+		"OPEN": true, "PARTY": true, "SECT": true, "KEY": true, "APPROVAL": true, "HIDDEN": true,
+	}
+	if !validPolicies[req.AccessPolicy] {
+		req.AccessPolicy = "OPEN"
+	}
+
+	var inCombatSession bool
+	_ = db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT EXISTS(
+			SELECT 1 FROM realtime_combat_session_participants
+			WHERE player_id = $1 AND status = 'active'
+		)
+	`, playerID).Scan(&inCombatSession)
+	if inCombatSession {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không thể Hạ Khiếu khi đang trong trận chiến thời gian thực."})
+		return
+	}
+
+	handedOff, handoffErr := middleware.BeginRealtimeHandoff(playerID)
+	if handoffErr != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Không thể tạm dừng điều khiển thời gian thực, vui lòng thử lại."})
+		return
+	}
+	var realtimeFinished bool
+	if handedOff {
+		defer func() {
+			if !realtimeFinished {
+				middleware.AbortRealtimeHandoff(playerID)
+			}
+		}()
 	}
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
@@ -412,6 +457,17 @@ func AnchorAperture(c *gin.Context) {
 		return
 	}
 
+	if liveRegion, liveX, liveY, ok := middleware.RealtimePlayerLocation(playerID); ok && liveRegion != "" {
+		player.CurrentRegion = liveRegion
+		player.X = liveX
+		player.Y = liveY
+	}
+
+	if player.CurrentRegion == "aperture_interior" || strings.HasPrefix(player.CurrentRegion, "aperture:") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể Hạ Khiếu khi đang ở bên trong một Tiên Khiếu khác."})
+		return
+	}
+
 	var ap models.ImmortalAperture
 	err = tx.QueryRow(`
 		SELECT id, is_placed, state, heaven_qi, earth_qi, max_heaven_qi, max_earth_qi
@@ -432,14 +488,43 @@ func AnchorAperture(c *gin.Context) {
 		return
 	}
 
-	// Update immortal_apertures placement
+	// 1. Update immortal_apertures placement and record return location
 	_, err = tx.Exec(`
 		UPDATE immortal_apertures
-		SET is_placed = true, placed_region = $1, placed_x = $2, placed_y = $3, placed_at = NOW(), updated_at = NOW()
+		SET is_placed = true, placed_region = $1, placed_x = $2, placed_y = $3, placed_at = NOW(),
+		    return_region = $1, return_x = $2, return_y = $3, updated_at = NOW()
 		WHERE id = $4
 	`, player.CurrentRegion, float64(player.X), float64(player.Y), ap.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái Hạ Khiếu"})
+		return
+	}
+
+	// 2. Upsert World Gateway (Môn Hộ)
+	_, err = tx.Exec(`
+		INSERT INTO aperture_portals (aperture_id, owner_id, region_id, x, y, name, access_policy, is_active, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW())
+		ON CONFLICT (aperture_id) DO UPDATE
+		SET region_id = EXCLUDED.region_id, x = EXCLUDED.x, y = EXCLUDED.y, name = EXCLUDED.name,
+		    access_policy = EXCLUDED.access_policy, is_active = true, updated_at = NOW()
+	`, ap.ID, player.ID, player.CurrentRegion, float64(player.X), float64(player.Y), req.PortalName, req.AccessPolicy)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khởi tạo Môn Hộ thế giới: " + err.Error()})
+		return
+	}
+
+	// 3. Move host body inside the aperture instance (Host cannot be outside while anchored)
+	apertureInstanceID := fmt.Sprintf("aperture:%s", ap.ID)
+	_, err = tx.Exec(`
+		UPDATE players
+		SET current_region = 'aperture_interior', map_instance_id = $1, x = 10, y = 10,
+		    world_zone_id = 'aperture_interior', world_instance_id = $2,
+		    world_x = 10, world_y = 10, world_safe_x = 10, world_safe_y = 10,
+		    world_location_revision = world_location_revision + 1, version = version + 1
+		WHERE id = $3
+	`, ap.ID, apertureInstanceID, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển dịch thân thể vào Tiên Khiếu: " + err.Error()})
 		return
 	}
 
@@ -448,23 +533,69 @@ func AnchorAperture(c *gin.Context) {
 		return
 	}
 
+	if handedOff {
+		middleware.FinishRealtimeHandoff(playerID)
+		realtimeFinished = true
+	}
+	apUUID, _ := uuid.Parse(ap.ID)
+	syncSpatialPlayer(playerID, "aperture_interior", 10, 10, apUUID)
+
+	_ = cache.PublishEventQuick("world:cell", map[string]any{
+		"type":       "portal_spawn",
+		"region_id":  player.CurrentRegion,
+		"x":          player.X,
+		"y":          player.Y,
+		"cell_type":  "AperturePortal",
+		"content_id": ap.ID,
+	})
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Hạ Khiếu thành công tại %s (%d, %d). Tiên Khiếu đã cắm rễ vào đại địa, dòng sông Quang Âm đồng bộ với ngoại giới (tốc độ thời gian giảm về 1.0x). Đang hấp thụ Thiên Khí và Địa Khí...",
+		"message": fmt.Sprintf("Hạ Khiếu thành công tại %s (%d, %d). Môn Hộ đã hiển hiện ngoài thế giới. Thân thể Cổ Tiên đã bước vào tọa trấn bên trong Tiên Khiếu, dòng sông Quang Âm đồng bộ với ngoại giới (1.0x). Đang hấp thụ Thiên Khí và Địa Khí...",
 			player.CurrentRegion, player.X, player.Y),
-		"is_placed":     true,
-		"placed_region": player.CurrentRegion,
-		"placed_x":      player.X,
-		"placed_y":      player.Y,
+		"is_placed":        true,
+		"placed_region":    player.CurrentRegion,
+		"placed_x":         player.X,
+		"placed_y":         player.Y,
+		"aperture_region":  "aperture_interior",
+		"aperture_instance": apertureInstanceID,
+		"portal_name":      req.PortalName,
+		"access_policy":    req.AccessPolicy,
 	})
 }
 
 // UnanchorAperture retracts the immortal aperture back into the immortal's body,
-// concluding the anchoring session and crediting absorbed heaven & earth qi.
+// concluding the anchoring session and restoring the host back to the world map.
 func UnanchorAperture(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
+	}
+
+	var inCombatSession bool
+	_ = db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT EXISTS(
+			SELECT 1 FROM realtime_combat_session_participants
+			WHERE player_id = $1 AND status = 'active'
+		)
+	`, playerID).Scan(&inCombatSession)
+	if inCombatSession {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không thể thu khiếu khi đang trong trận chiến thời gian thực."})
+		return
+	}
+
+	handedOff, handoffErr := middleware.BeginRealtimeHandoff(playerID)
+	if handoffErr != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Không thể tạm dừng điều khiển thời gian thực, vui lòng thử lại."})
+		return
+	}
+	var realtimeFinished bool
+	if handedOff {
+		defer func() {
+			if !realtimeFinished {
+				middleware.AbortRealtimeHandoff(playerID)
+			}
+		}()
 	}
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
@@ -476,10 +607,14 @@ func UnanchorAperture(c *gin.Context) {
 
 	var ap models.ImmortalAperture
 	var placedAt *time.Time
+	var placedRegion sql.NullString
+	var placedX, placedY sql.NullFloat64
 	err = tx.QueryRow(`
-		SELECT id, is_placed, state, heaven_qi, earth_qi, max_heaven_qi, max_earth_qi, placed_at
+		SELECT id, is_placed, state, heaven_qi, earth_qi, max_heaven_qi, max_earth_qi, placed_at,
+		       placed_region, placed_x, placed_y
 		FROM immortal_apertures WHERE player_id = $1 FOR UPDATE
-	`, playerID).Scan(&ap.ID, &ap.IsPlaced, &ap.State, &ap.HeavenQi, &ap.EarthQi, &ap.MaxHeavenQi, &ap.MaxEarthQi, &placedAt)
+	`, playerID).Scan(&ap.ID, &ap.IsPlaced, &ap.State, &ap.HeavenQi, &ap.EarthQi, &ap.MaxHeavenQi, &ap.MaxEarthQi, &placedAt,
+		&placedRegion, &placedX, &placedY)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chưa khai mở Tiên Khiếu"})
 		return
@@ -487,6 +622,21 @@ func UnanchorAperture(c *gin.Context) {
 
 	if !ap.IsPlaced {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Khiếu hiện không trong trạng thái Hạ Khiếu."})
+		return
+	}
+
+	// Safety Lock 1: Check if there are active guests inside the aperture
+	var guestCount int
+	err = tx.QueryRow(`SELECT COUNT(1) FROM aperture_guest_roster WHERE aperture_id = $1`, ap.ID).Scan(&guestCount)
+	if err == nil && guestCount > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể thu khiếu khi còn %d ngoại nhân bên trong Tiên Khiếu (Nguy cơ Đạo Ngân xé rách vách ngăn).", guestCount)})
+		return
+	}
+
+	// Safety Lock 3: Check if active tribulation or enemies
+	hasTrib, err := db.HasActiveTribulationOrEnemies(tx, ap.ID)
+	if err == nil && hasTrib {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể thu khiếu khi đang trong quá trình độ kiếp."})
 		return
 	}
 
@@ -510,6 +660,14 @@ func UnanchorAperture(c *gin.Context) {
 		newState = "STABLE"
 	}
 
+	// Deactivate World Gateway
+	_, _ = tx.Exec(`
+		UPDATE aperture_portals
+		SET is_active = false, updated_at = NOW()
+		WHERE aperture_id = $1
+	`, ap.ID)
+
+	// Update immortal_apertures (retract into host body)
 	_, err = tx.Exec(`
 		UPDATE immortal_apertures
 		SET is_placed = false, placed_region = NULL, placed_x = NULL, placed_y = NULL, placed_at = NULL,
@@ -521,19 +679,63 @@ func UnanchorAperture(c *gin.Context) {
 		return
 	}
 
+	// Move host back to the world map at the placement location
+	destRegion := "Southern_Border"
+	destX := 500
+	destY := 500
+	if placedRegion.Valid && placedRegion.String != "" {
+		destRegion = placedRegion.String
+	}
+	if placedX.Valid {
+		destX = int(placedX.Float64)
+	}
+	if placedY.Valid {
+		destY = int(placedY.Float64)
+	}
+
+	_, err = tx.Exec(`
+		UPDATE players
+		SET current_region = $1, map_instance_id = NULL, x = $2, y = $3, world_zone_id = $1, world_instance_id = '',
+		    world_x = $2, world_y = $3, world_safe_x = $2, world_safe_y = $3,
+		    world_location_revision = world_location_revision + 1, version = version + 1
+		WHERE id = $4
+	`, destRegion, destX, destY, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn nguyên thân thể về thế giới"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu thu hồi"})
 		return
 	}
 
+	if handedOff {
+		middleware.FinishRealtimeHandoff(playerID)
+		realtimeFinished = true
+	}
+	syncSpatialPlayer(playerID, destRegion, destX, destY, uuid.Nil)
+
+	_ = cache.PublishEventQuick("world:cell", map[string]any{
+		"type":       "portal_despawn",
+		"region_id":  destRegion,
+		"x":          destX,
+		"y":          destY,
+		"cell_type":  "AperturePortal",
+		"content_id": ap.ID,
+	})
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Thu Khiếu thành công. Đã nạp +%.0f Thiên Khí và +%.0f Địa Khí. Tốc độ thời gian Tiên Khiếu đã khôi phục bình thường.",
-			gainedHeavenQi, gainedEarthQi),
-		"heaven_qi":     newHeavenQi,
-		"earth_qi":      newEarthQi,
-		"max_heaven_qi": ap.MaxHeavenQi,
-		"max_earth_qi":  ap.MaxEarthQi,
-		"state":         newState,
-		"is_placed":     false,
+		"message": fmt.Sprintf("Thu Khiếu thành công! Môn Hộ thế giới đã khép lại. Tiên Khiếu đã thu hồi vào nhục thân. Đã nạp +%.0f Thiên Khí và +%.0f Địa Khí. Tốc độ thời gian Tiên Khiếu đã khôi phục bình thường. Thân thể Cổ Tiên đã trở lại %s (%d, %d).",
+			gainedHeavenQi, gainedEarthQi, destRegion, destX, destY),
+		"heaven_qi":       newHeavenQi,
+		"earth_qi":        newEarthQi,
+		"max_heaven_qi":   ap.MaxHeavenQi,
+		"max_earth_qi":    ap.MaxEarthQi,
+		"state":           newState,
+		"is_placed":       false,
+		"current_region":  destRegion,
+		"x":               destX,
+		"y":               destY,
 	})
 }

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype 03: Hệ Thống Trợ Trận Độ Kiếp & Thiên Đạo Thích Ứng Biến Dị</title>
+  <style>
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #161f30;
+      --bg-card: #223048;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.25);
+      --danger: #ef4444;
+      --success: #22c55e;
+      --purple: #a855f7;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-primary); color: var(--text-main); line-height: 1.5; padding: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+    header { border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    h1 { font-size: 1.6rem; color: var(--accent); margin-bottom: 6px; }
+    .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+
+    .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid-layout { grid-template-columns: 1fr; } }
+
+    .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+    .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+    .state-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; font-weight: bold; }
+    .badge-calm { background: var(--bg-card); color: var(--text-muted); }
+    .badge-danger { background: var(--danger); color: white; animation: pulse 1.5s infinite; }
+    .badge-purple { background: var(--purple); color: white; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .stat-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: 0.9rem; }
+    .stat-label { color: var(--text-muted); }
+    .stat-val { font-weight: 600; }
+
+    .enemy-card {
+      background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .enemy-name { font-weight: 600; font-size: 0.9rem; }
+    .enemy-meta { font-size: 0.75rem; color: var(--text-muted); }
+    .enemy-hp-bar { height: 6px; background: #334155; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+    .enemy-hp-fill { height: 100%; background: var(--danger); transition: width 0.3s; }
+
+    .log-box { background: #060a12; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; height: 160px; overflow-y: auto; font-size: 0.82rem; font-family: monospace; color: #38bdf8; }
+    .log-item { margin-bottom: 4px; }
+    .log-err { color: #f87171; }
+    .log-ok { color: #4ade80; }
+    .log-warn { color: #facc15; }
+    .log-purple { color: #c084fc; }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    button {
+      background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border);
+      padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    button:hover:not(:disabled) { background: var(--accent); color: #000; border-color: var(--accent); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.btn-primary { background: #d97706; border-color: #f59e0b; color: white; }
+    button.btn-primary:hover:not(:disabled) { background: #b45309; }
+    button.btn-danger { background: #991b1b; border-color: #dc2626; color: white; }
+    button.btn-danger:hover:not(:disabled) { background: #7f1d1d; }
+
+    /* Tabs & Scenarios */
+    .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 14px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; border-radius: 4px; }
+    .tab-btn.active { background: var(--bg-card); color: var(--accent); font-weight: 600; }
+    .scenario-desc { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; }
+    .step-list { display: flex; flex-direction: column; gap: 8px; }
+    .step-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Prototype 03: Hệ Thống Trợ Trận Độ Kiếp & Thiên Đạo Thích Ứng Biến Dị</h1>
+    <div class="subtitle">
+      Mô phỏng cơ chế Thiên Đạo trừng phạt trợ trận độ kiếp theo cốt truyện Cổ Chân Nhân: Nhân hệ số độ khó, sinh đợt kiếp nạn biến dị tương khắc trợ thủ, và ma trận quyết toán chiến lợi phẩm/khế ước thù lao.
+    </div>
+  </header>
+
+  <!-- State & Realtime Dashboard -->
+  <div class="grid-layout">
+    <!-- Panel 1: Tribulation & Heaven's Will -->
+    <div class="card">
+      <div class="card-title">
+        <span>⚡ Trạng Thái Tai Kiếp (Thiên Đạo Uy Áp)</span>
+        <span id="tribulationBadge" class="state-badge badge-calm">Chưa Kích Hoạt</span>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Loại Tai Kiếp:</span>
+        <span class="stat-val" id="valTribulationType">Địa Tai (Lục Chuyển Lần 3)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Hệ Số Phẫn Nộ Thiên Đạo (Scaling):</span>
+        <span class="stat-val" id="valScalingMult" style="color: #22c55e;">1.00x (Tiêu chuẩn Solo)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Kiếp Nạn Biến Dị (Nemesis Mutation):</span>
+        <span class="stat-val" id="valMutationStatus">Không kích hoạt</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Chủ Khiếu (Host):</span>
+        <span class="stat-val">Phương Nguyên [Rank 6 - Lực Đạo/Biến Hóa]</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Trợ Thủ Tham Chiến (Helpers):</span>
+        <span class="stat-val" id="valHelpersDesc" style="color: #38bdf8;">0 người (Đang solo)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Khế Ước Thù Lao Định Mức:</span>
+        <span class="stat-val" id="valBountyRate">15 Tiên Nguyên Thạch / Trợ Thủ</span>
+      </div>
+    </div>
+
+    <!-- Panel 2: Live Enemies in Aperture -->
+    <div class="card">
+      <div class="card-title">
+        <span>👹 Quái Kiếp Nạn Trong Tiên Khiếu (<span id="valEnemyCount">0</span>)</span>
+        <button class="btn-danger" onclick="actSimulateAttack(40000)" style="font-size: 0.75rem; padding: 4px 8px;">Tấn Công Tất Cả (-40k HP)</button>
+      </div>
+
+      <div id="enemyContainer" style="min-height: 140px;">
+        <div style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding-top: 40px;">
+          Chưa có tai kiếp giáng lâm
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diagnostic Action Log -->
+  <div class="card">
+    <div class="card-title">📜 Nhật Ký Thiên Đạo & Chiến Sự (Realtime Battle Log)</div>
+    <div class="log-box" id="logBox">
+      <div class="log-item log-ok">[Hệ Thống] Sẵn sàng mô phỏng cơ chế Trợ Trận Độ Kiếp.</div>
+    </div>
+  </div>
+
+  <!-- Interactive Controls: Guided Scenarios & Free-Play -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('scenario1')">Kịch Bản 1: Solo vs Có Trợ Thủ</button>
+      <button class="tab-btn" onclick="switchTab('scenario2')">Kịch Bản 2: Biến Dị Tương Khắc Trợ Thủ</button>
+      <button class="tab-btn" onclick="switchTab('scenario3')">Kịch Bản 3: Quyết Toán & Khế Ước Thù Lao</button>
+      <button class="tab-btn" onclick="switchTab('freeplay')">🎮 Chế Độ Tự Do (Free-Play)</button>
+    </div>
+
+    <!-- Scenario 1 Content -->
+    <div id="tab-scenario1" class="tab-content">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> So sánh độ khó khi Độ Kiếp Solo và khi mời trợ thủ. Thiên Đạo lập tức cảm ứng sự hiện diện của trợ thủ để nhân hệ số HP và Công của toàn bộ quái kiếp.
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Kích hoạt Địa Tai ở chế độ Solo (Không có trợ thủ)</span>
+          <button class="btn-primary" onclick="actLaunchTribulation([])">Độ Kiếp Solo (1.0x)</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Hủy tai kiếp và mời 1 Trợ Thủ Rank 6 (Bạch Ngưng Băng)</span>
+          <button onclick="actLaunchTribulation([{ name: 'Bạch Ngưng Băng', rank: 6, path: 'Băng Tuyết Đạo' }])">Mời 1 Trợ Thủ R6 (+70% Uy Lực)</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 3: Mời thêm 1 Đại Cao Thủ Rank 7 (Sở Độ - Lực Đạo Tông Sư)</span>
+          <button class="btn-danger" onclick="actLaunchTribulation([{ name: 'Bạch Ngưng Băng', rank: 6, path: 'Băng Tuyết Đạo' }, { name: 'Sở Độ', rank: 7, path: 'Lực Đạo' }])">Mời Thêm Cao Thủ R7 (2.4x Cực Nguy Hiểm)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 2 Content -->
+    <div id="tab-scenario2" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> Khảo nghiệm cơ chế Thiên Đạo sinh Quái Biến Dị tương khắc: Trợ thủ là Hắc Lâu Lan (Viêm Đạo) -> Thiên Đạo sinh Cực Hàn Băng Long kháng 80% Lửa.
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Mời Trợ Thủ Viêm Đạo "Hắc Lâu Lan" và bắt đầu độ kiếp</span>
+          <button class="btn-primary" onclick="actLaunchWithFireHelper()">Độ Kiếp Có Trợ Thủ Viêm Đạo</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Hắc Lâu Lan thử dùng Sát Chiêu Viêm Đạo công kích Boss Biến Dị</span>
+          <button onclick="actAttackNemesis('FIRE')">Tung Đòn Lửa (Bị Kháng 80%)</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 3: Phương Nguyên dùng Lực Đạo áp sát giáng đòn quyết định</span>
+          <button class="btn-primary" onclick="actAttackNemesis('FORCE')">Dùng Lực Đạo Đập Tan Băng Long</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 3 Content -->
+    <div id="tab-scenario3" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> Tiêu diệt toàn bộ quái kiếp nạn, kích hoạt quyết toán: Chủ Khiếu nhận trọn Đạo Ngân thăng cấp; hệ thống trích Tiên Nguyên Thạch trả thù lao cho Trợ Thủ kèm Tiên Tài rơi rớt.
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Thiết lập trận chiến với 1 Trợ Thủ (Bạch Ngưng Băng)</span>
+          <button class="btn-primary" onclick="actLaunchTribulation([{ name: 'Bạch Ngưng Băng', rank: 6, path: 'Băng Tuyết Đạo' }])">Khởi Động Trận Đấu</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Tiêu diệt toàn bộ quái kiếp nạn</span>
+          <button class="btn-danger" onclick="actKillAllEnemies()">Diệt Toàn Bộ Quái Kiếp</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 3: Quyết toán thắng lợi (Resolve Victory)</span>
+          <button class="btn-primary" onclick="actResolveVictory()">Quyết Toán Thắng Lợi & Trả Thù Lao</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Free-Play Content -->
+    <div id="tab-freeplay" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        Tự do tùy chỉnh số lượng trợ thủ, kích hoạt độ kiếp và thử nghiệm đòn đánh:
+      </div>
+      <div class="btn-group">
+        <button class="btn-primary" onclick="actAddCustomHelper()">+ Thêm Trợ Thủ</button>
+        <button class="btn-danger" onclick="actSimulateAttack(50000)">Tấn Công Toàn Thể (-50,000 HP)</button>
+        <button onclick="actResolveVictory()">Thử Quyết Toán Thắng Lợi</button>
+        <button onclick="resetModel()">🔄 Đặt Lại Ban Đầu</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let helpers = [];
+  let enemies = [];
+  let isTribulationActive = false;
+  let tribulationType = "EARTH_CALAMITY";
+  let hostDaoMarks = 3200;
+  let hostStones = 250;
+
+  function log(msg, type = "ok") {
+    const box = document.getElementById("logBox");
+    const div = document.createElement("div");
+    div.className = "log-item log-" + type;
+    const time = new Date().toLocaleTimeString();
+    div.innerText = `[${time}] ${msg}`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function calculateScaling() {
+    let mult = 1.0;
+    for (const h of helpers) {
+      const deltaRank = Math.max(0, h.rank - 6 + 1);
+      mult += (0.4 + 0.3 * deltaRank);
+    }
+    return mult;
+  }
+
+  function render() {
+    const mult = calculateScaling();
+    const badge = document.getElementById("tribulationBadge");
+    if (isTribulationActive) {
+      badge.className = "state-badge badge-danger";
+      badge.innerText = `ĐANG GIÁNG LÂM (${mult.toFixed(2)}x)`;
+    } else {
+      badge.className = "state-badge badge-calm";
+      badge.innerText = "Chưa Kích Hoạt";
+    }
+
+    document.getElementById("valScalingMult").innerText = `${mult.toFixed(2)}x (${helpers.length === 0 ? "Solo Chuẩn" : `Phẫn Nộ vì ${helpers.length} Trợ Thủ`})`;
+    document.getElementById("valScalingMult").style.color = mult > 1.0 ? "var(--danger)" : "var(--success)";
+
+    document.getElementById("valHelpersDesc").innerText = helpers.length === 0
+      ? "0 người (Solo)"
+      : helpers.map(h => `${h.name} [R${h.rank} - ${h.path}]`).join(", ");
+
+    const hasMutation = enemies.some(e => e.isMutation);
+    document.getElementById("valMutationStatus").innerText = hasMutation
+      ? "🔥 CẢNH BÁO: Xuất hiện Boss Biến Dị Tương Khắc!"
+      : (helpers.length > 0 ? "Sắp kích phát đợt biến dị" : "Bình thường");
+    document.getElementById("valMutationStatus").style.color = hasMutation ? "var(--purple)" : "var(--text-muted)";
+
+    document.getElementById("valEnemyCount").innerText = enemies.filter(e => e.hp > 0).length;
+
+    // Render Enemies
+    const container = document.getElementById("enemyContainer");
+    const aliveEnemies = enemies.filter(e => e.hp > 0);
+    if (aliveEnemies.length === 0) {
+      container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding-top: 40px;">${isTribulationActive ? "🎉 ĐÃ TIÊU DIỆT TOÀN BỘ QUÁI KIẾP NẠN!" : "Chưa có tai kiếp"}</div>`;
+      return;
+    }
+
+    container.innerHTML = "";
+    aliveEnemies.forEach(e => {
+      const div = document.createElement("div");
+      div.className = "enemy-card";
+      const hpPct = Math.max(0, (e.hp / e.maxHp) * 100);
+      div.innerHTML = `
+        <div style="flex: 1; margin-right: 12px;">
+          <div class="enemy-name" style="color: ${e.isMutation ? "var(--purple)" : (e.isBoss ? "var(--danger)" : "var(--text-main)")};">
+            ${e.name} ${e.isMutation ? "[BIẾN DỊ TƯƠNG KHẮC]" : (e.isBoss ? "[BOSS ĐỊA TAI]" : "[MINION]")}
+          </div>
+          <div class="enemy-meta">
+            Lưu Phái: ${e.path} | Công: ${Math.floor(e.attack)} | Thủ: ${Math.floor(e.defense)}
+          </div>
+          <div class="enemy-hp-bar">
+            <div class="enemy-hp-fill" style="width: ${hpPct}%;"></div>
+          </div>
+        </div>
+        <div style="font-size: 0.82rem; font-weight: bold; text-align: right; min-width: 90px;">
+          ${Math.floor(e.hp).toLocaleString()} HP<br>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">${hpPct.toFixed(0)}%</span>
+        </div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  // Pure Logic Actions
+  function actLaunchTribulation(helperList = []) {
+    helpers = [...helperList];
+    isTribulationActive = true;
+    const mult = calculateScaling();
+
+    enemies = [];
+    const baseBossHP = 120000;
+    const baseBossAtk = 2400;
+
+    // Boss chính
+    enemies.push({
+      name: "Địa Độc Huyết Chu (Thổ Đạo)",
+      path: "Thổ Đạo / Huyết Đạo",
+      hp: baseBossHP * mult,
+      maxHp: baseBossHP * mult,
+      attack: baseBossAtk * mult,
+      defense: 600,
+      isBoss: true,
+      isMutation: false
+    });
+
+    // Minions
+    const minionCount = 2 + helpers.length * 2;
+    for (let i = 1; i <= minionCount; i++) {
+      enemies.push({
+        name: `Độc Giáp Trùng #${i}`,
+        path: "Thổ Đạo",
+        hp: 18000 * mult,
+        maxHp: 18000 * mult,
+        attack: 700 * mult,
+        defense: 250,
+        isBoss: false,
+        isMutation: false
+      });
+    }
+
+    log(`⚡ ĐỊA TAI GIÁNG LÂM! Thiên Đạo cảm ứng ${helpers.length} trợ thủ, độ khó nhân ${mult.toFixed(2)}x! Boss HP: ${(baseBossHP * mult).toLocaleString()}.`, "warn");
+    render();
+  }
+
+  function actLaunchWithFireHelper() {
+    helpers = [{ name: "Hắc Lâu Lan", rank: 6, path: "Viêm Đạo" }];
+    isTribulationActive = true;
+    const mult = calculateScaling(); // 1.7x
+
+    enemies = [];
+    // Boss chính
+    enemies.push({
+      name: "Địa Nham Cự Thú",
+      path: "Thổ Đạo",
+      hp: 120000 * mult,
+      maxHp: 120000 * mult,
+      attack: 2400 * mult,
+      defense: 700,
+      isBoss: true,
+      isMutation: false
+    });
+
+    // Boss Biến Dị Tương Khắc (Khắc Viêm Đạo)
+    enemies.push({
+      name: "Cực Hàn Băng Long (Biến Dị)",
+      path: "Băng Tuyết Đạo (Kháng 80% Viêm)",
+      hp: 95000 * mult,
+      maxHp: 95000 * mult,
+      attack: 2800 * mult,
+      defense: 800,
+      isBoss: true,
+      isMutation: true,
+      fireResist: 0.8
+    });
+
+    log(`⚡ THIÊN ĐẠO PHẪN NỘ! Phát hiện Trợ Thủ Hắc Lâu Lan tu luyện [Viêm Đạo]. Thiên Đạo lập tức giáng hạ [Cực Hàn Băng Long] mang quy tắc Băng Đạo tương khắc để trừng phạt!`, "purple");
+    render();
+  }
+
+  function actAttackNemesis(atkType) {
+    const nemesis = enemies.find(e => e.isMutation && e.hp > 0);
+    if (!nemesis) {
+      log("Không tìm thấy Boss Biến Dị còn sống!", "warn");
+      return;
+    }
+
+    if (atkType === "FIRE") {
+      const rawDmg = 50000;
+      const actualDmg = rawDmg * (1 - nemesis.fireResist);
+      nemesis.hp = Math.max(0, nemesis.hp - actualDmg);
+      log(`Hắc Lâu Lan xuất chiêu [Hỏa Điểu Phệ Thiên] (50,000 sát thương)! Tuy nhiên Băng Long kháng 80%, chỉ chịu ${actualDmg.toLocaleString()} sát thương thực tế!`, "err");
+    } else if (atkType === "FORCE") {
+      const rawDmg = 120000;
+      nemesis.hp = Math.max(0, nemesis.hp - rawDmg);
+      log(`Phương Nguyên vận dụng [Lực Đạo Khí Cự Thủ] giáng một đòn sấm sét 120,000 sát thương vật lý! Băng Long bị nghiền nát!`, "ok");
+      if (nemesis.hp === 0) {
+        log(`🎉 CHIẾN LỢI PHẨM: Tiêu diệt Cực Hàn Băng Long rơi Tiên Tài Rank 7 [Vạn Niên Băng Phách] phân bổ cho Trợ Thủ!`, "purple");
+      }
+    }
+    render();
+  }
+
+  function actSimulateAttack(damage) {
+    if (enemies.length === 0) return;
+    enemies.forEach(e => {
+      e.hp = Math.max(0, e.hp - damage);
+    });
+    log(`Tổ đội phối hợp xuất chiêu diện rộng gây -${damage.toLocaleString()} HP lên toàn bộ quái kiếp!`, "ok");
+    render();
+  }
+
+  function actKillAllEnemies() {
+    enemies.forEach(e => e.hp = 0);
+    log("Toàn bộ quái kiếp nạn đã bị tiêu diệt sạch sẽ!", "ok");
+    render();
+  }
+
+  function actResolveVictory() {
+    if (!isTribulationActive) {
+      log("Hiện tại không có trận độ kiếp nào!", "err");
+      return;
+    }
+    const aliveCount = enemies.filter(e => e.hp > 0).length;
+    if (aliveCount > 0) {
+      log(`⛔ CHƯA THỂ QUYẾT TOÁN: Vẫn còn ${aliveCount} quái kiếp chưa bị tiêu diệt!`, "err");
+      return;
+    }
+
+    // Award host
+    const daoGained = 750;
+    hostDaoMarks += daoGained;
+    isTribulationActive = false;
+
+    log(`===============================================`, "ok");
+    log(`🏆 ĐỘ KIẾP THẮNG LỢI! Vượt qua Địa Tai vẻ vang!`, "ok");
+    log(`- Chủ Khiếu (Phương Nguyên): Thu nạp 100% Đạo Ngân (+${daoGained} Đạo Ngân), diện tích Tiên Khiếu mở rộng +5,000 mẫu.`, "ok");
+
+    // Award helpers
+    if (helpers.length > 0) {
+      const bountyPerHelper = 15;
+      const totalBounty = bountyPerHelper * helpers.length;
+      hostStones = Math.max(0, hostStones - totalBounty);
+      helpers.forEach(h => {
+        log(`- Trợ Thủ [${h.name}]: Nhận ${bountyPerHelper} Tiên Nguyên Thạch theo khế ước thù lao + Rơi rớt Tiên Tài hoang dã.`, "purple");
+      });
+      log(`Hệ thống đã tự động khấu trừ ${totalBounty} Tiên Nguyên Thạch từ kho Chủ Khiếu để chi trả thù lao.`, "warn");
+    }
+    log(`===============================================`, "ok");
+    render();
+  }
+
+  function actAddCustomHelper() {
+    const name = prompt("Tên Trợ Thủ:", "Thái Bạch Vân Sinh");
+    if (!name) return;
+    const rank = parseInt(prompt("Rank Cổ Tiên (6-7):", "6") || "6");
+    const path = prompt("Lưu Phái Chính:", "Thời Đạo / Trụ Đạo") || "Thời Đạo";
+    helpers.push({ name, rank, path });
+    log(`Đã kết nạp Trợ Thủ [${name}] [Rank ${rank} - ${path}] vào tổ đội hộ kiếp.`, "ok");
+    render();
+  }
+
+  function resetModel() {
+    helpers = [];
+    enemies = [];
+    isTribulationActive = false;
+    log("Đã lập lại trạng thái ban đầu.", "warn");
+    render();
+  }
+
+  function switchTab(tabId) {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
+    event.target.classList.add("active");
+    document.getElementById("tab-" + tabId).style.display = "block";
+  }
+
+  // Initial render
+  render();
+</script>
+</body>
+</html>

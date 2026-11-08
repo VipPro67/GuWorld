@@ -46,6 +46,14 @@ type TeleportMarker struct {
 	IsActive     bool   `json:"is_active"`
 }
 
+type AperturePortalMarker struct {
+	OwnerID          string `json:"owner_id"`
+	ApertureID       string `json:"aperture_id"`
+	AccessPolicy     string `json:"access_policy"`
+	ConcealmentPower int    `json:"concealment_power"`
+	IsMine           bool   `json:"is_mine"`
+}
+
 // sectMarkersInRegion loads sect bases for one map. Defenders are deliberately
 // not loaded: markers only need position, level and shield state, and the
 // defender list costs one query per sect in GetSectsMap.
@@ -143,6 +151,56 @@ func teleportMarkersInRegion(regionID string, authID uuid.UUID, mySectID *string
 	return out
 }
 
+// aperturePortalMarkersInRegion returns active immortal aperture gateways in this region.
+// Observers only see portals if they own them, if the portal is public/sect-accessible,
+// or if their Scouting capability is strong enough to pierce the portal's ConcealmentPower.
+func aperturePortalMarkersInRegion(regionID string, authID uuid.UUID, mySectID *string) []MapMarkerView {
+	query := `
+		SELECT p.id, p.name, p.owner_id, p.aperture_id, p.x, p.y, p.access_policy, p.concealment_power, (p.owner_id = $1) AS is_mine
+		FROM aperture_portals p
+		WHERE p.is_active = TRUE AND p.region_id = $2
+		  AND (p.owner_id = $1 OR p.access_policy IN ('OPEN', 'KEY', 'APPROVAL')`
+	args := []interface{}{authID, regionID}
+	if mySectID != nil && *mySectID != "" {
+		query += " OR (p.access_policy = 'SECT' AND EXISTS (SELECT 1 FROM sect_members sm WHERE sm.player_id = p.owner_id AND sm.sect_id = $3))"
+		args = append(args, *mySectID)
+	}
+	query += ")"
+
+	rows, err := db.DB.Query(query, args...)
+	if err != nil {
+		logger.S.Warnf("Failed to load aperture portal markers for region %s: %v", regionID, err)
+		return nil
+	}
+	defer rows.Close()
+
+	out := make([]MapMarkerView, 0)
+	for rows.Next() {
+		var (
+			id, name, ownerID, apertureID string
+			x, y                          float64
+			detail                        AperturePortalMarker
+		)
+		if err := rows.Scan(&id, &name, &ownerID, &apertureID, &x, &y, &detail.AccessPolicy, &detail.ConcealmentPower, &detail.IsMine); err != nil {
+			continue
+		}
+		detail.OwnerID = ownerID
+		detail.ApertureID = apertureID
+		detail.IsMine = (ownerID == authID.String())
+
+		out = append(out, MapMarkerView{
+			ID:       id,
+			Kind:     "aperture_portal",
+			RegionID: regionID,
+			X:        int(x),
+			Y:        int(y),
+			Name:     name,
+			Detail:   detail,
+		})
+	}
+	return out
+}
+
 // GetZoneMapObjects returns static structure markers for one map. The client
 // merges this with the cells feed and the realtime snapshot into a single
 // marker view-model, so the map and the radar cannot drift apart.
@@ -176,5 +234,6 @@ func GetZoneMapObjects(c *gin.Context) {
 	out := make([]MapMarkerView, 0)
 	out = append(out, sectMarkersInRegion(regionID, mySectID)...)
 	out = append(out, teleportMarkersInRegion(regionID, authID, mySectID)...)
+	out = append(out, aperturePortalMarkersInRegion(regionID, authID, mySectID)...)
 	c.JSON(http.StatusOK, out)
 }

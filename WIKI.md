@@ -1392,6 +1392,45 @@ Sau khi thành Tiên, Tiên Khiếu không chỉ là lưới đặt công trình
 
 Mô phỏng xã hội cập nhật nền sau mỗi vài phút, vì vậy số liệu có thể thay đổi dù người chơi không bấm hành động. Đừng dùng `EXPLOIT` dài hạn nếu kho lương, hạnh phúc và an ninh chưa ổn định.
 
+### 21.1. Hạ Khiếu, Môn Hộ Thế Giới & Trợ Trận Độ Kiếp (Quy Chuẩn Cổ Chân Nhân)
+
+Hệ thống Tiên Khiếu tái hiện sát cốt truyện *Cổ Chân Nhân* (Reverend Insanity):
+
+1. **Tính Thống Nhất Thân Thể & Tiên Khiếu:**
+   - Tiên Khiếu bình thường nương náu bên trong nhục thân Cổ Tiên, **không hiện diện như một địa điểm độc lập trên bản đồ thế giới**. Khi mang khiếu trên người, Cổ Tiên có thể chu du thiên hạ, sông Quang Âm chảy xiết (`time_rate` nội bộ) giúp sản xuất tài nguyên nhưng tiêu hao dần Thiên Địa Khí.
+2. **Hạ Khiếu (Anchoring):**
+   - Cổ Tiên (Rank ≥ 6) có thể chọn Hạ Khiếu tại vị trí hiện tại. Tiên Khiếu cắm rễ vào địa mạch, sinh ra một **Môn Hộ thế giới** (`aperture_portals`) hiển hiện trên bản đồ và radar ngoại giới.
+   - Khi Hạ Khiếu, **nhục thân Cổ Tiên tiến vào bên trong Tiên Khiếu tọa trấn** (`aperture:<id>` tại ô (10, 10)) và không thể chu du ngoại giới cho đến khi Thu Khiếu.
+   - Sông Quang Âm tạm hoãn về **1.0x** (đồng bộ với ngoại giới), tự động hấp thụ nạp lại **+1% trần max Thiên Khí và Địa Khí mỗi phút**.
+3. **Môn Hộ & Phân Quyền Khách (Guest Matrix):**
+   - Cổ sư ngoại giới trong phạm vi 3 ô có thể bước qua Môn Hộ để tiến vào bên trong Tiên Khiếu nếu thỏa mãn chính sách ra vào:
+     - `OPEN`: Tự do cho mọi người.
+     - `PARTY`: Chỉ thành viên cùng Tổ Đội với Chủ Khiếu.
+     - `SECT`: Chỉ đồng môn cùng Tông Môn.
+     - `HIDDEN`: Ẩn khỏi bản đồ công cộng.
+   - Danh sách khách ghi nhận tại `aperture_guest_roster` với 3 vai trò:
+     - `VISITOR`: Khách thường (thưởng ngoạn).
+     - `ASSISTANT`: Hộ pháp trợ kiếp (hỗ trợ chiến đấu chống tai kiếp).
+     - `PRISONER`: Tù nhân phong ấn (bị áp chế chân nguyên / tiên nguyên).
+   - **Áp Lực Đạo Ngân:** Nếu khách có Chuyển số cao hơn Chủ Khiếu ($\Delta R > 0$) mà không áp chế khí tức, mỗi chênh lệch rank gây $\Delta R \times 250$ HP/s sát thương trực tiếp lên vách ngăn Tiên Khiếu.
+4. **Trợ Trận Độ Kiếp & Biến Dị Thiên Đạo:**
+   - Khi tai kiếp giáng lâm, các Hộ Pháp (`ASSISTANT`) có mặt trong khiếu sẽ cùng tham chiến realtime bảo vệ cứ điểm và diệt boss kiếp.
+   - **Thiên Đạo Thích Ứng:** Độ khó tai kiếp nhân theo hệ số $\text{Multiplier} = 1.0 + \sum [0.4 + 0.3 \times \Delta R]$ và Thiên Đạo sản sinh thêm quái kiếp mang lưu phái tương khắc với Hộ Pháp.
+   - **Quy Thuộc Đạo Ngân:** Toàn bộ **100% Đạo Ngân kiếp nạn** quy tụ về Chủ Khiếu; Hộ Pháp nhận Tiên Nguyên Thạch theo thù lao thỏa thuận từ ngân khố Chủ Khiếu.
+5. **Duy Ngã Độc Tôn & Minh Ước Tín Đạo:**
+   - Trong Tiên Khiếu của mình, Chủ Khiếu nhận buff sân nhà: giảm -50% tiêu hao chân nguyên/tiên nguyên, tăng +25% sát thương và +40% kháng khống chế.
+   - Để phòng ngừa khách tạo phản, Chủ Khiếu có thể lập **Minh Ước Tín Đạo**:
+     - `MINOR` (Tiểu Ước): Ràng buộc hòa bình cơ bản.
+     - `MAJOR` (Đại Minh Ước): Kẻ làm phản bị phản phệ trọng thương và tiêu hao 30% Đạo Ngân.
+     - `ABSOLUTE` (Tử Sinh Huyết Thệ): Tiêu diệt 100% tu vi và Đạo Ngân của kẻ phản bội ngay lập tức.
+   - Chủ Khiếu có quyền **Trục Xuất (Evict)** bất kỳ khách nào ra ngoài Môn Hộ thế giới.
+6. **Thu Khiếu (Unanchoring):**
+   - Thu hồi Tiên Khiếu vào nhục thân Cổ Tiên, đóng Môn Hộ thế giới, và đưa thân thể Cổ Tiên trở lại tọa độ đặt khiếu ban đầu ngoài thế giới thực.
+   - **3 Khóa An Toàn:**
+     - Chặn nếu còn khách bên trong (`guestCount > 0`) để tránh Đạo Ngân của khách xé rách vách ngăn.
+     - Chặn nếu đang trong phiên chiến đấu / realtime.
+     - Chặn nếu đang trong quá trình độ kiếp / còn quái tai kiếp.
+
 ## 22. Nhiệm vụ, thành tựu và phần thưởng tài khoản
 
 - **Nhiệm vụ:** xem yêu cầu/tiến độ/phần thưởng rồi hoàn thành khi đủ điều kiện. Một số tiến độ được ghi tự động từ hoạt động gameplay.

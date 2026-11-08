@@ -11,12 +11,12 @@ import type { NearbyVeinInfo } from "@/store/useWorldStore";
  * from the store remain assignable, while callers (and tests) only need the
  * subset that actually reaches the screen.
  */
-export type WorldMarkerKind = "sect" | "vein" | "teleport" | "portal" | "drop" | "resource";
+export type WorldMarkerKind = "sect" | "vein" | "teleport" | "portal" | "drop" | "resource" | "aperture_portal";
 
 export type WorldMarkerTone = "self" | "enemy" | "rare" | "neutral";
 
 export interface WorldMarkerAction {
-  type: "open-sect" | "attack-sect" | "harvest-vein" | "loot-drop" | "open-teleport" | "harvest-resource";
+  type: "open-sect" | "attack-sect" | "harvest-vein" | "loot-drop" | "open-teleport" | "harvest-resource" | "enter-portal";
   targetId: string;
 }
 
@@ -83,6 +83,7 @@ export interface WorldMarker {
   drop?: WorldMarkerDrop;
   portal?: WorldMarkerPortal;
   resource?: WorldMarkerResource;
+  aperturePortal?: { accessPolicy: string; concealmentPower: number; ownerId: string };
 }
 
 /** Interaction ranges live here so the map and HUD cannot drift apart. */
@@ -94,4 +95,5 @@ export const MARKER_INTERACTION_RADIUS: Record<WorldMarkerKind, number> = {
   portal: 0,
   // Backend worldHarvestRange (Chebyshev ≤ 6 cells).
   resource: 6,
+  aperture_portal: 3.0,
 };

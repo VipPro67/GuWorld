@@ -530,6 +530,24 @@ func settleRealtimeTribulationVictory(ctx context.Context, playerID, eventID uui
 
 	now := time.Now()
 	_, _ = tx.ExecContext(ctx, `UPDATE tribulation_events SET status = 'SUCCESS', aperture_hp_after = $1, ended_at = $2 WHERE id = $3`, ap.ApertureHP, now, ev.ID)
+
+	// Payout agreed bounties to co-op helpers
+	coopRows, errCoop := tx.QueryContext(ctx, `
+		SELECT player_id, agreed_bounty_immortal_stones
+		FROM tribulation_coop_participants
+		WHERE event_id = $1 AND is_alive = true AND agreed_bounty_immortal_stones > 0
+	`, ev.ID)
+	if errCoop == nil {
+		defer coopRows.Close()
+		for coopRows.Next() {
+			var helperID uuid.UUID
+			var bounty int
+			if errScan := coopRows.Scan(&helperID, &bounty); errScan == nil && bounty > 0 {
+				_, _ = tx.ExecContext(ctx, `UPDATE players SET immortal_stones = GREATEST(0, immortal_stones - $1) WHERE id = $2`, bounty, playerID)
+				_, _ = tx.ExecContext(ctx, `UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id = $2`, bounty, helperID)
+			}
+		}
+	}
 	if _, err = tx.ExecContext(ctx, `
 		UPDATE immortal_apertures 
 		SET state = $1, next_tribulation_year = $2, aperture_hp = $3,

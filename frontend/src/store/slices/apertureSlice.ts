@@ -16,6 +16,8 @@ import type {
   ApertureVariantNPC,
   TribulationEvent,
   TribulationEnemy,
+  AperturePortal,
+  ApertureGuest,
 } from "@/store/useGameStore";
 
 let fetchAperturePromise: Promise<void> | null = null;
@@ -116,10 +118,24 @@ export interface ApertureSlice {
   dismissNPC: (npcId: string) => Promise<boolean>;
   useGutsGu: () => Promise<boolean>;
   refineSoul: () => Promise<boolean>;
+  portal: AperturePortal | null;
+  guests: ApertureGuest[];
+  fetchPortal: (forceRefresh?: boolean) => Promise<void>;
+  managePortal: (name: string, accessPolicy: string) => Promise<boolean>;
+  anchorAperture: (portalName?: string, accessPolicy?: string) => Promise<boolean>;
+  unanchorAperture: () => Promise<boolean>;
+  enterPortal: (portalId: string) => Promise<boolean>;
+  leaveAperture: () => Promise<boolean>;
+  fetchGuests: () => Promise<void>;
+  setGuestRole: (guestId: string, role: string) => Promise<boolean>;
+  evictGuest: (guestId: string) => Promise<boolean>;
+  signAllianceContract: (guestId: string, tier?: string) => Promise<boolean>;
 }
 
 export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ApertureSlice> = (set, get) => ({
   aperture: null,
+  portal: null,
+  guests: [],
   daoMarks: [],
   daoNgan: null,
   apertureNodes: [],
@@ -1360,5 +1376,268 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally { get().endAction("aperture"); }
+  },
+
+  fetchPortal: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/portal`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ portal: data.portal || null });
+      }
+    } catch (err) {
+      console.error("Failed to fetch aperture portal:", err);
+    }
+  },
+
+  managePortal: async (name: string, accessPolicy: string) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/portal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, access_policy: accessPolicy }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cập nhật Môn Hộ thất bại");
+      get().addToast(data.message || "Cập nhật Môn Hộ thành công!", "success");
+      await get().fetchPortal();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  anchorAperture: async (portalName = "Môn Hộ Tiên Khiếu", accessPolicy = "OPEN") => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/anchor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ portal_name: portalName, access_policy: accessPolicy }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hạ Khiếu thất bại");
+      get().addToast(data.message || "Hạ Khiếu thành công!", "success");
+      get().addLog(data.message || "Đã hạ khiếu tiếp dẫn địa khí.");
+      if (get().player) {
+        get().setPlayerFromServer({
+          current_region: data.aperture_region,
+          world_zone_id: data.aperture_region,
+          world_instance_id: data.aperture_instance || "",
+          x: 10,
+          y: 10,
+        });
+        get().requestWorldReconnect();
+      }
+      await get().fetchAperture(true);
+      await get().fetchPortal();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  unanchorAperture: async () => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/unanchor`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thu Khiếu thất bại");
+      get().addToast(data.message || "Thu Khiếu thành công!", "success");
+      get().addLog(data.message || "Đã thu hồi Tiên Khiếu vào nhục thân.");
+      if (get().player) {
+        get().setPlayerFromServer({
+          current_region: data.current_region,
+          world_zone_id: data.current_region,
+          world_instance_id: "",
+          x: data.x,
+          y: data.y,
+        });
+        get().requestWorldReconnect();
+      }
+      set({ portal: null, guests: [] });
+      await get().fetchAperture(true);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  enterPortal: async (portalId: string) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/portals/${portalId}/enter`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Tiến vào Môn Hộ thất bại");
+      get().addToast(data.message || "Đã bước vào Tiên Khiếu!", "success");
+      get().addLog(data.message || "Đã bước qua Môn Hộ.");
+      if (get().player) {
+        get().setPlayerFromServer({
+          current_region: data.aperture_region,
+          world_zone_id: data.aperture_region,
+          world_instance_id: data.aperture_instance || "",
+          x: data.x || 10,
+          y: data.y || 10,
+        });
+        get().requestWorldReconnect();
+      }
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  leaveAperture: async () => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/leave`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Rời khỏi Tiên Khiếu thất bại");
+      get().addToast(data.message || "Đã rời Tiên Khiếu trở lại thế giới!", "info");
+      get().addLog(data.message || "Đã bước qua Môn Hộ ra thế giới thực.");
+      if (get().player) {
+        get().setPlayerFromServer({
+          current_region: data.current_region,
+          world_zone_id: data.current_region,
+          world_instance_id: "",
+          x: data.x,
+          y: data.y,
+        });
+        get().requestWorldReconnect();
+      }
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  fetchGuests: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/guests`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ guests: data.guests || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch guests:", err);
+    }
+  },
+
+  setGuestRole: async (guestId: string, role: string) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/guests/${guestId}/role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Phân quyền thất bại");
+      get().addToast(data.message || "Đã cập nhật quyền hạn!", "success");
+      await get().fetchGuests();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  evictGuest: async (guestId: string) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/guests/${guestId}/evict`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Trục xuất thất bại");
+      get().addToast(data.message || "Đã trục xuất thành công!", "success");
+      await get().fetchGuests();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  signAllianceContract: async (guestId: string, tier = "MAJOR") => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/guests/${guestId}/contract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contract_tier: tier }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Ký kết Minh Ước thất bại");
+      get().addToast(data.message || "Ký kết Minh Ước thành công!", "success");
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
   },
 });

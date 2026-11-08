@@ -468,9 +468,57 @@ export interface ImmortalAperture {
   grand_tribulation_count: number;
   myriad_tribulation_count: number;
   chaos_calamity_count: number;
-  state: 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED';
+  state: 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED' | 'UNBALANCED';
+  heaven_qi?: number;
+  earth_qi?: number;
+  max_heaven_qi?: number;
+  max_earth_qi?: number;
+  is_placed?: boolean;
+  placed_region?: string | null;
+  placed_x?: number | null;
+  placed_y?: number | null;
+  placed_at?: string | null;
+  return_region?: string | null;
+  return_x?: number | null;
+  return_y?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AperturePortal {
+  id: string;
+  aperture_id: string;
+  owner_id: string;
+  region_id: string;
+  x: number;
+  y: number;
+  name: string;
+  access_policy: 'OPEN' | 'PARTY' | 'SECT' | 'KEY' | 'APPROVAL' | 'HIDDEN';
+  concealment_power: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApertureGuest {
+  aperture_id: string;
+  player_id: string;
+  username?: string;
+  rank?: number;
+  role: 'VISITOR' | 'ASSISTANT' | 'PRISONER';
+  granted_by: string;
+  entered_at: string;
+}
+
+export interface TribulationCoopParticipant {
+  event_id: string;
+  player_id: string;
+  username?: string;
+  rank: number;
+  primary_path: string;
+  agreed_bounty_immortal_stones: number;
+  is_alive: boolean;
+  created_at: string;
 }
 
 export interface DaoMark {

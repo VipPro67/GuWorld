@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype 04: Bùa Lợi Duy Ngã Độc Tôn & Hóa Thân Phúc Địa Vô Chủ</title>
+  <style>
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-secondary: #172033;
+      --bg-card: #25334d;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #eab308;
+      --accent-glow: rgba(234, 179, 8, 0.25);
+      --danger: #ef4444;
+      --success: #22c55e;
+      --spirit: #38bdf8;
+      --border: #384b6b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-primary); color: var(--text-main); line-height: 1.5; padding: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+    header { border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    h1 { font-size: 1.6rem; color: var(--accent); margin-bottom: 6px; }
+    .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+
+    .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid-layout { grid-template-columns: 1fr; } }
+
+    .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+    .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+    .state-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; font-weight: bold; }
+    .badge-sovereign { background: #d97706; color: white; box-shadow: 0 0 10px rgba(217, 119, 6, 0.4); }
+    .badge-unowned { background: var(--spirit); color: #000; animation: glow 2s infinite alternate; }
+    .badge-danger { background: var(--danger); color: white; }
+
+    @keyframes glow {
+      from { box-shadow: 0 0 6px var(--spirit); }
+      to { box-shadow: 0 0 18px var(--spirit); }
+    }
+
+    .stat-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: 0.9rem; }
+    .stat-label { color: var(--text-muted); }
+    .stat-val { font-weight: 600; }
+
+    .spirit-box {
+      background: rgba(56, 189, 248, 0.08); border: 1px solid var(--spirit);
+      border-radius: 6px; padding: 12px; margin-top: 10px; font-size: 0.88rem;
+    }
+
+    .log-box { background: #060913; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; height: 160px; overflow-y: auto; font-size: 0.82rem; font-family: monospace; color: #38bdf8; }
+    .log-item { margin-bottom: 4px; }
+    .log-err { color: #f87171; }
+    .log-ok { color: #4ade80; }
+    .log-warn { color: #facc15; }
+    .log-spirit { color: #38bdf8; font-weight: bold; }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    button {
+      background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border);
+      padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    button:hover:not(:disabled) { background: var(--accent); color: #000; border-color: var(--accent); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.btn-primary { background: #d97706; border-color: #f59e0b; color: white; }
+    button.btn-primary:hover:not(:disabled) { background: #b45309; }
+    button.btn-danger { background: #991b1b; border-color: #dc2626; color: white; }
+    button.btn-danger:hover:not(:disabled) { background: #7f1d1d; }
+    button.btn-spirit { background: #0284c7; border-color: #38bdf8; color: white; }
+    button.btn-spirit:hover:not(:disabled) { background: #0369a1; }
+
+    /* Tabs & Scenarios */
+    .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 14px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; border-radius: 4px; }
+    .tab-btn.active { background: var(--bg-card); color: var(--accent); font-weight: 600; }
+    .scenario-desc { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; }
+    .step-list { display: flex; flex-direction: column; gap: 8px; }
+    .step-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Prototype 04: Bùa Lợi Duy Ngã Độc Tôn & Hóa Thân Phúc Địa Vô Chủ</h1>
+    <div class="subtitle">
+      Khảo nghiệm cơ chế đối kháng ma đạo sinh tử bên trong Tiên Khiếu: Bùa lợi thiên địa của Chủ Khiếu, cơ chế phản phệ Minh Ước Tín Đạo khi có kẻ bội phản, và tiến trình hóa thân thành Phúc Địa Vô Chủ có Địa Linh chấp niệm bảo vệ di sản.
+    </div>
+  </header>
+
+  <!-- State & Realtime Dashboard -->
+  <div class="grid-layout">
+    <!-- Panel 1: Host & Realm Status -->
+    <div class="card">
+      <div class="card-title">
+        <span>👑 Chủ Khiếu & Tiểu Thiên Địa</span>
+        <span id="realmStatusBadge" class="state-badge badge-sovereign">Duy Ngã Độc Tôn Active</span>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Chủ Nhân Tiên Khiếu:</span>
+        <span class="stat-val" id="valHostName">Cổ Tiên Phương Nguyên (Còn Sống)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Sinh Lực Chủ Khiếu (Host HP):</span>
+        <span class="stat-val" id="valHostHP" style="color: var(--success);">85,000 / 85,000</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Tiên Nguyên Dự Trữ:</span>
+        <span class="stat-val" id="valHostEssence">48 Thanh Đề Tiên Nguyên</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Hiệu Ứng Duy Ngã Độc Tôn:</span>
+        <span class="stat-val" id="valSovereignEffects" style="color: #facc15;">-50% Mana Cost, +25% Dmg, +40% Kháng CC</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Trạng Thái Phúc Địa:</span>
+        <span class="stat-val" id="valApertureState">Hồ Tiên Phúc Địa (Có Chủ Sở Hữu)</span>
+      </div>
+    </div>
+
+    <!-- Panel 2: Guest / Traitor & Land Spirit -->
+    <div class="card">
+      <div class="card-title">
+        <span>⚔️ Khách Mời & Địa Linh Di Sản</span>
+        <span id="traitorStatusBadge" class="state-badge badge-calm" style="background: #334155;">Minh Ước Hòa Bình</span>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Khách Mời Hiện Diện:</span>
+        <span class="stat-val" id="valGuestName">Phí Tài [Rank 6 - Nô Đạo]</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Sinh Lực Khách (Guest HP):</span>
+        <span class="stat-val" id="valGuestHP">65,000 / 65,000</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Khế Ước Tín Đạo Bảo Vệ:</span>
+        <span class="stat-val" id="valContractType" style="color: #38bdf8;">Đại Thề Minh Ước (Phạt 50% HP + Stun)</span>
+      </div>
+
+      <!-- Land Spirit Info (Visible only when unowned) -->
+      <div id="landSpiritBox" class="spirit-box" style="display: none;">
+        <div style="font-weight: bold; color: var(--spirit); margin-bottom: 4px;">👻 Địa Linh: Tiểu Hồ Tiên (Chấp Niệm Tiền Nhân)</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">
+          "Chủ nhân đã tạ thế... Ta phụng mệnh canh giữ 30 vạn Đảm Thức Cổ và Đãng Hồn Sơn. Người nào muốn nhận ta làm chủ phải thỏa mãn chấp niệm!"
+        </div>
+        <div style="margin-top: 6px; font-size: 0.82rem; color: #facc15;">
+          <strong>Điều Kiện Nhận Chủ:</strong> <span id="valInheritanceReq">Sở hữu Lực Đạo Tông Sư & nộp 10 vạn đầu Hoang Thú</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diagnostic Action Log -->
+  <div class="card">
+    <div class="card-title">📜 Nhật Ký Giao Tranh & Di Sản (Audit Log)</div>
+    <div class="log-box" id="logBox">
+      <div class="log-item log-ok">[Hệ Thống] Chủ Khiếu kích hoạt bùa lợi [Duy Ngã Độc Tôn]. Khách mời bước vào với Minh Ước Tín Đạo.</div>
+    </div>
+  </div>
+
+  <!-- Interactive Controls: Guided Scenarios & Free-Play -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('scenario1')">Kịch Bản 1: Ưu Thế Duy Ngã Độc Tôn</button>
+      <button class="tab-btn" onclick="switchTab('scenario2')">Kịch Bản 2: Phản Bội & Phản Phệ Tín Đạo</button>
+      <button class="tab-btn" onclick="switchTab('scenario3')">Kịch Bản 3: Chủ Khiếu Tử Trận & Hóa Thân Phúc Địa Vô Chủ</button>
+      <button class="tab-btn" onclick="switchTab('freeplay')">🎮 Chế Độ Tự Do (Free-Play)</button>
+    </div>
+
+    <!-- Scenario 1 Content -->
+    <div id="tab-scenario1" class="tab-content">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> Khảo nghiệm ưu thế "Trong phúc địa ta là trời": Giảm 50% tiêu hao Tiên Nguyên, tăng 25% sát thương và giảm 40% thời gian dính khống chế.
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Khách thử tung chiêu khống chế [Băng Đóng Băng] (Gốc: 5 giây)</span>
+          <button onclick="actGuestStunHost()">Khách Tung Khống Chế</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Chủ Khiếu phản công với Sát Chiêu Lực Đạo (Chỉ tốn 1 Tiên Nguyên thay vì 2)</span>
+          <button class="btn-primary" onclick="actHostCounterAttack()">Chủ Khiếu Phản Công Tiết Kiệm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 2 Content -->
+    <div id="tab-scenario2" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> Khách mời kích hoạt trạng thái phản bội (TRAITOR). Vì đã ký Minh Ước Tín Đạo, hành vi phản bội lập tức giáng sấm sét phản phệ trừ 50% HP và Choáng 3s!
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Khách bất ngờ kích hoạt nút "Bội Ước / Cướp Phá Tài Nguyên"</span>
+          <button class="btn-danger" onclick="actGuestRebel(true)">Khách Bội Ước (Có Minh Ước)</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Chủ Khiếu tận dụng lúc phản tặc bị choáng để tiêu diệt</span>
+          <button class="btn-primary" onclick="actHostExecuteTraitor()">Xử Trảm Phản Tặc</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 3: Xem rơi rớt đồ vào kho Tiên Khiếu</span>
+          <button onclick="log('Toàn bộ tài nguyên cướp bóc và túi đồ của kẻ phản bội đã tịch thu vào kho!', 'ok')">Kiểm Tra Kho</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 3 Content -->
+    <div id="tab-scenario3" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        <strong>Mục tiêu:</strong> Chủ Khiếu bị hạ sát trong giao tranh. Nhục thân tan rã, Tiên Khiếu cắm rễ vĩnh viễn hóa thành Phúc Địa Vô Chủ với Địa Linh trấn thủ đưa ra Quest nhận chủ.
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <span>Bước 1: Chủ Khiếu chịu đòn chí mạng cạn kiệt HP (Tử Vong)</span>
+          <button class="btn-danger" onclick="actHostDie()">Chủ Khiếu Vẫn Lạc</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 2: Kiểm chứng sự xuất hiện của Địa Linh & Khóa Di Sản</span>
+          <button class="btn-spirit" onclick="actInspectLandSpirit()">Hội Thoại Cùng Địa Linh</button>
+        </div>
+        <div class="step-item">
+          <span>Bước 3: Cổ Tiên khác đáp ứng điều kiện nhận chủ (Lực Đạo Tông Sư)</span>
+          <button class="btn-primary" onclick="actClaimInheritance('Phương Nguyên Đệ Nhị')">Thỏa Mãn Điều Kiện & Kế Thừa Phúc Địa</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Free-Play Content -->
+    <div id="tab-freeplay" class="tab-content" style="display: none;">
+      <div class="scenario-desc">
+        Tùy chỉnh tự do giữa các trạng thái sống/chết, ký kết minh ước hoặc trở thành phúc địa vô chủ:
+      </div>
+      <div class="btn-group">
+        <button class="btn-primary" onclick="actHostCounterAttack()">Chủ Khiếu Tấn Công (-20,000 HP Khách)</button>
+        <button class="btn-danger" onclick="actGuestAttackHost(25000)">Khách Đánh Chủ Khiếu (-25,000 HP)</button>
+        <button class="btn-danger" onclick="actGuestRebel(false)">Khách Phản Bội (KHÔNG CÓ Minh Ước)</button>
+        <button class="btn-spirit" onclick="actHostDie()">Chuyển Thành Phúc Địa Vô Chủ</button>
+        <button onclick="resetModel()">🔄 Đặt Lại Ban Đầu</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const initialData = {
+    hostName: "Phương Nguyên",
+    hostHP: 85000,
+    hostMaxHP: 85000,
+    hostEssence: 48,
+    isHostAlive: true,
+    sovereignActive: true,
+    guestName: "Phí Tài",
+    guestHP: 65000,
+    guestMaxHP: 65000,
+    hasContract: true,
+    isGuestTraitor: false,
+    isUnowned: false,
+    landSpiritName: "Tiểu Hồ Tiên",
+    inheritanceMet: false
+  };
+
+  let model = { ...initialData };
+
+  function log(msg, type = "ok") {
+    const box = document.getElementById("logBox");
+    const div = document.createElement("div");
+    div.className = "log-item log-" + type;
+    const time = new Date().toLocaleTimeString();
+    div.innerText = `[${time}] ${msg}`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function render() {
+    const realmBadge = document.getElementById("realmStatusBadge");
+    if (model.isUnowned) {
+      realmBadge.className = "state-badge badge-unowned";
+      realmBadge.innerText = "PHÚC ĐỊA VÔ CHỦ (ĐỊA LINH TRẤN GIỮ)";
+      document.getElementById("valHostName").innerText = "Đã tử trận (Nhục thân tan rã thành đất)";
+      document.getElementById("valHostHP").innerText = "0 / 85,000";
+      document.getElementById("valApertureState").innerText = "Phúc Địa Vô Chủ cắm rễ vĩnh viễn trên bản đồ thế giới";
+      document.getElementById("valSovereignEffects").innerText = "Đã giải trừ (Chủ khiếu đã chết)";
+      document.getElementById("landSpiritBox").style.display = "block";
+    } else {
+      realmBadge.className = "state-badge badge-sovereign";
+      realmBadge.innerText = "Duy Ngã Độc Tôn Active";
+      document.getElementById("valHostName").innerText = `${model.hostName} (Còn Sống)`;
+      document.getElementById("valHostHP").innerText = `${model.hostHP.toLocaleString()} / ${model.hostMaxHP.toLocaleString()}`;
+      document.getElementById("valApertureState").innerText = "Hồ Tiên Phúc Địa (Có Chủ Sở Hữu)";
+      document.getElementById("valSovereignEffects").innerText = "-50% Mana Cost, +25% Dmg, +40% Kháng CC";
+      document.getElementById("landSpiritBox").style.display = "none";
+    }
+
+    document.getElementById("valHostEssence").innerText = `${model.hostEssence} Thanh Đề Tiên Nguyên`;
+
+    // Traitor badge
+    const tBadge = document.getElementById("traitorStatusBadge");
+    if (model.isGuestTraitor) {
+      tBadge.className = "state-badge badge-danger";
+      tBadge.innerText = "🚨 PHẢN TẶC (TRAITOR PK)";
+    } else {
+      tBadge.className = "state-badge badge-calm";
+      tBadge.innerText = model.hasContract ? "Minh Ước Hòa Bình" : "Tự Do (Không Ràng Buộc)";
+    }
+
+    document.getElementById("valGuestHP").innerText = `${Math.max(0, model.guestHP).toLocaleString()} / ${model.guestMaxHP.toLocaleString()}`;
+    document.getElementById("valContractType").innerText = model.hasContract
+      ? "Đại Thề Minh Ước (Phạt 50% HP + Stun 3s)"
+      : "Không Ký Minh Ước (Rủi Ro Cực Cao!)";
+  }
+
+  // Pure Logic Actions
+  function actGuestStunHost() {
+    if (!model.isHostAlive) return;
+    const baseDuration = 5.0;
+    const actualDuration = baseDuration * (1 - 0.4); // 40% CC resistance
+    log(`Khách tung [Băng Khóa Chiêu] 5.0s. Nhờ bùa lợi [Duy Ngã Độc Tôn], Chủ Khiếu kháng 40%, thời gian khống chế giảm xuống còn ${actualDuration.toFixed(1)} giây!`, "warn");
+  }
+
+  function actHostCounterAttack() {
+    if (!model.isHostAlive) return;
+    const normalCost = 2;
+    const actualCost = normalCost * 0.5; // 50% cost reduction
+    model.hostEssence -= actualCost;
+    const damage = 25000;
+    model.guestHP = Math.max(0, model.guestHP - damage);
+    log(`Chủ Khiếu giáng đòn [Lực Đạo Khí Phách Thủ] gây ${damage.toLocaleString()} sát thương! Tiêu hao chỉ tốn ${actualCost} Tiên Nguyên (thay vì ${normalCost}).`, "ok");
+    render();
+  }
+
+  function actGuestRebel(withContract) {
+    model.isGuestTraitor = true;
+    model.hasContract = withContract;
+    if (withContract) {
+      const penaltyDmg = model.guestHP * 0.5;
+      model.guestHP -= penaltyDmg;
+      log(`🚨 PHẢN BỘI! Khách [${model.guestName}] trở cờ tấn công Chủ Khiếu!`, "err");
+      log(`⚡ TÍN ĐẠO PHẢN PHỆ: Vì đã ký Minh Ước Hộ Đạo, Đạo Ngân Tín Đạo lập tức bóp nghẹt tâm mạch! Trừ ${penaltyDmg.toLocaleString()} HP và bị Choáng 3 giây!`, "err");
+    } else {
+      log(`🚨 PHẢN BỘI TÀN KHỐC! Khách [${model.guestName}] trở cờ! Vì hai bên KHÔNG ký Minh Ước, kẻ phản bội không chịu bất kỳ hình phạt nào!`, "err");
+    }
+    render();
+  }
+
+  function actHostExecuteTraitor() {
+    model.guestHP = 0;
+    log(`Chủ Khiếu chém đầu kẻ phản bội [${model.guestName}] ngay tại chỗ! Thi thể tan biến, rơi toàn bộ Tiên Tài vào kho Tiên Khiếu.`, "ok");
+    render();
+  }
+
+  function actGuestAttackHost(dmg) {
+    if (!model.isHostAlive) return;
+    model.hostHP = Math.max(0, model.hostHP - dmg);
+    log(`Khách tung đòn hiểm hóc trúng Chủ Khiếu gây -${dmg.toLocaleString()} HP!`, "err");
+    if (model.hostHP <= 0) {
+      actHostDie();
+    } else {
+      render();
+    }
+  }
+
+  function actHostDie() {
+    model.isHostAlive = false;
+    model.hostHP = 0;
+    model.isUnowned = true;
+    log(`💀 CHỦ KHIẾU TỬ TRẬN! Nhục thân Cổ Tiên Phương Nguyên hoàn toàn tan rã, hòa nhập vào thiên địa!`, "err");
+    log(`👻 BIẾN DỊ THẾ GIỚI: Tiên Khiếu cắm rễ vĩnh viễn ngoài bản đồ Ngũ Vực, chuyển hóa thành [Phúc Địa Vô Chủ]!`, "spirit");
+    log(`Địa Linh [Tiểu Hồ Tiên] chính thức giáng sinh từ chấp niệm tiền nhân, phong tỏa Đãng Hồn Sơn và đưa ra thử thách nhận chủ!`, "spirit");
+    render();
+  }
+
+  function actInspectLandSpirit() {
+    if (!model.isUnowned) {
+      log("Chủ khiếu vẫn còn sống, Địa Linh chưa xuất hiện!", "warn");
+      return;
+    }
+    log(`[Địa Linh Tiểu Hồ Tiên]: "Muốn làm chủ nhân mới của ta? Ngươi phải là Lực Đạo Tông Sư và hoàn thành thử thách di sản!"`, "spirit");
+  }
+
+  function actClaimInheritance(newOwnerName) {
+    if (!model.isUnowned) return;
+    log(`🎉 KẾ THỪA THÀNH CÔNG! [${newOwnerName}] đáp ứng đủ điều kiện của Địa Linh (Lực Đạo Tông Sư)!`, "ok");
+    log(`Địa Linh Tiểu Hồ Tiên bái kiến: "Tiểu Hồ Tiên bái kiến Tân Chủ Nhân!". Toàn bộ Đãng Hồn Sơn và tài nguyên thuộc về [${newOwnerName}].`, "ok");
+    model.hostName = newOwnerName;
+    model.isHostAlive = true;
+    model.hostHP = 75000;
+    model.isUnowned = false;
+    render();
+  }
+
+  function resetModel() {
+    model = { ...initialData };
+    log("Đã lập lại trạng thái ban đầu.", "warn");
+    render();
+  }
+
+  function switchTab(tabId) {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
+    event.target.classList.add("active");
+    document.getElementById("tab-" + tabId).style.display = "block";
+  }
+
+  // Initial render
+  render();
+</script>
+</body>
+</html>

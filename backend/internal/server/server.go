@@ -878,6 +878,14 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 			aperture.POST("/cleanse-dao-marks", handlers.CleanseDaoMarks)
 			aperture.POST("/anchor", handlers.AnchorAperture)
 			aperture.POST("/unanchor", handlers.UnanchorAperture)
+			aperture.GET("/portal", handlers.GetAperturePortal)
+			aperture.POST("/portal", handlers.ManageAperturePortal)
+			aperture.POST("/portals/:portalId/enter", handlers.EnterAperturePortal)
+			aperture.POST("/leave", handlers.LeaveAperture)
+			aperture.GET("/guests", handlers.GetApertureGuests)
+			aperture.POST("/guests/:guestId/role", handlers.SetGuestRole)
+			aperture.POST("/guests/:guestId/evict", handlers.EvictGuest)
+			aperture.POST("/guests/:guestId/contract", handlers.SignAllianceContract)
 			aperture.GET("/variant-humans", handlers.GetApertureVariantHumans)
 
 			// Phase 1: Variant Economy — node workers

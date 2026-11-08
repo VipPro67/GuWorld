@@ -4,6 +4,7 @@ import { WorldTransport, type WorldTransportOptions } from "../network/WorldTran
 import type { WorldTransportLike } from "../network/Transport.ts";
 import { BACKEND_URL } from "../../lib/config.ts";
 import { authFetch } from "../../lib/auth.ts";
+import { versionsForMMOZone } from "../../lib/mmoConfig.ts";
 import {
   RealtimeMetricsCollector,
   type RealtimeMetricsLive,
@@ -375,7 +376,14 @@ export class WorldRuntime {
     let nextJoin = join;
     const resolvedZone = this.joinZoneResolver?.()?.trim() ?? "";
     if (resolvedZone && resolvedZone !== join.zone_id) {
-      nextJoin = { ...join, zone_id: resolvedZone };
+      const versions = versionsForMMOZone(resolvedZone);
+      nextJoin = {
+        ...join,
+        zone_id: resolvedZone,
+        map_version: versions.mapVersion,
+        content_version: versions.contentVersion,
+      };
+      this.lastJoin = nextJoin;
     }
     this.socket = this.createSocket();
     this.resetSocketMetrics();
@@ -390,7 +398,13 @@ export class WorldRuntime {
    */
   public async reconnectTo(zoneId: string): Promise<WorldWelcomePayload | null> {
     if (!this.lastJoin || !zoneId) return null;
-    this.lastJoin = { ...this.lastJoin, zone_id: zoneId };
+    const versions = versionsForMMOZone(zoneId);
+    this.lastJoin = {
+      ...this.lastJoin,
+      zone_id: zoneId,
+      map_version: versions.mapVersion,
+      content_version: versions.contentVersion,
+    };
     return this.reconnect();
   }
 

@@ -851,6 +851,25 @@ func spawnTribulationEventWorker(apertureID string, playerID string, currentHP f
 		path = chaoticHybridPath(daoMarks, path)
 	}
 
+	// Thiên Đạo Phẫn Nộ: Cảm ứng trợ thủ bên trong Tiên Khiếu gia tăng uy lực
+	var helperCount int
+	var helperMaxRank int
+	_ = tx.QueryRow(`
+		SELECT COUNT(g.player_id), COALESCE(MAX(p.rank), 0)
+		FROM aperture_guest_roster g
+		JOIN players p ON p.id = g.player_id
+		WHERE g.aperture_id = $1 AND g.role IN ('VISITOR', 'ASSISTANT')
+	`, apertureID).Scan(&helperCount, &helperMaxRank)
+
+	if helperCount > 0 {
+		deltaRank := helperMaxRank - rank + 1
+		if deltaRank < 0 {
+			deltaRank = 0
+		}
+		coopMult := 1.0 + float64(helperCount)*0.4 + float64(deltaRank)*0.3
+		calamityMult *= coopMult
+	}
+
 	rewardMarks := models.CalculateTribulationReward(rank, tribulationType)
 	if rewardMult <= 0 {
 		rewardMult = 1.0
@@ -865,6 +884,18 @@ func spawnTribulationEventWorker(apertureID string, playerID string, currentHP f
 	`, eventID, apertureID, playerID, tribulationType, path, currentHP, rewardMarks)
 	if err != nil {
 		return err
+	}
+
+	// Record participants in tribulation_coop_participants
+	if helperCount > 0 {
+		_, _ = tx.Exec(`
+			INSERT INTO tribulation_coop_participants (event_id, player_id, rank, primary_path, is_alive, created_at)
+			SELECT $1, g.player_id, p.rank, COALESCE(p.race, ''), true, NOW()
+			FROM aperture_guest_roster g
+			JOIN players p ON p.id = g.player_id
+			WHERE g.aperture_id = $2 AND g.role IN ('VISITOR', 'ASSISTANT')
+			ON CONFLICT (event_id, player_id) DO NOTHING
+		`, eventID, apertureID)
 	}
 
 	// Spawn Enemies
