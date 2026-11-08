@@ -143,7 +143,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/unequip-all` |
 | POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |
 | POST | `/inventory/set-vital` |
-| POST | `/inventory/use-gu` |
+| POST | `/inventory/use-gu` | Cổ Tiêu Hao thường nhận `{ "gu_instance_id": "..." }`. Cổ có capability `RANDOM_PORTAL`/`PORTAL_CREATE` nhận thêm `teleport_mode: "random"` hoặc `teleport_mode: "coordinates"` cùng `x`, `y` khi chọn tọa độ. Xác thực đích, dịch chuyển và tiêu hao được xử lý trong cùng transaction. |
 | POST | `/inventory/use-support` | Dùng Cổ hồi máu ngoài combat (bất kỳ Cổ không phải Tiêu Hao có block `ON_ACTION` `HEAL`/`FLAT`); xử lý `ON_USE` và hồi HP từ `active.heal_flat`. Body: `{ "gu_instance_id": "..." }`. |
 | POST | `/inventory/drop` |
 | POST | `/inventory/drop-batch` |

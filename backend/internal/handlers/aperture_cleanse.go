@@ -20,7 +20,7 @@ import (
 // Thanh Đạo Tẩy Thể (Dao Cleansing) — spec §6.
 const (
 	cleanseCooldown      = 1 * time.Hour
-	cleanseMarksPerStone = 100 // 1 Tiên Nguyên Thạch per 100 tạp đạo ngân
+	cleanseMarksPerStone = 100  // 1 Tiên Nguyên Thạch per 100 tạp đạo ngân
 	cleanseRefundRatio   = 0.30 // 30% refunded as Dao Materials
 	// cleanseRefundMarks là số Đạo Ngân mà 1 món Đạo Tài hoàn trả bổ sung khi
 	// dùng (khớp params.value của block ADD_DAO_MARKS trong Item.csv).

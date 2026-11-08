@@ -206,6 +206,10 @@ _Avoid_: vehicle mount, robot pilot
 Hệ thống 6 chiêu thức chiến đấu chuẩn hóa của Tiên Cổ Phòng khi người chơi dung nhập, bao gồm đầy đủ các vai trò: Pháo kích công kích, Xung kích di chuyển, Đại trận phòng hộ, Hồi phục sửa chữa, Thần thông hủy diệt tối hậu, và Lệnh rời khỏi Cổ Phòng.
 _Avoid_: generic killer moves
 
+### Vỡ Phòng Tiên Cổ Phòng (Gu House Structural Breach)
+Trạng thái sụp đổ hoàn toàn kết cấu trận pháp của Tiên Cổ Phòng khi Form HP cạn kiệt trong giao tranh; Tiên Cổ Phòng hấp thu 100% đòn đánh mà không tràn sát thương sang nhục thân, nhưng kích phát phản phệ trận pháp làm Cổ Tiên bị văng ra chịu Choáng 3 giây cùng tổn thương 30% sinh mệnh tối đa, độ bền Cổ Phòng về mức 0% buộc tháo trang bị, và truyền 30% xung kích chấn thương làm suy giảm độ bền của toàn bộ Tiên Cổ hạch tâm.
+_Avoid_: armor break debuff, vehicle wreck
+
 ### Hao Hụt Duy Trì Biến Thân (Sustained Form Upkeep)
 Cơ chế tiêu hao Chân Nguyên hoặc Tiên Nguyên liên tục theo nhịp realtime (tick) để duy trì hình thái biến thân, tự động giải trừ khi cạn kiệt năng lượng hoặc bị phá vỡ hình thái.
 _Avoid_: mana drain debuff

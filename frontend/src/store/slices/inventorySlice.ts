@@ -53,7 +53,7 @@ export interface InventorySlice {
   unequipAllGu: () => Promise<void>;
   updateGuStatus: (instanceId: string, status: string) => Promise<void>;
   setVitalGu: (instanceId: string) => Promise<void>;
-  useGu: (instanceId: string) => Promise<void>;
+  useGu: (instanceId: string, teleport?: { mode: "random" | "coordinates"; x?: number; y?: number }) => Promise<void>;
   useSupportGu: (instanceId: string) => Promise<void>;
   useGus: (instanceIds: string[]) => Promise<boolean>;
   useItem: (itemId: string) => Promise<void>;
@@ -404,11 +404,11 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
     });
   },
 
-  useGu: async (instanceId) => {
+  useGu: async (instanceId, teleport) => {
     await executeGameAction<{ message?: string }>(get, set, {
       endpoint: "/api/inventory/use-gu",
       actionLock: "player:inventory",
-      body: { gu_instance_id: instanceId },
+      body: { gu_instance_id: instanceId, ...(teleport ? { teleport_mode: teleport.mode, ...(teleport.mode === "coordinates" ? { x: teleport.x, y: teleport.y } : {}) } : {}) },
       errorMessage: "Sử dụng Cổ trùng thất bại.",
     });
   },

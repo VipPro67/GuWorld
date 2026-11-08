@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strings"
 
@@ -18,6 +19,9 @@ import (
 
 type UseGuRequest struct {
 	GuInstanceID string `json:"gu_instance_id" binding:"required"`
+	TeleportMode string `json:"teleport_mode,omitempty"`
+	X            *int   `json:"x,omitempty"`
+	Y            *int   `json:"y,omitempty"`
 }
 
 // UseConsumableGu activates a consumable Gu bug\x27s one-time effect and removes it
@@ -39,6 +43,7 @@ func UseConsumableGu(c *gin.Context) {
 	var reduceHunger bool
 	var realtimeBaseHP float64
 	var realtimeActive bool
+	var transition *SpatialTransitionResult
 
 	player, err := MutatePlayer(authID, PlayerMutationOptions{
 		Scope:        playerstate.GuFull,
@@ -86,7 +91,28 @@ func UseConsumableGu(c *gin.Context) {
 			return NewMutationError(http.StatusBadRequest, err.Error())
 		}
 
+		_, hasPortal := models.GuSpecCapability(specs, "PORTAL_CREATE")
+		_, hasRandom := models.GuSpecCapability(specs, "RANDOM_PORTAL")
+		teleportGu := hasPortal || hasRandom
+		if teleportGu && req.TeleportMode == "" {
+			return NewMutationError(http.StatusBadRequest, "Cổ dịch chuyển cần chọn phương thức dịch chuyển.")
+		}
+		if req.TeleportMode != "" && !teleportGu {
+			return NewMutationError(http.StatusBadRequest, "Cổ trùng này không có năng lực dịch chuyển.")
+		}
+		if teleportGu && req.TeleportMode != "random" && req.TeleportMode != "coordinates" {
+			return NewMutationError(http.StatusBadRequest, "Phương thức dịch chuyển không hợp lệ.")
+		}
+		if req.TeleportMode == "random" && !hasRandom {
+			return NewMutationError(http.StatusBadRequest, "Cổ trùng này không có năng lực dịch chuyển ngẫu nhiên.")
+		}
+		if req.TeleportMode == "coordinates" && !hasPortal {
+			return NewMutationError(http.StatusBadRequest, "Cổ trùng này không thể dịch chuyển tới tọa độ tự chọn.")
+		}
 		cost := gamefx.EnergyCost(player, &specs)
+		if teleportGu {
+			cost = GetPortalManaCost(player, &specs)
+		}
 		player.CurrentMana -= cost
 
 		var logs []string
@@ -99,12 +125,78 @@ func UseConsumableGu(c *gin.Context) {
 				logs = append(logs, consumeMsg)
 			}
 		}
+		if teleportGu && len(logs) == 0 {
+			logs = append(logs, fmt.Sprintf("%s kích hoạt cổng dịch chuyển.", specs.Name))
+		}
 
 		if len(logs) == 0 {
 			return NewMutationError(http.StatusBadRequest, "Hiệu ứng của Cổ trùng tiêu hao này chưa được định nghĩa hoặc không kích hoạt thành công!")
 		}
 
 		logMsg = strings.Join(logs, " ")
+
+		if teleportGu {
+			destX, destY := 0, 0
+			if req.TeleportMode == "coordinates" {
+				if req.X == nil || req.Y == nil {
+					return NewMutationError(http.StatusBadRequest, "Cần nhập đủ tọa độ X và Y.")
+				}
+				destX, destY = *req.X, *req.Y
+			} else {
+				rangeLimit := GuTeleportRange(&specs)
+				minX, maxX, minY, maxY := 0, WorldWidth-1, 0, WorldHeight-1
+				if rangeLimit > 0 {
+					minX, maxX = player.X-rangeLimit, player.X+rangeLimit
+					minY, maxY = player.Y-rangeLimit, player.Y+rangeLimit
+					if minX < 0 {
+						minX = 0
+					}
+					if maxX >= WorldWidth {
+						maxX = WorldWidth - 1
+					}
+					if minY < 0 {
+						minY = 0
+					}
+					if maxY >= WorldHeight {
+						maxY = WorldHeight - 1
+					}
+				}
+				foundDestination := false
+				for attempt := 0; attempt < 100; attempt++ {
+					x, y := minX+rand.Intn(maxX-minX+1), minY+rand.Intn(maxY-minY+1)
+					if (x != player.X || y != player.Y) && FindZoneAt(x, y) != nil {
+						destX, destY, foundDestination = x, y, true
+						break
+					}
+				}
+				if !foundDestination {
+					return NewMutationError(http.StatusBadRequest, "Không tìm được điểm dịch chuyển hợp lệ trong phạm vi.")
+				}
+			}
+			if !inWorld(destX, destY) {
+				return NewMutationError(http.StatusBadRequest, "Tọa độ vượt ra ngoài ranh giới bản đồ.")
+			}
+			zone := FindZoneAt(destX, destY)
+			if zone == nil {
+				return NewMutationError(http.StatusBadRequest, "Tọa độ không thuộc khu vực có thể dịch chuyển tới.")
+			}
+			if r := GuTeleportRange(&specs); r > 0 && chebyshevDistance(player.X, player.Y, destX, destY) > r {
+				return NewMutationError(http.StatusBadRequest, fmt.Sprintf("Tọa độ vượt quá tầm dịch chuyển (%d ô).", r))
+			}
+			targetRegion := zone.ID
+			var moveErr error
+			transition, moveErr = ExecuteSpatialTransition(c.Request.Context(), tx, player, movementSpec{kind: movementGuTeleport, x: destX, y: destY, hasTarget: true, targetRegion: targetRegion}, publishPartyRealtimeEvent)
+			if moveErr != nil {
+				if me, ok := moveErr.(*movementError); ok {
+					return NewMutationError(me.status, me.message)
+				}
+				return moveErr
+			}
+			logMsg += fmt.Sprintf(" Đã dịch chuyển đến (%d, %d).", destX, destY)
+			if transition.DebuffMessage != "" {
+				logMsg += " " + transition.DebuffMessage
+			}
+		}
 
 		if player.PathMasteries == nil {
 			player.PathMasteries = make(models.PathMasteriesMap)
@@ -148,6 +240,9 @@ func UseConsumableGu(c *gin.Context) {
 	}
 
 	applyRealtimeHPDelta(authID, realtimeBaseHP, realtimeActive, player)
+	if transition != nil && transition.PublishPostCommit != nil {
+		transition.PublishPostCommit()
+	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,

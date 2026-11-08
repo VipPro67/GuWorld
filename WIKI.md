@@ -659,6 +659,8 @@ Năm khu tân thủ có cảnh quan riêng trong cùng phong cách pixel-art t�
 
 Cổ Sư có thể khắc họa trận văn, câu thông thiên địa để xây dựng các **Truyền Tống Trận** cố định trên bản đồ Thế Giới Ngũ Vực. Hệ thống kết nối các tọa độ không gian, hỗ trợ dịch chuyển nhanh cho cá nhân, tông môn hoặc toàn bộ tu chân giới.
 
+Các Cổ Tiêu Hao có năng lực `RANDOM_PORTAL` hoặc `PORTAL_CREATE` được dùng trong **Túi Cổ**. `RANDOM_PORTAL` mở xác nhận dịch chuyển đến một tọa độ ngẫu nhiên hợp lệ; `PORTAL_CREATE` mở hộp nhập tọa độ (nếu có cả hai năng lực, có thể chọn một trong hai cách). Máy chủ kiểm tra khu vực, tầm dịch chuyển và điều kiện di chuyển trước khi trừ mana và tiêu hao Cổ; thao tác thất bại không tiêu hao tài nguyên.
+
 #### 1. Nguyên Lý Hoạt Động & Hướng Kết Nối
 - Cần tối thiểu **2 điểm truyền tống** trong tầm phủ sóng để tạo liên kết không gian.
 - **Điều kiện kích hoạt:** đạo hữu phải còn sống (HP > 0), không ở trạng thái Cõi Chết, không đang trong trận chiến và nhân vật không bị thế giới realtime điều khiển. Cổng chuyển vùng, Cổ dịch chuyển và lời mời tổ đội áp dụng cùng bộ điều kiện.

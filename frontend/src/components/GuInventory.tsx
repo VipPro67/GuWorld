@@ -8,7 +8,7 @@ import { translateGuType, translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
 import { GamePanel } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
-import { hasOperation } from "@/lib/effect-blocks";
+import { hasCapability, hasOperation, portalRange, usesRandomPortal } from "@/lib/effect-blocks";
 import { KillerMovesPanel } from "@/components/KillerMovesPanel";
 import { getItemIconUrl } from "@/lib/item-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
@@ -28,7 +28,7 @@ interface GuInventoryProps {
   onUseItem?: (itemId: string) => Promise<void>;
   onUpdateStatus?: (instanceId: string, status: string) => Promise<void>;
   onSetVital?: (instanceId: string) => Promise<void>;
-  onUseGu?: (instanceId: string) => Promise<void>;
+  onUseGu?: (instanceId: string, teleport?: { mode: "random" | "coordinates"; x?: number; y?: number }) => Promise<void>;
   onUseSupportGu?: (instanceId: string) => Promise<void>;
   onDropGu?: (instanceId: string) => Promise<boolean>;
   onDropGus?: (instanceIds: string[]) => Promise<boolean>;
@@ -124,6 +124,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   // Single-group quantity use mode (Gu tab)
   const [useMultipleGuGroupKey, setUseMultipleGuGroupKey] = useState<string | null>(null);
   const [useMultipleGuQty, setUseMultipleGuQty] = useState<number>(1);
+  const [portalGuId, setPortalGuId] = useState<string | null>(null);
+  const [portalMode, setPortalMode] = useState<"random" | "coordinates">("coordinates");
+  const [portalX, setPortalX] = useState(String(player.x ?? 0));
+  const [portalY, setPortalY] = useState(String(player.y ?? 0));
 
   const [feedingId, setFeedingId] = useState<string | null>(null);
   const [feedingGroupGuId, setFeedingGroupGuId] = useState<string | null>(null);
@@ -241,6 +245,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const handleUseGu = async (instanceId: string) => {
     if (!onUseGu && !onUseGus) return;
+    const instance = player.gu_inventory?.find((g) => g.instance_id === instanceId);
+    const spec = instance ? guSpecFor(instance.gu_id, instance.rank) : undefined;
+    if (onUseGu && instance && spec && (hasCapability(spec.effects, "PORTAL_CREATE") || usesRandomPortal(spec.effects))) {
+      setPortalGuId(instanceId);
+      setPortalMode(usesRandomPortal(spec.effects) ? "random" : "coordinates");
+      setPortalX(String(player.x ?? 0));
+      setPortalY(String(player.y ?? 0));
+      return;
+    }
     setUsingGuId(instanceId);
     try {
       if (onUseGu) {
@@ -248,6 +261,19 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       } else if (onUseGus) {
         await onUseGus([instanceId]);
       }
+    } finally {
+      setUsingGuId(null);
+    }
+  };
+
+  const confirmPortalTravel = async () => {
+    if (!portalGuId || !onUseGu) return;
+    setUsingGuId(portalGuId);
+    try {
+      await onUseGu(portalGuId, portalMode === "random"
+        ? { mode: "random" }
+        : { mode: "coordinates", x: Number(portalX), y: Number(portalY) });
+      setPortalGuId(null);
     } finally {
       setUsingGuId(null);
     }
@@ -1531,7 +1557,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                             )}
 
                             {/* Per-group "Use Multiple" button for Consumable Gu */}
-                            {spec.gu_type === "Consumable" && (onUseGus || onUseGu) && instances.filter(isEligibleForUse).length > 1 && useMultipleGuGroupKey !== groupKey && (
+                            {spec.gu_type === "Consumable" && !hasCapability(spec.effects, "PORTAL_CREATE") && !usesRandomPortal(spec.effects) && (onUseGus || onUseGu) && instances.filter(isEligibleForUse).length > 1 && useMultipleGuGroupKey !== groupKey && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -2895,6 +2921,34 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
         );
       })()}
       {selectedTab === "killer-moves" && <KillerMovesPanel />}
+      {portalGuId && (() => {
+        const instance = player.gu_inventory?.find((g) => g.instance_id === portalGuId);
+        const spec = instance ? guSpecFor(instance.gu_id, instance.rank) : undefined;
+        if (!instance || !spec) return null;
+        const canRandom = usesRandomPortal(spec.effects);
+        const canCoordinates = hasCapability(spec.effects, "PORTAL_CREATE");
+        const range = portalRange(spec.effects, instance.rank);
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPortalGuId(null); }}>
+            <section role="dialog" aria-modal="true" aria-labelledby="gu-portal-title" className="w-full max-w-md rounded-xl border border-amber-700/60 bg-zinc-950 p-5 text-zinc-100 shadow-2xl">
+              <h2 id="gu-portal-title" className="text-lg font-semibold text-amber-200">Dịch chuyển bằng {spec.name}</h2>
+              <p className="mt-1 text-sm text-zinc-400">Vị trí hiện tại: ({player.x}, {player.y}) · {range > 0 ? `Tầm tối đa ${range} ô` : "Không giới hạn tầm"}</p>
+              {canRandom && canCoordinates && <div className="mt-4 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setPortalMode("random")} className={`rounded-lg border px-3 py-2 text-sm ${portalMode === "random" ? "border-cyan-400 bg-cyan-950/60 text-cyan-200" : "border-zinc-700 text-zinc-300"}`}>Ngẫu nhiên</button>
+                <button type="button" onClick={() => setPortalMode("coordinates")} className={`rounded-lg border px-3 py-2 text-sm ${portalMode === "coordinates" ? "border-cyan-400 bg-cyan-950/60 text-cyan-200" : "border-zinc-700 text-zinc-300"}`}>Chọn tọa độ</button>
+              </div>}
+              {portalMode === "coordinates" && canCoordinates ? <div className="mt-4 grid grid-cols-2 gap-3">
+                <label className="text-xs text-zinc-400">Tọa độ X<input type="number" min="0" max="14999" value={portalX} onChange={(e) => setPortalX(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white" /></label>
+                <label className="text-xs text-zinc-400">Tọa độ Y<input type="number" min="0" max="9999" value={portalY} onChange={(e) => setPortalY(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white" /></label>
+              </div> : <p className="mt-4 rounded-lg bg-zinc-900 p-3 text-sm text-zinc-300">Cổ sẽ đưa đạo hữu đến một vị trí ngẫu nhiên hợp lệ.</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={() => setPortalGuId(null)} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300">Hủy</button>
+                <button type="button" disabled={actionLoading || usingGuId === portalGuId || (portalMode === "coordinates" && (!Number.isInteger(Number(portalX)) || !Number.isInteger(Number(portalY)) || Number(portalX) < 0 || Number(portalX) >= 15000 || Number(portalY) < 0 || Number(portalY) >= 10000))} onClick={() => void confirmPortalTravel()} className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{usingGuId === portalGuId ? "Đang dịch chuyển…" : "Dịch chuyển"}</button>
+              </div>
+            </section>
+          </div>
+        );
+      })()}
     </div>
   );
 };
