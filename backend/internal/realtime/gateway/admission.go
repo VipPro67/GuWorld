@@ -722,13 +722,14 @@ func (a *Admission) join(ctx context.Context, playerID, controllerID uuid.UUID, 
 					Rank:             comp.Rank,
 				},
 				AI: sim.AIState{
-					Active:       true,
 					AttackDamage: comp.Attack,
 					Rank:         comp.Rank,
 				},
 			})
 		}
-		_ = a.manager.AttachCompanions(lease, companionEntities)
+		if err := a.manager.AttachCompanions(lease, companionEntities); err != nil {
+			logger.S.Errorf("Realtime companion admission failed for %s: %v", playerID, err)
+		}
 	}
 	zoneMap, _ := a.manager.ZoneMapFor(key)
 	var mana *manaSettlement
@@ -1559,11 +1560,13 @@ func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 		// Park the session for resume instead of releasing the lease. The
 		// sweeper finalizes it when the grace window expires.
 		if err := a.flushState(active); err != nil {
-			if errors.Is(err, persistence.ErrLocationRevisionStale) {
-				logger.S.Warnf("Realtime disconnect for %s found stale location revision; location superseded: %v", active.playerID, err)
+			if errors.Is(err, persistence.ErrLocationRevisionStale) || errors.Is(err, realtimeworld.ErrInvalidLease) {
+				logger.S.Warnf("Realtime disconnect for %s found a superseded session: %v", active.playerID, err)
 				a.manager.LeaveCharacter(active.lease)
 				a.mu.Lock()
-				delete(a.sessions, controllerID)
+				if held, ok := a.sessions[controllerID]; ok && held.lease.Token == active.lease.Token {
+					delete(a.sessions, controllerID)
+				}
 				a.mu.Unlock()
 				return
 			}
@@ -1580,11 +1583,13 @@ func (a *Admission) Disconnect(playerID, controllerID uuid.UUID) {
 		return
 	}
 	if err := a.flushState(active); err != nil {
-		if errors.Is(err, persistence.ErrLocationRevisionStale) {
-			logger.S.Warnf("Realtime disconnect for %s found stale location revision; location superseded: %v", active.playerID, err)
+		if errors.Is(err, persistence.ErrLocationRevisionStale) || errors.Is(err, realtimeworld.ErrInvalidLease) {
+			logger.S.Warnf("Realtime disconnect for %s found a superseded session: %v", active.playerID, err)
 			a.manager.LeaveCharacter(active.lease)
 			a.mu.Lock()
-			delete(a.sessions, controllerID)
+			if held, ok := a.sessions[controllerID]; ok && held.lease.Token == active.lease.Token {
+				delete(a.sessions, controllerID)
+			}
 			a.mu.Unlock()
 			return
 		}

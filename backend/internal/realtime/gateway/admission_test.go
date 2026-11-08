@@ -76,6 +76,88 @@ func TestAdmissionJoinUsesServerStateAndLeaveReleasesMembership(t *testing.T) {
 	}
 }
 
+func TestAdmissionAddsFormationCompanionsToWorld(t *testing.T) {
+	playerID, controllerID := uuid.New(), uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
+	manager := startTestManager(t, key, 1)
+	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{
+			MapID: "forest", RegionID: "forest-clearing", HP: 70, BaseHP: 100,
+			Companions: []handlers.RealtimeCompanion{{
+				ID: "pet-1", ActorKind: "COMPANION_BEAST", Name: "Đã Trụ",
+				HP: 106, MaxHP: 106, Attack: 9, Speed: 4,
+			}},
+		}, nil
+	})
+
+	_, err := admission.Join(context.Background(), playerID, controllerID, protocol.JoinRequest{
+		ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := manager.Snapshot(key)
+	if err != nil {
+		t.Fatalf("joined zone snapshot unavailable: %v", err)
+	}
+	for _, entity := range snapshot.Entities {
+		if entity.ID == "comp_pet-1" && entity.Kind == sim.EntityCompanion {
+			return
+		}
+	}
+	t.Fatalf("formation companion missing from joined zone snapshot: %+v", snapshot.Entities)
+}
+
+func TestAdmissionDisconnectAndRejoinReplacesFormationCompanions(t *testing.T) {
+	playerID := uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
+	manager := startTestManager(t, key, 1)
+	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{
+			MapID: "forest", RegionID: "forest-clearing", HP: 70, BaseHP: 100,
+			Companions: []handlers.RealtimeCompanion{{
+				ID: "pet-1", ActorKind: "COMPANION_BEAST", Name: "Đã Trụ",
+				HP: 106, MaxHP: 106, Attack: 9, Speed: 4,
+			}},
+		}, nil
+	})
+	request := protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}
+
+	firstController := uuid.New()
+	if _, err := admission.Join(context.Background(), playerID, firstController, request); err != nil {
+		t.Fatal(err)
+	}
+	admission.Disconnect(playerID, firstController)
+	snapshot, err := manager.Snapshot(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entity := range snapshot.Entities {
+		if entity.ID == "comp_pet-1" {
+			t.Fatalf("disconnected owner left a companion in the zone: %+v", snapshot.Entities)
+		}
+	}
+
+	secondController := uuid.New()
+	if _, err := admission.Join(context.Background(), playerID, secondController, request); err != nil {
+		t.Fatalf("rejoin after disconnect: %v", err)
+	}
+	snapshot, err = manager.Snapshot(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	companionCount := 0
+	for _, entity := range snapshot.Entities {
+		if entity.ID == "comp_pet-1" && entity.Kind == sim.EntityCompanion {
+			companionCount++
+		}
+	}
+	if companionCount != 1 {
+		t.Fatalf("rejoin has %d formation companion entities, want 1: %+v", companionCount, snapshot.Entities)
+	}
+}
+
 func TestAdmissionSubmitsInputOnlyForActiveController(t *testing.T) {
 	playerID, controllerID := uuid.New(), uuid.New()
 	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
@@ -644,6 +726,40 @@ func TestDisconnectCleansUpStaleRevisionSession(t *testing.T) {
 	}
 	if manager.OwnsCharacter(sim.CharacterID(playerID.String())) {
 		t.Fatal("expected manager to no longer own character after disconnect with stale revision")
+	}
+}
+
+func TestDisconnectCleansUpSessionAfterLeaseReplacement(t *testing.T) {
+	playerID, controllerID := uuid.New(), uuid.New()
+	key := sim.ZoneKey{MapID: "forest", InstanceID: "realtime-preview", RulesetVersion: "v1"}
+	manager := startTestManager(t, key, 1)
+	admission := NewAdmission(testConfig(playerID), manager, func(context.Context, uuid.UUID) (handlers.RealtimeJoinState, error) {
+		return handlers.RealtimeJoinState{MapID: "forest", RegionID: "forest", HP: 70, BaseHP: 100}, nil
+	})
+	admission.SetStateStore(&fakeStateStore{})
+	request := protocol.JoinRequest{ZoneID: "forest", MapVersion: "map-1", ContentVersion: "content-1"}
+	if _, err := admission.Join(context.Background(), playerID, controllerID, request); err != nil {
+		t.Fatal(err)
+	}
+
+	admission.mu.Lock()
+	active := admission.sessions[controllerID]
+	admission.mu.Unlock()
+	replacement, err := manager.ReplaceCharacterLease(active.lease, uuid.NewString())
+	if err != nil {
+		t.Fatalf("replace ownership lease: %v", err)
+	}
+
+	admission.Disconnect(playerID, controllerID)
+
+	admission.mu.Lock()
+	_, oldSessionRemains := admission.sessions[controllerID]
+	admission.mu.Unlock()
+	if oldSessionRemains {
+		t.Fatal("stale disconnected session remains after lease replacement")
+	}
+	if _, err := manager.SnapshotForLease(replacement); err != nil {
+		t.Fatalf("disconnect invalidated replacement lease: %v", err)
 	}
 }
 

@@ -1239,6 +1239,7 @@ type PlayerEventDomain =
   | "item_inventory"
   | "recipes"
   | "combat_stats"
+  | "pets"
   | "tribulation"
   | "spatial_realm"
   | "ascension";
@@ -1815,6 +1816,7 @@ export const useGameStore = create<GameState>((set, get) => {
             if (changedDomains.has("tribulation")) void get().fetchActiveTribulation(true);
             if (changedDomains.has("spatial_realm")) void get().fetchActiveSpatialRealm();
             if (changedDomains.has("ascension")) void get().fetchAscensionSession();
+            if (changedDomains.has("pets")) void get().fetchPlayerPets();
           }
           if (eventType !== "session.kicked" && !shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision)) {
             return;

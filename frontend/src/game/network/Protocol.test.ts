@@ -32,6 +32,31 @@ test("parseWorldSnapshotPayload accepts floating-point mana and max_mana", () =>
   assert.equal(parsed.entities[0].shield, 50.5);
 });
 
+test("parseWorldSnapshotPayload accepts companion entities", () => {
+  const parsed = parseWorldSnapshotPayload({
+    tick: 100,
+    ack_seq: 0,
+    baseline_id: 1,
+    base_tick: 100,
+    is_baseline: true,
+    entities: [{
+      entity_id: "comp_pet-1",
+      entity_revision: 0,
+      kind: "companion",
+      x: 12,
+      y: 34,
+      hp: 106,
+      max_hp: 106,
+      owner_id: "player-1",
+      companion_kind: "COMPANION_BEAST",
+      stance: "DEFEND",
+    }],
+  });
+
+  assert.equal(parsed.entities[0].kind, "companion");
+  assert.equal(parsed.entities[0].owner_id, "player-1");
+});
+
 test("parseWorldSnapshotPayload accepts the server's 13 cooldown slots", () => {
   const cooldowns = Array.from({ length: 13 }, (_, slot) => slot);
   const parsed = parseWorldSnapshotPayload({

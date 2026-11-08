@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -11,6 +12,37 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 )
+
+func TestRealtimeCaptureInsertUsesMonsterTemplateColumns(t *testing.T) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not locate server test source")
+	}
+	schemaPath := filepath.Join(filepath.Dir(sourceFile), "../../internal/db/schema_world.go")
+	schema, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tableMatch := regexp.MustCompile(`(?s)CREATE TABLE IF NOT EXISTS monster_templates\s*\((.*?)\);`).FindSubmatch(schema)
+	if len(tableMatch) != 2 {
+		t.Fatal("could not locate monster_templates DDL")
+	}
+	columns := make(map[string]struct{})
+	for _, line := range strings.Split(string(tableMatch[1]), "\n") {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) >= 2 {
+			columns[strings.TrimSuffix(fields[0], ",")] = struct{}{}
+		}
+	}
+
+	references := regexp.MustCompile(`\bm\.([a-z_]+)\b`).FindAllStringSubmatch(realtimeCaptureInsertSQL, -1)
+	for _, reference := range references {
+		if _, ok := columns[reference[1]]; !ok {
+			t.Errorf("capture insert references missing monster_templates column m.%s", reference[1])
+		}
+	}
+}
 
 func TestResolveRealtimeMapPathFromNestedServerDirectory(t *testing.T) {
 	_, sourceFile, _, ok := runtime.Caller(0)

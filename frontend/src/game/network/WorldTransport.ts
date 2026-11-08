@@ -92,6 +92,7 @@ export class WorldTransport implements WorldTransportLike {
   private nextRequestId = 1;
   private joinTimeout: ReturnType<typeof setTimeout> | null = null;
   private lastResyncSentAt = 0;
+  private pendingBaselineResync = false;
 
   private readonly projection = new WorldStateProjection();
 
@@ -126,6 +127,7 @@ export class WorldTransport implements WorldTransportLike {
     this.incoming = new Uint8Array(0);
     this.incomingOffset = 0;
     this.lastResyncSentAt = 0;
+    this.pendingBaselineResync = false;
     this.buffer.reset();
 
     const useSharedClient = Boolean(this.options.client) || !this.options.createTransport;
@@ -406,6 +408,7 @@ export class WorldTransport implements WorldTransportLike {
     this.ownsTransport = false;
     this.buffer.reset();
     this.projection.reset();
+    this.pendingBaselineResync = false;
   }
 
   private releaseStreamLocks(): void {
@@ -557,6 +560,10 @@ export class WorldTransport implements WorldTransportLike {
           this.snapshotCount += 1;
           this.lastSnapshotAt = Date.now();
           this.emitSnapshot(applied.state);
+          if (this.pendingBaselineResync) {
+            this.pendingBaselineResync = false;
+            this.requestResync("Delta arrived before a baseline");
+          }
           resolve(this.welcome);
         } catch (error) {
           this.failJoin(reject, asWorldError(error, "invalid_welcome"));
@@ -698,6 +705,10 @@ export class WorldTransport implements WorldTransportLike {
     removed: number[];
     projectiles: Projectile[];
   }): void {
+    if (this.buffer.getState() === null) {
+      this.pendingBaselineResync = true;
+      return;
+    }
     const snapshot = this.projection.projectDelta({ ...delta, states: delta.entities }, this.buffer.getState()?.baseTick ?? delta.tick);
     const applied = this.buffer.apply(snapshot);
     if (applied.status === "resync_required") {

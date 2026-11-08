@@ -245,6 +245,30 @@ func schemaAperture() error {
 		ON aperture_resource_points (region_id) WHERE scope = 'WORLD';`); err != nil {
 		return err
 	}
+	if err := execSchema("aperture_variant_humans", `
+	CREATE TABLE IF NOT EXISTS aperture_variant_humans (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		race VARCHAR(50) NOT NULL,
+		population INTEGER NOT NULL DEFAULT 0,
+		happiness DOUBLE PRECISION NOT NULL DEFAULT 70.0,
+		oppression DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+		rebellion_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+		labor_intensity VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+		prosperity DOUBLE PRECISION NOT NULL DEFAULT 50.0,
+		gu_master_count INTEGER NOT NULL DEFAULT 0,
+		gu_immortal_count INTEGER NOT NULL DEFAULT 0,
+		food_stored DOUBLE PRECISION NOT NULL DEFAULT 0,
+		food_per_capita DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+		population_growth_rate DOUBLE PRECISION NOT NULL DEFAULT 0.001,
+		mortality_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0005,
+		created_at TIMESTAMP DEFAULT now(),
+		updated_at TIMESTAMP DEFAULT now(),
+		UNIQUE (aperture_id, race)
+	);`); err != nil {
+		return err
+	}
+
 	if err := execSchema("aperture_point_workers", `
 	CREATE TABLE IF NOT EXISTS aperture_point_workers (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -281,18 +305,6 @@ func schemaAperture() error {
 		return err
 	}
 
-	// Legacy RESOURCE nodes are replaced by the resource-point economy. The
-	// delete is unconditional because it is a one-way migration: every boot
-	// only defensive players structures survive.
-	if err := execSchema("aperture_resource_nodes_legacy_strip", `
-	DELETE FROM aperture_resource_nodes
-	WHERE COALESCE(node_category, 'RESOURCE') <> 'DEFENSE';
-	DELETE FROM aperture_resource_node_cells
-	WHERE NOT EXISTS (SELECT 1 FROM aperture_resource_nodes n WHERE n.id = aperture_resource_node_cells.node_id);
-	`); err != nil {
-		return err
-	}
-
 	if err := execSchema("aperture_nodes_category_idx", `
 	CREATE INDEX IF NOT EXISTS idx_aperture_nodes_category ON aperture_resource_nodes (aperture_id, node_category);`); err != nil {
 		return err
@@ -310,6 +322,19 @@ func schemaAperture() error {
 	CREATE INDEX IF NOT EXISTS idx_aperture_node_cells_aperture ON aperture_resource_node_cells (aperture_id, node_id);`); err != nil {
 		return err
 	}
+
+	// Legacy RESOURCE nodes are replaced by the resource-point economy. The
+	// delete is unconditional because it is a one-way migration: every boot
+	// only defensive players structures survive.
+	if err := execSchema("aperture_resource_nodes_legacy_strip", `
+	DELETE FROM aperture_resource_nodes
+	WHERE COALESCE(node_category, 'RESOURCE') <> 'DEFENSE';
+	DELETE FROM aperture_resource_node_cells
+	WHERE NOT EXISTS (SELECT 1 FROM aperture_resource_nodes n WHERE n.id = aperture_resource_node_cells.node_id);
+	`); err != nil {
+		return err
+	}
+
 	if err := execSchema("aperture_resource_node_cells_backfill", `
 		INSERT INTO aperture_resource_node_cells (node_id, aperture_id, x, y)
 		SELECT n.id, n.aperture_id, n.x, n.y
@@ -317,30 +342,6 @@ func schemaAperture() error {
 		WHERE NOT EXISTS (SELECT 1 FROM aperture_resource_node_cells c WHERE c.node_id = n.id)
 		ON CONFLICT DO NOTHING
 	`); err != nil {
-		return err
-	}
-
-	if err := execSchema("aperture_variant_humans", `
-	CREATE TABLE IF NOT EXISTS aperture_variant_humans (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
-		race VARCHAR(50) NOT NULL,
-		population INTEGER NOT NULL DEFAULT 0,
-		happiness DOUBLE PRECISION NOT NULL DEFAULT 70.0,
-		oppression DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-		rebellion_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-		labor_intensity VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
-		prosperity DOUBLE PRECISION NOT NULL DEFAULT 50.0,
-		gu_master_count INTEGER NOT NULL DEFAULT 0,
-		gu_immortal_count INTEGER NOT NULL DEFAULT 0,
-		food_stored DOUBLE PRECISION NOT NULL DEFAULT 0,
-		food_per_capita DOUBLE PRECISION NOT NULL DEFAULT 1.0,
-		population_growth_rate DOUBLE PRECISION NOT NULL DEFAULT 0.001,
-		mortality_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0005,
-		created_at TIMESTAMP DEFAULT now(),
-		updated_at TIMESTAMP DEFAULT now(),
-		UNIQUE (aperture_id, race)
-	);`); err != nil {
 		return err
 	}
 

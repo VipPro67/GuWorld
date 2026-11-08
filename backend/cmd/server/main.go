@@ -48,6 +48,24 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
+const realtimeCaptureInsertSQL = `
+	INSERT INTO non_player_actors (
+		id, actor_kind, owner_player_id, template_source, template_id,
+		species, name, rank, hp, max_hp, base_attack, base_defense, speed,
+		count, hunger, max_hunger, loyalty, lifecycle_state, execution_state,
+		behavior_profile, formation_slot
+	)
+	SELECT
+		gen_random_uuid(), 'COMPANION_BEAST', $1, 'MONSTER_TEMPLATE', $2,
+		COALESCE(m.type, $2), COALESCE(m.name, $2), $3,
+		COALESCE(m.max_hp, 100), COALESCE(m.max_hp, 100), COALESCE(m.base_attack, 20),
+		COALESCE(m.base_defense, 5), 4,
+		1, 0, 100, 80, 'ACTIVE', 'STORED',
+		'PASSIVE', 0
+	FROM (SELECT 1) _
+	LEFT JOIN monster_templates m ON m.id = $2
+`
+
 func init() {
 	// Set the global default timezone for Go (time.Local)
 	loc, err := time.LoadLocation("Asia/Ho_Chi_Minh")
@@ -504,28 +522,13 @@ func main() {
 			})
 
 			manager.SetCaptureHandler(func(callCtx context.Context, captureEv realtimeworld.CaptureEvent) error {
-				_, err := db.DB.ExecContext(callCtx, `
-					INSERT INTO non_player_actors (
-						id, actor_kind, owner_player_id, template_source, template_id,
-						species, name, rank, hp, max_hp, base_attack, base_defense, speed,
-						count, hunger, max_hunger, loyalty, lifecycle_state, execution_state,
-						behavior_profile, formation_slot
-					)
-					SELECT
-						gen_random_uuid(), 'COMPANION_BEAST', $1, 'MONSTER_TEMPLATE', $2,
-						COALESCE(m.species, $2), COALESCE(m.name, $2), COALESCE(m.rank, $3),
-						COALESCE(m.max_hp, 100), COALESCE(m.max_hp, 100), COALESCE(m.base_attack, 20),
-						COALESCE(m.base_defense, 5), COALESCE(m.speed, 4),
-						1, 0, 100, 80, 'ACTIVE', 'STORED',
-						'PASSIVE', 0
-					FROM (SELECT 1) _
-					LEFT JOIN monster_templates m ON m.id = $2
-				`, captureEv.PlayerID, captureEv.TemplateID, captureEv.MonsterRank)
+				_, err := db.DB.ExecContext(callCtx, realtimeCaptureInsertSQL,
+					captureEv.PlayerID, captureEv.TemplateID, captureEv.MonsterRank)
 				if err != nil {
 					logger.S.Errorf("Realtime capture persistence failed for %s: %v", captureEv.TargetID, err)
 					return err
 				}
-				handlers.PublishPlayerRealtimeEvent(captureEv.PlayerID, handlers.PlayerEventUpdated)
+				handlers.PublishPlayerRealtimeEvent(captureEv.PlayerID, handlers.PlayerEventUpdated, handlers.PetsDomain)
 				logger.S.Infof("Realtime capture successful: player=%s target=%s template=%s", captureEv.PlayerID, captureEv.TargetID, captureEv.TemplateID)
 				return nil
 			})

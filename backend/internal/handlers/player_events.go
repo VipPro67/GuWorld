@@ -25,6 +25,7 @@ const (
 	ItemInventoryDomain PlayerEventDomain = "item_inventory"
 	RecipesDomain       PlayerEventDomain = "recipes"
 	CombatStatsDomain   PlayerEventDomain = "combat_stats"
+	PetsDomain          PlayerEventDomain = "pets"
 	// Progression domains let UI screens replace their polling timers with
 	// event-driven refreshes: clients refetch only when the owning state
 	// actually changed.

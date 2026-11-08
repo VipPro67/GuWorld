@@ -146,3 +146,59 @@ func TestWebSocketMultiplexesChunkedWorldAndUI(t *testing.T) {
 		t.Fatal("oversized WebSocket message was accepted")
 	}
 }
+
+func TestWebSocketUIStreamBurstDoesNotClose(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	listener := &pipeListener{conn: serverConn, done: make(chan struct{})}
+	playerID := uuid.New()
+	fake := &fakeAdmission{feed: make(chan sim.Snapshot, 4), inputs: make(chan protocol.Input, 4)}
+	server := New(fake, nil).WithUIOptions(UIOptions{Hub: newFakeUIHub()})
+	httpServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = server.HandleWebSocket(w, r, playerID, "tab-burst", func(*http.Request) bool { return true })
+	})}
+	go func() { _ = httpServer.Serve(listener) }()
+	t.Cleanup(func() { _ = clientConn.Close(); _ = serverConn.Close(); _ = httpServer.Close() })
+	dialer := websocket.Dialer{NetDialContext: func(context.Context, string, string) (net.Conn, error) { return clientConn, nil }}
+	conn, _, err := dialer.Dial("ws://example/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	// Open UI stream
+	if err := conn.WriteMessage(websocket.BinaryMessage, []byte{wsUI, 1, v2.StreamUI}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Burst 25 subscribe messages back-to-back (frontend subscribes to ~16 channels on connect)
+	for i := 0; i < 25; i++ {
+		msg := append([]byte{wsUI, 1}, []byte("{\"type\":\"subscribe\",\"channel\":\"chat:world\"}\n")...)
+		if err := conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Ping at the end of burst to verify stream is still open and responding
+	if err := conn.WriteMessage(websocket.BinaryMessage, append([]byte{wsUI, 1}, []byte("{\"type\":\"ping\"}\n")...)); err != nil {
+		t.Fatal(err)
+	}
+
+	gotPong := false
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	for i := 0; i < 30; i++ {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		if bytes.Equal(message, []byte{wsClose, wsUI, 1}) {
+			t.Fatalf("stream was closed prematurely by server during burst: %v", message)
+		}
+		if len(message) > 2 && message[0] == wsUI && message[1] == 1 && bytes.Contains(message[2:], []byte(`"pong"`)) {
+			gotPong = true
+			break
+		}
+	}
+	if !gotPong {
+		t.Fatal("expected pong after subscription burst, stream was dropped or unresponsive")
+	}
+}

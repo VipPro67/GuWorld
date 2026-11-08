@@ -1988,15 +1988,20 @@ func (m *Manager) releaseCharacterLocked(lease OwnershipLease) bool {
 		return false
 	}
 	zone := m.zones[active.ZoneKey]
-	if active.HasEntity && m.started && !m.closed {
+	if active.HasEntity {
 		if zone == nil {
-			return false
-		}
-		if err := removeEntityFromRunningZone(zone, sim.EntityID(lease.CharacterID)); err != nil {
-			return false
-		}
-	} else if active.HasEntity {
-		if zone != nil {
+			if m.started && !m.closed {
+				return false
+			}
+		} else if m.started && !m.closed {
+			if err := removeOwnedCompanionsFromRunningZone(zone, active.CharacterID); err != nil {
+				return false
+			}
+			if err := removeEntityFromRunningZone(zone, sim.EntityID(lease.CharacterID)); err != nil {
+				return false
+			}
+		} else {
+			removeOwnedCompanions(zone.world, active.CharacterID)
 			zone.world.RemoveEntity(sim.EntityID(lease.CharacterID))
 		}
 	}
@@ -2006,6 +2011,26 @@ func (m *Manager) releaseCharacterLocked(lease OwnershipLease) bool {
 		m.markZoneIdleLocked(active.ZoneKey, zone)
 	}
 	return true
+}
+
+func removeOwnedCompanionsFromRunningZone(zone *managedZone, ownerID sim.CharacterID) error {
+	for _, entity := range zone.world.Snapshot().Entities {
+		if entity.Kind != sim.EntityCompanion || (entity.Companion.OwnerCharacterID != ownerID && entity.Companion.OwnerID != sim.EntityID(ownerID)) {
+			continue
+		}
+		if err := removeEntityFromRunningZone(zone, entity.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func removeOwnedCompanions(world *sim.World, ownerID sim.CharacterID) {
+	for _, entity := range world.Snapshot().Entities {
+		if entity.Kind == sim.EntityCompanion && (entity.Companion.OwnerCharacterID == ownerID || entity.Companion.OwnerID == sim.EntityID(ownerID)) {
+			world.RemoveEntity(entity.ID)
+		}
+	}
 }
 
 func (m *Manager) removeLeaseSubscribersLocked(lease OwnershipLease) {

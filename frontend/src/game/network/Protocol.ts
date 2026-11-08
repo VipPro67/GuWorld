@@ -444,7 +444,7 @@ function parseEntityState(value: unknown): WorldEntityState {
   if (!isSafeNonNegativeInteger(value.entity_revision) || !isFiniteNumber(value.x) || !isFiniteNumber(value.y) || !isFiniteNumber(value.hp) || value.hp < 0 || Math.abs(value.x) > 1_000_000 || Math.abs(value.y) > 1_000_000) {
     throw new Error("World snapshot entity state is invalid");
   }
-  if (value.kind !== undefined && value.kind !== "player" && value.kind !== "monster") {
+  if (value.kind !== undefined && value.kind !== "player" && value.kind !== "monster" && value.kind !== "companion") {
     throw new Error("World snapshot entity kind is invalid");
   }
   if (value.max_hp !== undefined && (!isFiniteNumber(value.max_hp) || value.max_hp <= 0)) {
@@ -474,7 +474,7 @@ function parseEntityState(value: unknown): WorldEntityState {
     y: value.y,
     hp: value.hp,
   };
-  if (value.kind !== undefined) entity.kind = value.kind as "player" | "monster";
+  if (value.kind !== undefined) entity.kind = value.kind as WorldEntityState["kind"];
   if (value.party_id !== undefined && (typeof value.party_id !== "string" || value.party_id.length > 80)) {
     throw new Error("World snapshot party_id is invalid");
   }

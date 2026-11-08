@@ -121,6 +121,38 @@ test("joins over WebTransport and exposes the baseline snapshot", async () => {
   assert.deepEqual(decodeInput(datagram.payload), { seq: 1, moveX: 127, moveY: 0 });
 });
 
+test("requests a fresh baseline when a datagram overtakes the welcome baseline", async () => {
+  const fake = fakeTransport();
+  const client = new WorldTransport({
+    url: "https://localhost:8443/api/wt",
+    getToken: () => "token",
+    createTransport: () => fake.transport,
+  });
+  const resyncErrors: string[] = [];
+  client.onResyncRequired((reason) => resyncErrors.push(reason));
+  const pending = client.connect({ zone_id: "forest", map_version: "map-1", content_version: "content-1" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  fake.pushDatagram(encodeSnapshotDelta({
+    tick: 101, baselineId: 1, ackSeq: 0, hasProjectiles: false,
+    entities: [], removed: [], projectiles: [],
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  fake.pushFrame(encodeFrame(Op.Welcome, encodeWelcome({
+    sessionId: "s1", zoneId: "forest", mapVersion: "map-1", contentVersion: "content-1",
+    tickRate: 20, movementSpeedX100: 500, serverTick: 100, entityId: "player-1",
+    entityRevision: 3, baselineId: 1, mapHash: "", skillsJson: new Uint8Array(0),
+    loadoutRevision: "", snapshot: encodeSnapshotFull(baseline()),
+  })));
+  await pending;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.deepEqual(resyncErrors, [], "an early datagram must not put the runtime into an error state");
+  assert.equal(fake.sentFrames.at(-1)?.[4], Op.Resync, "request a reliable baseline after welcome");
+  assert.equal(client.getSnapshot()?.tick, 100);
+});
+
 test("delivers combat events on the reliable stream", async () => {
   const fake = fakeTransport();
   const client = new WorldTransport({

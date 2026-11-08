@@ -403,10 +403,12 @@ export class RealtimeClient {
       const url = buildRealtimeWTURL(this.options.url, resolvedToken, tabId);
       const factory = this.options.createTransport;
       const TransportCtor = defaultWebTransportCtor();
+      const configuredWT = (process.env.NEXT_PUBLIC_REALTIME_URL ?? "").trim();
+      const wtAvailable = Boolean(factory || this.options.url || configuredWT || BACKEND_URL.startsWith("https://"));
       let transport: WebTransportLike | null = null;
       let kind: "wt" | "ws" = "wt";
       try {
-        if (factory || TransportCtor) {
+        if (wtAvailable && (factory || TransportCtor)) {
           transport = factory ? factory(url) : new (TransportCtor as WebTransportCtor)(url);
           this.session = transport;
           try {

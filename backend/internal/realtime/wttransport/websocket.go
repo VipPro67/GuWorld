@@ -121,7 +121,7 @@ type websocketStream struct {
 
 func newWebsocketStream(session *websocketSession, kind, id byte) *websocketStream {
 	r, w := io.Pipe()
-	stream := &websocketStream{session: session, kind: kind, id: id, reader: r, writer: w, incoming: make(chan []byte, 8), done: make(chan struct{})}
+	stream := &websocketStream{session: session, kind: kind, id: id, reader: r, writer: w, incoming: make(chan []byte, 256), done: make(chan struct{})}
 	go stream.feed()
 	return stream
 }
