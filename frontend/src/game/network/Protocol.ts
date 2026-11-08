@@ -11,6 +11,7 @@ export type WorldMessageType =
   | "world.attack"
   | "world.capture"
   | "world.companion_stance"
+  | "world.gu_house_integrate"
   | "world.events"
   | "world.snapshot"
   | "world.transfer"
@@ -92,6 +93,11 @@ export interface CompanionStancePayload {
   seq: number;
   stance: "DEFEND" | "FOCUS" | "FOLLOW";
   focus_target_id?: string;
+}
+
+export interface GuHouseIntegratePayload {
+  seq: number;
+  action: "ENTER" | "EXIT";
 }
 
 export interface WorldProjectileState {
@@ -230,6 +236,9 @@ const knownTypes = new Set<WorldMessageType>([
   "world.move_target",
   "world.cast",
   "world.attack",
+  "world.capture",
+  "world.companion_stance",
+  "world.gu_house_integrate",
   "world.events",
   "world.snapshot",
   "world.transfer",
@@ -493,6 +502,29 @@ function parseEntityState(value: unknown): WorldEntityState {
     if (typeof value.form_active !== "boolean") throw new Error("World snapshot form state is invalid");
     entity.form_active = value.form_active;
   }
+  if (value.transformation !== undefined && isRecord(value.transformation)) {
+    entity.transformation = {
+      active: Boolean(value.transformation.active),
+      form_id: String(value.transformation.form_id || ""),
+      form_name: String(value.transformation.form_name || ""),
+      form_kind: (value.transformation.form_kind as "FULL" | "PARTIAL" | "GU_HOUSE") || "FULL",
+      model_scale: Number(value.transformation.model_scale) || 1,
+      collision_radius: Number(value.transformation.collision_radius) || 0.5,
+      max_form_hp: Number(value.transformation.max_form_hp) || 0,
+      current_form_hp: Number(value.transformation.current_form_hp) || 0,
+      is_windup: Boolean(value.transformation.is_windup),
+      windup_progress: value.transformation.windup_progress !== undefined ? Number(value.transformation.windup_progress) : undefined,
+    };
+  }
+  if (Array.isArray(value.statuses)) {
+    entity.statuses = value.statuses.map(String);
+  }
+  if (typeof value.stealthed === "boolean") entity.stealthed = value.stealthed;
+  if (typeof value.flying === "boolean") entity.flying = value.flying;
+  if (typeof value.hasted === "boolean") entity.hasted = value.hasted;
+  if (typeof value.owner_id === "string") entity.owner_id = value.owner_id;
+  if (typeof value.companion_kind === "string") entity.companion_kind = value.companion_kind;
+  if (typeof value.stance === "string") entity.stance = value.stance as "DEFEND" | "FOCUS" | "FOLLOW";
   return entity;
 }
 

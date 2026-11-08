@@ -26,6 +26,7 @@ export interface WorldTransportLike {
   sendBasicAttack(attack: Omit<BasicAttackPayload, "seq">): number | null;
   sendCapture(targetId: string, guId?: string): number | null;
   sendCompanionStance(stance: "DEFEND" | "FOCUS" | "FOLLOW", focusTargetId?: string): number | null;
+  sendGuHouseIntegrate(action: "ENTER" | "EXIT"): number | null;
   onEvents(callback: (event: WorldEvent) => void): () => void;
   onSnapshot(callback: (state: BufferedWorldState) => void): () => void;
   onReject(callback: (reject: WorldRejectPayload) => void): () => void;

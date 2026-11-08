@@ -180,6 +180,11 @@ export class WorldScene extends Phaser.Scene {
       this.cycleTarget();
       return;
     }
+    if (event.altKey && (event.key === "g" || event.key === "G")) {
+      event.preventDefault();
+      this.toggleGuHouseIntegrate();
+      return;
+    }
     const slot = matchHotbarSlot(event);
     if (slot !== null) {
       event.preventDefault();
@@ -538,6 +543,17 @@ export class WorldScene extends Phaser.Scene {
     return nearest;
   }
 
+  public toggleGuHouseIntegrate(): void {
+    if (!this.runtime) return;
+    const self = this.runtime.getEntities().find((e) => e.isSelf);
+    const transform = self?.transformation;
+    if (transform?.active && transform.form_kind === "GU_HOUSE") {
+      this.runtime.integrateGuHouse("EXIT");
+    } else {
+      this.runtime.integrateGuHouse("ENTER");
+    }
+  }
+
   private cycleTarget(): void {
     if (!this.runtime) return;
     const self = this.runtime.getSelfPosition();
@@ -780,9 +796,19 @@ export class WorldScene extends Phaser.Scene {
         return;
       }
       case "TRANSFORMATION_ENDED":
-      case "TRANSFORMATION_BROKEN":
         if (event.source_id) this.formByEntity.delete(event.source_id);
         return;
+      case "TRANSFORMATION_BROKEN": {
+        if (event.source_id) this.formByEntity.delete(event.source_id);
+        if (event.source_id && event.source_id === this.selfId) {
+          this.cameraController.shake(0.015);
+          if (eventX !== null && eventY !== null) {
+            const pixels = worldToPixels({ x: eventX, y: eventY });
+            this.vfx.spawnRing(pixels.x, pixels.y - 12, 0xeab308);
+          }
+        }
+        return;
+      }
       case "MOVE_TARGET_REJECTED":
         this.motion?.stopAll();
         this.notice(reason ? `Đường đi bị chặn: ${reason}` : "Đường đi bị chặn");

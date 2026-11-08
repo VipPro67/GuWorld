@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
 )
 
@@ -136,28 +137,31 @@ type Vitals struct {
 // Entity is authoritative zone state. Fields are exported for construction and
 // snapshots; callers must not mutate an entity after passing it to AddEntity.
 type Entity struct {
-	ID             EntityID                 `json:"id"`
-	CharacterID    CharacterID              `json:"character_id,omitempty"`
-	Name           string                   `json:"name,omitempty"`
-	Kind           EntityKind               `json:"kind"`
-	Transform      Transform                `json:"transform"`
-	Vitals         Vitals                   `json:"vitals"`
-	Defense        float64                  `json:"-"`
-	DaoProfile     *gamefx.DaoCombatProfile `json:"-"`
-	PathResistance map[string]float64       `json:"-"`
-	Speed          float64                  `json:"speed"`
-	Radius         float64                  `json:"radius"`
-	Faction        string                   `json:"faction"`
-	PartyID        string                   `json:"party_id,omitempty"`
-	PvPEnabled     bool                     `json:"pvp_enabled,omitempty"`
-	Revision       uint64                   `json:"revision"`
-	AckSeq         uint64                   `json:"ack_seq,omitempty"`
-	LeaseToken     string                   `json:"-"`
-	Suspended      bool                     `json:"-"`
-	AI             AIState                  `json:"-"`
-	Combat         CombatState              `json:"-"`
-	Companion      CompanionState           `json:"-"`
-	Transformation TransformationState      `json:"-"`
+	ID                EntityID                     `json:"id"`
+	CharacterID       CharacterID                  `json:"character_id,omitempty"`
+	Name              string                       `json:"name,omitempty"`
+	Kind              EntityKind                   `json:"kind"`
+	Transform         Transform                    `json:"transform"`
+	Vitals            Vitals                       `json:"vitals"`
+	Defense           float64                      `json:"-"`
+	DaoProfile        *gamefx.DaoCombatProfile     `json:"-"`
+	PathResistance    map[string]float64           `json:"-"`
+	Speed             float64                      `json:"speed"`
+	Radius            float64                      `json:"radius"`
+	Faction           string                       `json:"faction"`
+	PartyID           string                       `json:"party_id,omitempty"`
+	PvPEnabled        bool                         `json:"pvp_enabled,omitempty"`
+	Revision          uint64                       `json:"revision"`
+	AckSeq            uint64                       `json:"ack_seq,omitempty"`
+	LeaseToken        string                       `json:"-"`
+	Suspended         bool                         `json:"-"`
+	AI                AIState                      `json:"-"`
+	Combat            CombatState                  `json:"-"`
+	Companion         CompanionState               `json:"-"`
+	Transformation    TransformationState          `json:"-"`
+	EquippedGuHouse   *models.GuHouseCombatProfile `json:"-"`
+	GuHouseDurability float64                      `json:"-"`
+	GuHouseWearDamage float64                      `json:"-"`
 
 	moveIntent    Vec2
 	moveTarget    *Vec2
@@ -174,11 +178,12 @@ type InputCommand struct {
 	Move       Vec2
 	// Target is set for a click-to-move intent. It shares the movement sequence
 	// stream with WASD input; a non-zero Move cancels an active target.
-	Target          *Vec2
-	Cast            *CastCommand
-	Attack          *AttackCommand
-	Capture         *CaptureCommand
-	CompanionStance *CompanionStanceCommand
+	Target           *Vec2
+	Cast             *CastCommand
+	Attack           *AttackCommand
+	Capture          *CaptureCommand
+	CompanionStance  *CompanionStanceCommand
+	GuHouseIntegrate *GuHouseIntegrateCommand
 }
 
 type lifecycleCommand struct {
@@ -704,6 +709,10 @@ func (w *World) Step() Snapshot {
 		}
 		if command.CompanionStance != nil {
 			w.setCompanionStanceLocked(entity, *command.CompanionStance)
+			continue
+		}
+		if command.GuHouseIntegrate != nil {
+			w.setGuHouseIntegrateLocked(entity, *command.GuHouseIntegrate)
 			continue
 		}
 		if entity.Combat.Pending != nil && entity.Combat.Pending.IsCapture && (command.Target != nil || command.Move.X != 0 || command.Move.Y != 0) {

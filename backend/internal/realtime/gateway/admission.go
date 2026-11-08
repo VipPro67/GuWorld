@@ -664,18 +664,20 @@ func (a *Admission) join(ctx context.Context, playerID, controllerID uuid.UUID, 
 	moveSpeed := realtimePlayerSpeed(state.MovementSpeed)
 	entity := sim.Entity{
 		ID: sim.EntityID(playerID.String()), CharacterID: sim.CharacterID(playerID.String()), Kind: sim.EntityPlayer,
-		Name:           state.Username,
-		Transform:      sim.Transform{Position: position},
-		Vitals:         sim.Vitals{HP: baseHP, MaxHP: maxHP, Shield: baseShield},
-		Defense:        state.Defense,
-		DaoProfile:     state.DaoProfile,
-		PathResistance: state.PathResistance,
-		Speed:          moveSpeed,
-		Radius:         playerRadius,
-		Faction:        "player",
-		PartyID:        state.PartyID,
-		PvPEnabled:     state.PvPEnabled,
-		Combat:         playerCombat,
+		Name:              state.Username,
+		Transform:         sim.Transform{Position: position},
+		Vitals:            sim.Vitals{HP: baseHP, MaxHP: maxHP, Shield: baseShield},
+		Defense:           state.Defense,
+		DaoProfile:        state.DaoProfile,
+		PathResistance:    state.PathResistance,
+		Speed:             moveSpeed,
+		Radius:            playerRadius,
+		Faction:           "player",
+		PartyID:           state.PartyID,
+		PvPEnabled:        state.PvPEnabled,
+		Combat:            playerCombat,
+		EquippedGuHouse:   state.EquippedGuHouse,
+		GuHouseDurability: state.EquippedGuHouseDurability,
 	}
 	lease, err = a.manager.AttachCharacterEntity(lease, entity)
 	if err != nil {
@@ -1236,6 +1238,16 @@ func (a *Admission) CompanionStance(playerID, controllerID uuid.UUID, stance pro
 	})
 }
 
+func (a *Admission) GuHouseIntegrate(playerID, controllerID uuid.UUID, intent protocol.GuHouseIntegrateIntent) error {
+	return a.submitCommand(playerID, controllerID, sim.InputCommand{
+		Seq: intent.Seq,
+		GuHouseIntegrate: &sim.GuHouseIntegrateCommand{
+			Seq:    intent.Seq,
+			Action: intent.Action,
+		},
+	})
+}
+
 func (a *Admission) submitCommand(playerID, controllerID uuid.UUID, command sim.InputCommand) error {
 	a.mu.Lock()
 	active, exists := a.sessions[controllerID]
@@ -1254,6 +1266,8 @@ func (a *Admission) submitCommand(playerID, controllerID uuid.UUID, command sim.
 		err = a.manager.SubmitCapture(active.lease, command)
 	case command.CompanionStance != nil:
 		err = a.manager.SubmitCompanionStance(active.lease, command)
+	case command.GuHouseIntegrate != nil:
+		err = a.manager.SubmitGuHouseIntegrate(active.lease, command)
 	case command.Target != nil:
 		err = a.manager.SubmitMoveTarget(active.lease, command)
 	default:
@@ -1743,15 +1757,30 @@ func (a *Admission) flushStateLocked(active session) (bool, bool, error) {
 		}
 		var revision int64
 		manaApplied := false
+		guHouseDamage := 0.0
+		guHouseBreached := false
+		guHouseID := ""
+		if entity.EquippedGuHouse != nil {
+			guHouseID = entity.EquippedGuHouse.ID
+			if entity.GuHouseDurability <= 0 {
+				guHouseBreached = true
+			} else if entity.GuHouseWearDamage > 0 {
+				guHouseDamage = entity.GuHouseWearDamage
+				entity.GuHouseWearDamage = 0
+			}
+		}
 		if atomicStore, ok := a.states.(interface {
 			SaveAndApplyCombatDeltaRevision(context.Context, persistence.State, float64, persistence.CombatUsage) (int64, error)
 		}); ok {
 			var saveErr error
 			revision, saveErr = atomicStore.SaveAndApplyCombatDeltaRevision(ctx, checkpoint, delta, persistence.CombatUsage{
-				Gu:           guUses,
-				KillerMoves:  killerMoveUses,
-				Skills:       skillUses,
-				BasicAttacks: basicAttackUses,
+				Gu:              guUses,
+				KillerMoves:     killerMoveUses,
+				Skills:          skillUses,
+				BasicAttacks:    basicAttackUses,
+				GuHouseID:       guHouseID,
+				GuHouseDamage:   guHouseDamage,
+				GuHouseBreached: guHouseBreached,
 			})
 			if saveErr != nil {
 				return false, false, saveErr

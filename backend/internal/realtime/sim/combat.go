@@ -51,6 +51,13 @@ type CompanionStanceCommand struct {
 	FocusTargetID EntityID
 }
 
+type GuHouseIntegrateCommand struct {
+	EntityID   EntityID
+	LeaseToken string
+	Seq        uint64
+	Action     string // "ENTER" or "EXIT"
+}
+
 type PendingCast struct {
 	Skill       combat.Skill
 	TargetID    EntityID
@@ -285,7 +292,7 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 		reject("silenced")
 		return
 	}
-	if caster.Transformation.Active && caster.Transformation.FormKind == TransformationFull {
+	if caster.Transformation.Active && (caster.Transformation.FormKind == TransformationFull || caster.Transformation.FormKind == TransformationGuHouse) {
 		if command.Slot > 6 {
 			reject("form_skill_locked")
 			return
@@ -304,8 +311,14 @@ func (w *World) startCastLocked(caster *Entity, command CastCommand) {
 		reject("wrong_target_mode")
 		return
 	}
-	if skill.ID == "REVERT_METAMORPHOSIS" || (skill.FormActivation && (caster.Combat.FormActive || caster.Transformation.Active)) {
-		w.revertTransformationLocked(caster, "manual_revert", false)
+	if skill.ID == "REVERT_METAMORPHOSIS" || skill.ID == "REVERT_GU_HOUSE" ||
+		(caster.Transformation.Active && caster.Transformation.FormKind == TransformationGuHouse && command.Slot == 6) ||
+		(skill.FormActivation && (caster.Combat.FormActive || caster.Transformation.Active)) {
+		revertReason := "manual_revert"
+		if caster.Transformation.FormKind == TransformationGuHouse || skill.ID == "REVERT_GU_HOUSE" {
+			revertReason = "voluntary_exit"
+		}
+		w.revertTransformationLocked(caster, revertReason, false)
 		return
 	}
 	if skill.FormAbility && !caster.Combat.FormActive && !caster.Transformation.Active {
@@ -604,6 +617,19 @@ func (w *World) SubmitCompanionStance(command CompanionStanceCommand) error {
 	}
 }
 
+func (w *World) SubmitGuHouseIntegrate(command GuHouseIntegrateCommand) error {
+	if command.EntityID == "" || command.Seq == 0 || (command.Action != "ENTER" && command.Action != "EXIT") {
+		return ErrInvalidInput
+	}
+	cmd := command
+	select {
+	case w.inbox <- InputCommand{EntityID: command.EntityID, LeaseToken: command.LeaseToken, Seq: command.Seq, GuHouseIntegrate: &cmd}:
+		return nil
+	default:
+		return ErrQueueFull
+	}
+}
+
 func (w *World) startCaptureLocked(caster *Entity, command CaptureCommand) {
 	if caster == nil {
 		return
@@ -699,5 +725,87 @@ func (w *World) setCompanionStanceLocked(owner *Entity, command CompanionStanceC
 				entity.Revision++
 			}
 		}
+	}
+}
+
+func (w *World) setGuHouseIntegrateLocked(entity *Entity, command GuHouseIntegrateCommand) {
+	if entity == nil {
+		return
+	}
+	reject := func(reason string) {
+		w.emitEvent(combat.Event{
+			Type:     combat.EventCastRejected,
+			SourceID: string(entity.ID),
+			SkillID:  "gu_house_integrate",
+			Reason:   reason,
+		})
+	}
+	if entity.Kind != EntityPlayer || entity.Vitals.HP <= 0 {
+		reject("caster_not_ready")
+		return
+	}
+
+	if command.Action == "EXIT" {
+		if !entity.Transformation.Active || entity.Transformation.FormKind != TransformationGuHouse {
+			reject("not_in_gu_house")
+			return
+		}
+		w.revertTransformationLocked(entity, "voluntary_exit", false)
+		return
+	}
+
+	if command.Action == "ENTER" {
+		if entity.Transformation.Active || entity.Transformation.IsWindup {
+			reject("already_transformed")
+			return
+		}
+		if entity.EquippedGuHouse == nil {
+			reject("gu_house_not_equipped")
+			return
+		}
+		if entity.GuHouseDurability <= 0 {
+			reject("gu_house_broken")
+			return
+		}
+		if w.isStunned(entity) {
+			reject("hard_cc_active")
+			return
+		}
+		if w.hasStatus(entity, "SILENCE") || w.hasStatus(entity, "GU_SEAL") || w.hasStatus(entity, "FREEZE") {
+			reject("silenced")
+			return
+		}
+		if entity.Combat.Pending != nil {
+			reject("already_casting")
+			return
+		}
+		if entity.Combat.Mana < 50 {
+			reject("insufficient_mana")
+			return
+		}
+
+		// Deduct 50 initial mana
+		entity.Combat.Mana -= 50
+
+		if entity.Transformation.OriginalRadius == 0 {
+			entity.Transformation.OriginalRadius = entity.Radius
+		}
+		entity.Transformation = TransformationState{
+			Active:         false,
+			FormID:         entity.EquippedGuHouse.ID,
+			FormName:       entity.EquippedGuHouse.Name,
+			FormKind:       TransformationGuHouse,
+			IsWindup:       true,
+			WindupEndTick:  w.tick + 40,
+			OriginalRadius: entity.Radius,
+		}
+		entity.Revision++
+
+		w.emitEvent(combat.Event{
+			Type:     combat.EventCastAccepted,
+			SourceID: string(entity.ID),
+			SkillID:  "gu_house_integrate",
+			Reason:   "transform_windup",
+		})
 	}
 }

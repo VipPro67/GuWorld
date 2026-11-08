@@ -30,10 +30,13 @@ type SkillUseKey struct {
 // durable checkpoint. Gu settles hunger, KillerMoves settle per-move mastery,
 // and Skills/BasicAttacks settle path mastery (Chân Ý).
 type CombatUsage struct {
-	Gu           map[string]uint64
-	KillerMoves  map[string]uint64
-	Skills       map[SkillUseKey]uint64
-	BasicAttacks uint64
+	Gu              map[string]uint64
+	KillerMoves     map[string]uint64
+	Skills          map[SkillUseKey]uint64
+	BasicAttacks    uint64
+	GuHouseID       string
+	GuHouseDamage   float64
+	GuHouseBreached bool
 }
 
 type killerMoveGain struct {
@@ -254,6 +257,31 @@ func (s *Service) SaveAndApplyCombatDeltaRevision(ctx context.Context, state Sta
 	}
 	if err := settlePathMastery(ctx, tx, state.PlayerID, usage.Skills, usage.BasicAttacks, killerGains); err != nil {
 		return 0, err
+	}
+	if usage.GuHouseID != "" && (usage.GuHouseDamage > 0 || usage.GuHouseBreached) {
+		if usage.GuHouseBreached {
+			_, _ = tx.ExecContext(ctx, `
+				UPDATE player_gu_houses
+				SET current_durability = 0, is_equipped = false, updated_at = NOW()
+				WHERE id = $1::uuid AND player_id = $2
+			`, usage.GuHouseID, state.PlayerID)
+			var coreBytes []byte
+			_ = tx.QueryRowContext(ctx, `SELECT core_gu_instances FROM player_gu_houses WHERE id = $1::uuid`, usage.GuHouseID).Scan(&coreBytes)
+			if len(coreBytes) > 0 {
+				var coreIDs []string
+				if err := json.Unmarshal(coreBytes, &coreIDs); err == nil {
+					for _, gid := range coreIDs {
+						_, _ = db.ApplyGuDurabilityDegradation(tx, state.PlayerID.String(), gid, 30.0)
+					}
+				}
+			}
+		} else if usage.GuHouseDamage > 0 {
+			_, _ = tx.ExecContext(ctx, `
+				UPDATE player_gu_houses
+				SET current_durability = GREATEST(0, current_durability - $1), updated_at = NOW()
+				WHERE id = $2::uuid AND player_id = $3
+			`, usage.GuHouseDamage, usage.GuHouseID, state.PlayerID)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, err

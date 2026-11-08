@@ -646,8 +646,17 @@ export function PhaserWorldHost({ onExit, worldActive = true, onConnectionChange
             rightClickSlot={currentCombatSettings?.realtime_right_click_slot ?? 0}
             onClearTarget={() => runtimeRef.current?.setSelectedTarget(null)}
             onSelectTarget={(id) => runtimeRef.current?.setSelectedTarget(id)}
-            onCapture={(targetId) => runtimeRef.current?.captureTarget(targetId)}
+            onCapture={(targetId, guInstanceId) => runtimeRef.current?.captureTarget(targetId, guInstanceId)}
             onCompanionStance={(stance) => runtimeRef.current?.setCompanionStance(stance, runtimeRef.current?.getSelectedTargetId() ?? undefined)}
+            onGuHouseIntegrate={(action) => {
+              const game = gameRef.current;
+              const scene = game?.scene.getScene("WorldScene") as unknown as { toggleGuHouseIntegrate?: () => void } | undefined;
+              if (scene?.toggleGuHouseIntegrate) {
+                scene.toggleGuHouseIntegrate();
+              } else if (runtimeRef.current) {
+                runtimeRef.current.integrateGuHouse(action);
+              }
+            }}
             onMoveJoystick={(vector) => {
               const game = gameRef.current;
               if (!game) return;

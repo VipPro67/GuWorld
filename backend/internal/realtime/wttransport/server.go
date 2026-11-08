@@ -35,6 +35,7 @@ type Admission interface {
 	BasicAttack(playerID, controllerID uuid.UUID, attack protocol.Attack) error
 	Capture(playerID, controllerID uuid.UUID, capture protocol.CaptureIntent) error
 	CompanionStance(playerID, controllerID uuid.UUID, stance protocol.CompanionStanceIntent) error
+	GuHouseIntegrate(playerID, controllerID uuid.UUID, intent protocol.GuHouseIntegrateIntent) error
 	SubscribeSnapshots(playerID, controllerID uuid.UUID) (<-chan sim.Snapshot, func(), error)
 	Leave(playerID, controllerID uuid.UUID) error
 	Disconnect(playerID, controllerID uuid.UUID)
@@ -43,6 +44,8 @@ type Admission interface {
 const (
 	joinFrameTimeout        = 10 * time.Second
 	baselineTicks           = 40
+	slowSnapshotDispatchLog = 100 * time.Millisecond
+	slowSnapshotLogInterval = 5 * time.Second
 	CloseCodeServerDraining = 4010
 )
 
@@ -159,12 +162,13 @@ type worldSession struct {
 	baseTick       uint32
 	lastTick       atomic.Uint32
 
-	lastSnapshot       sim.Snapshot
-	lastEventID        uint64
-	eventSeq           uint64
-	lastTransferReject time.Time
-	resyncRequested    atomic.Bool
-	snapshotMu         sync.RWMutex
+	lastSnapshot        sim.Snapshot
+	lastEventID         uint64
+	eventSeq            uint64
+	lastTransferReject  time.Time
+	lastSlowDispatchLog time.Time
+	resyncRequested     atomic.Bool
+	snapshotMu          sync.RWMutex
 }
 
 func (s *Server) serve(session *webtransport.Session, playerID, initialControllerID uuid.UUID, tabID string) {
@@ -507,13 +511,25 @@ func (w *worldSession) snapshotLoop(ctx context.Context, feed <-chan sim.Snapsho
 					}
 				}
 			}
+			snapshotSendStarted := time.Now()
 			if err := w.sendSnapshot(observerView); err != nil {
 				logger.S.Debugf("WebTransport snapshot to %s stopped: %v", w.playerID, err)
 				return
 			}
+			snapshotSendDuration := time.Since(snapshotSendStarted)
+			eventsSendStarted := time.Now()
 			if err := w.sendEvents(observerView.Events); err != nil {
 				logger.S.Debugf("WebTransport events to %s stopped: %v", w.playerID, err)
 				return
+			}
+			eventsSendDuration := time.Since(eventsSendStarted)
+			if dispatchDuration := snapshotSendDuration + eventsSendDuration; dispatchDuration >= slowSnapshotDispatchLog &&
+				(w.lastSlowDispatchLog.IsZero() || time.Since(w.lastSlowDispatchLog) >= slowSnapshotLogInterval) {
+				w.lastSlowDispatchLog = time.Now()
+				logger.S.Warnf(
+					"[realtime-slow-dispatch] zone=%s tick=%d snapshot=%s events=%s entities=%d",
+					snapshot.ZoneKey.String(), snapshot.Tick, snapshotSendDuration, eventsSendDuration, len(observerView.Entities),
+				)
 			}
 		}
 	}
@@ -858,6 +874,17 @@ func (w *worldSession) frameLoop(ctx context.Context) {
 				focusID, _ := w.registry.target(action.FocusNetID)
 				_ = w.server.admission.CompanionStance(w.playerID, w.controllerID, protocol.CompanionStanceIntent{
 					Seq: action.Seq, Stance: stanceName(action.Stance), FocusTargetID: focusID,
+				})
+			}
+		case v2.OpGuHouseIntegrate:
+			action, err := v2.DecodeGuHouseIntegrateAction(payload)
+			if err == nil {
+				actionStr := "ENTER"
+				if action.Action == 2 {
+					actionStr = "EXIT"
+				}
+				_ = w.server.admission.GuHouseIntegrate(w.playerID, w.controllerID, protocol.GuHouseIntegrateIntent{
+					Seq: action.Seq, Action: actionStr,
 				})
 			}
 		case v2.OpLeave:

@@ -47,6 +47,7 @@ export class RealtimeDebugHUD {
     this.text.setText([
       `F3 DEBUG · ${stats.status.toUpperCase()}`,
       `tick ${stats.tick} @ ${stats.tickRate}Hz · entities ${stats.entities} · projectiles ${stats.projectiles}`,
+      `interp buffer ${stats.interpolationDelayTicks}t (~${Math.round(stats.interpolationDelayTicks * 1000 / stats.tickRate)}ms)`,
       `self ${stats.selfX.toFixed(2)}, ${stats.selfY.toFixed(2)} · correction ${stats.lastCorrection.toFixed(2)}u`,
       `net msgs ${stats.network.messages} · snapshots ${stats.network.snapshots} · ${kb.toFixed(1)}KB · snap ${age}`,
       `rate ${m.rateHz.toFixed(1)}/s · gap avg ${m.gapAvgMs.toFixed(1)} p95 ${m.gapP95Ms.toFixed(1)} p99 ${m.gapP99Ms.toFixed(1)} max ${m.gapMaxMs.toFixed(0)}ms`,

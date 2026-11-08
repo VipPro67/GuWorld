@@ -20,19 +20,20 @@ const (
 )
 
 const (
-	TypeJoin            = "world.join"
-	TypeWelcome         = "world.welcome"
-	TypeInput           = "world.input"
-	TypeMoveTo          = "world.move_target"
-	TypeCast            = "world.cast"
-	TypeAttack          = "world.attack"
-	TypeEvents          = "world.events"
-	TypeSnapshot        = "world.snapshot"
-	TypeTransfer        = "world.transfer"
-	TypeReject          = "world.reject"
-	TypeResync          = "world.resync"
-	TypeCapture         = "world.capture"
-	TypeCompanionStance = "world.companion_stance"
+	TypeJoin             = "world.join"
+	TypeWelcome          = "world.welcome"
+	TypeInput            = "world.input"
+	TypeMoveTo           = "world.move_target"
+	TypeCast             = "world.cast"
+	TypeAttack           = "world.attack"
+	TypeEvents           = "world.events"
+	TypeSnapshot         = "world.snapshot"
+	TypeTransfer         = "world.transfer"
+	TypeReject           = "world.reject"
+	TypeResync           = "world.resync"
+	TypeCapture          = "world.capture"
+	TypeCompanionStance  = "world.companion_stance"
+	TypeGuHouseIntegrate = "world.gu_house_integrate"
 )
 
 var ErrInvalidMessage = errors.New("invalid realtime world message")
@@ -159,6 +160,11 @@ type CompanionStanceIntent struct {
 	CompanionID   string `json:"companion_id,omitempty"`
 	Stance        string `json:"stance"`
 	FocusTargetID string `json:"focus_target_id,omitempty"`
+}
+
+type GuHouseIntegrateIntent struct {
+	Seq    uint64 `json:"seq"`
+	Action string `json:"action"` // ENTER or EXIT
 }
 
 type Reject struct {
@@ -346,6 +352,12 @@ func DecodeClientMessage(data []byte) (Envelope, any, error) {
 			err = message.Validate()
 		}
 		return envelope, message, err
+	case TypeGuHouseIntegrate:
+		message, err := DecodePayload[GuHouseIntegrateIntent](envelope)
+		if err == nil {
+			err = message.Validate()
+		}
+		return envelope, message, err
 	case TypeResync:
 		message, err := DecodePayload[Resync](envelope)
 		return envelope, message, err
@@ -380,6 +392,17 @@ func (s CompanionStanceIntent) Validate() error {
 	}
 	if s.Stance == "FOCUS" && (s.FocusTargetID == "" || len(s.FocusTargetID) > MaxEntityID) {
 		return fmt.Errorf("%w: focus stance requires valid focus_target_id", ErrInvalidMessage)
+	}
+	return nil
+}
+
+func (intent GuHouseIntegrateIntent) Validate() error {
+	if intent.Seq == 0 {
+		return fmt.Errorf("%w: gu house integrate seq must be positive", ErrInvalidMessage)
+	}
+	act := strings.ToUpper(strings.TrimSpace(intent.Action))
+	if act != "ENTER" && act != "EXIT" {
+		return fmt.Errorf("%w: gu house integrate action must be ENTER or EXIT", ErrInvalidMessage)
 	}
 	return nil
 }
@@ -455,7 +478,7 @@ func decodeStrict(data []byte, destination any) error {
 
 func knownType(messageType string) bool {
 	switch messageType {
-	case TypeJoin, TypeWelcome, TypeInput, TypeMoveTo, TypeCast, TypeAttack, TypeEvents, TypeSnapshot, TypeTransfer, TypeReject, TypeResync:
+	case TypeJoin, TypeWelcome, TypeInput, TypeMoveTo, TypeCast, TypeAttack, TypeEvents, TypeSnapshot, TypeTransfer, TypeReject, TypeResync, TypeCapture, TypeCompanionStance, TypeGuHouseIntegrate:
 		return true
 	default:
 		return false

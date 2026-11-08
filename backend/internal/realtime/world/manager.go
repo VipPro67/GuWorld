@@ -1557,6 +1557,13 @@ func (m *Manager) SubmitCompanionStance(lease OwnershipLease, command sim.InputC
 	return m.submitForLease(lease, command)
 }
 
+func (m *Manager) SubmitGuHouseIntegrate(lease OwnershipLease, command sim.InputCommand) error {
+	if command.GuHouseIntegrate == nil {
+		return sim.ErrInvalidInput
+	}
+	return m.submitForLease(lease, command)
+}
+
 func (m *Manager) AttachCompanions(lease OwnershipLease, companions []sim.Entity) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1729,6 +1736,10 @@ func (m *Manager) submitForLease(lease OwnershipLease, command sim.InputCommand)
 		command.CompanionStance.EntityID = sim.EntityID(lease.CharacterID)
 		command.CompanionStance.LeaseToken = active.Token
 		return zone.world.SubmitCompanionStance(*command.CompanionStance)
+	case command.GuHouseIntegrate != nil:
+		command.GuHouseIntegrate.EntityID = sim.EntityID(lease.CharacterID)
+		command.GuHouseIntegrate.LeaseToken = active.Token
+		return zone.world.SubmitGuHouseIntegrate(*command.GuHouseIntegrate)
 	case command.Target != nil:
 		return zone.world.SubmitMoveTarget(command)
 	default:

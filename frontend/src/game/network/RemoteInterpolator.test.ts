@@ -33,3 +33,29 @@ test("RemoteInterpolator drops duplicate ticks, stale entities and reset clears 
   interpolator.reset();
   assert.equal(interpolator.positionAt("a", 11), null);
 });
+
+test("RemoteInterpolator adapts its render buffer to snapshot gaps and recovers", () => {
+  const interpolator = new RemoteInterpolator();
+  interpolator.push(10, [entity("mob", 0)]);
+  assert.equal(interpolator.getInterpolationDelayTicks(), 2);
+
+  interpolator.push(18, [entity("mob", 1)]);
+  assert.equal(interpolator.getInterpolationDelayTicks(), 6);
+
+  for (let tick = 19; tick <= 50; tick += 1) {
+    interpolator.push(tick, [entity("mob", 1)]);
+  }
+  assert.equal(interpolator.getInterpolationDelayTicks(), 2);
+});
+
+test("RemoteInterpolator extrapolates briefly but never across a long snapshot gap", () => {
+  const interpolator = new RemoteInterpolator();
+  interpolator.push(10, [entity("mob", 1)]);
+  interpolator.push(11, [entity("mob", 1.2)]);
+
+  assert.deepEqual(interpolator.positionAt("mob", 12), { x: 1.4, y: 0 });
+  assert.ok(Math.abs(interpolator.positionAt("mob", 100)!.x - 1.6) < 1e-9);
+
+  interpolator.push(20, [entity("mob", 3)]);
+  assert.deepEqual(interpolator.positionAt("mob", 22), { x: 3, y: 0 });
+});

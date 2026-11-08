@@ -30,6 +30,7 @@ export const Op = {
   Stance: 0x0d,
   Resync: 0x0e,
   Keepalive: 0x0f,
+  GuHouseIntegrate: 0x10,
 } as const;
 
 export const DatagramOp = {
@@ -805,6 +806,13 @@ export function encodeStance(input: { seq: number; stance: number; focusNetId: n
   const payload = new Writer(8);
   payload.varint(input.seq).u8(input.stance).u16(input.focusNetId);
   return encodeFrame(Op.Stance, payload.bytes());
+}
+
+export function encodeGuHouseIntegrate(input: { seq: number; action: "ENTER" | "EXIT" }): Uint8Array {
+  const payload = new Writer(8);
+  const actionCode = input.action === "EXIT" ? 2 : 1;
+  payload.varint(input.seq).u8(actionCode);
+  return encodeFrame(Op.GuHouseIntegrate, payload.bytes());
 }
 
 export const EVENT_TYPE_NAMES: Record<number, string> = {

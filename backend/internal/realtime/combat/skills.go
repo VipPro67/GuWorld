@@ -243,7 +243,7 @@ func (skill Skill) Valid() bool {
 	case ModeGround:
 		return skill.Range > 0 && (skill.Radius > 0 || skill.MoveDistance > 0) && skill.Damage >= 0
 	case ModeSelf:
-		return skill.Shield >= 0 && skill.Heal >= 0 && (skill.Shield > 0 || skill.Heal > 0 || skill.StatusID != "" || skill.Cleanse || skill.MoveDistance > 0 || skill.ID == "REVERT_METAMORPHOSIS" || skill.FormActivation)
+		return skill.Shield >= 0 && skill.Heal >= 0 && (skill.Shield > 0 || skill.Heal > 0 || skill.StatusID != "" || skill.Cleanse || skill.MoveDistance > 0 || skill.ID == "REVERT_METAMORPHOSIS" || skill.ID == "REVERT_GU_HOUSE" || skill.FormActivation)
 	default:
 		return false
 	}

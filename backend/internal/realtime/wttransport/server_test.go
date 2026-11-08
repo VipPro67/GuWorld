@@ -67,6 +67,9 @@ func (f *fakeAdmission) Capture(uuid.UUID, uuid.UUID, protocol.CaptureIntent) er
 func (f *fakeAdmission) CompanionStance(uuid.UUID, uuid.UUID, protocol.CompanionStanceIntent) error {
 	return nil
 }
+func (f *fakeAdmission) GuHouseIntegrate(uuid.UUID, uuid.UUID, protocol.GuHouseIntegrateIntent) error {
+	return nil
+}
 func (f *fakeAdmission) SubscribeSnapshots(uuid.UUID, uuid.UUID) (<-chan sim.Snapshot, func(), error) {
 	return f.feed, func() {}, nil
 }

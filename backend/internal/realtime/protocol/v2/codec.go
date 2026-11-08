@@ -37,21 +37,22 @@ const (
 
 // Stream opcodes.
 const (
-	OpJoin       byte = 0x01
-	OpWelcome    byte = 0x02
-	OpLeave      byte = 0x03
-	OpTransfer   byte = 0x04
-	OpReject     byte = 0x05
-	OpEvents     byte = 0x06
-	OpSnapshot   byte = 0x07
-	OpSpawn      byte = 0x08
-	OpMoveTarget byte = 0x09
-	OpCast       byte = 0x0A
-	OpAttack     byte = 0x0B
-	OpCapture    byte = 0x0C
-	OpStance     byte = 0x0D
-	OpResync     byte = 0x0E
-	OpKeepalive  byte = 0x0F
+	OpJoin             byte = 0x01
+	OpWelcome          byte = 0x02
+	OpLeave            byte = 0x03
+	OpTransfer         byte = 0x04
+	OpReject           byte = 0x05
+	OpEvents           byte = 0x06
+	OpSnapshot         byte = 0x07
+	OpSpawn            byte = 0x08
+	OpMoveTarget       byte = 0x09
+	OpCast             byte = 0x0A
+	OpAttack           byte = 0x0B
+	OpCapture          byte = 0x0C
+	OpStance           byte = 0x0D
+	OpResync           byte = 0x0E
+	OpKeepalive        byte = 0x0F
+	OpGuHouseIntegrate byte = 0x10
 )
 
 // Datagram opcodes (lower 6 bits of the header byte).
@@ -973,6 +974,23 @@ type StanceAction struct {
 func DecodeStanceAction(payload []byte) (StanceAction, error) {
 	decoder := NewDecoder(payload)
 	action := StanceAction{Seq: decoder.Varint(), Stance: decoder.U8(), FocusNetID: decoder.U16()}
+	return action, decoder.Err()
+}
+
+type GuHouseIntegrateAction struct {
+	Seq    uint64
+	Action uint8 // 1 = ENTER, 2 = EXIT
+}
+
+func EncodeGuHouseIntegrateAction(action GuHouseIntegrateAction) ([]byte, error) {
+	encoder := NewEncoder(16)
+	encoder.Varint(action.Seq).U8(action.Action)
+	return encoder.Bytes(), encoder.Err()
+}
+
+func DecodeGuHouseIntegrateAction(payload []byte) (GuHouseIntegrateAction, error) {
+	decoder := NewDecoder(payload)
+	action := GuHouseIntegrateAction{Seq: decoder.Varint(), Action: decoder.U8()}
 	return action, decoder.Err()
 }
 

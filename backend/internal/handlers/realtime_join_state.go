@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
@@ -62,37 +63,39 @@ type RealtimeKillerMove struct {
 // RealtimeJoinState is loaded from the primary database for admission. It is
 // deliberately separate from the cached UI snapshot used by the legacy client.
 type RealtimeJoinState struct {
-	Username                 string
-	MapID                    string
-	RegionID                 string
-	MapInstanceID            string
-	X                        int
-	Y                        int
-	WorldX                   float64
-	WorldY                   float64
-	WorldSafeX               float64
-	WorldSafeY               float64
-	WorldInstanceID          string
-	WorldLocationRevision    int64
-	HasWorldLocation         bool
-	HasWorldLocationRevision bool
-	HP                       float64
-	BaseHP                   float64
-	CurrentMana              float64
-	MaxMana                  float64
-	ManaRegenPerSecond       float64
-	BaseAttack               float64
-	Defense                  float64
-	MovementSpeed            float64
-	DaoProfile               *gamefx.DaoCombatProfile
-	PathResistance           map[string]float64
-	Rank                     int
-	NeedsOnboarding          bool
-	PartyID                  string
-	PvPEnabled               bool
-	EquippedGu               []RealtimeEquippedGu
-	KillerMoves              []RealtimeKillerMove
-	Companions               []RealtimeCompanion
+	Username                  string
+	MapID                     string
+	RegionID                  string
+	MapInstanceID             string
+	X                         int
+	Y                         int
+	WorldX                    float64
+	WorldY                    float64
+	WorldSafeX                float64
+	WorldSafeY                float64
+	WorldInstanceID           string
+	WorldLocationRevision     int64
+	HasWorldLocation          bool
+	HasWorldLocationRevision  bool
+	HP                        float64
+	BaseHP                    float64
+	CurrentMana               float64
+	MaxMana                   float64
+	ManaRegenPerSecond        float64
+	BaseAttack                float64
+	Defense                   float64
+	MovementSpeed             float64
+	DaoProfile                *gamefx.DaoCombatProfile
+	PathResistance            map[string]float64
+	Rank                      int
+	NeedsOnboarding           bool
+	PartyID                   string
+	PvPEnabled                bool
+	EquippedGu                []RealtimeEquippedGu
+	KillerMoves               []RealtimeKillerMove
+	Companions                []RealtimeCompanion
+	EquippedGuHouse           *models.GuHouseCombatProfile
+	EquippedGuHouseDurability float64
 }
 
 type RealtimeCompanion struct {
@@ -309,6 +312,22 @@ func LoadRealtimeJoinState(ctx context.Context, playerID uuid.UUID) (RealtimeJoi
 			); err == nil {
 				state.Companions = append(state.Companions, comp)
 			}
+		}
+	}
+
+	houseRow := db.DB.QueryRowContext(ctx, `
+		SELECT house_profile, current_durability
+		FROM player_gu_houses
+		WHERE player_id = $1 AND is_equipped = true
+		LIMIT 1
+	`, playerID)
+	var houseBytes []byte
+	var houseDur float64
+	if err := houseRow.Scan(&houseBytes, &houseDur); err == nil && len(houseBytes) > 0 {
+		var houseProf models.GuHouseCombatProfile
+		if err := json.Unmarshal(houseBytes, &houseProf); err == nil {
+			state.EquippedGuHouse = &houseProf
+			state.EquippedGuHouseDurability = houseDur
 		}
 	}
 

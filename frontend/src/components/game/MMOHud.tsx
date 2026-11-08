@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Compass, Crown, Flame, Gem, History, Loader2, MapPin, Menu, Minus, Package, PawPrint, Plus, ScrollText, Settings2, ShoppingBag, Sparkles, Store, Swords, Trophy, Users, X, Eye, EyeOff, ChevronDown, ChevronUp, Shield, Crosshair, Pickaxe, Gift, Footprints } from "lucide-react";
+import { BookOpen, Compass, Crown, Flame, Gem, History, Loader2, MapPin, Menu, Minus, Package, PawPrint, Plus, ScrollText, Settings2, ShoppingBag, Sparkles, Store, Swords, Trophy, Users, X, Eye, EyeOff, ChevronDown, ChevronUp, Shield, Crosshair, Pickaxe, Gift, Footprints, Castle, LogOut } from "lucide-react";
 import type { WorldSkillInfo } from "@/game/network/Protocol";
 import type { RuntimeEntity } from "@/game/core/WorldRuntime";
 import { getMonsterArt } from "@/game/assets/MonsterArt";
@@ -86,8 +86,9 @@ export interface MMOHudProps {
   aimingSlot?: number | null;
   onCancelAim?: () => void;
   onHoverSkill?: (slot: number | null) => void;
-  onCapture?: (targetId: string) => void;
+  onCapture?: (targetId: string, guInstanceId: string) => void;
   onCompanionStance?: (stance: "DEFEND" | "FOCUS" | "FOLLOW") => void;
+  onGuHouseIntegrate?: (action: "ENTER" | "EXIT") => void;
 }
 
 const MODE_LABEL: Record<WorldSkillInfo["mode"], string> = {
@@ -245,23 +246,39 @@ export function MMOHud(props: MMOHudProps) {
   };
 
   const hotbarKeybinds = useHotbarKeybinds();
-  // Only render slots that actually hold a Gu or a realtime skill; empty
-  // placeholders are gone so the HUD reflects the current loadout.
-  const hotbarSlots = Array.from({ length: 12 }, (_, index) => index + 1).filter((slot) =>
-    props.skills.some((entry) => entry.slot === slot) ||
-    props.guSlots.some((entry) => entry.slot === slot && entry.guId),
-  );
-
   const monsterDictionary = useGameStore((state) => state.monsterDictionary);
   const guDictionary = useGameStore((state) => state.guDictionary);
   const passiveStats = useGameStore((state) => state.passiveStats);
   const fetchPassiveStats = useGameStore((state) => state.fetchPassiveStats);
+  const guHouses = useGameStore((state) => state.guHouses);
+  const fetchGuHouses = useGameStore((state) => state.fetchGuHouses);
 
   useEffect(() => {
     if (props.connected && props.player && !passiveStats) {
       void fetchPassiveStats();
     }
-  }, [props.connected, props.player?.id, passiveStats, fetchPassiveStats]);
+    if (props.connected && props.player && guHouses.length === 0) {
+      void fetchGuHouses();
+    }
+  }, [props.connected, props.player?.id, passiveStats, fetchPassiveStats, guHouses.length, fetchGuHouses]);
+
+  const equippedGuHouse = guHouses.find((h) => h.is_equipped);
+  const hasEquippedGuHouse = Boolean(equippedGuHouse && equippedGuHouse.current_durability > 0);
+  const selfEntity = props.nearby.find((e) => e.isSelf);
+  const transform = selfEntity?.transformation;
+  const isGuHouse = transform?.active === true && transform.form_kind === "GU_HOUSE";
+  const isWindup = transform?.is_windup === true;
+  const formHp = transform?.current_form_hp ?? 0;
+  const maxFormHp = transform?.max_form_hp ?? 0;
+
+  // In Gu House mode, hotbar strictly renders the 6 House Strike slots.
+  // Otherwise, only render slots that actually hold a Gu or a realtime skill.
+  const hotbarSlots = isGuHouse
+    ? [1, 2, 3, 4, 5, 6]
+    : Array.from({ length: 12 }, (_, index) => index + 1).filter((slot) =>
+        props.skills.some((entry) => entry.slot === slot) ||
+        props.guSlots.some((entry) => entry.slot === slot && entry.guId),
+      );
 
   // Compute player's Investigation stat (base 1.0 + equipped Gu passives)
   let equippedInvestigation = 0;
@@ -374,39 +391,34 @@ export function MMOHud(props: MMOHudProps) {
   const currentStance = activeCompanion?.stance || selectedStance;
 
   // Capture Gu check
-  let hasCaptureGu = false;
-  if (props.player?.gu_inventory) {
-    hasCaptureGu = props.player.gu_inventory.some((gu) => {
-      const spec = guDictionary[gu.gu_id];
-      if (!spec) return false;
-      const pathStr = Array.isArray(spec.path) ? spec.path.join(" ") : "";
-      const combatTags = Array.isArray(spec.combat_tags) ? spec.combat_tags.join(" ") : "";
-      const supportTags = Array.isArray(spec.support_tags) ? spec.support_tags.join(" ") : "";
-      const tagsStr = `${combatTags} ${supportTags}`;
-      const nameStr = spec.name || "";
-      const idStr = spec.id || gu.gu_id || "";
-      return (
-        pathStr.toLowerCase().includes("enslavement") ||
-        tagsStr.toLowerCase().includes("enslave") ||
-        nameStr.toLowerCase().includes("ngự xích") ||
-        nameStr.toLowerCase().includes("nô") ||
-        idStr.includes("CONTROL_CHAIN") ||
-        idStr.includes("ENSLAVE") ||
-        idStr.includes("NO_") ||
-        JSON.stringify(spec.effects || {}).includes("CAPTURE_BONUS")
-      );
-    });
-  }
+  const captureGu = props.player?.gu_inventory.find((gu) => {
+    if (!gu.equipped || gu.status !== "ACTIVE" || gu.hunger < 5) return false;
+    const spec = guDictionary[gu.gu_id];
+    if (!spec) return false;
+    const pathStr = Array.isArray(spec.path) ? spec.path.join(" ") : "";
+    const combatTags = Array.isArray(spec.combat_tags) ? spec.combat_tags.join(" ") : "";
+    const supportTags = Array.isArray(spec.support_tags) ? spec.support_tags.join(" ") : "";
+    const tagsStr = `${combatTags} ${supportTags}`;
+    const nameStr = spec.name || "";
+    const idStr = spec.id || gu.gu_id || "";
+    return (
+      pathStr.toLowerCase().includes("enslavement") ||
+      tagsStr.toLowerCase().includes("enslave") ||
+      nameStr.toLowerCase().includes("ngự xích") ||
+      nameStr.toLowerCase().includes("nô") ||
+      idStr.includes("CONTROL_CHAIN") ||
+      idStr.includes("ENSLAVE") ||
+      idStr.includes("NO_") ||
+      JSON.stringify(spec.effects || {}).includes("CAPTURE_BONUS")
+    );
+  });
+  const hasCaptureGu = Boolean(captureGu);
 
-  // Capture condition check (target subdued: HP <= 25% or CCed, range <= 6.0m, capturable, hasCaptureGu)
+  // Capture condition check (range <= 6.0m, capturable, hasCaptureGu)
   const targetEntity = props.target;
-  const selfEntity = props.nearby.find((e) => e.isSelf);
   const distanceToTarget = targetEntity && targetEntity.x !== undefined && targetEntity.y !== undefined && selfEntity
     ? Math.hypot(targetEntity.x - selfEntity.x, targetEntity.y - selfEntity.y)
     : (targetEntity && props.position ? Math.hypot((targetEntity.x ?? props.position.x) - props.position.x, (targetEntity.y ?? props.position.y) - props.position.y) : 999);
-  const targetHpPct = targetEntity && targetEntity.maxHp > 0 ? targetEntity.hp / targetEntity.maxHp : 1;
-  const hasTargetCC = targetEntity?.statuses?.some((st) => ["STUN", "FREEZE", "PETRIFY", "BIND", "ROOT"].includes(st)) ?? false;
-  const isSubdued = targetHpPct <= 0.25 || hasTargetCC;
   const isCapturable = targetEntity?.kind === "monster" && (targetSpec ? targetSpec.is_capturable !== false : true);
 
   const canCapture = Boolean(
@@ -414,7 +426,6 @@ export function MMOHud(props: MMOHudProps) {
     targetEntity.kind === "monster" &&
     targetEntity.hp > 0 &&
     isCapturable &&
-    isSubdued &&
     distanceToTarget <= 6.0 &&
     hasCaptureGu
   );
@@ -651,6 +662,11 @@ export function MMOHud(props: MMOHudProps) {
             )}
           </button>
           <div className="flex flex-col gap-0.5 w-16">
+            {isGuHouse && maxFormHp > 0 && (
+              <div className="h-1.5 w-full bg-[var(--mmo-theme-zinc-950,#1a1300)] rounded-full overflow-hidden border border-amber-500 shadow-[0_0_5px_rgba(234,179,8,0.4)]" title={`Cổ Phòng: ${Math.round(formHp)}/${Math.round(maxFormHp)}`}>
+                <div className="h-full bg-gradient-to-r from-amber-500 to-yellow-300 transition-[width]" style={{ width: `${pct(formHp, maxFormHp)}%` }} />
+              </div>
+            )}
             <div className="h-1.5 w-full bg-[var(--mmo-theme-zinc-950,#0f172a)] rounded-full overflow-hidden border border-red-950">
               <div className="h-full bg-red-500 transition-[width]" style={{ width: `${pct(props.hp, props.maxHp)}%` }} />
             </div>
@@ -715,6 +731,17 @@ export function MMOHud(props: MMOHudProps) {
 
           {/* 2 Thanh kép HP & CN */}
           <div className="mt-1.5 space-y-1 font-sans text-[9px]">
+            {isGuHouse && maxFormHp > 0 && (
+              <div className="relative h-3 overflow-hidden rounded-full border border-amber-500 bg-amber-950/80 shadow-[0_0_8px_rgba(234,179,8,0.5)]">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-300 transition-[width]"
+                  style={{ width: `${pct(formHp, maxFormHp)}%` }}
+                />
+                <span className="absolute inset-0 grid place-items-center font-bold text-amber-100 text-[8px] drop-shadow">
+                  CỔ PHÒNG {Math.round(formHp)}/{Math.round(maxFormHp)}
+                </span>
+              </div>
+            )}
             <div className="relative h-3 overflow-hidden rounded-full border border-[#9b6654] bg-[var(--mmo-theme-zinc-950,#2b1110)]">
               <div className="h-full bg-gradient-to-r from-[#8f2c29] to-[#e45e4d] transition-[width]" style={{ width: `${pct(props.hp, props.maxHp)}%` }} />
               {props.shield > 0 && (
@@ -799,6 +826,17 @@ export function MMOHud(props: MMOHudProps) {
 
           {/* 4 Thanh Tứ Trụ Năng Lượng */}
           <div className="mt-2 space-y-1 font-sans text-[9px]">
+            {isGuHouse && maxFormHp > 0 && (
+              <div className="relative h-3.5 overflow-hidden rounded-full border border-amber-400 bg-amber-950/80 shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-300 transition-[width]"
+                  style={{ width: `${pct(formHp, maxFormHp)}%` }}
+                />
+                <span className="absolute inset-0 grid place-items-center font-bold text-amber-100 drop-shadow-md">
+                  THỂ LƯỢNG CỔ PHÒNG {Math.round(formHp)}/{Math.round(maxFormHp)}
+                </span>
+              </div>
+            )}
             {/* 1. HP (Khí Huyết) */}
             <div className="relative h-3.5 overflow-hidden rounded-full border border-[#9b6654] bg-[var(--mmo-theme-zinc-950,#2b1110)]">
               <div
@@ -1300,7 +1338,7 @@ export function MMOHud(props: MMOHudProps) {
               {canCapture && (
                 <button
                   type="button"
-                  onClick={() => targetEntity && props.onCapture?.(targetEntity.id)}
+                  onClick={() => targetEntity && captureGu && props.onCapture?.(targetEntity.id, captureGu.instance_id)}
                   className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg border border-amber-400 bg-gradient-to-r from-amber-950 via-emerald-950 to-amber-950 py-1.5 px-3 font-bold text-xs text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.5)] animate-pulse hover:brightness-125 active:scale-95 transition-all cursor-pointer"
                 >
                   <PawPrint className="h-3.5 w-3.5 text-emerald-400" />
@@ -1840,10 +1878,14 @@ export function MMOHud(props: MMOHudProps) {
 
       {/* Mobile Combat Hub: 2-Row Cluster + Big Attack Button (Tối ưu ngón cái tay phải, không bị che/tràn màn hình) */}
       <div className="pointer-events-auto absolute bottom-2 right-2 flex items-end gap-1.5 md:hidden z-20 select-none">
-        {hotbarSlots.length > 0 && <div className={`grid grid-cols-4 gap-1 rounded-xl p-1 shadow-xl ${frame}`}>
+        {hotbarSlots.length > 0 && <div className={`grid grid-cols-4 gap-1 rounded-xl p-1 shadow-xl ${
+          isGuHouse
+            ? "border-2 border-[#d29922] bg-gradient-to-b from-[#2a1d08]/95 to-[#150e04]/95 shadow-[0_0_20px_rgba(210,153,34,0.35)]"
+            : frame
+        }`}>
           {hotbarSlots.map((slot) => {
             const skill = props.skills.find((entry) => entry.slot === slot);
-            const guSlot = props.guSlots.find((entry) => entry.slot === slot);
+            const guSlot = isGuHouse ? undefined : props.guSlots.find((entry) => entry.slot === slot);
             const remaining = props.cooldownRemaining[slot] ?? 0;
             const isAimingThis = props.aimingSlot === slot;
             const formActive = props.nearby.find((entity) => entity.isSelf)?.formActive === true;
@@ -1870,7 +1912,7 @@ export function MMOHud(props: MMOHudProps) {
                 onClick={() => skill && props.onCast(slot)}
                 title={
                   skill
-                    ? `${guSlot?.name ?? skill.name} · ${MODE_LABEL[skill.mode]} · Tầm: ${skill.range}m · (${formatManaCost(skill.mana_cost)} nguyên)`
+                    ? `${isGuHouse ? skill.name : (guSlot?.name ?? skill.name)} · ${MODE_LABEL[skill.mode]} · Tầm: ${skill.range}m · (${formatManaCost(skill.mana_cost)} nguyên)`
                     : isPassive
                       ? `${guSlot?.name} · Bị động`
                       : guSlot?.name
@@ -1880,11 +1922,15 @@ export function MMOHud(props: MMOHudProps) {
                 className={`relative flex h-10 w-10 flex-col justify-between overflow-hidden rounded-lg border p-0.5 text-center transition active:scale-90 ${
                   isAimingThis
                     ? "border-amber-400 bg-gradient-to-b from-[#4a3512] to-[#241a08] text-amber-100 ring-2 ring-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)] scale-105 z-20 animate-pulse"
-                    : isToggled || (isFormActivation && formActive)
-                      ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70"
-                      : skill
-                        ? "border-[#9d865b] bg-gradient-to-b from-[#254636] to-[#162d22] text-[#f9e9c8] active:border-[#dfc382]"
-                        : "border-[#544b3b]/60 bg-gradient-to-b from-[#242019]/90 to-[#151310]/90 text-[#867d6c] opacity-70"
+                    : isGuHouse && slot === 6
+                      ? "border-red-500/90 bg-gradient-to-b from-[#4a1515] to-[#200808] text-rose-100 hover:border-red-400 ring-1 ring-red-500/50"
+                      : isGuHouse
+                        ? "border-[#d29922] bg-gradient-to-b from-[#3a280c] to-[#1c1305] text-[#ffeac0] shadow-[0_0_8px_rgba(210,153,34,0.2)]"
+                        : isToggled || (isFormActivation && formActive)
+                          ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70"
+                          : skill
+                            ? "border-[#9d865b] bg-gradient-to-b from-[#254636] to-[#162d22] text-[#f9e9c8] active:border-[#dfc382]"
+                            : "border-[#544b3b]/60 bg-gradient-to-b from-[#242019]/90 to-[#151310]/90 text-[#867d6c] opacity-70"
                 }`}
               >
                 <span className="absolute left-0 top-0 rounded-br bg-black/85 px-1 py-0.2 font-mono text-[8px] font-bold text-[#f4d695] border-r border-b border-[#8f6d40]/50 leading-none z-10">
@@ -1911,15 +1957,29 @@ export function MMOHud(props: MMOHudProps) {
                   />
                 )}
                 <div className="flex-1 flex flex-col items-center justify-center w-full mt-0.5 px-0.5 z-10">
-                  {guSlot?.guId && getGuIconUrl(guSlot.guId, guSlot.name) && (
+                  {guSlot?.guId && getGuIconUrl(guSlot.guId, guSlot.name) ? (
                     <img
                       src={getGuIconUrl(guSlot.guId, guSlot.name)!}
                       alt=""
                       className="h-4 w-4 object-contain drop-shadow"
                     />
-                  )}
+                  ) : isGuHouse ? (
+                    slot === 1 ? (
+                      <Crosshair className="h-3.5 w-3.5 text-amber-300 drop-shadow" />
+                    ) : slot === 2 ? (
+                      <Swords className="h-3.5 w-3.5 text-amber-300 drop-shadow" />
+                    ) : slot === 3 ? (
+                      <Shield className="h-3.5 w-3.5 text-amber-300 drop-shadow" />
+                    ) : slot === 4 ? (
+                      <Sparkles className="h-3.5 w-3.5 text-emerald-300 drop-shadow" />
+                    ) : slot === 5 ? (
+                      <Flame className="h-3.5 w-3.5 text-red-400 drop-shadow" />
+                    ) : (
+                      <LogOut className="h-3.5 w-3.5 text-rose-300 drop-shadow" />
+                    )
+                  ) : null}
                   <span className="line-clamp-1 text-[7.5px] font-semibold leading-tight tracking-tight">
-                    {isFormActivation ? "Biến thân" : isFormAbility ? `Dạng: ${skill?.name}` : guSlot?.name ?? (skill?.name || "Trống")}
+                    {isGuHouse ? skill?.name : isFormActivation ? "Biến thân" : isFormAbility ? `Dạng: ${skill?.name}` : guSlot?.name ?? (skill?.name || "Trống")}
                   </span>
                 </div>
                 <span className="font-mono text-[7px] text-cyan-200/90 truncate tracking-tighter">
@@ -2032,7 +2092,7 @@ export function MMOHud(props: MMOHudProps) {
         <div className="pointer-events-auto absolute bottom-36 md:bottom-40 left-1/2 -translate-x-1/2 flex items-center z-20">
           <button
             type="button"
-            onClick={() => targetEntity && props.onCapture?.(targetEntity.id)}
+            onClick={() => targetEntity && captureGu && props.onCapture?.(targetEntity.id, captureGu.instance_id)}
             className="flex items-center gap-2 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-950 via-emerald-950 to-amber-950 px-3.5 py-1.5 sm:px-4 sm:py-2 font-bold text-xs sm:text-sm text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.6)] animate-pulse hover:brightness-125 active:scale-95 transition-all cursor-pointer"
           >
             <PawPrint className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400 animate-bounce" />
@@ -2041,8 +2101,47 @@ export function MMOHud(props: MMOHudProps) {
         </div>
       )}
 
+      {/* Gu House Integration Windup Channeling Bar */}
+      {isWindup && (
+        <div className="pointer-events-auto absolute bottom-36 md:bottom-40 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 rounded-xl border-2 border-amber-400 bg-black/90 px-5 py-2.5 shadow-[0_0_25px_rgba(251,191,36,0.8)] backdrop-blur-md">
+          <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-200">
+            <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+            <span>Đang Dung Nhập Tiên Cổ Phòng...</span>
+          </div>
+          <div className="w-48 sm:w-56 h-2 rounded-full bg-zinc-800 overflow-hidden border border-amber-500/60">
+            <div
+              className="h-full bg-gradient-to-r from-amber-500 to-yellow-300 animate-pulse transition-all duration-100"
+              style={{ width: `${Math.max(5, Math.min(100, (transform?.windup_progress ?? 0) * 100))}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Gu House Quick Toggle Action [Alt+G] */}
+      {(hasEquippedGuHouse || isGuHouse) && (
+        <div className={`pointer-events-auto absolute ${hasCompanion ? "bottom-32 md:bottom-36" : "bottom-24 md:bottom-28"} left-1/2 -translate-x-1/2 z-20 flex items-center justify-center`}>
+          <button
+            type="button"
+            onClick={() => props.onGuHouseIntegrate?.(isGuHouse ? "EXIT" : "ENTER")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs shadow-lg backdrop-blur-md border transition-all active:scale-95 cursor-pointer ${
+              isGuHouse
+                ? "bg-gradient-to-r from-red-950/90 via-amber-950/90 to-red-950/90 border-amber-500/80 text-amber-200 hover:brightness-125 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+                : "bg-gradient-to-r from-amber-950/90 via-yellow-950/90 to-amber-950/90 border-amber-400/80 text-amber-100 hover:brightness-125 shadow-[0_0_15px_rgba(251,191,36,0.5)] animate-pulse"
+            }`}
+            title={isGuHouse ? "Rời Tiên Cổ Phòng (Alt+G)" : "Dung Nhập Tiên Cổ Phòng (Alt+G)"}
+          >
+            {isGuHouse ? <LogOut className="h-3.5 w-3.5 text-amber-300" /> : <Castle className="h-3.5 w-3.5 text-amber-400" />}
+            <span>{isGuHouse ? "Rời Tiên Cổ Phòng [Alt+G]" : "Dung Nhập Tiên Cổ Phòng [Alt+G]"}</span>
+          </button>
+        </div>
+      )}
+
       {/* Desktop Hotbar (Thanh ngang tiêu chuẩn cho PC / Tablet) */}
-      <div className={`pointer-events-auto absolute bottom-2 left-1/2 hidden md:flex max-w-[min(98vw,480px)] -translate-x-1/2 items-center gap-1 sm:gap-1.5 md:gap-2 overflow-x-auto rounded-xl p-1 sm:p-1.5 md:p-2 sm:max-w-none sm:w-auto shadow-2xl ${frame}`}>
+      <div className={`pointer-events-auto absolute bottom-2 left-1/2 hidden md:flex max-w-[min(98vw,480px)] -translate-x-1/2 items-center gap-1 sm:gap-1.5 md:gap-2 overflow-x-auto rounded-xl p-1 sm:p-1.5 md:p-2 sm:max-w-none sm:w-auto shadow-2xl ${
+        isGuHouse
+          ? "border-2 border-[#d29922] bg-gradient-to-b from-[#2a1d08]/95 to-[#150e04]/95 shadow-[0_0_30px_rgba(210,153,34,0.35)]"
+          : frame
+      }`}>
         <button
           type="button"
           onClick={props.onAttack}
@@ -2059,7 +2158,7 @@ export function MMOHud(props: MMOHudProps) {
         </button>
         {hotbarSlots.map((slot) => {
           const skill = props.skills.find((entry) => entry.slot === slot);
-          const guSlot = props.guSlots.find((entry) => entry.slot === slot);
+          const guSlot = isGuHouse ? undefined : props.guSlots.find((entry) => entry.slot === slot);
           const remaining = props.cooldownRemaining[slot] ?? 0;
           const isAimingThis = props.aimingSlot === slot;
           const formActive = props.nearby.find((entity) => entity.isSelf)?.formActive === true;
@@ -2088,7 +2187,7 @@ export function MMOHud(props: MMOHudProps) {
               onMouseLeave={() => props.onHoverSkill?.(null)}
               title={
                 skill
-                  ? `${guSlot?.name ?? skill.name} · Phím [${hotbarKeyLabel(slot, hotbarKeybinds)}]
+                  ? `${isGuHouse ? skill.name : (guSlot?.name ?? skill.name)} · Phím [${hotbarKeyLabel(slot, hotbarKeybinds)}]
 Cơ chế: ${MODE_BADGE[skill.mode].icon} ${MODE_BADGE[skill.mode].label}
 Tầm xa: ${skill.range.toFixed(1)} ô${skill.radius_units ? ` · Bán kính: ${skill.radius_units} ô` : ""}${skill.shape ? ` · Dạng: ${skill.shape}` : ""}
 Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi: ${(skill.cooldown_ticks / 20).toFixed(1)}s${isToggled ? " · (ĐANG DUY TRÌ)" : ""}`
@@ -2101,11 +2200,15 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
               className={`relative flex h-12 min-w-[46px] flex-col justify-between overflow-hidden rounded-lg border px-1 pt-3 pb-0.5 text-center transition shadow sm:h-16 sm:w-20 sm:pt-4 sm:pb-1 md:h-20 md:w-24 shrink-0 ${
                 isAimingThis
                   ? "border-amber-400 bg-gradient-to-b from-[#4a3512] to-[#241a08] text-amber-100 ring-2 ring-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.8)] scale-105 z-20 animate-pulse"
-                  : isToggled || (isFormActivation && formActive)
-                    ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70 shadow-[0_0_12px_rgba(52,211,153,0.4)]"
-                    : skill
-                      ? "border-[#9d865b] bg-gradient-to-b from-[#254636] to-[#162d22] text-[#f9e9c8] hover:border-[#dfc382] hover:brightness-110 active:scale-95"
-                      : "border-[#544b3b] bg-gradient-to-b from-[#242019] to-[#151310] text-[#867d6c] opacity-80"
+                  : isGuHouse && slot === 6
+                    ? "border-red-500/90 bg-gradient-to-b from-[#4a1515] to-[#200808] text-rose-100 hover:border-red-400 hover:brightness-125 ring-1 ring-red-500/50"
+                    : isGuHouse
+                      ? "border-[#d29922] bg-gradient-to-b from-[#3a280c] to-[#1c1305] text-[#ffeac0] hover:border-[#f5d070] hover:brightness-110 active:scale-95 shadow-[0_0_8px_rgba(210,153,34,0.2)]"
+                      : isToggled || (isFormActivation && formActive)
+                        ? "border-emerald-400 bg-gradient-to-b from-[#1b4332] to-[#081c15] text-[#d8f3dc] ring-2 ring-emerald-500/70 shadow-[0_0_12px_rgba(52,211,153,0.4)]"
+                        : skill
+                          ? "border-[#9d865b] bg-gradient-to-b from-[#254636] to-[#162d22] text-[#f9e9c8] hover:border-[#dfc382] hover:brightness-110 active:scale-95"
+                          : "border-[#544b3b] bg-gradient-to-b from-[#242019] to-[#151310] text-[#867d6c] opacity-80"
               }`}
             >
               <span className="absolute left-0 top-0 rounded-br bg-black/85 px-1.5 py-0.5 font-mono text-[9px] sm:text-[11px] md:text-xs font-bold text-[#f4d695] border-r border-b border-[#8f6d40]/50 leading-none z-10">
@@ -2134,19 +2237,33 @@ Tiêu hao: ${formatManaCost(skill.mana_cost)} ${manaName.toLowerCase()} · Hồi
                 />
               )}
               <div className="flex-1 flex flex-col items-center justify-center w-full px-0.5 z-10">
-                {guSlot?.guId && getGuIconUrl(guSlot.guId, guSlot.name) && (
+                {guSlot?.guId && getGuIconUrl(guSlot.guId, guSlot.name) ? (
                   <img
                     src={getGuIconUrl(guSlot.guId, guSlot.name)!}
                     alt=""
                     className="h-5 w-5 sm:h-7 sm:w-7 object-contain drop-shadow mb-0.5"
                   />
-                )}
+                ) : isGuHouse ? (
+                  slot === 1 ? (
+                    <Crosshair className="h-5 w-5 sm:h-6 sm:w-6 text-amber-300 drop-shadow mb-0.5" />
+                  ) : slot === 2 ? (
+                    <Swords className="h-5 w-5 sm:h-6 sm:w-6 text-amber-300 drop-shadow mb-0.5" />
+                  ) : slot === 3 ? (
+                    <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-amber-300 drop-shadow mb-0.5" />
+                  ) : slot === 4 ? (
+                    <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-300 drop-shadow mb-0.5" />
+                  ) : slot === 5 ? (
+                    <Flame className="h-5 w-5 sm:h-6 sm:w-6 text-red-400 drop-shadow mb-0.5" />
+                  ) : (
+                    <LogOut className="h-5 w-5 sm:h-6 sm:w-6 text-rose-300 drop-shadow mb-0.5" />
+                  )
+                ) : null}
                 <span className="line-clamp-1 text-[8px] sm:text-[10px] md:text-xs font-semibold leading-tight tracking-tight">
-                  {isFormActivation ? "Biến thân" : isFormAbility ? `Dạng: ${skill?.name}` : guSlot?.name ?? skill?.name ?? "Chưa gán"}
+                  {isGuHouse ? skill?.name : isFormActivation ? "Biến thân" : isFormAbility ? `Dạng: ${skill?.name}` : guSlot?.name ?? skill?.name ?? "Chưa gán"}
                 </span>
               </div>
               <span className="font-mono text-[7px] sm:text-[9.5px] md:text-[10px] text-cyan-200/90 truncate tracking-tighter">
-                {skill ? `${formatManaCost(skill.mana_cost)} nguyên` : isPassive ? "Bị động" : guSlot?.guId ? "Chưa hỗ trợ" : "Cổ trùng"}
+                {skill ? (isGuHouse && slot === 6 ? "Miễn phí" : `${formatManaCost(skill.mana_cost)} nguyên`) : isPassive ? "Bị động" : guSlot?.guId ? "Chưa hỗ trợ" : "Cổ trùng"}
               </span>
               {remaining > 0.05 && (
                 <span className="absolute inset-0 z-20 grid place-items-center bg-black/75 font-sans font-bold text-xs sm:text-base md:text-lg text-amber-200 backdrop-blur-[1px]">

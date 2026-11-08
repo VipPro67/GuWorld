@@ -53,6 +53,7 @@ import {
   encodeMoveTarget,
   encodePingDatagram,
   encodeStance,
+  encodeGuHouseIntegrate,
   readSpawn,
   type DeltaEntity,
   type Projectile,
@@ -323,6 +324,13 @@ export class WorldTransport implements WorldTransportLike {
     const seq = ++this.nextInputSeq;
     const focusNetId = focusTargetId ? (this.projection.netId(focusTargetId) ?? 0) : 0;
     void this.sendFrame(encodeStance({ seq, stance: stanceCode(stance), focusNetId }));
+    return seq;
+  }
+
+  public sendGuHouseIntegrate(action: "ENTER" | "EXIT"): number | null {
+    if (!this.joined) return null;
+    const seq = ++this.nextInputSeq;
+    void this.sendFrame(encodeGuHouseIntegrate({ seq, action }));
     return seq;
   }
 

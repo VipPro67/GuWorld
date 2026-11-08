@@ -826,7 +826,7 @@ The server validates region, authoritative distance, life state, mana, hunger, c
 
 Bật bằng `TLS_ENABLED=true` (hoặc `WT_ENABLED=true`) + `TLS_CERT_FILE`/`TLS_KEY_FILE`; `TLS_ADDR`/`WT_ADDR` mặc định `:8443` phục vụ **HTTPS (TCP)** và **QUIC/WebTransport (UDP)** trong cùng process. Endpoint dùng chung `CORS_ALLOWED_ORIGINS` cho `CheckOrigin`. Token lấy từ query `?token=` và `tab_id` cho resume.
 
-- **World stream (`0x01`)**: mở bidirectional stream, gửi `0x01` + `"GWT"` + version `2`, sau đó frame `u32 len | u8 opcode | payload` (`u32` đã bao gồm opcode). Opcode: join/welcome/leave/transfer/reject/events/snapshot/spawn/move_target/cast/attack/capture/stance/resync.
+- **World stream (`0x01`)**: mở bidirectional stream, gửi `0x01` + `"GWT"` + version `2`, sau đó frame `u32 len | u8 opcode | payload` (`u32` đã bao gồm opcode). Opcode: join/welcome/leave/transfer/reject/events/snapshot/spawn/move_target/cast/attack/capture/stance/gu_house_integrate (0x10)/resync.
 - **UI stream (`0x02`)**: NDJSON trên bidirectional stream. Client gửi `subscribe`, `unsubscribe`, `command`, `ping`; server trả `event` (theo `channel`), `command.result`, `response`, `error`, `pong`. Kênh được auto-subscribe theo player (`player`, `notification`, `trade`, `refine`, `combat`, `arena`, `catalog`, chat công khai/khu vực/tông môn/private) và kiểm tra scope trước khi đăng ký.
 - **Close code**: `4000` superseded same tab, `4001` session replaced, `4002` protocol mismatch, `4003` join timeout, `4008` rate limited, `4010` server draining.
 - **Datagram**: 1 byte header `version(2b)|opcode(6b)`; input, snapshot delta, ping/pong. Snapshot delta > `maxDatagramSize` (1024 B) tự động tràn sang frame `snapshot` trên stream.

@@ -777,11 +777,11 @@ Trong chiến đấu Realtime (20Hz server authoritative), đạo hữu có th�
 
 - **Điều kiện xuất hiện nút Kết Ấn (Bắt thú):**
   1. Mục tiêu là quái thú dã ngoại (`EntityMonster`) và cho phép bắt (`is_capturable !== false`).
-  2. Quái đã bị áp chế: **HP $\le 25\%$** HOẶC đang chịu khống chế cứng (`STUN`, `FREEZE`, `PETRIFY`, `BIND`, `ROOT`).
-  3. Cự ly tiếp cận: $\le 5.0 - 6.0$m.
+  2. Quái còn sống; không cần giảm HP hay khống chế trước. Khống chế cứng vẫn làm tăng nhẹ xác suất bắt.
+  3. Cự ly tiếp cận: $\le 6.0$m.
   4. Người chơi sở hữu Cổ Nô Đạo (Cổ có hiệu ứng `CAPTURE_BONUS`, phái `Enslavement Path`, tag `enslave` hoặc Cổ Ngự Xích).
 - **Cơ chế Dẫn Kênh (Channeling 3.0s = 60 ticks):**
-  - Cổ sư tiêu hao 20 Chân nguyên, bước vào trạng thái niệm ấn (bị khóa chân `ROOT`).
+  - Cổ sư tiêu hao 5 Chân nguyên và 5 độ no của Cổ Nô Đạo đang trang bị khi bắt đầu niệm ấn (bị khóa chân `ROOT`). Chi phí không hoàn lại nếu bị ngắt.
   - **Ngắt niệm (Interrupt):** Nếu Cổ sư di chuyển, bị trúng đòn sát thương từ bất kỳ nguồn nào hoặc trúng khống chế, quá trình kết ấn lập tức bị ngắt.
 - **Xác suất bắt thành công:**
   - $P_{\text{capture}} = \text{clamp}\big((P_{\text{base}} \times F_{\text{rank}} \times F_{\text{hp}} \times F_{\text{cc}} \times F_{\text{soul}}) + B_{\text{gu}}, \; 0.02, \; 0.95\big)$.
@@ -1281,6 +1281,31 @@ Projectile của chiêu định hướng dừng tại phạm vi `range` của pr
 Status realtime có thời lượng và lịch tick do server quản lý; điều kiện khống chế, hồi chiêu, tài nguyên và sát thương được kiểm tra authoritative. Tài liệu chi tiết về profile/effect đang chạy nằm trong `docs/GAME_DATA.md` và `docs/mmo/gu-realtime-schema.md`. Những mechanic legacy theo lượt không có ở hai contract này chỉ là lịch sử, không mô tả runtime hiện tại.
 
 Tiên Cổ phòng thủ: bật dạng biến thân bằng nút riêng, có thời gian thi triển theo profile; khống chế cứng ngắt quá trình biến thân, sát thương thường không ngắt. Phòng thủ và tiêu mana liên tục bắt đầu sau khi biến thân hoàn tất; trong dạng biến thân có chiêu riêng, trạng thái tự kết thúc khi tắt hoặc hết mana.
+
+### Tiên Cổ Phòng trong chiến đấu Realtime (Authoritative Zone Sim)
+
+- **Dung Nhập & Giải Trừ (`Alt+G` / Nút Nhanh HUD):**
+  - Cổ Tiên có Tiên Cổ Phòng đang trang bị và còn độ bền (>0%) có thể kích hoạt dung nhập qua phím tắt `Alt+G` hoặc nút trên thanh hành động.
+  - Điều kiện: Không bị dính trạng thái khống chế cứng (`STUN`, `FREEZE`, `SLEEP`), tiêu hao 50 Chân Nguyên khởi động.
+  - Quá trình vận khí: 40 tick (2.0s). Bị khống chế cứng trong thời gian này sẽ hủy bỏ tiến trình dung nhập.
+  - Khi dung nhập hoàn tất: Nhân vật phóng đại kích thước (hitbox 1.8x), sở hữu lượng sinh lực Cổ Phòng độc lập (Form HP 4500, Thủ 80, Giảm sát thương 25%). Toàn bộ thanh chiêu thức tạm thời được thay thế bằng **Bộ 6 Chiêu Thức Trận Kích**:
+    1. **Cổ Pháo Liên Châu [1]**: Pháo kích tầm xa 12 ô, gây sát thương định hướng xuyên thấu.
+    2. **Trận Tràng Xung Kích [2]**: Xung kích diện rộng hình nón 8 ô, đẩy lùi và làm chậm mục tiêu.
+    3. **Kim Quang Hộ Thể [3]**: Hộ thuẫn hộ thể kiên cố hấp thụ sát thương.
+    4. **Trận Đạo Tu Bổ [4]**: Kích hoạt trận đạo tu bổ trực tiếp thể lượng (Form HP) của Tiên Cổ Phòng.
+    5. **Thần Uy Tuyệt Diệt [5]**: Chiêu thức tuyệt sát trận đạo diện rộng trong bán kính 6 ô xung quanh Cổ Phòng.
+    6. **Rời Tiên Cổ Phòng [6]**: Giải trừ dung nhập an toàn, khôi phục lại hình thái Cổ Tiên và bộ kỹ năng bản thân.
+
+- **Cơ chế Hấp Thu 100% Sát Thương & Vỡ Phòng (Structural Breach):**
+  - Tiên Cổ Phòng hấp thu trọn vẹn 100% mọi sát thương nhận vào tầng Form HP; hoàn toàn không có sát thương xuyên thấu (spillover) vào HP người chơi.
+  - **Vỡ Phòng**: Khi Form HP bị đánh sập về 0:
+    - Độ bền Tiên Cổ Phòng rơi về **0%**, lập tức tự động tháo trang bị (`is_equipped = false`).
+    - Cổ Sư bị bắn văng ra ngoài, chịu chấn động phản phệ mất ngay **30% Max HP** (tối thiểu còn 1 HP) và bị **Choáng (`STUN`) 3 giây (60 tick)**.
+    - Toàn bộ Cổ trận nhãn (`core_gu_instances`) chịu 30 điểm sát thương chấn động độ bền.
+
+- **Tiêu hao Duy Trì (Upkeep) & Suy Hao Độ Bền An Toàn (Safe Exit):**
+  - Chi phí duy trì Chân Nguyên mỗi giây dựa trên rank Tiên Cổ Phòng và rank Cổ Tiên: $U_{\text{base}} \times \mathcal{M}(R_H, R_P) \times F_{\text{sub}}$. Nếu cạn kiệt Chân Nguyên, Cổ Phòng tự động giải trừ và người chơi chịu trạng thái suy kiệt.
+  - Khi chủ động rời phòng an toàn qua phím 6 hoặc `Alt+G`, Cổ Phòng chỉ chịu hao mòn độ bền bậc thang: $0.5\% + 10\% \times (1 - \text{FormHP}/\text{MaxFormHP})$.
 
 ### Cơ chế ngoài chiến đấu (Handlers)
 1. `ON_CONSUME / ADD_LIFESPAN_YEARS (params.value)` — tiêu hao để cộng vĩnh viễn N năm tuổi thọ. VD: Thọ Cổ 100 Năm (`value: 100`).

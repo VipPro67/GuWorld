@@ -127,7 +127,6 @@ export const DEFAULT_REALTIME_CONTROL_SETTINGS: RealtimeControlSettings = {
 };
 
 const DEFAULT_SPEED = 4;
-const INTERPOLATION_DELAY_TICKS = 2;
 const MAX_SELF_RECONCILE_LEAD_TICKS = 5;
 const MAX_SELF_LATENCY_MS = 250;
 const INPUT_SEND_INTERVAL = 0.1;
@@ -137,6 +136,74 @@ const INPUT_KEEPALIVE_INTERVAL = 0.15;
  * Owns the realtime network session for the Phaser scene. Snapshots are read on
  * the render side only; the scene never mutates authoritative state.
  */
+export const GU_HOUSE_SKILLS: WorldSkillInfo[] = [
+  {
+    slot: 1,
+    id: "HOUSE_STRIKE_ARTILLERY",
+    name: "Trận Kích Pháo Lôi",
+    mode: "DIRECTION",
+    range: 16.0,
+    mana_cost: 22,
+    cooldown_ticks: 30,
+    windup_ticks: 0,
+  },
+  {
+    slot: 2,
+    id: "HOUSE_STRIKE_TRAMPLE",
+    name: "Kim Cang Xung Kích",
+    mode: "DIRECTION",
+    range: 10.0,
+    mana_cost: 33,
+    cooldown_ticks: 80,
+    windup_ticks: 0,
+    move_distance: 10.0,
+    move_duration_ticks: 8,
+    move_behavior: "IMPACT",
+  },
+  {
+    slot: 3,
+    id: "HOUSE_STRIKE_BARRIER",
+    name: "Hộ Thể Quang Thuẫn",
+    mode: "SELF",
+    range: 0,
+    mana_cost: 49,
+    cooldown_ticks: 200,
+    windup_ticks: 0,
+  },
+  {
+    slot: 4,
+    id: "HOUSE_STRIKE_MENDING",
+    name: "Đại Trận Tu Bổ",
+    mode: "SELF",
+    range: 0,
+    mana_cost: 65,
+    cooldown_ticks: 300,
+    windup_ticks: 20,
+  },
+  {
+    slot: 5,
+    id: "HOUSE_STRIKE_ULTIMATE",
+    name: "Đại Diệt Tuyệt Trận",
+    mode: "GROUND",
+    range: 12.0,
+    radius_units: 6.5,
+    shape: "CIRCLE",
+    mana_cost: 120,
+    cooldown_ticks: 600,
+    windup_ticks: 30,
+  },
+  {
+    slot: 6,
+    id: "REVERT_GU_HOUSE",
+    name: "Rời Tiên Cổ Phòng",
+    mode: "SELF",
+    range: 0,
+    mana_cost: 0,
+    cooldown_ticks: 20,
+    windup_ticks: 0,
+  },
+];
+
 export class WorldRuntime {
   private socket: WorldTransportLike;
   private readonly transportOptions: WorldTransportOptions | undefined;
@@ -487,7 +554,7 @@ export class WorldRuntime {
   public getEntities(): RuntimeEntity[] {
     const snapshot = this.snapshot;
     if (!snapshot) return [];
-    const renderTick = Math.max(0, this.clock.estimatedTick() - INTERPOLATION_DELAY_TICKS);
+    const renderTick = Math.max(0, this.clock.estimatedTick() - this.interpolator.getInterpolationDelayTicks());
     const entities: RuntimeEntity[] = [];
     for (const entity of snapshot.entities) {
       const maxHp = entity.max_hp ?? 100;
@@ -568,6 +635,11 @@ export class WorldRuntime {
   }
 
   public getSkills(): WorldSkillInfo[] {
+    const self = this.snapshot?.entities.find((entity) => entity.entity_id === this.selfId);
+    const transform = self?.transformation;
+    if (transform?.active && transform.form_kind === "GU_HOUSE") {
+      return GU_HOUSE_SKILLS.map((skill) => ({ ...skill }));
+    }
     return this.welcome?.skills ? this.welcome.skills.map((skill) => ({ ...skill })) : [];
   }
 
@@ -636,6 +708,7 @@ export class WorldRuntime {
     status: WorldRuntimeStatus;
     tick: number;
     tickRate: number;
+    interpolationDelayTicks: number;
     entities: number;
     projectiles: number;
     selfX: number;
@@ -658,6 +731,7 @@ export class WorldRuntime {
       status: this.status,
       tick: this.snapshot?.tick ?? 0,
       tickRate: this.clock.getTickRate(),
+      interpolationDelayTicks: this.interpolator.getInterpolationDelayTicks(),
       entities: this.snapshot?.entities.length ?? 0,
       projectiles: this.snapshot?.projectiles?.length ?? 0,
       selfX: self.x,
@@ -768,6 +842,11 @@ export class WorldRuntime {
   public setCompanionStance(stance: "DEFEND" | "FOCUS" | "FOLLOW", focusTargetId?: string): number | null {
     if (this.status !== "joined") return null;
     return this.socket.sendCompanionStance(stance, focusTargetId);
+  }
+
+  public integrateGuHouse(action: "ENTER" | "EXIT"): number | null {
+    if (this.status !== "joined") return null;
+    return this.socket.sendGuHouseIntegrate(action);
   }
 
   private bindSocket(): void {

@@ -287,10 +287,17 @@ func (w *World) applySelfSupportLocked(caster *Entity, skill combat.Skill) {
 		if w.hasStatus(caster, "BURN") {
 			healVal *= 0.5
 		}
-		before := caster.Vitals.HP
-		caster.Vitals.HP = math.Min(caster.Vitals.MaxHP, caster.Vitals.HP+healVal)
-		caster.Revision++
-		w.emitEvent(combat.Event{Type: combat.EventHealApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: caster.Vitals.HP - before, HP: caster.Vitals.HP})
+		if caster.Transformation.Active && caster.Transformation.FormKind == TransformationGuHouse && caster.Transformation.MaxFormHP > 0 {
+			before := caster.Transformation.CurrentFormHP
+			caster.Transformation.CurrentFormHP = math.Min(caster.Transformation.MaxFormHP, caster.Transformation.CurrentFormHP+healVal)
+			caster.Revision++
+			w.emitEvent(combat.Event{Type: combat.EventHealApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: caster.Transformation.CurrentFormHP - before, HP: caster.Transformation.CurrentFormHP})
+		} else {
+			before := caster.Vitals.HP
+			caster.Vitals.HP = math.Min(caster.Vitals.MaxHP, caster.Vitals.HP+healVal)
+			caster.Revision++
+			w.emitEvent(combat.Event{Type: combat.EventHealApplied, SourceID: string(caster.ID), TargetID: string(caster.ID), SkillID: skill.ID, Amount: caster.Vitals.HP - before, HP: caster.Vitals.HP})
+		}
 	}
 	if skill.Shield > 0 {
 		caster.Vitals.Shield += skill.Shield

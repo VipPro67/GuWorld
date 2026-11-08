@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/realtime/combat"
 )
 
@@ -244,6 +245,10 @@ func (w *World) tickTransformationLocked() {
 		// 1. Check pending windup completion
 		if entity.Transformation.IsWindup {
 			if w.tick >= entity.Transformation.WindupEndTick {
+				if entity.Transformation.FormKind == TransformationGuHouse {
+					w.completeGuHouseTransformationLocked(entity)
+					continue
+				}
 				// Lookup authored form config or default
 				rec, found := GetTransformationForm(entity.Transformation.FormID)
 				req := FormActivationRequest{
@@ -348,7 +353,23 @@ func (w *World) applyFormDamageLocked(target *Entity, incomingDamage float64) fl
 		reducedDamage *= (1.0 - math.Min(0.9, target.Transformation.DamageReduction))
 	}
 
-	// Deduct from Form HP layer if available
+	// For Gu House: 100% absorption without spillover
+	if target.Transformation.FormKind == TransformationGuHouse {
+		if target.Transformation.CurrentFormHP > 0 {
+			if target.Transformation.CurrentFormHP > reducedDamage {
+				target.Transformation.CurrentFormHP -= reducedDamage
+				target.Revision++
+				return 0 // Absorbed completely
+			}
+			// Structural Breach: Form HP drops to 0, absorbs all incoming damage (no spillover), triggers breach backlash
+			target.Transformation.CurrentFormHP = 0
+			w.triggerGuHouseBreachLocked(target)
+			return 0 // No spillover!
+		}
+		return 0
+	}
+
+	// Deduct from Form HP layer if available (standard Full / Partial metamorphosis)
 	if target.Transformation.CurrentFormHP > 0 {
 		if target.Transformation.CurrentFormHP >= reducedDamage {
 			target.Transformation.CurrentFormHP -= reducedDamage
@@ -364,6 +385,28 @@ func (w *World) applyFormDamageLocked(target *Entity, incomingDamage float64) fl
 	}
 
 	return reducedDamage
+}
+
+func (w *World) triggerGuHouseBreachLocked(entity *Entity) {
+	if entity == nil {
+		return
+	}
+	w.revertTransformationLocked(entity, "structural_breach", false)
+
+	// Backlash damage: 30% of entity.Vitals.MaxHP, retaining minimum 1 HP
+	backlash := entity.Vitals.MaxHP * 0.30
+	entity.Vitals.HP = math.Max(1.0, entity.Vitals.HP-backlash)
+
+	// Stun for 60 ticks (3.0s)
+	w.applyStatusLocked(nil, entity, combat.Skill{
+		StatusID:            "STUN",
+		StatusDurationTicks: 60,
+		StatusDebuff:        true,
+	})
+
+	// Severe damage: Gu house durability drops to 0
+	entity.GuHouseDurability = 0
+	entity.Revision++
 }
 
 // RevertTransformation restores the entity back to standard form.
@@ -383,13 +426,28 @@ func (w *World) revertTransformationLocked(entity *Entity, reason string, applyE
 		entity.Radius = entity.Transformation.OriginalRadius
 	}
 
-	// Restore human skill bar if Full Metamorphosis was active
-	if entity.Transformation.FormKind == TransformationFull && entity.Transformation.SavedSkills.Skills[1].ID != "" {
+	// Restore human skill bar if Full Metamorphosis or Gu House was active
+	if (entity.Transformation.FormKind == TransformationFull || entity.Transformation.FormKind == TransformationGuHouse) && entity.Transformation.SavedSkills.Skills[1].ID != "" {
 		RestoreSkillPalette(entity, w.tick, entity.Transformation.SavedSkills)
 	}
 
 	formID := entity.Transformation.FormID
-	isBroken := reason == "form_broken" || reason == "mana_depleted"
+	formKind := entity.Transformation.FormKind
+	maxFormHP := entity.Transformation.MaxFormHP
+	currentFormHP := entity.Transformation.CurrentFormHP
+	isBroken := reason == "form_broken" || reason == "mana_depleted" || reason == "structural_breach"
+
+	if formKind == TransformationGuHouse && maxFormHP > 0 {
+		if reason == "structural_breach" {
+			entity.GuHouseDurability = 0
+		} else {
+			// Tiered durability degradation on safe exit: 0.5% min + 10% * (1 - Current/Max)
+			hpRatio := math.Max(0, math.Min(1, currentFormHP/maxFormHP))
+			wear := 0.5 + 10.0*(1.0-hpRatio)
+			entity.GuHouseDurability = math.Max(0, entity.GuHouseDurability-wear)
+			entity.GuHouseWearDamage += wear
+		}
+	}
 
 	entity.Transformation = TransformationState{
 		Active:         false,
@@ -501,4 +559,239 @@ func GetFlameBearFormProfile() FormSkillProfile {
 			},
 		},
 	}
+}
+
+// CalculateGuHouseUpkeep computes the mana upkeep per second for an Immortal Gu House.
+func CalculateGuHouseUpkeep(houseRank, playerRank, subRank, coreCount, auxCount int) float64 {
+	if houseRank <= 0 {
+		houseRank = 6
+	}
+	if playerRank <= 0 {
+		playerRank = 6
+	}
+	if coreCount <= 0 {
+		coreCount = 1
+	}
+	// 1. U_base = (N_core * 0.04 + N_aux * 0.0005) * S_aux
+	uBaseRaw := float64(coreCount)*0.04 + float64(auxCount)*0.0005
+	sAux := 1.0
+	neededAux := 30 * coreCount
+	if auxCount < neededAux {
+		sAux += float64(neededAux-auxCount) / float64(100*coreCount)
+	}
+	uBase := uBaseRaw * sAux
+
+	// 2. F_sub = 1.0 - (SubRank - 1) * 0.05
+	if subRank < 1 {
+		subRank = 1
+	} else if subRank > 4 {
+		subRank = 4
+	}
+	fSub := 1.0 - float64(subRank-1)*0.05
+
+	// 3. M(R_H, R_P)
+	m := 1.0
+	rankDiff := houseRank - playerRank
+	if rankDiff > 0 {
+		// Player rank lower than house rank: penalty
+		m = math.Pow(100.0, float64(rankDiff)) * math.Pow(1.5, float64(rankDiff))
+	} else if rankDiff < 0 {
+		// Player rank higher than house rank: discount
+		pDiff := float64(-rankDiff)
+		m = math.Pow(100.0, float64(rankDiff)) * math.Pow(0.8, pDiff)
+	}
+
+	return uBase * m * fSub
+}
+
+// BuildGuHouseSkillProfile generates the standard 6-slot House Strike palette.
+func BuildGuHouseSkillProfile(house models.GuHouseCombatProfile) FormSkillProfile {
+	rank := house.Rank
+	if rank <= 0 {
+		rank = 6
+	}
+	coreCount := len(house.CoreGuIDs)
+	if coreCount <= 0 {
+		coreCount = 1
+	}
+	auxCount := house.AuxGuCount
+
+	// Slot 1: Artillery Strike (Pháo Kích)
+	baseDmg := float64(rank*120 + coreCount*80)
+	for _, act := range house.Actions {
+		if act.BaseDamage > baseDmg {
+			baseDmg = act.BaseDamage
+		}
+	}
+	slot1Dmg := baseDmg * (1.0 + float64(auxCount)*0.005)
+	slot1 := combat.Skill{
+		Slot:             1,
+		ID:               "HOUSE_STRIKE_ARTILLERY",
+		Name:             "Trận Kích Pháo Lôi",
+		Mode:             combat.ModeDirection,
+		Range:            16.0,
+		Damage:           slot1Dmg,
+		ManaCost:         float64(10 + rank*2),
+		CooldownTicks:    30, // 1.5s
+		ProjectileSpeed:  24.0,
+		ProjectileRadius: 0.6,
+		ProjectileTicks:  40,
+	}
+	if len(house.CoreGuIDs) > 0 {
+		slot1.GuInstanceID = house.CoreGuIDs[0]
+	}
+
+	// Slot 2: Siege Trample (Xung Kích)
+	slot2Dmg := float64(rank*80 + auxCount*2)
+	slot2 := combat.Skill{
+		Slot:              2,
+		ID:                "HOUSE_STRIKE_TRAMPLE",
+		Name:              "Kim Cang Xung Kích",
+		Mode:              combat.ModeDirection,
+		Range:             10.0,
+		Damage:            slot2Dmg,
+		ManaCost:          float64(15 + rank*3),
+		CooldownTicks:     80, // 4.0s
+		MoveDistance:      10.0,
+		MoveDurationTicks: 8,
+		MoveBehavior:      "IMPACT",
+		KnockbackDistance: 3.5,
+	}
+
+	// Slot 3: Fortress Barrier (Đại Trận Hộ Thể)
+	shieldAmount := house.MaxHouseHP * 0.20
+	if shieldAmount <= 0 {
+		shieldAmount = 900
+	}
+	slot3 := combat.Skill{
+		Slot:                3,
+		ID:                  "HOUSE_STRIKE_BARRIER",
+		Name:                "Hộ Thể Quang Thuẫn",
+		Mode:                combat.ModeSelf,
+		Shield:              shieldAmount,
+		StatusDurationTicks: 200, // 10s
+		ManaCost:            float64(25 + rank*4),
+		CooldownTicks:       200, // 10s
+	}
+	if len(house.CoreGuIDs) > 1 {
+		slot3.GuInstanceID = house.CoreGuIDs[1]
+	}
+
+	// Slot 4: Structural Mending (Tu Bổ Kết Cấu)
+	healAmount := house.MaxHouseHP * 0.15
+	if healAmount <= 0 {
+		healAmount = 675
+	}
+	slot4 := combat.Skill{
+		Slot:          4,
+		ID:            "HOUSE_STRIKE_MENDING",
+		Name:          "Đại Trận Tu Bổ",
+		Mode:          combat.ModeSelf,
+		Heal:          healAmount,
+		WindupTicks:   20, // 1.0s
+		ManaCost:      float64(35 + rank*5),
+		CooldownTicks: 300, // 15s
+	}
+
+	// Slot 5: Ultimate Destruction (Thần Thông Tuyệt Diệt)
+	slot5Dmg := float64(rank*250 + coreCount*150 + auxCount*10)
+	slot5 := combat.Skill{
+		Slot:           5,
+		ID:             "HOUSE_STRIKE_ULTIMATE",
+		Name:           "Đại Diệt Tuyệt Trận",
+		Mode:           combat.ModeGround,
+		Range:          12.0,
+		Radius:         6.5,
+		Damage:         slot5Dmg,
+		WindupTicks:    30, // 1.5s
+		ManaCost:       float64(60 + rank*10),
+		CooldownTicks:  600, // 30s
+		GuComponentIDs: house.CoreGuIDs,
+	}
+
+	// Slot 6: Disembark (Rời Tiên Cổ Phòng)
+	slot6 := combat.Skill{
+		Slot:          6,
+		ID:            "REVERT_GU_HOUSE",
+		Name:          "Rời Tiên Cổ Phòng",
+		Mode:          combat.ModeSelf,
+		ManaCost:      0,
+		CooldownTicks: 20, // 1.0s
+	}
+
+	return FormSkillProfile{
+		FormID:   house.ID,
+		FormName: house.Name,
+		Skills:   [7]combat.Skill{{}, slot1, slot2, slot3, slot4, slot5, slot6},
+	}
+}
+
+func (w *World) completeGuHouseTransformationLocked(entity *Entity) {
+	if entity == nil || entity.EquippedGuHouse == nil {
+		return
+	}
+	house := entity.EquippedGuHouse
+
+	if entity.Transformation.OriginalRadius == 0 {
+		entity.Transformation.OriginalRadius = entity.Radius
+	}
+
+	radiusMult := 1.8
+	modelScale := 1.8
+
+	maxFormHP := house.MaxHouseHP
+	if maxFormHP <= 0 {
+		maxFormHP = 4500
+	}
+	formDefense := house.HouseDefense
+	if formDefense <= 0 {
+		formDefense = 80
+	}
+	dmgReduction := house.DamageReduction
+	if dmgReduction <= 0 {
+		dmgReduction = 0.25
+	}
+
+	playerRank := house.Rank
+	subRank := 1
+	if entity.Companion.Rank > 0 {
+		playerRank = entity.Companion.Rank
+	}
+
+	upkeepPerSec := CalculateGuHouseUpkeep(house.Rank, playerRank, subRank, len(house.CoreGuIDs), house.AuxGuCount)
+
+	profile := BuildGuHouseSkillProfile(*house)
+	savedSkills := SwapSkillPalette(entity, w.tick, profile)
+
+	entity.Transformation = TransformationState{
+		Active:              true,
+		FormID:              house.ID,
+		FormName:            house.Name,
+		FormKind:            TransformationGuHouse,
+		ModelScale:          modelScale,
+		CollisionRadiusMult: radiusMult,
+		OriginalRadius:      entity.Transformation.OriginalRadius,
+		MaxFormHP:           maxFormHP,
+		CurrentFormHP:       maxFormHP,
+		FormDefenseBonus:    formDefense,
+		DamageReduction:     dmgReduction,
+		Upkeep: UpkeepCost{
+			ManaPerTick: upkeepPerSec / float64(TickRate),
+		},
+		ExpireTick:  0,
+		IsWindup:    false,
+		SavedSkills: savedSkills,
+	}
+
+	// Scale collision radius
+	entity.Radius = entity.Transformation.OriginalRadius * radiusMult
+	entity.Revision++
+
+	w.emitEvent(combat.Event{
+		Type:     combat.EventTransformationStarted,
+		SourceID: string(entity.ID),
+		TargetID: string(entity.ID),
+		SkillID:  house.ID,
+		Reason:   "gu_house_complete",
+	})
 }

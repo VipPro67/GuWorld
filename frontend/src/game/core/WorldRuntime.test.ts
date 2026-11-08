@@ -124,6 +124,11 @@ class FakeTransport implements WorldTransportLike {
     return this.seq++;
   }
 
+  public sendGuHouseIntegrate(action: "ENTER" | "EXIT"): number | null {
+    this.messagesSent += 1;
+    return this.seq++;
+  }
+
   public emitSnapshot(payload: WorldSnapshotPayload): void {
     this.messages += 1;
     const result = this.buffer.apply(payload);
@@ -250,6 +255,23 @@ test("dash snapshots control self position until DASH_ENDED", async () => {
   fake.emitEvent({ event_id: 2, tick: 11, type: "DASH_ENDED", source_id: "player-1", payload: { skill_id: "DASH" } });
   runtime.update(0.1);
   assert.ok(runtime.getSelfPosition().y > 10, "ordinary prediction did not resume after dash");
+  runtime.disconnect();
+});
+
+test("WorldRuntime increases remote interpolation delay after a delayed snapshot", async () => {
+  const fake = new FakeTransport();
+  const runtime = new WorldRuntime({ transportFactory: () => fake });
+  await runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+
+  fake.emitSnapshot({
+    tick: 18, ack_seq: 0, baseline_id: 1, base_tick: 10, is_baseline: false,
+    entities: [{ entity_id: "remote-1", entity_revision: 1, x: 28, y: 20, hp: 80 }],
+    removed: [],
+  });
+
+  const remote = runtime.getEntities().find((entity) => entity.id === "remote-1");
+  assert.equal(runtime.getDebugStats().interpolationDelayTicks, 6);
+  assert.ok(remote && remote.x > 21.8 && remote.x < 22.4, `unexpected interpolated x=${remote?.x}`);
   runtime.disconnect();
 });
 
@@ -439,4 +461,60 @@ test("application rejections surface the admission code without another transpor
     assert.equal(runtime.getErrorCode(), code);
     runtime.disconnect();
   }
+});
+
+test("WorldRuntime swaps skill palette to 6 House Strikes when in GU_HOUSE transformation", async () => {
+  const fake = new FakeTransport();
+  const runtime = new WorldRuntime({ transportFactory: () => fake });
+  await runtime.connect({ zone_id: "starter", map_version: "map-1", content_version: "content-1" });
+
+  // Human skills initially
+  assert.equal(runtime.getSkills().length, 2);
+  assert.equal(runtime.getSkills()[0].name, "Bolt");
+
+  // Push snapshot with GU_HOUSE transformation (tick must be >= baseline server_tick 10)
+  fake.emitSnapshot({
+    tick: 11,
+    ack_seq: 0,
+    baseline_id: 1,
+    base_tick: 10,
+    is_baseline: false,
+    entities: [
+      {
+        entity_id: "player-1",
+        entity_revision: 2,
+        x: 10,
+        y: 10,
+        hp: 100,
+        transformation: {
+          active: true,
+          form_id: "gu_house_1",
+          form_name: "Thất Tinh Lâu",
+          form_kind: "GU_HOUSE",
+          model_scale: 1.8,
+          collision_radius: 0.9,
+          max_form_hp: 4500,
+          current_form_hp: 4500,
+          is_windup: false,
+        },
+      },
+    ],
+  });
+
+  const houseSkills = runtime.getSkills();
+  assert.equal(houseSkills.length, 6);
+  assert.equal(houseSkills[0].id, "HOUSE_STRIKE_ARTILLERY");
+  assert.equal(houseSkills[0].name, "Trận Kích Pháo Lôi");
+  assert.equal(houseSkills[1].id, "HOUSE_STRIKE_TRAMPLE");
+  assert.equal(houseSkills[1].name, "Kim Cang Xung Kích");
+  assert.equal(houseSkills[2].id, "HOUSE_STRIKE_BARRIER");
+  assert.equal(houseSkills[2].name, "Hộ Thể Quang Thuẫn");
+  assert.equal(houseSkills[3].id, "HOUSE_STRIKE_MENDING");
+  assert.equal(houseSkills[3].name, "Đại Trận Tu Bổ");
+  assert.equal(houseSkills[4].id, "HOUSE_STRIKE_ULTIMATE");
+  assert.equal(houseSkills[4].name, "Đại Diệt Tuyệt Trận");
+  assert.equal(houseSkills[5].id, "REVERT_GU_HOUSE");
+  assert.equal(houseSkills[5].name, "Rời Tiên Cổ Phòng");
+
+  runtime.disconnect();
 });

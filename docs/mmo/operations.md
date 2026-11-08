@@ -77,6 +77,15 @@ staging-canary and on-call evidence.
 - Existing admin monitor endpoints cover system/request traces and realtime UI
   subscription stats.
 - Client **F3** debug HUD shows tick/FPS/network counters/prediction correction.
+- Remote actors use an adaptive 2–6 tick interpolation buffer (100–300 ms at
+  20 Hz) and at most 2 ticks of extrapolation from recent, plausible movement.
+  Large snapshot gaps are not extrapolated across; compare F3 gap/stall metrics
+  with the zone's `LastStep` before attributing them to simulation load. This
+  client smoothing reduces visible jitter but does not repair transport stalls.
+- The WebTransport server emits rate-limited `[realtime-slow-dispatch]` warnings
+  when writing a snapshot plus its events takes at least 100 ms. Correlate these
+  with F3 gaps and zone `LastStep` to distinguish simulation cost from output
+  backpressure.
 - Startup logs record map hash, monster count, instance count and compiled Gu
   profile hash.
 
