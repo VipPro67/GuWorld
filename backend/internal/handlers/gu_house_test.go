@@ -79,3 +79,36 @@ func TestCompileKillerMoveCombatProfile(t *testing.T) {
 		t.Fatalf("expected target SINGLE, got %s", prof.TargetType)
 	}
 }
+
+func TestKillerMoveStarvingComponentAvailability(t *testing.T) {
+	ownedSet := map[string]ownedKillerMoveGu{
+		"inst_1": {InstanceID: "inst_1", GuID: "gu_a", Rank: 1, Hunger: 100, State: "ACTIVE"},
+		"inst_2": {InstanceID: "inst_2", GuID: "gu_b", Rank: 1, Hunger: 0, State: "ACTIVE"},
+	}
+
+	components := []killerMoveComponent{
+		{InstanceID: "inst_1", GuID: "gu_a", Rank: 1},
+		{InstanceID: "inst_2", GuID: "gu_b", Rank: 1},
+	}
+
+	available, hasStarvingGu, missingGu, _ := evaluateKillerMoveComponents(components, ownedSet)
+	if !available {
+		t.Fatalf("expected available=true when all components are owned and alive, got available=false")
+	}
+	if !hasStarvingGu {
+		t.Fatalf("expected has_starving_gu=true when a component has hunger=0, got false")
+	}
+	if len(missingGu) > 0 {
+		t.Fatalf("expected 0 missing gu, got %d", len(missingGu))
+	}
+
+	// Missing component test
+	delete(ownedSet, "inst_2")
+	available2, _, missingGu2, _ := evaluateKillerMoveComponents(components, ownedSet)
+	if available2 {
+		t.Fatalf("expected available=false when component is missing, got true")
+	}
+	if len(missingGu2) != 1 || missingGu2[0] != "inst_2" {
+		t.Fatalf("expected missing gu inst_2, got %v", missingGu2)
+	}
+}

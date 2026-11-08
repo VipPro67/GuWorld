@@ -1288,7 +1288,7 @@ return (
 
             {/* Chi tiết ô chọn / Xây dựng HOẶC Vượt Kiếp */}
             <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 flex flex-col justify-between space-y-6">
-              {activeTribulation && aperture?.state === "TRIBULATION_ACTIVE" ? (
+              {activeTribulation ? (
                 // COMBAT AND RESOLVE CONTROLS FOR TRIBULATION
                 <div className="space-y-6">
                   {/* Calamity general info / combat actions */}

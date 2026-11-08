@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import { BookOpenCheck, Check, GripVertical, Plus, Save, Search, ShieldAlert, Sparkles, Trash2, WandSparkles, Castle } from "lucide-react";
+import { BookOpenCheck, Check, GripVertical, Plus, Save, Search, ShieldAlert, Sparkles, Trash2, WandSparkles, Castle, AlertCircle } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
 import type { KillerMoveDraft, KillerMoveEffectOption, KillerMovePreview } from "@/store/slices/killerMovesSlice";
 import { GuHousePanel } from "@/components/GuHousePanel";
@@ -273,12 +273,31 @@ export function KillerMovesPanel() {
           {moves.map((move) => <article key={move.id} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3.5">
             <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-bold text-zinc-100">{move.name}</h4><p className="mt-1 text-[10px] text-zinc-500">Rank {move.main_gu_rank} · {move.components.length} Cổ · {move.combat_profile?.target_type === "ALL_ENEMIES" ? "AoE Toàn thể" : move.combat_profile?.target_type === "ROW" ? "Hàng ngang" : "Đơn thể"} · Hồi chiêu {((move.combat_profile?.realtime_cooldown_ms ?? 0) / 1000).toFixed(1)} giây</p></div>{move.is_equipped && <span className="rounded-full border border-emerald-900 bg-emerald-950/40 px-2 py-0.5 text-[9px] text-emerald-300">Đang trang bị</span>}</div>
             <div className="mt-3 flex flex-wrap gap-1.5">{move.components.map((component) => <span key={component.instance_id} className="rounded-md bg-zinc-900 px-2 py-1 text-[9px] text-zinc-400">{guName(component.instance_id, component.rank)}</span>)}</div>
-            <div className="mt-3 flex items-center justify-between text-[10px] font-mono"><span className={move.available ? "text-emerald-400" : "text-red-300"}>{move.available ? <><Check className="mr-1 inline h-3 w-3" />Sẵn sàng</> : "Thiếu Cổ thành phần"}</span><span className="text-cyan-300">Thành thạo {move.mastery_level} · {move.mastery_xp} XP</span></div>
-            <div className={`mt-2 text-[10px] ${move.realtime_supported ? "text-emerald-300" : "text-amber-300"}`}>{move.realtime_supported ? "Có thể cast realtime" : move.realtime_unavailable_reason ?? "Effect chưa có executor realtime"}</div>
+            <div className="mt-3 flex items-center justify-between text-[10px] font-mono">
+              <span className={!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-400" : "text-emerald-400"}>
+                {!move.available ? (
+                  <><ShieldAlert className="mr-1 inline h-3 w-3" />Thiếu Cổ thành phần</>
+                ) : move.has_starving_gu ? (
+                  <><AlertCircle className="mr-1 inline h-3 w-3" />Cần cho Cổ ăn</>
+                ) : (
+                  <><Check className="mr-1 inline h-3 w-3" />Sẵn sàng</>
+                )}
+              </span>
+              <span className="text-cyan-300">Thành thạo {move.mastery_level} · {move.mastery_xp} XP</span>
+            </div>
+            <div className={`mt-2 text-[10px] ${!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-300" : move.realtime_supported ? "text-emerald-300" : "text-amber-300"}`}>
+              {!move.available
+                ? (move.realtime_unavailable_reason || "Thiếu Cổ thành phần")
+                : move.has_starving_gu
+                  ? (move.realtime_unavailable_reason || "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)")
+                  : move.realtime_supported
+                    ? "Có thể cast realtime"
+                    : (move.realtime_unavailable_reason ?? "Effect chưa có executor realtime")}
+            </div>
             <div className="mt-2 text-[10px] text-zinc-500">Thành công hiện tại: <span className="text-amber-200">{formatPercent(move.success_chance)}</span> · Hòa hợp {formatPercent(move.harmony)}</div>
             <div className="mt-3 flex gap-2">
               <button onClick={() => void toggleEquip(move.id)} disabled={!move.available || (!move.is_equipped && equippedCount>=maxEquipped)} className={`flex-1 rounded-lg border px-2 py-2 text-[10px] font-bold disabled:opacity-40 ${move.is_equipped ? "border-zinc-700 text-zinc-300 hover:bg-zinc-900" : "border-emerald-900 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-950/50"}`}>{move.is_equipped ? "Tháo trang bị" : "Trang bị"}</button>
-              {move.selected_effects.some((effect) => effect.trigger === "ON_USE") && <button onClick={() => void useMove(move.id)} disabled={!move.is_equipped || !move.available} className="rounded-lg border border-violet-900 bg-violet-950/30 px-3 text-[10px] text-violet-200 hover:bg-violet-950/50 disabled:opacity-40">Dùng</button>}
+              {move.selected_effects.some((effect) => effect.trigger === "ON_USE") && <button onClick={() => void useMove(move.id)} disabled={!move.is_equipped || !move.available || move.has_starving_gu} className="rounded-lg border border-violet-900 bg-violet-950/30 px-3 text-[10px] text-violet-200 hover:bg-violet-950/50 disabled:opacity-40">Dùng</button>}
               <button onClick={() => void remove(move.id)} className="rounded-lg border border-red-950 px-3 text-red-400 hover:bg-red-950/30" aria-label="Xóa sát chiêu"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           </article>)}

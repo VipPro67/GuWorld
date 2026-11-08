@@ -41,6 +41,29 @@ func killerMoveComponentMatches(component killerMoveComponent, gu models.GuInsta
 	return gu.InstanceID == component.InstanceID && gu.GuID == component.GuID && gu.Rank == component.Rank && !strings.EqualFold(gu.Status, "DEAD")
 }
 
+func evaluateKillerMoveComponents(components []killerMoveComponent, ownedSet map[string]ownedKillerMoveGu) (bool, bool, []string, []realtimeeffects.KillerMoveComponent) {
+	available := true
+	hasStarvingGu := false
+	var missingGu []string
+	moveComponents := make([]realtimeeffects.KillerMoveComponent, 0, len(components))
+	for _, component := range components {
+		gu, exists := ownedSet[component.InstanceID]
+		if !exists || strings.EqualFold(gu.State, "DEAD") || gu.GuID != component.GuID || gu.Rank != component.Rank {
+			available = false
+			missingGu = append(missingGu, component.InstanceID)
+			continue
+		}
+		if gu.Hunger < 1 {
+			hasStarvingGu = true
+		}
+		moveComponents = append(moveComponents, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: gu.Hunger})
+	}
+	if len(missingGu) > 0 {
+		available = false
+	}
+	return available, hasStarvingGu, missingGu, moveComponents
+}
+
 type killerMoveEffectRef struct {
 	Key        string `json:"key"`
 	Trigger    string `json:"trigger"`
@@ -118,6 +141,7 @@ type storedKillerMove struct {
 	MasteryLevel              int                            `json:"mastery_level"`
 	Equipped                  bool                           `json:"is_equipped"`
 	Available                 bool                           `json:"available"`
+	HasStarvingGu             bool                           `json:"has_starving_gu,omitempty"`
 	RealtimeSupported         bool                           `json:"realtime_supported"`
 	RealtimeUnavailableReason string                         `json:"realtime_unavailable_reason,omitempty"`
 	MissingGu                 []string                       `json:"missing_gu,omitempty"`
@@ -775,7 +799,7 @@ func ListKillerMoves(c *gin.Context) {
 		return
 	}
 	defer rows.Close()
-	owned, err := db.DB.QueryContext(c.Request.Context(), `SELECT id,gu_id,gu_rank,state FROM player_gu WHERE player_id=$1`, playerID)
+	owned, err := db.DB.QueryContext(c.Request.Context(), `SELECT id,gu_id,gu_rank,hunger,state FROM player_gu WHERE player_id=$1`, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh Cổ thành phần"})
 		return
@@ -783,7 +807,7 @@ func ListKillerMoves(c *gin.Context) {
 	ownedSet := map[string]ownedKillerMoveGu{}
 	for owned.Next() {
 		var gu ownedKillerMoveGu
-		if owned.Scan(&gu.InstanceID, &gu.GuID, &gu.Rank, &gu.State) == nil {
+		if err := owned.Scan(&gu.InstanceID, &gu.GuID, &gu.Rank, &gu.Hunger, &gu.State); err == nil {
 			ownedSet[gu.InstanceID] = gu
 		}
 	}
@@ -811,22 +835,11 @@ func ListKillerMoves(c *gin.Context) {
 		m.MasteryLevel = m.MasteryXP / 100
 		currentLevel := gamefx.PathMasteryLevel(masteries[gamefx.CleanPath(m.Path)])
 		m.SuccessChance = killerMoveAdjustedChance(m.SuccessChance, m.CreationPathMasteryLevel, currentLevel, m.MasteryXP)
-		m.Available = true
-		moveComponents := make([]realtimeeffects.KillerMoveComponent, 0, len(m.Components))
-		for _, component := range m.Components {
-			gu, exists := ownedSet[component.InstanceID]
-			if !exists || strings.EqualFold(gu.State, "DEAD") || gu.GuID != component.GuID || gu.Rank != component.Rank {
-				m.Available = false
-				m.MissingGu = append(m.MissingGu, component.InstanceID)
-				continue
-			}
-			if gu.Hunger < 1 {
-				m.Available = false
-				m.RealtimeUnavailableReason = "Cổ thành phần đã hết độ no"
-			}
-			moveComponents = append(moveComponents, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: gu.Hunger})
-		}
-		if !m.Available && m.RealtimeUnavailableReason == "" {
+		available, hasStarvingGu, missingGu, moveComponents := evaluateKillerMoveComponents(m.Components, ownedSet)
+		m.Available = available
+		m.HasStarvingGu = hasStarvingGu
+		m.MissingGu = missingGu
+		if !m.Available {
 			m.RealtimeUnavailableReason = "Thiếu Cổ thành phần"
 		}
 		if m.Available {
@@ -846,6 +859,8 @@ func ListKillerMoves(c *gin.Context) {
 				if m.RealtimeUnavailableReason == "" {
 					m.RealtimeUnavailableReason = "Effect chưa có executor realtime"
 				}
+			} else if m.HasStarvingGu {
+				m.RealtimeUnavailableReason = "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)"
 			}
 		}
 		result = append(result, m)
@@ -1009,7 +1024,7 @@ func UseKillerMove(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Sát chiêu thiếu đúng Cổ thành phần còn sống"})
 			return
 		}
-		if gu.Hunger <= 0 {
+		if gu.Hunger < 1 {
 			c.JSON(http.StatusConflict, gin.H{"error": "Cổ thành phần đã kiệt sức, cần cho ăn trước"})
 			return
 		}

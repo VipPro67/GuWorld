@@ -117,6 +117,7 @@ export interface KillerMoveRecord {
   mastery_level: number;
   is_equipped: boolean;
   available: boolean;
+  has_starving_gu?: boolean;
   realtime_supported?: boolean;
   realtime_unavailable_reason?: string;
   missing_gu?: string[];
