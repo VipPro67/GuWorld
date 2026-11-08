@@ -101,7 +101,7 @@ func roamingMerchantTick(ctx context.Context, database *sql.DB) {
 	// Announce in the spawned region's chat channel (not world) after commit so a
 	// rolled-back spawn never leaks coordinates.
 	for _, n := range notices {
-		_ = SendSystemMessage("region", sql.NullString{String: n.regionID, Valid: true}, fmt.Sprintf(
+		_ = SendSystemMessage("region", sql.NullString{}, fmt.Sprintf(
 			"【Thương Nhân Lang Thang】Một thương nhân bí ẩn vừa xuất hiện tại %s (%d, %d)! Hàng hiếm giá cao, nhanh chân kẻo lỡ.",
 			n.regionName, n.x, n.y))
 	}

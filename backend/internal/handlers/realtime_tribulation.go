@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	realtimeai "github.com/vippro67/GuWorld/backend/internal/realtime/ai"
@@ -358,6 +359,26 @@ func HandleRealtimeTribulationPlayerDeath(ctx context.Context, death realtimewor
 		WHERE id = $6
 	`, exitRegion, exitX, exitY, int(exitX), int(exitY), playerID); err != nil {
 		return fmt.Errorf("persist defeated tribulation exit: %w", err)
+	}
+
+	var apID uuid.UUID
+	var isPlaced bool
+	if queryErr := tx.QueryRowContext(ctx, `SELECT id, is_placed FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&apID, &isPlaced); queryErr == nil && isPlaced {
+		_, _ = tx.ExecContext(ctx, `
+			UPDATE immortal_apertures
+			SET is_placed = false, placed_region = NULL, placed_x = NULL, placed_y = NULL, placed_at = NULL, updated_at = NOW()
+			WHERE id = $1
+		`, apID)
+		_, _ = tx.ExecContext(ctx, `UPDATE aperture_portals SET is_active = false, updated_at = NOW() WHERE aperture_id = $1`, apID)
+		_, _ = tx.ExecContext(ctx, `DELETE FROM aperture_guest_roster WHERE aperture_id = $1`, apID)
+		_ = cache.PublishEventQuick("world:cell", map[string]any{
+			"type":       "portal_despawn",
+			"region_id":  exitRegion,
+			"x":          int(exitX),
+			"y":          int(exitY),
+			"cell_type":  "AperturePortal",
+			"content_id": apID.String(),
+		})
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit defeated tribulation exit: %w", err)

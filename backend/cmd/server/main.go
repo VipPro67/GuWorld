@@ -444,6 +444,11 @@ func main() {
 							logger.S.Errorf("Realtime tribulation player death handling failed for %s: %v", death.TargetID, err)
 							return err
 						}
+					} else if death.ZoneKey.MapID == "aperture_interior" || strings.HasPrefix(death.ZoneKey.InstanceID, "aperture:") {
+						if err := handlers.HandleRealtimeAperturePlayerDeath(callCtx, death); err != nil {
+							logger.S.Errorf("Realtime aperture player death handling failed for %s: %v", death.TargetID, err)
+							return err
+						}
 					} else {
 						if err := handlers.HandleRealtimePlayerDeath(callCtx, death); err != nil {
 							logger.S.Errorf("Realtime player death handling failed for %s: %v", death.TargetID, err)

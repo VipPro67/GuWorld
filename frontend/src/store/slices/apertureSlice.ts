@@ -1523,7 +1523,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   leaveAperture: async () => {
-    const { token } = get();
+    const { token, aperture } = get();
+    if (aperture?.is_placed) {
+      return get().unanchorAperture();
+    }
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {

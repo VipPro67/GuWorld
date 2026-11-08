@@ -402,8 +402,8 @@ func LeaveAperture(c *gin.Context) {
 	// Move guest back to outer world
 	_, err = tx.ExecContext(c.Request.Context(), `
 		UPDATE players
-		SET current_region = $1, map_instance_id = NULL, x = $2, y = $3, world_zone_id = $1, world_instance_id = '',
-		    world_x = $2, world_y = $3, world_safe_x = $2, world_safe_y = $3,
+		SET current_region = $1, map_instance_id = NULL, x = ($2)::int, y = ($3)::int, world_zone_id = $1, world_instance_id = '',
+		    world_x = ($2)::double precision, world_y = ($3)::double precision, world_safe_x = ($2)::double precision, world_safe_y = ($3)::double precision,
 		    world_location_revision = world_location_revision + 1, version = version + 1
 		WHERE id = $4
 	`, returnRegion, int(returnX), int(returnY), playerID)
@@ -592,13 +592,13 @@ func EvictGuest(c *gin.Context) {
 	// Teleport guest outside
 	_, err = tx.ExecContext(c.Request.Context(), `
 		UPDATE players
-		SET current_region = $1, map_instance_id = NULL, x = $2, y = $3, world_zone_id = $1, world_instance_id = '',
-		    world_x = $2, world_y = $3, world_safe_x = $2, world_safe_y = $3,
+		SET current_region = $1, map_instance_id = NULL, x = ($2)::int, y = ($3)::int, world_zone_id = $1, world_instance_id = '',
+		    world_x = ($2)::double precision, world_y = ($3)::double precision, world_safe_x = ($2)::double precision, world_safe_y = ($3)::double precision,
 		    world_location_revision = world_location_revision + 1, version = version + 1
 		WHERE id = $4
 	`, returnRegion, int(returnX), int(returnY), guestUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi dịch chuyển khách ra ngoài"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi dịch chuyển khách ra ngoài: " + err.Error()})
 		return
 	}
 

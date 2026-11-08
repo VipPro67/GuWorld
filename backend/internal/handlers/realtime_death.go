@@ -51,6 +51,13 @@ func HandleRealtimePlayerDeath(ctx context.Context, death realtimeworld.DeathEve
 	if deathRegion == "" {
 		return errors.New("defeated character has no persisted region")
 	}
+	if deathRegion == "aperture_interior" || strings.HasPrefix(deathRegion, "aperture:") {
+		_ = tx.Rollback()
+		if handedOff {
+			middleware.AbortRealtimeHandoff(playerID)
+		}
+		return HandleRealtimeAperturePlayerDeath(ctx, death)
+	}
 	var winnerID *uuid.UUID
 	killerName := ""
 	if sourceID, parseErr := uuid.Parse(string(death.SourceID)); parseErr == nil && sourceID != playerID {

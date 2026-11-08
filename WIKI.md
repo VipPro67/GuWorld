@@ -1430,6 +1430,9 @@ Hệ thống Tiên Khiếu tái hiện sát cốt truyện *Cổ Chân Nhân* (R
      - Chặn nếu còn khách bên trong (`guestCount > 0`) để tránh Đạo Ngân của khách xé rách vách ngăn.
      - Chặn nếu đang trong phiên chiến đấu / realtime.
      - Chặn nếu đang trong quá trình độ kiếp / còn quái tai kiếp.
+7. **Cơ Chế Tử Vong Bên Trong Tiên Khiếu:**
+   - **Chủ Khiếu tử đạo:** Nếu Chủ Khiếu bị hạ gục bên trong Tiên Khiếu, Tiên Khiếu sẽ lập tức kích hoạt cơ chế tự bảo hộ **Tự Động Thu Khiếu** — khép lại Môn Hộ thế giới, thu hồi Tiên Khiếu vào nhục thân, trục xuất toàn bộ ngoại nhân bên trong ra ngoài Môn Hộ, và hoàn nguyên thân thể Cổ Tiên tại vị trí đặt Môn Hộ ở ngoại giới với 10 phút miễn nhiễm PvP. Quy tắc tối thượng được bảo đảm: *Khiếu và Người không bao giờ bị tách rời*.
+   - **Ngoại nhân/Khách tử đạo:** Nếu khách bị hạ gục bên trong Tiên Khiếu, khách bị xóa khỏi danh sách khách (`aperture_guest_roster`) và chuyển dịch hồi sinh bên ngoài vị trí Môn Hộ tại ngoại giới. Tiên Khiếu và Môn Hộ của Chủ Khiếu vẫn duy trì bình thường.
 
 ## 22. Nhiệm vụ, thành tựu và phần thưởng tài khoản
 

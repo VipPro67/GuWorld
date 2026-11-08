@@ -584,6 +584,8 @@ export function MMOHud(props: MMOHudProps) {
   const attackSect = useGameStore((state) => state.attackSect);
   const enterPortal = useGameStore((state) => state.enterPortal);
   const leaveAperture = useGameStore((state) => state.leaveAperture);
+  const unanchorAperture = useGameStore((state) => state.unanchorAperture);
+  const aperture = useGameStore((state) => state.aperture);
 
   // Single marker view-model: the radar and the proximity prompts below read the
   // same array the Phaser world layer draws, so they cannot drift apart.
@@ -1834,20 +1836,30 @@ export function MMOHud(props: MMOHudProps) {
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-serif font-bold text-purple-200 truncate">
-                    Tiên Khiếu Giới Vực
+                    {aperture?.is_placed ? "Đang Hạ Khiếu (Chủ Khiếu)" : "Tiên Khiếu Giới Vực"}
                   </div>
                   <div className="text-[10px] text-purple-300/80 truncate">
-                    Môn Hộ trở lại thế giới thực
+                    {aperture?.is_placed ? "Thu hồi Tiên Khiếu trở về thế giới" : "Môn Hộ trở lại thế giới thực"}
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => void leaveAperture()}
-                className="shrink-0 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 border border-purple-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
-              >
-                Rời Khiếu
-              </button>
+              {aperture?.is_placed ? (
+                <button
+                  type="button"
+                  onClick={() => void unanchorAperture()}
+                  className="shrink-0 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 border border-amber-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
+                >
+                  Thu Khiếu
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void leaveAperture()}
+                  className="shrink-0 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 border border-purple-400/50 px-3 py-1 text-xs font-serif font-bold text-white shadow-md active:scale-95 transition cursor-pointer"
+                >
+                  Rời Khiếu
+                </button>
+              )}
             </div>
           )}
         </div>
