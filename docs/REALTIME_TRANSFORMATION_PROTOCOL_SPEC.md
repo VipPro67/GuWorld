@@ -1,7 +1,7 @@
 # Đặc Tả Giao Thức Đồng Bộ Realtime (Wire Protocol) & Hiển Thị Client Cho Biến Thân
 
 > **Lưu ý:** transport hiện tại là WebTransport (`CONNECT /api/wt`), không còn
-> WebSocket. Sơ đồ dưới đây giữ tên cũ cho mục đích lịch sử; xem `docs/API.md`
+> WebSocket. Sơ đồ dưới đây giữ tên cũ cho mục đích lịch sử; xem `docs/guides/API.md`
 > và `docs/wayfinder/specs/WT-313-wire-protocol-v2.md` cho wire protocol v2.
 
 ## 1. Tổng Quan Kiến Trúc

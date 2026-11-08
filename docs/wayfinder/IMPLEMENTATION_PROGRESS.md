@@ -24,7 +24,7 @@
 - **TLS/QUIC trong Go:** `TLS_ENABLED=true` phục vụ HTTPS (`TLS_ADDR`) + WT (`WT_ADDR`);
   `TLS_ENABLED`/`WT_ENABLED` thiếu cert hoặc realtime runtime ⇒ process dừng (fail fast).
 - Test xanh: backend `go test ./...`; frontend `npm test` **215 pass**, `tsc --noEmit`, `eslint`.
-- **Còn lại:** deploy cert thật + smoke production theo `docs/PRODUCTION_DEPLOY.md`.
+- **Còn lại:** deploy cert thật + smoke production theo `docs/guides/PRODUCTION_DEPLOY.md`.
 
 ## Commit & hạng mục đã hoàn thành
 
@@ -47,7 +47,7 @@
 | **Bước 3 (Xong)** | RPC UI (`world.cells_rect`, `world.drops`, `chat.send`) qua HTTP fallback + map projectiles trên `WorldTransport` |
 | **Bước 4 — code (Xong)** | Xoá `internal/ws` client/limiter, thay bằng `internal/uihub` sink-only; xoá `/api/ws`; xoá `WorldSocket`, `websocket.ts`; rename sang `UIRealtimeManager`/`uiRealtimeManager`; `WorldRuntime` WT-only; TLS + WT trong `main.go`; drain 4010 + chờ session đóng |
 | **Bước 4 — infra (Xong)** | Xoá `Caddyfile`; compose publish `443:8443/tcp+udp`, DB/Redis loopback, mount `./certs`, healthcheck HTTPS, `stop_grace_period`; Dockerfile `EXPOSE 8443 8443/udp`; deploy workflow health/HTTP3 probe; `.env.example` TLS/WT |
-| **Bước 4 — docs (Xong)** | `README`, `docs/DEVELOPMENT.md`, `docs/API.md`, `docs/PRODUCTION_DEPLOY.md`, file tiến độ này |
+| **Bước 4 — docs (Xong)** | `README`, `docs/guides/DEVELOPMENT.md`, `docs/guides/API.md`, `docs/guides/PRODUCTION_DEPLOY.md`, file tiến độ này |
 
 ## Kiến trúc hiện tại
 
@@ -108,7 +108,7 @@ Các timer HTTP định kỳ trên màn hình thế giới đã được thay b�
 2. Mở TCP 443 + UDP 443 trên Lightsail; sysctl UDP buffer; gỡ Caddy host.
 3. Cấp cert Let's Encrypt cho cả `api` + `rt`, copy vào `./certs/fullchain.pem` / `privkey.pem`.
 4. `docker compose up -d`, kiểm tra log HTTPS + WT, chạy smoke test mục 4 của
-   `docs/PRODUCTION_DEPLOY.md`.
+   `docs/guides/PRODUCTION_DEPLOY.md`.
 5. Đo resume 3 s/10 s p95 < 2 s trên WiFi/4G thật.
 6. Commit các thay đổi chưa commit trên branch `deploy`.
 
@@ -130,7 +130,7 @@ NEXT_PUBLIC_REALTIME_URL=https://localhost:8443/api/wt
 Chrome yêu cầu cert tin cậy **cho QUIC**; cert tự ký bị
 `ERR_QUIC_CERT_ROOT_NOT_KNOWN`. Dùng cert Let's Encrypt thật hoặc policy
 `CACertificates` (Chrome 132+). Hướng dẫn production đầy đủ:
-[`docs/PRODUCTION_DEPLOY.md`](../PRODUCTION_DEPLOY.md).
+[`docs/guides/PRODUCTION_DEPLOY.md`](../PRODUCTION_DEPLOY.md).
 
 ## Giới hạn/known issues còn lại
 

@@ -51,7 +51,7 @@ Lightsail (1 box, 1 process Go)
 | `CORS_ALLOWED_ORIGINS` | `https://cogioi.io.vn,https://www.cogioi.io.vn,http://localhost:3000` | **Dùng chung** cho CORS và WT `CheckOrigin` |
 | `WS_ALLOWED_ORIGINS` | (deprecated) | Fallback 1 release, log warn nếu còn dùng |
 
-Bổ sung `.env.example` + `docs/DEVELOPMENT.md`; không commit token thật.
+Bổ sung `.env.example` + `docs/guides/DEVELOPMENT.md`; không commit token thật.
 
 ## 3. Setup Lightsail / host (làm 1 lần, theo thứ tự)
 
@@ -186,8 +186,8 @@ SIGTERM
 | File | Nội dung |
 |---|---|
 | `README.md` | bỏ "reverse proxy", mô tả `:8080` dev và `:8443` TLS + UDP WT prod |
-| `docs/DEVELOPMENT.md` | env mới (§2), quy trình cert/DNS/firewall, lệnh kiểm tra, shutdown |
-| `docs/API.md` | `/api/health`, `/api/wt` (handshake), ghi chú Cloudflare cho WT |
+| `docs/guides/DEVELOPMENT.md` | env mới (§2), quy trình cert/DNS/firewall, lệnh kiểm tra, shutdown |
+| `docs/guides/API.md` | `/api/health`, `/api/wt` (handshake), ghi chú Cloudflare cho WT |
 | `.env.example` | env §2, ghi rõ token Cloudflare |
 | `AGENTS.md` | startup/commands nếu port mặc định đổi (giữ dev `:8080`) |
 | `Caddyfile` | **xoá file** |

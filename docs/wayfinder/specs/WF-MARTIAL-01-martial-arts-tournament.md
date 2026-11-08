@@ -309,7 +309,7 @@ Clone bộ `frontend/src/components/DeathArena/*`:
 - `backend/internal/server/server.go` — group `/martial-arena`
 - `frontend/src/store/useGameStore.ts` — compose slice
 - `frontend/src/app/page.tsx` — route/view
-- `docs/API.md` — ghi routes mới (theo AGENTS.md)
+- `docs/guides/API.md` — ghi routes mới (theo AGENTS.md)
 
 ---
 

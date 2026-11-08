@@ -48,7 +48,7 @@ const (
 	cellPoolResource = 1
 	cellPoolWildGu   = 2
 	// Tiên Cổ (rank >= 6) never spawns as a map cell; it only comes from gacha,
-	// refining and auctions (see docs/GAME_DATA.md).
+	// refining and auctions (see docs/guides/GAME_DATA.md).
 	maxWildGuRank = 5
 )
 

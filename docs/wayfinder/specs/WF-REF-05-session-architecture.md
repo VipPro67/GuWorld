@@ -651,7 +651,7 @@ if recipe.TargetRank >= 6 || recipe.TargetRank >= player.Rank {
 - `backend/internal/ws/redis_sub.go`, `backend/internal/ws/client.go` — channel `refine`
 - `backend/cmd/server/main.go` — start worker
 - `frontend/src/lib/websocket.ts` (nếu cần type) + `frontend/src/store/useGameStore.ts` — subscribe `"refine"`
-- `docs/API.md`, `WIKI.md`, `docs/GAME_DATA.md`, `docs/DEVELOPMENT.md`
+- `docs/guides/API.md`, `WIKI.md`, `docs/guides/GAME_DATA.md`, `docs/guides/DEVELOPMENT.md`
 
 ---
 

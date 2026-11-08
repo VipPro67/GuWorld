@@ -35,7 +35,7 @@ Mỗi Cổ, sát chiêu, passive, tài nguyên và hậu quả combat đã có t
 - [x] Đưa `movement_policy`, `recovery_ms` vào runtime. Hiện mọi active profile khai báo `SLOW` và recovery 150–350 ms nhưng zone đang root lúc windup và bỏ recovery.
 - [ ] Chạy từng operation trong active theo thứ tự và target đã khai báo. Không chấp nhận `STAT_MOD` rồi bỏ qua; giữ nhiều status cùng lúc khi profile cần.
 - [ ] Gắn passive/hidden passive của Cổ sở hữu vào zone; bỏ `PREVIEW_LAST_STAND` khỏi nhân vật thật. Tránh cộng đôi chỉ số đã được `CalculatePlayerStats`/`gamefx` đưa vào snapshot.
-- [ ] Đối chiếu bảng `Gu.csv`/Block v2 và `docs/GAME_DATA.md` cho từng loại: damage, heal, shield, mana restore, direct HP, strip/bypass, multihit, lifesteal, crit, thorns, control, cleanse, status/drain, summon và native hook. Viết runtime handler xác định cho `UNIQUE` có gameplay; các entry chưa author vẫn bị khóa cast.
+- [ ] Đối chiếu bảng `Gu.csv`/Block v2 và `docs/guides/GAME_DATA.md` cho từng loại: damage, heal, shield, mana restore, direct HP, strip/bypass, multihit, lifesteal, crit, thorns, control, cleanse, status/drain, summon và native hook. Viết runtime handler xác định cho `UNIQUE` có gameplay; các entry chưa author vẫn bị khóa cast.
 - [ ] Tích hợp sát chiêu: xác thực từng instance thành phần, mana/độ no, xác suất, mastery, effect và dữ liệu recipe; không giả làm một slot Cổ thông thường.
 
 ### 3. Kết quả trận và độ bền
@@ -49,7 +49,7 @@ Mỗi Cổ, sát chiêu, passive, tài nguyên và hậu quả combat đã có t
 - [ ] Bảng đối chiếu toàn bộ operation/trigger Block v2: nguồn turn-based, profile realtime, handler realtime, test và trạng thái coverage. Đo coverage theo **cast thực tế**, không dùng audit từ vựng làm thước đo.
 - [ ] Test deterministic cho cast/cancel/rejoin/checkpoint đồng thời, từng status/native hook, sát chiêu, kill reward và lỗi DB/queue. Test với dữ liệu Cổ thật và nhiều instance cùng Gu ID.
 - [ ] Chạy `go test ./...`, `go test -race ./...` cho thay đổi zone/concurrency, `npm run lint` và `npm run build` khi sửa frontend.
-- [ ] Cập nhật `WIKI.md`, `docs/GAME_DATA.md`, `docs/mmo/gu-realtime-schema.md` và tài liệu API/schema tương ứng với các luật thực tế.
+- [ ] Cập nhật `WIKI.md`, `docs/guides/GAME_DATA.md`, `docs/mmo/gu-realtime-schema.md` và tài liệu API/schema tương ứng với các luật thực tế.
 
 ## Thứ tự triển khai
 

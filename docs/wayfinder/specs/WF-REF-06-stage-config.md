@@ -333,8 +333,8 @@ deathPenalty := session.DeathPenalty // 0 hoặc snap.DeathPenalty
 - `backend/internal/handlers/refine_session_plan.go` — dùng stage thay hardcode
 - `backend/internal/handlers/refine_session_resolve.go` — dùng snapshot bonus/mastery/death
 - `backend/internal/handlers/death_penalty.go` — đọc `rate_snapshot->>'death_penalty'`
-- `docs/GAME_DATA.md` — bảng + CSV + quy trình import
-- `docs/API.md` — lỗi `REFINE_CONFIG_MISSING` (nếu có trong bảng lỗi)
+- `docs/guides/GAME_DATA.md` — bảng + CSV + quy trình import
+- `docs/guides/API.md` — lỗi `REFINE_CONFIG_MISSING` (nếu có trong bảng lỗi)
 
 ---
 
@@ -357,7 +357,7 @@ deathPenalty := session.DeathPenalty // 0 hoặc snap.DeathPenalty
 
 ## 11. Tài liệu
 
-Thêm vào `docs/GAME_DATA.md`:
+Thêm vào `docs/guides/GAME_DATA.md`:
 
 - Bảng `refine_stage_templates` và ý nghĩa từng cột.
 - File `RefineStage.csv`, header, ví dụ 1 dòng.

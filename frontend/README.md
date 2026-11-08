@@ -55,5 +55,5 @@ Nếu biến này không tồn tại, store dùng mặc định `http://localhos
 
 - API calls dùng `credentials: "include"`, backend cần CORS đúng origin frontend.
 - View mới nên đi qua `currentView` trong Zustand store nếu là tab chính.
-- Khi thêm route backend mới, cập nhật `docs/API.md` ở root repo.
+- Khi thêm route backend mới, cập nhật `docs/guides/API.md` ở root repo.
 - Khi thêm state/action lớn trong store, cập nhật README này và `PROJECT.md` nếu là feature người dùng nhìn thấy.

@@ -117,7 +117,7 @@ Dưới đây là bảng đối chiếu giữa chi phí kỳ vọng để luyệ
   $$100 \times 2 = 200 \text{ con Cổ Rank 6} + 200 \text{ con Cổ Rank 7!}$$
 - Và để luyện **1 con Cổ Rank 9** ($0.2\%$), kỳ vọng tiêu tốn:
   $$500 \times 2 = 1,000 \text{ con Cổ Rank 7} + 1,000 \text{ con Cổ Rank 8!}$$
-- **Xung đột nghiêm trọng với hệ thống**: Trong game, Tiên Cổ (Rank $\ge 6$) là **DUY NHẤT TOÀN SERVER** (ràng buộc DB `uq_player_gu_immortal`, xem `docs/GAME_DATA.md`). Nếu toàn server chỉ tồn tại tối đa vài chục cá thể Tiên Cổ, việc đòi hỏi đốt cháy hàng trăm con Tiên Cổ làm phôi khiến việc hợp luyện Tiên Cổ bậc 8, 9 trên thực tế là **bất khả thi về mặt toán học** nếu không có tỷ lệ bảo tồn phôi gần như tuyệt đối (`OutcomeFailSafe` hoặc vật phẩm bảo vệ phôi).
+- **Xung đột nghiêm trọng với hệ thống**: Trong game, Tiên Cổ (Rank $\ge 6$) là **DUY NHẤT TOÀN SERVER** (ràng buộc DB `uq_player_gu_immortal`, xem `docs/guides/GAME_DATA.md`). Nếu toàn server chỉ tồn tại tối đa vài chục cá thể Tiên Cổ, việc đòi hỏi đốt cháy hàng trăm con Tiên Cổ làm phôi khiến việc hợp luyện Tiên Cổ bậc 8, 9 trên thực tế là **bất khả thi về mặt toán học** nếu không có tỷ lệ bảo tồn phôi gần như tuyệt đối (`OutcomeFailSafe` hoặc vật phẩm bảo vệ phôi).
 
 ### 4.4 Tử huyệt 4: Sự bất hợp lý trong định giá nguyên liệu tại `Item.csv`
 - Trong `backend/data/Item.csv`, toàn bộ $792$ nguyên liệu (`Material`) được gán `base_price` theo dải:

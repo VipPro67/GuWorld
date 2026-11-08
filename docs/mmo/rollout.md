@@ -3,7 +3,7 @@
 > **Historical rollout record.** Since this was written the transport moved from
 > WebSocket to WebTransport v2 (`CONNECT /api/wt`, world stream `0x01` + UI
 > stream `0x02`). WebSocket/protocol-v1 details below describe the earlier
-> phase. Current setup: `docs/PRODUCTION_DEPLOY.md`.
+> phase. Current setup: `docs/guides/PRODUCTION_DEPLOY.md`.
 
 Realtime MMO is the primary world for every signed-in player. Public map
 catalogue entries matching the shipped release are loaded automatically;

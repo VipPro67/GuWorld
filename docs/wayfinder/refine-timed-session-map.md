@@ -37,7 +37,7 @@ Biến **Luyện Cổ** từ một `POST /api/refine` tức thời thành một 
   - Cấu hình nhịp độ **data-driven** (CSV + Admin import), không hardcode trong handler.
   - Schema mới khai báo inline trong `CREATE TABLE` của `schema_*.go`; không dùng `ALTER TABLE` patch.
   - Realtime dùng **WebTransport** (`/api/wt`), không phải SSE/WebSocket; event mới phải có nhánh xử lý tường minh trong `useGameStore`.
-  - Cập nhật `docs/API.md`, `docs/GAME_DATA.md`, `WIKI.md` khi chạm route/schema/gameplay.
+  - Cập nhật `docs/guides/API.md`, `docs/guides/GAME_DATA.md`, `WIKI.md` khi chạm route/schema/gameplay.
 
 ---
 

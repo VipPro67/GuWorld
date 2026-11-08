@@ -100,11 +100,11 @@ Nguồn chuẩn nằm trong `backend/data/`, gồm dictionary Cổ/vật phẩm/
 
 ## Tài liệu liên quan
 
-- API: `docs/API.md`.
-- Kiến trúc: `docs/ARCHITECTURE.md`.
-- Ownership và workflow khi sửa player: `docs/PLAYER_DOMAIN.md`.
-- Dữ liệu: `docs/GAME_DATA.md`.
-- Hướng dẫn phát triển: `docs/DEVELOPMENT.md`.
+- API: `docs/guides/API.md`.
+- Kiến trúc: `docs/architecture/ARCHITECTURE.md`.
+- Ownership và workflow khi sửa player: `docs/architecture/PLAYER_DOMAIN.md`.
+- Dữ liệu: `docs/guides/GAME_DATA.md`.
+- Hướng dẫn phát triển: `docs/guides/DEVELOPMENT.md`.
 - Wiki gameplay: `WIKI.md`.
 
 ### Server-authoritative ordinary world monsters

@@ -5,7 +5,7 @@
 Run `go run ./cmd/migrate_gu_effects -format gu -source data/Gu.csv` from
 `backend/` for a non-destructive JSON audit. Candidate files are only written
 when both `-write` and a non-source `-output` path are supplied. See
-`docs/GAME_DATA.md` for report fields and the migration gate. Non-empty
+`docs/guides/GAME_DATA.md` for report fields and the migration gate. Non-empty
 candidates remain closed until runtime shadow evidence is bound to the selected
 snapshot and catalog revision in the machine-readable report.
 
@@ -193,7 +193,7 @@ docker compose -f docker-compose.local.yml up --build
 
 File này bind backend vào `127.0.0.1:8080`, không có TLS/Caddy. Để thử
 WebTransport local, dùng cert tin cậy và chạy binary với `TLS_ENABLED=true` (xem
-mục cuối của `docs/PRODUCTION_DEPLOY.md`).
+mục cuối của `docs/guides/PRODUCTION_DEPLOY.md`).
 
 `docker-compose.yml` là cấu hình **production**: Go phục vụ HTTPS trên
 `TLS_ADDR` và QUIC/WebTransport trên `WT_ADDR` (mặc định `:8443`, publish ra
@@ -203,7 +203,7 @@ trong `backend/.env`. Không commit hai file env hoặc cert. Production DB/Redi
 chỉ ở trong Compose network; local profile bind Redis vào loopback.
 
 Checklist đầy đủ (DNS, firewall UDP, cert, smoke test, rollback):
-[`docs/PRODUCTION_DEPLOY.md`](PRODUCTION_DEPLOY.md).
+[`docs/guides/PRODUCTION_DEPLOY.md`](PRODUCTION_DEPLOY.md).
 
 Cả hai profile đều:
 1. Tải và cấu hình PostgreSQL (`gu_db`) và Redis.
@@ -325,9 +325,9 @@ outage nằm tại [`ADMIN_OPERATIONS_RUNBOOK.md`](ADMIN_OPERATIONS_RUNBOOK.md).
 
 ## Documentation maintenance checklist
 
-- Route thay đổi: cập nhật `docs/API.md`.
+- Route thay đổi: cập nhật `docs/guides/API.md`.
 - Component/view gameplay thay đổi: cập nhật `PROJECT.md` và `WIKI.md` nếu ảnh hưởng người chơi.
-- CSV/schema thay đổi: cập nhật `docs/GAME_DATA.md`.
+- CSV/schema thay đổi: cập nhật `docs/guides/GAME_DATA.md`.
 - Lệnh chạy/env thay đổi: cập nhật tài liệu này và README tương ứng.
 
 ## Effect catalog Block v2 migration

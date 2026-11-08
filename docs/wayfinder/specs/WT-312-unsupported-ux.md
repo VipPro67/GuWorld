@@ -127,10 +127,10 @@ Nút "Tiếp tục không realtime" đóng overlay, đặt cờ phiên `gu_realt
 
 | File | Nội dung |
 |---|---|
-| `docs/API.md` | 2 route mới (`/api/realtime/capability`, `/api/admin/monitor/realtime/capability`) |
-| `docs/GAME_DATA.md` | Bảng `realtime_client_capability` |
+| `docs/guides/API.md` | 2 route mới (`/api/realtime/capability`, `/api/admin/monitor/realtime/capability`) |
+| `docs/guides/GAME_DATA.md` | Bảng `realtime_client_capability` |
 | `WIKI.md` | Người chơi: yêu cầu trình duyệt/mạng, chế độ không realtime |
-| `README.md` / `docs/DEVELOPMENT.md` | Ghi chú browser support nếu cần |
+| `README.md` / `docs/guides/DEVELOPMENT.md` | Ghi chú browser support nếu cần |
 
 ## 7. Out of scope
 

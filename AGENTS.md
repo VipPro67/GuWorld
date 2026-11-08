@@ -24,7 +24,7 @@ No CI/CD. No standalone typecheck script. Backend tests are distributed across p
 
 ## Backend Conventions (agent would likely miss)
 
-- **Player changes have a dedicated map.** For route-to-handler ownership, snapshot/service boundaries, mutation workflow, and focused tests, read `docs/PLAYER_DOMAIN.md` before changing player persistence, player-visible state, or player routes. `internal/playerstate` owns the canonical full-row projection and collection revision; narrow projections remain valid when they intentionally read only the fields a caller needs. Player-initiated cell changes go through `handlers/movement.go` and its shared check/write/publish flow.
+- **Player changes have a dedicated map.** For route-to-handler ownership, snapshot/service boundaries, mutation workflow, and focused tests, read `docs/architecture/PLAYER_DOMAIN.md` before changing player persistence, player-visible state, or player routes. `internal/playerstate` owns the canonical full-row projection and collection revision; narrow projections remain valid when they intentionally read only the fields a caller needs. Player-initiated cell changes go through `handlers/movement.go` and its shared check/write/publish flow.
 - **Services are selective, not universal.** Gameplay rules remain primarily in `backend/internal/handlers/`. The wired shared services are `PlayerService`, `InventoryService`, `QuestService`, `RecipeService`, and `AchievementService`, exposed through `handlers/services.go`. Reuse a service when it owns the operation; do not assume map, combat-session, or dao services exist, or route every handler through a service.
 - **Schema is idempotently initialized, not managed by a versioned migration framework.** Domain DDL lives in `backend/internal/db/schema_*.go`; it includes `CREATE TABLE`, indexes, compatibility `ALTER` statements and backfills. `InitSchema()` runs these in dependency order and seeds runtime prerequisites. For a new column, update the table definition and add the compatibility DDL required for existing installations, following the owning schema file. Check for separately required, explicitly run data-migration scripts. Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` maps each registration region to its hub and falls back to `Southern_Border`.
 - **DB reset note:** `players.race`, `players.constitution`, `players.current_region` have FKs. `InitSchema` pre-seeds the `''` race/constitution keys and the `Southern_Border` region so registration works before CSV import; race/constitution registry loaders filter out `''` keys.
@@ -33,9 +33,9 @@ No CI/CD. No standalone typecheck script. Backend tests are distributed across p
 - Changing CSV files requires importing the relevant dataset through the Admin panel.
 - Registries are cached in memory on startup; restart the backend after data changes when required by the registry implementation.
 - **Registries cached in memory** on startup (`models.GuRegistry`, `models.ItemRegistry`, `gamefx.ConstitutionRegistry`, `gamefx.RaceRegistry`). Changing CSV requires app restart.
-- **Thể chất (constitution) là data-driven.** Danh sách seed từ `data/Constitution.csv` → bảng `constitution_dictionary`, effect resolve từ `gamefx.Effects` (JSON trong cột `effects`). Thêm thể chất mới: sửa CSV + Import bảng "Thể chất" trong Admin. Format effects xem `docs/GAME_DATA.md`.
+- **Thể chất (constitution) là data-driven.** Danh sách seed từ `data/Constitution.csv` → bảng `constitution_dictionary`, effect resolve từ `gamefx.Effects` (JSON trong cột `effects`). Thêm thể chất mới: sửa CSV + Import bảng "Thể chất" trong Admin. Format effects xem `docs/guides/GAME_DATA.md`.
 - **Chủng tộc (race) là data-driven.** Danh sách seed từ `data/Race.csv` → bảng `race_dictionary`, effect resolve từ `gamefx.Effects` (JSON trong cột `effects`). Thêm chủng tộc mới: sửa CSV + Import bảng "Chủng tộc" trong Admin. `players.race` luôn là 1 key duy nhất (default `human`).
-- **Workers are goroutine polling loops**, not job queues. Hunger, tribulation, mine monsters. All workers accept `context.Context` for graceful shutdown, and **all recurring loops go through `internal/worker/runner.go`** (`RunEvery` / `SafeRun`) so a panic in one tick is logged and recovered instead of killing the process. Don't hand-roll a ticker/select loop. See `docs/DEVELOPMENT.md` → Background workers.
+- **Workers are goroutine polling loops**, not job queues. Hunger, tribulation, mine monsters. All workers accept `context.Context` for graceful shutdown, and **all recurring loops go through `internal/worker/runner.go`** (`RunEvery` / `SafeRun`) so a panic in one tick is logged and recovered instead of killing the process. Don't hand-roll a ticker/select loop. See `docs/guides/DEVELOPMENT.md` → Background workers.
 - **Redis is required for full functionality, but startup is resilient.** Connects with bounded retries/backoff (`REDIS_CONNECT_ATTEMPTS`/`REDIS_CONNECT_DELAY_MS`) and, if still unavailable, keeps running with in-memory fallbacks and a nil cache client rather than crash-looping (a restart replays `InitSchema`'s heavy backfills/DDL and can take the database down).
 - **JSONB fields** use `interface{}` with custom `Scan`/`Value`. Watch for type assertion panics. `CombatState.Scan` now returns empty struct (not nil) on null.
 - **Handlers return errors** to Gin; no panic recovery middleware.
@@ -52,11 +52,11 @@ No CI/CD. No standalone typecheck script. Backend tests are distributed across p
 
 | Change | Update |
 |--------|--------|
-| Routes | `docs/API.md` |
-| Schema/CSV | `docs/GAME_DATA.md` |
-| Startup/commands/env | `docs/DEVELOPMENT.md` + `README.md` |
+| Routes | `docs/guides/API.md` |
+| Schema/CSV | `docs/guides/GAME_DATA.md` |
+| Startup/commands/env | `docs/guides/DEVELOPMENT.md` + `README.md` |
 | Gameplay (player-visible) | `WIKI.md` |
-| Trigger/op/native hook mới | `docs/GAME_DATA.md` + `frontend/src/lib/wiki/effect-glossary.ts` |
+| Trigger/op/native hook mới | `docs/guides/GAME_DATA.md` + `frontend/src/lib/wiki/effect-glossary.ts` |
 | Project scope | `PROJECT.md` |
 
 ## Key File Pointers
@@ -85,7 +85,7 @@ No CI/CD. No standalone typecheck script. Backend tests are distributed across p
 * Do not modify unrelated files.
 * Do not rewrite large files unnecessarily.
 * Before changing database schema, inspect the existing schema in `backend/internal/db/schema_*.go`.
-* Before changing gameplay values, inspect the corresponding CSV/data source and `docs/GAME_DATA.md`.
+* Before changing gameplay values, inspect the corresponding CSV/data source and `docs/guides/GAME_DATA.md`.
 
 ### Delegation
 
@@ -189,7 +189,7 @@ When adding or modifying Gu, constitution, items, effects, recipes, or other gam
 
 1. Check the relevant CSV file in `backend/data/`.
 2. Check the corresponding database table.
-3. Check `docs/GAME_DATA.md`.
+3. Check `docs/guides/GAME_DATA.md`.
 4. Check the effect resolution code in `gamefx`.
 5. Update all required data/documentation together.
 

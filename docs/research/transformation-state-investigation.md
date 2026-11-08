@@ -3,7 +3,7 @@
 - **Mã Issue**: [#283](https://github.com/VipPro67/GuWorld/issues/283)
 - **Map Cha**: [#282](https://github.com/VipPro67/GuWorld/issues/282) (Triển khai Biến Thân & Hình Thái Chiến Đấu)
 - **Nhánh**: `research/transformation-state-283`
-- **Tài liệu Domain liên quan**: `CONTEXT.md` (Domain Biến Hóa Đạo & Hình Thái Chiến Đấu), `docs/PLAYER_DOMAIN.md`, `docs/STATUS_EFFECTS.md`
+- **Tài liệu Domain liên quan**: `CONTEXT.md` (Domain Biến Hóa Đạo & Hình Thái Chiến Đấu), `docs/architecture/PLAYER_DOMAIN.md`, `docs/STATUS_EFFECTS.md`
 
 ---
 

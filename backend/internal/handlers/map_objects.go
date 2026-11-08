@@ -21,7 +21,7 @@ import (
 // /explore/cells/rect, monsters through the realtime world snapshot.
 //
 // Coordinates are local map cells of RegionID, matching players.x/y and the
-// cells feed. See docs/GAME_DATA.md → World coordinates.
+// cells feed. See docs/guides/GAME_DATA.md → World coordinates.
 type MapMarkerView struct {
 	ID       string `json:"id"`
 	Kind     string `json:"kind"`

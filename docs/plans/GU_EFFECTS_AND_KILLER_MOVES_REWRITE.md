@@ -203,7 +203,7 @@ Deletion test: nếu xóa module này, validation, target selection, stacking, e
 Root chỉ được có `schema_version` và `blocks`; không giữ song song `active`,
 `passive`, `growth`, `other` hoặc các namespace legacy khác. Contract enum,
 ordering, lifecycle, budget, provenance và matrix migration đầy đủ nằm trong
-`docs/GAME_DATA.md`; tài liệu kế hoạch không định nghĩa một dialect thứ hai.
+`docs/guides/GAME_DATA.md`; tài liệu kế hoạch không định nghĩa một dialect thứ hai.
 
 Các nguyên tắc:
 
@@ -251,7 +251,7 @@ Envelope, versioning và validation được dùng chung, nhưng không ép mọ
 | Periodic/`other` | regen, stones, lifespan, thought | tick snapshot → worker commands |
 | House/support | namespace chưa typed | chỉ chốt sau inventory Phase 0 |
 
-Phase 0 đã có baseline inventory/matrix authoritative trong `docs/GAME_DATA.md`: mọi key/action code được nối với nguồn, trigger, target, unit/scaling, executor, persistence owner, UI và test/gap. Không xóa legacy namespace nào trước khi converter v2 + executor + parity test + database audit đạt cổng migration.
+Phase 0 đã có baseline inventory/matrix authoritative trong `docs/guides/GAME_DATA.md`: mọi key/action code được nối với nguồn, trigger, target, unit/scaling, executor, persistence owner, UI và test/gap. Không xóa legacy namespace nào trước khi converter v2 + executor + parity test + database audit đạt cổng migration.
 
 ## 5. Thiết kế sát chiêu mới
 
@@ -467,7 +467,7 @@ Thêm endpoint/admin report “catalog health”, không trả implementation in
 5. `backend/internal/handlers/admin_*`: staging validation, publish revision, health report.
 6. `backend/data/`: migrate effect schema v2 và catalog killer moves theo batch.
 7. `frontend/src/store/slices/` + UI sát chiêu: đọc definition, recipe requirement và validation errors từ server; frontend không tự tính effect authoritative.
-8. `docs/GAME_DATA.md`, `docs/API.md`, `WIKI.md`, `PROJECT.md`: cập nhật cùng phase tương ứng.
+8. `docs/guides/GAME_DATA.md`, `docs/guides/API.md`, `WIKI.md`, `PROJECT.md`: cập nhật cùng phase tương ứng.
 
 ## 11. Những điều không nên làm
 

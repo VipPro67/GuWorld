@@ -32,7 +32,7 @@ Cổ rank thấp hơn rank người chơi vẫn đi đường nhanh `POST /api/r
 - Giữ `POST /api/refine` vô thời hạn hay deprecate dần?
 - Client cũ (nếu có) gọi route này với Cổ cao sẽ nhận lỗi gì?
 - `refine_deduce` không đổi.
-- Tài liệu cần cập nhật: `docs/API.md`, `WIKI.md` mục Luyện Cổ, `docs/GAME_DATA.md` nếu thêm bảng.
+- Tài liệu cần cập nhật: `docs/guides/API.md`, `WIKI.md` mục Luyện Cổ, `docs/guides/GAME_DATA.md` nếu thêm bảng.
 - Frontend: `cultivationSlice.refineGu` có giữ nguyên hay tách `refineQuick` / `startRefineSession`?
 
 ### 5. Chống lạm dụng

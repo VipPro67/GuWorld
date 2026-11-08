@@ -7,7 +7,7 @@
 **Tiến độ triển khai:** Batch đầu tiên đã chuyển movement/runtime stats sang commit đồng bộ trong transaction nghiệp vụ; legacy Redis payload vẫn được xử lý trong cửa sổ tương thích bằng version/timestamp guard và compare-and-ACK. Growth đã thống nhất lock `players -> player_gu`, passive-stats dùng projection read-only và full player loader không còn lấy connection DB thứ hai trong transaction. Các hạng mục domain table/CAS đầy đủ, idempotency/outbox và refactor combat vẫn theo backlog bên dưới.
 **Cập nhật 2026-10-26:** `internal/playerstate` đã gom shape đọc của `players` (column list, revision, Gu/materials, repair, not-found) và `services.PlayerService` chỉ còn phần time projection. Phần ghi/unit-of-work và phân quyền field vẫn nằm trong backlog của kế hoạch này.
 
-Đây là tài liệu thiết kế và backlog, không phải mô tả hiện trạng đầy đủ. Mục 3 ghi lại baseline khi lập kế hoạch; hãy kiểm tra code hiện hành trước khi dùng một rủi ro trong đó làm căn cứ sửa. Bản đồ ownership player hiện tại nằm ở [PLAYER_DOMAIN.md](PLAYER_DOMAIN.md).
+Đây là tài liệu thiết kế và backlog, không phải mô tả hiện trạng đầy đủ. Mục 3 ghi lại baseline khi lập kế hoạch; hãy kiểm tra code hiện hành trước khi dùng một rủi ro trong đó làm căn cứ sửa. Bản đồ ownership player hiện tại nằm ở [PLAYER_DOMAIN.md](architecture/PLAYER_DOMAIN.md).
 
 ## 1. Kết luận điều hành
 

@@ -539,7 +539,7 @@ Nếu cần mở rộng ( ví dụ level max, giảm cấp nhiều hơn 1 bướ
 3. Đăng ký route mới trong `backend/internal/server/server.go`.
 4. Viết handler trong file phù hợp.
 5. Cập nhật worker nếu có tính năng theo thời gian.
-6. Nếu cần, cập nhật `docs/API.md` hoặc `docs/GAME_DATA.md`.
+6. Nếu cần, cập nhật `docs/guides/API.md` hoặc `docs/guides/GAME_DATA.md`.
 7. Kiểm tra đồng bộ frontend nếu API payload thay đổi.
 
 ---
@@ -587,8 +587,8 @@ Hệ thống tông môn hiện tại đang hoạt động theo mô hình:
 ## 13. Lưu ý cập nhật khi thay đổi logic hệ thống
 
 Khi có thay đổi về API, nghiệp vụ hay bảng dữ liệu của tông môn, cần cập nhật đồng bộ:
-- `docs/API.md`
-- `docs/GAME_DATA.md`
+- `docs/guides/API.md`
+- `docs/guides/GAME_DATA.md`
 - `WIKI.md` nếu người chơi thấy trực tiếp
 - `README.md` nếu ảnh hưởng startup hoặc dev flow
 - Bản tài liệu này (`docs/SECT_SYSTEM.md`) để giữ nguyên lịch sử kiến thức

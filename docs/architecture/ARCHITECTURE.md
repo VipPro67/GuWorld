@@ -1,3 +1,4 @@
+
 # Architecture
 
 ## Runtime overview
@@ -63,7 +64,7 @@ The canonical full-row player projection and collection revision live in `intern
 - Protected HTTP calls use cookie credentials. `NEXT_PUBLIC_BACKEND_URL` defaults to `http://localhost:8080`.
 - The client tries WebTransport `/api/wt` first, then WebSocket `/api/ws` if transport establishment fails. One session per tab carries a world stream (`0x01`, binary v2), a UI stream (`0x02`, NDJSON pub/sub and RPC), and input/snapshot datagrams or equivalent WS frames. `internal/uihub` fans out UI channels from Redis Pub/Sub.
 - World-map queries remain HTTP for snapshots, rectangular cell fetches and actions; the world stream keeps nearby state fresh between snapshots. HTTP endpoints stay available as fallback for non-realtime actions.
-- A browser without WebTransport tries WebSocket. If neither connects, HTTP features keep working and the world map stays locked. See [PRODUCTION_DEPLOY.md](PRODUCTION_DEPLOY.md) for the TLS/QUIC origin setup.
+- A browser without WebTransport tries WebSocket. If neither connects, HTTP features keep working and the world map stays locked. See [Production deployment](../guides/PRODUCTION_DEPLOY.md) for the TLS/QUIC origin setup.
 - The Zustand root composes domain slices for inventory, combat, exploration, aperture, marketplace, sect, party, notifications, achievements, pets, gacha, betting and other systems.
 
 ## Player state and movement
@@ -94,4 +95,4 @@ Schema is split by domain under `backend/internal/db/schema_*.go`. Important gro
 - aperture: apertures, resource nodes, tribulations, variant-human populations, node workers, refinement queue, settlements, events and NPCs;
 - sect/activities: sect membership, requests, missions, vault/mines and instances.
 
-Dao marks and several extensible effect/state structures use JSONB. Player row reads go through `internal/playerstate`; full-row scans elsewhere are considered debt. See `docs/GAME_DATA.md` for field and CSV details; the router in `backend/internal/server/server.go` remains the source of truth for endpoints.
+Dao marks and several extensible effect/state structures use JSONB. Player row reads go through `internal/playerstate`; full-row scans elsewhere are considered debt. See `docs/guides/GAME_DATA.md` for field and CSV details; the router in `backend/internal/server/server.go` remains the source of truth for endpoints.

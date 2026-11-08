@@ -47,7 +47,7 @@ Khi đăng ký, đạo hữu mặc định Nhân Tộc  và chọn **Giới tín
 | Thái Cổ Nhân Tộc (`ancient_human`) | +10% hiệu quả tu luyện, +3 Vận, +10% Nhân Đạo affinity, -5% tỉ lệ Luyện Cổ |
 | Cương Thi (`cuong_thi`) | **Bất tử tuổi thọ** (thọ nguyên không bao giờ cạn); **Cấm tự hồi phục** HP, Chân Nguyên/Tiên Nguyên, Nguyên Lực, Thần Hồn. Khi ở trạng thái Tiên Cương: gia tốc thời gian khóa ở `1.0`, Tiên Khiếu thành Tiên Khiếu Chết, không còn tiên kiếp, và bị suy thoái `time_rate` & `area_size` theo thời gian |
 
-Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` (seed từ `data/Race.csv`): admin thêm chủng tộc mới bằng cách sửa CSV (thêm dòng `key,name,effects`) rồi Import bảng "Chủng tộc" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
+Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` (seed từ `data/Race.csv`): admin thêm chủng tộc mới bằng cách sửa CSV (thêm dòng `key,name,effects`) rồi Import bảng "Chủng tộc" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/guides/GAME_DATA.md`.
 
 ### Tuổi thọ & Trạng thái Tử Vong
 
@@ -114,7 +114,7 @@ Quy tắc áp dụng trạng thái:
 | Huyết Ma Sát Thể (`blood_fiend_body`) | Huyết Đạo đạo ngân +25%, +15% tấn công, +20% hồi phục nhận, +35% áp lực Không Khiếu, -10% tỉ lệ Luyện Cổ |
 | Huyễn Mộng Linh Thể (`dream_phantom_body`) | Mộng Đạo đạo ngân +20%, +5% sát thương Mộng Đạo, -15% kháng tâm lý, -10% kháng CC |
 
-Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuses`). Một số trạng thái có **thời hạn** (đếm theo giờ thực) và tự biến mất khi hết hạn. Danh sách trạng thái được **data-driven** từ bảng `status_dictionary` (seed từ `data/Status.csv`): admin thêm trạng thái mới bằng cách sửa CSV (thêm dòng `key,name,effects,default_duration_minutes,blocked_actions,description`) rồi Import bảng "Trạng thái" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
+Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuses`). Một số trạng thái có **thời hạn** (đếm theo giờ thực) và tự biến mất khi hết hạn. Danh sách trạng thái được **data-driven** từ bảng `status_dictionary` (seed từ `data/Status.csv`): admin thêm trạng thái mới bằng cách sửa CSV (thêm dòng `key,name,effects,default_duration_minutes,blocked_actions,description`) rồi Import bảng "Trạng thái" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/guides/GAME_DATA.md`.
 
 
 ## 2. Tu luyện
@@ -212,7 +212,7 @@ Nghi thức Thăng Tiên gồm **3 khâu tuần tự** — không còn là một
 - Trong **Túi Đồ → Cổ Trùng**, chọn Cổ có hiệu ứng hồi máu (block `ON_ACTION` với `HEAL`/`FLAT`, ví dụ `active.heal_flat`) rồi bấm **Dùng ngoài combat** để hồi sinh lực; mỗi lần dùng tốn Chân Nguyên và giảm 1 độ no của Cổ. Không giới hạn ở Cổ Hỗ Trợ — Cổ Chủ động/Hồi phục có heal đều dùng được (trừ Cổ Tiêu Hao).
 - **Tốc độ hồi:** `HP/giờ = (HP tối đa hiệu dụng × 5% + hp_regen từ effect) × (1 + healing_received)`, cap tại HP tối đa hiệu dụng (`base_hp` + `stat_base_hp` thụ động từ Cổ).
 - Toàn bộ hồi tự động HP, Chân/Tiên Nguyên, Niệm Lực và Thần Hồn được tổng hợp từ các block của Chủng tộc, Thể chất, Trạng thái và Cổ `ON_TICK`, rồi mới áp dụng hệ số cho phép hồi. Với Cương Thi hệ số cuối bằng `0`, nên cả hồi nền lẫn Cổ hồi thụ động đều không sinh tài nguyên; hồi chủ động bằng vật phẩm/Cổ tiêu hao vẫn hoạt động.
-- `hp_regen` (số phẳng HP/giờ) và `healing_received` (% nhân) đến từ thể chất/chủng tộc/trạng thái qua hệ thống effects (xem `docs/GAME_DATA.md`).
+- `hp_regen` (số phẳng HP/giờ) và `healing_received` (% nhân) đến từ thể chất/chủng tộc/trạng thái qua hệ thống effects (xem `docs/guides/GAME_DATA.md`).
 - Tốc độ hồi nhân thêm `TimeSpeedMultiplier` (KHÔNG nhân `time_rate` Tiên khiếu — khác với hồi Chân Nguyên).
 
 ### Nhân Khí (Human Qi)
@@ -1278,7 +1278,7 @@ Chiêu realtime dùng các mẫu VFX cast/impact theo Path và effect của prof
 
 Projectile của chiêu định hướng dừng tại phạm vi `range` của profile; lifetime chỉ giới hạn thời gian bay và không thể làm chiêu gây sát thương vượt quá vòng phạm vi.
 
-Status realtime có thời lượng và lịch tick do server quản lý; điều kiện khống chế, hồi chiêu, tài nguyên và sát thương được kiểm tra authoritative. Tài liệu chi tiết về profile/effect đang chạy nằm trong `docs/GAME_DATA.md` và `docs/mmo/gu-realtime-schema.md`. Những mechanic legacy theo lượt không có ở hai contract này chỉ là lịch sử, không mô tả runtime hiện tại.
+Status realtime có thời lượng và lịch tick do server quản lý; điều kiện khống chế, hồi chiêu, tài nguyên và sát thương được kiểm tra authoritative. Tài liệu chi tiết về profile/effect đang chạy nằm trong `docs/guides/GAME_DATA.md` và `docs/mmo/gu-realtime-schema.md`. Những mechanic legacy theo lượt không có ở hai contract này chỉ là lịch sử, không mô tả runtime hiện tại.
 
 Tiên Cổ phòng thủ: bật dạng biến thân bằng nút riêng, có thời gian thi triển theo profile; khống chế cứng ngắt quá trình biến thân, sát thương thường không ngắt. Phòng thủ và tiêu mana liên tục bắt đầu sau khi biến thân hoàn tất; trong dạng biến thân có chiêu riêng, trạng thái tự kết thúc khi tắt hoặc hết mana.
 

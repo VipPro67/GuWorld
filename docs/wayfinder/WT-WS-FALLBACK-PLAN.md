@@ -147,7 +147,7 @@ Since WS is one ordered byte stream, prioritize bounded queues and freshness:
 - Track WS/WT join success, fallback rate, p95 join time, p95 input-to-snapshot
   latency, queue overflow, reconnect/resume, bytes and CPU. Alert on sustained
   WS overload or a rise in failed joins.
-- Update `docs/ARCHITECTURE.md`, `docs/API.md`, deployment docs and the Wayfinder
+- Update `docs/architecture/ARCHITECTURE.md`, `docs/guides/API.md`, deployment docs and the Wayfinder
   implementation progress note when code is released.
 
 ## Completion criteria

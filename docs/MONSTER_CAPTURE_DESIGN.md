@@ -255,8 +255,8 @@ Admin (nhóm admin sẵn có):
 
 | Thay đổi | Tài liệu |
 |----------|----------|
-| Routes mới `/pets`, `/combat/capture`, admin pets | `docs/API.md` |
-| Schema `player_pets`, cột `monster_templates`, CSV, effect `CaptureBonus` | `docs/GAME_DATA.md` |
+| Routes mới `/pets`, `/combat/capture`, admin pets | `docs/guides/API.md` |
+| Schema `player_pets`, cột `monster_templates`, CSV, effect `CaptureBonus` | `docs/guides/GAME_DATA.md` |
 | Luật gameplay pet (bắt/chết/đói) | `WIKI.md` |
 | Phạm vi dự án | `PROJECT.md` |
 

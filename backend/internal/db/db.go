@@ -3140,7 +3140,7 @@ func SeedInstanceTemplates() error {
 
 	// Dream realms (Mộng Cảnh) are data-driven from DreamRealm.csv. Each row
 	// maps 1:1 to an instance_templates record; empty map_data is generated
-	// from the path key. See docs/GAME_DATA.md.
+	// from the path key. See docs/guides/GAME_DATA.md.
 	if err := seedDreamRealmsFromCSV("DreamRealm.csv"); err != nil {
 		return err
 	}

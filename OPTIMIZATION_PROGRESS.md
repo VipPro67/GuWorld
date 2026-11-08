@@ -1,6 +1,6 @@
 # GuWorld Optimization Progress Tracking
 
-This is a historical progress log, not a live inventory of current files or completed checks. For current Player ownership, use [docs/PLAYER_DOMAIN.md](docs/PLAYER_DOMAIN.md); rerun validation commands against the current worktree.
+This is a historical progress log, not a live inventory of current files or completed checks. For current Player ownership, use [docs/architecture/PLAYER_DOMAIN.md](docs/architecture/PLAYER_DOMAIN.md); rerun validation commands against the current worktree.
 
 ## Phase 1: Quick Wins (High Impact, Low Risk) - 1-2 days
 
@@ -135,7 +135,7 @@ This is a historical progress log, not a live inventory of current files or comp
   - `rankLabel`, `subRankLabel`, `typeColor`, `gridXLabel`
   - `EFFECT_STYLE`, `EFFECT_LABEL`, `getCombatEffects`, `EffectBadge`
   - Removed ~120 lines of duplication from CombatScreen.tsx
-- [x] **Split the legacy player.go handler** into focused `player_*` files. The old filename/task breakdown is obsolete; use [docs/PLAYER_DOMAIN.md](docs/PLAYER_DOMAIN.md) for current ownership.
+- [x] **Split the legacy player.go handler** into focused `player_*` files. The old filename/task breakdown is obsolete; use [docs/architecture/PLAYER_DOMAIN.md](docs/architecture/PLAYER_DOMAIN.md) for current ownership.
 
 - [ ] **Split admin.go** (4434 lines)
 - [ ] **Split sect.go** (3839 lines)

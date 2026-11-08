@@ -8,7 +8,7 @@ Tài liệu chi tiết về kiến trúc, luồng hoạt động, danh mục sta
 > runtime hiện tại. Contract authoring đích là **Definition → Envelope → Block →
 > Trigger → Condition → Target selector → Operation → Amount (Unit + Scaling) →
 > Runtime effect/Event/Command → Native hook**, được chốt tại
-> `docs/GAME_DATA.md` mục “Đặc tả effect thống nhất v2”. “Status” chỉ một trạng
+> `docs/guides/GAME_DATA.md` mục “Đặc tả effect thống nhất v2”. “Status” chỉ một trạng
 > thái runtime có ID; bonus race/constitution/player-status gọi là **character
 > modifier**. `active`, `passive`, `growth`, `other` và `SpecialMechanic` là
 > **legacy namespace**, không phải cấu trúc để author nội dung v2.

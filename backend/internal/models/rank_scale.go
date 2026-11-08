@@ -7,7 +7,7 @@ package models
 // Immortals: Rank 6=10^4, Rank 7=10^6, Rank 8=10^8, Rank 9=10^10 (x100 per rank).
 //
 // Gu values, monster base stats and player base stats are all meant to be
-// expressed as <ratio> * RankScale(rank); see docs/GAME_DATA.md. Keep the table
+// expressed as <ratio> * RankScale(rank); see docs/guides/GAME_DATA.md. Keep the table
 // here (a leaf package) so both models and gamefx can share it without an
 // import cycle.
 var RankScaleTable = [10]float64{

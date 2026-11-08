@@ -2,7 +2,7 @@
 
 Effect migration is non-destructive by default. From `backend/`, run
 `go run ./cmd/migrate_gu_effects -format gu -source data/Gu.csv` to produce a
-machine-readable audit without changing CSV data. See `docs/GAME_DATA.md` for
+machine-readable audit without changing CSV data. See `docs/guides/GAME_DATA.md` for
 format-specific conversion and migration-gate rules.
 
 GuWorld là web game RPG text-based lấy cảm hứng từ hệ thống tu luyện/Cổ trùng. Codebase hiện tại gồm:
@@ -17,14 +17,14 @@ GuWorld là web game RPG text-based lấy cảm hứng từ hệ thống tu luy�
 | --- | --- |
 | [`PROJECT.md`](./PROJECT.md) | Trạng thái dự án, module chính và phạm vi hiện tại. |
 | [`WIKI.md`](./WIKI.md) | Wiki gameplay cho người chơi/tester. |
-| [`docs/API.md`](./docs/API.md) | Nhóm API backend theo router hiện tại. |
-| [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Kiến trúc thư mục, luồng khởi động và module runtime. |
-| [`docs/GAME_DATA.md`](./docs/GAME_DATA.md) | Nguồn dữ liệu CSV/seed và registry runtime. |
-| [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) | Cách chạy, biến môi trường, kiểm tra nhanh. |
-| [`docs/PRODUCTION_DEPLOY.md`](./docs/PRODUCTION_DEPLOY.md) | Checklist production: DNS, TLS, firewall, cert, WebTransport, rollback và smoke test. |
+| [`docs/guides/API.md`](./docs/guides/API.md) | Nhóm API backend theo router hiện tại. |
+| [`docs/architecture/ARCHITECTURE.md`](./docs/architecture/ARCHITECTURE.md) | Kiến trúc thư mục, luồng khởi động và module runtime. |
+| [`docs/guides/GAME_DATA.md`](./docs/guides/GAME_DATA.md) | Nguồn dữ liệu CSV/seed và registry runtime. |
+| [`docs/guides/DEVELOPMENT.md`](./docs/guides/DEVELOPMENT.md) | Cách chạy, biến môi trường, kiểm tra nhanh. |
+| [`docs/guides/PRODUCTION_DEPLOY.md`](./docs/guides/PRODUCTION_DEPLOY.md) | Checklist production: DNS, TLS, firewall, cert, WebTransport, rollback và smoke test. |
 | [`frontend/README.md`](./frontend/README.md) | Ghi chú riêng cho frontend. |
 
-Các tài liệu thiết kế/roadmap chỉ mô tả hướng phát triển. Các tài liệu trong bảng trên là điểm bắt đầu để đối chiếu hành vi đang chạy.
+Xem [mục lục tài liệu](./docs/README.md) để tìm tài liệu theo nhóm. Các tài liệu thiết kế/roadmap chỉ mô tả hướng phát triển. Các tài liệu trong bảng trên là điểm bắt đầu để đối chiếu hành vi đang chạy.
 
 ## Chạy nhanh local
 
@@ -38,7 +38,7 @@ Lệnh này khởi chạy Go backend, PostgreSQL và Redis ở chế độ local
 `:8080`, không TLS, không Caddy). Production dùng `docker-compose.yml`: Go phục
 vụ HTTPS/WebSocket (TCP/443) và WebTransport (UDP/443) trong cùng process. Client ưu tiên WebTransport và dùng WebSocket fallback khi WT không thiết lập được. Compose production cần `certs/fullchain.pem` +
 `certs/privkey.pem` (đọc bởi GID `10001`) và host phải mở TCP/UDP 443 — xem
-[`docs/PRODUCTION_DEPLOY.md`](./docs/PRODUCTION_DEPLOY.md). Muốn chạy local
+[`docs/guides/PRODUCTION_DEPLOY.md`](./docs/guides/PRODUCTION_DEPLOY.md). Muốn chạy local
 không TLS bằng binary, đặt `TLS_ENABLED=false`, `WT_ENABLED=false` và dùng
 `go run ./cmd/server` (plain HTTP `:8080`); WebSocket fallback có thể dùng `ws://localhost:8080/api/ws` khi dev không bật WT. WebTransport cần HTTPS/cert tin cậy. Backend tự khởi tạo schema cùng
 dữ liệu hệ thống tối thiểu. Sau lần cài mới, quản trị viên phải import dữ liệu
@@ -59,7 +59,7 @@ cd backend
 go run ./cmd/server
 ```
 
-Backend mặc định nghe `:8080`, tự khởi tạo schema và các bản ghi hệ thống tối thiểu khi kết nối được PostgreSQL. Quá trình này được serialize giữa các instance bằng PostgreSQL advisory lock và tự thử lại các lỗi lock tạm thời; cấu hình timeout/retry được mô tả trong `docs/DEVELOPMENT.md`. Hãy import CSV trong Admin trước khi chơi và khởi động lại backend để nạp lại các registry được cache.
+Backend mặc định nghe `:8080`, tự khởi tạo schema và các bản ghi hệ thống tối thiểu khi kết nối được PostgreSQL. Quá trình này được serialize giữa các instance bằng PostgreSQL advisory lock và tự thử lại các lỗi lock tạm thời; cấu hình timeout/retry được mô tả trong `docs/guides/DEVELOPMENT.md`. Hãy import CSV trong Admin trước khi chơi và khởi động lại backend để nạp lại các registry được cache.
 
 ### Frontend
 
@@ -121,7 +121,7 @@ Tổng hợp giới hạn còn lại của PR-01…PR-36: `docs/mmo/remaining-li
 
 ## Nguyên tắc cập nhật tài liệu
 
-1. Nếu thay đổi route backend, cập nhật `docs/API.md`.
-2. Nếu thay đổi schema/seed CSV, cập nhật `docs/GAME_DATA.md`.
-3. Nếu thay đổi flow chạy app, biến môi trường hoặc lệnh kiểm tra, cập nhật `docs/DEVELOPMENT.md` và README liên quan.
+1. Nếu thay đổi route backend, cập nhật `docs/guides/API.md`.
+2. Nếu thay đổi schema/seed CSV, cập nhật `docs/guides/GAME_DATA.md`.
+3. Nếu thay đổi flow chạy app, biến môi trường hoặc lệnh kiểm tra, cập nhật `docs/guides/DEVELOPMENT.md` và README liên quan.
 4. Nếu thay đổi gameplay nhìn thấy được, cập nhật `WIKI.md`.

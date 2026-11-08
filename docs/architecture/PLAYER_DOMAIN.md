@@ -1,12 +1,12 @@
 # Player Domain Guide
 
-Use this guide when changing a player route, durable player state, player-visible gameplay, or the frontend player snapshot. It is an index and workflow, not a second API or schema specification. The route table in `backend/internal/server/server.go`, the owning code, and `docs/API.md` remain authoritative.
+Use this guide when changing a player route, durable player state, player-visible gameplay, or the frontend player snapshot. It is an index and workflow, not a second API or schema specification. The route table in `backend/internal/server/server.go`, the owning code, and `docs/guides/API.md` remain authoritative.
 
 ## Ownership Map
 
 | Concern | Start here | Boundary / notes |
 | --- | --- | --- |
-| Route and HTTP contract | `backend/internal/server/server.go`, `docs/API.md` | The router is the source of truth for registration; follow the registered handler before editing. |
+| Route and HTTP contract | `backend/internal/server/server.go`, `docs/guides/API.md` | The router is the source of truth for registration; follow the registered handler before editing. |
 | Registration and onboarding | `backend/internal/handlers/player_auth_register.go` | Also inspect schema foreign keys and region/hub data when changing creation defaults. |
 | Login, logout, current player, cookies, Google auth | `backend/internal/handlers/player_auth_login.go`, `player_auth_cookies.go`, `player_auth_google.go` | Session and current-player projection behavior is auth-sensitive. |
 | Durable player snapshot | `backend/internal/playerstate/snapshot.go` | Owns full-row columns and scan order, collection revision, Dao-mark hydration, materials, expired-status repair, and not-found behavior. |
@@ -24,7 +24,7 @@ Shared handler services are initialized in `backend/internal/handlers/services.g
 
 ## Change Workflow
 
-1. Find the route in `server.go`, read its contract in `docs/API.md`, and follow the registered handler. For non-route gameplay, start from the owning handler or caller.
+1. Find the route in `server.go`, read its contract in `docs/guides/API.md`, and follow the registered handler. For non-route gameplay, start from the owning handler or caller.
 2. Classify the data being changed: canonical `players` row, a player collection/table, a derived response projection, or transient/realtime state. Inspect the matching schema and existing writer before changing persistence.
 3. For a full player snapshot, use `playerstate.Load`/`Scan` or the appropriate `PlayerService` loader. `Options.Gu` selects Gu scope only; materials, Dao-mark hydration, and expired-status repair are included by `playerstate.Load`. A narrow projection is appropriate when the caller needs only specific fields; do not duplicate the full canonical projection or collection revision.
 4. For player state mutations, use `MutatePlayer` in `backend/internal/handlers/player_mutation.go`. It executes the caller's mutation closure inside an atomic database transaction with `FOR UPDATE` locking, applies passive evaluations, executes a canonical full-row update that monotonically increments `version` and `state_revision`, commits atomically, and publishes post-commit player snapshot events (`PublishPlayerSnapshot`) to Redis and connected clients. Do not write hand-rolled `UPDATE players` statements with partial column subsets that omit `version` or `state_revision`.
@@ -38,4 +38,4 @@ Shared handler services are initialized in `backend/internal/handlers/services.g
 - `playerstate.Load` may repair expired statuses and therefore is not a pure, side-effect-free read. Choose it with that behavior in mind; use an existing narrow projection when only response fields are needed.
 - Materials are loaded from `player_inventory_items`; Gu inventory is loaded only for the selected Gu scope. A missing player is reported as `sql.ErrNoRows` and can be checked with `playerstate.IsNotFound`.
 - Schema definitions and compatibility DDL live in `backend/internal/db/schema_*.go`. The project has no versioned migration framework; inspect whether a change also needs an explicit operational data migration.
-- For player-visible gameplay values backed by CSV/JSON registries, inspect the source data and `docs/GAME_DATA.md`; update `WIKI.md` when player-facing rules change.
+- For player-visible gameplay values backed by CSV/JSON registries, inspect the source data and `docs/guides/GAME_DATA.md`; update `WIKI.md` when player-facing rules change.

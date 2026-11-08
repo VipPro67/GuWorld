@@ -441,9 +441,9 @@ cho vùng boss-only, trả đúng loài `Patrol` cho vùng chỉ có Patrol, wal
 
 | File | Vị trí | Nội dung |
 |---|---|---|
-| `docs/GAME_DATA.md` | ~`:1028` (mục `monster_spawns`) | Whitelist rule, kế thừa `ParentID`, bỏ fallback registry toàn cục, danh sách 4 vùng không sinh quái thường |
+| `docs/guides/GAME_DATA.md` | ~`:1028` (mục `monster_spawns`) | Whitelist rule, kế thừa `ParentID`, bỏ fallback registry toàn cục, danh sách 4 vùng không sinh quái thường |
 | `WIKI.md` | mục bản đồ / khám phá | 1 câu player-visible: quái mỗi vùng lấy từ data Admin khai báo |
-| `docs/ADMIN_RESOURCE_MATRIX.md` | `:117` | Không đổi (đã ghi "Reload Zone/Monster registry") |
+| `docs/guides/ADMIN_RESOURCE_MATRIX.md` | `:117` | Không đổi (đã ghi "Reload Zone/Monster registry") |
 
 ---
 

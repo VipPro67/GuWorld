@@ -155,9 +155,9 @@ Bất kỳ mục fail ⇒ **HOLD**, dời cutover; không có ngoại lệ "depl
 | `docs/mmo/cutover.md` | Thay "rollout stages" bằng 3 pha A/B/C; rollback revert + image pin; bỏ mô tả flag/allowlist cũ nếu còn |
 | `docs/mmo/rollout.md` | Trạng thái transport mới, build-id gate, GitOps order |
 | `docs/mmo/release-checklist.md` | Gate D bổ sung mục WT (browser matrix, resume, capability, cert) |
-| `docs/DEVELOPMENT.md` | Quy trình deploy frontend CF Workers + backend workflow, rollback |
+| `docs/guides/DEVELOPMENT.md` | Quy trình deploy frontend CF Workers + backend workflow, rollback |
 | `README.md` | Yêu cầu browser/mạng, bảo trì |
-| `docs/API.md` | `/api/health` fields, drain endpoint |
+| `docs/guides/API.md` | `/api/health` fields, drain endpoint |
 
 ## 7. Rủi ro
 

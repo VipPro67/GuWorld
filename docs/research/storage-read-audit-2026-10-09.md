@@ -358,7 +358,7 @@ thêm `response_body_truncated`; khi body JSON lỗi bị cắt và không parse
 metadata/string overhead. Trace còn ghi `response_bytes` bằng kích thước thực gửi từ
 Gin writer; tab Admin hiển thị kích thước này cạnh latency. Nhờ vậy có thể phát hiện
 GET có payload lớn mà không cần giữ response đầy đủ trong bộ nhớ. Contract được ghi
-trong `docs/API.md`.
+trong `docs/guides/API.md`.
 
 **Bằng chứng mã:** `backend/internal/monitor/monitor.go`
 (`loggingResponseWriter`, `Middleware`, `RequestTrace`);

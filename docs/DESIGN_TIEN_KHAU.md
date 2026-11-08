@@ -81,7 +81,7 @@ Tiên Khiếu mở (grade 1–5: area, time_rate, sản lượng cơ bản)
 | P0-5 | **Phân công dị nhân có nghĩa**: `+0.25 yield × số công nhân` từng node (cap 2/node; hằng số trước, data-driven sau). | `handlers/aperture_collect.go:592-608`, `variant_economy.go` |
 | P0-6 | **Thức ăn của dị nhân**: society sim đọc tồn kho node BREEDING/nông trại (lưu kho `food_storage` của settlement — cột đã có) thay vì tiêu `immortal_essence`; thiếu đồ ăn → đói/khủng loạn như cũ. | `worker/society_simulation.go:85-129` |
 
-Kiểm tra P0: `go test ./internal/handlers/... -run Aperture` + worker tests; cập nhật `docs/GAME_DATA.md` (rule ApertureNodeTemplate.csv) và `WIKI.md` (mảng nuôi trồng).
+Kiểm tra P0: `go test ./internal/handlers/... -run Aperture` + worker tests; cập nhật `docs/guides/GAME_DATA.md` (rule ApertureNodeTemplate.csv) và `WIKI.md` (mảng nuôi trồng).
 
 ### Phase 1 — Tách Tiên Nguyên (schema + ngoài trận)
 
@@ -132,7 +132,7 @@ Kiểm tra Phase 2: `go test ./internal/realtime/... -race` (dual-pool cast/sett
 3. **Không làm mất giá Tiên Nguyên đã tích lũy**: backfill phải chạy đúng một lần, idempotent, theo pattern initSchema của repo.
 4. **Giao thoa UI cũ/mới**: giữ response field cũ (`max_mana` cho rank ≥ 6 trả cap logic mới) cho tới khi dual-bar sống; arena/death-arena copy (`schema_death_arena.go:63-64`) giữ nguyên vì arena offline không dùng Tiên Nguyên.
 5. **P0 phải đi trước** vì economies thay đổi: refinement worker chưa wire nghĩa là player đang mở "luyện tự động" mà không thực thi — cần change note.
-6. **Tài liệu cần cập nhật**: `WIKI.md` (§ mana, § Tiên Khiếu/nuôi trồng, § Thạch nạp), `docs/API.md` (response shapes), `docs/GAME_DATA.md` (CSV columns + cap per grade); `PROJECT.md` khi scope mở sang Địa Linh 공공.
+6. **Tài liệu cần cập nhật**: `WIKI.md` (§ mana, § Tiên Khiếu/nuôi trồng, § Thạch nạp), `docs/guides/API.md` (response shapes), `docs/guides/GAME_DATA.md` (CSV columns + cap per grade); `PROJECT.md` khi scope mở sang Địa Linh 공공.
 7. **Thứ tự bắt buộc**: P0 → P1 → P2 → P2b → P3 (P2 trước P1 sẽ đụng settlement với migration đang chạy).
 
 ## 5. Thứ tự triển khai đề xuất
@@ -182,4 +182,4 @@ Mỗi phase là một PR độc lập + tests riêng; trước khi kết phase c
 ### 6.4 Phạm vi cắt (files)
 
 B: `schema_aperture.go` (DDL + migrate), `models/aperture.go` (+types), `gamefx/aperture_yield.go` (+vitality/stock), NEW `handlers/aperture_points.go`, `handlers/aperture_collect.go` (cut & glue), `handlers/aperture_nodes.go` (defense-only), `handlers/aperture_core.go` (GET nodes → defense; new GET points; seed gen), `handlers/aperture_settings.go` (defense-only), `handlers/tribulation_trigger.go` (yearly sim trên điểm), `handlers/realtime_tribulation.go` + `handlers/tribulation_realtime.go` (arena swap), `worker/variant_refinement.go` wire, `server.go` routes, admin_world_extended (giữ list DEFENSE, điểm admin list thêm).
-F: `apertureSlice.ts` + `ImmortalApertureView.tsx` (tab Điểm Tài Nguyên thay tab khu trội; giờ vẫn giữ grid phòng thu); `docs/GAME_DATA.md` CSV rule; `WIKI.md` § Tiên đạo rewrite; `API.md` mới route.
+F: `apertureSlice.ts` + `ImmortalApertureView.tsx` (tab Điểm Tài Nguyên thay tab khu trội; giờ vẫn giữ grid phòng thu); `docs/guides/GAME_DATA.md` CSV rule; `WIKI.md` § Tiên đạo rewrite; `API.md` mới route.
