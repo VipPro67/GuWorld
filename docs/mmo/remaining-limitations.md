@@ -99,34 +99,15 @@ Impact: cross-process double ownership remains a release blocker.
 
 ### PR-06 — Unified input arbitration & aim UI
 
-**Status:** IN PROGRESS.
+**Status:** RETIRED — realtime combat controls removed; turn-based world encounters remain pending.
 
-- Keys `1–6` now map to the ordered equipped Gu hotbar; selecting a supported
-  Gu by key or HUD button casts it and lets left/right click reuse it. Esc clears
-  the selection, and empty/unsupported slots no longer fall back to preview
-  skills. The six-slot assignment is in the **Tu luyện → Bản Thân → Cài đặt
-  MMO** section and saves through the authenticated realtime-hotbar endpoint.
-- MMO settings now persist left-click slot/selected-Gu behavior, right-click
-  basic attack or a selected hotbar Gu, and client-side auto-farm range/HP stop
-  controls inside the existing `combat_settings` JSON. Auto-farm only runs while
-  the game tab is open, pauses for manual movement/clicks and open panels, and
-  stops at the configured HP threshold. Auto-farm skill use follows the equipped
-  hotbar order; the retired turn-based Gu tactic loadout is no longer edited or
-  sent by the client (`gu_priorities` is cleared on save). The `skip_battle`
-  setting and its server-side simulator shortcut have been removed. The legacy
-  combat endpoint and tournament simulators have been migrated to realtime;
-  the backend turn-based simulator and its player-facing resolver routes have
-  been removed. Realtime tournament sessions settle through their death
-  handlers.
-- The browser flow is verified against live services on `localhost:3000`. Movement
-  tested via both D key and pointer click-to-move, updating authoritative positions
-  `(61, 60)` -> `(63, 60)` -> `(64, 62)`. Three equipped Gu skills map to hotbar keys `1–3`
-  and basic attack binds to right-click.
-- Aim confirmation/cancel, Space, F, Tab and Esc lack the planned 30+ conflict
-  tests, including `QWERDF` vs WASD. Right-click now confirms the selected Gu
-  cast while a hotbar Gu is selected; Esc cancels aim/selection.
-- Chat/modal runtime focus behavior and aim/target hit-testing are partial.
-- Multi-client browser load and automated auto-farm long soak remain to be scripted.
+- Realtime combat hotbar, mouse casting, skill hotbar API/state, and client-side
+  auto-farm were retired. Legacy player loadout fields are dropped by schema
+  initialization.
+- Ordinary world-monster aggro still updates chase/attack state on a realtime
+  worker. It does not currently resolve damage or start a turn-based encounter.
+  The encounter trigger and related PvP/tournament behavior need separate design;
+  see `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 
 ### PR-07 — Client timing, snapshot & prediction core
 

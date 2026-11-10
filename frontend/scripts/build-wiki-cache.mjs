@@ -105,7 +105,6 @@ function buildWikiData() {
       combat_roles: safeJSON(r[guCol("combat_roles")], []),
       combat_tags: safeJSON(r[guCol("combat_tags")], []),
       support_tags: safeJSON(r[guCol("support_tags")], []),
-      skill_profile: safeJSON(r[guCol("skill_profile")], null),
     });
   }
   const gus = Array.from(gusMap.values());

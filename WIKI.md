@@ -131,7 +131,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 
 - Trong quá trình tu hành, Cổ sư có thể tích luỹ điểm **Chân Ý** của các lưu phái (ví dụ: Kiếm Đạo, Hỏa Đạo, Trí Đạo...) để thăng tiến cảnh giới lưu phái.
 - **Cách nhận điểm Chân Ý:**
-  - **Sử dụng Cổ tiêu hao/Cổ trong chiến đấu realtime:** (bao gồm đánh tay và auto-farm chạy trên client như khai thác mỏ, tàn tích). Mỗi lần thi triển thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận còn phụ thuộc hiệu suất cảnh giới và giới hạn của rank Cổ. (Lưu ý: Đấu Trường Ảo không cộng điểm).
+  - **Sử dụng Cổ tiêu hao/Cổ trong combat turn-based:** Mỗi lần sử dụng thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận còn phụ thuộc hiệu suất cảnh giới và giới hạn của rank Cổ. (Lưu ý: Đấu Trường Ảo không cộng điểm).
   - **Không có giới hạn mỗi trận:** điểm Chân Ý từ Cổ, sát chiêu và đánh thường được cộng trực tiếp khi settle checkpoint, không bị chặn bởi Rank × 10 như quy tắc turn-based cũ. Hunger, mana và cooldown là giới hạn tự nhiên.
   - Các nguồn điểm khác đã có trong game gồm phần thưởng Phó bản (như Mộng Cảnh) và Luyện Cổ; điểm thực nhận tuân theo công thức của từng hoạt động.
 - **Các mốc cảnh giới:** Phàm Thai (< 10.000) -> Đại Sư (10.000) -> Tông Sư (100.000) -> Đại Tông Sư (1.000.000) -> Vô Thượng Đại Tông Sư (10.000.000).
@@ -185,9 +185,9 @@ Nghi thức Thăng Tiên gồm **3 khâu tuần tự** — không còn là một
 - **Núi Danh / Bí Cảnh Thiên Địa (`point_class=FAMOUS`, canon ch. 2121–2153):** mỗi vùng hoang dã rank ≥ 4 có ô Boss sẽ có đúng **1 núi danh**, neo trên **ô Boss mạnh nhất** — canh giữ bởi thú hoang tối thượng; chỉ khai thác được khi guardian không còn sống trên ô (Boss respawn lại thì mỏ "đóng" lại). Phẩm núi danh theo rank Boss, `rare_rate`/`gu_rate` cao hơn điểm thường, sinh **vật liệu đặc hữu** (hồn sa, độc sa, phượng tử, băng tinh, nô đá, Lang Gia luyện sa, huyết tinh…) cho luyện Cổ cấp cao.
 - **Di dời (canon ch. 2153 "bán núi mua núi"):** mỏ ngoài map **di dời được vào Tiên Khiếu** nếu còn chỗ (<16 điểm) và sinh khí ≥ 70% (chỉ Cổ Tiên **Rank ≥ 6** mới có Tiên Khiếu để chứa). Đây là **nghi thức tại chỗ**, không phải mua đứt: bấm di dời sẽ **khấu trừ Tiên Nguyên ngay** — **LOW 20 / MID 30 / TOP 50**, cộng **+50% mỗi Chuyển trên Lục Chuyển** — và mỏ **vẫn nằm ngoài map**; đạo hữu phải **đứng tại mỏ** suốt **3 phút (LOW) / 5 phút (MID) / 8 phút (TOP)**, giảm 12% mỗi Chuyển trên Lục Chuyển (sàn 60 giây). Hết giờ mà vẫn đứng tại mỏ thì mỏ mới chuyển sang `scope=APERTURE`, xếp vào ô trống trên lưới 20×20 và bắt đầu ăn `time_rate` + Đạo Ngân. **Rời khỏi mỏ giữa chừng → nghi thức hỏng và Tiên Nguyên đã tiêu mất luôn** (không hoàn). Mỗi đạo hữu chỉ làm được **một nghi thức một lúc**; mỏ đang bị người khác làm nghi thức thì không chen vào được. Nghi thức **quá hạn 10 phút** bị dọn tự động (worker mỗi phút): mất Tiên Nguyên, mỏ trở lại tự do cho người khác. Vùng cũ sẽ được worker mọc mỏ khác.
 - **Giao dịch:** chỉ điểm **trong Tiên Khiếu**, đang `ACTIVE` mới niêm yết được ở **Bảo Hoàng Thiên** (`item_type=ResourcePoint`); mua xong mỏ được **rebind sang Tiên Khiếu người mua** (tối đa 16 điểm). Mỏ ngoài map phải **di dời** trước rồi mới bán được.
-- **Kiếp nạn chỉ diễn ra trong trận:** khi đạo hữu online **nhưng chưa bước vào** vùng `aperture_tribulation`, tai kiếp được **đóng băng** như khi offline — quái giữ nguyên vị trí, không phá node, và đồng hồ 24 giờ không trôi. Trước đây worker từng mô phỏng phá hoại ngoài màn hình; cơ chế đó đã bị gỡ, mọi sát thương node/tháp giờ resolve trọn trong zone realtime.
+- **Tai kiếp realtime đã ngừng:** mô phỏng quái theo tick và sát thương node/tháp trên map không còn được hỗ trợ. Luồng encounter và kết toán tai kiếp theo lượt chưa hoàn thiện; trạng thái này được theo dõi tại `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 - Khi đến gần node/vùng, quái đánh vùng 3×3 quanh vị trí của nó. Mỗi ô thuộc node bị trúng cộng sát thương vào HP chung của node; sát thương mỗi ô theo loại kiếp: Địa Tai 1, Thiên Kiếp 2, Hạo Kiếp 4, Vạn Kiếp 8, Hỗn Độn Đại Nạn 16. Đại Yêu gây gấp đôi sát thương yêu tướng.
-- **Chiến trường tai kiếp dùng map realtime riêng:** vào map Tiên Khiếu từ bảng điều khiển, tự di chuyển và thi triển Cổ theo hotbar; quái realtime tự tìm người chơi hoặc phá node, còn trạng thái node/quái được máy chủ lưu theo sự kiện. Sau khi vào map, quái chờ 5 giây trước khi bắt đầu hoạt động để nhân vật kịp tải chiến trường. Quái cuối cùng bị hạ sẽ tự kết toán tai kiếp, nhận Đạo Ngân và xử lý đột phá nếu đủ điều kiện. Hệ thống còn đối soát trạng thái realtime với DB và tự kết toán trong tối đa ~5 giây kể cả khi death event cuối bị lỡ; HUD hiển thị số quái còn lại theo dữ liệu máy chủ (không phải số quái trong radar cục bộ). Nếu đạo hữu bị hạ gục, nhân vật được đưa về tọa độ đã lưu mà không rơi đồ.
+- **Chuyển đổi chiến trường tai kiếp:** cơ chế map realtime, hotbar thi triển Cổ và AI quái theo tick đã bị ngừng. Luồng kích hoạt/kết toán tai kiếp theo combat turn-based chưa được hoàn thiện; xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 - **Cổ sư chỉ được xuất trận khi Sinh lực Tiên Khiếu > 5% Sinh lực tối đa.** Nếu Tiên Khiếu nguy cấp (≤ 5%), đạo hữu không thể ra tay — quái sẽ tiếp tục càn quét mỏ trong sự bất lực; hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp.
 - **Thoát hoặc hết hạn tai kiếp:** Rút lui bằng HUD hoặc hết thời gian online cho phép sẽ kết toán thất bại; bộ đếm số lượng tai kiếp không tăng, nhưng mốc `next_tribulation_year` vẫn được đẩy lên để có thời gian hồi phục. Hạ quái cuối cùng sẽ tự kết toán thắng và nhận thưởng; không còn nút kết toán mô phỏng trận đấu.
 - **Kiếp nạn theo cấp bậc:**
@@ -432,9 +432,9 @@ Trong Túi Đồ, mở tab **Sát Chiêu**, chọn một Cổ chính và thêm C
 
 Rank Cổ chính quyết định phần lớn ngân sách sức mạnh; Cổ phụ bổ sung ngân sách với mức giảm dần. Số lượng, phạm vi và độ phức tạp effect làm tăng tải công thức. Khi tải vượt ngân sách, hệ thống tự giảm giá trị effect và hiển thị kết quả trước khi lưu. Cấp lưu phái và độ thành thạo ảnh hưởng tỉ lệ thôi động; dùng thành công giúp tăng thành thạo sát chiêu và cộng **Chân Ý lưu phái hạch tâm** theo rank Cổ chính (R1=1 … R9=300, giảm theo cảnh giới hiện tại).
 
-Preview realtime dùng cùng compiler với combat. Có thể phối hợp damage đơn mục tiêu với hồi/khiên bản thân trong một sát chiêu; thanh tẩy chỉ dùng trong chiêu SELF. Nếu hệ thống tự giảm effect để vừa ngân sách, cần xác nhận preview trước khi lưu. Status theo lượt và effect chưa có executor realtime không được đưa vào builder.
+Preview sát chiêu dùng compiler effect chung và kiểm tra các effect được combat theo lượt hỗ trợ. Có thể phối hợp damage đơn mục tiêu với hồi/khiên bản thân; thanh tẩy chỉ dùng trong chiêu SELF. Nếu hệ thống tự giảm effect để vừa ngân sách, cần xác nhận preview trước khi lưu. Các effect chưa có executor turn-based chưa được hỗ trợ.
 
-Khi đúc Tiên Cổ Ốc, có thể chọn một Trận Kích realtime từ effect của từng Cổ hạch tâm. Preview hiển thị các action đã tạo; Trận Kích và sát chiêu cùng dùng hotbar 9–12. Profile đã lưu là snapshot; thay đổi luật không tự sửa build cũ.
+Khi đúc Tiên Cổ Ốc, có thể chọn Trận Kích từ effect của Cổ hạch tâm. Preview hiển thị các action; Trận Kích và sát chiêu được đưa vào cấu hình combat theo lượt. Profile đã lưu là snapshot; thay đổi luật không tự sửa build cũ.
 
 Sát chiêu cần được trang bị và kích hoạt trong **Cài đặt chiến thuật** (Aperture > Cài đặt) hoặc tick chọn trực tiếp trong màn hình **Chuẩn bị chiến đấu** trước trận; sát chiêu không được trang bị/chọn sẽ không tự động kích hoạt. Effect hồi phục `ON_USE` có thể được dùng ngoài combat bằng nút **Dùng**. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Một instance Cổ có thể tham gia nhiều sát chiêu. Nếu instance đó rời `player_gu`, chết hoặc đổi thành Cổ/rank khác, những công thức tham chiếu nó sẽ tạm thời không dùng được.
 
@@ -447,7 +447,7 @@ Mỗi Cổ instance có:
 
 Khi Cổ chết đói, **Ký Sự Tu Hành** ghi bản rõ: độ no ngay trước khi chết, trạng thái lúc đó (`ACTIVE`/`SLEEPING`/`SEALED` — quyết định tốc độ hao hụt), lần cuối được cho ăn và tổng thời gian không được cho ăn của cá thể đó.
 
-**Huyền Cổ (Thiên Đạo, Rank 10):** hiệu ứng kết thúc trận trước Lượt 1 thuộc combat theo lượt đã bị gỡ. Cổ này chưa có profile tương đương trong combat realtime, nên hiệu ứng đó hiện không kích hoạt trong chiến đấu.
+**Huyền Cổ (Thiên Đạo, Rank 10):** hiệu ứng kết thúc trận trước Lượt 1 chưa có executor combat theo lượt; hiệu ứng hiện không kích hoạt trong chiến đấu và cần được thiết kế lại trước khi hỗ trợ.
 
 Cổ sư có thể:
 
@@ -622,19 +622,9 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 
 > **Tốc độ chạy MMO:** realtime world dùng tốc độ nền 4 ô/giây tại passive MOVEMENT = 1; mỗi điểm MOVEMENT cao hơn mốc này cộng 5% tốc độ. Slow, haste, root và stun tiếp tục tác động theo trạng thái realtime.
 
-> **Chiến đấu realtime (dev):** hotbar **1–6** là sáu Cổ được gán trong **Tu luyện → Bản Thân → Cài đặt MMO → Gán Cổ vào hotbar realtime**; phím **7** bật/tắt biến thân của Cổ phòng thủ nếu được hỗ trợ, phím **8** dùng chiêu riêng trong dạng. Ô **9–12** là **bốn phím Alt** dùng chung cho **Sát Chiêu đã trang bị và Trận Kích của Tiên Cổ Ốc đang xuất chiến**; thứ tự ghim chỉnh trong **Cài đặt → Chiến đấu & Điều khiển**, danh sách chỉ hiện các chiêu đang có thay vì ô trống. Phím của các ô đang có chiêu (Cổ 1–6 và chiêu 9–12) có thể đổi trong cùng tab (lưu theo thiết bị; phím biến thân 7–8 giữ mặc định); HUD ngoài trận cũng chỉ vẽ các ô đang có Cổ hoặc chiêu. Windup/cooldown Sát Chiêu và Trận Kích được tính realtime theo rank và độ phức tạp; không dùng số lượt cũ. Sát Chiêu có thể ghép damage đơn mục tiêu với hồi hoặc khiên bản thân; thanh tẩy chỉ dùng trong chiêu SELF. Trận Kích lấy effect realtime đã chọn từ Cổ hạch tâm. Các effect phải compile được bằng executor realtime; effect có điều kiện và status theo lượt chưa có hỗ trợ bị khóa. Mỗi lần cast tiêu hao một độ no từ từng Cổ thành phần và mana; tỉ lệ thất bại/phản phệ được kiểm tra authoritative. Trận Kích tiêu hao độ no Cổ hạch tâm của Ốc nhưng không cộng độ thành thạo sát chiêu. Trong **Tu luyện → Bản Thân → Cài đặt MMO → Điều khiển chuột & phím**, có thể gán chuột trái cho một nút cố định hoặc để dùng Cổ đang chọn (nếu chưa chọn thì click đất để đi), và gán chuột phải cho đòn thường hoặc một Cổ. **Tự farm quái realtime** sẽ tự tìm quái trong bán kính đã chọn, áp sát và đánh; tùy chọn dùng kỹ năng theo thứ tự hotbar. Farm tạm dừng khi HP xuống ngưỡng an toàn, khi mở bảng MMO hoặc khi người chơi tự thao tác; chỉ chạy khi tab game đang mở. **Esc** bỏ chọn/aim/target. Cổ chỉ thi triển được khi có profile realtime hợp lệ; Cổ chưa có profile vẫn hiện tên nhưng nút cast bị khóa và không tự đổi thành chiêu khác. Effect có điều kiện hoặc status turn-based chỉ dùng được khi profile MMO đã khai báo rõ cơ chế và thời lượng; hệ thống không tự đổi số lượt thành giây hay thêm sát thương thay thế. Đánh thường lấy công từ chỉ số nhân vật. Chiêu Cổ dùng giá mana theo chuyển/cảnh giới, luyện hóa và xung đột đạo ngân; sát thương lấy nền MMO rồi nhân cảnh giới lưu phái, đạo ngân và bonus hệ. Phòng thủ và kháng hệ giảm sát thương nhận. Cổ vượt chuyển phản phệ HP. Mana tiêu được ghi định kỳ và khi rời map; hồi phục thụ động được tính khi tải lại hồ sơ. Cài đặt chiến thuật tự động turn-base đã được gỡ khỏi UI.
+> **Combat hiện tại:** giao tranh PvE chuẩn dùng mô phỏng theo lượt qua `CombatScreen`. Hotbar realtime, auto-farm, điều khiển thi triển Cổ theo thời gian thực và các profile realtime không còn là cơ chế combat được hỗ trợ. Các phần thế giới/đấu trường chưa có chuyển đổi đầy đủ được liệt kê tại `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 
-> Mỗi lần thử dùng Cổ hợp lệ trong realtime giảm 1 độ no của đúng cá thể Cổ, kể cả khi thiếu Chân Nguyên hoặc chịu phản phệ; Cổ hết độ no không thể tiếp tục thi triển. Độ no và Chân Nguyên tiêu hao được ghi cùng checkpoint định kỳ hoặc khi rời map. Đánh thường không thể chen vào lúc đang vận chiêu Cổ.
-
-> Khi đang vận chiêu hoặc vừa thi triển xong, nhân vật di chuyển theo `movement_policy` của Cổ: `SLOW` còn nửa tốc độ, `ROOT` đứng yên, `FREE` không giảm. Hết windup vẫn có một khoảng recovery ngắn chặn dùng chiêu/đánh thường kế tiếp. Cooldown, trạng thái có thời hạn và hiệu ứng ẩn đang chạy được lưu lại khi rời map hoặc chuyển vùng, nên vào lại không reset thời gian để né chiêu.
-
-> **Lướt và Tăng Tốc:** Bấm chiêu lướt khi đang chạy sẽ dùng hướng di chuyển hiện tại; lúc đứng yên sẽ dùng hướng ngắm, mục tiêu hoặc hướng di chuyển gần nhất. Server khóa hướng lúc nhận lệnh. Lướt dừng trước tường; chiêu va chạm gây sát thương lên địch đầu tiên, còn chiêu di chuyển thuần đi xuyên qua thực thể. Không thể dùng cú lướt thứ hai khi cú đầu còn chạy. Khống chế cứng ngắt lướt; ROOT/BIND ngăn lướt bắt đầu nhưng không dừng cú đã chạy; SLOW và buff Tăng Tốc không đổi tốc độ lướt. Quãng đường, thời gian lướt và sức mạnh/thời gian Tăng Tốc được cấu hình theo từng Cổ và Chuyển Cổ.
-
-> Các Cổ có Tăng Tốc trong combat: Thanh Phong Luân Cổ (Nhất Chuyển: 1,35× trong 2,5 giây), Ngũ Chuyển Độn Kiều Cổ (1,5× trong 3 giây), Tâm Giới Tiên Cổ (Thất Chuyển: 1,75× trong 3,5 giây). Dùng lại cùng buff sẽ làm mới thời hạn; nhiều buff Tăng Tốc khác nhau lấy hệ số cao nhất.
-
-> Nhân vật của người chơi hiện dùng tạo hình chibi pixel Cổ Nguyệt Phương Nguyên; người chơi có tên Bạch Ngưng Băng hoặc Bai Ning Bing dùng tạo hình Bạch Ngưng Băng. Hai tạo hình này dùng chung trạng thái hoạt ảnh di chuyển và chiến đấu của map realtime. Quái trên map realtime hiển thị tên và ảnh đúng theo mẫu; khi truy đuổi hoặc tấn công người chơi, thanh máu chuyển đỏ. Thanh máu trên đầu nhân vật và quái vật tích hợp **Damage Lag Bar** (thanh trễ vàng/trắng trượt mượt sau khi trừ máu) và cảnh báo nhấp nháy đỏ khi máu dưới 25%. Khi có khiên, thanh khiên lam ngọc hiển thị phía trên thanh máu; khiên bị đánh trúng sẽ phát tia sáng kim quang (`fx_khien_anh_kim`), và khi cạn khiên sẽ kích hoạt hoạt ảnh vỡ giáp vụn nát (`fx_thu_vo_giap_gpt`). Đòn đánh thường có hoạt ảnh chém năng lượng định hướng và làm chớp trắng/đỏ sprite mục tiêu. Kỹ năng Cổ trùng phát hoạt ảnh VFX tương ứng theo thuộc tính (Hỏa Dực, Thiểm Quang, Điện Nhãn, Thính Phong, Lôi Phạt, Độc Xà, v.v.). Các ô Cổ trên Hotbar và Túi Cổ được bao bọc bởi **Khung Phẩm Cấp Đạo Hồn** chuẩn hóa từ Chuyển 1 đến Chuyển 9. Bảng mục tiêu có ảnh quái và HP. Số sát thương nổi là lượng HP thực mất sau khi trừ khiên; “chặn” chỉ xuất hiện khi khiên hấp thụ toàn bộ đòn đánh.
-
-> Trên map realtime, Tăng Tốc để lại vệt gió khi di chuyển, Bay có dáng lơ lửng, không phát bước đi, cùng vòng khí và điểm sáng dưới chân, Tàng Hình có viền tím mờ, còn khiên tạo đường sáng quanh nhân vật. Biến hình phát vòng sáng lúc bật/tắt và giữ hào quang khi còn hiệu lực; Viêm Hùng, Lục Tí Tuyết Băng Ma Vương và Cuồng Man Thú Thần có hình dạng riêng, Lang Bì phủ tai/móng vuốt và Quy Giáp hiện mai rùa. Sự kiện dịch chuyển realtime phát vòng sáng ở điểm đi và điểm đến khi server gửi tọa độ; chiêu di chuyển được server xác nhận vẫn dùng VFX cast riêng của kỹ năng.
+> Các mô tả cũ về cast, lướt, Tăng Tốc, hoạt ảnh đòn đánh, hotbar và HUD chiến đấu realtime bên dưới đã nghỉ hưu cùng client combat cũ; chúng không mô tả hành vi hiện hành. Cooldown/warmup lượt, trigger encounter từ quái thế giới và PvP/đấu trường cần chuyển đổi riêng; xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 
 > **Khiên ảo có hạn:** khiên của người chơi tan dần **10% giá trị hiện tại mỗi giây** (dưới 1 thì về 0), nên khiên tích lũy không còn tồn tại vĩnh viễn. Khiên còn lại trong checkpoint cũng tiếp tục tan theo thời gian offline, nên đăng nhập lại không khôi phục nguyên lớp khiên cũ.
 
@@ -645,13 +635,13 @@ Năm khu tân thủ có cảnh quan riêng trong cùng phong cách pixel-art t�
 - **Bản đồ thế giới (World Atlas)** hiển thị 5 Đại Vực trên đồ bản 15.000 × 10.000: Nam Cương, Trung Châu, Bắc Nguyên nằm thành ba vùng ở phía bắc; Tây Mạc và Đông Hải chia đôi phía nam. Mỗi vùng/tiểu khu (`KHU_VUC`, `SAFE_ZONE`, `HUB`) sử dụng hệ tọa độ cục bộ đồng bộ với MMO chuẩn 1.000 × 1.000 ô (bắt đầu từ `(0, 0)`), với điểm vào trung tâm ở `(500, 500)`. Mỗi Đại Vực có HUB, vùng an toàn và các KHU_VUC con. Bạch Thiên thuộc tầng 2, Hắc Thiên thuộc tầng 3; lối lên hai tầng đang được chuẩn bị và chưa mở. Các địa danh con của Bạch Thiên/Hắc Thiên xuất hiện dưới dạng **Bí Cảnh Bản Đồ dùng chung toàn server**: người chơi cùng vào một bí cảnh sẽ gặp nhau trong cùng một bản đồ riêng, tách khỏi tọa độ thế giới. Mỗi bí cảnh có cổng cố định được đánh dấu trên bản đồ tầng 1; Cổ Sư phải đi tới đúng cổng mới tiến vào được. Mỗi Đại Vực tầng 1 có HUB khởi đầu riêng; khi hoàn tất thiết lập ban đầu, Cổ Sư được đưa vào HUB theo vùng đăng ký.
 - Mỗi Đại Vực chia thành **tiểu vực** 1.000 × 1.000. Trong Đại Vực có các **địa danh có tên** (Thanh Mao Sơn, Tam Vương Truyền Thừa, Sa Mạc Thanh Quỷ...) với độ khó cố định theo vùng.
 - Cổ sư xem lưới địa đồ xung quanh, di chuyển theo Thân pháp, chạm trán quái, thu thập tài nguyên/Cổ hoang dã; du hành giữa các Đại Vực qua màn hình bản đồ thế giới.
-- **Bản đồ lớn "Ngũ Vực"** hiển thị bản đồ thế giới tầng 1 trên một canvas phóng to/thu nhỏ được: vẽ ranh giới các vùng, các điểm dùng chung (Trạm Nghỉ 🏯, Boss ⚔️, Linh Tài 💎) từ `map_cells`, **các chấm quái vật/tài nguyên xung quanh đạo hữu** (resolve theo đúng nội dung từng ô khi di chuyển), và sương mù tối vùng tiểu vực chưa ghé thăm (dựa trên `visited_subzones`). Các ô đã tải được **cache theo chunk 64×64, tách theo khu vực và prefetch dải phía trước hướng đi**; thay đổi ô realtime được apply trực tiếp thay vì tải lại toàn vùng, nên marker hiện dần (không nhấp nháy) và xuất hiện sớm ở khu vực sắp đến. Di chuyển bằng cách **giữ WASD/phím mũi tên trên máy tính hoặc kéo joystick trên thiết bị cảm ứng**; thả phím/joystick để dừng và đổi hướng bất kỳ lúc nào. Nhân vật nội suy liên tục giữa các ô với tốc độ dựa trên chỉ số **MOVEMENT**, trong khi server vẫn xác nhận từng ô và dừng lại nếu phát sinh chiến đấu hoặc sự kiện. Click/tap bản đồ chỉ dùng để chọn mục tiêu hoặc tương tác, không còn ra lệnh di chuyển. Ô trống không tự tạo phục kích procedural, nhưng quái runtime có thể phát hiện, đuổi theo và mở combat khi đạo hữu đến đủ gần mà không cần bước vào ô sinh quái. Vị trí camera + độ zoom của bản đồ được **giữ nguyên sau khi chiến đấu**.
+- **Bản đồ lớn "Ngũ Vực"** hiển thị bản đồ thế giới tầng 1 trên một canvas phóng to/thu nhỏ được: vẽ ranh giới các vùng, các điểm dùng chung (Trạm Nghỉ 🏯, Boss ⚔️, Linh Tài 💎) từ `map_cells`, **các chấm quái vật/tài nguyên xung quanh đạo hữu** (resolve theo đúng nội dung từng ô khi di chuyển), và sương mù tối vùng tiểu vực chưa ghé thăm (dựa trên `visited_subzones`). Các ô đã tải được **cache theo chunk 64×64, tách theo khu vực và prefetch dải phía trước hướng đi**; thay đổi ô realtime được apply trực tiếp thay vì tải lại toàn vùng, nên marker hiện dần (không nhấp nháy) và xuất hiện sớm ở khu vực sắp đến. Di chuyển bằng cách **giữ WASD/phím mũi tên trên máy tính hoặc kéo joystick trên thiết bị cảm ứng**; thả phím/joystick để dừng và đổi hướng bất kỳ lúc nào. Nhân vật nội suy liên tục giữa các ô với tốc độ dựa trên chỉ số **MOVEMENT**, trong khi server vẫn xác nhận từng ô và dừng lại nếu phát sinh chiến đấu hoặc sự kiện. Click/tap bản đồ chỉ dùng để chọn mục tiêu hoặc tương tác, không còn ra lệnh di chuyển. Encounter turn-based hiện bắt đầu qua ô quái trên bản đồ lưới; actor quái Redis chưa được nối vào encounter. Vị trí camera + độ zoom của bản đồ được giữ nguyên khi chuyển view.
 - Trong **Cài Đặt Chung → Hiển thị trên bản đồ**, đạo hữu có thể chọn **Đầy đủ**, **Giảm nhẹ**, **Giảm nhiều**, **Bản đồ lưới (đơn giản)** hoặc **Tắt bản đồ**. Mức lưới đơn giản thay canvas bằng lưới ô quanh vị trí hiện tại, bấm ô trong tầm Thân pháp để di chuyển, không có chọn vùng hay panel phụ. Các mức giảm bớt nhịp cập nhật dữ liệu nền; Tắt bản đồ tháo giao diện Pixi và ngừng các yêu cầu API nền của bản đồ. Lựa chọn được lưu trên trình duyệt hiện tại.
-- **Quái nhỏ, tài nguyên thấp, Cổ cấp thấp** được sinh procedural theo vùng (không lưu DB), **nội dung ổn định theo ô** — quái không tự đổi chỗ/re-randomize theo thời gian; sau khi đạo hữu dọn dẹp một ô, ô đó trống trong 15 phút rồi nội dung cũ quay lại (cooldown `cleared_cells`). Nội dung ô tài nguyên/Cổ hoang dã được chọn theo **dải Chuyển (rank) của vùng** (vật liệu/thức ăn và Cổ rank ≤ 5, trọng số theo cả rank lẫn rarity), nên vùng rank cao không còn rơi đồ rank thấp; Cổ Tiên (rank ≥ 6) không bao giờ xuất hiện trong ô. Các bãi có tâm và loài quái ổn định; Elite đi chung pool sinh quái của vùng (không còn cơ chế "Elite ở tâm bãi") nhưng bị giảm trọng số nên hiếm hơn quái thường. Vùng không có dòng `MonsterSpawn` nào thì không sinh quái. **Boss và tài nguyên cấp cao** là điểm dùng chung toàn thế giới trong `map_cells`, hồi sinh theo `respawn_seconds` riêng sau khi bị đánh bại/hái. Boss trở thành actor dùng chung, phát hiện và đuổi người chơi trong toàn bộ ranh giới `Region` của nó, tự mở combat khi áp sát; khi mất mục tiêu boss quay về ô sinh. Boss không vào `HUB`/`SAFE_ZONE`.
-- Khi trạng thái quái thời gian thực đã tải xong, bản đồ hiển thị đúng cá thể đang tồn tại thay cho dấu quái tĩnh: quái thường di chuyển 0,9–1,7 ô/giây theo Rank, phát hiện người chơi trong 9–17 ô và đuổi tới 15–23 ô quanh điểm sinh (đã vào đuổi thì chỉ bỏ khi vượt hết phạm vi này). Elite di chuyển nhanh hơn (+0,2 ô/giây), phát hiện trong 14 ô và đuổi tối đa 22 ô quanh điểm sinh; boss săn người chơi trong toàn vùng. Quái không thể sinh ra, chọn mục tiêu hay đi xuyên vào `HUB`/`SAFE_ZONE`; Elite và boss cũng bị giới hạn bởi ranh giới vùng, còn quái thường không thể bước vào khu vực có **rank tối đa thấp hơn rank của nó** (quái mạnh không lạc vào vùng cấp thấp). Giao đánh với quái diễn ra trọn trong thế giới realtime: đạo hữu dùng đòn đánh cơ bản hoặc tung chiêu từ hotbar; quái trả đòn qua zone sim, nên không còn luồng "tự động phản công" theo lượt HTTP của bản đồ lưới cũ. Bản đồ nội suy mượt giữa các vị trí server xác nhận, hiện thanh máu khi bị thương/được chọn và hiệu ứng khi ra đòn hoặc nhận sát thương.
-- **Tung chiêu ngoài bản đồ:** trang bị một Cổ có hiệu ứng Block v2 `ON_ACTION` (sát thương, hồi phục, tạo khiên hoặc buff công/thủ/tốc) rồi bấm ô kỹ năng (hoặc phím `1`–`5`). Nếu đã chọn quái, chiêu sát thương được tung ngay; nếu chưa chọn, con trỏ chuyển sang chế độ nhắm mục tiêu và cần nhấp trực tiếp vào quái runtime. Mục tiêu và chiêu đang ngắm không bị hủy chỉ vì một snapshot tạm thời chưa chứa con quái đang di chuyển; khi đổi Đại Vực hoặc nhận sự kiện quái bị hạ/hủy thì lựa chọn mới được xóa. Nhấp xuống ô đất không tiêu hao mana. Cổ hồi phục, phòng thủ hoặc buff không thể gây sát thương lên quái chỉ vì một mục tiêu cũ vẫn đang được chọn.
+- **Quái nhỏ, tài nguyên thấp, Cổ cấp thấp** được sinh procedural theo vùng (không lưu DB), **nội dung ổn định theo ô** — quái không tự đổi chỗ/re-randomize theo thời gian; sau khi đạo hữu dọn dẹp một ô, ô đó trống trong 15 phút rồi nội dung cũ quay lại (cooldown `cleared_cells`). Nội dung ô tài nguyên/Cổ hoang dã được chọn theo **dải Chuyển (rank) của vùng** (vật liệu/thức ăn và Cổ rank ≤ 5, trọng số theo cả rank lẫn rarity), nên vùng rank cao không còn rơi đồ rank thấp; Cổ Tiên (rank ≥ 6) không bao giờ xuất hiện trong ô. Các bãi có tâm và loài quái ổn định; Elite đi chung pool sinh quái của vùng (không còn cơ chế "Elite ở tâm bãi") nhưng bị giảm trọng số nên hiếm hơn quái thường. Vùng không có dòng `MonsterSpawn` nào thì không sinh quái. **Boss và tài nguyên cấp cao** là điểm dùng chung toàn thế giới trong `map_cells`, hồi sinh theo `respawn_seconds` riêng sau khi bị đánh bại/hái. Boss actor hiện chỉ phục vụ snapshot và quản trị; AI đuổi đánh đã gỡ.
+- Actor quái Redis chỉ phục vụ snapshot/admin và không còn AI đuổi đánh. Encounter turn-based hiện được kích hoạt qua ô quái trên bản đồ lưới; kết nối actor Redis với encounter còn thiếu. Dữ liệu spawn vẫn lấy từ `Region.csv`, `MonsterSpawn.csv` và `MapCell.csv`.
+- Chiêu thức được thực thi trong encounter turn-based theo các effect mà simulator hỗ trợ. Cast ngoài combat và target runtime actor chưa được hỗ trợ.
 - Nội dung mỗi vùng phụ thuộc dữ liệu do Admin import từ `backend/data/Region.csv`, `MonsterSpawn.csv` và `MapCell.csv`.
-- Thanh công cụ cho phép chuyển giữa **tương tác/chọn mục tiêu** và **kéo bản đồ**, đưa camera về nhân vật, đồng thời bật/tắt nhãn Quái & Cổ/Boss/HUB/Khu vực/Ngũ Vực. Chọn một người chơi để xem hồ sơ hoặc mời tổ đội; dùng WASD/joystick để tiếp cận và chỉ có thể phát động PvP khi mục tiêu ở trong phạm vi 2 ô.
+- Thanh công cụ cho phép chuyển giữa **tương tác/chọn mục tiêu** và **kéo bản đồ**, đưa camera về nhân vật, đồng thời bật/tắt nhãn Quái & Cổ/Boss/HUB/Khu vực/Ngũ Vực. Chọn một người chơi để xem hồ sơ hoặc mời tổ đội; PvP realtime đã nghỉ hưu và luồng PvP turn-based cần chuyển đổi riêng.
 - Có thể dịch chuyển tức thời đến các vị trí bằng Cổ trùng có khả năng Dịch Chuyển / Tạo Cổng (như Định Tiên Du, Môn Vực Cổ, Thần Du Fake,...) đang trang bị và ở trạng thái ACTIVE. Cổ tạo cổng cho chọn tọa độ hoặc chọn nhanh vùng an toàn khu vực; loại cổng ngẫu nhiên tự chọn đích. **Tầm dịch chuyển giới hạn theo rank Cổ** (rank 5 → 1.000 ô, rank 6 → 3.000, rank 7 → 10.000, rank 8 → 20.000, rank 9 → 30.000 ô; khoảng cách tính theo ô chéo Chebyshev) và có thể chỉnh riêng bằng `params.range` trong `Gu.csv` (khai báo tường minh luôn thắng); Cổ có `IGNORE_MOVEMENT_RANGE` **không kèm** `range` (Thiên Lý Độn, Định Tiên Du...) dịch chuyển vô hạn. Khi đội trưởng dịch chuyển, tổ đội đi theo nhưng cả cuộc dịch chuyển bị chặn nếu có thành viên rank cao hơn rank Cổ dịch chuyển. Cơ chế dịch chuyển bằng tiền (Linh Thạch / Nguyên Thạch) đã bị hủy bỏ.
 - **Chiến lợi phẩm mặt đất/hài cốt:** tài sản rơi khi tử vong được lưu trên ô bản đồ. Trong thời gian khóa, chỉ người hạ gục được nhặt; hết khóa, người khác có thể nhặt. Panel trên bản đồ cho xem nội dung và trạng thái khóa, người liên quan nhận thông báo khi tài sản bị nhặt.
 
@@ -725,7 +715,7 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - Chỉ định mục tiêu hỗ trợ vị trí/hàng/cột/toàn bộ tùy `target_type` của Cổ.
 - **Combat turn-based:** encounter mới dùng simulator xác định và replay; bao gồm quái dã ngoại, PvP dã ngoại, Bí Cảnh, Võ Đài, Tập Luyện, Sinh Tử Đài, Đại Hội Võ Thuật, Tông Môn Chiến và Tai Kiếp. Chuyển động trên bản đồ vẫn realtime. Người chơi dã ngoại bị khóa trong zone khi simulator xử lý combat; kết quả được lưu trước khi mở khóa.
 - Cổ trang bị và Sát Chiêu vẫn giữ dữ liệu cấu hình realtime tương thích để bảo toàn loadout và effect; chúng được đọc bởi simulator turn-based trong encounter mới.
-- Các phiên combat realtime đã mở trước cutover giữ handler settlement cũ để có thể kết thúc an toàn; API mở encounter realtime mới cho Tai Kiếp đã bị gỡ khỏi router.
+- API và handler kết toán realtime đã bị gỡ. Encounter cũ trong DB không còn được hỗ trợ và các khóa combat realtime cũ trong `active_combat` được dọn khi khởi tạo schema.
 - **Chiến báo:** lịch sử combat mới ghi kết quả turn-based; dữ liệu realtime cũ vẫn được giữ để tương thích.
 - **Phân bổ chiến lợi phẩm quái:** mọi quái rơi thêm **Nguyên liệu bậc tương ứng** với rank quái (thịt yêu thú, thiên khí… cùng bậc — quái khó thưởng đúng tầm, quái dễ không cho đồ bậc cao). Đồ **đặc thù loài** (tơ nhện, lông thú, kén…) chỉ rơi từ đúng loài đó và không phụ thuộc rank — muốn farm tơ nhện hãy tìm **Xích Ti Huyết Chu** (`wan_xa_goc`), **Diệu Thủ Ấu Chu** (`qing_mao_mountain`); Nguyên Thạch và tiền tệ đặc biệt rơi phổ quát. Một số hiếm phẩm đặc biệt gắn cờ jackpot luôn có cơ hội rơi dù lệch bậc (tỉ lệ riêng).
 - **Cổ trong pool của quái:** quái có thể mang Cổ khai báo trong `gu_inventory`; pool `gu_pool` của loài được ưu tiên, nếu rỗng thì dùng pool Cổ kế thừa theo vùng. Realtime chọn Cổ theo trọng số/slot, roll tỉ lệ theo rank và tier quái, rồi cấp thưởng idempotent cùng loot còn lại. Tiên Cổ vẫn bị chặn nếu đã tồn tại trên server.
@@ -740,7 +730,7 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 
 - Mọi kháng đều là effect cộng dồn từ Cổ đang trang bị + Chủng tộc + Thể chất + Trạng thái — không có Cổ nào "miễn nhiễm đặc quyền" ngoài effect nó mang.
 - `mental_resistance` + `cc_resist`: giảm tỉ lệ dính hiệu ứng bất lợi (nhân với nhau, trần 75%).
-- `tenacity` (0..1): rút ngắn thời gian hiệu ứng bất lợi phải chịu; realtime status runtime kiểm tra tự giải theo tick (ưu tiên khống chế cứng trước debuff khác). Buff có lợi không bao giờ bị tự giải nhầm.
+- `tenacity` (0..1): giảm thời lượng hoặc tự giải hiệu ứng bất lợi nếu flow combat theo lượt đang xử lý effect đó; chưa áp dụng đồng nhất cho mọi simulator encounter.
 - VD: Ngã Ý Cổ mang `tenacity: 0.35, cc_resist: 0.15` — chịu CC ngắn hơn và có cơ hội tự giải hiệu ứng theo tick realtime.
 
 ### Quy luật Áp Chế Cảnh Giới 2 Chiều & Tỉ Lệ Kích Hoạt Động (Dynamic Proc Chance)
@@ -1166,93 +1156,12 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 ## 15. Tổ đội và Đấu trường
 
 - Tổ đội: tạo tổ đội, xem trạng thái, mời Cổ sư, rời tổ đội. Chỉ có thể mời và **chấp nhận lời mời** khi cả hai ở cùng bản đồ thế giới và cách nhau tối đa 100 ô (Chebyshev); đồng ý khi đã đi xa sẽ thất bại.
-- **Tổ đội trong combat realtime:** người chơi cùng party trong cùng zone được nhận diện cùng phe; mỗi nhân vật vẫn điều khiển riêng qua realtime. Map/instance riêng chỉ nhận người chơi được session cho phép; không còn lượt combat được mở từ party leader.
+- **Tổ đội trong combat:** encounter turn-based hiện tại vẫn xử lý party theo luật encounter. Tích hợp party cho PvP và các đấu trường cần chuyển đổi; xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 - **Võ Đài:** trận khiêu chiến chạy realtime trong map riêng, hai người tham gia dùng HP/Chân Nguyên tạm thời nên kết quả không làm mất sinh lực thật. Tối đa 10 lượt khiêu chiến/ngày; thắng người xếp cao hơn thì đổi vị trí. Thắng nhận 50, thua nhận 1 Đồng Võ Đài; hệ thống chốt thưởng ngày lúc 22:30. Đồng dùng tại tab Bảo Các của Võ Đài. Bảo Các còn bày thêm một nhóm **tài nguyên Tiên cấp (Food/Material rank ≥ 6)** đổi ngẫu nhiên theo khung giờ, đồng giá **99 Xu Đấu Trường**.
 
-### Đấu Trường Thời Gian Thực (kiểu MOBA)
+### Đấu trường realtime (đã nghỉ hưu)
 
-Đây là chế độ **đánh tay theo thời gian thực**:
-nhân vật tự do chạy trong đấu trường, Cổ trùng dùng như chiêu thức có hướng và
-vùng đánh, và **né đòn được**. Mở từ menu **Hoạt động → Đấu Trường Realtime**
-(hoặc mục *Đấu Trường Realtime* trong hotbar). Bản hiện tại là **luyện tập 1
-người vs Hình Nhân Gỗ**.
-
-Hồ sơ chiêu tùy chọn được author ngay trên dòng Cổ tương ứng trong `Gu.csv`. Trang wiki của Cổ hiển thị sơ đồ kiểu ngắm/vùng đánh, tầm dùng, thời gian niệm, hồi chiêu và hậu động tác từ dữ liệu này; hiệu ứng của chiêu vẫn lấy từ trường `effects`.
-
-**Điều khiển**
-
-**Điều khiển & Giao diện MOBA (PC & Mobile)**
-
-Hệ thống hỗ trợ 2 chế độ điều khiển tối ưu linh hoạt, có nút chuyển đổi trực tiếp trên thanh tiêu đề (`📱 MOBA Mobile` / `💻 MOBA PC`):
-
-| Thiết bị / Chế độ | Thao tác | Tác dụng |
-| --- | --- | --- |
-| **PC MOBA** | `W A S D` hoặc phím mũi tên | Di chuyển nhân vật |
-| **PC MOBA** | Chuột phải | **Đánh thường (Basic Attack)** theo hướng con trỏ; server xét va chạm trong tầm 2,2 ô, hồi 0,5 giây, không tốn Mana |
-| **PC MOBA** | Rê chuột trong đấu trường | Tự động định vị điểm ngắm chiêu liên tục theo con trỏ |
-| **PC MOBA** | Phím `1`–`6` hoặc bấm ô kỹ năng | Dùng mục tiêu đang chọn; nếu chưa chọn thì bật vùng ngắm, nhấp vào quái hoặc khoảng trống để xuất chiêu |
-| **PC MOBA** | Nhấp chuột trái vào sàn đấu (khi đang ngắm) | Bắn chiêu tại vị trí chuột |
-| **PC MOBA** | Phím `ESC` | Hủy ngắm chiêu ngay lập tức |
-| **Mobile MOBA** | Cần ảo bên trái (`Virtual Joystick`) | Di chuyển nhân vật mượt mà với cảm ứng xoay 360° |
-| **Mobile MOBA** | Nút Đánh Thường tròn lớn (góc dưới bên phải) | **Đánh thường**: đánh mục tiêu đang chọn; nếu chưa chọn thì đánh theo hướng di chuyển gần nhất (hồi 0,5 giây) |
-| **Mobile MOBA** | Cụm chiêu hình cánh cung (`Radial Arc`) | Bố cục ôm quanh nút đánh thường theo ngón cái tay phải, dễ bấm và phản xạ nhanh |
-| **Mobile MOBA** | Chạm nhanh (Tap) vào chiêu | Dùng mục tiêu đang chọn hoặc bật vùng ngắm để chọn điểm tung chiêu |
-| **Mobile MOBA** | Giữ nút chiêu rồi kéo (Drag-to-Aim) | Kéo hướng ngắm; kéo càng xa chiêu ra càng xa |
-| **Mobile MOBA** | Kéo vào **Vùng Hủy Chiêu** (góc trên bên phải) | Vùng ngắm chuyển màu đỏ, thả ngón tay để hủy chiêu an toàn |
-| **Chung** | Cổ hệ `SELF` (Tự thân / Khiên) | Bấm/gõ phím là kích hoạt tức thì, không cần ngắm |
-
-**Asset nền chiêu & Giao diện hiển thị:**
-- **Nền chiêu nghệ thuật (Procedural Element Background Art):** Mỗi loại Cổ trùng có asset hình nền nguyên tố đặc sắc vẽ vector thời gian thực: Kim/Đao (vệt chém kiếm khí hoàng kim), Thủy (vòng xoáy thủy triều lam ngọc), Tinh Đạo (tinh vân vũ trụ và thiên thạch tím), Âm Đạo (sóng âm ba đồng tâm huyền ảo), Không Gian (vòng xoáy lỗ hổng thứ nguyên), Pháp Thuẫn (ma trận bát quái lục bảo hộ thể).
-- **Khung kỹ năng MOBA:** Viền kim loại huyền thiết cổ phong, đồng hồ đếm ngược hồi chiêu dạng quét tròn (`conic-gradient`) kèm chữ số to rõ, nhãn tiêu hao Chân Nguyên (Mana), và phím tắt `Q/W/E/R` nổi bật.
-
-**Nhân vật trong đấu trường** dùng ảnh đại diện của người chơi (`avatar_url`); chưa
-đặt thì dùng hình tu sĩ mặc định. Hình Nhân Gỗ được vẽ theo hình người gỗ tập,
-không cần thêm ảnh.
-
-**Bốn kiểu ngắm**
-
-- **Chọn mục tiêu (`TARGET`)** — bấm vào đối thủ trong tầm để khóa mục tiêu; bấm vào khoảng trống để tung theo hướng ngắm và có thể hụt.
-- **Theo hướng (`DIRECTION`)** — kéo từ nhân vật ra; tia/đạn bay theo hướng đó.
-- **Theo vùng đất (`GROUND`)** — bấm vào điểm trên sàn; vùng tròn/quạt hình thành ở đó.
-- **Tự thân (`SELF`)** — khiên/hồi máu, dùng ngay.
-
-**Né đòn** là phần cốt lõi: chiêu có **thời gian niệm** sẽ hiện vùng ngắm trước
-khi nổ, nên chỉ cần bước ra khỏi vùng hoặc vòng ra sau trụ là trượt. Đạn bay cũng
-né được bằng cách di chuyển ngang. Đòn `TARGET` đã khóa mục tiêu thì **không né
-được**; nếu tung vào khoảng trống, server xét va chạm theo hướng khi chiêu nổ.
-
-Đánh thường bằng chuột phải quét một vùng hẹp theo hướng con trỏ; nút HUD đánh
-theo hướng di chuyển gần nhất khi chưa chọn mục tiêu. Server xét va chạm
-với thực thể hợp lệ gần nhất trên đường đánh; đánh vào khoảng không vẫn ra đòn
-và tính hồi chiêu, nhưng không gây sát thương. Nút Đánh Thường trên HUD ưu tiên
-mục tiêu đang chọn; tự động đánh quái vẫn chọn mục tiêu như trước.
-
-**Vùng ngắm hiện cho cả hai bên.** Khung hình mỗi tick mang đầy đủ hình dạng, điểm
-ngắm và thời gian niệm của mọi chiêu đang chuẩn bị, nên đối thủ thấy được đúng
-vùng màu đỏ mình sắp ăn đòn — giống như mình thấy vùng xanh của chính mình. Ô ngắm
-đậm dần theo tiến độ niệm: càng gần nổ càng rõ.
-
-**Đang niệm thì đứng yên.** Xuất chiêu khoá di chuyển đến khi chiêu nổ, nên vùng
-ngắm không bị trôi và hai bên đều có khoảng thời gian công bằng để né.
-
-**Hình Nhân Gỗ biết né.** Nó chỉ bước ra khi **đủ thời gian và đủ tốc độ** để thoát
-khỏi vùng ngắm; nếu không thoát được thì đứng chịu đòn. Vì vậy chiêu niệm lâu
-(Tinh Lạc) bị né, còn chiêu nhanh (Thủy Tiễn) thì trúng.
-
-**Luật trong trận**
-
-- Máu và Chân Nguyên là **chỉ số riêng của trận** (Chân Nguyên 100, hồi 6/giây);
-  dùng Cổ trong trận **không** tiêu hao Sinh lực/Chân Nguyên thật của nhân vật.
-- Sát thương vẫn tính theo Công/Thủ của nhân vật và hiệu ứng của Cổ, nên Cổ cấp
-  càng cao đánh càng đau.
-- Mỗi Cổ có **hồi chiêu riêng** theo giây, hiện trên thanh chiêu.
-- Hết máu là thua. Trận cũng kết thúc khi hết 3 phút; ai còn nhiều máu theo tỉ lệ
-  hơn thì thắng.
-- Trụ và tường trong đấu trường **chặn đường đi** nhưng **không chặn chiêu**.
-
-Bộ chiêu luyện tập gồm 6 Cổ cấp thấp, mỗi Cổ minh hoạ một cơ chế:
-Sơ Giai Đao Khí (chọn mục tiêu), Thủy Tiễn (xuyên theo hướng), Sơ Giai Tinh Lạc
-(AoE có độ trễ), Âm Lãng (quạt), Sơ Giai Không Gian Môn (lướt), Pháp Thuẫn (khiên).
+Chế độ realtime một người vs hình nhân và hotbar realtime đã bị gỡ. Phòng tập turn-based hiện tại tiếp tục dùng simulator theo lượt. PvP/đấu trường cần chuyển đổi riêng; xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 
 ## 16. Chat, mail và feedback
 
@@ -1279,7 +1188,7 @@ Chiêu realtime dùng các mẫu VFX cast/impact theo Path và effect của prof
 
 Projectile của chiêu định hướng dừng tại phạm vi `range` của profile; lifetime chỉ giới hạn thời gian bay và không thể làm chiêu gây sát thương vượt quá vòng phạm vi.
 
-Status realtime có thời lượng và lịch tick do server quản lý; điều kiện khống chế, hồi chiêu, tài nguyên và sát thương được kiểm tra authoritative. Tài liệu chi tiết về profile/effect đang chạy nằm trong `docs/guides/GAME_DATA.md` và `docs/mmo/gu-realtime-schema.md`. Những mechanic legacy theo lượt không có ở hai contract này chỉ là lịch sử, không mô tả runtime hiện tại.
+> **Đoạn dưới đây là tài liệu lịch sử của combat realtime đã nghỉ hưu.** Runtime hiện tại dùng simulator theo lượt trong các flow được hỗ trợ; Gu realtime profile và status tick realtime không còn hoạt động. Xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md` và `docs/guides/GAME_DATA.md` để biết coverage/gap hiện tại.
 
 Tiên Cổ phòng thủ: bật dạng biến thân bằng nút riêng, có thời gian thi triển theo profile; khống chế cứng ngắt quá trình biến thân, sát thương thường không ngắt. Phòng thủ và tiêu mana liên tục bắt đầu sau khi biến thân hoàn tất; trong dạng biến thân có chiêu riêng, trạng thái tự kết thúc khi tắt hoặc hết mana.
 
@@ -1520,7 +1429,7 @@ Sức dò chia làm ba trụ, **càng đầu bảng càng nặng**:
    | Cộng phẳng | +0 | **+50** | **+140** | **+280** | **+470** |
    | Nhân thêm | ×1.00 | ×1.05 | ×1.12 | ×1.20 | ×1.30 |
 
-   Mốc cảnh giới: 10.000 / 100.000 / 1.000.000 / 10.000.000 Chân Ý. Cảnh giới tích từ **các nguồn**: dùng Cổ, cast Cổ thường và đánh thường trong combat realtime, thi triển sát chiêu, và luyện Cổ.
+   Mốc cảnh giới: 10.000 / 100.000 / 1.000.000 / 10.000.000 Chân Ý. Cảnh giới tích từ các nguồn gameplay được hỗ trợ như dùng Cổ, combat turn-based, thi triển sát chiêu và luyện Cổ.
 
 2. **Cổ trùng.** Mỗi Cổ đang trang bị cộng theo phẩm bậc (Cổ rank *n* → `+5n`): Cổ 3 chuyển +15, Cổ 7 chuyển +35, Cổ 9 chuyển +45. Phe thủ đối xứng bằng Ngụy Trang (`DISGUISE ×5`) + `PERFECT_DISGUISE` (+80, Thái Độ Cổ) + `CONCEAL_GU` (+30), nên **cùng lượng Cổ thì hai phe cân bằng**.
 
@@ -1566,7 +1475,7 @@ Sau mỗi lần suy diễn, bảng **điểm của chính đạo hữu** (Cổ /
 
 ## Quái thường trên World Map
 
-Quái thường trên World Map là thực thể realtime riêng: mỗi lần sinh có ID, HP, vị trí và trạng thái riêng. Sát thương không chí mạng được giữ lại và đồng bộ cho người chơi gần đó. Quái tự phát hiện người chơi ở gần, đuổi, đánh theo nhịp realtime và quay lại điểm sinh khi mất mục tiêu hoặc vượt dây cương, kể cả tại khu an toàn; khu an toàn vẫn chặn PvP giữa người chơi. Quái không chọn mục tiêu ở vùng khác. Va chạm không mở trận turn-based. Sau khi bị hạ, quái sinh lại bằng instance ID mới sau thời gian hồi sinh của điểm spawn; nếu `respawn_seconds` nhỏ hơn 1, thời gian mặc định là 300 giây. Client chỉ dự đoán hiệu ứng hình ảnh; HP, tử vong và phần thưởng luôn do server quyết định.
+Actor quái trên World Map hiện là snapshot Redis dùng cho hiển thị và công cụ quản trị. Chúng không tự phát hiện người chơi, đuổi đánh, gây sát thương hoặc mở combat. Combat turn-based được kích hoạt từ ô quái trên bản đồ lưới; bridge giữa actor Redis và encounter chưa được triển khai. Spawn tĩnh vẫn dùng `respawn_seconds` (mặc định 300 giây nếu giá trị nhỏ hơn 1).
 
 Người chơi trong cùng instance realtime có thể được chọn bằng cách nhấp vào nhân vật hoặc dùng phím chuyển mục tiêu. Bảng mục tiêu cho phép xem hồ sơ, mời tổ đội, nhắn riêng và gửi lời mời giao dịch; đòn đánh/kỹ năng lên người chơi vẫn tuân theo luật PvP của bản đồ và máy chủ.
 

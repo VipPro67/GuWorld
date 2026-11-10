@@ -69,6 +69,22 @@ func schemaPlayerItems() error {
 	CREATE INDEX IF NOT EXISTS idx_player_gu_houses_equipped ON player_gu_houses (player_id, is_equipped) WHERE is_equipped = true;`); err != nil {
 		return err
 	}
+	if err := execSchema("player_combat_profiles_remove_realtime_fields", `
+	UPDATE player_killer_moves
+	SET combat_profile = combat_profile - ARRAY['realtime_windup_ms', 'realtime_cooldown_ms', 'realtime_effects']::text[]
+	WHERE combat_profile ?| ARRAY['realtime_windup_ms', 'realtime_cooldown_ms', 'realtime_effects'];
+	UPDATE player_gu_houses
+	SET house_profile = jsonb_set(
+		house_profile, '{actions}',
+		(SELECT COALESCE(jsonb_agg(action - ARRAY['realtime_windup_ms', 'realtime_cooldown_ms', 'realtime_effects']::text[]), '[]'::jsonb)
+		 FROM jsonb_array_elements(house_profile->'actions') AS actions(action)),
+		true
+	)
+	WHERE jsonb_typeof(house_profile->'actions') = 'array'
+	AND EXISTS (SELECT 1 FROM jsonb_array_elements(house_profile->'actions') AS actions(action)
+		WHERE action ?| ARRAY['realtime_windup_ms', 'realtime_cooldown_ms', 'realtime_effects']);`); err != nil {
+		return err
+	}
 
 	if err := execSchema("player_gu", `
 	CREATE TABLE IF NOT EXISTS player_gu (

@@ -88,7 +88,6 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 
 		spec, found := models.GetGu(gu.GuID, gu.Rank)
 		if found {
-			windupMS, cooldownMS := models.KillerMoveRealtimeTiming(gu.Rank, 1)
 			actionPath := "strength"
 			if len(spec.Path) > 0 {
 				actionPath = gamefx.CleanPath(spec.Path[0])
@@ -104,18 +103,15 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 				}
 				var selected *killerMoveEffectOption
 				for optionIndex := range options {
-					if options[optionIndex].Key == key && options[optionIndex].RealtimeSupported {
+					if options[optionIndex].Key == key && options[optionIndex].CombatSupported {
 						selected = &options[optionIndex]
 						break
 					}
 				}
 				if selected == nil {
-					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích đã chọn không hợp lệ hoặc chưa có executor realtime")
+					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích đã chọn không hợp lệ hoặc chưa có executor combat theo lượt")
 				}
 				operation := selected.Operation
-				target := selected.Target
-				operation.Target = &target
-				effect := gameplayeffects.Block{ID: "HOUSE_" + key, Trigger: gameplayeffects.TriggerOnAction, Target: target, Operations: []gameplayeffects.Operation{operation}}
 				targetType := "SELF"
 				if operation.Op == gameplayeffects.OpDamage {
 					targetType = "SINGLE"
@@ -123,8 +119,7 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 				action := models.KillerMoveCombatProfile{
 					ProfileVersion: 2, EffectLabel: selected.Label, ID: id, Name: fmt.Sprintf("Trận Kích: %s", spec.Name), Rank: gu.Rank,
 					MainPath: actionPath, AllPaths: []string{actionPath}, TargetType: targetType,
-					RealtimeWindupMS: windupMS, RealtimeCooldownMS: cooldownMS, Priority: 1,
-					ManaCost: spec.BaseManaCost * 1.5, SuccessChance: 0.95, RealtimeEffects: []gameplayeffects.Block{effect},
+					Priority: 1, ManaCost: spec.BaseManaCost * 1.5, SuccessChance: 0.95,
 				}
 				if operation.Op == "" {
 					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích %q không hợp lệ", selected.Label)
@@ -142,13 +137,12 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 				continue
 			}
 			actions = append(actions, models.KillerMoveCombatProfile{
-				ID:               id,
-				Name:             fmt.Sprintf("Trận Kích: %s", spec.Name),
-				Rank:             gu.Rank,
-				MainPath:         actionPath,
-				AllPaths:         []string{actionPath},
-				TargetType:       getGuTargetType(spec),
-				RealtimeWindupMS: windupMS, RealtimeCooldownMS: cooldownMS,
+				ID:            id,
+				Name:          fmt.Sprintf("Trận Kích: %s", spec.Name),
+				Rank:          gu.Rank,
+				MainPath:      actionPath,
+				AllPaths:      []string{actionPath},
+				TargetType:    getGuTargetType(spec),
 				Priority:      1,
 				ManaCost:      spec.BaseManaCost * 1.5,
 				BaseDamage:    float64(gu.Rank * 120),
@@ -296,7 +290,7 @@ func CreateGuHouse(c *gin.Context) {
 		return
 	}
 	if req.ActionEffectKeys != nil && len(profile.Actions) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chọn ít nhất một Trận Kích realtime trước khi đúc kết Tiên Cổ Ốc"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chọn ít nhất một Trận Kích được hỗ trợ trong combat theo lượt trước khi đúc kết Tiên Cổ Ốc"})
 		return
 	}
 

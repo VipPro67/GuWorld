@@ -31,14 +31,6 @@ type CombatState struct {
 	WorldMonsterRegionID       string               `json:"world_monster_region_id,omitempty"`
 	WorldMonsterID             string               `json:"world_monster_id,omitempty"`
 	WorldMonsterEncounterID    string               `json:"world_monster_encounter_id,omitempty"`
-	WorldPvPEncounterID        string               `json:"world_pvp_encounter_id,omitempty"`
-	RealtimeWorldPvPAttackerID string               `json:"realtime_world_pvp_attacker_id,omitempty"`
-	RealtimeWorldPvPDefenderID string               `json:"realtime_world_pvp_defender_id,omitempty"`
-	RealtimeWorldGeneration    string               `json:"realtime_world_generation,omitempty"`
-	RealtimeWorldEventID       uint64               `json:"realtime_world_event_id,omitempty"`
-	RealtimeWorldMapID         string               `json:"realtime_world_map_id,omitempty"`
-	RealtimeWorldInstanceID    string               `json:"realtime_world_instance_id,omitempty"`
-	RealtimeWorldRuleset       string               `json:"realtime_world_ruleset,omitempty"`
 	WorldBossCellRegionID      string               `json:"world_boss_cell_region_id,omitempty"`
 	WorldBossCellX             int                  `json:"world_boss_cell_x,omitempty"`
 	WorldBossCellY             int                  `json:"world_boss_cell_y,omitempty"`

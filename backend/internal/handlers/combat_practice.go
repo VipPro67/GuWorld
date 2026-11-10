@@ -11,20 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-const practiceRealtimeMapID = "realtime_preview"
-
-// RealtimeCombatInstanceVitals stores temporary arena resources and the latest
-// position for one participant in a shared combat session.
-type RealtimeCombatInstanceVitals struct {
-	CurrentHP    float64 `json:"current_hp"`
-	CurrentMana  float64 `json:"current_mana"`
-	X            float64 `json:"x"`
-	Y            float64 `json:"y"`
-	CombatTeamID string  `json:"combat_team_id,omitempty"`
-	OriginZoneID string  `json:"origin_zone_id,omitempty"`
-}
-
-type PracticeRealtimeRequest struct {
+type PracticeCombatRequest struct {
 	DummyHP     float64 `json:"dummy_hp"`
 	DummyShield float64 `json:"dummy_shield"`
 	DummyAtk    float64 `json:"dummy_atk"`
@@ -32,7 +19,7 @@ type PracticeRealtimeRequest struct {
 	DummySpeed  float64 `json:"dummy_speed"`
 }
 
-type PracticeRealtimeConfig struct {
+type PracticeCombatConfig struct {
 	DummyHP     float64 `json:"dummy_hp"`
 	DummyShield float64 `json:"dummy_shield"`
 	DummyAtk    float64 `json:"dummy_atk"`
@@ -40,20 +27,19 @@ type PracticeRealtimeConfig struct {
 	DummySpeed  float64 `json:"dummy_speed"`
 }
 
-// StartRealtimePractice now starts a virtual deterministic encounter. The route
-// name is retained for API compatibility; practice no longer creates a world session.
-func StartRealtimePractice(c *gin.Context) {
+// StartPracticeCombat starts a virtual turn-based training encounter.
+func StartPracticeCombat(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	var req PracticeRealtimeRequest
+	var req PracticeCombatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	config := PracticeRealtimeConfig{
+	config := PracticeCombatConfig{
 		DummyHP:     boundedPracticeValue(req.DummyHP, 100000, 1, 1e12),
 		DummyShield: boundedPracticeValue(req.DummyShield, 0, 0, 1e12),
 		DummyAtk:    boundedPracticeValue(req.DummyAtk, 10, 0, 1e9),
@@ -100,9 +86,9 @@ func StartRealtimePractice(c *gin.Context) {
 	respondActionOnly(c, http.StatusOK, player, gin.H{"is_practice": true, "active_combat": player.ActiveCombat})
 }
 
-// EndRealtimePractice is retained for older clients. It clears an un-resolved
-// practice encounter without applying combat costs or world movement.
-func EndRealtimePractice(c *gin.Context) {
+// EndPracticeCombat clears an unresolved practice encounter without applying
+// combat costs or world movement.
+func EndPracticeCombat(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})

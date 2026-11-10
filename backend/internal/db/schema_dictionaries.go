@@ -47,12 +47,11 @@ func schemaDictionaries() error {
 		support_tags JSONB DEFAULT '[]',
 		base_price NUMERIC(30,3) NOT NULL DEFAULT 0,
 		image_url TEXT NOT NULL DEFAULT '',
-		skill_profile JSONB,
 		PRIMARY KEY (id, rank)
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("gu_dictionary_skill_profile", `ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS skill_profile JSONB;`); err != nil {
+	if err := execSchema("gu_dictionary_remove_realtime_skill_profile", `ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS skill_profile;`); err != nil {
 		return err
 	}
 	// Older databases may still have the retired authoring flag. Immortality is

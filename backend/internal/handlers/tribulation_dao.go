@@ -179,11 +179,8 @@ func guardNextTribulationYear(nextYear, currentYears float64) float64 {
 	return math.Round(nextYear)
 }
 
-// Offline-protection tuning for tribulations. While the player is offline the
-// tribulation is held (no spawn / no damage); the years still flow so players
-// cannot game the calendar. A grace period after spawn/return lets them prepare.
+// Offline-protection tuning for tribulations.
 const (
 	tribulationOnlineWindow = 5 * time.Minute // how fresh last_activity must be to count as "online"
-	tribulationGracePeriod  = 5 * time.Minute // enemies idle this long after spawn/return
 	tribulationPenaltyAfter = 24 * time.Hour  // offline/pending hold beyond this causes immediate tribulation failure
 )

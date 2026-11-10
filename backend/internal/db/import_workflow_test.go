@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"os"
@@ -52,14 +53,14 @@ func TestSeedGusFromCSVBatchesInserts(t *testing.T) {
 	if len(rec.queries) != 2 {
 		t.Fatalf("exec count = %d, want 2 batched inserts", len(rec.queries))
 	}
-	if rec.argLens[0] != 500*20 || rec.argLens[1] != 20 {
-		t.Fatalf("arg counts = %v, want [%d %d]", rec.argLens, 500*20, 20)
+	if rec.argLens[0] != 500*19 || rec.argLens[1] != 19 {
+		t.Fatalf("arg counts = %v, want [%d %d]", rec.argLens, 500*19, 19)
 	}
-	if !strings.Contains(rec.queries[0], "($1,") || !strings.Contains(rec.queries[0], "$10000") {
+	if !strings.Contains(rec.queries[0], "($1,") || !strings.Contains(rec.queries[0], "$9500") {
 		t.Fatalf("first batch placeholders malformed: %q", rec.queries[0][:80])
 	}
-	if strings.Contains(rec.queries[0], "$10001") {
-		t.Fatalf("first batch has placeholder beyond its 10000 params")
+	if strings.Contains(rec.queries[0], "$9501") {
+		t.Fatalf("first batch has placeholder beyond its 9500 params")
 	}
 	if !strings.Contains(rec.queries[1], "($1,") {
 		t.Fatalf("second batch placeholders must restart at $1")
@@ -154,6 +155,60 @@ func TestValidateImportCSVStillRequiresGuPathJSON(t *testing.T) {
 	_, issues := validateImportCSV(dataset, []byte("id,rank,path\ngu_test,1,not-json\n"))
 	if len(issues) != 1 || issues[0].Code != "invalid_json" || issues[0].Field != "path" {
 		t.Fatalf("unexpected issues: %#v", issues)
+	}
+}
+
+func TestRegionCSVKeepsApertureInteriorInactiveAndLootRegionsPresent(t *testing.T) {
+	readRows := func(filename string) ([]string, [][]string) {
+		t.Helper()
+		file, err := os.Open(filepath.Join("..", "..", "data", filename))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+
+		reader := csv.NewReader(file)
+		header, err := reader.Read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := reader.ReadAll()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return header, rows
+	}
+
+	regionHeader, regionRows := readRows("Region.csv")
+	regionIDColumn := colIndex(regionHeader, "id")
+	regionActiveColumn := colIndex(regionHeader, "is_active")
+	if regionIDColumn < 0 || regionActiveColumn < 0 {
+		t.Fatal("Region.csv must contain id and is_active columns")
+	}
+	regions := make(map[string]string, len(regionRows))
+	for _, row := range regionRows {
+		regions[row[regionIDColumn]] = row[regionActiveColumn]
+	}
+	active, ok := regions["aperture_interior"]
+	if !ok {
+		t.Fatal("Region.csv must contain aperture_interior")
+	}
+	if !strings.EqualFold(active, "false") {
+		t.Fatal("Region.csv must keep aperture_interior inactive until its layer is opened")
+	}
+	if _, ok := regions["am_hon_sa_vuc"]; !ok {
+		t.Fatal("Region.csv must contain am_hon_sa_vuc before importing its loot tables")
+	}
+
+	lootHeader, lootRows := readRows("RegionLootTables.csv")
+	lootRegionColumn := colIndex(lootHeader, "region_id")
+	if lootRegionColumn < 0 {
+		t.Fatal("RegionLootTables.csv must contain region_id")
+	}
+	for _, row := range lootRows {
+		if _, ok := regions[row[lootRegionColumn]]; !ok {
+			t.Errorf("RegionLootTables.csv references unknown region %q", row[lootRegionColumn])
+		}
 	}
 }
 

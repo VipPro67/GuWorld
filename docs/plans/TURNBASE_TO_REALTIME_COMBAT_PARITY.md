@@ -54,3 +54,4 @@ Mỗi Cổ, sát chiêu, passive, tài nguyên và hậu quả combat đã có t
 ## Thứ tự triển khai
 
 Làm chặng 1 trước để không tạo thêm đường cast miễn phí hoặc reset trạng thái. Sau đó triển khai engine effect theo nhóm nhỏ có test dữ liệu thật, cuối cùng mới mở cast cho entry đã đạt parity. Mỗi chặng phải chạy được độc lập; chưa hoàn tất chặng 4 thì mục tiêu chuyển toàn bộ cơ chế vẫn là **chưa đạt**.
+# RETIRED: this parity plan targets the retired realtime combat runtime. Keep as historical context only; current direction is documented in `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.

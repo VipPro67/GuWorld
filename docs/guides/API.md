@@ -137,7 +137,6 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/subjugate-gu` | Luyện hóa ý chí Cổ trùng (Gu Subjugation). Body `{ "instance_id": "..." }`. Nếu Bản Mệnh Cổ có Rank $\ge$ Rank Cổ cần luyện $+ 2$, ý chí dã Cổ bị áp chế hoàn toàn, đạt ngay 100% (0 mana). Nếu không, tiêu hao `Rank * 25` Chân Nguyên để tăng +25% tiến độ mỗi lần luyện. |
 | POST | `/inventory/nourish-gu` | Ôn dưỡng Cổ trùng (Gu Nourishment). Body `{ "instance_id": "..." }`. Dùng Chân Nguyên bằng `10 * W(gu_rank) / W(player_rank)` để hồi phục +15.0 độ bền cho Cổ bị tổn thương (`durability >= 20`). |
 | POST | `/inventory/repair-gu` | Tu bổ Cổ trùng (Gu Restoration). Body `{ "instance_id": "..." }`. Tiêu hao Chân Nguyên bằng `5 * W(gu_rank) / W(player_rank)` để tu bổ Cổ bị trọng thương (`durability < 20` hoặc `state = DAMAGED`), phục hồi về độ bền 50.0 và trạng thái `ACTIVE`. W(Rank) = `{1,2,5,20,100,1000,10000,100000,1000000}` cho Rank 1–9. |
-| POST | `/inventory/realtime-hotbar` | Lưu thiết lập hotbar realtime: mảng tối đa 6 phần tử vào `players.realtime_hotbar` — vị trí mảng = ô 1–6, `""` = ô trống, phần tử phải là instance Cổ đang trang bị + ACTIVE (validated). Thiết lập là *explicit setting*: Cổ được gán giữ nguyên ô kể cả khi trang bị/tháo Cổ khác; ô trống giữa layout không đổi số (các ô sau không bị đẩy số); Cổ tạm mất hợp lệ (ngủ/trọng thương/hết bền) được giữ chỗ và tự chiếm lại ô khi hợp lệ trở lại; Cổ đã bán/trao/dead-release được bỏ pin. Đồng thời cập nhật `players.equipped_gus` (thứ tự danh sách trang bị). Body `{ "gu_instance_ids": ["id", "", "id", ...] }`, response `{ "equipped_gus", "hotbar_gus" }`. Không trang bị/tháo Cổ. Áp dụng sau khi world kết nối lại. |
 | POST | `/inventory/unequip-all` |
 | POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |
 | POST | `/inventory/set-vital` |
@@ -145,9 +144,9 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/use-support` | Dùng Cổ hồi máu ngoài combat (bất kỳ Cổ không phải Tiêu Hao có block `ON_ACTION` `HEAL`/`FLAT`); xử lý `ON_USE` và hồi HP từ `active.heal_flat`. Body: `{ "gu_instance_id": "..." }`. |
 | POST | `/inventory/drop` |
 | POST | `/inventory/drop-batch` |
-| GET | `/killer-moves/options` | Cổ người chơi trong `player_gu` và các effect realtime được hỗ trợ; hồi `ON_USE` ngoài combat vẫn được đánh dấu riêng. Các lựa chọn mới cho build realtime gồm damage TARGET, heal/shield/cleanse SELF. |
-| GET | `/killer-moves` | Danh sách sát chiêu đã lưu, độ thành thạo, trạng thái thiếu Cổ, timing realtime và `realtime_supported`/lý do khóa. Sát chiêu đã trang bị và Trận Kích của Tiên Cổ Ốc đang xuất chiến cùng dùng bốn ô hotbar 9–12; thứ tự lưu qua `/combat/skill-loadout`. |
-| POST | `/killer-moves/preview` | Tính thử công thức và biên dịch cùng compiler realtime dùng khi vào combat. Trả ngân sách, hệ số effect, độ hòa hợp, chi phí, `realtime_supported`, lý do và `preview_fingerprint`. |
+| GET | `/killer-moves/options` | Cổ người chơi trong `player_gu` và các effect được hỗ trợ cho combat theo lượt; hồi `ON_USE` ngoài combat được đánh dấu riêng. Build hỗ trợ damage TARGET và heal/shield/cleanse SELF. |
+| GET | `/killer-moves` | Danh sách sát chiêu đã lưu, độ thành thạo, trạng thái thiếu Cổ và combat profile theo lượt. |
+| POST | `/killer-moves/preview` | Tính thử công thức và biên dịch combat profile theo lượt. Trả ngân sách, hệ số effect, độ hòa hợp, chi phí và `preview_fingerprint`. |
 | POST | `/killer-moves` | Lưu profile đã preview; body thêm `name`, `preview_fingerprint` và `accept_adjustments` nếu effect bị tự cân. Fingerprint cũ hoặc build không compile được bị từ chối. Tối đa 12 sát chiêu lưu, 4 sát chiêu trang bị. |
 | POST | `/killer-moves/:id/equip` | Bật/tắt trang bị. Mỗi Cổ thành phần phải còn đúng instance/rank trong `player_gu`. |
 | POST | `/killer-moves/:id/use` | Dùng ngoài combat nếu công thức có effect hồi phục `ON_USE`; hao Chân Nguyên và mỗi Cổ thành phần giảm 1 độ no. Nếu thành công, cộng Chân Ý path hạch tâm theo rank Cổ chính; response có thêm `path`, `path_gain`, `path_masteries`. |
@@ -172,10 +171,8 @@ Realtime: Kênh UI `refine` trên stream `0x02` nhận `{type:"refine.session", 
 Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404), `REFINE_SESSION_REQUIRED` (400), `REFINE_STEP_NOT_OPEN` (409), `REFINE_STEP_CLOSED` (410), `REFINE_STEP_ALREADY_DONE` (409), `REFINE_NONCE_INVALID` (409), `REFINE_PAYLOAD_INVALID` (400), `REFINE_GU_LOCKED` (409), `REFINE_CONFIG_MISSING` (503), `REFINE_IMMORTAL_CONFLICT` (409).
 | POST | `/combat/practice` | Tạo encounter turn-based ảo với hình nhân; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Không chuyển zone hay tạo realtime session; trả `active_combat` để dùng luồng `/combat/start`. |
 | POST | `/combat/practice/exit` | Hủy encounter tập luyện chưa resolve; không áp dụng phí chiến đấu hoặc thay đổi vị trí. |
-| GET | `/combat/skill-loadout` | Hotbar chiêu thức ô 9–12: `{slots, available, first_slot, max_slots}`. `slots` chỉ chứa chiêu đang ghim theo thứ tự phím; `available` gồm mọi Sát Chiêu đã trang bị và Trận Kích của Tiên Cổ Ốc đang xuất chiến kèm `supported`/`reason`. Hai nguồn dùng chung bốn ô. |
-| PUT | `/combat/skill-loadout` | Lưu thứ tự ghim ô 9–12 (Alt+1–4). Body `{ "entries": [{ "kind": "move"\|"house", "id": "..." }] }`, tối đa 4, không trùng; từ chối chiêu chưa trang bị hoặc chưa hỗ trợ realtime. Trả `{message, loadout}` đã resolve. |
 | GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng), **mọi trận boss** (`BOSS`/`World_Boss`/`TRIBULATION_BOSS`, cả thắng lẫn thua), **mọi trận Tông Môn Chiến** (`SECT_WAR`, cả thắng lẫn thua, ghi cho cả người tấn công và từng đệ tử trấn thủ tham chiến với góc nhìn đảo phe), các trận PVE **thua**, và các trận PVE **thắng có rơi Tiên Cổ** (kể cả quái thường/tinh anh, để xem lại vận may); PVE thường thắng không rơi Tiên Cổ thì không lưu. Bản ghi PVE/boss cũ hơn 30 ngày bị worker xóa theo lô (PVP giữ vô hạn). |
-| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để xem lại sự kiện chiến đấu realtime; các bản ghi turn-based cũ vẫn đọc được. |
+| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để xem lại trận chiến mô phỏng theo lượt. |
 
 ## Exploration and combat
 
@@ -282,9 +279,6 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 | GET | `/tribulations/active` | Trả event đang ACTIVE mới nhất, danh sách quái còn sống và `total_enemies` / `defeated_enemies` / `remaining_enemies`. |
 | POST | `/tribulations/:eventId/engage` | Bắt đầu hoặc tiếp tục encounter Tai Kiếp turn-based, lưu vào `players.active_combat` và chuyển zone lease về backend trước khi combat bắt đầu. |
 | POST | `/tribulations/:eventId/resolve` | Kết toán tai kiếp theo trạng thái enemy đã được turn-based combat cập nhật; chỉ thành công khi toàn bộ enemy đã chết, nếu chưa sẽ áp dụng nhánh thất bại/rút lui tương ứng. |
-| POST | `/tribulations/:eventId/realtime-victory` | Settlement tương thích cho phiên realtime đã mở trước cutover; không còn route realtime-engage để tạo phiên mới. |
-| POST | `/tribulations/:eventId/realtime-escape` | Thoát an toàn khỏi phiên Tai Kiếp realtime cũ đang còn mở. |
-| POST | `/tribulations/realtime-exit` | Dọn và thoát khỏi phiên Tai Kiếp realtime cũ, kể cả sau refresh hoặc khi event đã hết. |
 
 `POST /immortal-aperture/nodes` accepts `{node_type, x, y, path, prod_key, cells}` but **rejects every non-DEFENSE type** (production moved to resource points). `cells` is a connected array of `{x,y}` cells on the 20×20 grid; omitted `cells` means the single anchor cell. Defense structures require Tiên Nguyên Thạch plus the template's required Gu (consumed permanently).
 
@@ -390,7 +384,7 @@ Bí cảnh bản đồ và Vùng truyền thừa (`SPATIAL_REALM`, `SPATIAL_INHE
 - **`SHARED`**: 1 phiên chung toàn server per template. Mọi người chơi cùng vào 1 bản đồ.
 - **`PARTY`**: 1 phiên riêng cho từng tổ đội (`party_id`), kiểm tra số lượng thành viên tối thiểu/tối đa.
 - **`SOLO`**: 1 phiên riêng cho từng cá nhân (`owner_id`).
-- **Rule Engine (`rules` JSONB)**: `duration_minutes` (hết hạn worker dọn và trả thành viên về tọa độ cũ), `pvp_mode` (`SAFE` / `FREE_PK` / `FACTION_PK`), `max_allowed_rank` & `apply_rank_suppression`, `allow_teleport`, `death_penalty` (`EVICT` / `SAFE_RESPAWN`), `entry_item` & `entry_item_count`. Tài nguyên nhân vật được lưu như combat realtime bình thường; ground drops tiếp tục được cô lập per `map_instance_id`.
+- **Rule Engine (`rules` JSONB)**: `duration_minutes` (hết hạn worker dọn và trả thành viên về tọa độ cũ), `pvp_mode` (`SAFE` / `FREE_PK` / `FACTION_PK`), `max_allowed_rank` & `apply_rank_suppression`, `allow_teleport`, `death_penalty` (`EVICT` / `SAFE_RESPAWN`), `entry_item` & `entry_item_count`. Combat trong các flow được hỗ trợ dùng simulator theo lượt; ground drops được cô lập theo `map_instance_id`.
 
 ## Gacha (Cổ Từ / Mở Đá)
 
@@ -676,7 +670,7 @@ không dùng lệnh đường đi legacy. Client gửi NDJSON
 | --- | --- | --- |
 | `world.cells_rect` | `{min_x,min_y,max_x,max_y}` | `GET /explore/cells/rect` |
 | `world.objects` | `{}` | `GET /explore/objects` |
-| `match.input` | `{seq, move:{dx,dy}, casts:[{gu_id,rank,mode,ax,ay,target_id}]}` | Không có (chỉ realtime) |
+| `match.input` | `{seq, move:{dx,dy}, casts:[{gu_id,rank,mode,ax,ay,target_id}]}` | Giao thức trận realtime cũ; combat realtime đã bị gỡ, không phải API combat hiện hành |
 
 Danh tính người chơi luôn lấy từ phiên realtime đã xác thực, không lấy từ
 payload. Các HTTP endpoint vẫn được giữ làm fallback khi UI stream chưa kết nối.
@@ -814,22 +808,11 @@ Boss là actor runtime trong Redis, không phải bảng dữ liệu: chúng ch�
 | PUT | `/admin/world-bosses/:region_id/:instance_id` | `world_bosses.update` | Body `{x?, y?, hp?, state?}`. Toạ độ phải nằm trong khu vực; `hp` được clamp `[0, max_hp]`. `hp=0` → `DEFEATED` + `respawn_at`; `state="IDLE"` → hồi sinh tại điểm spawn với đầy HP và xoá `respawn_at`. Ghi bằng CAS theo `revision` như worker (xung đột trả `409`), broadcast `monster_moved`/`monster_updated`/`monster_defeated`/`monster_respawned`. Boss không còn trong Redis → `404`. |
 | DELETE | `/admin/world-bosses?region_id=` | `world_bosses.delete` | Xoá mọi boss đang sống của khu vực khỏi Redis (snapshot kế tiếp materialize lại từ dữ liệu tĩnh). Bắt buộc `reason` + `confirmation_target`; được audit là destructive. |
 
-## World monster runtime
+## World monster snapshot
 
-`GET /api/world/monsters?r=25` returns the authoritative ordinary-monster snapshot for the authenticated player's current region and AOI. `r` defaults to and is capped at 25, while clients normally send their actual 10–25-cell investigation radius. A snapshot materializes intersecting non-boss `monster_spawns` on demand; each result has a fresh `instance_id`, stable `spawn_id`, position, HP, state, revision, and server timestamps.
+`GET /api/world/monsters?r=25` returns the authenticated player's nearby world actor snapshot. The radius defaults to and is capped at 25 cells. It may materialize static monster spawn rows, procedural monster cells, and boss map cells into Redis for snapshot/admin display. These actors do not chase, attack, or publish combat events. Player combat remains the supported turn-based encounter flow initiated by map-cell movement; an encounter bridge for Redis world actors is not implemented.
 
-The client should send its actual investigation radius (currently 10–25 cells).
-The server groups runtime monsters into 32×32-cell buckets and activates only
-the bucket neighborhood intersecting active players; the separate 300-cell
-world-position broadcast radius is not used as the monster activation radius.
-
-`POST /api/explore/use_gu` accepts stable monster targets:
-
-```json
-{"command_id":"uuid","gu_instance_id":"uuid","target":{"kind":"monster","id":"monster-instance-uuid"}}
-```
-
-The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The target combat events travel on the realtime world stream (opcode `events`) and carry `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `monster_attack_started`, `monster_attack`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, `monster_respawned`, and `monster_updated` (admin runtime edits). `monster_attack` includes `target_id`, actual HP damage, remaining HP/shield and whether the target was defeated; monster contact no longer creates a turn-based `active_combat` encounter.
+Admin boss routes can inspect, move, damage, defeat, revive, or remove a live boss actor. These operations update the snapshot state only and do not broadcast a realtime combat stream.
 
 ## Exploration & Tactical Grid API
 

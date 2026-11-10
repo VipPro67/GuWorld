@@ -3,6 +3,7 @@ package handlers
 import (
 	"testing"
 
+	"github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -16,22 +17,18 @@ func TestGetGuTargetType(t *testing.T) {
 	}
 
 	aoeGu := models.Gu{
-		ID:   "aoe_gu",
-		Rank: 3,
-		SkillProfile: &models.GuSkillProfile{
-			Shape: models.SkillShapeCircle,
-		},
+		ID:      "aoe_gu",
+		Rank:    3,
+		Effects: models.GuEffects{Blocks: []effects.Block{{Target: effects.Target{Selector: effects.TargetAllEnemies}}}},
 	}
 	if tt := getGuTargetType(aoeGu); tt != "ALL_ENEMIES" {
 		t.Fatalf("expected ALL_ENEMIES, got %s", tt)
 	}
 
 	lineGu := models.Gu{
-		ID:   "line_gu",
-		Rank: 2,
-		SkillProfile: &models.GuSkillProfile{
-			Shape: models.SkillShapeLine,
-		},
+		ID:      "line_gu",
+		Rank:    2,
+		Effects: models.GuEffects{Blocks: []effects.Block{{Target: effects.Target{Selector: effects.TargetRow}}}},
 	}
 	if tt := getGuTargetType(lineGu); tt != "ROW" {
 		t.Fatalf("expected ROW, got %s", tt)
@@ -71,9 +68,6 @@ func TestCompileKillerMoveCombatProfile(t *testing.T) {
 
 	if prof.Rank != 3 {
 		t.Fatalf("expected rank 3, got %d", prof.Rank)
-	}
-	if prof.RealtimeCooldownMS == 0 || prof.RealtimeWindupMS == 0 {
-		t.Fatalf("expected explicit realtime timing, got windup=%d cooldown=%d", prof.RealtimeWindupMS, prof.RealtimeCooldownMS)
 	}
 	if prof.TargetType != "SINGLE" {
 		t.Fatalf("expected target SINGLE, got %s", prof.TargetType)

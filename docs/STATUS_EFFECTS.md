@@ -1,4 +1,4 @@
-> **Historical reference:** The turn-based simulator described below was removed in #272. Realtime status behavior is implemented in `backend/internal/statusfx` and `backend/internal/realtime`.
+> **Historical reference:** Realtime combat/status ticking described here has been retired. Supported encounters use the turn-based simulator; verify individual status/effect coverage in `docs/guides/GAME_DATA.md`.
 
 # GuWorld - Hệ Thống Effect & Status Effects (Reference & Developer Guide)
 

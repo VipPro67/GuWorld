@@ -128,7 +128,6 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 		equippedGusJSON := marshalJSONOrDefault(player.EquippedGus, "[]")
 		statusesJSON := marshalJSONOrDefault(player.Statuses, "[]")
 		bodyModsJSON := marshalJSONOrDefault(player.BodyMods, "[]")
-		hotbarJSON := marshalJSONOrDefault(player.HotbarGus, "[]")
 		clearedCellsJSON := marshalJSONOrDefault(player.ClearedCells, "{}")
 		visitedSubzonesJSON := marshalJSONOrDefault(player.VisitedSubZones, "[]")
 		pathMasteriesJSON := marshalJSONOrDefault(player.PathMasteries, "{}")
@@ -146,15 +145,15 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 			    current_thought = $16, max_thought = $17,
 			    lifespan = $18, aperture_stress = $19, last_cultivate_time = $20, time_speed_multiplier = $21,
 			    aptitude_type = $22, aptitude_percent = $23, aptitude_grade = $24,
-			    equipped_gus = $25, statuses = $26, body_mods = $27, realtime_hotbar = $28,
-			    cleared_cells = $29, visited_subzones = $30, path_masteries = $31,
-			    growth_data = $32, immortal_state = $33, combat_settings = $34,
-			    active_combat = $44,
-			    explore_count = $35, last_explore_reset = $36,
-			    bio = $37, fake_rank = $38, fake_sub_rank = $39, fake_vital_gu = $40, is_disguised = $41, avatar_url = $42,
+			    equipped_gus = $25, statuses = $26, body_mods = $27,
+			    cleared_cells = $28, visited_subzones = $29, path_masteries = $30,
+			    growth_data = $31, immortal_state = $32, combat_settings = $33,
+			    active_combat = $43,
+			    explore_count = $34, last_explore_reset = $35,
+			    bio = $36, fake_rank = $37, fake_sub_rank = $38, fake_vital_gu = $39, is_disguised = $40, avatar_url = $41,
 			    version = version + 1,
 			    state_revision = COALESCE(state_revision, 0) + 1
-			WHERE id = $43
+			WHERE id = $42
 		`,
 			player.Rank, player.SubRank, player.WallProgress, player.HumanQi,
 			player.CurrentMana, player.MaxMana, player.LastManaUpdate,
@@ -163,7 +162,7 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 			player.CurrentThought, player.MaxThought,
 			player.Lifespan, player.ApertureStress, player.LastCultivateTime, player.TimeSpeedMultiplier,
 			player.AptitudeType, player.AptitudePercent, player.AptitudeGrade,
-			equippedGusJSON, statusesJSON, bodyModsJSON, hotbarJSON,
+			equippedGusJSON, statusesJSON, bodyModsJSON,
 			clearedCellsJSON, visitedSubzonesJSON, pathMasteriesJSON,
 			growthDataJSON, immortalStateJSON, combatSettingsJSON,
 			player.ExploreCount, player.LastExploreReset,

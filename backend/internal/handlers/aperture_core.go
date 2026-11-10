@@ -412,8 +412,8 @@ func AnchorAperture(c *gin.Context) {
 	var inCombatSession bool
 	_ = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT EXISTS(
-			SELECT 1 FROM realtime_combat_session_participants
-			WHERE player_id = $1 AND status = 'active'
+			SELECT 1 FROM players
+			WHERE id = $1 AND active_combat IS NOT NULL
 		)
 	`, playerID).Scan(&inCombatSession)
 	if inCombatSession {
@@ -575,8 +575,8 @@ func UnanchorAperture(c *gin.Context) {
 	var inCombatSession bool
 	_ = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT EXISTS(
-			SELECT 1 FROM realtime_combat_session_participants
-			WHERE player_id = $1 AND status = 'active'
+			SELECT 1 FROM players
+			WHERE id = $1 AND active_combat IS NOT NULL
 		)
 	`, playerID).Scan(&inCombatSession)
 	if inCombatSession {

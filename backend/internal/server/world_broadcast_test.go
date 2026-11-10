@@ -7,7 +7,7 @@ import (
 
 func TestWorldTargetedEventUsesClientEnvelope(t *testing.T) {
 	raw := []byte(`{"event_id":"move-1","event_type":"monster_moved"}`)
-	wrapped := worldEventEnvelope("world:combat", raw)
+	wrapped := worldEventEnvelope("world:pos", raw)
 	var event struct {
 		Type    string          `json:"type"`
 		Channel string          `json:"channel"`
@@ -16,7 +16,7 @@ func TestWorldTargetedEventUsesClientEnvelope(t *testing.T) {
 	if err := json.Unmarshal(wrapped, &event); err != nil {
 		t.Fatal(err)
 	}
-	if event.Type != "event" || event.Channel != "world:combat" || string(event.Data) != string(raw) {
+	if event.Type != "event" || event.Channel != "world:pos" || string(event.Data) != string(raw) {
 		t.Fatalf("unexpected targeted wire event: %s", wrapped)
 	}
 }

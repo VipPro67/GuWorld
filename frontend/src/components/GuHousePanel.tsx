@@ -172,7 +172,7 @@ export function GuHousePanel() {
                 const choices = effectsForCore(id);
                 return <div key={id} className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 p-2">
                   <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-300">{gu ? (guDictionary[gu.gu_id]?.name || gu.gu_id) : id}</span>
-                  {choices.length === 0 ? <span className="text-[10px] text-amber-300">Chưa có effect realtime khả dụng</span> : <select value={actionEffectKeys[id] || ""} onChange={(event) => setActionEffectKeys((prev) => ({ ...prev, [id]: event.target.value }))} className="max-w-[60%] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200">
+                  {choices.length === 0 ? <span className="text-[10px] text-amber-300">Chưa có effect combat theo lượt được hỗ trợ</span> : <select value={actionEffectKeys[id] || ""} onChange={(event) => setActionEffectKeys((prev) => ({ ...prev, [id]: event.target.value }))} className="max-w-[60%] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200">
                     <option value="">Không gán Trận Kích</option>
                     {choices.map((effect) => <option key={effect.key} value={effect.key}>{effect.label} · {effect.operation.value ? effect.operation.value : effect.operation.op}</option>)}
                   </select>}

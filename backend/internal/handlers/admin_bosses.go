@@ -32,7 +32,6 @@ type AdminWorldBoss struct {
 	HP                float64    `json:"hp"`
 	MaxHP             float64    `json:"max_hp"`
 	State             string     `json:"state"`
-	TargetID          string     `json:"target_id,omitempty"`
 	RespawnSeconds    int        `json:"respawn_seconds"`
 	RespawnAt         *time.Time `json:"respawn_at,omitempty"`
 	Revision          int64      `json:"revision"`
@@ -49,7 +48,7 @@ func newAdminWorldBoss(monster cache.WorldMonster) AdminWorldBoss {
 		MonsterTemplateID: monster.MonsterTemplateID, Name: name,
 		Rank: monster.Rank, SubRank: monster.SubRank,
 		X: monster.X, Y: monster.Y, SpawnX: monster.SpawnX, SpawnY: monster.SpawnY,
-		HP: monster.HP, MaxHP: monster.MaxHP, State: monster.State, TargetID: monster.TargetID,
+		HP: monster.HP, MaxHP: monster.MaxHP, State: monster.State,
 		RespawnSeconds: monster.RespawnSeconds, Revision: monster.Revision, LastUpdateAt: monster.LastUpdateAt,
 	}
 	if !monster.RespawnAt.IsZero() {
@@ -136,7 +135,7 @@ func applyAdminWorldBossUpdate(monster *cache.WorldMonster, req adminWorldBossUp
 	}
 	if req.State != nil {
 		switch strings.ToUpper(strings.TrimSpace(*req.State)) {
-		case MonsterStateIdle, MonsterStateChase, MonsterStateAttack, MonsterStateReturn, MonsterStateDefeated:
+		case MonsterStateIdle, MonsterStateDefeated:
 		default:
 			return "", fmt.Errorf("state không hợp lệ")
 		}
@@ -154,23 +153,15 @@ func applyAdminWorldBossUpdate(monster *cache.WorldMonster, req adminWorldBossUp
 		case MonsterStateDefeated:
 			monster.State = MonsterStateDefeated
 			monster.HP = 0
-			monster.TargetID = ""
 			monster.RespawnAt = now.Add(monsterRespawnDelay(monster.RespawnSeconds))
 			event = "monster_defeated"
 		case MonsterStateIdle:
 			monster.State = MonsterStateIdle
 			monster.HP = monster.MaxHP
 			monster.X, monster.Y = monster.SpawnX, monster.SpawnY
-			monster.TargetID = ""
 			monster.RespawnAt = time.Time{}
 			event = "monster_respawned"
 		default:
-			state := strings.ToUpper(strings.TrimSpace(*req.State))
-			if state != monster.State {
-				monster.State = state
-				monster.RespawnAt = time.Time{}
-				event = "monster_updated"
-			}
 		}
 	}
 
@@ -187,7 +178,6 @@ func applyAdminWorldBossUpdate(monster *cache.WorldMonster, req adminWorldBossUp
 		}
 		if x != monster.X || y != monster.Y {
 			monster.X, monster.Y = x, y
-			monster.TargetID = ""
 			if event == "" {
 				event = "monster_moved"
 			}
@@ -200,7 +190,6 @@ func applyAdminWorldBossUpdate(monster *cache.WorldMonster, req adminWorldBossUp
 			monster.HP = hp
 			if hp == 0 {
 				monster.State = MonsterStateDefeated
-				monster.TargetID = ""
 				monster.RespawnAt = now.Add(monsterRespawnDelay(monster.RespawnSeconds))
 				event = "monster_defeated"
 			} else if monster.State == MonsterStateDefeated {
@@ -225,7 +214,7 @@ func applyAdminWorldBossUpdate(monster *cache.WorldMonster, req adminWorldBossUp
 // write uses the revision CAS the workers use, so a concurrent tick cannot be
 // clobbered and cannot clobber this update.
 func AdminUpdateWorldBoss(c *gin.Context) {
-	adminID, ok := requireAdmin(c)
+	_, ok := requireAdmin(c)
 	if !ok {
 		return
 	}
@@ -274,7 +263,6 @@ func AdminUpdateWorldBoss(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Boss vừa được worker cập nhật, hãy thử lại"})
 		return
 	}
-	broadcastWorldCombat(monster, event, map[string]any{"admin_id": adminID.String()})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật boss", "data": newAdminWorldBoss(monster)})
 }
 
@@ -288,7 +276,7 @@ type adminWorldBossSpawnRequest struct {
 // boss map_cells. An empty region_id targets every region at once, so an admin
 // can populate the whole dashboard in one click instead of region by region.
 func AdminSpawnWorldBosses(c *gin.Context) {
-	adminID, ok := requireAdmin(c)
+	_, ok := requireAdmin(c)
 	if !ok {
 		return
 	}
@@ -374,7 +362,6 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 		}
 		if isNew {
 			created++
-			broadcastWorldCombat(runtime, "monster_spawned", map[string]any{"boss": true, "admin_id": adminID.String()})
 			continue
 		}
 		if runtime.State != MonsterStateDefeated {
@@ -396,7 +383,6 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 			continue
 		}
 		revived++
-		broadcastWorldCombat(runtime, event, map[string]any{"boss": true, "admin_id": adminID.String()})
 	}
 	if err := rows.Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc ô boss: " + err.Error()})

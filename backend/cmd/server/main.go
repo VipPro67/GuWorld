@@ -184,7 +184,6 @@ func main() {
 	handlers.StartTribulationWorker(ctx)
 	handlers.StartRefineSessionWorker(ctx)
 	handlers.StartWorldIndexSyncWorker(ctx)
-	handlers.StartWorldMonsterWorker(ctx)
 	handlers.StartSpatialRealmExpiryWorker(ctx)
 	handlers.StartPrimevalVeinWorker(ctx)
 	handlers.StartWorldResourcePointWorker(ctx)

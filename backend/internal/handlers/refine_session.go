@@ -956,7 +956,7 @@ func AbortRefineSession(c *gin.Context) {
 
 	// Recompute equipped list: prune the saved order down to the still
 	// equipped+ACTIVE Gu instead of rebuilding from inventory order, so the
-	// realtime hotbar assignment (Ô 1–6) is not reset by aborting a session.
+	// equipped Gu ordering is not reset by aborting a session.
 	playerGu, err := db.LoadPlayerGus(tx, authID.String(), false)
 	if err != nil {
 		logger.S.Errorf("AbortRefineSession: load gus error: %v", err)

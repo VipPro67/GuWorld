@@ -703,8 +703,8 @@ export default function Home() {
                 <div className="flex gap-2.5 items-start bg-sky-950/20 border border-sky-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">🐾</span>
                   <div>
-                    <span className="font-bold text-sky-300">Quái Thế Giới Truy Đuổi Từ Xa</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Quái thường phát hiện người chơi trong 9–17 ô theo Rank, đuổi tới 15–23 ô quanh điểm sinh và di chuyển 0,9–1,7 ô/giây theo Rank. Elite phát hiện trong 14 ô, đuổi tối đa 22 ô với tốc độ nhanh hơn quái thường 0,2 ô/giây; boss săn mục tiêu trong toàn vùng. Khi quái áp sát, combat tự mở mà không cần bước vào đúng ô sinh quái.</p>
+                    <span className="font-bold text-sky-300">Chiến Đấu Theo Lượt</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Combat realtime và AI đuổi đánh quái đã được gỡ. Chạm trán turn-based hiện bắt đầu khi di chuyển tới ô quái; actor quái Redis chưa được nối với encounter.</p>
                   </div>
                 </div>
                 <div className="flex gap-2.5 items-start bg-red-950/20 border border-red-500/10 rounded-lg p-3">

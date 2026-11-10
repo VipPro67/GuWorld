@@ -401,9 +401,6 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
 			shub.BroadcastToTargets(uihub.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
-		handlers.WorldCombatBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			shub.BroadcastToTargets(uihub.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
-		}
 	}
 	worker.PlayerEventPublisher = func(playerID uuid.UUID, eventType string, domains ...string) {
 		typedDomains := make([]handlers.PlayerEventDomain, 0, len(domains))
@@ -707,7 +704,6 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		inventory.Use(middleware.RequireOnboarded())
 		inventory.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
-			inventory.POST("/realtime-hotbar", handlers.UpdateRealtimeHotbarOrder)
 			inventory.POST("/feed", handlers.FeedGu)
 			inventory.POST("/feed-group", handlers.FeedGroup)
 			inventory.POST("/feed-all", handlers.FeedAll)
@@ -790,10 +786,8 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			combat.POST("/start", handlers.AutoCombatStart)
 			combat.POST("/flee/:id", handlers.Flee)
 			combat.POST("/capture", handlers.CaptureMonster)
-			combat.POST("/practice", handlers.StartRealtimePractice)
-			combat.POST("/practice/exit", handlers.EndRealtimePractice)
-			combat.GET("/skill-loadout", handlers.GetCombatSkillLoadout)
-			combat.PUT("/skill-loadout", handlers.UpdateCombatSkillLoadout)
+			combat.POST("/practice", handlers.StartPracticeCombat)
+			combat.POST("/practice/exit", handlers.EndPracticeCombat)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}
@@ -912,10 +906,6 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			tribulations.GET("/active", handlers.GetActiveTribulation)
 			tribulations.POST("/:eventId/engage", handlers.EngageTribulation)
 			tribulations.POST("/:eventId/resolve", handlers.ResolveTribulation)
-			// Settlement/escape routes remain for sessions opened before the turn-based cutover.
-			tribulations.POST("/:eventId/realtime-victory", handlers.RealtimeResolveTribulationVictory)
-			tribulations.POST("/:eventId/realtime-escape", handlers.RealtimeEscapeTribulation)
-			tribulations.POST("/realtime-exit", handlers.RealtimeExitTribulation)
 		}
 
 		// Arena — group: 40/min, per player: 25/min

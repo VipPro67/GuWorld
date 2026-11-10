@@ -91,7 +91,7 @@ Các biến thường dùng:
 | `MMO_MAX_PLAYERS_PER_ZONE` | Giới hạn admission mỗi zone; mặc định `5`, cho phép `1`–`100`. |
 | `MMO_INSTANCES_PER_ZONE` | Số instance của mỗi map trong process; mặc định `1`, cho phép `1`–`8`. Join được route tới instance ít người nhất còn capacity. Mỗi map được đọc/kiểm tra một lần lúc startup và dùng chung artifact collision/spawn giữa các instance; world, quái và runner 20 Hz chỉ được tạo khi instance có lease đầu tiên và bị giải phóng sau 5 phút không còn lease/subscriber/projectile/event chờ. |
 | `MMO_MAP_DIR` | Thư mục map JSON server đọc lúc startup; mặc định `data/mmo/maps`. Mỗi map đọc `<map_id>.json`; thiếu/sai map hoặc version không khớp release đi kèm code thì manager không khởi chạy và admission fail closed. Việc kiểm tra vẫn chạy đủ cho mọi map cấu hình kể cả khi chưa có instance nào hoạt động. |
-| `MMO_GU_PROFILES` | Danh sách catalog profile Gu realtime, phân tách bằng dấu phẩy; mặc định `data/mmo/gu/transpiled_profiles.json`. Compile/validate lúc startup khi realtime bật; đường dẫn tương đối được dò từ thư mục đang chạy lên các thư mục cha (hỗ trợ `backend/cmd/server`). Lỗi sẽ log và hotbar realtime fail-closed, không có chiêu mẫu thay thế. |
+| `MMO_GU_PROFILES` | Legacy setting for the retired realtime combat runtime; it is no longer read by the server. |
 
 DB đã khởi tạo trước khi thêm các cột `world_*` cần backup, drain realtime/movement, rồi chạy thủ công `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/scripts/migrate_player_world_location.sql` trước khi nâng backend. Không chạy script khi server cũ còn nhận movement hoặc checkpoint.
 
@@ -102,6 +102,8 @@ Frontend:
 | Variable | Mục đích |
 | --- | --- |
 | `NEXT_PUBLIC_BACKEND_URL` | Backend base URL; mặc định `http://localhost:8080`. Production dùng `https://api.cogioi.io.vn`. |
+| `INTERNAL_BACKEND_URL` | Backend base URL cho SSR/server-side fetch; mặc định dùng `NEXT_PUBLIC_BACKEND_URL`. |
+| `NEXT_PUBLIC_SITE_URL` | Origin của frontend cho metadata, robots và sitemap; mặc định `https://www.cogioi.io.vn`. |
 | `NEXT_PUBLIC_REALTIME_URL` | URL WT đầy đủ, ví dụ `https://rt.cogioi.io.vn/api/wt`; mặc định suy ra từ backend (HTTPS + `/api/wt`). Client thử WT trước. |
 | `NEXT_PUBLIC_REALTIME_WS_URL` | URL WebSocket fallback; nếu có URL WT cấu hình thì dùng cùng host và đổi sang `/api/ws`, nếu không thì suy ra từ `NEXT_PUBLIC_BACKEND_URL`. Production host phải phục vụ TCP/TLS. |
 | `NEXT_PUBLIC_MMO_ZONE_ID` | Zone dự phòng cho preview/test. Khi đăng nhập, client ưu tiên `current_region` của nhân vật để chọn map KHU_VUC/SAFE_ZONE tương ứng. |
@@ -117,139 +119,10 @@ after the previous round completes; player status, Gu inventory, recipes and unr
 notification count refresh at most once per 15 seconds. Polling pauses in hidden
 or offline tabs, stops after tab replacement/unmount, and stops when UI realtime recovers.
 Bao Hoang chat sends use HTTP once, with no replay through another transport after
-an uncertain mutation result. World movement/combat still require realtime.
+an uncertain mutation result. World movement and non-combat synchronization still use realtime transport.
 Client chuyển sang WebSocket khi WebTransport không được hỗ trợ hoặc không thiết lập được kết nối. World và UI dùng chung một kết nối đã chọn trong mỗi tab. Khi mất kết nối, các request đang chờ bị từ chối; nút kết nối lại hoặc sự kiện online có thể khởi động lại ngân sách retry. Trình duyệt không dùng được cả hai transport vẫn có các chức năng HTTP, còn world map bị khóa.
 
-Sau đăng nhập và onboarding, Phaser 4.2.1 là gameplay world duy nhất; `dashboard`/`world-map` cũ chỉ
-còn là view ID tương thích, các component map turn-based đã bị gỡ khỏi frontend và không fallback
-client kết nối Phaser MMO cho mọi tài khoản đã đăng nhập; map/content versions được lấy từ release đã đóng gói. Client gửi
-`world.join` bằng zone ID của `current_region`, tải map tương ứng từ `/game/maps/<zone>.json`, render snapshot AOI 20 Hz, WASD + click-to-move và để server xác nhận vị trí/HP. Không có
-Phaser physics và không có sát thương do client tính. Thiếu cấu hình zone thì Phaser hiện preview/error,
-không quay lại world cũ. Vùng khởi đầu lưu trong `current_region` vẫn được dùng làm metadata để xác
-nhận map mà nhân vật được phép vào.
-Map collision dùng chung một JSON ở `backend/data/mmo/maps/` và `frontend/public/game/maps/`;
-format và quy trình copy nằm trong `docs/mmo/map-format.md`. Monster spawn khai báo trong map
-được tạo lại mỗi khi instance được kích hoạt từ `monster_templates` và chạy AI server-owned. Combat preview dùng phím
-1–6 (`TARGET`/`DIRECTION`/`GROUND`/`SELF`), damage/projectile/AoE do server tính; PR-19 thêm
-status tick/DoT/HoT/stack/cleanse, freeze chặn di chuyển/cast và hidden passive preview
-(HP thấp + 3 hit → shield, ICD). Khiên người chơi decay 10%/giây trên zone tick
-(`sim.DecayedShield`) và checkpoint cũng được làm già theo `updated_at` khi vào lại.
-HUD React lấy hotbar/mana/cooldown/cast từ snapshot; aim DIRECTION/GROUND
-là hai bước (chọn skill → click xác nhận), projectile do server mô phỏng. Art combat hiện là placeholder
-procedural (`placeholder-1`) với animation idle/walk/cast/hit/death và VFX pool; xem
-`docs/mmo/assets.md`. Click-to-move dùng A* preview phía client rồi gửi từng waypoint
-`world.move_target`; server vẫn xác nhận từng đoạn và phát `MOVE_TARGET_REJECTED` khi chặn.
-Camera có deadzone/zoom/shake + chỉ báo mục tiêu ngoài màn hình. Loadout hotbar lúc join lấy từ
-`players.equipped_gus` + `player_gu` đang equipped/ACTIVE, match profile realtime đã compile và
-re-slot 1–6; Gu chưa compile bị bỏ qua, fallback preview nếu không có Gu nào. View MMO có drawer
-Túi/Tu luyện/Tổ đội/Cài đặt + chat overlay; mở panel đặt UI-modal chặn input Phaser nhưng server
-không dừng zone. Loot auto-grant idempotent qua `realtime_loot_grants`; vị trí MMO được checkpoint
-trong `players` (join resume, leave/disconnect flush, worker 10s), còn
-`player_world_state_v2` chỉ giữ HP/shield và phiên bản map, xem `docs/mmo/recovery.md`.
-Death Arena và Martial Arena tạo `realtime_combat_sessions` mode `tournament` trên map ảo cô lập;
-participants được route vào cùng instance, worker chỉ chuyển vòng sau khi session kết thúc. Disconnect
-được xử thua sau 30 giây; Death Arena lưu HP/Mana còn lại cho vòng sau, Martial Arena hồi đầy chỉ số
-mỗi trận. Kết quả và phần thưởng được ghi trong transaction settlement của realtime death handler.
-Snapshots trận riêng lưu combat events cùng checkpoint HP/Mana trong
-`realtime_combat_session_events`; khi trận kết thúc, các event được dùng làm
-combat log cho lịch sử đấu trường, võ đài và chiến tranh tông môn.
-Chiến tranh tông môn dùng session `sect_war`, có Hộ Sơn Thần Thú trên map ảo,
-settlement giữ logic cướp kho/khiên phòng thủ/đóng góp và Qi. Chỉ thành viên
-đang có lease realtime được đưa vào trận; sủng vật chưa được mô hình hóa ở map này.
-Portal metadata được parse/render và `Manager.TransferCharacter` handoff atomic trong process, nhưng
-chưa tự trigger portal/update DB/scene swap; xem `docs/mmo/transfer.md`. Ruleset map `pve/pvp/safe`, party-aware
-harm rules, boss threat + splash và nhãn/tint party trong snapshot; xem `docs/mmo/pvp-party.md`.
-Chưa có corpse/F loot, death/respawn UI, party loot/duel consent hoặc live equip refresh.
-
-Mô phỏng MMO headless (không cần DB/Redis): `cd backend && go run ./cmd/mmo_headless -ticks 10000`.
-Nó chạy 2 player và 10 monster qua tick cố định 20 Hz rồi in checksum snapshot.
-Smoke slice đầy đủ hơn: `go run ./cmd/mmo_slice -players 5 -mobs 10 -ticks 400` (movement/cast/death/metrics).
-Synthetic QoS: `go run ./cmd/mmo_bench -players 100 -mobs 50 -ticks 1000`; report ở
-`docs/mmo/benchmark.md`. Checklist Gate B: `docs/mmo/vertical-slice.md`.
-Trong MMO scene, **F3** bật/tắt debug HUD (tick/FPS/network/prediction).
-CI/observability/content versioning: `docs/mmo/operations.md`; admin stats endpoint
-`GET /api/admin/monitor/realtime` (permission `monitoring.read`).
-Soak/reconnect: `go run ./cmd/mmo_soak -duration 60s -players 10 -mobs 20 -reconnect-every 5s`;
-fuzz/security plan: `docs/mmo/security.md`.
-Release gate tự động (format/vet/test/race/Gu/map/slice/soak/frontend):
-`scripts/mmo-release-gate.sh`. Gate D checklist + sign-off: `docs/mmo/release-checklist.md`;
-SLO/capacity candidate: `docs/mmo/slo.md`; roadmap sau beta: `docs/mmo/roadmap.md`.
-Tổng hợp giới hạn còn lại của PR-01…PR-36: `docs/mmo/remaining-limitations.md`.
-
-## Run with Docker Compose
-
-Chạy môi trường backend local (Go app, PostgreSQL, Redis, plain HTTP) bằng file
-compose local:
-
-```bash
-docker compose -f docker-compose.local.yml up --build
-```
-
-File này bind backend vào `127.0.0.1:8080`, không có TLS/Caddy. Để thử
-WebTransport local, dùng cert tin cậy và chạy binary với `TLS_ENABLED=true` (xem
-mục cuối của `docs/guides/PRODUCTION_DEPLOY.md`).
-
-`docker-compose.yml` là cấu hình **production**: Go phục vụ HTTPS trên
-`TLS_ADDR` và QUIC/WebTransport trên `WT_ADDR` (mặc định `:8443`, publish ra
-host `443/tcp` + `443/udp`). Nó cần `certs/fullchain.pem` +
-`certs/privkey.pem`, `POSTGRES_PASSWORD` trong root `.env`, và DB/JWT/OAuth
-trong `backend/.env`. Không commit hai file env hoặc cert. Production DB/Redis
-chỉ ở trong Compose network; local profile bind Redis vào loopback.
-
-Checklist đầy đủ (DNS, firewall UDP, cert, smoke test, rollback):
-[`docs/guides/PRODUCTION_DEPLOY.md`](PRODUCTION_DEPLOY.md).
-
-Cả hai profile đều:
-1. Tải và cấu hình PostgreSQL (`gu_db`) và Redis.
-2. Build/chạy Go backend từ `backend/Dockerfile`; CSV nguồn nằm trong `backend/data/` để quản trị viên import khi cần.
-3. Healthcheck để trì hoãn backend cho đến khi PostgreSQL sẵn sàng.
-4. (Production) mount cert read-only và drain WebTransport với close code `4010` khi shutdown.
-
-## Run backend (Manual)
-
-```bash
-cd backend
-go run ./cmd/server
-```
-
-Server sẽ:
-
-1. Kết nối DB.
-2. Tạo/migrate schema.
-3. Seed các bản ghi hệ thống tối thiểu; riêng quest hiện được đồng bộ từ `Quest.csv`. Các dictionary gameplay khác **không tự import**.
-4. Load registry từ database. Nếu chưa có dữ liệu, vào Admin → **Dữ liệu** để import CSV rồi khởi động lại backend.
-5. Start workers.
-6. Listen HTTP.
-
-`InitSchema` dùng PostgreSQL advisory lock để chỉ một instance thay đổi schema tại
-một thời điểm, đồng thời thử lại có giới hạn khi gặp SQLSTATE `55P03`, `40P01`
-hoặc `40001`. Nếu vẫn hết thời gian chờ, hãy kiểm tra transaction dài hoặc
-`idle in transaction` trên PostgreSQL và tạm dừng import/traffic ghi trong cửa
-sổ migrate; không nên chỉ tăng timeout vô hạn. Với rolling deployment, nên chạy
-migration như một bước riêng trước khi đưa replica mới nhận traffic.
-
-## Run frontend
-
-Frontend pin Node 22 qua `.nvmrc` (khớp `frontend/Dockerfile`) để tránh lỗi
-esbuild `ETXTBSY` khi CI dùng Node 24. Chạy `nvm use` trước khi cài dependency.
-
-```bash
-cd frontend
-nvm use
-npm install
-npm run dev
-```
-
-Mở `http://localhost:3000`.
-
-## Checks used in this repo
-
-Backend:
-
-```bash
-cd backend
-go test ./...
-```
+The Phaser world movement runtime and its realtime transport remain for movement, presence, chat, and synchronization. Realtime combat, skill hotbars, combat simulation, combat session settlement, and their event logs have been retired. Death Arena and Martial Arena use turn-based encounter workers. PvP and other arena conversion gaps are documented in `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 
 Frontend:
 
@@ -297,9 +170,7 @@ Rules:
   need a `done` channel keep their own loop, but wrap the tick body in `SafeRun` (or `SafeRunE`).
 - Work that a tick hands off (because it opens a transaction or runs heavy CPU) goes to a
   bounded pool rather than running inline, so one slow item cannot blow the tick budget.
-  Example: `dispatchWorldMonsterAttack` (`handlers/world_monsters.go`) reserves a slot on
-  a buffered channel and applies a realtime monster attack under `SafeRun` in a goroutine;
-  when the pool is full the attack is deferred to its next cooldown instead of queueing.
+  Example: bounded dispatch is appropriate for expensive tick work that remains active; the retired world monster attack dispatcher is no longer present.
 
 ### Observability & Debugging
 

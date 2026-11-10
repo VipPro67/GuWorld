@@ -55,7 +55,6 @@ interface ApertureProps {
   guDictionary: Record<string, GuSpec>;
   initialTab?: ApertureTab;
   expandMmoSettings?: boolean;
-  onRealtimeHotbarSaved?: () => void;
 }
 
 const RANK_NAMES: Record<number, string> = {
@@ -207,7 +206,6 @@ export const Aperture: React.FC<ApertureProps> = ({
   guDictionary,
   initialTab = "aperture",
   expandMmoSettings = false,
-  onRealtimeHotbarSaved,
 }) => {
   const store = useGameStore();
   const constitutionDictionary = store.constitutionDictionary;

@@ -25,38 +25,9 @@ only HP/shield and map/content versions. Existing databases require the
 explicit maintenance script `backend/scripts/migrate_player_world_location.sql`;
 it is not run during startup. See `docs/mmo/recovery.md`.
 
-## Realtime hotbar (Ô 1–6)
+## Combat loadout
 
-`players.realtime_hotbar` is the explicit hotbar setting: an ordered JSONB
-array (max 6) of armed Gu instance ids assigned by the player via
-`POST /api/inventory/realtime-hotbar`; index 0–5 maps to hotbar ô 1–6 and `""`
-is a deliberate empty slot. Pins survive equip/unequip churn: while a pinned
-Gu is temporarily invalid (sleeping/sealed/damaged/unequipped) its slot stays
-empty (reserved), and the Gu reclaims it on revalidation; a pin whose instance
-no longer belongs to the player is released and the slot becomes fillable.
-Unpinned equipped+ACTIVE Gu fill empty slots in `players.equipped_gus` order.
-Composition lives in `handlers/realtime_join_state.go`
-(`orderRealtimeHotbar`, pure + tested), consumed by
-`LoadCombatLoadout` → gateway admission → `world.welcome` skills. The save
-endpoint also keeps `players.equipped_gus` ordered = pinned-first so the
-Aperture equipped list matches the hotbar.
-
-## Realtime skill loadout
-
-`players.realtime_skill_loadout` is an ordered JSONB array (max 4) of
-`{"kind":"move"|"house","id":"..."}` entries and
-`players.realtime_skill_loadout_configured` distinguishes "never saved" (the
-server backfills slots from the equipped pool) from an explicit order. It binds
-hotbar slots 9–12, shared by equipped player killer moves
-(`player_killer_moves.is_equipped`) and the Trận Kích actions of the equipped
-`player_gu_houses` row. Resolution and slot binding live in
-`handlers/skill_loadout.go`; entries whose source is gone (move deleted or
-unequipped, house unequipped) are dropped and later entries compact upward,
-while resolvable-but-unsupported entries keep their slot as an empty gap so the
-remaining keys do not shift. `PUT /api/combat/skill-loadout` rejects entries
-that are not equipped or not realtime-supported at save time. Trận Kích
-consumption drains the house core Gu hunger but does not accrue killer-move
-mastery XP.
+Realtime Gu hotbar/loadout (hotbar 1–6 and 9–12) đã bị gỡ khỏi player schema, API và model. `InitSchema` xóa các cột legacy `realtime_hotbar`, `realtime_skill_loadout` và `realtime_skill_loadout_configured` trên DB hiện hữu. Sát Chiêu và Trận Kích lưu tactical profile turn-based trong `player_killer_moves.combat_profile` / `player_gu_houses.house_profile`; khóa windup/cooldown mili giây và `realtime_effects` cũ được dọn tự động. Xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md` để biết các luật combat chưa được chuyển.
 
 ## Daily missions
 
@@ -229,7 +200,7 @@ Icon vật phẩm ở túi đồ, danh mục và Thương Đội dùng bộ WebP
 ## Registry runtime
 
 - `models.LoadGuRegistry(db.DB)` load `gu_dictionary` vào `models.GuRegistry` khi server start.
-- API `/api/dictionary/gus` trả trường `skill_profile` cùng định nghĩa Cổ; trang `/wiki/gu/:id?rank=` dùng profile này để vẽ sơ đồ vùng đánh và hiển thị cách ngắm, tầm, bán kính, niệm chiêu, hồi chiêu, hậu động tác và số mục tiêu.
+- API `/api/dictionary/gus` trả định nghĩa Cổ và effects theo lượt; dữ liệu hồ sơ cast realtime đã bị gỡ khỏi CSV, database và trang wiki.
 - `models.LoadItemRegistry(db.DB)` load `item_dictionary` vào `models.ItemRegistry` khi server start.
 - Runtime gameplay không đọc trực tiếp các namespace authoring `active`, `passive`,
   `growth`, `other` trong các domain derived stats, scouting/profile/refinement
@@ -327,11 +298,11 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 | 3 | Great Grandmaster (Đại Tông Sư) | ×1.4 | ≥ 1.000.000 |
 | 4 | Supreme Grandmaster (Vô Thượng Đại Tông Sư) | ×1.5 | ≥ 10.000.000 |
 
-Điểm nhận từ: dùng Cổ (theo bảng rank bên dưới), cast Cổ thường và đánh thường trong combat realtime, sát chiêu thành công (theo rank Cổ hạch tâm), luyện Cổ thành công (theo rank Cổ đích), và thưởng Chân Ý phó bản (cộng thẳng `amount`). Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
+Điểm nhận từ: dùng Cổ ngoài combat (theo bảng rank bên dưới), sát chiêu thành công, luyện Cổ thành công và thưởng Chân Ý phó bản. Nguồn từ cast/đánh thường trong combat realtime đã bị gỡ; chưa khẳng định các action này tăng điểm ở mọi flow turn-based. Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
 
 > **Hệ số Đạo Cấp chỉ dùng trong combat.** Uy lực/khiên/hồi máu của Cổ và sát chiêu nhân hệ số trên; còn **chỉ số bị động** (ATK/DEF/HP/SPEED cộng thẳng từ `ALWAYS_ON` / `PASSIVE_STATS`) là **giá trị raw** — không nhân Đạo Cấp lẫn Đạo Ngân (`handlers/player_stats.go`, `gamefx.PassiveHPBonus`).
 
-**Không có giới hạn Chân Ý theo trận.** Giới hạn Rank × 10 và counter `players.active_combat.path_mastery_gained` thuộc executor turn-based đã bị gỡ. Realtime cộng trực tiếp vào `players.path_masteries` khi settle checkpoint, atomically cùng hunger/mana; checkpoint lỗi sẽ retry ở lần sau.
+**Giới hạn Chân Ý theo trận:** chưa có quy tắc dùng chung được xác nhận cho các flow combat hiện hành. Counter và checkpoint của runtime realtime đã bị gỡ.
 
 **Chân Ý khi dùng Cổ:** mỗi lần thôi động Cổ thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận vẫn chịu hiệu suất theo cảnh giới hiện tại và giới hạn cảnh giới của rank Cổ. Sát chiêu dùng cùng bảng theo rank Cổ hạch tâm; đánh thường trúng mục tiêu cộng 1 điểm vào path `strength`.
 
@@ -542,60 +513,9 @@ Danh sách hiện tại:
   - `blood_fiend_body` (Huyết Ma Sát Thể): Huyết Đạo đạo ngân +25%, +15% attack, +20% hồi phục nhận, +35% áp lực không khiếu, -10% tỉ lệ luyện cổ
   - `dream_phantom_body` (Huyễn Mộng Linh Thể): Mộng Đạo đạo ngân +20%, +5% sát thương Mộng Đạo, -15% kháng tâm lý, -10% kháng CC
 
-### Hồ sơ chiêu của Cổ
+### Hồ sơ kỹ năng realtime đã nghỉ hưu
 
-`Gu.csv.skill_profile` là object tùy chọn trên đúng dòng `(id, rank)` của Cổ. Nó
-lưu cách ngắm, hình vùng đánh và thông số thời gian để gameplay realtime và wiki
-cùng đọc một nguồn. Hiệu ứng DAMAGE/STATUS/SHIELD tiếp tục nằm trong `effects`,
-không bị lặp trong hồ sơ chiêu. Để trống trường này nếu Cổ chưa có chiêu realtime.
-
-| Cột | Kiểu | Ý nghĩa |
-| --- | --- | --- |
-| `cast_mode` | VARCHAR(20) | `TARGET` (chọn unit) · `DIRECTION` (hướng) · `GROUND` (điểm đất) · `SELF` |
-| `shape` | VARCHAR(20) | `SINGLE` · `LINE` (dài × rộng) · `CIRCLE` (bán kính) · `CONE` (dài × góc) |
-| `radius` | DOUBLE | Bán kính vùng tròn |
-| `length` | DOUBLE | Chiều dài tia/hình quạt |
-| `width` | DOUBLE | Bề rộng tia |
-| `angle_deg` | DOUBLE | Góc mở của hình quạt |
-| `cast_range` | DOUBLE | Tầm xa tối đa từ người dùng tới điểm/hướng |
-| `cast_time_ms` | INT | Thời gian niệm (đứng yên); 0 = tức thời |
-| `recovery_ms` | INT | Khựng sau khi xuất chiêu |
-| `cooldown_ms` | INT | Hồi chiêu thời gian thực (khác status cooldown theo lượt) |
-| `projectile_speed` | DOUBLE | 0 = đánh tức thời; >0 = đạn bay (ô/giây) |
-| `pierce` | BOOL | Đạn/tia xuyên qua nhiều mục tiêu |
-| `max_targets` | INT | Số mục tiêu tối đa mỗi lần trúng |
-| `move_distance` | DOUBLE | Quãng lướt realtime (ô); 0 = không |
-| `move_duration_ms` | INT | Thời gian lướt; bắt buộc khi `move_distance` > 0 |
-| `move_behavior` | VARCHAR | `MOVE_ONLY` (chỉ di chuyển) hoặc `IMPACT` (dừng ở địch đầu tiên và gây sát thương) |
-| `status_move_multiplier` | DOUBLE | Hệ số chạy của `STATUS`; >1 là Tăng Tốc |
-| `status_debuff` | BOOL | `false` cho buff Tăng Tốc |
-| `status_stack_policy`, `status_max_stacks` | VARCHAR, INT | Tăng Tốc dùng `REFRESH` và `1` |
-| `knockback_distance` | DOUBLE | Đẩy lùi mục tiêu khi trúng đòn (ô); 0 = không |
-| `player_atk_ratio` | DOUBLE | Tỷ lệ hưởng theo công kích nhân vật (% Base Attack, mặc định 0.5) |
-| `gu_power_ratio` | DOUBLE | Tỷ lệ hưởng theo uy lực Cổ (% Base Gu Damage, mặc định 1.0) |
-
-Quy ước chọn mode theo hình:
-
-- `TARGET` + `SINGLE` → đòn chọn mục tiêu cổ điển.
-- `DIRECTION` + `LINE` → skillshot xuyên (đạn bay hoặc tia tức thời).
-- `GROUND` + `CIRCLE` → AoE đặt xuống đất, có `cast_time_ms` thì người chơi né được.
-- `DIRECTION` + `CONE` → sóng/quạt.
-- Profile có `move_distance` > 0 phải ghi rõ `move_duration_ms` và `move_behavior`; `IMPACT` dùng hiệu ứng `DAMAGE` dương.
-- Tăng Tốc dùng `cast_mode: SELF`, `status_id: HASTE`, `duration_ms`, `status_move_multiplier` > 1, `status_debuff: false`, `status_stack_policy: REFRESH`, `status_max_stacks: 1`. Từng dòng Cổ tự ghi giá trị theo Rank.
-- `SELF` → tự buff (khiên/hồi), bắn ngay không cần ngắm.
-
-Cơ chế hiệu ứng thế giới mở (Realtime Status Effects):
-- **Câm lặng (`SILENCE`, `GU_SEAL`, `FORGET_EGO`)**: Khóa tung chiêu Cổ, nhân vật vẫn có thể di chuyển và đánh thường.
-- **Mù lòa (`BLIND`)**: Đòn đánh thường bị trượt (miss với 0 damage).
-- **Phản sát thương (`THORNS`)**: Phản lại 35% sát thương nhận trực tiếp ngược về kẻ tấn công.
-- **Vết thương thiêu đốt (`BURN`)**: Giảm 50% lượng máu hồi phục từ các chiêu thức hỗ trợ (`HEAL`).
-- **Trói chân (`ROOT`, `BIND`) vs Choáng cứng (`STUN`, `FREEZE`, `PETRIFY`)**: `ROOT` giảm tốc độ di chuyển về 0 nhưng vẫn cho phép quay hướng và tung chiêu; Hard CC khóa cả di chuyển lẫn dùng kỹ năng.
-- **Tỉ lệ sát thương lai (Hybrid Scaling)**: Sát thương chiêu realtime được tính kết hợp giữa công kích nhân vật và uy lực Cổ: `(Damage * gu_power_ratio + BaseAttack * player_atk_ratio) * DamageScale`.
-
-`cooldown_ms` dùng thời gian thực. Khi vào map, chi phí dùng Cổ được tính từ
-`gamefx.EnergyCost` theo chuyển/cảnh giới và thuế xung đột Đạo Ngân. Zone giữ
-pool Chân Nguyên của nhân vật và ghi delta tiêu hao về `players.current_mana`
-cùng checkpoint; không dùng pool combat mặc định 100 cho nhân vật thật.
+`skill_profile` từng chứa hình học ngắm, cast time, cooldown mili giây, projectile và chuyển động realtime. Cột này đã bị xóa khỏi `Gu.csv` và được `InitSchema` xóa khỏi `gu_dictionary` hiện hữu; API và trang Wiki không còn đọc hoặc hiển thị profile. Combat theo lượt dùng các effect trong `effects` và luật target turn-based hiện có. Những behavior chưa có executor turn-based cần được ghi nhận là chưa hỗ trợ, không dùng lại profile realtime.
 
 ### Cổ của người chơi — bảng `player_gu`
 
@@ -621,10 +541,7 @@ Cột `players.gu_inventory` (JSONB) đã được **thay thế hoàn toàn** b�
 | `last_fed_at` | TIMESTAMPTZ | Lần cuối được cho ăn. Chỉ các feed handler (`gu.feed`/`feed_group`/`feed_all`) ghi trực tiếp; không nằm trong đường sync bulk. Dùng cho audit log chết đói (thời gian không được cho ăn). |
 | `created_at` / `updated_at` | TIMESTAMPTZ | |
 
-Trong combat realtime, mỗi slot hotbar gắn với một `player_gu.id` cụ thể. Một
-lần thử cast hợp lệ trừ 1 `hunger` của instance đó trước khi kiểm tra thiếu
-Chân Nguyên, Zone chặn cast khi độ no dưới 1; checkpoint
-trừ tổng lượt dùng theo delta trong cùng transaction ghi vị trí/HP/mana.
+Mỗi Cổ instance được lưu và trang bị riêng; hành vi trong combat được resolve bởi simulator theo lượt.
 
 `movement_policy` của profile được áp trong windup và recovery: `SLOW` còn 50%
 tốc độ chạy, `ROOT` dừng di chuyển, `FREE`/bỏ trống giữ nguyên tốc độ. `recovery_ms`
@@ -642,8 +559,9 @@ thái combat có thể khôi phục.
 - Sát chiêu tự tạo được lưu riêng trong `player_killer_moves`: công thức gồm Cổ chính/phụ, tham chiếu instance Cổ, effect đã chọn và effect đã cân bằng, cùng độ thành thạo và trạng thái trang bị. `balance_version`/`combat_profile.profile_version` đóng dấu snapshot luật; thay đổi luật không tự sửa build đã lưu. Cổ có thể được dùng trong nhiều sát chiêu; mỗi lần kích hoạt, từng Cổ thành phần giảm 1 độ no.
 - Các Cổ thành phần được kiểm tra lại theo `player_gu.id`, `gu_id`, `gu_rank` và trạng thái sống khi trang bị/thi triển. Bán, hợp luyện hoặc làm chết Cổ khiến sát chiêu phụ thuộc vào instance đó tạm mất hiệu lực.
 - Cân bằng sát chiêu hiện dùng ngân sách theo rank Cổ chính, đóng góp giảm dần của Cổ phụ, tải effect theo loại/giá trị/phạm vi/thời lượng/xác suất, độ hòa hợp lưu phái và độ phức tạp. Effect được giảm tự động khi vượt ngân sách; `balance_version` định danh luật dùng lúc tạo.
-- Người chơi có thể lưu tối đa 12 sát chiêu và trang bị tối đa 4. Tối đa bốn sát chiêu được nạp vào realtime hotbar ở ô 9–12. Builder realtime đưa ra damage TARGET, heal/shield/cleanse SELF; compiler gộp nhiều effect tương thích trong cùng cast (damage có thể kết hợp với heal/khiên bản thân; cleanse chỉ dùng ở chiêu SELF). Hồi phục `ON_USE` vẫn có thể tạo sát chiêu chỉ dùng ngoài combat qua `UseKillerMove`. Effect có điều kiện, status theo lượt, `DIRECT_HP`, `BARRIER`, `STAT_MOD` và các loại khác chưa có executor bị loại khỏi builder. Preview chạy cùng compiler realtime; lưu yêu cầu fingerprint preview khớp và xác nhận nếu tự cân giảm uy lực. Windup/cooldown realtime được xác định theo rank và độ phức tạp; không chuyển `warmup_turns`/`cooldown_turns` cũ thành thời gian.
-- Profile Trận Kích mới của Tiên Cổ Ốc lưu `realtime_effects` trên từng action, được chọn từ effect realtime của Cổ hạch tâm và dùng chung compiler/loadout 9–12 với sát chiêu. `house_profile.profile_version` nhận diện snapshot. Bản ghi cũ không có `realtime_effects` tiếp tục dùng bộ damage đơn mục tiêu tổng hợp cũ; không tự nâng cấp hay đổi hành vi.
+- Người chơi có thể lưu tối đa 12 sát chiêu và trang bị tối đa 4. Tác vụ chiến đấu theo lượt dùng profile đã trang bị; không còn hotbar 9–12 hoặc windup/cooldown theo mili giây. Builder giới hạn effect theo executor turn-based; effect chưa hỗ trợ phải được ghi nhận, không tự thay bằng executor realtime.
+- Profile Trận Kích của Tiên Cổ Ốc lưu dữ liệu chiến thuật turn-based. Các khóa realtime cũ trong `combat_profile` / `house_profile` được dọn khi `InitSchema` chạy; profile thiếu quy tắc lượt cần được rà soát trước khi kích hoạt.
+
 - Cột `players.temp_loot` đã bị **bỏ hẳn** (migration `ALTER TABLE players DROP COLUMN IF EXISTS temp_loot;`). Chiến lợi phẩm khám phá giờ vào thẳng túi thật (nguyên liệu → `player_inventory_items`, thạch → `players.primeval_stones`/`immortal_stones`, Cổ → `player_gu`).
 
 ### Cơ chế rơi đồ khi tử đạo & Thiên Đạo Tiêu Hủy (Death Penalty & Void Destruction)
@@ -693,9 +611,7 @@ Lưu các sự kiện Kiếp Nạn của Tiên Khiếu:
 - `reward_dao_marks` (BIGINT) — Số Đạo Ngân thưởng
 - `started_at` / `ended_at` (TIMESTAMPTZ)
 
-Khi nhân vật đang ở map realtime, các endpoint `realtime-engage`, `realtime-victory`, `realtime-escape`, `realtime-exit` bàn giao lease zone cũ trước khi ghi `current_region/world_zone_id`: flush vị trí live, tạm dừng checkpoint, ghi đích và nhả lease. Nhờ vậy checkpoint/disconnect của zone cũ không ghi đè region và lần join kế tiếp không bị `realtime_map_mismatch`.
-
-Mỗi event có một instance realtime riêng (`aperture_tribulation#<event_id>`), không dùng chung map với người khác. Khi join, backend dựng encounter từ chính `tribulation_enemies` và `aperture_resource_nodes` (không dùng spawn tĩnh trong map artifact): HP/ATK/DEF lấy từ row DB đã scale theo rank/sub-rank, `tribulation_enemies.is_dead` được cập nhật khi quái chết, checkpoint 10 giây đồng bộ HP quái/node còn sống. Quái của kiếp nạn có `NoRespawn`, nên không hồi sinh; node phòng thủ (`node_category='DEFENSE'`) bị loại khỏi encounter realtime. Worker legacy dừng mô phỏng khi `players.current_region='aperture_tribulation'`; node do quái phá trực tiếp trong combat realtime. Khi quái cuối cùng chết, server tự kết toán victory (idempotent) và đưa nhân vật về vị trí thoát. Khi player hết máu trong combat, server tự đưa về vị trí cũ, hồi HP về 1 và không rơi rớt vật phẩm. Map realtime là 40×40; các vị trí node/quái từ lưới Tiên Khiếu bền vững 20×20 được chiếu theo tỷ lệ 2×, người chơi vào tại (20,20). Backend lưu vị trí region/tọa độ local trước khi vào cùng anchor atlas độc lập với FK region. Khi thoát, nếu region lưu còn active và tọa độ nằm trong bounds thì khôi phục đúng vị trí (hub cũng được); nếu không, chọn `KHU_VUC`/`SAFE_ZONE` active gần anchor nhất và dùng entry point, rồi chọn hub active gần nhất. Nếu không tồn tại đích nào thì trả lỗi rõ ràng, không chuyển ngầm về tọa độ mặc định. Map event riêng được nạp nội bộ, không cần cấu hình zone hay allowlist; backend xác thực tài khoản, vị trí và trạng thái event ACTIVE. Khi cập nhật server hiện hữu, import lại dataset **Region** trong Admin để áp dụng kích thước 40×40; seed startup chỉ thêm region còn thiếu và không ghi đè row đã có.
+Combat tai kiếp dùng encounter turn-based: `/api/tribulations/:eventId/engage` dựng `active_combat` từ các enemy rows còn sống; simulator xử lý trận và `/resolve` kết toán kết quả. Các worker di chuyển quái theo tick, damage node realtime và auto-close sự kiện khi hết quái đã bị gỡ. Damage node/phòng thủ chiến trường chưa được chuyển vào simulator; không có map chiến đấu realtime 40×40 đang chạy.
 
 ### Bảng `aperture_return_anchors`
 
@@ -720,11 +636,10 @@ Lưu các quái vật sinh ra trong Kiếp Nạn Tiên Khiếu:
 
 ### Cổ
 
-> Combat turn-based, simulator và các `turn`/`turns` trong mô tả legacy bên dưới
-> không còn là runtime. Combat hiện chạy trong realtime zone; chỉ Gu/profile và
-> effect có executor realtime được khai báo trong `docs/mmo/gu-realtime-schema.md`
-> mới được cast. Catalog/import vẫn có thể giữ effect cũ để tránh mất dữ liệu,
-> nhưng được phân loại không đồng nghĩa với có hiệu lực trong combat.
+> Combat turn-based hiện là runtime cho các flow được hỗ trợ. Combat realtime
+> zone và Gu skill profile đã bị gỡ. Các `turn`/`turns` và effect chưa được
+> simulator hỗ trợ vẫn có thể nằm trong catalog để giữ dữ liệu, nhưng không có
+> hiệu lực cho tới khi được nối vào simulator.
 
 Các trường quan trọng trong dictionary:
 
@@ -738,10 +653,10 @@ Các trường quan trọng trong dictionary:
   - **Khối `active`:** effect chủ động dùng trong combat — `damage_flat`, `damage_mult`, `damage_path`, `heal_flat`, `shield_flat`, `apply_status`, `target_selector`, `summon_*`, `curve_attack`, `lifesteal`, … Danh sách đầy đủ + catalog chuẩn xem mục **"Hiệu ứng Cổ (effects)"** bên dưới.
     - `apply_status`, `chance`, `turns` và các key combat khác có thể còn trong dữ liệu/import legacy. Những trường này không tự tạo profile realtime; không chuyển `turns` thành giây và không suy ra executor từ parser/catalog.
   - **Khối `passive` (Block v2 duy nhất, không còn đọc flat cũ):** chỉ số vĩnh viễn cộng dồn (`STAT_MOD ... SPEED`, `MOVEMENT` = phạm vi di chuyển ô — tốc chạy map, `SPEED` chỉ thứ tự đánh combat), `damage_reduction`, `luck`, `storage_capacity`, `tenacity` (0..1: rút ngắn duration CC + tỉ lệ tự giải 1 debuff đầu lượt), `cc_resist` (0..1: kháng proc mọi debuff, nhân với mental resist, cap tổng 0.75), …
-    - Các key khắc hệ/passive trong legacy block không tự áp dụng vào realtime. Chỉ dùng profile và kháng hệ hiện có trong schema MMO; xem `docs/mmo/gu-realtime-schema.md`.
+    - Các key khắc hệ/passive trong legacy block không tự áp dụng nếu simulator chưa có handler tương ứng. Gu realtime profile và schema MMO combat đã bị gỡ.
   - **Shorthand status (đã loại khỏi dữ liệu):** key viết tắt (`freeze`, `slow`, `slow1`, `weak`, `stun`, `silence`, `bleed`, `poison`, `thorns`, `regen`, `atk_up`, `def_up`, `taunt`) không còn xuất hiện trong `Gu.csv` — toàn bộ đã migrate sang `apply_status` dạng mảng. `ActiveEffect.normalize()` vẫn giữ làm fallback cho DB rows cũ chưa re-import; **không dùng cho dữ liệu mới**.
-  - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Việc trigger/code được chấp nhận ở catalog hoặc parser không bảo đảm executor combat realtime tồn tại. Combat runtime chỉ dùng effect/profile có hỗ trợ được liệt kê trong `docs/mmo/gu-realtime-schema.md` và phần combat realtime của `WIKI.md`.
-    - Các mechanic theo lượt (`ON_TURN_START`, `ON_BATTLE_START`, `turns`, initiative, reborn/rewind, summon theo trận và tương tự) là dữ liệu/logic legacy; simulator đã bị xóa và hiện chưa có executor realtime tương đương.
+  - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Việc trigger/code được chấp nhận ở catalog hoặc parser không bảo đảm simulator turn-based có handler tương ứng. Những effect chưa có handler cần được ghi nhận là chưa hỗ trợ.
+    - Các mechanic theo lượt (`ON_TURN_START`, `ON_BATTLE_START`, `turns`, initiative, reborn/rewind, summon theo trận và tương tự) chỉ hoạt động nếu simulator có handler cụ thể; các trường được parse hoặc phân loại chưa đủ để khẳng định đã được hỗ trợ.
   - Dịch chuyển bằng Cổ vẫn chạy qua movement/world handlers; phạm vi theo rank và quyền dịch chuyển được mô tả ở phần route movement bên trên. Các mechanic hành động combat theo lượt được giữ trong dữ liệu để migration/đối chiếu, không phải runtime contract hiện hành.
     - Alias consume đã chạy (không còn 400): `STONE_APERTURE`→`APERTURE_PETRIFICATION`, `POISON_VOW`→`CONTRACT_OATH`, `THIRD_WATCH`→`TIME_ACCELERATION`, `RECORD_MESSAGE`→`RECORD` (dùng qua endpoint Support, trigger `ON_USE`). `STONE_APERTURE`/`APERTURE_PETRIFICATION` chỉ áp dụng khi rank Cổ trùng với rank người dùng. `MAN_BEAST_BURIAL` cho phép Cổ Sư Rank 1–4 ở Đỉnh Phong đột phá lên Rank kế tiếp Sơ Giai khi rank Cổ trùng với rank người dùng; giảm 10 Chân Nguyên tối đa (tối thiểu 20) và kẹp Chân Nguyên hiện tại theo giới hạn mới. `SPRING_EGG_HATCH` chạy được qua Cổ tiêu hao `GU_SPRING_EGG` (endpoint Consumable, có `tx` để cấy Phàm Tuyền); trigger khác hoặc thiếu `tx` trả lỗi "chỉ có thể cấy Nguyên Tuyền khi tiêu hao trực tiếp" và **không** tiêu Cổ. Endpoint Support persist đủ cột như Consumable.
     - Action code liên quan Hồn Phách:
@@ -802,7 +717,7 @@ trong snapshot CSV hiện tại. UI label là `Gu.name` cộng formatter
 operation (legacy chưa có label riêng); definition do `gu_dictionary` sở hữu,
 runtime combat nằm trong combat snapshot, còn world/worker command persist bởi
 handler/worker tương ứng. Các ghi chú về executor/test trong bảng là trạng thái lịch sử trước cutover;
-`catalog` từng chỉ các test `effectcatalog/{catalog,validate,timing}_test.go`; `characterization` từng gồm test handler/simulator/worker. Backend turn-based đã bị xóa theo #272; những executor/test simulator bên dưới là ghi chú lịch sử, không mô tả runtime hiện hành. Runtime combat hiện hành nằm trong `backend/internal/realtime/`; chỉ các effect có profile realtime được phép dùng trong chiến đấu.
+`catalog` chỉ các test `effectcatalog/{catalog,validate,timing}_test.go`; `characterization` gồm test handler/simulator/worker. Combat runtime hiện hành dùng `backend/internal/simulator/`; realtime zone sim và Gu profile combat đã bị gỡ. Coverage từng phần được ghi trong bảng bên dưới.
 
 | Legacy namespace/key (mỗi key trong ô là một entry độc lập) | Trigger → target | Unit / scaling | Executor hiện tại; persistence owner | Test hiện có |
 |---|---|---|---|---|
@@ -877,7 +792,7 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | Race: `immortal`, `disable_hp_regen`, `disable_mana_regen`, `disable_soul_regen`, `disable_resource_regen` | always-on → self | boolean | lifespan/regen policy; players.race | thiếu label cho một số flag; gamefx tests một phần |
 | Status: `death_drop_mult`, `pvp_immune` | while status active → self | multiplier/bool | **không có field/executor: silent no-op hiện tại, phải fail khi compile v2** | chưa có label/test execution |
 | Item: `hunger`, `restore_hp`, `heal_aperture`, `increase_aperture_area`, `increase_aperture_time_rate`, `add_dao_marks`, `increase_human_qi`, `random_constitution`, `random_race`, `open_mine_chest`, `open_immortal_mine_chest`, `spring_egg_hatch` | item use/feed → self/pet/aperture | flat hoặc command enum | item/pet handlers; inventory + players/aperture | `Item.name`; `handlers/item_effects_test.go` (coverage từng key chưa đầy đủ) |
-| `killer_moves.effects` legacy keys | legacy move build/cast | nhiều đơn vị cũ, không đồng nhất | Không phải contract realtime. Combat Sát Chiêu dùng `compiled_effects`; chỉ một `ON_ACTION` đơn effect thuộc tập executor realtime hỗ trợ được đưa vào slot 9–12. `/killer-moves/:id/use` ngoài combat chỉ xử lý hồi phục `ON_USE` bản thân. | realtime loadout compiler; effect không hỗ trợ bị khóa |
+| `killer_moves.effects` legacy keys | legacy move build/cast | nhiều đơn vị cũ, không đồng nhất | Không phải contract realtime. Combat Sát Chiêu dùng profile turn-based; `ON_USE` ngoài combat chỉ xử lý hồi phục bản thân. Effect ngoài executor turn-based cần được ghi nhận là chưa hỗ trợ. | tactical loadout; effect không hỗ trợ bị khóa |
 | `aperture_variant_events.effects` | chưa có producer/trigger | chưa xác định | chỉ có JSONB owner event row; **không executor/persistence command** | không UI, không test; mọi payload hiện là no-op |
 
 **Nguyên Tuyền (primeval vein):** bảng `primeval_veins` (`region_id`, `x`, `y`, `vein_type` `mortal`/`immortal`, `rarity`, `accumulated_since`, `produced_minutes`, `expires_at`). Mỗi mỏ có bể chung: ai đứng trong phạm vi 3 ô cũng thu hoạch được, nhận hết phần đã tích rồi bể reset. Trần tích lũy **1 ngày sản lượng**; trần vòng đời theo phẩm chất (Thường 7 / Hiếm 10 / Sử Thi 14 / Truyền Thuyết 21 / Siêu Cấp 30 ngày sản lượng); mỏ sống tối đa **30 ngày**. Phàm Tuyền nhả `mine_chest`; Tiên Tuyền nhả `mine_chest_immortal` (tỉ lệ rương decay 50%/2h, sàn 20% base — `veinChestDecay`, `handlers/primeval_vein.go`). Worker spawn tối đa **31 phàm + 5 tiên** (tiên chỉ ở vùng `min_rank ≥ 5`; mỗi đại vực ~1/5 cap), mỗi 30 phút bù 1 mỏ/loại. Boss rơi Cổ trùng `GU_SPRING_EGG` (Tuyền Đản Cổ) với tỉ lệ 1%; dùng Cổ này kích hoạt effect `SPRING_EGG_HATCH` để cấy Phàm Tuyền tại chỗ. Người chơi cấy bằng Cổ/vật phẩm **không** bị giới hạn cap 31 Phàm Tuyền toàn cục hay cap đại vực (cap chỉ áp cho worker tự spawn); vẫn chặn ô đã có địa điểm, vùng an toàn và bí cảnh.
@@ -915,8 +830,8 @@ Bản đồ chuyển đổi sang realtime MMO nằm ở `docs/mmo/gu-coverage.cs
 `go run ./cmd/gudata audit-realtime`). Mỗi block có trạng thái
 `SUPPORTED`/`NEEDS_REAUTHOR`/`UNSUPPORTED`/`NOT_ACTIVE` và lý do; skill chưa
 audit **không** được cast như skill mất hiệu ứng. Sáu Gu MVP và quy tắc phân
-loại nằm trong `docs/mmo/gu-coverage.md`; schema profile/compiler realtime nằm
-trong `docs/mmo/gu-realtime-schema.md`.
+loại nằm trong `docs/mmo/gu-coverage.md`; `docs/mmo/gu-realtime-schema.md` là
+tài liệu legacy, không còn là contract combat được hỗ trợ.
 
 Root chỉ có `schema_version` và `blocks`:
 
@@ -1092,7 +1007,7 @@ Cấu trúc flat v2 của mỗi block:
 
 ### Status chiến đấu (combat)
 
-Status chiến đấu realtime được quản lý theo profile status có thời hạn trong world runtime; server quyết định áp dụng, cộng dồn và hết hạn theo tick. `docs/STATUS_EFFECTS.md` còn giữ lịch sử mô hình theo lượt cũ, không phải contract runtime hiện hành.
+Status combat trong simulator theo lượt được áp dụng theo handler của từng effect. Hành vi tick realtime trong world runtime đã bị gỡ; `docs/STATUS_EFFECTS.md` là tài liệu tham chiếu lịch sử cần đối chiếu với simulator.
 
 **14 status từng được định nghĩa cho combat theo lượt (bảng lịch sử, không phải contract realtime):**
 
@@ -1113,7 +1028,7 @@ Status chiến đấu realtime được quản lý theo profile status có thờ
 | `bleed` | DOT | giá trị cố định `/tick` | từ `status_duration_ticks` | cuối lượt | Không |
 | `poison` | DOT | giá trị cố định `/tick` | từ `status_duration_ticks` | cuối lượt | Không |
 
-Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không qua tier). DoT và duration trong mô hình theo lượt cũ không còn là runtime contract; status realtime dùng duration/tick theo profile trong `statusfx` và world runtime.
+Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không qua tier). DoT và duration combat chỉ có hiệu lực ở những effect đã có resolver trong simulator; không còn duration/tick combat theo realtime profile.
 
 **Status có trong data, đã wire qua registry `statusfx`** (xem `docs/STATUS_EFFECTS.md` → "Registry status"): `BURN` (DoT hỏa), `FEAR` (force basic), `CONFUSE` (40% mis-target), `STEALTH` (untargetable), `SLEEP` (skip turn + break on damage), `BLIND` (35% miss), `CHARM` (điều khiển), `BIND` (mất lượt).
 
@@ -1129,7 +1044,7 @@ Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không
 - **Hiệu ứng Bản thân (Self-Target)**: Tỉ lệ thành công tỉ lệ thuận với Cảnh giới người dùng (Player Rank): $\text{factor}_{\text{self}} = 1.0 + 0.05 \times (\text{casterPlayerRank} - 1)$.
 - **Hiệu ứng Đối phương (Enemy-Target)**: Xác suất chịu ảnh hưởng của chênh lệch Cảnh giới ($\text{casterRank} - \text{targetRank}$): Chênh lệch $\ge +2$ ($\times 1.5$), $+1$ ($\times 1.2$), $0$ ($\times 1.0$), $-1$ ($\times 0.6$), $\le -2$ ($\times 0.1$). Tiên Cổ đánh Phàm Cổ áp dụng hệ số tối thiểu $1.0\times$ (tự động nâng lên $1.5\times$).
 
-Thêm status realtime mới: khai báo trong `statusfx.Registry` và nối behavior vào realtime status runtime.
+Thêm status combat mới: khai báo registry/status model theo flow tương ứng và nối handler vào simulator turn-based. `statusfx` realtime behavior không phải combat runtime hiện hành.
 
 ### Item
 
@@ -1317,7 +1232,7 @@ Zone type không nhận diện fallback về priority của `KHU_VUC`. `FindLarg
 
 **Phân lớp sinh nội dung**:
 - Quái nhỏ / tài nguyên thấp / Cổ cấp thấp → sinh **procedural** bằng hash seed theo `(zone, x, y, window 180s)`, không đụng DB. Tâm bãi quái dùng lưới seed riêng theo zone; cả vị trí, loài và cấp của bãi ổn định giữa người chơi và lần khởi động.
-- Ô quái procedural trong AOI được materialize thành `WorldMonster` Redis với identity ổn định `procedural:<region>:<x>:<y>`; movement và combat sau đó được phát qua `world:combat`. Marker cell chỉ là fallback cho tới khi runtime replacement tại đúng tọa độ xuất hiện.
+- Ô quái procedural trong AOI được materialize thành `WorldMonster` Redis với identity ổn định `procedural:<region>:<x>:<y>` để snapshot/admin display. Actor không tự di chuyển hoặc chiến đấu; encounter bridge tới combat turn-based chưa được triển khai.
 - Boss / tài nguyên cấp cao / làng → ô **persistent** trong `map_cells`, nạp vào index bộ nhớ lúc start, có respawn dùng chung. Boss world map chạy thành actor Redis dùng chung, đuổi người chơi trong toàn bộ bounds của region đã gán và không vào `HUB`/`SAFE_ZONE`. Khi chuyển spawn trong `MapCell.csv`, giữ ô cũ dưới dạng `is_active=false` để lần import cập nhật/tắt record cũ; restart backend sau import để nạp ZoneRegistry.
 
 Import/Export qua Admin tab "Dữ liệu": bảng `region` (Region.csv), `map_cell` (MapCell.csv), `monster_spawn` (MonsterSpawn.csv). Admin quản lý region cũng có thể xem tầng hiện gán. Sau khi import **restart backend** để nạp ZoneRegistry. Bí cảnh dạng bản đồ dùng một phiên toàn server cho mỗi template: `shared_spatial_instances` giữ lifecycle/expiry, `shared_spatial_instance_members` giữ người tham gia và điểm quay về từng người. `POST /api/instance/spatial/exit` chỉ hoạt động tại portal persistent (`EXIT_PORTAL`, `PORTAL_EXIT` hoặc metadata action `EXIT_SPATIAL_REALM`); item effect `exit_spatial_realm` dùng cùng dữ liệu điểm quay về.
@@ -1458,7 +1373,7 @@ Sủng vật được lưu dưới dạng `non_player_actors.actor_kind = 'COMPA
 - **Phí Hồn Phách khi ra trận:** mỗi pet (bầy) tiêu tốn `soul_hp` = `count` (số cá thể) khi load vào trận thật (`combat_state.go`). Nếu `soul_hp < count` → **bỏ qua pet đó**. Trừ dần theo `formation_slot ASC`.
   - Áp dụng cho cả pet của **đối phương phòng thủ** khi bị tấn công PvP/mine/map (trừ `soul_hp` của họ, thiếu thì bỏ pet của họ).
   - **Võ Đài (arena, virtual) không tốn soul.**
-  - Phí được xử lý khi build realtime combatants trong `backend/internal/realtime/gateway/combat_state.go`; không dùng snapshot `active_combat` cũ.
+  - Mô tả phí build realtime combatants đã nghỉ hưu cùng runtime realtime; encounter turn-based dùng snapshot `active_combat`.
 
 ### Đội hình tổ đội (trưởng nhóm xếp)
 
@@ -1653,15 +1568,9 @@ Hai cơ chế, cùng đọc qua `PlayerIgnoresMonsters` (`handlers/player_stats.
 - `FLYING` và alias `PHI_HANH` được đăng ký trong `statusfx` với behaviour `world_map` (không có
   tác dụng trong combat) để Block v2 compile/validate hợp lệ.
 
-World-monster worker bỏ qua người đang bay qua registry in-memory `flyingPlayers`
-(`handlers/world_index.go`), refresh ở mỗi lần di chuyển và mỗi lần toggle. Khi quái áp sát,
-worker gây sát thương theo nhịp realtime; không tạo encounter trong `active_combat`.
-
 ## Ordinary world-monster lifecycle
 
-`monster_templates`, `monster_spawns`, and `map_cells` remain PostgreSQL static data. Ordinary non-boss monster HP, target, state, statuses, position, timestamps, and revision are ephemeral Redis data under `world:monster:*`; they are not written to PostgreSQL per hit or movement. A static spawn's stable identity is `spawn:<region_id>:<monster_id>` (the table's composite key); procedural cells, map-cell bosses and guards keep their own prefixed ids. Runtime aggro scales from 6 cells at Rank 1 to 14 cells at Rank 9; the leash scales from 10 to 20 cells. Other defaults are a 1.5-cell attack range, speed 0.15 cells/second, and a 2-second attack interval. Monsters cannot spawn in, acquire targets in, attack into, or cross a `HUB`/`SAFE_ZONE`. Runtime TTL is the spawn respawn duration plus a five-minute replay-safety window.
-
-Ordinary world monsters pursue nearby players and attack through the realtime world-combat worker when their authoritative attack interval is ready; contact alone does not create a separate encounter or turn-based auto-combat session. Player attacks, Gu casts and supported Sát Chiêu resolve in the realtime world zone. When a monster defeats a player, its display name is stored in the ground drop's `killer_name`.
+`monster_templates`, `monster_spawns`, and `map_cells` remain PostgreSQL static data. Redis `WorldMonster` values hold temporary snapshot/admin state (HP, position, state, revision, and respawn time); no autonomous target, movement, attack, status, or damage simulation runs for these actors. Static spawn identity is `spawn:<region_id>:<monster_id>`; procedural cells, map-cell bosses, and guards keep prefixed identities. Turn-based encounters are still initiated through map-cell movement. A bridge from Redis world actors to turn-based encounters remains unfinished.
 
 Monster runtime AOI uses **32×32-cell buckets**, separate from the legacy
 300×300 player-position broadcast index. The activation/fan-out radius is 25

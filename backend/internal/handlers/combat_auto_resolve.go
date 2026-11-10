@@ -45,9 +45,6 @@ type CombatResolution struct {
 //
 // winner is always derived from the simulation, never from log text.
 func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string) (*CombatResolution, error) {
-	if player != nil && player.ActiveCombat != nil && player.ActiveCombat.WorldPvPEncounterID != "" && player.ID.String() != player.ActiveCombat.RealtimeWorldPvPAttackerID {
-		return nil, fmt.Errorf("open-world PvP encounter is resolved by its initiating player")
-	}
 	var pendingNotifications []notify.Notification
 	var immortalAnnouncements []immortalGuLootAnnouncement
 	// immortalGuDropped lets a PVE victory against a normal/elite monster be

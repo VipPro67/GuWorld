@@ -283,8 +283,6 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       killerMovesLoading: false,
       guHouses: [],
       guHousesLoading: false,
-      skillLoadout: null,
-      skillLoadoutLoading: false,
     });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");

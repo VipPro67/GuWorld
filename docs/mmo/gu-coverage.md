@@ -139,3 +139,4 @@ the dragon Gu's damage/status numbers for the current runtime budget.
 - `GU_WATER_SHIELD` is conservatively flagged because its block target is `COL`
   even though the shield operation overrides target to `SELF`.
 - The audit does not yet validate VFX/icon assets; that is PR-18/PR-21.
+# Historical coverage for the retired realtime combat runtime. It does not describe current combat support; see `docs/guides/GAME_DATA.md`.

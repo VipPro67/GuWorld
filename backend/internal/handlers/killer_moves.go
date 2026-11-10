@@ -81,8 +81,8 @@ type killerMoveEffectOption struct {
 	Trigger           string                    `json:"trigger"`
 	Operation         gameplayeffects.Operation `json:"operation"`
 	Target            gameplayeffects.Target    `json:"target"`
-	RealtimeSupported bool                      `json:"realtime_supported"`
-	RealtimeReason    string                    `json:"realtime_unavailable_reason,omitempty"`
+	CombatSupported   bool                      `json:"combat_supported"`
+	UnavailableReason string                    `json:"unavailable_reason,omitempty"`
 }
 
 type killerMoveDraftRequest struct {
@@ -95,54 +95,48 @@ type killerMoveDraftRequest struct {
 }
 
 type killerMovePreview struct {
-	Components             []killerMoveComponent          `json:"components"`
-	SelectedEffects        []killerMoveEffectRef          `json:"selected_effects"`
-	CompiledEffects        []gameplayeffects.Block        `json:"compiled_effects"`
-	Rank                   int                            `json:"rank"`
-	Path                   string                         `json:"path"`
-	PathMasteryLevel       int                            `json:"path_mastery_level"`
-	PowerBudget            float64                        `json:"power_budget"`
-	PowerLoad              float64                        `json:"power_load"`
-	EffectScale            float64                        `json:"effect_scale"`
-	Harmony                float64                        `json:"harmony"`
-	Complexity             float64                        `json:"complexity"`
-	SuccessChance          float64                        `json:"success_chance"`
-	ManaCost               float64                        `json:"mana_cost"`
-	CombatProfile          models.KillerMoveCombatProfile `json:"combat_profile"`
-	Warnings               []string                       `json:"warnings"`
-	RealtimeSupported      bool                           `json:"realtime_supported"`
-	RealtimeReason         string                         `json:"realtime_unavailable_reason,omitempty"`
-	HasRealtimeEffects     bool                           `json:"has_realtime_effects"`
-	HasOutsideCombatEffect bool                           `json:"has_outside_combat_effect"`
-	PreviewFingerprint     string                         `json:"preview_fingerprint"`
+	Components         []killerMoveComponent          `json:"components"`
+	SelectedEffects    []killerMoveEffectRef          `json:"selected_effects"`
+	CompiledEffects    []gameplayeffects.Block        `json:"compiled_effects"`
+	Rank               int                            `json:"rank"`
+	Path               string                         `json:"path"`
+	PathMasteryLevel   int                            `json:"path_mastery_level"`
+	PowerBudget        float64                        `json:"power_budget"`
+	PowerLoad          float64                        `json:"power_load"`
+	EffectScale        float64                        `json:"effect_scale"`
+	Harmony            float64                        `json:"harmony"`
+	Complexity         float64                        `json:"complexity"`
+	SuccessChance      float64                        `json:"success_chance"`
+	ManaCost           float64                        `json:"mana_cost"`
+	CombatProfile      models.KillerMoveCombatProfile `json:"combat_profile"`
+	Warnings           []string                       `json:"warnings"`
+	PreviewFingerprint string                         `json:"preview_fingerprint"`
 }
 
 type storedKillerMove struct {
-	ID                        string                         `json:"id"`
-	Name                      string                         `json:"name"`
-	MainGuInstance            string                         `json:"main_gu_instance_id"`
-	MainGuID                  string                         `json:"main_gu_id"`
-	MainGuRank                int                            `json:"main_gu_rank"`
-	Components                []killerMoveComponent          `json:"components"`
-	SelectedEffects           []killerMoveEffectRef          `json:"selected_effects"`
-	CompiledEffects           []gameplayeffects.Block        `json:"compiled_effects"`
-	Path                      string                         `json:"path"`
-	CreationPathMasteryLevel  int                            `json:"creation_path_mastery_level"`
-	PowerBudget               float64                        `json:"power_budget"`
-	PowerLoad                 float64                        `json:"power_load"`
-	Harmony                   float64                        `json:"harmony"`
-	Complexity                float64                        `json:"complexity"`
-	SuccessChance             float64                        `json:"success_chance"`
-	CombatProfile             models.KillerMoveCombatProfile `json:"combat_profile"`
-	MasteryXP                 int                            `json:"mastery_xp"`
-	MasteryLevel              int                            `json:"mastery_level"`
-	Equipped                  bool                           `json:"is_equipped"`
-	Available                 bool                           `json:"available"`
-	HasStarvingGu             bool                           `json:"has_starving_gu,omitempty"`
-	RealtimeSupported         bool                           `json:"realtime_supported"`
-	RealtimeUnavailableReason string                         `json:"realtime_unavailable_reason,omitempty"`
-	MissingGu                 []string                       `json:"missing_gu,omitempty"`
-	BalanceVersion            int                            `json:"balance_version"`
+	ID                       string                         `json:"id"`
+	Name                     string                         `json:"name"`
+	MainGuInstance           string                         `json:"main_gu_instance_id"`
+	MainGuID                 string                         `json:"main_gu_id"`
+	MainGuRank               int                            `json:"main_gu_rank"`
+	Components               []killerMoveComponent          `json:"components"`
+	SelectedEffects          []killerMoveEffectRef          `json:"selected_effects"`
+	CompiledEffects          []gameplayeffects.Block        `json:"compiled_effects"`
+	Path                     string                         `json:"path"`
+	CreationPathMasteryLevel int                            `json:"creation_path_mastery_level"`
+	PowerBudget              float64                        `json:"power_budget"`
+	PowerLoad                float64                        `json:"power_load"`
+	Harmony                  float64                        `json:"harmony"`
+	Complexity               float64                        `json:"complexity"`
+	SuccessChance            float64                        `json:"success_chance"`
+	CombatProfile            models.KillerMoveCombatProfile `json:"combat_profile"`
+	MasteryXP                int                            `json:"mastery_xp"`
+	MasteryLevel             int                            `json:"mastery_level"`
+	Equipped                 bool                           `json:"is_equipped"`
+	Available                bool                           `json:"available"`
+	HasStarvingGu            bool                           `json:"has_starving_gu,omitempty"`
+	MissingGu                []string                       `json:"missing_gu,omitempty"`
+	BalanceVersion           int                            `json:"balance_version"`
 }
 
 type ownedKillerMoveGu struct {
@@ -195,17 +189,17 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 			if op.Target != nil {
 				target = *op.Target
 			}
-			realtimeSupported := block.Trigger == gameplayeffects.TriggerOnAction
+			combatSupported := block.Trigger == gameplayeffects.TriggerOnAction
 			outsideCombatSupported := block.Trigger == gameplayeffects.TriggerOnUse && killerMoveOutsideCombatOperationAllowed(op, target)
-			if !realtimeSupported && !outsideCombatSupported {
+			if !combatSupported && !outsideCombatSupported {
 				continue
 			}
 			key := killerMoveEffectKey(inst.InstanceID, bi, oi)
 			result = append(result, killerMoveEffectOption{
 				Key: key, SourceID: inst.InstanceID, SourceName: spec.Name,
 				GuID: inst.GuID, Rank: inst.Rank, Label: killerMoveOperationLabel(op), Trigger: string(block.Trigger),
-				Operation: op, Target: target, RealtimeSupported: realtimeSupported,
-				RealtimeReason: map[bool]string{true: "", false: "Chỉ dùng ngoài combat"}[realtimeSupported],
+				Operation: op, Target: target, CombatSupported: combatSupported,
+				UnavailableReason: map[bool]string{true: "", false: "Chỉ dùng ngoài combat"}[combatSupported],
 			})
 		}
 	}
@@ -455,18 +449,6 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 	}
 	profile := compileKillerMoveCombatProfile(mainSpec, main, components, selected, blocks, path, pathMasteryLevel, harmony, complexity, success, manaCost)
 	preview := killerMovePreview{Components: components, SelectedEffects: selected, CompiledEffects: blocks, Rank: main.Rank, Path: path, PathMasteryLevel: pathMasteryLevel, PowerBudget: budget, PowerLoad: load, EffectScale: scale, Harmony: harmony, Complexity: complexity, SuccessChance: success, ManaCost: manaCost, CombatProfile: profile, Warnings: warnings}
-	for _, block := range blocks {
-		if block.Trigger == gameplayeffects.TriggerOnAction {
-			preview.HasRealtimeEffects = true
-		}
-		if block.Trigger == gameplayeffects.TriggerOnUse {
-			preview.HasOutsideCombatEffect = true
-		}
-	}
-	preview.RealtimeSupported = true
-	if !preview.HasRealtimeEffects && preview.HasOutsideCombatEffect {
-		preview.RealtimeReason = "Sát chiêu này chỉ dùng ngoài combat"
-	}
 	preview.PreviewFingerprint = killerMovePreviewHash(preview)
 	return preview, main, nil
 }
@@ -485,14 +467,6 @@ func getGuTargetType(spec models.Gu) string {
 			return "ALL_ENEMIES"
 		}
 		if strings.Contains(sel, "ROW") || strings.Contains(sel, "COL") {
-			return "ROW"
-		}
-	}
-	if spec.SkillProfile != nil {
-		switch spec.SkillProfile.Shape {
-		case models.SkillShapeCircle, models.SkillShapeCone, models.SkillShapeRectangle:
-			return "ALL_ENEMIES"
-		case models.SkillShapeLine, models.SkillShapeCross:
 			return "ROW"
 		}
 	}
@@ -548,7 +522,6 @@ func compileKillerMoveCombatProfile(
 		}
 	}
 
-	windupMS, cooldownMS := models.KillerMoveRealtimeTiming(main.Rank, complexity)
 	hasTargetEffect, hasSelfEffect := false, false
 	for _, block := range blocks {
 		for _, operation := range block.Operations {
@@ -574,26 +547,23 @@ func compileKillerMoveCombatProfile(
 	}
 
 	backfirePct := math.Max(0.08, 0.28-float64(pathMasteryLevel)*0.035-(harmony-0.6)*0.20)
-	// Realtime currently models backfire damage but has no authored status
-	// executor for this legacy penalty. Do not generate a status that would
-	// make an otherwise valid profile uncastable.
+	// Backfire currently applies damage only; do not create an unsupported
+	// status effect that would make an otherwise valid profile unusable.
 	backfireStatus := ""
 
 	return models.KillerMoveCombatProfile{
-		ProfileVersion:     2,
-		Rank:               main.Rank,
-		MainPath:           path,
-		AllPaths:           allPaths,
-		TargetType:         targetType,
-		Bypass:             bypass,
-		RealtimeWindupMS:   windupMS,
-		RealtimeCooldownMS: cooldownMS,
-		Priority:           1,
-		ManaCost:           manaCost,
-		HungerCost:         float64(len(components)),
-		SuccessChance:      success,
-		BackfireHPPercent:  backfirePct,
-		BackfireStatus:     backfireStatus,
+		ProfileVersion:    2,
+		Rank:              main.Rank,
+		MainPath:          path,
+		AllPaths:          allPaths,
+		TargetType:        targetType,
+		Bypass:            bypass,
+		Priority:          1,
+		ManaCost:          manaCost,
+		HungerCost:        float64(len(components)),
+		SuccessChance:     success,
+		BackfireHPPercent: backfirePct,
+		BackfireStatus:    backfireStatus,
 	}
 }
 
@@ -722,10 +692,6 @@ func CreateKillerMove(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Bản preview đã thay đổi; hãy xem lại profile mới trước khi lưu"})
 		return
 	}
-	if !preview.RealtimeSupported && (preview.HasRealtimeEffects || !preview.HasOutsideCombatEffect) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Sát chiêu cần ít nhất một tổ hợp effect có executor realtime"})
-		return
-	}
 	if preview.EffectScale < 0.999 && !req.AcceptAdjustments {
 		c.JSON(http.StatusConflict, gin.H{"error": "Hãy xác nhận các effect đã được tự cân bằng trước khi lưu"})
 		return
@@ -811,10 +777,6 @@ func ListKillerMoves(c *gin.Context) {
 		_ = json.Unmarshal(selected, &m.SelectedEffects)
 		_ = json.Unmarshal(compiled, &m.CompiledEffects)
 		_ = json.Unmarshal(combatProf, &m.CombatProfile)
-		if m.CombatProfile.RealtimeWindupMS == 0 || m.CombatProfile.RealtimeCooldownMS == 0 {
-			m.CombatProfile.RealtimeWindupMS, m.CombatProfile.RealtimeCooldownMS = models.KillerMoveRealtimeTiming(m.MainGuRank, m.Complexity)
-			m.CombatProfile.TargetType = "SINGLE"
-		}
 		m.MasteryLevel = m.MasteryXP / 100
 		currentLevel := gamefx.PathMasteryLevel(masteries[gamefx.CleanPath(m.Path)])
 		m.SuccessChance = killerMoveAdjustedChance(m.SuccessChance, m.CreationPathMasteryLevel, currentLevel, m.MasteryXP)
@@ -822,14 +784,6 @@ func ListKillerMoves(c *gin.Context) {
 		m.Available = available
 		m.HasStarvingGu = hasStarvingGu
 		m.MissingGu = missingGu
-		if !m.Available {
-			m.RealtimeUnavailableReason = "Thiếu Cổ thành phần"
-		} else {
-			m.RealtimeSupported = true
-			if m.HasStarvingGu {
-				m.RealtimeUnavailableReason = "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)"
-			}
-		}
 		result = append(result, m)
 	}
 	if err := rows.Err(); err != nil {

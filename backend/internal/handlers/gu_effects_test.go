@@ -105,9 +105,9 @@ func TestCleanupInvalidEquipped(t *testing.T) {
 	}
 }
 
-// TestRebuildEquippedGusKeepsHotbarOrderWhileMembersStayValid pins the hotbar
-// fallback contract: players.equipped_gus is the hotbar *fallback fill order*
-// (the explicit slot setting lives in players.realtime_hotbar). As long as
+// TestRebuildEquippedGusKeepsHotbarOrderWhileMembersStayValid pins the combat
+// selection contract: players.equipped_gus preserves the player's configured
+// order. As long as
 // every equipped ACTIVE Gu stays valid, its position in the list must never
 // move: no re-shuffle, no re-sort, no dedupe side effects.
 func TestRebuildEquippedGusKeepsHotbarOrderWhileMembersStayValid(t *testing.T) {

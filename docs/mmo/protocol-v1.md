@@ -144,3 +144,4 @@ The isolated server simulation can be exercised with
 `cd backend && go run ./cmd/mmo_headless -ticks 10000`. It spawns two players and
 ten monsters, runs fixed 20 Hz steps without sleeping, and prints a repeatable
 snapshot checksum. Movement intents expire after five ticks without an update.
+# Historical protocol reference: realtime combat casts and arena simulation are retired. Movement and other non-combat realtime protocols may still apply; see `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.

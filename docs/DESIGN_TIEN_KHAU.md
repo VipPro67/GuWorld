@@ -128,7 +128,7 @@ Kiểm tra Phase 2: `go test ./internal/realtime/... -race` (dual-pool cast/sett
 ## 4. Rủi ro & lưu ý
 
 1. **Bốn góc dính chặt khi tách pool: (a) regen** (`player_service.go:150-156`), (b) **EnergyCost branches** (`gamefx/energy.go` theo IsImmortalPlayer), (c) **mirror writes** (4 điểm), (d) **nạp đá** (`player_recharge.go`). Chiến lược: schema-first, double-write, rồi cutover.
-2. **Realtime settlement là điểm nhạy cảm nhất**: `manaSettlement` hiện chỉ theo 1 delta; cần tests chống lost-update cho cả 2 pools (dùng `GREATEST(0, ...)` như hiện trạng).
+2. **Combat settlement**: nội dung về realtime settlement bên dưới là thiết kế lịch sử; combat hiện hành dùng settlement của các flow turn-based được hỗ trợ.
 3. **Không làm mất giá Tiên Nguyên đã tích lũy**: backfill phải chạy đúng một lần, idempotent, theo pattern initSchema của repo.
 4. **Giao thoa UI cũ/mới**: giữ response field cũ (`max_mana` cho rank ≥ 6 trả cap logic mới) cho tới khi dual-bar sống; arena/death-arena copy (`schema_death_arena.go:63-64`) giữ nguyên vì arena offline không dùng Tiên Nguyên.
 5. **P0 phải đi trước** vì economies thay đổi: refinement worker chưa wire nghĩa là player đang mở "luyện tự động" mà không thực thi — cần change note.

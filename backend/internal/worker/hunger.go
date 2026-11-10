@@ -439,7 +439,7 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 		}
 	}
 
-	// Prune equipped_gus when an equipped Gu died, preserving the saved hotbar
+	// Prune equipped_gus when an equipped Gu died, preserving the saved ordering
 	// order: only still-equipped ACTIVE Gus stay in the array.
 	if equippedDeath {
 		var savedOrder models.EquippedGusList

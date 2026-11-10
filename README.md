@@ -45,6 +45,12 @@ dữ liệu hệ thống tối thiểu. Sau lần cài mới, quản trị viên
 gameplay từ tab **Dữ liệu**; `Quest.csv` hiện là ngoại lệ được đồng bộ khi khởi
 tạo schema.
 
+Frontend Compose chạy ở `:3000`. Cấu hình `NEXT_PUBLIC_BACKEND_URL`,
+`NEXT_PUBLIC_REALTIME_WS_URL`, `NEXT_PUBLIC_SITE_URL` và
+`INTERNAL_BACKEND_URL` trong root `.env`; các biến `NEXT_PUBLIC_*` được nhúng
+vào client bundle lúc build, nên cần build lại frontend sau khi đổi:
+`docker compose -f docker-compose.local.yml up --build frontend`.
+
 Thông tin DB/JWT/OAuth phải đặt trong `backend/.env`; thông tin Grafana Alloy đặt
 trong root `.env`. Không lưu credential trong Compose hoặc Git. Khi dùng Redis
 TLS, backend xác minh certificate và hỗ trợ `REDIS_TLS_SERVER_NAME` cùng
@@ -73,44 +79,16 @@ Frontend mặc định gọi backend qua `NEXT_PUBLIC_BACKEND_URL` hoặc `http:
 
 Kiểm tra frontend bằng `npm run lint` và `npm run build`.
 
-### MMO realtime headless (đang phát triển)
+### Realtime combat (đã nghỉ hưu)
 
-```bash
-cd backend
-go run ./cmd/mmo_headless -ticks 10000
-```
-
-Lệnh chạy mô phỏng zone 20 Hz với 2 người chơi và 10 quái, in checksum của
-snapshot cuối; không cần PostgreSQL, Redis hoặc frontend.
-
-Smoke vertical slice (5 player + 10 quái, di chuyển/cast/death/metrics):
-`cd backend && go run ./cmd/mmo_slice -players 5 -mobs 10 -ticks 400`.
-Synthetic load: `go run ./cmd/mmo_bench -players 100 -mobs 50 -ticks 1000`.
-Checklist Gate B: `docs/mmo/vertical-slice.md`; benchmark: `docs/mmo/benchmark.md`.
-
-Realtime MMO được bật mặc định cho mọi tài khoản đã đăng nhập. Backend tự nạp
-các map công khai khớp release; không cần cờ bật, danh sách zone hay allowlist.
-Sau đăng nhập client tự chọn map theo `current_region` của nhân vật (hoặc dùng
-`NEXT_PUBLIC_MMO_ZONE_ID` làm giá trị dự phòng nếu nhân vật chưa có khu vực).
-Client gửi `world.join`, render snapshot AOI và
-dự phòng WASD/click-to-move; server vẫn xác nhận vị trí, HP, collision tĩnh, monster AI và
-combat preview (phím 1–6, projectile/AoE/shield) với animation placeholder và VFX pool. Map preview
-dùng chung JSON cho server/client; ngoài `realtime_preview` có pack Alpha 4 map liên kết
-(`misty_forest`/`bone_crypt`/`crimson_ravine`/`emerald_grotto`, gồm boss/PvP/safe hub; xem
-`docs/mmo/map-format.md`). Catalog Gu realtime gồm 6 MVP + 40 Alpha profile (xem
-`docs/mmo/gu-realtime-schema.md`); art manifest và quy trình thay asset ở `docs/mmo/assets.md`.
-Loot/checkpoint/reconnect đã có một phần; xem `docs/mmo/protocol-v1.md` và `docs/mmo/rollout.md`.
-Trước khi beta, chạy `scripts/mmo-release-gate.sh` và điền evidence/sign-off trong
-`docs/mmo/release-checklist.md`; SLO/capacity candidate ở `docs/mmo/slo.md`, roadmap ở
-`docs/mmo/roadmap.md`. Automated subset pass không đồng nghĩa Gate D pass.
-Tổng hợp giới hạn còn lại của PR-01…PR-36: `docs/mmo/remaining-limitations.md`.
+Realtime combat simulation binaries and world combat were retired. Turn-based encounters use the backend simulator; remaining world actor, PvP, and arena conversion gaps are tracked in `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 
 ## Module gameplay hiện có
 
 - Đăng ký/đăng nhập, Google OAuth, hồ sơ, avatar, referral.
 - Tu luyện phàm nhân, phá vách, dùng Xá Lợi Cổ, thăng tiên, độ kiếp.
 - Không khiếu/tiên khiếu, đạo ngân, tài nguyên node, dị nhân và tai kiếp.
-- Khám phá bản đồ realtime, PvE/PvP combat, đội hình 3x3, ground drop và retreat/flee.
+- Khám phá bản đồ, combat theo lượt trong các flow được hỗ trợ, đội hình 3x3, ground drop và retreat/flee.
 - Inventory Cổ/vật phẩm/nguyên liệu, cho ăn, trang bị, bản mệnh, tiêu hao/hỗ trợ.
 - Luyện Cổ, suy diễn công thức, sát chiêu.
 - Shop NPC, Bảo Hoàng Thiên marketplace/auction/trade listing, P2P trade.

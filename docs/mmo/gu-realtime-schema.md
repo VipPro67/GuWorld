@@ -214,3 +214,4 @@ preview loadout rather than running a partially compiled skill set.
 - Native handlers for `UNIQUE` effects / `NEEDS_REAUTHOR` Gu.
 - Per-Gu hidden passives beyond the preview one.
 - VFX asset existence validation for Alpha icons/cast/impact placeholders.
+# RETIRED: this schema described realtime Gu combat profiles, which have been removed. Current combat coverage is tracked in `docs/guides/GAME_DATA.md` and `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.

@@ -1,6 +1,6 @@
 # Cơ Chế Cảnh Giới Lưu Phái & Đạo Ngân
 
-> Tài liệu này còn phần công thức lịch sử từ `handlers/`. Turn-based combat đã bị gỡ theo #272; phần combat cũ bên dưới không phải contract runtime. Combat realtime chỉ dùng cơ chế được khai báo trong profile MMO.
+> Công thức combat trong tài liệu này là tham chiếu lịch sử. Combat hiện hành dùng encounter turn-based ở các flow được hỗ trợ; các gap chuyển đổi được ghi tại `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`. Không còn Gu realtime profile.
 
 ---
 
@@ -47,7 +47,7 @@ finalDefense = baseDefense × daoMultiplier
 
 > **Không áp lên chỉ số bị động.** Đạo Ngân chỉ khuếch đại sát thương/khiên/hồi máu của hành động trong combat (và các cơ chế triệu hồi/bắt thú/luyện cổ/trinh sát riêng). ATK/DEF/HP/SPEED cộng thẳng từ Cổ (`ALWAYS_ON` / `PASSIVE_STATS`) là **giá trị raw**, không nhân Đạo Ngân lẫn Đạo Cấp: `GetPassiveStats` (`handlers/player_stats.go`) và `PassiveHPBonus` (`gamefx/fx.go`) cộng đúng con số trong data.
 
-**Combat realtime:** profile MMO quyết định hành vi cast, target, thời lượng, hồi chiêu và hiệu ứng realtime. Hệ số `DaoMultiplier()` và cách áp dụng bên dưới chỉ ghi lại runtime turn-based đã nghỉ hưu; không dùng các công thức/đường dẫn `simulator/engine.go` để suy ra combat hiện hành. Profile thiếu hành vi realtime hợp lệ bị khóa, không tự đổi lượt thành thời gian.
+**Combat theo lượt:** simulator áp dụng các công thức combat được hỗ trợ. Dao marks chưa được nối vào mọi loại action; xem bảng effect và các gap trong tài liệu chuyển đổi combat.
 
 Frontend đồng bộ: `ImmortalApertureView.tsx:1850-1855`
 
@@ -127,16 +127,13 @@ Ví dụ JSON:
 
 | Nguồn | Handler | Điểm |
 |-------|---------|------|
-| **Sát Chiêu thành công** | `killer_moves.go` (`UseKillerMove`, realtime settlement) | Theo rank Cổ hạch tâm: 1 / 2 / 5 / 10 / 20 / 50 / 100 / 200 / 300 (R1–R9), sau đó áp dụng hiệu suất cảnh giới. Chỉ cộng path hạch tâm; Trận Kích không cộng |
-| **Cast Cổ thường trong combat realtime** | `realtime/persistence` settlement | Cùng bảng rank của Cổ đang dùng, path sát thương của kỹ năng, áp dụng hiệu suất cảnh giới |
-| **Đánh thường trúng mục tiêu** | `realtime/persistence` settlement | +1 điểm vào path `strength` (qua `CalculatePathMasteryGain`), không tính đòn chém vào không khí |
+| **Sát Chiêu thành công** | `killer_moves.go` | Theo rank Cổ hạch tâm: 1 / 2 / 5 / 10 / 20 / 50 / 100 / 200 / 300 (R1–R9), sau đó áp dụng hiệu suất cảnh giới. Chỉ cộng path hạch tâm; Trận Kích không cộng |
+| **Cast Cổ / đánh thường** | Combat theo lượt | Chưa được xác nhận là nguồn tăng điểm trong simulator hiện hành |
 | **Cổ tiêu hao ngoài combat** | `player_gu_use.go` | Cùng bảng rank của Cổ, áp dụng hiệu suất cảnh giới |
 | **Luyện Cổ thành công** | `refine_gu.go` | Theo rank Cổ đích: 2 / 5 / 15 / 40 / 100 / 500 / 2.500 / 15.000 / 50.000, sau đó áp dụng hiệu suất cảnh giới |
 | **Chân Ý từ phó bản** | `instance.go` | cộng thẳng `amount` điểm vào path |
 
-> **Không có cap Chân Ý theo trận.** `PathMasteryBattleGainLimit(rank)` và counter `players.active_combat.path_mastery_gained` thuộc pipeline turn-based cũ đã bị gỡ; realtime cộng trực tiếp vào `players.path_masteries` khi settle checkpoint.
-
-Realtime dùng chung công thức `CalculatePathMasteryGain(rank, level, PathMasteryGuUseBaseGain(rank))`. Điểm được settle atomically cùng hunger/mana tại checkpoint; nếu transaction lỗi, lần checkpoint sau gửi lại cùng delta.
+> Giới hạn và nguồn Chân Ý từ combat cần được xác minh theo từng flow turn-based; checkpoint realtime đã bị gỡ.
 
 ### 2.3 Công Thức Ảnh Hưởng
 

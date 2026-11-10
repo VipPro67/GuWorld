@@ -452,18 +452,6 @@ func clampRankToZoneBand(regionID string, rank int) int {
 	return zone.MaxRank
 }
 
-// monsterCanRoamInto reports whether a monster of the given rank may occupy
-// (x, y). Ordinary world monsters are only leashed to their spawn point, not to
-// their zone, so without this check a rank-8 hunter can follow a player across
-// a border into a zone whose band never spawns rank-8 monsters.
-func monsterCanRoamInto(rank int, x, y int) bool {
-	zone := FindZoneAt(x, y)
-	if zone == nil || zone.MaxRank <= 0 {
-		return true
-	}
-	return rank <= zone.MaxRank
-}
-
 func activeScopeRegions(minX, minY, maxX, maxY int, mapID, playerRegion string) []string {
 	seen := make(map[string]struct{})
 	var result []string

@@ -7,11 +7,9 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,74 +19,22 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 const (
 	MonsterStateIdle     = "IDLE"
-	MonsterStateChase    = "CHASE"
-	MonsterStateAttack   = "ATTACK"
-	MonsterStateReturn   = "RETURN"
 	MonsterStateDefeated = "DEFEATED"
 
-	worldMonsterTickInterval = 250 * time.Millisecond
-	worldMonsterSafetyTTL    = 5 * time.Minute
-	worldMonsterMoveEventGap = 400 * time.Millisecond
-	// Movement speed is rank-scaled (see worldMonsterSpeed); Elite and Boss
-	// monsters add this bonus on top of the same rank curve.
-	worldMonsterSpecialSpeedBonus = 0.2
-	worldMonsterEliteAggro        = 14.0
-	worldMonsterEliteLeash        = 22.0
-	// Idle monsters only need their Redis value refreshed occasionally (TTL,
-	// retuned fields). Without a heartbeat every idle actor would issue a CAS +
-	// SET on every 250ms tick.
-	worldMonsterHeartbeatInterval = 5 * time.Second
+	worldMonsterSafetyTTL = 5 * time.Minute
 	// Monster AOI is deliberately independent from the 300-cell player
 	// position broadcast index. The client investigation radius is capped at
 	// 25 cells, so 32-cell buckets keep a view to at most 3x3 small buckets.
-	WorldMonsterAOIBucket         = 32
-	WorldMonsterActivationRadius  = 25
-	worldMonsterMaxBuckets        = 128
-	worldMonsterMaxPerTick        = 512
-	worldMonsterTickBudget        = 150 * time.Millisecond
-	worldMonsterBucketQueryRadius = 35
+	WorldMonsterAOIBucket        = 32
+	WorldMonsterActivationRadius = 25
 )
 
 type WorldMonster = cache.WorldMonster
-type StatusEffect = cache.WorldStatusEffect
-
-type WorldCombatEvent struct {
-	EventID        string         `json:"event_id"`
-	ServerTime     time.Time      `json:"server_time"`
-	RegionID       string         `json:"region_id"`
-	MapID          string         `json:"world_map_id"`
-	MapInstanceID  string         `json:"map_instance_id,omitempty"`
-	EntityID       string         `json:"entity_id"`
-	EntityRevision int64          `json:"entity_revision"`
-	EventType      string         `json:"event_type"`
-	Position       WorldPosition  `json:"position"`
-	Payload        map[string]any `json:"payload,omitempty"`
-}
-
-type WorldPosition struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
-var WorldCombatBroadcaster func(channel string, payload []byte, targets map[uuid.UUID]struct{})
-
-var worldMonsterMetrics struct {
-	processed            atomic.Uint64
-	skipped              atomic.Uint64
-	conflicts            atomic.Uint64
-	duplicates           atomic.Uint64
-	kills                atomic.Uint64
-	preventedDoubleKills atomic.Uint64
-	eventFanout          atomic.Uint64
-}
-
-var worldMonsterBucketCursor atomic.Uint64
 
 var (
 	worldMonstersInBucket    = cache.WorldMonstersInBucket
@@ -167,6 +113,26 @@ func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time)
 		spawnGuards(ctx, runtime, now)
 	}
 	return runtime, created, nil
+}
+
+func respawnWorldMonsterIfDue(ctx context.Context, monster WorldMonster, now time.Time) WorldMonster {
+	if monster.State != MonsterStateDefeated || monster.RespawnAt.IsZero() || now.Before(monster.RespawnAt) {
+		return monster
+	}
+	replacement := monster
+	replacement.InstanceID = uuid.NewString()
+	replacement.HP = replacement.MaxHP
+	replacement.State = MonsterStateIdle
+	replacement.Revision = 1
+	replacement.RespawnAt = time.Time{}
+	replacement.LastUpdateAt = now
+	replacement.X, replacement.Y = replacement.SpawnX, replacement.SpawnY
+	oldBX, oldBY := monsterBucket(int(monster.X), int(monster.Y))
+	newBX, newBY := monsterBucket(int(replacement.X), int(replacement.Y))
+	if ok, err := cache.RespawnWorldMonster(ctx, monster, replacement, oldBX, oldBY, newBX, newBY, monsterTTL(monster.RespawnSeconds)); err == nil && ok {
+		return replacement
+	}
+	return monster
 }
 
 func spawnGuards(ctx context.Context, leader WorldMonster, now time.Time) {
@@ -265,64 +231,18 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 	if rank < 1 {
 		rank = 1
 	}
-	maxHP, attack, defense := models.ScaleMonsterStats(template.MaxHP, template.BaseAttack, template.BaseDefense, rank, spawn.SubRank, template.Type)
-	aggroRadius, leashRadius := worldMonsterAggroProfile(rank)
-	attackRange, speed := 1.5, worldMonsterSpeed(rank)
-	patrolMinX, patrolMinY, patrolMaxX, patrolMaxY := 0, 0, 0, 0
-	if spawn.IsBoss {
-		// Bosses can pursue players throughout their owning region, but remain
-		// confined to that region's rectangle.
-		patrolMinX, patrolMinY, patrolMaxX, patrolMaxY = monsterPatrolBounds(spawn.RegionID)
-		leashRadius = patrolRadius(spawn.X, spawn.Y, patrolMinX, patrolMinY, patrolMaxX, patrolMaxY)
-		aggroRadius = leashRadius
-		attackRange, speed = 2, worldMonsterSpeed(rank)+worldMonsterSpecialSpeedBonus
-	} else if strings.EqualFold(template.Type, "Elite") {
-		// Elite monsters notice and pursue players around their spawn, but stay
-		// inside their owning region instead of using the boss-wide hunt.
-		patrolMinX, patrolMinY, patrolMaxX, patrolMaxY = monsterPatrolBounds(spawn.RegionID)
-		aggroRadius, leashRadius = worldMonsterEliteAggro, worldMonsterEliteLeash
-		speed = worldMonsterSpeed(rank) + worldMonsterSpecialSpeedBonus
-	}
+	maxHP, _, _ := models.ScaleMonsterStats(template.MaxHP, template.BaseAttack, template.BaseDefense, rank, spawn.SubRank, template.Type)
 	monster := WorldMonster{
 		InstanceID: uuid.NewString(), SpawnID: spawn.ID, MonsterTemplateID: spawn.MonsterID, IsBoss: spawn.IsBoss, IsElite: strings.EqualFold(template.Type, "Elite"), Rank: rank, SubRank: spawn.SubRank, RegionID: spawn.RegionID,
 		X: float64(spawn.X), Y: float64(spawn.Y), SpawnX: float64(spawn.X), SpawnY: float64(spawn.Y),
 		HP: maxHP, MaxHP: maxHP, State: MonsterStateIdle, Revision: 1, LastUpdateAt: now,
-		Statuses: []StatusEffect{}, RespawnSeconds: spawn.RespawnSeconds, AggroRadius: aggroRadius, AttackRange: attackRange,
-		LeashRadius: leashRadius, Speed: speed, AttackIntervalMS: 2000, BaseAttack: attack, BaseDefense: defense,
-		PatrolMinX: patrolMinX, PatrolMinY: patrolMinY, PatrolMaxX: patrolMaxX, PatrolMaxY: patrolMaxY,
+		RespawnSeconds: spawn.RespawnSeconds,
 	}
 	return monster, nil
 }
 
-// worldMonsterSpeed returns an ordinary monster's movement speed in cells per
-// second, scaled by rank: 0.9 at rank 1 up to 1.7 at rank 9. Elite and Boss
-// monsters add worldMonsterSpecialSpeedBonus on top of the same curve.
-func worldMonsterSpeed(rank int) float64 {
-	if rank < 1 {
-		rank = 1
-	}
-	if rank > 9 {
-		rank = 9
-	}
-	return 0.8 + 0.1*float64(rank)
-}
-
-// worldMonsterAggroProfile gives ordinary monsters a rank-scaled detection
-// radius plus a slightly wider leash so a pursuit is not dropped the moment the
-// player steps one cell out of detection. Detection is 9-17 cells; the pursuit
-// keeps its target out to 15-23 cells of the spawn point.
-func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
-	if rank < 1 {
-		rank = 1
-	}
-	if rank > 9 {
-		rank = 9
-	}
-	aggroRadius = 8 + float64(rank)
-	leashRadius = aggroRadius + 6
-	return aggroRadius, leashRadius
-}
-
+// applyWorldMonsterTuning upgrades rank metadata left by older runtime snapshots.
+// World actors no longer run an autonomous chase/attack simulation.
 func applyWorldMonsterTuning(ctx context.Context, monster *WorldMonster) {
 	if monster.Rank < 1 {
 		cell := resolveWorldMonsterCell(int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY)))
@@ -332,26 +252,9 @@ func applyWorldMonsterTuning(ctx context.Context, monster *WorldMonster) {
 			monster.Rank = rank
 		}
 	}
-	// Actors restored from Redis may still carry an over-band rank from old
-	// data; cap it at the owning zone so the roaming gate below can hold.
 	monster.Rank = clampRankToZoneBand(monster.RegionID, monster.Rank)
-	effectiveRank := monster.Rank
-	if effectiveRank < 1 {
-		effectiveRank = 1
-	}
-	if monster.IsBoss {
-		monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY = monsterPatrolBounds(monster.RegionID)
-		monster.LeashRadius = patrolRadius(int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY)), monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY)
-		monster.AggroRadius = monster.LeashRadius
-		monster.Speed = worldMonsterSpeed(effectiveRank) + worldMonsterSpecialSpeedBonus
-		monster.AttackRange = 2
-	} else if worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
-		monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY = monsterPatrolBounds(monster.RegionID)
-		monster.AggroRadius, monster.LeashRadius = worldMonsterEliteAggro, worldMonsterEliteLeash
-		monster.Speed = worldMonsterSpeed(effectiveRank) + worldMonsterSpecialSpeedBonus
-	} else {
-		monster.AggroRadius, monster.LeashRadius = worldMonsterAggroProfile(effectiveRank)
-		monster.Speed = worldMonsterSpeed(effectiveRank)
+	if monster.Rank < 1 {
+		monster.Rank = 1
 	}
 }
 
@@ -365,16 +268,6 @@ func monsterPatrolBounds(regionID string) (minX, minY, maxX, maxY int) {
 		return region.MinX, region.MinY, region.MaxX, region.MaxY
 	}
 	return 0, 0, WorldWidth - 1, WorldHeight - 1
-}
-
-func patrolRadius(spawnX, spawnY, minX, minY, maxX, maxY int) float64 {
-	maxDistance := 0.0
-	for _, x := range []int{minX, maxX} {
-		for _, y := range []int{minY, maxY} {
-			maxDistance = math.Max(maxDistance, math.Hypot(float64(x-spawnX), float64(y-spawnY)))
-		}
-	}
-	return maxDistance
 }
 
 func monsterBucket(x, y int) (int, int) {
@@ -465,54 +358,6 @@ func proceduralMonsterCell(spawnID string) (region string, x, y int, ok bool) {
 	return parts[0], x, y, true
 }
 
-func activeMonsterBuckets(players []WorldPosEntry, radius, limit int) []ActiveWorldBucket {
-	if radius < 0 || limit <= 0 {
-		return nil
-	}
-	capacity := len(players) * 9
-	if capacity > limit {
-		capacity = limit
-	}
-	buckets := make([]ActiveWorldBucket, 0, capacity)
-	seen := make(map[string]struct{}, capacity)
-	for _, player := range players {
-		mapID := player.MapID
-		if mapID == "" {
-			mapID = worldMapIDForRegion(player.Region)
-		}
-		minBX, minBY := monsterBucket(player.X-radius, player.Y-radius)
-		maxBX, maxBY := monsterBucket(player.X+radius, player.Y+radius)
-		for _, scopeRegion := range activeScopeRegions(player.X-radius, player.Y-radius, player.X+radius, player.Y+radius, mapID, player.Region) {
-			for bx := minBX; bx <= maxBX && len(buckets) < limit; bx++ {
-				for by := minBY; by <= maxBY && len(buckets) < limit; by++ {
-					key := fmt.Sprintf("%s:%s:%s:%d:%d", mapID, player.InstanceID, scopeRegion, bx, by)
-					if _, exists := seen[key]; exists {
-						continue
-					}
-					seen[key] = struct{}{}
-					buckets = append(buckets, ActiveWorldBucket{BX: bx, BY: by, X: player.X, Y: player.Y, Region: scopeRegion, MapID: mapID, InstanceID: player.InstanceID})
-				}
-			}
-		}
-	}
-	return buckets
-}
-
-func rotatingMonsterBucketWindow(buckets []ActiveWorldBucket, limit int, cursor uint64) []ActiveWorldBucket {
-	if limit <= 0 || len(buckets) == 0 {
-		return nil
-	}
-	if len(buckets) <= limit {
-		return buckets
-	}
-	out := make([]ActiveWorldBucket, 0, limit)
-	start := int(cursor % uint64(len(buckets)))
-	for i := 0; i < limit; i++ {
-		out = append(out, buckets[(start+i)%len(buckets)])
-	}
-	return out
-}
-
 // GetWorldMonsters materializes only static spawns intersecting the requested
 // AOI and returns their authoritative Redis state.
 func GetWorldMonsters(c *gin.Context) {
@@ -593,6 +438,7 @@ func GetWorldMonsters(c *gin.Context) {
 			continue
 		}
 		monster, created := result.Monster, result.Created
+		monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
 		// Elite/Boss spawn guards around them
 		if monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
 			spawnGuards(c.Request.Context(), monster, now)
@@ -602,13 +448,11 @@ func GetWorldMonsters(c *gin.Context) {
 			monsters = append(monsters, monster)
 		}
 		if created {
-			broadcastWorldCombat(monster, "monster_spawned", nil)
 		}
 	}
 	spawnDuration := time.Since(snapshotStartedAt)
 	// Persistent Boss map_cells are the source of truth for shared boss spawns.
-	// They are materialized as normal world actors, so the same AI can chase,
-	// attack, be defeated, and respawn them for every player in that region.
+	// They are materialized as static actors for the snapshot and admin views.
 	bossRows, bossErr := db.DB.QueryContext(c.Request.Context(), `
 		SELECT region_id, x, y, COALESCE(content_id,''),
 		       CASE WHEN COALESCE(metadata->>'rank','') ~ '^[0-9]+$' THEN (metadata->>'rank')::int ELSE 1 END,
@@ -676,6 +520,7 @@ func GetWorldMonsters(c *gin.Context) {
 			continue
 		}
 		monster, created := result.Monster, result.Created
+		monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
 		if spawnWithinPlayerRadius(spawn, entry, radius) {
 			occupied[[2]int{spawn.X, spawn.Y}] = struct{}{}
 		}
@@ -683,7 +528,6 @@ func GetWorldMonsters(c *gin.Context) {
 			monsters = append(monsters, monster)
 		}
 		if created && math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) <= float64(radius) {
-			broadcastWorldCombat(monster, "monster_spawned", map[string]any{"boss": true})
 		}
 	}
 	bossMaterializeDuration := time.Since(bossMaterializeStartedAt)
@@ -694,8 +538,8 @@ func GetWorldMonsters(c *gin.Context) {
 		}
 	}
 	bossPruneDuration := time.Since(bossPruneStartedAt)
-	// Actors may have chased far from their persistent spawn coordinate. Read
-	// their current AOI buckets as well, so polling/reconnect still sees them.
+	// Read active actors from nearby buckets so polling/reconnect sees actors
+	// that an admin moved away from their persistent spawn coordinate.
 	minBX, minBY := monsterBucket(entry.X-radius, entry.Y-radius)
 	maxBX, maxBY := monsterBucket(entry.X+radius, entry.Y+radius)
 	seenActors := make(map[string]struct{}, len(monsters))
@@ -719,6 +563,7 @@ func GetWorldMonsters(c *gin.Context) {
 		}
 		for _, coord := range coords {
 			for _, monster := range buckets[coord] {
+				monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
 				if monster.State == MonsterStateDefeated || math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) > float64(radius) {
 					continue
 				}
@@ -749,6 +594,7 @@ func GetWorldMonsters(c *gin.Context) {
 			continue
 		}
 		monster, created := result.Monster, result.Created
+		monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
 		if monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
 			spawnGuards(c.Request.Context(), monster, now)
 		}
@@ -756,7 +602,6 @@ func GetWorldMonsters(c *gin.Context) {
 			monsters = append(monsters, monster)
 		}
 		if created {
-			broadcastWorldCombat(monster, "monster_spawned", map[string]any{"procedural": true})
 		}
 	}
 	totalDuration := time.Since(snapshotStartedAt)
@@ -765,376 +610,4 @@ func GetWorldMonsters(c *gin.Context) {
 			entry.Region, radius, totalDuration, spawnDuration, bossLoadDuration, bossMaterializeDuration, bossPruneDuration, bucketDuration, time.Since(proceduralStartedAt), bossRowCount, len(bossRequests), bossMaterializeErrors, bucketCount, bucketErrors, len(monsters))
 	}
 	c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": now})
-}
-
-func broadcastWorldCombat(monster WorldMonster, eventType string, payload map[string]any) {
-	if WorldCombatBroadcaster == nil {
-		return
-	}
-	authoritative := make(map[string]any, len(payload)+7)
-	for key, value := range payload {
-		authoritative[key] = value
-	}
-	authoritative["entity"] = monster
-	authoritative["state"] = monster.State
-	authoritative["target_id"] = monster.TargetID
-	authoritative["x"] = monster.X
-	authoritative["y"] = monster.Y
-	authoritative["hp"] = monster.HP
-	authoritative["max_hp"] = monster.MaxHP
-	mapID := worldMapIDForRegion(monster.RegionID)
-	targets := map[uuid.UUID]struct{}{}
-	for _, p := range worldPosIndex.NearbyInScope(int(monster.X), int(monster.Y), WorldMonsterActivationRadius, "", mapID, "") {
-		if !isRegionWithinScope(monster.RegionID, p.Region) {
-			continue
-		}
-		if id, err := uuid.Parse(p.ID); err == nil {
-			targets[id] = struct{}{}
-		}
-	}
-	if len(targets) == 0 {
-		return
-	}
-	event := WorldCombatEvent{EventID: uuid.NewString(), ServerTime: time.Now().UTC(), RegionID: monster.RegionID, MapID: mapID, EntityID: monster.InstanceID, EntityRevision: monster.Revision, EventType: eventType, Position: WorldPosition{monster.X, monster.Y}, Payload: authoritative}
-	worldMonsterMetrics.eventFanout.Add(uint64(len(targets)))
-	WorldCombatBroadcaster("world:combat", mustMarshal(event), targets)
-}
-
-type monsterTickTarget struct {
-	ID   string
-	X, Y float64
-}
-
-func selectMonsterTarget(monster WorldMonster, candidates []WorldPosEntry, active func(string) bool, radius float64) (monsterTickTarget, bool) {
-	type ranked struct {
-		monsterTickTarget
-		d float64
-	}
-	if radius <= 0 {
-		radius = monster.AggroRadius
-	}
-	valid := make([]ranked, 0, len(candidates))
-	for _, p := range candidates {
-		if !isRegionWithinScope(monster.RegionID, p.Region) || !active(p.ID) || isWorldMonsterSafeZone(p.Region, p.X, p.Y) {
-			continue
-		}
-		d := math.Hypot(float64(p.X)-monster.X, float64(p.Y)-monster.Y)
-		if d > radius {
-			continue
-		}
-		valid = append(valid, ranked{monsterTickTarget{p.ID, float64(p.X), float64(p.Y)}, d})
-	}
-	if len(valid) > 1 {
-		sort.Slice(valid, func(i, j int) bool {
-			if valid[i].d == valid[j].d {
-				return valid[i].ID < valid[j].ID
-			}
-			return valid[i].d < valid[j].d
-		})
-	}
-	if len(valid) == 0 {
-		return monsterTickTarget{}, false
-	}
-	return valid[0].monsterTickTarget, true
-}
-
-func tickWorldMonster(monster WorldMonster, candidates []WorldPosEntry, now time.Time, active func(string) bool) (WorldMonster, string) {
-	if monster.State == MonsterStateDefeated {
-		return monster, ""
-	}
-	lastUpdateAt := monster.LastUpdateAt
-	dt := now.Sub(monster.LastUpdateAt).Seconds()
-	if dt < 0 {
-		dt = 0
-	}
-	if dt > 5 {
-		dt = 5
-	}
-	statusCount := len(monster.Statuses)
-	monster.Statuses = expireMonsterStatuses(monster.Statuses, now)
-	oldState := monster.State
-	oldX, oldY := monster.X, monster.Y
-	targetCandidates := candidates
-	if monster.State == MonsterStateAttack && monster.TargetID != "" {
-		targetCandidates = make([]WorldPosEntry, 0, 1)
-		for _, candidate := range candidates {
-			if candidate.ID == monster.TargetID {
-				targetCandidates = append(targetCandidates, candidate)
-				break
-			}
-		}
-	}
-	// Detection uses the aggro radius, but a monster already pursuing keeps its
-	// target out to the leash so it does not give up one cell outside detection.
-	searchRadius := monster.AggroRadius
-	if monster.State == MonsterStateChase || monster.State == MonsterStateAttack {
-		searchRadius = math.Max(monster.AggroRadius, monster.LeashRadius)
-	}
-	target, found := selectMonsterTarget(monster, targetCandidates, active, searchRadius)
-	if monster.State == MonsterStateReturn {
-		moveMonsterToward(&monster, monster.SpawnX, monster.SpawnY, dt)
-		if math.Hypot(monster.X-monster.SpawnX, monster.Y-monster.SpawnY) < 0.1 {
-			monster.X = monster.SpawnX
-			monster.Y = monster.SpawnY
-			monster.State = MonsterStateIdle
-			monster.HP = monster.MaxHP
-		}
-	} else if !found || (!monster.IsBoss && math.Hypot(target.X-monster.SpawnX, target.Y-monster.SpawnY) > monster.LeashRadius) {
-		if monster.State != MonsterStateIdle {
-			monster.State = MonsterStateReturn
-			monster.TargetID = ""
-		}
-	} else {
-		monster.TargetID = target.ID
-		distance := math.Hypot(target.X-monster.X, target.Y-monster.Y)
-		if distance <= monster.AttackRange {
-			monster.State = MonsterStateAttack
-		} else {
-			monster.State = MonsterStateChase
-			moveMonsterToward(&monster, target.X, target.Y, dt)
-		}
-	}
-	monster.LastUpdateAt = now
-	changed := oldState != monster.State || oldX != monster.X || oldY != monster.Y || len(monster.Statuses) != statusCount
-	// Persist on a real change, plus a slow heartbeat so TTL/tuning survive.
-	// The old `|| dt > 0` was always true and forced a CAS + SET for every
-	// monster on every tick, even when nothing moved.
-	if changed || now.Sub(lastUpdateAt) >= worldMonsterHeartbeatInterval {
-		monster.Revision++
-	}
-	if oldState != monster.State {
-		var eventType string
-		switch monster.State {
-		case MonsterStateChase:
-			eventType = "monster_targeted"
-		case MonsterStateAttack:
-			eventType = "monster_attack_started"
-		case MonsterStateReturn, MonsterStateIdle:
-			eventType = "monster_returned"
-		}
-		return monster, eventType
-	}
-	if oldX != monster.X || oldY != monster.Y {
-		return monster, "monster_moved"
-	}
-	return monster, ""
-}
-
-func moveMonsterToward(monster *WorldMonster, tx, ty, dt float64) {
-	dx, dy := tx-monster.X, ty-monster.Y
-	distance := math.Hypot(dx, dy)
-	if distance == 0 {
-		return
-	}
-	isElite := worldMonsterTemplateIsElite(monster.MonsterTemplateID)
-	step := math.Min(distance, monster.Speed*dt)
-	nx, ny := monster.X+dx/distance*step, monster.Y+dy/distance*step
-	// Check every crossed cell so a delayed tick cannot tunnel through a safe
-	// zone merely because its final endpoint lies outside it.
-	segments := int(math.Ceil(step * 2))
-	if segments < 1 {
-		segments = 1
-	}
-	for i := 1; i <= segments; i++ {
-		ratio := float64(i) / float64(segments)
-		sx, sy := monster.X+(nx-monster.X)*ratio, monster.Y+(ny-monster.Y)*ratio
-		ix, iy := int(math.Round(sx)), int(math.Round(sy))
-		outsidePatrol := (monster.IsBoss || isElite) && (ix < monster.PatrolMinX || ix > monster.PatrolMaxX || iy < monster.PatrolMinY || iy > monster.PatrolMaxY)
-		if (!monster.IsBoss && !inWorld(ix, iy)) || outsidePatrol || isWorldMonsterSafeZone(monster.RegionID, ix, iy) {
-			return
-		}
-	}
-	// Never step into a zone whose rank band is below the monster's own rank.
-	// Boss/Elite already stay inside their patrol rect; this closes the same
-	// border for ordinary monsters, which are only leashed to their spawn.
-	if !monsterCanRoamInto(monster.Rank, int(math.Round(nx)), int(math.Round(ny))) {
-		return
-	}
-	if monster.IsBoss || math.Hypot(nx-monster.SpawnX, ny-monster.SpawnY) <= monster.LeashRadius {
-		monster.X, monster.Y = nx, ny
-	}
-}
-
-func expireMonsterStatuses(statuses []StatusEffect, now time.Time) []StatusEffect {
-	out := statuses[:0]
-	for _, s := range statuses {
-		if s.ExpiresAt.IsZero() || s.ExpiresAt.After(now) {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-// StartWorldMonsterWorker runs one bounded ticker for all ordinary monsters.
-func StartWorldMonsterWorker(ctx context.Context) {
-	startWorldMonsterWorker(ctx, worldMonsterTickInterval)
-}
-
-func startWorldMonsterWorker(ctx context.Context, interval time.Duration) <-chan struct{} {
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case now := <-ticker.C:
-				worker.SafeRun("World Monster", ctx, func(ctx context.Context) {
-					processWorldMonsterTick(ctx, now.UTC())
-				})
-			}
-		}
-	}()
-	return done
-}
-
-func processWorldMonsterTick(ctx context.Context, now time.Time) {
-	deadline := time.Now().Add(worldMonsterTickBudget)
-	online := worldPosIndex.OnlineEntries(-1, func(entry WorldPosEntry) bool {
-		if flyingPlayers.isFlying(entry.ID, now) {
-			// Flying players are invisible to ground monsters: no aggro, no chase.
-			return false
-		}
-		playerID, err := uuid.Parse(entry.ID)
-		if err != nil || !isLegacyWorldMonsterPlayer(entry) || !isWSConnected(playerID) {
-			return false
-		}
-		return checkRegionAction(entry.Region, "combat") == nil && checkRegionAction(entry.Region, "monster_combat") == nil
-	})
-	playersByRegion := make(map[string][]WorldPosEntry)
-	for _, player := range online {
-		playersByRegion[player.Region] = append(playersByRegion[player.Region], player)
-	}
-	regions := make([]string, 0, len(playersByRegion))
-	for region := range playersByRegion {
-		regions = append(regions, region)
-	}
-	sort.Strings(regions)
-	allBuckets := make([]ActiveWorldBucket, 0, len(online)*9)
-	for _, region := range regions {
-		allBuckets = append(allBuckets, activeMonsterBuckets(playersByRegion[region], WorldMonsterActivationRadius, int(^uint(0)>>1))...)
-	}
-	bossBuckets := make([]ActiveWorldBucket, 0, 32)
-	seenBosses := make(map[string]struct{}, 32)
-	seenBossRegions := make(map[string]struct{}, len(regions)*2)
-	for _, region := range regions {
-		for _, scopeRegion := range regionScopeIDs(region) {
-			if _, seen := seenBossRegions[scopeRegion]; seen {
-				continue
-			}
-			seenBossRegions[scopeRegion] = struct{}{}
-			bosses, err := cache.WorldBossesInRegion(ctx, scopeRegion)
-			if err != nil {
-				continue
-			}
-			for _, boss := range bosses {
-				if _, seen := seenBosses[boss.InstanceID]; seen {
-					continue
-				}
-				seenBosses[boss.InstanceID] = struct{}{}
-				bx, by := monsterBucket(int(boss.X), int(boss.Y))
-				bossBuckets = append(bossBuckets, ActiveWorldBucket{BX: bx, BY: by, X: int(boss.X), Y: int(boss.Y), Region: boss.RegionID, MapID: worldMapIDForRegion(boss.RegionID), BossScope: true})
-			}
-		}
-	}
-	cursor := worldMonsterBucketCursor.Add(uint64(worldMonsterMaxBuckets)) - uint64(worldMonsterMaxBuckets)
-	buckets := append(bossBuckets, rotatingMonsterBucketWindow(allBuckets, worldMonsterMaxBuckets, cursor)...)
-	if len(allBuckets) > len(buckets) {
-		worldMonsterMetrics.skipped.Add(uint64(len(allBuckets) - len(buckets)))
-	}
-	processed := 0
-	for _, b := range buckets {
-		if processed >= worldMonsterMaxPerTick || time.Now().After(deadline) {
-			worldMonsterMetrics.skipped.Add(1)
-			break
-		}
-		monsters, err := worldMonstersInBucket(ctx, b.Region, b.BX, b.BY)
-		if err != nil {
-			continue
-		}
-		bucketCenterX := b.BX*WorldMonsterAOIBucket + WorldMonsterAOIBucket/2
-		bucketCenterY := b.BY*WorldMonsterAOIBucket + WorldMonsterAOIBucket/2
-		candidates := online
-		if !b.BossScope {
-			candidates = worldPosIndex.NearbyInScope(bucketCenterX, bucketCenterY, worldMonsterBucketQueryRadius, "", b.MapID, b.InstanceID)
-		}
-		for monsterIndex, monster := range monsters {
-			if monster.IsBoss != b.BossScope {
-				continue
-			}
-			if processed >= worldMonsterMaxPerTick || time.Now().After(deadline) {
-				worldMonsterMetrics.skipped.Add(uint64(len(monsters) - monsterIndex))
-				break
-			}
-			processed++
-			// Refresh cached monsters as well as newly materialized ones so a deploy
-			// takes effect immediately instead of waiting for their Redis TTL.
-			tuned := monster
-			applyWorldMonsterTuning(ctx, &tuned)
-			if monster.State == MonsterStateDefeated && !monster.RespawnAt.IsZero() && !now.Before(monster.RespawnAt) {
-				replacement := tuned
-				replacement.InstanceID = uuid.NewString()
-				replacement.HP = replacement.MaxHP
-				replacement.State = MonsterStateIdle
-				replacement.TargetID = ""
-				replacement.Revision = 1
-				replacement.Statuses = []StatusEffect{}
-				replacement.RespawnAt = time.Time{}
-				replacement.LastHitAt = time.Time{}
-				replacement.LastSeenAt = time.Time{}
-				replacement.LastUpdateAt = now
-				replacement.X, replacement.Y = replacement.SpawnX, replacement.SpawnY
-				bx, by := monsterBucket(int(replacement.X), int(replacement.Y))
-				oldBX, oldBY := monsterBucket(int(monster.X), int(monster.Y))
-				if ok, _ := cache.RespawnWorldMonster(ctx, monster, replacement, oldBX, oldBY, bx, by, monsterTTL(monster.RespawnSeconds)); ok {
-					broadcastWorldCombat(replacement, "monster_respawned", map[string]any{"previous_instance_id": monster.InstanceID})
-				}
-				continue
-			}
-			next, eventType := tickWorldMonster(tuned, candidates, now, func(id string) bool {
-				parsed, parseErr := uuid.Parse(id)
-				return parseErr == nil && isWSConnected(parsed)
-			})
-			eventRevision := next.Revision
-			if eventType == "monster_moved" {
-				if !monster.LastSeenAt.IsZero() && now.Sub(monster.LastSeenAt) < worldMonsterMoveEventGap {
-					eventType = ""
-				} else {
-					next.LastSeenAt = now
-				}
-			}
-			if next.Revision == monster.Revision {
-				continue
-			}
-			bx, by := monsterBucket(int(next.X), int(next.Y))
-			oldBX, oldBY := monsterBucket(int(monster.X), int(monster.Y))
-			ok, err := casWorldMonster(ctx, monster, next, monster.Revision, oldBX, oldBY, bx, by, monsterTTL(monster.RespawnSeconds))
-			if err != nil || !ok {
-				worldMonsterMetrics.conflicts.Add(1)
-				continue
-			}
-			if eventType != "" {
-				stateEvent := next
-				stateEvent.Revision = eventRevision
-				broadcastWorldCombat(stateEvent, eventType, nil)
-			}
-		}
-	}
-	worldMonsterMetrics.processed.Add(uint64(processed))
-}
-
-// isLegacyWorldMonsterPlayer keeps the shared monster worker scoped to the
-// default world map.
-func isLegacyWorldMonsterPlayer(entry WorldPosEntry) bool {
-	mapID := entry.MapID
-	if mapID == "" {
-		mapID = worldMapIDForRegion(entry.Region)
-	}
-	if mapID != "world_map" || entry.InstanceID != "" {
-		return false
-	}
-	_, err := uuid.Parse(entry.ID)
-	return err == nil
 }

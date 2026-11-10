@@ -71,33 +71,6 @@ func TestClampRankToZoneBand(t *testing.T) {
 	}
 }
 
-func TestMonsterCannotRoamIntoLowerRankZone(t *testing.T) {
-	withTestZones(t, testScopeZones()...)
-
-	if monsterCanRoamInto(8, 200, 200) {
-		t.Fatal("rank 8 monster must not enter a rank 3-5 zone")
-	}
-	if !monsterCanRoamInto(5, 200, 200) {
-		t.Fatal("rank 5 monster must be allowed in a rank 3-5 zone")
-	}
-	if !monsterCanRoamInto(8, 600, 200) {
-		t.Fatal("rank 8 monster must still roam its own rank 6-8 zone")
-	}
-}
-
-func TestMoveMonsterTowardStopsAtLowerRankBorder(t *testing.T) {
-	withTestZones(t, testScopeZones()...)
-
-	monster := WorldMonster{
-		RegionID: "high_sibling", MonsterTemplateID: "monster_roam_test", Rank: 8,
-		X: 410, Y: 200, SpawnX: 410, SpawnY: 200, LeashRadius: 100, Speed: 10,
-	}
-	moveMonsterToward(&monster, 200, 200, 1)
-	if monster.X != 410 || monster.Y != 200 {
-		t.Fatalf("monster crossed into the low-rank zone: (%v,%v)", monster.X, monster.Y)
-	}
-}
-
 func TestWorldMonsterCandidateClampsRankToZoneBand(t *testing.T) {
 	withTestZones(t, testScopeZones()...)
 

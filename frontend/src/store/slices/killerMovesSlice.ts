@@ -29,8 +29,8 @@ export interface KillerMoveEffectOption {
     status_id?: string;
     stat?: string;
   };
-  realtime_supported?: boolean;
-  realtime_unavailable_reason?: string;
+  combat_supported?: boolean;
+  unavailable_reason?: string;
 }
 
 export interface KillerMoveCombatProfile {
@@ -43,8 +43,6 @@ export interface KillerMoveCombatProfile {
   all_paths: string[];
   target_type: string;
   bypass: boolean;
-  realtime_windup_ms?: number;
-  realtime_cooldown_ms?: number;
   priority: number;
   mana_cost: number;
   hunger_cost: number;
@@ -57,7 +55,6 @@ export interface KillerMoveCombatProfile {
   success_chance: number;
   backfire_hp_pct: number;
   backfire_status?: string;
-  realtime_effects?: Array<unknown>;
 }
 
 export interface GuHouseCombatProfile {
@@ -118,8 +115,6 @@ export interface KillerMoveRecord {
   is_equipped: boolean;
   available: boolean;
   has_starving_gu?: boolean;
-  realtime_supported?: boolean;
-  realtime_unavailable_reason?: string;
   missing_gu?: string[];
   balance_version: number;
 }
@@ -147,31 +142,7 @@ export interface KillerMovePreview {
   mana_cost: number;
   combat_profile?: KillerMoveCombatProfile;
   warnings: string[];
-  realtime_supported?: boolean;
-  realtime_unavailable_reason?: string;
-  has_realtime_effects?: boolean;
-  has_outside_combat_effect: boolean;
   preview_fingerprint: string;
-}
-
-export type CombatSkillKind = "move" | "house";
-
-export interface CombatSkillCandidate {
-  kind: CombatSkillKind;
-  id: string;
-  name: string;
-  rank: number;
-  path: string;
-  slot: number;
-  supported: boolean;
-  reason?: string;
-}
-
-export interface CombatSkillLoadout {
-  slots: CombatSkillCandidate[];
-  available: CombatSkillCandidate[];
-  firstSlot: number;
-  maxSlots: number;
 }
 
 export interface KillerMovesSlice {
@@ -183,8 +154,6 @@ export interface KillerMovesSlice {
   killerMovesLoading: boolean;
   guHouses: GuHouseRecord[];
   guHousesLoading: boolean;
-  skillLoadout: CombatSkillLoadout | null;
-  skillLoadoutLoading: boolean;
   fetchKillerMoves: () => Promise<void>;
   previewKillerMove: (draft: KillerMoveDraft) => Promise<KillerMovePreview | null>;
   createKillerMove: (draft: KillerMoveDraft) => Promise<boolean>;
@@ -196,8 +165,6 @@ export interface KillerMovesSlice {
   createGuHouse: (draft: GuHouseDraft) => Promise<boolean>;
   toggleEquipGuHouse: (id: string) => Promise<boolean>;
   repairGuHouse: (id: string) => Promise<boolean>;
-  fetchSkillLoadout: () => Promise<void>;
-  saveSkillLoadout: (entries: Array<{ kind: CombatSkillKind; id: string }>) => Promise<boolean>;
 }
 
 export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, KillerMovesSlice> = (set, get) => ({
@@ -209,8 +176,6 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   killerMovesLoading: false,
   guHouses: [],
   guHousesLoading: false,
-  skillLoadout: null,
-  skillLoadoutLoading: false,
 
   fetchKillerMoves: async () => {
     const { token, logout } = get();
@@ -285,7 +250,6 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể trang bị sát chiêu");
       await get().fetchKillerMoves();
-      await get().fetchSkillLoadout();
       return true;
     } catch (caught) {
       get().addToast(caught instanceof Error ? caught.message : "Không thể trang bị sát chiêu", "error");
@@ -390,7 +354,6 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Không thể cập nhật trang bị");
       await get().fetchGuHouses();
-      await get().fetchSkillLoadout();
       return true;
     } catch (caught) {
       get().addToast(caught instanceof Error ? caught.message : "Lỗi trang bị Cổ Ốc", "error");
@@ -407,7 +370,6 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (!res.ok) throw new Error(data.error || "Không thể tu sửa Tiên Cổ Ốc");
       get().addToast(data.message || "Đã tu sửa Tiên Cổ Ốc hoàn hảo", "success");
       await get().fetchGuHouses();
-      await get().fetchSkillLoadout();
       return true;
     } catch (caught) {
       get().addToast(caught instanceof Error ? caught.message : "Lỗi tu sửa", "error");
@@ -415,60 +377,5 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
     }
   },
 
-  fetchSkillLoadout: async () => {
-    const { token } = get();
-    if (!token) return;
-    set({ skillLoadoutLoading: true });
-    try {
-      const res = await authFetch(`${BACKEND_URL}/api/combat/skill-loadout`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Không thể tải hotbar chiêu thức");
-      set({ skillLoadout: normalizeSkillLoadout(data), skillLoadoutLoading: false });
-    } catch (caught) {
-      set({ skillLoadoutLoading: false });
-      get().addToast(caught instanceof Error ? caught.message : "Không thể tải hotbar chiêu thức", "error");
-    }
-  },
 
-  saveSkillLoadout: async (entries) => {
-    const { token } = get();
-    if (!token) return false;
-    set({ skillLoadoutLoading: true });
-    try {
-      const res = await authFetch(`${BACKEND_URL}/api/combat/skill-loadout`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entries }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Không thể lưu hotbar chiêu thức");
-      set({ skillLoadout: normalizeSkillLoadout(data.loadout), skillLoadoutLoading: false });
-      get().addToast(data.message || "Đã lưu hotbar chiêu thức", "success");
-      return true;
-    } catch (caught) {
-      set({ skillLoadoutLoading: false });
-      get().addToast(caught instanceof Error ? caught.message : "Không thể lưu hotbar chiêu thức", "error");
-      return false;
-    }
-  },
 });
-
-function normalizeSkillLoadout(data: unknown): CombatSkillLoadout | null {
-  if (!data || typeof data !== "object") return null;
-  const source = data as { slots?: unknown; available?: unknown; first_slot?: unknown; max_slots?: unknown };
-  const candidates = (value: unknown): CombatSkillCandidate[] =>
-    Array.isArray(value)
-      ? value.filter((item): item is CombatSkillCandidate =>
-          !!item && typeof item === "object" &&
-          ((item as CombatSkillCandidate).kind === "move" || (item as CombatSkillCandidate).kind === "house") &&
-          typeof (item as CombatSkillCandidate).id === "string" &&
-          typeof (item as CombatSkillCandidate).name === "string" &&
-          typeof (item as CombatSkillCandidate).slot === "number")
-      : [];
-  return {
-    slots: candidates(source.slots),
-    available: candidates(source.available),
-    firstSlot: typeof source.first_slot === "number" ? source.first_slot : 9,
-    maxSlots: typeof source.max_slots === "number" ? source.max_slots : 4,
-  };
-}

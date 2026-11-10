@@ -708,11 +708,6 @@ func AscensionEngageCalamity(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi dọn dẹp trạng thái phiên cũ"})
 		return
 	}
-	_, _ = tx.Exec(`
-		UPDATE realtime_combat_session_participants SET status = 'abandoned'
-		WHERE player_id = $1 AND status = 'active'
-	`, player.ID)
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return

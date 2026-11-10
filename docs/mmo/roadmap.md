@@ -105,3 +105,4 @@ Each roadmap item should cite one or more of:
 
 If an item cannot state its trigger, prerequisite and rollback, it is not ready
 to schedule.
+# Historical roadmap: the realtime combat direction below was retired. Current combat uses the turn-based simulator in supported flows; see `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.

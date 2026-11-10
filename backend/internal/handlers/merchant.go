@@ -764,9 +764,9 @@ func SellToMerchant(c *gin.Context) {
 	}
 	player.PrimevalStones += primeval
 	player.ImmortalStones += immortal
-	// Preserve the saved hotbar order in players.equipped_gus: prune invalid
+	// Preserve the equipped Gu order in players.equipped_gus: prune invalid
 	// entries and append newly equipped actives instead of rebuilding from
-	// inventory order (which would reset the realtime hotbar assignment).
+	// inventory order (which would unexpectedly reorder the equipped Gu list).
 	RebuildEquippedGus(&player)
 	if guSold {
 		if err := db.RemovePlayerGus(tx, removedGuIDs); err != nil {

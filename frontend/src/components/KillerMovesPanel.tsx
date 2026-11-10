@@ -284,7 +284,7 @@ export function KillerMovesPanel() {
             </div>
             <div className={`mt-2 text-[10px] ${!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-300" : "text-emerald-300"}`}>
               {!move.available
-                ? (move.realtime_unavailable_reason || "Thiếu Cổ thành phần")
+                ? (move.missing_gu?.length ? `Thiếu Cổ: ${move.missing_gu.join(", ")}` : "Cổ thành phần không còn khả dụng")
                 : move.has_starving_gu
                   ? "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)"
                   : "Sẵn sàng trong chiến đấu"}

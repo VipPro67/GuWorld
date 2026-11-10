@@ -1217,11 +1217,3 @@ func autoResolveEvent(eventID string, playerID string) {
 
 	_ = tx.Commit()
 }
-
-type ActiveTribulationEvent struct {
-	EventID         string
-	ApertureID      string
-	PlayerID        string
-	TribulationType string
-	StartedAt       time.Time
-}
