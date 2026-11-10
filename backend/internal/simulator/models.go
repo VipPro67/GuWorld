@@ -447,7 +447,7 @@ type CombatState struct {
 	Enemies              []*CombatantAuto
 	CaptureTurnSnapshots bool
 	// FastResolve skips verbose log string formatting for batch / background resolution
-	FastResolve          bool
+	FastResolve bool
 
 	// Boss specific tracking
 	BossPhase int // 0 = 100-70%, 1 = 70-30%, 2 = 30-0%

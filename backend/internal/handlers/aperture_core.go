@@ -552,14 +552,14 @@ func AnchorAperture(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("Hạ Khiếu thành công tại %s (%d, %d). Môn Hộ đã hiển hiện ngoài thế giới. Thân thể Cổ Tiên đã bước vào tọa trấn bên trong Tiên Khiếu, dòng sông Quang Âm đồng bộ với ngoại giới (1.0x). Đang hấp thụ Thiên Khí và Địa Khí...",
 			player.CurrentRegion, player.X, player.Y),
-		"is_placed":        true,
-		"placed_region":    player.CurrentRegion,
-		"placed_x":         player.X,
-		"placed_y":         player.Y,
-		"aperture_region":  "aperture_interior",
+		"is_placed":         true,
+		"placed_region":     player.CurrentRegion,
+		"placed_x":          player.X,
+		"placed_y":          player.Y,
+		"aperture_region":   "aperture_interior",
 		"aperture_instance": apertureInstanceID,
-		"portal_name":      req.PortalName,
-		"access_policy":    req.AccessPolicy,
+		"portal_name":       req.PortalName,
+		"access_policy":     req.AccessPolicy,
 	})
 }
 
@@ -728,14 +728,14 @@ func UnanchorAperture(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("Thu Khiếu thành công! Môn Hộ thế giới đã khép lại. Tiên Khiếu đã thu hồi vào nhục thân. Đã nạp +%.0f Thiên Khí và +%.0f Địa Khí. Tốc độ thời gian Tiên Khiếu đã khôi phục bình thường. Thân thể Cổ Tiên đã trở lại %s (%d, %d).",
 			gainedHeavenQi, gainedEarthQi, destRegion, destX, destY),
-		"heaven_qi":       newHeavenQi,
-		"earth_qi":        newEarthQi,
-		"max_heaven_qi":   ap.MaxHeavenQi,
-		"max_earth_qi":    ap.MaxEarthQi,
-		"state":           newState,
-		"is_placed":       false,
-		"current_region":  destRegion,
-		"x":               destX,
-		"y":               destY,
+		"heaven_qi":      newHeavenQi,
+		"earth_qi":       newEarthQi,
+		"max_heaven_qi":  ap.MaxHeavenQi,
+		"max_earth_qi":   ap.MaxEarthQi,
+		"state":          newState,
+		"is_placed":      false,
+		"current_region": destRegion,
+		"x":              destX,
+		"y":              destY,
 	})
 }

@@ -282,12 +282,12 @@ func EnterAperturePortal(c *gin.Context) {
 	syncSpatialPlayer(playerID, "aperture_interior", 10, 10, portalApUUID)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":         fmt.Sprintf("Đạo hữu đã bước qua Môn Hộ tiến vào %s an toàn.", portal.Name),
-		"aperture_region": "aperture_interior",
+		"message":           fmt.Sprintf("Đạo hữu đã bước qua Môn Hộ tiến vào %s an toàn.", portal.Name),
+		"aperture_region":   "aperture_interior",
 		"aperture_instance": apertureInstanceID,
-		"x":               10,
-		"y":               10,
-		"role":            "VISITOR",
+		"x":                 10,
+		"y":                 10,
+		"role":              "VISITOR",
 	})
 }
 

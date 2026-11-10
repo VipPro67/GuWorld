@@ -57,31 +57,19 @@ services:
         condition: service_started
 
   frontend:
-    image: ghcr.io/vippro67/guworld-frontend:latest
+    build:
+      context: .                 # Thư mục chứa source code của frontend (hoặc đường dẫn tới folder frontend nếu để chung repo)
+      dockerfile: Dockerfile     # Tên file Dockerfile của bạn
     container_name: guworld-frontend
     restart: always
     environment:
       INTERNAL_BACKEND_URL: http://backend:8080
+      # Nếu cần truyền các biến môi trường lúc build Next.js (ARG), bạn khai báo thêm ở đây:
+      # args:
+      #   NEXT_PUBLIC_BACKEND_URL: http://localhost:8080
     depends_on:
       - backend
 
-  alloy:
-    image: grafana/alloy:latest
-    container_name: guworld-alloy
-    restart: always
-    environment:
-      LOKI_URL: https://logs-prod-020.grafana.net/loki/api/v1/push
-      LOKI_USER: 1492959
-      PROMETHEUS_URL: https://prometheus-prod-37-prod-ap-southeast-1.grafana.net/api/prom/push
-      PROMETHEUS_USER: 2994568
-      GRAFANA_API_KEY: ${GRAFANA_API_KEY}
-    volumes:
-      - ./alloy/config.alloy:/etc/alloy/config.alloy
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command:
-      - run
-      - --server.http.listen-addr=0.0.0.0:12345
-      - /etc/alloy/config.alloy
 
 volumes:
   postgres_data:
