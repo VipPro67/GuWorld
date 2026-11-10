@@ -97,23 +97,6 @@ services:
       retries: 12
       start_period: 30s
 
-  # alloy:
-  #   image: grafana/alloy:latest
-  #   container_name: guworld-alloy
-  #   restart: always
-  #   environment:
-  #     - LOKI_URL=${LOKI_URL}
-  #     - LOKI_USER=${LOKI_USER}
-  #     - PROMETHEUS_URL=${PROMETHEUS_URL}
-  #     - PROMETHEUS_USER=${PROMETHEUS_USER}
-  #     - GRAFANA_API_KEY=${GRAFANA_API_KEY}
-  #   volumes:
-  #     - ./alloy/config.alloy:/etc/alloy/config.alloy
-  #     - /var/run/docker.sock:/var/run/docker.sock:ro
-  #   command:
-  #     - run
-  #     - --server.http.listen-addr=0.0.0.0:12345
-  #     - /etc/alloy/config.alloy
 
 volumes:
   redis_data:

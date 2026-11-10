@@ -58,10 +58,12 @@ services:
 
   frontend:
     build:
-      context: .                 # Thư mục chứa source code của frontend (hoặc đường dẫn tới folder frontend nếu để chung repo)
+      context: ./frontend               # Thư mục chứa source code của frontend (hoặc đường dẫn tới folder frontend nếu để chung repo)
       dockerfile: Dockerfile     # Tên file Dockerfile của bạn
     container_name: guworld-frontend
     restart: always
+    env_file:
+      - ./frontend/.env
     environment:
       INTERNAL_BACKEND_URL: http://backend:8080
       # Nếu cần truyền các biến môi trường lúc build Next.js (ARG), bạn khai báo thêm ở đây:
