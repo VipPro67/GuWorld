@@ -34,7 +34,7 @@ services:
     container_name: guworld-backend
     restart: always
     ports:
-      - "127.0.0.1:8080:8080"  # Local plain HTTP; WebTransport needs TLS and is not enabled in this profile.
+      - "8080:8080"  # Local plain HTTP; WebTransport needs TLS and is not enabled in this profile.
     env_file:
       - ./backend/.env
     environment:
@@ -62,6 +62,8 @@ services:
       dockerfile: Dockerfile     # Tên file Dockerfile của bạn
     container_name: guworld-frontend
     restart: always
+    ports:
+      - "3000:3000"
     env_file:
       - ./frontend/.env
     environment:
