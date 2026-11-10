@@ -58,8 +58,12 @@ services:
 
   frontend:
     build:
-      context: ./frontend               # Thư mục chứa source code của frontend (hoặc đường dẫn tới folder frontend nếu để chung repo)
-      dockerfile: Dockerfile     # Tên file Dockerfile của bạn
+      context: ./frontend
+      dockerfile: Dockerfile
+      # Next.js embeds NEXT_PUBLIC_* values during the build.
+      args:
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://132.226.95.3:8080}
+        NEXT_PUBLIC_REALTIME_WS_URL: ${NEXT_PUBLIC_REALTIME_WS_URL:-ws://132.226.95.3:8080/api/ws}
     container_name: guworld-frontend
     restart: always
     ports:
@@ -67,10 +71,9 @@ services:
     env_file:
       - ./frontend/.env
     environment:
-      INTERNAL_BACKEND_URL: http://132.226.95.3:8080
-      # Nếu cần truyền các biến môi trường lúc build Next.js (ARG), bạn khai báo thêm ở đây:
-      # args:
-      NEXT_PUBLIC_BACKEND_URL: http://132.226.95.3:8080
+      INTERNAL_BACKEND_URL: ${INTERNAL_BACKEND_URL:-http://132.226.95.3:8080}
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://132.226.95.3:8080}
+      NEXT_PUBLIC_REALTIME_WS_URL: ${NEXT_PUBLIC_REALTIME_WS_URL:-ws://132.226.95.3:8080/api/ws}
     depends_on:
       - backend
 
