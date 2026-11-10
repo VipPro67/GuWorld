@@ -35,7 +35,8 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/dictionary/region-loot` | Public wiki region loot rules dictionary only (`[{region_id, loot_table_id, monster_type, min_rank, max_rank, chance}]`). |
 | GET | `/recipes` | Public refining recipes. Thêm query param `?all=true` để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. Hỗ trợ `If-None-Match`; response trả `ETag` và `X-Catalog-Revision`, còn `304` giữ nguyên cache hiện tại của client. |
 | GET | `/gus/:instance_id/history` | Lịch sử vòng đời một cá thể Cổ (chỉ Tiên Cổ rank ≥ 6 có log). `instance_id` bất biến qua trade/bán/kho; destroy (thả/đói/chết) đóng timeline. |
-| POST | `/auth/send-otp` | Send OTP via email to register. |
+| GET | `/auth/config` | Public auth settings, including whether email verification is required. |
+| POST | `/auth/send-otp` | Send OTP via email to register when email verification is enabled. |
 | POST | `/auth/register` | Rate limited. Requires valid OTP. Body thêm `race` (`human`/`fur_people`) và `gender` (`male`/`female`), mặc định `human`/`male`. |
 | POST | `/auth/login` | Rate limited. |
 | POST | `/auth/logout` | Public logout endpoint. |

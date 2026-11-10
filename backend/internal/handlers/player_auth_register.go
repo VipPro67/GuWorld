@@ -254,31 +254,38 @@ func RegisterPlayer(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Verify email OTP inside tx
-	var dbOTP string
-	var expiresAt time.Time
-	err = tx.QueryRow("SELECT otp, expires_at FROM email_otps WHERE email = $1", req.Email).Scan(&dbOTP, &expiresAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Mã xác thực OTP chưa được gửi hoặc đã bị xóa!"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi xác thực OTP"})
+	if EmailVerificationRequired() {
+		// Verify email OTP inside tx
+		var dbOTP string
+		var expiresAt time.Time
+		var attempts int
+		err = tx.QueryRow("SELECT otp, expires_at, attempts FROM email_otps WHERE email = $1 FOR UPDATE", req.Email).Scan(&dbOTP, &expiresAt, &attempts)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Mã xác thực OTP chưa được gửi hoặc đã bị xóa!"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi xác thực OTP"})
+			}
+			return
 		}
-		return
+		if time.Now().After(expiresAt) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mã OTP đã hết hạn! Vui lòng yêu cầu mã mới."})
+			return
+		}
+		if dbOTP != req.OTP {
+			attempts++
+			if attempts >= 5 {
+				_, _ = tx.Exec("DELETE FROM email_otps WHERE email = $1", req.Email)
+			} else {
+				_, _ = tx.Exec("UPDATE email_otps SET attempts = $2 WHERE email = $1", req.Email, attempts)
+			}
+			_ = tx.Commit()
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mã OTP không chính xác!"})
+			return
+		}
+		// Delete OTP to prevent reuse
+		_, _ = tx.Exec("DELETE FROM email_otps WHERE email = $1", req.Email)
 	}
-
-	if time.Now().After(expiresAt) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã OTP đã hết hạn! Vui lòng yêu cầu mã mới."})
-		return
-	}
-
-	if dbOTP != req.OTP {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã OTP không chính xác!"})
-		return
-	}
-
-	// Delete OTP to prevent reuse
-	_, _ = tx.Exec("DELETE FROM email_otps WHERE email = $1", req.Email)
 
 	// Verify email uniqueness inside tx
 	var emailExists bool

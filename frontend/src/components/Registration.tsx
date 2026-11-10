@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
+import { BACKEND_URL } from "@/lib/config";
 import {
   Sparkles,
   Compass,
@@ -57,6 +58,18 @@ export const Registration: React.FC<RegistrationProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [referralCode, setReferralCode] = useState("");
   const [gender, setGender] = useState("male");
+  const [emailVerificationRequired, setEmailVerificationRequired] = useState(false);
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/auth/config`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((config) => {
+        if (typeof config?.email_verification_required === "boolean") {
+          setEmailVerificationRequired(config.email_verification_required);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -95,7 +108,7 @@ export const Registration: React.FC<RegistrationProps> = ({
       if (!emailValue || password.length < 6) return;
       await onLogin(emailValue, password);
     } else {
-      if (!usernameValue || !emailValue || password.length < 6 || !otp.trim()) return;
+      if (!usernameValue || !emailValue || password.length < 6 || (emailVerificationRequired && !otp.trim())) return;
       await onRegister(
         usernameValue,
         password,
@@ -275,20 +288,20 @@ export const Registration: React.FC<RegistrationProps> = ({
                   required
                 />
               </div>
-              <button
+              {emailVerificationRequired && <button
                 type="button"
                 disabled={isLoading || otpCooldown > 0 || email.trim().length === 0}
                 onClick={handleSendOTP}
                 className="px-4 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-[var(--bg-elevated)] disabled:text-zinc-600 border border-amber-500 rounded-xl text-xs font-serif text-amber-100 transition-colors shrink-0 cursor-pointer min-w-[80px]"
               >
                 {otpCooldown > 0 ? `${otpCooldown}s` : "Gửi Mã"}
-              </button>
+              </button>}
             </div>
           </div>
         )}
 
         {/* OTP - Only in registration */}
-        {!isLoginTab && (
+        {!isLoginTab && emailVerificationRequired && (
           <div className="relative">
             <label
               htmlFor="otp"
@@ -400,14 +413,14 @@ export const Registration: React.FC<RegistrationProps> = ({
             isLoading ||
             (isLoginTab
               ? email.trim().length === 0
-              : username.trim().length < 3 || email.trim().length === 0 || otp.trim().length < 6) ||
+              : username.trim().length < 3 || email.trim().length === 0 || (emailVerificationRequired && otp.trim().length < 6)) ||
             password.length < 6
           }
           className={`w-full py-4 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-6 ${
             isLoading ||
             (isLoginTab
               ? email.trim().length === 0
-              : username.trim().length < 3 || email.trim().length === 0 || otp.trim().length < 6) ||
+              : username.trim().length < 3 || email.trim().length === 0 || (emailVerificationRequired && otp.trim().length < 6)) ||
             password.length < 6
               ? "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
               : "bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 font-bold hover:from-amber-500 hover:to-yellow-500 hover:shadow-[0_0_25px_rgba(234,179,8,0.25)] active:scale-[0.98]"

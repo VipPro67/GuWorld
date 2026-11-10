@@ -458,8 +458,13 @@ func schemaPlayerExtras() error {
 		email VARCHAR(255) PRIMARY KEY,
 		otp VARCHAR(10) NOT NULL,
 		expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+		attempts INTEGER NOT NULL DEFAULT 0,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("email_otps_attempts", `
+	ALTER TABLE email_otps ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;`); err != nil {
 		return err
 	}
 

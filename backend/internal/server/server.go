@@ -518,6 +518,7 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		// Auth Endpoints
 		authGroup := api.Group("/auth")
 		{
+			authGroup.GET("/config", middleware.RateLimitByIP(60, time.Minute), handlers.GetAuthConfig)
 			authGroup.POST("/send-otp", middleware.RateLimitByIP(1, time.Minute), handlers.SendOTP)
 			authGroup.POST("/register", middleware.RateLimitByIP(1, time.Minute), handlers.RegisterPlayer)
 			authGroup.POST("/login", middleware.RateLimitByIP(9, time.Minute), handlers.LoginPlayer)

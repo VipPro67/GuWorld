@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,8 +15,21 @@ type SendOTPRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
+// EmailVerificationRequired is opt-in; email verification is disabled by default.
+func EmailVerificationRequired() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("REQUIRE_EMAIL_VERIFICATION")), "true")
+}
+
+func GetAuthConfig(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"email_verification_required": EmailVerificationRequired()})
+}
+
 // SendOTP handles generating and sending an OTP to the user's email
 func SendOTP(c *gin.Context) {
+	if !EmailVerificationRequired() {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Xác thực email hiện đang được tắt"})
+		return
+	}
 	var req SendOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Định dạng Email không hợp lệ!"})
@@ -44,16 +59,11 @@ func SendOTP(c *gin.Context) {
 	}
 
 	// 1.5. Prevent email bombing: Check if OTP was sent to this email less than 1 minute ago
-	var existingExpiresAt time.Time
-	err = db.DB.QueryRow("SELECT expires_at FROM email_otps WHERE email = $1", req.Email).Scan(&existingExpiresAt)
-	if err == nil {
-		// OTP lifetime is 5 minutes. If remaining time > 4 minutes, it was sent < 1 minute ago.
-		if existingExpiresAt.Sub(time.Now()) > 4*time.Minute {
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "Yêu cầu OTP quá nhanh. Vui lòng đợi 1 phút trước khi yêu cầu gửi lại!",
-			})
-			return
-		}
+	var lastSentAt time.Time
+	err = db.DB.QueryRow("SELECT created_at FROM email_otps WHERE email = $1", req.Email).Scan(&lastSentAt)
+	if err == nil && time.Since(lastSentAt) < time.Minute {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Yêu cầu OTP quá nhanh. Vui lòng đợi 1 phút trước khi yêu cầu gửi lại!"})
+		return
 	}
 
 	// 2. Generate OTP
