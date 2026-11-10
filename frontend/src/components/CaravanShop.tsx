@@ -3,11 +3,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName, guSpecFor } from "@/store/useGameStore";
-import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check, RefreshCw } from "lucide-react";
+import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check, RefreshCw, LayoutGrid, List, X, Info } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 import { GamePanel, GameButton, GameTabs, GameCard, GameInput, GameSelect } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { getGuIconUrl } from "@/lib/gu-icons";
+import { getGuRankColor } from "@/lib/gu-frames";
 // UI migrated to shared components
 
 interface ShopItem {
@@ -60,6 +62,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const [sellSearch, setSellSearch] = useState("");
   const [sellRankFilter, setSellRankFilter] = useState<string>("All");
   const [sellPathFilter, setSellPathFilter] = useState<string>("All");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // Selection states for Modals
   const [selectedBuyItem, setSelectedBuyItem] = useState<ShopItem | null>(null);
@@ -520,38 +523,88 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
           : "* Giả gia đi khắp ngũ vực thu mua cổ trùng hoang dại và nguyên liệu tu hành với giá chiết khấu ưu đãi."}
       </div>
 
-      {/* TABS filter */}
+      {/* TABS filter & View Mode */}
       {mode === "buy" ? (
-        <div className="flex gap-2 bg-zinc-950/85 p-1.5 rounded-xl border border-zinc-900">
-          {(["Gu", "Material", "Consumable"] as const).map((tab) => (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="flex flex-1 gap-2 bg-zinc-950/85 p-1.5 rounded-xl border border-zinc-900">
+            {(["Gu", "Material", "Consumable"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setShopTab(tab)}
+                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all cursor-pointer ${
+                  shopTab === tab
+                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {tab === "Gu" ? "Cổ Trùng" : tab === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center self-end sm:self-auto bg-zinc-950 border border-zinc-900 rounded-xl p-0.5">
             <button
-              key={tab}
-              onClick={() => setShopTab(tab)}
-              className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all cursor-pointer ${
-                shopTab === tab
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                  : "text-zinc-500 hover:text-zinc-300"
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                viewMode === "grid" ? "bg-amber-500/20 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"
               }`}
+              title="Dạng Lưới RPG"
             >
-              {tab === "Gu" ? "Cổ Trùng" : tab === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
+              <LayoutGrid className="w-4 h-4" />
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                viewMode === "list" ? "bg-amber-500/20 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+              title="Dạng Danh Sách"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="flex gap-2 bg-zinc-950/85 p-1.5 rounded-xl border border-zinc-900">
-          {(["All", "Gu", "Material", "Recipe"] as const).map((tab) => (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="flex flex-1 gap-2 bg-zinc-950/85 p-1.5 rounded-xl border border-zinc-900">
+            {(["All", "Gu", "Material", "Recipe"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setSellTab(tab)}
+                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all cursor-pointer ${
+                  sellTab === tab
+                    ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {tab === "All" ? "Tất Cả" : tab === "Gu" ? "Cổ Trùng" : tab === "Material" ? "Vật Phẩm" : "Bí Phương"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center self-end sm:self-auto bg-zinc-950 border border-zinc-900 rounded-xl p-0.5">
             <button
-              key={tab}
-              onClick={() => setSellTab(tab)}
-              className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all cursor-pointer ${
-                sellTab === tab
-                  ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                  : "text-zinc-500 hover:text-zinc-300"
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                viewMode === "grid" ? "bg-rose-500/20 text-rose-400 font-bold" : "text-zinc-500 hover:text-zinc-300"
               }`}
+              title="Dạng Lưới RPG"
             >
-              {tab === "All" ? "Tất Cả" : tab === "Gu" ? "Cổ Trùng" : tab === "Material" ? "Vật Phẩm" : "Bí Phương"}
+              <LayoutGrid className="w-4 h-4" />
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                viewMode === "list" ? "bg-rose-500/20 text-rose-400 font-bold" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+              title="Dạng Danh Sách"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -767,92 +820,172 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             <span className="text-xs font-mono">Thương Đội không có bán loại này.</span>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredBuyItems.map((item) => {
-              const guSpec = item.type === "Gu" ? guSpecFor(item.id, item.rank) : undefined;
-              const itemTier: StoneTier = item.currency === "immortal" ? "immortal" : "primeval";
-              const canAfford = itemTier === "immortal"
-                ? (player.immortal_stones || 0) >= item.price
-                : player.primeval_stones >= item.price;
-              const ownedQty = item.type === "Gu"
-                ? (player.gu_inventory?.filter((g) => g.gu_id === item.id && g.status !== "DEAD").length || 0)
-                : (player.materials_inventory?.[item.id] || 0);
+          viewMode === "grid" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {filteredBuyItems.map((item) => {
+                const itemTier: StoneTier = item.currency === "immortal" ? "immortal" : "primeval";
+                const canAfford = itemTier === "immortal"
+                  ? (player.immortal_stones || 0) >= item.price
+                  : player.primeval_stones >= item.price;
+                const ownedQty = item.type === "Gu"
+                  ? (player.gu_inventory?.filter((g) => g.gu_id === item.id && g.status !== "DEAD").length || 0)
+                  : (player.materials_inventory?.[item.id] || 0);
+                const rankColors = getGuRankColor(item.rank || 1);
+                const iconUrl = item.type === "Gu"
+                  ? getGuIconUrl(item.id, item.name)
+                  : getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type });
 
-              return (
-                <div
-                  key={`${item.id}-${item.rank || 0}`}
-                  className="bg-zinc-950/50 border border-zinc-900 rounded-2xl p-4 flex flex-col justify-between hover:border-zinc-800 hover:bg-zinc-950/80 transition-all group"
-                >
-                  <div className="space-y-2 mb-3">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[9px] font-mono border border-zinc-800 px-2 py-0.5 rounded text-zinc-500 uppercase tracking-wider">
-                        {item.type === "Gu" ? "Cổ Trùng" : item.type === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
-                      </span>
+                return (
+                  <div
+                    key={`${item.id}-${item.rank || 0}`}
+                    onClick={() => handleOpenBuyModal(item)}
+                    className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                  >
+                    <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
                       {item.rank ? (
-                        <span className="text-[9px] font-mono border border-zinc-800 px-2 py-0.5 rounded text-violet-400">
-                          Hạng {item.rank}
+                        <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${rankColors.badge}`}>
+                          R{item.rank}
                         </span>
                       ) : null}
-                      <span className={`text-xs font-mono font-bold flex items-center gap-1 ${itemTier === "immortal" ? "text-violet-400" : "text-amber-400"}`}>
-                        {itemTier === "immortal"
-                          ? <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                          : <Coins className="w-3.5 h-3.5 text-amber-500" />}
-                        {item.price}
-                        <span className="text-[9px] text-zinc-500 font-normal">{itemTier === "immortal" ? "Tiên Nguyên Thạch" : ""}</span>
+                      <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono text-zinc-400 bg-zinc-950/80 border border-zinc-800">
+                        {item.type === "Gu" ? "Cổ" : item.type === "Material" ? "Linh tài" : "Tiêu hao"}
                       </span>
+                      <img
+                        src={iconUrl}
+                        alt={item.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-12 h-12 sm:w-14 sm:h-14 object-contain transition-transform group-hover:scale-110 duration-200 drop-shadow-md"
+                      />
+                      {ownedQty > 0 && (
+                        <span className="absolute bottom-1 right-1 px-1 rounded text-[9px] font-mono font-bold text-emerald-400 bg-zinc-950/90 border border-emerald-500/30">
+                          x{ownedQty}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {item.type !== "Gu" && <img src={getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type })} alt="" loading="lazy" decoding="async" className="h-10 w-10 shrink-0 rounded-lg bg-zinc-900/60 object-contain" />}
-                      <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-amber-400 transition-colors">
+
+                    <div className="space-y-1">
+                      <h4 className={`text-xs font-serif font-bold truncate group-hover:text-amber-300 transition-colors ${rankColors.text}`}>
                         {item.name}
                       </h4>
+                      <div className="flex items-center justify-between text-xs font-mono pt-1 border-t border-zinc-800/40">
+                        <span className={`font-bold flex items-center gap-0.5 ${itemTier === "immortal" ? "text-violet-400" : "text-amber-400"}`}>
+                          {itemTier === "immortal" ? <Sparkles className="w-3 h-3 text-violet-400" /> : <Coins className="w-3 h-3 text-amber-500" />}
+                          {item.price}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenBuyModal(item);
+                          }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                            canAfford
+                              ? "bg-amber-600 hover:bg-amber-500 text-zinc-950"
+                              : "bg-zinc-900 border border-zinc-850 text-zinc-500"
+                          }`}
+                        >
+                          Mua
+                        </button>
+                      </div>
                     </div>
-                    <details className="mt-1">
-                      <summary className="text-[10px] text-zinc-500 hover:text-amber-500 cursor-pointer select-none list-none font-mono outline-none inline-flex items-center gap-1 transition-colors">
-                        [+] Xem mô tả
-                      </summary>
-                      <p className="text-xs text-zinc-405 leading-normal mt-2 border-l-2 border-zinc-800 pl-2">
-                        {item.description}
-                      </p>
-                      {item.type === "Gu" && (
-                        <div className="mt-3">
-                          <h5 className="mb-1 text-[10px] font-mono font-bold uppercase tracking-wide text-amber-500">Tác dụng</h5>
-                          {guSpec?.effects?.blocks?.length ? (
-                            <EffectEnvelopeView effects={guSpec.effects} />
-                          ) : (
-                            <p className="text-[10px] text-zinc-500">Cổ trùng này không có hiệu ứng được ghi nhận.</p>
-                          )}
-                        </div>
-                      )}
-                    </details>
                   </div>
-                  <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-zinc-600 font-mono">
-                        Kho hàng: {item.stock > 0 ? `${item.stock} cái` : "Vô hạn"}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        Bạn có: <span className="text-emerald-500 font-bold">x{ownedQty}</span>
-                      </span>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredBuyItems.map((item) => {
+                const guSpec = item.type === "Gu" ? guSpecFor(item.id, item.rank) : undefined;
+                const itemTier: StoneTier = item.currency === "immortal" ? "immortal" : "primeval";
+                const canAfford = itemTier === "immortal"
+                  ? (player.immortal_stones || 0) >= item.price
+                  : player.primeval_stones >= item.price;
+                const ownedQty = item.type === "Gu"
+                  ? (player.gu_inventory?.filter((g) => g.gu_id === item.id && g.status !== "DEAD").length || 0)
+                  : (player.materials_inventory?.[item.id] || 0);
+                const rankColors = getGuRankColor(item.rank || 1);
+                const iconUrl = item.type === "Gu"
+                  ? getGuIconUrl(item.id, item.name)
+                  : getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type });
+
+                return (
+                  <div
+                    key={`${item.id}-${item.rank || 0}`}
+                    className={`bg-zinc-950/50 border rounded-2xl p-4 flex flex-col justify-between hover:border-zinc-800 hover:bg-zinc-950/80 transition-all group ${rankColors.border}`}
+                  >
+                    <div className="space-y-2 mb-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[9px] font-mono border border-zinc-800 px-2 py-0.5 rounded text-zinc-500 uppercase tracking-wider">
+                          {item.type === "Gu" ? "Cổ Trùng" : item.type === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
+                        </span>
+                        {item.rank ? (
+                          <span className={`text-[9px] font-mono border px-2 py-0.5 rounded ${rankColors.badge}`}>
+                            Hạng {item.rank}
+                          </span>
+                        ) : null}
+                        <span className={`text-xs font-mono font-bold flex items-center gap-1 ${itemTier === "immortal" ? "text-violet-400" : "text-amber-400"}`}>
+                          {itemTier === "immortal"
+                            ? <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                            : <Coins className="w-3.5 h-3.5 text-amber-500" />}
+                          {item.price}
+                          <span className="text-[9px] text-zinc-500 font-normal">{itemTier === "immortal" ? "Tiên Nguyên Thạch" : ""}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <img src={iconUrl} alt="" loading="lazy" decoding="async" className="h-10 w-10 shrink-0 rounded-lg bg-zinc-900/60 object-contain p-0.5 border border-zinc-800" />
+                        <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-amber-400 transition-colors">
+                          {item.name}
+                        </h4>
+                      </div>
+                      <details className="mt-1">
+                        <summary className="text-[10px] text-zinc-500 hover:text-amber-500 cursor-pointer select-none list-none font-mono outline-none inline-flex items-center gap-1 transition-colors">
+                          [+] Xem mô tả
+                        </summary>
+                        <p className="text-xs text-zinc-405 leading-normal mt-2 border-l-2 border-zinc-800 pl-2 font-mono">
+                          {item.description}
+                        </p>
+                        {item.type === "Gu" && (
+                          <div className="mt-3">
+                            <h5 className="mb-1 text-[10px] font-mono font-bold uppercase tracking-wide text-amber-500">Tác dụng</h5>
+                            {guSpec?.effects?.blocks?.length ? (
+                              <EffectEnvelopeView effects={guSpec.effects} />
+                            ) : (
+                              <p className="text-[10px] text-zinc-500 font-mono">Cổ trùng này không có hiệu ứng được ghi nhận.</p>
+                            )}
+                          </div>
+                        )}
+                      </details>
                     </div>
-                    <button
-                      type="button"
-                      disabled={actionLoading}
-                      onClick={() => handleOpenBuyModal(item)}
-                      className={`py-1.5 px-4 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer ${
-                        canAfford
-                          ? "bg-amber-600 hover:bg-amber-500 text-zinc-950 active:scale-[0.98]"
-                          : "bg-zinc-900 border border-zinc-850 text-zinc-500"
-                      }`}
-                    >
-                      <ShoppingCart className="w-3.5 h-3.5" />
-                      <span>Mua</span>
-                    </button>
+                    <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-zinc-600 font-mono">
+                          Kho hàng: {item.stock > 0 ? `${item.stock} cái` : "Vô hạn"}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-mono">
+                          Bạn có: <span className="text-emerald-500 font-bold">x{ownedQty}</span>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => handleOpenBuyModal(item)}
+                        className={`py-1.5 px-4 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer ${
+                          canAfford
+                            ? "bg-amber-600 hover:bg-amber-500 text-zinc-950 active:scale-[0.98]"
+                            : "bg-zinc-900 border border-zinc-850 text-zinc-500"
+                        }`}
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Mua</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )
         )
       ) : (
         // Sell Mode List
@@ -863,12 +996,98 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               {sellSearch ? "Không tìm thấy vật phẩm phù hợp." : "Bạn không có vật phẩm thích hợp để bán thu lại."}
             </span>
           </div>
+        ) : viewMode === "grid" ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pb-6">
+            {activeSellList.map((item) => {
+              const key = `${item.type}-${item.id}-${item.rank}`;
+              const isSelected = !!selectedSellItems[key];
+              const selectedItem = selectedSellItems[key];
+              const rankColors = getGuRankColor(item.rank || 1);
+              const iconUrl = item.type === "Gu"
+                ? getGuIconUrl(item.id, item.name)
+                : item.type === "Recipe"
+                ? getItemIconUrl({ id: "recipe", name: "Bí Phương", item_type: "Recipe" })
+                : getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type });
+
+              return (
+                <div
+                  key={key}
+                  onClick={() => toggleSelectItem(item)}
+                  className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${
+                    isSelected
+                      ? "border-rose-500 bg-rose-500/10 shadow-lg shadow-rose-950/40"
+                      : `${rankColors.border} ${rankColors.bgGradient} hover:border-rose-950/50`
+                  }`}
+                >
+                  <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
+                    <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${rankColors.badge}`}>
+                      R{item.rank}
+                    </span>
+
+                    {/* Checkbox badge */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectItem(item);
+                      }}
+                      className={`absolute top-1 right-1 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                        isSelected
+                          ? "bg-rose-600 border-rose-500 text-zinc-950"
+                          : "bg-zinc-900/80 border-zinc-800 hover:border-rose-500/30 text-transparent"
+                      }`}
+                    >
+                      <Check className="w-3.5 h-3.5 text-zinc-950 font-bold" />
+                    </button>
+
+                    <img
+                      src={iconUrl}
+                      alt={item.name}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-12 h-12 sm:w-14 sm:h-14 object-contain transition-transform group-hover:scale-110 duration-200 drop-shadow-md"
+                    />
+
+                    <span className="absolute bottom-1 right-1 px-1 rounded text-[9px] font-mono font-bold text-rose-300 bg-zinc-950/90 border border-rose-500/30">
+                      x{item.owned}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-serif font-bold text-zinc-200 truncate group-hover:text-rose-400 transition-colors">
+                      {item.name}
+                    </h4>
+
+                    <div className="flex items-center justify-between text-xs font-mono pt-1 border-t border-zinc-800/40">
+                      <span className="font-bold flex items-center gap-0.5 text-emerald-400 text-[11px]">
+                        +{item.price}
+                        <span className="text-[9px] text-zinc-500 font-normal">{item.currency === "immortal" ? "TNT" : "NT"}</span>
+                      </span>
+
+                      {isSelected && (
+                        <span className="text-[10px] font-mono font-bold text-rose-400">
+                          Bán: {selectedItem.quantityToSell}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-6">
             {activeSellList.map((item) => {
               const key = `${item.type}-${item.id}-${item.rank}`;
               const isSelected = !!selectedSellItems[key];
               const selectedItem = selectedSellItems[key];
+              const rankColors = getGuRankColor(item.rank || 1);
+              const iconUrl = item.type === "Gu"
+                ? getGuIconUrl(item.id, item.name)
+                : item.type === "Recipe"
+                ? getItemIconUrl({ id: "recipe", name: "Bí Phương", item_type: "Recipe" })
+                : getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type });
+
               return (
                 <div
                   key={key}
@@ -909,7 +1128,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                     </button>
 
                     <div className="flex items-center gap-2">
-                      {item.type === "Material" && <img src={getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type })} alt="" loading="lazy" decoding="async" className="h-10 w-10 shrink-0 rounded-lg bg-zinc-900/60 object-contain" />}
+                      <img src={iconUrl} alt="" loading="lazy" decoding="async" className="h-10 w-10 shrink-0 rounded-lg bg-zinc-900/60 object-contain p-0.5 border border-zinc-800" />
                       <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-rose-400 transition-colors">
                         {item.name}
                       </h4>
@@ -987,14 +1206,62 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       {/* Buy Quantity Modal */}
       {selectedBuyItem && createPortal(
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setSelectedBuyItem(null)}>
-          <div className="bg-zinc-950 border border-zinc-850 rounded-3xl p-6 max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div>
-              <h4 className="text-lg font-bold text-zinc-100 font-serif">
-                Thực Hiện Giao Dịch
-              </h4>
-              <p className="text-xs text-zinc-400 mt-1">
-                Mua {selectedBuyItem.name} từ Giả gia thương đội.
-              </p>
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-4 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setSelectedBuyItem(null)}
+              className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Visual Art Header */}
+            <div className="flex items-center gap-3 pt-1">
+              <div className="w-16 h-16 rounded-2xl bg-black/60 border border-zinc-800 flex items-center justify-center p-2 shrink-0 relative shadow-inner">
+                <img
+                  src={
+                    selectedBuyItem.type === "Gu"
+                      ? getGuIconUrl(selectedBuyItem.id, selectedBuyItem.name)
+                      : getItemIconUrl(itemDictionary[selectedBuyItem.id] ?? { id: selectedBuyItem.id, name: selectedBuyItem.name, item_type: selectedBuyItem.type })
+                  }
+                  alt={selectedBuyItem.name}
+                  className="w-12 h-12 object-contain"
+                />
+                {selectedBuyItem.rank && (
+                  <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold px-1 rounded bg-zinc-950/90 text-amber-300 border border-amber-500/30">
+                    R{selectedBuyItem.rank}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-base font-bold text-zinc-100 font-serif truncate">
+                  {selectedBuyItem.name}
+                </h4>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border bg-amber-950/60 text-amber-300 border-amber-500/30">
+                    {selectedBuyItem.type === "Gu" ? "Cổ Trùng" : selectedBuyItem.type === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
+                  </span>
+                  {selectedBuyItem.rank ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono text-zinc-400 bg-zinc-900 border border-zinc-800">
+                      Hạng {selectedBuyItem.rank}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {/* Lore / Description */}
+            <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 text-xs text-zinc-400 font-mono leading-relaxed max-h-24 overflow-y-auto">
+              <div className="flex items-start gap-1.5 mb-1 text-zinc-500 text-[10px] uppercase font-bold tracking-wider">
+                <Info className="w-3 h-3 text-amber-500/70 shrink-0 mt-0.5" />
+                Mô tả vật phẩm
+              </div>
+              {selectedBuyItem.description}
+              {selectedBuyItem.type === "Gu" && guSpecFor(selectedBuyItem.id, selectedBuyItem.rank)?.effects?.blocks?.length ? (
+                <div className="mt-2 pt-2 border-t border-zinc-800">
+                  <EffectEnvelopeView effects={guSpecFor(selectedBuyItem.id, selectedBuyItem.rank)!.effects!} />
+                </div>
+              ) : null}
             </div>
 
             <div className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-3 space-y-1.5 text-xs font-mono">

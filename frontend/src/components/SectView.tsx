@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useGameStore, Sect, SectMission, GuInstance, SectVaultGuItem, formatRecipeName, guSpecFor, SectRelocationEstimate } from "@/store/useGameStore";
 import { translatePath, parsePaths } from "@/lib/translate";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { getGuIconUrl } from "@/lib/gu-icons";
+import { getGuRankColor } from "@/lib/gu-frames";
 import {
   Shield,
   Activity,
@@ -30,6 +33,8 @@ import {
   MapPin,
   Navigation,
   Crown,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { GamePanel, GameButton, GameCard, GameTabs, GameModal, GameInput, GameSelect, GameBadge, GameProgressBar, GameSection, SearchableSelect } from "@/components/ui";
 // UI migrated to shared components
@@ -149,9 +154,24 @@ export const SectView: React.FC = () => {
   const [vaultTab, setVaultTab] = useState<"gu" | "material" | "recipe">("gu");
   const [vaultSearch, setVaultSearch] = useState("");
   const [vaultRankFilter, setVaultRankFilter] = useState<string>("All");
+  const [vaultViewMode, setVaultViewMode] = useState<"grid" | "list">("grid");
   const [vaultPage, setVaultPage] = useState(1);
-  const vaultItemsPerPage = 8;
+  const vaultItemsPerPage = vaultViewMode === "grid" ? 18 : 8;
   const [buyQtys, setBuyQtys] = useState<Record<string, number>>({});
+  const [inspectedVaultItem, setInspectedVaultItem] = useState<{
+    type: "gu" | "material" | "recipe";
+    id: string;
+    rank?: number;
+    name: string;
+    iconUrl: string;
+    description: string;
+    cost: number;
+    stock: number;
+    owned: number;
+    completionRate?: number;
+    hungerRate?: number;
+    maxHunger?: number;
+  } | null>(null);
 
   const getBuyQty = (key: string): number => buyQtys[key] || 1;
   const setBuyQty = (key: string, n: number, max?: number): void => {
@@ -2020,15 +2040,132 @@ export const SectView: React.FC = () => {
                   ))}
                 </div>
               )}
+
+              <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setVaultViewMode("grid")}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    vaultViewMode === "grid" ? "bg-blue-600/30 text-blue-400 font-bold" : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                  title="Dạng Lưới RPG"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVaultViewMode("list")}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    vaultViewMode === "list" ? "bg-blue-600/30 text-blue-400 font-bold" : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                  title="Dạng Danh Sách"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Vault Inventory Render */}
           <div>
             {vaultTab === "gu" && (
-              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-                {filteredVaultGus.length > 0 ? (
-                  filteredVaultGus.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map((vg) => {
+              filteredVaultGus.length > 0 ? (
+                vaultViewMode === "grid" ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {filteredVaultGus.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map((vg) => {
+                      const spec = guDictionary[vg.id];
+                      const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
+                      const displayRank = vg.rank || spec?.rank || 1;
+                      const rankColors = getGuRankColor(displayRank);
+                      const iconUrl = getGuIconUrl(vg.id, spec?.name);
+                      const memberPts = member?.contribution_points || 0;
+                      const canAfford = memberPts >= vg.cost;
+                      const ownedCount = player?.gu_inventory?.filter((g: ApiResponseData) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
+
+                      return (
+                        <div
+                          key={`${vg.id}_${vg.rank || 0}`}
+                          onClick={() => setInspectedVaultItem({
+                            type: "gu",
+                            id: vg.id,
+                            rank: vg.rank,
+                            name: spec?.name || vg.id,
+                            iconUrl,
+                            description: spec?.description || "Cổ trùng lưu truyền trong bảo khố tông môn.",
+                            cost: vg.cost,
+                            stock: vg.quantity !== undefined ? vg.quantity : 999,
+                            owned: ownedCount,
+                            hungerRate: spec?.hunger_rate,
+                            maxHunger: spec?.max_hunger || 100,
+                          })}
+                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                        >
+                          <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
+                            <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${rankColors.badge}`}>
+                              R{displayRank}
+                            </span>
+                            <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono text-zinc-300 bg-zinc-950/80 border border-zinc-800">
+                              {vg.quantity !== undefined ? `${vg.quantity} con` : "∞"}
+                            </span>
+                            <img
+                              src={iconUrl}
+                              alt={spec?.name || vg.id}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-12 h-12 sm:w-14 sm:h-14 object-contain transition-transform group-hover:scale-110 duration-200 drop-shadow-md"
+                            />
+                            {outOfStock && (
+                              <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-[10px] font-mono font-bold text-rose-400">
+                                Hết hàng
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-1">
+                            <h4 className={`text-xs font-serif font-bold truncate group-hover:text-amber-300 transition-colors ${rankColors.text}`}>
+                              {spec?.name || vg.id}
+                            </h4>
+                            <div className="flex items-center justify-between text-xs font-mono pt-1 border-t border-zinc-800/40">
+                              <span className="text-yellow-400 font-bold flex items-center gap-0.5">
+                                <Coins className="w-3 h-3 text-yellow-500" />
+                                {vg.cost.toLocaleString()}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={outOfStock || !canAfford || actionLoading}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setInspectedVaultItem({
+                                    type: "gu",
+                                    id: vg.id,
+                                    rank: vg.rank,
+                                    name: spec?.name || vg.id,
+                                    iconUrl,
+                                    description: spec?.description || "Cổ trùng lưu truyền trong bảo khố tông môn.",
+                                    cost: vg.cost,
+                                    stock: vg.quantity !== undefined ? vg.quantity : 999,
+                                    owned: ownedCount,
+                                    hungerRate: spec?.hunger_rate,
+                                    maxHunger: spec?.max_hunger || 100,
+                                  });
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                                  canAfford && !outOfStock
+                                    ? "bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-500/40"
+                                    : "bg-zinc-900 text-zinc-500 border border-zinc-800"
+                                }`}
+                              >
+                                {outOfStock ? "Hết" : "Đổi"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                    {filteredVaultGus.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map((vg) => {
                       const spec = guDictionary[vg.id];
                       const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
                       const uKey = `${vg.id}_${vg.rank || 0}`;
@@ -2041,37 +2178,51 @@ export const SectView: React.FC = () => {
                       const maxAffordable = Math.floor(memberPts / (vg.cost || 1));
                       const unaffordable = memberPts < totalCost;
                       const displayRank = vg.rank || spec?.rank || 1;
+                      const rankColors = getGuRankColor(displayRank);
                       const ownedCount = player?.gu_inventory?.filter((g: ApiResponseData) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
                       const vgMaxHunger = spec?.max_hunger || 100;
+                      const iconUrl = getGuIconUrl(vg.id, spec?.name);
+
                       return (
                         <div
                           key={uKey}
-                          className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300"
+                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300 ${rankColors.border}`}
                         >
-                          <div className="flex flex-col min-w-0">
-                            <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
-                              {spec?.name || vg.id}
-                            </h4>
-                            <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                              Phân loại: {spec?.gu_type || "Cổ"} | Hạng: {displayRank} | Số lượng: {vg.quantity !== undefined ? `${vg.quantity} con` : "Vô hạn"}
-                              {player && (
-                                <>
-                                  {" | "}
-                                  Bạn có: <span className="text-emerald-500 font-semibold">{ownedCount} con</span>
-                                </>
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-12 h-12 rounded-xl bg-zinc-950/60 object-contain p-1 border border-zinc-800 shrink-0 flex items-center justify-center">
+                              <img
+                                src={iconUrl}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                className="w-10 h-10 object-contain"
+                              />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
+                                {spec?.name || vg.id}
+                              </h4>
+                              <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                                Phân loại: {spec?.gu_type || "Cổ"} | Hạng: {displayRank} | Số lượng: {vg.quantity !== undefined ? `${vg.quantity} con` : "Vô hạn"}
+                                {player && (
+                                  <>
+                                    {" | "}
+                                    Bạn có: <span className="text-emerald-500 font-semibold">{ownedCount} con</span>
+                                  </>
+                                )}
+                              </span>
+                              {(spec?.hunger_rate ?? 0) > 0 && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[9px] text-zinc-500 font-mono">Độ no khi rút:</span>
+                                  <span className="text-[9px] font-mono text-amber-400 font-semibold">
+                                    1/{vgMaxHunger}
+                                  </span>
+                                </div>
                               )}
-                            </span>
-                            {(spec?.hunger_rate ?? 0) > 0 && (
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <span className="text-[9px] text-zinc-500 font-mono">Độ no khi rút:</span>
-                                <span className="text-[9px] font-mono text-amber-400 font-semibold">
-                                  1/{vgMaxHunger}
-                                </span>
-                              </div>
-                            )}
-                            <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
-                              {spec?.description || "Không có mô tả bí thuật..."}
-                            </p>
+                              <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
+                                {spec?.description || "Không có mô tả bí thuật..."}
+                              </p>
+                            </div>
                           </div>
 
                           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
@@ -2104,172 +2255,484 @@ export const SectView: React.FC = () => {
                           </div>
                         </div>
                       );
-                    })
-                ) : (
-                  <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Cổ trùng phù hợp trong bảo khố</div>
-                )}
-              </div>
+                    })}
+                  </div>
+                )
+              ) : (
+                <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Cổ trùng phù hợp trong bảo khố</div>
+              )
             )}
 
             {vaultTab === "material" && (
-              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-                {filteredVaultMaterials.length > 0 ? (
-                  filteredVaultMaterials.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map(([matId, qty]) => {
-                    const spec = itemDictionary[matId];
-                    const cost = getVaultCost(getItemBasePrice(matId));
-                    const qtyKey = `material-${matId}`;
-                    const buyQty = getBuyQty(qtyKey);
-                    const totalCost = cost * buyQty;
-                    const memberPts = member?.contribution_points || 0;
-                    const maxAffordable = Math.floor(memberPts / (cost || 1));
-                    const unaffordable = memberPts < totalCost;
+              filteredVaultMaterials.length > 0 ? (
+                vaultViewMode === "grid" ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {filteredVaultMaterials.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map(([matId, qty]) => {
+                      const spec = itemDictionary[matId];
+                      const cost = getVaultCost(getItemBasePrice(matId));
+                      const memberPts = member?.contribution_points || 0;
+                      const canAfford = memberPts >= cost;
+                      const ownedCount = player?.materials_inventory?.[matId] || 0;
+                      const iconUrl = getItemIconUrl(spec ?? { id: matId, name: matId, item_type: "Material" });
+                      const rankColors = getGuRankColor(spec?.rank || 1);
 
-                    const ownedCount = player?.materials_inventory?.[matId] || 0;
+                      return (
+                        <div
+                          key={matId}
+                          onClick={() => setInspectedVaultItem({
+                            type: "material",
+                            id: matId,
+                            name: spec?.name || matId,
+                            iconUrl,
+                            description: spec?.description || "Nguyên liệu chế tác / luyện cổ trùng...",
+                            cost,
+                            stock: qty,
+                            owned: ownedCount,
+                          })}
+                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                        >
+                          <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
+                            <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${rankColors.badge}`}>
+                              R{spec?.rank || 1}
+                            </span>
+                            <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono text-zinc-300 bg-zinc-950/80 border border-zinc-800">
+                              x{qty}
+                            </span>
+                            <img
+                              src={iconUrl}
+                              alt={spec?.name || matId}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-12 h-12 sm:w-14 sm:h-14 object-contain transition-transform group-hover:scale-110 duration-200 drop-shadow-md"
+                            />
+                            {qty <= 0 && (
+                              <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-[10px] font-mono font-bold text-rose-400">
+                                Hết hàng
+                              </div>
+                            )}
+                          </div>
 
-                    return (
-                      <div
-                        key={matId}
-                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300"
-                      >
-                        <div className="flex items-start gap-3 min-w-0">
-                          <img
-                            src={getItemIconUrl(spec ?? { id: matId, name: matId, item_type: "Material" })}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            className="w-10 h-10 rounded-xl bg-zinc-950/60 object-contain p-1 border border-zinc-800 shrink-0"
-                          />
-                          <div className="flex flex-col min-w-0">
-                            <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
+                          <div className="space-y-1">
+                            <h4 className={`text-xs font-serif font-bold truncate group-hover:text-amber-300 transition-colors ${rankColors.text}`}>
                               {spec?.name || matId}
                             </h4>
-                            <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                              Còn lại bảo khố: {qty}x
-                              {player && (
-                                <>
-                                  {" | "}
-                                  Bạn có: <span className="text-emerald-500 font-semibold">{ownedCount}x</span>
-                                </>
-                              )}
-                            </span>
-                            <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
-                              {spec?.description || "Nguyên liệu chế tác / luyện cổ trùng..."}
-                            </p>
+                            <div className="flex items-center justify-between text-xs font-mono pt-1 border-t border-zinc-800/40">
+                              <span className="text-yellow-400 font-bold flex items-center gap-0.5">
+                                <Coins className="w-3 h-3 text-yellow-500" />
+                                {cost.toLocaleString()}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={qty <= 0 || !canAfford || actionLoading}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setInspectedVaultItem({
+                                    type: "material",
+                                    id: matId,
+                                    name: spec?.name || matId,
+                                    iconUrl,
+                                    description: spec?.description || "Nguyên liệu chế tác / luyện cổ trùng...",
+                                    cost,
+                                    stock: qty,
+                                    owned: ownedCount,
+                                  });
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                                  canAfford && qty > 0
+                                    ? "bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-500/40"
+                                    : "bg-zinc-900 text-zinc-500 border border-zinc-800"
+                                }`}
+                              >
+                                {qty <= 0 ? "Hết" : "Đổi"}
+                              </button>
+                            </div>
                           </div>
                         </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
-                          {qty > 0 && (
-                            <div className="flex flex-wrap items-center gap-2">
-                              {renderQtyStepper(qtyKey, qty, maxAffordable)}
-                              <div className="text-right">
-                                <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
-                                <span className="text-xs font-mono font-bold text-yellow-500">
-                                  {totalCost.toLocaleString()} Pts
-                                </span>
-                                {member && (
-                                  <span className={`text-[9px] font-mono block ${unaffordable ? "text-red-400 font-semibold" : "text-zinc-500"}`}>
-                                    {unaffordable ? `(Thiếu ${(totalCost - memberPts).toLocaleString()} Pts)` : `(Còn ${(memberPts - totalCost).toLocaleString()} Pts)`}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          <button
-                            onClick={async () => {
-                              await buyFromSectVault("material", matId, buyQty);
-                            }}
-                            disabled={unaffordable || qty <= 0 || actionLoading}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
-                          >
-                            {qty <= 0 ? "Hết Hàng" : buyQty > 1 ? `Đổi ${buyQty} Linh Tài` : "Đổi Linh Tài"}
-                          </button>
-                          {renderDestroyButton("material", matId, spec?.name || matId)}
-                        </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Linh tài phù hợp trong bảo khố</div>
-                )}
-              </div>
+                  <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                    {filteredVaultMaterials.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map(([matId, qty]) => {
+                      const spec = itemDictionary[matId];
+                      const cost = getVaultCost(getItemBasePrice(matId));
+                      const qtyKey = `material-${matId}`;
+                      const buyQty = getBuyQty(qtyKey);
+                      const totalCost = cost * buyQty;
+                      const memberPts = member?.contribution_points || 0;
+                      const maxAffordable = Math.floor(memberPts / (cost || 1));
+                      const unaffordable = memberPts < totalCost;
+                      const ownedCount = player?.materials_inventory?.[matId] || 0;
+                      const rankColors = getGuRankColor(spec?.rank || 1);
+
+                      return (
+                        <div
+                          key={matId}
+                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300 ${rankColors.border}`}
+                        >
+                          <div className="flex items-start gap-3 min-w-0">
+                            <img
+                              src={getItemIconUrl(spec ?? { id: matId, name: matId, item_type: "Material" })}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              className="w-10 h-10 rounded-xl bg-zinc-950/60 object-contain p-1 border border-zinc-800 shrink-0"
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
+                                {spec?.name || matId}
+                              </h4>
+                              <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                                Còn lại bảo khố: {qty}x
+                                {player && (
+                                  <>
+                                    {" | "}
+                                    Bạn có: <span className="text-emerald-500 font-semibold">{ownedCount}x</span>
+                                  </>
+                                )}
+                              </span>
+                              <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
+                                {spec?.description || "Nguyên liệu chế tác / luyện cổ trùng..."}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
+                            {qty > 0 && (
+                              <div className="flex flex-wrap items-center gap-2">
+                                {renderQtyStepper(qtyKey, qty, maxAffordable)}
+                                <div className="text-right">
+                                  <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
+                                  <span className="text-xs font-mono font-bold text-yellow-500">
+                                    {totalCost.toLocaleString()} Pts
+                                  </span>
+                                  {member && (
+                                    <span className={`text-[9px] font-mono block ${unaffordable ? "text-red-400 font-semibold" : "text-zinc-500"}`}>
+                                      {unaffordable ? `(Thiếu ${(totalCost - memberPts).toLocaleString()} Pts)` : `(Còn ${(memberPts - totalCost).toLocaleString()} Pts)`}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              onClick={async () => {
+                                await buyFromSectVault("material", matId, buyQty);
+                              }}
+                              disabled={unaffordable || qty <= 0 || actionLoading}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                            >
+                              {qty <= 0 ? "Hết Hàng" : buyQty > 1 ? `Đổi ${buyQty} Linh Tài` : "Đổi Linh Tài"}
+                            </button>
+                            {renderDestroyButton("material", matId, spec?.name || matId)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Linh tài phù hợp trong bảo khố</div>
+              )
             )}
 
             {vaultTab === "recipe" && (
-              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-                {filteredVaultRecipes.length > 0 ? (
-                  filteredVaultRecipes.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map((vaultRecipe) => {
-                    const recipeId = vaultRecipe.recipe_id;
-                    const recipeInfo = recipes?.find(r => r.id === recipeId);
-                    const targetGuSpec = recipeInfo ? guDictionary[recipeInfo.target_gu_id] : null;
-                    // Mirror the backend: the catalog rank is authoritative, and
-                    // the id suffix (rank_variant) is the fallback for legacy or
-                    // orphaned vault rows so the displayed cost matches the charge.
-                    const targetGuRank = recipeInfo?.target_rank
-                      || targetGuSpec?.rank
-                      || Number(recipeId.match(/_(\d+)_\d+$/)?.[1])
-                      || 1;
-                    const cost = getRecipeVaultCost(targetGuRank);
-                    const unaffordable = (member?.contribution_points || 0) < cost;
+              filteredVaultRecipes.length > 0 ? (
+                vaultViewMode === "grid" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {filteredVaultRecipes.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map((vaultRecipe) => {
+                      const recipeId = vaultRecipe.recipe_id;
+                      const recipeInfo = recipes?.find(r => r.id === recipeId);
+                      const targetGuSpec = recipeInfo ? guDictionary[recipeInfo.target_gu_id] : null;
+                      const targetGuRank = recipeInfo?.target_rank
+                        || targetGuSpec?.rank
+                        || Number(recipeId.match(/_(\d+)_\d+$/)?.[1])
+                        || 1;
+                      const cost = getRecipeVaultCost(targetGuRank);
+                      const memberPts = member?.contribution_points || 0;
+                      const canAfford = memberPts >= cost;
+                      const isUnlocked = player?.unlocked_recipes?.some(ur => ur.recipe_id === recipeId) || false;
+                      const rankColors = getGuRankColor(targetGuRank);
+                      const iconUrl = recipeInfo?.target_gu_id
+                        ? getGuIconUrl(recipeInfo.target_gu_id, targetGuSpec?.name)
+                        : getItemIconUrl({ id: "recipe", name: "Bí Phương", item_type: "Recipe" });
 
-                    const isUnlocked = player?.unlocked_recipes?.some(ur => ur.recipe_id === recipeId) || false;
-
-                    return (
-                      <div
-                        key={recipeId}
-                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300"
-                      >
-                        <div className="flex flex-col min-w-0">
-                          <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
-                            {formatRecipeName(recipeId)}
-                          </h4>
-                          <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                            Độ hoàn thiện: {vaultRecipe.completion_rate.toFixed(0)}%{" | "}
-                            Bao gồm: Nguyên liệu & Tỷ lệ luyện chế thành công môn phái đúc rút.
-                            {player && (
-                              <>
-                                {" | "}
-                                Trạng thái: <span className={isUnlocked ? "text-emerald-500 font-semibold" : "text-zinc-400"}>
-                                  {isUnlocked ? "Đã học" : "Chưa học"}
-                                </span>
-                              </>
-                            )}
-                          </span>
-                          <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
-                            Giải khóa công thức hợp thành tại lò luyện Cổ trùng của bạn.
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
-                          <div className="text-right">
-                            <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
-                            <span className="text-xs font-mono font-bold text-yellow-500">{cost.toLocaleString()} Pts</span>
-                            {member && !isUnlocked && (
-                              <span className={`text-[9px] font-mono block ${unaffordable ? "text-red-400 font-semibold" : "text-zinc-500"}`}>
-                                {unaffordable ? `(Thiếu ${(cost - member.contribution_points).toLocaleString()} Pts)` : `(Còn ${(member.contribution_points - cost).toLocaleString()} Pts)`}
-                              </span>
+                      return (
+                        <div
+                          key={recipeId}
+                          onClick={() => setInspectedVaultItem({
+                            type: "recipe",
+                            id: recipeId,
+                            rank: targetGuRank,
+                            name: formatRecipeName(recipeId),
+                            iconUrl,
+                            description: "Giải khóa công thức hợp thành tại lò luyện Cổ trùng của bạn.",
+                            cost,
+                            stock: 1,
+                            owned: isUnlocked ? 1 : 0,
+                            completionRate: vaultRecipe.completion_rate,
+                          })}
+                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                        >
+                          <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
+                            <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${rankColors.badge}`}>
+                              Chuyển {targetGuRank}
+                            </span>
+                            <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono text-zinc-300 bg-zinc-950/80 border border-zinc-800">
+                              {vaultRecipe.completion_rate.toFixed(0)}%
+                            </span>
+                            <img
+                              src={iconUrl}
+                              alt={formatRecipeName(recipeId)}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-12 h-12 sm:w-14 sm:h-14 object-contain transition-transform group-hover:scale-110 duration-200 drop-shadow-md"
+                            />
+                            {isUnlocked && (
+                              <div className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded text-[8px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/30">
+                                Đã học
+                              </div>
                             )}
                           </div>
-                          <button
-                            onClick={async () => {
-                              await buyFromSectVault("recipe", recipeId);
-                            }}
-                            disabled={unaffordable || isUnlocked || actionLoading}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
-                          >
-                            {isUnlocked ? "Đã Học" : "Học Công Thức"}
-                          </button>
-                          {renderDestroyButton("recipe", recipeId, formatRecipeName(recipeId))}
+
+                          <div className="space-y-1">
+                            <h4 className={`text-xs font-serif font-bold truncate group-hover:text-amber-300 transition-colors ${rankColors.text}`}>
+                              {formatRecipeName(recipeId)}
+                            </h4>
+                            <div className="flex items-center justify-between text-xs font-mono pt-1 border-t border-zinc-800/40">
+                              <span className="text-yellow-400 font-bold flex items-center gap-0.5">
+                                <Coins className="w-3 h-3 text-yellow-500" />
+                                {cost.toLocaleString()}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={isUnlocked || !canAfford || actionLoading}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await buyFromSectVault("recipe", recipeId);
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                                  !isUnlocked && canAfford
+                                    ? "bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-500/40"
+                                    : "bg-zinc-900 text-zinc-500 border border-zinc-800"
+                                }`}
+                              >
+                                {isUnlocked ? "Đã Học" : "Học"}
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Cổ phương phù hợp trong bảo khố</div>
-                )}
-              </div>
+                  <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                    {filteredVaultRecipes.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map((vaultRecipe) => {
+                      const recipeId = vaultRecipe.recipe_id;
+                      const recipeInfo = recipes?.find(r => r.id === recipeId);
+                      const targetGuSpec = recipeInfo ? guDictionary[recipeInfo.target_gu_id] : null;
+                      const targetGuRank = recipeInfo?.target_rank
+                        || targetGuSpec?.rank
+                        || Number(recipeId.match(/_(\d+)_\d+$/)?.[1])
+                        || 1;
+                      const cost = getRecipeVaultCost(targetGuRank);
+                      const unaffordable = (member?.contribution_points || 0) < cost;
+                      const isUnlocked = player?.unlocked_recipes?.some(ur => ur.recipe_id === recipeId) || false;
+                      const rankColors = getGuRankColor(targetGuRank);
+                      const iconUrl = recipeInfo?.target_gu_id
+                        ? getGuIconUrl(recipeInfo.target_gu_id, targetGuSpec?.name)
+                        : getItemIconUrl({ id: "recipe", name: "Bí Phương", item_type: "Recipe" });
+
+                      return (
+                        <div
+                          key={recipeId}
+                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300 ${rankColors.border}`}
+                        >
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-zinc-950/60 p-1 border border-zinc-800 shrink-0 flex items-center justify-center">
+                              <img
+                                src={iconUrl}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                className="w-8 h-8 object-contain"
+                              />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
+                                {formatRecipeName(recipeId)}
+                              </h4>
+                              <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                                Độ hoàn thiện: {vaultRecipe.completion_rate.toFixed(0)}%{" | "}
+                                Bao gồm: Nguyên liệu & Tỷ lệ luyện chế thành công môn phái đúc rút.
+                                {player && (
+                                  <>
+                                    {" | "}
+                                    Trạng thái: <span className={isUnlocked ? "text-emerald-500 font-semibold" : "text-zinc-400"}>
+                                      {isUnlocked ? "Đã học" : "Chưa học"}
+                                    </span>
+                                  </>
+                                )}
+                              </span>
+                              <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
+                                Giải khóa công thức hợp thành tại lò luyện Cổ trùng của bạn.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
+                            <div className="text-right">
+                              <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
+                              <span className="text-xs font-mono font-bold text-yellow-500">{cost.toLocaleString()} Pts</span>
+                              {member && !isUnlocked && (
+                                <span className={`text-[9px] font-mono block ${unaffordable ? "text-red-400 font-semibold" : "text-zinc-500"}`}>
+                                  {unaffordable ? `(Thiếu ${(cost - member.contribution_points).toLocaleString()} Pts)` : `(Còn ${(member.contribution_points - cost).toLocaleString()} Pts)`}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={async () => {
+                                await buyFromSectVault("recipe", recipeId);
+                              }}
+                              disabled={unaffordable || isUnlocked || actionLoading}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                            >
+                              {isUnlocked ? "Đã Học" : "Học Công Thức"}
+                            </button>
+                            {renderDestroyButton("recipe", recipeId, formatRecipeName(recipeId))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Cổ phương phù hợp trong bảo khố</div>
+              )
             )}
           </div>
+
+          {/* Sect Vault Item Inspector Modal */}
+          {inspectedVaultItem && (
+            createPortal(
+              <div
+                className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in"
+                onClick={() => setInspectedVaultItem(null)}
+              >
+                <div
+                  className="bg-zinc-950 border border-blue-500/40 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setInspectedVaultItem(null)}
+                    className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="w-16 h-16 rounded-2xl bg-black/60 border border-blue-500/30 flex items-center justify-center p-2 shrink-0 relative shadow-inner">
+                      <img
+                        src={inspectedVaultItem.iconUrl}
+                        alt={inspectedVaultItem.name}
+                        className="w-12 h-12 object-contain"
+                      />
+                      {inspectedVaultItem.rank && (
+                        <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold px-1 rounded bg-zinc-950/90 text-blue-300 border border-blue-500/30">
+                          R{inspectedVaultItem.rank}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-base font-bold text-zinc-100 font-serif truncate">
+                        {inspectedVaultItem.name}
+                      </h4>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border bg-blue-950 text-blue-300 border-blue-500/40">
+                          {inspectedVaultItem.type === "gu" ? "Cổ Trùng" : inspectedVaultItem.type === "material" ? "Linh Tài" : "Cổ Phương"}
+                        </span>
+                        {inspectedVaultItem.completionRate !== undefined && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono text-zinc-400 bg-zinc-900 border border-zinc-800">
+                            Hoàn thiện {inspectedVaultItem.completionRate.toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 text-xs text-zinc-400 font-mono leading-relaxed max-h-24 overflow-y-auto">
+                    {inspectedVaultItem.description}
+                  </div>
+
+                  <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 space-y-1.5 text-xs font-mono">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400">Đơn giá cống hiến:</span>
+                      <span className="font-bold flex items-center gap-1 text-yellow-400">
+                        <Coins className="w-3.5 h-3.5 text-yellow-500" />
+                        {inspectedVaultItem.cost.toLocaleString()} Pts
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-zinc-800/60 pt-1.5">
+                      <span className="text-zinc-400">Kho bảo khố:</span>
+                      <span className="text-zinc-200 font-bold">
+                        {inspectedVaultItem.stock >= 999 ? "Vô hạn" : `${inspectedVaultItem.stock} mục`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400">Bạn đang có:</span>
+                      <span className="text-emerald-400 font-bold">
+                        {inspectedVaultItem.owned} mục
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-zinc-800/60 pt-1.5">
+                      <span className="text-zinc-400">Cống hiến hiện có:</span>
+                      <span className="text-yellow-400 font-bold">
+                        {(member?.contribution_points || 0).toLocaleString()} Pts
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setInspectedVaultItem(null)}
+                      className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer"
+                    >
+                      Đóng
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        actionLoading ||
+                        inspectedVaultItem.stock <= 0 ||
+                        (member?.contribution_points || 0) < inspectedVaultItem.cost ||
+                        (inspectedVaultItem.type === "recipe" && inspectedVaultItem.owned > 0)
+                      }
+                      onClick={async () => {
+                        if (inspectedVaultItem.type === "gu") {
+                          await buyFromSectVault("gu", inspectedVaultItem.id, 1, inspectedVaultItem.rank);
+                        } else if (inspectedVaultItem.type === "material") {
+                          await buyFromSectVault("material", inspectedVaultItem.id, 1);
+                        } else {
+                          await buyFromSectVault("recipe", inspectedVaultItem.id);
+                        }
+                        setInspectedVaultItem(null);
+                      }}
+                      className="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs active:scale-[0.98] transition-all cursor-pointer shadow-lg flex items-center justify-center gap-1.5"
+                    >
+                      <Coins className="w-3.5 h-3.5" />
+                      {inspectedVaultItem.type === "recipe" && inspectedVaultItem.owned > 0
+                        ? "Đã Học"
+                        : inspectedVaultItem.stock <= 0
+                        ? "Hết Hàng"
+                        : "Xác Nhận Đổi"}
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          )}
 
           {vaultItemCount > vaultItemsPerPage && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-zinc-900 pt-4">

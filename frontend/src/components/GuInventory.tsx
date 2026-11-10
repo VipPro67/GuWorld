@@ -146,6 +146,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [detailOpen, setDetailOpen] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [inspectedGroupKey, setInspectedGroupKey] = useState<string | null>(null);
+  const [inspectedMaterialKey, setInspectedMaterialKey] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"gu" | "material" | "killer-moves">(initialTab);
@@ -836,6 +837,35 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest block font-bold">Kho vật phẩm</span>
               <span className="text-[10px] text-zinc-600">{visibleMaterials.length} loại · {totalMaterialCount} món</span>
             </div>
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-0.5 rounded-xl border border-zinc-800 bg-zinc-950/70 p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                title="Dạng Ô Lưới RPG"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="text-[10px] hidden sm:inline">Ô Lưới</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                title="Dạng Danh Sách"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span className="text-[10px] hidden sm:inline">Danh Sách</span>
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -871,6 +901,53 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               <Gem className="mb-2 h-6 w-6 text-zinc-700" />
               <span className="text-xs font-semibold text-zinc-400">{filteredMaterials.length === 0 ? "Kho đồ đang trống" : "Không có vật phẩm trong mục này"}</span>
               <span className="mt-1 text-[10px] text-zinc-600">Vật phẩm thu thập được sẽ xuất hiện tại đây.</span>
+            </div>
+          ) : viewMode === "grid" ? (
+            /* RPG Grid Mode for Materials */
+            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-2.5">
+              {visibleMaterials.map(({ key, spec, qty }) => {
+                const isConsumable = isConsumableItem(spec);
+                const rarity = spec.rank || spec.rarity || 1;
+                const rarityBorder = rarity >= 5 ? "border-fuchsia-500/50 bg-fuchsia-950/20 hover:border-fuchsia-400" :
+                  rarity >= 4 ? "border-amber-500/50 bg-amber-950/20 hover:border-amber-400" :
+                  rarity >= 3 ? "border-sky-500/50 bg-sky-950/20 hover:border-sky-400" :
+                  rarity >= 2 ? "border-emerald-500/50 bg-emerald-950/20 hover:border-emerald-400" :
+                  "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700";
+
+                return (
+                  <div
+                    key={key}
+                    onClick={() => setInspectedMaterialKey(key)}
+                    className={`aspect-square rounded-2xl border flex flex-col items-center justify-center relative p-1 cursor-pointer select-none group hover:-translate-y-0.5 hover:shadow-lg transition-all ${rarityBorder}`}
+                  >
+                    <div className="absolute top-1 left-1.5 flex items-center gap-0.5">
+                      <span className="text-[8px] font-mono font-bold text-zinc-400">
+                        R{rarity}
+                      </span>
+                    </div>
+
+                    {isConsumable && (
+                      <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Tiêu hao" />
+                    )}
+
+                    <img
+                      src={getItemIconUrl(spec)}
+                      alt={spec.name}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow group-hover:scale-105 transition-transform"
+                    />
+
+                    <span className="text-[9px] font-mono text-zinc-300 truncate w-full px-1 text-center mt-0.5">
+                      {spec.name}
+                    </span>
+
+                    <span className="absolute bottom-1 right-1 text-[9px] font-mono font-bold px-1 py-0.2 rounded-md bg-zinc-950/90 text-amber-300 border border-zinc-800 shadow-sm">
+                      ×{qty}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="grid items-start gap-2.5 sm:gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 12rem), 1fr))" }}>
@@ -2916,6 +2993,155 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                   Xem Chi Tiết Cổ Trùng Trên Wiki
                 </Link>
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Item Inspector Modal */}
+      {inspectedMaterialKey && (() => {
+        const itemEntry = visibleMaterials.find((m) => m.key === inspectedMaterialKey) ||
+          ownedMaterials.find((m) => m.key === inspectedMaterialKey);
+        if (!itemEntry) return null;
+        const { key, spec, qty } = itemEntry;
+        const isConsumable = isConsumableItem(spec);
+        const isUsing = usingId === key;
+        const rarity = spec.rank || spec.rarity || 1;
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+            onClick={() => setInspectedMaterialKey(null)}
+          >
+            <div
+              className="relative w-full max-w-md bg-zinc-950 border border-sky-500/35 rounded-3xl p-5 sm:p-6 shadow-[0_0_40px_rgba(14,165,233,0.2)] text-left space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setInspectedMaterialKey(null)}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 p-1.5 rounded-xl hover:bg-zinc-900 cursor-pointer"
+                title="Đóng"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex flex-col items-center text-center pt-2">
+                <div className="w-20 h-20 rounded-2xl bg-zinc-900/80 border-2 border-sky-500/40 flex items-center justify-center p-2 shadow-inner relative">
+                  <img
+                    src={getItemIconUrl(spec)}
+                    alt={spec.name}
+                    className="w-16 h-16 object-contain drop-shadow"
+                  />
+                  <span className="absolute -bottom-2 -right-2 text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500 text-zinc-950 shadow-md">
+                    ×{qty}
+                  </span>
+                </div>
+
+                <h3 className="text-lg font-serif font-bold text-zinc-100 mt-3">
+                  {spec.name}
+                </h3>
+
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap justify-center font-mono">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                    Phẩm Cấp: Rank {rarity}
+                  </span>
+                  {spec.path && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-300 border border-zinc-800">
+                      {translatePath(spec.path)}
+                    </span>
+                  )}
+                  {isConsumable ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Tiêu Hao
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-400 border border-zinc-800">
+                      Linh Tài / Khác
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-3.5 space-y-1.5">
+                <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                  Mô Tả Vật Phẩm
+                </div>
+                <p className="text-xs text-zinc-300 font-serif leading-relaxed">
+                  {spec.description || "Thiên tài địa bảo trong trời đất, hữu dụng cho Cổ sư tu luyện."}
+                </p>
+              </div>
+
+              {isConsumable && (onUseItem || onUseItems) ? (
+                <div className="space-y-2 pt-2 border-t border-zinc-900">
+                  <div className="grid grid-cols-2 gap-2">
+                    {onUseItem && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await handleUseItemClick(key);
+                          if (qty <= 1) setInspectedMaterialKey(null);
+                        }}
+                        disabled={actionLoading || isUsing}
+                        className={`py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs transition-all shadow-md active:scale-98 cursor-pointer disabled:opacity-50 ${qty === 1 || !onUseItems ? "col-span-2" : ""}`}
+                      >
+                        {isUsing ? "Đang Dùng..." : "Sử Dụng 1"}
+                      </button>
+                    )}
+
+                    {onUseItems && qty > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUseMultipleItemId(useMultipleItemId === key ? null : key);
+                          setUseMultipleItemQty(1);
+                        }}
+                        disabled={actionLoading}
+                        className="py-2.5 px-3 rounded-xl bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/40 text-amber-300 font-mono font-bold text-xs transition-all cursor-pointer"
+                      >
+                        {useMultipleItemId === key ? "Đóng Chọn SL" : "Dùng Nhiều..."}
+                      </button>
+                    )}
+                  </div>
+
+                  {useMultipleItemId === key && (
+                    <div className="flex flex-wrap items-center gap-2 p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-xl animate-in fade-in">
+                      <span className="text-xs text-emerald-400 font-mono font-bold">Số lượng:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={Math.min(qty, 100)}
+                        value={useMultipleItemQty}
+                        onChange={(e) => setUseMultipleItemQty(Math.max(1, Math.min(qty, 100, parseInt(e.target.value) || 1)))}
+                        className="w-16 bg-zinc-950 border border-emerald-900/60 text-emerald-300 text-xs font-mono text-center py-1 rounded-lg outline-none focus:border-emerald-500"
+                      />
+                      <span className="text-[10px] text-zinc-500 font-mono">/ {qty}</span>
+                      <button
+                        type="button"
+                        onClick={() => setUseMultipleItemQty(Math.min(qty, 100))}
+                        className="text-[10px] py-1 px-2 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
+                      >
+                        Tối đa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await handleUseMultipleItem();
+                          if (qty <= useMultipleItemQty) setInspectedMaterialKey(null);
+                        }}
+                        disabled={actionLoading}
+                        className="text-xs font-bold py-1 px-3 bg-emerald-600 text-white hover:bg-emerald-500 rounded-lg font-mono transition-all cursor-pointer shadow-md"
+                      >
+                        Xác Nhận
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3 bg-zinc-900/40 border border-zinc-850 rounded-xl text-center text-xs text-zinc-400 font-mono">
+                  Sở hữu trong kho: <span className="text-amber-400 font-bold">{qty}</span> món
+                </div>
+              )}
             </div>
           </div>
         );

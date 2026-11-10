@@ -170,6 +170,10 @@ _Avoid_: 20Hz continuous tick, physics hitbox
 Hiệu ứng chiến đấu diễn ra và tính toán theo số hiệp (turns) hoặc thời điểm kích hoạt (`ON_ACTION`, `ON_HIT`, `ON_TURN_START`, `ON_DEATH`), tương tác trực tiếp với Chân Nguyên, Sinh Lực, Giáp Ảo và Đạo Ngân lưu phái.
 _Avoid_: thời lượng giây liên tục, continuous damage tick
 
+### Sát Chiêu Hợp Thành (Composite Killer Move)
+Hành động chiến đấu do Cổ sư tạo từ một Cổ chính và các Cổ thành phần; một sát chiêu có thể kết hợp nhiều thao tác hiệu ứng do người chơi chọn, còn Cổ chính định danh sát chiêu và lưu phái chủ đạo.
+_Avoid_: effect đơn lẻ, chiêu tự ghép không chọn lọc
+
 ### Thám Hiểm Lưới Chiến Thuật (Tactical Grid Exploration)
 Mô hình di chuyển và khám phá thế giới từng bước theo tọa độ ô vuông nguyên bản ($x, y$ số nguyên) kế thừa từ `map_cells`. Mỗi bước đi tiêu hao Chân Nguyên / Thể Lực, giải tỏa sương mù chiến tranh dựa trên chỉ số Thám Tra (`investigation`), phát hiện tài nguyên ẩn, mỏ nguyên tuyền và kích hoạt trận chiến theo lượt khi bước vào lãnh địa quái vật.
 _Avoid_: continuous float coordinates, WASD vector movement, 20Hz zone sim
