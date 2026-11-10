@@ -85,14 +85,6 @@ func TestValidateMovementState(t *testing.T) {
 		wantCode   string
 	}{
 		{
-			name:       "realtime ownership wins",
-			mutate:     func(p *models.Player) { p.Lifespan = 0 },
-			spec:       movementSpec{hasTarget: true, x: -1, y: -1},
-			owned:      true,
-			wantStatus: http.StatusConflict,
-			wantCode:   "realtime_world_owns_character",
-		},
-		{
 			name:       "bounds before alive checks",
 			spec:       movementSpec{hasTarget: true, x: -1, y: 0},
 			wantStatus: http.StatusBadRequest,
@@ -106,6 +98,11 @@ func TestValidateMovementState(t *testing.T) {
 			name:       "wounded cannot move",
 			mutate:     func(p *models.Player) { p.HP = 0 },
 			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "active turn-based combat blocks movement",
+			mutate:     func(p *models.Player) { p.ActiveCombat = &models.CombatState{} },
+			wantStatus: http.StatusConflict,
 		},
 		{
 			name:       "healthy player passes",

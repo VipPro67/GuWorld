@@ -2148,30 +2148,12 @@ func seedRegionsFromCSV(filename string) error {
 }
 
 func registerGeneratedRegionMap(id, name string, minRank, maxRank int) error {
-	path := csvPath(filepath.Join("mmo", "maps", id+".json"))
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read map artifact %s: %w", path, err)
-	}
-	var artifact struct {
-		ID      string `json:"map_id"`
-		Width   int    `json:"width"`
-		Height  int    `json:"height"`
-		Version string `json:"map_version"`
-	}
-	if err := json.Unmarshal(raw, &artifact); err != nil {
-		return fmt.Errorf("decode map artifact: %w", err)
-	}
-	if artifact.ID != id || artifact.Width < 8 || artifact.Height < 8 || artifact.Version == "" {
-		return fmt.Errorf("map artifact identity or dimensions are invalid")
-	}
-	_, err = activeCSVImportDB().Exec(`
+	_, err := activeCSVImportDB().Exec(`
 		INSERT INTO world_maps (id, name, description, map_type, width, height, min_rank, max_rank, is_active)
-		VALUES ($1,$2,$3,'WORLD',$4,$5,$6,$7,TRUE)
+		VALUES ($1,$2,$3,'WORLD',64,48,$4,$5,TRUE)
 		ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
-		width=EXCLUDED.width, height=EXCLUDED.height, min_rank=EXCLUDED.min_rank,
-		max_rank=EXCLUDED.max_rank, is_active=TRUE, updated_at=NOW()
-	`, id, name, "Realtime map generated from Region.csv.", artifact.Width, artifact.Height, minRank, maxRank)
+		min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank, is_active=TRUE, updated_at=NOW()
+	`, id, name, "Generated map for "+name, minRank, maxRank)
 	return err
 }
 

@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
-	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -391,17 +390,15 @@ func TestWorldMonsterTickExcludesIsolatedRealtimeInstance(t *testing.T) {
 	}
 }
 
-func TestLegacyMonsterFilterExcludesRealtimeOwnedDefaultMapPlayer(t *testing.T) {
+func TestLegacyMonsterFilterValidatesWorldMapPlayer(t *testing.T) {
 	playerID := uuid.New()
-	middleware.SetRealtimeOwnershipChecker(func(id uuid.UUID) bool { return id == playerID })
-	t.Cleanup(func() { middleware.SetRealtimeOwnershipChecker(nil) })
 	entry := WorldPosEntry{ID: playerID.String(), Region: "legacy", MapID: "world_map"}
-	if isLegacyWorldMonsterPlayer(entry) {
-		t.Fatal("legacy monster worker accepted a realtime-owned player without a DB instance marker")
-	}
-	entry.ID = uuid.NewString()
 	if !isLegacyWorldMonsterPlayer(entry) {
-		t.Fatal("unowned legacy player should continue activating legacy monsters")
+		t.Fatal("world map player should activate world monsters")
+	}
+	entry.InstanceID = "instance-1"
+	if isLegacyWorldMonsterPlayer(entry) {
+		t.Fatal("instanced player should not activate shared world monsters")
 	}
 }
 

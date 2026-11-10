@@ -4,20 +4,28 @@ import (
 	"testing"
 )
 
-func TestAutoCombatConfigNormalizesRealtimeControls(t *testing.T) {
+func TestAutoCombatConfigNormalizesTurnBasedSettings(t *testing.T) {
 	settings := AutoCombatConfig{
-		RealtimeLeftClickSlot:    8,
-		RealtimeRightClickAction: "unknown",
-		RealtimeRightClickSlot:   9,
-		RealtimeFarmRange:        100,
-		RealtimeFarmStopHP:       120,
+		HealThreshold:      0,
+		ManaThreshold:      -1,
+		CategoryPriorities: nil,
+		KmPriorities:       []GuTactic{{GuID: "km-a", Priority: 1}},
 	}
-	settings.NormalizeRealtimeSettings()
-	if settings.RealtimeLeftClickSlot != 0 || settings.RealtimeRightClickAction != "attack" || settings.RealtimeRightClickSlot != 0 {
-		t.Fatalf("invalid click bindings were not normalized: %+v", settings)
+	settings.Normalize()
+	if settings.HealThreshold != 30 || settings.ManaThreshold != 30 {
+		t.Fatalf("turn-based thresholds were not defaulted: hp=%v mana=%v", settings.HealThreshold, settings.ManaThreshold)
 	}
-	if settings.RealtimeFarmRange != 32 || settings.RealtimeFarmStopHP != 90 {
-		t.Fatalf("farm limits were not clamped: range=%v stopHP=%v", settings.RealtimeFarmRange, settings.RealtimeFarmStopHP)
+	wantCategories := []string{"other", "shield", "heal", "damage"}
+	if len(settings.CategoryPriorities) != len(wantCategories) {
+		t.Fatalf("category order = %v, want %v", settings.CategoryPriorities, wantCategories)
+	}
+	for i := range wantCategories {
+		if settings.CategoryPriorities[i] != wantCategories[i] {
+			t.Fatalf("category order = %v, want %v", settings.CategoryPriorities, wantCategories)
+		}
+	}
+	if len(settings.KillerMovePriorities) != 1 || settings.KillerMovePriorities[0].GuID != "km-a" {
+		t.Fatalf("legacy killer move priorities were not restored: %+v", settings.KillerMovePriorities)
 	}
 }
 

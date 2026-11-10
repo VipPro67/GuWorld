@@ -75,6 +75,26 @@ export interface RefineRateBreakdown {
   refinement_realm: number;
 }
 
+export interface Combatant {
+  id: string; name: string; kind: string; rank: number; sub_rank: number;
+  hp: number; max_hp: number; current_mana: number; max_mana: number;
+  base_attack: number; base_defense: number; gu_inventory?: GuInstance[];
+  avatar_url?: string;
+  dao_marks?: Record<string, number>; path_masteries?: Record<string, number>;
+  grid_x?: number; grid_y?: number; speed?: number; virtual_shield?: number;
+}
+
+export interface CombatState {
+  enemy_name: string; enemy_hp: number; enemy_max_hp: number;
+  enemy_damage: number; enemy_defense: number; charge_points: number;
+  target_player_id?: string; enemy_template_id?: string;
+  world_monster_region_id?: string; world_monster_id?: string;
+  world_monster_encounter_id?: string; allies?: Combatant[]; enemies?: Combatant[];
+  enemy_type?: string; enemy_rank?: number; enemy_sub_rank?: number;
+  combat_mode?: string; tribulation_event_id?: string; target_sect_id?: string;
+  aperture_hp?: number; aperture_max_hp?: number;
+}
+
 
 export interface PlayerPet {
   id: string;
@@ -278,6 +298,7 @@ export interface Player {
   gender: string;
   constitution: string;
   statuses: PlayerStatusInstance[];
+  active_combat?: CombatState | null;
   version?: number;
 }
 
@@ -290,14 +311,22 @@ export interface PlayerStatusInstance {
 
 
 export interface AutoCombatConfig {
-  pvp_enabled?: boolean;
-  realtime_left_click_slot?: number;
-  realtime_right_click_action?: "attack" | "skill";
-  realtime_right_click_slot?: number;
-  realtime_auto_farm?: boolean;
-  realtime_farm_range?: number;
-  realtime_farm_stop_hp_percent?: number;
-  realtime_farm_use_skills?: boolean;
+  auto_heal_hp?: boolean;
+  heal_threshold?: number;
+  auto_restore_mana?: boolean;
+  mana_threshold?: number;
+  category_priorities?: string[];
+  gu_priorities?: CombatTactic[];
+  killer_move_priorities?: CombatTactic[];
+  km_priorities?: CombatTactic[];
+  skip_battle?: boolean;
+}
+
+export interface CombatTactic {
+  gu_id: string;
+  priority: number;
+  use_condition?: string;
+  condition_value?: number;
 }
 
 export interface ManaSnapshot {
@@ -1271,6 +1300,8 @@ export const AUTHENTICATED_SESSION = "cookie-session";
 const PLAYER_EVENT_TYPES = [
   "mana.snapshot",
   "player.updated",
+  "combat.started",
+  "combat.ended",
   "trade.updated",
   "player.heartbeat",
   "player.position",
@@ -1870,6 +1901,29 @@ export const useGameStore = create<GameState>((set, get) => {
             return;
           }
           const currentPlayer = get().player;
+
+          if (eventType === "combat.started" || eventType === "combat.ended") {
+            if (!currentPlayer) return;
+            const activeCombat = eventData?.active_combat ?? null;
+            const posUpdate: Partial<Player> = {};
+            if (typeof eventData?.x === "number" && typeof eventData?.y === "number") {
+              posUpdate.x = eventData.x;
+              posUpdate.y = eventData.y;
+            }
+            if (eventData?.current_region) {
+              posUpdate.current_region = eventData.current_region;
+            }
+            set((state) => ({
+              player: { ...currentPlayer, ...posUpdate, active_combat: activeCombat },
+              playerStateRevision: incomingRevision ?? get().playerStateRevision,
+              playerRevision: state.playerRevision + 1,
+              // A completed combat event can arrive before the HTTP response
+              // that contains its replay. Keep the replay until the user exits;
+              // a new encounter starts a fresh replay lifecycle.
+              ...(eventType === "combat.started" ? { activeCombatReplay: null } : {}),
+            }));
+            return;
+          }
 
           if (eventType === "session.kicked") {
             const state = get();

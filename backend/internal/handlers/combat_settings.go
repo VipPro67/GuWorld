@@ -10,7 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-// GetCombatSettings returns realtime combat controls and auto-farm settings.
+// GetCombatSettings returns the saved combat tactics and world controls.
 func GetCombatSettings(c *gin.Context) {
 	authID, ok := middleware.GetPlayerID(c)
 	if !ok {
@@ -29,8 +29,7 @@ func GetCombatSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"combat_settings": settings})
 }
 
-// UpdateCombatSettings saves only realtime controls; legacy turn-based tactics
-// sent by older clients are ignored by JSON decoding and are never persisted.
+// UpdateCombatSettings persists turn-based tactics together with world controls.
 func UpdateCombatSettings(c *gin.Context) {
 	authID, ok := middleware.GetPlayerID(c)
 	if !ok {
@@ -45,7 +44,7 @@ func UpdateCombatSettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	req.CombatSettings.NormalizeRealtimeSettings()
+	req.CombatSettings.Normalize()
 	settingsJSON, err := json.Marshal(req.CombatSettings)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid combat settings"})
@@ -59,7 +58,7 @@ func UpdateCombatSettings(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "Cập nhật cài đặt chiến đấu realtime thành công!",
+		"message":         "Cập nhật cài đặt chiến đấu thành công!",
 		"combat_settings": req.CombatSettings,
 	})
 }

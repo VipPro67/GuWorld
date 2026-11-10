@@ -2,12 +2,7 @@
 
 Base path: `/api`.
 
-During the MMO location transition, legacy party invitations and acceptance (rejection remains available),
-merchant map/trade, scouting, spatial realm mutations and sect defense/attack
-routes return HTTP 409 with `code: "realtime_world_owns_character"` when the
-current process owns the actor in MMO. The admin player editor also returns
-that code for coordinate edits targeting an MMO-owned player. See
-`docs/mmo/location-audit.md` for remaining guard limitations.
+Toàn bộ cơ chế chiến đấu và khám phá thế giới vận hành trên hệ thống theo lượt (Turn-based deterministic simulation) và bản đồ lưới map_cells. Hệ thống UI events (chat, notifications, cập nhật nhân vật, giao dịch) được đồng bộ qua WebSocket (`/api/ws`).
 
 Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequired()` trừ khi ghi public.
 
@@ -72,8 +67,11 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/player/clear-stress` |
 | GET | `/player/profile/:username` |
 | PUT | `/player/profile/settings` | Cập nhật hồ sơ (bio, avatar, mật khẩu, ngụy trang). Username không trùng nhau dù khác hoa/thường; nhập tên người chơi tại các tính năng được hỗ trợ cũng không phân biệt hoa/thường. Đổi tên khác biệt thực sự: Rank 1-2 miễn phí; Rank 3-5 tốn Nguyên Thạch (5k/20k/100k); Rank 6-9 tốn Tiên Nguyên Thạch (100/500/2.5k/10k), tụt Đạo Ngân & Chân Ý Lưu Phái (-30%/-40%/-50%/-70%), tổn hại Tiên Khiếu và phát thông báo Thế Giới (không tụt tiểu cảnh giới). |
-| GET | `/player/combat-settings` | Đọc cài đặt điều khiển realtime, tự farm và `pvp_enabled` (chủ động tham chiến PvP). PvP cá nhân chỉ có hiệu lực trên bản đồ `pvp`; bản đồ `safe`/`pve` luôn chặn. Không còn chiến thuật tự động turn-based. |
-| PUT | `/player/combat-settings` | Lưu cài đặt điều khiển realtime, tự farm và `pvp_enabled`; khi bật PvP trên bản đồ PvP, người chơi khác có thể tấn công nhân vật kể cả khi họ tắt PvP. Danh sách Cổ realtime cấu hình riêng qua `/inventory/realtime-hotbar`, thứ tự Sát Chiêu/Trận Kích Tiên Cổ Ốc trong ô 9–12 cấu hình qua `/combat/skill-loadout`. |
+| GET | `/player/combat-settings` | Đọc chiến thuật tự động turn-based: hồi HP/chân nguyên, thứ tự nhóm hành động, ưu tiên Cổ và sát chiêu, điều kiện sử dụng, và bỏ qua trận. |
+| PUT | `/player/combat-settings` | Lưu chiến thuật tự động turn-based. Các trường điều khiển realtime cũ bị bỏ qua và được dọn khỏi dữ liệu khi khởi tạo schema. |
+| POST | `/combat/start` | Tự động mô phỏng trọn trận turn-based xác định từ `players.active_combat`; body `{ "loadout": { "GuIds": [], "KillerMoveIds": [], "NoGuSkills": false } }`. Trả replay (`logs`, `winner`, `combatants`) sau khi transaction settlement commit. |
+| POST | `/combat/flee/:id` | Bỏ chạy khỏi encounter turn-based của chính người chơi đã đăng nhập; xử lý phản đòn và settlement theo luật encounter. |
+| POST | `/combat/capture` | Thử thu phục quái của encounter đang hoạt động; body `{ "player_id": "<player UUID>" }`. Thành công kết thúc encounter và tạo companion beast; thất bại để combat tiếp tục. |
 | GET | `/player/referrals` |
 | POST | `/player/referrals/claim` |
 | POST | `/player/referrals/bind` |
@@ -172,8 +170,8 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 Realtime: Kênh UI `refine` trên stream `0x02` nhận `{type:"refine.session", session, revision}` khi tạo/submit/resolve/abort.
 
 Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404), `REFINE_SESSION_REQUIRED` (400), `REFINE_STEP_NOT_OPEN` (409), `REFINE_STEP_CLOSED` (410), `REFINE_STEP_ALREADY_DONE` (409), `REFINE_NONCE_INVALID` (409), `REFINE_PAYLOAD_INVALID` (400), `REFINE_GU_LOCKED` (409), `REFINE_CONFIG_MISSING` (503), `REFINE_IMMORTAL_CONFLICT` (409).
-| POST | `/combat/practice` | Tạo phiên tập luyện realtime riêng trên `realtime_preview`; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Không tiêu hao HP/Chân Nguyên thật và trả `{instance_id,zone_id,origin_zone_id,is_practice}` để client nối vào zone. |
-| POST | `/combat/practice/exit` | Kết thúc phiên tập luyện realtime và khôi phục zone đã lưu trước khi vào phòng tập. |
+| POST | `/combat/practice` | Tạo encounter turn-based ảo với hình nhân; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Không chuyển zone hay tạo realtime session; trả `active_combat` để dùng luồng `/combat/start`. |
+| POST | `/combat/practice/exit` | Hủy encounter tập luyện chưa resolve; không áp dụng phí chiến đấu hoặc thay đổi vị trí. |
 | GET | `/combat/skill-loadout` | Hotbar chiêu thức ô 9–12: `{slots, available, first_slot, max_slots}`. `slots` chỉ chứa chiêu đang ghim theo thứ tự phím; `available` gồm mọi Sát Chiêu đã trang bị và Trận Kích của Tiên Cổ Ốc đang xuất chiến kèm `supported`/`reason`. Hai nguồn dùng chung bốn ô. |
 | PUT | `/combat/skill-loadout` | Lưu thứ tự ghim ô 9–12 (Alt+1–4). Body `{ "entries": [{ "kind": "move"\|"house", "id": "..." }] }`, tối đa 4, không trùng; từ chối chiêu chưa trang bị hoặc chưa hỗ trợ realtime. Trả `{message, loadout}` đã resolve. |
 | GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng), **mọi trận boss** (`BOSS`/`World_Boss`/`TRIBULATION_BOSS`, cả thắng lẫn thua), **mọi trận Tông Môn Chiến** (`SECT_WAR`, cả thắng lẫn thua, ghi cho cả người tấn công và từng đệ tử trấn thủ tham chiến với góc nhìn đảo phe), các trận PVE **thua**, và các trận PVE **thắng có rơi Tiên Cổ** (kể cả quái thường/tinh anh, để xem lại vận may); PVE thường thắng không rơi Tiên Cổ thì không lưu. Bản ghi PVE/boss cũ hơn 30 ngày bị worker xóa theo lô (PVP giữ vô hạn). |
@@ -281,11 +279,12 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 | DELETE | `/immortal-aperture/npcs/:npc_id` |
 | GET | `/dao-marks` |
 | GET | `/dao-marks/dao-ngan` | Đạo ngân (composite dao power) calculation. |
-| GET | `/tribulations/active` | Trả event đang ACTIVE (chọn theo `started_at` mới nhất, cùng thứ tự với loader realtime), danh sách quái còn sống và `total_enemies` / `defeated_enemies` / `remaining_enemies`. Khi nhân vật đang ở trong encounter realtime, quái đã chết theo snapshot authoritative được loại khỏi danh sách ngay cả khi `tribulation_enemies.is_dead` chưa kịp ghi. |
-| POST | `/tribulations/:eventId/realtime-engage` | Chuyển nhân vật vào map realtime `aperture_tribulation` 40×40 và trả danh sách node/quái đã chiếu từ lưới Tiên Khiếu 20×20 theo tỷ lệ 2×. Vị trí region và tọa độ local hiện tại được lưu nguyên vẹn cùng anchor atlas trước khi chuyển, trong cùng transaction. Nếu nhân vật đang có lease realtime, backend flush vị trí live, ghi đích rồi nhả lease để client join lại map kiếp (tránh checkpoint zone cũ ghi đè region). |
-| POST | `/tribulations/:eventId/realtime-victory` | Kết toán thắng kiếp, cộng Đạo Ngân, đột phá nếu đủ điều kiện và đưa nhân vật về vị trí region/tọa độ đã lưu nếu region còn active và tọa độ hợp lệ (kể cả hub). Nếu không, chọn khu vực an toàn active gần anchor atlas nhất, rồi hub active; trả lỗi nếu không có đích hợp lệ. Trước khi kiểm tra điều kiện thắng, backend đối soát `tribulation_enemies` với snapshot realtime (quái HP ≤ 0 được đánh dấu chết) và worker tự kết toán mọi event ACTIVE đã sạch quái trong tối đa ~5 giây. |
-| POST | `/tribulations/:eventId/realtime-escape` | Rút lui khỏi map kiếp về vị trí an toàn, áp dụng cùng cơ chế bàn giao lease realtime. |
-| POST | `/tribulations/realtime-exit` | Thoát Tiên Khiếu không cần biết `eventId` (dùng được sau refresh hoặc khi event đã hết). Handoff lease, đồng bộ HP quái/node, đưa nhân vật về vị trí cũ đã lưu (kể cả hub nếu còn active và tọa độ hợp lệ); nếu region không còn hợp lệ thì dùng khu vực an toàn active gần nhất rồi mới fallback sang hub. |
+| GET | `/tribulations/active` | Trả event đang ACTIVE mới nhất, danh sách quái còn sống và `total_enemies` / `defeated_enemies` / `remaining_enemies`. |
+| POST | `/tribulations/:eventId/engage` | Bắt đầu hoặc tiếp tục encounter Tai Kiếp turn-based, lưu vào `players.active_combat` và chuyển zone lease về backend trước khi combat bắt đầu. |
+| POST | `/tribulations/:eventId/resolve` | Kết toán tai kiếp theo trạng thái enemy đã được turn-based combat cập nhật; chỉ thành công khi toàn bộ enemy đã chết, nếu chưa sẽ áp dụng nhánh thất bại/rút lui tương ứng. |
+| POST | `/tribulations/:eventId/realtime-victory` | Settlement tương thích cho phiên realtime đã mở trước cutover; không còn route realtime-engage để tạo phiên mới. |
+| POST | `/tribulations/:eventId/realtime-escape` | Thoát an toàn khỏi phiên Tai Kiếp realtime cũ đang còn mở. |
+| POST | `/tribulations/realtime-exit` | Dọn và thoát khỏi phiên Tai Kiếp realtime cũ, kể cả sau refresh hoặc khi event đã hết. |
 
 `POST /immortal-aperture/nodes` accepts `{node_type, x, y, path, prod_key, cells}` but **rejects every non-DEFENSE type** (production moved to resource points). `cells` is a connected array of `{x,y}` cells on the 20×20 grid; omitted `cells` means the single anchor cell. Defense structures require Tiên Nguyên Thạch plus the template's required Gu (consumed permanently).
 
@@ -831,6 +830,20 @@ world-position broadcast radius is not used as the monster activation radius.
 ```
 
 The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The target combat events travel on the realtime world stream (opcode `events`) and carry `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `monster_attack_started`, `monster_attack`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, `monster_respawned`, and `monster_updated` (admin runtime edits). `monster_attack` includes `target_id`, actual HP damage, remaining HP/shield and whether the target was defeated; monster contact no longer creates a turn-based `active_combat` encounter.
+
+## Exploration & Tactical Grid API
+
+Hệ thống điều hướng lai (Hybrid Exploration) cung cấp 2 endpoint HTTP chính phục vụ lưới khám phá và di chuyển:
+
+* `GET /api/explore/grid`:
+  - Trả về snapshot ma trận lưới ô xung quanh người chơi trong phạm vi tầm nhìn (`vision_radius`).
+  - Dữ liệu trả về gồm: `x`, `y`, `vision_radius`, danh sách `cells` (loại ô: `Empty`, `Monster`, `Boss`, `WildGu`, `Resource`, `PrimevalVein`, `ENTRY_PORTAL`, `INHERITANCE_ALTAR`), danh sách `players_on_map`, `ground_drops`, chỉ số di chuyển và bán kính điều tra.
+
+* `POST /api/explore/move`:
+  - Payload: `{"x": int, "y": int, "auto_skip_combat": bool}`.
+  - Kiểm tra khoảng cách hợp lệ, trạng thái di chuyển của đội trưởng/thành viên.
+  - Xử lý các sự kiện đến ô: Giới Bích áp chế, nhặt tài nguyên, thu hoạch Nguyên Tuyền, đụng độ quái vật/boss/PvP (kích hoạt turn-based `active_combat` hoặc tính toán nhanh `auto_skip_combat`).
+
 
 ## WebTransport v2 — wire protocol chi tiết
 

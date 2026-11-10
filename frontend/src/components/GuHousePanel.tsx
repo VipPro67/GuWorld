@@ -56,7 +56,7 @@ export function GuHousePanel() {
     };
   }, [selectedCoreIDs, auxGuCount, actionEffectKeys, name, previewGuHouse]);
 
-  const effectsForCore = (id: string) => effects.filter((effect) => effect.source_instance_id === id && effect.realtime_supported);
+  const effectsForCore = (id: string) => effects.filter((effect) => effect.source_instance_id === id);
 
   const toggleCoreGu = (id: string) => {
     if (selectedCoreIDs.includes(id)) {

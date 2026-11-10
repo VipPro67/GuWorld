@@ -45,6 +45,7 @@ func schemaPlayers() error {
 		gender VARCHAR(20) NOT NULL DEFAULT '',
 		constitution VARCHAR(100) NOT NULL DEFAULT '' REFERENCES constitution_dictionary(key),
 		path_masteries JSONB NOT NULL DEFAULT '{}',
+		active_combat JSONB DEFAULT NULL,
 		body_mods JSONB NOT NULL DEFAULT '[]',
 		visited_subzones JSONB NOT NULL DEFAULT '[]',
 		equipped_gus JSONB NOT NULL DEFAULT '[]',
@@ -112,6 +113,28 @@ func schemaPlayers() error {
 		is_chat_muted BOOLEAN NOT NULL DEFAULT false,
 		chat_muted_until TIMESTAMPTZ
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("players_active_combat_compat", `
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS active_combat JSONB DEFAULT NULL;`); err != nil {
+		return err
+	}
+	if err := execSchema("players_remove_realtime_combat_settings", `
+	UPDATE players
+	SET combat_settings = combat_settings
+		- 'pvp_enabled'
+		- 'realtime_left_click_slot'
+		- 'realtime_right_click_action'
+		- 'realtime_right_click_slot'
+		- 'realtime_auto_farm'
+		- 'realtime_farm_range'
+		- 'realtime_farm_stop_hp_percent'
+		- 'realtime_farm_use_skills'
+	WHERE combat_settings ?| ARRAY[
+		'pvp_enabled', 'realtime_left_click_slot', 'realtime_right_click_action',
+		'realtime_right_click_slot', 'realtime_auto_farm', 'realtime_farm_range',
+		'realtime_farm_stop_hp_percent', 'realtime_farm_use_skills'
+	];`); err != nil {
 		return err
 	}
 	if err := execSchema("player_pending_respawns", `

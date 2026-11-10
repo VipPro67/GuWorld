@@ -134,11 +134,11 @@ _Avoid_: Bí cảnh đại trà, mộng cảnh
 ### Quy Tắc Bí Cảnh (Spatial Realm Rules / Realm Rules)
 Tập luật môi trường ràng buộc hành vi của mọi Cổ sư khi hiện diện bên trong một Bí cảnh hoặc Vùng truyền thừa. Bao gồm: Thời lượng đếm ngược (Duration Timer), Cơ chế PK (Vùng An Toàn / Hỗn Chiến Tự Do), Giới hạn cảnh giới tối đa & Áp chế tu vi (Rank Suppression), Quy tắc trừng phạt tử vong (trục xuất về thế giới hoặc hồi sinh tại cổng), và Cấm đoán truyền tống trận.
 
-### Map Trận Đấu Đấu Trường (Arena Match Map)
-Map realtime riêng cho một trận Đấu Trường, chỉ được chia sẻ bởi những người trong trận. Mỗi trận cách ly trạng thái và tài nguyên combat; ngắt kết nối có thời gian quay lại 30 giây trước khi bị xử thua.
+### Phiên Đấu Trường (Arena Match)
+Trận đấu PvP giải quyết theo thể thức theo lượt (Turn-based), hai bên sử dụng đội hình, sát chiêu và Cổ trùng đã trang bị để tranh tài.
 
-### Map Tập Luyện (Training Map)
-Map realtime riêng tư cho một phiên tập luyện, dùng tài nguyên combat tạm thời và có thể thoát hoặc đặt lại bất cứ lúc nào mà không ảnh hưởng trạng thái nhân vật thật.
+### Phiên Tập Luyện (Training Session)
+Phiên đấu tập turn-based với hình nhân (dummy), dùng tài nguyên combat tạm thời để thử nghiệm sát chiêu mà không ảnh hưởng trạng thái nhân vật thật.
 
 
 ## Nguyên Tuyền (Primeval Vein)
@@ -153,21 +153,26 @@ Bản đọc nhất quán của hàng `players` cùng các tập con được ch
 _Avoid_: player DTO, player object
 
 ### Chuỗi Di Chuyển (Movement Chain / Spatial Transition)
-Module chuyển dịch không gian nguyên tử và nhất quán dùng chung cho mọi cách người chơi đổi ô: quyền điều khiển realtime → biên giới → sống/chết → chiến đấu → trưởng tổ đội → chính sách vùng → đích → áp chế giới vực → cập nhật vị trí đồng bộ (`players`, `world_location_revision`, `player_world_state_v2`) → kéo tổ đội → phát sự kiện post-commit.
+Module chuyển dịch không gian nguyên tử và nhất quán dùng chung cho mọi cách người chơi đổi ô: biên giới → sống/chết → kiểm tra chiến đấu → trưởng tổ đội → chính sách vùng → đích → áp chế giới vực → cập nhật vị trí đồng bộ (`players`, `world_location_revision`) → kéo tổ đội → phát sự kiện post-commit.
 _Avoid_: move handler, teleport logic, ad-hoc coordinate update
 
 ### Chuỗi Đột Biến Người Chơi (Player Mutation Pipeline)
 Module thực thi các đột biến trạng thái người chơi nguyên tử và nhất quán dùng chung cho mọi hành vi gameplay làm thay đổi chỉ số hoặc tài sản nhân vật: mở transaction `sql.Tx` & khóa dòng `FOR UPDATE` → chiếu nạp Player Snapshot → tính toán thụ động (mana / ôn dưỡng độ bền) → thực thi closure đột biến nghiệp vụ → cập nhật đầy đủ các cột khả biến với bước tăng đơn điệu `version` và `state_revision` → commit nguyên tử → phát sự kiện đồng bộ post-commit qua Redis / SSE.
 _Avoid_: ad-hoc SQL update, unversioned mutation, manual snapshot broadcast
 
-## Realtime Combat & Techniques (Chiến Đấu Thời Gian Thực & Chiêu Thức)
+## Strategic Combat & Turn-Based Engine (Chiến Đấu Theo Lượt & Mô Phỏng Chiến Thuật)
 
-### Chiến Đấu Thời Gian Thực (Realtime Combat)
-Mô hình chiến đấu trong đó người chơi trực tiếp điều khiển di chuyển và lựa chọn chiêu thức, còn đồng đội và đối thủ do AI hành động; kết quả được server quyết định liên tục theo thời gian thay vì theo lượt.
-_Avoid_: auto-combat mô phỏng theo lượt
+### Chiến Đấu Theo Lượt (Turn-Based Combat)
+Mô hình chiến đấu tất định (deterministic) theo lượt tính toán từ phía máy chủ (`backend/internal/simulator/engine.go`), dựa trên snapshot chiến đấu của các bên tham gia (Cổ sư, Hung thú, Phân thân Đạo phái), tính toán hiệu ứng kích hoạt của Cổ trùng, Sát chiêu, Đạo ngân và Buff/Debuff theo từng hiệp. Người chơi có thể lựa chọn điều khiển chiêu thức / theo dõi diễn biến trận chiến qua `CombatScreen.tsx` hoặc Quét trận tức thì (Fast Auto-resolve) qua `combat_auto_resolve.go`.
+_Avoid_: 20Hz continuous tick, physics hitbox
 
-### Hiệu Ứng Chiến Đấu Realtime (Realtime Combat Effect)
-Hiệu ứng chiến đấu cần có hành vi, mục tiêu và thời lượng realtime được định nghĩa rõ; số lượt không tự quy đổi thành giây. Hiệu ứng chưa có hành vi realtime chưa thể dùng trong chiến đấu realtime.
+### Hiệu Ứng Chiến Đấu Theo Lượt (Turn-Based Combat Effect)
+Hiệu ứng chiến đấu diễn ra và tính toán theo số hiệp (turns) hoặc thời điểm kích hoạt (`ON_ACTION`, `ON_HIT`, `ON_TURN_START`, `ON_DEATH`), tương tác trực tiếp với Chân Nguyên, Sinh Lực, Giáp Ảo và Đạo Ngân lưu phái.
+_Avoid_: thời lượng giây liên tục, continuous damage tick
+
+### Thám Hiểm Lưới Chiến Thuật (Tactical Grid Exploration)
+Mô hình di chuyển và khám phá thế giới từng bước theo tọa độ ô vuông nguyên bản ($x, y$ số nguyên) kế thừa từ `map_cells`. Mỗi bước đi tiêu hao Chân Nguyên / Thể Lực, giải tỏa sương mù chiến tranh dựa trên chỉ số Thám Tra (`investigation`), phát hiện tài nguyên ẩn, mỏ nguyên tuyền và kích hoạt trận chiến theo lượt khi bước vào lãnh địa quái vật.
+_Avoid_: continuous float coordinates, WASD vector movement, 20Hz zone sim
 
 ### Lướt (Dash)
 Chiêu thức di chuyển nhân vật một quãng theo hướng đã khóa khi bắt đầu thi triển. Lướt thuần di chuyển có thể xuyên qua thực thể; lướt va chạm dừng ở kẻ địch đầu tiên và gây sát thương, còn địa hình chặn đường. ROOT/BIND ngăn displacement bắt đầu nhưng không dừng cú lướt đã khởi động; SLOW không làm chậm cú lướt đang chạy, còn hard CC chặn cast và ngắt cú lướt. Không thể bắt đầu cú lướt thứ hai trước khi cú hiện tại kết thúc; Tăng Tốc không đổi cú lướt đang chạy.

@@ -3,20 +3,16 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
-	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // AutoSettleCompletedTribulations reconciles every active tribulation event and
-// settles it once no enemy is alive. It is the safety net for a lost death
-// event, a restarted realtime zone or a death handler that failed after the
-// final kill: the durable event must not stay ACTIVE forever.
+// settles it once no enemy is alive.
 func AutoSettleCompletedTribulations(ctx context.Context) error {
 	if db.DB == nil {
 		return nil
@@ -63,49 +59,30 @@ func autoSettleTribulationEventIfCleared(ctx context.Context, eventID, playerID 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := reconcileTribulationEnemiesFromLiveState(ctx, tx, playerID, eventID); err != nil {
-		return fmt.Errorf("reconcile live tribulation enemies: %w", err)
-	}
 	var alive int
 	if err := tx.QueryRowContext(ctx, `
 		SELECT COUNT(1) FROM tribulation_enemies WHERE event_id = $1 AND is_dead = false
 	`, eventID).Scan(&alive); err != nil {
 		return fmt.Errorf("count living tribulation enemies: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit auto-settle check: %w", err)
-	}
 	if alive > 0 {
 		return nil
 	}
-
-	finishHandoff, abortHandoff, _, handoffStatus, _, _ := beginTribulationHandoff(playerID)
-	if handoffStatus != 0 {
-		// The player is in the middle of another handoff. The next tick retries.
-		return nil
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE tribulation_events SET status = 'RESOLVED', completed_at = NOW() WHERE id = $1 AND status = 'ACTIVE'
+	`, eventID); err != nil {
+		return err
 	}
-	defer abortHandoff()
-
-	result, status, settleErr := settleRealtimeTribulationVictory(ctx, playerID, eventID, "auto-reconcile")
-	if settleErr != nil {
-		if status == http.StatusNotFound {
-			finishHandoff()
-			return nil
-		}
-		return fmt.Errorf("settle cleared tribulation (%d): %w", status, settleErr)
+	if err := tx.Commit(); err != nil {
+		return err
 	}
-	finishHandoff()
 	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, TribulationDomain)
-	notify.Send(db.DB, playerID, "tribulation_victory", "Vượt Kiếp Thành Công", result.Message)
-	logger.S.Infof("Auto-settled cleared tribulation %s for %s: %s", eventID, playerID, result.Message)
 	return nil
 }
 
-// StartTribulationAutoSettleWorker periodically closes events whose enemies are
-// all dead. Five seconds keeps the manual "Hoàn Tất" button a fallback rather
-// than a requirement.
+// StartTribulationAutoSettleWorker periodically closes events whose enemies are all dead.
 func StartTribulationAutoSettleWorker(ctx context.Context) {
-	worker.RunEvery(ctx, 5*time.Second, "Tribulation Auto Settle", func(ctx context.Context) {
+	worker.RunEvery(ctx, 15*time.Second, "Tribulation Auto Settle", func(ctx context.Context) {
 		if err := AutoSettleCompletedTribulations(ctx); err != nil {
 			logger.S.Errorf("Tribulation auto-settle worker error: %v", err)
 		}

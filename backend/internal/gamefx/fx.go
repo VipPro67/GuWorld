@@ -772,3 +772,26 @@ func PathDamageMultiplierForPaths(paths []string, pathDamage map[string]float64)
 	}
 	return maxMult
 }
+
+func (e Effects) ApplyToEnemyCombatState(combat *models.CombatState) {
+	if combat == nil {
+		return
+	}
+	combat.EnemyPathResistance = e.PathResistanceBonus
+	combat.EnemyMentalResistance = e.MentalResistanceBonus
+	combat.EnemyTenacity = e.Tenacity
+	combat.EnemyCCResist = e.CCResist
+	combat.EnemyDaoBonus = e.DaoNganBonus
+	combat.EnemyPathDamageBonus = e.PathDamageBonus
+	combat.EnemyHealingReceived = e.HealingReceivedBonus
+	combat.EnemySoulDefenseBonus = e.SoulDefenseBonus
+	combat.EnemyLuckBonus = e.LuckBonus
+}
+
+// ApplyEnemyEffects evaluates character effects from defender and applies them to combat.
+func ApplyEnemyEffects(combat *models.CombatState, defender *models.Player) {
+	if combat == nil || defender == nil {
+		return
+	}
+	Get(defender).ApplyToEnemyCombatState(combat)
+}

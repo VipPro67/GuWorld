@@ -12,7 +12,7 @@ const defaults = { dummyHP: 100000, dummyShield: 0, dummyAtk: 10, dummyDef: 5, d
 
 export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
   const store = useGameStore();
-  const startPractice = useGameStore((state) => state.executePracticeCombat);
+  const startPractice = useGameStore((state) => state.startPracticeCombat);
   const exitPractice = useGameStore((state) => state.exitPracticeCombat);
   const [dummyConfig, setDummyConfig] = useState(defaults);
   const [active, setActive] = useState(false);
@@ -35,8 +35,8 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
 
   const enter = async () => {
     setBusy(true);
-    const session = await startPractice({}, dummyConfig);
-    setActive(Boolean(session));
+    const started = await startPractice(dummyConfig);
+    setActive(Boolean(started));
     setBusy(false);
   };
 
@@ -57,8 +57,8 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
           <div className="flex items-center gap-3">
             <Swords className="h-5 w-5 text-amber-300" />
             <div>
-              <h2 className="font-serif text-xl font-semibold">Phòng tập realtime</h2>
-              <p className="text-xs text-amber-100/60">Phiên riêng, không tiêu hao tài nguyên nhân vật</p>
+              <h2 className="font-serif text-xl font-semibold">Phòng tập</h2>
+              <p className="text-xs text-amber-100/60">Simulator turn-based, không tiêu hao tài nguyên nhân vật</p>
             </div>
           </div>
           <button aria-label="Đóng phòng tập" onClick={active ? leave : onClose} className="rounded-lg p-2 hover:bg-white/10">
@@ -89,12 +89,12 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
               ))}
             </div>
             <button disabled={busy} onClick={enter} className="mt-5 w-full rounded-xl bg-amber-500 px-4 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:opacity-50">
-              {busy ? "Đang tạo bản đồ riêng…" : "Vào tập luyện"}
+              {busy ? "Đang chuẩn bị trận tập luyện…" : "Vào tập luyện"}
             </button>
           </>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-amber-100/70">Bạn đang ở bản đồ tập luyện. Di chuyển và dùng hotbar để chiến đấu với hình nhân.</p>
+            <p className="text-sm text-amber-100/70">Encounter tập luyện đã sẵn sàng. Chạy simulator để xem replay với cấu hình hình nhân đã chọn.</p>
             <button disabled={busy} onClick={leave} className="w-full rounded-xl border border-amber-300/50 px-4 py-3 font-semibold text-amber-100 hover:bg-amber-300/10 disabled:opacity-50">
               {busy ? "Đang rời bản đồ…" : "Kết thúc tập luyện"}
             </button>

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -169,46 +168,42 @@ func (s *StatusList) Expire(now time.Time) bool {
 // shared world map (bounded set, used for exploration achievements).
 type VisitedSubZonesList []string
 
-// AutoCombatConfig stores realtime combat controls and client auto-farm policy.
+// AutoCombatConfig stores turn-based combat tactics.
 type AutoCombatConfig struct {
-	PvPEnabled               bool    `json:"pvp_enabled"`
-	RealtimeLeftClickSlot    int     `json:"realtime_left_click_slot"`
-	RealtimeRightClickAction string  `json:"realtime_right_click_action"`
-	RealtimeRightClickSlot   int     `json:"realtime_right_click_slot"`
-	RealtimeAutoFarm         bool    `json:"realtime_auto_farm"`
-	RealtimeFarmRange        float64 `json:"realtime_farm_range"`
-	RealtimeFarmStopHP       float64 `json:"realtime_farm_stop_hp_percent"`
-	RealtimeFarmUseSkills    bool    `json:"realtime_farm_use_skills"`
+	AutoHealHP           bool       `json:"auto_heal_hp,omitempty"`
+	HealThreshold        float64    `json:"heal_threshold,omitempty"`
+	AutoRestoreMana      bool       `json:"auto_restore_mana,omitempty"`
+	ManaThreshold        float64    `json:"mana_threshold,omitempty"`
+	CategoryPriorities   []string   `json:"category_priorities,omitempty"`
+	GuPriorities         []GuTactic `json:"gu_priorities,omitempty"`
+	KillerMovePriorities []GuTactic `json:"killer_move_priorities,omitempty"`
+	KmPriorities         []GuTactic `json:"km_priorities,omitempty"`
+	SkipBattle           bool       `json:"skip_battle,omitempty"`
 }
 
-func (c *AutoCombatConfig) NormalizeRealtimeSettings() {
-	if c.RealtimeLeftClickSlot < 0 || c.RealtimeLeftClickSlot > 6 {
-		c.RealtimeLeftClickSlot = 0
+type GuTactic struct {
+	GuID           string  `json:"gu_id"`
+	Priority       int     `json:"priority"`
+	UseCondition   string  `json:"use_condition"`
+	ConditionValue float64 `json:"condition_value"`
+}
+
+func (c *AutoCombatConfig) Normalize() {
+	if len(c.CategoryPriorities) == 0 {
+		c.CategoryPriorities = []string{"other", "shield", "heal", "damage"}
 	}
-	if c.RealtimeRightClickAction != "attack" && c.RealtimeRightClickAction != "skill" {
-		c.RealtimeRightClickAction = "attack"
+	if len(c.KillerMovePriorities) == 0 && len(c.KmPriorities) > 0 {
+		c.KillerMovePriorities = c.KmPriorities
+	} else if len(c.KmPriorities) == 0 && len(c.KillerMovePriorities) > 0 {
+		c.KmPriorities = c.KillerMovePriorities
 	}
-	if c.RealtimeRightClickSlot < 1 || c.RealtimeRightClickSlot > 6 {
-		c.RealtimeRightClickSlot = 0
-		if c.RealtimeRightClickAction == "skill" {
-			c.RealtimeRightClickAction = "attack"
-		}
+	if c.HealThreshold <= 0 {
+		c.HealThreshold = 30
 	}
-	if math.IsNaN(c.RealtimeFarmRange) || math.IsInf(c.RealtimeFarmRange, 0) || c.RealtimeFarmRange <= 0 {
-		c.RealtimeFarmRange = 14
+	if c.ManaThreshold <= 0 {
+		c.ManaThreshold = 30
 	}
-	if c.RealtimeFarmRange < 4 {
-		c.RealtimeFarmRange = 4
-	}
-	if c.RealtimeFarmRange > 32 {
-		c.RealtimeFarmRange = 32
-	}
-	if math.IsNaN(c.RealtimeFarmStopHP) || math.IsInf(c.RealtimeFarmStopHP, 0) || c.RealtimeFarmStopHP <= 0 {
-		c.RealtimeFarmStopHP = 25
-	}
-	if c.RealtimeFarmStopHP > 90 {
-		c.RealtimeFarmStopHP = 90
-	}
+
 }
 
 func scanBytes(value interface{}) ([]byte, bool) {
@@ -243,7 +238,7 @@ func (c *AutoCombatConfig) Scan(value interface{}) error {
 	}
 	err := json.Unmarshal(bytes, c)
 	if err == nil {
-		c.NormalizeRealtimeSettings()
+		c.Normalize()
 	}
 	return err
 }
@@ -260,9 +255,12 @@ func (c AutoCombatConfig) Value() (driver.Value, error) {
 // DefaultAutoCombatConfig returns sensible defaults.
 func DefaultAutoCombatConfig() AutoCombatConfig {
 	return AutoCombatConfig{
-		RealtimeRightClickAction: "attack",
-		RealtimeFarmRange:        14,
-		RealtimeFarmStopHP:       25,
+		HealThreshold:        30,
+		ManaThreshold:        30,
+		CategoryPriorities:   []string{"other", "shield", "heal", "damage"},
+		GuPriorities:         []GuTactic{},
+		KillerMovePriorities: []GuTactic{},
+		KmPriorities:         []GuTactic{},
 	}
 }
 
@@ -317,6 +315,7 @@ type Player struct {
 
 	ImmortalState      ImmortalState       `json:"immortal_state"`
 	GuInventory        GuInventory         `json:"gu_inventory"`
+	ActiveCombat       *CombatState        `json:"active_combat,omitempty"`
 	GrowthData         GrowthData          `json:"growth_data"`
 	MaterialsInventory MaterialsInventory  `json:"materials_inventory,omitempty"`
 	CompletedQuests    CompletedQuestsList `json:"completed_quests,omitempty"`

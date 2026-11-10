@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 type PortalTransferReq struct {
@@ -114,4 +115,31 @@ func PortalTransfer(c *gin.Context) {
 		"message": logMsg,
 		"player":  player,
 	})
+}
+
+// LegacyPortalDestination projects an authored map-local portal target into world coordinates.
+func LegacyPortalDestination(target *models.Region, localX, localY int) (int, int) {
+	x := localX
+	y := localY
+	if target != nil {
+		if target.Width > 0 && x > target.Width-2 {
+			x = target.Width - 2
+		}
+		if target.Height > 0 && y > target.Height-2 {
+			y = target.Height - 2
+		}
+		if x < 1 {
+			x = 1
+		}
+		if y < 1 {
+			y = 1
+		}
+		if target.MaxX > target.MinX {
+			x = target.MinX + x
+		}
+		if target.MaxY > target.MinY {
+			y = target.MinY + y
+		}
+	}
+	return x, y
 }

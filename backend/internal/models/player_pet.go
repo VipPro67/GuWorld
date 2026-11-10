@@ -23,7 +23,7 @@ type PlayerPet struct {
 	Hunger            float64   `json:"hunger"`
 	MaxHunger         float64   `json:"max_hunger"`
 	PetHungerPerHour  float64   `json:"pet_hunger_per_hour"`
-	State             string    `json:"state"`          // ACTIVE, SLEEPING
+	State             string    `json:"state"`          // ACTIVE, SLEEPING, INJURED
 	FormationSlot     int       `json:"formation_slot"` // 0 = kho, 1..N = đội hình
 	CapturedAt        time.Time `json:"captured_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
@@ -34,7 +34,7 @@ func LoadPlayerPets(db *sql.DB, playerID string) ([]PlayerPet, error) {
 		SELECT id, owner_player_id, template_id, name, rank, sub_rank,
 		       hp, max_hp, base_attack, base_defense, speed, count,
 		       hunger, max_hunger, upkeep_rate,
-		       CASE WHEN execution_state = 'RECOVERING' THEN 'SLEEPING' ELSE 'ACTIVE' END,
+		       CASE execution_state WHEN 'RECOVERING' THEN 'SLEEPING' WHEN 'INJURED' THEN 'INJURED' ELSE 'ACTIVE' END,
 		       formation_slot, created_at, updated_at
 		FROM non_player_actors
 		WHERE owner_player_id = $1 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
@@ -67,7 +67,7 @@ func LoadFormationPets(db *sql.DB, playerID string) ([]PlayerPet, error) {
 		SELECT id, owner_player_id, template_id, name, rank, sub_rank,
 		       hp, max_hp, base_attack, base_defense, speed, count,
 		       hunger, max_hunger, upkeep_rate,
-		       CASE WHEN execution_state = 'RECOVERING' THEN 'SLEEPING' ELSE 'ACTIVE' END,
+		       CASE execution_state WHEN 'RECOVERING' THEN 'SLEEPING' WHEN 'INJURED' THEN 'INJURED' ELSE 'ACTIVE' END,
 		       formation_slot, created_at, updated_at
 		FROM non_player_actors
 		WHERE owner_player_id = $1 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'

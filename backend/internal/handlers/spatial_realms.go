@@ -21,6 +21,19 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+func realtimeMapID(regionID, zoneType, assignedMapID string) string {
+	switch zoneType {
+	case "KHU_VUC", "SAFE_ZONE":
+		if regionID != "" {
+			return regionID
+		}
+	}
+	if assignedMapID != "" {
+		return assignedMapID
+	}
+	return "world_map"
+}
+
 // RealmRules defines the rule engine constraints on a spatial realm or inheritance ground.
 type RealmRules struct {
 	DurationMinutes      int    `json:"duration_minutes"`
@@ -390,28 +403,6 @@ func EnterSpatialRealm(c *gin.Context) {
 		_ = tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(r.zone_type,''),COALESCE(w.world_map_id,'') FROM regions r LEFT JOIN region_world_maps w ON w.region_id=r.id WHERE r.id=$1`, oldRegion).Scan(&oldType, &oldMap)
 		oldWorldZone = realtimeMapID(oldRegion, oldType, oldMap)
 	}
-	if _, err = tx.ExecContext(c.Request.Context(), `
-		INSERT INTO realtime_combat_sessions (id,mode,zone_id,origin_zone_id,payload)
-		VALUES ($1,'secret_realm',$2,$3,jsonb_build_object('template_id',$4,'scope',$5))
-		ON CONFLICT (id) DO NOTHING
-	`, instanceID, realmZoneID, oldWorldZone, req.TemplateID, scope); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở phiên realtime cho Bí Cảnh."})
-		return
-	}
-	var activeSession bool
-	if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM realtime_combat_session_participants WHERE player_id=$1 AND status='active')`, playerID).Scan(&activeSession); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên realtime hiện tại."})
-		return
-	}
-	if activeSession {
-		c.JSON(http.StatusConflict, gin.H{"error": "Nhân vật đã ở trong một phiên realtime khác."})
-		return
-	}
-	_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO realtime_combat_session_participants(session_id,player_id,payload) VALUES($1,$2,jsonb_build_object('origin_zone_id',$3,'origin_region_id',$4,'origin_x',$5,'origin_y',$6))`, instanceID, playerID, oldWorldZone, oldRegion, oldX, oldY)
-	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Không thể tham gia phiên realtime Bí Cảnh."})
-		return
-	}
 	_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO shared_spatial_instance_members(instance_id,player_id,return_region_id,return_x,return_y) VALUES($1,$2,$3,$4,$5)`, instanceID, playerID, oldRegion, oldX, oldY)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đã ở trong một bí cảnh"})
@@ -500,10 +491,6 @@ func ExitSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất thoát bí cảnh"})
 		return
 	}
-	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE realtime_combat_session_participants SET status='completed' WHERE session_id=$1 AND player_id=$2 AND status='active'`, instanceID, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất phiên realtime Bí Cảnh."})
-		return
-	}
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái thoát"})
 		return
@@ -556,9 +543,6 @@ func closeSpatialRealmTx(ctx context.Context, tx *sql.Tx, instanceID uuid.UUID, 
 		if _, err := tx.ExecContext(ctx, `UPDATE shared_spatial_instance_members SET exited_at=NOW(),exit_reason=$1 WHERE player_id=$2 AND instance_id=$3 AND exited_at IS NULL`, reason, m.id, instanceID); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE realtime_combat_session_participants SET status='completed' WHERE session_id=$1 AND player_id=$2 AND status='active'`, instanceID, m.id); err != nil {
-			return err
-		}
 	}
 	// A realm run is a finite shared map copy; its ground loot expires with it.
 	var regionID string
@@ -566,12 +550,6 @@ func closeSpatialRealmTx(ctx context.Context, tx *sql.Tx, instanceID uuid.UUID, 
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM map_ground_drops WHERE region_id=$1 AND (map_instance_id=$2 OR map_instance_id IS NULL)`, regionID, instanceID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE realtime_combat_session_participants SET status='completed' WHERE session_id=$1 AND status='active'`, instanceID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE realtime_combat_sessions SET status='completed',ended_at=NOW() WHERE id=$1 AND mode='secret_realm' AND status='active'`, instanceID); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE shared_spatial_instances SET status='CLOSED',closed_at=NOW(),close_reason=$1 WHERE id=$2 AND status='ACTIVE'`, reason, instanceID)

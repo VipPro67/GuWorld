@@ -91,7 +91,7 @@ func TestKillerMoveStarvingComponentAvailability(t *testing.T) {
 		{InstanceID: "inst_2", GuID: "gu_b", Rank: 1},
 	}
 
-	available, hasStarvingGu, missingGu, _ := evaluateKillerMoveComponents(components, ownedSet)
+	available, hasStarvingGu, missingGu := evaluateKillerMoveComponents(components, ownedSet)
 	if !available {
 		t.Fatalf("expected available=true when all components are owned and alive, got available=false")
 	}
@@ -104,7 +104,7 @@ func TestKillerMoveStarvingComponentAvailability(t *testing.T) {
 
 	// Missing component test
 	delete(ownedSet, "inst_2")
-	available2, _, missingGu2, _ := evaluateKillerMoveComponents(components, ownedSet)
+	available2, _, missingGu2 := evaluateKillerMoveComponents(components, ownedSet)
 	if available2 {
 		t.Fatalf("expected available=false when component is missing, got true")
 	}

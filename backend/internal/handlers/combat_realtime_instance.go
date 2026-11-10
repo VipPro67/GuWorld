@@ -1,20 +1,28 @@
 package handlers
 
 import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
 	"math"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 const practiceRealtimeMapID = "realtime_preview"
+
+// RealtimeCombatInstanceVitals stores temporary arena resources and the latest
+// position for one participant in a shared combat session.
+type RealtimeCombatInstanceVitals struct {
+	CurrentHP    float64 `json:"current_hp"`
+	CurrentMana  float64 `json:"current_mana"`
+	X            float64 `json:"x"`
+	Y            float64 `json:"y"`
+	CombatTeamID string  `json:"combat_team_id,omitempty"`
+	OriginZoneID string  `json:"origin_zone_id,omitempty"`
+}
 
 type PracticeRealtimeRequest struct {
 	DummyHP     float64 `json:"dummy_hp"`
@@ -32,27 +40,12 @@ type PracticeRealtimeConfig struct {
 	DummySpeed  float64 `json:"dummy_speed"`
 }
 
-// RealtimeCombatInstanceVitals stores temporary arena resources and the latest
-// position for one participant in a shared combat session.
-type RealtimeCombatInstanceVitals struct {
-	CurrentHP    float64 `json:"current_hp"`
-	CurrentMana  float64 `json:"current_mana"`
-	X            float64 `json:"x"`
-	Y            float64 `json:"y"`
-	CombatTeamID string  `json:"combat_team_id,omitempty"`
-	OriginZoneID string  `json:"origin_zone_id,omitempty"`
-}
-
-// StartRealtimePractice creates an isolated training instance. The durable
-// character keeps its real resources; only its realtime routing fields change.
+// StartRealtimePractice now starts a virtual deterministic encounter. The route
+// name is retained for API compatibility; practice no longer creates a world session.
 func StartRealtimePractice(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-	if reason := RealtimeRuntimeError(); reason != "" {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_unavailable", "error": "Phòng tập realtime hiện chưa khả dụng."})
 		return
 	}
 	var req PracticeRealtimeRequest
@@ -67,121 +60,80 @@ func StartRealtimePractice(c *gin.Context) {
 		DummyDef:    boundedPracticeValue(req.DummyDef, 5, 0, 1e9),
 		DummySpeed:  boundedPracticeValue(req.DummySpeed, 1, 0, 100),
 	}
-
-	handedOff, err := middleware.BeginRealtimeHandoff(playerID)
-	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_checkpoint_unavailable", "error": "Không thể tạm dừng thế giới realtime."})
-		return
-	}
-	if handedOff {
-		defer middleware.AbortRealtimeHandoff(playerID)
-	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở phiên tập luyện."})
 		return
 	}
 	defer tx.Rollback()
-	var regionID, currentZone, currentInstance string
-	err = tx.QueryRowContext(c.Request.Context(), `
-		SELECT COALESCE(current_region,''), COALESCE(NULLIF(world_zone_id,''), current_region), COALESCE(world_instance_id,'')
-		FROM players WHERE id=$1 FOR UPDATE
-	`, playerID).Scan(&regionID, &currentZone, &currentInstance)
+	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			c.JSON(http.StatusRequestTimeout, gin.H{"error": "Yêu cầu đã bị hủy."})
-		} else if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusConflict, gin.H{"code": "character_not_ready", "error": "Nhân vật đang chiến đấu hoặc không khả dụng."})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc trạng thái nhân vật."})
-		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không thể đọc trạng thái nhân vật."})
 		return
 	}
-	if regionID == "" || currentInstance != "" {
-		c.JSON(http.StatusConflict, gin.H{"code": "combat_instance_conflict", "error": "Nhân vật đã ở trong một phiên riêng."})
+	if player.ActiveCombat != nil {
+		c.JSON(http.StatusConflict, gin.H{"code": "combat_active", "error": "Nhân vật đang chiến đấu."})
 		return
 	}
-	instanceID := uuid.New()
-	payload, err := json.Marshal(config)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo cấu hình hình nhân."})
+	if gamefx.IsDeadState(&player) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Nhân vật không thể bắt đầu chiến đấu khi đã chết."})
 		return
 	}
-	if _, err = tx.ExecContext(c.Request.Context(), `
-		INSERT INTO realtime_combat_instances (id,player_id,mode,zone_id,origin_zone_id,payload)
-		VALUES ($1,$2,'training',$3,$4,$5)
-	`, instanceID, playerID, practiceRealtimeMapID, currentZone, payload); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"code": "combat_instance_conflict", "error": "Không thể tạo phiên tập luyện."})
-		return
+	dummy := models.CombatState{
+		EnemyTemplateID: "training_dummy", EnemyName: "Hình nhân", EnemyType: "PRACTICE", CombatMode: "virtual",
+		EnemyHP: config.DummyHP, EnemyMaxHP: config.DummyHP, EnemyDamage: config.DummyAtk, EnemyDefense: config.DummyDef,
+		EnemySpeed: config.DummySpeed, EnemyRank: 1,
 	}
-	if _, err = tx.ExecContext(c.Request.Context(), `
-		UPDATE players SET world_zone_id=$2, world_instance_id=$3, world_location_revision=world_location_revision+1
-		WHERE id=$1
-	`, playerID, practiceRealtimeMapID, "combat:"+instanceID.String()); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển vào bản đồ tập luyện."})
+	player.ActiveCombat = InitializeCombatState(tx, &dummy, &player)
+	if len(player.ActiveCombat.Enemies) > 0 {
+		player.ActiveCombat.Enemies[0].VirtualShield = config.DummyShield
+	}
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET active_combat=$1 WHERE id=$2`, player.ActiveCombat, player.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phiên tập luyện."})
 		return
 	}
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phiên tập luyện."})
 		return
 	}
-	if handedOff {
-		middleware.FinishRealtimeHandoff(playerID)
-	}
-	c.JSON(http.StatusOK, gin.H{"instance_id": instanceID.String(), "zone_id": practiceRealtimeMapID, "origin_zone_id": currentZone, "is_practice": true})
+	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
+	respondActionOnly(c, http.StatusOK, player, gin.H{"is_practice": true, "active_combat": player.ActiveCombat})
 }
 
-// EndRealtimePractice restores the zone that was active before training.
+// EndRealtimePractice is retained for older clients. It clears an un-resolved
+// practice encounter without applying combat costs or world movement.
 func EndRealtimePractice(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	handedOff, err := middleware.BeginRealtimeHandoff(playerID)
-	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "realtime_checkpoint_unavailable", "error": "Không thể tạm dừng thế giới realtime."})
-		return
-	}
-	if handedOff {
-		defer middleware.AbortRealtimeHandoff(playerID)
-	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc phiên tập luyện."})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc tập luyện."})
 		return
 	}
 	defer tx.Rollback()
-	var originZone, combatZone string
-	err = tx.QueryRowContext(c.Request.Context(), `
-		SELECT origin_zone_id, zone_id FROM realtime_combat_instances
-		WHERE player_id=$1 AND mode='training' AND status='active' FOR UPDATE
-	`, playerID).Scan(&originZone, &combatZone)
+	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không thể đọc trạng thái nhân vật."})
+		return
+	}
+	if player.ActiveCombat == nil || player.ActiveCombat.EnemyType != "PRACTICE" {
 		c.JSON(http.StatusConflict, gin.H{"code": "training_session_inactive", "error": "Không có phiên tập luyện đang mở."})
 		return
 	}
-	result, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET world_zone_id=$2, world_instance_id='', world_location_revision=world_location_revision+1 WHERE id=$1 AND world_zone_id=$3 AND world_instance_id LIKE 'combat:%'`, playerID, originZone, combatZone)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khôi phục bản đồ trước đó."})
-		return
-	}
-	if changed, rowsErr := result.RowsAffected(); rowsErr != nil || changed != 1 {
-		c.JSON(http.StatusConflict, gin.H{"code": "training_session_inactive", "error": "Nhân vật không còn ở trong phiên tập luyện này."})
-		return
-	}
-	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE realtime_combat_instances SET status='completed', ended_at=NOW() WHERE player_id=$1 AND mode='training' AND status='active'`, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đóng phiên tập luyện."})
+	player.ActiveCombat = nil
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET active_combat=NULL WHERE id=$1`, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc tập luyện."})
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu kết quả tập luyện."})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc tập luyện."})
 		return
 	}
-	if handedOff {
-		middleware.FinishRealtimeHandoff(playerID)
-	}
-	c.JSON(http.StatusOK, gin.H{"zone_id": originZone, "is_practice": false})
+	PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
+	c.JSON(http.StatusOK, gin.H{"is_practice": false})
 }
 
 func boundedPracticeValue(value, fallback, minimum, maximum float64) float64 {

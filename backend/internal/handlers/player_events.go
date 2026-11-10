@@ -43,6 +43,8 @@ const (
 	PlayerEventHeartbeat = "player.heartbeat"
 	SessionEventKicked   = "session.kicked"
 	PositionEventUpdated = "player.position"
+	CombatEventStarted   = "combat.started"
+	CombatEventEnded     = "combat.ended"
 )
 
 type PlayerRealtimeSnapshot struct {
@@ -88,13 +90,56 @@ type PlayerDeltaEvent struct {
 
 // PlayerDeltaData contains only the fields that changed.
 type PlayerDeltaData struct {
-	X              int      `json:"x,omitempty"`
-	Y              int      `json:"y,omitempty"`
-	HP             *float64 `json:"hp,omitempty"`
-	MaxHP          *float64 `json:"max_hp,omitempty"`
-	CurrentMana    *float64 `json:"current_mana,omitempty"`
-	MaxMana        *float64 `json:"max_mana,omitempty"`
-	ApertureStress *float64 `json:"aperture_stress,omitempty"`
+	X              int                 `json:"x,omitempty"`
+	Y              int                 `json:"y,omitempty"`
+	CurrentRegion  string              `json:"current_region,omitempty"`
+	HP             *float64            `json:"hp,omitempty"`
+	MaxHP          *float64            `json:"max_hp,omitempty"`
+	CurrentMana    *float64            `json:"current_mana,omitempty"`
+	MaxMana        *float64            `json:"max_mana,omitempty"`
+	ApertureStress *float64            `json:"aperture_stress,omitempty"`
+	ActiveCombat   *models.CombatState `json:"active_combat,omitempty"`
+}
+
+// PublishPlayerCombatDelta publishes the active encounter through the
+// canonical player event stream after its transaction commits.
+func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, state *models.CombatState) {
+	revision, err := loadPlayerStateRevision(db.DB, playerID)
+	if err != nil {
+		return
+	}
+	delta := PlayerDeltaEvent{
+		StateRevision: revision,
+		Type:          eventType, Revision: nextPlayerEventRevision(),
+		ChangedDomains: []PlayerEventDomain{PlayerDomain},
+		Data:           PlayerDeltaData{ActiveCombat: state},
+	}
+	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
+}
+
+// PublishPlayerCombatDeltaWithPos publishes the active encounter with player position coordinates
+// through the canonical player event stream after its transaction commits.
+func PublishPlayerCombatDeltaWithPos(player *models.Player, eventType string, state *models.CombatState) {
+	if player == nil {
+		return
+	}
+	revision, err := loadPlayerStateRevision(db.DB, player.ID)
+	if err != nil {
+		return
+	}
+	delta := PlayerDeltaEvent{
+		StateRevision:  revision,
+		Type:           eventType,
+		Revision:       nextPlayerEventRevision(),
+		ChangedDomains: []PlayerEventDomain{PlayerDomain},
+		Data: PlayerDeltaData{
+			ActiveCombat:  state,
+			X:             player.X,
+			Y:             player.Y,
+			CurrentRegion: player.CurrentRegion,
+		},
+	}
+	_ = cache.PublishEventQuick("player:"+player.ID.String(), delta)
 }
 
 // ClearPendingPlayerQueues removes a player's ID from async batch queues so uncommitted stale snapshots don't overwrite immediate DB commits.

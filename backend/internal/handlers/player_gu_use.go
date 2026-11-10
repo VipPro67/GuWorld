@@ -41,15 +41,12 @@ func UseConsumableGu(c *gin.Context) {
 	var logMsg string
 	var specs models.GuDictionaryItem
 	var reduceHunger bool
-	var realtimeBaseHP float64
-	var realtimeActive bool
 	var transition *SpatialTransitionResult
 
 	player, err := MutatePlayer(authID, PlayerMutationOptions{
 		Scope:        playerstate.GuFull,
 		EventDomains: []PlayerEventDomain{PlayerDomain, GuInventoryDomain, CombatStatsDomain},
 	}, func(tx *sql.Tx, player *models.Player) error {
-		realtimeBaseHP, realtimeActive = seedRealtimeHP(authID, player)
 
 		targetIdx := -1
 		for idx, gu := range player.GuInventory {
@@ -239,7 +236,6 @@ func UseConsumableGu(c *gin.Context) {
 		return
 	}
 
-	applyRealtimeHPDelta(authID, realtimeBaseHP, realtimeActive, player)
 	if transition != nil && transition.PublishPostCommit != nil {
 		transition.PublishPostCommit()
 	}
@@ -286,14 +282,10 @@ func UseSupportGu(c *gin.Context) {
 	}
 
 	var logMsg string
-	var realtimeBaseHP float64
-	var realtimeActive bool
-
 	player, err := MutatePlayer(authID, PlayerMutationOptions{
 		Scope:        playerstate.GuFull,
 		EventDomains: []PlayerEventDomain{PlayerDomain, GuInventoryDomain, CombatStatsDomain},
 	}, func(tx *sql.Tx, player *models.Player) error {
-		realtimeBaseHP, realtimeActive = seedRealtimeHP(authID, player)
 
 		targetIdx := -1
 		for idx, gu := range player.GuInventory {
@@ -385,7 +377,6 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	applyRealtimeHPDelta(authID, realtimeBaseHP, realtimeActive, player)
 	respondActionGuOnly(c, http.StatusOK, *player, gin.H{
 		"message": logMsg + " Nhân Khí +0.",
 	})

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Bell, CheckCheck, Package, Skull, ShoppingBag, Gavel, Coins, Info, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useGameStore, type PlayerNotification } from "@/store/useGameStore";
 
@@ -101,13 +100,7 @@ const NotificationItem: React.FC<{ notification: PlayerNotification }> = ({ noti
 export const NotificationBell: React.FC<{ size?: "sm" | "md" }> = ({ size = "md" }) => {
   const { notifications, unreadNotifications, fetchNotifications, fetchUnreadNotificationsCount, markAllNotificationsRead } = useGameStore();
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (open) {
@@ -119,12 +112,7 @@ export const NotificationBell: React.FC<{ size?: "sm" | "md" }> = ({ size = "md"
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (
-        ref.current &&
-        !ref.current.contains(target) &&
-        modalRef.current &&
-        !modalRef.current.contains(target)
-      ) {
+      if (ref.current && !ref.current.contains(target)) {
         setOpen(false);
       }
     };
@@ -135,7 +123,7 @@ export const NotificationBell: React.FC<{ size?: "sm" | "md" }> = ({ size = "md"
   const isSmall = size === "sm";
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative z-50" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
         className={`relative rounded-xl bg-[#1e1712]/90 hover:bg-[#2c2016] text-[#e8d7b3] hover:text-[#fff0cd] transition-colors border border-[#a88952]/60 flex items-center justify-center cursor-pointer shadow-md backdrop-blur-md ${
@@ -156,15 +144,9 @@ export const NotificationBell: React.FC<{ size?: "sm" | "md" }> = ({ size = "md"
         )}
       </button>
 
-      {open && mounted && createPortal(
-        <div className="fixed inset-0 z-[9999] pointer-events-none">
+      {open && (
           <div
-            className="pointer-events-auto absolute inset-0 bg-black/40 sm:bg-transparent"
-            onClick={() => setOpen(false)}
-          />
-          <div
-            ref={modalRef}
-            className="pointer-events-auto fixed top-14 left-4 right-4 sm:left-4 sm:right-auto sm:w-[380px] max-w-[calc(100vw-2rem)] max-h-[75dvh] flex flex-col rounded-2xl border border-[#a88952]/80 bg-[#16100bfd] text-[#f4e8cb] shadow-[0_20px_50px_rgba(0,0,0,.9)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-serif"
+            className="absolute right-0 top-full mt-2 w-[min(380px,calc(100vw-2rem))] max-h-[min(75dvh,640px)] flex flex-col rounded-2xl border border-[#a88952]/80 bg-[#16100bfd] text-[#f4e8cb] shadow-[0_20px_50px_rgba(0,0,0,.9)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-serif"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#a88952]/30 bg-[#251a13]/90 rounded-t-2xl">
               <div className="flex items-center gap-2">
@@ -200,8 +182,6 @@ export const NotificationBell: React.FC<{ size?: "sm" | "md" }> = ({ size = "md"
               )}
             </div>
           </div>
-        </div>,
-        document.body
       )}
     </div>
   );

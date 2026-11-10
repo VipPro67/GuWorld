@@ -34,7 +34,7 @@ let confirmResolve: ((value: boolean) => void) | null = null;
 
 export const useUIStore = create<UIStoreState>((set, get) => ({
   toasts: [],
-  currentView: "mmo-world",
+  currentView: "dashboard",
   showChangelog: false,
   confirmDialog: { open: false, message: "", confirmText: "Xác nhận", cancelText: "Hủy" },
 

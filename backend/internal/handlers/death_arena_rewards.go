@@ -21,6 +21,7 @@ func loadTeamMembersForCombat(q db.Queryer, teamID string) ([]*teamMemberCombata
 		JOIN players p ON dtm.player_id = p.id
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 		WHERE dtm.team_id = $1 AND dtm.eliminated = false AND dtm.current_hp > 0
+		ORDER BY dtm.player_id
 	`, teamID)
 	if err != nil {
 		return nil, err

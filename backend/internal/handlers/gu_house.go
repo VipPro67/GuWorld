@@ -16,7 +16,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -127,15 +126,8 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 					RealtimeWindupMS: windupMS, RealtimeCooldownMS: cooldownMS, Priority: 1,
 					ManaCost: spec.BaseManaCost * 1.5, SuccessChance: 0.95, RealtimeEffects: []gameplayeffects.Block{effect},
 				}
-				compiled := realtimeeffects.BuildKillerMoveSkills([]realtimeeffects.KillerMove{{
-					ProfileVersion: 2, ID: action.ID, Name: action.Name, Rank: action.Rank,
-					Components:         []realtimeeffects.KillerMoveComponent{{InstanceID: gu.InstanceID, Hunger: 1}},
-					ExpectedComponents: 1, Effects: action.RealtimeEffects, ManaCost: action.ManaCost,
-					SuccessChance: action.SuccessChance, Complexity: 1,
-					WindupMS: action.RealtimeWindupMS, CooldownMS: action.RealtimeCooldownMS,
-				}})
-				if len(compiled) != 1 {
-					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích %q không vượt qua compiler realtime", selected.Label)
+				if operation.Op == "" {
+					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích %q không hợp lệ", selected.Label)
 				}
 				switch operation.Op {
 				case gameplayeffects.OpDamage:

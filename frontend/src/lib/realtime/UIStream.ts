@@ -1,4 +1,4 @@
-import { STREAM_UI } from "../../game/network/v2/Codec.ts";
+export const STREAM_UI = 0x02;
 
 export interface WebTransportStreamLike {
   readable: ReadableStream<Uint8Array>;

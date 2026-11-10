@@ -23,7 +23,7 @@ func AdminListPlayerPets(c *gin.Context) {
 		SELECT id, owner_player_id, template_id, name, rank, sub_rank,
 		       hp, max_hp, base_attack, base_defense, speed, count,
 		       hunger, max_hunger, upkeep_rate,
-		       CASE WHEN execution_state = 'RECOVERING' THEN 'SLEEPING' ELSE 'ACTIVE' END,
+		       CASE execution_state WHEN 'RECOVERING' THEN 'SLEEPING' WHEN 'INJURED' THEN 'INJURED' ELSE 'ACTIVE' END,
 		       formation_slot, created_at, updated_at
 		FROM non_player_actors WHERE owner_player_id = $1
 		  AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'

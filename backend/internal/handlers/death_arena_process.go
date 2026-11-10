@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -28,11 +27,8 @@ func processPendingMatches(tournamentID string) {
 
 	logger.S.Infof("Death Arena: Starting match processing for tournament %s", tournamentID)
 
-	// Only reopen a match if its realtime session was lost during a restart.
-	_, _ = db.DB.Exec(`UPDATE death_arena_matches m SET status='PENDING'
-		WHERE m.tournament_id=$1 AND m.status='IN_PROGRESS' AND NOT EXISTS (
-			SELECT 1 FROM realtime_combat_sessions s WHERE s.mode='tournament' AND s.status='active'
-			AND s.payload->>'tournament_id'=$1 AND s.payload->>'match_id'=m.id::text)`, tournamentID)
+	// Reopen in-progress matches on restart.
+	_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status='PENDING' WHERE tournament_id=$1 AND status='IN_PROGRESS'`, tournamentID)
 
 	roundStartTime := time.Now()
 
@@ -61,7 +57,6 @@ func processPendingMatches(tournamentID string) {
 			var activeCount int
 			_ = db.DB.QueryRow(`SELECT COUNT(*) FROM death_arena_matches WHERE tournament_id=$1 AND status='IN_PROGRESS'`, tournamentID).Scan(&activeCount)
 			if activeCount > 0 {
-				settleExpiredTournamentDisconnects(context.Background(), tournamentID, "death_arena")
 				time.Sleep(time.Second)
 				continue
 			}
@@ -137,7 +132,14 @@ func processPendingMatches(tournamentID string) {
 		}
 
 		// Mark as in progress
-		_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'IN_PROGRESS' WHERE id = $1`, matchID)
+		claimed, claimErr := db.DB.Exec(`UPDATE death_arena_matches SET status='IN_PROGRESS' WHERE id=$1 AND status='PENDING'`, matchID)
+		if claimErr != nil {
+			logger.S.Errorf("Death Arena: failed to claim match %s: %v", matchID, claimErr)
+			return
+		}
+		if affected, _ := claimed.RowsAffected(); affected != 1 {
+			continue
+		}
 
 		var teamBIDPtr *string
 		if teamBID.Valid && teamBID.String != "" {
@@ -175,7 +177,7 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		return err
 	}
 
-	// Load living participants and open their isolated realtime map.
+	// Load living participants and resolve the bracket match in the turn-based simulator.
 	teamAMembers, err := loadTeamMembersForCombat(db.DB, teamAID)
 	if err != nil {
 		return err
@@ -243,7 +245,7 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		return nil
 	}
 
-	return startRealtimeDeathArenaMatch(tournamentID, matchID, teamAID, *teamBID, teamAMembers, teamBMembers)
+	return resolveDeathArenaTurnBasedMatch(tournamentID, matchID, teamAID, *teamBID)
 }
 
 // advanceToNextRound advances the tournament to the next round

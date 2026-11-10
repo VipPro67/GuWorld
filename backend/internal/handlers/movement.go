@@ -115,13 +115,9 @@ func validateMovementTarget(spec movementSpec) *movementError {
 
 // validateMovementState is the database-free half of the chain. Kept pure so
 // the precedence and messages are testable without a transaction.
-func validateMovementState(player *models.Player, spec movementSpec, ownedByRealtime bool) *movementError {
-	if ownedByRealtime {
-		return &movementError{
-			status:  http.StatusConflict,
-			code:    "realtime_world_owns_character",
-			message: "Character is controlled by the realtime world",
-		}
+func validateMovementState(player *models.Player, spec movementSpec, _ bool) *movementError {
+	if player.ActiveCombat != nil {
+		return &movementError{status: http.StatusConflict, message: "Không thể di chuyển khi đang chiến đấu."}
 	}
 	if err := validateMovementTarget(spec); err != nil {
 		return err
@@ -188,14 +184,7 @@ func actionStatus(policy movementPolicy) int {
 // transaction, so an MMO-owned character is not even charged mana by the
 // legacy path. The full guard still repeats the check at the seam.
 func rejectRealtimeOwned(c *gin.Context, playerID uuid.UUID) bool {
-	if !middleware.IsRealtimeWorldOwned(playerID) {
-		return false
-	}
-	c.JSON(http.StatusConflict, gin.H{
-		"code":  "realtime_world_owns_character",
-		"error": "Character is controlled by the realtime world",
-	})
-	return true
+	return false
 }
 
 // movementErrorPayload renders a guard violation without needing a gin context,
@@ -286,15 +275,6 @@ func ExecuteSpatialTransition(ctx context.Context, tx *sql.Tx, player *models.Pl
 	`, player.CurrentRegion, player.X, player.Y, player.PrimevalStones, player.ImmortalStones, player.Statuses,
 		float64(player.X), float64(player.Y), player.ID); err != nil {
 		return nil, fmt.Errorf("update player location on transition: %w", err)
-	}
-
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO player_world_state_v2 (player_id, hp, shield, map_version, content_version, updated_at)
-		VALUES ($1, $2, 0, '', '', NOW())
-		ON CONFLICT (player_id)
-		DO UPDATE SET hp = EXCLUDED.hp, updated_at = NOW()
-	`, player.ID, player.HP); err != nil {
-		return nil, fmt.Errorf("upsert player_world_state_v2 on transition: %w", err)
 	}
 
 	syncedMembers := SyncPartyMembersLocation(tx, player)

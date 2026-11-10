@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"sync"
@@ -44,11 +43,8 @@ func processPendingMartialMatches(tournamentID string) {
 
 	logger.S.Infof("Martial Arena: processing matches for tournament %s", tournamentID)
 
-	// Reopen only matches whose realtime session was lost during a restart.
-	_, _ = db.DB.Exec(`UPDATE martial_matches m SET status='PENDING'
-		WHERE m.tournament_id=$1 AND m.status='IN_PROGRESS' AND NOT EXISTS (
-			SELECT 1 FROM realtime_combat_sessions s WHERE s.mode='tournament' AND s.status='active'
-			AND s.payload->>'tournament_id'=$1 AND s.payload->>'match_id'=m.id::text)`, tournamentID)
+	// Reopen in-progress matches on restart.
+	_, _ = db.DB.Exec(`UPDATE martial_matches SET status='PENDING' WHERE tournament_id=$1 AND status='IN_PROGRESS'`, tournamentID)
 
 	for {
 		var status string
@@ -69,7 +65,6 @@ func processPendingMartialMatches(tournamentID string) {
 			var activeCount int
 			_ = db.DB.QueryRow(`SELECT COUNT(*) FROM martial_matches WHERE tournament_id=$1 AND status='IN_PROGRESS'`, tournamentID).Scan(&activeCount)
 			if activeCount > 0 {
-				settleExpiredTournamentDisconnects(context.Background(), tournamentID, "martial_arena")
 				time.Sleep(time.Second)
 				continue
 			}
@@ -97,7 +92,14 @@ func processPendingMartialMatches(tournamentID string) {
 			return
 		}
 
-		_, _ = db.DB.Exec(`UPDATE martial_matches SET status = 'IN_PROGRESS' WHERE id = $1`, matchID)
+		claimed, claimErr := db.DB.Exec(`UPDATE martial_matches SET status='IN_PROGRESS' WHERE id=$1 AND status='PENDING'`, matchID)
+		if claimErr != nil {
+			logger.S.Errorf("Martial Arena: failed to claim match %s: %v", matchID, claimErr)
+			return
+		}
+		if affected, _ := claimed.RowsAffected(); affected != 1 {
+			continue
+		}
 
 		var bPtr *string
 		if combatantBID.Valid && combatantBID.String != "" {
@@ -115,7 +117,7 @@ func processPendingMartialMatches(tournamentID string) {
 	}
 }
 
-// resolveMartialMatch starts one 1v1 realtime arena match and records the result.
+// resolveMartialMatch simulates one 1v1 turn-based match and records the result.
 func resolveMartialMatch(tournamentID, matchID, combatantAID string, combatantBID *string) error {
 	if combatantBID == nil || *combatantBID == "" {
 		_, err := db.DB.Exec(`UPDATE martial_matches SET status = 'BYE', winner_combatant_id = $1, finished_at = NOW() WHERE id = $2`, combatantAID, matchID)
@@ -128,16 +130,7 @@ func resolveMartialMatch(tournamentID, matchID, combatantAID string, combatantBI
 		return err
 	}
 
-	memberA, err := loadMartialCombatant(db.DB, combatantAID)
-	if err != nil {
-		return err
-	}
-	memberB, err := loadMartialCombatant(db.DB, *combatantBID)
-	if err != nil {
-		return err
-	}
-
-	return startRealtimeMartialArenaMatch(tournamentID, matchID, combatantAID, *combatantBID, memberA, memberB)
+	return resolveMartialArenaTurnBasedMatch(tournamentID, matchID, combatantAID, *combatantBID)
 }
 
 // advanceMartialRound creates next-round matches from the current winners, or crowns

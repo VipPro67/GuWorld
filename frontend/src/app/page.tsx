@@ -10,7 +10,7 @@ import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { LevelZeroView } from "@/components/LevelZeroView";
-import { Sparkles, X, Handshake, Store } from "@/lib/icons";
+import { Sparkles, X, Handshake, Store, HelpCircle, LogOut } from "@/lib/icons";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { NotificationBell } from "@/components/NotificationBell";
 import { RespawnChoiceModal } from "@/components/RespawnChoiceModal";
@@ -25,7 +25,6 @@ import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliatio
 import { updateUiPreferences } from "@/lib/ui-preferences";
 import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { installHttpFallbackPolling } from "@/lib/http-fallback";
-import { BasicFeatureNavigation } from "@/components/game/BasicFeatureNavigation";
 
 const subscribeConnection = (notify: () => void) => uiRealtimeManager.onConnectionChange(notify);
 const getConnection = () => uiRealtimeManager.getConnectionState();
@@ -51,12 +50,14 @@ const PetPanel = dynamic(() => import("@/components/PetPanel").then(m => m.PetPa
 const SectView = dynamic(() => import("@/components/SectView").then(m => m.SectView), { ssr: false });
 const PartyView = dynamic(() => import("@/components/PartyView").then(m => m.PartyView), { ssr: false });
 const CombatHistoryView = dynamic(() => import("@/components/CombatHistoryView").then(m => m.CombatHistoryView), { ssr: false });
+const CombatScreen = dynamic(() => import("@/components/CombatScreen").then(m => m.CombatScreen), { ssr: false });
 const FeedbackView = dynamic(() => import("@/components/FeedbackView").then(m => m.FeedbackView), { ssr: false });
 const AuditLogsView = dynamic(() => import("@/components/AuditLogsView").then(m => m.AuditLogsView), { ssr: false });
 const LeaderboardView = dynamic(() => import("@/components/LeaderboardView").then(m => m.LeaderboardView), { ssr: false });
 const TrainingRoom = dynamic(() => import("@/components/TrainingRoom").then(m => m.TrainingRoom), { ssr: false });
 const UtilitiesView = dynamic(() => import("@/components/UtilitiesView").then(m => m.UtilitiesView), { ssr: false });
-const PhaserWorldHost = dynamic(() => import("@/components/game/PhaserWorldHost").then(m => m.PhaserWorldHost), { ssr: false });
+const ExplorationMap = dynamic(() => import("@/components/ExplorationMap").then(m => m.ExplorationMap), { ssr: false });
+const LobbyView = dynamic(() => import("@/components/LobbyView").then(m => m.LobbyView), { ssr: false });
 
 export default function Home() {
   const router = useRouter();
@@ -169,12 +170,15 @@ export default function Home() {
   );
 
   const unequipAllGu = useGameStore((s) => s.unequipAllGu);
+  const logout = useGameStore((s) => s.logout);
   const merchantAtVillage = useGameStore((s) => s.merchantAtVillage);
   const nearbyMerchants = useGameStore((s) => s.merchants);
   const fetchMerchants = useGameStore((s) => s.fetchMerchants);
+  const activeCombatReplay = useGameStore((s) => s.activeCombatReplay);
+  const fleeCombat = useGameStore((s) => s.fleeCombat);
 
   const currentView = useUIStore((s) => s.currentView);
-  const isGameWorldSurface = ["dashboard", "mmo-world"].includes(currentView);
+  const isExploreView = ["explore", "mmo-world"].includes(currentView);
   const setView = useUIStore((s) => s.setView);
   const showChangelog = useUIStore((s) => s.showChangelog);
   const setShowChangelog = useUIStore((s) => s.setShowChangelog);
@@ -205,15 +209,8 @@ export default function Home() {
 
   // 1. Session Restoration on Mount
   useEffect(() => {
-    // Warm the browser image cache at the same time as dictionary/session
-    // startup. Phaser will consume the same URLs when its world scene mounts.
     void fetchDictionary();
     void initializeSession();
-    void import("@/game/assets/warmupWorldAssets").then(({ warmupWorldAssets }) => {
-      warmupWorldAssets();
-    }).catch((error: unknown) => {
-      console.warn("[Assets] Could not warm the world image cache:", error);
-    });
   }, [initializeSession, fetchDictionary]);
 
   const playerId = player?.id;
@@ -272,9 +269,9 @@ export default function Home() {
   // panel refreshes its own list while open; polling here duplicated requests
   // for players standing idle on the world page.
   useEffect(() => {
-    if (!playerId || !isGameWorldSurface) return;
+    if (!playerId || !isExploreView) return;
     void fetchMerchants();
-  }, [playerId, player?.current_region, isGameWorldSurface, fetchMerchants]);
+  }, [playerId, player?.current_region, isExploreView, fetchMerchants]);
 
   const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
@@ -331,28 +328,47 @@ export default function Home() {
     );
   }
 
-  // Phaser is the only persistent gameplay world. Old view IDs remain aliases
-  // for navigation compatibility and never open a legacy map surface.
-  const isGameWorldView = Boolean(player && !player.needs_onboarding);
-  const isFullBleedView = currentView === "practice-room" || isGameWorldSurface;
+  const isFullBleedView = currentView === "practice-room" || isExploreView;
   const isWideFeatureView = ["aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "death-arena", "martial-arena"].includes(currentView);
 
   const viewTitles: Record<string, string> = {
-    "practice-room": "Phòng tập", cultivation: "Tu luyện", character: "Nhân vật", inventory: "Túi đồ", "inventory-gu": "Cổ trùng", party: "Tổ đội",    refine: "Luyện Cổ", topup: "Nạp", "premium-shop": "Cửa hàng tiên ngọc",
-    "premium-store": "Cửa hàng", shop: "Thương hội", auction: "Chợ Tiên",
-    arena: "Đấu trường", "death-arena": "Sinh tử đài", "martial-arena": "Đại Hội Võ Thuật", leaderboard: "Bảng xếp hạng",
-    gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân",
-    aperture: "Tiên khiếu", "dream-realm": "Mộng Cảnh", dungeon: "Bí cảnh & Truyền thừa", sect: "Tông môn",
-    "combat-history": "Lịch sử chiến đấu", feedback: "Góp ý", "audit-logs": "Nhật ký hệ thống",
-    "mmo-world": "Thế giới Realtime",
+    dashboard: "Sảnh chính",
+    explore: "Khám phá dã ngoại",
+    "practice-room": "Phòng tập",
+    cultivation: "Tu luyện",
+    character: "Nhân vật",
+    inventory: "Túi đồ",
+    "inventory-gu": "Cổ trùng",
+    party: "Tổ đội",
+    refine: "Luyện Cổ",
+    topup: "Nạp",
+    "premium-shop": "Cửa hàng tiên ngọc",
+    "premium-store": "Cửa hàng",
+    shop: "Thương hội",
+    auction: "Chợ Tiên",
+    arena: "Đấu trường",
+    "death-arena": "Sinh tử đài",
+    "martial-arena": "Đại Hội Võ Thuật",
+    leaderboard: "Bảng xếp hạng",
+    gacha: "Tiên duyên",
+    achievements: "Thành tựu",
+    pets: "Dị nhân",
+    aperture: "Tiên khiếu",
+    "dream-realm": "Mộng Cảnh",
+    dungeon: "Bí cảnh & Truyền thừa",
+    sect: "Tông môn",
+    "combat-history": "Lịch sử chiến đấu",
+    feedback: "Góp ý",
+    "audit-logs": "Nhật ký hệ thống",
+    "mmo-world": "Khám phá dã ngoại",
     utilities: "Tiện ích",
   };
 
   return (
-    <div className={`${isGameWorldView ? "h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0" : "min-h-screen flex flex-col py-2 sm:py-8 px-1 sm:px-6 lg:px-8"} relative`}>
+    <div className="mmo-paper-theme h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0 relative">
       {/* Top Header Navigation */}
-      {!isGameWorldView && <header className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto pb-4 border-b border-[var(--border-default)] mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-4">
+      <header className="w-full max-w-[1600px] px-2 sm:px-6 mx-auto py-2.5 sm:py-3 border-b border-[var(--border-default)] flex justify-between items-center gap-3 shrink-0 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30">
+        <div className="flex items-center gap-3 sm:gap-6">
           <div
             onClick={() => {
               if (player && currentView !== "dashboard") {
@@ -360,37 +376,52 @@ export default function Home() {
               }
             }}
             className={`flex items-center gap-2 ${player && currentView !== "dashboard" ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
-            title={player && currentView !== "dashboard" ? "Trở về Sảnh" : undefined}
+            title={player && currentView !== "dashboard" ? "Trở về Sảnh Chính" : undefined}
           >
-              <div className="w-8 h-8 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)] flex items-center justify-center shrink-0">
-                <Sparkles className="w-4 h-4 text-emerald-400" />
-              </div>
-              <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-[var(--text-primary)]">
-                Cổ Giới
-              </h1>
+            <div className="w-8 h-8 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)] flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+            </div>
+            <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-[var(--text-primary)]">
+              Cổ Giới
+            </h1>
           </div>
+
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {player && (
+            <Link
+              href="/wiki"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs text-emerald-400 hover:text-emerald-300 font-serif transition-colors border border-zinc-800 inline-flex items-center gap-1"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="hidden sm:inline">Wiki</span>
+            </Link>
+          )}
+
           {player && <NotificationBell />}
+
+          {player && (
+            <button
+              onClick={logout}
+              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-red-950/30 text-xs text-red-400 hover:text-red-300 font-serif transition-colors border border-zinc-800 hover:border-red-900/30 cursor-pointer inline-flex items-center gap-1"
+              title="Đăng Xuất"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Đăng Xuất</span>
+            </button>
+          )}
+
+          <ClearCacheButton />
         </div>
-      </header>}
-      {isGameWorldView && (!worldConnected || connection !== "connected") && (
-        <BasicFeatureNavigation
-          worldConnected={worldConnected}
-          onNavigate={setView}
-          onReconnect={() => {
-            setView("mmo-world");
-            uiRealtimeManager.retryConnection();
-            useGameStore.getState().requestWorldReconnect();
-          }}
-        />
-      )}
-      {isGameWorldView && !worldConnected && <GlobalChatOverlay />}
+      </header>
+
       {/* Main Content Area */}
-      <main className={`w-full ${isGameWorldView ? "flex-1 min-h-0 max-w-none px-0 mx-0 overflow-hidden flex flex-col" : "flex-grow flex items-start justify-center max-w-[1600px] px-2 sm:px-8 mx-auto"}`}>
+      <main className="w-full flex-1 min-h-0 max-w-none px-0 mx-0 overflow-hidden flex flex-col">
         {!player ? (
-          <div className="py-12 w-full flex justify-center">
+          <div className="py-12 w-full flex justify-center overflow-y-auto">
             <Registration
               onRegister={register}
               onLogin={login}
@@ -400,18 +431,37 @@ export default function Home() {
               onClearError={clearError}
             />
           </div>
+        ) : player.active_combat || activeCombatReplay ? (
+          <div className="w-full flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            <CombatScreen
+              player={player}
+              enemy={player.active_combat || activeCombatReplay!.enemy}
+              guDictionary={guDictionary}
+              actionLoading={actionLoading}
+              isPracticeMode={((player.active_combat || activeCombatReplay?.enemy)?.enemy_type === "PRACTICE")}
+              onRetreat={fleeCombat}
+            />
+          </div>
         ) : player.rank === 0 ? (
-          <div className="py-12 w-full flex justify-center">
+          <div className="py-12 w-full flex justify-center overflow-y-auto">
             <LevelZeroView onComplete={completeTutorial} />
           </div>
         ) : player.needs_onboarding ? (
-          <div className="py-12 w-full flex justify-center">
+          <div className="py-12 w-full flex justify-center overflow-y-auto">
             <OnboardingModal onComplete={completeOnboarding} />
           </div>
         ) : (
           <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
-            <PhaserWorldHost worldActive={isGameWorldSurface || currentView === "practice-room"} onExit={() => setView("character")} onConnectionChange={setWorldConnected} fallbackChatActive={!worldConnected} />
-            {!isGameWorldSurface && (
+            {isExploreView ? (
+              <div className="w-full h-full overflow-y-auto py-2 sm:py-4">
+                <ExplorationMap player={player} />
+              </div>
+            ) : (
+              <div className="w-full h-full overflow-y-auto py-2 sm:py-4 px-2 sm:px-6">
+                <LobbyView />
+              </div>
+            )}
+            {!isExploreView && currentView !== "dashboard" && (
               <div className={`absolute inset-0 z-40 flex items-center justify-center ${isFullBleedView ? "" : "bg-black/75 backdrop-blur-sm md:p-4"}`}>
                 <section
                   role="dialog"
@@ -426,11 +476,10 @@ export default function Home() {
                       <div className="hidden text-[10px] uppercase tracking-[.2em] text-[#795a34] sm:block">Cổ Giới · Bảng điều khiển</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {player && <NotificationBell />}
                       <button
-                        onClick={() => setView("mmo-world")}
+                        onClick={() => setView("dashboard")}
                         aria-label="Đóng bảng điều khiển"
-                        className="mmo-bamboo-action grid h-9 w-9 shrink-0 place-items-center"
+                        className="mmo-bamboo-action grid h-9 w-9 shrink-0 place-items-center cursor-pointer"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -613,7 +662,7 @@ export default function Home() {
       {player && <RefineSessionPanel />}
 
       {/* Footer Details */}
-      {!isGameWorldView && (
+      {!player && (
         <footer className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-primary flex flex-col items-center gap-2">
           <div className="flex items-center gap-3">
             <a href="https://www.facebook.com/profile.php?id=61587628762458" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all">
@@ -905,7 +954,7 @@ export default function Home() {
       )}
 
       {/* Global Floating Chat Box */}
-      {player && !isGameWorldSurface && <GlobalChatOverlay />}
+      {player && !isExploreView && <GlobalChatOverlay />}
     </div>
   );
 }

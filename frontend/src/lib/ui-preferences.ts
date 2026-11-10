@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 
 /**
  * Single local save for UI settings. Everything device-specific that the client
- * persists lives here: quick actions, HUD view modes, changelog snooze, hotbar
- * keybinds and the general UI toggles. Server-side gameplay settings (Cổ/killer
- * move loadout, realtime controls) stay on the player row.
+ * persists lives here: lobby quick actions, HUD view modes, changelog snooze,
+ * and general UI preferences. Turn-based combat tactics are saved on the player.
  */
 
 export type HudViewMode = "expanded" | "compact" | "minimized";
@@ -51,11 +50,11 @@ export const DEFAULT_MENU_COLOR: MenuColorConfig = {
 };
 
 export type UiPreferences = {
-  quickActions: string[];
+  lobbyItems: string[];
+  hiddenLobbyItems: string[];
   playerViewMode: HudViewMode | "";
   targetViewMode: HudViewMode | "";
   changelogHideUntil: string;
-  keybinds: Record<number, string>;
   soundEnabled: boolean;
   showOtherPlayerNames: boolean;
   menuColor: MenuColorConfig;
@@ -65,14 +64,18 @@ export const UI_PREFERENCES_KEY = "gu_ui_prefs_v1";
 export const UI_PREFERENCES_EVENT = "gu_ui_prefs_updated";
 
 const LEGACY_KEYS = [
-  "gu_mmo_quick_actions",
   "gu_world_direct_action_hotbar_v1",
   "gu_player_view_mode",
   "gu_target_view_mode",
   "gu_changelog_hide_until",
 ];
 
-const DEFAULT_QUICK_ACTIONS = ["maps", "inventory", "cultivation", "shop"];
+export const DEFAULT_LOBBY_ITEMS = [
+  "character", "inventory", "refine", "aperture", "premium-store", "shop", "auction",
+  "pets", "sect", "practice-room", "arena", "death-arena", "martial-arena", "achievements",
+  "utilities", "explore", "dream-realm", "spatial-realms", "gacha", "leaderboard",
+  "divination", "feedback", "combat-history", "audit-logs",
+];
 const VIEW_MODES: HudViewMode[] = ["expanded", "compact", "minimized"];
 
 // Base keys owned by movement or fixed controls; binding these would shadow
@@ -100,25 +103,15 @@ function isViewMode(value: unknown): value is HudViewMode {
   return typeof value === "string" && VIEW_MODES.includes(value as HudViewMode);
 }
 
-function normalizeQuickActions(value: unknown): string[] {
-  if (!Array.isArray(value)) return [...DEFAULT_QUICK_ACTIONS];
-  const ids = value.filter((id): id is string => typeof id === "string" && id.length > 0);
-  return ids.length > 0 ? ids.slice(0, 5) : [...DEFAULT_QUICK_ACTIONS];
+function normalizeLobbyItems(value: unknown): string[] {
+  if (!Array.isArray(value)) return [...DEFAULT_LOBBY_ITEMS];
+  const ids = value.filter((id): id is string => typeof id === "string" && DEFAULT_LOBBY_ITEMS.includes(id));
+  return [...new Set([...ids, ...DEFAULT_LOBBY_ITEMS.filter((id) => !ids.includes(id))])];
 }
 
-function normalizeKeybinds(value: unknown): Record<number, string> {
-  const defaults = defaultHotbarKeybinds();
-  const keybinds: Record<number, string> = {};
-  if (value && typeof value === "object") {
-    for (const [rawSlot, binding] of Object.entries(value as Record<string, unknown>)) {
-      const slot = Number(rawSlot);
-      if (!Number.isInteger(slot) || slot < 1 || slot > HOTBAR_SLOT_COUNT) continue;
-      if (typeof binding === "string" && binding.length > 0 && binding.length <= 32) {
-        keybinds[slot] = binding;
-      }
-    }
-  }
-  return { ...defaults, ...keybinds };
+function normalizeHiddenLobbyItems(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((id): id is string => typeof id === "string" && DEFAULT_LOBBY_ITEMS.includes(id)))];
 }
 
 function normalizeMenuColor(value: unknown): MenuColorConfig {
@@ -159,11 +152,11 @@ function normalizeMenuColor(value: unknown): MenuColorConfig {
 export function normalizeUiPreferences(value: unknown): UiPreferences {
   const stored = value && typeof value === "object" ? (value as Partial<UiPreferences>) : {};
   return {
-    quickActions: normalizeQuickActions(stored.quickActions),
+    lobbyItems: normalizeLobbyItems(stored.lobbyItems),
+    hiddenLobbyItems: normalizeHiddenLobbyItems(stored.hiddenLobbyItems),
     playerViewMode: isViewMode(stored.playerViewMode) ? stored.playerViewMode : "",
     targetViewMode: isViewMode(stored.targetViewMode) ? stored.targetViewMode : "",
     changelogHideUntil: typeof stored.changelogHideUntil === "string" ? stored.changelogHideUntil : "",
-    keybinds: normalizeKeybinds(stored.keybinds),
     soundEnabled: typeof stored.soundEnabled === "boolean" ? stored.soundEnabled : true,
     showOtherPlayerNames: typeof stored.showOtherPlayerNames === "boolean" ? stored.showOtherPlayerNames : true,
     menuColor: normalizeMenuColor(stored.menuColor),
@@ -189,13 +182,6 @@ export function resolveTargetViewMode(preferences?: UiPreferences): HudViewMode 
 function readLegacyPreferences(): Partial<UiPreferences> {
   if (typeof window === "undefined") return {};
   const legacy: Partial<UiPreferences> = {};
-  try {
-    const quick = localStorage.getItem("gu_mmo_quick_actions");
-    if (quick) {
-      const parsed = JSON.parse(quick);
-      if (Array.isArray(parsed)) legacy.quickActions = normalizeQuickActions(parsed);
-    }
-  } catch { /* Ignore malformed legacy data. */ }
   try {
     const playerMode = localStorage.getItem("gu_player_view_mode");
     if (isViewMode(playerMode)) legacy.playerViewMode = playerMode;
@@ -501,8 +487,8 @@ export function updateUiPreferences(patch: Partial<UiPreferences>): UiPreference
 
 export function resetUiPreferences(): UiPreferences {
   return updateUiPreferences({
-    quickActions: [...DEFAULT_QUICK_ACTIONS],
-    keybinds: defaultHotbarKeybinds(),
+    lobbyItems: [...DEFAULT_LOBBY_ITEMS],
+    hiddenLobbyItems: [],
     menuColor: { ...DEFAULT_MENU_COLOR },
   });
 }
@@ -527,15 +513,15 @@ export function useUiPreferences(): UiPreferences {
 }
 
 export function getHotbarKeybinds(): Record<number, string> {
-  return getUiPreferences().keybinds;
+  return defaultHotbarKeybinds();
 }
 
-export function setHotbarKeybinds(keybinds: Record<number, string>): UiPreferences {
-  return updateUiPreferences({ keybinds });
+export function setHotbarKeybinds(_keybinds: Record<number, string>): UiPreferences {
+  return getUiPreferences();
 }
 
 export function useHotbarKeybinds(): Record<number, string> {
-  return useUiPreferences().keybinds;
+  return defaultHotbarKeybinds();
 }
 
 /** Returns the binding for a slot as a readable label, e.g. "1", "Alt+1", "Q", "F2". */

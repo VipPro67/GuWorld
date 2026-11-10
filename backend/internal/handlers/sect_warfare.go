@@ -28,6 +28,8 @@ const (
 	sectArrayCooldown    = 12 * time.Hour
 )
 
+const sectWarGuardianTemplateID = "sect_war_guardian"
+
 func sectArrayCanIntercept(now time.Time, readyAt sql.NullTime) bool {
 	return !readyAt.Valid || !now.Before(readyAt.Time)
 }
@@ -533,8 +535,8 @@ func ToggleDefendSect(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": msg, "is_defending": newState})
 }
 
-// AttackSect starts a realtime sect-war instance. Enemies are the guardian
-// beast and defending sect members; allies join the attacker in the instance.
+// AttackSect starts a turn-based sect-war encounter against the guardian and
+// defenders snapshotted at the target sect gate.
 func AttackSect(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -549,6 +551,17 @@ func AttackSect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
+	handedOff, err := middleware.BeginRealtimeHandoff(playerID)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Không thể đồng bộ trạng thái trước khi công phạt."})
+		return
+	}
+	committed := false
+	defer func() {
+		if handedOff && !committed {
+			middleware.AbortRealtimeHandoff(playerID)
+		}
+	}()
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -584,7 +597,7 @@ func AttackSect(c *gin.Context) {
 		return
 	}
 	var activeSectWar bool
-	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM realtime_combat_sessions WHERE mode='sect_war' AND status='active' AND payload->>'target_sect_id'=$1)`, req.TargetSectID).Scan(&activeSectWar); err != nil {
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE active_combat->>'target_sect_id'=$1)`, req.TargetSectID).Scan(&activeSectWar); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra chiến trận đang diễn ra."})
 		return
 	}
@@ -599,9 +612,9 @@ func AttackSect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
-	if region, x, y, ok := middleware.RealtimePlayerLocation(playerID); ok {
-		attacker.CurrentRegion = region
-		attacker.X, attacker.Y = x, y
+	if attacker.ActiveCombat != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đang trong trận chiến khác!"})
+		return
 	}
 
 	distX := math.Abs(float64(attacker.X - targetMapX))
@@ -660,28 +673,25 @@ func AttackSect(c *gin.Context) {
 		return
 	}
 
-	// Only realtime-owned defenders can enter this player-controlled virtual map.
+	// Snapshot registered defenders at the sect gate into the deterministic encounter.
 	var defenderIDs []uuid.UUID
 	defRows, derr := tx.Query(`
 		SELECT sm.player_id FROM sect_members sm
 		JOIN players p ON sm.player_id = p.id
 		WHERE sm.sect_id = $1 AND sm.is_defending = true
-	  AND p.current_region = $2 AND p.hp > 0
+		  AND p.current_region = $2 AND p.x = $3 AND p.y = $4 AND p.hp > 0 AND p.active_combat IS NULL
 		LIMIT 8
-	`, req.TargetSectID, targetRegion)
+	`, req.TargetSectID, targetRegion, targetMapX, targetMapY)
 	if derr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải đội hình phòng thủ."})
 		return
 	}
 	for defRows.Next() {
 		var defID uuid.UUID
-		if defRows.Scan(&defID) != nil || !middleware.IsRealtimeWorldOwned(defID) {
+		if defRows.Scan(&defID) != nil {
 			continue
 		}
-		region, x, y, ok := middleware.RealtimePlayerLocation(defID)
-		if ok && region == targetRegion && x == targetMapX && y == targetMapY {
-			defenderIDs = append(defenderIDs, defID)
-		}
+		defenderIDs = append(defenderIDs, defID)
 	}
 	if rowsErr := defRows.Err(); rowsErr != nil {
 		defRows.Close()
@@ -690,33 +700,74 @@ func AttackSect(c *gin.Context) {
 	}
 	defRows.Close()
 
-	instanceID, participantIDs, startErr := startRealtimeSectWar(c.Request.Context(), tx, playerID, attacker.Username, req.TargetSectID, targetName, targetRegion, targetLevel, arrLvl, defenderIDs)
-	if startErr != nil {
-		logger.S.Errorf("AttackSect: failed to start realtime sect war for player %s: %v", playerID, startErr)
-		c.JSON(http.StatusConflict, gin.H{"error": "Không thể bắt đầu chiến trận realtime. Hãy bảo đảm đội hình đang trực tuyến và không ở trận khác."})
-		return
+	guardian := sectGuardianProfileFor(targetName, targetLevel, arrLvl)
+	base := models.CombatState{
+		EnemyTemplateID: sectWarGuardianTemplateID, EnemyName: guardian.Name,
+		EnemyType: "SECT_WAR", CombatMode: "real",
+		EnemyHP: guardian.MaxHP, EnemyMaxHP: guardian.MaxHP,
+		EnemyMana: 100, EnemyMaxMana: 100,
+		EnemyDamage: guardian.BaseAttack, EnemyDefense: guardian.BaseDefense,
+		EnemySpeed: 8 + float64(guardian.Rank)*2, EnemyRank: guardian.Rank,
+		EnemySubRank: guardian.SubRank, AIProfile: "aggressive", TargetSectID: req.TargetSectID,
 	}
-	attacker.HumanQi = math.Min(attacker.HumanQi+5, MaxHumanQi)
-	defCount := 0
-	for _, id := range participantIDs {
-		if id != playerID && !containsUUID(defenderIDs, id) {
-			defCount++
+	attacker.ActiveCombat = StartCombat(tx, &base, &attacker)
+	var defenderCount int
+	for _, defID := range defenderIDs {
+		defender, loadErr := evaluateManaTxEquippedReadonly(tx, defID)
+		if loadErr != nil || defender.HP <= 0 {
+			continue
+		}
+		stats := CalculatePlayerStats(&defender)
+		combatant := models.CombatantFromPlayer(&defender, stats)
+		combatant.Kind = "Player"
+		combatant.CombatSettings = &defender.CombatSettings
+		combatant.GuInventory = defender.GuInventory
+		attacker.ActiveCombat.Enemies = append(attacker.ActiveCombat.Enemies, combatant)
+		defenderCount++
+	}
+	enemySlots := [][2]int{{2, 3}, {2, 1}, {1, 1}, {3, 1}, {2, 2}, {1, 2}, {3, 2}, {1, 3}, {3, 3}}
+	for idx := range attacker.ActiveCombat.Enemies {
+		if idx < len(enemySlots) {
+			attacker.ActiveCombat.Enemies[idx].GridX = enemySlots[idx][0]
+			attacker.ActiveCombat.Enemies[idx].GridY = enemySlots[idx][1]
+		}
+		if attacker.ActiveCombat.Enemies[idx].Speed == 0 {
+			attacker.ActiveCombat.Enemies[idx].Speed = 8 + float64(attacker.ActiveCombat.Enemies[idx].Rank)*2
 		}
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	qiGained := AddHumanQi(&attacker, 5)
+	combatBytes, err := json.Marshal(attacker.ActiveCombat)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo trạng thái chiến đấu."})
+		return
+	}
+	if _, err := tx.Exec(`UPDATE players SET active_combat=$1,human_qi=$2 WHERE id=$3`, string(combatBytes), attacker.HumanQi, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái chiến đấu."})
+		return
+	}
+	auditlog.Log(tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.attack", EntityType: "sect", EntityID: req.TargetSectID,
-		RequestSummary: fmt.Sprintf("Tấn công realtime tông môn %s", targetName),
-		Metadata:       map[string]interface{}{"target_sect_id": req.TargetSectID, "my_sect_id": mySectID, "instance_id": instanceID.String(), "guardian_rank": targetLevel, "defender_count": len(defenderIDs)},
+		RequestSummary: fmt.Sprintf("Khiêu chiến tông môn %s (Hộ Sơn Thần Thú R%d, %d đệ tử trấn thủ)", targetName, targetLevel, defenderCount),
+		Metadata:       map[string]interface{}{"target_sect_id": req.TargetSectID, "my_sect_id": mySectID, "guardian_rank": targetLevel, "defender_count": defenderCount},
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	_ = SendSystemMessage("sect", sql.NullString{String: req.TargetSectID, Valid: true},
-		fmt.Sprintf("[Chiến Báo] Kẻ địch %s đã phát động tấn công Sơn Môn realtime!", attacker.Username))
-	msg := fmt.Sprintf("Khiêu chiến Tông Môn %s! Trận realtime đã bắt đầu với Hộ Sơn Thần Thú", targetName)
-	if defCount > 0 {
-		msg += fmt.Sprintf(" cùng %d đệ tử trấn thủ", defCount)
+	if err = tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
 	}
-	msg += ". Nhân Khí +5."
-	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": msg, "instance_id": instanceID, "zone_id": practiceRealtimeMapID})
+	committed = true
+	if handedOff {
+		middleware.FinishRealtimeHandoff(playerID)
+	}
+	attacker.HumanQi = math.Min(attacker.HumanQi, MaxHumanQi)
+	PublishPlayerCombatDelta(playerID, CombatEventStarted, attacker.ActiveCombat)
+	msg := fmt.Sprintf("Khiêu chiến Tông Môn %s! Đối mặt Hộ Sơn Thần Thú", targetName)
+	if defenderCount > 0 {
+		msg += fmt.Sprintf(" cùng %d đệ tử trấn thủ", defenderCount)
+	}
+	msg += fmt.Sprintf(". Nhân Khí +%.0f.", qiGained)
+	_ = SendSystemMessage("sect", sql.NullString{String: req.TargetSectID, Valid: true}, fmt.Sprintf("[Chiến Báo] Kẻ địch %s đã phát động tấn công Sơn Môn!", attacker.Username))
+	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": msg, "active_combat": attacker.ActiveCombat})
 }
 
 // sectPlunderVoidPct — Thiên Đạo Tiêu Hủy (Void Destruction) khi cướp kho Tông Môn,
@@ -744,7 +795,7 @@ func splitVoidDestruction(stolen int64, voidPct float64) (destroyed, delivered i
 	return destroyed, stolen - destroyed
 }
 
-// ApplySectWarVictory applies rewards after a realtime sect-war instance ends.
+// ApplySectWarVictory applies rewards after a turn-based sect-war encounter ends.
 // It plunders funds, vault_materials, vault_gu, and vault_recipes from the target sect.
 // Một phần chiến lợi phẩm bị Thiên Đạo tiêu hủy vĩnh viễn (Void Destruction),
 // phần còn lại chia cho đội tấn công. Mọi thao tác xóa kho / lưu đồ cho đội chạy

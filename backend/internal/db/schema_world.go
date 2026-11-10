@@ -33,12 +33,7 @@ func schemaWorld() error {
 	VALUES
 		('world_map', 'WorldMap', 'Năm đại vực của thế giới hiện tại.', 'WORLD', 30000, 20000, 1, 9, TRUE),
 		('bai_thien', 'Bạch Thiên · Tầng 2', 'Đại vực tầng 2; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 6, 9, FALSE),
-		('hac_thien', 'Hắc Thiên · Tầng 3', 'Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 8, 9, FALSE),
-		('realtime_preview', 'MMO Preview', 'Map thử nghiệm Phaser realtime 64×48.', 'WORLD', 64, 48, 1, 9, TRUE),
-		('misty_forest', 'Rừng Sương Mù', 'Map MMO Alpha PvE 64×48.', 'WORLD', 64, 48, 1, 9, TRUE),
-		('bone_crypt', 'Hầm Xương', 'Map MMO Alpha PvE 64×48.', 'WORLD', 64, 48, 1, 9, TRUE),
-		('crimson_ravine', 'Hẻm Núi Đỏ', 'Map MMO Alpha PvP 64×48.', 'WORLD', 64, 48, 1, 9, TRUE),
-		('emerald_grotto', 'Hang Ngọc Lục Bảo', 'Map MMO Alpha Safe 64×48.', 'WORLD', 64, 48, 1, 9, TRUE)
+		('hac_thien', 'Hắc Thiên · Tầng 3', 'Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 8, 9, FALSE)
 	ON CONFLICT (id) DO NOTHING;
 	UPDATE world_maps SET name='Bạch Thiên · Tầng 2', description='Đại vực tầng 2; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.' WHERE id='bai_thien';
 	UPDATE world_maps SET name='Hắc Thiên · Tầng 3', description='Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.' WHERE id='hac_thien';

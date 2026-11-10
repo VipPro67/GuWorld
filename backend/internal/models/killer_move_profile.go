@@ -38,6 +38,8 @@ type KillerMoveCombatProfile struct {
 	Bypass             bool                    `json:"bypass"`      // Bypasses frontline / shields
 	RealtimeWindupMS   uint64                  `json:"realtime_windup_ms"`
 	RealtimeCooldownMS uint64                  `json:"realtime_cooldown_ms"`
+	CooldownTurns      int                     `json:"cooldown_turns,omitempty"`
+	WarmupTurns        int                     `json:"warmup_turns,omitempty"`
 	Priority           int                     `json:"priority"`
 	ManaCost           float64                 `json:"mana_cost"`
 	HungerCost         float64                 `json:"hunger_cost"`

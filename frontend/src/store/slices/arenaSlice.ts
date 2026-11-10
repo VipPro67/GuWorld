@@ -134,14 +134,7 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
-      if (data.zone_id && data.instance_id) {
-        get().setPlayerFromServer({
-          world_zone_id: data.zone_id,
-          world_instance_id: `combat:${data.instance_id}`,
-        });
-        get().requestWorldReconnect();
-        get().setView("mmo-world");
-      }
+      if (data.active_combat) get().setPlayerFromServer({ active_combat: data.active_combat });
       get().addLog(data.message || "Đã thách đấu đối thủ!");
       return true;
     } catch (caught: unknown) {

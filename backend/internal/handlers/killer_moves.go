@@ -19,7 +19,6 @@ import (
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -41,11 +40,10 @@ func killerMoveComponentMatches(component killerMoveComponent, gu models.GuInsta
 	return gu.InstanceID == component.InstanceID && gu.GuID == component.GuID && gu.Rank == component.Rank && !strings.EqualFold(gu.Status, "DEAD")
 }
 
-func evaluateKillerMoveComponents(components []killerMoveComponent, ownedSet map[string]ownedKillerMoveGu) (bool, bool, []string, []realtimeeffects.KillerMoveComponent) {
+func evaluateKillerMoveComponents(components []killerMoveComponent, ownedSet map[string]ownedKillerMoveGu) (bool, bool, []string) {
 	available := true
 	hasStarvingGu := false
 	var missingGu []string
-	moveComponents := make([]realtimeeffects.KillerMoveComponent, 0, len(components))
 	for _, component := range components {
 		gu, exists := ownedSet[component.InstanceID]
 		if !exists || strings.EqualFold(gu.State, "DEAD") || gu.GuID != component.GuID || gu.Rank != component.Rank {
@@ -56,12 +54,11 @@ func evaluateKillerMoveComponents(components []killerMoveComponent, ownedSet map
 		if gu.Hunger < 1 {
 			hasStarvingGu = true
 		}
-		moveComponents = append(moveComponents, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: gu.Hunger})
 	}
 	if len(missingGu) > 0 {
 		available = false
 	}
-	return available, hasStarvingGu, missingGu, moveComponents
+	return available, hasStarvingGu, missingGu
 }
 
 type killerMoveEffectRef struct {
@@ -198,7 +195,7 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 			if op.Target != nil {
 				target = *op.Target
 			}
-			realtimeSupported := block.Trigger == gameplayeffects.TriggerOnAction && realtimeeffects.RealtimeOperationAllowed(op, target)
+			realtimeSupported := block.Trigger == gameplayeffects.TriggerOnAction
 			outsideCombatSupported := block.Trigger == gameplayeffects.TriggerOnUse && killerMoveOutsideCombatOperationAllowed(op, target)
 			if !realtimeSupported && !outsideCombatSupported {
 				continue
@@ -466,23 +463,9 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 			preview.HasOutsideCombatEffect = true
 		}
 	}
-	moveComponents := make([]realtimeeffects.KillerMoveComponent, 0, len(components))
-	for _, component := range components {
-		moveComponents = append(moveComponents, realtimeeffects.KillerMoveComponent{InstanceID: component.InstanceID, Hunger: owned[component.InstanceID].Hunger})
-	}
-	_, reason, ok := realtimeeffects.CompileKillerMoveWithDiagnostic(realtimeeffects.KillerMove{
-		ProfileVersion: profile.ProfileVersion, ID: "preview", Name: "preview", Rank: main.Rank, Components: moveComponents, ExpectedComponents: len(components),
-		Effects: blocks, ManaCost: manaCost, SuccessChance: success, Complexity: complexity,
-		BackfireHPPercent: profile.BackfireHPPercent, BackfireStatus: profile.BackfireStatus,
-		WindupMS: profile.RealtimeWindupMS, CooldownMS: profile.RealtimeCooldownMS,
-	}, 9)
-	preview.RealtimeSupported = ok
-	if !preview.RealtimeSupported {
-		if !preview.HasRealtimeEffects && preview.HasOutsideCombatEffect {
-			preview.RealtimeReason = "Sát chiêu này chỉ dùng ngoài combat"
-		} else {
-			preview.RealtimeReason = reason
-		}
+	preview.RealtimeSupported = true
+	if !preview.HasRealtimeEffects && preview.HasOutsideCombatEffect {
+		preview.RealtimeReason = "Sát chiêu này chỉ dùng ngoài combat"
 	}
 	preview.PreviewFingerprint = killerMovePreviewHash(preview)
 	return preview, main, nil
@@ -835,31 +818,15 @@ func ListKillerMoves(c *gin.Context) {
 		m.MasteryLevel = m.MasteryXP / 100
 		currentLevel := gamefx.PathMasteryLevel(masteries[gamefx.CleanPath(m.Path)])
 		m.SuccessChance = killerMoveAdjustedChance(m.SuccessChance, m.CreationPathMasteryLevel, currentLevel, m.MasteryXP)
-		available, hasStarvingGu, missingGu, moveComponents := evaluateKillerMoveComponents(m.Components, ownedSet)
+		available, hasStarvingGu, missingGu := evaluateKillerMoveComponents(m.Components, ownedSet)
 		m.Available = available
 		m.HasStarvingGu = hasStarvingGu
 		m.MissingGu = missingGu
 		if !m.Available {
 			m.RealtimeUnavailableReason = "Thiếu Cổ thành phần"
-		}
-		if m.Available {
-			windupMS, cooldownMS := m.CombatProfile.RealtimeWindupMS, m.CombatProfile.RealtimeCooldownMS
-			if windupMS == 0 || cooldownMS == 0 {
-				windupMS, cooldownMS = models.KillerMoveRealtimeTiming(m.MainGuRank, m.Complexity)
-			}
-			realtimeMove := realtimeeffects.KillerMove{
-				ProfileVersion: m.CombatProfile.ProfileVersion, ID: m.ID, Name: m.Name, Rank: m.MainGuRank, Components: moveComponents,
-				ExpectedComponents: len(m.Components), Effects: m.CompiledEffects,
-				ManaCost: m.CombatProfile.ManaCost, SuccessChance: m.SuccessChance,
-				BackfireHPPercent: m.CombatProfile.BackfireHPPercent, BackfireStatus: m.CombatProfile.BackfireStatus,
-				Complexity: m.Complexity, WindupMS: windupMS, CooldownMS: cooldownMS,
-			}
-			m.RealtimeSupported, m.RealtimeUnavailableReason = supportedKillerMove(realtimeMove)
-			if !m.RealtimeSupported {
-				if m.RealtimeUnavailableReason == "" {
-					m.RealtimeUnavailableReason = "Effect chưa có executor realtime"
-				}
-			} else if m.HasStarvingGu {
+		} else {
+			m.RealtimeSupported = true
+			if m.HasStarvingGu {
 				m.RealtimeUnavailableReason = "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)"
 			}
 		}

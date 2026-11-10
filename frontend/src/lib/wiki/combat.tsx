@@ -243,9 +243,9 @@ export const combatPages: WikiPage[] = [
         description: "10 Nhóm Đạo, cơ chế triệt tiêu xung đột và màng kháng tự nhiên",
       },
       {
-        title: "Chiến đấu realtime",
+        title: "Chiến đấu theo lượt",
         targetId: "combat",
-        description: "Hotbar, giờ đọc ma nhã và giao chiến thời gian thực",
+        description: "Động cơ turn-based chuẩn xác, thứ tự lượt, Chân nguyên và sát chiêu",
       },
       {
         title: "Hướng dẫn Tân thủ",
@@ -256,44 +256,47 @@ export const combatPages: WikiPage[] = [
   },
   {
     id: "combat",
-    title: "Chiến đấu realtime",
+    title: "Cơ chế Chiến đấu theo lượt",
     category: "combat",
-    keywords: ["chiến đấu", "combat", "realtime", "hotbar", "cast", "khiên", "shield", "aoe"],
+    keywords: ["chiến đấu", "combat", "turnbase", "turn-based", "theo lượt", "tốc độ", "khiên", "shield", "sát chiêu"],
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Chiến đấu chạy trên map realtime do server mô phỏng theo tick. Vị trí, mục tiêu, thời gian tụ lực, hồi chiêu, trạng thái và sát thương đều được máy chủ xác nhận.
+          Chiến đấu trong Cổ Giới vận hành theo cơ chế <strong>theo lượt xác định (Deterministic Turn-based Engine)</strong>. Mỗi hiệp đấu được máy chủ tính toán chuẩn xác dựa trên Tốc độ, Chân nguyên, hiệu ứng Cổ trùng và Sát chiêu.
         </p>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">1. Điều khiển và thi triển chiêu</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">1. Thứ tự hành động và Hiệp đấu</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Di chuyển bằng WASD/chuột; dùng hotbar để chọn Cổ có profile realtime. Chiêu có thể cần chọn mục tiêu hoặc hướng, tụ lực, tiêu Chân Nguyên và chờ hồi chiêu tùy profile.
+            Mỗi hiệp (turn), các nhân vật (hoặc quái vật) hành động tuần tự theo chỉ số <strong>Tốc độ (Speed)</strong>. Đơn vị có tốc độ cao hơn sẽ ra đòn trước, cho phép áp dụng khống chế hoặc khiên bảo hộ kịp thời.
           </p>
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)]">
-            <li>🎯 <strong>Mục tiêu:</strong> profile khai báo mục tiêu, tầm đánh và giới hạn số mục tiêu.</li>
-            <li>💥 <strong>Vùng tác động:</strong> hình dạng, bán kính và hướng do profile realtime quyết định.</li>
-            <li>⚡ <strong>Server authoritative:</strong> client gửi lệnh; máy chủ kiểm tra range, mana, cooldown và hit.</li>
+            <li>🎯 <strong>Thứ tự lượt:</strong> Xác định tự động vào đầu mỗi hiệp dựa trên tốc độ thực tế (bao gồm buff/debuff).</li>
+            <li>⚡ <strong>Chân Nguyên:</strong> Mỗi Cổ trùng hoặc Sát chiêu khi kích hoạt tiêu hao Chân Nguyên tương ứng. Nếu Chân Nguyên không đủ, đòn đánh sẽ suy yếu hoặc chỉ dùng đòn đánh thường.</li>
+            <li>🌪️ <strong>Sát chiêu phối hợp:</strong> Kích hoạt các hiệu ứng diện rộng (AoE), hàng ngang (Row) hoặc đơn thể theo công thức sát chiêu đã phối ngũ.</li>
           </div>
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Trạng thái và hiệu ứng</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Trạng thái và Hiệu ứng kích hoạt</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Status được áp dụng, cộng dồn và hết hạn theo tick realtime. Effect chỉ hoạt động khi có executor và profile realtime rõ ràng; dữ liệu turn-based cũ không tự đổi lượt thành giây hoặc tự phát sinh hành vi thay thế.
+            Các hiệu ứng được kích hoạt chuẩn xác theo từng giai đoạn trong hiệp đấu:
           </p>
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)]">
+            <li>🏁 <strong>ON_BATTLE_START:</strong> Kích hoạt khi vừa bước vào trận (khiên mở màn, bùa chúc phúc).</li>
+            <li>🔄 <strong>ON_TURN_START:</strong> Kích hoạt ở đầu mỗi lượt của bản thân (hồi phục Chân Nguyên, độc tố phát tác).</li>
+            <li>💥 <strong>ON_ACTION / ON_CAST:</strong> Kích hoạt khi thực hiện công kích hoặc thi triển sát chiêu.</li>
+            <li>🛡️ <strong>POST_ACTION:</strong> Phản đòn, hút máu, hoặc tích tụ hộ thuẫn sau khi công kích.</li>
+          </div>
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">3. Khiên ảo & Sinh Mạng</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">3. Khiên Hộ Thể & Rơi Đồ Khi Bại Trận</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Sinh mạng và khiên được mô phỏng trong world runtime. Khiên hấp thụ sát thương theo quy tắc profile; khi HP về 0, server xử lý hạ gục, respawn/settlement và lịch sử theo chế độ chiến đấu.
-          </p>
-          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Khiên ảo là tạm thời: mỗi giây mất <strong>10% giá trị hiện tại</strong> (dưới 1 thì về 0). Khiên còn lại trong checkpoint cũng tan dần theo thời gian offline, nên đăng nhập lại không khôi phục lớp khiên cũ.
+            Khiên hấp thụ sát thương trực tiếp trước khi ảnh hưởng đến Sinh mệnh (HP). Khi HP về 0, nhân vật sẽ bị trọng thương hoặc tử vong.
           </p>
           <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs leading-relaxed text-amber-300">
-            💀 <strong>Tử Đạo (Chết rơi đồ):</strong> Khi bại trận dã ngoại, bỏ chạy ngất xỉu, hay thua PvP, đạo hữu sẽ đánh rơi một phần tài sản đang giữ: Nguyên Thạch, nguyên liệu, Cổ trùng (trừ Cổ đang trang bị & Bản Mệnh Cổ) và Bí phương.
+            💀 <strong>Tử Đạo (Rơi đồ dã ngoại):</strong> Khi bại trận ở các khu vực dã ngoại nguy hiểm, đạo hữu có thể đánh rơi một phần tài sản mang theo: Nguyên Thạch, nguyên liệu, và Cổ trùng chưa khóa (ngoại trừ Cổ đang trang bị và Bản Mệnh Cổ).
           </div>
         </div>
       </div>

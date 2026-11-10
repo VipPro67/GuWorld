@@ -26,10 +26,13 @@ import {
   Radar,
   Layers,
   Eye,
+  Settings2,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { Num } from "./Num";
 import { SpatialRealmsModal } from "./SpatialRealmsModal";
+import { LobbySettingsPanel } from "./LobbySettingsPanel";
+import { useUiPreferences } from "@/lib/ui-preferences";
 import Link from "next/link";
 
 interface HubItem {
@@ -78,6 +81,8 @@ export const LobbyView: React.FC = () => {
     setSpatialDirectoryOpen,
   } = useGameStore();
   const [manaNow, setManaNow] = useState(() => Date.now());
+  const [combatSettingsOpen, setCombatSettingsOpen] = useState(false);
+  const { lobbyItems, hiddenLobbyItems } = useUiPreferences();
 
   useEffect(() => {
     if (player && player.rank >= 6 && !aperture) {
@@ -280,6 +285,15 @@ export const LobbyView: React.FC = () => {
 
   const activityItems: HubItem[] = [
     {
+      id: "explore",
+      label: "Khám Phá Dã Ngoại",
+      icon: Compass,
+      gradient: "from-emerald-600 to-teal-700",
+      glow: "group-hover:shadow-[0_0_25px_rgba(16,185,129,0.45)]",
+      borderColor: "border-emerald-400/30",
+      iconColor: "text-emerald-400",
+    },
+    {
       id: "dream-realm",
       label: "Mộng Cảnh",
       icon: Gem,
@@ -366,6 +380,11 @@ export const LobbyView: React.FC = () => {
     setView(item.id);
   };
 
+  const orderLobbyItems = (items: HubItem[]) => items
+    .filter((item) => !hiddenLobbyItems.includes(item.id))
+    .sort((a, b) => lobbyItems.indexOf(a.id) - lobbyItems.indexOf(b.id));
+  const visibleLobbyItems = orderLobbyItems([...managementItems, ...activityItems]);
+
   const getRankName = (rank: number, sub: number, aperture?: ImmortalAperture | null): string => {
     const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
     const rankNames = [
@@ -405,7 +424,7 @@ export const LobbyView: React.FC = () => {
   };
 
   return (
-    <div className="w-full mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-8">
+    <div className="mmo-paper-theme mmo-paper-surface w-full mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-8 text-[var(--text-primary,#f4e8cb)]">
       {/* 1. CHARACTER & RESOURCE HUD */}
       {player && (
         <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl">
@@ -561,52 +580,18 @@ export const LobbyView: React.FC = () => {
         <LogConsole logs={logs} />
       </div>
 
-      {/* 2. Category: CHỨC NĂNG */}
       <div className="flex flex-col gap-3 sm:gap-5">
         <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
           <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
-            Chức năng chính
+            Chức năng Lobby
           </h2>
           <span className="text-[10px] text-zinc-600 font-mono">
-            {managementItems.length} chức năng
-          </span>
-        </div>
-
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-4 justify-center">
-          {managementItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.id}
-                onClick={() => handleItemClick(item)}
-                className="flex flex-col items-center p-2 rounded-2xl transition-all duration-300 hover:bg-zinc-900/20 cursor-pointer group select-none"
-              >
-                <div
-                  className={`w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center bg-gradient-to-br ${item.gradient} border ${item.borderColor} transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 relative ${item.glow}`}
-                >
-                  <Icon className={`w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${item.iconColor} drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]`} />
-                </div>
-                <span className="font-serif text-[10px] sm:text-[11px] font-semibold text-zinc-400 mt-2 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
-                  {item.label}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      {/* 3. Category: HOẠT ĐỘNG */}
-      <div className="flex flex-col gap-3 sm:gap-5">
-        <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
-          <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
-            Hoạt động khác
-          </h2>
-          <span className="text-[10px] text-zinc-600 font-mono">
-            {activityItems.length} hoạt động
+            {visibleLobbyItems.length} chức năng
           </span>
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-4 justify-center">
-          {activityItems.map((item) => {
+          {visibleLobbyItems.map((item) => {
             const Icon = item.icon;
             return (
               <div
@@ -644,6 +629,44 @@ export const LobbyView: React.FC = () => {
           })}
         </div>
       </div>
+      <div className="flex justify-end border-t border-zinc-900/60 pt-3">
+        <button
+          type="button"
+          onClick={() => setCombatSettingsOpen(true)}
+          className="flex items-center gap-2 rounded-xl border border-[var(--mmo-menu-border-soft,rgba(168,137,82,0.4))] bg-[var(--mmo-theme-elevated,#352618)] px-4 py-2 text-xs font-semibold text-[var(--text-primary,#f4e8cb)] transition hover:border-[var(--mmo-menu-accent,#e4b96c)] hover:brightness-110"
+        >
+          <Settings2 className="h-4 w-4 text-[var(--mmo-menu-accent,#e4b96c)]" />
+          Cài đặt
+        </button>
+      </div>
+      {combatSettingsOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Cài đặt Lobby"
+            className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-900/60 bg-zinc-950 shadow-2xl"
+          >
+            <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 sm:px-5">
+              <div>
+                <h2 className="font-serif text-base font-bold text-amber-100">Cài Đặt</h2>
+                <p className="text-[10px] text-zinc-500">Menu lobby, giao diện và chiến thuật turn-based</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng cài đặt Lobby"
+                onClick={() => setCombatSettingsOpen(false)}
+                className="rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="overflow-y-auto p-3 sm:p-5">
+                <LobbySettingsPanel />
+            </div>
+          </section>
+        </div>
+      )}
       <SpatialRealmsModal />
     </div>
   );

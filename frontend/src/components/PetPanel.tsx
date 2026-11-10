@@ -274,6 +274,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                     <span className="text-sm font-bold text-zinc-200 truncate">{displayName}</span>
                     {isFormation && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400">Đội hình</span>}
                     {pet.state === "SLEEPING" && <Moon className="w-3 h-3 text-blue-400" />}
+                    {pet.state === "INJURED" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/60 text-rose-300">Bị thương</span>}
                   </div>
                   <div className="text-[10px] text-zinc-500 mt-0.5">
                     {monSpec?.name || pet.monster_template_id} · Rank {pet.rank}
@@ -326,8 +327,8 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                       >
                         Cho Ăn
                       </button>
-                      <button onClick={() => setPetSleep(pet.id, pet.state !== "SLEEPING")} className="text-[10px] px-2 py-1 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700">
-                        {pet.state === "SLEEPING" ? "Thức" : "Ngủ"}
+                      <button onClick={() => setPetSleep(pet.id, pet.state === "ACTIVE")} className="text-[10px] px-2 py-1 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700">
+                        {pet.state === "SLEEPING" ? "Thức" : pet.state === "INJURED" ? "Đưa về kho" : "Ngủ"}
                       </button>
                       <button onClick={() => handleRelease(pet.id, pet.nickname)} className="text-[10px] px-2 py-1 rounded bg-red-900/50 text-red-400 hover:bg-red-800/50">
                         Thả

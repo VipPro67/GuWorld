@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { STREAM_UI } from "../../game/network/v2/Codec.ts";
-import { UIStream, type UIStreamMessage } from "./UIStream.ts";
+import { UIStream, STREAM_UI, type UIStreamMessage } from "./UIStream.ts";
 
 function createFakeBiDiStream() {
   let controller!: ReadableStreamDefaultController<Uint8Array>;

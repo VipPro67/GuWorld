@@ -50,6 +50,35 @@ func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 
 	return cost
 }
 
+// EnergyCostForCombatant applies the player Gu cost rules to the immutable
+// actor projection used by the turn-based simulator.
+func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem) float64 {
+	if actor == nil || guSpec == nil {
+		return 0
+	}
+	cost := guSpec.BaseManaCost
+	if actor.Rank >= util.ImmortalRankThreshold {
+		if guSpec.Rank < util.ImmortalRankThreshold {
+			return 0
+		}
+		if actor.Rank > guSpec.Rank {
+			cost /= math.Pow(100, float64(actor.Rank-guSpec.Rank))
+		} else if actor.Rank < guSpec.Rank {
+			cost *= HigherRankManaMultiplier(guSpec.Rank, actor.Rank)
+		}
+	} else if actor.Rank > guSpec.Rank && guSpec.Rank < util.ImmortalRankThreshold {
+		cost /= math.Pow(10, float64(actor.Rank-guSpec.Rank))
+	} else if actor.Rank < guSpec.Rank {
+		cost *= HigherRankManaMultiplier(guSpec.Rank, actor.Rank)
+	} else {
+		cost *= SubRankManaFactor(actor.SubRank)
+	}
+	if RefineManaTier(actor.Rank, actor.GuInventory) > 0 {
+		cost *= 0.5
+	}
+	return cost
+}
+
 func HigherRankManaMultiplier(guRank, userRank int) float64 {
 	if guRank <= userRank {
 		return 1.0

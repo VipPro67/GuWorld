@@ -4,7 +4,6 @@ import { create } from "zustand";
 import { BACKEND_URL } from "@/lib/config";
 import { authFetch } from "@/lib/auth";
 import { useGameStore, type ApertureResourcePoint } from "@/store/useGameStore";
-import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 
 export interface NearbyVeinInfo {
   id: string;
@@ -129,7 +128,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     const maxY = Math.round(y + boundedRadius);
 
     try {
-      const data: unknown = await uiRealtimeManager.request<unknown>("world.cells_rect", { min_x: minX, min_y: minY, max_x: maxX, max_y: maxY });
+      const res = await authFetch(`${BACKEND_URL}/api/explore/cells/rect?min_x=${minX}&min_y=${minY}&max_x=${maxX}&max_y=${maxY}`);
+      if (!res.ok) return false;
+      const data: unknown = await res.json();
       if (!Array.isArray(data)) return false;
 
       const cells: NearbyCell[] = data.map((item: Record<string, unknown>) => ({

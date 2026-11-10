@@ -4,7 +4,7 @@ import React, { useReducer, useMemo, useRef, useEffect, useCallback } from "reac
 import {
   Swords, SkipForward, Heart, Shield, Skull,
   Zap, FlaskConical, Sparkles, Flame, Play, Pause,
-  ArrowLeft, ChevronRight, Droplets, Coins, Gem,
+  ArrowLeft, ChevronRight, Droplets, Coins, Gem, Eye,
   ChevronDown,
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { Num } from "./Num";
 import { FormattedText } from "./FormattedText";
 import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
+import { MonsterSprite } from "@/components/MonsterSprite";
 
 export interface StatModSource {
   key: string;
@@ -119,6 +120,7 @@ interface CombatantReplayInfo {
   defense?: number;
   speed?: number;
   kind_detail?: string;
+  template_id?: string;
   rank?: number;
   sub_rank?: number;
   dao_marks?: Record<string, number>;
@@ -159,6 +161,7 @@ interface CombatantState {
   pathMasteries?: Record<string, number>;
   guInventory?: Array<{ gu_id?: string; guId?: string; rank: number; status?: string }>;
   avatarUrl?: string;
+  templateId?: string;
   statuses: CombatStatusEntry[];
 }
 
@@ -465,10 +468,11 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
       for (const c of initialCombatants) {
         map[c.id] = {
           id: c.id,
+          templateId: c.template_id || c.id,
           name: c.name,
           kind: c.kind,
           maxHp: c.max_hp || 100,
-          hp: c.hp || (c.max_hp || 100),
+          hp: c.hp ?? (c.max_hp || 100),
           maxMp: c.max_mana || 0,
           mp: c.mana || 0,
           shield: c.shield || 0,
@@ -772,9 +776,13 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
       : "";
 
     return (
-      <div
+      <button
+        type="button"
         key={`${gridX}-${gridY}`}
+        disabled={!c}
         onClick={() => c && setDetailCombatant(detailCombatant?.id === c.id ? null : c)}
+        aria-label={c ? `${c.name}, HP ${Math.round(c.hp)} trên ${Math.round(c.maxHp)}. Bấm để xem chi tiết.` : `Ô trống ${gridX}, ${gridY}`}
+        title={c ? "Bấm để xem thông tin chi tiết" : undefined}
         className={`rounded-xl border ${
           isEmpty
             ? 'border-zinc-800/40 bg-zinc-950/30'
@@ -783,155 +791,68 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               : isAlly
                 ? `border-emerald-800/50 bg-gradient-to-b from-emerald-950/30 to-zinc-950/90 shadow-sm ${borderGlow}`
                 : `border-rose-800/50 bg-gradient-to-b from-rose-950/30 to-zinc-950/90 shadow-sm ${borderGlow}`
-        } flex flex-col justify-between p-2 sm:p-2.5 relative cursor-pointer transition-all hover:brightness-125 hover:border-zinc-500/50 min-h-[145px] sm:min-h-[160px]`}
+        } aspect-square min-w-0 overflow-hidden flex flex-col items-center gap-1 p-1.5 sm:p-2 relative text-left transition-all ${c ? "cursor-pointer hover:brightness-125 hover:border-zinc-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400" : "cursor-default"}`}
       >
         {c ? (
           <>
-            {/* Header: Avatar + Name + Badges */}
-            <div className="flex items-center gap-2 w-full min-w-0">
-              {/* Avatar */}
-              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-300 border-2 ${
-                isAlly ? 'border-emerald-500/60 shadow-emerald-950/50' : 'border-rose-500/60 shadow-rose-950/50'
-              } shadow-md`}>
-                {c.avatarUrl ? (
-                  <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  c.name.slice(0, 2).toUpperCase()
-                )}
-              </div>
-
-              {/* Name & Badges */}
-              <div className="min-w-0 flex-1 flex flex-col justify-center">
-                <div className="flex items-center gap-1 min-w-0">
-                  <span className={`text-[11px] sm:text-xs font-bold truncate ${
-                    c.hp <= 0 ? 'text-zinc-600 line-through' : isAlly ? 'text-emerald-300' : 'text-rose-300'
-                  }`}>
-                    {c.name}
-                  </span>
-                  {c.hp <= 0 && <span className="text-xs text-rose-500 font-bold shrink-0">†</span>}
-                </div>
-
-                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                  {c.rank ? (
-                    <span className="text-[8px] sm:text-[9px] px-1 py-0.2 rounded bg-zinc-800/90 text-amber-300 font-mono font-bold border border-amber-500/30">
-                      {c.rank >= 6 ? `Chuyển ${c.rank}` : `H${c.rank}`}
-                    </span>
-                  ) : null}
-                  {!isAlly && c.kindDetail && c.kindDetail !== "" && (
-                    <span className={`text-[8px] sm:text-[9px] px-1 py-0.2 rounded border font-bold ${
-                      c.kindDetail === "Boss" ? 'bg-red-950/80 text-red-300 border-red-700' :
-                      c.kindDetail === "Elite" ? 'bg-purple-950/80 text-purple-300 border-purple-700' :
-                      'bg-zinc-800/80 text-zinc-400 border-zinc-700'
-                    }`}>
-                      {c.kindDetail.toUpperCase()}
-                    </span>
-                  )}
-                </div>
-              </div>
+            <div className="flex items-center justify-between gap-1 w-full min-w-0">
+              <span className={`min-w-0 truncate text-[9px] sm:text-[10px] font-bold ${c.hp <= 0 ? "text-zinc-600 line-through" : isAlly ? "text-emerald-300" : "text-rose-300"}`}>
+                {c.name}
+              </span>
+              {c.hp <= 0 ? <span className="text-rose-500 text-[10px]">†</span> : (
+                <span className="shrink-0 rounded bg-zinc-800/90 px-1 text-[8px] font-mono text-amber-300">
+                  {c.rank >= 6 ? `C${c.rank}` : `H${c.rank}`}
+                </span>
+              )}
             </div>
 
-            {/* Vital Bars Section (HP, Shield, Mana) */}
-            <div className="w-full space-y-1.5 my-1.5">
-              {/* HP Bar & Value */}
-              <div>
-                <div className="flex justify-between items-center text-[10px] font-mono leading-tight mb-0.5">
-                  <span className="text-zinc-400 font-semibold flex items-center gap-0.5">
-                    <Heart className="w-2.5 h-2.5 text-rose-400 shrink-0" />
-                    HP
-                  </span>
-                  <span className={`font-bold ${c.hp <= 0 ? 'text-zinc-600' : 'text-zinc-200'}`}>
-                    <Num value={Math.round(c.hp)} /> / <Num value={Math.round(c.maxHp)} />
-                  </span>
+            <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+              {isAlly ? (
+                <div className="h-[68%] aspect-square rounded-full overflow-hidden border-2 border-emerald-500/60 bg-zinc-800 flex items-center justify-center text-sm font-black text-zinc-300 shadow-lg">
+                  {c.avatarUrl ? <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" /> : c.name.slice(0, 2).toUpperCase()}
                 </div>
-                <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${
-                      c.hp <= 0
-                        ? 'bg-zinc-700'
-                        : isAlly
-                        ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
-                        : 'bg-gradient-to-r from-rose-600 to-rose-400'
-                    }`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Shield Bar (if active) */}
-              {c.shield > 0 && (
-                <div className="flex items-center justify-between text-[9px] font-mono font-bold text-cyan-300 bg-cyan-950/50 border border-cyan-800/60 px-1.5 py-0.5 rounded">
-                  <span className="flex items-center gap-1">
-                    <Shield className="w-2.5 h-2.5 text-cyan-400" /> Khiên
-                  </span>
-                  <span>+<Num value={Math.round(c.shield)} /></span>
-                </div>
+              ) : (
+                <MonsterSprite templateId={c.templateId || c.id} alt={c.name} className="w-[90%] h-[90%] object-contain drop-shadow-[0_0_12px_rgba(251,113,133,0.28)]" />
               )}
+            </div>
 
+            <div className="w-full">
+              <div className="flex justify-between gap-1 text-[8px] sm:text-[9px] font-mono leading-tight mb-1">
+                <span className="text-zinc-400 flex items-center gap-0.5"><Heart className="w-2.5 h-2.5 text-rose-400" />HP</span>
+                <span className="truncate text-zinc-200 font-bold"><Num value={Math.round(c.hp)} /> / <Num value={Math.round(c.maxHp)} /></span>
+              </div>
+              <div className="w-full h-2 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                <div className={`h-full rounded-full transition-all duration-300 ${c.hp <= 0 ? "bg-zinc-700" : isAlly ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : "bg-gradient-to-r from-rose-600 to-rose-400"}`} style={{ width: `${pct}%` }} />
+              </div>
+              <div className="mt-1 flex items-center justify-around gap-0.5 text-[7px] sm:text-[8px] font-mono text-zinc-400" aria-label="Chỉ số chiến đấu hiện tại">
+                <span title={`Công hiện tại: ${Math.round(c.damage)}`} className="text-rose-300">⚔ <Num value={Math.round(c.damage)} /></span>
+                <span title={`Thủ hiện tại: ${Math.round(c.defense)}`} className="text-sky-300">🛡 <Num value={Math.round(c.defense)} /></span>
+                <span title={`Tốc hiện tại: ${Math.round(c.speed)}`} className="text-amber-300">⚡ <Num value={Math.round(c.speed)} /></span>
+                {c.shield > 0 && <span title={`Khiên hiện tại: ${Math.round(c.shield)}`} className="text-cyan-300"><Shield className="inline h-2.5 w-2.5" /> <Num value={Math.round(c.shield)} /></span>}
+              </div>
               {c.statuses.length > 0 && (
-                <div className="flex flex-wrap gap-1 pt-1" aria-label="Trạng thái hiện tại">
-                  {c.statuses.slice(0, 3).map((status, statusIndex) => (
-                    <span key={`${status.id}-${statusIndex}`} className={`max-w-full truncate rounded border px-1 py-0.5 text-[8px] ${status.type === "buff" ? "border-emerald-800/60 bg-emerald-950/40 text-emerald-300" : "border-rose-800/60 bg-rose-950/40 text-rose-300"}`} title={`${status.id} · còn ${status.remaining_turns} lượt`}>
+                <div className="mt-1 flex w-full flex-wrap justify-center gap-0.5 overflow-hidden" aria-label="Hiệu ứng đang hoạt động">
+                  {c.statuses.slice(0, 2).map((status, statusIndex) => (
+                    <span
+                      key={`${status.id}-${statusIndex}`}
+                      title={`${status.id.replaceAll("_", " ")} · còn ${status.remaining_turns} lượt`}
+                      className={`max-w-full truncate rounded border px-1 py-0.5 text-[7px] leading-tight ${status.type === "buff" ? "border-emerald-800/60 bg-emerald-950/50 text-emerald-300" : "border-rose-800/60 bg-rose-950/50 text-rose-300"}`}
+                    >
                       {status.id.replaceAll("_", " ")} · {status.remaining_turns}L
                     </span>
                   ))}
-                  {c.statuses.length > 3 && <span className="text-[8px] text-zinc-500">+{c.statuses.length - 3}</span>}
+                  {c.statuses.length > 2 && <span className="text-[7px] text-zinc-500">+{c.statuses.length - 2}</span>}
                 </div>
               )}
-
-              {/* Mana Bar */}
-              {c.maxMp > 0 && (isAlly || (c.kindDetail && c.kindDetail.toLowerCase() === "player")) && (
-                <div>
-                  <div className="flex justify-between items-center text-[9px] font-mono leading-tight mb-0.5">
-                    <span className="text-purple-400/90 font-medium flex items-center gap-0.5">
-                      <Zap className="w-2.5 h-2.5 text-purple-400 shrink-0" />
-                      {c.rank >= 6 ? "Tiên Nguyên" : "MP"}
-                    </span>
-                    <span className="text-purple-300 font-bold">
-                      {c.rank >= 6 ? (
-                        <Num value={Math.round(c.mp)} />
-                      ) : (
-                        <><Num value={Math.round(c.mp)} /> / <Num value={Math.round(c.maxMp)} /></>
-                      )}
-                    </span>
-                  </div>
-                  <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-purple-600 to-indigo-400 transition-all duration-300"
-                      style={{ width: `${c.rank >= 6 ? 100 : c.maxMp > 0 ? Math.min(100, (c.mp / c.maxMp) * 100) : 0}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Combat Stats Footer (Công ⚔, Thủ 🛡, Tốc ⚡) */}
-            <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-zinc-800/60 w-full mt-auto text-center text-[9px] font-mono font-bold">
-              <div
-                className="bg-rose-950/40 border border-rose-900/40 text-rose-300 rounded py-0.5 px-0.5 truncate"
-                title={`Công kích: ${c.damage.toLocaleString()}`}
-              >
-                ⚔ <Num value={Math.round(c.damage)} />
-              </div>
-              <div
-                className="bg-blue-950/40 border border-blue-900/40 text-blue-300 rounded py-0.5 px-0.5 truncate"
-                title={`Phòng thủ: ${c.defense.toLocaleString()}`}
-              >
-                🛡 <Num value={Math.round(c.defense)} />
-              </div>
-              <div
-                className="bg-amber-950/40 border border-amber-900/40 text-amber-300 rounded py-0.5 px-0.5 truncate"
-                title={`Tốc độ: ${c.speed.toLocaleString()}`}
-              >
-                ⚡ <Num value={Math.round(c.speed)} />
+              <div className="mt-0.5 flex justify-center text-[7px] font-mono text-zinc-600">
+                <span className="inline-flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" /> Chi tiết</span>
               </div>
             </div>
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full my-auto text-zinc-700/60 font-mono text-[10px]">
-            <span className="opacity-40">{gridX},{gridY}</span>
-          </div>
+          <span className="m-auto text-zinc-800/60 font-mono text-[10px]">{gridX},{gridY}</span>
         )}
-      </div>
+      </button>
     );
   };
 
@@ -954,8 +875,10 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-zinc-500">
-                {c.avatarUrl ? (
+                {isAlly && c.avatarUrl ? (
                   <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : !isAlly ? (
+                  <MonsterSprite templateId={c.templateId || c.id} alt={c.name} className="w-full h-full object-contain" />
                 ) : (
                   c.name.slice(0, 2).toUpperCase()
                 )}
@@ -1460,9 +1383,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             }
 
             if (log.action === "TURN_END") {
-              return <div key={idx} className={`py-1 text-center text-[9px] ${idx === state.currentIndex ? "text-cyan-300" : "text-zinc-600"}`}>
-                Đã ghi nhận chỉ số và trạng thái cuối lượt {log.turn}
-              </div>;
+              return null;
             }
 
             if (isBattleBoundary) {

@@ -44,7 +44,7 @@ export function KillerMovesPanel() {
 
   const selectedGuIDs = useMemo(() => new Set([mainId, ...components]), [mainId, components]);
   const availableEffects = useMemo(
-    () => effects.filter((effect) => selectedGuIDs.has(effect.source_instance_id) && (effect.realtime_supported || effect.trigger === "ON_USE")),
+    () => effects.filter((effect) => selectedGuIDs.has(effect.source_instance_id)),
     [effects, selectedGuIDs],
   );
   const selectedEffectOptions = useMemo(
@@ -230,7 +230,7 @@ export function KillerMovesPanel() {
             {availableEffects.length === 0 ? <div className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-600">Cổ đã chọn chưa có hiệu ứng được hỗ trợ.</div> : <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
               {availableEffects.map((effect) => <div key={effect.key} draggable onDragStart={(event) => event.dataTransfer.setData("text/killer-move-effect", effect.key)} className="group flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 cursor-grab active:cursor-grabbing">
                 <GripVertical className="h-4 w-4 shrink-0 text-zinc-600" />
-                <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold text-zinc-200">{effect.label}</div><div className="truncate text-[10px] text-zinc-500">{effect.source_name} · {effect.realtime_supported ? "Realtime" : effect.realtime_unavailable_reason || "Ngoài combat"} · {effect.operation.value ? `Giá trị ${effect.operation.value}` : effect.operation.status_id || effect.operation.sub_type || effect.operation.op}</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold text-zinc-200">{effect.label}</div><div className="truncate text-[10px] text-zinc-500">{effect.source_name} · {effect.operation.value ? `Giá trị ${effect.operation.value}` : effect.operation.status_id || effect.operation.sub_type || effect.operation.op}</div></div>
                 <button aria-label="Thêm hiệu ứng" onClick={() => addEffect(effect.key)} disabled={selectedEffects.includes(effect.key) || selectedEffects.length>=8} className="rounded-md border border-zinc-700 p-1 text-zinc-400 hover:border-amber-600 hover:text-amber-300 disabled:opacity-30"><Plus className="h-3.5 w-3.5" /></button>
               </div>)}
             </div>}
@@ -247,13 +247,10 @@ export function KillerMovesPanel() {
             <div className="rounded-lg bg-zinc-900 p-2"><div className="text-zinc-500">Tỉ lệ thành công</div><div className="mt-0.5 font-mono text-emerald-300">{formatPercent(preview.success_chance)}</div></div>
             <div className="rounded-lg bg-zinc-900 p-2"><div className="text-zinc-500">Hòa hợp</div><div className="mt-0.5 font-mono text-cyan-300">{formatPercent(preview.harmony)}</div></div>
             <div className="rounded-lg bg-zinc-900 p-2"><div className="text-zinc-500">Phạm vi mục tiêu</div><div className="mt-0.5 font-mono text-amber-300">{preview.combat_profile?.target_type === "ALL_ENEMIES" ? "Toàn bộ địch (AoE)" : preview.combat_profile?.target_type === "ROW" ? "Hàng ngang (ROW)" : "Đơn thể"}</div></div>
-            <div className="rounded-lg bg-zinc-900 p-2"><div className="text-zinc-500">Tụ lực realtime</div><div className="mt-0.5 font-mono text-purple-300">{((preview.combat_profile?.realtime_windup_ms ?? 0) / 1000).toFixed(2)} giây</div></div>
-            <div className="rounded-lg bg-zinc-900 p-2"><div className="text-zinc-500">Hồi chiêu realtime</div><div className="mt-0.5 font-mono text-sky-300">{((preview.combat_profile?.realtime_cooldown_ms ?? 0) / 1000).toFixed(1)} giây</div></div>
             <div className="rounded-lg bg-zinc-900 p-2"><div className="text-zinc-500">Chi phí chân nguyên</div><div className="mt-0.5 font-mono text-violet-300">{preview.mana_cost.toFixed(1)}</div></div>
             <div className="rounded-lg bg-zinc-900 p-2"><div className="text-zinc-500">Rủi ro phản phệ</div><div className="mt-0.5 font-mono text-rose-400">Mất {formatPercent(preview.combat_profile?.backfire_hp_pct || 0.12)} HP</div></div>
             {preview.effect_scale < 0.999 && <div className="col-span-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-amber-200">Uy lực effect sau cân bằng: {formatPercent(preview.effect_scale)}</div>}
             {preview.warnings?.map((warning) => <div key={warning} className="col-span-2 flex gap-1.5 text-amber-300"><ShieldAlert className="h-3.5 w-3.5 shrink-0" />{warning}</div>)}
-            {!preview.realtime_supported && <div className="col-span-2 rounded-lg border border-orange-900/50 bg-orange-950/20 p-2 text-orange-200">{preview.realtime_unavailable_reason || "Chiêu chỉ có thể dùng ngoài combat."}</div>}
           </div>}
           {previewError && <p className="mb-3 text-[11px] text-red-300">{previewError}</p>}
           {preview && preview.effect_scale < 0.999 && <label className="mb-3 flex items-start gap-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-[11px] text-amber-100">
@@ -262,7 +259,7 @@ export function KillerMovesPanel() {
           </label>}
           <div className="mt-auto space-y-2">
             <input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="Đặt tên sát chiêu" className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-amber-500" />
-            <button onClick={() => void saveMove()} disabled={saving || !preview || (!preview.realtime_supported && (preview.has_realtime_effects || !preview.has_outside_combat_effect)) || !name.trim() || moves.length>=maxSaved || (preview.effect_scale < 0.999 && acceptedPreview !== preview.preview_fingerprint)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2.5 text-xs font-bold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-4 w-4" />{saving ? "Đang lưu…" : "Lưu Sát Chiêu"}</button>
+            <button onClick={() => void saveMove()} disabled={saving || !preview || !name.trim() || moves.length>=maxSaved || (preview.effect_scale < 0.999 && acceptedPreview !== preview.preview_fingerprint)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2.5 text-xs font-bold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-4 w-4" />{saving ? "Đang lưu…" : "Lưu Sát Chiêu"}</button>
           </div>
         </section>
       </div>
@@ -271,7 +268,7 @@ export function KillerMovesPanel() {
         <div className="flex items-center gap-2 text-sm font-bold text-zinc-200"><BookOpenCheck className="h-4 w-4 text-cyan-300" />Sát Chiêu Đã Sáng Tạo</div>
         {loading ? <div className="py-6 text-center text-xs text-zinc-500">Đang tải danh sách…</div> : moves.length === 0 ? <div className="rounded-xl border border-dashed border-zinc-800 p-5 text-center text-xs text-zinc-600">Chưa có sát chiêu nào.</div> : <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {moves.map((move) => <article key={move.id} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3.5">
-            <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-bold text-zinc-100">{move.name}</h4><p className="mt-1 text-[10px] text-zinc-500">Rank {move.main_gu_rank} · {move.components.length} Cổ · {move.combat_profile?.target_type === "ALL_ENEMIES" ? "AoE Toàn thể" : move.combat_profile?.target_type === "ROW" ? "Hàng ngang" : "Đơn thể"} · Hồi chiêu {((move.combat_profile?.realtime_cooldown_ms ?? 0) / 1000).toFixed(1)} giây</p></div>{move.is_equipped && <span className="rounded-full border border-emerald-900 bg-emerald-950/40 px-2 py-0.5 text-[9px] text-emerald-300">Đang trang bị</span>}</div>
+            <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-bold text-zinc-100">{move.name}</h4><p className="mt-1 text-[10px] text-zinc-500">Rank {move.main_gu_rank} · {move.components.length} Cổ · {move.combat_profile?.target_type === "ALL_ENEMIES" ? "AoE Toàn thể" : move.combat_profile?.target_type === "ROW" ? "Hàng ngang" : "Đơn thể"}</p></div>{move.is_equipped && <span className="rounded-full border border-emerald-900 bg-emerald-950/40 px-2 py-0.5 text-[9px] text-emerald-300">Đang trang bị</span>}</div>
             <div className="mt-3 flex flex-wrap gap-1.5">{move.components.map((component) => <span key={component.instance_id} className="rounded-md bg-zinc-900 px-2 py-1 text-[9px] text-zinc-400">{guName(component.instance_id, component.rank)}</span>)}</div>
             <div className="mt-3 flex items-center justify-between text-[10px] font-mono">
               <span className={!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-400" : "text-emerald-400"}>
@@ -285,14 +282,12 @@ export function KillerMovesPanel() {
               </span>
               <span className="text-cyan-300">Thành thạo {move.mastery_level} · {move.mastery_xp} XP</span>
             </div>
-            <div className={`mt-2 text-[10px] ${!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-300" : move.realtime_supported ? "text-emerald-300" : "text-amber-300"}`}>
+            <div className={`mt-2 text-[10px] ${!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-300" : "text-emerald-300"}`}>
               {!move.available
                 ? (move.realtime_unavailable_reason || "Thiếu Cổ thành phần")
                 : move.has_starving_gu
-                  ? (move.realtime_unavailable_reason || "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)")
-                  : move.realtime_supported
-                    ? "Có thể cast realtime"
-                    : (move.realtime_unavailable_reason ?? "Effect chưa có executor realtime")}
+                  ? "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)"
+                  : "Sẵn sàng trong chiến đấu"}
             </div>
             <div className="mt-2 text-[10px] text-zinc-500">Thành công hiện tại: <span className="text-amber-200">{formatPercent(move.success_chance)}</span> · Hòa hợp {formatPercent(move.harmony)}</div>
             <div className="mt-3 flex gap-2">

@@ -18,9 +18,6 @@ distinct `-output` path (never overwrites source). Reports are JSON on stdout.
 | Subcommand | Purpose |
 | --- | --- |
 | `check-effects` | Validate `Gu.csv` (full catalog + Block-v2 + unclassified-key) and `Item.csv` (Block-v2). Exits non-zero on errors. |
-| `audit-realtime` | Classify every Gu block for the realtime zone (`SUPPORTED`/`NEEDS_REAUTHOR`/`UNSUPPORTED`/`NOT_ACTIVE`), emit coverage CSV/JSON and MVP check. `-strict` fails on unclassified operations or missing MVP. |
-| `transpile-realtime-gu` | Generate the catalog-only MMO hotbar profiles from `Gu.csv`, preserving explicitly authored profiles from the selected override catalog; actions are emitted only when every cast effect is represented by the current realtime contract. |
-| `compile-realtime-gu` | Compile authored realtime Gu profiles against `Gu.csv` + combat contract, fail closed on invalid timing/mode/effect, optionally write the immutable compiled artifact. |
 | `balance` | Score each Gu's flat combat power vs its rank peers (median band ± `tol`) and flag outliers. `-write` scales the flagged Gu's `DAMAGE`/`SHIELD`/`HEAL`/`DIRECT_HP` FLAT values toward the band edge. Tune via `-config` (`balance.tol`, `min_score_frac`, `weights`). |
 | `rebalance` | Clamp supported combat, DoT, and base-stat values to documented rank anchors (±35% by default). Other numeric effects use their same-rank median when at least 5 distinct Gu definitions share the effect; otherwise they are listed in `unanchored_effects` and left unchanged. Dry-run reports JSON; `-write -output` writes a separate candidate CSV; explicit `-in-place` replaces `Gu.csv` after creating `Gu.csv.bak` (refuses to overwrite an existing backup). |
 | `match-food` | Flag `food_types` entries that reference missing items/Gu, and count low-nutrition food. `-write` remaps dangling references to a path/rank-matched Food. |
@@ -37,9 +34,6 @@ Example config (optional, `{}` falls back to defaults):
 
 ```bash
 go run ./cmd/gudata check-effects -data data
-go run ./cmd/gudata audit-realtime -data data -csv ../docs/mmo/gu-coverage.csv -strict
-go run ./cmd/gudata transpile-realtime-gu -data data -overrides data/mmo/gu/authored_overrides.json -output data/mmo/gu/transpiled_profiles.json -compile-report /tmp/gu-compiled-profiles.json
-go run ./cmd/gudata compile-realtime-gu -data data -profiles data/mmo/gu/transpiled_profiles.json -report ../docs/mmo/gu-compiled.json
 go run ./cmd/gudata balance -data data
 go run ./cmd/gudata balance -data data -config data/gudata.json -write -output /tmp/Gu.bal.csv
 go run ./cmd/gudata rebalance -data data

@@ -394,30 +394,7 @@ type RealtimeWorldAdmission interface {
 }
 
 // SetupRouter initializes the Gin router with middlewares and routes
-func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmission) *gin.Engine {
-	var worldAdmission RealtimeWorldAdmission
-	if len(realtimeAdmission) > 0 {
-		worldAdmission = realtimeAdmission[0]
-	}
-	if worldAdmission != nil {
-		middleware.SetRealtimeHandoffBridge(&middleware.RealtimeHandoffBridge{
-			Begin:  worldAdmission.BeginHandoff,
-			Abort:  worldAdmission.AbortHandoff,
-			Finish: worldAdmission.FinishHandoff,
-		})
-		middleware.SetRealtimeLocationReader(worldAdmission.PlayerLocation)
-		if enemyReader, ok := worldAdmission.(interface {
-			TribulationEnemyStates(uuid.UUID) (map[string]bool, map[string]bool, bool)
-		}); ok {
-			middleware.SetRealtimeTribulationEnemyReader(enemyReader.TribulationEnemyStates)
-		} else {
-			middleware.SetRealtimeTribulationEnemyReader(nil)
-		}
-	} else {
-		middleware.SetRealtimeHandoffBridge(nil)
-		middleware.SetRealtimeLocationReader(nil)
-		middleware.SetRealtimeTribulationEnemyReader(nil)
-	}
+func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 	if shub != nil {
 		handlers.SetRealtimeEventStatsProvider(shub.GetStats)
 		handlers.SetRealtimeConnectedProvider(shub.IsConnected)
@@ -810,6 +787,9 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 		combat.Use(middleware.RequireOnboarded())
 		combat.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
+			combat.POST("/start", handlers.AutoCombatStart)
+			combat.POST("/flee/:id", handlers.Flee)
+			combat.POST("/capture", handlers.CaptureMonster)
 			combat.POST("/practice", handlers.StartRealtimePractice)
 			combat.POST("/practice/exit", handlers.EndRealtimePractice)
 			combat.GET("/skill-loadout", handlers.GetCombatSkillLoadout)
@@ -930,7 +910,9 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 		tribulations.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			tribulations.GET("/active", handlers.GetActiveTribulation)
-			tribulations.POST("/:eventId/realtime-engage", handlers.RealtimeEngageTribulation)
+			tribulations.POST("/:eventId/engage", handlers.EngageTribulation)
+			tribulations.POST("/:eventId/resolve", handlers.ResolveTribulation)
+			// Settlement/escape routes remain for sessions opened before the turn-based cutover.
 			tribulations.POST("/:eventId/realtime-victory", handlers.RealtimeResolveTribulationVictory)
 			tribulations.POST("/:eventId/realtime-escape", handlers.RealtimeEscapeTribulation)
 			tribulations.POST("/realtime-exit", handlers.RealtimeExitTribulation)
@@ -1005,6 +987,8 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 		}
 
 		// World & Exploration
+		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
+		api.POST("/explore/move", middleware.AuthRequired(), middleware.RequireOnboarded(), handlers.MovePlayer)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/world/map-objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetZoneMapObjects)
@@ -1072,9 +1056,9 @@ func SetupRouter(shub *uihub.ShardedHub, realtimeAdmission ...RealtimeWorldAdmis
 		merchant.Use(middleware.RequireOnboarded())
 		merchant.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
-			merchant.POST("/quote", middleware.RequireLegacyWorldMode(), handlers.QuoteMerchant)
-			merchant.POST("/sell", middleware.RequireLegacyWorldMode(), handlers.SellToMerchant)
-			merchant.POST("/buy", middleware.RequireLegacyWorldMode(), handlers.BuyFromMerchant)
+			merchant.POST("/quote", handlers.QuoteMerchant)
+			merchant.POST("/sell", handlers.SellToMerchant)
+			merchant.POST("/buy", handlers.BuyFromMerchant)
 		}
 
 		// Trade — group: 25/min, per player: 8/min

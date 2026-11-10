@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -50,31 +51,48 @@ func GetGrid(c *gin.Context) {
 	}
 
 	stats := CalculatePlayerStats(&player)
-	visionRadius := int(stats["investigation"])
-	if visionRadius < 1 {
-		visionRadius = 1
+	rawInvestigation := int(stats["investigation"])
+	if rawInvestigation < 1 {
+		rawInvestigation = 1
 	}
-	// Hard upper cap on map vision so stacked INVESTIGATION stats cannot
-	// reveal the entire world. The raw stat is hidden behind this cap for
-	// every consumer of the grid viewport.
-	if visionRadius > MaxMapVisionRadius {
-		visionRadius = MaxMapVisionRadius
+	gridStats := gin.H{"movement": stats["movement"], "investigation": rawInvestigation}
+
+	// Maximum allowed vision radius for grid rendering based on player investigation stats.
+	// Minimum default radius is 2 (giving a 5x5 grid: dx,dy in [-2, 2]).
+	maxVisionRadius := rawInvestigation
+	if maxVisionRadius < 2 {
+		maxVisionRadius = 2
 	}
-	// The client only reads movement + investigation; skip shipping the rest
-	// of the stat block in every viewport fetch.
-	gridStats := gin.H{"movement": stats["movement"], "investigation": visionRadius}
-	visualVisionRadius := visionRadius
-	if visualVisionRadius > 2 {
+	// Hard cap for grid matrix viewport to avoid rendering too many tiles (e.g. max radius 5 gives 11x11 = 121 tiles)
+	const MaxVisualGridRadius = 5
+	if maxVisionRadius > MaxVisualGridRadius {
+		maxVisionRadius = MaxVisualGridRadius
+	}
+
+	// Read player's preferred radius from client query (e.g., ?radius=2 or ?r=3)
+	// Default radius is 2 (5x5).
+	visualVisionRadius := 2
+	if rStr := c.DefaultQuery("radius", c.Query("r")); rStr != "" {
+		if rVal, err := strconv.Atoi(rStr); err == nil && rVal >= 2 {
+			visualVisionRadius = rVal
+		}
+	}
+	if visualVisionRadius > maxVisionRadius {
+		visualVisionRadius = maxVisionRadius
+	}
+	if visualVisionRadius < 2 {
 		visualVisionRadius = 2
 	}
+
 	if statsOnly {
 		c.JSON(http.StatusOK, gin.H{
-			"x":             player.X,
-			"y":             player.Y,
-			"vision_radius": visualVisionRadius,
-			"stats":         gridStats,
-			"world_width":   WorldWidth,
-			"world_height":  WorldHeight,
+			"x":                 player.X,
+			"y":                 player.Y,
+			"vision_radius":     visualVisionRadius,
+			"max_vision_radius": maxVisionRadius,
+			"stats":             gridStats,
+			"world_width":       WorldWidth,
+			"world_height":      WorldHeight,
 		})
 		return
 	}
@@ -251,15 +269,16 @@ func GetGrid(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"x":              player.X,
-		"y":              player.Y,
-		"vision_radius":  visualVisionRadius,
-		"cells":          cells,
-		"stats":          gridStats,
-		"players_on_map": nearbyPlayers,
-		"ground_drops":   groundDrops,
-		"world_width":    WorldWidth,
-		"world_height":   WorldHeight,
+		"x":                 player.X,
+		"y":                 player.Y,
+		"vision_radius":     visualVisionRadius,
+		"max_vision_radius": maxVisionRadius,
+		"cells":             cells,
+		"stats":             gridStats,
+		"players_on_map":    nearbyPlayers,
+		"ground_drops":      groundDrops,
+		"world_width":       WorldWidth,
+		"world_height":      WorldHeight,
 	})
 }
 

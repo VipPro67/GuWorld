@@ -5,8 +5,6 @@
 // Subcommands:
 //
 //	gudata check-effects  validate Gu/Item effect blocks against effectcatalog
-//	gudata audit-realtime classify Gu blocks for the realtime zone runtime
-//	gudata compile-realtime-gu compile authored realtime Gu profiles
 //	gudata balance        compare each Gu's power vs its rank peers (band + tol)
 //	gudata match-food     audit/remap Gu food_types against Item.csv
 //	gudata gen-recipe     generate missing refinement recipes (configurable)
@@ -31,12 +29,6 @@ func main() {
 	switch os.Args[1] {
 	case "check-effects":
 		err = cmdCheckEffects(os.Args[2:])
-	case "audit-realtime":
-		err = cmdAuditRealtime(os.Args[2:])
-	case "compile-realtime-gu":
-		err = cmdCompileRealtimeGu(os.Args[2:])
-	case "transpile-realtime-gu":
-		err = cmdTranspileRealtimeGu(os.Args[2:])
 	case "balance":
 		err = cmdBalance(os.Args[2:])
 	case "match-food":
@@ -54,7 +46,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `usage: gudata <check-effects|audit-realtime|compile-realtime-gu|transpile-realtime-gu|balance|match-food|gen-recipe> [flags]`)
+	fmt.Fprintln(os.Stderr, `usage: gudata <check-effects|balance|match-food|gen-recipe> [flags]`)
 }
 
 // dataDir returns the -data flag value defaulting to "data".
@@ -98,8 +90,8 @@ func samePath(a, b string) bool {
 
 type table struct {
 	header []string
-	col    map[string]int
 	rows   [][]string
+	colIdx map[string]int
 }
 
 func readCSV(path string) (*table, error) {
@@ -114,7 +106,6 @@ func readCSV(path string) (*table, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Strip UTF-8 BOM from the first header cell (the data files carry one).
 	if len(header) > 0 {
 		header[0] = strings.TrimPrefix(header[0], "\uFEFF")
 	}
@@ -122,25 +113,28 @@ func readCSV(path string) (*table, error) {
 	if err != nil {
 		return nil, err
 	}
-	col := make(map[string]int, len(header))
+	colIdx := make(map[string]int, len(header))
 	for i, h := range header {
-		col[strings.TrimSpace(h)] = i
+		colIdx[strings.TrimSpace(h)] = i
 	}
-	return &table{header: header, col: col, rows: rows}, nil
+	return &table{header: header, rows: rows, colIdx: colIdx}, nil
 }
 
-func (t *table) get(row []string, name string) string {
-	i, ok := t.col[name]
+func (t *table) get(row []string, col string) string {
+	i, ok := t.colIdx[col]
 	if !ok || i >= len(row) {
 		return ""
 	}
 	return row[i]
 }
 
-func (t *table) set(row []string, name, val string) {
-	i, ok := t.col[name]
-	if !ok || i >= len(row) {
+func (t *table) set(row []string, col, val string) {
+	i, ok := t.colIdx[col]
+	if !ok {
 		return
+	}
+	for len(row) <= i {
+		row = append(row, "")
 	}
 	row[i] = val
 }

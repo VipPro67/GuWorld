@@ -135,6 +135,7 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 		growthDataJSON := marshalJSONOrDefault(player.GrowthData, `{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}`)
 		immortalStateJSON := marshalJSONOrDefault(player.ImmortalState, "{}")
 		combatSettingsJSON := marshalJSONOrDefault(player.CombatSettings, "{}")
+		activeCombatJSON := marshalJSONOrDefault(player.ActiveCombat, "null")
 
 		_, err = tx.Exec(`
 			UPDATE players
@@ -148,6 +149,7 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 			    equipped_gus = $25, statuses = $26, body_mods = $27, realtime_hotbar = $28,
 			    cleared_cells = $29, visited_subzones = $30, path_masteries = $31,
 			    growth_data = $32, immortal_state = $33, combat_settings = $34,
+			    active_combat = $44,
 			    explore_count = $35, last_explore_reset = $36,
 			    bio = $37, fake_rank = $38, fake_sub_rank = $39, fake_vital_gu = $40, is_disguised = $41, avatar_url = $42,
 			    version = version + 1,
@@ -166,7 +168,7 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 			growthDataJSON, immortalStateJSON, combatSettingsJSON,
 			player.ExploreCount, player.LastExploreReset,
 			player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, player.AvatarURL,
-			player.ID,
+			player.ID, activeCombatJSON,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("persist player mutation: %w", err)

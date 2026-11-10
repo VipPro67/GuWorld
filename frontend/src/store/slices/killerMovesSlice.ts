@@ -147,9 +147,9 @@ export interface KillerMovePreview {
   mana_cost: number;
   combat_profile?: KillerMoveCombatProfile;
   warnings: string[];
-  realtime_supported: boolean;
+  realtime_supported?: boolean;
   realtime_unavailable_reason?: string;
-  has_realtime_effects: boolean;
+  has_realtime_effects?: boolean;
   has_outside_combat_effect: boolean;
   preview_fingerprint: string;
 }

@@ -30,6 +30,22 @@ type MonsterTemplate struct {
 	PetHungerPerHour float64            `json:"pet_hunger_per_hour"`
 }
 
+func BuildCombatStateFromMonster(mon MonsterTemplate, rank, subRank int) CombatState {
+	return BuildCombatStateFromMonsterWithRegion(mon, rank, subRank, nil)
+}
+
+func BuildCombatStateFromMonsterWithRegion(mon MonsterTemplate, rank, subRank int, _ []GuPoolEntry) CombatState {
+	hp, attack, defense := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, rank, subRank, mon.Type)
+	return CombatState{
+		EnemyTemplateID: mon.ID, EnemyName: mon.Name, EnemyType: mon.Type,
+		EnemyHP: hp, EnemyMaxHP: hp, EnemyMana: 100, EnemyMaxMana: 100,
+		EnemyDamage: attack, EnemyDefense: defense, EnemyRank: rank, EnemySubRank: subRank,
+		EnemyGuInventory: append(GuInventory(nil), mon.GuInventory...),
+		EnemyDaoMarks:    mon.DaoMarks, EnemyPathMasteries: mon.PathMasteries,
+		AIProfile: mon.AIProfile, LootTableID: mon.LootTableID,
+	}
+}
+
 type GuPoolEntry struct {
 	GuID        string  `json:"gu_id"`
 	Rank        int     `json:"rank"`
@@ -67,6 +83,42 @@ type MonsterSpawn struct {
 	MaxRank        int     `json:"max_rank"`
 	IsBossSpawn    bool    `json:"is_boss_spawn"`
 	IsActive       bool    `json:"is_active"`
+}
+
+// Combatant is the historical turn-based battle projection of a player,
+// monster, pet, or other combat actor.
+type Combatant struct {
+	ID                      string            `json:"id"`
+	Name                    string            `json:"name"`
+	Kind                    string            `json:"kind"`
+	Rank                    int               `json:"rank"`
+	SubRank                 int               `json:"sub_rank"`
+	HP                      float64           `json:"hp"`
+	MaxHP                   float64           `json:"max_hp"`
+	CurrentMana             float64           `json:"current_mana"`
+	MaxMana                 float64           `json:"max_mana"`
+	BaseAttack              float64           `json:"base_attack"`
+	BaseDefense             float64           `json:"base_defense"`
+	GuInventory             GuInventory       `json:"gu_inventory"`
+	DaoMarks                DaoMarksMap       `json:"dao_marks"`
+	PathMasteries           map[string]int    `json:"path_masteries"`
+	BodyMods                BodyModsList      `json:"body_mods,omitempty"`
+	AIProfile               string            `json:"ai_profile"`
+	LootTableID             string            `json:"loot_table_id"`
+	StatusEffects           []StatusEffect    `json:"status_effects"`
+	GridX                   int               `json:"grid_x"`
+	GridY                   int               `json:"grid_y"`
+	Speed                   float64           `json:"speed"`
+	VirtualShield           float64           `json:"virtual_shield"`
+	SoulHP                  float64           `json:"soul_hp"`
+	MaxSoulHP               float64           `json:"max_soul_hp"`
+	DaoMarkDamage           float64           `json:"dao_mark_damage"`
+	ApertureDmg             float64           `json:"aperture_dmg"`
+	AvatarURL               string            `json:"avatar_url,omitempty"`
+	FullyGrown              []FullyGrownInfo  `json:"fully_grown,omitempty"`
+	CombatSettings          *AutoCombatConfig `json:"combat_settings,omitempty"`
+	HasNonConflictingDao    bool              `json:"has_non_conflicting_dao,omitempty"`
+	DaoConflictReductionPct float64           `json:"dao_conflict_reduction_pct,omitempty"`
 }
 
 // MonsterRankScalingEnabled reports whether monster and boss stats are

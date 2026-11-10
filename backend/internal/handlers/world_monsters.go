@@ -1126,8 +1126,7 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 }
 
 // isLegacyWorldMonsterPlayer keeps the shared monster worker scoped to the
-// default legacy world. Non-empty instance IDs and process-local realtime
-// leases belong to isolated runtimes and must never activate legacy AI.
+// default world map.
 func isLegacyWorldMonsterPlayer(entry WorldPosEntry) bool {
 	mapID := entry.MapID
 	if mapID == "" {
@@ -1136,6 +1135,6 @@ func isLegacyWorldMonsterPlayer(entry WorldPosEntry) bool {
 	if mapID != "world_map" || entry.InstanceID != "" {
 		return false
 	}
-	playerID, err := uuid.Parse(entry.ID)
-	return err == nil && !middleware.IsRealtimeWorldOwned(playerID)
+	_, err := uuid.Parse(entry.ID)
+	return err == nil
 }

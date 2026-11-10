@@ -1,208 +1,59 @@
 package main
 
 import (
+	"net/http/httptest"
 	"os"
-	"path/filepath"
-	"regexp"
-	"runtime"
-	"strings"
 	"testing"
-
-	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/models"
-	realtimeeffects "github.com/vippro67/GuWorld/backend/internal/realtime/effects"
-	"github.com/vippro67/GuWorld/backend/internal/realtime/nav"
 )
 
-func TestSafeMapMonsterSpawnsAreHostile(t *testing.T) {
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("could not locate server test source")
+func TestEnvBool(t *testing.T) {
+	tests := []struct {
+		val  string
+		want bool
+	}{
+		{"1", true},
+		{"true", true},
+		{"True", true},
+		{"yes", true},
+		{"on", true},
+		{"0", false},
+		{"false", false},
+		{"no", false},
+		{"off", false},
+		{"", false},
 	}
-	mapPath := filepath.Join(filepath.Dir(sourceFile), "../../data/mmo/maps/tan_thu_coc_nam_cuong.json")
-	loadedMap, err := nav.LoadFile(mapPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loadedMap.Ruleset != "safe" {
-		t.Fatalf("starter map ruleset=%q, want safe", loadedMap.Ruleset)
-	}
-
-	var monsterSpawns int
-	for _, spawn := range loadedMap.Spawns {
-		if spawn.Kind != "monster" {
-			continue
-		}
-		monsterSpawns++
-		template := models.MonsterTemplate{ID: spawn.MonsterID, Name: spawn.MonsterID, Type: "normal", MaxHP: 100, BaseAttack: 10}
-		got := realtimeMonsterSpawn(spawn, template)
-		if got.Passive {
-			t.Errorf("safe-map monster %q is still passive", spawn.MonsterID)
-		}
-		if got.AggroRadius <= 0 {
-			t.Errorf("safe-map monster %q has no aggro radius", spawn.MonsterID)
+	for _, tc := range tests {
+		os.Setenv("TEST_ENV_BOOL", tc.val)
+		if got := envBool("TEST_ENV_BOOL"); got != tc.want {
+			t.Errorf("envBool(%q) = %v, want %v", tc.val, got, tc.want)
 		}
 	}
-	if monsterSpawns == 0 {
-		t.Fatal("starter map has no monster spawns to validate")
-	}
+	os.Unsetenv("TEST_ENV_BOOL")
 }
 
-func TestRealtimeCaptureInsertUsesMonsterTemplateColumns(t *testing.T) {
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("could not locate server test source")
-	}
-	schemaPath := filepath.Join(filepath.Dir(sourceFile), "../../internal/db/schema_world.go")
-	schema, err := os.ReadFile(schemaPath)
-	if err != nil {
-		t.Fatal(err)
+func TestRealtimeOriginChecker(t *testing.T) {
+	os.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,https://app.guworld.com")
+	defer os.Unsetenv("CORS_ALLOWED_ORIGINS")
+
+	checker := realtimeOriginChecker()
+
+	// Same origin (no origin header) is allowed
+	req1 := httptest.NewRequest("GET", "/api/ws", nil)
+	if !checker(req1) {
+		t.Error("expected empty origin to be allowed")
 	}
 
-	tableMatch := regexp.MustCompile(`(?s)CREATE TABLE IF NOT EXISTS monster_templates\s*\((.*?)\);`).FindSubmatch(schema)
-	if len(tableMatch) != 2 {
-		t.Fatal("could not locate monster_templates DDL")
-	}
-	columns := make(map[string]struct{})
-	for _, line := range strings.Split(string(tableMatch[1]), "\n") {
-		fields := strings.Fields(strings.TrimSpace(line))
-		if len(fields) >= 2 {
-			columns[strings.TrimSuffix(fields[0], ",")] = struct{}{}
-		}
+	// Allowed origin
+	req2 := httptest.NewRequest("GET", "/api/ws", nil)
+	req2.Header.Set("Origin", "http://localhost:3000")
+	if !checker(req2) {
+		t.Error("expected http://localhost:3000 to be allowed")
 	}
 
-	references := regexp.MustCompile(`\bm\.([a-z_]+)\b`).FindAllStringSubmatch(realtimeCaptureInsertSQL, -1)
-	for _, reference := range references {
-		if _, ok := columns[reference[1]]; !ok {
-			t.Errorf("capture insert references missing monster_templates column m.%s", reference[1])
-		}
-	}
-}
-
-func TestResolveRealtimeMapPathFromNestedServerDirectory(t *testing.T) {
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("could not locate server source directory")
-	}
-	originalWD, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(originalWD) })
-	if err := os.Chdir(filepath.Dir(sourceFile)); err != nil {
-		t.Fatal(err)
-	}
-
-	path := resolveRealtimeMapPath("data/mmo/maps", "world_map")
-	if filepath.Base(path) != "world_map.json" {
-		t.Fatalf("map path=%q, want world_map.json", path)
-	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("resolved map path %q is unavailable: %v", path, err)
-	}
-}
-
-func TestExpandRealtimeZoneIDsFiltersMismatchedMapVersions(t *testing.T) {
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("could not locate server source directory")
-	}
-	originalWD, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(originalWD) })
-	if err := os.Chdir(filepath.Dir(sourceFile)); err != nil {
-		t.Fatal(err)
-	}
-
-	expanded := expandRealtimeZoneIDs(map[string]struct{}{"*": {}}, "data/mmo/maps", "regions-v1", "region-content-v1")
-	if len(expanded) != 128 {
-		t.Fatalf("expanded zone count=%d, want the 128 rollout maps (125 world regions + aperture_tribulation + aperture_interior + realtime_preview)", len(expanded))
-	}
-	for _, regionID := range []string{"thanh_mao_son", "tan_thu_coc_nam_cuong", "hub_thuong_gia_thanh", "aperture_tribulation", "aperture_interior", "realtime_preview"} {
-		if _, ok := expanded[regionID]; !ok {
-			t.Fatalf("expanded zones missing region map %q", regionID)
-		}
-	}
-	for _, mismatched := range []string{"world_map", "misty_forest"} {
-		if _, ok := expanded[mismatched]; ok {
-			t.Fatalf("expanded zones included version-mismatched map %q", mismatched)
-		}
-	}
-}
-
-func TestResolveRealtimeProfilePathsFromNestedServerDirectory(t *testing.T) {
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("could not locate server source directory")
-	}
-	originalWD, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(originalWD) })
-	if err := os.Chdir(filepath.Dir(sourceFile)); err != nil {
-		t.Fatal(err)
-	}
-
-	resolved := resolveRealtimeProfilePaths("data/mmo/gu/transpiled_profiles.json")
-	for _, path := range strings.Split(resolved, ",") {
-		if _, err := os.Stat(path); err != nil {
-			t.Fatalf("resolved profile catalog %q is unavailable: %v", path, err)
-		}
-	}
-	catalog, err := realtimeeffects.LoadProfileCatalogs(resolved)
-	if err != nil {
-		t.Fatalf("could not load profile catalogs from nested server directory: %v", err)
-	}
-	if len(catalog.Profiles) != 4636 {
-		t.Fatalf("loaded profile count=%d, want 4636", len(catalog.Profiles))
-	}
-}
-
-func TestCompileWithDB(t *testing.T) {
-	if os.Getenv("DB_PASSWORD") == "" {
-		os.Setenv("DB_PASSWORD", "cKsQD[ER&.z=1Xe$,+9KaH+#0vmen^~h")
-	}
-	err := db.Connect()
-	if err != nil {
-		t.Skipf("cannot connect to db: %v", err)
-	}
-	defer db.DB.Close()
-
-	if err := models.LoadGuRegistry(db.DB); err != nil {
-		t.Fatalf("LoadGuRegistry failed: %v", err)
-	}
-
-	guEntries := make([]realtimeeffects.GuEntry, 0, len(models.GuRegistry))
-	for id, ranks := range models.GuRegistry {
-		for rank, item := range ranks {
-			guEntries = append(guEntries, realtimeeffects.GuEntry{
-				ID: id, Name: item.Name, Rank: rank, Type: item.Type, PrimaryRole: item.PrimaryRole,
-				ManaCost: item.BaseManaCost,
-			})
-		}
-	}
-	t.Logf("guEntries count: %d", len(guEntries))
-
-	// Check if GU_FLYING_SWORD rank 7 is in guEntries
-	var foundFlying7 bool
-	for _, e := range guEntries {
-		if e.ID == "GU_FLYING_SWORD" && e.Rank == 7 {
-			foundFlying7 = true
-			break
-		}
-	}
-	t.Logf("foundFlying7: %v", foundFlying7)
-
-	catalog, err := realtimeeffects.LoadProfileCatalogs("../../data/mmo/gu/transpiled_profiles.json")
-	if err != nil {
-		t.Fatalf("LoadProfileCatalogs failed: %v", err)
-	}
-
-	_, compileErr := realtimeeffects.CompileCatalog(catalog, guEntries, realtimeeffects.DefaultMVP())
-	if compileErr != nil {
-		t.Fatalf("CompileCatalog failed: %v", compileErr)
+	// Disallowed origin
+	req3 := httptest.NewRequest("GET", "/api/ws", nil)
+	req3.Header.Set("Origin", "http://malicious.com")
+	if checker(req3) {
+		t.Error("expected http://malicious.com to be rejected")
 	}
 }

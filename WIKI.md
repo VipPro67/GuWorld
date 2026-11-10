@@ -7,7 +7,7 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại, di
 - Cổ sư đăng ký bằng username/email/password hoặc đăng nhập Google nếu cấu hình OAuth.
 - **Khóa tài khoản (`players.ban`)**: tài khoản bị khóa (có thời hạn hoặc vĩnh viễn) không thể đăng nhập và bị đẩy khỏi phiên đang chơi; đăng nhập trả về lý do khóa. Admin cũng có thể chỉ **hạn chế chat** (không gửi được chat Bảo Hoàng/private mail) hoặc chặn thiết bị. Hệ thống tự động khóa khi một thiết bị vượt ngưỡng nhiều tài khoản hoặc lạm dụng referral.
 - Hồ sơ hỗ trợ bio, avatar, đổi mật khẩu và cơ chế ngụy trang thông tin công khai.
-- **Khi mất kết nối thế giới:** thanh **Chức năng** vẫn cho mở nhân vật, túi đồ, tu luyện, luyện Cổ, cửa hàng, Chợ Tiên và các bảng cơ bản qua HTTP nếu máy chủ HTTP còn truy cập được. Chat vẫn gửi được; tin nhắn của kênh đang mở và giao dịch được cập nhật định kỳ khi mất kênh realtime. Di chuyển và chiến đấu ngoài thế giới cần kết nối realtime. Bấm **Kết nối lại** để trở về thế giới và thử lại.
+- **Kết nối máy chủ:** Các tính năng game (nhân vật, túi đồ, tu luyện, luyện Cổ, cửa hàng, Chợ Tiên, chiến đấu theo lượt) hoạt động qua HTTP API. Kênh thời gian thực (chat, thông báo, cập nhật nhân vật, giao dịch) được đồng bộ qua WebSocket (`/api/ws`). Di chuyển và khám phá thế giới thực hiện trên bản đồ lưới.
 - **Đổi Đạo Hiệu (Hạn chế & Đại Đạo Phản Phệ)**:
   - **Nhất Chuyển & Nhị Chuyển (Rank 1 - 2)**: Tự do đổi tên miễn phí, không tốn tài nguyên hay chịu phản phệ.
   - **Tam Chuyển (Rank 3)**: Tốn **5.000 Nguyên Thạch**.
@@ -718,14 +718,15 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 
 ## 9. Chiến đấu
 
-- PvE/PvP khởi tạo từ map thế giới realtime hoặc private session theo chế độ; không có encounter turn-based mở từ exploration.
-- **Phòng tập:** tạo một map realtime riêng cho từng phiên. Sinh lực, Chân Nguyên và độ no của Cổ trong phiên tập không ghi đè tài nguyên thật; rời phòng sẽ trở về map trước đó.
+- Chạm trán quái dã ngoại được bàn giao từ aggro của map sang encounter turn-based bền vững. Người chơi bị khóa điều khiển map trong lúc xem và chạy replay mô phỏng; thắng/thua kết toán xong mới mở khóa actor realtime. Di chuyển thế giới ngoài combat vẫn realtime.
+- Đồng đội cùng khu vực và cùng map instance tham chiến cùng trưởng nhóm; trạng thái combat khóa thao tác của họ đến khi kết toán. Pet trong đội hình tiếp tục tham chiến theo lượt và lưu HP/kết quả sau trận. Quái dã ngoại chỉ dùng đội hình spawn, không tự sinh hộ vệ ngẫu nhiên.
+- **Phòng tập:** tạo encounter giả lập turn-based. Sinh lực và Chân Nguyên của hình nhân là ảo; kết thúc không ghi đè tài nguyên thật.
 - Cổ sư dùng Cổ trang bị, có thể charge và chọn mục tiêu.
 - Chỉ định mục tiêu hỗ trợ vị trí/hàng/cột/toàn bộ tùy `target_type` của Cổ.
-- **Chiến đấu realtime:** server mô phỏng di chuyển, đánh thường, cast có tụ lực/hồi chiêu, va chạm, status và sát thương theo tick. Người chơi chủ động chọn chiêu; auto-farm chỉ phát lệnh realtime theo cài đặt khi client đang chạy.
-- Cổ trang bị và Sát Chiêu dùng profile realtime đã hỗ trợ; effect không có executor realtime sẽ không được cast. Tiên Cổ phòng thủ dùng trạng thái biến thân có thời gian tụ lực, hao mana theo thời gian và chiêu thức riêng.
-- PvE/PvP, Đấu Trường, Tập Luyện, Tông Môn Chiến và Tai Kiếp đều dùng world/session realtime. Settlement thưởng, tiêu hao và lịch sử được ghi khi realtime session kết thúc.
-- **Chiến báo:** hiển thị các sự kiện combat realtime; bản ghi turn-based cũ còn đọc được trong thời gian tương thích, không có luồng tạo bản ghi turn-based mới.
+- **Combat turn-based:** encounter mới dùng simulator xác định và replay; bao gồm quái dã ngoại, PvP dã ngoại, Bí Cảnh, Võ Đài, Tập Luyện, Sinh Tử Đài, Đại Hội Võ Thuật, Tông Môn Chiến và Tai Kiếp. Chuyển động trên bản đồ vẫn realtime. Người chơi dã ngoại bị khóa trong zone khi simulator xử lý combat; kết quả được lưu trước khi mở khóa.
+- Cổ trang bị và Sát Chiêu vẫn giữ dữ liệu cấu hình realtime tương thích để bảo toàn loadout và effect; chúng được đọc bởi simulator turn-based trong encounter mới.
+- Các phiên combat realtime đã mở trước cutover giữ handler settlement cũ để có thể kết thúc an toàn; API mở encounter realtime mới cho Tai Kiếp đã bị gỡ khỏi router.
+- **Chiến báo:** lịch sử combat mới ghi kết quả turn-based; dữ liệu realtime cũ vẫn được giữ để tương thích.
 - **Phân bổ chiến lợi phẩm quái:** mọi quái rơi thêm **Nguyên liệu bậc tương ứng** với rank quái (thịt yêu thú, thiên khí… cùng bậc — quái khó thưởng đúng tầm, quái dễ không cho đồ bậc cao). Đồ **đặc thù loài** (tơ nhện, lông thú, kén…) chỉ rơi từ đúng loài đó và không phụ thuộc rank — muốn farm tơ nhện hãy tìm **Xích Ti Huyết Chu** (`wan_xa_goc`), **Diệu Thủ Ấu Chu** (`qing_mao_mountain`); Nguyên Thạch và tiền tệ đặc biệt rơi phổ quát. Một số hiếm phẩm đặc biệt gắn cờ jackpot luôn có cơ hội rơi dù lệch bậc (tỉ lệ riêng).
 - **Cổ trong pool của quái:** quái có thể mang Cổ khai báo trong `gu_inventory`; pool `gu_pool` của loài được ưu tiên, nếu rỗng thì dùng pool Cổ kế thừa theo vùng. Realtime chọn Cổ theo trọng số/slot, roll tỉ lệ theo rank và tier quái, rồi cấp thưởng idempotent cùng loot còn lại. Tiên Cổ vẫn bị chặn nếu đã tồn tại trên server.
 - **Túi đồ khi khám phá là túi thật:** nguyên liệu/Cổ/tiền nhặt được trong chuyến đi vào thẳng túi đồ (không còn "túi tạm"). Khi về trấn an toàn không có bước "thu hoạch" — đồ đã nằm sẵn trong túi.

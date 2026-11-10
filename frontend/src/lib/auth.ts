@@ -1,5 +1,5 @@
 import { BACKEND_URL } from "./config.ts";
-import { defaultTabCoordinator, setTabClaimer } from "./realtime/RealtimeClient.ts";
+import { defaultTabCoordinator, setTabClaimer } from "./tabCoordinator.ts";
 
 /**
  * Shared authentication helpers for browser-side fetch.

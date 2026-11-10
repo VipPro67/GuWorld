@@ -1,1 +1,1 @@
-export { MONSTER_ATLAS_MANIFEST } from "../game/assets/monsterAtlasManifest";
+export { MONSTER_ATLAS_MANIFEST } from "../lib/assets/monsterAtlasManifest";
