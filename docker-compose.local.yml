@@ -67,10 +67,10 @@ services:
     env_file:
       - ./frontend/.env
     environment:
-      INTERNAL_BACKEND_URL: http://backend:8080
+      INTERNAL_BACKEND_URL: http://132.226.95.3:8080
       # Nếu cần truyền các biến môi trường lúc build Next.js (ARG), bạn khai báo thêm ở đây:
       # args:
-      #   NEXT_PUBLIC_BACKEND_URL: http://localhost:8080
+      NEXT_PUBLIC_BACKEND_URL: http://132.226.95.3:8080
     depends_on:
       - backend
 
