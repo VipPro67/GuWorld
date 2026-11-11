@@ -863,6 +863,12 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			aperture.POST("/guests/:guestId/contract", handlers.SignAllianceContract)
 			aperture.GET("/variant-humans", handlers.GetApertureVariantHumans)
 
+			// Aperture Gu Swarms (Đàn Phàm Cổ Tiên Khiếu)
+			aperture.GET("/swarms", handlers.GetApertureGuSwarms)
+			aperture.POST("/swarms/materialize", handlers.MaterializeGuFromSwarm)
+			aperture.POST("/swarms/dematerialize", handlers.DematerializeGuToSwarm)
+			aperture.POST("/swarms/deposit-all", handlers.DepositAllHealthyGus)
+
 			// Phase 1: Variant Economy — node workers
 			aperture.GET("/nodes/:id/workers", handlers.GetApertureNodeWorkers)
 			aperture.POST("/nodes/:id/workers", handlers.AssignWorkerToNode)

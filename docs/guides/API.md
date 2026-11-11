@@ -275,6 +275,10 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 | GET | `/immortal-aperture/npcs` |
 | POST | `/immortal-aperture/npcs/:npc_id/role` |
 | DELETE | `/immortal-aperture/npcs/:npc_id` |
+| GET | `/immortal-aperture/swarms` | Danh sách đàn phàm cổ (`aperture_gu_swarms`) được nuôi dưỡng trong Tiên Khiếu. Trả về `{swarms: [...]}`. |
+| POST | `/immortal-aperture/swarms/materialize` | Rút 1 cá thể Cổ từ đàn thành `player_gu` độc lập (`{gu_id, gu_rank, equip}`). Nếu `equip: true` và còn slot trống (< 60), tự động trang bị. |
+| POST | `/immortal-aperture/swarms/dematerialize` | Thả 1 cá thể Phàm Cổ lành lặn không trang bị (`{instance_id}`) từ `player_gu` vào đàn trong Tiên Khiếu. |
+| POST | `/immortal-aperture/swarms/deposit-all` | Thu hồi hàng loạt tất cả Phàm Cổ (Rank 1-5) lành lặn, không trang bị, không bản mệnh vào đàn nuôi dưỡng Tiên Khiếu. |
 | GET | `/dao-marks` |
 | GET | `/dao-marks/dao-ngan` | Đạo ngân (composite dao power) calculation. |
 | GET | `/tribulations/active` | Trả event đang ACTIVE mới nhất, danh sách quái còn sống và `total_enemies` / `defeated_enemies` / `remaining_enemies`. |

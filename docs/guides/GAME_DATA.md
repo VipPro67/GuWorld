@@ -617,6 +617,22 @@ Combat tai kiếp dùng encounter turn-based: `/api/tribulations/:eventId/engage
 
 Lưu tọa độ atlas của vị trí trước độ kiếp, độc lập với `return_region` để vẫn chọn được vùng an toàn lân cận khi region cũ bị xóa. Gồm `aperture_id` (PK/FK, cascade), `atlas_x`, `atlas_y` (nullable) và `updated_at`. Bảng tự tạo bằng `CREATE TABLE IF NOT EXISTS` khi khởi động.
 
+### Bảng `aperture_gu_swarms` (Đàn Phàm Cổ Tiên Khiếu)
+
+Lưu trữ số lượng Phàm Cổ (Rank 1-5) sinh sống theo đàn trong Tiên Khiếu của Cổ Tiên (Rank ≥ 6), tối ưu hóa lưu trữ hàng vạn con mà không làm phình to bảng `player_gu` hay gây quá tải worker độ đói:
+- `id` (UUID PRIMARY KEY)
+- `aperture_id` (UUID FK → `immortal_apertures(id)` ON DELETE CASCADE)
+- `gu_id` (VARCHAR(64)), `gu_rank` (INT) — Composite FK → `gu_dictionary(id, rank)`
+- `quantity` (BIGINT NOT NULL, `CHECK (quantity >= 0)`)
+- `created_at`, `updated_at` (TIMESTAMPTZ)
+- Ràng buộc: `CHECK (gu_rank BETWEEN 1 AND 5)` (chỉ lưu Phàm Cổ, Tiên Cổ Rank 6+ luôn là cá thể độc nhất trong `player_gu`).
+- Unique: `UNIQUE (aperture_id, gu_id, gu_rank)` (mỗi loài Cổ kèm rank chỉ có 1 đàn trong cùng một Tiên Khiếu).
+
+**Cơ chế liên quan:**
+- **Sức chứa Phàm Nhân (`MortalApertureCapacity`):** Phàm nhân (Rank 1-5) giữ Cổ dạng cá thể trong `player_gu` với giới hạn dung lượng: Rank 1 (15 con), Rank 2 (20), Rank 3 (30), Rank 4 (50), Rank 5 (100).
+- **Chuyển Hóa Cá Thể (Materialize / Dematerialize):** Cổ Tiên có thể trích xuất cá thể 100% độ bền / 100% luyện hóa từ đàn để trang bị ra trận (tối đa 60 slot) hoặc thu hồi hàng loạt Phàm Cổ lành lặn không trang bị trở lại đàn.
+- **Tiêu thụ hàng loạt trong Luyện Cổ:** Phiên luyện Cổ hỗ trợ trừ nguyên liệu trực tiếp từ `aperture_gu_swarms` và ghi nhận vào cột `swarms_deducted` trong `refine_sessions`.
+
 ### Bảng `tribulation_enemies`
 
 Lưu các quái vật sinh ra trong Kiếp Nạn Tiên Khiếu:

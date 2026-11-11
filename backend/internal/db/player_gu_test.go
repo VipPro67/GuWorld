@@ -62,3 +62,27 @@ func TestSameGuInstanceWithRefinementAndDurability(t *testing.T) {
 		t.Fatalf("instances with different durability must not match")
 	}
 }
+
+func TestMortalApertureCapacity(t *testing.T) {
+	tests := []struct {
+		rank    int
+		subRank int
+		want    int
+	}{
+		{1, 1, 15},
+		{2, 1, 25},
+		{3, 1, 40},
+		{4, 1, 60},
+		{5, 1, 80},
+		{5, 4, 100},
+		{6, 1, -1},
+		{7, 1, -1},
+	}
+	for _, tc := range tests {
+		got := MortalApertureCapacity(tc.rank, tc.subRank)
+		if got != tc.want {
+			t.Errorf("MortalApertureCapacity(%d, %d) = %d, want %d", tc.rank, tc.subRank, got, tc.want)
+		}
+	}
+}
+

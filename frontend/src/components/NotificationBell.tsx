@@ -146,7 +146,7 @@ export const NotificationBell: React.FC<{ size?: "sm" | "md" }> = ({ size = "md"
 
       {open && (
           <div
-            className="absolute right-0 top-full mt-2 w-[min(380px,calc(100vw-2rem))] max-h-[min(75dvh,640px)] flex flex-col rounded-2xl border border-[#a88952]/80 bg-[#16100bfd] text-[#f4e8cb] shadow-[0_20px_50px_rgba(0,0,0,.9)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-serif"
+            className="absolute right-0 top-full mt-2 box-border w-[calc(100vw-2rem)] max-w-[380px] sm:w-[380px] max-h-[min(75dvh,640px)] flex flex-col rounded-2xl border border-[#a88952]/80 bg-[#16100bfd] text-[#f4e8cb] shadow-[0_20px_50px_rgba(0,0,0,.9)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-serif"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#a88952]/30 bg-[#251a13]/90 rounded-t-2xl">
               <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ import { BACKEND_URL } from "@/lib/config";
 import { createManaSnapshotFromPlayer } from "@/store/useGameStore";
 import type {
   ImmortalAperture,
+  ApertureGuSwarmView,
   DaoMark,
   DaoNganResult,
   ApertureResourceNode,
@@ -50,6 +51,11 @@ let fetchActiveTribulationPromise: Promise<void> | null = null;
 let lastActiveTribulationPlayerId: string | null = null;
 let lastActiveTribulationFetchTime = 0;
 const ACTIVE_TRIBULATION_TTL_MS = 15000;
+
+let fetchApertureSwarmsPromise: Promise<void> | null = null;
+let lastApertureSwarmsPlayerId: string | null = null;
+let lastApertureSwarmsFetchTime = 0;
+const APERTURE_SWARMS_TTL_MS = 15000;
 
 export interface ActiveTribulation {
   event: TribulationEvent;
@@ -127,11 +133,17 @@ export interface ApertureSlice {
   setGuestRole: (guestId: string, role: string) => Promise<boolean>;
   evictGuest: (guestId: string) => Promise<boolean>;
   signAllianceContract: (guestId: string, tier?: string) => Promise<boolean>;
+  apertureSwarms: ApertureGuSwarmView[];
+  fetchApertureSwarms: (forceRefresh?: boolean) => Promise<void>;
+  materializeGuFromSwarm: (guId: string, guRank: number, equip?: boolean) => Promise<boolean>;
+  dematerializeGuToSwarm: (instanceId: string) => Promise<boolean>;
+  depositAllHealthyGus: () => Promise<boolean>;
 }
 
 export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ApertureSlice> = (set, get) => ({
   aperture: null,
   portal: null,
+  apertureSwarms: [],
   guests: [],
   daoMarks: [],
   daoNgan: null,
@@ -1499,6 +1511,131 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Ký kết Minh Ước thất bại");
       get().addToast(data.message || "Ký kết Minh Ước thành công!", "success");
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  fetchApertureSwarms: async (forceRefresh = false) => {
+    const { player, token } = get();
+    if (!token || !player) return;
+    if (player.rank < 6) return;
+
+    const now = Date.now();
+    const isSamePlayer = lastApertureSwarmsPlayerId === player.id;
+    const isFresh = isSamePlayer && now - lastApertureSwarmsFetchTime < APERTURE_SWARMS_TTL_MS;
+
+    if (!forceRefresh && isFresh) return;
+    if (!forceRefresh && isSamePlayer && fetchApertureSwarmsPromise) {
+      await fetchApertureSwarmsPromise;
+      return;
+    }
+
+    lastApertureSwarmsPlayerId = player.id;
+    lastApertureSwarmsFetchTime = now;
+
+    fetchApertureSwarmsPromise = (async () => {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/swarms`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        set({ apertureSwarms: data.swarms || [] });
+      } catch (err) {
+        console.error("fetchApertureSwarms failed", err);
+      } finally {
+        fetchApertureSwarmsPromise = null;
+      }
+    })();
+
+    await fetchApertureSwarmsPromise;
+  },
+
+  materializeGuFromSwarm: async (guId: string, guRank: number, equip = true) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/swarms/materialize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gu_id: guId, gu_rank: guRank, equip }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Rút Cổ trùng thất bại");
+      get().addToast(data.message || "Rút Cổ trùng thành công!", "success");
+      const player = get().player;
+      await Promise.all([
+        get().fetchApertureSwarms(true),
+        get().fetchGuInventory(true),
+        player ? get().fetchPlayerStatus(player.id, true) : Promise.resolve(),
+      ]);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  dematerializeGuToSwarm: async (instanceId: string) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/swarms/dematerialize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instance_id: instanceId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thả Cổ vào Tiên Khiếu thất bại");
+      get().addToast(data.message || "Thả Cổ vào Tiên Khiếu thành công!", "success");
+      const player = get().player;
+      await Promise.all([
+        get().fetchApertureSwarms(true),
+        get().fetchGuInventory(true),
+        player ? get().fetchPlayerStatus(player.id, true) : Promise.resolve(),
+      ]);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  depositAllHealthyGus: async () => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/swarms/deposit-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thu hồi Cổ trùng thất bại");
+      get().addToast(data.message || "Thu hồi Cổ trùng thành công!", "success");
+      const player = get().player;
+      await Promise.all([
+        get().fetchApertureSwarms(true),
+        get().fetchGuInventory(true),
+        player ? get().fetchPlayerStatus(player.id, true) : Promise.resolve(),
+      ]);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

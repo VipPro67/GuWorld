@@ -1344,6 +1344,13 @@ Hệ thống Tiên Khiếu tái hiện sát cốt truyện *Cổ Chân Nhân* (R
    - **Chủ Khiếu tử đạo:** Nếu Chủ Khiếu bị hạ gục bên trong Tiên Khiếu, Tiên Khiếu sẽ lập tức kích hoạt cơ chế tự bảo hộ **Tự Động Thu Khiếu** — khép lại Môn Hộ thế giới, thu hồi Tiên Khiếu vào nhục thân, trục xuất toàn bộ ngoại nhân bên trong ra ngoài Môn Hộ, và hoàn nguyên thân thể Cổ Tiên tại vị trí đặt Môn Hộ ở ngoại giới với 10 phút miễn nhiễm PvP. Quy tắc tối thượng được bảo đảm: *Khiếu và Người không bao giờ bị tách rời*.
    - **Ngoại nhân/Khách tử đạo:** Nếu khách bị hạ gục bên trong Tiên Khiếu, khách bị xóa khỏi danh sách khách (`aperture_guest_roster`) và chuyển dịch hồi sinh bên ngoài vị trí Môn Hộ tại ngoại giới. Tiên Khiếu và Môn Hộ của Chủ Khiếu vẫn duy trì bình thường.
 
+8. **Đàn Phàm Cổ Tiên Khiếu (Aperture Gu Swarms):**
+   - Khi Cổ Sư đột phá lên Lục Chuyển Cổ Tiên, Tiên Khiếu trở thành một hệ sinh thái tiểu thế giới hoàn chỉnh. Cổ Tiên có thể nuôi dưỡng hàng vạn Phàm Cổ (Rank 1-5) theo từng bầy đàn tích lũy không giới hạn số lượng.
+   - **Miễn Trừ Độ Đói:** Các Phàm Cổ trong Đàn Tiên Khiếu hoàn toàn không bị hao tổn độ đói hay độ bền theo thời gian nhờ vào hoàn cảnh sinh thái tự nhiên của Tiên Khiếu.
+   - **Trích Xuất & Thu Hồi:** Cổ Tiên có thể trích xuất cá thể (100% độ bền / 100% luyện hóa) vào ô trang bị chiến đấu (tối đa 60 slot) hoặc rút vào túi, đồng thời có thể bấm "Thả Tất Cả Phàm Cổ Vào Đàn" để thu hồi nhanh toàn bộ Phàm Cổ lành lặn không trang bị vào đàn nuôi dưỡng.
+   - **Tiêu Thụ Hàng Loạt:** Luyện Cổ bậc cao và Sát Chiêu có thể tiêu thụ trực tiếp Phàm Cổ từ Đàn Cổ trong Tiên Khiếu.
+   - **Sức Chứa Phàm Cổ Của Phàm Nhân:** Phàm nhân (Rank 1-5) giữ Cổ dạng cá thể với giới hạn sức chứa Không Khiếu: Nhất Chuyển (15 con), Nhị Chuyển (20 con), Tam Chuyển (30 con), Tứ Chuyển (50 con), Ngũ Chuyển (100 con).
+
 ## 22. Nhiệm vụ, thành tựu và phần thưởng tài khoản
 
 - **Nhiệm vụ:** xem yêu cầu/tiến độ/phần thưởng rồi hoàn thành khi đủ điều kiện. Một số tiến độ được ghi tự động từ hoạt động gameplay.

@@ -114,10 +114,67 @@ func LoadPlayerGuForUpdate(q Queryer, playerID, instanceID string) (*models.GuIn
 	return &gu, nil
 }
 
+// MortalApertureCapacity returns the maximum number of Gu bugs a mortal player (Rank 1-5) can store in their aperture.
+// For Immortals (Rank >= 6), it returns -1 (unlimited for aperture swarms; equipped gus are capped at MaxEquippedGus = 60).
+func MortalApertureCapacity(rank int, subRank int) int {
+	switch rank {
+	case 1:
+		return 15
+	case 2:
+		return 25
+	case 3:
+		return 40
+	case 4:
+		return 60
+	case 5:
+		if subRank >= 4 {
+			return 100
+		}
+		return 80
+	default:
+		if rank >= 6 {
+			return -1
+		}
+		return 15
+	}
+}
+
+// CheckApertureCapacity checks if adding delta Gus would exceed the player's aperture capacity.
+func CheckApertureCapacity(q Queryer, playerID string, delta int) error {
+	if delta <= 0 {
+		return nil
+	}
+	var rank, subRank int
+	err := q.QueryRow(`SELECT rank, sub_rank FROM players WHERE id = $1`, playerID).Scan(&rank, &subRank)
+	if err != nil {
+		return nil // skip check if player cannot be read (e.g. non-player actor or mock)
+	}
+	cap := MortalApertureCapacity(rank, subRank)
+	if cap < 0 {
+		return nil // Immortal: unlimited
+	}
+	var currentCount int
+	if err := q.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1 AND location <> 'ACTOR'`, playerID).Scan(&currentCount); err != nil {
+		return err
+	}
+	if currentCount+delta > cap {
+		return fmt.Errorf("không khiếu đã đạt giới hạn sức chứa (%d/%d cổ trùng), chân nguyên không đủ dung nạp thêm", currentCount, cap)
+	}
+	return nil
+}
+
 // AddPlayerGu inserts a single Gu instance owned by a player, upserting on id conflict.
 // When the new instance is equipped, it first counts the player's already-equipped
 // Gus and refuses to equip beyond MaxEquippedGus to avoid over-equipping.
 func AddPlayerGu(tx QueryExecer, playerID string, gu models.GuInstance) error {
+	var exists bool
+	_ = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM player_gu WHERE id = $1)`, gu.InstanceID).Scan(&exists)
+	if !exists {
+		if err := CheckApertureCapacity(tx, playerID, 1); err != nil {
+			return err
+		}
+	}
+
 	if gu.Equipped {
 		var equippedCount int
 		if err := tx.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1 AND equipped AND id <> $2`, playerID, gu.InstanceID).Scan(&equippedCount); err != nil {
@@ -462,6 +519,12 @@ func UpdatePlayerGu(tx Execer, gu models.GuInstance) error {
 func AddPlayerGusBulk(tx Execer, playerID string, gus []models.GuInstance) error {
 	if len(gus) == 0 {
 		return nil
+	}
+
+	if q, ok := tx.(Queryer); ok {
+		if err := CheckApertureCapacity(q, playerID, len(gus)); err != nil {
+			return err
+		}
 	}
 
 	n := len(gus)

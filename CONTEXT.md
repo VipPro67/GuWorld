@@ -253,6 +253,27 @@ _Avoid_: Passive HP regen
 Hành động chủ động dùng Chân Nguyên ôn dưỡng (với chấn thương nhẹ) hoặc phối hợp Dược Thảo, Tiên Nguyên Thạch, nguyên liệu luyện Cổ đồng hệ (khi chấn thương nặng hoặc độ bền dưới 20) để chữa lành kết cấu Cổ trùng, khôi phục linh tính thi triển.
 _Avoid_: Blacksmith repair
 
+## Tiered Gu Storage & Aperture Gu Swarms (Kiến Trúc Phân Tầng Cổ Trùng & Đàn Cổ Tiên Khiếu)
+
+### Đàn Phàm Cổ Tiên Khiếu (Immortal Aperture Gu Swarm)
+Mô hình lưu trữ xếp chồng số lượng (Stackable/Fungible) dành riêng cho Phàm Cổ (Rank 1–5) cư ngụ trong Tiên Khiếu (Phúc Địa/Động Thiên) của Cổ Tiên (Rank 6+). Phàm Cổ trong Đàn Cổ được hệ sinh thái Tiên Khiếu tự động chu cấp dưỡng khí và thức ăn, không chịu cơ chế suy giảm độ đói cá thể, cho phép tích trữ hàng vạn con phục vụ Hợp Luyện, Sát Chiêu và xây dựng Tiên Cổ Phòng. Tiên Cổ (Rank 6–9) và Cổ đang trang bị (Equipped) vĩnh viễn không thể nhập đàn.
+_Avoid_: Generic item stack, boundless mortal bag, single giant instance table
+
+### Chuyển Hóa Cá Thể Cổ Trùng (Gu Materialization & Dematerialization)
+Vòng đời chuyển đổi hai chiều giữa Đàn Cổ Tiên Khiếu (Stackable) và Cổ Cá Thể (Instance trong `player_gu`):
+- **Cụ Thể Hóa (Materialization)**: Rút 1 con Phàm Cổ từ Đàn Cổ để tạo thành 1 thực thể Cổ cá thể đầy đủ sinh mệnh (100% hunger, 100% durability, state ACTIVE) để trang bị vào Không Khiếu hoặc cài làm Bản Mệnh Cổ.
+- **Hòa Nhập Đàn Cổ (Dematerialization)**: Giải phóng một Phàm Cổ đang trang bị khi tháo ra trở về Tiên Khiếu; chỉ chấp nhận Cổ hoàn toàn lành lặn (100% durability, không bị khóa, không phải Bản Mệnh) để xóa bản ghi cá thể và cộng dồn số lượng vào Đàn Cổ. Cổ bị thương duy trì dạng cá thể để chữa trị.
+_Avoid_: Lossy item conversion, unequip item drop
+
+### Sức Chứa Không Khiếu Phàm Nhân (Mortal Aperture Capacity)
+Hạn mức dung nạp Cổ trùng tối đa của Không Khiếu Cổ Sư giai đoạn Phàm trần (Rank 1–5), tăng dần theo cảnh giới tiểu cảnh giới và đại cảnh giới. Phản ánh áp lực chân nguyên và gánh nặng thức ăn nuôi dưỡng Cổ trùng của người phàm; đồng thời ngăn chặn triệt để hành vi tích trữ bùng nổ dữ liệu trước khi đắc đạo Thăng Tiên.
+_Avoid_: Infinite inventory, weight limit RPG thông thường
+
+### Tiêu Thụ Hàng Loạt Từ Đàn (Direct Gu Swarm Batch Consumption)
+Cơ chế cho phép các nghi thức Hợp Luyện Tiên giai và kích hoạt Sát Chiêu quy mô lớn (như Vạn Kiếm Quy Tông, Phong Nhận Loạn Vũ) khấu trừ trực tiếp số lượng Phàm Cổ cần thiết từ Đàn Cổ Tiên Khiếu qua một thao tác trừ số học nguyên tử, không yêu cầu phân giải hay hủy diệt từng mã định danh cá thể.
+_Avoid_: Looped single gu deletion, N+1 query consumption
+
+
 ## Observability, Tracing & Diagnostics (Hệ Thống Quan Sát, Truy Vết & Chẩn Đoán)
 
 ### Khối Thu Nạp Lỗi (Error Intake Module)

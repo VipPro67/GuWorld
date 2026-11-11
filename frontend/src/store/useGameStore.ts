@@ -513,6 +513,21 @@ export interface ImmortalAperture {
   updated_at: string;
 }
 
+export interface ApertureGuSwarmView {
+  id: string;
+  aperture_id: string;
+  gu_id: string;
+  gu_rank: number;
+  quantity: number;
+  gu_name: string;
+  gu_type: string;
+  paths: string[];
+  description?: string;
+  food?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AperturePortal {
   id: string;
   aperture_id: string;

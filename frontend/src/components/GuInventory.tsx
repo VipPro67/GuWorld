@@ -1147,6 +1147,19 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         {unequippingAll ? "🛡️ Đang Tháo..." : "🛡️ Tháo Tất Cả"}
                       </button>
                     )}
+                    {player.rank >= 6 && guSubTab === "rest" && (
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={async () => {
+                          await useGameStore.getState().depositAllHealthyGus();
+                        }}
+                        className="text-[10px] font-bold py-1 px-2.5 bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 rounded-lg font-mono transition-all cursor-pointer disabled:opacity-50"
+                        title="Chuyển tất cả phàm cổ lành lặn không trang bị vào đàn nuôi dưỡng Tiên Khiếu"
+                      >
+                        📥 Thả Vào Đàn
+                      </button>
+                    )}
                     {onDropGus && guSubTab === "rest" && (
                       <button
                         type="button"
@@ -1709,6 +1722,17 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                       {settingVitalId === singleGu.instance_id ? "..." : "Đặt Bản Mệnh"}
                                     </button>
                                   )}
+                                  {player.rank >= 6 && spec.rank <= 5 && !singleGu.equipped && !singleGu.is_vital && (singleGu.durability ?? 100) >= 100 && canAct && !isBatchMode && (
+                                    <button
+                                      type="button"
+                                      disabled={actionLoading}
+                                      onClick={() => useGameStore.getState().dematerializeGuToSwarm(singleGu.instance_id)}
+                                      className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-cyan-950/30 text-cyan-300 border border-cyan-900/40 hover:bg-cyan-950/50 font-mono disabled:opacity-50"
+                                      title="Thả Phàm Cổ này vào Đàn Cổ Tiên Khiếu"
+                                    >
+                                      Thả Đàn
+                                    </button>
+                                  )}
                                   {onDropGu && !singleGu.is_vital && !singleGu.equipped && !isBatchMode && (
                                     <button
                                       type="button"
@@ -2051,6 +2075,19 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                         className="text-[9px] font-bold py-1 px-2.5 bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50 rounded font-mono cursor-pointer disabled:opacity-50"
                                       >
                                         {usingGuId === gu.instance_id ? "..." : "Sử Dụng"}
+                                      </button>
+                                    )}
+
+                                    {/* Thả Đàn Tiên Khiếu */}
+                                    {player.rank >= 6 && spec.rank <= 5 && !gu.equipped && !gu.is_vital && (gu.durability ?? 100) >= 100 && !isDead && status !== "SEALED" && !isBatchMode && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading}
+                                        onClick={() => useGameStore.getState().dematerializeGuToSwarm(gu.instance_id)}
+                                        className="text-[9px] font-bold py-1 px-2.5 bg-cyan-950/30 text-cyan-400 border border-cyan-900/40 hover:bg-cyan-950/50 rounded font-mono cursor-pointer"
+                                        title="Thả Phàm Cổ này vào Đàn Cổ Tiên Khiếu"
+                                      >
+                                        Thả Đàn
                                       </button>
                                     )}
 

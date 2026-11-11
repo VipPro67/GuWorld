@@ -643,6 +643,28 @@ func schemaAperture() error {
 		return err
 	}
 
+	// --- Aperture Gu Swarms (Đàn Phàm Cổ nuôi dưỡng trong Tiên Khiếu) ---
+	if err := execSchema("aperture_gu_swarms", `
+	CREATE TABLE IF NOT EXISTS aperture_gu_swarms (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		gu_id VARCHAR(50) NOT NULL,
+		gu_rank INTEGER NOT NULL CHECK (gu_rank >= 1 AND gu_rank <= 5),
+		quantity BIGINT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT,
+		CONSTRAINT uq_aperture_gu_swarms UNIQUE (aperture_id, gu_id, gu_rank)
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("aperture_gu_swarms_gu_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_gu_swarms_gu ON aperture_gu_swarms (gu_id, gu_rank);
+	`); err != nil {
+		return err
+	}
+
 	return nil
 }
 

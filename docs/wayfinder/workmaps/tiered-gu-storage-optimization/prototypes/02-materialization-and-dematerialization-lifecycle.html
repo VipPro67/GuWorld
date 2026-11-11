@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype 02: Vòng Đời Chuyển Đổi Hai Chiều Giữa Đàn Cổ và Cá Thể</title>
+  <style>
+    :root {
+      --bg-primary: #090d16;
+      --bg-secondary: #131b2e;
+      --bg-card: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --immortal: #eab308;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-primary); color: var(--text-main); line-height: 1.5; padding: 24px; }
+    .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+    header { border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    h1 { font-size: 1.5rem; color: var(--accent); margin-bottom: 6px; }
+    .subtitle { color: var(--text-muted); font-size: 0.92rem; }
+
+    .grid-3col { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 16px; }
+    @media (max-width: 1000px) { .grid-3col { grid-template-columns: 1fr; } }
+
+    .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .card-title { font-size: 1.05rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; }
+
+    .badge { font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: bold; text-transform: uppercase; }
+    .badge-swarm { background: #0369a1; color: #fff; }
+    .badge-equipped { background: #15803d; color: #fff; }
+    .badge-damaged { background: #b91c1c; color: #fff; }
+    .badge-immortal { background: var(--immortal); color: #000; font-weight: bold; }
+    .badge-vital { background: #a855f7; color: #fff; }
+
+    /* Swarm list */
+    .swarm-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+    .swarm-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .swarm-name { font-weight: 600; font-size: 0.9rem; }
+    .swarm-qty { font-family: monospace; font-size: 0.95rem; color: var(--accent); font-weight: bold; }
+
+    /* Instance list */
+    .instance-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+    .instance-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .instance-header { display: flex; justify-content: space-between; align-items: center; }
+    .instance-dura-bar { height: 6px; background: #0f172a; border-radius: 3px; overflow: hidden; }
+    .instance-dura-fill { height: 100%; transition: width 0.3s; }
+
+    .log-box { background: #060910; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; height: 280px; overflow-y: auto; font-size: 0.8rem; font-family: monospace; color: #38bdf8; }
+    .log-item { margin-bottom: 4px; }
+    .log-err { color: #f87171; }
+    .log-ok { color: #4ade80; }
+    .log-warn { color: #facc15; }
+    .log-immortal { color: #fde047; font-weight: bold; }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
+    button {
+      background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border);
+      padding: 6px 10px; border-radius: 5px; cursor: pointer; font-size: 0.82rem; font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    button:hover:not(:disabled) { background: var(--accent); color: #000; border-color: var(--accent); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    button.btn-primary { background: #0284c7; border-color: #0ea5e9; color: white; }
+    button.btn-primary:hover:not(:disabled) { background: #0369a1; }
+    button.btn-success { background: #16a34a; border-color: #22c55e; color: white; }
+    button.btn-success:hover:not(:disabled) { background: #15803d; }
+    button.btn-danger { background: #991b1b; border-color: #dc2626; color: white; }
+    button.btn-danger:hover:not(:disabled) { background: #7f1d1d; }
+
+    /* Tabs & Walkthroughs */
+    .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+    .tab-btn.active { background: var(--bg-card); color: var(--accent); font-weight: 600; }
+    .scenario-desc { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 12px; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; line-height: 1.4; }
+    .step-list { display: flex; flex-direction: column; gap: 6px; }
+    .step-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 8px 12px; border-radius: 5px; font-size: 0.83rem; }
+    .step-done { text-decoration: line-through; opacity: 0.45; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Prototype 02: Vòng Đời Chuyển Đổi Hai Chiều (Materialization & Dematerialization)</h1>
+    <div class="subtitle">
+      Khảo nghiệm mô hình chuyển hóa nguyên tử: Cụ thể hóa Phàm Cổ từ Đàn Tiên Khiếu ra trang bị (`Materialize`), hòa nhập Cổ lành lặn trở về đàn (`Dematerialize`), chốt chặn từ chối Cổ bị thương / Tiên Cổ / Bản Mệnh, và thao tác một chạm thu hồi toàn bộ.
+    </div>
+  </header>
+
+  <div class="grid-3col">
+    <!-- CỘT 1: ĐÀN PHÀM CỔ TIÊN KHIẾU (aperture_gu_swarms) -->
+    <div class="card">
+      <div class="card-title">
+        <span>Tiên Khiếu Đàn Cổ (Stackable)</span>
+        <span class="badge badge-swarm">aperture_gu_swarms</span>
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-muted);">
+        Phàm Cổ tự dưỡng trong Tiên Khiếu. Không tiêu hao độ đói cá thể, lưu dạng số lượng lớn:
+      </div>
+
+      <div id="swarmList" class="swarm-list"></div>
+
+      <div style="border-top: 1px dashed var(--border); padding-top: 10px; margin-top: auto;">
+        <button class="btn-success" style="width: 100%;" onclick="handleDepositAll()">
+          ⚡ Thả Tất Cả Cổ Lành Lặn Vào Tiên Khiếu (Deposit All)
+        </button>
+      </div>
+    </div>
+
+    <!-- CỘT 2: CỔ CÁ THỂ MANG THEO (player_gu) -->
+    <div class="card">
+      <div class="card-title">
+        <span>Cổ Cá Thể (Instance)</span>
+        <span id="equippedCountBadge" class="badge badge-equipped">Equipped: 2/60</span>
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-muted);">
+        Cổ đang trang bị hoặc mang trong túi thân (`player_gu`). Có độ bền, slot trang bị, và ID cá thể:
+      </div>
+
+      <div id="instanceList" class="instance-list"></div>
+
+      <div style="border-top: 1px dashed var(--border); padding-top: 10px; margin-top: auto;">
+        <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Mô phỏng Giao Tranh & Tu Bổ:</div>
+        <div class="btn-group">
+          <button class="btn-danger" onclick="simulateDamage()">⚔️ Chịu Đòn (Giảm Độ Bền)</button>
+          <button class="btn-primary" onclick="repairAll()">✨ Tu Bổ Toàn Bộ (100% Dura)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CỘT 3: NHẬT KÝ THẨM ĐỊNH & ATOMIC LOGS -->
+    <div class="card">
+      <div class="card-title">
+        <span>Nhật Ký Giao Dịch Nguyên Tử</span>
+        <button onclick="clearLogs()" style="font-size: 0.72rem; padding: 2px 6px;">Xóa log</button>
+      </div>
+      <div id="logBox" class="log-box"></div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: auto;">
+        * Mọi thao tác đều được bảo vệ bởi Postgres Transaction (`sql.Tx`) và khóa hàng `FOR UPDATE`.
+      </div>
+    </div>
+  </div>
+
+  <!-- KỊCH BẢN KHẢO NGHIỆM -->
+  <div class="card">
+    <div class="card-title">Kịch Bản Khảo Nghiệm Quy Trình Chuyển Hóa (Walkthroughs)</div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchScenario(0)">1. Vòng Đời Chuẩn (Rút ➔ Trang Bị ➔ Tháo ➔ Nhập Đàn)</button>
+      <button class="tab-btn" onclick="switchScenario(1)">2. Chặn Cổ Bị Thương (Damaged Gu Rejection)</button>
+      <button class="tab-btn" onclick="switchScenario(2)">3. Bảo Vệ Tiên Cổ & Bản Mệnh (Immortal / Vital Protection)</button>
+      <button class="tab-btn" onclick="switchScenario(3)">4. Thu Gom Nhanh Sau Khi Farm (Deposit All Batch)</button>
+    </div>
+
+    <div id="scenarioDesc" class="scenario-desc"></div>
+    <div id="stepList" class="step-list"></div>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+// PURE DOMAIN MODULE: MATERIALIZATION & DEMATERIALIZATION LIFECYCLE
+// =============================================================================
+
+const MaxEquippedGus = 60;
+
+/**
+ * Cụ Thể Hóa (Materialization): Rút 1 Cổ từ Đàn Phàm Cổ ra làm Cá Thể trang bị.
+ */
+function materializeGu(swarm, playerInstances) {
+  // 1. Kiểm tra số lượng trong đàn
+  if (!swarm || swarm.quantity < 1) {
+    return { ok: false, code: "SWARM_INSUFFICIENT", error: "Số lượng Cổ trong đàn không đủ!" };
+  }
+
+  // 2. Kiểm tra slot trang bị
+  const equippedCount = playerInstances.filter(g => g.equipped).length;
+  if (equippedCount >= MaxEquippedGus) {
+    return { ok: false, code: "MAX_EQUIPPED_REACHED", error: `Không Khiếu đã trang bị tối đa ${MaxEquippedGus} Cổ trùng!` };
+  }
+
+  // 3. Khấu trừ đàn
+  swarm.quantity -= 1;
+
+  // 4. Sinh Instance mới (UUID, 100% hunger, 100% durability, 100% refine)
+  const newInstance = {
+    id: "gu-inst-" + Math.floor(Math.random() * 900000 + 100000),
+    gu_id: swarm.gu_id,
+    name: swarm.name,
+    rank: swarm.rank,
+    durability: 100.0,
+    hunger: 100,
+    refinement_progress: 100.0,
+    equipped: true,
+    is_vital: false,
+    is_locked: false,
+    state: "ACTIVE"
+  };
+
+  return { ok: true, instance: newInstance, remainingSwarm: swarm.quantity };
+}
+
+/**
+ * Hòa Nhập Đàn (Dematerialization): Tháo Cổ cá thể và giải phóng trở về Tiên Khiếu.
+ */
+function dematerializeGu(instance, swarms) {
+  // 1. Không cho phép Tiên Cổ nhập đàn (Rank 6+)
+  if (instance.rank >= 6) {
+    return { ok: false, code: "IMMORTAL_GU_CANNOT_SWARM", error: `Tiên Cổ ${instance.name} (Rank ${instance.rank}) là độc nhất thiên địa, không thể hòa nhập đàn!` };
+  }
+
+  // 2. Không cho phép Bản Mệnh Cổ nhập đàn
+  if (instance.is_vital) {
+    return { ok: false, code: "VITAL_GU_CANNOT_SWARM", error: `Bản Mệnh Cổ ${instance.name} gắn liền tính mạng, tuyệt đối không thể giải phóng vào đàn!` };
+  }
+
+  // 3. Khóa an toàn
+  if (instance.is_locked) {
+    return { ok: false, code: "GU_LOCKED", error: `Cổ trùng ${instance.name} đang bị khóa (giao dịch / hợp luyện), không thể nhập đàn!` };
+  }
+
+  // 4. BẮT BUỘC lành lặn 100% độ bền
+  if (instance.durability < 100.0) {
+    return {
+      ok: false,
+      code: "GU_DAMAGED",
+      error: `Cổ trùng ${instance.name} đang bị thương tổn (độ bền ${instance.durability.toFixed(1)}/100)! Cần tu bổ lành lặn trước khi thả vào Tiên Khiếu.`
+    };
+  }
+
+  // 5. Tìm hoặc tạo đàn tương ứng
+  let targetSwarm = swarms.find(s => s.gu_id === instance.gu_id && s.rank === instance.rank);
+  if (!targetSwarm) {
+    targetSwarm = { gu_id: instance.gu_id, name: instance.name, rank: instance.rank, quantity: 0 };
+    swarms.push(targetSwarm);
+  }
+  targetSwarm.quantity += 1;
+
+  return { ok: true, swarm: targetSwarm };
+}
+
+/**
+ * Thu gom nhanh toàn bộ Phàm Cổ lành lặn vào Tiên Khiếu
+ */
+function depositAllHealthyMortalGus(instances, swarms) {
+  const eligible = [];
+  const rejected = [];
+
+  instances.forEach(inst => {
+    if (inst.rank <= 5 && !inst.is_vital && !inst.is_locked && inst.durability >= 100.0) {
+      eligible.push(inst);
+    } else {
+      rejected.push(inst);
+    }
+  });
+
+  if (eligible.length === 0) {
+    return { ok: false, error: "Không có Phàm Cổ nào lành lặn đủ điều kiện nhập đàn!" };
+  }
+
+  // Gom theo cụm (gu_id, rank)
+  const batchCounts = {};
+  eligible.forEach(inst => {
+    const key = `${inst.gu_id}_${inst.rank}`;
+    batchCounts[key] = (batchCounts[key] || 0) + 1;
+  });
+
+  Object.entries(batchCounts).forEach(([key, count]) => {
+    const [gu_id, rankStr] = key.split("_");
+    const rank = parseInt(rankStr);
+    let s = swarms.find(x => x.gu_id === gu_id && x.rank === rank);
+    if (!s) {
+      const sample = eligible.find(x => x.gu_id === gu_id && x.rank === rank);
+      s = { gu_id, name: sample.name, rank, quantity: 0 };
+      swarms.push(s);
+    }
+    s.quantity += count;
+  });
+
+  return { ok: true, depositedCount: eligible.length, remainingInstances: rejected };
+}
+
+// =============================================================================
+// STATE & UI CONTROLLER
+// =============================================================================
+
+let swarms = [
+  { gu_id: "gu_moonlight", name: "Nguyệt Quang Cổ", rank: 1, quantity: 5000 },
+  { gu_id: "gu_wind_blade", name: "Phong Nhận Cổ", rank: 2, quantity: 1200 },
+  { gu_id: "gu_iron_bone", name: "Thiết Cốt Cổ", rank: 3, quantity: 450 }
+];
+
+let playerInstances = [
+  {
+    id: "inst-vital-spring",
+    gu_id: "gu_spring_autumn",
+    name: "Xuân Thu Thiền (Rank 6)",
+    rank: 6,
+    durability: 100.0,
+    hunger: 100,
+    equipped: true,
+    is_vital: true,
+    is_locked: false,
+    state: "ACTIVE"
+  },
+  {
+    id: "inst-moon-01",
+    gu_id: "gu_moonlight",
+    name: "Nguyệt Quang Cổ",
+    rank: 1,
+    durability: 100.0,
+    hunger: 100,
+    equipped: true,
+    is_vital: false,
+    is_locked: false,
+    state: "ACTIVE"
+  }
+];
+
+function log(msg, type = "ok") {
+  const box = document.getElementById("logBox");
+  const time = new Date().toTimeString().split(" ")[0];
+  const item = document.createElement("div");
+  item.className = `log-item log-${type}`;
+  item.textContent = `[${time}] ${msg}`;
+  box.appendChild(item);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLogs() {
+  document.getElementById("logBox").innerHTML = "";
+}
+
+function render() {
+  // 1. Render Swarms
+  const swarmContainer = document.getElementById("swarmList");
+  swarmContainer.innerHTML = "";
+  swarms.forEach(s => {
+    const item = document.createElement("div");
+    item.className = "swarm-item";
+    item.innerHTML = `
+      <div>
+        <div class="swarm-name">${s.name} <span class="badge badge-swarm">Rank ${s.rank}</span></div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">${s.gu_id}</div>
+      </div>
+      <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+        <span class="swarm-qty">${s.quantity.toLocaleString()} con</span>
+        <button class="btn-primary" style="font-size: 0.72rem; padding: 3px 8px;" onclick="handleMaterialize('${s.gu_id}', ${s.rank})">
+          Rút ➔ Trang Bị
+        </button>
+      </div>
+    `;
+    swarmContainer.appendChild(item);
+  });
+
+  // 2. Render Instances
+  const instContainer = document.getElementById("instanceList");
+  instContainer.innerHTML = "";
+  playerInstances.forEach(inst => {
+    const isDamaged = inst.durability < 100;
+    const item = document.createElement("div");
+    item.className = "instance-item";
+
+    let badges = [];
+    if (inst.is_vital) badges.push(`<span class="badge badge-vital">BẢN MỆNH</span>`);
+    if (inst.rank >= 6) badges.push(`<span class="badge badge-immortal">TIÊN CỔ R${inst.rank}</span>`);
+    else badges.push(`<span class="badge badge-swarm">Rank ${inst.rank}</span>`);
+    if (inst.equipped) badges.push(`<span class="badge badge-equipped">EQUIPPED</span>`);
+    if (isDamaged) badges.push(`<span class="badge badge-damaged">HƯ HẠI</span>`);
+
+    item.innerHTML = `
+      <div class="instance-header">
+        <span style="font-weight: 600; font-size: 0.88rem;">${inst.name}</span>
+        <div style="display: flex; gap: 4px;">${badges.join("")}</div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--text-muted);">
+        <span>Độ bền: ${inst.durability.toFixed(1)}/100</span>
+        <span>ID: ${inst.id.slice(0, 14)}</span>
+      </div>
+      <div class="instance-dura-bar">
+        <div class="instance-dura-fill" style="width: ${inst.durability}%; background-color: ${isDamaged ? 'var(--danger)' : 'var(--success)'};"></div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px;">
+        ${inst.equipped && !inst.is_vital ? `<button style="font-size: 0.72rem; padding: 2px 6px;" onclick="toggleEquip('${inst.id}')">Tháo</button>` : ''}
+        ${!inst.equipped ? `<button class="btn-primary" style="font-size: 0.72rem; padding: 2px 6px;" onclick="toggleEquip('${inst.id}')">Trang bị</button>` : ''}
+        <button class="btn-success" style="font-size: 0.72rem; padding: 2px 6px;" onclick="handleDematerialize('${inst.id}')">
+          Thả Vào Tiên Khiếu ➔
+        </button>
+      </div>
+    `;
+    instContainer.appendChild(item);
+  });
+
+  const eqCount = playerInstances.filter(g => g.equipped).length;
+  document.getElementById("equippedCountBadge").textContent = `Equipped: ${eqCount}/${MaxEquippedGus}`;
+}
+
+function handleMaterialize(gu_id, rank) {
+  const s = swarms.find(x => x.gu_id === gu_id && x.rank === rank);
+  const res = materializeGu(s, playerInstances);
+  if (!res.ok) {
+    log(`[MATERIALIZE FAILED] ${res.error}`, "err");
+  } else {
+    playerInstances.push(res.instance);
+    log(`[MATERIALIZE SUCCESS] Rút thành công 1 con ${res.instance.name}. Đàn còn ${res.remainingSwarm} con. Đã tự động trang bị vào slot!`, "ok");
+  }
+  render();
+}
+
+function handleDematerialize(instanceID) {
+  const idx = playerInstances.findIndex(g => g.id === instanceID);
+  if (idx === -1) return;
+  const inst = playerInstances[idx];
+
+  const res = dematerializeGu(inst, swarms);
+  if (!res.ok) {
+    log(`[DEMATERIALIZE REJECTED] ${res.error}`, "err");
+  } else {
+    playerInstances.splice(idx, 1);
+    log(`[DEMATERIALIZE SUCCESS] Giải phóng bản ghi cá thể (${inst.id}). Con ${inst.name} đã hòa nhập vào Đàn Tiên Khiếu (+1). Số lượng đàn hiện tại: ${res.swarm.quantity} con.`, "ok");
+  }
+  render();
+}
+
+function toggleEquip(instanceID) {
+  const inst = playerInstances.find(g => g.id === instanceID);
+  if (!inst) return;
+  if (inst.is_vital) {
+    log(`[ACTION REJECT] Bản Mệnh Cổ luôn được trang bị, không thể tháo!`, "warn");
+    return;
+  }
+  inst.equipped = !inst.equipped;
+  log(`[EQUIP TOGGLE] Đã ${inst.equipped ? 'trang bị' : 'tháo'} Cổ ${inst.name}.`, "ok");
+  render();
+}
+
+function simulateDamage() {
+  let damagedCount = 0;
+  playerInstances.forEach(g => {
+    if (g.equipped && Math.random() > 0.3) {
+      g.durability = Math.max(10, g.durability - 35.0);
+      damagedCount++;
+    }
+  });
+  if (damagedCount > 0) {
+    log(`[COMBAT IMPACT] Giao tranh kịch liệt! ${damagedCount} Cổ trùng bị chấn thương, độ bền suy giảm!`, "warn");
+  } else {
+    log(`[COMBAT IMPACT] Đòn đánh không gây hư hại kết cấu Cổ trùng.`, "ok");
+  }
+  render();
+}
+
+function repairAll() {
+  let repCount = 0;
+  playerInstances.forEach(g => {
+    if (g.durability < 100) {
+      g.durability = 100.0;
+      repCount++;
+    }
+  });
+  log(`[REPAIR COMPLETED] Đã vận chuyển Tiên Nguyên tu bổ thành công ${repCount} Cổ trùng phục hồi 100% độ bền.`, "ok");
+  render();
+}
+
+function handleDepositAll() {
+  const res = depositAllHealthyMortalGus(playerInstances, swarms);
+  if (!res.ok) {
+    log(`[DEPOSIT ALL FAILED] ${res.error}`, "warn");
+  } else {
+    playerInstances = res.remainingInstances;
+    log(`[DEPOSIT ALL SUCCESS] Đã thu gom và hòa nhập thành công ${res.depositedCount} Phàm Cổ lành lặn vào các đàn Tiên Khiếu!`, "ok");
+  }
+  render();
+}
+
+// =============================================================================
+// SCENARIOS & GUIDED WALKTHROUGHS
+// =============================================================================
+
+const scenarios = [
+  {
+    title: "1. Vòng Đời Chuẩn (Rút ➔ Trang Bị ➔ Tháo ➔ Nhập Đàn)",
+    desc: "Khảo nghiệm luồng hoạt động chuẩn: Cổ Tiên rút 1 con Nguyệt Quang Cổ từ đàn 5.000 con ra trang bị -> Tháo trang bị -> Thả Cổ lành lặn về Tiên Khiếu -> Số lượng trong đàn hoàn nguyên 5.000 con, bản ghi cá thể bị xóa.",
+    init: () => {
+      swarms[0].quantity = 5000;
+      playerInstances = [playerInstances[0]]; // Chỉ giữ Bản Mệnh Cổ
+      clearLogs();
+      log("Khởi tạo: Đàn Nguyệt Quang Cổ có đúng 5.000 con.");
+      render();
+    },
+    steps: [
+      { text: "Rút 1 Nguyệt Quang Cổ từ đàn ra trang bị (Materialize)", action: () => handleMaterialize("gu_moonlight", 1) },
+      { text: "Kiểm tra: Đàn giảm còn 4.999 con, xuất hiện 1 cá thể trong slot", action: () => log(`Kiểm tra: Đàn có ${swarms[0].quantity} con, cá thể ID: ${playerInstances[1].id}`, "ok") },
+      { text: "Tháo trang bị Cổ cá thể này (Unequip)", action: () => toggleEquip(playerInstances[1].id) },
+      { text: "Thả Cổ lành lặn về Tiên Khiếu (Dematerialize)", action: () => handleDematerialize(playerInstances[1].id) },
+      { text: "Kiểm tra: Đàn đã hoàn nguyên 5.000 con, bản ghi cá thể bị xóa an toàn", action: () => log(`Hoàn tất: Đàn đã trở lại ${swarms[0].quantity} con! Không có dữ liệu rác.`, "ok") }
+    ]
+  },
+  {
+    title: "2. Chặn Cổ Bị Thương (Damaged Gu Rejection)",
+    desc: "Khảo nghiệm tính toàn vẹn: Cổ trùng bị rạn nứt trong giao tranh (độ bền < 100%) tuyệt đối KHÔNG được thả vào đàn để tránh làm ô nhiễm chất lượng đàn. Sau khi tu bổ lành lặn mới được thả.",
+    init: () => {
+      playerInstances = [
+        playerInstances[0],
+        { id: "inst-damaged-moon", gu_id: "gu_moonlight", name: "Nguyệt Quang Cổ", rank: 1, durability: 45.0, hunger: 100, equipped: false, is_vital: false, is_locked: false, state: "ACTIVE" }
+      ];
+      clearLogs();
+      log("Khởi tạo: Có 1 Nguyệt Quang Cổ đang bị thương (Độ bền 45/100).", "warn");
+      render();
+    },
+    steps: [
+      { text: "Cố tình thả con Cổ đang bị thương vào Tiên Khiếu (sẽ bị CHẶN)", action: () => handleDematerialize("inst-damaged-moon") },
+      { text: "Vận chuyển Tiên Nguyên ôn dưỡng tu bổ Cổ lành lặn (100% Độ bền)", action: () => repairAll() },
+      { text: "Thả lại vào Tiên Khiếu sau khi đã tu bổ thành công (Chấp thuận)", action: () => handleDematerialize("inst-damaged-moon") }
+    ]
+  },
+  {
+    title: "3. Bảo Vệ Tiên Cổ & Bản Mệnh (Immortal / Vital Protection)",
+    desc: "Tiên Cổ (Rank 6+) là 'Thiên Địa duy nhất', Bản Mệnh Cổ gắn liền tính mạng Cổ Tiên. Cả hai tuyệt đối không được phép giải phóng vào Đàn Phàm Cổ.",
+    init: () => {
+      clearLogs();
+      log("Khởi tạo: Kiểm tra bảo vệ Tiên Cổ và Bản Mệnh Cổ.");
+      render();
+    },
+    steps: [
+      { text: "Thử thả Bản Mệnh Cổ (Xuân Thu Thiền) vào đàn (sẽ bị TỪ CHỐI)", action: () => handleDematerialize("inst-vital-spring") },
+      { text: "Xác nhận Bản Mệnh Cổ vẫn tồn tại nguyên vẹn trong Không Khiếu", action: () => log("Bản Mệnh Cổ được bảo vệ 100%, không bị giải phóng.", "ok") }
+    ]
+  },
+  {
+    title: "4. Thu Gom Nhanh Sau Khi Farm (Deposit All Batch)",
+    desc: "Cổ Tiên sau khi ra ngoài thu thập được hàng chục Phàm Cổ dã ngoại. Nhấn 1 nút 'Deposit All' để tự động gom toàn bộ Phàm Cổ lành lặn vào các đàn tương ứng chỉ trong 1 thao tác.",
+    init: () => {
+      // Giả lập nhặt 4 Cổ dã ngoại
+      playerInstances = [
+        playerInstances[0],
+        { id: "drop-1", gu_id: "gu_moonlight", name: "Nguyệt Quang Cổ", rank: 1, durability: 100.0, hunger: 100, equipped: false, is_vital: false, is_locked: false, state: "ACTIVE" },
+        { id: "drop-2", gu_id: "gu_moonlight", name: "Nguyệt Quang Cổ", rank: 1, durability: 100.0, hunger: 100, equipped: false, is_vital: false, is_locked: false, state: "ACTIVE" },
+        { id: "drop-3", gu_id: "gu_wind_blade", name: "Phong Nhận Cổ", rank: 2, durability: 100.0, hunger: 100, equipped: false, is_vital: false, is_locked: false, state: "ACTIVE" },
+        { id: "drop-4", gu_id: "gu_wind_blade", name: "Phong Nhận Cổ", rank: 2, durability: 40.0, hunger: 100, equipped: false, is_vital: false, is_locked: false, state: "ACTIVE" } // con này bị thương
+      ];
+      clearLogs();
+      log("Khởi tạo: 3 Phàm Cổ lành lặn và 1 Phàm Cổ bị thương trong túi.");
+      render();
+    },
+    steps: [
+      { text: "Bấm 'Thả Tất Cả Cổ Lành Lặn Vào Tiên Khiếu'", action: () => handleDepositAll() },
+      { text: "Kiểm tra: 3 con lành lặn đã vào đàn, con bị thương vẫn giữ lại để chữa trị", action: () => log(`Túi còn lại: ${playerInstances.length} con (con bị thương vẫn an toàn).`, "ok") }
+    ]
+  }
+];
+
+let activeScenario = 0;
+let activeStep = 0;
+
+function switchScenario(idx) {
+  activeScenario = idx;
+  activeStep = 0;
+  document.querySelectorAll(".tab-btn").forEach((btn, i) => {
+    btn.className = `tab-btn ${i === idx ? 'active' : ''}`;
+  });
+  const sc = scenarios[idx];
+  document.getElementById("scenarioDesc").textContent = sc.desc;
+  sc.init();
+  renderSteps();
+}
+
+function renderSteps() {
+  const sc = scenarios[activeScenario];
+  const list = document.getElementById("stepList");
+  list.innerHTML = "";
+  sc.steps.forEach((step, i) => {
+    const item = document.createElement("div");
+    item.className = `step-item ${i < activeStep ? 'step-done' : ''}`;
+    item.innerHTML = `
+      <span><strong>Bước ${i + 1}:</strong> ${step.text}</span>
+      <button class="${i === activeStep ? 'btn-primary' : ''}" ${i === activeStep ? '' : 'disabled'}>
+        ${i < activeStep ? '✓ Đã chạy' : (i === activeStep ? 'Thực hiện ➔' : 'Chờ...')}
+      </button>
+    `;
+    if (i === activeStep) {
+      item.querySelector("button").onclick = () => {
+        step.action();
+        activeStep++;
+        renderSteps();
+      };
+    }
+    list.appendChild(item);
+  });
+}
+
+// Khởi chạy
+switchScenario(0);
+</script>
+</body>
+</html>

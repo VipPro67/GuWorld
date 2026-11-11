@@ -421,7 +421,7 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="w-full flex-1 min-h-0 max-w-none px-0 mx-0 overflow-hidden flex flex-col">
         {!player ? (
-          <div className="py-12 w-full flex justify-center overflow-y-auto">
+          <div className="flex-1 min-h-0 py-8 sm:py-12 w-full flex justify-center overflow-y-auto overscroll-contain">
             <Registration
               onRegister={register}
               onLogin={login}

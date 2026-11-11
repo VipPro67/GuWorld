@@ -50,6 +50,27 @@ func (a ImmortalAperture) TotalTribulationCount() int {
 	return a.EarthCalamityCount + a.HeavenlyTribulationCount + a.GrandTribulationCount + a.MyriadTribulationCount + a.ChaosCalamityCount
 }
 
+// ApertureGuSwarm đại diện cho một đàn Phàm Cổ (Rank 1-5) sinh sống trong Tiên Khiếu.
+type ApertureGuSwarm struct {
+	ID         string    `json:"id"`
+	ApertureID string    `json:"aperture_id"`
+	GuID       string    `json:"gu_id"`
+	GuRank     int       `json:"gu_rank"`
+	Quantity   int64     `json:"quantity"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// ApertureGuSwarmView mở rộng kèm thông tin từ điển để hiển thị trên client.
+type ApertureGuSwarmView struct {
+	ApertureGuSwarm
+	GuName      string   `json:"gu_name"`
+	GuType      string   `json:"gu_type"`
+	Paths       []string `json:"paths"`
+	Description string   `json:"description,omitempty"`
+	Food        string   `json:"food,omitempty"`
+}
+
 // AperturePointStock holds accumulated produce per item id. It is stored as a
 // JSONB map on aperture_resource_points.stock.
 type AperturePointStock map[string]int64

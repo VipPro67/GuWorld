@@ -30,6 +30,10 @@ import {
   UserPlus,
   AlertTriangle,
   Trash2,
+  Layers,
+  Bug,
+  ArrowDownToLine,
+  ArrowUpFromLine,
 } from "lucide-react";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { formatNumber, statusRemainLabel, calculateTribulationProgress } from "@/lib/utils";
@@ -48,7 +52,7 @@ function formatStat(val: number): string {
     : (val % 1 === 0 ? val.toString() : val.toFixed(2));
 }
 
-export type ApertureTab = "aperture" | "growth" | "referrals" | "settings";
+export type ApertureTab = "aperture" | "growth" | "referrals" | "settings" | "swarms";
 
 interface ApertureProps {
   player: Player;
@@ -303,6 +307,32 @@ export const Aperture: React.FC<ApertureProps> = ({
     setSettingsUsername(player.username || "");
   }, [player.username]);
 
+  // Swarms state
+  const [swarmSearch, setSwarmSearch] = useState("");
+  const [swarmRankFilter, setSwarmRankFilter] = useState<string>("ALL");
+  const [swarmPathFilter, setSwarmPathFilter] = useState<string>("ALL");
+  const [isDepositingAll, setIsDepositingAll] = useState(false);
+  const [materializingGuKey, setMaterializingGuKey] = useState<string | null>(null);
+
+  const filteredSwarms = useMemo(() => {
+    return (store.apertureSwarms || []).filter((s) => {
+      if (swarmRankFilter !== "ALL" && s.gu_rank.toString() !== swarmRankFilter) {
+        return false;
+      }
+      if (swarmPathFilter !== "ALL" && !(s.paths || []).includes(swarmPathFilter)) {
+        return false;
+      }
+      if (swarmSearch.trim()) {
+        const query = swarmSearch.trim().toLowerCase();
+        const matchName = (s.gu_name || "").toLowerCase().includes(query);
+        const matchId = (s.gu_id || "").toLowerCase().includes(query);
+        const matchPath = (s.paths || []).some((p) => p.toLowerCase().includes(query));
+        if (!matchName && !matchId && !matchPath) return false;
+      }
+      return true;
+    });
+  }, [store.apertureSwarms, swarmRankFilter, swarmPathFilter, swarmSearch]);
+
   React.useEffect(() => {
     if (activeTab === "referrals") {
       void store.fetchReferrals();
@@ -310,15 +340,22 @@ export const Aperture: React.FC<ApertureProps> = ({
       store.fetchAperture();
       store.fetchDaoMarks();
       store.fetchActiveTribulation();
+    } else if (activeTab === "swarms" && isImmortal) {
+      void store.fetchApertureSwarms();
     }
   }, [activeTab, isImmortal]);
 
   const [isReloading, setIsReloading] = useState(false);
   const handleReloadAll = async () => {
     setIsReloading(true);
-    const promises: Promise<ApiResponseData>[] = [store.fetchReferrals()];
+    const promises: Promise<unknown>[] = [store.fetchReferrals()];
     if (isImmortal) {
-      promises.push(store.fetchAperture(), store.fetchDaoMarks(), store.fetchActiveTribulation());
+      promises.push(
+        store.fetchAperture(),
+        store.fetchDaoMarks(),
+        store.fetchActiveTribulation(),
+        store.fetchApertureSwarms()
+      );
     }
     await Promise.all(promises);
     setIsReloading(false);
@@ -482,6 +519,7 @@ export const Aperture: React.FC<ApertureProps> = ({
           <GameTabs
             items={[
               { id: "aperture", label: "Không Khiếu", disabled: false },
+              ...(isImmortal ? [{ id: "swarms", label: "Đàn Cổ", disabled: false }] : []),
               { id: "growth", label: "Bản Thân", disabled: false },
               { id: "referrals", label: "Phúc Lợi", disabled: false },
               { id: "settings", label: "Hồ Sơ", disabled: false },
@@ -718,6 +756,217 @@ export const Aperture: React.FC<ApertureProps> = ({
             ) : (
               <div className="w-full mb-4">
                 <BlessedLandControls />
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "swarms" && isImmortal && (
+          <div className="w-full space-y-4 z-10">
+            {/* Header info & Deposit All button */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800 rounded-xl p-4">
+              <div>
+                <div className="flex items-center gap-2 text-amber-400 font-bold text-base">
+                  <Layers className="w-5 h-5 text-amber-400" />
+                  <span>Đàn Phàm Cổ Tiên Khiếu</span>
+                </div>
+                <div className="text-xs text-zinc-400 mt-1">
+                  Hệ sinh thái Tiên Khiếu tự động nuôi dưỡng hàng vạn Phàm Cổ (Rank 1-5). Miễn trừ tiêu hao độ đói, trích xuất tức thì.
+                </div>
+              </div>
+
+              <GameButton
+                variant="primary"
+                size="sm"
+                onClick={async () => {
+                  setIsDepositingAll(true);
+                  try {
+                    await store.depositAllHealthyGus();
+                  } finally {
+                    setIsDepositingAll(false);
+                  }
+                }}
+                disabled={isDepositingAll}
+                className="whitespace-nowrap shrink-0 flex items-center gap-1.5"
+              >
+                <ArrowDownToLine className={`w-4 h-4 ${isDepositingAll ? "animate-spin" : ""}`} />
+                <span>{isDepositingAll ? "Đang thu hồi..." : "Thả Tất Cả Phàm Cổ Vào Đàn"}</span>
+              </GameButton>
+            </div>
+
+            {/* Top Stats Overview */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Tổng Phàm Cổ</span>
+                <span className="text-lg font-bold text-amber-400 font-mono mt-1">
+                  {formatNumber((store.apertureSwarms || []).reduce((acc, s) => acc + s.quantity, 0))} con
+                </span>
+              </div>
+              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Số Loài Cổ</span>
+                <span className="text-lg font-bold text-cyan-400 font-mono mt-1">
+                  {(store.apertureSwarms || []).length} loài
+                </span>
+              </div>
+              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Slot Trang Bị</span>
+                <span className="text-lg font-bold text-zinc-200 font-mono mt-1">
+                  {(player.equipped_gus || []).length} / 60
+                </span>
+              </div>
+              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Dưỡng Cổ Trạng Thái</span>
+                <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 mt-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Tự Cung Dưỡng (0 Tiêu Hao)
+                </span>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex flex-wrap items-center gap-2 bg-zinc-900/40 border border-zinc-800 p-2.5 rounded-xl">
+              <input
+                type="text"
+                placeholder="Tìm theo tên Cổ hoặc ID..."
+                value={swarmSearch}
+                onChange={(e) => setSwarmSearch(e.target.value)}
+                className="bg-black/40 border border-zinc-800 text-xs text-zinc-200 px-3 py-1.5 rounded-lg flex-1 min-w-[160px] focus:outline-none focus:border-amber-500/50"
+              />
+
+              <select
+                value={swarmRankFilter}
+                onChange={(e) => setSwarmRankFilter(e.target.value)}
+                className="bg-black/40 border border-zinc-800 text-xs text-zinc-300 px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-amber-500/50"
+              >
+                <option value="ALL">Mọi Rank (1 - 5)</option>
+                <option value="1">Rank 1</option>
+                <option value="2">Rank 2</option>
+                <option value="3">Rank 3</option>
+                <option value="4">Rank 4</option>
+                <option value="5">Rank 5</option>
+              </select>
+
+              <select
+                value={swarmPathFilter}
+                onChange={(e) => setSwarmPathFilter(e.target.value)}
+                className="bg-black/40 border border-zinc-800 text-xs text-zinc-300 px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-amber-500/50"
+              >
+                <option value="ALL">Mọi Lưu Phái</option>
+                {Array.from(new Set((store.apertureSwarms || []).flatMap((s) => s.paths || []).filter(Boolean))).map((path) => (
+                  <option key={path} value={path}>
+                    {translatePath(path)}
+                  </option>
+                ))}
+              </select>
+
+              <span className="text-[11px] text-zinc-500 ml-auto hidden sm:inline">
+                Hiển thị: <strong className="text-zinc-300">{filteredSwarms.length}</strong> đàn
+              </span>
+            </div>
+
+            {/* Swarm Cards Grid or Empty */}
+            {filteredSwarms.length === 0 ? (
+              <div className="text-center py-12 px-4 border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/20">
+                <Bug className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                <div className="text-sm font-semibold text-zinc-300">
+                  {(store.apertureSwarms || []).length === 0
+                    ? "Chưa có Phàm Cổ nào trong Đàn Cổ Tiên Khiếu"
+                    : "Không tìm thấy đàn Cổ phù hợp bộ lọc"}
+                </div>
+                <div className="text-xs text-zinc-500 max-w-md mx-auto mt-1.5">
+                  {(store.apertureSwarms || []).length === 0
+                    ? "Nhấn nút 'Thả Tất Cả Phàm Cổ Vào Đàn' ở trên để chuyển phàm cổ lành lặn không trang bị vào đàn nuôi dưỡng không giới hạn số lượng."
+                    : "Hãy thử đổi từ khóa tìm kiếm hoặc chọn 'Mọi Rank' / 'Mọi Lưu Phái'."}
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredSwarms.map((swarm) => {
+                  const key = `${swarm.gu_id}_${swarm.gu_rank}`;
+                  const isExtracting = materializingGuKey === key;
+                  return (
+                    <div
+                      key={key}
+                      className="bg-zinc-900/60 border border-zinc-800 hover:border-zinc-700 rounded-xl p-3.5 flex flex-col justify-between transition-colors shadow-sm"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-semibold text-sm text-zinc-100 flex items-center gap-1.5">
+                              <span>{swarm.gu_name || swarm.gu_id}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                Chuyển {swarm.gu_rank}
+                              </span>
+                              {(swarm.paths || []).map((path) => (
+                                <span key={path} className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                  {translatePath(path)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="inline-block px-2 py-1 rounded-lg text-sm font-mono font-bold bg-amber-950/40 text-amber-300 border border-amber-500/30">
+                              x{formatNumber(swarm.quantity)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {swarm.description && (
+                          <p className="text-xs text-zinc-400 line-clamp-2 mt-2 leading-relaxed">
+                            {swarm.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-zinc-800/80">
+                        <GameButton
+                          variant="secondary"
+                          size="sm"
+                          disabled={isExtracting || (player.equipped_gus || []).length >= 60}
+                          title={
+                            (player.equipped_gus || []).length >= 60
+                              ? "Đã đầy 60 slot trang bị"
+                              : "Rút 1 con và tự động trang bị vào ô chiến đấu"
+                          }
+                          onClick={async () => {
+                            setMaterializingGuKey(key);
+                            try {
+                              await store.materializeGuFromSwarm(swarm.gu_id, swarm.gu_rank, true);
+                            } finally {
+                              setMaterializingGuKey(null);
+                            }
+                          }}
+                          className="text-[11px] py-1 h-auto flex items-center justify-center gap-1"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Rút & Trang Bị</span>
+                        </GameButton>
+
+                        <GameButton
+                          variant="ghost"
+                          size="sm"
+                          disabled={isExtracting}
+                          title="Rút 1 con vào Túi Cổ Trùng"
+                          onClick={async () => {
+                            setMaterializingGuKey(key);
+                            try {
+                              await store.materializeGuFromSwarm(swarm.gu_id, swarm.gu_rank, false);
+                            } finally {
+                              setMaterializingGuKey(null);
+                            }
+                          }}
+                          className="text-[11px] py-1 h-auto flex items-center justify-center gap-1 text-zinc-300 hover:text-white"
+                        >
+                          <ArrowUpFromLine className="w-3.5 h-3.5" />
+                          <span>Rút Vào Túi</span>
+                        </GameButton>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

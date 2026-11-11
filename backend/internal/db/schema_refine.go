@@ -21,6 +21,7 @@ func schemaRefine() error {
 		selected_gu_ids     TEXT[]       NOT NULL,
 		gu_snapshot         JSONB        NOT NULL DEFAULT '[]',
 		materials_deducted  JSONB        NOT NULL DEFAULT '{}',
+		swarms_deducted     JSONB        NOT NULL DEFAULT '{}',
 		rate_snapshot       JSONB        NOT NULL,
 
 		plan                JSONB        NOT NULL,
@@ -38,6 +39,10 @@ func schemaRefine() error {
 		acknowledged_at     TIMESTAMPTZ,
 		created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("refine_sessions_swarms_deducted_col", `
+	ALTER TABLE refine_sessions ADD COLUMN IF NOT EXISTS swarms_deducted JSONB NOT NULL DEFAULT '{}';`); err != nil {
 		return err
 	}
 	if err := execSchema("refine_sessions_one_active", `

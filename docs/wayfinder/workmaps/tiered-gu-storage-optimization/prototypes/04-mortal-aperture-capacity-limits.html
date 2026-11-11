@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype 04: Quy Chuẩn Giới Hạn Sức Chứa Không Khiếu Phàm Nhân</title>
+  <style>
+    :root {
+      --bg-primary: #090d16;
+      --bg-secondary: #131b2e;
+      --bg-card: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --immortal: #eab308;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-primary); color: var(--text-main); line-height: 1.5; padding: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+    header { border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    h1 { font-size: 1.5rem; color: var(--accent); margin-bottom: 6px; }
+    .subtitle { color: var(--text-muted); font-size: 0.92rem; }
+
+    .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 850px) { .grid-layout { grid-template-columns: 1fr; } }
+
+    .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+    .card-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+    .badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; font-weight: bold; }
+    .badge-mortal { background: #0284c7; color: #fff; }
+    .badge-immortal { background: var(--immortal); color: #000; box-shadow: 0 0 10px rgba(234, 179, 8, 0.4); }
+    .badge-full { background: var(--danger); color: #fff; }
+
+    .stat-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: 0.9rem; }
+    .stat-label { color: var(--text-muted); }
+    .stat-val { font-weight: 600; }
+
+    /* Progress bar */
+    .capacity-container { margin: 12px 0 6px 0; }
+    .capacity-bar-bg { width: 100%; height: 12px; background: #0f172a; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .capacity-bar-fill { height: 100%; width: 0%; transition: width 0.3s ease, background-color 0.3s ease; }
+
+    .log-box { background: #060910; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; height: 180px; overflow-y: auto; font-size: 0.82rem; font-family: monospace; color: #38bdf8; }
+    .log-item { margin-bottom: 4px; }
+    .log-err { color: #f87171; }
+    .log-ok { color: #4ade80; }
+    .log-warn { color: #facc15; }
+    .log-immortal { color: #fde047; font-weight: bold; }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button {
+      background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border);
+      padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    button:hover:not(:disabled) { background: var(--accent); color: #000; border-color: var(--accent); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    button.btn-primary { background: #0284c7; border-color: #0ea5e9; color: white; }
+    button.btn-primary:hover:not(:disabled) { background: #0369a1; }
+    button.btn-immortal { background: #a16207; border-color: #ca8a04; color: white; }
+    button.btn-immortal:hover:not(:disabled) { background: #854d0e; }
+    button.btn-danger { background: #991b1b; border-color: #dc2626; color: white; }
+    button.btn-danger:hover:not(:disabled) { background: #7f1d1d; }
+
+    /* Tabs & Walkthroughs */
+    .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 14px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+    .tab-btn.active { background: var(--bg-card); color: var(--accent); font-weight: 600; }
+    .scenario-desc { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; line-height: 1.4; }
+    .step-list { display: flex; flex-direction: column; gap: 8px; }
+    .step-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 9px 12px; border-radius: 6px; font-size: 0.85rem; }
+    .step-done { text-decoration: line-through; opacity: 0.5; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Prototype 04: Quy Chuẩn Giới Hạn Sức Chứa Không Khiếu Phàm Nhân</h1>
+    <div class="subtitle">
+      Khảo nghiệm mô hình giới hạn dung lượng Không Khiếu (Mortal Aperture Capacity): Bậc phẩm cảnh giới quyết định số lượng Cổ tối đa, các chốt chặn kiểm tra khi Nhặt / Mua / Rút kho / Hợp Luyện, và cơ chế chuyển đổi mở khóa không giới hạn khi Thăng Tiên (Rank 6+).
+    </div>
+  </header>
+
+  <div class="grid-layout">
+    <!-- PANEL 1: CẢNH GIỚI & KHÔNG KHIẾU HIỆN TẠI -->
+    <div class="card">
+      <div class="card-title">
+        <span>Trạng Thái Cổ Sư & Không Khiếu</span>
+        <span id="rankBadge" class="badge badge-mortal">Nhất Chuyển</span>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Cảnh Giới Tu Vi:</span>
+        <span class="stat-val" id="realmText">Rank 1 (Sơ Kỳ)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Chân Nguyên / Tiên Nguyên:</span>
+        <span class="stat-val" id="manaText">Thanh Đồng Chân Nguyên</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Sức Chứa Định Mức:</span>
+        <span class="stat-val" id="capacityText">15 Cổ trùng</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Số Cổ Đang Chứa (player_gu):</span>
+        <span class="stat-val" id="guCountText">3 / 15</span>
+      </div>
+
+      <div class="capacity-container">
+        <div class="capacity-bar-bg">
+          <div id="capacityBar" class="capacity-bar-fill" style="width: 20%; background-color: var(--success);"></div>
+        </div>
+      </div>
+      <div style="font-size: 0.8rem; text-align: right; color: var(--text-muted);" id="percentText">20.0% Dung Lượng</div>
+
+      <div style="margin-top: 14px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">
+        Thao Tác Tự Do (Free-Play):
+      </div>
+      <div class="btn-group">
+        <button onclick="handleAction('PICKUP_1')">Nhặt 1 Cổ Dã Ngoại</button>
+        <button onclick="handleAction('PICKUP_5')">Nhặt 5 Cổ (Bảo Rương)</button>
+        <button onclick="handleAction('BUY_CARAVAN')">Mua Cổ Thương Đoàn (+1)</button>
+        <button onclick="handleAction('SECT_WITHDRAW')">Rút Cổ Tông Môn (+1)</button>
+        <button class="btn-primary" onclick="handleAction('REFINE')">Hợp Luyện (2 Cổ ➔ 1 Cổ)</button>
+        <button class="btn-danger" onclick="handleAction('RELEASE')">Thả 1 Cổ (-1)</button>
+      </div>
+
+      <div style="margin-top: 14px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">
+        Đột Phá Cảnh Giới:
+      </div>
+      <div class="btn-group">
+        <button id="btnBreakthrough" onclick="handleAction('BREAKTHROUGH')">Đột Phá Lên Rank 2</button>
+        <button id="btnAscend" class="btn-immortal" onclick="handleAction('ASCEND')" disabled>Thăng Tiên Khai Khiếu (Rank 6)</button>
+        <button onclick="handleAction('RESET')" style="background: transparent;">Đặt lại Ban Đầu</button>
+      </div>
+    </div>
+
+    <!-- PANEL 2: NHẬT KÝ KIỂM TRA & CHỐT CHẶN (LOGS) -->
+    <div class="card">
+      <div class="card-title">
+        <span>Nhật Ký Thẩm Định Không Khiếu</span>
+        <button onclick="clearLogs()" style="font-size: 0.75rem; padding: 2px 6px;">Xóa log</button>
+      </div>
+      <div id="logBox" class="log-box"></div>
+    </div>
+  </div>
+
+  <!-- KỊCH BẢN KHẢO NGHIỆM (WALKTHROUGHS) -->
+  <div class="card">
+    <div class="card-title">Kịch Bản Khảo Nghiệm Các Tình Huống Trọng Yếu</div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchScenario(0)">1. Chạm Đáy Không Khiếu (Full Capacity)</button>
+      <button class="tab-btn" onclick="switchScenario(1)">2. Hợp Luyện Khi Đầy Túi (Net Negative)</button>
+      <button class="tab-btn" onclick="switchScenario(2)">3. Giãn Nở Khi Đột Phá (Expansion)</button>
+      <button class="tab-btn" onclick="switchScenario(3)">4. Thăng Tiên Vô Hạn Đàn Cổ (Immortal Ascension)</button>
+    </div>
+
+    <div id="scenarioDesc" class="scenario-desc"></div>
+    <div id="stepList" class="step-list"></div>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+// PURE DOMAIN MODULE (LIFTABLE TO GO CODEBASE)
+// =============================================================================
+
+const RealmDef = {
+  1: { name: "Nhất Chuyển (Rank 1)", capacity: 15, mana: "Thanh Đồng Chân Nguyên" },
+  2: { name: "Nhị Chuyển (Rank 2)", capacity: 25, mana: "Xích Thiết Chân Nguyên" },
+  3: { name: "Tam Chuyển (Rank 3)", capacity: 40, mana: "Bạch Ngân Chân Nguyên" },
+  4: { name: "Tứ Chuyển (Rank 4)", capacity: 60, mana: "Hoàng Kim Chân Nguyên" },
+  5: { name: "Ngũ Chuyển (Rank 5)", capacity: 80, mana: "Tử Tinh Chân Nguyên" },
+  6: { name: "Lục Chuyển Cổ Tiên (Rank 6)", capacity: -1, mana: "Thanh Đề Tiên Nguyên (Vô Hạn Đàn Cổ)" }
+};
+
+/**
+ * Tính toán dung lượng tối đa của Không Khiếu
+ * @returns {number} -1 nếu là Cổ Tiên (vô hạn), số nguyên nếu là Phàm nhân.
+ */
+function getMortalApertureCapacity(rank, subRank = 1) {
+  if (rank >= 6) return -1;
+  if (rank === 5 && subRank >= 4) return 100;
+  return RealmDef[rank]?.capacity || 10;
+}
+
+/**
+ * Kiểm định việc nạp Cổ vào Không Khiếu
+ */
+function validateApertureAddition(currentCount, addingCount, rank, subRank = 1) {
+  const cap = getMortalApertureCapacity(rank, subRank);
+  if (cap === -1) {
+    return { ok: true, capacity: -1, newCount: currentCount + addingCount };
+  }
+  if (currentCount + addingCount > cap) {
+    return {
+      ok: false,
+      code: "APERTURE_CAPACITY_EXCEEDED",
+      error: `Không Khiếu đã đầy (${currentCount}/${cap} Cổ trùng)! Chân nguyên không đủ dung nạp thêm ${addingCount} Cổ trùng mới.`,
+      capacity: cap,
+      overflow: (currentCount + addingCount) - cap
+    };
+  }
+  return { ok: true, capacity: cap, newCount: currentCount + addingCount };
+}
+
+/**
+ * Kiểm định thao tác Hợp Luyện Cổ:
+ * Tiêu thụ `consumedCount` Cổ cũ, sản sinh `producedCount` Cổ mới.
+ */
+function validateRefinementCapacity(currentCount, consumedCount, producedCount, rank, subRank = 1) {
+  const cap = getMortalApertureCapacity(rank, subRank);
+  if (cap === -1) return { ok: true, capacity: -1, newCount: currentCount - consumedCount + producedCount };
+  
+  // Tính số dư thực tế sau khi tiêu trừ nguyên liệu
+  const netCount = currentCount - consumedCount + producedCount;
+  if (netCount > cap) {
+    return {
+      ok: false,
+      code: "APERTURE_CAPACITY_EXCEEDED",
+      error: `Không Khiếu quá tải sau hợp luyện (${netCount}/${cap})!`,
+      capacity: cap
+    };
+  }
+  return { ok: true, capacity: cap, newCount: netCount };
+}
+
+// =============================================================================
+// STATE & UI CONTROLLER
+// =============================================================================
+
+let state = {
+  rank: 1,
+  subRank: 1,
+  guCount: 3,
+  isImmortal: false
+};
+
+function log(msg, type = "ok") {
+  const box = document.getElementById("logBox");
+  const time = new Date().toTimeString().split(" ")[0];
+  const item = document.createElement("div");
+  item.className = `log-item log-${type}`;
+  item.textContent = `[${time}] ${msg}`;
+  box.appendChild(item);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLogs() {
+  document.getElementById("logBox").innerHTML = "";
+}
+
+function render() {
+  const cap = getMortalApertureCapacity(state.rank, state.subRank);
+  const isImmortal = state.rank >= 6;
+
+  document.getElementById("realmText").textContent = isImmortal
+    ? "Lục Chuyển Cổ Tiên (Tiên Khiếu Khai Mở)"
+    : `${RealmDef[state.rank].name} (Tiểu cảnh giới ${state.subRank})`;
+  document.getElementById("manaText").textContent = RealmDef[state.rank].mana;
+
+  const rankBadge = document.getElementById("rankBadge");
+  if (isImmortal) {
+    rankBadge.textContent = "CỔ TIÊN (RANK 6)";
+    rankBadge.className = "badge badge-immortal";
+    document.getElementById("capacityText").textContent = "Vô Hạn (Đàn Phàm Cổ Tiên Khiếu)";
+    document.getElementById("guCountText").textContent = `${state.guCount} (Đang Nuôi Dưỡng)`;
+    document.getElementById("capacityBar").style.width = "100%";
+    document.getElementById("capacityBar").style.backgroundColor = "var(--immortal)";
+    document.getElementById("percentText").textContent = "Không Giới Hạn Sức Chứa";
+  } else {
+    rankBadge.textContent = `PHÀM NHÂN (RANK ${state.rank})`;
+    rankBadge.className = state.guCount >= cap ? "badge badge-full" : "badge badge-mortal";
+    document.getElementById("capacityText").textContent = `${cap} Cổ trùng`;
+    document.getElementById("guCountText").textContent = `${state.guCount} / ${cap}`;
+
+    const pct = Math.min(100, (state.guCount / cap) * 100);
+    const bar = document.getElementById("capacityBar");
+    bar.style.width = `${pct}%`;
+    if (pct >= 100) bar.style.backgroundColor = "var(--danger)";
+    else if (pct >= 70) bar.style.backgroundColor = "var(--warning)";
+    else bar.style.backgroundColor = "var(--success)";
+    document.getElementById("percentText").textContent = `${pct.toFixed(1)}% Dung Lượng`;
+  }
+
+  // Breakthrough buttons
+  const btnBt = document.getElementById("btnBreakthrough");
+  const btnAsc = document.getElementById("btnAscend");
+  if (state.rank < 5) {
+    btnBt.disabled = false;
+    btnBt.textContent = `Đột Phá Lên Rank ${state.rank + 1}`;
+    btnAsc.disabled = true;
+  } else if (state.rank === 5) {
+    btnBt.disabled = true;
+    btnBt.textContent = "Đã Đạt Ngũ Chuyển Đỉnh Phong";
+    btnAsc.disabled = false;
+  } else {
+    btnBt.disabled = true;
+    btnAsc.disabled = true;
+  }
+}
+
+function handleAction(action) {
+  switch (action) {
+    case "PICKUP_1": {
+      const v = validateApertureAddition(state.guCount, 1, state.rank, state.subRank);
+      if (!v.ok) {
+        log(`[REJECT] Nhặt Cổ dã ngoại thất bại: ${v.error}`, "err");
+      } else {
+        state.guCount = v.newCount;
+        log(`[SUCCESS] Nhặt được 1 Nguyệt Quang Cổ. Không Khiếu: ${state.guCount}/${v.capacity === -1 ? '∞' : v.capacity}`, "ok");
+      }
+      break;
+    }
+    case "PICKUP_5": {
+      const v = validateApertureAddition(state.guCount, 5, state.rank, state.subRank);
+      if (!v.ok) {
+        log(`[REJECT] Mở bảo rương thất bại: ${v.error}`, "err");
+      } else {
+        state.guCount = v.newCount;
+        log(`[SUCCESS] Mở bảo rương nhận 5 Cổ trùng. Không Khiếu: ${state.guCount}/${v.capacity === -1 ? '∞' : v.capacity}`, "ok");
+      }
+      break;
+    }
+    case "BUY_CARAVAN": {
+      const v = validateApertureAddition(state.guCount, 1, state.rank, state.subRank);
+      if (!v.ok) {
+        log(`[REJECT] Mua Cổ từ Thương đoàn thất bại: ${v.error}`, "err");
+      } else {
+        state.guCount = v.newCount;
+        log(`[SUCCESS] Giao dịch thành công 1 Cổ trùng từ Giả Phú Thương Đoàn.`, "ok");
+      }
+      break;
+    }
+    case "SECT_WITHDRAW": {
+      const v = validateApertureAddition(state.guCount, 1, state.rank, state.subRank);
+      if (!v.ok) {
+        log(`[REJECT] Rút Cổ từ Kho Tông Môn thất bại: ${v.error}`, "err");
+      } else {
+        state.guCount = v.newCount;
+        log(`[SUCCESS] Rút 1 Cổ trùng từ Kho Tông Môn thành công.`, "ok");
+      }
+      break;
+    }
+    case "REFINE": {
+      if (state.guCount < 2) {
+        log(`[REJECT] Không đủ nguyên liệu: Cần tối thiểu 2 Cổ để hợp luyện.`, "warn");
+        return;
+      }
+      const v = validateRefinementCapacity(state.guCount, 2, 1, state.rank, state.subRank);
+      if (!v.ok) {
+        log(`[REJECT] Hợp luyện bị hủy: ${v.error}`, "err");
+      } else {
+        state.guCount = v.newCount;
+        log(`[SUCCESS] Hợp Luyện Đại Thành! Tiêu hao 2 Cổ phôi, dung hợp thành 1 Cổ bậc cao. Số Cổ thực tế giảm 1 (Hiện có: ${state.guCount}).`, "ok");
+      }
+      break;
+    }
+    case "RELEASE": {
+      if (state.guCount > 0) {
+        state.guCount--;
+        log(`[ACTION] Thả 1 Cổ trùng về tự nhiên. Số Cổ còn lại: ${state.guCount}`, "warn");
+      }
+      break;
+    }
+    case "BREAKTHROUGH": {
+      if (state.rank < 5) {
+        state.rank++;
+        const newCap = getMortalApertureCapacity(state.rank);
+        log(`[BREAKTHROUGH] Đột phá cảnh giới thành công! Tiến cấp ${RealmDef[state.rank].name}. Dung lượng Không Khiếu mở rộng thành ${newCap} Cổ!`, "ok");
+      }
+      break;
+    }
+    case "ASCEND": {
+      if (state.rank === 5) {
+        state.rank = 6;
+        state.isImmortal = true;
+        log(`[ASCENSION] Tam Khí Quy Nhất - THĂNG TIÊN ĐẠI THÀNH! Không Khiếu vỡ ra hóa thành Tiên Khiếu Vô Biên!`, "immortal");
+        log(`[ASCENSION] Khai mở "Đàn Phàm Cổ Tiên Khiếu". Toàn bộ hạn ngạch phàm trần được xóa bỏ.`, "immortal");
+      }
+      break;
+    }
+    case "RESET": {
+      state = { rank: 1, subRank: 1, guCount: 3, isImmortal: false };
+      log(`[RESET] Đã thiết lập lại trạng thái Cổ Sư Nhất Chuyển sơ khởi.`, "warn");
+      break;
+    }
+  }
+  render();
+}
+
+// =============================================================================
+// SCENARIOS & GUIDED WALKTHROUGHS
+// =============================================================================
+
+const scenarios = [
+  {
+    title: "1. Chạm Đáy Không Khiếu (Full Capacity)",
+    desc: "Cổ sư Nhất Chuyển chỉ có sức chứa 15 Cổ. Thực hiện gom nhặt Cổ liên tục để chạm trần dung lượng và kiểm chứng chốt chặn APERTURE_CAPACITY_EXCEEDED từ chối an toàn mọi thao tác Nhặt / Mua / Rút kho.",
+    init: () => { state = { rank: 1, subRank: 1, guCount: 13, isImmortal: false }; clearLogs(); log("Khởi tạo: Rank 1 với 13/15 Cổ."); render(); },
+    steps: [
+      { text: "Nhặt thêm 1 Cổ dã ngoại (lên 14/15)", action: () => handleAction("PICKUP_1") },
+      { text: "Nhặt thêm 1 Cổ dã ngoại (chạm mốc 15/15)", action: () => handleAction("PICKUP_1") },
+      { text: "Cố gắng nhặt thêm 1 Cổ nữa (sẽ bị CHẶN)", action: () => handleAction("PICKUP_1") },
+      { text: "Cố gắng mua Cổ từ Thương đoàn (sẽ bị CHẶN)", action: () => handleAction("BUY_CARAVAN") },
+      { text: "Thả 1 Cổ để giải phóng không gian (xuống 14/15)", action: () => handleAction("RELEASE") },
+      { text: "Nhặt lại Cổ sau khi đã có chỗ trống (thành công)", action: () => handleAction("PICKUP_1") }
+    ]
+  },
+  {
+    title: "2. Hợp Luyện Khi Đầy Túi (Net Negative Logic)",
+    desc: "Tình huống góc đặc biệt: Khi túi đầy 15/15, Cổ Sư muốn hợp luyện 2 Cổ cũ thành 1 Cổ mới. Về mặt số học, số Cổ sau hợp luyện là 14 (giảm đi 1). Hệ thống phải thông minh cho phép thao tác này diễn ra, không được chặn nhầm!",
+    init: () => { state = { rank: 1, subRank: 1, guCount: 15, isImmortal: false }; clearLogs(); log("Khởi tạo: Rank 1 đang ĐẦY TÚI 15/15."); render(); },
+    steps: [
+      { text: "Thử nhặt Cổ (xác nhận túi đang đầy và bị chặn)", action: () => handleAction("PICKUP_1") },
+      { text: "Thực hiện Hợp Luyện: Tiêu hao 2 Cổ cũ tạo 1 Cổ mới (Net -1)", action: () => handleAction("REFINE") },
+      { text: "Kiểm tra số Cổ: Đã giảm xuống 14/15, Không Khiếu đã có chỗ trống!", action: () => log(`Kiểm tra thành công: Túi hiện tại có ${state.guCount}/15 con.`, "ok") },
+      { text: "Nhặt 1 Cổ dã ngoại lấp đầy lại khoảng trống (lên 15/15)", action: () => handleAction("PICKUP_1") }
+    ]
+  },
+  {
+    title: "3. Giãn Nở Khi Đột Phá Cảnh Giới (Expansion)",
+    desc: "Khi Cổ Sư đột phá đại cảnh giới (Rank 1 ➔ 2 ➔ 3 ➔ 4 ➔ 5), Không Khiếu tự động giãn nở dung lượng tương ứng (15 ➔ 25 ➔ 40 ➔ 60 ➔ 80), cho phép thu nạp thêm Cổ mà không cần mua rương mở rộng.",
+    init: () => { state = { rank: 1, subRank: 1, guCount: 15, isImmortal: false }; clearLogs(); log("Khởi tạo: Rank 1 đầy túi 15/15."); render(); },
+    steps: [
+      { text: "Xác nhận túi đầy ở Rank 1 (15/15)", action: () => log(`Túi hiện tại: ${state.guCount}/15`, "warn") },
+      { text: "Đột phá lên Nhị Chuyển (Rank 2) ➔ Dung lượng tăng lên 25", action: () => handleAction("BREAKTHROUGH") },
+      { text: "Mở bảo rương nhặt 5 Cổ mới (thành công lên 20/25)", action: () => handleAction("PICKUP_5") },
+      { text: "Đột phá lên Tam Chuyển (Rank 3) ➔ Dung lượng tăng lên 40", action: () => handleAction("BREAKTHROUGH") },
+      { text: "Nhặt thêm 5 Cổ nữa vào Không Khiếu Tam Chuyển (lên 25/40)", action: () => handleAction("PICKUP_5") }
+    ]
+  },
+  {
+    title: "4. Thăng Tiên Vô Hạn Đàn Cổ (Immortal Ascension)",
+    desc: "Cổ sư Ngũ Chuyển Đỉnh Phong sở hữu 80 Cổ trùng. Khi Thăng Tiên thành công, Không Khiếu chuyển hóa thành Tiên Khiếu. Toàn bộ giới hạn dung lượng Phàm Cổ được dỡ bỏ hoàn toàn (Vô Hạn Đàn Cổ).",
+    init: () => { state = { rank: 5, subRank: 4, guCount: 80, isImmortal: false }; clearLogs(); log("Khởi tạo: Ngũ Chuyển Đỉnh Phong (80/100 Cổ)."); render(); },
+    steps: [
+      { text: "Tiến hành nghi thức Thăng Tiên (Tam Khí Quy Nhất)", action: () => handleAction("ASCEND") },
+      { text: "Thu nạp 5 Cổ liên tiếp vào Đàn Cổ Tiên Khiếu", action: () => handleAction("PICKUP_5") },
+      { text: "Thu nạp thêm 5 Cổ nữa mà không gặp bất kỳ giới hạn nào", action: () => handleAction("PICKUP_5") },
+      { text: "Xác nhận hệ thống chuyển sang chế độ Tiên Khiếu Tự Dưỡng", action: () => log(`Hoàn tất: Tiên Khiếu hiện nuôi dưỡng ${state.guCount} Phàm Cổ không tốn sức chứa!`, "immortal") }
+    ]
+  }
+];
+
+let activeScenario = 0;
+let activeStep = 0;
+
+function switchScenario(idx) {
+  activeScenario = idx;
+  activeStep = 0;
+  document.querySelectorAll(".tab-btn").forEach((btn, i) => {
+    btn.className = `tab-btn ${i === idx ? 'active' : ''}`;
+  });
+  const sc = scenarios[idx];
+  document.getElementById("scenarioDesc").textContent = sc.desc;
+  sc.init();
+  renderSteps();
+}
+
+function renderSteps() {
+  const sc = scenarios[activeScenario];
+  const list = document.getElementById("stepList");
+  list.innerHTML = "";
+  sc.steps.forEach((step, i) => {
+    const item = document.createElement("div");
+    item.className = `step-item ${i < activeStep ? 'step-done' : ''}`;
+    item.innerHTML = `
+      <span><strong>Bước ${i + 1}:</strong> ${step.text}</span>
+      <button class="${i === activeStep ? 'btn-primary' : ''}" ${i === activeStep ? '' : 'disabled'}>
+        ${i < activeStep ? '✓ Đã chạy' : (i === activeStep ? 'Thực hiện ➔' : 'Chờ...')}
+      </button>
+    `;
+    if (i === activeStep) {
+      item.querySelector("button").onclick = () => {
+        step.action();
+        activeStep++;
+        renderSteps();
+      };
+    }
+    list.appendChild(item);
+  });
+}
+
+// Khởi chạy ban đầu
+switchScenario(0);
+</script>
+</body>
+</html>

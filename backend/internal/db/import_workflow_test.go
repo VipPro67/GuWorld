@@ -53,14 +53,15 @@ func TestSeedGusFromCSVBatchesInserts(t *testing.T) {
 	if len(rec.queries) != 2 {
 		t.Fatalf("exec count = %d, want 2 batched inserts", len(rec.queries))
 	}
-	if rec.argLens[0] != 500*19 || rec.argLens[1] != 19 {
-		t.Fatalf("arg counts = %v, want [%d %d]", rec.argLens, 500*19, 19)
+	colsPerRow := 20
+	if rec.argLens[0] != 500*colsPerRow || rec.argLens[1] != colsPerRow {
+		t.Fatalf("arg counts = %v, want [%d %d]", rec.argLens, 500*colsPerRow, colsPerRow)
 	}
-	if !strings.Contains(rec.queries[0], "($1,") || !strings.Contains(rec.queries[0], "$9500") {
+	if !strings.Contains(rec.queries[0], "($1,") || !strings.Contains(rec.queries[0], fmt.Sprintf("$%d", 500*colsPerRow)) {
 		t.Fatalf("first batch placeholders malformed: %q", rec.queries[0][:80])
 	}
-	if strings.Contains(rec.queries[0], "$9501") {
-		t.Fatalf("first batch has placeholder beyond its 9500 params")
+	if strings.Contains(rec.queries[0], fmt.Sprintf("$%d", 500*colsPerRow+1)) {
+		t.Fatalf("first batch has placeholder beyond its %d params", 500*colsPerRow)
 	}
 	if !strings.Contains(rec.queries[1], "($1,") {
 		t.Fatalf("second batch placeholders must restart at $1")
