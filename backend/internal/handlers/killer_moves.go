@@ -19,6 +19,7 @@ import (
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -69,6 +70,7 @@ type killerMoveEffectRef struct {
 	Rank       int    `json:"rank"`
 	BlockIndex int    `json:"block_index"`
 	OpIndex    int    `json:"operation_index"`
+	PlayerATKCoefficient *float64 `json:"player_atk_coefficient,omitempty"`
 }
 
 type killerMoveEffectOption struct {
@@ -81,6 +83,8 @@ type killerMoveEffectOption struct {
 	Trigger           string                    `json:"trigger"`
 	Operation         gameplayeffects.Operation `json:"operation"`
 	Target            gameplayeffects.Target    `json:"target"`
+	Conditions        []gameplayeffects.Condition `json:"conditions,omitempty"`
+	PlayerATKCoefficient float64 `json:"player_atk_coefficient"`
 	CombatSupported   bool                      `json:"combat_supported"`
 	UnavailableReason string                    `json:"unavailable_reason,omitempty"`
 }
@@ -189,7 +193,7 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 			if op.Target != nil {
 				target = *op.Target
 			}
-			combatSupported := block.Trigger == gameplayeffects.TriggerOnAction
+			combatSupported := block.Trigger == gameplayeffects.TriggerOnAction && killerMoveOperationAllowed(op, target)
 			outsideCombatSupported := block.Trigger == gameplayeffects.TriggerOnUse && killerMoveOutsideCombatOperationAllowed(op, target)
 			if !combatSupported && !outsideCombatSupported {
 				continue
@@ -198,7 +202,8 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 			result = append(result, killerMoveEffectOption{
 				Key: key, SourceID: inst.InstanceID, SourceName: spec.Name,
 				GuID: inst.GuID, Rank: inst.Rank, Label: killerMoveOperationLabel(op), Trigger: string(block.Trigger),
-				Operation: op, Target: target, CombatSupported: combatSupported,
+				Operation: op, Target: target, Conditions: append([]gameplayeffects.Condition(nil), block.Conditions...),
+				PlayerATKCoefficient: spec.PlayerATKCoefficient, CombatSupported: combatSupported,
 				UnavailableReason: map[bool]string{true: "", false: "Chỉ dùng ngoài combat"}[combatSupported],
 			})
 		}
@@ -212,15 +217,33 @@ func killerMoveEffectKey(instanceID string, blockIndex, operationIndex int) stri
 	return fmt.Sprintf("%s:%d:%d", instanceID, blockIndex, operationIndex)
 }
 
-func killerMoveOperationAllowed(op gameplayeffects.Operation) bool {
+
+func killerMoveOperationAllowed(op gameplayeffects.Operation, target gameplayeffects.Target) bool {
+	selector := strings.ToUpper(string(target.Selector))
+	isSelf := selector == string(gameplayeffects.TargetSelf)
+	isEnemy := selector == string(gameplayeffects.TargetSingle) || selector == string(gameplayeffects.TargetRow) ||
+		selector == string(gameplayeffects.TargetCol) || selector == "CROSS" || selector == string(gameplayeffects.TargetAll) ||
+		selector == string(gameplayeffects.TargetAllEnemies)
 	switch op.Op {
-	case gameplayeffects.OpDamage, gameplayeffects.OpShield, gameplayeffects.OpHeal,
-		gameplayeffects.OpDirectHP, gameplayeffects.OpStatus, gameplayeffects.OpBarrier,
-		gameplayeffects.OpCleanse:
-		return true
-	case gameplayeffects.OpStatMod:
-		stat := strings.ToUpper(op.Stat)
-		return stat == "ATTACK" || stat == "DEFENSE"
+	case gameplayeffects.OpDamage:
+		return isEnemy && (op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") || strings.EqualFold(op.SubType, "MULTIPLIER") || strings.EqualFold(op.SubType, "MAX_HP_PERCENT"))
+	case gameplayeffects.OpDirectHP:
+		return isEnemy && (strings.EqualFold(op.SubType, "MAX_HP_PERCENT") || strings.EqualFold(op.SubType, "SHIELD_STRIP"))
+	case gameplayeffects.OpShield, gameplayeffects.OpBarrier:
+		return isSelf && (op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") || strings.EqualFold(op.SubType, "MULTIPLIER") || strings.EqualFold(op.SubType, "PERCENT"))
+	case gameplayeffects.OpHeal:
+		if strings.EqualFold(op.SubType, "LIFESTEAL") {
+			return false // lifesteal needs a single damage executor to preserve ordering
+		}
+		return isSelf && (op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") || strings.EqualFold(op.SubType, "PERCENT") || strings.EqualFold(op.SubType, "MANA") || strings.EqualFold(op.SubType, "RESOURCE"))
+	case gameplayeffects.OpCleanse:
+		return isSelf
+	case gameplayeffects.OpStatus:
+		status, ok := statusfx.Spec(op.StatusID)
+		if !ok {
+			return false
+		}
+		return (status.SelfTarget && isSelf) || (!status.SelfTarget && isEnemy)
 	default:
 		return false
 	}
@@ -353,6 +376,7 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 	selected := make([]killerMoveEffectRef, 0, len(req.SelectedEffectKeys))
 	blocks := make([]gameplayeffects.Block, 0, len(req.SelectedEffectKeys))
 	load := 0.0
+	unscalableLoad := 0.0
 	selectedKeys := make(map[string]bool, len(req.SelectedEffectKeys))
 	for _, key := range req.SelectedEffectKeys {
 		if selectedKeys[key] {
@@ -371,14 +395,19 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 		if _, err := fmt.Sscanf(parts[1]+":"+parts[2], "%d:%d", &bi, &oi); err != nil {
 			return killerMovePreview{}, main, fmt.Errorf("Mã hiệu ứng không hợp lệ")
 		}
-		selected = append(selected, killerMoveEffectRef{Key: key, Trigger: option.Trigger, InstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank, BlockIndex: bi, OpIndex: oi})
+		coefficient := option.PlayerATKCoefficient
+		selected = append(selected, killerMoveEffectRef{Key: key, Trigger: option.Trigger, InstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank, BlockIndex: bi, OpIndex: oi, PlayerATKCoefficient: &coefficient})
 		blockTarget := option.Target
 		operation := option.Operation
 		// Keep each selected operation's target when the compiler flattens
 		// multiple one-operation blocks into a single combat action.
 		operation.Target = &blockTarget
-		blocks = append(blocks, gameplayeffects.Block{ID: "KM_" + strings.ReplaceAll(key, ":", "_"), Trigger: gameplayeffects.Trigger(option.Trigger), Target: blockTarget, Operations: []gameplayeffects.Operation{operation}})
-		load += killerMoveEffectLoad(option.Operation, blockTarget)
+		blocks = append(blocks, gameplayeffects.Block{ID: "KM_" + strings.ReplaceAll(key, ":", "_"), Trigger: gameplayeffects.Trigger(option.Trigger), Target: blockTarget, Conditions: append([]gameplayeffects.Condition(nil), option.Conditions...), Operations: []gameplayeffects.Operation{operation}})
+		effectLoad := killerMoveEffectLoad(option.Operation, blockTarget)
+		load += effectLoad
+		if option.Operation.Op == gameplayeffects.OpCleanse {
+			unscalableLoad += effectLoad
+		}
 	}
 	if len(paths) == 0 {
 		paths[gamefx.CleanPath("strength")] = true
@@ -422,10 +451,19 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 	}
 	scale := 1.0
 	if load > budget {
-		scale = budget / load
+		scalableLoad := load - unscalableLoad
+		if unscalableLoad >= budget || scalableLoad <= 0 {
+			return killerMovePreview{}, main, fmt.Errorf("Các hiệu ứng không thể tự cân đã vượt ngân sách rank; hãy bỏ bớt effect hoặc chọn Cổ chính rank cao hơn")
+		}
+		scale = (budget - unscalableLoad) / scalableLoad
 	}
 	if scale < 0.15 {
 		return killerMovePreview{}, main, fmt.Errorf("Công thức vượt ngân sách sức mạnh quá xa; hãy giảm số hiệu ứng hoặc chọn Cổ rank cao hơn")
+	}
+	for i := range selected {
+		if selected[i].PlayerATKCoefficient != nil {
+			*selected[i].PlayerATKCoefficient *= scale
+		}
 	}
 	for bi := range blocks {
 		for oi := range blocks[bi].Operations {
@@ -619,6 +657,10 @@ func scaleKillerMoveOperation(op *gameplayeffects.Operation, scale float64) {
 		return
 	}
 	if op.Op == gameplayeffects.OpCleanse {
+		return
+	}
+	if (op.Op == gameplayeffects.OpDamage || op.Op == gameplayeffects.OpShield) && strings.EqualFold(op.SubType, "MULTIPLIER") {
+		op.Value = 1 + (op.Value-1)*scale
 		return
 	}
 	op.Value *= scale

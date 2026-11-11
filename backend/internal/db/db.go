@@ -1159,6 +1159,7 @@ func seedGusFromCSV(filename string) error {
 	basePriceIdx := col("base_price")
 	imageURLIdx := col("image_url")
 	targetTypeIdx := col("target_type")
+	playerATKCoefficientIdx := col("player_atk_coefficient")
 
 	if idIdx < 0 || nameIdx < 0 || rankIdx < 0 {
 		return fmt.Errorf("Gu.csv missing required columns (id, name, rank)")
@@ -1203,6 +1204,22 @@ func seedGusFromCSV(filename string) error {
 		}
 		return strings.TrimSpace(row[idx])
 	}
+	coefficientByID := make(map[string]float64)
+	for _, key := range order {
+		value := 0.0
+		raw := get(seen[key].fields, playerATKCoefficientIdx)
+		if raw != "" {
+			parsed, parseErr := strconv.ParseFloat(raw, 64)
+			if parseErr != nil || parsed < 0 {
+				return fmt.Errorf("Gu.csv line %d: player_atk_coefficient must be a non-negative number", seen[key].line)
+			}
+			value = parsed
+		}
+		if existing, ok := coefficientByID[key.id]; ok && existing != value {
+			return fmt.Errorf("Gu.csv has different player_atk_coefficient values across ranks for %s", key.id)
+		}
+		coefficientByID[key.id] = value
+	}
 
 	// Validate the complete effect catalog before the first database write. A
 	// malformed row must not turn a bulk import into a partially-updated
@@ -1228,16 +1245,16 @@ func seedGusFromCSV(filename string) error {
 	// Multi-row VALUES keeps the upsert semantics while cutting round-trips.
 	const guImportBatchSize = 500
 	batchValues := make([]string, 0, guImportBatchSize)
-	batchArgs := make([]interface{}, 0, guImportBatchSize*19)
+	batchArgs := make([]interface{}, 0, guImportBatchSize*20)
 	flushGuBatch := func() error {
 		if len(batchValues) == 0 {
 			return nil
 		}
-		query := "INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url) VALUES " +
+		query := "INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, player_atk_coefficient, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url) VALUES " +
 			strings.Join(batchValues, ",") +
 			` ON CONFLICT (id, rank) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
-			    base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
+			    base_mana_cost=EXCLUDED.base_mana_cost, player_atk_coefficient=EXCLUDED.player_atk_coefficient, effects=EXCLUDED.effects,
 			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
 			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, primary_role=EXCLUDED.primary_role,
 			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags,
@@ -1263,6 +1280,7 @@ func seedGusFromCSV(filename string) error {
 		desc := get(row, descIdx)
 		path := get(row, pathIdx)
 		manaCostStr := get(row, manaCostIdx)
+		playerATKCoefficient, _ := strconv.ParseFloat(get(row, playerATKCoefficientIdx), 64)
 		effectsRaw := seen[key].normalizedEffects
 		rarity := parseRarity(get(row, rarityIdx))
 		primaryRole := get(row, primaryRoleIdx)
@@ -1339,9 +1357,9 @@ func seedGusFromCSV(filename string) error {
 
 		n := len(batchArgs)
 		batchValues = append(batchValues, fmt.Sprintf(
-			"($%d,$%d,$%d,$%d::jsonb,$%d,$%d,$%d::jsonb,$%d,$%d::jsonb,$%d,$%d,$%d,$%d,$%d,$%d::jsonb,$%d::jsonb,$%d::jsonb,$%d,$%d)",
-			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12, n+13, n+14, n+15, n+16, n+17, n+18, n+19))
-		batchArgs = append(batchArgs, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
+			"($%d,$%d,$%d,$%d::jsonb,$%d,$%d,$%d,$%d::jsonb,$%d,$%d::jsonb,$%d,$%d,$%d,$%d,$%d,$%d::jsonb,$%d::jsonb,$%d::jsonb,$%d,$%d)",
+			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12, n+13, n+14, n+15, n+16, n+17, n+18, n+19, n+20))
+		batchArgs = append(batchArgs, id, name, rank, pathJSON, guType, manaCost, playerATKCoefficient, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
 		if len(batchValues) >= guImportBatchSize {
 			if err := flushGuBatch(); err != nil {
 				return fmt.Errorf("upsert gu %s rank %s: %w", id, rankStr, err)
@@ -3529,8 +3547,8 @@ var individualExportDefs = map[string]exportDef{
 	},
 	"gu": {
 		filename: "Gu.csv",
-		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), CASE WHEN COALESCE(base_price,0) = 0 THEN '0' ELSE TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM base_price::text)) END, COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url", "player_atk_coefficient"},
+		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), CASE WHEN COALESCE(base_price,0) = 0 THEN '0' ELSE TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM base_price::text)) END, COALESCE(image_url,''), COALESCE(player_atk_coefficient,0) FROM gu_dictionary ORDER BY id`,
 	},
 	"constitution": {
 		filename: "Constitution.csv",

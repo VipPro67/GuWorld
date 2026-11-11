@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
@@ -1433,7 +1434,7 @@ func Simulate(state *CombatState) []CombatLog {
 			// Backfire: violent dao conflict wounds the caster directly (true damage).
 			// Basic attacks (đánh thường) are exempt: the fallback path defaults to
 			// Strength, so mixed-dao casters would otherwise self-wound every turn.
-			if conflictMult < 0.60 && a.ActionType != "BASIC_ATTACK" {
+			if conflictMult < 0.60 && a.ActionType != "BASIC_ATTACK" && !a.IsKillerMoveOperation {
 				if chance := gamefx.BackfireChance(conflictMult); chance > 0 && rng.Float64() < chance {
 					satKhi := satKhiPiercesImmunity(actor)
 					if !isImmuneToDamage(actor, satKhi) {
@@ -1613,7 +1614,38 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
+			// A composed move pays and schedules once, then delegates its authored
+			// operations to the existing per-effect simulator adapter. The parent
+			// has already passed cast failure, resource, backlash and cooldown rules.
+			if a.ActionType == "KILLER_MOVE" && len(a.OperationEffects) > 0 {
+				res.executed = true
+				for _, effect := range coalesceKillerMoveDamageEffects(a) {
+					if effect.Action == nil {
+						continue
+					}
+					child := *effect.Action
+					child.OperationConditions = append([]gameplayeffects.Condition(nil), effect.Compiled.Conditions...)
+					child.IsKillerMoveOperation = true
+					child.Rank = effect.SourceRank
+					child.SourceID = a.SourceID
+					out := runOne(actor, &child, isAlly, enemyTargets)
+					res.executed = res.executed || out.executed
+					res.hasDamage = res.hasDamage || out.hasDamage
+					if out.abort {
+						res.abort = true
+						return res
+					}
+				}
+				return res
+			}
+
 			resolved := resolveTargets(enemyTargets, a)
+			if a.IsKillerMoveOperation && strings.EqualFold(a.TargetType, "SELF") {
+				resolved = []*CombatantAuto{actor}
+			}
+			if len(a.OperationConditions) > 0 {
+				resolved = filterOperationTargets(actor, resolved, a.OperationConditions, a.Rank, a.Path, turn)
+			}
 			// ── BEFORE_ENEMY_ATTACK: FORGET_WILL confuse ──
 			// Redirects (or fizzles) the just-resolved targets. First
 			// defending owner that procs decides; backfire seals the owner.
@@ -1706,7 +1738,7 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 
 			res.executed = true
-			res.hasDamage = a.ActionType == "BASIC_ATTACK" || a.Damage > 0
+			res.hasDamage = a.ActionType == "BASIC_ATTACK" || a.Damage > 0 || a.DamageHPPercent > 0 || a.ShieldStripPercent > 0
 
 			firstTarget := resolved[0]
 

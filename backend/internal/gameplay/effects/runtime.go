@@ -106,6 +106,7 @@ type CompiledOperation struct {
 	Type                        OperationType
 	Trigger                     Trigger
 	SubType                     string
+	Conditions                  []Condition
 	Target                      *Target
 	Value                       float64
 	Path, Stat, Code            string
@@ -154,7 +155,7 @@ func (Compiler) Compile(input []Block) (*Compiled, error) {
 			if subType != "" && len(definition.SubTypes) > 0 && !definition.SubTypes[subType] {
 				return nil, fmt.Errorf("effect %q: unknown subtype %q for %q", b.ID, op.SubType, op.Op)
 			}
-			co := CompiledOperation{Type: op.Op, SubType: subType, Value: op.Value, Path: op.Path, Stat: strings.ToUpper(op.Stat), Unit: strings.ToUpper(op.Unit), Resource: strings.ToUpper(op.Resource), StackPolicy: strings.ToUpper(op.StackPolicy), Code: strings.ToUpper(op.Code), Params: append([]byte(nil), op.Params...)}
+			co := CompiledOperation{Type: op.Op, SubType: subType, Conditions: append([]Condition(nil), conditions...), Value: op.Value, Path: op.Path, Stat: strings.ToUpper(op.Stat), Unit: strings.ToUpper(op.Unit), Resource: strings.ToUpper(op.Resource), StackPolicy: strings.ToUpper(op.StackPolicy), Code: strings.ToUpper(op.Code), Params: append([]byte(nil), op.Params...)}
 			if len(op.Params) > 0 {
 				if err := json.Unmarshal(op.Params, &co.Values); err != nil {
 					return nil, fmt.Errorf("effect %q: invalid native params: %w", b.ID, err)
@@ -306,6 +307,7 @@ func cloneOps(in []CompiledOperation) []CompiledOperation {
 	out := append([]CompiledOperation(nil), in...)
 	for i := range out {
 		out[i].Params = append([]byte(nil), out[i].Params...)
+		out[i].Conditions = append([]Condition(nil), out[i].Conditions...)
 		out[i].Values = cloneValues(out[i].Values)
 		if out[i].Target != nil {
 			t := *out[i].Target

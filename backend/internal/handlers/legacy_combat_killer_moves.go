@@ -38,7 +38,7 @@ func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator
 		}
 	}
 
-	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,COALESCE(combat_profile,'{}'::jsonb) FROM player_killer_moves WHERE player_id=$1 AND id = ANY($2)`, player.ID, targetIDs)
+	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,COALESCE(combat_profile,'{}'::jsonb) FROM player_killer_moves WHERE player_id=$1 AND id = ANY($2)`, player.ID, targetIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -51,11 +51,12 @@ func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator
 	byID := make(map[string]storedKillerMove)
 	for rows.Next() {
 		var m storedKillerMove
-		var comps, compiled, combatProf []byte
-		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &comps, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &combatProf); err != nil {
+		var comps, selected, compiled, combatProf []byte
+		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &comps, &selected, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &combatProf); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(comps, &m.Components)
+		_ = json.Unmarshal(selected, &m.SelectedEffects)
 		_ = json.Unmarshal(compiled, &m.CompiledEffects)
 		_ = json.Unmarshal(combatProf, &m.CombatProfile)
 		if m.CombatProfile.CooldownTurns == 0 {

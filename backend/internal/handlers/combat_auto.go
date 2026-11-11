@@ -671,7 +671,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			continue
 		}
 		mainSpec.Name = move.Name
-		mainSpec.Effects = models.GuEffects{Blocks: move.CompiledEffects}
+		mainSpec.Effects = models.GuEffects{}
 		mainSpec.BaseManaCost = 0
 		movePaths := make([]string, 0, len(move.Components))
 		seenPaths := make(map[string]bool)
@@ -694,12 +694,67 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		if actionErr != nil {
 			continue
 		}
-		compiledEffects, compileErr := (gameplayeffects.Compiler{}).Compile(move.CompiledEffects)
-		if compileErr != nil {
-			logger.S.Warnf("Skipping invalid killer move %s effects: %v", move.ID, compileErr)
-			continue
+		if len(move.SelectedEffects) == len(move.CompiledEffects) && len(move.SelectedEffects) > 0 {
+			for index, block := range move.CompiledEffects {
+				ref := move.SelectedEffects[index]
+				sourceSpec, sourceFound := models.GetGu(ref.GuID, ref.Rank)
+				if !sourceFound || block.Trigger != gameplayeffects.TriggerOnAction {
+					continue
+				}
+				sourceSpec.Effects = models.GuEffects{Blocks: []gameplayeffects.Block{block}}
+				operationAction, buildErr := buildSimActionFromGu(&actor, &sourceSpec, "KILLER_MOVE_EFFECT")
+				if buildErr != nil {
+					logger.S.Warnf("Skipping invalid operation in killer move %s from Gu %s rank %d: %v", move.ID, ref.GuID, ref.Rank, buildErr)
+					continue
+				}
+				compiled, compileErr := (gameplayeffects.Compiler{}).Compile([]gameplayeffects.Block{block})
+				if compileErr != nil {
+					logger.S.Warnf("Skipping invalid operation in killer move %s: %v", move.ID, compileErr)
+					continue
+				}
+				compiledAction := compiled.CompileCombatAction()
+				coefficient := sourceSpec.PlayerATKCoefficient
+				if ref.PlayerATKCoefficient != nil {
+					coefficient = *ref.PlayerATKCoefficient
+				}
+				for opIndex, operation := range compiledAction.Operations {
+					child := operationAction
+					operationLabel := string(operation.Type)
+					if opIndex < len(block.Operations) {
+						operationLabel = killerMoveOperationLabel(block.Operations[opIndex])
+					}
+					child.Name = fmt.Sprintf("%s · %s", move.Name, operationLabel)
+					child.SourceID = ref.GuID
+					child.ActionType = "KILLER_MOVE_EFFECT"
+					child.KillerMoveID = ""
+					child.ComponentGuIDs = nil
+					child.ManaCost = 0
+					child.BacklashDamage = 0
+					child.SuccessChance = 0
+					child.CooldownTurns = 0
+					child.WarmupTurns = 0
+					child.IsKillerMoveOperation = true
+					child.OperationConditions = append([]gameplayeffects.Condition(nil), block.Conditions...)
+					if operation.Type == gameplayeffects.OpDamage && (operation.SubType == "" || strings.EqualFold(operation.SubType, "FLAT")) {
+						child.Damage += actor.BaseAttack * coefficient
+					}
+					child.Damage *= attackFactor
+					child.Defense *= defenseFactor
+					act.OperationEffects = append(act.OperationEffects, simulator.SimActionOperation{
+						Compiled: operation, SourceGuID: ref.GuID, SourceInstanceID: ref.InstanceID,
+						SourceRank: ref.Rank, PlayerATKCoefficient: coefficient, Action: &child,
+					})
+				}
+			}
+		} else {
+			// Pre-v3 saved moves do not carry a reliable source operation map.
+			// Keep their historical runtime projection until they are rebuilt.
+			mainSpec.Effects = models.GuEffects{Blocks: move.CompiledEffects}
+			act, actionErr = buildSimActionFromGu(&actor, &mainSpec, "KILLER_MOVE")
+			if actionErr != nil {
+				continue
+			}
 		}
-		act.CompiledOperations = compiledEffects.CompileCombatAction().Operations
 		act.SourceID = move.ID
 		act.KillerMoveID = move.ID
 		act.ComponentGuIDs = move.ComponentInstanceIDs()
@@ -717,7 +772,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			act.BackfireDamage = math.Round(playerStats["max_hp"] * 0.12)
 		}
 		act.BackfireStatus = move.CombatProfile.BackfireStatus
-		if move.CombatProfile.TargetType != "" {
+		if move.CombatProfile.TargetType != "" && len(act.OperationEffects) == 0 {
 			act.TargetType = move.CombatProfile.TargetType
 		}
 		act.Bypass = move.CombatProfile.Bypass

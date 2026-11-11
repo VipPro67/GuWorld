@@ -28,7 +28,7 @@ func AdminListGuItems(c *gin.Context) {
 		COALESCE(description,''), COALESCE(target_type,'SINGLE'), COALESCE(rarity,0),
 		COALESCE(primary_role,''), COALESCE(combat_roles,'[]'::jsonb),
 		COALESCE(combat_tags,'[]'::jsonb), COALESCE(support_tags,'[]'::jsonb), COALESCE(base_price,0),
-		COALESCE(image_url,'')
+		COALESCE(image_url,''), COALESCE(player_atk_coefficient,0)
 		FROM gu_dictionary ORDER BY name`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -56,6 +56,7 @@ func AdminListGuItems(c *gin.Context) {
 		SupportTags  json.RawMessage `json:"support_tags"`
 		BasePrice    float64         `json:"base_price"`
 		ImageURL     string          `json:"image_url"`
+		PlayerATKCoefficient float64 `json:"player_atk_coefficient"`
 	}
 
 	items := []GuRow{}
@@ -64,7 +65,7 @@ func AdminListGuItems(c *gin.Context) {
 		if err := rows.Scan(&r.ID, &r.Name, &r.Rank, &r.Path, &r.GuType,
 			&r.BaseManaCost, &r.Effects, &r.FoodTypes, &r.HungerRate, &r.MaxHunger,
 			&r.Description, &r.TargetType, &r.Rarity, &r.PrimaryRole,
-			&r.CombatRoles, &r.CombatTags, &r.SupportTags, &r.BasePrice, &r.ImageURL); err != nil {
+			&r.CombatRoles, &r.CombatTags, &r.SupportTags, &r.BasePrice, &r.ImageURL, &r.PlayerATKCoefficient); err != nil {
 			continue
 		}
 		items = append(items, r)
@@ -92,6 +93,7 @@ type AdminGuInput struct {
 	SupportTags  []string        `json:"support_tags"`
 	BasePrice    float64         `json:"base_price"`
 	ImageURL     string          `json:"image_url"`
+	PlayerATKCoefficient *float64 `json:"player_atk_coefficient,omitempty"`
 }
 
 func guValidate(req *AdminGuInput) (bool, string) {
@@ -107,6 +109,9 @@ func guValidate(req *AdminGuInput) (bool, string) {
 	validTypes := map[string]bool{"Active": true, "Buff": true, "Consumable": true, "Control": true, "Defense": true, "Healing": true, "Investigation": true, "Movement": true, "Passive": true, "Refinement": true, "Special": true, "Storage": true, "Summon": true, "Support": true, "Transformation": true, "Vital": true}
 	if !validTypes[req.GuType] {
 		return false, "gu_type không hợp lệ"
+	}
+	if req.PlayerATKCoefficient != nil && (*req.PlayerATKCoefficient < 0 || math.IsNaN(*req.PlayerATKCoefficient) || math.IsInf(*req.PlayerATKCoefficient, 0)) {
+		return false, "player_atk_coefficient phải là số hữu hạn không âm"
 	}
 	return true, ""
 }
@@ -179,8 +184,25 @@ func AdminCreateGuItem(c *gin.Context) {
 		return
 	}
 
-	_, err := db.DB.Exec(`INSERT INTO gu_dictionary (id,name,rank,path,gu_type,base_mana_cost,effects,food_types,hunger_rate,max_hunger,description,target_type,rarity,primary_role,combat_roles,combat_tags,support_tags,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
-		req.ID, req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
+	playerATKCoefficient := 0.0
+	var existingCoefficient float64
+	existingCoefficientErr := db.DB.QueryRow(`SELECT player_atk_coefficient FROM gu_dictionary WHERE id=$1 ORDER BY rank LIMIT 1`, req.ID).Scan(&existingCoefficient)
+	if existingCoefficientErr != nil && existingCoefficientErr != sql.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hệ số ATK người chơi hiện có: " + existingCoefficientErr.Error()})
+		return
+	}
+	if existingCoefficientErr == nil {
+		playerATKCoefficient = existingCoefficient
+	}
+	if req.PlayerATKCoefficient != nil {
+		if existingCoefficientErr == nil && *req.PlayerATKCoefficient != existingCoefficient {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "player_atk_coefficient phải giữ nguyên giữa các rank của cùng Gu"})
+			return
+		}
+		playerATKCoefficient = *req.PlayerATKCoefficient
+	}
+	_, err := db.DB.Exec(`INSERT INTO gu_dictionary (id,name,rank,path,gu_type,base_mana_cost,player_atk_coefficient,effects,food_types,hunger_rate,max_hunger,description,target_type,rarity,primary_role,combat_roles,combat_tags,support_tags,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+		req.ID, req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, playerATKCoefficient, req.Effects, marshalArray(req.FoodTypes),
 		req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.PrimaryRole,
 		marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL)
 	if err != nil {
@@ -204,6 +226,10 @@ func AdminUpdateGuItem(c *gin.Context) {
 	var req AdminGuInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+	if req.PlayerATKCoefficient != nil && (*req.PlayerATKCoefficient < 0 || math.IsNaN(*req.PlayerATKCoefficient) || math.IsInf(*req.PlayerATKCoefficient, 0)) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "player_atk_coefficient phải là số hữu hạn không âm"})
 		return
 	}
 
@@ -313,6 +339,11 @@ func AdminUpdateGuItem(c *gin.Context) {
 			args = append(args, req.Effects)
 			idx++
 		}
+		if req.PlayerATKCoefficient != nil {
+			sets = append(sets, "player_atk_coefficient=$"+strconv.Itoa(idx))
+			args = append(args, *req.PlayerATKCoefficient)
+			idx++
+		}
 
 		if len(sets) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
@@ -323,6 +354,12 @@ func AdminUpdateGuItem(c *gin.Context) {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 			return
+		}
+		if req.PlayerATKCoefficient != nil {
+			if _, err := db.DB.Exec(`UPDATE gu_dictionary SET player_atk_coefficient=$1 WHERE id=$2`, *req.PlayerATKCoefficient, guID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ hệ số ATK người chơi giữa các rank: " + err.Error()})
+				return
+			}
 		}
 	} else {
 		if valid, msg := guValidate(&req); !valid {
@@ -342,6 +379,13 @@ func AdminUpdateGuItem(c *gin.Context) {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 			return
+		}
+		if req.PlayerATKCoefficient != nil {
+			_, err := db.DB.Exec(`UPDATE gu_dictionary SET player_atk_coefficient=$1 WHERE id=$2`, *req.PlayerATKCoefficient, guID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật hệ số ATK người chơi: " + err.Error()})
+				return
+			}
 		}
 	}
 	if err := models.LoadGuRegistry(db.DB); err != nil {

@@ -375,6 +375,7 @@ type GuDictionaryItem struct {
 	Path         []string  `json:"path"`
 	Type         string    `json:"gu_type"`
 	BaseManaCost float64   `json:"base_mana_cost"`
+	PlayerATKCoefficient float64 `json:"player_atk_coefficient"`
 	Effects      GuEffects `json:"effects"`
 	FoodTypes    []string  `json:"food_types"`
 	HungerRate   int       `json:"hunger_rate"`
@@ -1172,7 +1173,7 @@ func HasImmortalRank(id string) bool {
 
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
+		SELECT id, name, rank, path, gu_type, base_mana_cost, COALESCE(player_atk_coefficient, 0), effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -1189,7 +1190,7 @@ func LoadGuRegistry(db *sql.DB) error {
 		var targetTypeRaw []byte
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Rank, &pathRaw,
-			&item.Type, &item.BaseManaCost,
+			&item.Type, &item.BaseManaCost, &item.PlayerATKCoefficient,
 			&item.Effects, &foodTypesRaw, &item.HungerRate,
 			&item.MaxHunger, &item.Description,
 			&targetTypeRaw, &item.Rarity,

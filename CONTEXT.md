@@ -174,6 +174,10 @@ _Avoid_: thời lượng giây liên tục, continuous damage tick
 Hành động chiến đấu do Cổ sư tạo từ một Cổ chính và các Cổ thành phần; một sát chiêu có thể kết hợp nhiều thao tác hiệu ứng do người chơi chọn, còn Cổ chính định danh sát chiêu và lưu phái chủ đạo.
 _Avoid_: effect đơn lẻ, chiêu tự ghép không chọn lọc
 
+### Hệ Số ATK Người Chơi của Cổ (Gu Player-ATK Coefficient)
+Trọng số riêng của một Cổ nhân với ATK người chơi để tính phần sát thương đóng góp vào Sát Chiêu Hợp Thành. Hệ số thuộc cấu hình của từng Cổ, không được suy ra từ Path và không đổi theo rank.
+_Avoid_: hệ số do người chơi nhập khi ghép chiêu, hệ số chung của Path
+
 ### Thám Hiểm Lưới Chiến Thuật (Tactical Grid Exploration)
 Mô hình di chuyển và khám phá thế giới từng bước theo tọa độ ô vuông nguyên bản ($x, y$ số nguyên) kế thừa từ `map_cells`. Mỗi bước đi tiêu hao Chân Nguyên / Thể Lực, giải tỏa sương mù chiến tranh dựa trên chỉ số Thám Tra (`investigation`), phát hiện tài nguyên ẩn, mỏ nguyên tuyền và kích hoạt trận chiến theo lượt khi bước vào lãnh địa quái vật.
 _Avoid_: continuous float coordinates, WASD vector movement, 20Hz zone sim

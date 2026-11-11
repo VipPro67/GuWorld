@@ -175,7 +175,7 @@ và session, không chứa role hoặc permission.
 
 | File | Nội dung |
 | --- | --- |
-| `backend/data/Gu.csv` | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, targeting, rarity, role/tags. |
+| `backend/data/Gu.csv` | Dictionary Cổ: rank, path, type, mana cost, hệ số ATK người chơi, effects, hunger, targeting, rarity, role/tags. |
 | `backend/data/Item.csv` | Vật phẩm, nguyên liệu, tiền tệ, consumable và effect. |
 | `backend/data/Recipe.csv` | Công thức luyện Cổ, nguyên liệu, tỉ lệ và chi phí. |
 | `backend/data/Monster.csv`, `LootTable.csv`, `MonsterSpawn.csv`, `RegionLootTables.csv` | Template quái, bảng loot, quy tắc spawn và loot theo vùng. |
@@ -556,9 +556,9 @@ thái combat có thể khôi phục.
 - Cổ đang trang bị/Bản Mệnh vẫn được mirror trong cột JSONB `players.equipped_gus` (danh sách `instance_id`) để các truy vấn nhẹ (status) không cần join.
 - API `GET /api/player/status/:id` chỉ trả Cổ đang trang bị/vital; toàn bộ túi Cổ lấy qua `GET /api/player/inventory/gus` (helper `db.GuInventoryAggregate` / `db.LoadPlayerGus`).
 - `monster_templates.gu_inventory` (JSON trong cột monster) **giữ nguyên**, không đổi.
-- Sát chiêu tự tạo được lưu riêng trong `player_killer_moves`: công thức gồm Cổ chính/phụ, tham chiếu instance Cổ, effect đã chọn và effect đã cân bằng, cùng độ thành thạo và trạng thái trang bị. `balance_version`/`combat_profile.profile_version` đóng dấu snapshot luật; thay đổi luật không tự sửa build đã lưu. Cổ có thể được dùng trong nhiều sát chiêu; mỗi lần kích hoạt, từng Cổ thành phần giảm 1 độ no.
+- Sát chiêu tự tạo được lưu riêng trong `player_killer_moves`: công thức gồm Cổ chính/phụ, tham chiếu instance Cổ, effect đã chọn và effect đã cân bằng, hệ số ATK người chơi đã snapshot theo từng effect, cùng độ thành thạo và trạng thái trang bị. `balance_version`/`combat_profile.profile_version` đóng dấu snapshot luật; thay đổi luật không tự sửa build đã lưu. Cổ có thể được dùng trong nhiều sát chiêu; mỗi lần kích hoạt, từng Cổ thành phần giảm 1 độ no.
 - Các Cổ thành phần được kiểm tra lại theo `player_gu.id`, `gu_id`, `gu_rank` và trạng thái sống khi trang bị/thi triển. Bán, hợp luyện hoặc làm chết Cổ khiến sát chiêu phụ thuộc vào instance đó tạm mất hiệu lực.
-- Cân bằng sát chiêu hiện dùng ngân sách theo rank Cổ chính, đóng góp giảm dần của Cổ phụ, tải effect theo loại/giá trị/phạm vi/thời lượng/xác suất, độ hòa hợp lưu phái và độ phức tạp. Effect được giảm tự động khi vượt ngân sách; `balance_version` định danh luật dùng lúc tạo.
+- Cân bằng sát chiêu dùng ngân sách theo rank Cổ chính, phần ngân sách giảm dần từ Cổ thành phần, và tải effect theo loại/giá trị/phạm vi/thời lượng/xác suất. Các giá trị an toàn để scale được tự cân chỉnh; nếu riêng phần không scale được đã vượt ngân sách thì builder từ chối tổ hợp. Mỗi operation giữ target, conditions và rank Gu nguồn. Damage FLAT từ các operation cùng target/điều kiện được cộng với `ATK người chơi × hệ số của Gu nguồn`, rồi đi qua modifier chung một lần. Hệ số nằm ở `Gu.csv.player_atk_coefficient`, giống nhau giữa mọi rank của cùng Gu; giá trị seed hiện tại là `0` để giữ nguyên sát thương trước khi cấu hình cân bằng từng Gu.
 - Người chơi có thể lưu tối đa 12 sát chiêu và trang bị tối đa 4. Tác vụ chiến đấu theo lượt dùng profile đã trang bị; không còn hotbar 9–12 hoặc windup/cooldown theo mili giây. Builder giới hạn effect theo executor turn-based; effect chưa hỗ trợ phải được ghi nhận, không tự thay bằng executor realtime.
 - Profile Trận Kích của Tiên Cổ Ốc lưu dữ liệu chiến thuật turn-based. Các khóa realtime cũ trong `combat_profile` / `house_profile` được dọn khi `InitSchema` chạy; profile thiếu quy tắc lượt cần được rà soát trước khi kích hoạt.
 

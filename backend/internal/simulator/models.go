@@ -212,6 +212,28 @@ type SimAction struct {
 	// CompiledOperations is the temporary v2 adapter payload. Legacy fields
 	// above remain populated until simulator parity is complete.
 	CompiledOperations []gameplayeffects.CompiledOperation
+
+	// OperationEffects is authoritative for a composed Killer Move. Each entry
+	// keeps its authored operation, source Gu/rank, conditions, and a temporary
+	// legacy-action adapter consumed by the current simulator.
+	OperationEffects []SimActionOperation
+	// OperationConditions gates this adapter action against its own targets.
+	OperationConditions []gameplayeffects.Condition
+	// IsKillerMoveOperation marks a child effect so shared cast costs, backlash,
+	// and move scheduling are handled only by the parent Killer Move.
+	IsKillerMoveOperation bool
+}
+
+// SimActionOperation is the stable operation-level carrier for composed
+// Killer Move effects. Action is an adapter for the simulator's existing
+// effect pipeline; it can be removed as operation execution gains parity.
+type SimActionOperation struct {
+	Compiled           gameplayeffects.CompiledOperation
+	SourceGuID         string
+	SourceInstanceID   string
+	SourceRank         int
+	PlayerATKCoefficient float64
+	Action             *SimAction
 }
 
 // CombatMechanic is the simulator-facing form of a compiled UNIQUE operation. Params stay

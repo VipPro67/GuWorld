@@ -20,6 +20,8 @@ export interface KillerMoveEffectOption {
   label: string;
   trigger: string;
   target: { selector: string; bypass_frontline?: boolean };
+  conditions?: Array<{ field: string; operator: string; value: number }>;
+  player_atk_coefficient?: number;
   operation: {
     op: string;
     sub_type?: string;
