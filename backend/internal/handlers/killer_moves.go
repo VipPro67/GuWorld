@@ -147,6 +147,7 @@ type storedKillerMove struct {
 	MasteryLevel             int                            `json:"mastery_level"`
 	Equipped                 bool                           `json:"is_equipped"`
 	Available                bool                           `json:"available"`
+	CanRepair                bool                           `json:"can_repair"`
 	UnavailableReason        string                         `json:"unavailable_reason,omitempty"`
 	HasStarvingGu            bool                           `json:"has_starving_gu,omitempty"`
 	MissingGu                []string                       `json:"missing_gu,omitempty"`
@@ -1023,6 +1024,23 @@ func ListKillerMoves(c *gin.Context) {
 		if compositionErr != nil {
 			m.UnavailableReason = "Composition graph hoặc Block v2 không còn khớp catalog hiện hành: " + compositionErr.Error()
 		}
+		if !m.Available {
+			canRepair := true
+			for _, comp := range m.Components {
+				found := false
+				for _, g := range ownedSet {
+					if g.GuID == comp.GuID && !strings.EqualFold(g.State, "DEAD") && !g.IsLocked && g.Location == "INVENTORY" {
+						found = true
+						break
+					}
+				}
+				if !found {
+					canRepair = false
+					break
+				}
+			}
+			m.CanRepair = canRepair
+		}
 		result = append(result, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -1075,19 +1093,28 @@ func EquipKillerMove(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Block v2 của sát chiêu không hợp lệ; hãy tạo lại sát chiêu"})
 			return
 		}
+		needsReconcile := false
 		if err := validateKillerMoveCompositionSnapshot(graph, selected, components, []gameplayeffects.Block(compiledBlocks)); err != nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Composition graph của sát chiêu không còn hợp lệ; hãy tạo lại từ preview: " + err.Error()})
-			return
+			needsReconcile = true
+		} else {
+			for _, component := range components {
+				var guID, state, location string
+				var rank int
+				var isLocked bool
+				err = tx.QueryRow(`SELECT gu_id,gu_rank,state,location,is_locked FROM player_gu WHERE id=$1 AND player_id=$2 FOR UPDATE`, component.InstanceID, playerID).Scan(&guID, &rank, &state, &location, &isLocked)
+				if err != nil || strings.EqualFold(state, "DEAD") || location != "INVENTORY" || isLocked || guID != component.GuID || rank != component.Rank {
+					needsReconcile = true
+					break
+				}
+			}
 		}
-		for _, component := range components {
-			var guID, state, location string
-			var rank int
-			var isLocked bool
-			err = tx.QueryRow(`SELECT gu_id,gu_rank,state,location,is_locked FROM player_gu WHERE id=$1 AND player_id=$2 FOR UPDATE`, component.InstanceID, playerID).Scan(&guID, &rank, &state, &location, &isLocked)
-			if err != nil || strings.EqualFold(state, "DEAD") || location != "INVENTORY" || isLocked || guID != component.GuID || rank != component.Rank {
-				c.JSON(http.StatusConflict, gin.H{"error": "Sát chiêu thiếu đúng Cổ thành phần còn sống"})
+		if needsReconcile {
+			reconciled, rErr := reconcileKillerMoveTx(tx, playerID, moveID)
+			if rErr != nil {
+				c.JSON(http.StatusConflict, gin.H{"error": "Không thể tự động đồng bộ Cổ thành phần cho sát chiêu: " + rErr.Error()})
 				return
 			}
+			components = reconciled.Components
 		}
 	}
 	if !equipped {
@@ -1224,6 +1251,249 @@ func DeleteKillerMove(c *gin.Context) {
 		Success:   true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa sát chiêu"})
+}
+
+func RepairKillerMove(c *gin.Context) {
+	playerID, ok := killerMoveOwner(c)
+	if !ok {
+		return
+	}
+	moveID := c.Param("id")
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	var lockedPlayer string
+	if err = tx.QueryRow(`SELECT id::text FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&lockedPlayer); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhân vật"})
+		return
+	}
+
+	reconciled, err := reconcileKillerMoveTx(tx, playerID, moveID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "Đã tu sửa và đồng bộ sát chiêu thành công!",
+		"killer_move": reconciled,
+	})
+}
+
+func reconcileKillerMoveTx(tx *sql.Tx, playerID uuid.UUID, moveID string) (storedKillerMove, error) {
+	var name, path string
+	var mainGuInstanceID, mainGuID string
+	var mainGuRank, masteryXP, balanceVersion int
+	var isEquipped bool
+	var rawComponents, rawGraph, rawSelected, rawCompiled, rawCombatProf []byte
+
+	err := tx.QueryRow(`
+		SELECT name, main_gu_instance_id, main_gu_id, main_gu_rank, components, composition_graph, selected_effects, compiled_effects, path, mastery_xp, is_equipped, balance_version, COALESCE(combat_profile,'{}'::jsonb)
+		FROM player_killer_moves
+		WHERE id=$1 AND player_id=$2 FOR UPDATE
+	`, moveID, playerID).Scan(&name, &mainGuInstanceID, &mainGuID, &mainGuRank, &rawComponents, &rawGraph, &rawSelected, &rawCompiled, &path, &masteryXP, &isEquipped, &balanceVersion, &rawCombatProf)
+	if err != nil {
+		return storedKillerMove{}, fmt.Errorf("không tìm thấy sát chiêu")
+	}
+
+	var components []killerMoveComponent
+	var graph composition.Graph
+	var selected []killerMoveEffectRef
+
+	if err := json.Unmarshal(rawComponents, &components); err != nil {
+		return storedKillerMove{}, fmt.Errorf("lỗi đọc danh sách Cổ thành phần")
+	}
+	if err := json.Unmarshal(rawGraph, &graph); err != nil {
+		return storedKillerMove{}, fmt.Errorf("lỗi đọc composition graph")
+	}
+	if err := json.Unmarshal(rawSelected, &selected); err != nil {
+		return storedKillerMove{}, fmt.Errorf("lỗi đọc danh sách effect")
+	}
+
+	owned, err := loadOwnedKillerMoveGus(tx, playerID)
+	if err != nil {
+		return storedKillerMove{}, fmt.Errorf("không thể tải Cổ trong hành trang: %w", err)
+	}
+
+	instMap := make(map[string]string)
+	usedInstances := make(map[string]bool)
+
+	// 1. Reconcile Main Gu
+	if g, ok := owned[mainGuInstanceID]; ok && g.GuID == mainGuID && strings.EqualFold(g.State, "ACTIVE") && g.Location == "INVENTORY" && !g.IsLocked {
+		instMap[mainGuInstanceID] = mainGuInstanceID
+		usedInstances[mainGuInstanceID] = true
+	} else {
+		var bestCandidate *ownedKillerMoveGu
+		for _, g := range owned {
+			if g.GuID == mainGuID && strings.EqualFold(g.State, "ACTIVE") && g.Location == "INVENTORY" && !g.IsLocked && !usedInstances[g.InstanceID] {
+				if bestCandidate == nil || g.Rank > bestCandidate.Rank {
+					candidate := g
+					bestCandidate = &candidate
+				}
+			}
+		}
+		if bestCandidate == nil {
+			return storedKillerMove{}, fmt.Errorf("không tìm thấy Cổ chính [%s] còn sống trong hành trang", mainGuID)
+		}
+		instMap[mainGuInstanceID] = bestCandidate.InstanceID
+		usedInstances[bestCandidate.InstanceID] = true
+	}
+
+	// 2. Reconcile each component
+	for _, comp := range components {
+		oldID := comp.InstanceID
+		if instMap[oldID] != "" {
+			continue
+		}
+		if g, ok := owned[oldID]; ok && g.GuID == comp.GuID && strings.EqualFold(g.State, "ACTIVE") && g.Location == "INVENTORY" && !g.IsLocked && !usedInstances[oldID] {
+			instMap[oldID] = oldID
+			usedInstances[oldID] = true
+		} else {
+			var bestCandidate *ownedKillerMoveGu
+			for _, g := range owned {
+				if g.GuID == comp.GuID && strings.EqualFold(g.State, "ACTIVE") && g.Location == "INVENTORY" && !g.IsLocked && !usedInstances[g.InstanceID] {
+					if bestCandidate == nil || g.Rank > bestCandidate.Rank {
+						candidate := g
+						bestCandidate = &candidate
+					}
+				}
+			}
+			if bestCandidate == nil {
+				return storedKillerMove{}, fmt.Errorf("không tìm thấy Cổ thành phần [%s] trong hành trang để đồng bộ", comp.GuID)
+			}
+			instMap[oldID] = bestCandidate.InstanceID
+			usedInstances[bestCandidate.InstanceID] = true
+		}
+	}
+
+	// 3. Map effect keys (instance:block:op)
+	keyMap := make(map[string]string)
+	newSelectedEffectKeys := make([]string, 0, len(selected))
+	for _, ref := range selected {
+		newInstID := instMap[ref.InstanceID]
+		if newInstID == "" {
+			newInstID = ref.InstanceID
+		}
+		newKey := killerMoveEffectKey(newInstID, ref.BlockIndex, ref.OpIndex)
+		keyMap[ref.Key] = newKey
+		newSelectedEffectKeys = append(newSelectedEffectKeys, newKey)
+	}
+
+	// 4. Map composition edges
+	newEdges := make([]composition.Edge, 0, len(graph.Edges))
+	for _, edge := range graph.Edges {
+		newFrom := keyMap[edge.From]
+		newTo := keyMap[edge.To]
+		if newFrom != "" && newTo != "" {
+			newEdges = append(newEdges, composition.Edge{From: newFrom, To: newTo, RuleID: edge.RuleID})
+		}
+	}
+
+	// 5. Output key & Component IDs
+	newOutputKey := keyMap[graph.OutputEffectKey]
+	if newOutputKey == "" && len(newSelectedEffectKeys) > 0 {
+		newOutputKey = newSelectedEffectKeys[0]
+	}
+
+	newMainInstanceID := instMap[mainGuInstanceID]
+	newComponentIDs := make([]string, 0, len(components))
+	for _, comp := range components {
+		newID := instMap[comp.InstanceID]
+		if newID != "" && newID != newMainInstanceID {
+			newComponentIDs = append(newComponentIDs, newID)
+		}
+	}
+
+	req := killerMoveDraftRequest{
+		Name:               name,
+		MainGuInstanceID:   newMainInstanceID,
+		ComponentIDs:       newComponentIDs,
+		SelectedEffectKeys: newSelectedEffectKeys,
+		OutputEffectKey:    newOutputKey,
+		RuleSetRevision:    composition.KillerMoveRuleSet().Revision,
+		CompositionEdges:   newEdges,
+		AcceptAdjustments:  true,
+	}
+
+	preview, mainGu, err := calculateKillerMoveDraft(tx, playerID, req, masteryXP)
+	if err != nil {
+		return storedKillerMove{}, fmt.Errorf("lỗi tính toán lại sát chiêu: %w", err)
+	}
+
+	componentsBytes, _ := json.Marshal(preview.Components)
+	compositionGraphBytes, _ := json.Marshal(preview.CompositionGraph)
+	selectedBytes, _ := json.Marshal(preview.SelectedEffects)
+	compiledBytes, _ := json.Marshal(gameplayeffects.BlockSet(preview.CompiledEffects))
+	profBytes, _ := json.Marshal(preview.CombatProfile)
+
+	_, err = tx.Exec(`
+		UPDATE player_killer_moves
+		SET main_gu_instance_id = $1,
+			main_gu_id = $2,
+			main_gu_rank = $3,
+			components = $4::jsonb,
+			composition_graph = $5::jsonb,
+			selected_effects = $6::jsonb,
+			compiled_effects = $7::jsonb,
+			path = $8,
+			power_budget = $9,
+			power_load = $10,
+			harmony = $11,
+			complexity = $12,
+			success_chance = $13,
+			combat_profile = $14::jsonb,
+			balance_version = $15,
+			updated_at = NOW()
+		WHERE id = $16 AND player_id = $17
+	`, mainGu.InstanceID, mainGu.GuID, mainGu.Rank, componentsBytes, compositionGraphBytes, selectedBytes, compiledBytes, preview.Path, preview.PowerBudget, preview.PowerLoad, preview.Harmony, preview.Complexity, preview.SuccessChance, profBytes, killerMoveBalanceVersion, moveID, playerID)
+	if err != nil {
+		return storedKillerMove{}, fmt.Errorf("không thể cập nhật sát chiêu vào cơ sở dữ liệu: %w", err)
+	}
+
+	if isEquipped && composition.KillerMoveProfile().GuPolicy == composition.GuPolicyReserveActive {
+		_, _ = tx.Exec(`DELETE FROM player_killer_move_gu_reservations WHERE killer_move_id = $1 AND player_id = $2`, moveID, playerID)
+		for _, comp := range preview.Components {
+			_, _ = tx.Exec(`
+				INSERT INTO player_killer_move_gu_reservations(gu_instance_id, killer_move_id, player_id, gu_id, gu_rank, gu_location, gu_is_locked)
+				VALUES($1, $2, $3, $4, $5, 'INVENTORY', false)
+				ON CONFLICT (gu_instance_id) DO UPDATE SET updated_at = NOW()
+			`, comp.InstanceID, moveID, playerID, comp.GuID, comp.Rank)
+		}
+	}
+
+	return storedKillerMove{
+		ID:                       moveID,
+		Name:                     name,
+		MainGuInstance:           mainGu.InstanceID,
+		MainGuID:                 mainGu.GuID,
+		MainGuRank:               mainGu.Rank,
+		Components:               preview.Components,
+		CompositionGraph:         preview.CompositionGraph,
+		SelectedEffects:          preview.SelectedEffects,
+		CompiledEffects:          preview.CompiledEffects,
+		Path:                     preview.Path,
+		CreationPathMasteryLevel: preview.PathMasteryLevel,
+		PowerBudget:              preview.PowerBudget,
+		PowerLoad:                preview.PowerLoad,
+		Harmony:                  preview.Harmony,
+		Complexity:               preview.Complexity,
+		SuccessChance:            preview.SuccessChance,
+		CombatProfile:            preview.CombatProfile,
+		MasteryXP:                masteryXP,
+		MasteryLevel:             masteryXP / 100,
+		Equipped:                 isEquipped,
+		Available:                true,
+		BalanceVersion:           killerMoveBalanceVersion,
+	}, nil
 }
 
 // UseKillerMove executes the intentionally narrow out-of-combat subset:

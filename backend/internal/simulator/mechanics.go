@@ -75,6 +75,93 @@ func applyLethalLuckWard(target *CombatantAuto, logs *[]CombatLog, turn int, rng
 	return false
 }
 
+// applyNirvanaRebirth provides the Niết Bàn Hỏa (Nirvana Fire) mechanic for Fire Path:
+// when lethal damage would push a unit to <= 0 HP, if the unit has the NIRVANA_FIRE mechanic
+// (ON_DEATH, COMBAT_PASSIVE, or BEFORE_HIT), it consumes the fire to revive with 40% MaxHP,
+// cleanses all debuffs, and retaliates with an AoE fire blast against all enemies.
+// Only triggers once per battle.
+func applyNirvanaRebirth(state *CombatState, target *CombatantAuto, logs *[]CombatLog, turn int) bool {
+	if target == nil || target.HP > 0 {
+		return false
+	}
+	if !actorHasMechanic(target, "ON_DEATH", "NIRVANA_FIRE") &&
+		!actorHasMechanic(target, "COMBAT_PASSIVE", "NIRVANA_FIRE") &&
+		!actorHasMechanic(target, "BEFORE_HIT", "NIRVANA_FIRE") {
+		return false
+	}
+	if target.CustomState == nil {
+		target.CustomState = make(map[string]int)
+	}
+	if target.CustomState["nirvana_fire_used"] > 0 {
+		return false
+	}
+	target.CustomState["nirvana_fire_used"] = 1
+
+	reviveHP := target.MaxHP * 0.40
+	if reviveHP < 20 {
+		reviveHP = 20
+	}
+	target.HP = reviveHP
+
+	// Cleanse debuffs
+	var cleanedEffects []Effect
+	for _, eff := range target.ActiveEffects {
+		if eff.Type != "debuff" {
+			cleanedEffects = append(cleanedEffects, eff)
+		}
+	}
+	target.ActiveEffects = cleanedEffects
+
+	if logs != nil {
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   target.ID,
+			ActorName: target.Name,
+			Action:    "NIRVANA_FIRE",
+			Detail:    fmt.Sprintf("[Viêm Đạo - Niết Bàn Hỏa] Thân thể bốc cháy ngút trời, %s dục hỏa trùng sinh hồi sinh với %.0f HP và tẩy trừ toàn bộ hiệu ứng bất lợi!", target.Name, reviveHP),
+		})
+	}
+
+	// Retaliate against enemies if state is provided
+	if state != nil {
+		isAlly := false
+		for _, a := range state.Allies {
+			if a.ID == target.ID {
+				isAlly = true
+				break
+			}
+		}
+		opponents := state.Enemies
+		if !isAlly {
+			opponents = state.Allies
+		}
+		blastDmg := target.BaseDmg * 0.80
+		if blastDmg < 30 {
+			blastDmg = 30
+		}
+		for _, opp := range opponents {
+			if opp != nil && opp.HP > 0 {
+				opp.HP -= blastDmg
+				if opp.HP < 0 {
+					opp.HP = 0
+				}
+				if logs != nil {
+					*logs = append(*logs, CombatLog{
+						Turn:      turn,
+						ActorId:   target.ID,
+						ActorName: target.Name,
+						Action:    "NIRVANA_FIRE",
+						TargetId:  opp.ID,
+						Damage:    blastDmg,
+						Detail:    fmt.Sprintf("[Niết Bàn Hỏa] Dư chấn hỏa diễm trùng sinh thiêu đốt %s nhận %.0f sát thương!", opp.Name, blastDmg),
+					})
+				}
+			}
+		}
+	}
+	return true
+}
+
 // isImmuneToDamage reports whether Bất Hoại blocks damage entirely. Covers the
 // registry buff, the raw "invulnerable" effect CHAOS_GAMBLE grants
 // (engine.go:1492), and the legacy DamageTakenReduction == 1 sentinel from
@@ -108,7 +195,9 @@ func isGuaranteedHit(actor *CombatantAuto, a *SimAction) bool {
 	if a != nil {
 		if hasMechanic(a.Mechanics, "ON_HIT", "GUARANTEED_HIT") ||
 			hasMechanic(a.Mechanics, "ON_ACTION", "GUARANTEED_HIT") ||
-			hasMechanic(a.Mechanics, "ON_CAST", "GUARANTEED_HIT") {
+			hasMechanic(a.Mechanics, "ON_CAST", "GUARANTEED_HIT") ||
+			hasMechanic(a.Mechanics, "ON_CAST", "CALCULATED_STRIKE") ||
+			hasMechanic(a.Mechanics, "ON_ACTION", "CALCULATED_STRIKE") {
 			return true
 		}
 	}
@@ -280,7 +369,11 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 					Detail:    dotDetail,
 				})
 			} else {
+				path := daoPathForAction([]string{dot.SourcePath})
+				naturalResist, resonance := targetDaoFactors(c, path)
+				dmg = math.Max(0, dmg*resonance*(1-naturalResist)*(1-pathBonus(c.PathResistance, []string{path}))*(1-c.DamageTakenReduction))
 				hpDmg := dmg
+				initialHP := c.HP
 				shieldDmg := 0.0
 				if c.VirtualShield > 0 {
 					if c.VirtualShield >= dmg {
@@ -305,6 +398,9 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 						c.HP = 0
 					}
 				}
+				if initialHP > c.HP && naturalResist > 0 {
+					applyForeignDaoWound(c)
+				}
 
 				detail := ""
 				if lastStandSaved {
@@ -323,6 +419,7 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 					ActorName: c.Name,
 					Action:    "DOT_TICK",
 					Damage:    dmg,
+					Breakdown: &DamageBreakdown{BaseDamage: dot.Value, DaoMult: dot.SourceDaoMult, TargetDaoResonance: resonance, DaoPath: path, NaturalResist: naturalResist, PathResist: pathBonus(c.PathResistance, []string{path}), DamageReduction: c.DamageTakenReduction, FinalDamage: dmg},
 					Detail:    detail,
 				})
 			}
@@ -386,6 +483,7 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	c.AccuracyPenalty = 0.0
 	c.EvasionChance = 0.0
 	c.DamageTakenReduction = 0.0
+	c.HealingReceivedPenalty = 0.0
 	c.IsInvincible = false
 	c.IsLastStand = false
 
@@ -422,6 +520,10 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 		case statusfx.BehaviourDamageReduction:
 			if r := float64(eff.Value) / 100.0; r > c.DamageTakenReduction {
 				c.DamageTakenReduction = r
+			}
+		case statusfx.BehaviourHealingReceivedReduction:
+			if r := float64(eff.Value) / 100.0; r > c.HealingReceivedPenalty {
+				c.HealingReceivedPenalty = r
 			}
 		case statusfx.BehaviourInvincible:
 			// Bất Hoại. DamageTakenReduction = 1.0 is kept as the sentinel the
@@ -499,9 +601,65 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 			case EffectTaunt:
 				c.HasTaunt = true
 				c.TaunterID = c.ID
+			case statusfx.StatusBerserk:
+				c.DamageMultiplier += 0.35
+				c.Tenacity += 0.30
+			case statusfx.StatusCalculated:
+				c.DamageMultiplier += 0.25
+			case statusfx.StatusBloodSacrifice:
+				c.DamageMultiplier += 0.50
+			case statusfx.StatusBearForm:
+				c.DefenseMultiplier *= 1.30
+			case statusfx.StatusEagleForm:
+				speedMult *= 1.40
+				if c.EvasionChance < 0.25 {
+					c.EvasionChance = 0.25
+				}
+			case statusfx.StatusBoneArmor:
+				c.ThornsDamage += 0.35
+				c.DefenseMultiplier *= 1.20
+			case statusfx.StatusAdaptiveResist:
+				if c.DamageTakenReduction < 0.25 {
+					c.DamageTakenReduction = 0.25
+				}
+			case statusfx.StatusMetalAegis:
+				c.DefenseMultiplier *= 1.35
+				if c.DamageTakenReduction < 0.15 {
+					c.DamageTakenReduction = 0.15
+				}
+			case statusfx.StatusCloudMist:
+				if c.EvasionChance < 0.35 {
+					c.EvasionChance = 0.35
+				}
+				if c.DamageTakenReduction < 0.20 {
+					c.DamageTakenReduction = 0.20
+				}
 			}
 		}
 	}
+
+	// BERSERK_STATE (Lực Đạo: Cuồng Man Bá Thể)
+	if hasMechanic(c.Mechanics, "COMBAT_PASSIVE", "BERSERK_STATE") {
+		if c.HP < c.MaxHP && c.MaxHP > 0 {
+			missingPct := (c.MaxHP - c.HP) / c.MaxHP
+			c.DamageMultiplier += missingPct * 0.80
+			c.Tenacity += missingPct * 0.50
+			if missingPct >= 0.70 { // HP < 30%: Enraged kháng choáng/đóng băng
+				c.IsStunned = false
+				c.IsFrozen = false
+			}
+		}
+	}
+
+	// SOUL_DEVOUR stacks (Hồn Đạo: Phệ Hồn Hóa Lực)
+	if c.CustomState != nil && c.CustomState["soul_devour_stacks"] > 0 {
+		stacks := c.CustomState["soul_devour_stacks"]
+		if stacks > 5 {
+			stacks = 5
+		}
+		c.DamageMultiplier += float64(stacks) * 0.10
+	}
+
 	c.EffectiveSpeed = c.Speed * speedMult
 }
 

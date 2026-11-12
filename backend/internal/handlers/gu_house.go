@@ -594,11 +594,42 @@ func EquipGuHouse(c *gin.Context) {
 				return
 			}
 		}
-		for _, coreID := range coreIDs {
+		var houseProf models.GuHouseCombatProfile
+		_ = json.Unmarshal(profileBytes, &houseProf)
+		relinkedHouse := false
+		for idx, coreID := range coreIDs {
 			var guID, state, location string
 			var rank int
 			var isLocked bool
-			if err = tx.QueryRow(`SELECT gu_id,gu_rank,state,location,is_locked FROM player_gu WHERE id=$1 AND player_id=$2 FOR UPDATE`, coreID, playerID).Scan(&guID, &rank, &state, &location, &isLocked); err != nil || rank < 6 || !strings.EqualFold(state, "ACTIVE") || location != "INVENTORY" || isLocked {
+			err = tx.QueryRow(`SELECT gu_id,gu_rank,state,location,is_locked FROM player_gu WHERE id=$1 AND player_id=$2 FOR UPDATE`, coreID, playerID).Scan(&guID, &rank, &state, &location, &isLocked)
+			if err != nil || rank < 6 || !strings.EqualFold(state, "ACTIVE") || location != "INVENTORY" || isLocked {
+				// Try auto-relink if instance changed or upgraded
+				var targetGuID string
+				if idx < len(houseProf.CoreGuIDs) {
+					targetGuID = houseProf.CoreGuIDs[idx]
+				}
+				if targetGuID != "" {
+					var newID string
+					var newRank int
+					findErr := tx.QueryRow(`
+						SELECT id::text, gu_rank FROM player_gu 
+						WHERE player_id=$1 AND gu_id=$2 AND gu_rank >= 6 AND state='ACTIVE' AND location='INVENTORY' AND is_locked=false 
+						ORDER BY gu_rank DESC LIMIT 1
+					`, playerID, targetGuID).Scan(&newID, &newRank)
+
+					if findErr == nil && newID != "" {
+						coreIDs[idx] = newID
+						coreID = newID
+						relinkedHouse = true
+						err = nil
+						rank = newRank
+						state = "ACTIVE"
+						location = "INVENTORY"
+						isLocked = false
+					}
+				}
+			}
+			if err != nil || rank < 6 || !strings.EqualFold(state, "ACTIVE") || location != "INVENTORY" || isLocked {
 				c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ Ốc thiếu đúng Cổ hạch tâm còn sống trong hành trang"})
 				return
 			}
@@ -652,6 +683,13 @@ func EquipGuHouse(c *gin.Context) {
 					c.JSON(http.StatusConflict, gin.H{"error": "Không thể giữ chỗ Cổ hạch tâm cho Tiên Cổ Ốc"})
 					return
 				}
+			}
+		}
+		if relinkedHouse {
+			newCoreBytes, _ := json.Marshal(coreIDs)
+			if _, err = tx.Exec(`UPDATE player_gu_houses SET core_gu_instances=$1 WHERE id=$2`, newCoreBytes, houseID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Cổ hạch tâm đã tái liên kết"})
+				return
 			}
 		}
 	}
@@ -712,39 +750,131 @@ func RepairGuHouse(c *gin.Context) {
 
 	var currentDurability float64
 	var rank int
-	err = tx.QueryRow(`SELECT current_durability, rank FROM player_gu_houses WHERE id=$1 AND player_id=$2 FOR UPDATE`, houseID, playerID).Scan(&currentDurability, &rank)
+	var isEquipped bool
+	var coreBytes, profBytes []byte
+	err = tx.QueryRow(`
+		SELECT current_durability, rank, is_equipped, core_gu_instances, house_profile 
+		FROM player_gu_houses 
+		WHERE id=$1 AND player_id=$2 FOR UPDATE
+	`, houseID, playerID).Scan(&currentDurability, &rank, &isEquipped, &coreBytes, &profBytes)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Tiên Cổ Ốc"})
 		return
 	}
 
-	if currentDurability >= 100 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cổ Ốc vẫn nguyên vẹn (100% độ bền)"})
-		return
+	var houseProf models.GuHouseCombatProfile
+	_ = json.Unmarshal(profBytes, &houseProf)
+
+	var coreIDs []string
+	_ = json.Unmarshal(coreBytes, &coreIDs)
+
+	relinked := false
+	highestRank := rank
+
+	// Auto-relink / reconcile each core Gu if instance changed or upgraded
+	for idx, coreID := range coreIDs {
+		var guID, state, location string
+		var guRank int
+		var isLocked bool
+		qErr := tx.QueryRow(`
+			SELECT gu_id, gu_rank, state, location, is_locked 
+			FROM player_gu 
+			WHERE id=$1 AND player_id=$2 FOR UPDATE
+		`, coreID, playerID).Scan(&guID, &guRank, &state, &location, &isLocked)
+
+		if qErr != nil || guRank < 6 || !strings.EqualFold(state, "ACTIVE") || location != "INVENTORY" || isLocked {
+			var targetGuID string
+			if idx < len(houseProf.CoreGuIDs) {
+				targetGuID = houseProf.CoreGuIDs[idx]
+			}
+			if targetGuID != "" {
+				var newID string
+				var newRank int
+				findErr := tx.QueryRow(`
+					SELECT id::text, gu_rank FROM player_gu 
+					WHERE player_id=$1 AND gu_id=$2 AND gu_rank >= 6 AND state='ACTIVE' AND location='INVENTORY' AND is_locked=false 
+					ORDER BY gu_rank DESC LIMIT 1
+				`, playerID, targetGuID).Scan(&newID, &newRank)
+
+				if findErr == nil && newID != "" {
+					coreIDs[idx] = newID
+					coreID = newID
+					relinked = true
+					guRank = newRank
+					guID = targetGuID
+					state = "ACTIVE"
+				}
+			}
+		}
+
+		if guRank > highestRank {
+			highestRank = guRank
+		}
 	}
 
-	cost := int64(math.Ceil((100.0 - currentDurability) * float64(rank) * 10))
+	var cost int64
+	if currentDurability < 100 {
+		cost = int64(math.Ceil((100.0 - currentDurability) * float64(highestRank) * 10))
 
-	// Deduct primeval / immortal stones from player
-	var currentStones int64
-	err = tx.QueryRow(`SELECT primeval_stones FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&currentStones)
-	if err != nil || currentStones < cost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch tu sửa (cần %d)", cost)})
-		return
+		var currentStones int64
+		err = tx.QueryRow(`SELECT primeval_stones FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&currentStones)
+		if err != nil || currentStones < cost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch tu sửa (cần %d)", cost)})
+			return
+		}
+
+		_, _ = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id=$2`, cost, playerID)
+		currentDurability = 100.0
 	}
 
-	_, _ = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id=$2`, cost, playerID)
-	_, _ = tx.Exec(`UPDATE player_gu_houses SET current_durability = 100, updated_at = NOW() WHERE id=$1`, houseID)
+	if relinked || highestRank != rank || currentDurability == 100.0 {
+		newCoreBytes, _ := json.Marshal(coreIDs)
+		houseProf.Rank = highestRank
+		newProfBytes, _ := json.Marshal(houseProf)
+
+		_, err = tx.Exec(`
+			UPDATE player_gu_houses 
+			SET current_durability = $1, rank = $2, core_gu_instances = $3::jsonb, house_profile = $4::jsonb, updated_at = NOW() 
+			WHERE id = $5
+		`, currentDurability, highestRank, newCoreBytes, newProfBytes, houseID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái Tiên Cổ Ốc"})
+			return
+		}
+
+		// If currently equipped and core Gus relinked, update reservations
+		if isEquipped && relinked && guHouseProductProfile.GuPolicy == composition.GuPolicyReserveActive {
+			_, _ = tx.Exec(`DELETE FROM player_gu_house_core_reservations WHERE gu_house_id=$1`, houseID)
+			for _, cid := range coreIDs {
+				var gID, gState string
+				var gRank int
+				if err := tx.QueryRow(`SELECT gu_id, gu_rank, state FROM player_gu WHERE id=$1`, cid).Scan(&gID, &gRank, &gState); err == nil {
+					_, _ = tx.Exec(`
+						INSERT INTO player_gu_house_core_reservations(gu_instance_id, gu_house_id, player_id, gu_id, gu_rank, gu_location, gu_is_locked, gu_state)
+						VALUES($1, $2, $3, $4, $5, 'INVENTORY', false, $6)
+						ON CONFLICT (gu_instance_id) DO UPDATE SET updated_at=NOW()
+					`, cid, houseID, playerID, gID, gRank, gState)
+				}
+			}
+		}
+	}
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận"})
 		return
 	}
 
+	msg := "Đã tu sửa và đồng bộ Tiên Cổ Ốc thành công!"
+	if cost == 0 && !relinked {
+		msg = "Tiên Cổ Ốc vẫn nguyên vẹn và Cổ hạch tâm đã đồng bộ hoàn hảo!"
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"current_durability": 100.0,
+		"current_durability": currentDurability,
+		"rank":               highestRank,
 		"cost":               cost,
-		"message":            "Đã tu sửa Tiên Cổ Ốc về trạng thái hoàn hảo!",
+		"relinked":           relinked,
+		"message":            msg,
 	})
 }
 

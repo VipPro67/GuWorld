@@ -14,6 +14,7 @@ const localRequire = (id) => {
   if (id === "react") return { ...React, default: React };
   if (id === "react/jsx-runtime") return jsxRuntime;
   if (id === "@/lib/translate") return { translatePath: (path) => path };
+  if (id === "@/lib/wiki/effect-glossary") return { COMBAT_STATUSES: [], NATIVE_HOOKS: [] };
   if (id === "@/lib/effect-presentation") return { formatEffectTarget: formatTarget, renderableEffectBlocks: (effects) => !effects ? { blocks: [] } : effects.schema_version === 2 ? { blocks: effects.blocks } : { blocks: [], unsupportedSchema: effects.schema_version } };
   return {};
 };

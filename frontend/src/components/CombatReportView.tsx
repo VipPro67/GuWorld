@@ -519,12 +519,13 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                     const baseDmg = b.base_damage || 0;
                     const skillMult = b.skill_mult || 1;
                     const daoMult = b.dao_mult || 1;
+                    const targetDaoResonance = b.target_dao_resonance || 1;
                     const buffMult = b.buff_mult || 1;
                     const critMult = b.crit_mult || 1;
                     const pathBonus = b.path_bonus || 0;
 
                     // 1. Raw Output Damage
-                    const rawOutputDmg = baseDmg * skillMult * daoMult * buffMult * critMult * (1 + pathBonus);
+                    const rawOutputDmg = baseDmg * skillMult * daoMult * buffMult * critMult * (1 + pathBonus) * targetDaoResonance;
 
                     // 2. Defense Reduction (Trừ giáp)
                     const targetDef = b.target_def || 0;
@@ -532,8 +533,9 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
 
                     // 3. Path Resistance & Damage Reduction (Kháng hệ & Giảm ST)
                     const pathResist = b.path_resist || 0;
+                    const naturalResist = b.natural_resist || 0;
                     const dmgReduction = b.damage_reduction || 0;
-                    const finalDmg = b.final_damage || Math.max(1, afterDefDmg * (1 - pathResist) * (1 - dmgReduction));
+                    const finalDmg = b.final_damage || Math.max(1, afterDefDmg * (1 - naturalResist) * (1 - pathResist) * (1 - dmgReduction));
 
                     // 4. Shield Absorbed & HP Lost
                     const shieldAbsorbed = b.shield_absorbed || 0;

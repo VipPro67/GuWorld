@@ -27,6 +27,8 @@ import {
   Layers,
   Eye,
   Settings2,
+  ChevronRight,
+  MapPin,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { Num } from "./Num";
@@ -79,6 +81,9 @@ export const LobbyView: React.FC = () => {
     aperture,
     fetchAperture,
     setSpatialDirectoryOpen,
+    regions,
+    regionsLoaded,
+    fetchRegions,
   } = useGameStore();
   const [manaNow, setManaNow] = useState(() => Date.now());
   const [combatSettingsOpen, setCombatSettingsOpen] = useState(false);
@@ -89,6 +94,10 @@ export const LobbyView: React.FC = () => {
       void fetchAperture();
     }
   }, [player, aperture, fetchAperture]);
+
+  useEffect(() => {
+    if (!regionsLoaded) void fetchRegions();
+  }, [regionsLoaded, fetchRegions]);
 
   useEffect(() => {
     if (!player || !manaSnapshot) return;
@@ -132,6 +141,8 @@ export const LobbyView: React.FC = () => {
   const displayedSoulPercent = player
     ? (player.max_soul > 0 ? Math.min(100, ((player.soul_hp || 0) / player.max_soul) * 100) : 0)
     : 0;
+  const currentRegion = regions.find((region) => region.id === player?.current_region);
+  const currentLocation = currentRegion?.name || player?.current_region || "Chưa xác định";
 
   const formatTimeRemaining = (current: number, max: number, realRegenPerHour: number) => {
     if (current >= max || realRegenPerHour <= 0) return "Đã đầy";
@@ -424,12 +435,20 @@ export const LobbyView: React.FC = () => {
   };
 
   return (
-    <div className="mmo-paper-theme mmo-paper-surface w-full mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-8 text-[var(--text-primary,#f4e8cb)]">
+    <div
+      className="mmo-paper-theme mmo-paper-surface relative isolate w-full mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-6 text-[var(--text-primary,#f4e8cb)]"
+      style={{
+        backgroundImage: "linear-gradient(rgba(18, 13, 9, 0.94), rgba(18, 13, 9, 0.97)), url('/assets/world/great-regions-atlas.png')",
+        backgroundSize: "cover, 700% 100%",
+        backgroundPosition: "center, left center",
+      }}
+    >
       {/* 1. CHARACTER & RESOURCE HUD */}
       {player && (
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl">
+        <div className="relative overflow-hidden bg-[var(--bg-surface)]/95 border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl">
+          <div aria-hidden="true" className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_0%_0%,rgba(180,132,55,0.12),transparent_42%),linear-gradient(110deg,transparent_45%,rgba(14,32,24,0.28))]" />
           {/* Left Block: Avatar & Name & Tu vi (Reduced width & wrapped text) */}
-          <div className="flex items-center gap-3 sm:gap-4 w-full md:w-48 shrink-0">
+          <div className="relative z-10 flex items-center gap-3 sm:gap-4 w-full md:w-48 lg:w-80 shrink-0">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold border border-[var(--border-default)] shrink-0 overflow-hidden">
               {player.avatar_url ? (
                 <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
@@ -444,115 +463,97 @@ export const LobbyView: React.FC = () => {
               <span className="text-xs text-zinc-500 font-mono font-semibold break-words whitespace-normal leading-tight mt-1">
                 {getRankName(player.rank, player.sub_rank, aperture)}
               </span>
+              <span className="mt-1.5 inline-flex min-w-0 items-center gap-1 text-[10px] leading-tight text-amber-200/80" title={`${currentLocation} (${player.x}, ${player.y})`}>
+                <MapPin className="h-3 w-3 shrink-0 text-amber-400" />
+                <span className="truncate">{currentLocation}</span>
+                <span className="shrink-0 font-mono text-amber-100/55">({player.x}, {player.y})</span>
+              </span>
             </div>
           </div>
 
-          {/* Center Block: HP, Mana, Thought & Soul Bars (Optimized to 1 line each) */}
-          <div className="flex flex-col gap-2 w-full md:w-[380px] grow max-w-md">
-            {/* HP Bar */}
-            <div
-              className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
-              title={player && hpRegenRealHourly > 0 && displayedHP < displayedMaxHP ? `Hồi máu: +${hpRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(displayedHP, displayedMaxHP, hpRegenRealHourly)}` : "Máu đầy"}
-            >
-              <div className="w-24 sm:w-28 flex items-center justify-between shrink-0 min-w-0">
-                <span className="font-semibold text-zinc-300">Máu</span>
-                {player && hpRegenRealHourly > 0 && displayedHP < displayedMaxHP && (
-                  <span className="text-[9px] text-emerald-500/80 font-semibold">
-                    +{hpRegenRealHourly.toFixed(1)}/g
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden relative">
-                <div
-                  className="bg-gradient-to-r from-red-600 to-rose-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${displayedHPPercent}%` }}
-                />
-              </div>
-              <span className="w-20 text-right text-[10.5px] text-zinc-350 shrink-0 font-medium font-mono">
-                {Math.round(displayedHP)}/{Math.round(displayedMaxHP)}
-              </span>
-            </div>
+          {/* Resource bars */}
+          <div className="relative z-10 grid w-full grow grid-cols-2 gap-x-4 gap-y-3 md:max-w-[620px] md:gap-x-6">
+            {[
+              {
+                label: "Sinh Lực",
+                value: `${Math.round(displayedHP)}/${Math.round(displayedMaxHP)}`,
+                percent: displayedHPPercent,
+                regen: hpRegenRealHourly,
+                current: displayedHP,
+                max: displayedMaxHP,
+                uncapped: false,
+                color: "from-rose-500 to-red-400",
+                textColor: "text-rose-200",
+              },
+              {
+                label: player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên",
+                value: player.rank >= 6 ? Math.round(displayedMana).toLocaleString("vi-VN") : `${Math.round(displayedMana)}/${Math.round(displayedMaxMana)}`,
+                percent: player.rank >= 6 ? 100 : displayedManaPercent,
+                regen: manaRegenRealHourly,
+                current: displayedMana,
+                max: displayedMaxMana,
+                uncapped: player.rank >= 6,
+                color: "from-sky-500 to-cyan-300",
+                textColor: "text-cyan-200",
+              },
+              {
+                label: "Niệm Lực",
+                value: `${(player.current_thought ?? 0).toFixed(1)}/${(player.max_thought ?? 100).toFixed(0)}`,
+                percent: displayedThoughtPercent,
+                regen: thoughtRegenRealHourly,
+                current: player.current_thought ?? 0,
+                max: player.max_thought ?? 100,
+                uncapped: false,
+                color: "from-violet-500 to-fuchsia-300",
+                textColor: "text-violet-200",
+              },
+              {
+                label: "Linh Hồn",
+                value: `${player.soul_hp}/${player.max_soul}`,
+                percent: displayedSoulPercent,
+                regen: soulRegenRealHourly,
+                current: player.soul_hp,
+                max: player.max_soul,
+                uncapped: false,
+                color: "from-indigo-500 to-purple-300",
+                textColor: "text-indigo-200",
+              },
+            ].map((resource) => {
+              const isFull = resource.current >= resource.max;
+              const regenText = resource.regen > 0 && (!isFull || resource.label === "Tiên Nguyên")
+                ? `+${resource.regen.toFixed(1)}/giờ`
+                : "";
+              const remainingText = !resource.uncapped && !isFull && resource.regen > 0
+                ? ` • ${formatTimeRemaining(resource.current, resource.max, resource.regen)}`
+                : "";
 
-            {/* Mana Bar */}
-            <div
-              className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
-              title={player && manaRegenRealHourly > 0 && (player.rank >= 6 || displayedMana < displayedMaxMana) ? `${player.rank >= 6 ? 'Hồi Tiên Nguyên' : 'Hồi Chân Nguyên'}: +${manaRegenRealHourly.toFixed(1)}/giờ${player.rank < 6 ? ` • ${formatTimeRemaining(displayedMana, displayedMaxMana, manaRegenRealHourly)}` : ""}` : "Năng lượng đầy"}
-            >
-              <div className="w-24 sm:w-28 flex items-center justify-between shrink-0 min-w-0">
-                <span className="font-semibold text-zinc-300 truncate">
-                  {player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên"}
-                </span>
-                {player && manaRegenRealHourly > 0 && (player.rank >= 6 || displayedMana < displayedMaxMana) && (
-                  <span className="text-[9px] text-emerald-500/80 font-semibold">
-                    +{manaRegenRealHourly.toFixed(1)}/g
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden relative">
+              return (
                 <div
-                  className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${player.rank >= 6 ? 100 : displayedManaPercent}%` }}
-                />
-              </div>
-              <span className="w-20 text-right text-[10.5px] text-zinc-350 shrink-0 font-medium font-mono">
-                {player.rank >= 6
-                  ? `${Math.round(displayedMana)}`
-                  : `${Math.round(displayedMana)}/${Math.round(displayedMaxMana)}`}
-              </span>
-            </div>
-
-            {/* Thought Bar */}
-            <div
-              className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
-              title={player && thoughtRegenRealHourly > 0 && (player.current_thought < player.max_thought) ? `Hồi Niệm Lực: +${thoughtRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(player.current_thought, player.max_thought, thoughtRegenRealHourly)}` : "Niệm Lực đầy"}
-            >
-              <div className="w-24 sm:w-28 flex items-center justify-between shrink-0 min-w-0">
-                <span className="font-semibold text-zinc-300">Niệm Lực</span>
-                {player && thoughtRegenRealHourly > 0 && player.current_thought < player.max_thought && (
-                  <span className="text-[9px] text-emerald-500/80 font-semibold">
-                    +{thoughtRegenRealHourly.toFixed(1)}/g
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden relative">
-                <div
-                  className="bg-gradient-to-r from-violet-600 to-purple-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${displayedThoughtPercent}%` }}
-                />
-              </div>
-              <span className="w-20 text-right text-[10.5px] text-zinc-350 shrink-0 font-medium font-mono">
-                {(player.current_thought ?? 0).toFixed(1)}/{(player.max_thought ?? 100).toFixed(0)}
-              </span>
-            </div>
-
-            {/* Soul Bar */}
-            <div
-              className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
-              title={player && soulRegenRealHourly > 0 && player.soul_hp < player.max_soul ? `Hồi Linh Hồn: +${soulRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(player.soul_hp, player.max_soul, soulRegenRealHourly)}` : "Linh Hồn đầy"}
-            >
-              <div className="w-24 sm:w-28 flex items-center justify-between shrink-0 min-w-0">
-                <span className="font-semibold text-zinc-300">Linh Hồn</span>
-                {player && soulRegenRealHourly > 0 && player.soul_hp < player.max_soul && (
-                  <span className="text-[9px] text-emerald-500/80 font-semibold">
-                    +{soulRegenRealHourly.toFixed(1)}/g
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden relative">
-                <div
-                  className="bg-gradient-to-r from-indigo-600 to-purple-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${displayedSoulPercent}%` }}
-                />
-              </div>
-              <span className="w-20 text-right text-[10.5px] text-zinc-350 shrink-0 font-medium font-mono">
-                {player.soul_hp}/{player.max_soul}
-              </span>
-            </div>
+                  key={resource.label}
+                  className="min-w-0 rounded-lg border border-white/5 bg-black/15 px-2.5 py-2"
+                  title={`${resource.label}: ${resource.value}${regenText ? ` • Hồi ${regenText}${remainingText}` : ""}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[10px] font-semibold text-zinc-300 sm:text-[11px]">{resource.label}</span>
+                    <span className={`shrink-0 text-[10px] font-mono font-semibold sm:text-[11px] ${resource.textColor}`}>{resource.value}</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full border border-black/40 bg-zinc-950">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r ${resource.color} transition-[width] duration-300`}
+                      style={{ width: `${Math.max(0, Math.min(100, resource.percent))}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 h-3 text-right text-[9px] font-mono text-emerald-400/75">
+                    {regenText}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           {/* Right Block: Resources (Stacked vertically) */}
-          <div className="flex flex-col justify-center items-center md:items-end gap-3 w-full md:w-auto border-t md:border-t-0 border-zinc-900/60 pt-3 md:pt-0 shrink-0">
+          <div className="relative z-10 grid grid-cols-2 md:flex md:flex-col justify-center items-center md:items-end gap-2 md:gap-3 w-full md:w-auto border-t md:border-t-0 border-zinc-900/60 pt-3 md:pt-0 shrink-0">
             {/* Primeval Stones */}
-            <div className="flex flex-col items-center md:items-end">
+            <div className="flex flex-col items-center md:items-end rounded-xl border border-amber-900/25 bg-black/15 px-3 py-2">
               <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Nguyên Thạch</span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Coins className="w-4 h-4 text-yellow-500" />
@@ -563,7 +564,7 @@ export const LobbyView: React.FC = () => {
             </div>
 
             {/* Immortal Stones */}
-            <div className="flex flex-col items-center md:items-end">
+            <div className="flex flex-col items-center md:items-end rounded-xl border border-violet-900/25 bg-black/15 px-3 py-2">
               <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Tiên Nguyên Thạch</span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Sparkles className="w-4 h-4 text-violet-400" />
@@ -580,51 +581,61 @@ export const LobbyView: React.FC = () => {
         <LogConsole logs={logs} />
       </div>
 
-      <div className="flex flex-col gap-3 sm:gap-5">
-        <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
-          <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
-            Chức năng Lobby
-          </h2>
-          <span className="text-[10px] text-zinc-600 font-mono">
+      <div className="flex flex-col gap-3 sm:gap-4">
+        <div className="flex items-end justify-between border-b border-[var(--border-default)]/60 pb-2">
+          <div>
+            <h2 className="font-serif text-base sm:text-lg font-bold tracking-wide text-[var(--text-primary,#f4e8cb)]">
+              Điểm Đến Cổ Giới
+            </h2>
+            <p className="mt-0.5 text-[10px] sm:text-xs text-[var(--text-muted,#ad9878)]">
+              Chọn một nơi để tiếp tục hành trình
+            </p>
+          </div>
+          <span className="rounded-full border border-[var(--border-default)]/70 bg-black/20 px-2.5 py-1 text-[10px] text-[var(--text-muted,#ad9878)] font-mono">
             {visibleLobbyItems.length} chức năng
           </span>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-4 justify-center">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-2 sm:gap-3">
           {visibleLobbyItems.map((item) => {
             const Icon = item.icon;
             return (
-              <div
+              <button
+                type="button"
                 key={item.id}
+                disabled={item.locked}
                 onClick={() => handleItemClick(item)}
-                className={`flex flex-col items-center p-2 rounded-2xl transition-all duration-300 select-none ${item.locked
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-zinc-900/20 cursor-pointer group"
-                  }`}
+                aria-label={item.locked ? `${item.label} (đã khóa)` : item.label}
+                title={item.locked ? `${item.label} — chưa mở khóa` : item.label}
+                className={`group relative flex min-h-[72px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all duration-200 sm:min-h-[82px] sm:px-3.5 ${
+                  item.locked
+                    ? "cursor-not-allowed border-[var(--border-default)]/40 bg-black/20 opacity-55"
+                    : `cursor-pointer border-[var(--border-default)]/70 bg-[linear-gradient(145deg,rgba(60,43,27,0.72),rgba(30,23,17,0.86))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:-translate-y-0.5 hover:border-amber-500/45 hover:bg-[linear-gradient(145deg,rgba(76,54,31,0.85),rgba(37,27,19,0.94))] hover:shadow-[0_8px_24px_rgba(0,0,0,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:translate-y-0`
+                }`}
               >
                 <div
-                  className={`w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center ${item.locked
-                      ? "bg-zinc-950 border border-zinc-900"
-                      : `bg-gradient-to-br ${item.gradient} border ${item.borderColor} hover:border-zinc-400 dark:hover:border-zinc-800 transition-all duration-300 group-hover:scale-110 shadow-md active:scale-95`
-                    } relative ${item.glow}`}
+                  className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border shadow-md transition-transform duration-200 sm:h-12 sm:w-12 sm:rounded-2xl ${
+                    item.locked
+                      ? "border-zinc-800 bg-zinc-950"
+                      : `bg-gradient-to-br ${item.gradient} ${item.borderColor} group-hover:scale-105 ${item.glow}`
+                  }`}
                 >
-                  {!item.locked && (
-                    <div className="absolute inset-1 rounded-full border border-dashed border-white/40 dark:border-zinc-800/80" />
-                  )}
-                  <Icon className={`w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${item.iconColor}`} />
+                  <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${item.iconColor}`} />
                   {item.locked && (
-                    <div className="absolute -bottom-1 -right-1 bg-zinc-900 border border-zinc-800 p-1 rounded-full">
-                      <Lock className="w-2.5 h-2.5 text-zinc-500" />
+                    <div className="absolute -bottom-1 -right-1 rounded-full border border-zinc-800 bg-zinc-950 p-1">
+                      <Lock className="h-2.5 w-2.5 text-zinc-500" />
                     </div>
                   )}
                 </div>
-                <span className={`font-serif text-[10px] sm:text-[11px] font-semibold mt-2 tracking-wide text-center transition-colors ${item.locked
-                    ? "text-zinc-600"
+                <span className={`min-w-0 flex-1 font-serif text-[11px] font-semibold leading-snug tracking-wide transition-colors sm:text-xs ${
+                  item.locked
+                    ? "text-zinc-500"
                     : "text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]"
-                  }`}>
+                }`}>
                   {item.label}
                 </span>
-              </div>
+                {!item.locked && <ChevronRight className="h-4 w-4 shrink-0 text-amber-500/45 transition-transform group-hover:translate-x-0.5 group-hover:text-amber-300" />}
+              </button>
             );
           })}
         </div>

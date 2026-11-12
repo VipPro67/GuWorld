@@ -806,6 +806,7 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			killerMoves.POST("", handlers.CreateKillerMove)
 			killerMoves.POST("/:id/equip", handlers.EquipKillerMove)
 			killerMoves.POST("/:id/use", handlers.UseKillerMove)
+			killerMoves.POST("/:id/repair", handlers.RepairKillerMove)
 			killerMoves.DELETE("/:id", handlers.DeleteKillerMove)
 		}
 

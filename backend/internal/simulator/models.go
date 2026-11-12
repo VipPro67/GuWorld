@@ -265,7 +265,7 @@ func CompiledCombatMechanics(compiled *gameplayeffects.Compiled, action bool) []
 	}
 	var result []CombatMechanic
 	for _, op := range compiled.NativeMechanics() {
-		isAction := op.Trigger == gameplayeffects.TriggerOnCast || op.Trigger == gameplayeffects.TriggerOnHit
+		isAction := op.Trigger == gameplayeffects.TriggerOnCast || op.Trigger == gameplayeffects.TriggerOnHit || op.Trigger == gameplayeffects.TriggerOnAction
 		if isAction != action {
 			continue
 		}
@@ -286,10 +286,12 @@ type Effect struct {
 
 // DoTEffect tracks a damage-over-time or heal-over-time effect on a combatant.
 type DoTEffect struct {
-	Type     string  // "bleed", "poison", "regen"
-	Value    float64 // damage or heal per turn
-	Turns    int     // remaining turns
-	DirectHP bool    // true if damage subtracts directly from HP bypassing shield
+	Type          string  // "bleed", "poison", "regen"
+	Value         float64 // damage or heal per turn
+	Turns         int     // remaining turns
+	DirectHP      bool    // true if damage subtracts directly from HP bypassing shield
+	SourcePath    string  // Dao path of the action that applied this effect
+	SourceDaoMult float64 // source's effective Dao multiplier snapshotted at application
 }
 
 // DaoMarks represents the dao marks of a combatant, grouped by path.
@@ -334,6 +336,7 @@ type CombatantAuto struct {
 	PathDamageBonus         map[string]float64       // additive damage multiplier for a path
 	PathResistance          map[string]float64       // additive damage reduction taken for a path
 	HealingReceived         float64                  // multiplier bonus on healing received
+	HealingReceivedPenalty  float64                  // additive healing reduction from active effects
 	MentalResistance        float64                  // chance (0-1) to resist control effects
 	Tenacity                float64                  // generic self-dispel chance + CC duration reduction (0-1)
 	CCResist                float64                  // generic proc resist vs all debuffs (0-1)
@@ -546,22 +549,24 @@ type StatProvenance struct {
 
 // DamageBreakdown contains the exact formula components for detailed player inspection.
 type DamageBreakdown struct {
-	BaseDamage      float64 `json:"base_damage,omitempty"`
-	SkillMult       float64 `json:"skill_mult,omitempty"`
-	DaoMult         float64 `json:"dao_mult,omitempty"`
-	BuffMult        float64 `json:"buff_mult,omitempty"`
-	CritMult        float64 `json:"crit_mult,omitempty"`
-	PathBonus       float64 `json:"path_bonus,omitempty"`
-	TargetDef       float64 `json:"target_def,omitempty"`
-	NaturalResist   float64 `json:"natural_resist,omitempty"`
-	PathResist      float64 `json:"path_resist,omitempty"`
-	DamageReduction float64 `json:"damage_reduction,omitempty"`
-	ShieldAbsorbed  float64 `json:"shield_absorbed,omitempty"`
-	HPDamage        float64 `json:"hp_damage,omitempty"`
-	FinalDamage     float64 `json:"final_damage,omitempty"`
-	RawDamage       float64 `json:"raw_damage,omitempty"`
-	HitCount        int     `json:"hit_count,omitempty"`
-	Reason          string  `json:"reason,omitempty"`
+	BaseDamage         float64 `json:"base_damage,omitempty"`
+	SkillMult          float64 `json:"skill_mult,omitempty"`
+	DaoMult            float64 `json:"dao_mult,omitempty"`
+	TargetDaoResonance float64 `json:"target_dao_resonance,omitempty"`
+	DaoPath            string  `json:"dao_path,omitempty"`
+	BuffMult           float64 `json:"buff_mult,omitempty"`
+	CritMult           float64 `json:"crit_mult,omitempty"`
+	PathBonus          float64 `json:"path_bonus,omitempty"`
+	TargetDef          float64 `json:"target_def,omitempty"`
+	NaturalResist      float64 `json:"natural_resist,omitempty"`
+	PathResist         float64 `json:"path_resist,omitempty"`
+	DamageReduction    float64 `json:"damage_reduction,omitempty"`
+	ShieldAbsorbed     float64 `json:"shield_absorbed,omitempty"`
+	HPDamage           float64 `json:"hp_damage,omitempty"`
+	FinalDamage        float64 `json:"final_damage,omitempty"`
+	RawDamage          float64 `json:"raw_damage,omitempty"`
+	HitCount           int     `json:"hit_count,omitempty"`
+	Reason             string  `json:"reason,omitempty"`
 
 	// Status-effect provenance attached by the engine from the combatants'
 	// StatProvenance maps, so the UI can show e.g. "Trọng Thương −50%".

@@ -659,10 +659,10 @@ func seedSpatialRealmEntryPortals(exec csvImportExecutor) error {
 	INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
 	SELECT v.region_id, v.x, v.y, 'ENTRY_PORTAL', v.content_id, v.metadata::jsonb, 0, TRUE
 	FROM (VALUES
-		('thanh_mao_son',525,525,'spatial_realm_hoa_tuu','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_hoa_tuu","label":"Cổng vào: Hoa Tửu Mật Đạo"}'),
-		('bach_cot_son',525,525,'spatial_realm_bach_cot','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_bach_cot","label":"Cổng vào: Bạch Cốt Động"}'),
-		('three_kings_mountain',525,525,'spatial_realm_three_kings','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_three_kings","label":"Cổng vào: Tam Vương Phúc Địa"}'),
-		('hu_tien_phuc_dia',525,525,'spatial_realm_dang_hon','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_dang_hon","label":"Cổng vào: Đãng Hồn Sơn"}')
+		('thanh_mao_son',525,525,'spatial_realm_hoa_tuu','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_hoa_tuu","label":"Phúc Địa Giới Môn Trận: Hoa Tửu Mật Đạo"}'),
+		('bach_cot_son',525,525,'spatial_realm_bach_cot','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_bach_cot","label":"Phúc Địa Giới Môn Trận: Bạch Cốt Động"}'),
+		('three_kings_mountain',525,525,'spatial_realm_three_kings','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_three_kings","label":"Phúc Địa Giới Môn Trận: Tam Vương Phúc Địa"}'),
+		('hu_tien_phuc_dia',525,525,'spatial_realm_dang_hon','{"action":"ENTER_SPATIAL_REALM","template_id":"spatial_realm_dang_hon","label":"Phúc Địa Giới Môn Trận: Đãng Hồn Sơn"}')
 	) AS v(region_id, x, y, content_id, metadata)
 	WHERE EXISTS (SELECT 1 FROM regions r WHERE r.id = v.region_id)
 	ON CONFLICT (region_id,x,y) DO NOTHING`)

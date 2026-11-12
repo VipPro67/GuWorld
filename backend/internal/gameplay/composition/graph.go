@@ -225,7 +225,7 @@ func KillerMoveProfile() Profile {
 func GuHouseProfile() Profile {
 	return Profile{
 		ID: "gu_house.v1", Product: "GU_HOUSE", Context: "TURN_BASED_COMBAT", Executor: "GU_HOUSE_ACTION_ADAPTER",
-		MinGuComponents: 2, MaxGuComponents: 5, MaxAuxGuCount: 200, MaxSaved: 4, MaxEquipped: 1,
+		MinGuComponents: 2, MaxGuComponents: 5, MaxAuxGuCount: 100000, MaxSaved: 4, MaxEquipped: 1,
 		GuPolicy:          GuPolicyReserveActive,
 		ContextByTrigger:  map[string]string{"ON_ACTION": "TURN_BASED_COMBAT"},
 		ExecutorByContext: map[string]string{"TURN_BASED_COMBAT": "GU_HOUSE_ACTION_ADAPTER"},

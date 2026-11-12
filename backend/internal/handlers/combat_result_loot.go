@@ -3,12 +3,14 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -242,16 +244,33 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 			if player.DaoMarks != nil {
 				luckMarks = player.DaoMarks["luck"]
 			}
-			luckDropChance := float64(luckMarks)/2000.0 + 0.10
+			charFX := gamefx.Get(player)
+			effectiveLuck := float64(luckMarks) + charFX.LuckBonus*50.0
+			luckDropChance := math.Min(0.85, effectiveLuck/2000.0 + 0.10)
 			if rand.Float64() < luckDropChance && activeCombat.LootTableID != "" {
 				enemyRank := activeCombat.EnemyRank
 				if enemyRank < 1 {
 					enemyRank = 1
 				}
-				bonusStones := rand.Intn(10*enemyRank+5) + 5
+				bonusStones := rand.Intn(10*enemyRank+5) + 5 + int(charFX.LuckBonus*float64(enemyRank))
 				player.PrimevalStones += float64(bonusStones)
 				stoneQty += bonusStones
 				lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("[Vận Đạo - Phúc Tinh Cao Chiếu] Khí vận chiếu rọi, bạn nhặt thêm được %d Nguyên Thạch!", bonusStones))
+
+				// Tề Thiên Hồng Vận: Cơ hội nhân đôi một loại tài nguyên rơi ra khi vận khí cao
+				if effectiveLuck >= 30 && len(loot.Items) > 1 && rand.Float64() < math.Min(0.5, effectiveLuck/800.0) {
+					for matID, qty := range loot.Items {
+						if matID != "primeval_stone" && qty > 0 {
+							extraQty := qty
+							if extraQty > 5 {
+								extraQty = 5
+							}
+							loot.Items[matID] += extraQty
+							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("[Vận Đạo - Tề Thiên Hồng Vận] Khí vận đại phát, bạn nhặt thêm được tài nguyên %s (+%d)!", matID, extraQty))
+							break
+						}
+					}
+				}
 			}
 
 			player.PrimevalStones += float64(stoneQty)

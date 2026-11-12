@@ -4,13 +4,14 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useShallow } from "zustand/react/shallow";
 import { useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { LevelZeroView } from "@/components/LevelZeroView";
-import { Sparkles, X, Handshake, Store, HelpCircle, LogOut } from "@/lib/icons";
+import { Sparkles, X, Handshake, Store, HelpCircle, LogOut, Compass, Gem, Swords } from "@/lib/icons";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { NotificationBell } from "@/components/NotificationBell";
 import { RespawnChoiceModal } from "@/components/RespawnChoiceModal";
@@ -419,17 +420,93 @@ export default function Home() {
       </header>
 
       {/* Main Content Area */}
-      <main className="w-full flex-1 min-h-0 max-w-none px-0 mx-0 overflow-hidden flex flex-col">
+      <main className={`w-full flex-1 min-h-0 max-w-none px-0 mx-0 flex flex-col ${player ? "overflow-hidden" : "overflow-y-auto"}`}>
         {!player ? (
-          <div className="flex-1 min-h-0 py-8 sm:py-12 w-full flex justify-center overflow-y-auto overscroll-contain">
-            <Registration
-              onRegister={register}
-              onLogin={login}
-              onSendOTP={sendOTP}
-              isLoading={isLoading}
-              error={error}
-              onClearError={clearError}
+          <div className="relative isolate flex-1 min-h-full w-full overflow-hidden bg-[#101814]">
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 opacity-45"
+              style={{
+                backgroundImage: "linear-gradient(90deg, rgba(10, 18, 14, 0.3), rgba(10, 18, 14, 0.86)), url('/assets/world/great-regions-atlas.png')",
+                backgroundSize: "cover, 700% 100%",
+                backgroundPosition: "center, left center",
+              }}
             />
+            <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_24%_42%,rgba(72,113,80,0.28),transparent_44%),linear-gradient(180deg,rgba(8,13,11,0.16),#101814_100%)]" />
+
+            <div className="relative z-10 mx-auto grid min-h-full w-full max-w-[1440px] grid-cols-1 items-center gap-8 px-4 py-7 sm:px-8 sm:py-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(390px,0.78fr)] lg:gap-10 lg:px-12">
+              <section className="relative hidden min-h-[580px] flex-col justify-between overflow-hidden rounded-[2rem] border border-emerald-100/10 bg-[#111a15]/45 p-8 shadow-[0_28px_90px_rgba(0,0,0,0.38)] backdrop-blur-[2px] lg:flex xl:min-h-[640px] xl:p-10">
+                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-emerald-950/25 via-transparent to-black/35" />
+                <div aria-hidden="true" className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(244,232,203,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(244,232,203,0.18)_1px,transparent_1px)] [background-size:52px_52px] [mask-image:linear-gradient(90deg,black,transparent_85%)]" />
+
+                <div className="relative z-10 flex items-center gap-3 text-[10px] font-mono uppercase tracking-[0.28em] text-emerald-100/75">
+                  <span className="h-px w-8 bg-amber-300/75" />
+                  Thiên địa rộng lớn · Đạo hữu tự chọn đường đi
+                </div>
+
+                <div className="relative z-10 max-w-[540px] pb-20 pt-10">
+                  <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-200/20 bg-black/25 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-amber-100/85">
+                    <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                    Web game nhập vai tu tiên
+                  </div>
+                  <h2 className="font-serif text-5xl font-bold leading-[1.08] tracking-wide text-[#fff3d8] drop-shadow-[0_4px_24px_rgba(0,0,0,0.65)] xl:text-6xl">
+                    Khai mở
+                    <span className="mt-2 block text-amber-300">Không Khiếu.</span>
+                  </h2>
+                  <p className="mt-5 max-w-md text-sm leading-7 text-stone-200/80">
+                    Bước vào thế giới Cổ Trùng, tự mình tu luyện, thám hiểm và viết nên con đường nghịch thiên của đạo hữu.
+                  </p>
+
+                  <div className="mt-8 flex flex-wrap gap-2.5">
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs text-stone-100/90">
+                      <Compass className="h-4 w-4 text-emerald-300" /> Khám phá thế giới
+                    </span>
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs text-stone-100/90">
+                      <Gem className="h-4 w-4 text-sky-300" /> Thu thập Cổ Trùng
+                    </span>
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs text-stone-100/90">
+                      <Swords className="h-4 w-4 text-rose-300" /> Giao đấu
+                    </span>
+                  </div>
+                </div>
+
+                <Image
+                  src="/assets/world/cultivator.webp"
+                  alt=""
+                  width={494}
+                  height={511}
+                  priority
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-4 right-0 z-[1] w-[48%] max-w-[360px] object-contain drop-shadow-[0_12px_42px_rgba(0,0,0,0.65)] xl:right-4 xl:w-[45%]"
+                />
+
+                <div className="relative z-10 grid max-w-[580px] grid-cols-3 gap-3 border-t border-white/10 pt-5">
+                  <div>
+                    <p className="font-serif text-lg font-bold text-amber-200">Tu luyện</p>
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-stone-300/60">Từng bước đột phá</p>
+                  </div>
+                  <div className="border-l border-white/10 pl-4">
+                    <p className="font-serif text-lg font-bold text-amber-200">Luyện Cổ</p>
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-stone-300/60">Tìm kiếm cơ duyên</p>
+                  </div>
+                  <div className="border-l border-white/10 pl-4">
+                    <p className="font-serif text-lg font-bold text-amber-200">Tranh đấu</p>
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-stone-300/60">Định đoạt thắng bại</p>
+                  </div>
+                </div>
+              </section>
+
+              <div className="flex w-full justify-center lg:justify-end">
+                <Registration
+                  onRegister={register}
+                  onLogin={login}
+                  onSendOTP={sendOTP}
+                  isLoading={isLoading}
+                  error={error}
+                  onClearError={clearError}
+                />
+              </div>
+            </div>
           </div>
         ) : player.active_combat || activeCombatReplay ? (
           <div className="w-full flex-1 min-h-0 overflow-y-auto overscroll-contain">

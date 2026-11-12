@@ -34,7 +34,7 @@ export function GuHousePanel() {
 
   const [name, setName] = useState("");
   const [selectedCoreIDs, setSelectedCoreIDs] = useState<string[]>([]);
-  const [auxGuCount, setAuxGuCount] = useState<number>(30);
+  const [auxGuCount, setAuxGuCount] = useState<number>(5000);
   const [actionEffectKeys, setActionEffectKeys] = useState<Record<string, string>>({});
   const [actionSupportKeys, setActionSupportKeys] = useState<Record<string, Record<string, string>>>({});
   const [preview, setPreview] = useState<GuHouseCombatProfile | null>(null);
@@ -129,7 +129,7 @@ export function GuHousePanel() {
       setSelectedCoreIDs([]);
       setActionEffectKeys({});
       setActionSupportKeys({});
-      setAuxGuCount(30);
+      setAuxGuCount(5000);
     }
   };
 
@@ -237,19 +237,33 @@ export function GuHousePanel() {
           <div>
             <div className="flex items-center justify-between">
               <label className="text-xs text-zinc-400">Số lượng Phàm Cổ làm vỏ ốc</label>
-              <span className="font-mono text-xs text-amber-300">{auxGuCount} Cổ</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={500}
+                  max={100000}
+                  step={500}
+                  value={auxGuCount}
+                  onChange={(e) => {
+                    const val = Math.max(500, Math.min(100000, Number(e.target.value) || 500));
+                    setAuxGuCount(val);
+                  }}
+                  className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-right font-mono text-xs text-amber-300 outline-none focus:border-amber-500"
+                />
+                <span className="text-xs text-zinc-500">Cổ</span>
+              </div>
             </div>
             <input
               type="range"
-              min={10}
-              max={150}
-              step={5}
+              min={500}
+              max={100000}
+              step={500}
               value={auxGuCount}
               onChange={(e) => setAuxGuCount(Number(e.target.value))}
               className="mt-2 w-full accent-amber-500"
             />
             <p className="mt-1 text-[10px] text-zinc-500">
-              Phàm Cổ cấu thành lớp giáp ngoài, trực tiếp gia tăng Máu (HP) và Phòng Thủ cho Cổ Ốc.
+              Phàm Cổ cấu thành lớp giáp ngoài (từ 500 đến 100.000 con), trực tiếp gia tăng Máu (HP) và Phòng Thủ cho Cổ Ốc.
             </p>
           </div>
 
@@ -377,15 +391,14 @@ export function GuHousePanel() {
                       {house.is_equipped ? "Thu Hồi" : "Xuất Chiến"}
                     </button>
 
-                    {house.current_durability < 100 && (
-                      <button
-                        onClick={() => void repairHouse(house.id)}
-                        className="flex items-center gap-1.5 rounded-xl border border-sky-900/60 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-950/60"
-                      >
-                        <Wrench className="h-3.5 w-3.5" />
-                        Tu Sửa
-                      </button>
-                    )}
+                    <button
+                      onClick={() => void repairHouse(house.id)}
+                      className="flex items-center gap-1.5 rounded-xl border border-sky-900/60 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-950/60"
+                      title="Tu sửa độ bền và tự động đồng bộ Tiên Cổ hạch tâm đã nâng cấp / thay thế"
+                    >
+                      <Wrench className="h-3.5 w-3.5" />
+                      {house.current_durability < 100 ? "Tu Sửa" : "Đồng Bộ Cổ"}
+                    </button>
                   </div>
                 </article>
               ))}

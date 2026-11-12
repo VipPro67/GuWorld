@@ -178,6 +178,40 @@ func computeFoodNutrition(foodID string, guRank int) int {
 	return int(math.Floor((foodMana / guMana) * 100.0))
 }
 
+// computeFoodNutritionForPlayer calculates hunger restoration considering the player's
+// Thực Đạo (Food Path) Dao Marks and equipped Food Gu, boosting nutrition efficiency.
+func computeFoodNutritionForPlayer(player *models.Player, foodID string, guRank int) int {
+	base := computeFoodNutrition(foodID, guRank)
+	if player == nil {
+		return base
+	}
+	bonus := 0.0
+	if player.DaoMarks != nil {
+		if marks := player.DaoMarks[gamefx.CleanPath("food")]; marks > 0 {
+			bonus += math.Min(0.5, float64(marks)/10000.0)
+		}
+	}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+				for _, p := range spec.Path {
+					if gamefx.CleanPath(p) == "food" {
+						bonus += 0.15
+						break
+					}
+				}
+			}
+		}
+	}
+	if bonus > 1.0 {
+		bonus = 1.0
+	}
+	if bonus > 0 {
+		return int(math.Round(float64(base) * (1.0 + bonus)))
+	}
+	return base
+}
+
 func chooseFeedCandidate(player models.Player, targetGu models.GuInstance, foodOptions []string, targetInstanceID string, materialQty map[string]int64) (foodID string, consumedGuIndex int) {
 	for _, food := range foodOptions {
 		if isFeedResource(food) {
@@ -319,7 +353,7 @@ func FeedGu(c *gin.Context) {
 			}
 
 			foodConsumed[foodID]++
-			nutrition := computeFoodNutrition(foodID, target.Rank)
+			nutrition := computeFoodNutritionForPlayer(player, foodID, target.Rank)
 			target.Hunger += nutrition
 			if target.Hunger > specs.MaxHunger {
 				target.Hunger = specs.MaxHunger
@@ -524,7 +558,7 @@ func FeedGroup(c *gin.Context) {
 						gu = &player.GuInventory[i]
 					}
 
-					nutrition := computeFoodNutrition(foodID, gu.Rank)
+					nutrition := computeFoodNutritionForPlayer(player, foodID, gu.Rank)
 					gu.Hunger += nutrition
 					if gu.Hunger > specs.MaxHunger {
 						gu.Hunger = specs.MaxHunger
@@ -742,7 +776,7 @@ func FeedAll(c *gin.Context) {
 					gu = &player.GuInventory[i]
 				}
 
-				nutrition := computeFoodNutrition(foodID, gu.Rank)
+				nutrition := computeFoodNutritionForPlayer(player, foodID, gu.Rank)
 				gu.Hunger += nutrition
 				if gu.Hunger > specs.MaxHunger {
 					gu.Hunger = specs.MaxHunger

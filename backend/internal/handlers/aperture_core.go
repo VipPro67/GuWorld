@@ -148,7 +148,7 @@ func GetImmortalAperture(c *gin.Context) {
 	if ap.State == "STABLE" || ap.State == "DAMAGED" {
 		elapsedSec := now.Sub(updatedAt).Seconds()
 		if elapsedSec > 0 && effectiveTimeRate > 0 {
-			elapsedInternalYears := elapsedSec * effectiveTimeRate / 36000.0
+			elapsedInternalYears := elapsedSec * effectiveTimeRate / 86400.0
 			ap.InternalYearsPassed += elapsedInternalYears
 			ap.UpdatedAt = now
 		}
@@ -176,7 +176,7 @@ func GetImmortalAperture(c *gin.Context) {
 
 		if (ap.State == "STABLE" || ap.State == "DAMAGED") && effectiveTimeRate > 0 && ap.NextTribulationYear > ap.InternalYearsPassed {
 			remainingInternalYears := ap.NextTribulationYear - ap.InternalYearsPassed
-			arrival := ap.UpdatedAt.Add(time.Duration(remainingInternalYears/effectiveTimeRate*36000.0) * time.Second)
+			arrival := ap.UpdatedAt.Add(time.Duration(remainingInternalYears/effectiveTimeRate*86400.0) * time.Second)
 			ap.NextTribulationAt = &arrival
 		}
 	} else {

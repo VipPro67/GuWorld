@@ -421,6 +421,7 @@ type PathCombatModifiers struct {
 	Path                 string  `json:"path"`
 	DaoMarks             int64   `json:"dao_marks"`
 	DaoAmplification     float64 `json:"dao_amplification"`
+	TargetDaoResonance   float64 `json:"target_dao_resonance"`
 	AttainmentLevel      int     `json:"attainment_level"`
 	AttainmentName       string  `json:"attainment_name"`
 	RealmControl         float64 `json:"realm_control"`
@@ -522,6 +523,7 @@ func BuildDaoCombatProfileWithReduction(
 		realmCtrl := RealmControlForLevel(lvl)
 		realmEff := RealmEfficiencyForLevel(lvl)
 		daoAmp := DaoAmplification(amt) + bonus
+		targetResonance := DaoAmplification(amt)
 
 		purity := 0.0
 		if totalMarks > 0 {
@@ -536,6 +538,7 @@ func BuildDaoCombatProfileWithReduction(
 				Path:                 p,
 				DaoMarks:             amt,
 				DaoAmplification:     daoAmp,
+				TargetDaoResonance:   targetResonance,
 				AttainmentLevel:      lvl,
 				AttainmentName:       PathMasteryLevelName(lvl),
 				RealmControl:         realmCtrl,
@@ -572,7 +575,7 @@ func BuildDaoCombatProfileWithReduction(
 
 		// Natural defensive resistance when attacked by path p.
 		var defConflict float64
-		for defP, defAmt := range cleanDaoMarks {
+		for defP, defAmt := range activeForeign {
 			if defAmt <= 0 {
 				continue
 			}
@@ -587,6 +590,7 @@ func BuildDaoCombatProfileWithReduction(
 			Path:                 p,
 			DaoMarks:             amt,
 			DaoAmplification:     daoAmp,
+			TargetDaoResonance:   targetResonance,
 			AttainmentLevel:      lvl,
 			AttainmentName:       PathMasteryLevelName(lvl),
 			RealmControl:         realmCtrl,
@@ -679,4 +683,18 @@ func (p *DaoCombatProfile) GetDefensiveResistance(attackPath string) float64 {
 		return mod.NaturalResistance
 	}
 	return 0.0
+}
+
+// GetTargetDaoResonance returns the uncapped same-path amplification applied
+// when this combatant is hit by attackPath. It is separate from natural
+// resistance so non-conflicting bodies can still resonate with a matching hit.
+func (p *DaoCombatProfile) GetTargetDaoResonance(attackPath string) float64 {
+	if p == nil {
+		return 1.0
+	}
+	clean := CleanPath(attackPath)
+	if mod, ok := p.Paths[clean]; ok {
+		return mod.TargetDaoResonance
+	}
+	return 1.0
 }

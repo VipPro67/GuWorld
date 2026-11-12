@@ -917,7 +917,7 @@ func resolveSummonMonsterStats(act *simulator.SimAction) {
 // scale without a SimAction, and SUMMON_MONSTER templates are resolved eagerly.
 func combatMechanicsForSpec(spec models.GuDictionaryItem, action bool) []simulator.CombatMechanic {
 	var result []simulator.CombatMechanic
-	if compiled := spec.Effects.Compiled(); compiled != nil {
+	if compiled := models.CompiledGuEffects(spec); compiled != nil {
 		result = simulator.CompiledCombatMechanics(compiled, action)
 	} else {
 		for _, mechanic := range spec.Effects.Other {

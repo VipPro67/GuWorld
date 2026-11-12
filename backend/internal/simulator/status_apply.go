@@ -239,11 +239,19 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		if val <= 0 {
 			val = 10
 		}
+		sourcePath := op.SourcePath
+		if sourcePath == "" {
+			sourcePath = daoPathForAction([]string{spec.Path})
+		}
+		sourceDaoMult, _ := actorDaoMultiplier(actor, []string{sourcePath})
+		val *= sourceDaoMult
 		target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
-			Type:     dotType(op.ID),
-			Value:    val,
-			Turns:    op.Turns,
-			DirectHP: spec.DirectHP,
+			Type:          dotType(op.ID),
+			Value:         val,
+			Turns:         op.Turns,
+			DirectHP:      spec.DirectHP,
+			SourcePath:    sourcePath,
+			SourceDaoMult: sourceDaoMult,
 		})
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,

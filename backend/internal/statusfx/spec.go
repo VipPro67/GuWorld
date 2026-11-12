@@ -11,11 +11,12 @@ import (
 // Value and Turns carry the catalog semantics: Value is the intensity (DoT
 // damage per tick, or percent), Turns is the real duration in turns.
 type StatusOp struct {
-	ID     string
-	Value  float64
-	Turns  int
-	Chance float64 // proc chance per application (0..1); 0 = always applies
-	Unit   StatusUnit
+	ID         string
+	Value      float64
+	Turns      int
+	Chance     float64 // proc chance per application (0..1); 0 = always applies
+	Unit       StatusUnit
+	SourcePath string
 }
 
 type StatusUnit string
@@ -49,6 +50,10 @@ type StatusSpec struct {
 
 // Registry maps a canonical status ID to its spec.
 var Registry = map[string]StatusSpec{
+	StatusForeignDaoWound: {
+		ID: StatusForeignDaoWound, Behaviour: BehaviourHealingReceivedReduction,
+		Label: "Đạo Ngân Thương", Category: CategoryDaoConflict, DefaultTurns: 2,
+	},
 	// ── Physical / Elemental DoT & HoT ──
 	StatusBleed: {
 		ID: StatusBleed, Behaviour: BehaviourDot, Label: "Xuất Huyết",
@@ -289,6 +294,144 @@ var Registry = map[string]StatusSpec{
 		ID: StatusLuckCurseReverse, Behaviour: BehaviourAtkUp, Label: "Họa Hề Phúc Sở Ỷ",
 		Category: CategoryBuff, Path: "luck", BaseChance: 1.0,
 		SelfTarget: true, DefaultTurns: 2,
+	},
+
+	// ── Đợt 2: Trí Đạo, Lực Đạo, Huyết Đạo ──
+	StatusBerserk: {
+		ID: StatusBerserk, Behaviour: BehaviourAtkUp, Label: "Cuồng Man Bá Thể",
+		Category: CategoryBuff, Path: "strength", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusCalculated: {
+		ID: StatusCalculated, Behaviour: BehaviourAtkUp, Label: "Động Tất Sơ Hở",
+		Category: CategoryBuff, Path: "wisdom", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 2,
+	},
+	StatusBloodSacrifice: {
+		ID: StatusBloodSacrifice, Behaviour: BehaviourAtkUp, Label: "Huyết Tế Cuồng Bạo",
+		Category: CategoryBuff, Path: "blood", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 2,
+	},
+	StatusBearForm: {
+		ID: StatusBearForm, Behaviour: BehaviourDefUp, Label: "Hóa Thân Cự Hùng",
+		Category: CategoryBuff, Path: "transformation", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusEagleForm: {
+		ID: StatusEagleForm, Behaviour: BehaviourHaste, Label: "Hóa Thân Kim Điêu",
+		Category: CategoryBuff, Path: "transformation", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusAdaptiveResist: {
+		ID: StatusAdaptiveResist, Behaviour: BehaviourDamageReduction, Label: "Thích Ứng Đạo Pháp",
+		Category: CategoryBuff, Path: "transformation", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusBoneArmor: {
+		ID: StatusBoneArmor, Behaviour: BehaviourThorns, Label: "Bạch Cốt Giáp",
+		Category: CategoryBuff, Path: "bone", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusMetalAegis: {
+		ID: StatusMetalAegis, Behaviour: BehaviourDefUp, Label: "Cương Thiết Hộ Thể",
+		Category: CategoryBuff, Path: "metal", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusCloudMist: {
+		ID: StatusCloudMist, Behaviour: BehaviourEvasion, Label: "Vân Vụ Ảo Mộng",
+		Category: CategoryBuff, Path: "cloud", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+
+	// ── Đợt 5: Sát Chiêu, Tiên Cổ Phòng, Trận Pháp ──
+	StatusReverseFlowSeal: {
+		ID: StatusReverseFlowSeal, Behaviour: BehaviourThorns, Label: "Nghịch Lưu Hộ Thân Quỹ",
+		Category: CategoryImmortal, Path: "water", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusFamiliarFace: {
+		ID: StatusFamiliarFace, Behaviour: BehaviourEvasion, Label: "Gặp Mặt Từng Quen Biết",
+		Category: CategoryBuff, Path: "transformation", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusTimeSpeedSurge: {
+		ID: StatusTimeSpeedSurge, Behaviour: BehaviourHaste, Label: "Phi Thuyền Lưu Tốc",
+		Category: CategoryBuff, Path: "time", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 5,
+	},
+	StatusFiveRegionalSuppression: {
+		ID: StatusFiveRegionalSuppression, Behaviour: BehaviourDaoConflict, Label: "Ngũ Giới Áp Chế",
+		Category: CategoryDaoConflict, Path: "rules", BaseChance: 1.0,
+		ResistGate: false, DefaultTurns: 5,
+	},
+	StatusNinetyNineShield: {
+		ID: StatusNinetyNineShield, Behaviour: BehaviourDefUp, Label: "Cửu Cửu Liên Hoàn Giáp",
+		Category: CategoryBuff, Path: "formation", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 5,
+	},
+
+	// ── Đợt 6: Sát Chiêu Tiên Đạo ──
+	StatusYamaEmperor: {
+		ID: StatusYamaEmperor, Behaviour: BehaviourDefUp, Label: "Diêm Đế Thể",
+		Category: CategoryImmortal, Path: "soul", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 4,
+	},
+	StatusBloodRobe: {
+		ID: StatusBloodRobe, Behaviour: BehaviourDamageReduction, Label: "Huyết Nhiễm Chinh Bào",
+		Category: CategoryBuff, Path: "blood", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusFutureSelf: {
+		ID: StatusFutureSelf, Behaviour: BehaviourAtkUp, Label: "Vị Lai Thân",
+		Category: CategoryBuff, Path: "time", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusEatingLoss: {
+		ID: StatusEatingLoss, Behaviour: BehaviourAtkUp, Label: "Cật Khuy Thị Phúc",
+		Category: CategoryBuff, Path: "food", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 5,
+	},
+	StatusFarewellCurse: {
+		ID: StatusFarewellCurse, Behaviour: BehaviourDot, Label: "Tống Hữu Chi Phong",
+		Category: CategoryDaoConflict, Path: "wind", BaseChance: 1.0,
+		ResistGate: false, DefaultTurns: 4, DirectHP: true,
+	},
+
+	// ── Đợt 7: Đại Điển Sát Chiêu Tiên Đạo ──
+	StatusSwordMark: {
+		ID: StatusSwordMark, Behaviour: BehaviourDot, Label: "Kiếm Ngân Tác Mệnh",
+		Category: CategoryPhysicalDoT, Path: "sword", BaseChance: 1.0,
+		DefaultTurns: 4, DirectHP: true,
+	},
+	StatusRefineSelf: {
+		ID: StatusRefineSelf, Behaviour: BehaviourAtkUp, Label: "Luyện Kỷ Thể",
+		Category: CategoryBuff, Path: "refinement", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 99,
+	},
+	StatusAllPeopleUnited: {
+		ID: StatusAllPeopleUnited, Behaviour: BehaviourAtkUp, Label: "Vạn Chúng Nhất Tâm",
+		Category: CategoryBuff, Path: "human", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 4,
+	},
+	StatusDryWoodSpring: {
+		ID: StatusDryWoodSpring, Behaviour: BehaviourRegen, Label: "Khô Mộc Phùng Xuân",
+		Category: CategoryBuff, Path: "wood", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusIceCoffin: {
+		ID: StatusIceCoffin, Behaviour: BehaviourFreeze, Label: "Cực Băng Trấn Tiên Quan",
+		Category: CategoryMentalCC, Path: "ice", BaseChance: 1.0,
+		DefaultTurns: 2,
+	},
+	StatusTotemGoldenBell: {
+		ID: StatusTotemGoldenBell, Behaviour: BehaviourThorns, Label: "Đồ Đằng Kim Chung",
+		Category: CategoryBuff, Path: "metal", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 4,
+	},
+	StatusGreatNight: {
+		ID: StatusGreatNight, Behaviour: BehaviourEvasion, Label: "Đại Dạ Di Thiên",
+		Category: CategoryBuff, Path: "dark", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 4,
 	},
 }
 

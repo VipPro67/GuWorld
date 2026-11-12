@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -269,6 +272,24 @@ func LootGroundDrop(c *gin.Context) {
 	}
 	player.PrimevalStones += loot.PrimevalStones
 	player.ImmortalStones += loot.ImmortalStones
+
+	// Vận Đạo: Khí vận giúp nhặt thêm chiến lợi phẩm rơi trên map
+	charFX := gamefx.Get(&player)
+	luckMarks := int64(0)
+	if player.DaoMarks != nil {
+		luckMarks = player.DaoMarks["luck"]
+	}
+	if charFX.LuckBonus > 0 || luckMarks > 0 {
+		effectiveLuck := float64(luckMarks) + charFX.LuckBonus*50.0
+		if rand.Float64() < math.Min(0.5, effectiveLuck/1000.0) && loot.PrimevalStones > 0 {
+			bonusStones := math.Round(loot.PrimevalStones * 0.2)
+			if bonusStones < 5 {
+				bonusStones = 5
+			}
+			player.PrimevalStones += bonusStones
+			logs = append(logs, fmt.Sprintf("[Vận Đạo - Phúc Vận Chiếu Rọi] Vận khí tốt giúp bạn nhặt thêm %.0f Nguyên Thạch!", bonusStones))
+		}
+	}
 
 	// Xóa đống đồ sau khi nhặt
 	if _, errDel := tx.Exec("DELETE FROM map_ground_drops WHERE id = $1", dropUUID); errDel != nil {

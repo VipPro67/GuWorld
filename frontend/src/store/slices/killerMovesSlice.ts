@@ -171,6 +171,7 @@ export interface KillerMoveRecord {
   mastery_level: number;
   is_equipped: boolean;
   available: boolean;
+  can_repair?: boolean;
   has_starving_gu?: boolean;
   missing_gu?: string[];
   unavailable_reason?: string;
@@ -226,6 +227,7 @@ export interface KillerMovesSlice {
   toggleKillerMoveEquip: (id: string) => Promise<boolean>;
   deleteKillerMove: (id: string) => Promise<boolean>;
   useKillerMove: (id: string) => Promise<boolean>;
+  repairKillerMove: (id: string) => Promise<boolean>;
   fetchGuHouses: () => Promise<void>;
   previewGuHouse: (draft: GuHouseDraft) => Promise<GuHouseCombatProfile | null>;
   createGuHouse: (draft: GuHouseDraft) => Promise<boolean>;
@@ -362,6 +364,22 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
       return false;
     } finally {
       get().endAction("player:inventory");
+    }
+  },
+
+  repairKillerMove: async (id) => {
+    const { token } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/killer-moves/${encodeURIComponent(id)}/repair`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể đồng bộ sát chiêu");
+      get().addToast(data.message || "Đã tu sửa và đồng bộ sát chiêu thành công", "success");
+      await get().fetchKillerMoves();
+      return true;
+    } catch (caught) {
+      get().addToast(caught instanceof Error ? caught.message : "Lỗi tu sửa sát chiêu", "error");
+      return false;
     }
   },
 

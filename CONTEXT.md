@@ -86,6 +86,38 @@ Tỉ lệ kích hoạt thực tế của một hiệu ứng trong chiến đấu
 
 ## Universal Dao Conflict & Multi-Path Impurity (Vạn Đạo Tương Xung & Trừng Phạt Đa Tu)
 
+### Khuếch Đại Đạo Ngân Cơ Sở (Base Dao Mark Amplification)
+Hệ số thô do đạo ngân cùng lưu phái cung cấp cho một hành động, trước khi áp dụng hiệu suất Chân Ý và xung đột đạo ngân.
+_Avoid_: Hệ số Đạo Ngân Hiệu Quả, tổng đạo ngân
+
+### Hệ Số Đạo Ngân Hiệu Quả (Effective Dao Mark Multiplier)
+Hệ số cuối cùng mà hành động nhận từ khuếch đại cơ sở sau khi Chân Ý và xung đột của lưu phái hành động được tính đến.
+_Avoid_: Khuếch Đại Đạo Ngân Cơ Sở, tổng đạo ngân
+
+### Ma Trận Tương Thích Lưu Phái (Path Compatibility Matrix)
+Quan hệ tương thích được định nghĩa cho từng cặp lưu phái, dùng để biểu diễn mức độ đạo ngân của phái này ma sát với hành động thuộc phái kia. Các nhóm phái cung cấp giá trị mặc định; cặp đặc thù có thể ghi đè.
+_Avoid_: Tương khắc nguyên tác cố định
+
+### Đạo Ngân Ngoại Phái Đang Hoạt Động (Active Foreign Dao Marks)
+Đạo ngân thuộc phái khác với path đang được đối chiếu (path hành động hoặc hit) và vượt ngưỡng dung nạp, nên được đưa vào tính xung đột tương ứng.
+_Avoid_: Tổng đạo ngân, đạo ngân chủ phái
+
+### Tương Tác Đạo Ngân Trên Mục Tiêu (Target-Side Dao Mark Interaction)
+Quan hệ giữa path của hit và từng nhóm đạo ngân trên người trúng; đạo ngân xung đột làm suy yếu hit, còn đạo ngân đồng phái có thể khuếch đại sát thương nhận.
+_Avoid_: Chỉ kháng từ đạo ngân ngoại phái
+
+### Cộng Hưởng Đạo Ngân Đồng Phái (Same-Path Dao Resonance)
+Hiệu ứng khuếch đại hit khi path của hit trùng với đạo ngân trên mục tiêu; nó tách biệt với khuếch đại do đạo ngân của người xuất chiêu.
+_Avoid_: Kháng tự nhiên, xung đột nội tại
+
+### Đạo Thương Ngoại Phái (Foreign Dao Wound)
+Vết thương combat do một hit mang path xung đột gây ra, làm suy giảm khả năng tiếp nhận trị liệu trong thời gian hiệu lực.
+_Avoid_: Trọng Thương, giảm trị liệu chung
+
+### Hệ Số Xung Đột Đạo Ngân (Dao Conflict Multiplier)
+Hệ số chung mô tả mức uy lực còn lại của hành động sau ma sát giữa lưu phái thi triển và đạo ngân ngoại phái đang hoạt động; cùng mức xung đột cũng điều chỉnh chi phí và khả năng bất ổn theo ngưỡng riêng của từng hệ quả.
+_Avoid_: Độ thuần khiết, kháng Đạo Ngân
+
 ### Đa Tu / Tạp Tu (Multi-Path Impurity)
 Trạng thái Cổ Tiên tích lũy Đạo Ngân dàn trải trên nhiều lưu phái độc lập mà không đạt cảnh giới tương ứng hoặc không sở hữu thể chất đặc thù (như Chí Tôn Tiên Thai). Độ thuần khiết (`Purity`) sụt giảm và số lưu phái kích hoạt (`ActivePaths`) vượt ngưỡng an toàn sẽ kích hoạt hệ thống trừng phạt lũy tiến.
 

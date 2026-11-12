@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -700,6 +701,37 @@ func ActionInstance(c *gin.Context) {
 
 	// 6. Apply health / soul HP damage parsed from option text
 	soulDeduct, normalDeduct := parseHPEffects(option.Text)
+	if template.Type == "DREAM_REALM" && soulDeduct > 0 {
+		dreamMarks := int64(0)
+		if player.DaoMarks != nil {
+			dreamMarks = player.DaoMarks["dream"]
+		}
+		hasDreamGu := false
+		for _, g := range models.FilterEquippedActive(player.GuInventory) {
+			if spec, ok := models.GetGu(g.GuID, g.Rank); ok {
+				for _, p := range spec.Path {
+					if strings.Contains(strings.ToLower(p), "dream") {
+						hasDreamGu = true
+						break
+					}
+				}
+			}
+		}
+		reduction := 0.0
+		if dreamMarks > 0 {
+			reduction += math.Min(0.3, float64(dreamMarks)/1000.0*0.1)
+		}
+		if hasDreamGu {
+			reduction += 0.25
+		}
+		if reduction > 0.5 {
+			reduction = 0.5
+		}
+		if reduction > 0 {
+			saved := int(float64(soulDeduct) * reduction)
+			soulDeduct -= saved
+		}
+	}
 	player.SoulHP -= soulDeduct
 	player.HP -= float64(normalDeduct)
 

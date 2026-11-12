@@ -151,7 +151,12 @@ func adaptBlockCombatOperations(actor *models.Combatant, spec *models.GuDictiona
 			case "GUARANTEED_HIT":
 				child.Mechanics = append(child.Mechanics, simulator.CombatMechanic{Trigger: "ON_HIT", ActionCode: "GUARANTEED_HIT"})
 			default:
-				return nil, fmt.Errorf("effect %q has unsupported combat mechanic %q", op.BlockID, op.Code)
+				child.Mechanics = append(child.Mechanics, simulator.CombatMechanic{
+					Trigger:    string(op.Trigger),
+					ActionCode: op.Code,
+					Params:     append([]byte(nil), op.Params...),
+					Values:     op.Values,
+				})
 			}
 		default:
 			return nil, fmt.Errorf("effect %q has unsupported combat operation %q", op.BlockID, op.Type)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import { BookOpenCheck, Check, GripVertical, Plus, Save, Search, ShieldAlert, Sparkles, Trash2, WandSparkles, Castle, AlertCircle } from "lucide-react";
+import { BookOpenCheck, Check, GripVertical, Plus, RefreshCw, Save, Search, ShieldAlert, Sparkles, Trash2, WandSparkles, Castle, AlertCircle } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
 import type { KillerMoveDraft, KillerMoveEffectOption, KillerMovePreview } from "@/store/slices/killerMovesSlice";
 import { GuHousePanel } from "@/components/GuHousePanel";
@@ -23,6 +23,7 @@ export function KillerMovesPanel() {
   const toggleEquip = useGameStore((s) => s.toggleKillerMoveEquip);
   const remove = useGameStore((s) => s.deleteKillerMove);
   const useMove = useGameStore((s) => s.useKillerMove);
+  const repairMove = useGameStore((s) => s.repairKillerMove);
 
   const [mainId, setMainId] = useState("");
   const [mainSearch, setMainSearch] = useState("");
@@ -313,10 +314,40 @@ export function KillerMovesPanel() {
           {moves.map((move) => <article key={move.id} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3.5">
             <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-bold text-zinc-100">{move.name}</h4><p className="mt-1 text-[10px] text-zinc-500">Rank {move.main_gu_rank} · {move.components.length} Cổ · {move.combat_profile?.target_type === "ALL_ENEMIES" ? "AoE Toàn thể" : move.combat_profile?.target_type === "ROW" ? "Hàng ngang" : "Đơn thể"}</p></div>{move.is_equipped && <span className="rounded-full border border-emerald-900 bg-emerald-950/40 px-2 py-0.5 text-[9px] text-emerald-300">Đang trang bị</span>}</div>
             <div className="mt-3 flex flex-wrap gap-1.5">{move.components.map((component) => <span key={component.instance_id} className="rounded-md bg-zinc-900 px-2 py-1 text-[9px] text-zinc-400">{guName(component.instance_id, component.rank)}</span>)}</div>
+            {move.combat_profile && (
+              <div className="mt-2.5 grid grid-cols-2 gap-1.5 rounded-lg border border-zinc-900 bg-zinc-900/40 p-2 text-[10px] font-mono">
+                {move.combat_profile.base_damage ? (
+                  <div className="text-rose-300">⚔️ Sát thương: {move.combat_profile.base_damage.toLocaleString()}</div>
+                ) : null}
+                {move.combat_profile.damage_mult ? (
+                  <div className="text-amber-300">💥 Hệ số: ×{move.combat_profile.damage_mult}</div>
+                ) : null}
+                {move.combat_profile.base_shield ? (
+                  <div className="text-sky-300">🛡️ Khiên: {move.combat_profile.base_shield.toLocaleString()}</div>
+                ) : null}
+                {move.combat_profile.base_healing ? (
+                  <div className="text-emerald-300">💚 Hồi phục: {move.combat_profile.base_healing.toLocaleString()}</div>
+                ) : null}
+                {move.combat_profile.lifesteal_pct ? (
+                  <div className="text-purple-300">🩸 Hút máu: {Math.round(move.combat_profile.lifesteal_pct * 100)}%</div>
+                ) : null}
+                {move.combat_profile.crit_bonus ? (
+                  <div className="text-yellow-300">⚡ Bạo kích: +{Math.round(move.combat_profile.crit_bonus * 100)}%</div>
+                ) : null}
+                <div className="text-violet-300">💧 Tiêu hao: {move.combat_profile.mana_cost || 0} Chân Nguyên</div>
+                {move.combat_profile.backfire_hp_pct ? (
+                  <div className="text-red-400">⚠️ Phản phệ: {Math.round(move.combat_profile.backfire_hp_pct * 100)}% HP</div>
+                ) : null}
+              </div>
+            )}
             <div className="mt-3 flex items-center justify-between text-[10px] font-mono">
-              <span className={!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-400" : "text-emerald-400"}>
+              <span className={!move.available ? (move.can_repair ? "text-amber-400" : "text-red-300") : move.has_starving_gu ? "text-amber-400" : "text-emerald-400"}>
                 {!move.available ? (
-                  <><ShieldAlert className="mr-1 inline h-3 w-3" />Thiếu Cổ thành phần</>
+                  move.can_repair ? (
+                    <><RefreshCw className="mr-1 inline h-3 w-3" />Có thể đồng bộ Cổ</>
+                  ) : (
+                    <><ShieldAlert className="mr-1 inline h-3 w-3" />Thiếu Cổ thành phần</>
+                  )
                 ) : move.has_starving_gu ? (
                   <><AlertCircle className="mr-1 inline h-3 w-3" />Cần cho Cổ ăn</>
                 ) : (
@@ -325,16 +356,28 @@ export function KillerMovesPanel() {
               </span>
               <span className="text-cyan-300">Thành thạo {move.mastery_level} · {move.mastery_xp} XP</span>
             </div>
-            <div className={`mt-2 text-[10px] ${!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-300" : "text-emerald-300"}`}>
+            <div className={`mt-2 text-[10px] ${!move.available ? (move.can_repair ? "text-amber-300" : "text-red-300") : move.has_starving_gu ? "text-amber-300" : "text-emerald-300"}`}>
               {!move.available
-                ? (move.missing_gu?.length ? `Thiếu Cổ: ${move.missing_gu.join(", ")}` : move.unavailable_reason || "Cổ thành phần hoặc composition profile không còn khả dụng")
+                ? (move.can_repair ? "Cổ thành phần đã tăng rank hoặc đổi instance — bấm [Đồng Bộ] để tự động nâng cấp sát chiêu" : move.missing_gu?.length ? `Thiếu Cổ: ${move.missing_gu.join(", ")}` : move.unavailable_reason || "Cổ thành phần hoặc composition profile không còn khả dụng")
                 : move.has_starving_gu
                   ? "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)"
                   : "Sẵn sàng trong chiến đấu"}
             </div>
             <div className="mt-2 text-[10px] text-zinc-500">Thành công hiện tại: <span className="text-amber-200">{formatPercent(move.success_chance)}</span> · Hòa hợp {formatPercent(move.harmony)}</div>
             <div className="mt-3 flex gap-2">
-              <button onClick={() => void toggleEquip(move.id)} disabled={(!move.available && !move.is_equipped) || (!move.is_equipped && equippedCount>=maxEquipped)} className={`flex-1 rounded-lg border px-2 py-2 text-[10px] font-bold disabled:opacity-40 ${move.is_equipped ? "border-zinc-700 text-zinc-300 hover:bg-zinc-900" : "border-emerald-900 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-950/50"}`}>{move.is_equipped ? "Tháo trang bị" : "Trang bị"}</button>
+              <button
+                onClick={() => void repairMove(move.id)}
+                className={`rounded-lg border px-2.5 py-2 text-[10px] font-bold flex items-center gap-1 ${
+                  move.can_repair
+                    ? "border-amber-700 bg-amber-950/40 text-amber-300 hover:bg-amber-950/70"
+                    : "border-zinc-800 text-zinc-400 hover:bg-zinc-900"
+                }`}
+                title="Tự động đồng bộ Cổ thành phần khi Cổ tăng rank hoặc thay đổi instance"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Đồng Bộ
+              </button>
+              <button onClick={() => void toggleEquip(move.id)} disabled={(!move.available && !move.is_equipped && !move.can_repair) || (!move.is_equipped && equippedCount>=maxEquipped)} className={`flex-1 rounded-lg border px-2 py-2 text-[10px] font-bold disabled:opacity-40 ${move.is_equipped ? "border-zinc-700 text-zinc-300 hover:bg-zinc-900" : "border-emerald-900 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-950/50"}`}>{move.is_equipped ? "Tháo trang bị" : "Trang bị"}</button>
               {move.selected_effects.some((effect) => effect.trigger === "ON_USE") && <button onClick={() => void useMove(move.id)} disabled={!move.is_equipped || !move.available || move.has_starving_gu} className="rounded-lg border border-violet-900 bg-violet-950/30 px-3 text-[10px] text-violet-200 hover:bg-violet-950/50 disabled:opacity-40">Dùng</button>}
               <button onClick={() => void remove(move.id)} className="rounded-lg border border-red-950 px-3 text-red-400 hover:bg-red-950/30" aria-label="Xóa sát chiêu"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>

@@ -7,6 +7,10 @@ import { useWorldStore } from "@/store/useWorldStore";
 import { usePolling } from "@/lib/usePolling";
 import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
 import { WorldAtlasModal } from "@/components/WorldAtlasModal";
+import { TeleportBuildModal } from "@/components/Teleport/TeleportBuildModal";
+import { TeleportDirectoryModal } from "@/components/Teleport/TeleportDirectoryModal";
+import { TeleportManagementModal } from "@/components/Teleport/TeleportManagementModal";
+import type { TeleportArray } from "@/store/slices/teleportSlice";
 import { useUIStore } from "@/store/useUIStore";
 import { MonsterSprite } from "@/components/MonsterSprite";
 
@@ -56,6 +60,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const guDictionary = useGameStore((state) => state.guDictionary);
   const itemDictionary = useGameStore((state) => state.itemDictionary);
   const monsterDictionary = useGameStore((state) => state.monsterDictionary);
+  const myTeleportArrays = useGameStore((state) => state.myTeleportArrays);
+  const fetchMyTeleportArrays = useGameStore((state) => state.fetchMyTeleportArrays);
 
   const [gridData, setGridData] = useState<GridData | null>(null);
   const [preferredRadius, setPreferredRadius] = useState<number>(() => {
@@ -70,8 +76,34 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   });
   const [lastLog, setLastLog] = useState<string | null>(null);
   const [showAtlas, setShowAtlas] = useState(false);
+  const [showBuildTeleport, setShowBuildTeleport] = useState(false);
+  const [showDirectoryModal, setShowDirectoryModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [selectedManageArray, setSelectedManageArray] = useState<TeleportArray | null>(null);
   const lastMoveTimeRef = useRef(0);
   const setView = useUIStore((state) => state.setView);
+
+  const standingOnTeleport = useMemo(() => {
+    return mapMarkers.find(
+      (m) => m.kind === "teleport" && m.x === player.x && m.y === player.y
+    );
+  }, [mapMarkers, player.x, player.y]);
+
+  const handleOpenManage = useCallback((arrayId: string) => {
+    const myArr = myTeleportArrays.find((a) => a.id === arrayId);
+    if (myArr) {
+      setSelectedManageArray(myArr);
+      setShowManageModal(true);
+    } else {
+      void fetchMyTeleportArrays().then(() => {
+        const found = useGameStore.getState().myTeleportArrays.find((a) => a.id === arrayId);
+        if (found) {
+          setSelectedManageArray(found);
+          setShowManageModal(true);
+        }
+      });
+    }
+  }, [myTeleportArrays, fetchMyTeleportArrays]);
 
   useEffect(() => {
     if (!regionsLoaded) fetchRegions();
@@ -109,6 +141,35 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     if (marker?.kind === "aperture_portal" && !marker.isMine && Math.hypot(x - player.x, y - player.y) <= 3) {
       await enterAperturePortal(marker.id);
       await loadGrid();
+      return;
+    }
+    if (marker?.kind === "teleport") {
+      if (player.x === x && player.y === y) {
+        if (marker.isMine) {
+          handleOpenManage(marker.id);
+          return;
+        }
+        setShowDirectoryModal(true);
+        return;
+      }
+      if (!isMovable || actionLoading || player.active_combat) return;
+      if (isMemberNotLeader) {
+        addToast("Chỉ có Trưởng nhóm mới có quyền di chuyển trên bản đồ!", "error");
+        return;
+      }
+      const now = Date.now();
+      if (now - lastMoveTimeRef.current < 600) return;
+      lastMoveTimeRef.current = now;
+
+      setLastLog(null);
+      const res = await movePlayer(x, y);
+      if (res) {
+        setLastLog(res.log);
+        await loadGrid();
+        if (res.player?.x === x && res.player?.y === y) {
+          setShowDirectoryModal(true);
+        }
+      }
       return;
     }
     if (resourcePointId && Math.max(Math.abs(x - player.x), Math.abs(y - player.y)) <= 6) {
@@ -151,8 +212,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   };
 
   const getEntityName = (type: string, content: string) => {
-    if (type === "EXIT_PORTAL" || type === "PORTAL_EXIT") return "Cổng trở về";
-    if (type === "ENTRY_PORTAL") return `Cổng vào bí cảnh: ${content.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`;
+    if (type === "EXIT_PORTAL" || type === "PORTAL_EXIT") return "Phúc Địa Thoát Ly Trận";
+    if (type === "ENTRY_PORTAL") return `Phúc Địa Giới Môn Trận: ${content.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`;
     if (type === "INHERITANCE_ALTAR") return `Đài Truyền Thừa: ${content.replace(/^altar_/, "").replace(/_/g, " ")}`;
     if (type === "Monster" || type === "Boss") return monsterDictionary[content]?.name || content.split(" ")[0];
     if (type === "Resource") return itemDictionary[content]?.name || content.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
@@ -216,7 +277,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
           kind: marker.kind,
           id: marker.id,
           name: marker.name,
-          isMine: marker.detail?.is_mine === true,
+          isMine: marker.detail?.is_mine === true || marker.detail?.owner_id === player.id || marker.detail?.OwnerID === player.id,
         }]);
       }
     }
@@ -229,7 +290,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       }
     }
     return map;
-  }, [mapMarkers, mapMarkersRegion, player.current_region, resourcePoints, resourcePointsRegion]);
+  }, [mapMarkers, mapMarkersRegion, player.current_region, player.id, resourcePoints, resourcePointsRegion]);
 
   const gridArray = useMemo(() => {
     const arr = [];
@@ -293,6 +354,24 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
             <MapIcon className="w-3.5 h-3.5" />
             <span>Đại Vực</span>
           </button>
+          <button
+            onClick={() => setShowBuildTeleport(true)}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-all font-serif text-xs font-semibold shadow-lg shadow-sky-950/20 cursor-pointer"
+            title="Bố trí Truyền Tống Trận (Trận Đạo)"
+          >
+            <Waypoints className="w-3.5 h-3.5 text-sky-300" />
+            <span>Bố Trận</span>
+          </button>
+          {standingOnTeleport && (
+            <button
+              onClick={() => setShowDirectoryModal(true)}
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 transition-all font-serif text-xs font-semibold shadow-lg shadow-emerald-950/20 cursor-pointer animate-pulse"
+              title="Đang đứng trên Truyền Tống Trận - Nhấp để dịch chuyển"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Dịch Chuyển</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -320,13 +399,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                 || markersOnCell.find((marker) => marker.kind === "sect")
                 || markersOnCell[0];
               const portalMarker = markersOnCell.find((marker) => marker.kind === "aperture_portal");
+              const teleportMarker = markersOnCell.find((marker) => marker.kind === "teleport");
               const resourcePoint = markersOnCell.find((marker) => marker.kind === "resource_point");
               const markerTitle = markersOnCell.map((marker) => marker.name).join(", ");
 
               return (
                 <div
                   key={`${x},${y}`}
-                  onClick={() => handleCellClick(x, y, isMovable, cellData, portalMarker || primaryMarker, resourcePoint?.id)}
+                  onClick={() => handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || primaryMarker, resourcePoint?.id)}
                   className={`aspect-square rounded-md border flex flex-col justify-center items-center relative transition-all duration-200 ${
                     isPlayerCell
                       ? "bg-emerald-500/25 border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.35)] z-20"
@@ -429,6 +509,44 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
           x={player.x}
           y={player.y}
           onClose={() => setShowAtlas(false)}
+        />
+      )}
+
+      {/* Teleport Formation Modals */}
+      {showBuildTeleport && (
+        <TeleportBuildModal
+          player={player}
+          onClose={() => setShowBuildTeleport(false)}
+          onSuccess={async () => {
+            setShowBuildTeleport(false);
+            await fetchZoneMarkers(player.current_region);
+            await loadGrid();
+            await fetchMyTeleportArrays();
+          }}
+        />
+      )}
+
+      {showDirectoryModal && (
+        <TeleportDirectoryModal
+          player={player}
+          onClose={() => setShowDirectoryModal(false)}
+          onOpenManage={handleOpenManage}
+        />
+      )}
+
+      {showManageModal && selectedManageArray && (
+        <TeleportManagementModal
+          player={player}
+          array={selectedManageArray}
+          onClose={() => {
+            setShowManageModal(false);
+            setSelectedManageArray(null);
+          }}
+          onUpdated={async () => {
+            await fetchZoneMarkers(player.current_region);
+            await loadGrid();
+            await fetchMyTeleportArrays();
+          }}
         />
       )}
     </div>

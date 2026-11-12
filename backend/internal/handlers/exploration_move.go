@@ -124,10 +124,69 @@ func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Reg
 
 	debuffPct, duration := GetRegionalWallDebuff(player.Rank, player.SubRank)
 	sourceLabel := fmt.Sprintf("Giới Vực Bích (%s ➔ %s)", oldZone.Name, newZone.Name)
-	player.Statuses.Add("regional_wall_suppression", sourceLabel, duration, debuffPct)
-
 	debuffInt := int(math.Abs(debuffPct * 100))
 	durMinutes := int(duration.Minutes())
+
+	type rowQuerier interface {
+		notify.Querier
+		QueryRow(string, ...interface{}) *sql.Row
+	}
+	var rq rowQuerier
+	var querier notify.Querier
+	if len(q) > 0 && q[0] != nil {
+		querier = q[0]
+		if r, ok := q[0].(rowQuerier); ok {
+			rq = r
+		}
+	} else if db.DB != nil {
+		querier = db.DB
+		rq = db.DB
+	}
+
+	// Check if player is piloting an active equipped Immortal Gu House
+	var houseID, houseName string
+	var currentDurability float64
+	var auxGuCount int
+	if rq != nil && player.ID != uuid.Nil {
+		_ = rq.QueryRow(`
+			SELECT id::text, name, current_durability, aux_gu_count 
+			FROM player_gu_houses 
+			WHERE player_id = $1 AND is_equipped = true 
+			LIMIT 1
+		`, player.ID).Scan(&houseID, &houseName, &currentDurability, &auxGuCount)
+	}
+
+	if houseID != "" && currentDurability > 0 {
+		// Tiên Cổ Ốc chịu áp lực khổng lồ thay cho chủ nhân!
+		durLoss := 25.0
+		newDur := math.Max(0, currentDurability-durLoss)
+		guLoss := int(float64(auxGuCount) * 0.15)
+		newAux := int(math.Max(0, float64(auxGuCount-guLoss)))
+
+		if newDur <= 0 {
+			// Cổ Ốc vỡ vụn ngay trong Giới Bích!
+			_, _ = querier.Exec(`UPDATE player_gu_houses SET current_durability = 0, aux_gu_count = $1, is_equipped = false, updated_at = NOW() WHERE id = $2`, newAux, houseID)
+			msg := fmt.Sprintf("💥 NGUY CẤP! Tiên Cổ Ốc [%s] không chịu nổi áp lực cuồng bạo của Giới Vực Bích (%s ➔ %s) và đã nổ tung! Đạo hữu văng ra ngoài và bị [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d phút).",
+				houseName, oldZone.Name, newZone.Name, debuffInt, durMinutes)
+			player.Statuses.Add("regional_wall_suppression", sourceLabel, duration, debuffPct)
+			if player.ID != uuid.Nil {
+				_ = notify.Send(querier, player.ID, "regional_wall_suppression", "Tiên Cổ Ốc Sụp Đổ", msg)
+			}
+			return msg
+		}
+
+		// Cổ Ốc che chở cho nhân vật, nhưng bản thân bị bào mòn độ bền và chấn tử phàm cổ
+		_, _ = querier.Exec(`UPDATE player_gu_houses SET current_durability = $1, aux_gu_count = $2, updated_at = NOW() WHERE id = $3`, newDur, newAux, houseID)
+		msg := fmt.Sprintf("🛡️ Tiên Cổ Ốc [%s] gượng ép xé rách Giới Vực Bích (%s ➔ %s)! Áp lực thiên địa đạo ngân xung đột làm tổn hại %.0f%% độ bền (còn %.0f%%) và chấn tử %d phàm cổ phụ trợ!",
+			houseName, oldZone.Name, newZone.Name, durLoss, newDur, guLoss)
+		if player.ID != uuid.Nil {
+			_ = notify.Send(querier, player.ID, "regional_wall_suppression", "Tiên Cổ Ốc Chấn Động", msg)
+		}
+		return msg
+	}
+
+	player.Statuses.Add("regional_wall_suppression", sourceLabel, duration, debuffPct)
+
 	var msg string
 	if durMinutes >= 60 {
 		msg = fmt.Sprintf("⚠️ Đạo hữu vừa vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d giờ).",
@@ -140,12 +199,6 @@ func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Reg
 	logger.S.Warnf("[Áp Chế Giới Vực] Người chơi %s (%s) bị áp chế khi vượt Giới Vực Bích từ %s sang %s (giảm %d%%, thời gian %v)",
 		player.Username, player.ID, oldZone.Name, newZone.Name, debuffInt, duration)
 
-	var querier notify.Querier
-	if len(q) > 0 && q[0] != nil {
-		querier = q[0]
-	} else if db.DB != nil {
-		querier = db.DB
-	}
 	if querier != nil && player.ID != uuid.Nil {
 		_ = notify.Send(querier, player.ID, "regional_wall_suppression", "Áp Chế Giới Vực", msg)
 	}

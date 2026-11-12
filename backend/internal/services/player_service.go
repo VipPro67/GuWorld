@@ -258,7 +258,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			}
 		}
 		if !gamefx.IsAgingImmune(player) {
-			yearsPassed := (secondsPassed * effectiveBase) / 36000.0
+			yearsPassed := (secondsPassed * effectiveBase) / 86400.0
 			player.Lifespan -= yearsPassed
 			if player.Lifespan <= 0 {
 				player.Lifespan = 0

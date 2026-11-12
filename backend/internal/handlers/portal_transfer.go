@@ -103,7 +103,7 @@ func PortalTransfer(c *gin.Context) {
 		return
 	}
 
-	logMsg := fmt.Sprintf("🌀 Đã tiến vào %s (%d, %d).", targetName, newX, newY)
+	logMsg := fmt.Sprintf("🌀 Cổ Đại Truyền Tống Trận đưa đạo hữu tiến vào %s (%d, %d).", targetName, newX, newY)
 	if transition.DebuffMessage != "" {
 		logMsg += " " + transition.DebuffMessage
 	}

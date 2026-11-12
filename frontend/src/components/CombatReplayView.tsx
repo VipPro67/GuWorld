@@ -31,6 +31,8 @@ export interface DamageBreakdown {
   base_damage?: number;
   skill_mult?: number;
   dao_mult?: number;
+  target_dao_resonance?: number;
+  dao_path?: string;
   buff_mult?: number;
   crit_mult?: number;
   path_bonus?: number;

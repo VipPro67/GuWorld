@@ -61,18 +61,57 @@ const (
 	StatusPhiHanh = "PHI_HANH"
 
 	// Gu World Dao Mechanics - New Status Effects
-	StatusEssenceLeak  = "ESSENCE_LEAK"
-	StatusGuSeal       = "GU_SEAL"
-	StatusSoulWound    = "SOUL_WOUND"
-	StatusThoughtChaos = "THOUGHT_CHAOS"
-	StatusDaoConflict  = "DAO_CONFLICT"
-	StatusBacklash     = "BACKLASH"
+	StatusEssenceLeak     = "ESSENCE_LEAK"
+	StatusGuSeal          = "GU_SEAL"
+	StatusSoulWound       = "SOUL_WOUND"
+	StatusThoughtChaos    = "THOUGHT_CHAOS"
+	StatusDaoConflict     = "DAO_CONFLICT"
+	StatusForeignDaoWound = "FOREIGN_DAO_WOUND"
+	StatusBacklash        = "BACKLASH"
 
 	// Mộng Đạo & Vận Đạo (Dream Path & Luck Path)
 	StatusDreamPrison      = "DREAM_PRISON"
 	StatusDreamIllusion    = "DREAM_ILLUSION"
 	StatusLuckSiphon       = "LUCK_SIPHON"
 	StatusLuckCurseReverse = "LUCK_CURSE_REVERSE"
+
+	// Đợt 2: Trí Đạo, Lực Đạo, Huyết Đạo
+	StatusBerserk        = "BERSERK"
+	StatusCalculated     = "CALCULATED"
+	StatusBloodSacrifice = "BLOOD_SACRIFICE"
+
+	// Đợt 3: Biến Hóa Đạo, Cốt Đạo
+	StatusBearForm       = "BEAR_FORM"
+	StatusEagleForm      = "EAGLE_FORM"
+	StatusAdaptiveResist = "ADAPTIVE_RESIST"
+	StatusBoneArmor      = "BONE_ARMOR"
+
+	// Đợt 4: Kim Đạo, Vân Đạo
+	StatusMetalAegis = "METAL_AEGIS"
+	StatusCloudMist  = "CLOUD_MIST"
+
+	// Đợt 5: Sát Chiêu, Tiên Cổ Phòng, Trận Pháp (Iconic Reverend Insanity Mechanics)
+	StatusReverseFlowSeal         = "REVERSE_FLOW_SEAL"
+	StatusFamiliarFace            = "FAMILIAR_FACE"
+	StatusTimeSpeedSurge          = "TIME_SPEED_SURGE"
+	StatusFiveRegionalSuppression = "FIVE_REGIONAL_SUPPRESSION"
+	StatusNinetyNineShield        = "NINETY_NINE_SHIELD"
+
+	// Đợt 6: Tuyệt Đỉnh Sát Chiêu Tiên Đạo (Reverend Insanity Docs Tab)
+	StatusYamaEmperor   = "YAMA_EMPEROR"
+	StatusBloodRobe     = "BLOOD_ROBE"
+	StatusFutureSelf    = "FUTURE_SELF"
+	StatusEatingLoss    = "EATING_LOSS"
+	StatusFarewellCurse = "FAREWELL_CURSE"
+
+	// Đợt 7: Đại Điển Sát Chiêu Tiên Đạo (Reverend Insanity Docs Tab 2)
+	StatusSwordMark       = "SWORD_MARK"
+	StatusRefineSelf      = "REFINE_SELF"
+	StatusAllPeopleUnited = "ALL_PEOPLE_UNITED"
+	StatusDryWoodSpring   = "DRY_WOOD_SPRING"
+	StatusIceCoffin       = "ICE_COFFIN"
+	StatusTotemGoldenBell = "TOTEM_GOLDEN_BELL"
+	StatusGreatNight      = "GREAT_NIGHT"
 )
 
 // StatusCategory groups statuses by their nature for dispel/cleanse mechanics.
@@ -90,31 +129,32 @@ const (
 // Behaviour tags drive realtime status application and ticking. Each new status
 // maps to one behaviour hook; unknown behaviours fall through to a no-op log.
 const (
-	BehaviourDot             = "dot"              // damage over time (bleed, poison, burn, slow_damage)
-	BehaviourRegen           = "regen"            // heal over time
-	BehaviourStun            = "stun"             // skip turn
-	BehaviourFreeze          = "freeze"           // skip turn, breaks on damage
-	BehaviourSilence         = "silence"          // only basic attack (cannot use skills)
-	BehaviourForceBasic      = "force_basic"      // fear: only basic attack
-	BehaviourConfuse         = "confuse"          // chance to mis-target
-	BehaviourStealth         = "stealth"          // untargetable, breaks on attack
-	BehaviourSleep           = "sleep"            // skip turn, breaks on damage
-	BehaviourBlind           = "blind"            // accuracy penalty / miss chance
-	BehaviourCharm           = "charm"            // redirect target (attack allies)
-	BehaviourBind            = "bind"             // immobilize (skip turn)
-	BehaviourTaunt           = "taunt"            // forces enemies to attack taunter
-	BehaviourThorns          = "thorns"           // reflects damage back to attacker
-	BehaviourAtkUp           = "atk_up"           // increases attack damage
-	BehaviourDefUp           = "def_up"           // increases defense
-	BehaviourWeak            = "weak"             // reduces damage dealt
-	BehaviourSlow            = "slow"             // reduces speed
-	BehaviourHaste           = "haste"            // speed up
-	BehaviourArmorBreak      = "armor_break"      // defense down
-	BehaviourDamageReduction = "damage_reduction" // reduce damage taken
-	BehaviourInvincible      = "invincible"       // Bất Hoại: immune to all damage
-	BehaviourLastStand       = "last_stand"       // Bất Tử: takes damage, HP floors at 1
-	BehaviourEvasion         = "evasion"          // dodge chance (0..1 = Effect.Value/100)
-	BehaviourReviveLock      = "revive_lock"      // prevent revival
+	BehaviourDot                      = "dot"                        // damage over time (bleed, poison, burn, slow_damage)
+	BehaviourRegen                    = "regen"                      // heal over time
+	BehaviourStun                     = "stun"                       // skip turn
+	BehaviourFreeze                   = "freeze"                     // skip turn, breaks on damage
+	BehaviourSilence                  = "silence"                    // only basic attack (cannot use skills)
+	BehaviourForceBasic               = "force_basic"                // fear: only basic attack
+	BehaviourConfuse                  = "confuse"                    // chance to mis-target
+	BehaviourStealth                  = "stealth"                    // untargetable, breaks on attack
+	BehaviourSleep                    = "sleep"                      // skip turn, breaks on damage
+	BehaviourBlind                    = "blind"                      // accuracy penalty / miss chance
+	BehaviourCharm                    = "charm"                      // redirect target (attack allies)
+	BehaviourBind                     = "bind"                       // immobilize (skip turn)
+	BehaviourTaunt                    = "taunt"                      // forces enemies to attack taunter
+	BehaviourThorns                   = "thorns"                     // reflects damage back to attacker
+	BehaviourAtkUp                    = "atk_up"                     // increases attack damage
+	BehaviourDefUp                    = "def_up"                     // increases defense
+	BehaviourWeak                     = "weak"                       // reduces damage dealt
+	BehaviourSlow                     = "slow"                       // reduces speed
+	BehaviourHaste                    = "haste"                      // speed up
+	BehaviourArmorBreak               = "armor_break"                // defense down
+	BehaviourDamageReduction          = "damage_reduction"           // reduce damage taken
+	BehaviourHealingReceivedReduction = "healing_received_reduction" // reduce healing received
+	BehaviourInvincible               = "invincible"                 // Bất Hoại: immune to all damage
+	BehaviourLastStand                = "last_stand"                 // Bất Tử: takes damage, HP floors at 1
+	BehaviourEvasion                  = "evasion"                    // dodge chance (0..1 = Effect.Value/100)
+	BehaviourReviveLock               = "revive_lock"                // prevent revival
 
 	// Gu World specific behaviours
 	BehaviourAperture     = "aperture"      // ESSENCE_LEAK, GU_SEAL, THOUGHT_CHAOS

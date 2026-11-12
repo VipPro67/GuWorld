@@ -145,7 +145,7 @@ export const Registration: React.FC<RegistrationProps> = ({
   };
 
   return (
-    <div className="glass-panel-gold rounded-3xl p-8 w-full max-w-md relative overflow-hidden group shadow-[0_0_50px_rgba(234,179,8,0.15)]">
+    <div className="glass-panel-gold rounded-3xl p-6 w-full max-w-md relative overflow-hidden group shadow-[0_0_50px_rgba(234,179,8,0.15)]">
       {referralCode && (
         <div className="mb-4 text-[10px] font-mono text-center text-amber-700 dark:text-amber-400 bg-[var(--bg-elevated)] border border-amber-500 p-2 rounded-xl animate-pulse">
           ⚡ LIÊN KẾT SƯ ĐỒ ĐÃ KÍCH HOẠT: <span className="font-bold underline text-yellow-300">{referralCode}</span>
@@ -156,7 +156,7 @@ export const Registration: React.FC<RegistrationProps> = ({
       <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-[var(--bg-elevated)] pointer-events-none" />
 
       {/* Header */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-5">
         <div className="inline-flex p-3 rounded-2xl bg-[var(--bg-elevated)] border border-amber-500 text-amber-500 mb-4 animate-pulse">
           <Compass className="w-6 h-6" />
         </div>
@@ -169,7 +169,7 @@ export const Registration: React.FC<RegistrationProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-zinc-900 mb-6 bg-[var(--bg-surface)] p-1.5 rounded-2xl border border-[var(--border-default)]">
+      <div className="flex border-b border-zinc-900 mb-5 bg-[var(--bg-surface)] p-1.5 rounded-2xl border border-[var(--border-default)]">
         <button
           type="button"
           onClick={() => handleTabChange(true)}
@@ -195,14 +195,14 @@ export const Registration: React.FC<RegistrationProps> = ({
       </div>
 
       {/* Text Description */}
-      <p className="text-xs text-[var(--text-secondary)] leading-relaxed text-center mb-6 font-serif h-12 flex items-center justify-center">
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed text-center mb-5 font-serif h-12 flex items-center justify-center">
         {isLoginTab
           ? "Đã có Tiên cốt Không Khiếu? Nhập Email cùng Mật mã để tiếp tục nghịch thiên hành trình."
           : '"Con người là vạn vật chi linh, Cổ là thiên địa chi tinh." Khai mở Đạo hiệu để gacha Tư chất (Giáp, Ất, Bính, Đinh).'}
       </p>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3">
         {/* Login email */}
         {isLoginTab && (
           <div className="relative">
@@ -416,7 +416,7 @@ export const Registration: React.FC<RegistrationProps> = ({
               : username.trim().length < 3 || email.trim().length === 0 || (emailVerificationRequired && otp.trim().length < 6)) ||
             password.length < 6
           }
-          className={`w-full py-4 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-6 ${
+          className={`w-full py-3.5 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-5 ${
             isLoading ||
             (isLoginTab
               ? email.trim().length === 0

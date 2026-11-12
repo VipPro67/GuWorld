@@ -127,7 +127,7 @@ func TestApplyProjectedStatusLifespanImmunityForRank10(t *testing.T) {
 	p10 := regenTestPlayer()
 	p10.Rank = 10
 	p10.Lifespan = 100
-	p10.LastManaUpdate = now.Add(-36000 * time.Second) // 1 year passed
+	p10.LastManaUpdate = now.Add(-86400 * time.Second) // 1 year passed
 	applyProjectedStatus(&p10, 0, 1, now)
 	if p10.Lifespan != 100 {
 		t.Fatalf("rank 10 lifespan changed: got %v, want 100", p10.Lifespan)
@@ -137,7 +137,7 @@ func TestApplyProjectedStatusLifespanImmunityForRank10(t *testing.T) {
 	p1 := regenTestPlayer()
 	p1.Rank = 1
 	p1.Lifespan = 100
-	p1.LastManaUpdate = now.Add(-36000 * time.Second) // 1 year passed
+	p1.LastManaUpdate = now.Add(-86400 * time.Second) // 1 year passed
 	applyProjectedStatus(&p1, 0, 1, now)
 	if p1.Lifespan >= 100 {
 		t.Fatalf("rank 1 lifespan did not decrease: got %v, want < 100", p1.Lifespan)

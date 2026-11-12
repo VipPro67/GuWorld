@@ -550,10 +550,24 @@ func Get(p *models.Player) Effects {
 		if !ok {
 			continue
 		}
+		guVal := func(spec models.GuDictionaryItem, key string) float64 {
+			v := models.GuStatValue(spec, key)
+			if v == 0 {
+				v = models.GuAlwaysOnValue(spec, key)
+			}
+			return v
+		}
 		addEffects(&fx, Effects{
-			Tenacity:                models.GuStatValue(spec, "TENACITY"),
-			CCResist:                models.GuStatValue(spec, "CC_RESIST"),
-			DaoConflictReductionPct: models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION"),
+			Tenacity:                guVal(spec, "TENACITY"),
+			CCResist:                guVal(spec, "CC_RESIST"),
+			DaoConflictReductionPct: guVal(spec, "PATH_CONFLICT_REDUCTION"),
+			LuckBonus:               guVal(spec, "LUCK"),
+			RefineBonus:             guVal(spec, "REFINE_SUCCESS"),
+			HPRegenBonus:            guVal(spec, "HP_REGEN"),
+			ManaRegenBonus:          guVal(spec, "MANA_REGEN"),
+			SoulRegenBonus:          guVal(spec, "SOUL_REGEN"),
+			SoulDefenseBonus:        guVal(spec, "SOUL_DEFENSE"),
+			MentalResistanceBonus:   guVal(spec, "MENTAL_RESISTANCE"),
 		})
 	}
 

@@ -327,7 +327,7 @@ func CheckAndTriggerTribulations() error {
 		// ── Process each aperture ─────────────────────────────────────────────
 		for _, ap := range apertures {
 			timeSpeedMultiplier := 1.0
-			realYearsPassed := 60.0 / 36000.0
+			realYearsPassed := 60.0 / 86400.0
 
 			// Look up player data from batch
 			currentLifespan := 100.0
@@ -398,7 +398,7 @@ func CheckAndTriggerTribulations() error {
 				}
 			}
 
-			subjectiveYearsPassed := 60.0 * ap.TimeRate * timeSpeedMultiplier / 36000.0
+			subjectiveYearsPassed := 60.0 * ap.TimeRate * timeSpeedMultiplier / 86400.0
 			newYearsPassed := ap.InternalYearsPassed + subjectiveYearsPassed
 			yearsDiff := math.Floor(newYearsPassed) - math.Floor(ap.InternalYearsPassed)
 

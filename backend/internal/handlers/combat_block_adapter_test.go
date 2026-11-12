@@ -119,3 +119,24 @@ func TestAdaptBlockCombatOperationKeepsGuaranteedHitAsMechanic(t *testing.T) {
 		t.Fatalf("guaranteed hit mechanic was not preserved as its own behavior: %+v", effects)
 	}
 }
+
+func TestAdaptBlockCombatOperationPassesThroughUniqueMechanics(t *testing.T) {
+	actor := &models.Combatant{MaxHP: 100}
+	spec := &models.GuDictionaryItem{ID: "GU_TEST", Name: "Cổ thử", Rank: 1}
+	compiled, err := (gameplayeffects.Compiler{}).Compile([]gameplayeffects.Block{{
+		ID: "ACTION", Trigger: gameplayeffects.TriggerOnAction,
+		Target:     gameplayeffects.Target{Selector: gameplayeffects.TargetSingle},
+		Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpUnique, Code: "CALCULATED_STRIKE"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	effects, err := adaptBlockCombatOperations(actor, spec, 1, compiled.Operations(gameplayeffects.TriggerOnAction))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(effects) != 1 || effects[0].Action == nil || len(effects[0].Action.Mechanics) != 1 || effects[0].Action.Mechanics[0].ActionCode != "CALCULATED_STRIKE" {
+		t.Fatalf("unique mechanic was not preserved on operation child action: %+v", effects)
+	}
+}
+

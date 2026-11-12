@@ -324,7 +324,7 @@ Tạo ngay khi hoàn tất khâu Thả Cổ của nghi thức Thăng Tiên (lên
 - `last_cleanse_at` (TIMESTAMPTZ, NULL) — mốc Thanh Đạo Tẩy Thể gần nhất; cooldown 1 giờ giữa các lần bóc tách Đạo Ngân ngoại hệ
 - `state` — STABLE / TRIBULATION_PENDING / TRIBULATION_ACTIVE / DAMAGED / DESTROYED
 
-> **Hằng số thời gian nội bộ:** 1 năm ngoại giới = **36.000 giây (10 giờ) đời thật** khi `time_speed_multiplier = 1`; 1 năm nội bộ Tiên Khiếu = **36.000 giây đời thật ÷ (`time_rate` × `time_speed_multiplier`)**. Sản lượng nền của Tiên Khiếu là `essence_production_per_year` sau mỗi năm nội bộ, nên tốc độ nền mỗi giờ đời thật là `essence_production_per_year ÷ 10 × time_rate × time_speed_multiplier`; Cổ, thể chất, tuổi thọ và hiệu ứng khóa hồi phục vẫn được áp dụng sau đó. Kiếp nạn đầu tiên đến vào năm nội bộ thứ 10 → chờ khoảng `10 × 36.000 ÷ time_rate` giây đời thật (khoảng 2–10 giờ, tùy phẩm cấp Tiên Khiếu). Kiếp đang ACTIVE quá **6 giờ đời thật** (chỉ tính thời gian online) tự động kết toán thất bại.
+> **Hằng số thời gian nội bộ:** 1 năm ngoại giới = **86.400 giây (1 ngày) đời thật** khi `time_speed_multiplier = 1`; 1 năm nội bộ Tiên Khiếu = **86.400 giây đời thật ÷ (`time_rate` × `time_speed_multiplier`)**. Sản lượng nền của Tiên Khiếu là `essence_production_per_year` sau mỗi năm nội bộ, nên tốc độ nền mỗi giờ đời thật là `essence_production_per_year ÷ 24 × time_rate × time_speed_multiplier`; Cổ, thể chất, tuổi thọ và hiệu ứng khóa hồi phục vẫn được áp dụng sau đó. Kiếp nạn đầu tiên đến vào năm nội bộ thứ 10 → chờ khoảng `10 × 86.400 ÷ time_rate` giây đời thật (khoảng 4 giờ 22 phút–24 giờ, tùy phẩm cấp Tiên Khiếu). Kiếp đang ACTIVE quá **6 giờ đời thật** (chỉ tính thời gian online) tự động kết toán thất bại.
 > **Bảo hộ offline:** khi đến mốc kiếp mà người chơi offline, worker không sinh quái, đặt `state='TRIBULATION_PENDING'`. Khi online lại mới spawn và có 5 phút grace trước khi quái di chuyển/phá mỏ.
 > **Vĩnh Sinh (Rank 10):** cảnh giới chỉ gán qua Admin (`admin_player_update.go` cap 1–10), không có đường đột phá từ Cửu Chuyển. Hai tác dụng: **không còn tai kiếp** (`tribulation_trigger.go` bỏ qua `checkAndTriggerSingleAperture` + nhánh lên lịch trong `CheckAndTriggerTribulations`) và **bất tử tuổi thọ** (`gamefx.IsDeadState` luôn false + worker không trừ `lifespan` do lão hóa). Sản xuất Tiên Nguyên, hệ sinh thái, dân cư, gia tốc thời gian và hồi phục giữ nguyên. Tên rank `GetRankName(10)="Vĩnh Sinh"`; nhãn Chân Nguyên tối cao là "Hỗn Độn Tiên Nguyên".
 
@@ -341,6 +341,8 @@ Một phiên nghi thức Thăng Tiên duy nhất mỗi người chơi (UNIQUE `p
 ### Đạo Ngân (Đạo Ấn)
 
 Đạo Ngân chỉ lưu trong cột JSONB `players.dao_marks` (ví dụ `{"strength": 100, "fire": 2500}`). Bảng quan hệ `dao_marks` đã bị xóa — không còn mirror. Path được normalize dạng lowercase (không có hậu tố `" path"`) khi lưu.
+
+Trong combat, khuếch đại cùng lưu phái là `1 + marks/1.000` (1.000 Đạo Ngân = ×2). Đòn nhận còn nhân khuếch đại Đạo Ngân cùng phái của mục tiêu, rồi trừ giáp, kháng tự nhiên theo Đạo Ngân khác phái đang hoạt động, kháng lưu phái và giảm sát thương. Kháng tự nhiên chỉ bật khi tổng Đạo Ngân mục tiêu vượt 10.000; các phái phòng thủ phải vượt ngưỡng hoạt động `max(1.000, 2% tổng)`. Sát thương đường dẫn khác có kháng sẽ gây Đạo Ngân Thương: giảm hồi phục nhận 30% trong 2 lượt.
 
 ### Cảnh Giới Lưu Phái — cột `players.path_masteries`
 
@@ -1064,6 +1066,15 @@ Cấu trúc flat v2 của mỗi block:
 | **DREAM_ILLUSION** | Buff (Mộng Đạo) | Mới | **CÓ (registry - ẩn thân trong ảo mộng, không bị địch nhắm đánh)** |
 | **LUCK_SIPHON** | Debuff (Vận Đạo) | Mới | **CÓ (registry - tước đoạt né tránh & bạo kích của địch)** |
 | **LUCK_CURSE_REVERSE** | Buff (Vận Đạo) | Mới | **CÓ (registry - biến họa thành phúc, tăng vọt tỉ lệ Đại Cát hiệp sau)** |
+| **BERSERK** | Buff (Lực Đạo) | Mới | **CÓ (registry - cuồng bạo, tăng 35% sát thương và 30% kiên cường)** |
+| **CALCULATED** | Buff (Trí Đạo) | Mới | **CÓ (registry - động tất, tăng 25% sát thương kỹ năng)** |
+| **BLOOD_SACRIFICE** | Buff (Huyết Đạo) | Mới | **CÓ (registry - huyết tế, tăng 50% sát thương gây ra)** |
+| **BEAR_FORM** | Buff (Biến Hóa Đạo) | Mới | **CÓ (registry - hóa thân Cự Hùng, tăng 30% thủ và 25% MaxHP Hùng Giáp)** |
+| **EAGLE_FORM** | Buff (Biến Hóa Đạo) | Mới | **CÓ (registry - hóa thân Kim Điêu, tăng 40% tốc độ và 25% né tránh)** |
+| **ADAPTIVE_RESIST** | Buff (Biến Hóa Đạo) | Mới | **CÓ (registry - thích ứng cơ thể, giảm 25% sát thương nhận vào)** |
+| **BONE_ARMOR** | Buff (Cốt Đạo) | Mới | **CÓ (registry - bạch cốt giáp, tăng 20% thủ, 35% phản đòn và nhận 20% MaxHP giáp)** |
+| **METAL_AEGIS** | Buff (Kim Đạo) | Mới | **CÓ (registry - cương thiết hộ thể, tăng 35% thủ và giảm 15% sát thương nhận vào)** |
+| **CLOUD_MIST** | Buff (Vân Đạo) | Mới | **CÓ (registry - vân vụ ảo mộng, tăng 35% né tránh và giảm 20% sát thương nhận vào)** |
 
 **Bảng D — Mapping key cũ → key chuẩn** (dùng key chuẩn khi thêm Cổ mới):
 
@@ -1109,6 +1120,9 @@ Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không
 **Status có trong data, đã wire qua registry `statusfx`** (xem `docs/STATUS_EFFECTS.md` → "Registry status"): `BURN` (DoT hỏa), `FEAR` (force basic), `CONFUSE` (40% mis-target), `STEALTH` (untargetable), `SLEEP` (skip turn + break on damage), `BLIND` (35% miss), `CHARM` (điều khiển), `BIND` (mất lượt).
 
 **Status catalog đã wire qua registry**: `HASTE` (tăng tốc), `ARMOR_BREAK` (giảm thủ), `DAMAGE_REDUCTION_UP` (giảm sát thương nhận), `INVINCIBLE` (Bất Hoại — miễn nhiễm mọi đường sát thương, không dispel), `LAST_STAND` (Bất Tử — nhận sát thương nhưng HP sàn 1, **bị dispel**), `EVASION` (tự buff né tránh — `value` là % né, gộp max, cap 75%), `REVIVE_LOCK` (chặn hồi sinh). Cả `INVINCIBLE` và `LAST_STAND` đều bị Sát Khí tầng $>10$ xuyên.
+- **Sát Chiêu, Tiên Cổ Phòng, Trận Pháp (Iconic Lore)**: `REVERSE_FLOW_SEAL` (Nghịch Lưu Hộ Thân Quỹ — phản phệ 100% sát thương), `FAMILIAR_FACE` (Gặp Mặt Từng Quen Biết — né tránh + bạo kích), `TIME_SPEED_SURGE` (Phi Thuyền Lưu Tốc — +50% tốc độ), `FIVE_REGIONAL_SUPPRESSION` (Ngũ Giới Áp Chế — phản phệ khi tung chiêu), `NINETY_NINE_SHIELD` (Cửu Cửu Liên Hoàn Giáp — hấp thụ 50% sát thương).
+- **Tuyệt Đỉnh Sát Chiêu Tiên Đạo (Reverend Insanity Canonical Moves)**: `YAMA_EMPEROR` (Diêm Đế Thể — +50% thủ & Diêm La Tử cắn nuốt hồn), `BLOOD_ROBE` (Huyết Nhiễm Chinh Bào — hấp thụ 40% sát thương thành Huyết Thuẫn), `FUTURE_SELF` (Vị Lai Thân — +80% công & +50% tốc), `EATING_LOSS` (Cật Khuy Thị Phúc — tích tầng chịu đòn tăng công thủ), `FAREWELL_CURSE` (Tống Hữu Chi Phong — trừ 5% MaxHP trực tiếp mỗi hiệp), `SWORD_MARK` (Kiếm Ngân Tác Mệnh — trừ máu theo tầng & trảm sát dưới 25% HP), `REFINE_SELF` (Luyện Kỷ Thể — +20% công thủ vĩnh viễn), `ALL_PEOPLE_UNITED` (Vạn Chúng Nhất Tâm — 30% khiên & +35% công), `DRY_WOOD_SPRING` (Khô Mộc Phùng Xuân — hồi 15% MaxHP mỗi hiệp), `ICE_COFFIN` (Trấn Tiên Quan — đóng băng & câm lặng 2 hiệp), `TOTEM_GOLDEN_BELL` (Kim Chung — phản 35% sát thương), `GREAT_NIGHT` (Đại Dạ Di Thiên — ẩn thân & +50% bạo kích).
+- **Native Hooks Sát Chiêu & Trận Pháp**: `REVERSE_FLOW_SEAL`, `GHOST_HAND_STEAL`, `LEAD_SOUL_TO_DREAM`, `MYRIAD_SELF_GIANT_HAND`, `FAMILIAR_FACE`, `FIVE_FINGER_SWORD`, `TIME_CUTTER`, `SPRING_SCISSORS_SUMMER_FAN`, `DRAGON_BREATH_SWORD`, `MYRIAD_YEAR_WARSHIP`, `DRAGON_PALACE_DOMINION`, `DIVINE_BEAN_ABUNDANCE`, `EIGHT_EXTREMITIES_LUCK`, `THUNDER_GOD_CITY`, `FIVE_REGIONAL_BOUNDARY`, `NINETY_NINE_ARRAY`, `SOUL_CONCEALMENT_ARRAY`, `SIX_EXTREMITIES_ARRAY`, `SONG_OF_SEPARATION`, `SONG_OF_DESTINY`, `FAREWELL_FRIEND_WIND`, `INFINITE_WIND`, `BLOOD_STAINED_ROBE`, `BLOOD_DEMON_DISINTEGRATION`, `YAMA_EMPEROR`, `IMMEASURABLE_QI_SEA`, `THREE_QI_RETURN`, `THREE_MEN_MAKE_TIGER`, `WORDS_ARE_FRIGHTENING`, `FATE_VANQUISHED`, `HEAVEN_NET_RESTRICTION`, `FUTURE_SELF`, `LANDSCAPE_AS_BEFORE`, `EATING_LOSS_BLESSING`, `MYRIAD_DISMANTLE`, `YOU_DU_STRENGTH_TIGER`, `NIRVANA_FIRE`, `SWORD_WAVE_TRIPLE`, `SWORD_MARK_DEATH`, `SOUL_EXPLOSION_DANG_HUN`, `SOUL_BEAST_SUMMON`, `STEAL_LIFE`, `CHAOS_CAVE_DRILL`, `NO_EXTREME_SPACE`, `LIGHT_TIME_FLYING_BLADE`, `ALL_PEOPLE_UNITED`, `HERO_AMONG_MEN`, `QI_JUE_RETURN_LIFE`, `RAGING_ANGRY_BIRD`, `EXTREME_ICE_CRYSTAL_COFFIN`, `THIRTY_THREE_HEAVEN_LIGHT`, `GREAT_NIGHT`, `DRY_WOOD_SPRING`, `IMMORTAL_BINDING_VINE`, `BLOOD_GOD_CHILD`, `TOTEM_KUN_PENG`, `TOTEM_GOLDEN_BELL`, `REFINE_SELF`, `MYRIAD_STAR_FIREFLY`, `FIVE_RESTRICTION_DEEP_LIGHT`, `CHARM_GHOST_COME`, `DEVOUR_HEAVEN_EARTH`.
 
 **Quy tắc gộp hiệu ứng (Consolidation)**:
 - `disable_gu_next_turn` và `FORGET_EGO` được quy về trạng thái chuẩn `GU_SEAL` (`StatusGuSeal`).
@@ -1656,3 +1670,59 @@ cells, matching the current hard cap for player investigation range, so one
 player normally activates at most a 3×3 neighborhood of small monster buckets.
 This separation avoids loading a 300×300 monster area for a 10–25-cell view
 without changing party, PvP, or world-position broadcast behavior.
+
+## Chuẩn Hóa Dòng Cổ Trùng (Gu Lineage Archetype Consistency)
+
+Toàn bộ 4,713 bản ghi Cổ trùng (`backend/data/Gu.csv`) qua 525 dòng tiến hóa (Lineage) từ Chuyển 1 đến Chuyển 9 được chuẩn hóa đồng bộ theo nguyên tắc bảo toàn Định Vị Cốt Lõi (Core Archetype):
+
+1. **Nguyên tắc bảo toàn trường phái theo dòng:**
+   - **Tấn Công (ATTACK):** Giữ nguyên kỹ năng công kích chủ động `ON_ACTION` gây `DAMAGE FLAT` tăng tiến mượt mà từ Phàm cổ (R1: 30, R2: 60, R3: 150, R4: 600, R5: 3,000) đến Tiên cổ (R6: 300,000, R7: 21,000,000, R8: 3,000,000,000, R9: 300,000,000,000). Không có trường hợp Chuyển 6 gây sát thương nhưng Chuyển 7 đột ngột biến thành Thuẫn/Buff.
+   - **Phòng Ngự (DEFENSE):** Cung cấp `SHIELD FLAT` hoặc `STAT_MOD DEFENSE` qua toàn bộ các chuyển; các chuyển cao tích hợp thêm cơ chế phản chấn, hộ thuẫn hoặc kháng hiệu ứng.
+   - **Trị Liệu (HEAL):** Cung cấp `HEAL FLAT` / `REGEN` bảo toàn chức năng hồi phục qua mọi chuyển.
+   - **Khống Chế (CONTROL):** Cung cấp `STATUS` vô hiệu hóa (`STUN`, `FREEZE`, `BIND`, `SILENCE`, `CONFUSE`) trên mọi chuyển.
+   - **Thân Pháp / Tốc Độ (MOVEMENT):** Cung cấp `STAT_MOD SPEED` / `MOVEMENT` hoặc `HASTE` / `FLYING`.
+   - **Phụ Trợ / Tri Thức (SUPPORT):** Cung cấp chỉ số bổ trợ hoặc tiện ích điều tra, không bị lai tạp đòn đánh đơn lẻ lệch dòng.
+
+2. **Tích hợp các Tuyệt Kỹ Tiên Đạo Cổ Chân Nhân vào Tiên Cổ tương ứng:**
+   - `GU_SEPARATION_SONG_I` (R7-R8): Biệt Ly Tiên Cổ (`SONG_OF_SEPARATION`)
+   - `GU_DESTINY_SONG_I` (R8-R9): Vận Mệnh Tiên Cổ (`SONG_OF_DESTINY`)
+   - `GU_FAREWELL_FRIEND_WIND_I` (R7-R8): Tống Hữu Chi Phong Tiên Cổ (`FAREWELL_FRIEND_WIND`)
+   - `GU_INFINITE_WIND_I` (R7-R8): Vô Hạn Phong Tiên Cổ (`INFINITE_WIND`)
+   - `GU_BLOOD_STAINED_ROBE_I` (R7-R8): Huyết Chinh Bào Tiên Cổ (`BLOOD_STAINED_ROBE`)
+   - `GU_BLOOD_DEMON` (R6-R8): Huyết Ma Tiên Cổ (`BLOOD_DEMON_DISINTEGRATION`)
+   - `GU_YAMA_EMPEROR_I` (R7-R8): Diêm Đế Tiên Cổ (`YAMA_EMPEROR`)
+   - `GU_QI_SEA_I` (R8-R9): Vô Lượng Khí Hải Tiên Cổ (`IMMEASURABLE_QI_SEA`)
+   - `GU_THREE_QI_RETURN_I` (R7-R8): Tam Khí Quy Lai Tiên Cổ (`THREE_QI_RETURN`)
+   - `GU_THREE_MEN_TIGER_I` (R6-R8): Tam Nhân Thành Hổ Tiên Cổ (`THREE_MEN_MAKE_TIGER`)
+   - `GU_WORDS_FRIGHTENING_I` (R6-R7): Chúng Khẩu Thao Kim Tiên Cổ (`WORDS_ARE_FRIGHTENING`)
+   - `GU_FATE_VANQUISHED_I` (R8-R9): Mệnh Bại Tiên Cổ (`FATE_VANQUISHED`)
+   - `GU_FUTURE_SELF_I` (R7-R8): Vị Lai Thân Tiên Cổ (`FUTURE_SELF`)
+   - `GU_LANDSCAPE_AS_BEFORE` (R6-R7): Giang Sơn Như Cố Tiên Cổ (`LANDSCAPE_AS_BEFORE`)
+   - `GU_EATING_LOSS_BLESSING_I` (R6-R8): Ăn Thiệt Là Phúc Tiên Cổ (`EATING_LOSS_BLESSING`)
+   - `GU_FOOD_DAO_DEVOUR_I` (R6-R8): Thôn Thiên Phệ Địa Tiên Cổ (`DEVOUR_HEAVEN_EARTH`)
+   - `GU_MYRIAD_DISMANTLE_I` (R7-R8): Vạn Triệt Tiên Cổ (`MYRIAD_DISMANTLE`)
+   - `GU_YOU_DU_TIGER_I` (R7-R8): U Đô Lực Hổ Tiên Cổ (`YOU_DU_STRENGTH_TIGER`)
+   - `GU_NIRVANA_FIRE_I` (R7-R8): Niết Bàn Hỏa Tiên Cổ (`NIRVANA_FIRE`)
+   - `GU_RAGING_BIRD_I` (R6-R8): Nộ Điểu Tiên Cổ (`RAGING_ANGRY_BIRD`)
+   - `GU_TRIPLE_SWORD_WAVE_I` (R6-R8): Tam Trọng Kiếm Lãng Tiên Cổ (`SWORD_WAVE_TRIPLE`)
+   - `GU_SWORD_MARK` (R6-R8): Kiếm Ngân Tiên Cổ (`SWORD_MARK_DEATH`)
+   - `GU_THEFT_LIFE_9` (R9): Thâu Sinh Tiên Cổ (`STEAL_LIFE`)
+   - `GU_CHAOS_CAVE_DRILL_I` (R7-R8): Hỗn Động Toàn Soa Tiên Cổ (`CHAOS_CAVE_DRILL`)
+   - `GU_PHANTOM_ORIGIN_I` (R9): Hư Thực Vô Gian Tiên Cổ (`NO_EXTREME_SPACE`)
+   - `GU_LIGHT_TIME_BLADE_I` (R7-R8): Quang Âm Phi Đao Tiên Cổ (`LIGHT_TIME_FLYING_BLADE`)
+   - `GU_ALL_PEOPLE_UNITED_I` (R7-R8): Vạn Chúng Nhất Tâm Tiên Cổ (`ALL_PEOPLE_UNITED`)
+   - `GU_HERO_AMONG_MEN_I` (R7-R8): Nhân Trung Hào Kiệt Tiên Cổ (`HERO_AMONG_MEN`)
+   - `GU_QI_JUE_LIFE_I` (R8-R9): Khí Tuyệt Hoán Sinh Tiên Cổ (`QI_JUE_RETURN_LIFE`)
+   - `GU_ICE_CRYSTAL_COFFIN_I` (R7-R8): Cực Băng Tinh Quan Tiên Cổ (`EXTREME_ICE_CRYSTAL_COFFIN`)
+   - `GU_THIRTY_THREE_HEAVEN_LIGHT_I` (R7-R8): Tam Thập Tam Thiên Quang Tiên Cổ (`THIRTY_THREE_HEAVEN_LIGHT`)
+   - `GU_GREAT_NIGHT_I` (R7-R8): Đại Dạ Vô Cương Tiên Cổ (`GREAT_NIGHT`)
+   - `GU_DRY_WOOD_SPRING_I` (R6-R8): Khô Mộc Phùng Xuân Tiên Cổ (`DRY_WOOD_SPRING`)
+   - `GU_IMMORTAL_BINDING_VINE_I` (R6-R8): Phược Tiên Đằng Tiên Cổ (`IMMORTAL_BINDING_VINE`)
+   - `GU_KUN_PENG_TOTEM_I` (R7-R8): Côn Bằng Đồ Đằng Tiên Cổ (`TOTEM_KUN_PENG`)
+   - `GU_REFINE_SELF_I` (R8-R9): Luyện Thân Thành Đạo Tiên Cổ (`REFINE_SELF`)
+   - `GU_MYRIAD_STAR_FIREFLY_I` (R7-R8): Vạn Tinh Huỳnh Hỏa Tiên Cổ (`MYRIAD_STAR_FIREFLY`)
+   - `GU_FIVE_RESTRICTION_LIGHT_I` (R7-R8): Ngũ Giới Huyền Quang Tiên Cổ (`FIVE_RESTRICTION_DEEP_LIGHT`)
+   - `GU_CHARM_GHOST_I` (R7-R8): Mị Lam Thoát Tục Tiên Cổ (`CHARM_GHOST_COME`)
+   - `GU_DANG_HUN_EXPLOSION_I` (R7-R8): Đãng Hồn Tạc Linh Tiên Cổ (`SOUL_EXPLOSION_DANG_HUN`)
+   - `GU_SOUL_BEAST_SUMMON_I` (R6-R8): Hồn Thú Triệu Hoán Tiên Cổ (`SOUL_BEAST_SUMMON`)
+

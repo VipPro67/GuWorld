@@ -164,7 +164,7 @@ Nghi thức Thăng Tiên gồm **3 khâu tuần tự** — không còn là một
 
 **Khâu 3 — Thả Cổ:**
 - Thả các cổ **Ngũ Chuyển** thuộc lưu phái đạt cảnh giới **Đại Sư** (10.000 Chân Ý) vào khiếu để tiêu hủy — mỗi cổ nhận lại **300 Đạo Ngân** theo lưu phái đó, định rõ đạo chủ tu khi bắt đầu Lục Chuyển. Cổ bị hủy vĩnh viễn; Cổ Bản Mệnh không thể thả.
-- Hoàn tất: lên **Lục Chuyển Cổ Tiên**, Nhân Khí bị tiêu hết, nhận 10 Tiên Nguyên Thạch, **Tiên Khiếu khai mở theo phẩm cấp đã định**, kiếp đầu giáng vào **năm nội bộ thứ 10** (khoảng 2–10 giờ đời thật tùy phẩm chất Tiên Khiếu — xem mục Gia tốc thời gian).
+- Hoàn tất: lên **Lục Chuyển Cổ Tiên**, Nhân Khí bị tiêu hết, nhận 10 Tiên Nguyên Thạch, **Tiên Khiếu khai mở theo phẩm cấp đã định**, kiếp đầu giáng vào **năm nội bộ thứ 10** (khoảng 4–24 giờ đời thật tùy phẩm chất Tiên Khiếu — xem mục Gia tốc thời gian).
 
 - **Thất bại giữa chừng** (hết thời hạn / thiếu Nhân Khí / thua Địa Tai): mất toàn bộ part chuẩn bị (chân nguyên đã đốt, 20% Nhân Khí hiện có) nhưng **giữ nguyên Ngũ Chuyển Đỉnh Phong** — có thể nát khiếu liều mạng lại bất cứ lúc nào.
 - Cổ Tiên có tiên khiếu, đạo ngân, tiên nguyên/tài nguyên riêng.
@@ -292,16 +292,16 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 ### Gia tốc thời gian (Time Rate)
 
 - `time_rate` (1.0x - 100.0x) điều chỉnh tốc độ thời gian bên trong Tiên Khiếu. Phẩm cấp Tiên Khiếu quyết định `time_rate` khởi tạo: **LOW 10–15×, MID 20–28×, HIGH 30–40×, EXTREME 40–55×**.
-- **1 năm nội bộ = 36.000 giây đời thật ÷ `time_rate`** (hằng số 36.000 giây/năm trong `tribulation.go` / `aperture.go`).
-- **Hồi Tiên Nguyên nền:** mỗi năm nội bộ, Tiên Khiếu sản xuất lượng `essence_production_per_year` theo phẩm cấp. Với `time_speed_multiplier = 1`, tốc độ nền mỗi giờ đời thật là `essence_production_per_year ÷ 10 × time_rate`; không có hệ số tiểu cảnh giới. Cổ, thể chất, tuổi thọ và hiệu ứng khóa hồi phục có thể thay đổi lượng thực nhận.
-- **Kiếp nạn đầu tiên** giáng lâm vào năm nội bộ thứ 10 → thời gian đời thật chờ = `10 × 36.000 ÷ time_rate` giây:
+- **1 năm nội bộ = 86.400 giây đời thật ÷ `time_rate`** (hằng số 86.400 giây/năm).
+- **Hồi Tiên Nguyên nền:** mỗi năm nội bộ, Tiên Khiếu sản xuất lượng `essence_production_per_year` theo phẩm cấp. Với `time_speed_multiplier = 1`, tốc độ nền mỗi giờ đời thật là `essence_production_per_year ÷ 24 × time_rate`; không có hệ số tiểu cảnh giới. Cổ, thể chất, tuổi thọ và hiệu ứng khóa hồi phục có thể thay đổi lượng thực nhận.
+- **Kiếp nạn đầu tiên** giáng lâm vào năm nội bộ thứ 10 → thời gian đời thật chờ = `10 × 86.400 ÷ time_rate` giây:
 
 | Phẩm cấp Tiên Khiếu | `time_rate` | Kiếp đầu tiên (đời thật) |
 |---|---|---|
-| LOW | 10–15× | 6h40m – 10 giờ |
-| MID | 20–28× | 3h34m – 5 giờ |
-| HIGH | 30–40× | 2h30m – 3h20m |
-| EXTREME | 40–55× | 1h49m – 2h30m |
+| LOW | 10–15× | 16h – 24 giờ |
+| MID | 20–28× | 8h34m – 12 giờ |
+| HIGH | 30–40× | 6h – 8 giờ |
+| EXTREME | 40–55× | 4h22m – 6 giờ |
 
 - **Ảnh hưởng đến:**
   - Tốc độ thu hoạch tài nguyên (cây, quặng, linh thú)
@@ -388,7 +388,7 @@ Hệ thống tính riêng theo lưu phái của từng hành động:
    - conflictRatio = Xung Đột Hiệu Dụng / Mẫu Số
    - M = max(0,08, 1 / (1 + conflictRatio × 1,6))
 
-Hệ số M nằm trong [0,08; 1,00]. Nó nhân vào hệ số Đạo Ngân của đòn: DaoMult = (1 + (DaoAmplification − 1) × RealmEfficiency) × M. Khuếch đại riêng của một phái là 1 + Đạo Ngân phái đó / 100; Đạo Ngân Hỏa không khuếch đại đòn Thủy hay Strength, nhưng có thể gây xung đột với chúng.
+Hệ số M nằm trong [0,08; 1,00]. Nó nhân vào hệ số Đạo Ngân của đòn: DaoMult = (1 + (DaoAmplification − 1) × RealmEfficiency) × M. Khuếch đại riêng của một phái là `1 + Đạo Ngân phái đó / 1.000`; 1.000 Đạo Ngân cùng phái cho ×2 trước Chân Ý và xung đột. Đạo Ngân Hỏa không khuếch đại đòn Thủy hay Strength, nhưng có thể gây xung đột với chúng.
 
 #### 3. Hậu Quả Trong Combat
 
@@ -397,7 +397,7 @@ Hệ số M nằm trong [0,08; 1,00]. Nó nhân vào hệ số Đạo Ngân củ
 - **Phản phệ nội thương**: khi M < 0,60, xác suất = min(30%, (0,60 − M) / (0,60 − 0,08) × 30%), tối đa **30%** tại M = 0,08. Kiểm tra này chỉ áp dụng cho **kỹ năng Cổ (GU_SKILL) và sát chiêu (KILLER_MOVE)**; **đánh thường được miễn phản phệ** (không tự mất HP, không bị giảm nửa sát thương) dù xung đột Strength nặng tới đâu.
 - **HP mất khi phản phệ**: trừ trực tiếp **8–12% HP tối đa**, không qua phòng thủ hoặc khiên ảo. Đòn đánh phát sinh phản phệ còn bị giảm thêm 50% sát thương.
 - **Bạo thể vong mạng**: không có một lần gieo xác suất chết riêng. Nhân vật chết nếu HP còn 0 sau khi trừ máu phản phệ. Một lần phản phệ thường không giết người đang đầy máu, nhưng có thể kết liễu người đã yếu; nhiều lần phản phệ làm nguy cơ cộng dồn. Bất Hoại chặn được sát thương; Bất Tử giữ tối thiểu 1 HP, trừ khi Sát Khí đủ điều kiện xuyên miễn nhiễm.
-- **Kháng Đạo Ngân tự nhiên khi phòng thủ**: khi nhận đòn từ phái p, hệ thống cộng Đạo Ngân phòng thủ theo `DefConflict = Σ(ĐạoNgân_q × (1 − TươngThích(p,q)))`, rồi tính `Kháng = 0,30 × DefConflict / (DefConflict + 50.000)`. Kháng tăng dần và tiến gần tối đa 30%; Cổ miễn xung đột cũng bỏ qua lớp kháng này. Cơ chế phòng thủ này riêng với phản phệ tự trừ HP của người ra đòn.
+- **Kháng Đạo Ngân tự nhiên khi phòng thủ**: chỉ bật khi tổng Đạo Ngân vượt 10.000; chỉ các phái q vượt `max(1.000, 2% tổng)` được tính vào `DefConflict = Σ(ĐạoNgân_q × (1 − TươngThích(p,q)))`. Kháng là `0,30 × DefConflict / (DefConflict + 50.000)`, tiến gần tối đa 30%. Đạo Ngân cùng phái với đòn nhận khuếch đại sát thương nhận theo `1 + marks/1.000`, độc lập với kháng; đòn gây HP damage sau kháng sẽ tạo Đạo Ngân Thương giảm hồi phục 30% trong 2 lượt. Cơ chế này riêng với phản phệ tự trừ HP của người ra đòn.
 - **Miễn xung đột**: Cổ đang ACTIVE và trang bị có PATH_CONFLICT_REDUCTION từ 100 trở lên miễn hình phạt này. Chân Ý Vô Thượng hóa giải xung đột khi hành động dùng đúng lưu phái đã đạt cảnh giới đó.
 
 #### 4. Ví Dụ Cụ Thể
@@ -436,9 +436,9 @@ Preview sát chiêu dùng compiler effect chung và kiểm tra các effect đư�
 
 Khi dùng Cổ trực tiếp trong combat theo lượt, các Block `ON_ACTION` chạy theo target và điều kiện đã khai báo. Mỗi Cổ vẫn chỉ trả chi phí và tiêu hao độ no một lần cho cả action; effect hoặc target chưa có adapter combat sẽ bị từ chối thay vì đổi sang cách dùng gần giống.
 
-Khi đúc Tiên Cổ Ốc, có thể chọn một effect đầu ra từ Cổ hạch tâm. Ghép effect hỗ trợ cần rule trong catalog riêng `gu_house_action.rules.v1` và capability grant khớp chính xác Block/op nguồn của cả hai Cổ; hiện chỉ COMBINE damage FLAT mục tiêu đơn được mở cho các nguồn có grant. Heal FLAT bản thân và shield/barrier FLAT bản thân có thể làm OUTPUT độc lập. Graph con `gu_house_action.v1` ghi provenance từng effect; preview biên dịch qua effect compiler chung, còn effect có điều kiện hoặc executor chưa hỗ trợ bị từ chối. Trận Kích có graph và provenance trong profile snapshot và được đưa vào combat theo lượt; khi Cổ Ốc bị phá, action của nó không thể dùng tiếp. Ngoài combat, người chơi có thể chọn effect `ON_USE` được hỗ trợ của một Cổ hạch tâm thuộc Tiên Cổ Ốc đang xuất chiến để hồi phục hoặc nhận trạng thái thế giới; lần dùng tiêu hao Chân Nguyên và 1 độ no của Cổ đó. Cổ Ốc phải còn độ bền và không thể thi triển khi người chơi đang combat. Profile `gu_house.v1` dùng executor Trận Kích riêng; khi xuất chiến, Cổ Ốc giữ chỗ 2–5 core Gu còn ACTIVE trong hành trang, giải phóng chúng khi tháo trang bị và không cho dùng chung với Sát Chiêu active. Thay đổi luật không tự sửa build cũ; Trận Kích cũ có SUPPORT edge nhưng thiếu rule revision không thể xuất chiến cho đến khi được tạo lại qua preview.
+Khi đúc Tiên Cổ Ốc, có thể chọn một effect đầu ra từ Cổ hạch tâm. Tiên Cổ Ốc cấu thành từ 2–5 Tiên Cổ hạch tâm (Rank 6+) và quy mô từ 500 đến 100.000 Phàm Cổ phụ trợ làm vỏ ốc, trực tiếp gia tăng Máu và Giáp phòng ngự. Ghép effect hỗ trợ cần rule trong catalog riêng `gu_house_action.rules.v1` và capability grant khớp chính xác Block/op nguồn của cả hai Cổ; hiện chỉ COMBINE damage FLAT mục tiêu đơn được mở cho các nguồn có grant. Heal FLAT bản thân và shield/barrier FLAT bản thân có thể làm OUTPUT độc lập. Graph con `gu_house_action.v1` ghi provenance từng effect; preview biên dịch qua effect compiler chung, còn effect có điều kiện hoặc executor chưa hỗ trợ bị từ chối. Trận Kích có graph và provenance trong profile snapshot và được đưa vào combat theo lượt; khi Cổ Ốc bị phá, action của nó không thể dùng tiếp. Ngoài combat, người chơi có thể chọn effect `ON_USE` được hỗ trợ của một Cổ hạch tâm thuộc Tiên Cổ Ốc đang xuất chiến để hồi phục hoặc nhận trạng thái thế giới; lần dùng tiêu hao Chân Nguyên và 1 độ no của Cổ đó. Cổ Ốc phải còn độ bền và không thể thi triển khi người chơi đang combat. Khi vượt Giới Vực Bích, Tiên Cổ Ốc không miễn trừ Giới Bích mà gánh chịu tổn thương thay cho chủ nhân: mất 25% độ bền và chấn tử 15% Phàm Cổ phụ trợ mỗi lần vượt qua; nếu độ bền chạm 0, Cổ Ốc nổ tung và người chơi bị áp chế hoàn toàn. Khi Tiên Cổ hạch tâm thăng rank hoặc thay đổi instance, người chơi có thể dùng nút **Tu Sửa / Đồng Bộ Cổ** để tự động tái liên kết và khôi phục độ bền bằng Nguyên Thạch. Profile `gu_house.v1` dùng executor Trận Kích riêng; khi xuất chiến, Cổ Ốc giữ chỗ 2–5 core Gu còn ACTIVE trong hành trang, giải phóng chúng khi tháo trang bị và không cho dùng chung với Sát Chiêu active. Thay đổi luật không tự sửa build cũ; Trận Kích cũ có SUPPORT edge nhưng thiếu rule revision không thể xuất chiến cho đến khi được tạo lại qua preview.
 
-Sát chiêu cần được trang bị và kích hoạt trong **Cài đặt chiến thuật** (Aperture > Cài đặt) hoặc tick chọn trực tiếp trong màn hình **Chuẩn bị chiến đấu** trước trận; sát chiêu không được trang bị/chọn sẽ không tự động kích hoạt. Effect `ON_USE` hồi HP, hoàn Chân Nguyên, Phi Hành, Ẩn Thân hoặc Tăng Tốc có thể được dùng ngoài combat bằng nút **Dùng**; STEALTH cộng điểm DISGUISE để giảm tỉ lệ phục kích khi di chuyển, HASTE nhân tốc độ người chơi theo phần trăm. Condition được đánh giá theo trạng thái trước khi trừ cost. Status world mặc định kéo dài theo Rank Cổ chính (phút); `turns` authored được hiểu là phút, giới hạn 24 giờ; STEALTH/HASTE dùng `value` tương ứng làm điểm DISGUISE và phần trăm tăng tốc, mặc định theo Rank và tối đa 100. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Các bản lưu chưa trang bị có thể dùng chung một Gu; khi trang bị, mỗi Gu chỉ được giữ chỗ cho một Sát Chiêu hoặc Tiên Cổ Ốc đang active. Gu đang giữ chỗ không thể chuyển giao, luyện Cổ hay rơi làm chiến lợi phẩm khi chủ nhân tử đạo. Nếu Gu chết vì đói, worker tháo sản phẩm liên quan và giải phóng giữ chỗ; công thức tham chiếu sẽ tạm thời không dùng được.
+Sát chiêu cần được trang bị và kích hoạt trong **Cài đặt chiến thuật** (Aperture > Cài đặt) hoặc tick chọn trực tiếp trong màn hình **Chuẩn bị chiến đấu** trước trận; sát chiêu không được trang bị/chọn sẽ không tự động kích hoạt. Khi Cổ thành phần thăng rank hoặc thay đổi instance ID trong hành trang, hệ thống gắn cờ **Có thể đồng bộ Cổ** và cung cấp nút **Đồng Bộ** để tự động cập nhật effect keys, re-compile composition graph với chỉ số mới mà không cần sáng tạo lại từ đầu; thao tác trang bị cũng sẽ tự động kích hoạt đồng bộ nếu phát hiện Cổ hợp lệ đã thăng cấp. Effect `ON_USE` hồi HP, hoàn Chân Nguyên, Phi Hành, Ẩn Thân hoặc Tăng Tốc có thể được dùng ngoài combat bằng nút **Dùng**; STEALTH cộng điểm DISGUISE để giảm tỉ lệ phục kích khi di chuyển, HASTE nhân tốc độ người chơi theo phần trăm. Condition được đánh giá theo trạng thái trước khi trừ cost. Status world mặc định kéo dài theo Rank Cổ chính (phút); `turns` authored được hiểu là phút, giới hạn 24 giờ; STEALTH/HASTE dùng `value` tương ứng làm điểm DISGUISE và phần trăm tăng tốc, mặc định theo Rank và tối đa 100. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Các bản lưu chưa trang bị có thể dùng chung một Gu; khi trang bị, mỗi Gu chỉ được giữ chỗ cho một Sát Chiêu hoặc Tiên Cổ Ốc đang active. Gu đang giữ chỗ không thể chuyển giao, luyện Cổ hay rơi làm chiến lợi phẩm khi chủ nhân tử đạo. Nếu Gu chết vì đói, worker tháo sản phẩm liên quan và giải phóng giữ chỗ; công thức tham chiếu sẽ tạm thời không dùng được.
 
 Mỗi Cổ instance có:
 
@@ -694,6 +694,8 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 
 
 ## 9. Chiến đấu
+
+- **Đạo Ngân trong sát thương:** khuếch đại theo lưu phái là `1 + Đạo Ngân/1.000` (1.000 Đạo Ngân cùng phái = ×2). Đòn đánh còn chịu khuếch đại cùng phái trên mục tiêu; sau đó mới trừ giáp, kháng Đạo Ngân tự nhiên, kháng lưu phái và giảm sát thương. Kháng tự nhiên cần tổng Đạo Ngân trên 10.000 và chỉ tính các lưu phái phòng thủ đang hoạt động (trên `max(1.000, 2% tổng)`). Đòn có đường dẫn gây HP damage khi gặp kháng tự nhiên sẽ tạo **Đạo Ngân Thương**, giảm hồi phục nhận 30% trong 2 lượt. DoT giữ đường dẫn và hệ số Đạo Ngân của đòn gây ra, nhưng mỗi lượt dùng phòng ngự hiện tại của mục tiêu.
 
 - Chạm trán quái dã ngoại được bàn giao từ aggro của map sang encounter turn-based bền vững. Người chơi bị khóa điều khiển map trong lúc xem và chạy replay mô phỏng; thắng/thua kết toán xong mới mở khóa actor realtime. Di chuyển thế giới ngoài combat vẫn realtime.
 - Đồng đội cùng khu vực và cùng map instance tham chiến cùng trưởng nhóm; trạng thái combat khóa thao tác của họ đến khi kết toán. Pet trong đội hình tiếp tục tham chiến theo lượt và lưu HP/kết quả sau trận. Quái dã ngoại chỉ dùng đội hình spawn, không tự sinh hộ vệ ngẫu nhiên.
