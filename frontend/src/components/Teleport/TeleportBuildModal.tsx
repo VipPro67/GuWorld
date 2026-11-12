@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
 import { X, Sparkles, Compass, Shield, Coins, Layers, ArrowRightLeft, Award, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { GameButton } from "@/components/ui";
-import type { TeleportBuildRequest, TeleportFormationCompositionGraph, TeleportFormationEffectPreview } from "@/store/slices/teleportSlice";
+import type { TeleportBuildRequest, TeleportCompositionTemplate, TeleportFormationCompositionGraph, TeleportFormationEffectPreview } from "@/store/slices/teleportSlice";
 
 interface TeleportBuildModalProps {
   player: Player;
@@ -38,6 +38,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
   const {
     teleportTemplates, fetchTeleportTemplates, buildTeleportArray, actionLoading,
     teleportFormationGus, teleportFormationEffects, teleportFormationRuleSet, fetchTeleportFormationOptions, previewTeleportArray,
+    teleportCompositionTemplates,
   } = useGameStore();
 
   const [selectedTier, setSelectedTier] = useState<string>("TIER_1");
@@ -56,8 +57,47 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
   const [effectPreview, setEffectPreview] = useState<TeleportFormationEffectPreview | null>(null);
   const [effectPreviewMessage, setEffectPreviewMessage] = useState("");
   const [effectPreviewLoading, setEffectPreviewLoading] = useState(false);
+  const [compositionDraftID, setCompositionDraftID] = useState("");
 
   const invalidateEffectPreview = () => {
+    setCompositionDraftID("");
+    setEffectPreview(null);
+    setEffectPreviewMessage("");
+  };
+
+  const applyCompositionTemplate = (template: TeleportCompositionTemplate | undefined) => {
+    if (!template) { setCompositionDraftID(""); invalidateEffectPreview(); return; }
+    const output = template.definition.sources.find((source) => source.key === template.definition.output_effect_key && source.role === "OUTPUT");
+    if (!output) { setEffectPreviewMessage("Composition template thiếu output source."); return; }
+    const core = activeFormationGus.find((gu) => gu.gu_id === output.gu_id && gu.rank === output.rank);
+    if (!core) { setEffectPreviewMessage(`Cần Cổ hạch tâm ${output.gu_id} rank ${output.rank}.`); return; }
+    const assigned = new Map<string, string>([[output.key, core.instance_id]]);
+    const used = new Set([core.instance_id]);
+    const supports: Array<{ guInstanceID: string; effectKey: string }> = [];
+    for (const source of template.definition.sources.filter((item) => item.role === "SUPPORT")) {
+      const guRank = `${source.gu_id}:${source.rank}`;
+      let instanceID = assigned.get(guRank);
+      if (!instanceID) {
+        const gu = activeFormationGus.find((item) => !used.has(item.instance_id) && item.gu_id === source.gu_id && item.rank === source.rank);
+        if (!gu) { setEffectPreviewMessage(`Cần Cổ hỗ trợ ${source.gu_id} rank ${source.rank}.`); return; }
+        instanceID = gu.instance_id;
+        assigned.set(guRank, instanceID);
+        used.add(instanceID);
+      }
+      assigned.set(source.key, instanceID);
+    }
+    for (const source of template.definition.sources) {
+      const instanceID = assigned.get(source.key);
+      const effect = teleportFormationEffects.find((item) => item.source_instance_id === instanceID && item.source_block_id === source.block_id && item.operation_index === source.operation_index && item.travel_supported);
+      if (!instanceID || !effect) { setEffectPreviewMessage(`Effect source ${source.gu_id}/${source.block_id}[${source.operation_index}] chưa sẵn sàng.`); return; }
+      if (source.role === "SUPPORT") supports.push({ guInstanceID: instanceID, effectKey: effect.key });
+      else setOutputEffectKey(effect.key);
+    }
+    setCompositionDraftID(template.id);
+    setCoreGuInstanceID(core.instance_id);
+    setSupportEffects(supports);
+    setSupportGuInstanceID("");
+    setSupportEffectKey("");
     setEffectPreview(null);
     setEffectPreviewMessage("");
   };
@@ -155,6 +195,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
       fee_enabled: feeEnabled,
       fee_currency: feeCurrency,
       fee_amount: Number(feeAmount) || 0,
+      ...(useArrivalEffect && compositionDraftID ? { composition_draft_id: compositionDraftID, composition_core_gu_instance_id: coreGuInstanceID } : {}),
       ...(useArrivalEffect && compositionGraph && effectPreview ? {
         composition_graph: compositionGraph,
         preview_fingerprint: effectPreview.preview_fingerprint,
@@ -174,6 +215,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
     fee_enabled: feeEnabled,
     fee_currency: feeCurrency,
     fee_amount: Number(feeAmount) || 0,
+    ...(useArrivalEffect && compositionDraftID ? { composition_draft_id: compositionDraftID, composition_core_gu_instance_id: coreGuInstanceID } : {}),
   });
 
   const handleEffectPreview = async () => {
@@ -407,6 +449,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
 
             {useArrivalEffect && (
               <div className="space-y-3 border-t border-cyan-900/40 pt-3">
+                {teleportCompositionTemplates.length > 0 && <label className="block text-[10px] font-mono text-zinc-400">Công thức do Admin biên soạn<select value={compositionDraftID} onChange={(event) => applyCompositionTemplate(teleportCompositionTemplates.find((template) => template.id === event.target.value))} className="mt-1 w-full rounded-lg border border-violet-900/50 bg-zinc-900 px-2.5 py-2 text-xs text-zinc-200"><option value="">Tự dựng composition</option>{teleportCompositionTemplates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.definition.sources.length} source</option>)}</select><span className="mt-1 block text-[10px] text-zinc-600">Server revalidate source/rule khi preview và pin snapshot khi xây Trận Pháp.</span></label>}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="text-[10px] font-mono text-zinc-400">
                     Cổ hạch tâm

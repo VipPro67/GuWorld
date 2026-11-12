@@ -283,6 +283,30 @@ func TestItemEffectsScan_Blocks(t *testing.T) {
 	}
 }
 
+func TestItemEffectsScan_RejectsUnsupportedBlockContext(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{
+			name: "wrong trigger",
+			raw:  `[{"id":"RESTORE_HP","trigger":"ON_USE","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"RESTORE_HP","params":{"value":50}}]}]`,
+		},
+		{
+			name: "conditional item event",
+			raw:  `[{"id":"RESTORE_HP","trigger":"ON_CONSUME","target":{"selector":"SELF"},"conditions":[{"field":"HP_PERCENT","operator":"LT","value":0.5}],"operations":[{"op":"UNIQUE","code":"RESTORE_HP","params":{"value":50}}]}]`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var effects ItemEffects
+			if err := effects.Scan(test.raw); err == nil {
+				t.Fatal("unsupported item effect context was silently accepted")
+			}
+		})
+	}
+}
+
 func TestCompiledProjectionReadsAuthoredBlocksOnly(t *testing.T) {
 	var effects GuEffects
 	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"HEARING","sub_type":"ADD_FLAT","value":4},{"op":"STAT_MOD","stat":"INVESTIGATION","sub_type":"ADD_FLAT","value":7},{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":10},{"op":"UNIQUE","code":"GROWTH_DURATION_HOURS","params":{"value":24}}]}]`

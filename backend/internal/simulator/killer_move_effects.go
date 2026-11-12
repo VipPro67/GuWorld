@@ -65,63 +65,25 @@ func filterOperationTargets(actor *CombatantAuto, targets []*CombatantAuto, cond
 }
 
 func operationConditionsMatch(actor, target *CombatantAuto, conditions []gameplayeffects.Condition, sourceRank int, paths []string, turn int) bool {
-	for _, condition := range conditions {
-		var actual float64
-		switch strings.ToUpper(condition.Field) {
-		case "HP_PERCENT", "ACTOR_HP_PERCENT":
-			if actor != nil && actor.MaxHP > 0 {
-				actual = actor.HP / actor.MaxHP
-			}
-		case "MANA_PERCENT":
-			if actor != nil && actor.MaxMana > 0 {
-				actual = actor.Mana / actor.MaxMana
-			}
-		case "TARGET_HP_PERCENT":
-			if target != nil && target.MaxHP > 0 {
-				actual = target.HP / target.MaxHP
-			}
-		case "TURN":
-			actual = float64(turn)
-		case "RANK":
-			actual = float64(sourceRank)
-		case "MASTERY":
-			if actor != nil && len(paths) > 0 {
-				actual = float64(gamefx.PathMasteryLevel(actor.PathMasteries[gamefx.CleanPath(paths[0])]))
-			}
-		case "STACKS":
-			actual = 0
-		default:
-			return false
+	values := gameplayeffects.ConditionValues{
+		"RANK": float64(sourceRank),
+		"TURN": float64(turn),
+	}
+	if actor != nil {
+		if actor.MaxHP > 0 {
+			values["HP_PERCENT"] = actor.HP / actor.MaxHP
+			values["ACTOR_HP_PERCENT"] = actor.HP / actor.MaxHP
 		}
-		value := condition.Value
-		switch strings.ToUpper(condition.Operator) {
-		case "LT":
-			if !(actual < value) {
-				return false
-			}
-		case "LTE":
-			if !(actual <= value) {
-				return false
-			}
-		case "GT":
-			if !(actual > value) {
-				return false
-			}
-		case "GTE":
-			if !(actual >= value) {
-				return false
-			}
-		case "EQ":
-			if actual != value {
-				return false
-			}
-		case "NE":
-			if actual == value {
-				return false
-			}
-		default:
-			return false
+		if actor.MaxMana > 0 {
+			values["MANA_PERCENT"] = actor.Mana / actor.MaxMana
+		}
+		if len(paths) > 0 {
+			values["MASTERY"] = float64(gamefx.PathMasteryLevel(actor.PathMasteries[gamefx.CleanPath(paths[0])]))
 		}
 	}
-	return true
+	if target != nil && target.MaxHP > 0 {
+		values["TARGET_HP_PERCENT"] = target.HP / target.MaxHP
+	}
+	matches, err := gameplayeffects.ConditionsMatch(conditions, values)
+	return err == nil && matches
 }

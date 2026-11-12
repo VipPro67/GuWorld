@@ -24,12 +24,17 @@ type Context struct {
 	RNG                             *rand.Rand
 	Actor, Target                   Snapshot
 	Rank, Mastery, Stacks           int
+	HasRank, HasMastery, HasStacks  bool
 	DaoMarks                        map[string]int64
 	Path                            []string
 	CatalogRevision                 uint64
 	Depth, Events, Repeats, Summons int
 }
-type Event struct{ Trigger Trigger }
+type Event struct {
+	Trigger Trigger
+	Turn    int
+	HasTurn bool
+}
 type Domain string
 
 const (
@@ -359,8 +364,16 @@ func (c *Compiled) Evaluate(ctx Context, event Event) (Result, error) {
 	}
 	var r Result
 	repeats, summons := ctx.Repeats, ctx.Summons
+	values := conditionValues(ctx, event)
 	for _, b := range c.blocks {
-		if b.trigger != event.Trigger || !conditionsMatch(b.conditions, ctx) {
+		if b.trigger != event.Trigger {
+			continue
+		}
+		matches, err := ConditionsMatch(b.conditions, values)
+		if err != nil {
+			return Result{}, fmt.Errorf("effect %q: %w", b.id, err)
+		}
+		if !matches {
 			continue
 		}
 		for _, op := range b.operations {
@@ -393,61 +406,31 @@ func (c *Compiled) Evaluate(ctx Context, event Event) (Result, error) {
 	}
 	return r, nil
 }
-func conditionsMatch(cs []Condition, ctx Context) bool {
-	for _, c := range cs {
-		var got float64
-		switch strings.ToUpper(c.Field) {
-		case "ACTOR_HP_PERCENT", "HP_PERCENT":
-			if ctx.Actor.MaxHP > 0 {
-				got = ctx.Actor.HP / ctx.Actor.MaxHP
-			}
-		case "MANA_PERCENT":
-			if ctx.Actor.MaxMana > 0 {
-				got = ctx.Actor.Mana / ctx.Actor.MaxMana
-			}
-		case "TARGET_HP_PERCENT":
-			if ctx.Target.MaxHP > 0 {
-				got = ctx.Target.HP / ctx.Target.MaxHP
-			}
-		case "RANK":
-			got = float64(ctx.Rank)
-		case "MASTERY":
-			got = float64(ctx.Mastery)
-		case "STACKS":
-			got = float64(ctx.Stacks)
-		default:
-			return false
-		}
-		switch c.Operator {
-		case "LT":
-			if !(got < c.Value) {
-				return false
-			}
-		case "LTE":
-			if !(got <= c.Value) {
-				return false
-			}
-		case "GT":
-			if !(got > c.Value) {
-				return false
-			}
-		case "GTE":
-			if !(got >= c.Value) {
-				return false
-			}
-		case "EQ":
-			if got != c.Value {
-				return false
-			}
-		case "NE":
-			if got == c.Value {
-				return false
-			}
-		default:
-			return false
-		}
+func conditionValues(ctx Context, event Event) ConditionValues {
+	values := ConditionValues{}
+	if ctx.HasRank || ctx.Rank > 0 {
+		values["RANK"] = float64(ctx.Rank)
 	}
-	return true
+	if ctx.HasMastery {
+		values["MASTERY"] = float64(ctx.Mastery)
+	}
+	if ctx.HasStacks {
+		values["STACKS"] = float64(ctx.Stacks)
+	}
+	if ctx.Actor.MaxHP > 0 {
+		values["HP_PERCENT"] = ctx.Actor.HP / ctx.Actor.MaxHP
+		values["ACTOR_HP_PERCENT"] = ctx.Actor.HP / ctx.Actor.MaxHP
+	}
+	if ctx.Actor.MaxMana > 0 {
+		values["MANA_PERCENT"] = ctx.Actor.Mana / ctx.Actor.MaxMana
+	}
+	if ctx.Target.MaxHP > 0 {
+		values["TARGET_HP_PERCENT"] = ctx.Target.HP / ctx.Target.MaxHP
+	}
+	if event.HasTurn {
+		values["TURN"] = float64(event.Turn)
+	}
+	return values
 }
 func domainFor(op CompiledOperation) Domain {
 	if op.Type == OpStatMod {

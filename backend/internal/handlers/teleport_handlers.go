@@ -291,7 +291,7 @@ func BuildTeleportArray(c *gin.Context) {
 	effectProfileJSON := []byte(`{}`)
 	if teleportArrayRequestHasEffect(req) {
 		var expectedFingerprint string
-		effectProfile, expectedFingerprint, err = buildTeleportArrayEffectProfile(tx, player.ID, req)
+		effectProfile, expectedFingerprint, err = buildTeleportArrayEffectProfile(c, tx, player.ID, req)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

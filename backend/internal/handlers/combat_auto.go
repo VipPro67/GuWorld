@@ -568,35 +568,17 @@ func guHouseComposedActionToSimAction(houseID string, selectedInstances, selecte
 	profile := composition.GuHouseActionProfile()
 	graph := *action.CompositionGraph
 	selected := append([]string(nil), action.ComponentGuInstances...)
-	var resolved composition.Graph
-	var err error
-	if graph.RuleSetRevision != "" {
-		ruleSet := composition.GuHouseActionRuleSet()
-		capabilitiesByEffect := make(map[string]map[string]bool, len(graph.Nodes))
-		for _, node := range graph.Nodes {
-			spec, found := models.GetGu(node.GuID, node.Rank)
-			if !found || node.SourceBlockID == "" || node.OperationIndex == nil {
-				return simulator.SimAction{}, false
-			}
-			if !guHouseSnapshotMatchesSource(node, spec.Effects.GetBlocks(), action.EffectBlocks) {
-				return simulator.SimAction{}, false
-			}
-			for _, grant := range spec.CompositionContributions.Grants {
-				if grant.EffectBlockID == node.SourceBlockID && grant.OperationIndex == *node.OperationIndex {
-					if capabilitiesByEffect[node.EffectKey] == nil {
-						capabilitiesByEffect[node.EffectKey] = make(map[string]bool)
-					}
-					capabilitiesByEffect[node.EffectKey][grant.Capability] = true
-				}
-			}
-		}
-		resolved, err = composition.ResolveWithRules(graph, profile, selected, ruleSet, capabilitiesByEffect)
-	} else {
-		if len(graph.Edges) > 0 {
+	if len(graph.Edges) > 0 {
+		if graph.RuleSetRevision == "" {
 			return simulator.SimAction{}, false
 		}
-		resolved, err = composition.Resolve(graph, profile, selected)
+		for _, edge := range graph.Edges {
+			if edge.RuleID == "" {
+				return simulator.SimAction{}, false
+			}
+		}
 	}
+	resolved, err := composition.Resolve(graph, profile, selected)
 	if err != nil || graph.OutputEffectKey != action.EffectKey || len(action.EffectBlocks) != len(resolved.Nodes) || len(selected) == 0 {
 		return simulator.SimAction{}, false
 	}

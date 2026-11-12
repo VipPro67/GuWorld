@@ -98,6 +98,7 @@ export interface KillerMoveCompositionRuleSet {
 
 export interface KillerMoveCompositionGraph {
   schema_version: number;
+  catalog_draft_id?: string;
   product: string;
   product_profile: string;
   context: string;
@@ -105,8 +106,14 @@ export interface KillerMoveCompositionGraph {
   core_gu_instance_id: string;
   output_effect_key: string;
   rule_set_revision?: string;
-  nodes: Array<{ effect_key: string; source_block_id?: string; operation_index?: number; role: "OUTPUT" | "SUPPORT"; gu_instance_id: string; gu_id: string; rank: number; trigger: string; context: string; executor: string }>;
+  nodes: Array<{ effect_key: string; source_block_id?: string; source_revision?: string; operation_index?: number; role: "OUTPUT" | "SUPPORT"; gu_instance_id: string; gu_id: string; rank: number; trigger: string; context: string; executor: string }>;
   edges: KillerMoveCompositionEdge[];
+}
+
+export interface KillerMoveCompositionTemplate {
+  id: string;
+  name: string;
+  definition: { product_profile: string; output_effect_key: string; sources: Array<{ key: string; gu_id: string; rank: number; block_id: string; operation_index: number; role: "OUTPUT" | "SUPPORT" }>; edges: KillerMoveCompositionEdge[] };
 }
 
 export interface GuHouseCombatProfile {
@@ -147,6 +154,7 @@ export interface GuHouseDraft {
   core_gu_instance_ids: string[];
   aux_gu_count: number;
   action_effect_keys?: Record<string, string>;
+  action_composition_draft_ids?: Record<string, string>;
   action_composition_graphs?: Record<string, KillerMoveCompositionGraph>;
   preview_fingerprint?: string;
 }
@@ -179,6 +187,7 @@ export interface KillerMoveRecord {
 }
 
 export interface KillerMoveDraft {
+  composition_draft_id?: string;
   name?: string;
   main_gu_instance_id: string;
   component_instance_ids: string[];
@@ -212,12 +221,14 @@ export interface KillerMovesSlice {
   killerMoveGus: KillerMoveGuOption[];
   killerMoveEffects: KillerMoveEffectOption[];
   killerMoveCompositionRuleSet: KillerMoveCompositionRuleSet | null;
+  killerMoveCompositionTemplates: KillerMoveCompositionTemplate[];
   killerMoves: KillerMoveRecord[];
   killerMovesMaxSaved: number;
   killerMovesMaxEquipped: number;
   killerMovesLoading: boolean;
   guHouses: GuHouseRecord[];
   guHouseCompositionRuleSet: KillerMoveCompositionRuleSet | null;
+  guHouseCompositionTemplates: KillerMoveCompositionTemplate[];
   guHousesMinCoreGus: number;
   guHousesMaxCoreGus: number;
   guHousesLoading: boolean;
@@ -240,12 +251,14 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   killerMoveGus: [],
   killerMoveEffects: [],
   killerMoveCompositionRuleSet: null,
+  killerMoveCompositionTemplates: [],
   killerMoves: [],
   killerMovesMaxSaved: 12,
   killerMovesMaxEquipped: 4,
   killerMovesLoading: false,
   guHouses: [],
   guHouseCompositionRuleSet: null,
+  guHouseCompositionTemplates: [],
   guHousesMinCoreGus: 2,
   guHousesMaxCoreGus: 5,
   guHousesLoading: false,
@@ -268,6 +281,7 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
         killerMoveGus: options.gus || [],
         killerMoveEffects: options.effect_options || [],
         killerMoveCompositionRuleSet: options.composition_rule_set || null,
+        killerMoveCompositionTemplates: options.composition_templates || [],
         killerMoves: moves.killer_moves || [],
         killerMovesMaxSaved: moves.max_saved || options.max_saved || 12,
         killerMovesMaxEquipped: moves.max_equipped || options.max_equipped || 4,
@@ -391,7 +405,7 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
       const res = await authFetch(`${BACKEND_URL}/api/gu-houses`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Không thể tải danh sách Tiên Cổ Ốc");
-      set({ guHouses: data.gu_houses || [], guHouseCompositionRuleSet: data.composition_rule_set || null, guHousesMinCoreGus: data.min_core_gus || 2, guHousesMaxCoreGus: data.max_core_gus || 5, guHousesLoading: false });
+      set({ guHouses: data.gu_houses || [], guHouseCompositionRuleSet: data.composition_rule_set || null, guHouseCompositionTemplates: data.composition_templates || [], guHousesMinCoreGus: data.min_core_gus || 2, guHousesMaxCoreGus: data.max_core_gus || 5, guHousesLoading: false });
     } catch (caught) {
       set({ guHousesLoading: false });
       get().addToast(caught instanceof Error ? caught.message : "Lỗi tải Tiên Cổ Ốc", "error");

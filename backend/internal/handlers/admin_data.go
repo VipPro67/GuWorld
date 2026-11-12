@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -91,6 +93,17 @@ func preflightImport(c *gin.Context, table string) {
 		writeImportError(c, "Preflight thất bại", err)
 		return
 	}
+	if issues := validateImportRuntimeEffectAdapters(sources); len(issues) > 0 {
+		plan.CanCommit = false
+		plan.ValidationErrors = append(plan.ValidationErrors, issues...)
+		for index := range plan.Datasets {
+			for _, issue := range issues {
+				if plan.Datasets[index].Key == issue.Dataset {
+					plan.Datasets[index].ValidationErrors = append(plan.Datasets[index].ValidationErrors, issue)
+				}
+			}
+		}
+	}
 	digest := db.ImportSourcesDigest(sources)
 	token := uuid.NewString()
 	expiresAt := time.Now().Add(importPreflightTTL)
@@ -102,7 +115,152 @@ func preflightImport(c *gin.Context, table string) {
 	}
 	stagedImports.items[token] = stagedImport{Owner: adminID, Table: table, Sources: sources, Digest: digest, ExpiresAt: expiresAt}
 	stagedImports.Unlock()
-	c.JSON(http.StatusOK, gin.H{"preflight_id": token, "expires_at": expiresAt, "source_digest": digest, "plan": plan})
+	c.JSON(http.StatusOK, gin.H{"preflight_id": token, "expires_at": expiresAt, "source_digest": digest, "plan": plan, "effect_compatibility": analyzeImportEffectCompatibility(sources)})
+}
+
+type importEffectContextSummary struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Status      string `json:"status"`
+	Supported   int    `json:"supported"`
+	Conditional int    `json:"conditional"`
+	Unsupported int    `json:"unsupported"`
+}
+
+type importEffectDatasetSummary struct {
+	Dataset  string                       `json:"dataset"`
+	Contexts []importEffectContextSummary `json:"contexts"`
+}
+
+func analyzeImportEffectCompatibility(sources map[string][]byte) []importEffectDatasetSummary {
+	effectDatasets := []struct{ filename, key string }{
+		{"Gu.csv", "gu"}, {"Item.csv", "item"}, {"Race.csv", "race"},
+		{"Constitution.csv", "constitution"}, {"Status.csv", "status"},
+	}
+	var summaries []importEffectDatasetSummary
+	for _, dataset := range effectDatasets {
+		content, ok := sources[dataset.filename]
+		if !ok {
+			continue
+		}
+		reader := csv.NewReader(strings.NewReader(string(content)))
+		headers, err := reader.Read()
+		if err != nil {
+			continue
+		}
+		indexes := map[string]int{}
+		for i, header := range headers {
+			indexes[strings.TrimSpace(header)] = i
+		}
+		effectsIndex, ok := indexes["effects"]
+		if !ok {
+			continue
+		}
+		counts := make([][3]int, len(effectCompatibilityPolicies))
+		for {
+			row, err := reader.Read()
+			if err != nil {
+				break
+			}
+			if effectsIndex >= len(row) {
+				continue
+			}
+			blocks, err := gameplayeffects.DecodeBlockSet([]byte(row[effectsIndex]))
+			if err != nil {
+				continue
+			}
+			for _, context := range analyzeEffectCompatibility([]gameplayeffects.Block(blocks)) {
+				for _, operation := range context.Operations {
+					index := compatibilityPolicyIndex(context.ID)
+					if index < 0 {
+						continue
+					}
+					switch operation.Status {
+					case "supported":
+						counts[index][0]++
+					case "conditional":
+						counts[index][1]++
+					default:
+						counts[index][2]++
+					}
+				}
+			}
+		}
+		summary := importEffectDatasetSummary{Dataset: dataset.key, Contexts: make([]importEffectContextSummary, 0, len(effectCompatibilityPolicies))}
+		for i, policy := range effectCompatibilityPolicies {
+			row := counts[i]
+			status := "unsupported"
+			if row[2] == 0 && row[1] == 0 && row[0] > 0 {
+				status = "supported"
+			} else if row[2] == 0 && row[1] > 0 {
+				status = "conditional"
+			} else if row[0]+row[1] > 0 {
+				status = "partial"
+			}
+			summary.Contexts = append(summary.Contexts, importEffectContextSummary{ID: policy.id, Label: policy.label, Status: status, Supported: row[0], Conditional: row[1], Unsupported: row[2]})
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries
+}
+
+func compatibilityPolicyIndex(id string) int {
+	for i, policy := range effectCompatibilityPolicies {
+		if policy.id == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func validateImportRuntimeEffectAdapters(sources map[string][]byte) []db.ImportValidationIssue {
+	keysByFilename := map[string]string{
+		"Item.csv": "item", "Race.csv": "race", "Constitution.csv": "constitution", "Status.csv": "status",
+	}
+	var issues []db.ImportValidationIssue
+	for filename, dataset := range keysByFilename {
+		content, exists := sources[filename]
+		if !exists {
+			continue
+		}
+		reader := csv.NewReader(strings.NewReader(string(content)))
+		headers, err := reader.Read()
+		if err != nil {
+			continue // CSV syntax errors are reported by the import planner.
+		}
+		indexes := make(map[string]int, len(headers))
+		for index, header := range headers {
+			indexes[strings.TrimSpace(header)] = index
+		}
+		effectsIndex, hasEffects := indexes["effects"]
+		if !hasEffects {
+			continue
+		}
+		rowNumber := 1
+		for {
+			row, readErr := reader.Read()
+			rowNumber++
+			if readErr != nil {
+				break
+			}
+			if effectsIndex >= len(row) || strings.TrimSpace(row[effectsIndex]) == "" {
+				continue
+			}
+			var adapterErr error
+			if dataset == "item" {
+				adapterErr = models.ValidateItemEffectBlocks([]byte(row[effectsIndex]))
+			} else {
+				adapterErr = gamefx.ValidateEffectProjection([]byte(row[effectsIndex]))
+			}
+			if adapterErr != nil {
+				issues = append(issues, db.ImportValidationIssue{
+					Dataset: dataset, Row: rowNumber, Field: "effects", Code: "unsupported_effect_context",
+					Message: adapterErr.Error(), Severity: "error",
+				})
+			}
+		}
+	}
+	return issues
 }
 
 // AdminImportData performs a no-write dry-run for every server-side dataset.
@@ -164,6 +322,10 @@ func commitImport(c *gin.Context, table string) {
 	digest := db.ImportSourcesDigest(stage.Sources)
 	if digest != stage.Digest {
 		c.JSON(http.StatusConflict, gin.H{"error": "Nguồn CSV đã thay đổi; hãy chạy preflight lại"})
+		return
+	}
+	if issues := validateImportRuntimeEffectAdapters(stage.Sources); len(issues) > 0 {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Effect không được hỗ trợ bởi runtime adapter", "validation_errors": issues})
 		return
 	}
 	plan, tx, err := db.RunImportPlanSources(c.Request.Context(), table, stage.Sources, false)

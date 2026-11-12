@@ -65,6 +65,7 @@ export interface TeleportFormationRuleSet {
 
 export interface TeleportFormationCompositionGraph {
   schema_version: number;
+  catalog_draft_id?: string;
   product: string;
   product_profile: string;
   context: string;
@@ -72,8 +73,14 @@ export interface TeleportFormationCompositionGraph {
   core_gu_instance_id: string;
   output_effect_key: string;
   rule_set_revision: string;
-  nodes: Array<{ effect_key: string; source_block_id: string; operation_index: number; role: "OUTPUT" | "SUPPORT"; gu_instance_id: string; gu_id: string; rank: number; trigger: string; context: string; executor: string }>;
+  nodes: Array<{ effect_key: string; source_block_id: string; source_revision?: string; operation_index: number; role: "OUTPUT" | "SUPPORT"; gu_instance_id: string; gu_id: string; rank: number; trigger: string; context: string; executor: string }>;
   edges: Array<{ from: string; to: string; kind: "COMBINE"; rule_id: string }>;
+}
+
+export interface TeleportCompositionTemplate {
+  id: string;
+  name: string;
+  definition: { output_effect_key: string; sources: Array<{ key: string; gu_id: string; rank: number; block_id: string; operation_index: number; role: "OUTPUT" | "SUPPORT" }> };
 }
 
 export interface TeleportFormationEffectPreview {
@@ -141,6 +148,7 @@ export interface TeleportSlice {
   teleportFormationGus: TeleportFormationGu[];
   teleportFormationEffects: TeleportFormationEffectOption[];
   teleportFormationRuleSet: TeleportFormationRuleSet | null;
+  teleportCompositionTemplates: TeleportCompositionTemplate[];
 
   fetchTeleportTemplates: () => Promise<void>;
   fetchMyTeleportArrays: () => Promise<void>;
@@ -171,6 +179,8 @@ export interface TeleportBuildRequest {
     fee_enabled?: boolean;
     fee_currency?: string;
     fee_amount?: number;
+    composition_draft_id?: string;
+    composition_core_gu_instance_id?: string;
     composition_graph?: TeleportFormationCompositionGraph;
     preview_fingerprint?: string;
 }
@@ -183,6 +193,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   teleportFormationGus: [],
   teleportFormationEffects: [],
   teleportFormationRuleSet: null,
+  teleportCompositionTemplates: [],
 
   fetchTeleportTemplates: async () => {
     try {
@@ -199,8 +210,8 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/effect-options`);
       if (!response.ok) return;
-      const data: { gus: TeleportFormationGu[]; effect_options: TeleportFormationEffectOption[]; composition_rule_set?: TeleportFormationRuleSet } = await response.json();
-      set({ teleportFormationGus: data.gus || [], teleportFormationEffects: data.effect_options || [], teleportFormationRuleSet: data.composition_rule_set || null });
+      const data: { gus: TeleportFormationGu[]; effect_options: TeleportFormationEffectOption[]; composition_rule_set?: TeleportFormationRuleSet; composition_templates?: TeleportCompositionTemplate[] } = await response.json();
+      set({ teleportFormationGus: data.gus || [], teleportFormationEffects: data.effect_options || [], teleportFormationRuleSet: data.composition_rule_set || null, teleportCompositionTemplates: data.composition_templates || [] });
     } catch (err) {
       console.error("Failed to fetch teleport formation effect options", err);
     }

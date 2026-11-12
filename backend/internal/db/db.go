@@ -273,6 +273,7 @@ func InitSchema() error {
 		{"daily_missions", schemaDailyMissions},
 		{"world_drops", schemaMapGroundDrops},
 		{"admin_roles", schemaAdminRoles},
+		{"effect_compositions", schemaEffectCompositions},
 		{"authorization", schemaAuthorization},
 		{"moderation", schemaModeration},
 		{"player_extras", schemaPlayerExtras},

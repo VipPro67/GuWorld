@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -50,7 +49,120 @@ type teleportArrayEffectPreview struct {
 	PreviewFingerprint   string                      `json:"preview_fingerprint"`
 }
 
-func buildTeleportArrayEffectProfile(tx *sql.Tx, playerID uuid.UUID, req models.BuildTeleportArrayReq) (teleportArrayEffectProfile, string, error) {
+func bindTeleportCompositionDraft(c *gin.Context, tx *sql.Tx, playerID uuid.UUID, req *models.BuildTeleportArrayReq) error {
+	if req.CompositionDraftID == "" {
+		req.CompositionGraph.CatalogDraftID = ""
+		return nil
+	}
+	id, err := uuid.Parse(req.CompositionDraftID)
+	if err != nil {
+		return fmt.Errorf("Composition draft ID không hợp lệ")
+	}
+	var raw []byte
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT definition FROM admin_effect_composition_drafts WHERE id=$1 AND status='DRAFT' AND product_profile=$2`, id, composition.TeleportFormationProfile().ID).Scan(&raw); err != nil {
+		return fmt.Errorf("Không tìm thấy composition draft Trận Pháp đang hoạt động")
+	}
+	var draft adminCompositionDraft
+	if err := json.Unmarshal(raw, &draft); err != nil {
+		return fmt.Errorf("Composition draft bị hỏng: %w", err)
+	}
+	resolved, err := resolveAdminComposition(c, draft)
+	if err != nil {
+		return fmt.Errorf("Composition draft không còn hợp lệ; Admin cần validate và lưu lại: %w", err)
+	}
+	outputSourceIndex := -1
+	for i := range resolved.Draft.Sources {
+		if resolved.Draft.Sources[i].Key == resolved.Draft.OutputEffectKey && resolved.Draft.Sources[i].Role == string(composition.NodeOutput) {
+			outputSourceIndex = i
+			break
+		}
+	}
+	if outputSourceIndex < 0 {
+		return fmt.Errorf("Composition draft thiếu Gu output")
+	}
+	owned, err := loadOwnedKillerMoveGus(tx, playerID)
+	if err != nil {
+		return err
+	}
+	coreID := req.CompositionCoreGuInstanceID
+	if coreID == "" {
+		coreID = req.CompositionGraph.CoreGuInstanceID
+	}
+	core, ok := owned[coreID]
+	outputSource := resolved.Draft.Sources[outputSourceIndex]
+	if !ok || core.GuID != outputSource.GuID || core.Rank != outputSource.Rank || !strings.EqualFold(core.State, "ACTIVE") || core.Location != "INVENTORY" || core.IsLocked {
+		return fmt.Errorf("Cổ hạch tâm phải khớp output %s rank %d và còn khả dụng", outputSource.GuID, outputSource.Rank)
+	}
+	ownedIDs := make([]string, 0, len(owned))
+	for instanceID := range owned {
+		ownedIDs = append(ownedIDs, instanceID)
+	}
+	sort.Strings(ownedIDs)
+	instanceBySource := map[string]string{outputSource.Key: coreID}
+	instanceByGuRank := map[string]string{}
+	selected := []string{coreID}
+	used := map[string]bool{coreID: true}
+	for _, source := range resolved.Draft.Sources {
+		if source.Role != string(composition.NodeSupport) {
+			continue
+		}
+		guRank := fmt.Sprintf("%s:%d", source.GuID, source.Rank)
+		if instanceID := instanceByGuRank[guRank]; instanceID != "" {
+			instanceBySource[source.Key] = instanceID
+			continue
+		}
+		for _, instanceID := range ownedIDs {
+			gu := owned[instanceID]
+			if used[instanceID] || gu.GuID != source.GuID || gu.Rank != source.Rank || !strings.EqualFold(gu.State, "ACTIVE") || gu.Location != "INVENTORY" || gu.IsLocked {
+				continue
+			}
+			instanceBySource[source.Key] = instanceID
+			instanceByGuRank[guRank] = instanceID
+			selected = append(selected, instanceID)
+			used[instanceID] = true
+			break
+		}
+		if instanceBySource[source.Key] == "" {
+			return fmt.Errorf("Cần Cổ hỗ trợ %s rank %d còn khả dụng", source.GuID, source.Rank)
+		}
+	}
+	bindings := make(map[string]composition.SourceBinding, len(resolved.Draft.Sources))
+	for _, source := range resolved.Draft.Sources {
+		instanceID := instanceBySource[source.Key]
+		options, err := getKillerMoveEffectOptions(owned[instanceID])
+		if err != nil {
+			return err
+		}
+		for _, option := range options {
+			if option.SourceBlockID == source.BlockID && option.OperationIndex == source.OperationIndex && option.SourceRevision == source.SourceRevision && option.TravelSupported {
+				profile := composition.TeleportFormationProfile()
+				contextID := profile.ContextByTrigger[option.Trigger]
+				bindings[source.Key] = composition.SourceBinding{
+					EffectKey: option.Key, GuInstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank,
+					SourceBlockID: option.SourceBlockID, SourceRevision: option.SourceRevision,
+					OperationIndex: option.OperationIndex, Trigger: option.Trigger, Context: contextID,
+					Executor: profile.ExecutorByContext[contextID],
+				}
+				break
+			}
+		}
+		if _, found := bindings[source.Key]; !found {
+			return fmt.Errorf("Effect source %s không còn được hỗ trợ bởi adapter Trận Pháp", source.Key)
+		}
+	}
+	graph, err := composition.BindCatalogGraph(resolved.Graph, id.String(), bindings)
+	if err != nil {
+		return err
+	}
+	req.CompositionCoreGuInstanceID = coreID
+	req.CompositionGraph = graph
+	return nil
+}
+
+func buildTeleportArrayEffectProfile(c *gin.Context, tx *sql.Tx, playerID uuid.UUID, req models.BuildTeleportArrayReq) (teleportArrayEffectProfile, string, error) {
+	if err := bindTeleportCompositionDraft(c, tx, playerID, &req); err != nil {
+		return teleportArrayEffectProfile{}, "", err
+	}
 	profile := composition.TeleportFormationProfile()
 	graph := req.CompositionGraph
 	if len(graph.Nodes) == 0 {
@@ -130,6 +242,7 @@ func buildTeleportArrayEffectProfile(tx *sql.Tx, playerID uuid.UUID, req models.
 			Operations: []gameplayeffects.Operation{operation},
 		})
 		resolved.Nodes[index].BlockID = fmt.Sprintf("ARRIVAL_%02d", index+1)
+		resolved.Nodes[index].SourceRevision = selectedEffect.SourceRevision
 	}
 	if _, err := (gameplayeffects.Compiler{}).Compile(blocks); err != nil {
 		return teleportArrayEffectProfile{}, "", fmt.Errorf("effect Trận Pháp không compile được: %w", err)
@@ -151,6 +264,13 @@ func buildTeleportArrayEffectProfile(tx *sql.Tx, playerID uuid.UUID, req models.
 		GuRank: highestRank, CompositionGraph: resolved, ComponentGuInstances: selected,
 		Effects: effectEnvelope,
 	}
+	profileRaw, err := json.Marshal(profileSnapshot)
+	if err != nil {
+		return teleportArrayEffectProfile{}, "", err
+	}
+	if _, err := validateTeleportArrayEffectProfile(profileRaw); err != nil {
+		return teleportArrayEffectProfile{}, "", fmt.Errorf("effect Trận Pháp không hợp lệ với arrival adapter: %w", err)
+	}
 	canonicalReq := req
 	canonicalReq.PreviewFingerprint = ""
 	fingerprintInput, err := json.Marshal(struct {
@@ -166,8 +286,8 @@ func buildTeleportArrayEffectProfile(tx *sql.Tx, playerID uuid.UUID, req models.
 }
 
 func teleportArrayRequestHasEffect(req models.BuildTeleportArrayReq) bool {
-	return req.CompositionGraph.Product != "" || req.CompositionGraph.ProductProfile != "" ||
-		req.CompositionGraph.OutputEffectKey != "" || len(req.CompositionGraph.Nodes) > 0 || len(req.CompositionGraph.Edges) > 0
+	return req.CompositionDraftID != "" || req.CompositionGraph.Product != "" || req.CompositionGraph.ProductProfile != "" ||
+		req.CompositionCoreGuInstanceID != "" || req.CompositionGraph.OutputEffectKey != "" || len(req.CompositionGraph.Nodes) > 0 || len(req.CompositionGraph.Edges) > 0
 }
 
 func reserveTeleportArrayGuComponents(tx *sql.Tx, playerID, arrayID uuid.UUID, profile teleportArrayEffectProfile) error {
@@ -246,9 +366,15 @@ func TeleportArrayEffectOptions(c *gin.Context) {
 		}
 	}
 	productProfile := composition.TeleportFormationProfile()
+	templates, err := listAdminCompositionTemplates(c.Request.Context(), productProfile.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải composition templates Trận Pháp"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"gus": gus, "effect_options": options,
-		"product_profile": productProfile.ID, "max_components": productProfile.MaxGuComponents,
+		"composition_templates": templates,
+		"product_profile":       productProfile.ID, "max_components": productProfile.MaxGuComponents,
 		"max_effects": productProfile.MaxNodes, "composition_rule_set": composition.TeleportFormationRuleSet(),
 	})
 }
@@ -274,7 +400,7 @@ func PreviewTeleportArray(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
-	effectProfile, fingerprint, err := buildTeleportArrayEffectProfile(tx, playerID, req)
+	effectProfile, fingerprint, err := buildTeleportArrayEffectProfile(c, tx, playerID, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -297,38 +423,35 @@ func validateTeleportArrayEffectProfile(raw []byte) (teleportArrayEffectProfile,
 		return teleportArrayEffectProfile{}, fmt.Errorf("effect profile không khớp Trận Pháp/executor")
 	}
 	graph := profile.CompositionGraph
-	var resolved composition.Graph
-	var err error
-	if graph.RuleSetRevision != "" {
-		ruleSet := composition.TeleportFormationRuleSet()
-		capabilitiesByEffect := make(map[string]map[string]bool, len(graph.Nodes))
-		for _, node := range graph.Nodes {
-			spec, found := models.GetGu(node.GuID, node.Rank)
-			if !found || node.SourceBlockID == "" || node.OperationIndex == nil || !teleportSnapshotMatchesSource(node, spec.Effects.GetBlocks(), profile.Effects.Blocks) {
-				return teleportArrayEffectProfile{}, fmt.Errorf("provenance Block v2 của Trận Pháp không khớp Cổ nguồn")
-			}
-			for _, grant := range spec.CompositionContributions.Grants {
-				if grant.EffectBlockID == node.SourceBlockID && grant.OperationIndex == *node.OperationIndex {
-					if capabilitiesByEffect[node.EffectKey] == nil {
-						capabilitiesByEffect[node.EffectKey] = map[string]bool{}
-					}
-					capabilitiesByEffect[node.EffectKey][grant.Capability] = true
-				}
+	if len(graph.Edges) > 0 {
+		if graph.RuleSetRevision == "" {
+			return teleportArrayEffectProfile{}, fmt.Errorf("graph ghép Trận Pháp thiếu revision rule đã pin")
+		}
+		for _, edge := range graph.Edges {
+			if edge.RuleID == "" {
+				return teleportArrayEffectProfile{}, fmt.Errorf("graph ghép Trận Pháp thiếu rule provenance")
 			}
 		}
-		resolved, err = composition.ResolveWithRules(graph, expected, profile.ComponentGuInstances, ruleSet, capabilitiesByEffect)
-	} else {
-		if len(graph.Edges) > 0 {
-			return teleportArrayEffectProfile{}, fmt.Errorf("graph ghép Trận Pháp cũ thiếu rule revision; cần tháo và tạo lại effect qua preview")
-		}
-		resolved, err = composition.Resolve(graph, expected, profile.ComponentGuInstances)
 	}
+	resolved, err := composition.Resolve(graph, expected, profile.ComponentGuInstances)
 	if err != nil {
 		return teleportArrayEffectProfile{}, err
 	}
 	if len(profile.Effects.Blocks) != len(resolved.Nodes) || profile.Effects.SchemaVersion != effectcatalog.BlockSchemaVersion {
 		return teleportArrayEffectProfile{}, fmt.Errorf("Block v2 snapshot không khớp composition graph")
 	}
+	legacyOutputOnly := len(resolved.Nodes) == 1 && len(resolved.Edges) == 0 && resolved.RuleSetRevision == ""
+	blocksByID := make(map[string]gameplayeffects.Block, len(profile.Effects.Blocks))
+	for _, block := range profile.Effects.Blocks {
+		if block.ID == "" {
+			return teleportArrayEffectProfile{}, fmt.Errorf("Block v2 snapshot thiếu ID")
+		}
+		if _, exists := blocksByID[block.ID]; exists {
+			return teleportArrayEffectProfile{}, fmt.Errorf("Block v2 snapshot có ID trùng lặp")
+		}
+		blocksByID[block.ID] = block
+	}
+	seenSnapshotBlocks := make(map[string]struct{}, len(resolved.Nodes))
 	rawEnvelope, err := json.Marshal(profile.Effects)
 	if err != nil {
 		return teleportArrayEffectProfile{}, err
@@ -340,6 +463,24 @@ func validateTeleportArrayEffectProfile(raw []byte) (teleportArrayEffectProfile,
 	var canonicalEnvelope teleportArrayEffectEnvelope
 	if err := json.Unmarshal(canonical, &canonicalEnvelope); err != nil {
 		return teleportArrayEffectProfile{}, err
+	}
+	for _, node := range resolved.Nodes {
+		if _, exists := seenSnapshotBlocks[node.BlockID]; exists {
+			return teleportArrayEffectProfile{}, fmt.Errorf("nhiều graph node cùng tham chiếu một Block v2 snapshot")
+		}
+		seenSnapshotBlocks[node.BlockID] = struct{}{}
+		if !legacyOutputOnly && (node.SourceBlockID == "" || node.OperationIndex == nil || *node.OperationIndex < 0 || !teleportSnapshotHasProvenance(node, blocksByID)) {
+			return teleportArrayEffectProfile{}, fmt.Errorf("provenance effect Trận Pháp không khớp snapshot đã pin")
+		}
+		block, hasSnapshot := blocksByID[node.BlockID]
+		if !hasSnapshot && legacyOutputOnly && len(profile.Effects.Blocks) == 1 {
+			block, hasSnapshot = profile.Effects.Blocks[0], true
+		}
+		if hasSnapshot {
+			if reason := unsupportedConditionReason("TELEPORT_ARRAY_ARRIVAL", block.Conditions); reason != "" {
+				return teleportArrayEffectProfile{}, fmt.Errorf("Block v2 snapshot Trận Pháp có condition không được hỗ trợ: %s", reason)
+			}
+		}
 	}
 	for _, block := range profile.Effects.Blocks {
 		if block.Trigger != gameplayeffects.TriggerOnUse || len(block.Operations) != 1 || !worldUseOperationAllowed(block.Operations[0], block.Target) {
@@ -354,45 +495,12 @@ func validateTeleportArrayEffectProfile(raw []byte) (teleportArrayEffectProfile,
 	return profile, nil
 }
 
-func teleportSnapshotMatchesSource(node composition.Node, sourceBlocks []gameplayeffects.Block, snapshots []gameplayeffects.Block) bool {
-	if node.OperationIndex == nil || *node.OperationIndex < 0 {
+func teleportSnapshotHasProvenance(node composition.Node, snapshots map[string]gameplayeffects.Block) bool {
+	snapshot, exists := snapshots[node.BlockID]
+	if !exists || len(snapshot.Operations) != 1 {
 		return false
 	}
-	var source *gameplayeffects.Block
-	for index := range sourceBlocks {
-		if sourceBlocks[index].ID == node.SourceBlockID {
-			source = &sourceBlocks[index]
-			break
-		}
-	}
-	if source == nil || *node.OperationIndex >= len(source.Operations) {
-		return false
-	}
-	var snapshot *gameplayeffects.Block
-	for index := range snapshots {
-		if snapshots[index].ID == node.BlockID {
-			snapshot = &snapshots[index]
-			break
-		}
-	}
-	if snapshot == nil || len(snapshot.Operations) != 1 {
-		return false
-	}
-	expectedOperation := source.Operations[*node.OperationIndex]
-	expectedOperation.Target = nil
-	if expectedOperation.Op == gameplayeffects.OpStatus {
-		if expectedOperation.Turns <= 0 {
-			expectedOperation.Turns = node.Rank
-		}
-		if expectedOperation.Value <= 0 {
-			expectedOperation.Value = float64(node.Rank)
-		}
-	}
-	expectedTarget := source.Target
-	if source.Operations[*node.OperationIndex].Target != nil {
-		expectedTarget = *source.Operations[*node.OperationIndex].Target
-	}
-	return snapshot.Trigger == source.Trigger && reflect.DeepEqual(snapshot.Target, expectedTarget) && reflect.DeepEqual(snapshot.Conditions, source.Conditions) && reflect.DeepEqual(snapshot.Operations[0], expectedOperation)
+	return snapshot.Trigger == gameplayeffects.Trigger(node.Trigger)
 }
 
 func applyTeleportArrayArrivalEffect(player *models.Player, raw []byte) (string, error) {

@@ -76,6 +76,33 @@ func TestTeleportArrayArrivalEffectRejectsUnsupportedCommand(t *testing.T) {
 	}
 }
 
+func TestTeleportArrayRejectsConditionUnavailableAtArrival(t *testing.T) {
+	profile := composition.TeleportFormationProfile()
+	snapshot := teleportArrayEffectProfile{
+		ProfileVersion: 1, ProductProfile: profile.ID, Context: profile.Context, Executor: profile.Executor,
+		GuRank: 6,
+		CompositionGraph: composition.Graph{
+			Product: profile.Product, ProductProfile: profile.ID, Context: profile.Context, Executor: profile.Executor,
+			CoreGuInstanceID: "core-instance", OutputEffectKey: "core-instance:0:0",
+			Nodes: []composition.Node{{EffectKey: "core-instance:0:0", Role: composition.NodeOutput, GuInstanceID: "core-instance", GuID: "GU_WIND", Rank: 6,
+				Trigger: "ON_USE", Context: "WORLD_TRAVEL_ARRIVAL", Executor: "TELEPORT_ARRAY_TRAVEL_ADAPTER"}},
+		},
+		ComponentGuInstances: []string{"core-instance"},
+		Effects: teleportArrayEffectEnvelope{SchemaVersion: effectcatalog.BlockSchemaVersion, Blocks: []gameplayeffects.Block{{
+			ID: "ARRIVAL_01", Trigger: gameplayeffects.TriggerOnUse, Target: gameplayeffects.Target{Selector: gameplayeffects.TargetSelf},
+			Conditions: []gameplayeffects.Condition{{Field: "MASTERY", Operator: "GTE", Value: 2}},
+			Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpHeal, SubType: "FLAT", Value: 10}},
+		}}},
+	}
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := validateTeleportArrayEffectProfile(raw); err == nil {
+		t.Fatal("arrival snapshot accepted condition field unavailable to the teleport adapter")
+	}
+}
+
 func TestTeleportArrayRejectsLegacyCompositionEdgeWithoutRuleRevision(t *testing.T) {
 	profile := composition.TeleportFormationProfile()
 	snapshot := teleportArrayEffectProfile{

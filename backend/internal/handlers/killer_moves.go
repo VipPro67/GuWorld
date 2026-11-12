@@ -63,6 +63,7 @@ func evaluateKillerMoveComponents(components []killerMoveComponent, ownedSet map
 type killerMoveEffectRef struct {
 	Key                  string   `json:"key"`
 	SourceBlockID        string   `json:"source_block_id"`
+	SourceRevision       string   `json:"source_revision,omitempty"`
 	Trigger              string   `json:"trigger"`
 	InstanceID           string   `json:"instance_id"`
 	GuID                 string   `json:"gu_id"`
@@ -75,6 +76,7 @@ type killerMoveEffectRef struct {
 type killerMoveEffectOption struct {
 	Key                     string                      `json:"key"`
 	SourceBlockID           string                      `json:"source_block_id"`
+	SourceRevision          string                      `json:"source_revision,omitempty"`
 	BlockIndex              int                         `json:"block_index"`
 	OperationIndex          int                         `json:"operation_index"`
 	SourceID                string                      `json:"source_instance_id"`
@@ -94,6 +96,7 @@ type killerMoveEffectOption struct {
 }
 
 type killerMoveDraftRequest struct {
+	CompositionDraftID string             `json:"composition_draft_id,omitempty"`
 	Name               string             `json:"name"`
 	MainGuInstanceID   string             `json:"main_gu_instance_id" binding:"required"`
 	ComponentIDs       []string           `json:"component_instance_ids"`
@@ -195,6 +198,10 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 	if !ok {
 		return nil, fmt.Errorf("Không tìm thấy dữ liệu Cổ %s rank %d", inst.GuID, inst.Rank)
 	}
+	sourceRevision, err := gameplayeffects.SourceRevision(spec.Effects.GetBlocks())
+	if err != nil {
+		return nil, fmt.Errorf("Không thể tính revision effect nguồn của Cổ %s rank %d: %w", inst.GuID, inst.Rank, err)
+	}
 	var result []killerMoveEffectOption
 	for bi, block := range spec.Effects.GetBlocks() {
 		if block.Trigger != gameplayeffects.TriggerOnAction && block.Trigger != gameplayeffects.TriggerOnUse {
@@ -218,7 +225,7 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 				}
 			}
 			result = append(result, killerMoveEffectOption{
-				Key: key, SourceBlockID: block.ID, BlockIndex: bi, OperationIndex: oi, SourceID: inst.InstanceID, SourceName: spec.Name,
+				Key: key, SourceBlockID: block.ID, SourceRevision: sourceRevision, BlockIndex: bi, OperationIndex: oi, SourceID: inst.InstanceID, SourceName: spec.Name,
 				GuID: inst.GuID, Rank: inst.Rank, Label: killerMoveOperationLabel(op), Trigger: string(block.Trigger),
 				Operation: op, Target: target, Conditions: append([]gameplayeffects.Condition(nil), block.Conditions...),
 				PlayerATKCoefficient: spec.PlayerATKCoefficient, CombatSupported: combatSupported,
@@ -237,6 +244,10 @@ func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOptio
 // activation/use time. Output-only legacy graphs remain readable; any graph
 // with composition edges must carry the current explicit rule revision.
 func validateKillerMoveCompositionSnapshot(graph composition.Graph, refs []killerMoveEffectRef, components []killerMoveComponent, blocks []gameplayeffects.Block) error {
+	return validateKillerMoveCompositionSnapshotMode(graph, refs, components, blocks, true)
+}
+
+func validateKillerMoveCompositionSnapshotMode(graph composition.Graph, refs []killerMoveEffectRef, components []killerMoveComponent, blocks []gameplayeffects.Block, requireCurrentSource bool) error {
 	if len(graph.Nodes) == 0 || len(graph.Nodes) != len(refs) || len(graph.Nodes) != len(blocks) {
 		return fmt.Errorf("graph, selected effects and Block v2 snapshot do not have matching node counts")
 	}
@@ -281,37 +292,52 @@ func validateKillerMoveCompositionSnapshot(graph composition.Graph, refs []kille
 		if node.SourceBlockID != ref.SourceBlockID || node.OperationIndex == nil || *node.OperationIndex != ref.OpIndex {
 			return fmt.Errorf("graph node %q has stale Block/op provenance", node.EffectKey)
 		}
+		if ref.SourceRevision != "" && node.SourceRevision != ref.SourceRevision {
+			return fmt.Errorf("graph node %q does not match its pinned source revision", node.EffectKey)
+		}
 		component, ownsComponent := componentsByID[node.GuInstanceID]
 		if !ownsComponent || component.GuID != node.GuID || component.Rank != node.Rank {
 			return fmt.Errorf("graph node %q is not backed by its declared Gu component", node.EffectKey)
 		}
-		instance := ownedKillerMoveGu{InstanceID: ref.InstanceID, GuID: ref.GuID, Rank: ref.Rank}
-		options, err := getKillerMoveEffectOptions(instance)
-		if err != nil {
-			return err
-		}
-		var option *killerMoveEffectOption
-		for index := range options {
-			if options[index].Key == ref.Key {
-				option = &options[index]
-				break
+		if requireCurrentSource {
+			instance := ownedKillerMoveGu{InstanceID: ref.InstanceID, GuID: ref.GuID, Rank: ref.Rank}
+			options, err := getKillerMoveEffectOptions(instance)
+			if err != nil {
+				return err
 			}
-		}
-		if option == nil || option.SourceBlockID != ref.SourceBlockID || option.OperationIndex != ref.OpIndex || option.Trigger != ref.Trigger {
-			return fmt.Errorf("selected effect %q no longer matches its authored Block/op", ref.Key)
-		}
-		if len(option.CompositionCapabilities) > 0 {
-			capabilitiesByEffect[node.EffectKey] = make(map[string]bool, len(option.CompositionCapabilities))
-			for _, capability := range option.CompositionCapabilities {
-				capabilitiesByEffect[node.EffectKey][capability] = true
+			var option *killerMoveEffectOption
+			for index := range options {
+				if options[index].Key == ref.Key {
+					option = &options[index]
+					break
+				}
 			}
+			if option == nil || option.SourceBlockID != ref.SourceBlockID || option.OperationIndex != ref.OpIndex || option.Trigger != ref.Trigger || (ref.SourceRevision != "" && option.SourceRevision != ref.SourceRevision) {
+				return fmt.Errorf("selected effect %q no longer matches its authored Block/op revision", ref.Key)
+			}
+			if len(option.CompositionCapabilities) > 0 {
+				capabilitiesByEffect[node.EffectKey] = make(map[string]bool, len(option.CompositionCapabilities))
+				for _, capability := range option.CompositionCapabilities {
+					capabilitiesByEffect[node.EffectKey][capability] = true
+				}
+			}
+			snapshot, found := blocksByID[node.BlockID]
+			if !found || snapshot.Trigger != gameplayeffects.Trigger(option.Trigger) || snapshot.Target != option.Target || !reflect.DeepEqual(snapshot.Conditions, option.Conditions) || len(snapshot.Operations) != 1 || !sameKillerMoveOperationSemantics(snapshot.Operations[0], option.Operation) {
+				return fmt.Errorf("Block v2 snapshot for %q does not match its authored operation", node.EffectKey)
+			}
+		} else if node.BlockID == "" || blocksByID[node.BlockID].ID == "" {
+			return fmt.Errorf("active Block v2 snapshot for %q is missing its materialized Block", node.EffectKey)
 		}
-		if node.BlockID == "" && legacyOutputOnly {
-			node.BlockID = blocks[0].ID
+		snapshot, exists := blocksByID[node.BlockID]
+		if !exists {
+			return fmt.Errorf("Block v2 snapshot for %q is missing", node.EffectKey)
 		}
-		snapshot, found := blocksByID[node.BlockID]
-		if !found || snapshot.Trigger != gameplayeffects.Trigger(option.Trigger) || snapshot.Target != option.Target || !reflect.DeepEqual(snapshot.Conditions, option.Conditions) || len(snapshot.Operations) != 1 || !sameKillerMoveOperationSemantics(snapshot.Operations[0], option.Operation) {
-			return fmt.Errorf("Block v2 snapshot for %q does not match its authored operation", node.EffectKey)
+		conditionContext := "KILLER_MOVE_COMBAT"
+		if node.Trigger == string(gameplayeffects.TriggerOnUse) {
+			conditionContext = "KILLER_MOVE_ON_USE"
+		}
+		if reason := unsupportedConditionReason(conditionContext, snapshot.Conditions); reason != "" {
+			return fmt.Errorf("Block v2 snapshot for %q has unsupported conditions: %s", node.EffectKey, reason)
 		}
 	}
 	profile := composition.KillerMoveProfile()
@@ -322,7 +348,19 @@ func validateKillerMoveCompositionSnapshot(graph composition.Graph, refs []kille
 		_, err := composition.Resolve(graph, profile, selected)
 		return err
 	}
-	_, err := composition.ResolveWithRules(graph, profile, selected, composition.KillerMoveRuleSet(), capabilitiesByEffect)
+	if requireCurrentSource {
+		_, err := composition.ResolveWithRules(graph, profile, selected, composition.KillerMoveRuleSet(), capabilitiesByEffect)
+		return err
+	}
+	if len(graph.Edges) > 0 && graph.RuleSetRevision == "" {
+		return fmt.Errorf("active composed Sát Chiêu is missing its pinned rule revision")
+	}
+	for _, edge := range graph.Edges {
+		if edge.RuleID == "" {
+			return fmt.Errorf("active composition edge is missing its pinned rule provenance")
+		}
+	}
+	_, err := composition.Resolve(graph, profile, selected)
 	return err
 }
 
@@ -338,6 +376,128 @@ func sameKillerMoveOperationSemantics(snapshot, authored gameplayeffects.Operati
 
 func killerMoveEffectKey(instanceID string, blockIndex, operationIndex int) string {
 	return fmt.Sprintf("%s:%d:%d", instanceID, blockIndex, operationIndex)
+}
+
+func bindKillerMoveCompositionDraft(c *gin.Context, tx *sql.Tx, playerID uuid.UUID, req *killerMoveDraftRequest) error {
+	if req.CompositionDraftID == "" {
+		return nil
+	}
+	id, err := uuid.Parse(req.CompositionDraftID)
+	if err != nil {
+		return fmt.Errorf("Composition draft ID không hợp lệ")
+	}
+	var raw []byte
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT definition FROM admin_effect_composition_drafts WHERE id=$1 AND status='DRAFT' AND product_profile=$2`, id, composition.KillerMoveProfile().ID).Scan(&raw); err != nil {
+		return fmt.Errorf("Không tìm thấy composition draft Sát Chiêu đang hoạt động")
+	}
+	var draft adminCompositionDraft
+	if err := json.Unmarshal(raw, &draft); err != nil {
+		return fmt.Errorf("Composition draft bị hỏng: %w", err)
+	}
+	resolved, err := resolveAdminComposition(c, draft)
+	if err != nil {
+		return fmt.Errorf("Composition draft không còn hợp lệ; Admin cần validate và lưu lại: %w", err)
+	}
+	owned, err := loadOwnedKillerMoveGus(tx, playerID)
+	if err != nil {
+		return err
+	}
+	output := resolved.Draft.OutputEffectKey
+	var outputSource *adminCompositionSource
+	for i := range resolved.Draft.Sources {
+		if resolved.Draft.Sources[i].Key == output {
+			outputSource = &resolved.Draft.Sources[i]
+			break
+		}
+	}
+	if outputSource == nil {
+		return fmt.Errorf("Composition draft thiếu Gu output")
+	}
+	main, ok := owned[req.MainGuInstanceID]
+	if !ok || main.GuID != outputSource.GuID || main.Rank != outputSource.Rank {
+		return fmt.Errorf("Cổ chính phải khớp Gu/rank output của composition draft (%s R%d)", outputSource.GuID, outputSource.Rank)
+	}
+	eligible := func(gu ownedKillerMoveGu) bool {
+		return !strings.EqualFold(gu.State, "DEAD") && !gu.IsLocked && gu.Location == "INVENTORY"
+	}
+	preferred := make(map[string]bool, len(req.ComponentIDs))
+	for _, instanceID := range req.ComponentIDs {
+		preferred[instanceID] = true
+	}
+	ownedIDs := make([]string, 0, len(owned))
+	for instanceID := range owned {
+		ownedIDs = append(ownedIDs, instanceID)
+	}
+	sort.Strings(ownedIDs)
+	assignedBySource := map[string]string{output: main.InstanceID}
+	assignedComponents := make([]string, 0)
+	usedInstances := map[string]bool{main.InstanceID: true}
+	assignedByGuRank := make(map[string]string)
+	for _, source := range resolved.Draft.Sources {
+		if source.Role != string(composition.NodeSupport) {
+			continue
+		}
+		groupKey := fmt.Sprintf("%s:%d", source.GuID, source.Rank)
+		if existing := assignedByGuRank[groupKey]; existing != "" {
+			assignedBySource[source.Key] = existing
+			continue
+		}
+		instanceID := ""
+		for pass := 0; pass < 2 && instanceID == ""; pass++ {
+			for _, candidateID := range ownedIDs {
+				candidate := owned[candidateID]
+				if candidateID == main.InstanceID || usedInstances[candidateID] || candidate.GuID != source.GuID || candidate.Rank != source.Rank || !eligible(candidate) || (pass == 0) != preferred[candidateID] {
+					continue
+				}
+				instanceID = candidateID
+				break
+			}
+		}
+		if instanceID == "" {
+			return fmt.Errorf("Cần Cổ hỗ trợ %s rank %d còn sống, mở khóa và trong hành trang", source.GuID, source.Rank)
+		}
+		assignedBySource[source.Key] = instanceID
+		assignedByGuRank[groupKey] = instanceID
+		usedInstances[instanceID] = true
+		assignedComponents = append(assignedComponents, instanceID)
+	}
+	bindings := make(map[string]composition.SourceBinding, len(resolved.Draft.Sources))
+	for _, source := range resolved.Draft.Sources {
+		instanceID := assignedBySource[source.Key]
+		instance := owned[instanceID]
+		options, optionErr := getKillerMoveEffectOptions(instance)
+		if optionErr != nil {
+			return optionErr
+		}
+		for _, option := range options {
+			if option.SourceBlockID == source.BlockID && option.OperationIndex == source.OperationIndex && option.GuID == source.GuID && option.Rank == source.Rank && option.SourceRevision == source.SourceRevision {
+				contextID := composition.KillerMoveProfile().ContextByTrigger[option.Trigger]
+				bindings[source.Key] = composition.SourceBinding{
+					EffectKey: option.Key, GuInstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank,
+					SourceBlockID: option.SourceBlockID, SourceRevision: option.SourceRevision,
+					OperationIndex: option.OperationIndex, Trigger: option.Trigger, Context: contextID,
+					Executor: composition.KillerMoveProfile().ExecutorByContext[contextID],
+				}
+				break
+			}
+		}
+		if _, found := bindings[source.Key]; !found {
+			return fmt.Errorf("Effect source %s không được hỗ trợ bởi Sát Chiêu hiện tại", source.Key)
+		}
+	}
+	graph, err := composition.BindCatalogGraph(resolved.Graph, id.String(), bindings)
+	if err != nil {
+		return err
+	}
+	req.ComponentIDs = assignedComponents
+	req.SelectedEffectKeys = make([]string, 0, len(graph.Nodes))
+	for _, node := range graph.Nodes {
+		req.SelectedEffectKeys = append(req.SelectedEffectKeys, node.EffectKey)
+	}
+	req.OutputEffectKey = graph.OutputEffectKey
+	req.RuleSetRevision = graph.RuleSetRevision
+	req.CompositionEdges = graph.Edges
+	return nil
 }
 
 func killerMoveOperationAllowed(op gameplayeffects.Operation, target gameplayeffects.Target) bool {
@@ -429,7 +589,12 @@ func GetKillerMoveOptions(c *gin.Context) {
 		}
 	}
 	profile := composition.KillerMoveProfile()
-	c.JSON(http.StatusOK, gin.H{"gus": instances, "effect_options": options, "composition_rule_set": composition.KillerMoveRuleSet(), "max_saved": profile.MaxSaved, "max_equipped": profile.MaxEquipped, "max_components": profile.MaxGuComponents, "max_effects": profile.MaxNodes})
+	templates, err := listAdminCompositionTemplates(c.Request.Context(), profile.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải composition templates"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"gus": instances, "effect_options": options, "composition_templates": templates, "composition_rule_set": composition.KillerMoveRuleSet(), "max_saved": profile.MaxSaved, "max_equipped": profile.MaxEquipped, "max_components": profile.MaxGuComponents, "max_effects": profile.MaxNodes})
 }
 
 func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraftRequest, masteryXP int) (killerMovePreview, ownedKillerMoveGu, error) {
@@ -519,14 +684,14 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 		for _, capability := range option.CompositionCapabilities {
 			capabilitiesByEffect[key][capability] = true
 		}
-		selected = append(selected, killerMoveEffectRef{Key: key, SourceBlockID: option.SourceBlockID, Trigger: option.Trigger, InstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank, BlockIndex: bi, OpIndex: oi, PlayerATKCoefficient: &coefficient})
+		selected = append(selected, killerMoveEffectRef{Key: key, SourceBlockID: option.SourceBlockID, SourceRevision: option.SourceRevision, Trigger: option.Trigger, InstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank, BlockIndex: bi, OpIndex: oi, PlayerATKCoefficient: &coefficient})
 		role := composition.NodeSupport
 		if key == req.OutputEffectKey {
 			role = composition.NodeOutput
 		}
 		executionContext := productProfile.ContextByTrigger[option.Trigger]
 		opIndex := oi
-		graphNodes = append(graphNodes, composition.Node{EffectKey: key, SourceBlockID: option.SourceBlockID, OperationIndex: &opIndex, Role: role, GuInstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank, Trigger: option.Trigger, Context: executionContext, Executor: productProfile.ExecutorByContext[executionContext]})
+		graphNodes = append(graphNodes, composition.Node{EffectKey: key, SourceBlockID: option.SourceBlockID, SourceRevision: option.SourceRevision, OperationIndex: &opIndex, Role: role, GuInstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank, Trigger: option.Trigger, Context: executionContext, Executor: productProfile.ExecutorByContext[executionContext]})
 		blockTarget := option.Target
 		operation := option.Operation
 		// Block v2 stores target selection on the block, never on the operation.
@@ -539,7 +704,7 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 		}
 	}
 	graph, err := composition.ResolveWithRules(composition.Graph{
-		Product: productProfile.Product, ProductProfile: productProfile.ID, Context: productProfile.Context, Executor: productProfile.Executor,
+		CatalogDraftID: req.CompositionDraftID, Product: productProfile.Product, ProductProfile: productProfile.ID, Context: productProfile.Context, Executor: productProfile.Executor,
 		RuleSetRevision:  ruleSet.Revision,
 		CoreGuInstanceID: main.InstanceID, OutputEffectKey: req.OutputEffectKey,
 		Nodes: graphNodes, Edges: req.CompositionEdges,
@@ -852,6 +1017,10 @@ func PreviewKillerMove(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	if err := bindKillerMoveCompositionDraft(c, tx, playerID, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	preview, _, err := calculateKillerMoveDraft(tx, playerID, req, 0)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -884,6 +1053,10 @@ func CreateKillerMove(c *gin.Context) {
 	var lockedPlayer string
 	if err = tx.QueryRow(`SELECT id::text FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&lockedPlayer); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhân vật"})
+		return
+	}
+	if err := bindKillerMoveCompositionDraft(c, tx, playerID, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	productProfile := composition.KillerMoveProfile()
@@ -1016,7 +1189,7 @@ func ListKillerMoves(c *gin.Context) {
 		available, hasStarvingGu, missingGu := evaluateKillerMoveComponents(m.Components, ownedSet)
 		compositionErr := snapshotErr
 		if compositionErr == nil {
-			compositionErr = validateKillerMoveCompositionSnapshot(m.CompositionGraph, m.SelectedEffects, m.Components, m.CompiledEffects)
+			compositionErr = validateKillerMoveCompositionSnapshotMode(m.CompositionGraph, m.SelectedEffects, m.Components, m.CompiledEffects, !m.Equipped)
 		}
 		m.Available = available && compositionErr == nil
 		m.HasStarvingGu = hasStarvingGu
@@ -1304,6 +1477,9 @@ func reconcileKillerMoveTx(tx *sql.Tx, playerID uuid.UUID, moveID string) (store
 	if err != nil {
 		return storedKillerMove{}, fmt.Errorf("không tìm thấy sát chiêu")
 	}
+	if isEquipped {
+		return storedKillerMove{}, fmt.Errorf("Sát chiêu active đang pin snapshot effect; hãy tháo trang bị trước khi đồng bộ draft theo catalog mới")
+	}
 
 	var components []killerMoveComponent
 	var graph composition.Graph
@@ -1537,7 +1713,7 @@ func UseKillerMove(c *gin.Context) {
 		return
 	}
 	move.CompiledEffects = []gameplayeffects.Block(blocks)
-	if err := validateKillerMoveCompositionSnapshot(move.CompositionGraph, move.SelectedEffects, move.Components, move.CompiledEffects); err != nil {
+	if err := validateKillerMoveCompositionSnapshotMode(move.CompositionGraph, move.SelectedEffects, move.Components, move.CompiledEffects, false); err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Composition graph của sát chiêu không còn hợp lệ; hãy tạo lại từ preview"})
 		return
 	}
@@ -1625,8 +1801,8 @@ func UseKillerMove(c *gin.Context) {
 	pathPoints := player.PathMasteries[cleanPath]
 	if success {
 		result, evalErr := compiledEffects.Evaluate(gameplayeffects.Context{
-			Actor: useSnapshot,
-			Rank:  move.MainGuRank, Mastery: currentLevel,
+			Actor: useSnapshot, Target: useSnapshot,
+			Rank: move.MainGuRank, Mastery: currentLevel, HasMastery: true,
 		}, gameplayeffects.Event{Trigger: gameplayeffects.TriggerOnUse})
 		if evalErr != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Không thể đánh giá effect ON_USE"})

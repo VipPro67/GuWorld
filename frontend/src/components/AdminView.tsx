@@ -88,6 +88,7 @@ import { CombatHistoryAdminTab } from "./admin/CombatHistoryAdminTab";
 import { MapDropsAdminTab } from "./admin/MapDropsAdminTab";
 import { ArenaRankingsAdminTab } from "./admin/ArenaRankingsAdminTab";
 import { WorldBossesAdminTab } from "./admin/WorldBossesAdminTab";
+import { EffectCompositionsAdminTab } from "./admin/EffectCompositionsAdminTab";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
@@ -672,7 +673,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [onlineLoading, setOnlineLoading] = useState(false);
 
   // ----- Dictionary state -----
-  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells" | "scouting" | "constitution" | "race" | "status" | "spawns" | "quests" | "dungeons">("import");
+  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells" | "scouting" | "constitution" | "race" | "status" | "spawns" | "quests" | "dungeons" | "compositions">("import");
   const [regions, setRegions] = useState<ApiResponseData[]>([]);
   const [regionsLoading, setRegionsLoading] = useState(false);
   const [regionEdit, setRegionEdit] = useState<ApiResponseData | null>(null);
@@ -3698,6 +3699,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             <button onClick={() => setDataTab("dungeons")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "dungeons" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Shield className="w-3.5 h-3.5 inline mr-1.5" />Phụ bản
             </button>
+            <button onClick={() => setDataTab("compositions")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "compositions" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Swords className="w-3.5 h-3.5 inline mr-1.5" />Tổ hợp effect
+            </button>
           </div>
 
           {dataTab === "import" && (
@@ -3963,6 +3967,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
           {dataTab === "spawns" && <WorldExtendedAdminTab type="spawns" addToast={addToast} canWrite={canAdminAction("updateMonsterSpawn")} canDelete={canAdminAction("deleteMonsterSpawn")} />}
           {dataTab === "quests" && <WorldExtendedAdminTab type="quests" addToast={addToast} canWrite={canAdminAction("updateWorldQuest")} canDelete={canAdminAction("deleteWorldQuest")} />}
           {dataTab === "dungeons" && <WorldExtendedAdminTab type="dungeons" addToast={addToast} canWrite={canAdminAction("updateDungeon")} canDelete={canAdminAction("deleteDungeon")} />}
+          {dataTab === "compositions" && <EffectCompositionsAdminTab canWrite={canAdminAction("updateGuDictionary")} addToast={addToast} />}
         </div>
       )}
 

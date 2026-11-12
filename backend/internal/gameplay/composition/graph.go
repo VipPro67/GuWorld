@@ -32,6 +32,7 @@ type Node struct {
 	EffectKey      string   `json:"effect_key"`
 	BlockID        string   `json:"block_id,omitempty"`
 	SourceBlockID  string   `json:"source_block_id,omitempty"`
+	SourceRevision string   `json:"source_revision,omitempty"`
 	OperationIndex *int     `json:"operation_index,omitempty"`
 	Role           NodeRole `json:"role"`
 	GuInstanceID   string   `json:"gu_instance_id"`
@@ -51,6 +52,7 @@ type Edge struct {
 
 type Graph struct {
 	SchemaVersion    int    `json:"schema_version"`
+	CatalogDraftID   string `json:"catalog_draft_id,omitempty"`
 	Product          string `json:"product"`
 	ProductProfile   string `json:"product_profile"`
 	Context          string `json:"context"`

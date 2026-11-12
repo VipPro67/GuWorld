@@ -6,8 +6,10 @@ package gamefx
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -106,6 +108,37 @@ type Effects struct {
 	BlockedActions map[string]bool `json:"blocked_actions,omitempty"`
 	// RawBlocks preserves the original block-v2 JSON array when loaded from DB or CSV.
 	RawBlocks json.RawMessage `json:"-"`
+}
+
+// ValidateEffectProjection checks whether a Block v2 definition can be
+// consumed by the passive/derived projection adapter. Unsupported triggers,
+// conditions, targets, and operations must be rejected before data is stored.
+func ValidateEffectProjection(raw []byte) error {
+	var effects Effects
+	return json.Unmarshal(raw, &effects)
+}
+
+// PassiveStatModSupported is the explicit stat-operation allowlist understood
+// by the current passive/derived projection adapter.
+func PassiveStatModSupported(stat, subtype, unit, path string) bool {
+	stat = strings.ToUpper(strings.TrimSpace(stat))
+	switch stat {
+	case "ATTACK", "DEFENSE", "SPEED", "HP", "DAO_MARK", "PATH_DAMAGE", "PATH_RESISTANCE", "LUCK",
+		"REFINE_SUCCESS", "CULTIVATION_EFFICIENCY", "DAO_MARK_GAIN", "APERTURE_STRESS",
+		"PATH_CONFLICT_REDUCTION", "TENACITY", "CC_RESIST":
+	default:
+		return false
+	}
+	if value := strings.ToUpper(strings.TrimSpace(subtype)); value != "" && value != "ADD_FLAT" {
+		return false
+	}
+	if value := strings.ToUpper(strings.TrimSpace(unit)); value != "" && value != "FLAT" {
+		return false
+	}
+	if (stat == "DAO_MARK" || stat == "PATH_DAMAGE" || stat == "PATH_RESISTANCE") && strings.TrimSpace(path) == "" {
+		return false
+	}
+	return true
 }
 
 // UnmarshalJSON unmarshals either a legacy Effects object or a pure Block v2 array [...].
@@ -277,6 +310,36 @@ func (e Effects) ToBlocks() []any {
 }
 
 func (e *Effects) unmarshalBlocks(data []byte) error {
+	var effectBlocks gameplayeffects.BlockSet
+	if err := json.Unmarshal(data, &effectBlocks); err != nil {
+		return err
+	}
+	for _, block := range effectBlocks {
+		if block.Trigger != gameplayeffects.TriggerAlwaysOn || len(block.Conditions) > 0 || block.Target.Selector != gameplayeffects.TargetSelf {
+			return fmt.Errorf("gamefx effect block %q requires ALWAYS_ON, unconditional SELF targeting", block.ID)
+		}
+		for _, operation := range block.Operations {
+			if operation.Target != nil && operation.Target.Selector != gameplayeffects.TargetSelf {
+				return fmt.Errorf("gamefx effect block %q has an unsupported operation target", block.ID)
+			}
+			switch operation.Op {
+			case gameplayeffects.OpStatMod:
+				if !PassiveStatModSupported(operation.Stat, operation.SubType, operation.Unit, operation.Path) {
+					return fmt.Errorf("gamefx effect block %q has unsupported STAT_MOD projection %q/%q/%q/%q", block.ID, operation.Stat, operation.SubType, operation.Unit, operation.Path)
+				}
+			case gameplayeffects.OpHeal:
+				if !strings.EqualFold(operation.SubType, "MANA") && !strings.EqualFold(operation.SubType, "LIFESTEAL") {
+					return fmt.Errorf("gamefx effect block %q has unsupported HEAL subtype %q", block.ID, operation.SubType)
+				}
+			case gameplayeffects.OpUnique:
+				if !gameFXUniqueProjection(operation.Code) {
+					return fmt.Errorf("gamefx effect block %q has unsupported UNIQUE code %q", block.ID, operation.Code)
+				}
+			default:
+				return fmt.Errorf("gamefx effect block %q has unsupported operation %q", block.ID, operation.Op)
+			}
+		}
+	}
 	*e = Effects{
 		StatMods:            map[string]float64{},
 		DaoNganBonus:        map[string]float64{},
@@ -459,6 +522,19 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 		}
 	}
 	return nil
+}
+
+func gameFXUniqueProjection(code string) bool {
+	switch strings.ToUpper(strings.TrimSpace(code)) {
+	case "STAT_MODS", "REFINE_SUCCESS", "DAO_MARK_MODIFIER", "PATH_DAMAGE_MODIFIER", "PATH_RESISTANCE_MODIFIER",
+		"LUCK", "MAX_MANA", "MANA_REGEN", "CULTIVATION_EFFICIENCY", "DAO_MARK_GAIN", "HEALING_RECEIVED",
+		"HP_REGEN", "MENTAL_RESISTANCE", "SOUL_DEFENSE", "SOUL_REGEN", "TENACITY", "CC_RESIST",
+		"APERTURE_STRESS", "NON_CONFLICTING_DAO_MARKS", "IMMORTAL", "DISABLE_HP_REGEN", "DISABLE_MANA_REGEN",
+		"DISABLE_RESOURCE_REGEN", "DISABLE_SOUL_REGEN":
+		return true
+	default:
+		return false
+	}
 }
 
 // ValidRaces returns the set of accepted race keys.

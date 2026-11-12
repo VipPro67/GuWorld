@@ -179,11 +179,27 @@ func validateAndNormalizeAdminGuEffects(c *gin.Context, key string, raw *json.Ra
 
 func validateAdminEffects(c *gin.Context, source, key string, raw json.RawMessage) bool {
 	issues := effectcatalog.ValidateBlockV2(raw, effectcatalog.Location{Source: source, Key: key})
-	if len(issues) == 0 {
-		return true
+	if len(issues) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Effect Block v2 không hợp lệ", "issues": issues})
+		return false
 	}
-	c.JSON(http.StatusBadRequest, gin.H{"error": "Effect Block v2 không hợp lệ", "issues": issues})
-	return false
+	if source == "item" {
+		if err := models.ValidateItemEffectBlocks(raw); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Effect không được hỗ trợ bởi item consume adapter", "details": err.Error()})
+			return false
+		}
+		blocks, err := gameplayeffects.DecodeBlockSet(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đọc được Effect Block v2", "details": err.Error()})
+			return false
+		}
+		unsupported := unsupportedEffectOperations(analyzeEffectCompatibility([]gameplayeffects.Block(blocks)), "ITEM_CONSUME")
+		if len(unsupported) > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Effect không được hỗ trợ bởi item consume adapter", "unsupported": unsupported})
+			return false
+		}
+	}
+	return true
 }
 
 func guEffectWarnings(c *gin.Context) []effectcatalog.Issue {
@@ -483,8 +499,17 @@ func AdminDeleteGuItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể xóa: có %d Cổ trùng loại này đang được người chơi sở hữu", ownedCount)})
 		return
 	}
+	var compositionCount int
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM admin_effect_composition_drafts WHERE status='DRAFT' AND definition->'sources' @> jsonb_build_array(jsonb_build_object('gu_id',$1))`, guID).Scan(&compositionCount); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra composition draft: " + err.Error()})
+		return
+	}
+	if compositionCount > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể xóa: Gu source đang được tham chiếu bởi %d composition draft; hãy cập nhật hoặc archive draft trước", compositionCount)})
+		return
+	}
 
-	_, err := db.DB.Exec(`DELETE FROM gu_dictionary WHERE id=$1`, guID)
+	_, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM gu_dictionary WHERE id=$1`, guID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
 		return

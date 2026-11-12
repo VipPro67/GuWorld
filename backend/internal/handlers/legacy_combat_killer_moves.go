@@ -76,7 +76,7 @@ func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator
 				break
 			}
 		}
-		if valid && validateKillerMoveCompositionSnapshot(m.CompositionGraph, m.SelectedEffects, m.Components, m.CompiledEffects) != nil {
+		if valid && validateKillerMoveCompositionSnapshotMode(m.CompositionGraph, m.SelectedEffects, m.Components, m.CompiledEffects, false) != nil {
 			valid = false
 		}
 		hasCombatEffect := false

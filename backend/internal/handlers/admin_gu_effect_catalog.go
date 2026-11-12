@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 )
 
 func AdminEffectCatalogMetadata(c *gin.Context) {
@@ -47,7 +48,16 @@ func AdminValidateGuEffects(c *gin.Context) {
 	}
 
 	issues := effectcatalog.ValidateBlockV2(req.Effects, effectcatalog.Location{Source: req.Source, Key: req.Key})
-	c.JSON(http.StatusOK, gin.H{"valid": len(issues) == 0, "schema_version": effectcatalog.BlockSchemaVersion, "issues": issues})
+	response := gin.H{"valid": len(issues) == 0, "schema_version": effectcatalog.BlockSchemaVersion, "issues": issues}
+	if len(issues) == 0 {
+		blocks, err := gameplayeffects.DecodeBlockSet(req.Effects)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể phân tích Block v2 sau khi validation thành công"})
+			return
+		}
+		response["compatibility"] = analyzeEffectCompatibility([]gameplayeffects.Block(blocks))
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func AdminAuditGuEffects(c *gin.Context) {

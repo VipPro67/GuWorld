@@ -54,6 +54,16 @@ fail closed. The one-way converter recognizes arrays/envelopes idempotently;
 legacy namespaces continue through the existing per-group migration/parity
 gate rather than being silently treated as Block v2.
 
+Every gameplay consumer owns a narrow adapter over this same contract. Item
+consumption currently accepts unconditional `ON_CONSUME` self-targeted native
+actions; race, constitution, and status projections accept unconditional
+`ALWAYS_ON` self-targeted stat/registered projection operations. Conditions,
+other triggers, targets, or operations that those adapters cannot evaluate are
+rejected by Admin CRUD and CSV preflight, and the runtime loaders reject them
+as well. The compatibility matrix still reports where a valid definition can
+run in other contexts; a green schema validation alone does not mean every
+consumer supports the block.
+
 `Gu.csv.composition_contributions` is a separate versioned authoring envelope:
 `{"schema_version":1,"grants":[{"effect_block_id":"ACTIVE_SKILL","operation_index":0,"capability":"COMBAT.DAMAGE.FLAT.SINGLE_TARGET"}]}`.
 Each grant must point at an operation in that row's Block v2 effects. The
@@ -71,6 +81,14 @@ appends the support's authored command as a separate Block v2 operation. The che
 data grants that capability only to `GU_ANCIENT_BODY_2` rank 2 and
 `GU_ALL_HEAVEN_RECORD_3` rank 3. Import Gu through Admin after editing grants;
 rule edits require a new revision so previews retain their provenance.
+
+Product drafts resolve against the latest Gu Block v2 source and current
+composition rules when previewed or activated. Once active, Sát Chiêu,
+Trận Kích, and Teleport Array keep their materialized Block v2 snapshot and
+record each source definition's SHA-256 revision in graph provenance. Editing
+the Gu catalog does not rewrite an active artifact; component ownership,
+availability, and hunger remain live lifecycle checks. Deactivate a product
+before synchronizing its draft to newer source effects or rules.
 
 Turn-based Gu `ON_ACTION` blocks are compiled into operation-level simulator
 actions. The adapter preserves each operation's effective target and block
@@ -916,10 +934,11 @@ Root chỉ có `schema_version` và `blocks`:
 - `schema_version` bắt buộc bằng `2`. Block `id` dùng `UPPER_SNAKE_CASE`, khớp `^[A-Z][A-Z0-9_]*$` và duy nhất trong definition.
 - Trigger hiện hành: `ALWAYS_ON`, `ON_ACTION`, `ON_HIT`, `BEFORE_HIT`, `ON_TURN_START`, `ON_DEATH`, `ON_TICK`, `CAPABILITY`, `COMBAT_PASSIVE`, `PASSIVE`, `ON_BATTLE_START`, `BEFORE_ENEMY_ATTACK`, `ON_CAST`, `ON_CONSUME`, `ON_USE`. `PASSIVE` được giữ để tương thích; dữ liệu mới nên dùng `ALWAYS_ON` cho stat thụ động hoặc `COMBAT_PASSIVE` cho hook trong trận.
 - Target có shape `{selector,bypass_frontline?}`. Selector: `SELF`, `TARGET`, `ROW`, `COL`, `ALL_ENEMIES`, `ALL_ALLIES`, `ALL`. Không dùng alias `SELECTED_TARGET`, `COLUMN` hoặc `SINGLE`.
-- Condition có đúng shape `{field,operator,value}` với `value` là number. Danh sách field/operator đóng và được trả qua metadata.
+- Condition có đúng shape `{field,operator,value}` với `value` là number. Danh sách field/operator đóng và được trả qua metadata. Runtime dùng chung semantics so sánh giữa effect evaluator và turn-based simulator; field chỉ được đánh giá khi context cung cấp dữ liệu tương ứng. Field thiếu dữ liệu phải fail closed thay vì mặc định bằng `0`; `TURN` cần event context có turn number.
 - Operation là object phẳng. `op` thuộc `DAMAGE`, `SHIELD`, `HEAL`, `DIRECT_HP`, `STAT_MOD`, `STATUS`, `BARRIER`, `CLEANSE`, `UNIQUE`; field tùy operation được metadata khai báo qua `allowed_fields`, `required_fields`, `sub_types`, `triggers`, `targets`. Tên field chuẩn là `sub_type` (không phải `subtype`), `value` number; các semantic bổ sung dùng `unit`, `resource`, `stack_policy`, `stat`, `status_id`, `turns`, `chance`, `path`, `code`, `params`.
 - `unit`, `resource` và `stack_policy` được giữ xuyên suốt authoring DTO → compiled operation → runtime command. Không được tự suy diễn/chuyển đổi tỷ lệ.
 - `UNIQUE` chỉ chấp nhận `code` đã đăng ký. Mỗi native hook khai báo domain, trigger và schema params (type, required, min/max hoặc enum); validator và compiler đều fail closed khi code/trigger/params không hợp lệ.
+- Admin báo riêng schema validity và ma trận compatibility theo executor thực tế (combat theo lượt, ON_USE, passive/derived, worker, refinement, composition); CSV preflight tổng hợp cùng ma trận cho các dataset effect. Combat realtime không phải execution context được hỗ trợ.
 - Status ID được lấy từ `statusfx.Registry`, không có danh sách status song song.
 
 Catalog metadata là nguồn đúng duy nhất cho editor và tooling; danh sách trên chỉ mô tả snapshot để đọc tài liệu. Mở rộng vocabulary phải sửa catalog cùng test conformance, không thêm map riêng trong compiler hoặc frontend.
@@ -1552,6 +1571,8 @@ Giao dịch đồng bộ cả `players.primeval_stones/immortal_stones` lẫn `w
 Bảng `teleport_arrays` lưu các thực thể trận pháp do người chơi và Tông Môn xây dựng trên bản đồ thế giới Ngũ Vực.
 
 Trận Pháp có thể lắp composition tùy chọn theo profile `teleport_formation.v1`: output và support đều lấy từ Cổ `ON_USE`, nhưng context là `WORLD_TRAVEL_ARRIVAL` và executor là adapter Trận Pháp. Builder chỉ cho phép self-heal HP, hồi MANA, FLYING, STEALTH và HASTE; preview/compiler từ chối operation ngoài ma trận. Graph provenance và effect snapshot Block v2 envelope (`schema_version: 2`) được lưu trong `teleport_arrays.effect_profile`; build phải gửi lại fingerprint preview. Các Gu thành phần bị giữ chỗ trong `teleport_array_gu_reservations` khi effect profile được lắp. Chúng vẫn hao đói bình thường; nếu một thành phần chết đói, worker tắt riêng `effect_enabled` của Trận Pháp và giải phóng cả nhóm reservation, còn dịch chuyển cơ bản vẫn dùng được. Phá dỡ array giải phóng reservation qua FK cascade.
+
+Admin → Dữ liệu → **Tổ hợp effect** là catalog draft dùng chung, lưu trong `admin_effect_composition_drafts`; draft lưu provenance theo Gu definition/rank/Block/operation, không gắn với `player_gu` instance. Các endpoint `/api/admin/effect-compositions/catalog`, `/validate`, và CRUD `/api/admin/effect-compositions` quản lý draft. Product options của Sát Chiêu, Tiên Cổ Ốc và Trận Pháp liệt kê template cùng profile tương ứng; gameplay chọn draft, map source sang Gu instance hợp lệ, revalidate source/rule rồi mới preview/lưu. Product lifecycle là nơi tạo active snapshot; snapshot đã tạo thực thi Block v2 đã pin và không tự đổi khi source/rule catalog đổi. Gu source đang được draft tham chiếu không thể hard-delete cho tới khi draft được sửa hoặc archive.
 
 #### Phân cấp trận pháp:
 - **`TIER_1` (Tiểu Hình Truyền Tống Trận / Vi Trận):**

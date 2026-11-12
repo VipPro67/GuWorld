@@ -65,7 +65,7 @@ func UseGuHouse(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ Ốc đã hư hại, cần tu sửa trước"})
 		return
 	}
-	if err := validateGuHouseActivationProfile(profileRaw); err != nil {
+	if err := validateGuHouseActivationProfileMode(profileRaw, false); err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
@@ -130,7 +130,7 @@ func UseGuHouse(c *gin.Context) {
 		return
 	}
 	snapshot := gameplayeffects.Snapshot{ID: player.ID.String(), HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(&player), Mana: player.CurrentMana, MaxMana: gamefx.EffectiveMaxMana(&player)}
-	result, err := compiled.Evaluate(gameplayeffects.Context{Actor: snapshot, Rank: gu.Rank}, gameplayeffects.Event{Trigger: gameplayeffects.TriggerOnUse})
+	result, err := compiled.Evaluate(gameplayeffects.Context{Actor: snapshot, Target: snapshot, Rank: gu.Rank}, gameplayeffects.Event{Trigger: gameplayeffects.TriggerOnUse})
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Không thể đánh giá effect ON_USE"})
 		return

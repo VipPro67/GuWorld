@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { BookOpenCheck, Check, GripVertical, Plus, RefreshCw, Save, Search, ShieldAlert, Sparkles, Trash2, WandSparkles, Castle, AlertCircle } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
-import type { KillerMoveDraft, KillerMoveEffectOption, KillerMovePreview } from "@/store/slices/killerMovesSlice";
+import type { KillerMoveDraft, KillerMoveEffectOption, KillerMovePreview, KillerMoveCompositionTemplate } from "@/store/slices/killerMovesSlice";
 import { GuHousePanel } from "@/components/GuHousePanel";
 
 const formatPercent = (value?: number) => `${Math.round((value || 0) * 100)}%`;
@@ -13,6 +13,7 @@ export function KillerMovesPanel() {
   const gus = useGameStore((s) => s.killerMoveGus);
   const effects = useGameStore((s) => s.killerMoveEffects);
   const ruleSet = useGameStore((s) => s.killerMoveCompositionRuleSet);
+  const compositionTemplates = useGameStore((s) => s.killerMoveCompositionTemplates);
   const moves = useGameStore((s) => s.killerMoves);
   const loading = useGameStore((s) => s.killerMovesLoading);
   const maxSaved = useGameStore((s) => s.killerMovesMaxSaved);
@@ -38,6 +39,7 @@ export function KillerMovesPanel() {
   const [saving, setSaving] = useState(false);
   const [acceptedPreview, setAcceptedPreview] = useState("");
   const [viewMode, setViewMode] = useState<"spells" | "houses">("spells");
+  const [compositionDraftID, setCompositionDraftID] = useState("");
 
   useEffect(() => { void fetch(); }, [fetch]);
 
@@ -88,6 +90,46 @@ export function KillerMovesPanel() {
     });
   }, [gus, guDictionary, mainId, components, componentSearch]);
 
+  const applyCompositionTemplate = (template: KillerMoveCompositionTemplate | undefined) => {
+    if (!template) {
+      setCompositionDraftID("");
+      return;
+    }
+    const outputSource = template.definition.sources.find((source) => source.key === template.definition.output_effect_key && source.role === "OUTPUT");
+    if (!outputSource) { setPreviewError("Composition template thiếu output source."); return; }
+    const outputGu = gus.find((gu) => gu.gu_id === outputSource.gu_id && gu.rank === outputSource.rank);
+    if (!outputGu) { setPreviewError(`Cần Cổ chính ${outputSource.gu_id} rank ${outputSource.rank}.`); return; }
+    const sourceInstance = new Map<string, string>([[outputSource.key, outputGu.instance_id]]);
+    const selectedComponentIDs: string[] = [];
+    const usedInstances = new Set([outputGu.instance_id]);
+    for (const source of template.definition.sources.filter((item) => item.role === "SUPPORT")) {
+      let instanceID = sourceInstance.get(`${source.gu_id}:${source.rank}`);
+      if (!instanceID) {
+        const gu = gus.find((item) => !usedInstances.has(item.instance_id) && item.gu_id === source.gu_id && item.rank === source.rank);
+        if (!gu) { setPreviewError(`Cần Cổ hỗ trợ ${source.gu_id} rank ${source.rank}.`); return; }
+        instanceID = gu.instance_id;
+        sourceInstance.set(`${source.gu_id}:${source.rank}`, instanceID);
+        selectedComponentIDs.push(instanceID);
+        usedInstances.add(instanceID);
+      }
+      sourceInstance.set(source.key, instanceID);
+    }
+    const remappedEffects = template.definition.sources.map((source) => {
+      const instanceID = sourceInstance.get(source.key);
+      return effects.find((effect) => effect.source_instance_id === instanceID && effect.source_block_id === source.block_id && effect.operation_index === source.operation_index);
+    });
+    if (remappedEffects.some((effect) => !effect)) { setPreviewError("Một source của template hiện không được hỗ trợ bởi Sát Chiêu."); return; }
+    const outputEffect = remappedEffects[template.definition.sources.findIndex((source) => source.role === "OUTPUT")];
+    if (!outputEffect) return;
+    setCompositionDraftID(template.id);
+    setMainId(outputGu.instance_id);
+    setComponents(selectedComponentIDs);
+    setOutputEffectKey(outputEffect.key);
+    setSelectedEffects(remappedEffects.filter((effect): effect is KillerMoveEffectOption => !!effect && effect.key !== outputEffect.key).map((effect) => effect.key));
+    setPreview(null);
+    setPreviewError("");
+  };
+
   const draft = useMemo<KillerMoveDraft | null>(() => {
     if (!mainId || !outputEffectKey) return null;
     const compositionEdges = selectedEffects.map((key) => {
@@ -95,8 +137,8 @@ export function KillerMovesPanel() {
       const rule = matchingRulesFor(outputEffect, support)[0];
       return rule ? { from: key, to: outputEffectKey, kind: rule.kind, rule_id: rule.id } : null;
     }).filter((edge): edge is NonNullable<typeof edge> => edge !== null);
-    return { main_gu_instance_id: mainId, component_instance_ids: components, selected_effect_keys: [outputEffectKey, ...selectedEffects], output_effect_key: outputEffectKey, rule_set_revision: ruleSet?.revision || "", composition_edges: compositionEdges };
-  }, [mainId, components, outputEffectKey, outputEffect, selectedEffects, effects, matchingRulesFor, ruleSet]);
+    return { composition_draft_id: compositionDraftID || undefined, main_gu_instance_id: mainId, component_instance_ids: components, selected_effect_keys: [outputEffectKey, ...selectedEffects], output_effect_key: outputEffectKey, rule_set_revision: ruleSet?.revision || "", composition_edges: compositionEdges };
+  }, [compositionDraftID, mainId, components, outputEffectKey, outputEffect, selectedEffects, effects, matchingRulesFor, ruleSet]);
 
   const allComponentsContribute = components.every((id) => selectedEffects.some((key) => effects.find((effect) => effect.key === key)?.source_instance_id === id));
 
@@ -114,9 +156,11 @@ export function KillerMovesPanel() {
   }, [draft, allComponentsContribute, previewDraft]);
 
   const addEffect = (key: string) => {
+    setCompositionDraftID("");
     setSelectedEffects((current) => current.includes(key) || current.length >= 7 ? current : [...current, key]);
   };
   const removeEffect = (key: string) => {
+    setCompositionDraftID("");
     setSelectedEffects((current) => current.filter((entry) => entry !== key));
   };
   const onDrop = (event: DragEvent) => {
@@ -130,7 +174,7 @@ export function KillerMovesPanel() {
     setSaving(true);
     try {
       if (await create({ ...draft, name: name.trim(), preview_fingerprint: preview.preview_fingerprint, accept_adjustments: acceptedPreview === preview.preview_fingerprint })) {
-        setName(""); setComponents([]); setSelectedEffects([]); setOutputEffectKey(""); setPreview(null);
+        setName(""); setComponents([]); setSelectedEffects([]); setOutputEffectKey(""); setCompositionDraftID(""); setPreview(null);
         setAcceptedPreview("");
       }
     } finally { setSaving(false); }
@@ -172,6 +216,7 @@ export function KillerMovesPanel() {
         <GuHousePanel />
       ) : (
         <>
+          {compositionTemplates.length > 0 && <label className="block text-[11px] text-zinc-400">Công thức do Admin biên soạn<select value={compositionDraftID} onChange={(event) => applyCompositionTemplate(compositionTemplates.find((template) => template.id === event.target.value))} className="mt-1 w-full rounded-lg border border-violet-900/50 bg-zinc-900 px-3 py-2.5 text-xs text-zinc-100"><option value="">Tự dựng công thức</option>{compositionTemplates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.definition.sources.length} source</option>)}</select><span className="mt-1 block text-[10px] text-zinc-600">Chọn công thức sẽ tự ghép các Cổ sở hữu phù hợp; server vẫn kiểm tra lại source và rule khi xem trước/lưu.</span></label>}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="flex items-center gap-2 text-base font-bold text-amber-200"><WandSparkles className="h-5 w-5 text-amber-400" />Sáng Tạo Sát Chiêu</h3>
@@ -204,7 +249,7 @@ export function KillerMovesPanel() {
                   key={gu.instance_id}
                   type="button"
                   aria-pressed={mainId === gu.instance_id}
-                  onClick={() => { setMainId(gu.instance_id); setComponents([]); setSelectedEffects([]); setOutputEffectKey(""); setComponentSearch(""); }}
+                  onClick={() => { setCompositionDraftID(""); setMainId(gu.instance_id); setComponents([]); setSelectedEffects([]); setOutputEffectKey(""); setComponentSearch(""); }}
                   className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${mainId === gu.instance_id ? "bg-amber-950/50 text-amber-200" : "text-zinc-300 hover:bg-zinc-800"}`}
                 >
                   <span className="truncate">{guName(gu.instance_id, gu.rank)}</span>
@@ -218,6 +263,7 @@ export function KillerMovesPanel() {
             <label className="mb-1.5 block text-[11px] font-mono uppercase tracking-wider text-zinc-400">Hiệu ứng kết quả · do Cổ chính tạo</label>
             <select value={outputEffectKey} onChange={(event) => {
               const nextKey = event.target.value;
+              setCompositionDraftID("");
               const nextTrigger = outputEffects.find((effect) => effect.key === nextKey)?.trigger;
               const nextOutput = outputEffects.find((effect) => effect.key === nextKey);
               const compatible = new Set(effects.filter((effect) => effect.source_instance_id !== mainId && selectedGuIDs.has(effect.source_instance_id) && effect.trigger === nextTrigger && matchingRulesFor(nextOutput, effect).length > 0).map((effect) => effect.key));
@@ -256,7 +302,7 @@ export function KillerMovesPanel() {
                   <button
                     key={gu.instance_id}
                     type="button"
-                    onClick={() => { setComponents((current) => [...current, gu.instance_id]); setComponentSearch(""); }}
+                    onClick={() => { setCompositionDraftID(""); setComponents((current) => [...current, gu.instance_id]); setComponentSearch(""); }}
                     className="w-full rounded-md px-2.5 py-1.5 text-left text-[11px] text-zinc-300 hover:bg-zinc-800"
                   >
                     {guName(gu.instance_id, gu.rank)}

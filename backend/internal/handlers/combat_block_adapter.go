@@ -29,6 +29,12 @@ func adaptBlockCombatOperations(actor *models.Combatant, spec *models.GuDictiona
 		if op.Trigger != gameplayeffects.TriggerOnAction {
 			continue
 		}
+		if reason := unsupportedConditionReason("TURN_BASED_COMBAT", op.Conditions); reason != "" {
+			return nil, fmt.Errorf("effect %q has unsupported turn-based conditions: %s", op.BlockID, reason)
+		}
+		if op.Type == gameplayeffects.OpUnique && len(op.Conditions) > 0 {
+			return nil, fmt.Errorf("effect %q native combat hook cannot evaluate Block conditions", op.BlockID)
+		}
 		if op.Target == nil || !effectcatalogCombatTarget(op.Target.Selector) {
 			return nil, fmt.Errorf("effect %q has no supported combat target", op.BlockID)
 		}

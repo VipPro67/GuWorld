@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -71,6 +72,13 @@ func (e *ItemEffects) Scan(value interface{}) error {
 }
 
 func (e *ItemEffects) scanBlocks(data []byte) error {
+	var blocks gameplayeffects.BlockSet
+	if err := json.Unmarshal(data, &blocks); err != nil {
+		return err
+	}
+	if err := validateItemBlockSet(blocks); err != nil {
+		return err
+	}
 	*e = make(ItemEffects)
 	type blockOp struct {
 		Op     string          `json:"op"`
@@ -80,11 +88,11 @@ func (e *ItemEffects) scanBlocks(data []byte) error {
 	type blockItem struct {
 		Operations []blockOp `json:"operations"`
 	}
-	var blocks []blockItem
-	if err := json.Unmarshal(data, &blocks); err != nil {
+	var rawBlocks []blockItem
+	if err := json.Unmarshal(data, &rawBlocks); err != nil {
 		return err
 	}
-	for _, b := range blocks {
+	for _, b := range rawBlocks {
 		for _, op := range b.Operations {
 			code := strings.ToUpper(op.Code)
 			key, ok := itemBlockCodeToKey[code]
@@ -98,6 +106,42 @@ func (e *ItemEffects) scanBlocks(data []byte) error {
 				_ = json.Unmarshal(op.Params, &p)
 			}
 			(*e)[key] = p.Value
+		}
+	}
+	return nil
+}
+
+// ValidateItemEffectBlocks validates the narrow ON_CONSUME adapter used by
+// consumable items before Admin CRUD or CSV import persists the definition.
+func ValidateItemEffectBlocks(raw []byte) error {
+	blocks, err := gameplayeffects.DecodeBlockSet(raw)
+	if err != nil {
+		return err
+	}
+	return validateItemBlockSet(blocks)
+}
+
+func validateItemBlockSet(blocks gameplayeffects.BlockSet) error {
+	seenCodes := make(map[string]bool)
+	for _, block := range blocks {
+		if block.Trigger != gameplayeffects.TriggerOnConsume || len(block.Conditions) > 0 || block.Target.Selector != gameplayeffects.TargetSelf {
+			return fmt.Errorf("item effect block %q requires unconditional ON_CONSUME SELF execution", block.ID)
+		}
+		for _, operation := range block.Operations {
+			if operation.Op != gameplayeffects.OpUnique || (operation.Target != nil && operation.Target.Selector != gameplayeffects.TargetSelf) {
+				return fmt.Errorf("item effect block %q requires a SELF UNIQUE native action", block.ID)
+			}
+			key, ok := itemBlockCodeToKey[strings.ToUpper(strings.TrimSpace(operation.Code))]
+			if !ok {
+				key = strings.ToLower(strings.TrimSpace(operation.Code))
+			}
+			if !itemEffectCodes[key] {
+				return fmt.Errorf("item effect block %q has unsupported native action %q", block.ID, operation.Code)
+			}
+			if seenCodes[key] {
+				return fmt.Errorf("item effect defines native action %q more than once", key)
+			}
+			seenCodes[key] = true
 		}
 	}
 	return nil

@@ -28,6 +28,7 @@ export function GuHousePanel() {
   const minCoreGus = useGameStore((s) => s.guHousesMinCoreGus);
   const maxCoreGus = useGameStore((s) => s.guHousesMaxCoreGus);
   const ruleSet = useGameStore((s) => s.guHouseCompositionRuleSet);
+  const compositionTemplates = useGameStore((s) => s.guHouseCompositionTemplates);
   const damageRule = ruleSet?.rules.find((rule) => rule.id === "combine-flat-single-target-damage");
   const effects = useGameStore((s) => s.killerMoveEffects);
   const guDictionary = useGameStore((s) => s.guDictionary);
@@ -37,6 +38,8 @@ export function GuHousePanel() {
   const [auxGuCount, setAuxGuCount] = useState<number>(5000);
   const [actionEffectKeys, setActionEffectKeys] = useState<Record<string, string>>({});
   const [actionSupportKeys, setActionSupportKeys] = useState<Record<string, Record<string, string>>>({});
+  const [actionCompositionDraftIDs, setActionCompositionDraftIDs] = useState<Record<string, string>>({});
+  const [compositionTemplateError, setCompositionTemplateError] = useState("");
   const [preview, setPreview] = useState<GuHouseCombatProfile | null>(null);
   const [creating, setCreating] = useState(false);
   const [worldEffectKeys, setWorldEffectKeys] = useState<Record<string, string>>({});
@@ -64,6 +67,7 @@ export function GuHousePanel() {
         core_gu_instance_ids: selectedCoreIDs,
         aux_gu_count: auxGuCount,
         action_effect_keys: actionEffectKeys,
+        action_composition_draft_ids: actionCompositionDraftIDs,
         action_composition_graphs: actionCompositionGraphs(),
       }).then((res) => {
         if (active) setPreview(res);
@@ -73,10 +77,40 @@ export function GuHousePanel() {
       active = false;
       clearTimeout(timer);
     };
-  }, [selectedCoreIDs, auxGuCount, actionEffectKeys, actionSupportKeys, name, minCoreGus, ruleSet, previewGuHouse]);
+  }, [selectedCoreIDs, auxGuCount, actionEffectKeys, actionSupportKeys, actionCompositionDraftIDs, name, minCoreGus, ruleSet, previewGuHouse]);
 
   const effectsForCore = (id: string) => effects.filter((effect) => effect.source_instance_id === id && effect.combat_supported && isGuHouseActionSupported(effect));
   const worldEffectsForCore = (id: string) => effects.filter((effect) => effect.source_instance_id === id && effect.travel_supported);
+
+  const applyActionCompositionTemplate = (coreID: string, template: typeof compositionTemplates[number] | undefined) => {
+    if (!template) { setCompositionTemplateError(""); setActionCompositionDraftIDs((current) => { const next = { ...current }; delete next[coreID]; return next; }); return; }
+    const output = template.definition.sources.find((source) => source.key === template.definition.output_effect_key && source.role === "OUTPUT");
+    const core = gus.find((gu) => gu.instance_id === coreID);
+    if (!output || !core || output.gu_id !== core.gu_id || output.rank !== core.rank) { setCompositionTemplateError("Cổ hạch tâm không khớp output của composition template."); return; }
+    const assigned = new Map<string, string>([[output.key, coreID]]);
+    const supportKeys: Record<string, string> = {};
+    for (const source of template.definition.sources.filter((item) => item.role === "SUPPORT")) {
+      let instanceID = assigned.get(`${source.gu_id}:${source.rank}`);
+      if (!instanceID) {
+        instanceID = selectedCoreIDs.find((candidateID) => {
+          const candidate = gus.find((entry) => entry.instance_id === candidateID);
+          return candidateID !== coreID && candidate?.gu_id === source.gu_id && candidate.rank === source.rank;
+        });
+        if (!instanceID) { setCompositionTemplateError(`Cần chọn Tiên Cổ ${source.gu_id} rank ${source.rank} làm hạch tâm Tiên Cổ Ốc.`); return; }
+        assigned.set(`${source.gu_id}:${source.rank}`, instanceID);
+      }
+      assigned.set(source.key, instanceID);
+    }
+    const remapped = template.definition.sources.map((source) => ({ source, effect: effects.find((effect) => effect.source_instance_id === assigned.get(source.key) && effect.source_block_id === source.block_id && effect.operation_index === source.operation_index && effect.combat_supported && isGuHouseActionSupported(effect)) }));
+    if (remapped.some((item) => !item.effect)) { setCompositionTemplateError("Một effect source của template không còn được hỗ trợ bởi Tiên Cổ Ốc."); return; }
+    const outputEffect = remapped.find((item) => item.source.role === "OUTPUT")?.effect;
+    if (!outputEffect) return;
+    for (const item of remapped) if (item.source.role === "SUPPORT" && item.effect) supportKeys[item.effect.source_instance_id] = item.effect.key;
+    setActionCompositionDraftIDs((current) => ({ ...current, [coreID]: template.id }));
+    setCompositionTemplateError("");
+    setActionEffectKeys((current) => ({ ...current, [coreID]: outputEffect.key }));
+    setActionSupportKeys((current) => ({ ...current, [coreID]: supportKeys }));
+  };
 
   const actionCompositionGraphs = () => {
     const graphs: Record<string, KillerMoveCompositionGraph> = {};
@@ -101,10 +135,12 @@ export function GuHousePanel() {
   const toggleCoreGu = (id: string) => {
     if (selectedCoreIDs.includes(id)) {
       setSelectedCoreIDs((prev) => prev.filter((item) => item !== id));
+      setActionCompositionDraftIDs({});
       setActionEffectKeys((prev) => { const next = { ...prev }; delete next[id]; return next; });
       setActionSupportKeys((prev) => { const next = { ...prev }; delete next[id]; for (const key of Object.keys(next)) { next[key] = { ...next[key] }; delete next[key][id]; } return next; });
     } else {
       if (selectedCoreIDs.length >= maxCoreGus) return;
+      setActionCompositionDraftIDs({});
       setSelectedCoreIDs((prev) => [...prev, id]);
       const options = effectsForCore(id);
       const chosen = options.find((effect) => effect.operation.op === "DAMAGE") || options[0];
@@ -120,6 +156,7 @@ export function GuHousePanel() {
       core_gu_instance_ids: selectedCoreIDs,
       aux_gu_count: auxGuCount,
       action_effect_keys: actionEffectKeys,
+        action_composition_draft_ids: actionCompositionDraftIDs,
       action_composition_graphs: actionCompositionGraphs(),
       preview_fingerprint: preview?.preview_fingerprint,
     });
@@ -129,6 +166,7 @@ export function GuHousePanel() {
       setSelectedCoreIDs([]);
       setActionEffectKeys({});
       setActionSupportKeys({});
+      setActionCompositionDraftIDs({});
       setAuxGuCount(5000);
     }
   };
@@ -209,13 +247,15 @@ export function GuHousePanel() {
 
           {selectedCoreIDs.length > 0 && <div>
             <label className="text-xs text-zinc-400">Chọn Trận Kích cho từng hạch tâm</label>
+            {compositionTemplateError && <p className="mt-1 text-[10px] text-red-300">{compositionTemplateError}</p>}
             <div className="mt-2 space-y-2">
               {selectedCoreIDs.map((id) => {
                 const gu = gus.find((entry) => entry.instance_id === id);
                 const choices = effectsForCore(id);
-                return <div key={id} className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 p-2">
+                return <div key={id} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 p-2">
                   <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-300">{gu ? (guDictionary[gu.gu_id]?.name || gu.gu_id) : id}</span>
-                  {choices.length === 0 ? <span className="text-[10px] text-amber-300">Chưa có effect combat theo lượt được hỗ trợ</span> : <select value={actionEffectKeys[id] || ""} onChange={(event) => setActionEffectKeys((prev) => ({ ...prev, [id]: event.target.value }))} className="max-w-[60%] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200">
+                  {compositionTemplates.some((template) => template.definition.sources.some((source) => source.role === "OUTPUT" && source.key === template.definition.output_effect_key && source.gu_id === gu?.gu_id && source.rank === gu?.rank)) && <select aria-label="Công thức Trận Kích Admin" value={actionCompositionDraftIDs[id] || ""} onChange={(event) => applyActionCompositionTemplate(id, compositionTemplates.find((template) => template.id === event.target.value))} className="max-w-[55%] rounded-md border border-violet-900/50 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200"><option value="">Tự dựng</option>{compositionTemplates.filter((template) => template.definition.sources.some((source) => source.role === "OUTPUT" && source.key === template.definition.output_effect_key && source.gu_id === gu?.gu_id && source.rank === gu?.rank)).map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select>}
+                  {choices.length === 0 ? <span className="text-[10px] text-amber-300">Chưa có effect combat theo lượt được hỗ trợ</span> : <select value={actionEffectKeys[id] || ""} onChange={(event) => { setActionCompositionDraftIDs((prev) => { const next = { ...prev }; delete next[id]; return next; }); setActionEffectKeys((prev) => ({ ...prev, [id]: event.target.value })); }} className="max-w-[60%] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200">
                     <option value="">Không gán Trận Kích</option>
                     {choices.map((effect) => <option key={effect.key} value={effect.key}>{effect.label} · {effect.operation.value ? effect.operation.value : effect.operation.op}</option>)}
                   </select>}
@@ -223,7 +263,7 @@ export function GuHousePanel() {
                     const supportGu = gus.find((entry) => entry.instance_id === supportID);
                     const supportChoices = effectsForCore(supportID);
                     return <div key={supportID} className="flex items-center gap-1">
-                      <select aria-label="Cổ hỗ trợ Trận Kích" value={actionSupportKeys[id]?.[supportID] || ""} onChange={(event) => setActionSupportKeys((prev) => ({ ...prev, [id]: { ...prev[id], [supportID]: event.target.value } }))} className="max-w-[45%] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200">
+                      <select aria-label="Cổ hỗ trợ Trận Kích" value={actionSupportKeys[id]?.[supportID] || ""} onChange={(event) => { setActionCompositionDraftIDs((prev) => { const next = { ...prev }; delete next[id]; return next; }); setActionSupportKeys((prev) => ({ ...prev, [id]: { ...prev[id], [supportID]: event.target.value } })); }} className="max-w-[45%] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200">
                         <option value="">Không ghép · {supportGu ? (guDictionary[supportGu.gu_id]?.name || supportGu.gu_id) : "Cổ hỗ trợ"}</option>
                         {supportChoices.filter((effect) => damageRule && effect.composition_capabilities?.includes(damageRule.support_capability) && choices.find((candidate) => candidate.key === actionEffectKeys[id])?.composition_capabilities?.includes(damageRule.core_capability)).map((effect) => <option key={effect.key} value={effect.key}>{effect.label} · {damageRule?.kind}</option>)}
                       </select>

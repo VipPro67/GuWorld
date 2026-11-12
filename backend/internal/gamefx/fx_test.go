@@ -49,6 +49,47 @@ func TestGetConstitutionEffects(t *testing.T) {
 	}
 }
 
+func TestValidateEffectProjectionRejectsUnsupportedBlockContext(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{
+			name: "wrong trigger",
+			raw:  `[{"id":"ATTACK","trigger":"ON_ACTION","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","value":0.2}]}]`,
+		},
+		{
+			name: "conditional derived projection",
+			raw:  `[{"id":"ATTACK","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"conditions":[{"field":"HP_PERCENT","operator":"LT","value":0.5}],"operations":[{"op":"STAT_MOD","stat":"ATTACK","value":0.2}]}]`,
+		},
+		{
+			name: "unsupported operation",
+			raw:  `[{"id":"ATTACK","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":10}]}]`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := ValidateEffectProjection([]byte(test.raw)); err == nil {
+				t.Fatal("unsupported derived effect context was silently accepted")
+			}
+		})
+	}
+}
+
+func TestPassiveStatModAllowlistRejectsLostUnitsAndPaths(t *testing.T) {
+	if PassiveStatModSupported("ATTACK", "ADD_FLAT", "PERCENT", "") {
+		t.Fatal("percentage unit must not be interpreted as a flat passive modifier")
+	}
+	for _, stat := range []string{"DAO_MARK", "PATH_DAMAGE", "PATH_RESISTANCE"} {
+		if PassiveStatModSupported(stat, "ADD_FLAT", "", "") {
+			t.Errorf("%s without a path would be silently dropped", stat)
+		}
+		if !PassiveStatModSupported(stat, "ADD_FLAT", "", "fire") {
+			t.Errorf("%s with an explicit path should be supported", stat)
+		}
+	}
+}
+
 func TestGetConstitutionEffectsNoConstitution(t *testing.T) {
 	fx := Get(&models.Player{})
 	if fx.ManaRegenBonus != 0 {

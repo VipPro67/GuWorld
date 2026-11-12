@@ -61,6 +61,7 @@ export const ADMIN_ACTIONS = {
   updateDungeon: { permission: "dungeons.update", riskLevel: "medium", confirmationRequired: false, reasonRequired: false, reauthenticationRequired: false },
   deleteDungeon: { permission: "dungeons.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   updateConstitution: { permission: "constitution_dictionary.update", riskLevel: "medium", confirmationRequired: false, reasonRequired: false, reauthenticationRequired: false },
+  updateGuDictionary: { permission: "gu_dictionary.update", riskLevel: "medium", confirmationRequired: false, reasonRequired: false, reauthenticationRequired: false },
   deleteConstitution: { permission: "constitution_dictionary.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   updateRaceDictionary: { permission: "race_dictionary.update", riskLevel: "medium", confirmationRequired: false, reasonRequired: false, reauthenticationRequired: false },
   deleteRaceDictionary: { permission: "race_dictionary.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },

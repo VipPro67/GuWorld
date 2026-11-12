@@ -9,12 +9,31 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 func validateDictionaryEffects(c *gin.Context, source, key string, raw json.RawMessage) bool {
 	issues := effectcatalog.ValidateBlockV2(raw, effectcatalog.Location{Source: source, Key: key})
 	if len(issues) == 0 {
+		contextID := map[string]string{"race": "PASSIVE_DERIVED", "constitution": "PASSIVE_DERIVED", "status": "PASSIVE_DERIVED"}[source]
+		if contextID == "" {
+			return true
+		}
+		if err := gamefx.ValidateEffectProjection(raw); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Effect không được hỗ trợ bởi passive/derived adapter", "details": err.Error()})
+			return false
+		}
+		blocks, err := gameplayeffects.DecodeBlockSet(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đọc được Effect Block v2", "details": err.Error()})
+			return false
+		}
+		unsupported := unsupportedEffectOperations(analyzeEffectCompatibility([]gameplayeffects.Block(blocks)), contextID)
+		if len(unsupported) > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Effect không được hỗ trợ bởi passive/derived adapter", "unsupported": unsupported})
+			return false
+		}
 		return true
 	}
 	c.JSON(http.StatusBadRequest, gin.H{"error": "Effect Block v2 không hợp lệ", "issues": issues})

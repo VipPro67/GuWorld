@@ -23,12 +23,128 @@ import (
 var guHouseProductProfile = composition.GuHouseProfile()
 
 type guHouseDraftRequest struct {
-	Name                    string                       `json:"name"`
-	CoreGuInstanceIDs       []string                     `json:"core_gu_instance_ids"`
-	AuxGuCount              int                          `json:"aux_gu_count"`
-	ActionEffectKeys        map[string]string            `json:"action_effect_keys,omitempty"`
-	ActionCompositionGraphs map[string]composition.Graph `json:"action_composition_graphs,omitempty"`
-	PreviewFingerprint      string                       `json:"preview_fingerprint,omitempty"`
+	Name                      string                       `json:"name"`
+	CoreGuInstanceIDs         []string                     `json:"core_gu_instance_ids"`
+	AuxGuCount                int                          `json:"aux_gu_count"`
+	ActionEffectKeys          map[string]string            `json:"action_effect_keys,omitempty"`
+	ActionCompositionDraftIDs map[string]string            `json:"action_composition_draft_ids,omitempty"`
+	ActionCompositionGraphs   map[string]composition.Graph `json:"action_composition_graphs,omitempty"`
+	PreviewFingerprint        string                       `json:"preview_fingerprint,omitempty"`
+}
+
+func bindGuHouseCompositionDrafts(c *gin.Context, tx *sql.Tx, playerID uuid.UUID, req *guHouseDraftRequest) error {
+	if len(req.ActionCompositionDraftIDs) == 0 {
+		for key, graph := range req.ActionCompositionGraphs {
+			graph.CatalogDraftID = ""
+			req.ActionCompositionGraphs[key] = graph
+		}
+		return nil
+	}
+	if req.ActionCompositionGraphs == nil {
+		req.ActionCompositionGraphs = make(map[string]composition.Graph)
+	}
+	for key, graph := range req.ActionCompositionGraphs {
+		graph.CatalogDraftID = ""
+		req.ActionCompositionGraphs[key] = graph
+	}
+	owned, err := loadOwnedKillerMoveGus(tx, playerID)
+	if err != nil {
+		return err
+	}
+	selectedCoreSet := make(map[string]bool, len(req.CoreGuInstanceIDs))
+	for _, instanceID := range req.CoreGuInstanceIDs {
+		selectedCoreSet[instanceID] = true
+	}
+	resolvedByDraft := make(map[string]resolvedAdminComposition)
+	for coreID, draftIDRaw := range req.ActionCompositionDraftIDs {
+		if !selectedCoreSet[coreID] {
+			return fmt.Errorf("Composition draft action phải gắn với Cổ hạch tâm đã chọn")
+		}
+		id, err := uuid.Parse(draftIDRaw)
+		if err != nil {
+			return fmt.Errorf("Composition draft ID của Tiên Cổ Ốc không hợp lệ")
+		}
+		var raw []byte
+		if err := tx.QueryRowContext(c.Request.Context(), `SELECT definition FROM admin_effect_composition_drafts WHERE id=$1 AND status='DRAFT' AND product_profile=$2`, id, composition.GuHouseActionProfile().ID).Scan(&raw); err != nil {
+			return fmt.Errorf("Không tìm thấy composition draft Trận Kích đang hoạt động")
+		}
+		var draft adminCompositionDraft
+		if err := json.Unmarshal(raw, &draft); err != nil {
+			return fmt.Errorf("Composition draft bị hỏng: %w", err)
+		}
+		resolved, cached := resolvedByDraft[id.String()]
+		if !cached {
+			resolved, err = resolveAdminComposition(c, draft)
+			if err != nil {
+				return fmt.Errorf("Composition draft không còn hợp lệ; Admin cần validate và lưu lại: %w", err)
+			}
+			resolvedByDraft[id.String()] = resolved
+		}
+		core, ok := owned[coreID]
+		outputIndex := -1
+		for i := range resolved.Draft.Sources {
+			if resolved.Draft.Sources[i].Key == resolved.Draft.OutputEffectKey && resolved.Draft.Sources[i].Role == string(composition.NodeOutput) {
+				outputIndex = i
+				break
+			}
+		}
+		if !ok || outputIndex < 0 || core.GuID != resolved.Draft.Sources[outputIndex].GuID || core.Rank != resolved.Draft.Sources[outputIndex].Rank {
+			return fmt.Errorf("Cổ hạch tâm %s không khớp output của draft Trận Kích", coreID)
+		}
+		instanceBySource := map[string]string{resolved.Draft.OutputEffectKey: coreID}
+		instanceByGuRank := map[string]string{}
+		selectedSet := map[string]bool{coreID: true}
+		for _, source := range resolved.Draft.Sources {
+			if source.Role != string(composition.NodeSupport) {
+				continue
+			}
+			group := fmt.Sprintf("%s:%d", source.GuID, source.Rank)
+			if instanceID := instanceByGuRank[group]; instanceID != "" {
+				instanceBySource[source.Key] = instanceID
+				continue
+			}
+			for _, instanceID := range req.CoreGuInstanceIDs {
+				gu := owned[instanceID]
+				if !selectedSet[instanceID] && gu.GuID == source.GuID && gu.Rank == source.Rank && strings.EqualFold(gu.State, "ACTIVE") && gu.Location == "INVENTORY" && !gu.IsLocked {
+					instanceBySource[source.Key] = instanceID
+					instanceByGuRank[group] = instanceID
+					selectedSet[instanceID] = true
+					break
+				}
+			}
+			if instanceBySource[source.Key] == "" {
+				return fmt.Errorf("Tiên Cổ Ốc cần Cổ hỗ trợ %s rank %d trong các hạch tâm đã chọn", source.GuID, source.Rank)
+			}
+		}
+		bindings := make(map[string]composition.SourceBinding, len(resolved.Draft.Sources))
+		for _, source := range resolved.Draft.Sources {
+			options, err := getKillerMoveEffectOptions(owned[instanceBySource[source.Key]])
+			if err != nil {
+				return err
+			}
+			for _, option := range options {
+				if option.SourceBlockID == source.BlockID && option.OperationIndex == source.OperationIndex && option.SourceRevision == source.SourceRevision && option.CombatSupported && guHouseActionOperationAllowed(option.Operation, option.Target) {
+					profile := composition.GuHouseActionProfile()
+					bindings[source.Key] = composition.SourceBinding{
+						EffectKey: option.Key, GuInstanceID: option.SourceID, GuID: option.GuID, Rank: option.Rank,
+						SourceBlockID: option.SourceBlockID, SourceRevision: option.SourceRevision,
+						OperationIndex: option.OperationIndex, Trigger: option.Trigger,
+						Context: profile.ContextByTrigger[option.Trigger], Executor: profile.ExecutorByContext[profile.ContextByTrigger[option.Trigger]],
+					}
+					break
+				}
+			}
+			if _, found := bindings[source.Key]; !found {
+				return fmt.Errorf("Effect source %s không còn được hỗ trợ bởi Tiên Cổ Ốc", source.Key)
+			}
+		}
+		graph, err := composition.BindCatalogGraph(resolved.Graph, id.String(), bindings)
+		if err != nil {
+			return err
+		}
+		req.ActionCompositionGraphs[coreID] = graph
+	}
+	return nil
 }
 
 type guHouseRecord struct {
@@ -130,7 +246,7 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 					Nodes: []composition.Node{{
 						EffectKey: selected.Key, Role: composition.NodeOutput, GuInstanceID: gu.InstanceID,
 						GuID: gu.GuID, Rank: gu.Rank, Trigger: selected.Trigger,
-						Context: houseActionProfile.Context, Executor: houseActionProfile.Executor, SourceBlockID: sourceBlockID, OperationIndex: &operationIndex,
+						Context: houseActionProfile.Context, Executor: houseActionProfile.Executor, SourceBlockID: sourceBlockID, SourceRevision: selected.SourceRevision, OperationIndex: &operationIndex,
 					}},
 				}
 				action, compileErr := compileGuHouseComposition(gu, spec, actionPath, legacyGraph, req.CoreGuInstanceIDs, owned)
@@ -239,6 +355,7 @@ func compileGuHouseComposition(core ownedKillerMoveGu, spec models.Gu, actionPat
 		if selectedEffect == nil || selectedEffect.Trigger != node.Trigger || selectedEffect.SourceID != node.GuInstanceID || selectedEffect.GuID != node.GuID {
 			return models.KillerMoveCombatProfile{}, fmt.Errorf("effect %q không khớp provenance hoặc chưa được executor hỗ trợ", node.EffectKey)
 		}
+		node.SourceRevision = selectedEffect.SourceRevision
 		action, err := compileGuHouseAction(gu, spec, *selectedEffect, actionPath)
 		if err != nil {
 			return models.KillerMoveCombatProfile{}, err
@@ -400,14 +517,28 @@ func ListGuHouses(c *gin.Context) {
 		}
 		list = append(list, r)
 	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu Tiên Cổ Ốc"})
+		return
+	}
+	if err := rows.Close(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đóng danh sách Tiên Cổ Ốc"})
+		return
+	}
 
+	templates, err := listAdminCompositionTemplates(c.Request.Context(), composition.GuHouseActionProfile().ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải composition templates Tiên Cổ Ốc"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"gu_houses":            list,
-		"product_profile":      guHouseProductProfile.ID,
-		"composition_rule_set": composition.GuHouseActionRuleSet(),
-		"max_saved":            guHouseProductProfile.MaxSaved,
-		"max_core_gus":         guHouseProductProfile.MaxGuComponents,
-		"min_core_gus":         guHouseProductProfile.MinGuComponents,
+		"gu_houses":             list,
+		"composition_templates": templates,
+		"product_profile":       guHouseProductProfile.ID,
+		"composition_rule_set":  composition.GuHouseActionRuleSet(),
+		"max_saved":             guHouseProductProfile.MaxSaved,
+		"max_core_gus":          guHouseProductProfile.MaxGuComponents,
+		"min_core_gus":          guHouseProductProfile.MinGuComponents,
 	})
 }
 
@@ -427,6 +558,10 @@ func PreviewGuHouse(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	if err := bindGuHouseCompositionDrafts(c, tx, playerID, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	profile, _, err := calculateGuHousePreview(tx, playerID, req)
 	if err != nil {
@@ -459,6 +594,10 @@ func CreateGuHouse(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	if err := bindGuHouseCompositionDrafts(c, tx, playerID, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	var count int
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM player_gu_houses WHERE player_id = $1`, playerID).Scan(&count); err != nil {
@@ -715,6 +854,10 @@ func EquipGuHouse(c *gin.Context) {
 }
 
 func validateGuHouseActivationProfile(raw []byte) error {
+	return validateGuHouseActivationProfileMode(raw, true)
+}
+
+func validateGuHouseActivationProfileMode(raw []byte, revalidateCurrent bool) error {
 	var profile models.GuHouseCombatProfile
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return fmt.Errorf("Profile Tiên Cổ Ốc không hợp lệ; hãy tạo lại từ preview")
@@ -723,12 +866,49 @@ func validateGuHouseActivationProfile(raw []byte) error {
 		if action.CompositionGraph == nil {
 			continue
 		}
-		revision := action.CompositionGraph.RuleSetRevision
-		if revision != "" && revision != composition.GuHouseActionRuleSet().Revision {
-			return fmt.Errorf("Trận Kích dùng catalog rule không còn hiệu lực; hãy tạo lại Tiên Cổ Ốc từ preview")
+		graph := *action.CompositionGraph
+		if revalidateCurrent {
+			if graph.RuleSetRevision != composition.GuHouseActionRuleSet().Revision {
+				return fmt.Errorf("Trận Kích dùng catalog rule đã cũ; hãy tạo lại Tiên Cổ Ốc từ preview")
+			}
+			capabilitiesByEffect := make(map[string]map[string]bool, len(graph.Nodes))
+			for _, node := range graph.Nodes {
+				spec, found := models.GetGu(node.GuID, node.Rank)
+				if !found || !guHouseSnapshotMatchesSource(node, spec.Effects.GetBlocks(), action.EffectBlocks) {
+					return fmt.Errorf("Trận Kích không còn khớp effect nguồn mới nhất; hãy cập nhật draft")
+				}
+				revision, err := gameplayeffects.SourceRevision(spec.Effects.GetBlocks())
+				if err != nil || (node.SourceRevision != "" && revision != node.SourceRevision) {
+					return fmt.Errorf("Trận Kích không còn khớp revision effect nguồn; hãy cập nhật draft")
+				}
+				for _, grant := range spec.CompositionContributions.Grants {
+					if grant.EffectBlockID == node.SourceBlockID && grant.OperationIndex == valueOrZero(node.OperationIndex) {
+						if capabilitiesByEffect[node.EffectKey] == nil {
+							capabilitiesByEffect[node.EffectKey] = make(map[string]bool)
+						}
+						capabilitiesByEffect[node.EffectKey][grant.Capability] = true
+					}
+				}
+			}
+			if len(graph.Nodes) > 0 {
+				if _, err := composition.ResolveWithRules(graph, composition.GuHouseActionProfile(), action.ComponentGuInstances, composition.GuHouseActionRuleSet(), capabilitiesByEffect); err != nil {
+					return fmt.Errorf("Trận Kích draft không còn hợp lệ theo rule/effect hiện hành: %w", err)
+				}
+			}
+			continue
 		}
-		if len(action.CompositionGraph.Edges) > 0 && revision == "" {
-			return fmt.Errorf("Trận Kích cũ chưa có catalog rule hợp lệ; hãy tạo lại Tiên Cổ Ốc từ preview trước khi xuất chiến")
+		if len(graph.Edges) > 0 && graph.RuleSetRevision == "" {
+			return fmt.Errorf("Trận Kích active thiếu revision rule đã pin")
+		}
+		for _, edge := range graph.Edges {
+			if edge.RuleID == "" {
+				return fmt.Errorf("Trận Kích active thiếu rule provenance đã pin")
+			}
+		}
+		if len(graph.Nodes) > 0 {
+			if _, err := composition.Resolve(graph, composition.GuHouseActionProfile(), action.ComponentGuInstances); err != nil {
+				return fmt.Errorf("Snapshot Trận Kích active không hợp lệ: %w", err)
+			}
 		}
 	}
 	return nil
