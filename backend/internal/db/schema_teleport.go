@@ -25,10 +25,36 @@ func schemaTeleport() error {
 		current_durability INT NOT NULL DEFAULT 100,
 		max_durability INT NOT NULL DEFAULT 100,
 		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		effect_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+		effect_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		CONSTRAINT uq_teleport_array_cell UNIQUE (region_id, x, y)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("teleport_arrays_effect_profile", `
+	ALTER TABLE teleport_arrays ADD COLUMN IF NOT EXISTS effect_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+	ALTER TABLE teleport_arrays ADD COLUMN IF NOT EXISTS effect_profile JSONB NOT NULL DEFAULT '{}'::jsonb;
+	CREATE UNIQUE INDEX IF NOT EXISTS uq_teleport_array_owner_key ON teleport_arrays(id, owner_id);`); err != nil {
+		return err
+	}
+	if err := execSchema("teleport_array_gu_reservations", `
+	CREATE TABLE IF NOT EXISTS teleport_array_gu_reservations (
+		gu_instance_id VARCHAR(80) PRIMARY KEY,
+		array_id UUID NOT NULL,
+		owner_id UUID NOT NULL,
+		gu_id VARCHAR(50) NOT NULL,
+		gu_rank INTEGER NOT NULL,
+		gu_location VARCHAR(30) NOT NULL,
+		gu_is_locked BOOLEAN NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		CONSTRAINT fk_teleport_array_gu_reservation_gu FOREIGN KEY (gu_instance_id, owner_id, gu_id, gu_rank, gu_location, gu_is_locked)
+			REFERENCES player_gu(id, player_id, gu_id, gu_rank, location, is_locked) ON DELETE NO ACTION ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+		CONSTRAINT fk_teleport_array_gu_reservation_array FOREIGN KEY (array_id, owner_id)
+			REFERENCES teleport_arrays(id, owner_id) ON DELETE CASCADE ON UPDATE RESTRICT
+	);
+	CREATE INDEX IF NOT EXISTS idx_teleport_array_gu_reservations_array ON teleport_array_gu_reservations(array_id);`); err != nil {
 		return err
 	}
 

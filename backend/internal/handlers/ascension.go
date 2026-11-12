@@ -839,6 +839,15 @@ func AscensionRelease(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể thả Cổ Bản Mệnh — nó vừa trấn giữ không khiếu cho đạo hữu!"})
 			return
 		}
+		reserved, reservationErr := guHasActiveProductReservation(tx, instID.String())
+		if reservationErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+			return
+		}
+		if reserved {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
+			return
+		}
 		spec, ok := models.GetGu(guID, guRank)
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không có trong điển tịch"})

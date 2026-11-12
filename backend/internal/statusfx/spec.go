@@ -268,6 +268,28 @@ var Registry = map[string]StatusSpec{
 		Category: CategoryMentalCC, Path: "wisdom", BaseChance: 0.6,
 		ResistGate: true, DefaultTurns: 2,
 	},
+
+	// ── Mộng Đạo & Vận Đạo (Dream Path & Luck Path) ──
+	StatusDreamPrison: {
+		ID: StatusDreamPrison, Behaviour: BehaviourDreamPrison, Label: "Mộng Cảnh Giam Cầm",
+		Category: CategoryMentalCC, Path: "dream", BaseChance: 0.65,
+		ResistGate: true, SkipTurn: true, BreakOnDamage: false, DefaultTurns: 2,
+	},
+	StatusDreamIllusion: {
+		ID: StatusDreamIllusion, Behaviour: BehaviourStealth, Label: "Mộng Ảnh Ẩn Thân",
+		Category: CategoryBuff, Path: "dream", BaseChance: 1.0,
+		SelfTarget: true, Untargetable: true, DefaultTurns: 2,
+	},
+	StatusLuckSiphon: {
+		ID: StatusLuckSiphon, Behaviour: BehaviourLuckSiphon, Label: "Đoạt Vận",
+		Category: CategoryMentalCC, Path: "luck", BaseChance: 0.7,
+		ResistGate: true, DefaultTurns: 3,
+	},
+	StatusLuckCurseReverse: {
+		ID: StatusLuckCurseReverse, Behaviour: BehaviourAtkUp, Label: "Họa Hề Phúc Sở Ỷ",
+		Category: CategoryBuff, Path: "luck", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 2,
+	},
 }
 
 // Spec returns the spec for a status ID (case-insensitive) and whether it is

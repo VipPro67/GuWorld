@@ -105,6 +105,14 @@ func TestAdminMetadataVocabularyIsValidatorCompilerConformant(t *testing.T) {
 	}
 }
 
+func TestWorldMapFlightStatusCanUseOnUseTrigger(t *testing.T) {
+	b := baseBlock()
+	b.Trigger = effects.TriggerOnUse
+	b.Target.Selector = effects.TargetSelf
+	b.Operations = []effects.Operation{{Op: effects.OpStatus, StatusID: "FLYING", Turns: 6, Chance: 1}}
+	assertAccepted(t, b)
+}
+
 func operationBlock(name, subtype string) effects.Block {
 	b := baseBlock()
 	op := effects.Operation{Op: effects.OperationType(name), SubType: subtype, Value: 1, Unit: "FLAT"}

@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
+)
 
 // Teleport array constants
 const (
@@ -41,6 +45,7 @@ type TeleportArray struct {
 	CurrentDurability int       `json:"current_durability"`
 	MaxDurability     int       `json:"max_durability"`
 	IsActive          bool      `json:"is_active"`
+	EffectEnabled     bool      `json:"effect_enabled"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }
@@ -102,13 +107,15 @@ type RepairTeleportArrayResp struct {
 
 // Request types
 type BuildTeleportArrayReq struct {
-	Name          string `json:"name" binding:"required"`
-	Tier          string `json:"tier" binding:"required"`
-	DirectionType string `json:"direction_type"`
-	AccessPolicy  string `json:"access_policy"`
-	FeeEnabled    bool   `json:"fee_enabled"`
-	FeeCurrency   string `json:"fee_currency"`
-	FeeAmount     int64  `json:"fee_amount"`
+	Name               string            `json:"name" binding:"required"`
+	Tier               string            `json:"tier" binding:"required"`
+	DirectionType      string            `json:"direction_type"`
+	AccessPolicy       string            `json:"access_policy"`
+	FeeEnabled         bool              `json:"fee_enabled"`
+	FeeCurrency        string            `json:"fee_currency"`
+	FeeAmount          int64             `json:"fee_amount"`
+	CompositionGraph   composition.Graph `json:"composition_graph,omitempty"`
+	PreviewFingerprint string            `json:"preview_fingerprint,omitempty"`
 }
 
 type TravelTeleportReq struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
 func CalculatePlayerStats(player *models.Player) map[string]float64 {
@@ -71,10 +72,15 @@ func toggleFlyingStatus(player *models.Player, guName string, guRank, turns int)
 }
 
 // PlayerDisguiseLevel is the total concealment score of a player: rank plus
-// DISGUISE stats from equipped active Gu plus wisdom/dark path mastery bonus.
+// DISGUISE stats, temporary STEALTH world buffs, and wisdom/dark path mastery.
 // Used both by scouting/profile and by world-map monster ambush rolls.
 func PlayerDisguiseLevel(player *models.Player) float64 {
 	disguiseLevel := float64(player.Rank)
+	for _, st := range player.Statuses.Active() {
+		if st.ID == statusfx.StatusStealth && !math.IsNaN(st.Value) && !math.IsInf(st.Value, 0) && st.Value > 0 && st.Value <= 100 {
+			disguiseLevel += st.Value
+		}
+	}
 	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
 		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
 			disguiseLevel += models.GuStatValue(spec, "DISGUISE")
@@ -209,6 +215,7 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 	}
 
 	// Active statuses (World Map buffs)
+	hasteSpeedPercent := 0.0
 	for _, st := range player.Statuses.Active() {
 		if st.ID == "buff_atk" {
 			addSrc("attack", "status:"+st.ID, st.Source, st.Value)
@@ -218,6 +225,11 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 		}
 		if st.ID == "buff_speed" {
 			addSrc("speed", "status:"+st.ID, st.Source, st.Value)
+		}
+		if st.ID == statusfx.StatusHaste {
+			if !math.IsNaN(st.Value) && !math.IsInf(st.Value, 0) && st.Value > 0 {
+				hasteSpeedPercent += st.Value
+			}
 		}
 	}
 
@@ -253,6 +265,23 @@ func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo
 		}
 		stats[key] = total
 		details = append(details, PassiveStatDetail{Key: key, Total: total, Sources: srcs})
+	}
+	if hasteSpeedPercent > 0 && stats["speed"] > 0 {
+		if hasteSpeedPercent > 100 {
+			hasteSpeedPercent = 100
+		}
+		bonus := stats["speed"] * hasteSpeedPercent / 100
+		stats["speed"] += bonus
+		for i := range details {
+			if details[i].Key == "speed" {
+				details[i].Sources = append(details[i].Sources, PassiveStatSource{
+					Source: "status:" + statusfx.StatusHaste, Name: "Tăng Tốc",
+					Value: hasteSpeedPercent, Final: bonus,
+				})
+				details[i].Total = stats["speed"]
+				break
+			}
+		}
 	}
 
 	// Dynamic storage bonus

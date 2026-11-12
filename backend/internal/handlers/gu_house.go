@@ -14,23 +14,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
-const (
-	guHouseMaxCoreGus = 5
-	guHouseMinCoreGus = 2
-	guHouseMaxSaved   = 4
-)
+var guHouseProductProfile = composition.GuHouseProfile()
 
 type guHouseDraftRequest struct {
-	Name               string            `json:"name"`
-	CoreGuInstanceIDs  []string          `json:"core_gu_instance_ids"`
-	AuxGuCount         int               `json:"aux_gu_count"`
-	ActionEffectKeys   map[string]string `json:"action_effect_keys,omitempty"`
-	PreviewFingerprint string            `json:"preview_fingerprint,omitempty"`
+	Name                    string                       `json:"name"`
+	CoreGuInstanceIDs       []string                     `json:"core_gu_instance_ids"`
+	AuxGuCount              int                          `json:"aux_gu_count"`
+	ActionEffectKeys        map[string]string            `json:"action_effect_keys,omitempty"`
+	ActionCompositionGraphs map[string]composition.Graph `json:"action_composition_graphs,omitempty"`
+	PreviewFingerprint      string                       `json:"preview_fingerprint,omitempty"`
 }
 
 type guHouseRecord struct {
@@ -47,15 +45,18 @@ type guHouseRecord struct {
 }
 
 func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftRequest) (models.GuHouseCombatProfile, int, error) {
+	if guHouseProductProfile.ID == "" || guHouseProductProfile.GuPolicy == "" {
+		return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Tiên Cổ Ốc chưa có product profile và chính sách Cổ thành phần")
+	}
 	req.Name = strings.TrimSpace(req.Name)
-	if len(req.CoreGuInstanceIDs) < guHouseMinCoreGus || len(req.CoreGuInstanceIDs) > guHouseMaxCoreGus {
-		return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Tiên Cổ Ốc cần từ %d đến %d Tiên Cổ hạch tâm", guHouseMinCoreGus, guHouseMaxCoreGus)
+	if len(req.CoreGuInstanceIDs) < guHouseProductProfile.MinGuComponents || len(req.CoreGuInstanceIDs) > guHouseProductProfile.MaxGuComponents {
+		return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Tiên Cổ Ốc cần từ %d đến %d Tiên Cổ hạch tâm", guHouseProductProfile.MinGuComponents, guHouseProductProfile.MaxGuComponents)
 	}
 	if req.AuxGuCount < 0 {
 		req.AuxGuCount = 0
 	}
-	if req.AuxGuCount > 200 {
-		req.AuxGuCount = 200
+	if req.AuxGuCount > guHouseProductProfile.MaxAuxGuCount {
+		req.AuxGuCount = guHouseProductProfile.MaxAuxGuCount
 	}
 
 	owned, err := loadOwnedKillerMoveGus(tx, playerID)
@@ -71,11 +72,11 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 
 	for _, id := range req.CoreGuInstanceIDs {
 		if seen[id] {
-			continue
+			return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Một Cổ hạch tâm không thể được chọn nhiều lần")
 		}
 		seen[id] = true
 		gu, ok := owned[id]
-		if !ok || strings.EqualFold(gu.State, "DEAD") {
+		if !ok || !strings.EqualFold(gu.State, "ACTIVE") || gu.Location != "INVENTORY" || gu.IsLocked {
 			return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Cổ hạch tâm không hợp lệ hoặc đã kiệt sức")
 		}
 		if gu.Rank < 6 {
@@ -91,6 +92,14 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 			actionPath := "strength"
 			if len(spec.Path) > 0 {
 				actionPath = gamefx.CleanPath(spec.Path[0])
+			}
+			if graph, hasGraph := req.ActionCompositionGraphs[id]; hasGraph {
+				action, compileErr := compileGuHouseComposition(gu, spec, actionPath, graph, req.CoreGuInstanceIDs, owned)
+				if compileErr != nil {
+					return models.GuHouseCombatProfile{}, 0, compileErr
+				}
+				actions = append(actions, action)
+				continue
 			}
 			if req.ActionEffectKeys != nil {
 				key := req.ActionEffectKeys[id]
@@ -111,44 +120,28 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 				if selected == nil {
 					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích đã chọn không hợp lệ hoặc chưa có executor combat theo lượt")
 				}
-				operation := selected.Operation
-				targetType := "SELF"
-				if operation.Op == gameplayeffects.OpDamage {
-					targetType = "SINGLE"
+				houseActionProfile := composition.GuHouseActionProfile()
+				sourceBlockID, operationIndex := selected.SourceBlockID, selected.OperationIndex
+				legacyGraph := composition.Graph{
+					SchemaVersion: composition.GraphSchemaVersion,
+					Product:       houseActionProfile.Product, ProductProfile: houseActionProfile.ID,
+					Context: houseActionProfile.Context, Executor: houseActionProfile.Executor, RuleSetRevision: composition.GuHouseActionRuleSet().Revision,
+					CoreGuInstanceID: gu.InstanceID, OutputEffectKey: selected.Key,
+					Nodes: []composition.Node{{
+						EffectKey: selected.Key, Role: composition.NodeOutput, GuInstanceID: gu.InstanceID,
+						GuID: gu.GuID, Rank: gu.Rank, Trigger: selected.Trigger,
+						Context: houseActionProfile.Context, Executor: houseActionProfile.Executor, SourceBlockID: sourceBlockID, OperationIndex: &operationIndex,
+					}},
 				}
-				action := models.KillerMoveCombatProfile{
-					ProfileVersion: 2, EffectLabel: selected.Label, ID: id, Name: fmt.Sprintf("Trận Kích: %s", spec.Name), Rank: gu.Rank,
-					MainPath: actionPath, AllPaths: []string{actionPath}, TargetType: targetType,
-					Priority: 1, ManaCost: spec.BaseManaCost * 1.5, SuccessChance: 0.95,
-				}
-				if operation.Op == "" {
-					return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích %q không hợp lệ", selected.Label)
-				}
-				switch operation.Op {
-				case gameplayeffects.OpDamage:
-					action.BaseDamage = operation.Value
-					action.DamageMult = 1
-				case gameplayeffects.OpHeal:
-					action.BaseHealing = operation.Value
-				case gameplayeffects.OpShield:
-					action.BaseShield = operation.Value
+				action, compileErr := compileGuHouseComposition(gu, spec, actionPath, legacyGraph, req.CoreGuInstanceIDs, owned)
+				if compileErr != nil {
+					return models.GuHouseCombatProfile{}, 0, compileErr
 				}
 				actions = append(actions, action)
 				continue
 			}
-			actions = append(actions, models.KillerMoveCombatProfile{
-				ID:            id,
-				Name:          fmt.Sprintf("Trận Kích: %s", spec.Name),
-				Rank:          gu.Rank,
-				MainPath:      actionPath,
-				AllPaths:      []string{actionPath},
-				TargetType:    getGuTargetType(spec),
-				Priority:      1,
-				ManaCost:      spec.BaseManaCost * 1.5,
-				BaseDamage:    float64(gu.Rank * 120),
-				DamageMult:    1.2,
-				SuccessChance: 0.95, // Gu House provides high casting stability
-			})
+			// Products cannot invent combat effects from Gu rank alone. Without
+			// an authored effect selection this core contributes no Trận Kích.
 		}
 	}
 
@@ -158,6 +151,9 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 
 	profile := models.GuHouseCombatProfile{
 		ProfileVersion:  2,
+		ProductProfile:  guHouseProductProfile.ID,
+		Context:         guHouseProductProfile.Context,
+		Executor:        guHouseProductProfile.Executor,
 		Name:            req.Name,
 		Rank:            highestRank,
 		CoreGuIDs:       coreGuIDs,
@@ -170,16 +166,205 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 		ZeroBackfire:    true,
 		Actions:         actions,
 	}
-	profile.PreviewFingerprint = guHousePreviewHash(profile)
+	profile.PreviewFingerprint, err = guHousePreviewHash(profile)
+	if err != nil {
+		return models.GuHouseCombatProfile{}, 0, fmt.Errorf("không thể chuẩn hóa Block v2 của Trận Kích: %w", err)
+	}
 
 	return profile, highestRank, nil
 }
 
-func guHousePreviewHash(profile models.GuHouseCombatProfile) string {
+func compileGuHouseComposition(core ownedKillerMoveGu, spec models.Gu, actionPath string, graph composition.Graph, houseGuIDs []string, owned map[string]ownedKillerMoveGu) (models.KillerMoveCombatProfile, error) {
+	profile := composition.GuHouseActionProfile()
+	if graph.CoreGuInstanceID != core.InstanceID {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích phải dùng đúng Cổ hạch tâm đã chọn")
+	}
+	selected := make([]string, 0, len(graph.Nodes))
+	seen := map[string]bool{}
+	for _, node := range graph.Nodes {
+		if !containsString(houseGuIDs, node.GuInstanceID) {
+			return models.KillerMoveCombatProfile{}, fmt.Errorf("Cổ hỗ trợ của Trận Kích chưa được chọn làm thành phần Cổ Ốc")
+		}
+		if !seen[node.GuInstanceID] {
+			selected = append(selected, node.GuInstanceID)
+			seen[node.GuInstanceID] = true
+		}
+	}
+	capabilitiesByEffect := make(map[string]map[string]bool, len(graph.Nodes))
+	for _, node := range graph.Nodes {
+		gu := owned[node.GuInstanceID]
+		options, optionErr := getKillerMoveEffectOptions(gu)
+		if optionErr != nil {
+			return models.KillerMoveCombatProfile{}, optionErr
+		}
+		for _, option := range options {
+			if option.Key != node.EffectKey || option.SourceBlockID != node.SourceBlockID || option.OperationIndex != valueOrZero(node.OperationIndex) {
+				continue
+			}
+			capabilitiesByEffect[node.EffectKey] = make(map[string]bool, len(option.CompositionCapabilities))
+			for _, capability := range option.CompositionCapabilities {
+				capabilitiesByEffect[node.EffectKey][capability] = true
+			}
+			break
+		}
+	}
+	ruleSet := composition.GuHouseActionRuleSet()
+	resolved, err := composition.ResolveWithRules(graph, profile, selected, ruleSet, capabilitiesByEffect)
+	if err != nil {
+		return models.KillerMoveCombatProfile{}, err
+	}
+	var output models.KillerMoveCombatProfile
+	blocks := make([]gameplayeffects.Block, 0, len(resolved.Nodes))
+	components := make([]string, 0, len(selected))
+	for _, instanceID := range selected {
+		components = append(components, instanceID)
+	}
+	for nodeIndex := range resolved.Nodes {
+		node := &resolved.Nodes[nodeIndex]
+		gu, ok := owned[node.GuInstanceID]
+		if !ok || gu.GuID != node.GuID || gu.Rank != node.Rank {
+			return models.KillerMoveCombatProfile{}, fmt.Errorf("provenance Cổ của effect %q đã thay đổi", node.EffectKey)
+		}
+		options, err := getKillerMoveEffectOptions(gu)
+		if err != nil {
+			return models.KillerMoveCombatProfile{}, err
+		}
+		var selectedEffect *killerMoveEffectOption
+		for i := range options {
+			if options[i].Key == node.EffectKey && options[i].CombatSupported {
+				selectedEffect = &options[i]
+				break
+			}
+		}
+		if selectedEffect == nil || selectedEffect.Trigger != node.Trigger || selectedEffect.SourceID != node.GuInstanceID || selectedEffect.GuID != node.GuID {
+			return models.KillerMoveCombatProfile{}, fmt.Errorf("effect %q không khớp provenance hoặc chưa được executor hỗ trợ", node.EffectKey)
+		}
+		action, err := compileGuHouseAction(gu, spec, *selectedEffect, actionPath)
+		if err != nil {
+			return models.KillerMoveCombatProfile{}, err
+		}
+		node.BlockID = fmt.Sprintf("EFFECT_%02d", nodeIndex+1)
+		operation := selectedEffect.Operation
+		operation.Target = nil
+		block := gameplayeffects.Block{ID: node.BlockID, Trigger: gameplayeffects.TriggerOnAction, Target: selectedEffect.Target, Conditions: selectedEffect.Conditions, Operations: []gameplayeffects.Operation{operation}}
+		blocks = append(blocks, block)
+		if node.Role == composition.NodeOutput {
+			output = action
+			continue
+		}
+		output.BaseDamage += action.BaseDamage
+		output.BaseHealing += action.BaseHealing
+		output.BaseShield += action.BaseShield
+		output.ManaCost += action.ManaCost
+	}
+	if output.EffectKey == "" {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("composition thiếu effect đầu ra")
+	}
+	if output.TargetType == "SELF" && output.BaseDamage > 0 {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích SELF không thể ghép effect gây sát thương lên mục tiêu khác")
+	}
+	output.CompositionGraph = &resolved
+	output.EffectBlocks = gameplayeffects.BlockSet(blocks)
+	output.ComponentGuInstances = components
+	return output, nil
+}
+
+func valueOrZero(value *int) int {
+	if value == nil {
+		return -1
+	}
+	return *value
+}
+
+func containsString(values []string, value string) bool {
+	for _, item := range values {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+func compileGuHouseAction(gu ownedKillerMoveGu, spec models.Gu, selected killerMoveEffectOption, actionPath string) (models.KillerMoveCombatProfile, error) {
+	if selected.Trigger != string(gameplayeffects.TriggerOnAction) || !selected.CombatSupported || selected.SourceID != gu.InstanceID || selected.GuID != gu.GuID {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích không có provenance/context/executor hợp lệ")
+	}
+	operation := selected.Operation
+	operation.Target = nil
+	block := gameplayeffects.Block{
+		ID: selected.Key, Trigger: gameplayeffects.TriggerOnAction, Target: selected.Target,
+		Conditions: selected.Conditions, Operations: []gameplayeffects.Operation{operation},
+	}
+	compiled, err := (gameplayeffects.Compiler{}).Compile([]gameplayeffects.Block{block})
+	if err != nil {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích %q không compile được: %w", selected.Label, err)
+	}
+	command := compiled.CompileCombatAction()
+	if len(command.Operations) != 1 {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích %q phải tạo đúng một effect command", selected.Label)
+	}
+	if len(command.Operations[0].Conditions) > 0 {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ effect có điều kiện")
+	}
+	if command.Operations[0].Value <= 0 {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích cần giá trị effect lớn hơn 0")
+	}
+	op := selected.Operation
+	target := selected.Target
+	if op.Target != nil {
+		target = *op.Target
+	}
+	targetType := ""
+	switch target.Selector {
+	case gameplayeffects.TargetSingle:
+		targetType = "SINGLE"
+	case gameplayeffects.TargetSelf:
+		targetType = "SELF"
+	default:
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ mục tiêu %q", target.Selector)
+	}
+	if op.SubType != "" && !strings.EqualFold(op.SubType, "FLAT") {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ subtype %q", op.SubType)
+	}
+	action := models.KillerMoveCombatProfile{
+		ProfileVersion: 2, EffectLabel: selected.Label, EffectKey: selected.Key,
+		EffectContext: guHouseProductProfile.Context, EffectExecutor: guHouseProductProfile.Executor, EffectGuID: gu.GuID,
+		EffectOperation: &op, EffectTarget: &target, EffectConditions: append([]gameplayeffects.Condition(nil), selected.Conditions...),
+		ID: gu.InstanceID, Name: fmt.Sprintf("Trận Kích: %s", spec.Name), Rank: gu.Rank,
+		MainPath: actionPath, AllPaths: []string{actionPath}, TargetType: targetType,
+		Priority: 1, ManaCost: spec.BaseManaCost * 1.5, SuccessChance: 0.95,
+	}
+	switch command.Operations[0].Type {
+	case gameplayeffects.OpDamage:
+		if targetType != "SINGLE" {
+			return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích damage chỉ hỗ trợ mục tiêu đơn hiện tại")
+		}
+		action.BaseDamage = command.Operations[0].Value
+		action.DamageMult = 1
+	case gameplayeffects.OpHeal:
+		if targetType != "SELF" {
+			return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích heal chỉ hỗ trợ mục tiêu bản thân hiện tại")
+		}
+		action.BaseHealing = command.Operations[0].Value
+	case gameplayeffects.OpShield, gameplayeffects.OpBarrier:
+		if targetType != "SELF" {
+			return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích shield chỉ hỗ trợ mục tiêu bản thân hiện tại")
+		}
+		action.BaseShield = command.Operations[0].Value
+	default:
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ operation %q", command.Operations[0].Type)
+	}
+	return action, nil
+}
+
+func guHousePreviewHash(profile models.GuHouseCombatProfile) (string, error) {
 	profile.PreviewFingerprint = ""
-	raw, _ := json.Marshal(profile)
+	raw, err := json.Marshal(profile)
+	if err != nil {
+		return "", err
+	}
 	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func ListGuHouses(c *gin.Context) {
@@ -209,15 +394,20 @@ func ListGuHouses(c *gin.Context) {
 			return
 		}
 		_ = json.Unmarshal(coreBytes, &r.CoreGuInstances)
-		_ = json.Unmarshal(profBytes, &r.HouseProfile)
+		if err := json.Unmarshal(profBytes, &r.HouseProfile); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Profile Block v2 của Tiên Cổ Ốc không hợp lệ"})
+			return
+		}
 		list = append(list, r)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"gu_houses":    list,
-		"max_saved":    guHouseMaxSaved,
-		"max_core_gus": guHouseMaxCoreGus,
-		"min_core_gus": guHouseMinCoreGus,
+		"gu_houses":            list,
+		"product_profile":      guHouseProductProfile.ID,
+		"composition_rule_set": composition.GuHouseActionRuleSet(),
+		"max_saved":            guHouseProductProfile.MaxSaved,
+		"max_core_gus":         guHouseProductProfile.MaxGuComponents,
+		"min_core_gus":         guHouseProductProfile.MinGuComponents,
 	})
 }
 
@@ -275,8 +465,8 @@ func CreateGuHouse(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giới hạn"})
 		return
 	}
-	if count >= guHouseMaxSaved {
-		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Mỗi người chơi tối đa %d Tiên Cổ Ốc", guHouseMaxSaved)})
+	if count >= guHouseProductProfile.MaxSaved {
+		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Mỗi người chơi tối đa %d Tiên Cổ Ốc", guHouseProductProfile.MaxSaved)})
 		return
 	}
 
@@ -296,7 +486,11 @@ func CreateGuHouse(c *gin.Context) {
 
 	coreBytes, _ := json.Marshal(req.CoreGuInstanceIDs)
 	profile.PreviewFingerprint = ""
-	profBytes, _ := json.Marshal(profile)
+	profBytes, err := json.Marshal(profile)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuẩn hóa Block v2 của Trận Kích"})
+		return
+	}
 
 	var houseID string
 	err = tx.QueryRow(`
@@ -349,9 +543,17 @@ func EquipGuHouse(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	var lockedPlayer string
+	if err = tx.QueryRow(`SELECT id::text FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&lockedPlayer); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhân vật"})
+		return
+	}
 
 	var isEquipped bool
-	err = tx.QueryRow(`SELECT is_equipped FROM player_gu_houses WHERE id=$1 AND player_id=$2 FOR UPDATE`, houseID, playerID).Scan(&isEquipped)
+	var coreBytes []byte
+	var profileBytes []byte
+	var durability float64
+	err = tx.QueryRow(`SELECT is_equipped,core_gu_instances,house_profile,current_durability FROM player_gu_houses WHERE id=$1 AND player_id=$2 FOR UPDATE`, houseID, playerID).Scan(&isEquipped, &coreBytes, &profileBytes, &durability)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Tiên Cổ Ốc"})
 		return
@@ -359,14 +561,111 @@ func EquipGuHouse(c *gin.Context) {
 
 	newState := !isEquipped
 	if newState {
-		// Unequip any currently equipped house
-		_, _ = tx.Exec(`UPDATE player_gu_houses SET is_equipped=false WHERE player_id=$1`, playerID)
+		if err := validateGuHouseActivationProfile(profileBytes); err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		if durability <= 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ Ốc đã hư hỏng hoàn toàn; hãy tu sửa trước khi trang bị"})
+			return
+		}
+		var coreIDs []string
+		if err = json.Unmarshal(coreBytes, &coreIDs); err != nil || len(coreIDs) < guHouseProductProfile.MinGuComponents || len(coreIDs) > guHouseProductProfile.MaxGuComponents {
+			c.JSON(http.StatusConflict, gin.H{"error": "Danh sách Cổ hạch tâm không hợp lệ; hãy đúc lại Tiên Cổ Ốc"})
+			return
+		}
+		seenCoreIDs := make(map[string]struct{}, len(coreIDs))
+		for _, coreID := range coreIDs {
+			if _, duplicate := seenCoreIDs[coreID]; duplicate {
+				c.JSON(http.StatusConflict, gin.H{"error": "Danh sách Cổ hạch tâm có instance trùng lặp"})
+				return
+			}
+			seenCoreIDs[coreID] = struct{}{}
+		}
+		if guHouseProductProfile.GuPolicy == composition.GuPolicyReserveActive {
+			// Release the outgoing house first. Any later error rolls the entire
+			// transaction back, and this permits two saved houses to share a core.
+			if _, err = tx.Exec(`UPDATE player_gu_houses SET is_equipped=false,updated_at=NOW() WHERE player_id=$1 AND is_equipped=true AND id<>$2`, playerID, houseID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tháo Tiên Cổ Ốc đang hoạt động"})
+				return
+			}
+			if _, err = tx.Exec(`DELETE FROM player_gu_house_core_reservations WHERE player_id=$1 AND gu_house_id IN (SELECT id FROM player_gu_houses WHERE player_id=$1 AND is_equipped=false) AND gu_house_id<>$2`, playerID, houseID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giải phóng Cổ hạch tâm cũ"})
+				return
+			}
+		}
+		for _, coreID := range coreIDs {
+			var guID, state, location string
+			var rank int
+			var isLocked bool
+			if err = tx.QueryRow(`SELECT gu_id,gu_rank,state,location,is_locked FROM player_gu WHERE id=$1 AND player_id=$2 FOR UPDATE`, coreID, playerID).Scan(&guID, &rank, &state, &location, &isLocked); err != nil || rank < 6 || !strings.EqualFold(state, "ACTIVE") || location != "INVENTORY" || isLocked {
+				c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ Ốc thiếu đúng Cổ hạch tâm còn sống trong hành trang"})
+				return
+			}
+			var heldByArray string
+			reservationErr := tx.QueryRow(`SELECT array_id::text FROM teleport_array_gu_reservations WHERE gu_instance_id=$1`, coreID).Scan(&heldByArray)
+			if reservationErr == nil {
+				c.JSON(http.StatusConflict, gin.H{"error": "Cổ hạch tâm đang được Trận Pháp trên bản đồ giữ chỗ"})
+				return
+			}
+			if reservationErr != sql.ErrNoRows {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Trận Pháp"})
+				return
+			}
+			var heldByMove string
+			reservationErr = tx.QueryRow(`SELECT killer_move_id::text FROM player_killer_move_gu_reservations WHERE gu_instance_id=$1`, coreID).Scan(&heldByMove)
+			if reservationErr == nil {
+				c.JSON(http.StatusConflict, gin.H{"error": "Cổ hạch tâm đang được Sát Chiêu active giữ chỗ"})
+				return
+			}
+			if reservationErr != sql.ErrNoRows {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Cổ hạch tâm"})
+				return
+			}
+			var heldByHouse string
+			reservationErr = tx.QueryRow(`SELECT gu_house_id::text FROM player_gu_house_core_reservations WHERE gu_instance_id=$1`, coreID).Scan(&heldByHouse)
+			if reservationErr == nil && heldByHouse != houseID {
+				c.JSON(http.StatusConflict, gin.H{"error": "Cổ hạch tâm đang được Tiên Cổ Ốc active khác giữ chỗ"})
+				return
+			}
+			if reservationErr != nil && reservationErr != sql.ErrNoRows {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Cổ hạch tâm"})
+				return
+			}
+			var legacyMoveUse bool
+			if err = tx.QueryRow(`SELECT EXISTS (
+				SELECT 1 FROM player_killer_moves AS move, jsonb_array_elements(move.components) AS component
+				WHERE move.player_id=$1 AND move.is_equipped=true AND component->>'instance_id'=$2
+			)`, playerID, coreID).Scan(&legacyMoveUse); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Sát Chiêu đang active"})
+				return
+			}
+			if legacyMoveUse {
+				c.JSON(http.StatusConflict, gin.H{"error": "Cổ hạch tâm đã thuộc Sát Chiêu active"})
+				return
+			}
+			if guHouseProductProfile.GuPolicy == composition.GuPolicyReserveActive {
+				if _, err = tx.Exec(`INSERT INTO player_gu_house_core_reservations(gu_instance_id,gu_house_id,player_id,gu_id,gu_rank,gu_location,gu_is_locked,gu_state)
+				VALUES($1,$2,$3,$4,$5,'INVENTORY',false,$6)
+				ON CONFLICT(gu_instance_id) DO UPDATE SET created_at=player_gu_house_core_reservations.created_at
+				WHERE player_gu_house_core_reservations.gu_house_id=EXCLUDED.gu_house_id`, coreID, houseID, playerID, guID, rank, state); err != nil {
+					c.JSON(http.StatusConflict, gin.H{"error": "Không thể giữ chỗ Cổ hạch tâm cho Tiên Cổ Ốc"})
+					return
+				}
+			}
+		}
 	}
 
 	_, err = tx.Exec(`UPDATE player_gu_houses SET is_equipped=$1, updated_at=NOW() WHERE id=$2 AND player_id=$3`, newState, houseID, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái trang bị"})
 		return
+	}
+	if !newState && guHouseProductProfile.GuPolicy == composition.GuPolicyReserveActive {
+		if _, err = tx.Exec(`DELETE FROM player_gu_house_core_reservations WHERE gu_house_id=$1 AND player_id=$2`, houseID, playerID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giải phóng Cổ hạch tâm"})
+			return
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -375,6 +674,26 @@ func EquipGuHouse(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"is_equipped": newState, "message": "Cập nhật trang bị thành công"})
+}
+
+func validateGuHouseActivationProfile(raw []byte) error {
+	var profile models.GuHouseCombatProfile
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		return fmt.Errorf("Profile Tiên Cổ Ốc không hợp lệ; hãy tạo lại từ preview")
+	}
+	for _, action := range profile.Actions {
+		if action.CompositionGraph == nil {
+			continue
+		}
+		revision := action.CompositionGraph.RuleSetRevision
+		if revision != "" && revision != composition.GuHouseActionRuleSet().Revision {
+			return fmt.Errorf("Trận Kích dùng catalog rule không còn hiệu lực; hãy tạo lại Tiên Cổ Ốc từ preview")
+		}
+		if len(action.CompositionGraph.Edges) > 0 && revision == "" {
+			return fmt.Errorf("Trận Kích cũ chưa có catalog rule hợp lệ; hãy tạo lại Tiên Cổ Ốc từ preview trước khi xuất chiến")
+		}
+	}
+	return nil
 }
 
 func RepairGuHouse(c *gin.Context) {

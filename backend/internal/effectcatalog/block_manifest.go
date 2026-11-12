@@ -40,7 +40,7 @@ var OperationCatalog = map[string]OperationDefinition{
 	"HEAL":      {values("FLAT", "PERCENT", "LIFESTEAL", "RESOURCE"), anyTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit", "resource"), []string{"value"}, true, false},
 	"DIRECT_HP": {values("FLAT", "MAX_HP_PERCENT", "SHIELD_STRIP"), combatTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit"), []string{"value"}, true, false},
 	"STAT_MOD":  {values("ADD_FLAT", "MULTIPLY_PERCENT", "SET", "GROWTH_CAP"), anyTriggers, combatTargets, values("op", "sub_type", "target", "stat", "value", "unit", "path", "turns", "stack_policy"), []string{"stat", "value"}, false, false},
-	"STATUS":    {nil, combatTriggers, combatTargets, values("op", "target", "status_id", "value", "turns", "chance", "stack_policy"), []string{"status_id", "turns", "chance"}, true, false},
+	"STATUS":    {nil, anyTriggers, combatTargets, values("op", "target", "status_id", "value", "turns", "chance", "stack_policy"), []string{"status_id", "turns", "chance"}, true, false},
 	"BARRIER":   {values("FLAT", "PERCENT"), combatTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit", "turns", "stack_policy"), []string{"value", "turns"}, true, false},
 	"CLEANSE":   {values("ALL", "DEBUFF", "STATUS"), anyTriggers, combatTargets, values("op", "sub_type", "target", "status_id"), nil, true, false},
 	"UNIQUE":    {nil, anyTriggers, combatTargets, values("op", "target", "code", "params"), []string{"code"}, false, false},
@@ -155,8 +155,9 @@ func init() {
 	register("ALWAYS_ON", "growth", "GROWTH_DURATION_HOURS")
 	register("ON_USE", "world", "RECORD_MESSAGE")
 	register("ON_TURN_START", "combat", "POEM_INTENT")
-	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY", "SUMMON_WOLF_FRONTLINE", "SUMMON_MONSTER", "INSTANT_WIN")
-	register("ON_CAST", "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE", "SUMMON_MONSTER")
+	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY", "SUMMON_WOLF_FRONTLINE", "SUMMON_MONSTER", "INSTANT_WIN", "LETHAL_LUCK_WARD")
+	register("ON_CAST", "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE", "SUMMON_MONSTER", "LUCK_ROULETTE", "DREAM_UNRAVEL")
+	register("ON_ACTION", "combat", "LUCK_ROULETTE", "DREAM_UNRAVEL")
 	register("ON_HIT", "combat", "BYPASS_SHIELD")
 	NativeHooks["GUARANTEED_HIT"] = NativeHook{
 		Triggers: values("ON_ACTION", "ON_HIT", "COMBAT_PASSIVE"),
@@ -181,8 +182,8 @@ func init() {
 		Params:   map[string]ParamSpec{},
 		Domain:   "combat",
 	}
-	register("BEFORE_HIT", "combat", "FIRST_TURN_EVADE")
-	register("COMBAT_PASSIVE", "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY")
+	register("BEFORE_HIT", "combat", "FIRST_TURN_EVADE", "LETHAL_LUCK_WARD")
+	register("COMBAT_PASSIVE", "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY", "LETHAL_LUCK_WARD")
 	register("CAPABILITY", "capability", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "IGNORE_MONSTER_ENCOUNTER", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "CONCEAL_GU", "SEVER_CLUES", "ARENA_IDENTITY_MASK", "PORTAL_CREATE", "RANDOM_PORTAL", "CAPTURE_BONUS")
 	register("ALWAYS_ON", "derived_player", "IMMUNE_DREAM_STATUS")
 	NativeHooks["DEDUCTION_INSTANT_FINISH"] = NativeHook{

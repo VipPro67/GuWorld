@@ -236,6 +236,24 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 			}
 		} else {
 			stoneQty := loot.Items["primeval_stone"]
+
+			// Vận Đạo: Khí Vận Chiếu Rọi / Phúc Tinh Cao Chiếu
+			luckMarks := int64(0)
+			if player.DaoMarks != nil {
+				luckMarks = player.DaoMarks["luck"]
+			}
+			luckDropChance := float64(luckMarks)/2000.0 + 0.10
+			if rand.Float64() < luckDropChance && activeCombat.LootTableID != "" {
+				enemyRank := activeCombat.EnemyRank
+				if enemyRank < 1 {
+					enemyRank = 1
+				}
+				bonusStones := rand.Intn(10*enemyRank+5) + 5
+				player.PrimevalStones += float64(bonusStones)
+				stoneQty += bonusStones
+				lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("[Vận Đạo - Phúc Tinh Cao Chiếu] Khí vận chiếu rọi, bạn nhặt thêm được %d Nguyên Thạch!", bonusStones))
+			}
+
 			player.PrimevalStones += float64(stoneQty)
 			for matID, qty := range loot.Items {
 				if matID == "primeval_stone" {

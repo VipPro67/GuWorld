@@ -67,6 +67,12 @@ const (
 	StatusThoughtChaos = "THOUGHT_CHAOS"
 	StatusDaoConflict  = "DAO_CONFLICT"
 	StatusBacklash     = "BACKLASH"
+
+	// Mộng Đạo & Vận Đạo (Dream Path & Luck Path)
+	StatusDreamPrison      = "DREAM_PRISON"
+	StatusDreamIllusion    = "DREAM_ILLUSION"
+	StatusLuckSiphon       = "LUCK_SIPHON"
+	StatusLuckCurseReverse = "LUCK_CURSE_REVERSE"
 )
 
 // StatusCategory groups statuses by their nature for dispel/cleanse mechanics.
@@ -118,6 +124,10 @@ const (
 	BehaviourThoughtChaos = "thought_chaos" // THOUGHT_CHAOS - killer move fail chance
 	BehaviourDaoConflict  = "dao_conflict"  // DAO_CONFLICT - reduce heal/shield from allies
 	BehaviourBacklash     = "backlash"      // BACKLASH - instant reflect on shield/killer move break
+
+	// Mộng Đạo & Vận Đạo behaviours
+	BehaviourDreamPrison = "dream_prison" // DREAM_PRISON - deep dream stasis, skip turn, does not break on normal damage
+	BehaviourLuckSiphon  = "luck_siphon"  // LUCK_SIPHON - siphon target's evasion and crit to caster
 
 	// BehaviourWorldMap marks statuses that only affect the world map. Combat
 	// loops intentionally fall through to their no-op default.

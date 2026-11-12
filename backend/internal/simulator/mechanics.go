@@ -32,6 +32,49 @@ func applyLastStandFloor(target *CombatantAuto, satKhiPierce bool) bool {
 	return false
 }
 
+// applyLethalLuckWard provides the Cẩu Thỉ Vận / Tử Địa Phùng Sinh mechanic for Luck Path:
+// when lethal damage would push a unit to <= 0 HP, it has a chance to prevent death,
+// floor HP at 1, and convert lethal damage into Chân Nguyên Giáp (Virtual Shield).
+// Only triggers once per battle.
+func applyLethalLuckWard(target *CombatantAuto, logs *[]CombatLog, turn int, rng *rand.Rand) bool {
+	if target == nil || target.HP > 0 {
+		return false
+	}
+	if !hasMechanic(target.Mechanics, "BEFORE_HIT", "LETHAL_LUCK_WARD") &&
+		!hasMechanic(target.Mechanics, "COMBAT_PASSIVE", "LETHAL_LUCK_WARD") &&
+		!hasMechanic(target.Mechanics, "ON_BATTLE_START", "LETHAL_LUCK_WARD") {
+		return false
+	}
+	if target.CustomState == nil {
+		target.CustomState = make(map[string]int)
+	}
+	if target.CustomState["lethal_luck_used"] > 0 {
+		return false
+	}
+
+	luckChance := 0.25 // Base 25%
+	if rng.Float64() < luckChance {
+		target.CustomState["lethal_luck_used"] = 1
+		target.HP = 1.0
+		shieldGain := target.MaxHP * 0.35
+		if shieldGain < 100 {
+			shieldGain = 100
+		}
+		target.VirtualShield += shieldGain
+		if logs != nil {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "LETHAL_LUCK_WARD",
+				Detail:    fmt.Sprintf("[Vận Đạo - Cẩu Thỉ Vận!] Vận khí ngút trời! %s thoát chết trong gang tấc (HP giữ lại 1, nhận thêm %.0f Chân Nguyên Giáp)!", target.Name, shieldGain),
+			})
+		}
+		return true
+	}
+	return false
+}
+
 // isImmuneToDamage reports whether Bất Hoại blocks damage entirely. Covers the
 // registry buff, the raw "invulnerable" effect CHAOS_GAMBLE grants
 // (engine.go:1492), and the legacy DamageTakenReduction == 1 sentinel from
@@ -85,7 +128,7 @@ const EvasionChanceCap = 0.75
 
 func tenacityPriority(id string) int {
 	switch id {
-	case statusfx.StatusStun, statusfx.StatusBind, statusfx.StatusFreeze, statusfx.StatusSleep,
+	case statusfx.StatusStun, statusfx.StatusBind, statusfx.StatusFreeze, statusfx.StatusSleep, statusfx.StatusDreamPrison,
 		EffectStun, EffectFreeze:
 		return 0
 	case statusfx.StatusSilence, statusfx.StatusFear,
@@ -332,6 +375,7 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	c.HasTaunt = false
 	c.TaunterID = ""
 	c.IsSleeping = false
+	c.IsDreamPrison = false
 	c.IsFeared = false
 	c.IsCharmed = false
 	c.IsStealthed = false
@@ -406,6 +450,8 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 			c.IsFeared = true
 		case statusfx.BehaviourSleep:
 			c.IsSleeping = true
+		case statusfx.BehaviourDreamPrison:
+			c.IsDreamPrison = true
 		case statusfx.BehaviourCharm:
 			c.IsCharmed = true
 		case statusfx.BehaviourStealth:

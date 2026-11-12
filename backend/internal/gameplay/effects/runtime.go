@@ -103,6 +103,8 @@ type compiledBlock struct {
 	operations []CompiledOperation
 }
 type CompiledOperation struct {
+	BlockID                     string
+	BlockIndex                  int
 	Type                        OperationType
 	Trigger                     Trigger
 	SubType                     string
@@ -118,7 +120,7 @@ type CompiledOperation struct {
 
 func (Compiler) Compile(input []Block) (*Compiled, error) {
 	blocks := make([]compiledBlock, 0, len(input))
-	for _, b := range input {
+	for blockIndex, b := range input {
 		if !effectcatalog.TriggerCatalog[string(b.Trigger)] {
 			return nil, fmt.Errorf("effect %q: unknown trigger %q", b.ID, b.Trigger)
 		}
@@ -155,7 +157,11 @@ func (Compiler) Compile(input []Block) (*Compiled, error) {
 			if subType != "" && len(definition.SubTypes) > 0 && !definition.SubTypes[subType] {
 				return nil, fmt.Errorf("effect %q: unknown subtype %q for %q", b.ID, op.SubType, op.Op)
 			}
-			co := CompiledOperation{Type: op.Op, SubType: subType, Conditions: append([]Condition(nil), conditions...), Value: op.Value, Path: op.Path, Stat: strings.ToUpper(op.Stat), Unit: strings.ToUpper(op.Unit), Resource: strings.ToUpper(op.Resource), StackPolicy: strings.ToUpper(op.StackPolicy), Code: strings.ToUpper(op.Code), Params: append([]byte(nil), op.Params...)}
+			effectiveOpTarget := b.Target
+			if op.Target != nil {
+				effectiveOpTarget = *op.Target
+			}
+			co := CompiledOperation{BlockID: b.ID, BlockIndex: blockIndex, Type: op.Op, Trigger: b.Trigger, SubType: subType, Conditions: append([]Condition(nil), conditions...), Target: &effectiveOpTarget, Value: op.Value, Path: op.Path, Stat: strings.ToUpper(op.Stat), Unit: strings.ToUpper(op.Unit), Resource: strings.ToUpper(op.Resource), StackPolicy: strings.ToUpper(op.StackPolicy), Code: strings.ToUpper(op.Code), Params: append([]byte(nil), op.Params...)}
 			if len(op.Params) > 0 {
 				if err := json.Unmarshal(op.Params, &co.Values); err != nil {
 					return nil, fmt.Errorf("effect %q: invalid native params: %w", b.ID, err)

@@ -128,13 +128,13 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 	add("ON_DEATH", DispositionSupported, "combat", "REBORN")
 	add("BEFORE_ENEMY_ATTACK", DispositionSupported, "combat", "FORGET_INTENT_INTERRUPT", "FORGET_WILL_CONFUSE")
 	add("ON_TURN_START", DispositionSupported, "combat", "POEM_INTENT")
-	add("ON_BATTLE_START", DispositionSupported, "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY", "SUMMON_WOLF_FRONTLINE", "SUMMON_MONSTER", "INSTANT_WIN")
-	add("ON_CAST", DispositionSupported, "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE", "SUMMON_MONSTER")
+	add("ON_BATTLE_START", DispositionSupported, "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY", "SUMMON_WOLF_FRONTLINE", "SUMMON_MONSTER", "INSTANT_WIN", "LETHAL_LUCK_WARD")
+	add("ON_CAST", DispositionSupported, "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE", "SUMMON_MONSTER", "LUCK_ROULETTE", "DREAM_UNRAVEL")
 	add("ON_HIT", DispositionSupported, "combat", "BYPASS_SHIELD", "GUARANTEED_HIT")
-	add("ON_ACTION", DispositionSupported, "combat", "GUARANTEED_HIT")
-	add("BEFORE_HIT", DispositionSupported, "combat", "FIRST_TURN_EVADE")
+	add("ON_ACTION", DispositionSupported, "combat", "GUARANTEED_HIT", "LUCK_ROULETTE", "DREAM_UNRAVEL")
+	add("BEFORE_HIT", DispositionSupported, "combat", "FIRST_TURN_EVADE", "LETHAL_LUCK_WARD")
 	add("PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT")
-	add("COMBAT_PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY", "GUARANTEED_HIT")
+	add("COMBAT_PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY", "GUARANTEED_HIT", "LETHAL_LUCK_WARD")
 	add("CAPABILITY", DispositionSupported, "world", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "IGNORE_MONSTER_ENCOUNTER", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK", "DEDUCTION_INSTANT_FINISH")
 	return result
 }
@@ -171,7 +171,7 @@ var statusDefinitions = func() map[string]Definition {
 	add(DispositionSupported, "statusfx", "BLEED", "POISON", "BURN", "FEAR", "CONFUSE", "STEALTH", "SLEEP", "BLIND", "CHARM", "BIND", "FORGET_EGO", "FORGET_REALITY",
 		"SLOW", "SLOW1", "SLOW_DAMAGE", "WEAK", "REGEN", "ATK_UP", "DEF_UP", "THORNS", "TAUNT",
 		"HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "LAST_STAND", "EVASION", "REVIVE_LOCK",
-		"ESSENCE_LEAK", "GU_SEAL", "SOUL_WOUND", "THOUGHT_CHAOS", "DAO_CONFLICT", "BACKLASH")
+		"ESSENCE_LEAK", "GU_SEAL", "SOUL_WOUND", "THOUGHT_CHAOS", "DAO_CONFLICT", "BACKLASH", "FLYING", "PHI_HANH")
 	add(DispositionPartial, "combat-legacy", "STUN", "FREEZE", "SILENCE")
 	add(DispositionMigrate, "effect-runtime-v2", "ROOT", "CONFUSION", "DECAY")
 	return result

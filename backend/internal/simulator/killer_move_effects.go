@@ -96,17 +96,29 @@ func operationConditionsMatch(actor, target *CombatantAuto, conditions []gamepla
 		value := condition.Value
 		switch strings.ToUpper(condition.Operator) {
 		case "LT":
-			if !(actual < value) { return false }
+			if !(actual < value) {
+				return false
+			}
 		case "LTE":
-			if !(actual <= value) { return false }
+			if !(actual <= value) {
+				return false
+			}
 		case "GT":
-			if !(actual > value) { return false }
+			if !(actual > value) {
+				return false
+			}
 		case "GTE":
-			if !(actual >= value) { return false }
+			if !(actual >= value) {
+				return false
+			}
 		case "EQ":
-			if actual != value { return false }
+			if actual != value {
+				return false
+			}
 		case "NE":
-			if actual == value { return false }
+			if actual == value {
+				return false
+			}
 		default:
 			return false
 		}

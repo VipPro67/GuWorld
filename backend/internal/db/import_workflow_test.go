@@ -53,7 +53,7 @@ func TestSeedGusFromCSVBatchesInserts(t *testing.T) {
 	if len(rec.queries) != 2 {
 		t.Fatalf("exec count = %d, want 2 batched inserts", len(rec.queries))
 	}
-	colsPerRow := 20
+	colsPerRow := 21
 	if rec.argLens[0] != 500*colsPerRow || rec.argLens[1] != colsPerRow {
 		t.Fatalf("arg counts = %v, want [%d %d]", rec.argLens, 500*colsPerRow, colsPerRow)
 	}

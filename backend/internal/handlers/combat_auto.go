@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -489,6 +491,271 @@ func buildStatProvenance(player *models.Player, finalStats map[string]float64, f
 
 // buildSimCombatant constructs a simulator.CombatantAuto from player + Gu loadout.
 // Shared by AutoCombatStart (combat_auto.go) and ResolveCombat (combat_auto_resolve.go).
+func guHouseActionToSimAction(houseID string, profile composition.Profile, coreGuInstances, coreGuIDs map[string]bool, action models.KillerMoveCombatProfile) (simulator.SimAction, bool) {
+	if action.CompositionGraph != nil {
+		return guHouseComposedActionToSimAction(houseID, coreGuInstances, coreGuIDs, action)
+	}
+	if profile.GuPolicy != composition.GuPolicyReserveActive || profile.Executor != "GU_HOUSE_ACTION_ADAPTER" ||
+		action.EffectContext != profile.Context || action.EffectExecutor != profile.Executor || action.EffectKey == "" ||
+		!coreGuInstances[action.ID] || action.EffectGuID == "" || action.EffectOperation == nil || action.EffectTarget == nil || len(action.EffectConditions) > 0 {
+		return simulator.SimAction{}, false
+	}
+	if !coreGuIDs[action.EffectGuID] {
+		return simulator.SimAction{}, false
+	}
+	op := *action.EffectOperation
+	target := *action.EffectTarget
+	if op.Target != nil && *op.Target != target {
+		return simulator.SimAction{}, false
+	}
+	block := gameplayeffects.Block{
+		ID: action.EffectKey, Trigger: gameplayeffects.TriggerOnAction, Target: target,
+		Conditions: action.EffectConditions, Operations: []gameplayeffects.Operation{op},
+	}
+	compiled, err := (gameplayeffects.Compiler{}).Compile([]gameplayeffects.Block{block})
+	if err != nil {
+		return simulator.SimAction{}, false
+	}
+	compiledAction := compiled.CompileCombatAction()
+	if len(compiledAction.Operations) != 1 || len(compiledAction.Operations[0].Conditions) > 0 || compiledAction.Operations[0].Value <= 0 {
+		return simulator.SimAction{}, false
+	}
+	command := compiledAction.Operations[0]
+	if command.SubType != "" && !strings.EqualFold(command.SubType, "FLAT") {
+		return simulator.SimAction{}, false
+	}
+	targetType := ""
+	switch strings.ToUpper(string(target.Selector)) {
+	case string(gameplayeffects.TargetSingle):
+		targetType = "SINGLE"
+	case string(gameplayeffects.TargetSelf):
+		targetType = "SELF"
+	default:
+		return simulator.SimAction{}, false
+	}
+	converted := simulator.SimAction{
+		ActionType: "KILLER_MOVE", Name: action.Name,
+		SourceID:       fmt.Sprintf("GU_HOUSE:%s:%s", houseID, action.EffectKey),
+		ComponentGuIDs: []string{action.ID}, SuccessChance: action.SuccessChance,
+		Path: append([]string(nil), action.AllPaths...), Rank: action.Rank,
+		Priority:   action.Priority,
+		DamageMult: 1, Defense: action.BaseShield, Healing: action.BaseHealing,
+		ManaCost: action.ManaCost, CooldownTurns: max(1, action.CooldownTurns),
+		WarmupTurns: action.WarmupTurns, TargetType: targetType, Bypass: action.Bypass,
+		IsFromGuHouse: true,
+	}
+	switch command.Type {
+	case gameplayeffects.OpDamage:
+		if targetType != "SINGLE" || action.BaseHealing != 0 || action.BaseShield != 0 || action.BaseDamage != command.Value {
+			return simulator.SimAction{}, false
+		}
+		converted.Damage = command.Value
+	case gameplayeffects.OpHeal:
+		if targetType != "SELF" || action.BaseDamage != 0 || action.BaseShield != 0 || action.BaseHealing != command.Value {
+			return simulator.SimAction{}, false
+		}
+	case gameplayeffects.OpShield, gameplayeffects.OpBarrier:
+		if targetType != "SELF" || action.BaseDamage != 0 || action.BaseHealing != 0 || action.BaseShield != command.Value {
+			return simulator.SimAction{}, false
+		}
+	default:
+		return simulator.SimAction{}, false
+	}
+	return converted, true
+}
+
+func guHouseComposedActionToSimAction(houseID string, selectedInstances, selectedGuIDs map[string]bool, action models.KillerMoveCombatProfile) (simulator.SimAction, bool) {
+	profile := composition.GuHouseActionProfile()
+	graph := *action.CompositionGraph
+	selected := append([]string(nil), action.ComponentGuInstances...)
+	var resolved composition.Graph
+	var err error
+	if graph.RuleSetRevision != "" {
+		ruleSet := composition.GuHouseActionRuleSet()
+		capabilitiesByEffect := make(map[string]map[string]bool, len(graph.Nodes))
+		for _, node := range graph.Nodes {
+			spec, found := models.GetGu(node.GuID, node.Rank)
+			if !found || node.SourceBlockID == "" || node.OperationIndex == nil {
+				return simulator.SimAction{}, false
+			}
+			if !guHouseSnapshotMatchesSource(node, spec.Effects.GetBlocks(), action.EffectBlocks) {
+				return simulator.SimAction{}, false
+			}
+			for _, grant := range spec.CompositionContributions.Grants {
+				if grant.EffectBlockID == node.SourceBlockID && grant.OperationIndex == *node.OperationIndex {
+					if capabilitiesByEffect[node.EffectKey] == nil {
+						capabilitiesByEffect[node.EffectKey] = make(map[string]bool)
+					}
+					capabilitiesByEffect[node.EffectKey][grant.Capability] = true
+				}
+			}
+		}
+		resolved, err = composition.ResolveWithRules(graph, profile, selected, ruleSet, capabilitiesByEffect)
+	} else {
+		if len(graph.Edges) > 0 {
+			return simulator.SimAction{}, false
+		}
+		resolved, err = composition.Resolve(graph, profile, selected)
+	}
+	if err != nil || graph.OutputEffectKey != action.EffectKey || len(action.EffectBlocks) != len(resolved.Nodes) || len(selected) == 0 {
+		return simulator.SimAction{}, false
+	}
+	for _, node := range resolved.Nodes {
+		if !selectedInstances[node.GuInstanceID] || !selectedGuIDs[node.GuID] {
+			return simulator.SimAction{}, false
+		}
+	}
+	commands := make(map[string]gameplayeffects.CompiledOperation, len(action.EffectBlocks))
+	for _, block := range action.EffectBlocks {
+		compiled, compileErr := (gameplayeffects.Compiler{}).Compile([]gameplayeffects.Block{block})
+		if compileErr != nil {
+			return simulator.SimAction{}, false
+		}
+		compiledAction := compiled.CompileCombatAction()
+		if len(compiledAction.Operations) != 1 || len(compiledAction.Operations[0].Conditions) != 0 || compiledAction.Operations[0].Value <= 0 {
+			return simulator.SimAction{}, false
+		}
+		commands[block.ID] = compiledAction.Operations[0]
+	}
+	var damage, healing, defense float64
+	outputTarget := ""
+	outputNode, ok := compositionOutputNode(resolved)
+	if !ok {
+		return simulator.SimAction{}, false
+	}
+	outputBlockID := compositionBlockID(outputNode)
+	outputCommand, ok := commands[outputBlockID]
+	if !ok {
+		return simulator.SimAction{}, false
+	}
+	var outputEffectTarget *gameplayeffects.Target
+	if outputCommand.Target != nil {
+		outputEffectTarget = outputCommand.Target
+	} else {
+		for _, block := range action.EffectBlocks {
+			if block.ID == outputBlockID {
+				outputEffectTarget = &block.Target
+				break
+			}
+		}
+	}
+	if outputEffectTarget == nil {
+		return simulator.SimAction{}, false
+	}
+	switch outputEffectTarget.Selector {
+	case gameplayeffects.TargetSingle:
+		outputTarget = "SINGLE"
+	case gameplayeffects.TargetSelf:
+		outputTarget = "SELF"
+	default:
+		return simulator.SimAction{}, false
+	}
+	for _, node := range resolved.Nodes {
+		blockID := compositionBlockID(node)
+		command, ok := commands[blockID]
+		if !ok {
+			return simulator.SimAction{}, false
+		}
+		if command.SubType != "" && !strings.EqualFold(command.SubType, "FLAT") {
+			return simulator.SimAction{}, false
+		}
+		target := command.Target
+		if target == nil {
+			for _, block := range action.EffectBlocks {
+				if block.ID == blockID {
+					target = &block.Target
+					break
+				}
+			}
+		}
+		if target == nil {
+			return simulator.SimAction{}, false
+		}
+		if node.Role == composition.NodeOutput {
+			if node.EffectKey != action.EffectKey || target.Selector != outputEffectTarget.Selector {
+				return simulator.SimAction{}, false
+			}
+		}
+		switch command.Type {
+		case gameplayeffects.OpDamage:
+			if target.Selector != gameplayeffects.TargetSingle || outputTarget == "SELF" {
+				return simulator.SimAction{}, false
+			}
+			damage += command.Value
+		case gameplayeffects.OpHeal:
+			if target.Selector != gameplayeffects.TargetSelf {
+				return simulator.SimAction{}, false
+			}
+			healing += command.Value
+		case gameplayeffects.OpShield, gameplayeffects.OpBarrier:
+			if target.Selector != gameplayeffects.TargetSelf {
+				return simulator.SimAction{}, false
+			}
+			defense += command.Value
+		default:
+			return simulator.SimAction{}, false
+		}
+	}
+	if outputTarget == "" {
+		return simulator.SimAction{}, false
+	}
+	if outputTarget != action.TargetType || damage != action.BaseDamage || healing != action.BaseHealing || defense != action.BaseShield {
+		return simulator.SimAction{}, false
+	}
+	return simulator.SimAction{ActionType: "KILLER_MOVE", Name: action.Name, SourceID: fmt.Sprintf("GU_HOUSE:%s:%s", houseID, action.EffectKey), ComponentGuIDs: append([]string(nil), selected...), SuccessChance: action.SuccessChance, Path: append([]string(nil), action.AllPaths...), Rank: action.Rank, Priority: action.Priority, Damage: damage, DamageMult: 1, Defense: defense, Healing: healing, ManaCost: action.ManaCost, CooldownTurns: max(1, action.CooldownTurns), WarmupTurns: action.WarmupTurns, TargetType: outputTarget, Bypass: action.Bypass, IsFromGuHouse: true}, true
+}
+
+func guHouseSnapshotMatchesSource(node composition.Node, sourceBlocks []gameplayeffects.Block, snapshotBlocks gameplayeffects.BlockSet) bool {
+	if node.OperationIndex == nil || *node.OperationIndex < 0 {
+		return false
+	}
+	var source *gameplayeffects.Block
+	for index := range sourceBlocks {
+		if sourceBlocks[index].ID == node.SourceBlockID {
+			source = &sourceBlocks[index]
+			break
+		}
+	}
+	if source == nil || *node.OperationIndex >= len(source.Operations) {
+		return false
+	}
+	var snapshot *gameplayeffects.Block
+	blockID := compositionBlockID(node)
+	for index := range snapshotBlocks {
+		if snapshotBlocks[index].ID == blockID {
+			snapshot = &snapshotBlocks[index]
+			break
+		}
+	}
+	if snapshot == nil || len(snapshot.Operations) != 1 {
+		return false
+	}
+	expectedOperation := source.Operations[*node.OperationIndex]
+	expectedOperation.Target = nil
+	expectedTarget := source.Target
+	if source.Operations[*node.OperationIndex].Target != nil {
+		expectedTarget = *source.Operations[*node.OperationIndex].Target
+	}
+	return snapshot.Trigger == source.Trigger && reflect.DeepEqual(snapshot.Target, expectedTarget) && reflect.DeepEqual(snapshot.Conditions, source.Conditions) && reflect.DeepEqual(snapshot.Operations[0], expectedOperation)
+}
+
+func compositionOutputNode(graph composition.Graph) (composition.Node, bool) {
+	for _, node := range graph.Nodes {
+		if node.Role == composition.NodeOutput && node.EffectKey == graph.OutputEffectKey {
+			return node, true
+		}
+	}
+	return composition.Node{}, false
+}
+
+func compositionBlockID(node composition.Node) string {
+	if node.BlockID != "" {
+		return node.BlockID
+	}
+	// Older saved Gu House actions keyed blocks directly by effect provenance.
+	return node.EffectKey
+}
+
 func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInitiator bool, reqLoadout *simulator.CombatLoadout) (*simulator.CombatantAuto, error) {
 	// Cổ mang CLEANSE_REGIONAL_WALL: gỡ Áp Chế Giới Vực khỏi bản thân trước
 	// khi tính stat để trận không kế thừa debuff thế giới. player ở đây luôn là
@@ -498,14 +765,18 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	actor := models.CombatantFromPlayer(player, playerStats)
 
 	var guHouseState *simulator.GuHouseState
+	var guHouseActions []simulator.SimAction
 	var houseID, houseName string
 	var houseRank int
 	var rawHouseProfile []byte
+	var rawHouseCoreIDs []byte
 	var durability float64
 	if tx != nil {
-		if err := tx.QueryRow(`SELECT id::text, name, rank, house_profile, current_durability FROM player_gu_houses WHERE player_id=$1 AND is_equipped=true LIMIT 1`, player.ID).Scan(&houseID, &houseName, &houseRank, &rawHouseProfile, &durability); err == nil && durability > 0 {
+		if err := tx.QueryRow(`SELECT id::text, name, rank, house_profile, core_gu_instances, current_durability FROM player_gu_houses WHERE player_id=$1 AND is_equipped=true LIMIT 1`, player.ID).Scan(&houseID, &houseName, &houseRank, &rawHouseProfile, &rawHouseCoreIDs, &durability); err == nil && durability > 0 {
 			var houseProf models.GuHouseCombatProfile
 			_ = json.Unmarshal(rawHouseProfile, &houseProf)
+			var coreIDs []string
+			_ = json.Unmarshal(rawHouseCoreIDs, &coreIDs)
 			guHouseState = &simulator.GuHouseState{
 				ID:              houseID,
 				Name:            houseName,
@@ -515,10 +786,28 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 				Defense:         houseProf.HouseDefense,
 				DamageReduction: houseProf.DamageReduction,
 			}
+			if houseProf.ProductProfile == guHouseProductProfile.ID && houseProf.Context == guHouseProductProfile.Context && houseProf.Executor == guHouseProductProfile.Executor {
+				coreSet := make(map[string]bool, len(coreIDs))
+				for _, instanceID := range coreIDs {
+					coreSet[instanceID] = true
+				}
+				coreGuIDSet := make(map[string]bool, len(houseProf.CoreGuIDs))
+				for _, guID := range houseProf.CoreGuIDs {
+					coreGuIDSet[guID] = true
+				}
+				for _, actionProfile := range houseProf.Actions {
+					action, ok := guHouseActionToSimAction(houseID, guHouseProductProfile, coreSet, coreGuIDSet, actionProfile)
+					if ok {
+						guHouseActions = append(guHouseActions, action)
+					} else {
+						logger.S.Warnf("Skipping invalid Trận Kích %q in Tiên Cổ Ốc %s: effect provenance or executor is unsupported", actionProfile.EffectKey, houseID)
+					}
+				}
+			}
 		}
 	}
 
-	var allActions []simulator.SimAction
+	allActions := append([]simulator.SimAction(nil), guHouseActions...)
 	var combatantMechanics []simulator.CombatMechanic
 
 	// Build owned equipped+ACTIVE Gu sets and lookup maps

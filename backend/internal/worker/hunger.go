@@ -499,6 +499,45 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 	}
 
 	// Remove starved (now DEAD) Gu instances.
+	// A reserved Gu may be a core component of an equipped product. Retire
+	// those products and release their reservations in this transaction before
+	// deleting the Gu, so one starvation event cannot roll back deaths for the
+	// rest of the player's Gu inventory.
+	if len(deadIDs) > 0 {
+		if _, err := tx.Exec(`UPDATE player_killer_moves AS move SET is_equipped=false,updated_at=NOW()
+			WHERE move.is_equipped=true AND EXISTS (
+				SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(move.components)='array' THEN move.components ELSE '[]'::jsonb END) AS component(value)
+				WHERE component.value->>'instance_id'=ANY($1::text[])
+			)`, pq.Array(deadIDs)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE player_gu_houses AS house SET is_equipped=false,updated_at=NOW()
+			WHERE house.is_equipped=true AND EXISTS (
+				SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(house.core_gu_instances)='array' THEN house.core_gu_instances ELSE '[]'::jsonb END) AS component(value)
+				WHERE component.value #>> '{}' = ANY($1::text[])
+			)`, pq.Array(deadIDs)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`WITH disabled AS (
+			UPDATE teleport_arrays AS ta SET effect_enabled=false,updated_at=NOW()
+			WHERE ta.effect_enabled=true AND EXISTS (
+				SELECT 1 FROM jsonb_array_elements_text(CASE
+					WHEN jsonb_typeof(ta.effect_profile->'component_gu_instances')='array'
+					THEN ta.effect_profile->'component_gu_instances' ELSE '[]'::jsonb END) AS component(instance_id)
+				WHERE component.instance_id=ANY($1::text[])
+			) RETURNING ta.id
+		)
+		DELETE FROM teleport_array_gu_reservations AS reservation
+		WHERE reservation.gu_instance_id=ANY($1::text[]) OR reservation.array_id IN (SELECT id FROM disabled)`, pq.Array(deadIDs)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM player_killer_move_gu_reservations WHERE gu_instance_id=ANY($1::text[])`, pq.Array(deadIDs)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM player_gu_house_core_reservations WHERE gu_instance_id=ANY($1::text[])`, pq.Array(deadIDs)); err != nil {
+			return err
+		}
+	}
 	if _, err := tx.Exec(`DELETE FROM player_gu WHERE id = ANY($1::text[])`, pq.Array(deadIDs)); err != nil {
 		return err
 	}

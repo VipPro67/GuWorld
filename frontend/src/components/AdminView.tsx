@@ -3777,9 +3777,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
           {dataTab === "gus" && (
             <CoreDataAdminTab kind="gus" rows={gus} loading={gusLoading}
-              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, player_atk_coefficient: 0, effects: [], food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
-              onEdit={(g) => setGuEdit({ ...structuredClone(g), _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
-              onCopy={(g) => setGuEdit({ ...structuredClone(g), id: "", _isNew: true, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
+              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, player_atk_coefficient: 0, effects: { schema_version: 2, blocks: [] }, composition_contributions: { schema_version: 1, grants: [] }, _compositionContributionsText: '{"schema_version":1,"grants":[]}', food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
+              onEdit={(g) => setGuEdit({ ...structuredClone(g), _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects, composition_contributions: typeof g.composition_contributions === "string" ? JSON.parse(g.composition_contributions) : (g.composition_contributions || { schema_version: 1, grants: [] }), _compositionContributionsText: JSON.stringify(typeof g.composition_contributions === "string" ? JSON.parse(g.composition_contributions) : (g.composition_contributions || { schema_version: 1, grants: [] }), null, 2) })}
+              onCopy={(g) => setGuEdit({ ...structuredClone(g), id: "", _isNew: true, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects, composition_contributions: { schema_version: 1, grants: [] }, _compositionContributionsText: '{"schema_version":1,"grants":[]}' })}
               onDelete={async (g) => { if (!confirm(`Xóa toàn bộ các rank của ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} />
           )}
 
@@ -4755,6 +4755,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <input value={(Array.isArray(guEdit[f.key]) ? guEdit[f.key] : []).join(", ")} onChange={e => setGuEdit({...guEdit, [f.key]: e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
               </div>
             ))}
+            <div className="mb-4">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Composition Contributions (Block ID + operation index)</label>
+              <p className="mb-1 text-[10px] text-zinc-500">Khai báo capability tường minh cho từng operation. Role/tag không tự tạo contribution.</p>
+              <textarea value={guEdit._compositionContributionsText || '{"schema_version":1,"grants":[]}'} onChange={e => setGuEdit({ ...guEdit, _compositionContributionsText: e.target.value })} rows={5} spellCheck={false} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-200" />
+            </div>
             {/* Gu Effects - Composable Blocks */}
             <GuEffectsEditor
               effects={guEdit.effects || {}}
@@ -4767,7 +4772,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <button onClick={async () => {
                 if (!await validateAllEffectEditors()) { addToast?.("Effect Block chưa hợp lệ", "error"); return; }
                 const isNew = !!guEdit._isNew;
-                const { _isNew, ...body } = guEdit;
+                let compositionContributions: unknown;
+                try { compositionContributions = JSON.parse(guEdit._compositionContributionsText || '{"schema_version":1,"grants":[]}'); }
+                catch { addToast?.("Composition Contributions phải là JSON hợp lệ", "error"); return; }
+                const { _isNew, _compositionContributionsText, ...body } = guEdit;
+                body.composition_contributions = compositionContributions;
                 const url = isNew ? `${BACKEND_URL}/api/admin/gu-dictionary` : `${BACKEND_URL}/api/admin/gu-dictionary/${guEdit.id}?old_rank=${guEdit._old_rank || body.rank}`;
                 const method = isNew ? "POST" : "PUT";
                 const ok = await exec(url, method, body);

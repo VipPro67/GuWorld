@@ -25,8 +25,67 @@ export interface TeleportArray {
   current_durability: number;
   max_durability: number;
   is_active: boolean;
+  effect_enabled: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface TeleportFormationGu {
+  instance_id: string;
+  gu_id: string;
+  rank: number;
+  hunger: number;
+  state: string;
+  location: string;
+  is_locked: boolean;
+}
+
+export interface TeleportFormationEffectOption {
+  key: string;
+  source_block_id: string;
+  operation_index: number;
+  source_instance_id: string;
+  source_name: string;
+  gu_id: string;
+  rank: number;
+  label: string;
+  trigger: string;
+  operation: { op: string; sub_type?: string; value?: number; status_id?: string; resource?: string; turns?: number; chance?: number };
+  target: { selector: string; bypass_frontline?: boolean };
+  conditions?: Array<{ field: string; operator: string; value: number }>;
+  travel_supported?: boolean;
+  composition_capabilities?: string[];
+}
+
+export interface TeleportFormationRuleSet {
+  schema_version: number;
+  revision: string;
+  rules: Array<{ id: string; product_profile: string; context: string; executor: string; kind: "COMBINE"; core_capability: string; support_capability: string }>;
+}
+
+export interface TeleportFormationCompositionGraph {
+  schema_version: number;
+  product: string;
+  product_profile: string;
+  context: string;
+  executor: string;
+  core_gu_instance_id: string;
+  output_effect_key: string;
+  rule_set_revision: string;
+  nodes: Array<{ effect_key: string; source_block_id: string; operation_index: number; role: "OUTPUT" | "SUPPORT"; gu_instance_id: string; gu_id: string; rank: number; trigger: string; context: string; executor: string }>;
+  edges: Array<{ from: string; to: string; kind: "COMBINE"; rule_id: string }>;
+}
+
+export interface TeleportFormationEffectPreview {
+  effect_enabled: boolean;
+  product_profile: string;
+  context: string;
+  executor: string;
+  gu_rank: number;
+  composition_graph: TeleportFormationCompositionGraph;
+  component_gu_instances: string[];
+  effects: { schema_version: number; blocks: Array<{ id: string; trigger: string; target: { selector: string }; operations: TeleportFormationEffectOption["operation"][] }> };
+  preview_fingerprint: string;
 }
 
 export interface TeleportTemplate {
@@ -79,19 +138,16 @@ export interface TeleportSlice {
   myTeleportArrays: TeleportArray[];
   teleportDirectory: TeleportDirectoryData | null;
   teleportLoading: boolean;
+  teleportFormationGus: TeleportFormationGu[];
+  teleportFormationEffects: TeleportFormationEffectOption[];
+  teleportFormationRuleSet: TeleportFormationRuleSet | null;
 
   fetchTeleportTemplates: () => Promise<void>;
   fetchMyTeleportArrays: () => Promise<void>;
   fetchTeleportDirectory: () => Promise<void>;
-  buildTeleportArray: (req: {
-    name: string;
-    tier: string;
-    direction_type?: string;
-    access_policy?: string;
-    fee_enabled?: boolean;
-    fee_currency?: string;
-    fee_amount?: number;
-  }) => Promise<TeleportBuildResult>;
+  fetchTeleportFormationOptions: () => Promise<void>;
+  previewTeleportArray: (req: TeleportBuildRequest) => Promise<{ success: boolean; preview?: TeleportFormationEffectPreview; message: string }>;
+  buildTeleportArray: (req: TeleportBuildRequest) => Promise<TeleportBuildResult>;
   travelTeleport: (targetArrayId: string) => Promise<{ success: boolean; message: string }>;
   manageTeleportArray: (req: {
     array_id: string;
@@ -107,11 +163,26 @@ export interface TeleportSlice {
   dismantleTeleportArray: (arrayId: string) => Promise<boolean>;
 }
 
+export interface TeleportBuildRequest {
+    name: string;
+    tier: string;
+    direction_type?: string;
+    access_policy?: string;
+    fee_enabled?: boolean;
+    fee_currency?: string;
+    fee_amount?: number;
+    composition_graph?: TeleportFormationCompositionGraph;
+    preview_fingerprint?: string;
+}
+
 export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, TeleportSlice> = (set, get) => ({
   teleportTemplates: [],
   myTeleportArrays: [],
   teleportDirectory: null,
   teleportLoading: false,
+  teleportFormationGus: [],
+  teleportFormationEffects: [],
+  teleportFormationRuleSet: null,
 
   fetchTeleportTemplates: async () => {
     try {
@@ -121,6 +192,33 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ teleportTemplates: data });
     } catch (err) {
       console.error("Failed to fetch teleport templates", err);
+    }
+  },
+
+  fetchTeleportFormationOptions: async () => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/teleport/effect-options`);
+      if (!response.ok) return;
+      const data: { gus: TeleportFormationGu[]; effect_options: TeleportFormationEffectOption[]; composition_rule_set?: TeleportFormationRuleSet } = await response.json();
+      set({ teleportFormationGus: data.gus || [], teleportFormationEffects: data.effect_options || [], teleportFormationRuleSet: data.composition_rule_set || null });
+    } catch (err) {
+      console.error("Failed to fetch teleport formation effect options", err);
+    }
+  },
+
+  previewTeleportArray: async (req) => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/teleport/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Preview effect Trận Pháp thất bại");
+      return { success: true, preview: data as TeleportFormationEffectPreview, message: "Preview hợp lệ" };
+    } catch (caught: unknown) {
+      const error = caught instanceof Error ? caught : new Error(String(caught));
+      return { success: false, message: error.message };
     }
   },
 

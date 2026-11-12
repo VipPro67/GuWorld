@@ -38,7 +38,7 @@ func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator
 		}
 	}
 
-	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,COALESCE(combat_profile,'{}'::jsonb) FROM player_killer_moves WHERE player_id=$1 AND id = ANY($2)`, player.ID, targetIDs)
+	rows, err := tx.Query(`SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,composition_graph,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,COALESCE(combat_profile,'{}'::jsonb) FROM player_killer_moves WHERE player_id=$1 AND id = ANY($2)`, player.ID, targetIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -51,13 +51,18 @@ func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator
 	byID := make(map[string]storedKillerMove)
 	for rows.Next() {
 		var m storedKillerMove
-		var comps, selected, compiled, combatProf []byte
-		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &comps, &selected, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &combatProf); err != nil {
+		var comps, graph, selected, compiled, combatProf []byte
+		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &comps, &graph, &selected, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &combatProf); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(comps, &m.Components)
+		_ = json.Unmarshal(graph, &m.CompositionGraph)
 		_ = json.Unmarshal(selected, &m.SelectedEffects)
-		_ = json.Unmarshal(compiled, &m.CompiledEffects)
+		blocks, decodeErr := gameplayeffects.DecodeBlockSet(compiled)
+		if decodeErr != nil {
+			continue
+		}
+		m.CompiledEffects = []gameplayeffects.Block(blocks)
 		_ = json.Unmarshal(combatProf, &m.CombatProfile)
 		if m.CombatProfile.CooldownTurns == 0 {
 			m.CombatProfile.CooldownTurns = 1 + (len(m.Components)-1)/2
@@ -70,6 +75,9 @@ func loadCombatKillerMoves(tx *sql.Tx, player *models.Player, loadout *simulator
 				valid = false
 				break
 			}
+		}
+		if valid && validateKillerMoveCompositionSnapshot(m.CompositionGraph, m.SelectedEffects, m.Components, m.CompiledEffects) != nil {
+			valid = false
 		}
 		hasCombatEffect := false
 		for _, block := range m.CompiledEffects {

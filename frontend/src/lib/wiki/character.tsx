@@ -495,10 +495,11 @@ export const characterPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cấu trúc Sát Chiêu</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Sát Chiêu (Killer Move) là kỹ năng ghép từ <strong>1 Cổ Hạch Tâm (Core Gu)</strong> và <strong>0–8 Cổ Phụ Trợ (Support Gu)</strong>. Cổ phụ trợ có thể tăng sát thương, giảm hao Chân Nguyên, thêm khống chế (choáng, đóng băng, câm lặng) hoặc rút ngắn thời gian tụ lực.
+            Sát Chiêu (Killer Move) có một <strong>Cổ chính</strong> tạo hiệu ứng đầu ra và tối đa năm <strong>Cổ phụ</strong>. Mỗi Cổ phụ phải nối tới đầu ra bằng một quy tắc composition có provenance rõ ràng.
           </p>
           <ul className="list-disc list-inside text-xs text-[var(--text-secondary)] space-y-2 leading-relaxed">
-            <li><strong>Cổ Hạch Tâm</strong> quyết định lưu phái và hiệu ứng chính của sát chiêu; sát chiêu rèn luyện tích lũy Đạo Ngân vào lưu phái cốt lõi.</li>
+            <li><strong>Cổ chính</strong> quyết định lưu phái và hiệu ứng đầu ra; Cổ phụ khai báo một quan hệ typed: mở khóa/điều kiện, cầu nối/chuyển hóa, khuếch đại/dẫn động hoặc ổn định/phụ trợ.</li>
+            <li>Preview kiểm tra mọi Cổ đã chọn có đường provenance tới đầu ra và dùng cùng một bản graph/fingerprint khi lưu. Các loại quan hệ hiện mô tả cấu trúc ghép, chưa tự biến đổi operation thành compound effect.</li>
             <li><strong>Body Mods</strong> là cải tạo thân thể vĩnh viễn tích lũy từ dung hợp Cổ trùng, phản ánh qua các chỉ số thân thể trên hồ sơ.</li>
             <li>Trạng thái thân thể (ví dụ Trọng Thương) làm suy giảm sức mạnh sát chiêu cho đến khi hồi phục.</li>
           </ul>
@@ -507,7 +508,7 @@ export const characterPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Sát Chiêu Phối Hợp</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Bằng cách trang bị và kích hoạt đồng thời một nhóm Cổ trùng bổ trợ nhau trong lượt đánh, bạn sẽ tạo ra sát chiêu cộng hưởng sức mạnh khủng khiếp:
+            Các hiệu ứng đã chọn được kiểm tra theo executor combat theo lượt. Những combo recipe đặc biệt chưa có runtime nên không được xem là hiệu ứng đang hoạt động:
           </p>
           <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)] leading-relaxed">
             <li>💥 <strong>Lực Đạo combo:</strong> Trang bị đồng thời <strong>Toàn Lực Ứng Phó Cổ</strong> (kích hoạt 100% thú ảnh) và <strong>Khổ Lực Cổ</strong> (tăng sát thương dựa trên Sinh Lực đã mất) để tối đa lượng sát thương bộc phát.</li>

@@ -487,6 +487,15 @@ func AdminRemovePlayerGu(c *gin.Context) {
 		return
 	}
 	removedGuID := gu.GuID
+	reserved, reservationErr := guHasActiveProductReservation(tx, instanceID)
+	if reservationErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+		return
+	}
+	if reserved {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
+		return
+	}
 
 	deleteResult, err := tx.Exec(`DELETE FROM player_gu WHERE player_id=$1 AND id=$2 AND NOT EXISTS (SELECT 1 FROM actor_gu_equipment WHERE player_gu_id=$2)`, playerID.String(), instanceID)
 	if err != nil {

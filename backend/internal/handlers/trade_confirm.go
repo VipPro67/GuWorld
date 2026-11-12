@@ -116,6 +116,15 @@ func UpdateTradeOffer(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể giao dịch Cổ trùng đang trang bị: %s", targetGu.GuID)})
 			return
 		}
+		reserved, reservationErr := guHasActiveProductReservation(tx, instID)
+		if reservationErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+			return
+		}
+		if reserved {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
+			return
+		}
 	}
 
 	// Validate Materials

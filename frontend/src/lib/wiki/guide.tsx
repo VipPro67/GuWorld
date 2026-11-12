@@ -133,7 +133,7 @@ export const guidePages: WikiPage[] = [
                 • <strong>Luyện Cổ:</strong> Sử dụng các công thức (Recipe) tại lò luyện để dung hợp các loại Cổ trùng bậc thấp và nguyên liệu phụ để tạo ra Cổ trùng cấp cao hơn. Quá trình này có tỷ lệ thất bại tự nhiên làm mất nguyên liệu phụ.
               </p>
               <p>
-                • <strong>Sát Chiêu (Killer Moves):</strong> Lắp ráp kỹ năng tối thượng bằng cách kết hợp <strong>1 Cổ Hạch Tâm (Core Gu)</strong> quyết định lưu phái/sát thương gốc cùng tối đa <strong>8 Cổ Phụ Trợ (Support Gu)</strong> để bổ sung các hiệu ứng khống chế (choáng, đóng băng, câm lặng), tăng phạm vi tấn công và giảm hao Chân Nguyên.
+                • <strong>Sát Chiêu (Killer Moves):</strong> Chọn một <strong>Cổ chính</strong> làm hiệu ứng đầu ra và tối đa <strong>5 Cổ phụ</strong>; mỗi Cổ phụ cần nối tới output bằng một quy tắc composition có provenance.
               </p>
               <div className="p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/10 text-indigo-300">
                 ⏱️ <strong>Gợi ý:</strong> Mỗi sát chiêu mới tạo ra nhận <strong>+5 Nhân Khí</strong> — hãy ưu tiên tạo vài sát chiêu căn bản sớm để vừa có chiêu thức dùng khi chiến đấu, vừa tích Nhân Khí phục vụ Thăng Tiên về sau.

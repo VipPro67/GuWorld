@@ -19,6 +19,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
@@ -900,31 +902,43 @@ func safeJSONArray(raw string, fallback string, rowLabel string) string {
 
 func normalizedGuEffectsJSON(raw string, rowLabel string) (string, effectcatalog.Report, error) {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" || trimmed == "[]" {
-		return "[]", effectcatalog.Report{}, nil
-	}
-	if trimmed[0] == '[' {
-		issues := effectcatalog.ValidateBlockV2([]byte(trimmed), effectcatalog.Location{Source: "gu", Key: rowLabel})
+	loc := effectcatalog.Location{Source: "gu", Key: rowLabel}
+	if trimmed == "" || trimmed == "[]" || trimmed == "null" || strings.HasPrefix(trimmed, "[") {
+		canonical, issues := effectcatalog.CanonicalBlockV2Envelope([]byte(trimmed), loc)
 		if len(issues) > 0 {
 			return "", effectcatalog.Report{}, &effectcatalog.ValidationError{Issues: issues}
 		}
-		return trimmed, effectcatalog.Report{}, nil
+		return string(canonical), effectcatalog.Report{}, nil
 	}
-	var envelope map[string]json.RawMessage
-	if json.Unmarshal([]byte(raw), &envelope) == nil {
-		if _, ok := envelope["schema_version"]; ok || envelope["blocks"] != nil {
-			issues := effectcatalog.ValidateBlockV2([]byte(raw), effectcatalog.Location{Source: "gu", Key: rowLabel})
+	var root map[string]json.RawMessage
+	if json.Unmarshal([]byte(trimmed), &root) == nil {
+		if _, hasVersion := root["schema_version"]; hasVersion || root["blocks"] != nil {
+			canonical, issues := effectcatalog.CanonicalBlockV2Envelope([]byte(trimmed), loc)
 			if len(issues) > 0 {
 				return "", effectcatalog.Report{}, &effectcatalog.ValidationError{Issues: issues}
 			}
-			return raw, effectcatalog.Report{}, nil
+			return string(canonical), effectcatalog.Report{}, nil
 		}
 	}
+	// Transitional import seam for Gu rows not yet migrated through their
+	// per-group parity gate. New Block v2 authoring always takes the branch above.
 	normalized, report, err := effectcatalog.NormalizeAndValidate([]byte(raw))
 	if err != nil {
 		return "", report, fmt.Errorf("%s: %w", rowLabel, err)
 	}
 	return string(normalized), report, nil
+}
+
+func normalizedGuCompositionJSON(raw string, blocks []gameplayeffects.Block, rowLabel string) (string, error) {
+	catalog, err := composition.ParseGrantCatalog([]byte(raw), blocks)
+	if err != nil {
+		return "", fmt.Errorf("%s composition_contributions: %w", rowLabel, err)
+	}
+	normalized, err := catalog.Value()
+	if err != nil {
+		return "", fmt.Errorf("%s composition_contributions: %w", rowLabel, err)
+	}
+	return string(normalized), nil
 }
 
 type effectCSVSource struct{ source, filename, keyColumn string }
@@ -1160,15 +1174,17 @@ func seedGusFromCSV(filename string) error {
 	imageURLIdx := col("image_url")
 	targetTypeIdx := col("target_type")
 	playerATKCoefficientIdx := col("player_atk_coefficient")
+	compositionContributionsIdx := col("composition_contributions")
 
 	if idIdx < 0 || nameIdx < 0 || rankIdx < 0 {
 		return fmt.Errorf("Gu.csv missing required columns (id, name, rank)")
 	}
 
 	type guRow struct {
-		fields            []string
-		normalizedEffects string
-		line              int
+		fields                             []string
+		normalizedEffects                  string
+		normalizedCompositionContributions string
+		line                               int
 	}
 	type guKey struct{ id, rank string }
 	seen := make(map[guKey]guRow)
@@ -1233,6 +1249,18 @@ func seedGusFromCSV(filename string) error {
 			return err
 		}
 		entry.normalizedEffects = normalized
+		var envelope struct {
+			Blocks []gameplayeffects.Block `json:"blocks"`
+		}
+		if err := json.Unmarshal([]byte(normalized), &envelope); err != nil {
+			return fmt.Errorf("Gu.csv line %d, %s rank %s: cannot read normalized effect blocks: %w", entry.line, key.id, key.rank, err)
+		}
+		compositionRaw, err := normalizedGuCompositionJSON(get(entry.fields, compositionContributionsIdx), envelope.Blocks,
+			fmt.Sprintf("Gu.csv line %d, %s rank %s", entry.line, key.id, key.rank))
+		if err != nil {
+			return err
+		}
+		entry.normalizedCompositionContributions = compositionRaw
 		seen[key] = entry
 		warningCount += len(report.Warnings())
 	}
@@ -1245,12 +1273,12 @@ func seedGusFromCSV(filename string) error {
 	// Multi-row VALUES keeps the upsert semantics while cutting round-trips.
 	const guImportBatchSize = 500
 	batchValues := make([]string, 0, guImportBatchSize)
-	batchArgs := make([]interface{}, 0, guImportBatchSize*20)
+	batchArgs := make([]interface{}, 0, guImportBatchSize*21)
 	flushGuBatch := func() error {
 		if len(batchValues) == 0 {
 			return nil
 		}
-		query := "INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, player_atk_coefficient, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url) VALUES " +
+		query := "INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, player_atk_coefficient, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url, composition_contributions) VALUES " +
 			strings.Join(batchValues, ",") +
 			` ON CONFLICT (id, rank) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
@@ -1258,6 +1286,7 @@ func seedGusFromCSV(filename string) error {
 			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
 			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, primary_role=EXCLUDED.primary_role,
 			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags,
+			    composition_contributions=EXCLUDED.composition_contributions,
 			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE gu_dictionary.base_price END,
 			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END`
 		if _, err := activeCSVImportDB().Exec(query, batchArgs...); err != nil {
@@ -1299,6 +1328,7 @@ func seedGusFromCSV(filename string) error {
 		}
 
 		imageURL := get(row, imageURLIdx)
+		compositionContributions := seen[key].normalizedCompositionContributions
 		hungerRate := 0
 		fmt.Sscanf(hungerStr, "%d", &hungerRate)
 		maxHunger := 100
@@ -1357,9 +1387,9 @@ func seedGusFromCSV(filename string) error {
 
 		n := len(batchArgs)
 		batchValues = append(batchValues, fmt.Sprintf(
-			"($%d,$%d,$%d,$%d::jsonb,$%d,$%d,$%d,$%d::jsonb,$%d,$%d::jsonb,$%d,$%d,$%d,$%d,$%d,$%d::jsonb,$%d::jsonb,$%d::jsonb,$%d,$%d)",
-			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12, n+13, n+14, n+15, n+16, n+17, n+18, n+19, n+20))
-		batchArgs = append(batchArgs, id, name, rank, pathJSON, guType, manaCost, playerATKCoefficient, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
+			"($%d,$%d,$%d,$%d::jsonb,$%d,$%d,$%d,$%d::jsonb,$%d,$%d::jsonb,$%d,$%d,$%d,$%d,$%d,$%d::jsonb,$%d::jsonb,$%d::jsonb,$%d,$%d,$%d::jsonb)",
+			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12, n+13, n+14, n+15, n+16, n+17, n+18, n+19, n+20, n+21))
+		batchArgs = append(batchArgs, id, name, rank, pathJSON, guType, manaCost, playerATKCoefficient, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL, compositionContributions)
 		if len(batchValues) >= guImportBatchSize {
 			if err := flushGuBatch(); err != nil {
 				return fmt.Errorf("upsert gu %s rank %s: %w", id, rankStr, err)
@@ -3547,8 +3577,8 @@ var individualExportDefs = map[string]exportDef{
 	},
 	"gu": {
 		filename: "Gu.csv",
-		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url", "player_atk_coefficient"},
-		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), CASE WHEN COALESCE(base_price,0) = 0 THEN '0' ELSE TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM base_price::text)) END, COALESCE(image_url,''), COALESCE(player_atk_coefficient,0) FROM gu_dictionary ORDER BY id`,
+		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url", "player_atk_coefficient", "composition_contributions"},
+		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), CASE WHEN COALESCE(base_price,0) = 0 THEN '0' ELSE TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM base_price::text)) END, COALESCE(image_url,''), COALESCE(player_atk_coefficient,0), COALESCE(composition_contributions::text,'{"schema_version":1,"grants":[]}') FROM gu_dictionary ORDER BY id`,
 	},
 	"constitution": {
 		filename: "Constitution.csv",

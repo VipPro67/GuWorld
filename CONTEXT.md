@@ -72,7 +72,8 @@ Hiệu ứng trừng phạt xảy ra khi Cổ sư cố gắng suy diễn một m
 ## Modular Effect System & Realm Scaling (Hệ Thống Hiệu Ứng Lắp Ráp & Thang Đo Cảnh Giới)
 
 ### Khối Hiệu Ứng Lắp Ráp (Composable Effect Block)
-Cấu trúc nguyên tử hóa **đang ở mức prototype dữ liệu**, mô tả hiệu ứng theo mô hình ECA (Event-Condition-Action): gồm `Trigger` (thời điểm xảy ra sự kiện), `Conditions` (điều kiện lọc ngữ cảnh), `Target` (mục tiêu thụ hưởng/chịu đòn) và `Operations` (hành động/hiệu ứng thành phần như Damage, Shield, Status, StatMod). Backend gameplay hiện tại chưa thực thi `blocks`; frontend mới chỉ đọc một phần để hiển thị, chỉnh sửa và phân loại Cổ khi dựng đội. Các hành vi gameplay vẫn phụ thuộc trực tiếp vào `active`, `passive`, `growth` và `other`. Vì vậy không được coi `blocks` là nguồn dữ liệu chuẩn hoặc xóa các namespace cũ cho tới khi có executor, chuyển đổi đủ dữ liệu và kiểm thử tương đương hành vi.
+Quy tắc gameplay mô tả sự kiện kích hoạt, điều kiện áp dụng, mục tiêu và những thay đổi trạng thái được tạo ra. Chi phí, hồi chiêu, thời gian tụ lực và cách kích hoạt thuộc hồ sơ sử dụng của từng sản phẩm hoặc ngữ cảnh, không thuộc bản thân effect.
+_Avoid_: Kỹ năng chiến đấu mặc định, hồ sơ thi triển
 
 ### Suy Hao Cảnh Giới Tự Thân (Caster Rank Attenuation)
 Cơ chế suy giảm uy lực và thời lượng của hiệu ứng buff/bảo hộ khi Cổ sư cấp cao sử dụng Cổ trùng có Rank thấp hơn cảnh giới của bản thân áp lên chính mình (ví dụ Cổ Rank 4 tạo hiệu ứng Bất Tử cho Cổ Tiên Rank 9). Hiệu quả bảo vệ suy giảm mạnh theo hàm mũ hoặc chuyển đổi thành giá trị hữu hạn để tránh phá vỡ cân bằng cảnh giới.

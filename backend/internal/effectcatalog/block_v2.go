@@ -92,6 +92,58 @@ func ValidateBlockV2Definition(raw []byte, loc Location) error {
 	return nil
 }
 
+// CanonicalBlockV2Envelope validates a Block v2 array or envelope and returns
+// the canonical versioned envelope. Flat arrays remain accepted as a legacy
+// storage shape at read/import seams, but new writes always carry the schema
+// version. Legacy namespace objects are deliberately rejected here.
+func CanonicalBlockV2Envelope(raw []byte, loc Location) ([]byte, []ValidationIssue) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		trimmed = []byte("[]")
+	}
+
+	var blocks json.RawMessage
+	switch trimmed[0] {
+	case '[':
+		blocks = append(json.RawMessage(nil), trimmed...)
+	case '{':
+		var root map[string]json.RawMessage
+		if err := decodeObject(trimmed, &root); err != nil {
+			return nil, []ValidationIssue{{Source: loc.Source, Row: loc.Row, Key: loc.Key, Path: "$", Code: "invalid_json", Message: err.Error()}}
+		}
+		for key := range root {
+			if key != "schema_version" && key != "blocks" {
+				return nil, []ValidationIssue{{Source: loc.Source, Row: loc.Row, Key: loc.Key, Path: "$." + key, Code: "unknown_field", Message: "Block v2 envelope cannot contain sibling field " + key}}
+			}
+		}
+		var version int
+		versionRaw, ok := root["schema_version"]
+		if ok && (json.Unmarshal(versionRaw, &version) != nil || version != BlockSchemaVersion) {
+			return nil, []ValidationIssue{{Source: loc.Source, Row: loc.Row, Key: loc.Key, Path: "$.schema_version", Code: "unsupported_schema_version", Message: fmt.Sprintf("schema_version must be %d", BlockSchemaVersion)}}
+		}
+		if value, ok := root["blocks"]; ok {
+			blocks = append(json.RawMessage(nil), value...)
+		}
+	default:
+		return nil, []ValidationIssue{{Source: loc.Source, Row: loc.Row, Key: loc.Key, Path: "$", Code: "invalid_root", Message: "expected a Block v2 array or envelope"}}
+	}
+
+	if len(blocks) == 0 {
+		return nil, []ValidationIssue{{Source: loc.Source, Row: loc.Row, Key: loc.Key, Path: "$.blocks", Code: "required_field", Message: "blocks is required"}}
+	}
+	candidate, err := json.Marshal(struct {
+		SchemaVersion int             `json:"schema_version"`
+		Blocks        json.RawMessage `json:"blocks"`
+	}{SchemaVersion: BlockSchemaVersion, Blocks: blocks})
+	if err != nil {
+		return nil, []ValidationIssue{{Source: loc.Source, Row: loc.Row, Key: loc.Key, Path: "$", Code: "encode_failed", Message: err.Error()}}
+	}
+	if issues := ValidateBlockV2(candidate, loc); len(issues) > 0 {
+		return nil, issues
+	}
+	return candidate, nil
+}
+
 type blockValidator struct {
 	loc    Location
 	issues []ValidationIssue

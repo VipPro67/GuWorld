@@ -36,6 +36,7 @@ func schemaDictionaries() error {
 		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
 		player_atk_coefficient DOUBLE PRECISION NOT NULL DEFAULT 0,
 		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}',
+		composition_contributions JSONB NOT NULL DEFAULT '{"schema_version":1,"grants":[]}',
 		hunger_rate INTEGER NOT NULL,
 		food_types JSONB NOT NULL DEFAULT '[]',
 		max_hunger INTEGER DEFAULT 100,
@@ -56,6 +57,10 @@ func schemaDictionaries() error {
 		return err
 	}
 	if err := execSchema("gu_dictionary_player_atk_coefficient", `ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS player_atk_coefficient DOUBLE PRECISION NOT NULL DEFAULT 0;`); err != nil {
+		return err
+	}
+	if err := execSchema("gu_dictionary_composition_contributions", `
+	ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS composition_contributions JSONB NOT NULL DEFAULT '{"schema_version":1,"grants":[]}';`); err != nil {
 		return err
 	}
 	// Older databases may still have the retired authoring flag. Immortality is

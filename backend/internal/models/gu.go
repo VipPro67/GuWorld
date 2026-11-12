@@ -11,6 +11,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -369,25 +370,26 @@ func mergeEffectBlocks(authored, legacy []gameplayeffects.Block) []gameplayeffec
 }
 
 type GuDictionaryItem struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Rank         int       `json:"rank"`
-	Path         []string  `json:"path"`
-	Type         string    `json:"gu_type"`
-	BaseManaCost float64   `json:"base_mana_cost"`
-	PlayerATKCoefficient float64 `json:"player_atk_coefficient"`
-	Effects      GuEffects `json:"effects"`
-	FoodTypes    []string  `json:"food_types"`
-	HungerRate   int       `json:"hunger_rate"`
-	MaxHunger    int       `json:"max_hunger"`
-	Description  string    `json:"description"`
-	Rarity       int       `json:"rarity"`
-	PrimaryRole  string    `json:"primary_role"`
-	CombatRoles  []string  `json:"combat_roles"`
-	CombatTags   []string  `json:"combat_tags"`
-	SupportTags  []string  `json:"support_tags"`
-	BasePrice    float64   `json:"base_price"`
-	ImageURL     string    `json:"image_url"`
+	ID                       string                   `json:"id"`
+	Name                     string                   `json:"name"`
+	Rank                     int                      `json:"rank"`
+	Path                     []string                 `json:"path"`
+	Type                     string                   `json:"gu_type"`
+	BaseManaCost             float64                  `json:"base_mana_cost"`
+	PlayerATKCoefficient     float64                  `json:"player_atk_coefficient"`
+	Effects                  GuEffects                `json:"effects"`
+	FoodTypes                []string                 `json:"food_types"`
+	HungerRate               int                      `json:"hunger_rate"`
+	MaxHunger                int                      `json:"max_hunger"`
+	Description              string                   `json:"description"`
+	Rarity                   int                      `json:"rarity"`
+	PrimaryRole              string                   `json:"primary_role"`
+	CombatRoles              []string                 `json:"combat_roles"`
+	CombatTags               []string                 `json:"combat_tags"`
+	SupportTags              []string                 `json:"support_tags"`
+	CompositionContributions composition.GrantCatalog `json:"composition_contributions"`
+	BasePrice                float64                  `json:"base_price"`
+	ImageURL                 string                   `json:"image_url"`
 }
 
 type Gu = GuDictionaryItem
@@ -682,16 +684,23 @@ func (g *GuEffects) Scan(value interface{}) error {
 
 	trimmed := bytes.TrimSpace(b)
 	if len(trimmed) > 0 && trimmed[0] == '[' {
-		if err := json.Unmarshal(trimmed, &g.Blocks); err != nil {
-			return fmt.Errorf("invalid Gu effects array: %w", err)
+		canonical, issues := effectcatalog.CanonicalBlockV2Envelope(trimmed, effectcatalog.Location{Source: "gu"})
+		if len(issues) > 0 {
+			return fmt.Errorf("invalid Gu effects array: %w", &effectcatalog.ValidationError{Issues: issues})
 		}
-		if g.Other == nil {
-			g.Other = []SpecialMechanic{}
+		b = canonical
+		trimmed = canonical
+	}
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		var root map[string]json.RawMessage
+		if json.Unmarshal(trimmed, &root) == nil && (root["schema_version"] != nil || root["blocks"] != nil) {
+			canonical, issues := effectcatalog.CanonicalBlockV2Envelope(trimmed, effectcatalog.Location{Source: "gu"})
+			if len(issues) > 0 {
+				return fmt.Errorf("invalid Gu effects envelope: %w", &effectcatalog.ValidationError{Issues: issues})
+			}
+			b = canonical
+			trimmed = canonical
 		}
-		if err := g.compile(); err != nil {
-			return fmt.Errorf("compile Gu effects: %w", err)
-		}
-		return nil
 	}
 
 	normalized, _, err := effectcatalog.NormalizeAndValidate(b)
@@ -794,14 +803,18 @@ func (a *ActiveEffect) normalize() {
 }
 
 func (g GuEffects) Value() (driver.Value, error) {
-	if len(g.Blocks) > 0 {
-		b, err := json.Marshal(g.Blocks)
-		if err != nil {
-			return "[]", err
-		}
-		return string(b), nil
+	blocks := g.Blocks
+	if blocks == nil {
+		blocks = []gameplayeffects.Block{}
 	}
-	return "[]", nil
+	b, err := json.Marshal(struct {
+		SchemaVersion int                     `json:"schema_version"`
+		Blocks        []gameplayeffects.Block `json:"blocks"`
+	}{SchemaVersion: effectcatalog.BlockSchemaVersion, Blocks: blocks})
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
 }
 
 func GetFlatGuEffects(gu Gu) map[string]float64 {
@@ -1173,7 +1186,7 @@ func HasImmortalRank(id string) bool {
 
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, base_mana_cost, COALESCE(player_atk_coefficient, 0), effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
+		SELECT id, name, rank, path, gu_type, base_mana_cost, COALESCE(player_atk_coefficient, 0), effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, ''), COALESCE(composition_contributions,'{"schema_version":1,"grants":[]}'::jsonb)
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -1186,7 +1199,7 @@ func LoadGuRegistry(db *sql.DB) error {
 
 	for rows.Next() {
 		var item GuDictionaryItem
-		var pathRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw []byte
+		var pathRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw, compositionRaw []byte
 		var targetTypeRaw []byte
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Rank, &pathRaw,
@@ -1196,7 +1209,7 @@ func LoadGuRegistry(db *sql.DB) error {
 			&targetTypeRaw, &item.Rarity,
 			&item.PrimaryRole,
 			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw, &item.BasePrice,
-			&item.ImageURL,
+			&item.ImageURL, &compositionRaw,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to scan Gu spec row: %w", err)
@@ -1209,6 +1222,11 @@ func LoadGuRegistry(db *sql.DB) error {
 		_ = json.Unmarshal(combatRolesRaw, &item.CombatRoles)
 		_ = json.Unmarshal(combatTagsRaw, &item.CombatTags)
 		_ = json.Unmarshal(supportTagsRaw, &item.SupportTags)
+		catalog, err := composition.ParseGrantCatalog(compositionRaw, item.Effects.GetBlocks())
+		if err != nil {
+			return fmt.Errorf("failed to scan Gu composition contributions for %s rank %d: %w", item.ID, item.Rank, err)
+		}
+		item.CompositionContributions = catalog
 
 		if _, ok := newRegistry[item.ID]; !ok {
 			newRegistry[item.ID] = make(map[int]GuDictionaryItem)

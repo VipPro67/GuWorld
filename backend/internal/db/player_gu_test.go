@@ -85,4 +85,3 @@ func TestMortalApertureCapacity(t *testing.T) {
 		}
 	}
 }
-

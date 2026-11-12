@@ -12,6 +12,7 @@ export function KillerMovesPanel() {
   const guDictionary = useGameStore((s) => s.guDictionary);
   const gus = useGameStore((s) => s.killerMoveGus);
   const effects = useGameStore((s) => s.killerMoveEffects);
+  const ruleSet = useGameStore((s) => s.killerMoveCompositionRuleSet);
   const moves = useGameStore((s) => s.killerMoves);
   const loading = useGameStore((s) => s.killerMovesLoading);
   const maxSaved = useGameStore((s) => s.killerMovesMaxSaved);
@@ -27,6 +28,7 @@ export function KillerMovesPanel() {
   const [mainSearch, setMainSearch] = useState("");
   const [components, setComponents] = useState<string[]>([]);
   const [componentSearch, setComponentSearch] = useState("");
+  const [outputEffectKey, setOutputEffectKey] = useState("");
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<KillerMovePreview | null>(null);
@@ -43,9 +45,22 @@ export function KillerMovesPanel() {
   }, [gus, mainId]);
 
   const selectedGuIDs = useMemo(() => new Set([mainId, ...components]), [mainId, components]);
-  const availableEffects = useMemo(
-    () => effects.filter((effect) => selectedGuIDs.has(effect.source_instance_id)),
-    [effects, selectedGuIDs],
+  const outputEffects = useMemo(() => effects.filter((effect) => effect.source_instance_id === mainId), [effects, mainId]);
+  const outputEffect = outputEffects.find((effect) => effect.key === outputEffectKey);
+  const outputTrigger = outputEffect?.trigger;
+  const matchingRulesFor = useCallback((core: KillerMoveEffectOption | undefined, support: KillerMoveEffectOption | undefined) => {
+    if (!core || !support || !ruleSet) return [];
+    const coreCapabilities = new Set(core.composition_capabilities || []);
+    const supportCapabilities = new Set(support.composition_capabilities || []);
+    const context = core.trigger === "ON_ACTION" ? "TURN_BASED_COMBAT" : "OUT_OF_COMBAT_USE";
+    const executor = core.trigger === "ON_ACTION" ? "TURN_BASED_COMBAT_ADAPTER" : "KILLER_MOVE_USE_ADAPTER";
+    return ruleSet.rules.filter((rule) => rule.product_profile === "killer_move.v1"
+      && rule.context === context && rule.executor === executor
+      && coreCapabilities.has(rule.core_capability) && supportCapabilities.has(rule.support_capability));
+  }, [ruleSet]);
+  const contextEffects = useMemo(
+    () => outputTrigger ? effects.filter((effect) => effect.source_instance_id !== mainId && selectedGuIDs.has(effect.source_instance_id) && effect.trigger === outputTrigger && matchingRulesFor(outputEffect, effect).length > 0) : [],
+    [effects, mainId, outputEffect, outputTrigger, selectedGuIDs, matchingRulesFor],
   );
   const selectedEffectOptions = useMemo(
     () => selectedEffects.map((key) => effects.find((effect) => effect.key === key)).filter((effect): effect is KillerMoveEffectOption => !!effect),
@@ -73,12 +88,19 @@ export function KillerMovesPanel() {
   }, [gus, guDictionary, mainId, components, componentSearch]);
 
   const draft = useMemo<KillerMoveDraft | null>(() => {
-    if (!mainId || selectedEffects.length === 0) return null;
-    return { main_gu_instance_id: mainId, component_instance_ids: components, selected_effect_keys: selectedEffects };
-  }, [mainId, components, selectedEffects]);
+    if (!mainId || !outputEffectKey) return null;
+    const compositionEdges = selectedEffects.map((key) => {
+      const support = effects.find((effect) => effect.key === key);
+      const rule = matchingRulesFor(outputEffect, support)[0];
+      return rule ? { from: key, to: outputEffectKey, kind: rule.kind, rule_id: rule.id } : null;
+    }).filter((edge): edge is NonNullable<typeof edge> => edge !== null);
+    return { main_gu_instance_id: mainId, component_instance_ids: components, selected_effect_keys: [outputEffectKey, ...selectedEffects], output_effect_key: outputEffectKey, rule_set_revision: ruleSet?.revision || "", composition_edges: compositionEdges };
+  }, [mainId, components, outputEffectKey, outputEffect, selectedEffects, effects, matchingRulesFor, ruleSet]);
+
+  const allComponentsContribute = components.every((id) => selectedEffects.some((key) => effects.find((effect) => effect.key === key)?.source_instance_id === id));
 
   useEffect(() => {
-    if (!draft) { setPreview(null); setPreviewError(""); return; }
+    if (!draft || !allComponentsContribute) { setPreview(null); setPreviewError(""); return; }
     let live = true;
     const timer = window.setTimeout(() => {
       void previewDraft(draft).then((result) => {
@@ -88,12 +110,14 @@ export function KillerMovesPanel() {
       });
     }, 250);
     return () => { live = false; window.clearTimeout(timer); };
-  }, [draft, previewDraft]);
+  }, [draft, allComponentsContribute, previewDraft]);
 
   const addEffect = (key: string) => {
-    setSelectedEffects((current) => current.includes(key) || current.length >= 8 ? current : [...current, key]);
+    setSelectedEffects((current) => current.includes(key) || current.length >= 7 ? current : [...current, key]);
   };
-  const removeEffect = (key: string) => setSelectedEffects((current) => current.filter((entry) => entry !== key));
+  const removeEffect = (key: string) => {
+    setSelectedEffects((current) => current.filter((entry) => entry !== key));
+  };
   const onDrop = (event: DragEvent) => {
     event.preventDefault(); setDragOver(false);
     const key = event.dataTransfer.getData("text/killer-move-effect");
@@ -105,7 +129,7 @@ export function KillerMovesPanel() {
     setSaving(true);
     try {
       if (await create({ ...draft, name: name.trim(), preview_fingerprint: preview.preview_fingerprint, accept_adjustments: acceptedPreview === preview.preview_fingerprint })) {
-        setName(""); setComponents([]); setSelectedEffects([]); setPreview(null);
+        setName(""); setComponents([]); setSelectedEffects([]); setOutputEffectKey(""); setPreview(null);
         setAcceptedPreview("");
       }
     } finally { setSaving(false); }
@@ -179,7 +203,7 @@ export function KillerMovesPanel() {
                   key={gu.instance_id}
                   type="button"
                   aria-pressed={mainId === gu.instance_id}
-                  onClick={() => { setMainId(gu.instance_id); setComponents([]); setSelectedEffects([]); setComponentSearch(""); }}
+                  onClick={() => { setMainId(gu.instance_id); setComponents([]); setSelectedEffects([]); setOutputEffectKey(""); setComponentSearch(""); }}
                   className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${mainId === gu.instance_id ? "bg-amber-950/50 text-amber-200" : "text-zinc-300 hover:bg-zinc-800"}`}
                 >
                   <span className="truncate">{guName(gu.instance_id, gu.rank)}</span>
@@ -190,11 +214,28 @@ export function KillerMovesPanel() {
           </div>
 
           <div>
+            <label className="mb-1.5 block text-[11px] font-mono uppercase tracking-wider text-zinc-400">Hiệu ứng kết quả · do Cổ chính tạo</label>
+            <select value={outputEffectKey} onChange={(event) => {
+              const nextKey = event.target.value;
+              const nextTrigger = outputEffects.find((effect) => effect.key === nextKey)?.trigger;
+              const nextOutput = outputEffects.find((effect) => effect.key === nextKey);
+              const compatible = new Set(effects.filter((effect) => effect.source_instance_id !== mainId && selectedGuIDs.has(effect.source_instance_id) && effect.trigger === nextTrigger && matchingRulesFor(nextOutput, effect).length > 0).map((effect) => effect.key));
+              const removed = selectedEffects.filter((key) => !compatible.has(key));
+              setOutputEffectKey(nextKey);
+              setSelectedEffects((current) => current.filter((key) => compatible.has(key)));
+            }} className="w-full rounded-xl border border-amber-900/50 bg-zinc-900 px-3 py-2.5 text-xs text-zinc-100 outline-none focus:border-amber-500">
+              <option value="">Chọn hiệu ứng đầu ra</option>
+              {outputEffects.map((effect) => <option key={effect.key} value={effect.key}>{effect.label} · {effect.trigger} · {effect.target.selector}</option>)}
+            </select>
+              <p className="mt-1 text-[10px] text-zinc-600">Đầu ra được chọn từ Cổ chính. Cổ phụ chỉ hiện khi có capability và rule tương thích trong catalog.</p>
+          </div>
+
+          <div>
             <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400">Cổ phụ tùy chọn</span><span className="text-[10px] text-zinc-600">{components.length + (mainId ? 1 : 0)}/6</span></div>
             <div className="flex flex-wrap gap-2">
               {components.map((id) => {
                 const gu = gus.find((entry) => entry.instance_id === id);
-                return <button key={id} onClick={() => { setComponents((current) => current.filter((value) => value !== id)); setSelectedEffects((current) => current.filter((key) => effects.find((effect) => effect.key === key)?.source_instance_id !== id)); }} className="rounded-lg border border-cyan-900/60 bg-cyan-950/30 px-2.5 py-1.5 text-[11px] text-cyan-200 hover:border-red-800">{guName(id, gu?.rank || 1)} ×</button>;
+                return <button key={id} onClick={() => { const removed = selectedEffects.filter((key) => effects.find((effect) => effect.key === key)?.source_instance_id === id); setComponents((current) => current.filter((value) => value !== id)); setSelectedEffects((current) => current.filter((key) => !removed.includes(key))); }} className="rounded-lg border border-cyan-900/60 bg-cyan-950/30 px-2.5 py-1.5 text-[11px] text-cyan-200 hover:border-red-800">{guName(id, gu?.rank || 1)} ×</button>;
               })}
             </div>
             {components.length < 5 && <div className="mt-2">
@@ -222,25 +263,26 @@ export function KillerMovesPanel() {
                 ))}
               </div>
             </div>}
-            {selectedMain && <p className="mt-2 text-[10px] text-zinc-600">Cổ thành phần vẫn được dùng trong các sát chiêu khác; nếu bị mất hoặc chết, chiêu này sẽ tạm mất hiệu lực.</p>}
+            {selectedMain && <p className="mt-2 text-[10px] text-zinc-600">Bản lưu có thể dùng chung Cổ; khi trang bị, profile sẽ giữ chỗ các Cổ thành phần cho riêng Sát Chiêu đó. Cổ mất hoặc chết khiến chiêu tạm mất hiệu lực.</p>}
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400">Hiệu ứng có thể chọn</span><span className="text-[10px] text-zinc-600">Kéo hoặc bấm thêm</span></div>
-            {availableEffects.length === 0 ? <div className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-600">Cổ đã chọn chưa có hiệu ứng được hỗ trợ.</div> : <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
-              {availableEffects.map((effect) => <div key={effect.key} draggable onDragStart={(event) => event.dataTransfer.setData("text/killer-move-effect", effect.key)} className="group flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 cursor-grab active:cursor-grabbing">
+            <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400">Cổ phụ theo rule tương thích</span><span className="text-[10px] text-zinc-600">Kéo hoặc bấm thêm · {selectedEffects.length}/7</span></div>
+            {contextEffects.length === 0 ? <div className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-600">Không có effect hỗ trợ nào được rule catalog cho phép với đầu ra này.</div> : <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+              {contextEffects.map((effect) => <div key={effect.key} draggable onDragStart={(event) => event.dataTransfer.setData("text/killer-move-effect", effect.key)} className="group flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 cursor-grab active:cursor-grabbing">
                 <GripVertical className="h-4 w-4 shrink-0 text-zinc-600" />
                 <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold text-zinc-200">{effect.label}</div><div className="truncate text-[10px] text-zinc-500">{effect.source_name} · {effect.operation.value ? `Giá trị ${effect.operation.value}` : effect.operation.status_id || effect.operation.sub_type || effect.operation.op}{effect.operation.op === "DAMAGE" && (effect.operation.sub_type === "FLAT" || !effect.operation.sub_type) ? ` · ATK người chơi ×${effect.player_atk_coefficient ?? 0}` : ""}</div></div>
-                <button aria-label="Thêm hiệu ứng" onClick={() => addEffect(effect.key)} disabled={selectedEffects.includes(effect.key) || selectedEffects.length>=8} className="rounded-md border border-zinc-700 p-1 text-zinc-400 hover:border-amber-600 hover:text-amber-300 disabled:opacity-30"><Plus className="h-3.5 w-3.5" /></button>
+                <button aria-label="Thêm hiệu ứng" onClick={() => addEffect(effect.key)} disabled={selectedEffects.includes(effect.key) || selectedEffects.length>=7} className="rounded-md border border-zinc-700 p-1 text-zinc-400 hover:border-amber-600 hover:text-amber-300 disabled:opacity-30"><Plus className="h-3.5 w-3.5" /></button>
               </div>)}
             </div>}
           </div>
         </section>
 
         <section className={`flex min-h-64 flex-col rounded-2xl border p-4 transition-colors ${dragOver ? "border-amber-400 bg-amber-950/20" : "border-amber-900/50 bg-zinc-950/80"}`} onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={onDrop}>
-          <div className="mb-3 flex items-center justify-between"><h4 className="flex items-center gap-2 text-sm font-bold text-amber-200"><Sparkles className="h-4 w-4" />Công Thức</h4><span className="text-[10px] text-zinc-500">{selectedEffects.length}/8 hiệu ứng</span></div>
-          {selectedEffectOptions.length === 0 ? <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-zinc-800 p-5 text-center text-xs text-zinc-600">Kéo hiệu ứng thả vào đây<br />hoặc bấm dấu + cạnh hiệu ứng.</div> : <div className="mb-4 space-y-2">
-            {selectedEffectOptions.map((effect, index) => <div key={effect.key} className="flex items-center gap-2 rounded-xl border border-amber-900/40 bg-amber-950/15 px-3 py-2"><span className="font-mono text-[10px] text-amber-500">{index+1}</span><div className="min-w-0 flex-1"><div className="text-xs font-semibold text-zinc-200">{effect.label}</div><div className="truncate text-[10px] text-zinc-500">Nguồn: {effect.source_name} · {effect.target.selector}{effect.operation.op === "DAMAGE" && (effect.operation.sub_type === "FLAT" || !effect.operation.sub_type) ? ` · ATK người chơi ×${effect.player_atk_coefficient ?? 0}` : ""}</div></div><button onClick={() => removeEffect(effect.key)} className="text-zinc-600 hover:text-red-300" aria-label="Bỏ hiệu ứng"><Trash2 className="h-3.5 w-3.5" /></button></div>)}
+          <div className="mb-3 flex items-center justify-between"><h4 className="flex items-center gap-2 text-sm font-bold text-amber-200"><Sparkles className="h-4 w-4" />Công Thức</h4><span className="text-[10px] text-zinc-500">{selectedEffects.length + (outputEffectKey ? 1 : 0)}/8 node effect</span></div>
+          {selectedEffectOptions.length === 0 && !outputEffectKey ? <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-zinc-800 p-5 text-center text-xs text-zinc-600">Chọn hiệu ứng kết quả từ Cổ chính<br />rồi nối Cổ phụ vào graph.</div> : <div className="mb-4 space-y-2">
+            {outputEffectKey && <div className="rounded-xl border border-amber-700/50 bg-amber-950/25 px-3 py-2"><div className="text-[10px] uppercase tracking-wide text-amber-500">Đầu ra</div><div className="mt-0.5 text-xs font-semibold text-amber-100">{outputEffect?.label || "Hiệu ứng Cổ chính"}</div><div className="text-[10px] text-zinc-500">Nguồn: Cổ chính · {outputEffect?.trigger} · node output</div></div>}
+            {selectedEffectOptions.map((effect, index) => { const rule = matchingRulesFor(outputEffect, effect)[0]; return <div key={effect.key} className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-900/40 bg-amber-950/15 px-3 py-2"><span className="font-mono text-[10px] text-amber-500">{index+1}</span><div className="min-w-0 flex-1"><div className="text-xs font-semibold text-zinc-200">{effect.label}</div><div className="truncate text-[10px] text-zinc-500">Nguồn: {effect.source_name} · {effect.target.selector}{effect.operation.op === "DAMAGE" && (effect.operation.sub_type === "FLAT" || !effect.operation.sub_type) ? ` · ATK người chơi ×${effect.player_atk_coefficient ?? 0}` : ""}</div></div><span className="rounded-md border border-cyan-900/60 bg-cyan-950/30 px-2 py-1 text-[10px] text-cyan-200">{rule?.id || "Rule không khả dụng"}</span><button onClick={() => removeEffect(effect.key)} className="text-zinc-600 hover:text-red-300" aria-label="Bỏ hiệu ứng"><Trash2 className="h-3.5 w-3.5" /></button></div>; })}
           </div>}
 
           {preview && <div className="mb-4 grid grid-cols-2 gap-2 text-[11px]">
@@ -252,6 +294,7 @@ export function KillerMovesPanel() {
             {preview.effect_scale < 0.999 && <div className="col-span-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-amber-200">Uy lực effect sau cân bằng: {formatPercent(preview.effect_scale)}</div>}
             {preview.warnings?.map((warning) => <div key={warning} className="col-span-2 flex gap-1.5 text-amber-300"><ShieldAlert className="h-3.5 w-3.5 shrink-0" />{warning}</div>)}
           </div>}
+          {components.length > 0 && !allComponentsContribute && <p className="mb-3 text-[11px] text-amber-300">Mỗi Cổ phụ đã chọn cần ít nhất một hiệu ứng có provenance tới đầu ra.</p>}
           {previewError && <p className="mb-3 text-[11px] text-red-300">{previewError}</p>}
           {preview && preview.effect_scale < 0.999 && <label className="mb-3 flex items-start gap-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-[11px] text-amber-100">
             <input type="checkbox" checked={acceptedPreview === preview.preview_fingerprint} onChange={(event) => setAcceptedPreview(event.target.checked ? preview.preview_fingerprint : "")} className="mt-0.5 accent-amber-500" />
@@ -284,14 +327,14 @@ export function KillerMovesPanel() {
             </div>
             <div className={`mt-2 text-[10px] ${!move.available ? "text-red-300" : move.has_starving_gu ? "text-amber-300" : "text-emerald-300"}`}>
               {!move.available
-                ? (move.missing_gu?.length ? `Thiếu Cổ: ${move.missing_gu.join(", ")}` : "Cổ thành phần không còn khả dụng")
+                ? (move.missing_gu?.length ? `Thiếu Cổ: ${move.missing_gu.join(", ")}` : move.unavailable_reason || "Cổ thành phần hoặc composition profile không còn khả dụng")
                 : move.has_starving_gu
                   ? "Cổ thành phần đã hết độ no (cần cho ăn trước khi chiến đấu)"
                   : "Sẵn sàng trong chiến đấu"}
             </div>
             <div className="mt-2 text-[10px] text-zinc-500">Thành công hiện tại: <span className="text-amber-200">{formatPercent(move.success_chance)}</span> · Hòa hợp {formatPercent(move.harmony)}</div>
             <div className="mt-3 flex gap-2">
-              <button onClick={() => void toggleEquip(move.id)} disabled={!move.available || (!move.is_equipped && equippedCount>=maxEquipped)} className={`flex-1 rounded-lg border px-2 py-2 text-[10px] font-bold disabled:opacity-40 ${move.is_equipped ? "border-zinc-700 text-zinc-300 hover:bg-zinc-900" : "border-emerald-900 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-950/50"}`}>{move.is_equipped ? "Tháo trang bị" : "Trang bị"}</button>
+              <button onClick={() => void toggleEquip(move.id)} disabled={(!move.available && !move.is_equipped) || (!move.is_equipped && equippedCount>=maxEquipped)} className={`flex-1 rounded-lg border px-2 py-2 text-[10px] font-bold disabled:opacity-40 ${move.is_equipped ? "border-zinc-700 text-zinc-300 hover:bg-zinc-900" : "border-emerald-900 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-950/50"}`}>{move.is_equipped ? "Tháo trang bị" : "Trang bị"}</button>
               {move.selected_effects.some((effect) => effect.trigger === "ON_USE") && <button onClick={() => void useMove(move.id)} disabled={!move.is_equipped || !move.available || move.has_starving_gu} className="rounded-lg border border-violet-900 bg-violet-950/30 px-3 text-[10px] text-violet-200 hover:bg-violet-950/50 disabled:opacity-40">Dùng</button>}
               <button onClick={() => void remove(move.id)} className="rounded-lg border border-red-950 px-3 text-red-400 hover:bg-red-950/30" aria-label="Xóa sát chiêu"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>

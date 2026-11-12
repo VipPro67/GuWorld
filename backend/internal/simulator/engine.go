@@ -1219,6 +1219,7 @@ func Simulate(state *CombatState) []CombatLog {
 		var runOne func(actor *CombatantAuto, a *SimAction, isAlly bool, enemyTargets []*CombatantAuto) actionOutcome
 		runOne = func(actor *CombatantAuto, a *SimAction, isAlly bool, enemyTargets []*CombatantAuto) actionOutcome {
 			res := actionOutcome{}
+			operationDamageScale := 1.0
 
 			if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
 				return res
@@ -1233,71 +1234,6 @@ func Simulate(state *CombatState) []CombatLog {
 					Detail:    fmt.Sprintf("%s bị phong ấn Cổ, không thể dùng [%s] lượt này!", actor.Name, a.Name),
 				})
 				return res
-			}
-
-			// ── BEFORE_ENEMY_ATTACK: FORGET_INTENT interrupt ──
-			// The attack itself still lands; the attacker's Gu is sealed for
-			// the following turns. Independent roll per defending owner.
-			if a.ActionType == "BASIC_ATTACK" || a.Damage > 0 {
-				for _, d := range enemyTargets {
-					if d == nil || d.HP <= 0 || d.IsDead {
-						continue
-					}
-					if !hasMechanic(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT") {
-						continue
-					}
-					// Nghịch Chuyển Cổ: hostile Gu effects aimed at the holder
-					// are reversed — the interrupt fizzles, the strike lands.
-					if hasReverseCalamity(actor) {
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "REVERSE_NEGATE",
-							Detail:    fmt.Sprintf("Nghịch Chuyển Cổ đảo nghịch [Lãng Quên Ý Niệm] của %s về hư vô!", d.Name),
-						})
-						continue
-					}
-					chance := mechanicFloat(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "chance", 0)
-					intentRoll := rng.Float64()
-					if intentRoll >= chance {
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   d.ID,
-							ActorName: d.Name,
-							Action:    "FORGET_INTENT_MISS",
-							Detail:    fmt.Sprintf("[Lãng Quên Ý Niệm] của %s không kích hoạt: roll %.0f%% >= tỉ lệ %.0f%%!", d.Name, intentRoll*100, chance*100),
-						})
-						continue
-					}
-					if d.CustomState == nil {
-						d.CustomState = make(map[string]int)
-					}
-					maxSucc := mechanicInt(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "max_successful_activations", 8)
-					if d.CustomState["forget_intent_success"] >= maxSucc {
-						if mechanicBool(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "backfire_after_max", true) {
-							sealGuTurns(d, 1)
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   d.ID,
-								ActorName: d.Name,
-								Action:    "FORGET_INTENT_BACKFIRE",
-								Detail:    fmt.Sprintf("%s đã lãng quên quá nhiều (%d lần), bị phản phệ phong ấn Cổ!", d.Name, maxSucc),
-							})
-						}
-						continue
-					}
-					d.CustomState["forget_intent_success"]++
-					disableTurns := mechanicInt(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "disable_target_gu_turns", 1)
-					sealGuTurns(actor, disableTurns)
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "FORGET_INTENT",
-						Detail:    fmt.Sprintf("%s quên mất ý niệm sau đòn này, [%s] bị phong ấn %d lượt! (%d/%d)", actor.Name, a.Name, disableTurns, d.CustomState["forget_intent_success"], maxSucc),
-					})
-				}
 			}
 
 			if a.ActionType == "GU_SKILL" && (actor.Kind == "Player" || actor.Kind == "Ally" || actor.Kind == "VariantNPC") {
@@ -1327,6 +1263,7 @@ func Simulate(state *CombatState) []CombatLog {
 					actor.GuUsedCounts[guKey]++
 				}
 			}
+
 			if a.ActionType == "KILLER_MOVE" && actor.Kind == "Player" && len(a.ComponentGuIDs) > 0 {
 				canCast := true
 				for _, guID := range a.ComponentGuIDs {
@@ -1434,7 +1371,7 @@ func Simulate(state *CombatState) []CombatLog {
 			// Backfire: violent dao conflict wounds the caster directly (true damage).
 			// Basic attacks (đánh thường) are exempt: the fallback path defaults to
 			// Strength, so mixed-dao casters would otherwise self-wound every turn.
-			if conflictMult < 0.60 && a.ActionType != "BASIC_ATTACK" && !a.IsKillerMoveOperation {
+			if conflictMult < 0.60 && a.ActionType != "BASIC_ATTACK" && !a.IsKillerMoveOperation && !a.IsEffectOperation {
 				if chance := gamefx.BackfireChance(conflictMult); chance > 0 && rng.Float64() < chance {
 					satKhi := satKhiPiercesImmunity(actor)
 					if !isImmuneToDamage(actor, satKhi) {
@@ -1471,6 +1408,10 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 
 			if a.ActionType == "KILLER_MOVE" {
+				moveLabel := "sát chiêu"
+				if a.IsFromGuHouse {
+					moveLabel = "Trận Kích"
+				}
 				chance := a.SuccessChance
 				if chance <= 0 || chance > 1 {
 					// Moves created by players always carry a server-computed
@@ -1486,7 +1427,7 @@ func Simulate(state *CombatState) []CombatLog {
 					if actor.GuHouse != nil && !actor.GuHouse.IsDestroyed {
 						turnLogs = append(turnLogs, CombatLog{
 							Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "KILLER_MOVE_FAILED",
-							Detail: fmt.Sprintf("%s thôi động [%s] thất bại (%.0f%% / tỉ lệ %.0f%%); Tiên Cổ Ốc [%s] đã che chắn áp lực phản phệ cho chủ nhân!", actor.Name, a.Name, roll*100, chance*100, actor.GuHouse.Name),
+							Detail: fmt.Sprintf("%s thôi động %s [%s] thất bại (%.0f%% / tỉ lệ %.0f%%); Tiên Cổ Ốc [%s] đã che chắn áp lực phản phệ cho chủ nhân!", actor.Name, moveLabel, a.Name, roll*100, chance*100, actor.GuHouse.Name),
 						})
 					} else {
 						actor.HP -= backfireDmg
@@ -1495,7 +1436,7 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 						turnLogs = append(turnLogs, CombatLog{
 							Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "KILLER_MOVE_FAILED", Damage: backfireDmg,
-							Detail: fmt.Sprintf("[Phản Phệ] %s thôi động sát chiêu [%s] thất bại (%.0f%% / tỉ lệ %.0f%%), chân nguyên bạo tẩu gây %.0f sát thương phản phệ!", actor.Name, a.Name, roll*100, chance*100, backfireDmg),
+							Detail: fmt.Sprintf("[Phản Phệ] %s thôi động %s [%s] thất bại (%.0f%% / tỉ lệ %.0f%%), chân nguyên bạo tẩu gây %.0f sát thương phản phệ!", actor.Name, moveLabel, a.Name, roll*100, chance*100, backfireDmg),
 						})
 						if a.BackfireStatus != "" {
 							actor.HasThoughtChaos = true
@@ -1536,6 +1477,71 @@ func Simulate(state *CombatState) []CombatLog {
 						actor.ActionCooldowns = make(map[string]int)
 					}
 					actor.ActionCooldowns[actionKey] = a.CooldownTurns
+				}
+			}
+
+			// ── BEFORE_ENEMY_ATTACK: FORGET_INTENT interrupt ──
+			// The attack itself still lands; the attacker's Gu is sealed for
+			// the following turns. Independent roll per defending owner.
+			if hasEligibleHostileDamage(actor, a, enemyTargets, turn) && guActionHasAvailableHunger(actor, a) && !a.IsEffectOperation {
+				for _, d := range enemyTargets {
+					if d == nil || d.HP <= 0 || d.IsDead {
+						continue
+					}
+					if !hasMechanic(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT") {
+						continue
+					}
+					// Nghịch Chuyển Cổ: hostile Gu effects aimed at the holder
+					// are reversed — the interrupt fizzles, the strike lands.
+					if hasReverseCalamity(actor) {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "REVERSE_NEGATE",
+							Detail:    fmt.Sprintf("Nghịch Chuyển Cổ đảo nghịch [Lãng Quên Ý Niệm] của %s về hư vô!", d.Name),
+						})
+						continue
+					}
+					chance := mechanicFloat(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "chance", 0)
+					intentRoll := rng.Float64()
+					if intentRoll >= chance {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   d.ID,
+							ActorName: d.Name,
+							Action:    "FORGET_INTENT_MISS",
+							Detail:    fmt.Sprintf("[Lãng Quên Ý Niệm] của %s không kích hoạt: roll %.0f%% >= tỉ lệ %.0f%%!", d.Name, intentRoll*100, chance*100),
+						})
+						continue
+					}
+					if d.CustomState == nil {
+						d.CustomState = make(map[string]int)
+					}
+					maxSucc := mechanicInt(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "max_successful_activations", 8)
+					if d.CustomState["forget_intent_success"] >= maxSucc {
+						if mechanicBool(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "backfire_after_max", true) {
+							sealGuTurns(d, 1)
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   d.ID,
+								ActorName: d.Name,
+								Action:    "FORGET_INTENT_BACKFIRE",
+								Detail:    fmt.Sprintf("%s đã lãng quên quá nhiều (%d lần), bị phản phệ phong ấn Cổ!", d.Name, maxSucc),
+							})
+						}
+						continue
+					}
+					d.CustomState["forget_intent_success"]++
+					disableTurns := mechanicInt(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "disable_target_gu_turns", 1)
+					sealGuTurns(actor, disableTurns)
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "FORGET_INTENT",
+						Detail:    fmt.Sprintf("%s quên mất ý niệm sau đòn này, [%s] bị phong ấn %d lượt! (%d/%d)", actor.Name, a.Name, disableTurns, d.CustomState["forget_intent_success"], maxSucc),
+					})
 				}
 			}
 
@@ -1626,6 +1632,7 @@ func Simulate(state *CombatState) []CombatLog {
 					child := *effect.Action
 					child.OperationConditions = append([]gameplayeffects.Condition(nil), effect.Compiled.Conditions...)
 					child.IsKillerMoveOperation = true
+					child.IsEffectOperation = true
 					child.Rank = effect.SourceRank
 					child.SourceID = a.SourceID
 					out := runOne(actor, &child, isAlly, enemyTargets)
@@ -1640,7 +1647,7 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 
 			resolved := resolveTargets(enemyTargets, a)
-			if a.IsKillerMoveOperation && strings.EqualFold(a.TargetType, "SELF") {
+			if (a.IsKillerMoveOperation || a.IsEffectOperation) && strings.EqualFold(a.TargetType, "SELF") {
 				resolved = []*CombatantAuto{actor}
 			}
 			if len(a.OperationConditions) > 0 {
@@ -1649,7 +1656,7 @@ func Simulate(state *CombatState) []CombatLog {
 			// ── BEFORE_ENEMY_ATTACK: FORGET_WILL confuse ──
 			// Redirects (or fizzles) the just-resolved targets. First
 			// defending owner that procs decides; backfire seals the owner.
-			if len(resolved) > 0 && (a.ActionType == "BASIC_ATTACK" || a.Damage > 0) {
+			if len(resolved) > 0 && len(a.OperationEffects) == 0 && hasEligibleHostileDamage(actor, a, enemyTargets, turn) {
 				for _, d := range enemyTargets {
 					if d == nil || d.HP <= 0 || d.IsDead {
 						continue
@@ -1738,7 +1745,7 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 
 			res.executed = true
-			res.hasDamage = a.ActionType == "BASIC_ATTACK" || a.Damage > 0 || a.DamageHPPercent > 0 || a.ShieldStripPercent > 0
+			res.hasDamage = a.ActionType == "BASIC_ATTACK" || a.Damage > 0 || a.DamageHPPercent > 0 || a.ShieldStripPercent > 0 || a.PhantomDmg > 0
 
 			firstTarget := resolved[0]
 
@@ -2043,13 +2050,171 @@ func Simulate(state *CombatState) []CombatLog {
 
 				if chosenEffect == "crit_500" {
 					a.Damage *= 5.0
+					operationDamageScale = 5.0
 				}
+			}
+
+			// Vận Đạo: Cát Hung Chi Biến (LUCK_ROULETTE)
+			if hasMechanic(a.Mechanics, "ON_CAST", "LUCK_ROULETTE") || hasMechanic(a.Mechanics, "ON_ACTION", "LUCK_ROULETTE") {
+				hasCurseReverse := false
+				curseIdx := -1
+				for idx, eff := range actor.ActiveEffects {
+					if eff.ID == statusfx.StatusLuckCurseReverse {
+						hasCurseReverse = true
+						curseIdx = idx
+						break
+					}
+				}
+
+				greatLuckChance := 15.0
+				if hasCurseReverse {
+					greatLuckChance = 65.0
+					if curseIdx >= 0 && curseIdx < len(actor.ActiveEffects) {
+						actor.ActiveEffects = append(actor.ActiveEffects[:curseIdx], actor.ActiveEffects[curseIdx+1:]...)
+					}
+				}
+
+				roll := rng.Float64() * 100.0
+				if roll < greatLuckChance {
+					// Đại Cát
+					a.Damage *= 3.0
+					operationDamageScale = 3.0
+					actor.Mana += a.ManaCost
+					if actor.Mana > actor.MaxMana {
+						actor.Mana = actor.MaxMana
+					}
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "LUCK_ROULETTE",
+						Detail:    fmt.Sprintf("[Vận Đạo - Đại Cát!] Vận thế ngút trời! [%s] bạo phát x3.0 sát thương và phản hồi 100%% Chân Nguyên!", a.Name),
+					})
+				} else if roll < greatLuckChance+45.0 {
+					// Trung Cát
+					a.Damage *= 1.5
+					operationDamageScale = 1.5
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "LUCK_ROULETTE",
+						Detail:    fmt.Sprintf("[Vận Đạo - Trung Cát!] Khí vận hanh thông, [%s] gia tăng x1.5 sát thương!", a.Name),
+					})
+				} else if roll < greatLuckChance+45.0+30.0 {
+					// Bình Vận
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "LUCK_ROULETTE",
+						Detail:    fmt.Sprintf("[Vận Đạo - Bình Vận] Vận thế bình ổn, [%s] gây sát thương cơ bản.", a.Name),
+					})
+				} else {
+					// Đại Hung
+					a.Damage *= 0.5
+					operationDamageScale = 0.5
+					selfDmg := actor.HP * 0.10
+					if selfDmg < 1.0 {
+						selfDmg = 1.0
+					}
+					actor.HP -= selfDmg
+					if actor.HP < 1.0 {
+						actor.HP = 1.0
+					}
+					actor.ActiveEffects = append(actor.ActiveEffects, Effect{
+						ID: statusfx.StatusLuckCurseReverse, Type: "buff", Value: 1, Duration: 2,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "LUCK_ROULETTE",
+						Detail:    fmt.Sprintf("[Vận Đạo - Đại Hung!] Khí vận phản phệ, [%s] giảm 50%% sát thương, tự tổn %.0f HP! (Kích hoạt [Họa Hề Phúc Sở Ỷ]: Tăng mạnh vận khí hiệp kế!)", a.Name, selfDmg),
+					})
+				}
+			}
+
+			// Mộng Đạo: Giải Mộng Hóa Thần (DREAM_UNRAVEL)
+			if hasMechanic(a.Mechanics, "ON_CAST", "DREAM_UNRAVEL") || hasMechanic(a.Mechanics, "ON_ACTION", "DREAM_UNRAVEL") {
+				dispelledCount := 0
+				newEffects := make([]Effect, 0, len(actor.ActiveEffects))
+				for _, eff := range actor.ActiveEffects {
+					if isDispellableEffect(eff.ID) {
+						dispelledCount++
+					} else {
+						newEffects = append(newEffects, eff)
+					}
+				}
+				actor.ActiveEffects = newEffects
+				actor.IsStunned = false
+				actor.IsFrozen = false
+				actor.IsSleeping = false
+				actor.IsDreamPrison = false
+				actor.IsBound = false
+				actor.IsSilenced = false
+				actor.IsFeared = false
+
+				manaGain := actor.MaxMana * (0.15 * float64(dispelledCount+1))
+				shieldGain := actor.MaxHP * (0.10 * float64(dispelledCount+1))
+				actor.Mana += manaGain
+				if actor.Mana > actor.MaxMana {
+					actor.Mana = actor.MaxMana
+				}
+				actor.VirtualShield += shieldGain
+
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "DREAM_UNRAVEL",
+					Detail:    fmt.Sprintf("[Mộng Đạo - Giải Mộng] %s giải trừ %d tầng mê chướng tâm lý, chuyển hóa thành %.0f Chân Nguyên và %.0f Mộng Giáp hộ thể!", actor.Name, dispelledCount, manaGain, shieldGain),
+				})
+			}
+
+			// A normal Gu skill is paid, checked, and counted once by this parent
+			// action. Its Block v2 operations retain their own target and conditions
+			// and are each applied by the simulator exactly once here.
+			if a.ActionType == "GU_SKILL" && len(a.OperationEffects) > 0 {
+				for _, effect := range a.OperationEffects {
+					if effect.Action == nil {
+						continue
+					}
+					child := *effect.Action
+					child.IsEffectOperation = true
+					child.OperationConditions = append([]gameplayeffects.Condition(nil), effect.Compiled.Conditions...)
+					child.Rank = effect.SourceRank
+					child.SourceID = a.SourceID
+					if child.Damage > 0 {
+						child.Damage *= operationDamageScale
+					} else {
+						child.DamageMult *= operationDamageScale
+					}
+					child.DamageHPPercent *= operationDamageScale
+					child.ShieldStripPercent *= operationDamageScale
+					child.PhantomDmg *= operationDamageScale
+					if child.Damage > 0 || child.DamageHPPercent > 0 || child.ShieldStripPercent > 0 || child.PhantomDmg > 0 {
+						for _, mechanic := range a.Mechanics {
+							if mechanic.Trigger == "ON_HIT" && !hasMechanic(child.Mechanics, mechanic.Trigger, mechanic.ActionCode) {
+								child.Mechanics = append(child.Mechanics, mechanic)
+							}
+						}
+					}
+					out := runOne(actor, &child, isAlly, enemyTargets)
+					res.executed = res.executed || out.executed
+					res.hasDamage = res.hasDamage || out.hasDamage
+					if out.abort {
+						res.abort = true
+						return res
+					}
+				}
+				return res
 			}
 
 			// ── Apply damage & compound effects to all resolved targets ──
 			totalDamageDealt := 0.0
 			hasDamage := a.ActionType == "BASIC_ATTACK" || a.Damage > 0 ||
-				a.DamageHPPercent > 0 || a.ShieldStripPercent > 0
+				a.DamageHPPercent > 0 || a.ShieldStripPercent > 0 || a.PhantomDmg > 0
 			res.hasDamage = hasDamage
 
 			if hasDamage {
@@ -2445,7 +2610,7 @@ func Simulate(state *CombatState) []CombatLog {
 								supp, _ := statusfx.TargetSuppressionFactor(actionRank, target.Rank)
 								stripPct *= supp
 							}
-							strip := target.VirtualShield * stripPct
+							strip := math.Min(target.VirtualShield, target.VirtualShield*stripPct)
 							target.VirtualShield -= strip
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
@@ -2664,9 +2829,9 @@ func Simulate(state *CombatState) []CombatLog {
 						costLog = log
 					} else if log.Action == "PATH_MASTERY_GAIN" {
 						gainLog = log
-					} else if log.Action == "FORGET_WILL_INACTIVE" {
-						// Pre-attack proc miss must stay a separate entry so
-						// the replay can filter "đã kích hoạt hay chưa".
+					} else if log.Action == "FORGET_WILL_INACTIVE" || log.Action == "FORGET_INTENT" || log.Action == "FORGET_INTENT_MISS" || log.Action == "FORGET_INTENT_BACKFIRE" || log.Action == "REVERSE_NEGATE" {
+						// Proc outcomes remain separate so replay consumers can identify
+						// whether the interrupt activated, missed, or was negated.
 						preservedLogs = append(preservedLogs, *log)
 					} else if log.Action == "SHIELD_ABSORB" || log.Action == "SHIELD_BREAK" || log.Action == "SHIELD_BYPASS_ATTACK" || log.Action == "PATH_MASTERY_CAP" {
 						// Skip redundant damage outcome logs already detailed in useLog
@@ -2867,6 +3032,15 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorName: actor.Name,
 						Action:    "SLEEPING",
 						Detail:    fmt.Sprintf("%s đang ngủ, bỏ lượt!", actor.Name),
+					})
+					ccDisabledThisTurn[actor] = true
+				} else if actor.IsDreamPrison {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "DREAM_PRISON",
+						Detail:    fmt.Sprintf("[Mộng Đạo - Trầm Mộng] %s đang chìm sâu trong Mộng Cảnh, hoàn toàn mất quyền hành động!", actor.Name),
 					})
 					ccDisabledThisTurn[actor] = true
 				} else if actor.IsBound {
@@ -3459,8 +3633,10 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 		applyLastStandFloor(target, satKhiPierce)
 		if spillToAperture {
 			redirectApertureOverflow(state, target, logs, turn)
-		} else if target.HP < 0 {
-			target.HP = 0
+		} else if target.HP <= 0 {
+			if !applyLethalLuckWard(target, logs, turn, rng) {
+				target.HP = 0
+			}
 		}
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
@@ -3603,8 +3779,10 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 		applyLastStandFloor(target, satKhiPierce)
 		if spillToAperture {
 			redirectApertureOverflow(state, target, logs, turn)
-		} else if target.HP < 0 {
-			target.HP = 0
+		} else if target.HP <= 0 {
+			if !applyLethalLuckWard(target, logs, turn, rng) {
+				target.HP = 0
+			}
 		}
 		hpDamageDealt += damage
 		totalDmg := absorbed + damage
@@ -3631,6 +3809,9 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 	}
 	resolved := ResolveBasicDamage(damage, 0, 0, target.HP, 0, minHP)
 	target.HP = resolved.HP
+	if target.HP <= 0 {
+		applyLethalLuckWard(target, logs, turn, rng)
+	}
 	return hpDamageDealt + resolved.HPDamage
 }
 
@@ -3662,6 +3843,9 @@ func redirectApertureOverflow(state *CombatState, target *CombatantAuto, logs *[
 
 // checkActionCondition returns true if the action's use condition is met.
 func checkActionCondition(action *SimAction, actor, target *CombatantAuto) bool {
+	if action != nil && action.IsFromGuHouse && (actor == nil || actor.GuHouse == nil || actor.GuHouse.IsDestroyed) {
+		return false
+	}
 	if action != nil && actor != nil && actor.ActionCooldowns != nil {
 		actionKey := action.KillerMoveID
 		if actionKey == "" {

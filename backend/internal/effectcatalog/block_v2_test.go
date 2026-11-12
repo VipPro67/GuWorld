@@ -1,6 +1,27 @@
 package effectcatalog
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
+
+func TestCanonicalBlockV2Envelope(t *testing.T) {
+	array := []byte(`[{"id":"BASIC_HIT","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":10,"unit":"FLAT"}]}]`)
+	first, issues := CanonicalBlockV2Envelope(array, Location{Source: "test"})
+	if len(issues) != 0 {
+		t.Fatalf("array issues = %+v", issues)
+	}
+	second, issues := CanonicalBlockV2Envelope(first, Location{Source: "test"})
+	if len(issues) != 0 || !bytes.Equal(first, second) {
+		t.Fatalf("envelope not idempotent: %s / %s, issues=%+v", first, second, issues)
+	}
+	if _, issues := CanonicalBlockV2Envelope([]byte(`{"schema_version":3,"blocks":[]}`), Location{}); len(issues) == 0 {
+		t.Fatal("unsupported schema version accepted")
+	}
+	if _, issues := CanonicalBlockV2Envelope([]byte(`{"schema_version":2,"blocks":[],"active":{"damage_flat":1}}`), Location{}); len(issues) == 0 || issues[0].Code != "unknown_field" {
+		t.Fatal("mixed legacy sibling field was silently discarded")
+	}
+}
 
 func TestBlockV2AcceptsCataloguedOperation(t *testing.T) {
 	raw := []byte(`{"schema_version":2,"blocks":[{"id":"BASIC_HIT","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":10,"unit":"FLAT"}]}]}`)

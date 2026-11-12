@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
 import { X, Sparkles, Compass, Shield, Coins, Layers, ArrowRightLeft, Award, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { GameButton } from "@/components/ui";
+import type { TeleportBuildRequest, TeleportFormationCompositionGraph, TeleportFormationEffectPreview } from "@/store/slices/teleportSlice";
 
 interface TeleportBuildModalProps {
   player: Player;
@@ -34,7 +35,10 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { teleportTemplates, fetchTeleportTemplates, buildTeleportArray, actionLoading } = useGameStore();
+  const {
+    teleportTemplates, fetchTeleportTemplates, buildTeleportArray, actionLoading,
+    teleportFormationGus, teleportFormationEffects, teleportFormationRuleSet, fetchTeleportFormationOptions, previewTeleportArray,
+  } = useGameStore();
 
   const [selectedTier, setSelectedTier] = useState<string>("TIER_1");
   const [arrayName, setArrayName] = useState<string>("");
@@ -43,6 +47,59 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
   const [feeEnabled, setFeeEnabled] = useState<boolean>(false);
   const [feeCurrency, setFeeCurrency] = useState<string>("primeval_stones");
   const [feeAmount, setFeeAmount] = useState<number>(100);
+  const [useArrivalEffect, setUseArrivalEffect] = useState(false);
+  const [coreGuInstanceID, setCoreGuInstanceID] = useState("");
+  const [outputEffectKey, setOutputEffectKey] = useState("");
+  const [supportGuInstanceID, setSupportGuInstanceID] = useState("");
+  const [supportEffectKey, setSupportEffectKey] = useState("");
+  const [supportEffects, setSupportEffects] = useState<Array<{ guInstanceID: string; effectKey: string }>>([]);
+  const [effectPreview, setEffectPreview] = useState<TeleportFormationEffectPreview | null>(null);
+  const [effectPreviewMessage, setEffectPreviewMessage] = useState("");
+  const [effectPreviewLoading, setEffectPreviewLoading] = useState(false);
+
+  const invalidateEffectPreview = () => {
+    setEffectPreview(null);
+    setEffectPreviewMessage("");
+  };
+
+  const activeFormationGus = teleportFormationGus.filter((gu) => gu.state === "ACTIVE" && gu.location === "INVENTORY" && !gu.is_locked);
+  const formationRule = teleportFormationRuleSet?.rules.find((rule) => rule.id === "combine-arrival-self-effects");
+  const coreOptions = teleportFormationEffects.filter((effect) => effect.source_instance_id === coreGuInstanceID && effect.travel_supported);
+  const selectedOutput = coreOptions.find((effect) => effect.key === outputEffectKey);
+  const outputCanCombine = Boolean(formationRule && selectedOutput?.composition_capabilities?.includes(formationRule.core_capability));
+  const supportGuOptions = activeFormationGus.filter((gu) => gu.instance_id !== coreGuInstanceID && !supportEffects.some((item) => item.guInstanceID === gu.instance_id) && outputCanCombine && teleportFormationEffects.some((effect) => effect.source_instance_id === gu.instance_id && effect.travel_supported && effect.composition_capabilities?.includes(formationRule!.support_capability)));
+  const supportOptions = teleportFormationEffects.filter((effect) => effect.source_instance_id === supportGuInstanceID && effect.travel_supported && formationRule && effect.composition_capabilities?.includes(formationRule.support_capability));
+
+  const compositionGraph = (() => {
+    const coreGu = activeFormationGus.find((gu) => gu.instance_id === coreGuInstanceID);
+    const output = teleportFormationEffects.find((effect) => effect.key === outputEffectKey && effect.source_instance_id === coreGuInstanceID && effect.travel_supported);
+    if (!coreGu || !output || !formationRule || !teleportFormationRuleSet) return null;
+    const supportNodes = supportEffects.flatMap((selected) => {
+      if (!formationRule || !output.composition_capabilities?.includes(formationRule.core_capability)) return [];
+      const gu = activeFormationGus.find((candidate) => candidate.instance_id === selected.guInstanceID);
+      const effect = teleportFormationEffects.find((candidate) => candidate.key === selected.effectKey && candidate.source_instance_id === selected.guInstanceID && candidate.travel_supported);
+      if (!gu || !effect || !effect.composition_capabilities?.includes(formationRule.support_capability)) return [];
+      return [{ gu, effect }];
+    });
+    if (supportNodes.length !== supportEffects.length) return null;
+    const context = "WORLD_TRAVEL_ARRIVAL";
+    const executor = "TELEPORT_ARRAY_TRAVEL_ADAPTER";
+    return {
+      schema_version: 1,
+      product: "TELEPORT_ARRAY",
+      product_profile: "teleport_formation.v1",
+      context: "TELEPORT_ARRAY",
+      executor: "TELEPORT_ARRAY_ROUTER",
+      rule_set_revision: teleportFormationRuleSet.revision,
+      core_gu_instance_id: coreGu.instance_id,
+      output_effect_key: output.key,
+      nodes: [
+        { effect_key: output.key, source_block_id: output.source_block_id, operation_index: output.operation_index, role: "OUTPUT" as const, gu_instance_id: coreGu.instance_id, gu_id: coreGu.gu_id, rank: coreGu.rank, trigger: output.trigger, context, executor },
+        ...supportNodes.map(({ gu, effect }) => ({ effect_key: effect.key, source_block_id: effect.source_block_id, operation_index: effect.operation_index, role: "SUPPORT" as const, gu_instance_id: gu.instance_id, gu_id: gu.gu_id, rank: gu.rank, trigger: effect.trigger, context, executor })),
+      ],
+      edges: supportNodes.map(({ effect }) => ({ from: effect.key, to: output.key, kind: formationRule.kind, rule_id: formationRule.id })),
+    };
+  })();
 
   // Formation Path & Dao Mark calculations
   const formationPts = player.path_masteries?.["formation"] ?? player.path_masteries?.["formation path"] ?? 0;
@@ -55,6 +112,10 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
       fetchTeleportTemplates();
     }
   }, [teleportTemplates.length, fetchTeleportTemplates]);
+
+  useEffect(() => {
+    fetchTeleportFormationOptions();
+  }, [fetchTeleportFormationOptions]);
 
   const activeTpl = teleportTemplates.find((t) => t.tier === selectedTier) || teleportTemplates[0];
 
@@ -85,6 +146,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
 
   const handleBuild = async () => {
     if (!activeTpl) return;
+    if (useArrivalEffect && (!compositionGraph || !effectPreview)) return;
     const res = await buildTeleportArray({
       name: arrayName.trim() || activeTpl.name,
       tier: selectedTier,
@@ -93,11 +155,43 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
       fee_enabled: feeEnabled,
       fee_currency: feeCurrency,
       fee_amount: Number(feeAmount) || 0,
+      ...(useArrivalEffect && compositionGraph && effectPreview ? {
+        composition_graph: compositionGraph,
+        preview_fingerprint: effectPreview.preview_fingerprint,
+      } : {}),
     });
     if (res && res.success) {
       if (onSuccess) onSuccess();
       onClose();
     }
+  };
+
+  const baseBuildRequest = (): TeleportBuildRequest => ({
+    name: arrayName.trim() || activeTpl?.name || "",
+    tier: selectedTier,
+    direction_type: directionType,
+    access_policy: accessPolicy,
+    fee_enabled: feeEnabled,
+    fee_currency: feeCurrency,
+    fee_amount: Number(feeAmount) || 0,
+  });
+
+  const handleEffectPreview = async () => {
+    if (!compositionGraph || !activeTpl) {
+      setEffectPreviewMessage("Hãy chọn Cổ hạch tâm, effect đầu ra và các Cổ hỗ trợ trước.");
+      return;
+    }
+    setEffectPreviewLoading(true);
+    setEffectPreviewMessage("");
+    const result = await previewTeleportArray({ ...baseBuildRequest(), composition_graph: compositionGraph });
+    setEffectPreviewLoading(false);
+    if (!result.success || !result.preview) {
+      setEffectPreview(null);
+      setEffectPreviewMessage(result.message);
+      return;
+    }
+    setEffectPreview(result.preview);
+    setEffectPreviewMessage(`Profile ${result.preview.product_profile} hợp lệ · ${result.preview.effects.blocks.length} effect · ${result.preview.component_gu_instances.length} Cổ được giữ chỗ khi trận pháp hoạt động.`);
   };
 
   return (
@@ -173,7 +267,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
                   <button
                     key={tpl.tier}
                     type="button"
-                    onClick={() => setSelectedTier(tpl.tier)}
+                    onClick={() => { setSelectedTier(tpl.tier); invalidateEffectPreview(); }}
                     className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${
                       isSelected
                         ? "bg-amber-950/25 border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/30"
@@ -294,6 +388,120 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
             </div>
           )}
 
+          <div className="space-y-3 rounded-2xl border border-cyan-900/50 bg-cyan-950/10 p-4">
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={useArrivalEffect}
+                onChange={(event) => {
+                  setUseArrivalEffect(event.target.checked);
+                  invalidateEffectPreview();
+                }}
+                className="mt-0.5 accent-cyan-500"
+              />
+              <span>
+                <span className="block text-xs font-bold text-cyan-200">Lắp effect Cổ vào Trận Pháp</span>
+                <span className="mt-0.5 block text-[10px] leading-relaxed text-zinc-400">Effect của trận pháp đích kích hoạt khi người chơi truyền tống tới đó. Cổ thành phần được giữ chỗ cho tới khi tháo dỡ hoặc effect bị vô hiệu.</span>
+              </span>
+            </label>
+
+            {useArrivalEffect && (
+              <div className="space-y-3 border-t border-cyan-900/40 pt-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="text-[10px] font-mono text-zinc-400">
+                    Cổ hạch tâm
+                    <select
+                      value={coreGuInstanceID}
+                      onChange={(event) => {
+                        setCoreGuInstanceID(event.target.value);
+                        setOutputEffectKey("");
+                        setSupportEffects([]);
+                        setSupportGuInstanceID("");
+                        setSupportEffectKey("");
+                        invalidateEffectPreview();
+                      }}
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-xs text-zinc-200"
+                    >
+                      <option value="">Chọn Cổ hạch tâm</option>
+                      {activeFormationGus.map((gu) => <option key={gu.instance_id} value={gu.instance_id}>{gu.gu_id} · Rank {gu.rank}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[10px] font-mono text-zinc-400">
+                    Effect đầu ra
+                    <select
+                      value={outputEffectKey}
+                      onChange={(event) => { setOutputEffectKey(event.target.value); invalidateEffectPreview(); }}
+                      disabled={!coreGuInstanceID}
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-xs text-zinc-200 disabled:opacity-50"
+                    >
+                      <option value="">Chọn output ON_USE</option>
+                      {coreOptions.map((effect) => <option key={effect.key} value={effect.key}>{effect.label}</option>)}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <label className="text-[10px] font-mono text-zinc-400">
+                    Cổ hỗ trợ
+                    <select
+                      value={supportGuInstanceID}
+                      onChange={(event) => { setSupportGuInstanceID(event.target.value); setSupportEffectKey(""); invalidateEffectPreview(); }}
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-xs text-zinc-200"
+                    >
+                      <option value="">Không thêm Cổ phụ</option>
+                      {supportGuOptions.map((gu) => <option key={gu.instance_id} value={gu.instance_id}>{gu.gu_id} · Rank {gu.rank}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[10px] font-mono text-zinc-400">
+                    Effect hỗ trợ
+                    <select
+                      value={supportEffectKey}
+                      onChange={(event) => { setSupportEffectKey(event.target.value); invalidateEffectPreview(); }}
+                      disabled={!supportGuInstanceID}
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-xs text-zinc-200 disabled:opacity-50"
+                    >
+                      <option value="">Chọn support ON_USE</option>
+                      {supportOptions.map((effect) => <option key={effect.key} value={effect.key}>{effect.label}</option>)}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!supportGuInstanceID || !supportEffectKey || supportEffects.length >= 5}
+                    onClick={() => {
+                      setSupportEffects((current) => [...current, { guInstanceID: supportGuInstanceID, effectKey: supportEffectKey }]);
+                      setSupportGuInstanceID("");
+                      setSupportEffectKey("");
+                      invalidateEffectPreview();
+                    }}
+                    className="self-end rounded-lg border border-cyan-700/60 px-3 py-2 text-[10px] font-bold text-cyan-200 hover:bg-cyan-950/40 disabled:opacity-40"
+                  >
+                    Thêm Cổ phụ
+                  </button>
+                </div>
+
+                {supportEffects.length > 0 && (
+                  <div className="space-y-1.5">
+                    {supportEffects.map((support) => {
+                      const gu = activeFormationGus.find((candidate) => candidate.instance_id === support.guInstanceID);
+                      const effect = teleportFormationEffects.find((candidate) => candidate.key === support.effectKey);
+                      return <div key={support.effectKey} className="flex items-center justify-between rounded-lg bg-zinc-950/70 px-2.5 py-2 text-[10px] text-zinc-300">
+                        <span>{gu?.gu_id} · {effect?.label} <span className="text-cyan-400">← {formationRule?.kind}</span></span>
+                        <button type="button" onClick={() => { setSupportEffects((current) => current.filter((item) => item.effectKey !== support.effectKey)); invalidateEffectPreview(); }} className="text-rose-400">Bỏ</button>
+                      </div>;
+                    })}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={handleEffectPreview} disabled={effectPreviewLoading || !compositionGraph} className="rounded-lg bg-cyan-700/80 px-3 py-2 text-[10px] font-bold text-white hover:bg-cyan-600 disabled:opacity-40">
+                    {effectPreviewLoading ? "Đang kiểm tra graph..." : "Preview composition"}
+                  </button>
+                  {effectPreviewMessage && <span className={`text-[10px] ${effectPreview ? "text-emerald-300" : "text-amber-300"}`}>{effectPreviewMessage}</span>}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Form Settings */}
           <div className="space-y-4 bg-zinc-900/30 border border-zinc-800/60 p-4 rounded-2xl">
             <div>
@@ -400,6 +608,8 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
               <span className="text-rose-400">Yêu cầu Trận Đạo {getFormationRealmName(activeTpl?.min_formation_realm ?? 0)}</span>
             ) : !canAffordActiveStones || !canAffordActiveImmortal ? (
               <span className="text-rose-400">Không đủ tài nguyên bố trận</span>
+            ) : useArrivalEffect && !effectPreview ? (
+              <span className="text-amber-300">Cần preview composition trước</span>
             ) : (
               <span className="text-emerald-400">Đủ điều kiện bố trận</span>
             )}
@@ -415,7 +625,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
             <GameButton
               onClick={handleBuild}
               variant="primary"
-              disabled={actionLoading || !canBuildActive}
+              disabled={actionLoading || !canBuildActive || (useArrivalEffect && (!compositionGraph || !effectPreview))}
               className="px-6 py-2 text-xs font-bold font-serif cursor-pointer"
             >
               {actionLoading ? "Đang Bố Trí..." : "Bố Trí Trận Pháp"}

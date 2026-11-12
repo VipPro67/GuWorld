@@ -3,7 +3,16 @@
 import { useEffect, useState, useMemo } from "react";
 import { Castle, Shield, Wrench, Sparkles, Plus, Check } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
-import type { GuHouseCombatProfile } from "@/store/slices/killerMovesSlice";
+import type { GuHouseCombatProfile, KillerMoveCompositionGraph, KillerMoveEffectOption } from "@/store/slices/killerMovesSlice";
+
+
+function isGuHouseActionSupported(effect: KillerMoveEffectOption) {
+  const subtype = (effect.operation.sub_type || "FLAT").toUpperCase();
+  if (subtype !== "FLAT" || (effect.conditions?.length || 0) > 0) return false;
+  if (effect.operation.op === "DAMAGE") return effect.target.selector === "TARGET";
+  if (["HEAL", "SHIELD", "BARRIER"].includes(effect.operation.op)) return effect.target.selector === "SELF";
+  return false;
+}
 
 export function GuHousePanel() {
   const guHouses = useGameStore((s) => s.guHouses);
@@ -13,7 +22,13 @@ export function GuHousePanel() {
   const createGuHouse = useGameStore((s) => s.createGuHouse);
   const toggleEquip = useGameStore((s) => s.toggleEquipGuHouse);
   const repairHouse = useGameStore((s) => s.repairGuHouse);
+  const useGuHouse = useGameStore((s) => s.useGuHouse);
+  const fetchKillerMoves = useGameStore((s) => s.fetchKillerMoves);
   const gus = useGameStore((s) => s.killerMoveGus);
+  const minCoreGus = useGameStore((s) => s.guHousesMinCoreGus);
+  const maxCoreGus = useGameStore((s) => s.guHousesMaxCoreGus);
+  const ruleSet = useGameStore((s) => s.guHouseCompositionRuleSet);
+  const damageRule = ruleSet?.rules.find((rule) => rule.id === "combine-flat-single-target-damage");
   const effects = useGameStore((s) => s.killerMoveEffects);
   const guDictionary = useGameStore((s) => s.guDictionary);
 
@@ -21,21 +36,24 @@ export function GuHousePanel() {
   const [selectedCoreIDs, setSelectedCoreIDs] = useState<string[]>([]);
   const [auxGuCount, setAuxGuCount] = useState<number>(30);
   const [actionEffectKeys, setActionEffectKeys] = useState<Record<string, string>>({});
+  const [actionSupportKeys, setActionSupportKeys] = useState<Record<string, Record<string, string>>>({});
   const [preview, setPreview] = useState<GuHouseCombatProfile | null>(null);
   const [creating, setCreating] = useState(false);
+  const [worldEffectKeys, setWorldEffectKeys] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void fetchGuHouses();
-  }, [fetchGuHouses]);
+    void fetchKillerMoves();
+  }, [fetchGuHouses, fetchKillerMoves]);
 
   // Only Tiên Cổ (Rank >= 6) can be core hạch tâm
   const immortalGus = useMemo(() => {
-    return gus.filter((g) => g.rank >= 6 && g.state !== "DEAD");
+    return gus.filter((g) => g.rank >= 6 && g.state === "ACTIVE" && g.location === "INVENTORY");
   }, [gus]);
 
   // Update preview
   useEffect(() => {
-    if (selectedCoreIDs.length < 2) {
+    if (selectedCoreIDs.length < minCoreGus) {
       setPreview(null);
       return;
     }
@@ -46,6 +64,7 @@ export function GuHousePanel() {
         core_gu_instance_ids: selectedCoreIDs,
         aux_gu_count: auxGuCount,
         action_effect_keys: actionEffectKeys,
+        action_composition_graphs: actionCompositionGraphs(),
       }).then((res) => {
         if (active) setPreview(res);
       });
@@ -54,16 +73,38 @@ export function GuHousePanel() {
       active = false;
       clearTimeout(timer);
     };
-  }, [selectedCoreIDs, auxGuCount, actionEffectKeys, name, previewGuHouse]);
+  }, [selectedCoreIDs, auxGuCount, actionEffectKeys, actionSupportKeys, name, minCoreGus, ruleSet, previewGuHouse]);
 
-  const effectsForCore = (id: string) => effects.filter((effect) => effect.source_instance_id === id);
+  const effectsForCore = (id: string) => effects.filter((effect) => effect.source_instance_id === id && effect.combat_supported && isGuHouseActionSupported(effect));
+  const worldEffectsForCore = (id: string) => effects.filter((effect) => effect.source_instance_id === id && effect.travel_supported);
+
+  const actionCompositionGraphs = () => {
+    const graphs: Record<string, KillerMoveCompositionGraph> = {};
+    for (const coreID of selectedCoreIDs) {
+      const output = effectsForCore(coreID).find((effect) => effect.key === actionEffectKeys[coreID]);
+      const core = gus.find((gu) => gu.instance_id === coreID);
+      if (!output || !core) continue;
+      const nodes: KillerMoveCompositionGraph["nodes"] = [{ effect_key: output.key, source_block_id: output.source_block_id, operation_index: output.operation_index, role: "OUTPUT", gu_instance_id: coreID, gu_id: core.gu_id, rank: core.rank, trigger: output.trigger, context: "TURN_BASED_COMBAT", executor: "GU_HOUSE_ACTION_ADAPTER" }];
+      const edges: KillerMoveCompositionGraph["edges"] = [];
+      for (const [supportID, effectKey] of Object.entries(actionSupportKeys[coreID] || {})) {
+        const support = effectsForCore(supportID).find((effect) => effect.key === effectKey && effect.composition_capabilities?.includes(damageRule?.support_capability || ""));
+        const supportGu = gus.find((gu) => gu.instance_id === supportID);
+        if (!support || !supportGu || !damageRule || !output.composition_capabilities?.includes(damageRule.core_capability)) continue;
+        nodes.push({ effect_key: support.key, source_block_id: support.source_block_id, operation_index: support.operation_index, role: "SUPPORT", gu_instance_id: supportID, gu_id: supportGu.gu_id, rank: supportGu.rank, trigger: support.trigger, context: "TURN_BASED_COMBAT", executor: "GU_HOUSE_ACTION_ADAPTER" });
+        edges.push({ from: support.key, to: output.key, kind: damageRule.kind, rule_id: damageRule.id });
+      }
+      graphs[coreID] = { schema_version: 1, product: "GU_HOUSE_ACTION", product_profile: "gu_house_action.v1", context: "TURN_BASED_COMBAT", executor: "GU_HOUSE_ACTION_ADAPTER", rule_set_revision: ruleSet?.revision, core_gu_instance_id: coreID, output_effect_key: output.key, nodes, edges };
+    }
+    return graphs;
+  };
 
   const toggleCoreGu = (id: string) => {
     if (selectedCoreIDs.includes(id)) {
       setSelectedCoreIDs((prev) => prev.filter((item) => item !== id));
       setActionEffectKeys((prev) => { const next = { ...prev }; delete next[id]; return next; });
+      setActionSupportKeys((prev) => { const next = { ...prev }; delete next[id]; for (const key of Object.keys(next)) { next[key] = { ...next[key] }; delete next[key][id]; } return next; });
     } else {
-      if (selectedCoreIDs.length >= 5) return;
+      if (selectedCoreIDs.length >= maxCoreGus) return;
       setSelectedCoreIDs((prev) => [...prev, id]);
       const options = effectsForCore(id);
       const chosen = options.find((effect) => effect.operation.op === "DAMAGE") || options[0];
@@ -72,13 +113,14 @@ export function GuHousePanel() {
   };
 
   const handleCreate = async () => {
-    if (!name.trim() || selectedCoreIDs.length < 2) return;
+    if (!name.trim() || selectedCoreIDs.length < minCoreGus) return;
     setCreating(true);
     const success = await createGuHouse({
       name: name.trim(),
       core_gu_instance_ids: selectedCoreIDs,
       aux_gu_count: auxGuCount,
       action_effect_keys: actionEffectKeys,
+      action_composition_graphs: actionCompositionGraphs(),
       preview_fingerprint: preview?.preview_fingerprint,
     });
     setCreating(false);
@@ -86,6 +128,7 @@ export function GuHousePanel() {
       setName("");
       setSelectedCoreIDs([]);
       setActionEffectKeys({});
+      setActionSupportKeys({});
       setAuxGuCount(30);
     }
   };
@@ -117,7 +160,7 @@ export function GuHousePanel() {
               Đúc Kết Tiên Cổ Ốc
             </h4>
             <span className="font-mono text-xs text-zinc-500">
-              {selectedCoreIDs.length}/5 Tiên Cổ
+              {selectedCoreIDs.length}/{maxCoreGus} Tiên Cổ
             </span>
           </div>
 
@@ -133,7 +176,7 @@ export function GuHousePanel() {
 
           <div>
             <label className="text-xs text-zinc-400">
-              Chọn Tiên Cổ Hạch Tâm (Cần 2 đến 5 Tiên Cổ Rank 6+)
+              Chọn Tiên Cổ Hạch Tâm (Cần {minCoreGus} đến {maxCoreGus} Tiên Cổ Rank 6+)
             </label>
             {immortalGus.length === 0 ? (
               <div className="mt-2 rounded-xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-600">
@@ -176,6 +219,16 @@ export function GuHousePanel() {
                     <option value="">Không gán Trận Kích</option>
                     {choices.map((effect) => <option key={effect.key} value={effect.key}>{effect.label} · {effect.operation.value ? effect.operation.value : effect.operation.op}</option>)}
                   </select>}
+                  {actionEffectKeys[id] && selectedCoreIDs.filter((supportID) => supportID !== id && effectsForCore(supportID).length > 0).map((supportID) => {
+                    const supportGu = gus.find((entry) => entry.instance_id === supportID);
+                    const supportChoices = effectsForCore(supportID);
+                    return <div key={supportID} className="flex items-center gap-1">
+                      <select aria-label="Cổ hỗ trợ Trận Kích" value={actionSupportKeys[id]?.[supportID] || ""} onChange={(event) => setActionSupportKeys((prev) => ({ ...prev, [id]: { ...prev[id], [supportID]: event.target.value } }))} className="max-w-[45%] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[10px] text-zinc-200">
+                        <option value="">Không ghép · {supportGu ? (guDictionary[supportGu.gu_id]?.name || supportGu.gu_id) : "Cổ hỗ trợ"}</option>
+                        {supportChoices.filter((effect) => damageRule && effect.composition_capabilities?.includes(damageRule.support_capability) && choices.find((candidate) => candidate.key === actionEffectKeys[id])?.composition_capabilities?.includes(damageRule.core_capability)).map((effect) => <option key={effect.key} value={effect.key}>{effect.label} · {damageRule?.kind}</option>)}
+                      </select>
+                    </div>;
+                  })}
                 </div>;
               })}
             </div>
@@ -229,7 +282,7 @@ export function GuHousePanel() {
 
           <button
             onClick={() => void handleCreate()}
-            disabled={creating || selectedCoreIDs.length < 2 || !name.trim() || !preview?.preview_fingerprint || !preview.actions?.length}
+            disabled={creating || selectedCoreIDs.length < minCoreGus || !name.trim() || !preview?.preview_fingerprint || !preview.actions?.length}
             className="w-full rounded-xl bg-amber-600 py-2.5 text-xs font-bold text-white shadow-lg shadow-amber-950/40 hover:bg-amber-500 disabled:opacity-40"
           >
             {creating ? "Đang đúc kết…" : "Đúc Kết Tiên Cổ Ốc"}
@@ -299,6 +352,18 @@ export function GuHousePanel() {
                       Giảm ST: <span className="text-amber-300">{Math.round(house.house_profile.damage_reduction * 100)}%</span>
                     </div>
                   </div>
+
+                  {house.is_equipped && house.core_gu_instances.map((coreID) => {
+                    const options = worldEffectsForCore(coreID);
+                    if (options.length === 0) return null;
+                    return <div key={coreID} className="flex gap-2">
+                      <select aria-label={`Effect ngoài combat ${coreID}`} value={worldEffectKeys[coreID] || ""} onChange={(event) => setWorldEffectKeys((prev) => ({ ...prev, [coreID]: event.target.value }))} className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2 text-[10px] text-zinc-200">
+                        <option value="">Chọn effect ON_USE của Cổ hạch tâm</option>
+                        {options.map((effect) => <option key={effect.key} value={effect.key}>{effect.label}</option>)}
+                      </select>
+                      <button disabled={!worldEffectKeys[coreID]} onClick={() => void useGuHouse(house.id, coreID, worldEffectKeys[coreID])} className="rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-[10px] font-semibold text-amber-200 disabled:opacity-40">Thi triển</button>
+                    </div>;
+                  })}
 
                   <div className="flex gap-2 pt-1">
                     <button

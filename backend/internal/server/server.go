@@ -819,6 +819,7 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			guHouses.POST("/preview", handlers.PreviewGuHouse)
 			guHouses.POST("", handlers.CreateGuHouse)
 			guHouses.POST("/:id/equip", handlers.EquipGuHouse)
+			guHouses.POST("/:id/use", handlers.UseGuHouse)
 			guHouses.POST("/:id/repair", handlers.RepairGuHouse)
 		}
 
@@ -1003,7 +1004,9 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		teleport.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			teleport.GET("/templates", handlers.GetTeleportTemplates)
+			teleport.GET("/effect-options", handlers.TeleportArrayEffectOptions)
 			teleport.GET("/mine", handlers.GetMyTeleportArrays)
+			teleport.POST("/preview", handlers.PreviewTeleportArray)
 			teleport.POST("/build", handlers.BuildTeleportArray)
 			teleport.GET("/directory", handlers.GetTeleportDirectory)
 			teleport.POST("/travel", handlers.TravelTeleport)

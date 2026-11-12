@@ -258,6 +258,38 @@ var ambiguousGu = map[string]string{
 }
 
 func ConvertGu(id string, raw []byte) Result {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) > 0 && (trimmed[0] == '[' || trimmed[0] == '{') {
+		var root map[string]json.RawMessage
+		isBlockV2 := trimmed[0] == '['
+		if trimmed[0] == '{' && json.Unmarshal(trimmed, &root) == nil {
+			_, hasVersion := root["schema_version"]
+			_, hasBlocks := root["blocks"]
+			legacyNamespace := false
+			for _, namespace := range []string{"active", "passive", "growth", "explore", "support", "refinement", "house", "other"} {
+				if _, ok := root[namespace]; ok {
+					legacyNamespace = true
+					break
+				}
+			}
+			isBlockV2 = hasVersion || (hasBlocks && !legacyNamespace)
+		}
+		if isBlockV2 {
+			canonical, issues := effectcatalog.CanonicalBlockV2Envelope(trimmed, effectcatalog.Location{Source: "gu", Key: id})
+			if len(issues) > 0 {
+				findings := make([]Finding, 0, len(issues))
+				for _, issue := range issues {
+					findings = append(findings, Finding{Format: FormatGu, SourceID: id, Namespace: "blocks", Key: issue.Path, Reason: issue.Code + ": " + issue.Message})
+				}
+				return finalize(nil, findings, nil, nil, nil, nil)
+			}
+			result := finalize(canonical, nil, nil, nil, nil, nil)
+			result.Report.Total = 0 // already-authored v2 is validation, not legacy conversion
+			result.Report.Validated = true
+			applyMigrationGate(&result.Report)
+			return result
+		}
+	}
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &root); err != nil {
 		return finalize(nil, []Finding{{Format: FormatGu, SourceID: id, Reason: err.Error()}}, nil, nil, nil, nil)

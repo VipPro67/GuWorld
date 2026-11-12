@@ -568,6 +568,15 @@ func AcceptTradeOffer(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng yêu cầu đang trang bị, bị khóa, là Bổn Mệnh Cổ hoặc đã chết"})
 			return
 		}
+		reserved, reservationErr := guHasActiveProductReservation(tx, guInstID)
+		if reservationErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+			return
+		}
+		if reserved {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
+			return
+		}
 	}
 	for reqRecID := range requested.Recipes {
 		recProgress, err := RecipeSvc.Get(tx, acceptor.ID.String(), reqRecID)

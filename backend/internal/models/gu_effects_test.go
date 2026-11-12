@@ -1,9 +1,12 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 )
 
 func TestGetFlatGuEffectsPassiveOnlyDoesNotPanic(t *testing.T) {
@@ -16,6 +19,66 @@ func TestGetFlatGuEffectsPassiveOnlyDoesNotPanic(t *testing.T) {
 	effectsOut := GetFlatGuEffects(gu)
 	if effectsOut["flat_damage"] != 10 {
 		t.Fatalf("flat_damage = %v, want 10", effectsOut["flat_damage"])
+	}
+}
+
+func TestGuEffectsValueRoundTripsVersionedEnvelope(t *testing.T) {
+	var effects GuEffects
+	if err := effects.Scan(`[{"id":"BASIC_HIT","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":10,"unit":"FLAT"}]}]`); err != nil {
+		t.Fatal(err)
+	}
+	value, err := effects.Value()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := value.(string)
+	var envelope struct {
+		SchemaVersion int               `json:"schema_version"`
+		Blocks        []json.RawMessage `json:"blocks"`
+	}
+	if err := json.Unmarshal([]byte(raw), &envelope); err != nil || envelope.SchemaVersion != effectcatalog.BlockSchemaVersion || len(envelope.Blocks) != 1 {
+		t.Fatalf("value = %s, err=%v", raw, err)
+	}
+	var empty GuEffects
+	emptyValue, err := empty.Value()
+	if err != nil || !strings.Contains(emptyValue.(string), `"schema_version":2`) || !strings.Contains(emptyValue.(string), `"blocks":[]`) {
+		t.Fatalf("empty value = %v, err=%v", emptyValue, err)
+	}
+}
+
+func TestGuHouseActionSnapshotWritesEnvelopeAndReadsLegacyArray(t *testing.T) {
+	profile := GuHouseCombatProfile{Actions: []KillerMoveCombatProfile{{
+		EffectBlocks: gameplayeffects.BlockSet{{
+			ID: "EFFECT_01", Trigger: gameplayeffects.TriggerOnAction,
+			Target:     gameplayeffects.Target{Selector: gameplayeffects.TargetSingle},
+			Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpDamage, SubType: "FLAT", Value: 5}},
+		}},
+	}}}
+	raw, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"effect_blocks":{"schema_version":2,"blocks":[`) {
+		t.Fatalf("Gu House action did not persist a Block v2 envelope: %s", raw)
+	}
+	var decoded GuHouseCombatProfile
+	if err := json.Unmarshal(raw, &decoded); err != nil || len(decoded.Actions) != 1 || len(decoded.Actions[0].EffectBlocks) != 1 {
+		t.Fatalf("Block v2 action profile round trip = %+v, err=%v", decoded, err)
+	}
+	legacy := []byte(`{"actions":[{"effect_key":"legacy-key","effect_blocks":[{"id":"legacy-key","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":5}]}],"composition_graph":{"schema_version":1,"product":"GU_HOUSE_ACTION","product_profile":"gu_house_action.v1","context":"TURN_BASED_COMBAT","executor":"GU_HOUSE_ACTION_ADAPTER","core_gu_instance_id":"core-instance","output_effect_key":"legacy-key","nodes":[{"effect_key":"legacy-key","role":"OUTPUT","gu_instance_id":"core-instance","gu_id":"core_gu","rank":6,"trigger":"ON_ACTION","context":"TURN_BASED_COMBAT","executor":"GU_HOUSE_ACTION_ADAPTER"}],"edges":[]}}]}`)
+	if err := json.Unmarshal(legacy, &decoded); err != nil || len(decoded.Actions) != 1 || decoded.Actions[0].EffectBlocks[0].ID != "EFFECT_01" || decoded.Actions[0].CompositionGraph.Nodes[0].BlockID != "EFFECT_01" {
+		t.Fatalf("legacy action projection read = %+v, err=%v", decoded, err)
+	}
+	migrated, err := json.Marshal(decoded)
+	if err != nil || !strings.Contains(string(migrated), `"effect_blocks":{"schema_version":2,"blocks":[`) {
+		t.Fatalf("legacy action response could not be emitted as v2 envelope: %s err=%v", migrated, err)
+	}
+}
+
+func TestGuEffectsScanRejectsUnsupportedBlockEnvelopeVersion(t *testing.T) {
+	var effects GuEffects
+	if err := effects.Scan(`{"schema_version":3,"blocks":[]}`); err == nil {
+		t.Fatal("unsupported Block v2 envelope version accepted")
 	}
 }
 

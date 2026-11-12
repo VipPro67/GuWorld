@@ -428,15 +428,17 @@ Hiệu ứng chiến đấu đặc thù của Cổ trùng được lấy từ c�
 
 ### Sáng tạo Sát Chiêu
 
-Trong Túi Đồ, mở tab **Sát Chiêu**, chọn một Cổ chính và thêm Cổ phụ tùy ý. Kéo các hiệu ứng được hỗ trợ từ Cổ thành phần vào công thức, xem trước uy lực sau cân bằng, độ hòa hợp và tỉ lệ thành công, rồi đặt tên và lưu. Người chơi lưu tối đa 12 công thức và trang bị tối đa 4 sát chiêu.
+Trong Túi Đồ, mở tab **Sát Chiêu**, chọn Cổ chính và hiệu ứng đầu ra, rồi thêm Cổ phụ có effect cùng context. Gắn từng Cổ phụ vào đầu ra bằng một quy tắc typed, xem trước uy lực sau cân bằng, graph provenance, độ hòa hợp và tỉ lệ thành công, rồi đặt tên và lưu. Người chơi lưu tối đa 12 công thức và trang bị tối đa 4 sát chiêu.
 
 Rank Cổ chính quyết định phần lớn ngân sách sức mạnh; Cổ phụ bổ sung ngân sách với mức giảm dần. Số lượng, phạm vi và độ phức tạp effect làm tăng tải công thức. Khi tải vượt ngân sách, hệ thống tự giảm giá trị effect và hiển thị kết quả trước khi lưu. Cấp lưu phái và độ thành thạo ảnh hưởng tỉ lệ thôi động; dùng thành công giúp tăng thành thạo sát chiêu và cộng **Chân Ý lưu phái hạch tâm** theo rank Cổ chính (R1=1 … R9=300, giảm theo cảnh giới hiện tại).
 
 Preview sát chiêu dùng compiler effect chung và kiểm tra các effect được combat theo lượt hỗ trợ. Có thể phối hợp damage đơn mục tiêu với hồi/khiên bản thân; thanh tẩy chỉ dùng trong chiêu SELF. Nếu hệ thống tự giảm effect để vừa ngân sách, cần xác nhận preview trước khi lưu. Các effect chưa có executor turn-based chưa được hỗ trợ.
 
-Khi đúc Tiên Cổ Ốc, có thể chọn Trận Kích từ effect của Cổ hạch tâm. Preview hiển thị các action; Trận Kích và sát chiêu được đưa vào cấu hình combat theo lượt. Profile đã lưu là snapshot; thay đổi luật không tự sửa build cũ.
+Khi dùng Cổ trực tiếp trong combat theo lượt, các Block `ON_ACTION` chạy theo target và điều kiện đã khai báo. Mỗi Cổ vẫn chỉ trả chi phí và tiêu hao độ no một lần cho cả action; effect hoặc target chưa có adapter combat sẽ bị từ chối thay vì đổi sang cách dùng gần giống.
 
-Sát chiêu cần được trang bị và kích hoạt trong **Cài đặt chiến thuật** (Aperture > Cài đặt) hoặc tick chọn trực tiếp trong màn hình **Chuẩn bị chiến đấu** trước trận; sát chiêu không được trang bị/chọn sẽ không tự động kích hoạt. Effect hồi phục `ON_USE` có thể được dùng ngoài combat bằng nút **Dùng**. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Một instance Cổ có thể tham gia nhiều sát chiêu. Nếu instance đó rời `player_gu`, chết hoặc đổi thành Cổ/rank khác, những công thức tham chiếu nó sẽ tạm thời không dùng được.
+Khi đúc Tiên Cổ Ốc, có thể chọn một effect đầu ra từ Cổ hạch tâm. Ghép effect hỗ trợ cần rule trong catalog riêng `gu_house_action.rules.v1` và capability grant khớp chính xác Block/op nguồn của cả hai Cổ; hiện chỉ COMBINE damage FLAT mục tiêu đơn được mở cho các nguồn có grant. Heal FLAT bản thân và shield/barrier FLAT bản thân có thể làm OUTPUT độc lập. Graph con `gu_house_action.v1` ghi provenance từng effect; preview biên dịch qua effect compiler chung, còn effect có điều kiện hoặc executor chưa hỗ trợ bị từ chối. Trận Kích có graph và provenance trong profile snapshot và được đưa vào combat theo lượt; khi Cổ Ốc bị phá, action của nó không thể dùng tiếp. Ngoài combat, người chơi có thể chọn effect `ON_USE` được hỗ trợ của một Cổ hạch tâm thuộc Tiên Cổ Ốc đang xuất chiến để hồi phục hoặc nhận trạng thái thế giới; lần dùng tiêu hao Chân Nguyên và 1 độ no của Cổ đó. Cổ Ốc phải còn độ bền và không thể thi triển khi người chơi đang combat. Profile `gu_house.v1` dùng executor Trận Kích riêng; khi xuất chiến, Cổ Ốc giữ chỗ 2–5 core Gu còn ACTIVE trong hành trang, giải phóng chúng khi tháo trang bị và không cho dùng chung với Sát Chiêu active. Thay đổi luật không tự sửa build cũ; Trận Kích cũ có SUPPORT edge nhưng thiếu rule revision không thể xuất chiến cho đến khi được tạo lại qua preview.
+
+Sát chiêu cần được trang bị và kích hoạt trong **Cài đặt chiến thuật** (Aperture > Cài đặt) hoặc tick chọn trực tiếp trong màn hình **Chuẩn bị chiến đấu** trước trận; sát chiêu không được trang bị/chọn sẽ không tự động kích hoạt. Effect `ON_USE` hồi HP, hoàn Chân Nguyên, Phi Hành, Ẩn Thân hoặc Tăng Tốc có thể được dùng ngoài combat bằng nút **Dùng**; STEALTH cộng điểm DISGUISE để giảm tỉ lệ phục kích khi di chuyển, HASTE nhân tốc độ người chơi theo phần trăm. Condition được đánh giá theo trạng thái trước khi trừ cost. Status world mặc định kéo dài theo Rank Cổ chính (phút); `turns` authored được hiểu là phút, giới hạn 24 giờ; STEALTH/HASTE dùng `value` tương ứng làm điểm DISGUISE và phần trăm tăng tốc, mặc định theo Rank và tối đa 100. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Các bản lưu chưa trang bị có thể dùng chung một Gu; khi trang bị, mỗi Gu chỉ được giữ chỗ cho một Sát Chiêu hoặc Tiên Cổ Ốc đang active. Gu đang giữ chỗ không thể chuyển giao, luyện Cổ hay rơi làm chiến lợi phẩm khi chủ nhân tử đạo. Nếu Gu chết vì đói, worker tháo sản phẩm liên quan và giải phóng giữ chỗ; công thức tham chiếu sẽ tạm thời không dùng được.
 
 Mỗi Cổ instance có:
 
@@ -591,27 +593,10 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 
 ## 7. Sát chiêu
 
-- Cổ sư có thể tạo sát chiêu từ Cổ hạch tâm + tối đa 8 Cổ phụ trợ.
-- Preview tính hao Chân Nguyên, stability, damage, defense, cooldown/cast time.
-- **Hiệu ứng dung hợp (Compound Effects):** khi Cổ core và support có các hiệu ứng tương đồng (VD: damage + bleed, defense + heal), chúng kết hợp thành hiệu ứng mới mạnh hơn thay vì cộng dồn đơn thuần:
-  - `damage + bleed → xuất huyết trọng thương`: sát thương + chảy máu mỗi lượt
-  - `defense + heal → khiên sinh mệnh`: khiên tự hồi phục
-  - `damage + poison → độc nhận phá thể`: vết thương nhiễm độc
-  - `damage + stun → chấn động`: sát thương kèm choáng
-  - `movement + stealth → huyễn ảnh bộ`: tốc độ di chuyển
-  - `damage + blood_drain → huyết lực`: hút máu theo sát thương
-  - `summon + damage → hư ảnh đại lực`: hư ảnh chiến đấu
-  - `damage + damage_multiplier → cuồng phong`: đánh liên hoàn
-  - `defense + damage → phản thương kích`: phản đòn sát thương
-  - `generate/replicate → tạo hóa chi lực`: tăng cường hiệu quả hỗ trợ
-- **Cổ trận liên hoàn (Synergy Recipes):** nếu core và support khớp với các công thức đặc biệt, sát chiêu sẽ kích hoạt hiệu ứng cộng hưởng riêng:
-  - Đại Lực Thần Quyền (GU_CHARGING_CRASH + GU_TEN_JUN_STRENGTH + GU_JUN_STRENGTH + GU_SELF_STRENGTH): xuyên phá 50% giáp
-  - Âm Dương Lưỡng Nghi (GU_MOONLIGHT + GU_LITTLE_LIGHT): sát thương gấp đôi
-  - Huyết Sát Trận (GU_BLOOD_MOON + GU_BLOOD_ASSET + GU_BLOOD_SKULL): tiêu hao 10% Sinh lực, tăng 50% sát thương
-  - Huyền Ảnh Sát (GU_BLOOD_MOON + GU_SHADOW + GU_SHADOW_STEPS): tấn công từ bóng tối không thể né
-  - Ngũ Hành Sơn Hà (GU_CANOPY + GU_IRON_BONE + GU_EARTH_WORM): phòng ngự +200%, miễn khống chế
-  - Tứ Hải Tửu Trận (GU_LIQUOR_WORM + GU_FOUR_FLAVORS_LIQUOR + GU_SEVEN_FRAGRANCES_LIQUOR + GU_NINE_EYES_LIQUOR): giảm 50% hao Chân Nguyên
-- Sát chiêu đã lưu có thể cast trong combat và có thể bị xóa.
+- Sát chiêu có một Cổ chính tạo **hiệu ứng đầu ra** và tối đa năm Cổ phụ. Cổ phụ chỉ được nối khi capability của effect nguồn và output khớp một rule trong catalog; hiện catalog cho phép ghép thêm một lệnh sát thương phẳng đơn mục tiêu.
+- Rule graph đóng dấu revision, `rule_id`, profile, context và executor. Server kiểm tra grant trên đúng operation Block v2 của từng Cổ; role/tag không tự mở quyền ghép. Sai revision, rule, provenance hoặc capability sẽ làm preview/create thất bại.
+- Preview và create dùng cùng resolver và fingerprint. Rule `COMBINE` tạo thêm một Block v2 từ operation hỗ trợ đã khai báo; mỗi effect vẫn giữ provenance tới Gu nguồn.
+- Sát chiêu đã lưu có thể trang bị, sử dụng trong combat hoặc xóa. Profile hiện giữ chỗ các Cổ thành phần khi sát chiêu được trang bị; bản lưu chưa trang bị vẫn có thể dùng chung Cổ. Các ví dụ synergy recipe bên dưới tài liệu cũ không được triển khai trong runtime hiện tại.
 
 ## 8. Khám phá bản đồ
 
@@ -648,6 +633,8 @@ Năm khu tân thủ có cảnh quan riêng trong cùng phong cách pixel-art t�
 ### Hệ Thống Truyền Tống Trận (Teleportation Arrays) & Trận Đạo Lưu Phái
 
 Cổ Sư có thể khắc họa trận văn, câu thông thiên địa để xây dựng các **Truyền Tống Trận** cố định trên bản đồ Thế Giới Ngũ Vực. Hệ thống kết nối các tọa độ không gian, hỗ trợ dịch chuyển nhanh cho cá nhân, tông môn hoặc toàn bộ tu chân giới.
+
+Khi bố trí trận pháp, đạo hữu có thể chọn Cổ hạch tâm làm output và thêm Cổ hỗ trợ nối vào output bằng catalog `teleport_formation.rules.v1` (hiện chỉ có `COMBINE`). Ghép cần grant `WORLD_TRAVEL.ARRIVAL.SELF_EFFECT` chính xác trên cả output lẫn support; output-only không cần grant. Seed hiện chưa cấp grant travel nên support composition mở sau khi data author cấp grant phù hợp. Preview xác nhận profile `teleport_formation.v1`, provenance, Block v2 và các effect arrival được hỗ trợ trước khi cho xây. Effect của trận pháp đích kích hoạt trong cùng giao dịch với lượt truyền tống và áp dụng lên người vừa đến; các Cổ thành phần bị giữ chỗ khi profile còn hoạt động. Chúng vẫn hao đói; nếu một Cổ chết đói hoặc profile effect bị lỗi/stale, effect composition tự vô hiệu và reservation được thả, nhưng chức năng dịch chuyển cơ bản của công trình còn nguyên. Phá dỡ trận pháp cũng giải phóng toàn bộ Cổ đã giữ chỗ.
 
 Các Cổ Tiêu Hao có năng lực `RANDOM_PORTAL` hoặc `PORTAL_CREATE` được dùng trong **Túi Cổ**. `RANDOM_PORTAL` mở xác nhận dịch chuyển đến một tọa độ ngẫu nhiên hợp lệ; `PORTAL_CREATE` mở hộp nhập tọa độ (nếu có cả hai năng lực, có thể chọn một trong hai cách). Máy chủ kiểm tra khu vực, tầm dịch chuyển và điều kiện di chuyển trước khi trừ mana và tiêu hao Cổ; thao tác thất bại không tiêu hao tài nguyên.
 
@@ -1261,7 +1248,7 @@ Trang `/wiki` là nơi tra cứu hướng dẫn và bách khoa trong game; nội
 - **Cảnh Giới Lưu Phái (Attainment):** Độ ngộ Chân Ý gồm 5 bậc: Phàm Thai ➔ Đại Sư ➔ Tông Sư ➔ Đại Tông Sư ➔ Vô Thượng Đại Tông Sư. Điểm tích lũy riêng theo từng lưu phái; các nguồn gồm sử dụng Cổ, chiến đấu, sát chiêu, Luyện Cổ và phần thưởng một số Phó bản. Mốc hiện tại: Đại Sư=10.000, Tông Sư=100.000, Đại Tông Sư=1.000.000, Vô Thượng=10.000.000. **Để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, cần ít nhất 1 lưu phái đạt Tông Sư/Đại Tông Sư/Vô Thượng tương ứng.** Cảnh giới còn điều hòa Xung Đột Đạo Ngân và tăng hiệu quả theo cơ chế của từng hệ thống.
 - **Bản Mệnh Cổ (Vital Gu):** Cổ trùng gắn liền sinh mệnh, không bao giờ mất khi thất bại dã ngoại.
 - **Độ No (Hunger):** Cổ trùng giảm Độ No mỗi 3 giờ. Cần cho ăn đúng loại thức ăn (thịt thú, khoáng thạch...), nếu về 0 Độ No Cổ sẽ **chết vĩnh viễn**. Quy luật này áp dụng cả với Cổ đang nằm trong **Bảo khố Tông Môn**: Cổ trong kho vẫn hao Độ No mỗi 3 giờ (ngang mức hoạt động), về 0 sẽ chết và bị xóa khỏi kho; khi đổi ra, Cổ nhận đúng Độ No hiện tại chứ không được reset đầy.
-- **Sát Chiêu (Killer Moves):** Kỹ năng ghép từ 1 Cổ Hạch Tâm (Core Gu) và 0-8 Cổ Phụ Trợ (Support Gu) tăng sát thương, giảm hao Chân Nguyên, thêm khống chế (choáng, đóng băng, câm lặng) hoặc thời gian tụ lực.
+- **Sát Chiêu (Killer Moves):** Build hiện tại ghép một Cổ chính tạo output với tối đa 5 Cổ phụ có provenance tới output qua graph typed; các Gu được giữ chỗ riêng khi Sát Chiêu active.
 - **Kiếp Nạn (Tribulation):** Cổ Tiên phải chống chọi các kiếp nạn (Địa Tai, Thiên Kiếp...) định kỳ bảo vệ tài nguyên Tiên Khiếu. Vượt qua kiếp nạn nhận được lượng lớn Đạo Ngân.
 
 ### Các hoạt động chính:

@@ -13,6 +13,9 @@ export interface KillerMoveGuOption {
 
 export interface KillerMoveEffectOption {
   key: string;
+  source_block_id: string;
+  block_index: number;
+  operation_index: number;
   source_instance_id: string;
   source_name: string;
   gu_id: string;
@@ -22,6 +25,7 @@ export interface KillerMoveEffectOption {
   target: { selector: string; bypass_frontline?: boolean };
   conditions?: Array<{ field: string; operator: string; value: number }>;
   player_atk_coefficient?: number;
+  composition_capabilities?: string[];
   operation: {
     op: string;
     sub_type?: string;
@@ -32,12 +36,20 @@ export interface KillerMoveEffectOption {
     stat?: string;
   };
   combat_supported?: boolean;
+  travel_supported?: boolean;
   unavailable_reason?: string;
 }
 
 export interface KillerMoveCombatProfile {
   profile_version?: number;
   effect_label?: string;
+  effect_key?: string;
+  effect_context?: string;
+  effect_executor?: string;
+  effect_gu_id?: string;
+  effect_operation?: { op: string; sub_type?: string; value?: number };
+  effect_target?: { selector: string; bypass_frontline?: boolean };
+  effect_conditions?: Array<{ field: string; operator: string; value: number }>;
   id?: string;
   name?: string;
   rank: number;
@@ -59,8 +71,49 @@ export interface KillerMoveCombatProfile {
   backfire_status?: string;
 }
 
+export type KillerMoveContributionKind = "UNLOCK" | "BRIDGE" | "AMPLIFY" | "STABILIZE" | "COMBINE";
+
+export interface KillerMoveCompositionEdge {
+  from: string;
+  to: string;
+  kind: KillerMoveContributionKind;
+  rule_id?: string;
+}
+
+export interface KillerMoveCompositionRule {
+  id: string;
+  product_profile: string;
+  context: string;
+  executor: string;
+  kind: KillerMoveContributionKind;
+  core_capability: string;
+  support_capability: string;
+}
+
+export interface KillerMoveCompositionRuleSet {
+  schema_version: number;
+  revision: string;
+  rules: KillerMoveCompositionRule[];
+}
+
+export interface KillerMoveCompositionGraph {
+  schema_version: number;
+  product: string;
+  product_profile: string;
+  context: string;
+  executor: string;
+  core_gu_instance_id: string;
+  output_effect_key: string;
+  rule_set_revision?: string;
+  nodes: Array<{ effect_key: string; source_block_id?: string; operation_index?: number; role: "OUTPUT" | "SUPPORT"; gu_instance_id: string; gu_id: string; rank: number; trigger: string; context: string; executor: string }>;
+  edges: KillerMoveCompositionEdge[];
+}
+
 export interface GuHouseCombatProfile {
   profile_version?: number;
+  product_profile?: string;
+  context?: string;
+  executor?: string;
   preview_fingerprint?: string;
   id?: string;
   name?: string;
@@ -94,6 +147,7 @@ export interface GuHouseDraft {
   core_gu_instance_ids: string[];
   aux_gu_count: number;
   action_effect_keys?: Record<string, string>;
+  action_composition_graphs?: Record<string, KillerMoveCompositionGraph>;
   preview_fingerprint?: string;
 }
 
@@ -104,6 +158,7 @@ export interface KillerMoveRecord {
   main_gu_id: string;
   main_gu_rank: number;
   components: Array<{ instance_id: string; gu_id: string; rank: number }>;
+  composition_graph?: KillerMoveCompositionGraph;
   selected_effects: Array<{ key: string; trigger: string; instance_id: string }>;
   path: string;
   power_budget: number;
@@ -118,6 +173,7 @@ export interface KillerMoveRecord {
   available: boolean;
   has_starving_gu?: boolean;
   missing_gu?: string[];
+  unavailable_reason?: string;
   balance_version: number;
 }
 
@@ -126,12 +182,16 @@ export interface KillerMoveDraft {
   main_gu_instance_id: string;
   component_instance_ids: string[];
   selected_effect_keys: string[];
+  output_effect_key: string;
+  rule_set_revision: string;
+  composition_edges: KillerMoveCompositionEdge[];
   preview_fingerprint?: string;
   accept_adjustments?: boolean;
 }
 
 export interface KillerMovePreview {
   components: Array<{ instance_id: string; gu_id: string; rank: number }>;
+  composition_graph: KillerMoveCompositionGraph;
   selected_effects: Array<{ key: string; instance_id: string }>;
   rank: number;
   path: string;
@@ -150,11 +210,15 @@ export interface KillerMovePreview {
 export interface KillerMovesSlice {
   killerMoveGus: KillerMoveGuOption[];
   killerMoveEffects: KillerMoveEffectOption[];
+  killerMoveCompositionRuleSet: KillerMoveCompositionRuleSet | null;
   killerMoves: KillerMoveRecord[];
   killerMovesMaxSaved: number;
   killerMovesMaxEquipped: number;
   killerMovesLoading: boolean;
   guHouses: GuHouseRecord[];
+  guHouseCompositionRuleSet: KillerMoveCompositionRuleSet | null;
+  guHousesMinCoreGus: number;
+  guHousesMaxCoreGus: number;
   guHousesLoading: boolean;
   fetchKillerMoves: () => Promise<void>;
   previewKillerMove: (draft: KillerMoveDraft) => Promise<KillerMovePreview | null>;
@@ -167,16 +231,21 @@ export interface KillerMovesSlice {
   createGuHouse: (draft: GuHouseDraft) => Promise<boolean>;
   toggleEquipGuHouse: (id: string) => Promise<boolean>;
   repairGuHouse: (id: string) => Promise<boolean>;
+  useGuHouse: (id: string, coreGuInstanceID: string, effectKey: string) => Promise<boolean>;
 }
 
 export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, KillerMovesSlice> = (set, get) => ({
   killerMoveGus: [],
   killerMoveEffects: [],
+  killerMoveCompositionRuleSet: null,
   killerMoves: [],
   killerMovesMaxSaved: 12,
   killerMovesMaxEquipped: 4,
   killerMovesLoading: false,
   guHouses: [],
+  guHouseCompositionRuleSet: null,
+  guHousesMinCoreGus: 2,
+  guHousesMaxCoreGus: 5,
   guHousesLoading: false,
 
   fetchKillerMoves: async () => {
@@ -196,6 +265,7 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({
         killerMoveGus: options.gus || [],
         killerMoveEffects: options.effect_options || [],
+        killerMoveCompositionRuleSet: options.composition_rule_set || null,
         killerMoves: moves.killer_moves || [],
         killerMovesMaxSaved: moves.max_saved || options.max_saved || 12,
         killerMovesMaxEquipped: moves.max_equipped || options.max_equipped || 4,
@@ -303,7 +373,7 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
       const res = await authFetch(`${BACKEND_URL}/api/gu-houses`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Không thể tải danh sách Tiên Cổ Ốc");
-      set({ guHouses: data.gu_houses || [], guHousesLoading: false });
+      set({ guHouses: data.gu_houses || [], guHouseCompositionRuleSet: data.composition_rule_set || null, guHousesMinCoreGus: data.min_core_gus || 2, guHousesMaxCoreGus: data.max_core_gus || 5, guHousesLoading: false });
     } catch (caught) {
       set({ guHousesLoading: false });
       get().addToast(caught instanceof Error ? caught.message : "Lỗi tải Tiên Cổ Ốc", "error");
@@ -376,6 +446,28 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
     } catch (caught) {
       get().addToast(caught instanceof Error ? caught.message : "Lỗi tu sửa", "error");
       return false;
+    }
+  },
+
+  useGuHouse: async (id, coreGuInstanceID, effectKey) => {
+    const { token } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/gu-houses/${encodeURIComponent(id)}/use`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ core_gu_instance_id: coreGuInstanceID, effect_key: effectKey }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể dùng Tiên Cổ Ốc");
+      get().applyInventoryFromResponse(data);
+      get().addToast(data.message || "Tiên Cổ Ốc đã thi triển", "success");
+      await Promise.all([get().fetchGuHouses(), get().fetchKillerMoves()]);
+      return true;
+    } catch (caught) {
+      get().addToast(caught instanceof Error ? caught.message : "Không thể dùng Tiên Cổ Ốc", "error");
+      return false;
+    } finally {
+      get().endAction("player:inventory");
     }
   },
 

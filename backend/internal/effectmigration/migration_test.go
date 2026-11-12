@@ -44,6 +44,22 @@ func TestFormatSpecificConverters(t *testing.T) {
 	}
 }
 
+func TestConvertGuBlockV2IsCanonicalAndIdempotent(t *testing.T) {
+	array := []byte(`[{"id":"BASIC_HIT","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":10,"unit":"FLAT"}]}]`)
+	first := ConvertGu("v2", array)
+	if !first.Report.MigrationGate || first.Report.Total != 0 || !first.Report.Validated {
+		t.Fatalf("array audit = %+v", first.Report)
+	}
+	second := ConvertGu("v2", first.Envelope)
+	if !second.Report.MigrationGate || string(first.Envelope) != string(second.Envelope) {
+		t.Fatalf("not idempotent: first=%s second=%s report=%+v", first.Envelope, second.Envelope, second.Report)
+	}
+	bad := ConvertGu("bad", []byte(`{"schema_version":3,"blocks":[]}`))
+	if bad.Report.MigrationGate || len(bad.Report.Unsupported) == 0 {
+		t.Fatalf("unsupported version accepted: %+v", bad.Report)
+	}
+}
+
 func TestAmbiguousNeverGuessesAndGateStaysClosed(t *testing.T) {
 	r := ConvertGu("ambiguous", []byte(`{"active":{"sleep":2}}`))
 	if len(r.Report.Ambiguous) != 1 || len(r.Report.SuggestedMapping) != 1 || r.Report.MigrationGate {

@@ -841,9 +841,24 @@ func ActionInstance(c *gin.Context) {
 				// Clean and normalize path name to lowercase
 				cleanPath := strings.TrimSuffix(strings.ToLower(rewards.Attainment.Path), " path")
 
-				player.PathMasteries[cleanPath] += rewards.Attainment.Amount
+				attainmentGained := rewards.Attainment.Amount
+				extraDreamMsg := ""
+				// Mộng Đạo: Thấu Triệt Mộng Cảnh - tăng Chân Ý nếu có căn cơ Mộng Đạo
+				if cleanPath == "dream" || (player.DaoMarks != nil && player.DaoMarks["dream"] > 0) {
+					dreamMarks := int64(0)
+					if player.DaoMarks != nil {
+						dreamMarks = player.DaoMarks["dream"]
+					}
+					bonusAttainment := int(float64(attainmentGained) * (0.25 + float64(dreamMarks)/2000.0))
+					if bonusAttainment > 0 {
+						attainmentGained += bonusAttainment
+						extraDreamMsg = fmt.Sprintf(" [Mộng Đạo - Thấu Triệt Mộng Cảnh: nhận thêm +%d Chân Ý nhờ căn cơ Mộng Đạo!]", bonusAttainment)
+					}
+				}
+
+				player.PathMasteries[cleanPath] += attainmentGained
 				newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
-				logResult = "Chúc mừng đạo hữu xuất sắc vượt ải thành công, nhận được " + fmt.Sprintf("%d", rewards.Attainment.Amount) + " điểm Chân Ý lưu phái \"" + rewards.Attainment.Path + "\" (Cảnh giới: " + gamefx.PathMasteryLevelName(newLevel) + ")!"
+				logResult = "Chúc mừng đạo hữu xuất sắc vượt ải thành công, nhận được " + fmt.Sprintf("%d", attainmentGained) + " điểm Chân Ý lưu phái \"" + rewards.Attainment.Path + "\" (Cảnh giới: " + gamefx.PathMasteryLevelName(newLevel) + ")!" + extraDreamMsg
 			} else if len(rewards.DaoMarks) > 0 {
 				// Bí cảnh: award Đạo Ngân (Dao Marks) directly.
 				if _, err := addMultipleDaoMarksTx(tx, player.ID.String(), rewards.DaoMarks); err != nil {

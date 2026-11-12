@@ -241,6 +241,15 @@ func CreateBuybackOrder(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đang trang bị, bị khóa hoặc đã chết không thể đăng bán"})
 					return
 				}
+				reserved, reservationErr := guHasActiveProductReservation(tx, instID)
+				if reservationErr != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+					return
+				}
+				if reserved {
+					c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
+					return
+				}
 				_, err = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, BHTHSystemUUID, instID)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khóa Cổ trùng rao bán"})
@@ -497,6 +506,15 @@ func SellToBuybackOrder(c *gin.Context) {
 				}
 				if equipped || isLocked || state == "DEAD" {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đang trang bị, bị khóa hoặc đã chết không thể bán"})
+					return
+				}
+				reserved, reservationErr := guHasActiveProductReservation(tx, instID)
+				if reservationErr != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+					return
+				}
+				if reserved {
+					c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
 					return
 				}
 				if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2 AND player_id = $3`, buyerUUID, instID, actor.ID); err != nil {

@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -183,7 +185,7 @@ func GetMyTeleportArrays(c *gin.Context) {
 		       t.region_id, r.name, t.x, t.y, t.tier, t.max_range, t.is_cross_region,
 		       t.direction_type, t.access_policy, t.fee_enabled, t.fee_currency,
 		       t.fee_amount, t.vault_balance, t.current_durability, t.max_durability,
-		       t.is_active, t.created_at, t.updated_at
+		       t.is_active, t.effect_enabled, t.created_at, t.updated_at
 		FROM teleport_arrays t
 		JOIN players p ON p.id = t.owner_id
 		LEFT JOIN sects s ON s.id = t.sect_id
@@ -215,7 +217,7 @@ func GetMyTeleportArrays(c *gin.Context) {
 			&a.RegionID, &a.RegionName, &a.X, &a.Y, &a.Tier, &a.MaxRange, &a.IsCrossRegion,
 			&a.DirectionType, &a.AccessPolicy, &a.FeeEnabled, &a.FeeCurrency,
 			&a.FeeAmount, &a.VaultBalance, &a.CurrentDurability, &a.MaxDurability,
-			&a.IsActive, &a.CreatedAt, &a.UpdatedAt,
+			&a.IsActive, &a.EffectEnabled, &a.CreatedAt, &a.UpdatedAt,
 		); err != nil {
 			logger.S.Errorf("GetMyTeleportArrays scan failed: %v", err)
 			continue
@@ -283,6 +285,28 @@ func BuildTeleportArray(c *gin.Context) {
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		return
+	}
+	var effectProfile teleportArrayEffectProfile
+	effectProfileJSON := []byte(`{}`)
+	if teleportArrayRequestHasEffect(req) {
+		var expectedFingerprint string
+		effectProfile, expectedFingerprint, err = buildTeleportArrayEffectProfile(tx, player.ID, req)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if req.PreviewFingerprint == "" || req.PreviewFingerprint != expectedFingerprint {
+			c.JSON(http.StatusConflict, gin.H{"error": "Preview effect Trận Pháp đã cũ; hãy xem lại composition graph trước khi xây"})
+			return
+		}
+		effectProfileJSON, err = json.Marshal(effectProfile)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu effect profile Trận Pháp"})
+			return
+		}
+	} else if req.PreviewFingerprint != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Preview fingerprint được gửi nhưng composition graph đang trống"})
 		return
 	}
 	if err := checkRegionAction(player.CurrentRegion, "teleport"); err != nil {
@@ -375,19 +399,25 @@ func BuildTeleportArray(c *gin.Context) {
 			INSERT INTO teleport_arrays (
 				id, name, owner_id, sect_id, region_id, x, y, tier, max_range,
 				is_cross_region, direction_type, access_policy, fee_enabled, fee_currency,
-				fee_amount, vault_balance, current_durability, max_durability, is_active
+				fee_amount, vault_balance, current_durability, max_durability, is_active, effect_enabled, effect_profile
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7, $8, $9,
 				$10, $11, $12, $13, $14,
-				$15, 0, $16, $16, TRUE
+				$15, 0, $16, $16, TRUE, $17, $18
 			)
 		`, newID, req.Name, player.ID, sectIDPtr, player.CurrentRegion, player.X, player.Y,
 			tpl.Tier, tpl.MaxRange, tpl.IsCrossRegion, req.DirectionType, req.AccessPolicy,
-			req.FeeEnabled, req.FeeCurrency, req.FeeAmount, tpl.MaxDurability)
+			req.FeeEnabled, req.FeeCurrency, req.FeeAmount, tpl.MaxDurability, teleportArrayRequestHasEffect(req), effectProfileJSON)
 		if err != nil {
 			logger.S.Errorf("BuildTeleportArray insert error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Trận Pháp vào cơ sở dữ liệu"})
 			return
+		}
+		if teleportArrayRequestHasEffect(req) {
+			if err := reserveTeleportArrayGuComponents(tx, player.ID, newID, effectProfile); err != nil {
+				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+				return
+			}
 		}
 
 		_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, path_masteries = $3 WHERE id = $4`,
@@ -451,6 +481,7 @@ func BuildTeleportArray(c *gin.Context) {
 			CurrentDurability: tpl.MaxDurability,
 			MaxDurability:     tpl.MaxDurability,
 			IsActive:          true,
+			EffectEnabled:     teleportArrayRequestHasEffect(req),
 		}
 
 		c.JSON(http.StatusOK, models.BuildTeleportArrayResp{
@@ -822,6 +853,24 @@ func TravelTeleport(c *gin.Context) {
 	}
 
 	playerSectID := getPlayerSectID(tx, authID)
+	var sourceArrayID string
+	if err := tx.QueryRow(`SELECT id::text FROM teleport_arrays WHERE region_id=$1 AND x=$2 AND y=$3`, player.CurrentRegion, player.X, player.Y).Scan(&sourceArrayID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần đứng trực tiếp trên một Truyền Tống Trận để kích hoạt!"})
+		return
+	}
+	if sourceArrayID == targetUUID.String() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể truyền tống tới chính Trận Pháp đang đứng"})
+		return
+	}
+	arrayLockOrder := []string{sourceArrayID, targetUUID.String()}
+	sort.Strings(arrayLockOrder)
+	for _, arrayID := range arrayLockOrder {
+		var lockedID string
+		if err := tx.QueryRow(`SELECT id::text FROM teleport_arrays WHERE id=$1 FOR UPDATE`, arrayID).Scan(&lockedID); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Trận Pháp nguồn hoặc đích không còn tồn tại"})
+			return
+		}
+	}
 
 	// Check team rank gate for teleport
 	if player.PartyID != nil {
@@ -868,11 +917,13 @@ func TravelTeleport(c *gin.Context) {
 
 	// 2. Load Destination Array
 	var dest models.TeleportArray
+	var destEffectProfile []byte
 	var dSectID sql.NullString
 	err = tx.QueryRow(`
 		SELECT id, name, owner_id, sect_id, region_id, x, y, tier, max_range,
 		       is_cross_region, direction_type, access_policy, fee_enabled, fee_currency,
-		       fee_amount, vault_balance, current_durability, max_durability, is_active
+		       fee_amount, vault_balance, current_durability, max_durability, is_active,
+		       effect_enabled,effect_profile
 		FROM teleport_arrays
 		WHERE id = $1
 		FOR UPDATE
@@ -880,7 +931,7 @@ func TravelTeleport(c *gin.Context) {
 		&dest.ID, &dest.Name, &dest.OwnerID, &dSectID, &dest.RegionID, &dest.X, &dest.Y,
 		&dest.Tier, &dest.MaxRange, &dest.IsCrossRegion, &dest.DirectionType, &dest.AccessPolicy,
 		&dest.FeeEnabled, &dest.FeeCurrency, &dest.FeeAmount, &dest.VaultBalance,
-		&dest.CurrentDurability, &dest.MaxDurability, &dest.IsActive,
+		&dest.CurrentDurability, &dest.MaxDurability, &dest.IsActive, &dest.EffectEnabled, &destEffectProfile,
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Trận pháp đích không tồn tại hoặc đã bị phá hủy"})
@@ -986,13 +1037,37 @@ func TravelTeleport(c *gin.Context) {
 	}
 
 	// 6. Record Log
-	_, _ = tx.Exec(`
+	if _, err := tx.Exec(`
 		INSERT INTO teleport_array_logs (
 			array_id, user_id, from_region, from_x, from_y, to_region, to_x, to_y, fee_paid, fee_currency
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 		)
-	`, dest.ID, player.ID, source.RegionID, source.X, source.Y, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
+	`, dest.ID, player.ID, source.RegionID, source.X, source.Y, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi nhật ký truyền tống"})
+		return
+	}
+	arrivalEffectMessage := ""
+	if dest.EffectEnabled {
+		if _, validationErr := validateTeleportArrayEffectProfile(destEffectProfile); validationErr != nil {
+			if _, err = tx.Exec(`UPDATE teleport_arrays SET effect_enabled=false WHERE id=$1`, dest.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tự tháo effect Trận Pháp lỗi"})
+				return
+			}
+			if _, err = tx.Exec(`DELETE FROM teleport_array_gu_reservations WHERE array_id=$1`, dest.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giải phóng Cổ của effect Trận Pháp lỗi"})
+				return
+			}
+			dest.EffectEnabled = false
+			arrivalEffectMessage = "Effect Trận Pháp đích lỗi hoặc đã cũ nên được tự tháo; chuyến đi vẫn tiếp tục"
+		} else {
+			arrivalEffectMessage, err = applyTeleportArrayArrivalEffect(&player, destEffectProfile)
+			if err != nil {
+				c.JSON(http.StatusConflict, gin.H{"error": "Effect Trận Pháp đích lỗi khi thực thi; chuyến đi đã bị hủy"})
+				return
+			}
+		}
+	}
 
 	// 7. Move the player and apply the regional wall debuff via authoritative spatial transition.
 	transition, errMove := ExecuteSpatialTransition(c.Request.Context(), tx, &player, movementSpec{
@@ -1010,10 +1085,17 @@ func TravelTeleport(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
 		return
 	}
+	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2 WHERE id=$3`, player.HP, player.CurrentMana, player.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu effect Trận Pháp sau truyền tống"})
+		return
+	}
 
 	logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
 	if transition.DebuffMessage != "" {
 		logMsg += " " + transition.DebuffMessage
+	}
+	if arrivalEffectMessage != "" {
+		logMsg += " Hiệu ứng Trận Pháp đích: " + arrivalEffectMessage + "."
 	}
 
 	logger.S.Infof("[Pháp Trận] Người chơi %s (ID: %s) truyền tống qua pháp trận từ [%s] (%s: %d, %d) đến [%s] (%s: %d, %d) - Tiêu hao: %d %s", player.Username, player.ID, source.Name, source.RegionID, source.X, source.Y, dest.Name, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)

@@ -331,6 +331,40 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			Detail:    fmt.Sprintf("%s bị [%s], mất lượt trong %d lượt (tỉnh lại khi bị tấn công)!", target.Name, spec.Label, op.Turns),
 		})
 
+	case statusfx.BehaviourDreamPrison: // DREAM_PRISON
+		target.ActiveEffects = append(target.ActiveEffects, Effect{
+			ID: spec.ID, Type: "debuff", Value: 1, Duration: op.Turns,
+		})
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   target.ID,
+			ActorName: target.Name,
+			Action:    "DREAM_PRISON_APPLIED",
+			Detail:    fmt.Sprintf("[Mộng Đạo - Nhập Mộng] %s bị kéo vào [%s], mất lượt trong %d lượt (không bị phá bởi sát thương thường)!", target.Name, spec.Label, op.Turns),
+		})
+
+	case statusfx.BehaviourLuckSiphon: // LUCK_SIPHON
+		target.ActiveEffects = append(target.ActiveEffects, Effect{
+			ID: spec.ID, Type: "debuff", Value: 15, Duration: op.Turns,
+		})
+		if actor != nil {
+			actor.ActiveEffects = append(actor.ActiveEffects, Effect{
+				ID: "LUCK_SIPHON_BUFF", Type: "buff", Value: 15, Duration: op.Turns,
+			})
+			actor.EvasionChance += 0.15
+			if actor.EvasionChance > EvasionChanceCap {
+				actor.EvasionChance = EvasionChanceCap
+			}
+		}
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   actor.ID,
+			ActorName: actor.Name,
+			Action:    "LUCK_SIPHON_APPLIED",
+			TargetId:  target.ID,
+			Detail:    fmt.Sprintf("[Vận Đạo - Đoạt Vận] %s thi triển [%s], tước đoạt 15%% Né Tránh & Bạo Kích của %s chuyển hóa thành vận khí bản thân trong %d lượt!", actor.Name, spec.Label, target.Name, op.Turns),
+		})
+
 	case statusfx.BehaviourBlind: // BLIND
 		accPenalty := spec.Accuracy
 		if accPenalty <= 0 {

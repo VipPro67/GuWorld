@@ -40,7 +40,7 @@ export const EFFECT_TRIGGERS: GlossaryTrigger[] = [
   { code: "BEFORE_ENEMY_ATTACK", label: "Trước Khi Địch Đánh", group: "event", when: "Chạy ngay trước đòn của kẻ địch nhắm vào người mang." },
   { code: "ON_CAST", label: "Khi Niệm Chiêu", group: "event", when: "Chạy khi Cổ sư thôi động Cổ trong trận, trước khi đòn đánh được xử lý.", note: "Dùng cho biến thân/buff/danh sách chiêu đặc biệt." },
   { code: "ON_CONSUME", label: "Khi Nuốt Cổ", group: "action", when: "Chạy khi dùng Cổ Tiêu Hao qua túi đồ; Cổ biến mất sau khi hiệu ứng áp dụng.", note: "Cần Cổ đủ no, đủ Chân Nguyên và đúng điều kiện cảnh giới." },
-  { code: "ON_USE", label: "Khi Kích Hoạt", group: "action", when: "Chạy khi dùng Cổ Hỗ Trợ ngoài trận (nút Dùng).", note: "Chỉ một số Cổ hỗ trợ có hiệu ứng này." },
+  { code: "ON_USE", label: "Khi Kích Hoạt", group: "action", when: "Chạy khi dùng Cổ Hỗ Trợ hoặc Sát Chiêu ngoài trận (nút Dùng).", note: "Sát Chiêu hỗ trợ hồi HP, hoàn Chân Nguyên, Phi Hành, Ẩn Thân tăng DISGUISE và HASTE tăng tốc độ trên bản đồ; effect khác cần executor world riêng." },
 ];
 
 export interface GlossarySubType {
@@ -294,6 +294,9 @@ export const NATIVE_HOOKS: NativeHookEntry[] = [
   { code: "FORGET_WILL_CONFUSE", label: "Ý Niệm Hỗn Loạn", trigger: "BEFORE_ENEMY_ATTACK", status: "legacy", group: "combat", behavior: "Có thể khiến đòn địch đánh lạc sang chính nó hoặc hụt hẳn; có thể phản phệ phong ấn Cổ của mình." },
   { code: "UNRAVEL_RIDDLE", label: "Giải Đoán Câu Đố", trigger: "ON_CAST", status: "partial", group: "combat", behavior: "Xóa tối đa 2 buff của mục tiêu đầu tiên; phần 'ngắt chiêu tụ lực' hiện chỉ ghi log." },
   { code: "CHAOS_GAMBLE", label: "Hỗn Độn Đánh Cược", trigger: "ON_CAST", status: "partial", group: "combat", behavior: "Ngẫu nhiên một trong ba: ×5 sát thương đòn này, Bất Hoại 1 lượt, hoặc lấy đi 90% HP hiện tại của địch. 'Cái giá' hiện chưa bị trừ." },
+  { code: "LUCK_ROULETTE", label: "Cát Hung Chi Biến", trigger: "ON_CAST", status: "active", group: "combat", behavior: "Vận Đạo: Quay thưởng khí vận (Đại Cát ×3.0 dmg + hoàn Chân Nguyên, Trung Cát ×1.5 dmg, Bình Vận, hoặc Đại Hung tự tổn 10% HP và tăng vọt tỉ lệ Đại Cát hiệp sau)." },
+  { code: "LETHAL_LUCK_WARD", label: "Cẩu Thỉ Vận", trigger: "BEFORE_HIT", status: "active", group: "combat", behavior: "Vận Đạo: Khi nhận sát thương kết liễu, có tỉ lệ thoát chết trong gang tấc (HP giữ lại 1 và nhận thêm Chân Nguyên Giáp, 1 lần/trận)." },
+  { code: "DREAM_UNRAVEL", label: "Giải Mộng Hóa Thần", trigger: "ON_CAST", status: "active", group: "combat", behavior: "Mộng Đạo: Thanh tẩy toàn bộ khống chế & mê chướng tâm lý, chuyển hóa thành hồi Chân Nguyên và tạo Mộng Giáp hộ thể." },
   { code: "PERSIST_STATUS_ON_HIT", label: "Lưu Trạng Thái Khi Trúng Đòn", trigger: "ON_HIT", status: "partial", group: "combat", behavior: "Đòn trúng trong PvP thật gán vĩnh viễn một trạng thái lên địch, mỗi trận một lần." },
   { code: "IMMUNE_DREAM_STATUS", label: "Miễn Nhiễm Mộng Đạo", trigger: "ALWAYS_ON", status: "active", group: "combat", behavior: "Miễn nhiễm tuyệt đối mọi trạng thái thuộc Mộng đạo." },
   { code: "CLEANSE_REGIONAL_WALL", label: "Phá Áp Chế Giới Vực", trigger: "ON_BATTLE_START", status: "legacy", group: "combat", behavior: "Xóa Áp Chế Giới Vực của bản thân ngay đầu trận trước khi tính chỉ số." },
@@ -389,8 +392,8 @@ export const COMBAT_STATUSES: CombatStatusEntry[] = [
   { id: "DEF_UP", label: "Tăng Thủ", category: "Buff", behavior: "Tăng % phòng thủ.", turns: "3" },
   { id: "THORNS", label: "Phản Sát Thương", category: "Buff", behavior: "Phản lại % sát thương nhận vào.", turns: "3" },
   { id: "TAUNT", label: "Khiêu Khích", category: "Buff", behavior: "Buộc địch đánh vào người mang.", turns: "2" },
-  { id: "STEALTH", label: "Ẩn Thân", category: "Buff", behavior: "Không bị chọn bởi đòn đơn mục tiêu.", turns: "2" },
-  { id: "HASTE", label: "Tăng Tốc", category: "Buff", behavior: "Tăng % tốc độ.", turns: "3" },
+  { id: "STEALTH", label: "Ẩn Thân", category: "Buff / bản đồ", behavior: "Trong combat: không bị chọn bởi đòn đơn mục tiêu. Dùng ON_USE ngoài bản đồ: tăng DISGUISE, giảm tỉ lệ phục kích.", turns: "2 / phút" },
+  { id: "HASTE", label: "Tăng Tốc", category: "Buff / bản đồ", behavior: "Trong combat: tăng tốc độ theo lượt. Dùng ON_USE ngoài bản đồ: tăng tốc độ người chơi theo phần trăm trong thời hạn status.", turns: "3 lượt / phút" },
   { id: "FLYING", label: "Phi Hành", category: "Bản đồ", behavior: "Bay trên bản đồ, bỏ qua quái mặt đất; không tác dụng trong combat.", turns: "Vĩnh viễn" },
   { id: "PHI_HANH", label: "Phi Hành (alias)", category: "Bản đồ", behavior: "Tên cũ của FLYING, cùng hiệu ứng bản đồ.", turns: "Vĩnh viễn" },
   { id: "ARMOR_BREAK", label: "Phá Giáp", category: "Debuff", behavior: "Giảm % phòng thủ.", turns: "3" },
@@ -407,6 +410,10 @@ export const COMBAT_STATUSES: CombatStatusEntry[] = [
   { id: "BACKLASH", label: "Phản Phệ", category: "Bất tử", behavior: "Gây sát thương ngay khi dính.", turns: "1" },
   { id: "FORGET_EGO", label: "Lãng Quên Bản Ngã", category: "Khống chế tinh thần", behavior: "Phong ấn Cổ, không dùng được kỹ năng Cổ.", turns: "1" },
   { id: "FORGET_REALITY", label: "Lãng Quên Thực Tại", category: "Khống chế tinh thần", behavior: "Giảm % sát thương gây ra.", turns: "2" },
+  { id: "DREAM_PRISON", label: "Mộng Cảnh Giam Cầm", category: "Khống chế tinh thần", behavior: "Mộng Đạo: Kéo đối thủ vào cõi mộng sâu thẳm, mất lượt hoàn toàn và không bị đánh thức bởi sát thương thường.", turns: "2" },
+  { id: "DREAM_ILLUSION", label: "Mộng Ảnh Ẩn Thân", category: "Buff", behavior: "Mộng Đạo: Ẩn thân trong ảo mộng, kẻ địch không thể nhắm mục tiêu bằng đòn đánh đơn lẻ.", turns: "2" },
+  { id: "LUCK_SIPHON", label: "Đoạt Vận", category: "Khống chế tinh thần", behavior: "Vận Đạo: Tước đoạt 15% Né Tránh & Bạo Kích của mục tiêu chuyển hóa thành vận khí cho bản thân.", turns: "3" },
+  { id: "LUCK_CURSE_REVERSE", label: "Họa Hề Phúc Sở Ỷ", category: "Buff", behavior: "Vận Đạo: Biến họa thành phúc, tăng vọt tỉ lệ quay ra Đại Cát trong hiệp kế tiếp.", turns: "2" },
 ];
 
 export interface PersistentStatusEntry {

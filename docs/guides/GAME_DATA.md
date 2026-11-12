@@ -27,7 +27,7 @@ it is not run during startup. See `docs/mmo/recovery.md`.
 
 ## Combat loadout
 
-Realtime Gu hotbar/loadout (hotbar 1–6 and 9–12) đã bị gỡ khỏi player schema, API và model. `InitSchema` xóa các cột legacy `realtime_hotbar`, `realtime_skill_loadout` và `realtime_skill_loadout_configured` trên DB hiện hữu. Sát Chiêu và Trận Kích lưu tactical profile turn-based trong `player_killer_moves.combat_profile` / `player_gu_houses.house_profile`; khóa windup/cooldown mili giây và `realtime_effects` cũ được dọn tự động. Xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md` để biết các luật combat chưa được chuyển.
+Realtime Gu hotbar/loadout (hotbar 1–6 and 9–12) đã bị gỡ khỏi player schema, API và model. `InitSchema` xóa các cột legacy `realtime_hotbar`, `realtime_skill_loadout` và `realtime_skill_loadout_configured` trên DB hiện hữu. Sát Chiêu và Trận Kích lưu tactical profile turn-based trong `player_killer_moves.combat_profile` / `player_gu_houses.house_profile`; graph composition versioned của Sát Chiêu lưu riêng trong `player_killer_moves.composition_graph`. Các product effect snapshot mới ghi Block v2 envelope (`schema_version` + `blocks`); runtime giải chiếu về block list, và bộ đọc vẫn nhận mảng cũ trong lúc dữ liệu đã lưu được chuyển dần. Profile `killer_move.v1` và `gu_house.v1` khai báo cap/context/executor/chính sách Gu riêng. `player_killer_move_gu_reservations` và `player_gu_house_core_reservations` giữ chỗ Gu theo profile khi Sát Chiêu hoặc Tiên Cổ Ốc active, với quan hệ owner-typed, state snapshot và hạn chế đổi/xóa/chuyển Gu đã giữ chỗ. Hai sản phẩm không thể cùng dùng một Gu active; bản nháp chưa active vẫn được tham chiếu chung. Gu đang được giữ chỗ không bị chọn làm chiến lợi phẩm khi chủ nhân tử đạo; nếu Gu chết vì đói, worker tháo sản phẩm liên quan và giải phóng reservation trước khi xóa Gu. Khi nâng cấp, schema backfill reservation cho sản phẩm đang active hợp lệ; build Sát Chiêu sai định dạng/vượt cap sáu Gu/tranh Gu và Tiên Cổ Ốc có core sai định dạng/trùng/không còn ACTIVE hoặc tranh Gu sẽ tự tháo trang bị. Schema khởi tạo bổ sung các cấu trúc này theo cách idempotent. Khóa windup/cooldown mili giây và `realtime_effects` cũ được dọn tự động. Xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md` để biết các luật combat chưa được chuyển.
 
 ## Daily missions
 
@@ -43,6 +43,62 @@ JSONB field during the compatibility period. Admin revocation clears both record
 and any matching equipped title/frame, while leaving previously claimed rewards.
 
 ## Effect block migration audit
+
+`Gu.csv.effects` is now authored and persisted as the versioned Block v2
+envelope `{"schema_version":2,"blocks":[...]}`. The importer accepts Block
+v2 arrays and unversioned `{"blocks":[...]}` during this cutover and writes the
+canonical envelope; `GuEffects.Value()` and database exports preserve the
+envelope. Registry loading still accepts array rows so installations can be
+upgraded before the next Admin import. Unsupported explicit schema versions
+fail closed. The one-way converter recognizes arrays/envelopes idempotently;
+legacy namespaces continue through the existing per-group migration/parity
+gate rather than being silently treated as Block v2.
+
+`Gu.csv.composition_contributions` is a separate versioned authoring envelope:
+`{"schema_version":1,"grants":[{"effect_block_id":"ACTIVE_SKILL","operation_index":0,"capability":"COMBAT.DAMAGE.FLAT.SINGLE_TARGET"}]}`.
+Each grant must point at an operation in that row's Block v2 effects. The
+capability is explicit designer data; `primary_role`, `combat_roles`, and tags
+do not create grants. Leave the grants array empty until a versioned product
+rule consumes the capability. Admin Gu CRUD applies the same reference check,
+and Gu export preserves the envelope.
+
+The `teleport_formation.v1` catalog revision is `teleport_formation.rules.v1`. It permits only `COMBINE` for explicitly granted `WORLD_TRAVEL.ARRIVAL.SELF_EFFECT` operations: `ON_USE` self-heal/mana recovery or self `FLYING`, `STEALTH`, `HASTE`, using the `TELEPORT_ARRAY_TRAVEL_ADAPTER`. The current Gu seed has no travel capability grants, so support composition remains unavailable until designers author exact grants. Output-only effects do not need a grant.
+
+The `killer_move.v1` rule catalog revision is `killer_move.rules.v2`.
+It currently permits a `COMBINE` edge only between explicitly granted
+single-target flat-damage operations in turn-based combat. Its output template
+appends the support's authored command as a separate Block v2 operation. The checked-in Gu
+data grants that capability only to `GU_ANCIENT_BODY_2` rank 2 and
+`GU_ALL_HEAVEN_RECORD_3` rank 3. Import Gu through Admin after editing grants;
+rule edits require a new revision so previews retain their provenance.
+
+Turn-based Gu `ON_ACTION` blocks are compiled into operation-level simulator
+actions. The adapter preserves each operation's effective target and block
+conditions, and the parent Gu action pays mana/hunger and gains path mastery
+once. Supported operations are `DAMAGE` flat/multiplier/max-HP-percent,
+`SHIELD` flat/multiplier on self, `HEAL` flat/percent on self, hostile-target
+`LIFESTEAL`, self `MANA` restore, `DIRECT_HP`, self `BARRIER`, self `CLEANSE`,
+registered `STATUS` and the `GUARANTEED_HIT` action hook. `STAT_MOD` currently
+has no turn-based action adapter with duration/stack semantics and is rejected.
+`ON_HIT` native mechanics such as shield bypass stay on the combat hit path.
+The simulator currently has no `ALL_ALLIES` target adapter;
+unsupported operation/target combinations are rejected instead of being
+silently reinterpreted. This allowlist applies to normal turn-based Gu actions;
+Sát Chiêu, Trận Kích, and world operations keep their own product/context
+profiles and support gates.
+
+To canonicalize the checked-in Gu dataset safely, write to a distinct candidate
+and inspect the report before replacing the source:
+
+```bash
+cd backend
+go run ./cmd/migrate_gu_effects -format gu -source data/Gu.csv \
+  -write -output /tmp/Gu.csv.block-v2.csv -report /tmp/Gu.csv.audit.json
+```
+
+After changing this CSV, import **Cổ** through Admin → Dữ liệu. The runtime Gu
+registry is cached at startup, so restart the backend when the registry loader
+requires it.
 
 Legacy effects are converted by format, not through a shared best-effort
 decoder. Formats are `gu`, `item`, `gamefx`, `killer_move`, and
@@ -556,11 +612,11 @@ thái combat có thể khôi phục.
 - Cổ đang trang bị/Bản Mệnh vẫn được mirror trong cột JSONB `players.equipped_gus` (danh sách `instance_id`) để các truy vấn nhẹ (status) không cần join.
 - API `GET /api/player/status/:id` chỉ trả Cổ đang trang bị/vital; toàn bộ túi Cổ lấy qua `GET /api/player/inventory/gus` (helper `db.GuInventoryAggregate` / `db.LoadPlayerGus`).
 - `monster_templates.gu_inventory` (JSON trong cột monster) **giữ nguyên**, không đổi.
-- Sát chiêu tự tạo được lưu riêng trong `player_killer_moves`: công thức gồm Cổ chính/phụ, tham chiếu instance Cổ, effect đã chọn và effect đã cân bằng, hệ số ATK người chơi đã snapshot theo từng effect, cùng độ thành thạo và trạng thái trang bị. `balance_version`/`combat_profile.profile_version` đóng dấu snapshot luật; thay đổi luật không tự sửa build đã lưu. Cổ có thể được dùng trong nhiều sát chiêu; mỗi lần kích hoạt, từng Cổ thành phần giảm 1 độ no.
-- Các Cổ thành phần được kiểm tra lại theo `player_gu.id`, `gu_id`, `gu_rank` và trạng thái sống khi trang bị/thi triển. Bán, hợp luyện hoặc làm chết Cổ khiến sát chiêu phụ thuộc vào instance đó tạm mất hiệu lực.
+- Sát chiêu tự tạo được lưu riêng trong `player_killer_moves`: công thức gồm Cổ chính/phụ, graph composition có provenance, effect đã chọn và effect đã cân bằng, hệ số ATK người chơi đã snapshot theo từng effect, cùng độ thành thạo và trạng thái trang bị. `balance_version`/`combat_profile.profile_version` đóng dấu snapshot luật; thay đổi luật không tự sửa build đã lưu. Bản lưu chưa trang bị có thể dùng chung Cổ; khi active, profile giữ chỗ độc quyền mỗi Gu thành phần. Mỗi lần kích hoạt, từng Cổ thành phần giảm 1 độ no.
+- Các Cổ thành phần được kiểm tra lại theo `player_gu.id`, `gu_id`, `gu_rank` và trạng thái sống khi trang bị/thi triển. Cổ đang được Sát Chiêu active giữ chỗ không thể chuyển chủ, đổi loại/rank, khóa, hoặc bị xóa; cần tháo trang bị Sát Chiêu trước khi dùng Cổ cho thao tác khác. Nếu Cổ chết hoặc trạng thái dữ liệu bị thay đổi ngoài luồng, sát chiêu phụ thuộc vào instance đó tạm mất hiệu lực.
 - Cân bằng sát chiêu dùng ngân sách theo rank Cổ chính, phần ngân sách giảm dần từ Cổ thành phần, và tải effect theo loại/giá trị/phạm vi/thời lượng/xác suất. Các giá trị an toàn để scale được tự cân chỉnh; nếu riêng phần không scale được đã vượt ngân sách thì builder từ chối tổ hợp. Mỗi operation giữ target, conditions và rank Gu nguồn. Damage FLAT từ các operation cùng target/điều kiện được cộng với `ATK người chơi × hệ số của Gu nguồn`, rồi đi qua modifier chung một lần. Hệ số nằm ở `Gu.csv.player_atk_coefficient`, giống nhau giữa mọi rank của cùng Gu; giá trị seed hiện tại là `0` để giữ nguyên sát thương trước khi cấu hình cân bằng từng Gu.
-- Người chơi có thể lưu tối đa 12 sát chiêu và trang bị tối đa 4. Tác vụ chiến đấu theo lượt dùng profile đã trang bị; không còn hotbar 9–12 hoặc windup/cooldown theo mili giây. Builder giới hạn effect theo executor turn-based; effect chưa hỗ trợ phải được ghi nhận, không tự thay bằng executor realtime.
-- Profile Trận Kích của Tiên Cổ Ốc lưu dữ liệu chiến thuật turn-based. Các khóa realtime cũ trong `combat_profile` / `house_profile` được dọn khi `InitSchema` chạy; profile thiếu quy tắc lượt cần được rà soát trước khi kích hoạt.
+- Người chơi có thể lưu tối đa 12 sát chiêu và trang bị tối đa 4. Tác vụ chiến đấu theo lượt dùng profile đã trang bị; không còn hotbar 9–12 hoặc windup/cooldown theo mili giây. Builder giới hạn effect theo executor turn-based; effect chưa hỗ trợ phải được ghi nhận, không tự thay bằng executor realtime. Khi equip, combat load và Use ON_USE, hệ thống giải mã envelope Block v2 rồi kiểm tra lại graph/revision, provenance Block/op, rule grants và command snapshot; graph ghép legacy/stale bị khóa cho tới khi tạo lại.
+- Profile Trận Kích của Tiên Cổ Ốc lưu snapshot `gu_house.v1` với context `TURN_BASED_COMBAT` và executor `GU_HOUSE_ACTION_ADAPTER`. Mỗi Trận Kích có graph con `GU_HOUSE_ACTION/gu_house_action.v1`: một effect OUTPUT và các SUPPORT nối bằng rule đã khai báo; graph, effect blocks và provenance được chụp trong profile. Catalog `gu_house_action.rules.v1` hiện chỉ cho `COMBINE` damage FLAT đơn mục tiêu khi cả hai operation có grant `COMBAT.DAMAGE.FLAT.SINGLE_TARGET` chính xác trong `composition_contributions`; heal FLAT SELF và shield/barrier FLAT SELF chỉ dùng làm OUTPUT độc lập. Điều kiện và operation ngoài ma trận executor bị từ chối. Khi active, Tiên Cổ Ốc giữ chỗ độc quyền các core Gu còn ACTIVE trong inventory; tháo trang bị giải phóng chúng. Endpoint dùng ngoài combat của Tiên Cổ Ốc thi triển một effect `ON_USE` đã được world executor hỗ trợ từ Cổ hạch tâm được chọn, tiêu hao mana theo Cổ đó và 1 độ no; yêu cầu Cổ Ốc active, còn độ bền và người chơi không ở combat. Các khóa realtime cũ trong `combat_profile` / `house_profile` được dọn khi `InitSchema` chạy; profile cũ có SUPPORT edge nhưng thiếu rule revision bị chặn khi xuất chiến; tạo lại graph qua preview để nhận rule revision và capability grant hợp lệ.
 
 - Cột `players.temp_loot` đã bị **bỏ hẳn** (migration `ALTER TABLE players DROP COLUMN IF EXISTS temp_loot;`). Chiến lợi phẩm khám phá giờ vào thẳng túi thật (nguyên liệu → `player_inventory_items`, thạch → `players.primeval_stones`/`immortal_stones`, Cổ → `player_gu`).
 
@@ -808,7 +864,7 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | Race: `immortal`, `disable_hp_regen`, `disable_mana_regen`, `disable_soul_regen`, `disable_resource_regen` | always-on → self | boolean | lifespan/regen policy; players.race | thiếu label cho một số flag; gamefx tests một phần |
 | Status: `death_drop_mult`, `pvp_immune` | while status active → self | multiplier/bool | **không có field/executor: silent no-op hiện tại, phải fail khi compile v2** | chưa có label/test execution |
 | Item: `hunger`, `restore_hp`, `heal_aperture`, `increase_aperture_area`, `increase_aperture_time_rate`, `add_dao_marks`, `increase_human_qi`, `random_constitution`, `random_race`, `open_mine_chest`, `open_immortal_mine_chest`, `spring_egg_hatch` | item use/feed → self/pet/aperture | flat hoặc command enum | item/pet handlers; inventory + players/aperture | `Item.name`; `handlers/item_effects_test.go` (coverage từng key chưa đầy đủ) |
-| `killer_moves.effects` legacy keys | legacy move build/cast | nhiều đơn vị cũ, không đồng nhất | Không phải contract realtime. Combat Sát Chiêu dùng profile turn-based; `ON_USE` ngoài combat chỉ xử lý hồi phục bản thân. Effect ngoài executor turn-based cần được ghi nhận là chưa hỗ trợ. | tactical loadout; effect không hỗ trợ bị khóa |
+| `killer_moves.effects` legacy keys | legacy move build/cast | nhiều đơn vị cũ, không đồng nhất | Không phải contract realtime. Combat Sát Chiêu dùng profile turn-based; adapter `ON_USE` ngoài combat nhận self-heal HP FLAT/PERCENT, hoàn Chân Nguyên qua `HEAL/RESOURCE` MANA, `FLYING`, `STEALTH` và `HASTE` bản thân. STEALTH cộng `value` vào DISGUISE để giảm phục kích; HASTE nhân tốc độ người chơi theo phần trăm. Status duration dùng `turns` theo phút (mặc định Rank, tối đa 24 giờ); STEALTH/HASTE mặc định Rank và cap 100. Effect compile/evaluate qua contract chung; ngoài executor đã khai báo thì fail closed. | tactical loadout; effect không hỗ trợ bị khóa |
 | `aperture_variant_events.effects` | chưa có producer/trigger | chưa xác định | chỉ có JSONB owner event row; **không executor/persistence command** | không UI, không test; mọi payload hiện là no-op |
 
 **Nguyên Tuyền (primeval vein):** bảng `primeval_veins` (`region_id`, `x`, `y`, `vein_type` `mortal`/`immortal`, `rarity`, `accumulated_since`, `produced_minutes`, `expires_at`). Mỗi mỏ có bể chung: ai đứng trong phạm vi 3 ô cũng thu hoạch được, nhận hết phần đã tích rồi bể reset. Trần tích lũy **1 ngày sản lượng**; trần vòng đời theo phẩm chất (Thường 7 / Hiếm 10 / Sử Thi 14 / Truyền Thuyết 21 / Siêu Cấp 30 ngày sản lượng); mỏ sống tối đa **30 ngày**. Phàm Tuyền nhả `mine_chest`; Tiên Tuyền nhả `mine_chest_immortal` (tỉ lệ rương decay 50%/2h, sàn 20% base — `veinChestDecay`, `handlers/primeval_vein.go`). Worker spawn tối đa **31 phàm + 5 tiên** (tiên chỉ ở vùng `min_rank ≥ 5`; mỗi đại vực ~1/5 cap), mỗi 30 phút bù 1 mỏ/loại. Boss rơi Cổ trùng `GU_SPRING_EGG` (Tuyền Đản Cổ) với tỉ lệ 1%; dùng Cổ này kích hoạt effect `SPRING_EGG_HATCH` để cấy Phàm Tuyền tại chỗ. Người chơi cấy bằng Cổ/vật phẩm **không** bị giới hạn cap 31 Phàm Tuyền toàn cục hay cap đại vực (cap chỉ áp cho worker tự spawn); vẫn chặn ô đã có địa điểm, vùng an toàn và bí cảnh.
@@ -1004,6 +1060,10 @@ Cấu trúc flat v2 của mỗi block:
 | **SLEEP** | Control | CÓ (2) | **CÓ (registry)** |
 | **BLIND / CHARM / BIND** | Stat/Control | CÓ (1) | **CÓ (registry)** |
 | HASTE, ARMOR_BREAK, DAMAGE_REDUCTION_UP, INVINCIBLE, LAST_STAND, EVASION, REVIVE_LOCK | Buff/Debuff | Không | **CÓ (registry)** |
+| **DREAM_PRISON** | Control (Mộng Đạo) | Mới | **CÓ (registry - giam cầm trong mộng, mất lượt, không vỡ khi bị đánh)** |
+| **DREAM_ILLUSION** | Buff (Mộng Đạo) | Mới | **CÓ (registry - ẩn thân trong ảo mộng, không bị địch nhắm đánh)** |
+| **LUCK_SIPHON** | Debuff (Vận Đạo) | Mới | **CÓ (registry - tước đoạt né tránh & bạo kích của địch)** |
+| **LUCK_CURSE_REVERSE** | Buff (Vận Đạo) | Mới | **CÓ (registry - biến họa thành phúc, tăng vọt tỉ lệ Đại Cát hiệp sau)** |
 
 **Bảng D — Mapping key cũ → key chuẩn** (dùng key chuẩn khi thêm Cổ mới):
 
@@ -1476,6 +1536,8 @@ Giao dịch đồng bộ cả `players.primeval_stones/immortal_stones` lẫn `w
 ### Truyền Tống Trận Ngũ Vực (Teleportation Arrays)
 
 Bảng `teleport_arrays` lưu các thực thể trận pháp do người chơi và Tông Môn xây dựng trên bản đồ thế giới Ngũ Vực.
+
+Trận Pháp có thể lắp composition tùy chọn theo profile `teleport_formation.v1`: output và support đều lấy từ Cổ `ON_USE`, nhưng context là `WORLD_TRAVEL_ARRIVAL` và executor là adapter Trận Pháp. Builder chỉ cho phép self-heal HP, hồi MANA, FLYING, STEALTH và HASTE; preview/compiler từ chối operation ngoài ma trận. Graph provenance và effect snapshot Block v2 envelope (`schema_version: 2`) được lưu trong `teleport_arrays.effect_profile`; build phải gửi lại fingerprint preview. Các Gu thành phần bị giữ chỗ trong `teleport_array_gu_reservations` khi effect profile được lắp. Chúng vẫn hao đói bình thường; nếu một thành phần chết đói, worker tắt riêng `effect_enabled` của Trận Pháp và giải phóng cả nhóm reservation, còn dịch chuyển cơ bản vẫn dùng được. Phá dỡ array giải phóng reservation qua FK cascade.
 
 #### Phân cấp trận pháp:
 - **`TIER_1` (Tiểu Hình Truyền Tống Trận / Vi Trận):**

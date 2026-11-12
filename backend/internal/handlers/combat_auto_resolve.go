@@ -448,8 +448,19 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		Reason:     reason,
 		ManaCost:   cost,
 	}
-	if compiled := spec.Effects.Compiled(); compiled != nil {
-		act.CompiledOperations = compiled.CompileCombatAction().Operations
+	compiled := spec.Effects.Compiled()
+	if compiled == nil && len(spec.Effects.Blocks) > 0 {
+		compiled, err = (gameplayeffects.Compiler{}).Compile(spec.Effects.GetBlocks())
+		if err != nil {
+			return simulator.SimAction{}, fmt.Errorf("compile combat effects for %s: %w", spec.ID, err)
+		}
+	}
+	if compiled != nil {
+		operationEffects, adaptErr := adaptBlockCombatOperations(actor, spec, scale, compiled.Operations(gameplayeffects.TriggerOnAction))
+		if adaptErr != nil {
+			return simulator.SimAction{}, fmt.Errorf("adapt combat effects for %s: %w", spec.ID, adaptErr)
+		}
+		act.OperationEffects = operationEffects
 	}
 	act.Mechanics = append(act.Mechanics, combatMechanicsForSpec(*spec, true)...)
 	resolveSummonMonsterStats(&act)
@@ -462,7 +473,24 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		act.BacklashDamage = gamefx.HigherRankHPCost(spec.Rank, actor.Rank, actor.MaxHP)
 	}
 
-	if spec.Effects.Active != nil {
+	if compiled != nil {
+		// The simulator consumes the typed child operations once, after parent
+		// cast/resource checks. Keep only the base action damage here for parent
+		// hit interrupts; direct effect fields must not be applied a second time.
+		if len(act.OperationEffects) > 0 {
+			act.Defense = 0
+			act.Healing = 0
+			act.ManaRestore = 0
+			act.CleanseDebuffs = false
+			act.StatusOps = nil
+			act.LifeStealPct = 0
+			act.DamageHPPercent = 0
+			act.ShieldStripPercent = 0
+			act.TargetWeakPct = 0
+			act.DisableGuTurns = 0
+			act.PhantomDmg = 0
+		}
+	} else if spec.Effects.Active != nil {
 		active := spec.Effects.Active
 		if active.DamagePath != "" {
 			act.Path = []string{active.DamagePath}

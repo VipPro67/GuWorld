@@ -282,6 +282,7 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       killerMoves: [],
       killerMovesLoading: false,
       guHouses: [],
+      guHouseCompositionRuleSet: null,
       guHousesLoading: false,
     });
     localStorage.removeItem("gu_auth_token");

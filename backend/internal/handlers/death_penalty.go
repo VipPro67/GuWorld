@@ -232,7 +232,19 @@ type DeathPos struct {
 // applyDeathDrop applies the death penalty to a fully-loaded in-memory loser.
 func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, isAggressor bool, deathPos ...DeathPos) string {
 	mult, satKhiLevel := getSatKhiMultiplier(tx, loser.ID)
-	remainingGus, droppedGus := selectEligibleGus(loser.GuInventory, mult, satKhiLevel)
+	reservationErr := lockGuProductOwner(tx, loser.ID)
+	var reservedGus map[string]bool
+	if reservationErr == nil {
+		reservedGus, reservationErr = loadActiveProductGuReservations(tx, loser.ID)
+	}
+	if reservationErr != nil {
+		logger.S.Errorf("applyDeathDrop: cannot load active Gu product reservations for %s: %v", loser.ID, reservationErr)
+		reservedGus = make(map[string]bool, len(loser.GuInventory))
+		for _, gu := range loser.GuInventory {
+			reservedGus[gu.InstanceID] = true
+		}
+	}
+	remainingGus, droppedGus := selectEligibleGus(loser.GuInventory, mult, satKhiLevel, reservedGus)
 	loser.GuInventory = remainingGus
 	if len(droppedGus) > 0 && len(loser.EquippedGus) > 0 {
 		droppedMap := make(map[string]bool)
@@ -330,7 +342,19 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, isAggressor 
 	}
 
 	allGus, _ := db.LoadPlayerGus(tx, loserID.String(), false)
-	_, droppedGus := selectEligibleGus(allGus, mult, satKhiLevel)
+	reservationErr := lockGuProductOwner(tx, *loserID)
+	var reservedGus map[string]bool
+	if reservationErr == nil {
+		reservedGus, reservationErr = loadActiveProductGuReservations(tx, *loserID)
+	}
+	if reservationErr != nil {
+		logger.S.Errorf("CalculateDeathPenaltyLosses: cannot load active Gu product reservations for %s: %v", *loserID, reservationErr)
+		reservedGus = make(map[string]bool, len(allGus))
+		for _, gu := range allGus {
+			reservedGus[gu.InstanceID] = true
+		}
+	}
+	_, droppedGus := selectEligibleGus(allGus, mult, satKhiLevel, reservedGus)
 
 	// Degrade durability of equipped Gus by 15.0 on death (for non-memory record flows)
 	_, _ = db.ApplyEquippedGuDurabilityDegradation(tx, loserID.String(), 15.0)
@@ -612,10 +636,10 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 // selectEligibleGus returns the remaining inventory and the randomly chosen Gus to drop.
 // Vital Gu (Cổ Bản Mệnh) is NEVER dropped.
 // Equipped Gus can only be dropped if satKhiLevel > 0.
-func selectEligibleGus(gus models.GuInventory, mult float64, satKhiLevel int) (models.GuInventory, models.GuInventory) {
+func selectEligibleGus(gus models.GuInventory, mult float64, satKhiLevel int, reserved map[string]bool) (models.GuInventory, models.GuInventory) {
 	eligible := make(models.GuInventory, 0, len(gus))
 	for _, g := range gus {
-		if g.IsVital {
+		if g.IsVital || reserved[g.InstanceID] {
 			continue
 		}
 		if g.Equipped && satKhiLevel <= 0 {

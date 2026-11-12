@@ -193,6 +193,15 @@ func EquipNPCGu(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("NPC hiện chỉ có %d ô trang bị", actorRank)})
 		return
 	}
+	reserved, reservationErr := guHasActiveProductReservation(tx, req.GuInstanceID)
+	if reservationErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+		return
+	}
+	if reserved {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
+		return
+	}
 	if _, err = tx.Exec(`UPDATE player_gu SET location='ACTOR',equipped=false,is_vital=false,updated_at=NOW() WHERE id=$1`, req.GuInstanceID); err != nil {
 		c.JSON(500, gin.H{"error": "Database error"})
 		return

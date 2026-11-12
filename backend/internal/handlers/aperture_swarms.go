@@ -222,12 +222,12 @@ func MaterializeGuFromSwarm(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":          "Đã rút Cổ trùng từ Tiên Khiếu thành công!",
-		"instance_id":      newInstanceID,
-		"gu_id":            req.GuID,
-		"gu_rank":          req.GuRank,
-		"equipped":         req.Equip,
-		"remaining_swarm":  remainingQty,
+		"message":         "Đã rút Cổ trùng từ Tiên Khiếu thành công!",
+		"instance_id":     newInstanceID,
+		"gu_id":           req.GuID,
+		"gu_rank":         req.GuRank,
+		"equipped":        req.Equip,
+		"remaining_swarm": remainingQty,
 	})
 }
 
@@ -314,6 +314,15 @@ func DematerializeGuToSwarm(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đang bị khóa trong phiên luyện hoặc giao dịch!"})
 		return
 	}
+	reserved, reservationErr := guHasActiveProductReservation(tx, req.InstanceID)
+	if reservationErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+		return
+	}
+	if reserved {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
+		return
+	}
 	if durability < 100.0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": fmt.Sprintf("Cổ trùng đang bị thương tổn (độ bền %.1f/100)! Cần tu bổ lành lặn trước khi thả vào Tiên Khiếu.", durability),
@@ -372,10 +381,10 @@ func DematerializeGuToSwarm(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "Đã hòa nhập Cổ trùng vào Đàn Tiên Khiếu thành công!",
-		"gu_id":           guID,
-		"gu_rank":         guRank,
-		"new_swarm_qty":   newSwarmQty,
+		"message":       "Đã hòa nhập Cổ trùng vào Đàn Tiên Khiếu thành công!",
+		"gu_id":         guID,
+		"gu_rank":       guRank,
+		"new_swarm_qty": newSwarmQty,
 	})
 }
 
@@ -419,6 +428,9 @@ func DepositAllHealthyGus(c *gin.Context) {
 		FROM player_gu
 		WHERE player_id = $1 AND gu_rank <= 5 AND durability >= 100.0
 		  AND is_vital = false AND is_locked = false AND equipped = false
+		  AND NOT EXISTS (SELECT 1 FROM player_killer_move_gu_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
+		  AND NOT EXISTS (SELECT 1 FROM player_gu_house_core_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
+		  AND NOT EXISTS (SELECT 1 FROM teleport_array_gu_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
 		FOR UPDATE
 	`, playerID)
 	if err != nil {

@@ -182,7 +182,11 @@ func replaceAdminVariantNPCGu(c *gin.Context, tx *sql.Tx, actorID, ownerID strin
 	}
 	for _, g := range requested {
 		var guRank int
-		err := tx.QueryRowContext(c.Request.Context(), `SELECT gu_rank FROM player_gu WHERE id=$1 AND player_id=$2 AND location='INVENTORY' AND state='ACTIVE' AND hunger>0 AND NOT equipped AND NOT is_vital AND NOT is_locked FOR UPDATE`, g.PlayerGuID, ownerID).Scan(&guRank)
+		err := tx.QueryRowContext(c.Request.Context(), `SELECT gu_rank FROM player_gu WHERE id=$1 AND player_id=$2 AND location='INVENTORY' AND state='ACTIVE' AND hunger>0 AND NOT equipped AND NOT is_vital AND NOT is_locked
+			AND NOT EXISTS (SELECT 1 FROM player_killer_move_gu_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
+			AND NOT EXISTS (SELECT 1 FROM player_gu_house_core_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
+			AND NOT EXISTS (SELECT 1 FROM teleport_array_gu_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
+			FOR UPDATE`, g.PlayerGuID, ownerID).Scan(&guRank)
 		if err != nil {
 			return fmt.Errorf("Cổ %s không thuộc kho của chủ nhân hoặc không khả dụng", g.PlayerGuID)
 		}

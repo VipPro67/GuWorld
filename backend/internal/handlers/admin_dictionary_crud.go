@@ -12,6 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -29,6 +31,7 @@ func AdminListGuItems(c *gin.Context) {
 		COALESCE(primary_role,''), COALESCE(combat_roles,'[]'::jsonb),
 		COALESCE(combat_tags,'[]'::jsonb), COALESCE(support_tags,'[]'::jsonb), COALESCE(base_price,0),
 		COALESCE(image_url,''), COALESCE(player_atk_coefficient,0)
+		, COALESCE(composition_contributions,'{"schema_version":1,"grants":[]}'::jsonb)
 		FROM gu_dictionary ORDER BY name`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -37,26 +40,27 @@ func AdminListGuItems(c *gin.Context) {
 	defer rows.Close()
 
 	type GuRow struct {
-		ID           string          `json:"id"`
-		Name         string          `json:"name"`
-		Rank         int             `json:"rank"`
-		Path         json.RawMessage `json:"path"`
-		GuType       string          `json:"gu_type"`
-		BaseManaCost float64         `json:"base_mana_cost"`
-		Effects      json.RawMessage `json:"effects"`
-		FoodTypes    json.RawMessage `json:"food_types"`
-		HungerRate   int             `json:"hunger_rate"`
-		MaxHunger    int             `json:"max_hunger"`
-		Description  string          `json:"description"`
-		TargetType   string          `json:"target_type"`
-		Rarity       int             `json:"rarity"`
-		PrimaryRole  string          `json:"primary_role"`
-		CombatRoles  json.RawMessage `json:"combat_roles"`
-		CombatTags   json.RawMessage `json:"combat_tags"`
-		SupportTags  json.RawMessage `json:"support_tags"`
-		BasePrice    float64         `json:"base_price"`
-		ImageURL     string          `json:"image_url"`
-		PlayerATKCoefficient float64 `json:"player_atk_coefficient"`
+		ID                       string          `json:"id"`
+		Name                     string          `json:"name"`
+		Rank                     int             `json:"rank"`
+		Path                     json.RawMessage `json:"path"`
+		GuType                   string          `json:"gu_type"`
+		BaseManaCost             float64         `json:"base_mana_cost"`
+		Effects                  json.RawMessage `json:"effects"`
+		FoodTypes                json.RawMessage `json:"food_types"`
+		HungerRate               int             `json:"hunger_rate"`
+		MaxHunger                int             `json:"max_hunger"`
+		Description              string          `json:"description"`
+		TargetType               string          `json:"target_type"`
+		Rarity                   int             `json:"rarity"`
+		PrimaryRole              string          `json:"primary_role"`
+		CombatRoles              json.RawMessage `json:"combat_roles"`
+		CombatTags               json.RawMessage `json:"combat_tags"`
+		SupportTags              json.RawMessage `json:"support_tags"`
+		BasePrice                float64         `json:"base_price"`
+		ImageURL                 string          `json:"image_url"`
+		PlayerATKCoefficient     float64         `json:"player_atk_coefficient"`
+		CompositionContributions json.RawMessage `json:"composition_contributions"`
 	}
 
 	items := []GuRow{}
@@ -65,7 +69,7 @@ func AdminListGuItems(c *gin.Context) {
 		if err := rows.Scan(&r.ID, &r.Name, &r.Rank, &r.Path, &r.GuType,
 			&r.BaseManaCost, &r.Effects, &r.FoodTypes, &r.HungerRate, &r.MaxHunger,
 			&r.Description, &r.TargetType, &r.Rarity, &r.PrimaryRole,
-			&r.CombatRoles, &r.CombatTags, &r.SupportTags, &r.BasePrice, &r.ImageURL, &r.PlayerATKCoefficient); err != nil {
+			&r.CombatRoles, &r.CombatTags, &r.SupportTags, &r.BasePrice, &r.ImageURL, &r.PlayerATKCoefficient, &r.CompositionContributions); err != nil {
 			continue
 		}
 		items = append(items, r)
@@ -74,26 +78,56 @@ func AdminListGuItems(c *gin.Context) {
 }
 
 type AdminGuInput struct {
-	ID           string          `json:"id"`
-	Name         string          `json:"name"`
-	Rank         int             `json:"rank"`
-	Path         []string        `json:"path"`
-	GuType       string          `json:"gu_type"`
-	BaseManaCost float64         `json:"base_mana_cost"`
-	Effects      json.RawMessage `json:"effects"`
-	FoodTypes    []string        `json:"food_types"`
-	HungerRate   int             `json:"hunger_rate"`
-	MaxHunger    int             `json:"max_hunger"`
-	Description  string          `json:"description"`
-	TargetType   string          `json:"target_type"`
-	Rarity       int             `json:"rarity"`
-	PrimaryRole  string          `json:"primary_role"`
-	CombatRoles  []string        `json:"combat_roles"`
-	CombatTags   []string        `json:"combat_tags"`
-	SupportTags  []string        `json:"support_tags"`
-	BasePrice    float64         `json:"base_price"`
-	ImageURL     string          `json:"image_url"`
-	PlayerATKCoefficient *float64 `json:"player_atk_coefficient,omitempty"`
+	ID                       string          `json:"id"`
+	Name                     string          `json:"name"`
+	Rank                     int             `json:"rank"`
+	Path                     []string        `json:"path"`
+	GuType                   string          `json:"gu_type"`
+	BaseManaCost             float64         `json:"base_mana_cost"`
+	Effects                  json.RawMessage `json:"effects"`
+	FoodTypes                []string        `json:"food_types"`
+	HungerRate               int             `json:"hunger_rate"`
+	MaxHunger                int             `json:"max_hunger"`
+	Description              string          `json:"description"`
+	TargetType               string          `json:"target_type"`
+	Rarity                   int             `json:"rarity"`
+	PrimaryRole              string          `json:"primary_role"`
+	CombatRoles              []string        `json:"combat_roles"`
+	CombatTags               []string        `json:"combat_tags"`
+	SupportTags              []string        `json:"support_tags"`
+	BasePrice                float64         `json:"base_price"`
+	ImageURL                 string          `json:"image_url"`
+	PlayerATKCoefficient     *float64        `json:"player_atk_coefficient,omitempty"`
+	CompositionContributions json.RawMessage `json:"composition_contributions,omitempty"`
+}
+
+func validateGuCompositionContributions(c *gin.Context, effectsRaw, grantsRaw json.RawMessage, key string) (json.RawMessage, bool) {
+	canonicalEffects, issues := effectcatalog.CanonicalBlockV2Envelope(effectsRaw, effectcatalog.Location{Source: "gu", Key: key})
+	if len(issues) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đọc Block v2 để xác thực composition contributions"})
+		return nil, false
+	}
+	var effectSet struct {
+		Blocks []gameplayeffects.Block `json:"blocks"`
+	}
+	if err := json.Unmarshal(canonicalEffects, &effectSet); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đọc Block v2 để xác thực composition contributions"})
+		return nil, false
+	}
+	if len(grantsRaw) == 0 {
+		grantsRaw = json.RawMessage(`{"schema_version":1,"grants":[]}`)
+	}
+	catalog, err := composition.ParseGrantCatalog(grantsRaw, effectSet.Blocks)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("composition_contributions không hợp lệ (%s): %v", key, err)})
+		return nil, false
+	}
+	normalized, err := catalog.Value()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể chuẩn hóa composition_contributions"})
+		return nil, false
+	}
+	return normalized, true
 }
 
 func guValidate(req *AdminGuInput) (bool, string) {
@@ -122,6 +156,13 @@ func marshalArray(arr []string) json.RawMessage {
 	}
 	b, _ := json.Marshal(arr)
 	return b
+}
+
+func nullableJSON(raw json.RawMessage) interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+	return raw
 }
 
 func validateAndNormalizeAdminGuEffects(c *gin.Context, key string, raw *json.RawMessage) bool {
@@ -183,6 +224,10 @@ func AdminCreateGuItem(c *gin.Context) {
 	if !validateAndNormalizeAdminGuEffects(c, req.ID, &req.Effects) {
 		return
 	}
+	req.CompositionContributions, ok = validateGuCompositionContributions(c, req.Effects, req.CompositionContributions, req.ID)
+	if !ok {
+		return
+	}
 
 	playerATKCoefficient := 0.0
 	var existingCoefficient float64
@@ -201,10 +246,10 @@ func AdminCreateGuItem(c *gin.Context) {
 		}
 		playerATKCoefficient = *req.PlayerATKCoefficient
 	}
-	_, err := db.DB.Exec(`INSERT INTO gu_dictionary (id,name,rank,path,gu_type,base_mana_cost,player_atk_coefficient,effects,food_types,hunger_rate,max_hunger,description,target_type,rarity,primary_role,combat_roles,combat_tags,support_tags,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+	_, err := db.DB.Exec(`INSERT INTO gu_dictionary (id,name,rank,path,gu_type,base_mana_cost,player_atk_coefficient,effects,food_types,hunger_rate,max_hunger,description,target_type,rarity,primary_role,combat_roles,combat_tags,support_tags,base_price,image_url,composition_contributions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
 		req.ID, req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, playerATKCoefficient, req.Effects, marshalArray(req.FoodTypes),
 		req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.PrimaryRole,
-		marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL)
+		marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL, req.CompositionContributions)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
 		return
@@ -247,6 +292,27 @@ func AdminUpdateGuItem(c *gin.Context) {
 	}
 	if len(req.Effects) > 0 && !validateAndNormalizeAdminGuEffects(c, req.ID, &req.Effects) {
 		return
+	}
+	if len(req.Effects) > 0 || len(req.CompositionContributions) > 0 {
+		effectsForGrants := req.Effects
+		grantsForEffects := req.CompositionContributions
+		if len(effectsForGrants) == 0 || len(grantsForEffects) == 0 {
+			var existingEffects, existingGrants []byte
+			if err := db.DB.QueryRow(`SELECT effects, composition_contributions FROM gu_dictionary WHERE id=$1 AND rank=$2`, guID, oldRank).Scan(&existingEffects, &existingGrants); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ để xác thực composition contributions"})
+				return
+			}
+			if len(effectsForGrants) == 0 {
+				effectsForGrants = existingEffects
+			}
+			if len(grantsForEffects) == 0 {
+				grantsForEffects = existingGrants
+			}
+		}
+		req.CompositionContributions, ok = validateGuCompositionContributions(c, effectsForGrants, grantsForEffects, req.ID)
+		if !ok {
+			return
+		}
 	}
 
 	if req.Name == "" {
@@ -344,6 +410,11 @@ func AdminUpdateGuItem(c *gin.Context) {
 			args = append(args, *req.PlayerATKCoefficient)
 			idx++
 		}
+		if len(req.CompositionContributions) > 0 {
+			sets = append(sets, "composition_contributions=$"+strconv.Itoa(idx)+"::jsonb")
+			args = append(args, req.CompositionContributions)
+			idx++
+		}
 
 		if len(sets) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
@@ -372,10 +443,10 @@ func AdminUpdateGuItem(c *gin.Context) {
 		if req.TargetType == "" {
 			req.TargetType = "SINGLE"
 		}
-		_, err := db.DB.Exec(`UPDATE gu_dictionary SET name=$1,rank=$2,path=$3,gu_type=$4,base_mana_cost=$5,effects=$6,food_types=$7,hunger_rate=$8,max_hunger=$9,description=$10,target_type=$11,rarity=$12,primary_role=$13,combat_roles=$14,combat_tags=$15,support_tags=$16,base_price=$17,image_url=$18 WHERE id=$19 AND rank=$20`,
+		_, err := db.DB.Exec(`UPDATE gu_dictionary SET name=$1,rank=$2,path=$3,gu_type=$4,base_mana_cost=$5,effects=$6,food_types=$7,hunger_rate=$8,max_hunger=$9,description=$10,target_type=$11,rarity=$12,primary_role=$13,combat_roles=$14,combat_tags=$15,support_tags=$16,base_price=$17,image_url=$18,composition_contributions=COALESCE($19::jsonb,composition_contributions) WHERE id=$20 AND rank=$21`,
 			req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
 			req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.PrimaryRole,
-			marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL, guID, oldRank)
+			marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL, nullableJSON(req.CompositionContributions), guID, oldRank)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 			return

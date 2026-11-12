@@ -384,14 +384,18 @@ func CreateRefineSession(c *gin.Context) {
 
 	// Gu nguyên liệu phải không bị khóa bởi phiên khác.
 	lockedCount := 0
-	if err := tx.QueryRow(`SELECT COUNT(1) FROM player_gu WHERE player_id=$1 AND id = ANY($2::text[]) AND is_locked`,
+	if err := tx.QueryRow(`SELECT COUNT(1) FROM player_gu AS gu WHERE gu.player_id=$1 AND gu.id = ANY($2::text[]) AND (
+		gu.is_locked OR EXISTS (SELECT 1 FROM player_killer_move_gu_reservations AS reservation WHERE reservation.gu_instance_id=gu.id)
+		OR EXISTS (SELECT 1 FROM player_gu_house_core_reservations AS reservation WHERE reservation.gu_instance_id=gu.id)
+		OR EXISTS (SELECT 1 FROM teleport_array_gu_reservations AS reservation WHERE reservation.gu_instance_id=gu.id)
+	)`,
 		player.ID, pq.Array(req.SelectedGuInstanceIDs)).Scan(&lockedCount); err != nil {
 		logger.S.Errorf("CreateRefineSession: locked check error: %v", err)
 		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi kiểm tra Gu bị khóa"})
 		return
 	}
 	if lockedCount > 0 {
-		c.JSON(409, gin.H{"error": "Có Cổ nguyên liệu đang bị giữ trong phiên luyện khác!", "code": refineCodeGuLocked})
+		c.JSON(409, gin.H{"error": "Có Cổ nguyên liệu đang bị giữ trong phiên luyện, Sát Chiêu hoặc Tiên Cổ Ốc đang active!", "code": refineCodeGuLocked})
 		return
 	}
 

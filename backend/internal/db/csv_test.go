@@ -9,6 +9,26 @@ import (
 	"testing"
 )
 
+func TestNormalizedGuEffectsWritesCanonicalEnvelope(t *testing.T) {
+	block := `{"id":"BASIC_HIT","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":10,"unit":"FLAT"}]}`
+	for _, raw := range []string{"[" + block + "]", `{"blocks":[` + block + `]}`, `{"schema_version":2,"blocks":[` + block + `]}`} {
+		got, _, err := normalizedGuEffectsJSON(raw, "unit test")
+		if err != nil {
+			t.Fatalf("normalize %s: %v", raw, err)
+		}
+		var envelope struct {
+			SchemaVersion int               `json:"schema_version"`
+			Blocks        []json.RawMessage `json:"blocks"`
+		}
+		if err := json.Unmarshal([]byte(got), &envelope); err != nil || envelope.SchemaVersion != 2 || len(envelope.Blocks) != 1 {
+			t.Fatalf("normalized = %s, err=%v", got, err)
+		}
+	}
+	if _, _, err := normalizedGuEffectsJSON(`{"schema_version":3,"blocks":[]}`, "unit test"); err == nil {
+		t.Fatal("unsupported envelope version accepted")
+	}
+}
+
 func TestValidateCSVFiles(t *testing.T) {
 	// Change working directory to backend root so csvPath candidates match
 	oldWD, err := os.Getwd()

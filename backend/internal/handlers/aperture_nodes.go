@@ -457,6 +457,9 @@ func PlaceApertureNode(c *gin.Context) {
 			err = tx.QueryRow(`
 				SELECT id, gu_rank FROM player_gu 
 				WHERE player_id = $1 AND gu_id = $2 AND gu_rank >= $3 AND state = 'ACTIVE' AND is_vital = false AND equipped = false
+				  AND NOT EXISTS (SELECT 1 FROM player_killer_move_gu_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
+				  AND NOT EXISTS (SELECT 1 FROM player_gu_house_core_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
+				  AND NOT EXISTS (SELECT 1 FROM teleport_array_gu_reservations AS reservation WHERE reservation.gu_instance_id=player_gu.id)
 				LIMIT 1
 			`, playerID, requiredGuID, template.CostGuRank).Scan(&guInstanceID, &guRank)
 			if err == sql.ErrNoRows {
