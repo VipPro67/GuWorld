@@ -8,4 +8,5 @@ export * from "./GameModal";
 export * from "./GameSection";
 export * from "./GamePage";
 export * from "./GameInput";
+export * from "./GameDisclosure";
 export * from "./SearchableSelect";

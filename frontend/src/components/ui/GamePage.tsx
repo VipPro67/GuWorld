@@ -1,6 +1,7 @@
 "use client";
 
 import React, { forwardRef } from "react";
+import { GameDisclosure } from "./GameDisclosure";
 
 export interface GamePageProps extends React.HTMLAttributes<HTMLDivElement> {
   title?: string;
@@ -50,9 +51,9 @@ export const GamePage = forwardRef<HTMLDivElement, GamePageProps>(
                   </h1>
                 )}
                 {description && (
-                  <p className="mt-2 text-sm sm:text-base text-text-muted max-w-2xl">
+                  <GameDisclosure className="mt-2 max-w-2xl">
                     {description}
-                  </p>
+                  </GameDisclosure>
                 )}
               </div>
             </div>
@@ -89,9 +90,9 @@ export const GamePageHeader = ({
             </h1>
           )}
           {description && (
-            <p className="mt-2 text-sm sm:text-base text-text-muted max-w-2xl">
+            <GameDisclosure className="mt-2 max-w-2xl">
               {description}
-            </p>
+            </GameDisclosure>
           )}
         </div>
       </div>
@@ -165,7 +166,7 @@ export const GamePageSection = ({
           )}
           <div className="min-w-0">
             {title && <h2 className="text-xl font-bold font-serif text-text-primary">{title}</h2>}
-            {description && <p className="mt-1 text-sm text-text-muted">{description}</p>}
+            {description && <GameDisclosure className="mt-1">{description}</GameDisclosure>}
           </div>
         </div>
         {action && <div className="flex-shrink-0">{action}</div>}

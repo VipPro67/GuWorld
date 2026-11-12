@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useCallback, forwardRef } from "react";
+import React, { useEffect, useCallback, forwardRef, useId } from "react";
 import { createPortal } from "react-dom";
 import { GameButton } from "./GameButton";
+import { GameDisclosure } from "./GameDisclosure";
 
 export type GameModalSize =
   | "sm"
@@ -74,6 +75,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
     },
     ref
   ) => {
+    const titleId = useId();
     const handleKeyDown = useCallback(
       (e: KeyboardEvent) => {
         if (e.key === "Escape" && closeOnEscape) {
@@ -98,11 +100,10 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
 
     const modalContent = (
       <div
-        className="fixed inset-0 z-50 h-[100dvh] flex items-center justify-center px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)]"
+        className="mmo-paper-theme fixed inset-0 z-50 h-[100dvh] flex items-center justify-center px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)]"
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? "modal-title" : undefined}
-        aria-describedby={description ? "modal-description" : undefined}
+        aria-labelledby={title ? titleId : undefined}
       >
         <div
           className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm transition-opacity"
@@ -113,7 +114,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
           ref={ref}
           className={[
             "relative w-full animate-in fade-in zoom-in-95 duration-200",
-            "bg-surface",
+            "mmo-game-modal bg-surface",
             "rounded-3xl",
             "shadow-2xl",
             "max-h-[90dvh] flex flex-col overflow-hidden",
@@ -124,23 +125,20 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
           {...props}
         >
           {(title || showCloseButton) && (
-            <div className="flex items-start justify-between gap-4 p-5 border-b border-border/50">
+            <div className="mmo-paper-heading flex items-start justify-between gap-4 p-5">
               <div className="flex-1 min-w-0">
                 {title && (
                   <h2
-                    id="modal-title"
+                    id={titleId}
                     className="text-lg font-bold font-serif text-text-primary"
                   >
                     {title}
                   </h2>
                 )}
                 {description && (
-                  <p
-                    id="modal-description"
-                    className="mt-1 text-sm text-text-muted"
-                  >
+                  <GameDisclosure className="mt-1" summary="Thông tin">
                     {description}
-                  </p>
+                  </GameDisclosure>
                 )}
               </div>
               {showCloseButton && (

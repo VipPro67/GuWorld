@@ -607,20 +607,21 @@ export const LobbyView: React.FC = () => {
                 onClick={() => handleItemClick(item)}
                 aria-label={item.locked ? `${item.label} (đã khóa)` : item.label}
                 title={item.locked ? `${item.label} — chưa mở khóa` : item.label}
-                className={`group relative flex min-h-[72px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all duration-200 sm:min-h-[82px] sm:px-3.5 ${
+                className={`mmo-game-tile group relative flex min-h-[72px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all duration-200 sm:min-h-[82px] sm:px-3.5 ${
                   item.locked
-                    ? "cursor-not-allowed border-[var(--border-default)]/40 bg-black/20 opacity-55"
-                    : `cursor-pointer border-[var(--border-default)]/70 bg-[linear-gradient(145deg,rgba(60,43,27,0.72),rgba(30,23,17,0.86))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:-translate-y-0.5 hover:border-amber-500/45 hover:bg-[linear-gradient(145deg,rgba(76,54,31,0.85),rgba(37,27,19,0.94))] hover:shadow-[0_8px_24px_rgba(0,0,0,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:translate-y-0`
+                    ? "cursor-not-allowed opacity-55"
+                    : "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
                 }`}
+                data-locked={item.locked || undefined}
               >
                 <div
-                  className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border shadow-md transition-transform duration-200 sm:h-12 sm:w-12 sm:rounded-2xl ${
+                  className={`mmo-game-tile-icon relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border shadow-md transition-transform duration-200 sm:h-12 sm:w-12 sm:rounded-2xl ${
                     item.locked
                       ? "border-zinc-800 bg-zinc-950"
-                      : `bg-gradient-to-br ${item.gradient} ${item.borderColor} group-hover:scale-105 ${item.glow}`
+                      : "group-hover:scale-105"
                   }`}
                 >
-                  <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${item.iconColor}`} />
+                  <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${item.locked ? "text-zinc-600" : "text-[var(--mmo-menu-accent,#e4b96c)]"}`} />
                   {item.locked && (
                     <div className="absolute -bottom-1 -right-1 rounded-full border border-zinc-800 bg-zinc-950 p-1">
                       <Lock className="h-2.5 w-2.5 text-zinc-500" />

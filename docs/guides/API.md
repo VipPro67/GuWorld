@@ -228,7 +228,7 @@ Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404
 | POST | `/party/leave` |
 | POST | `/party/formation` | Trưởng nhóm xếp đội hình xuất trận. Body: `{"order": [{"kind": "player"\|"pet"\|"npc", "id": "...", "pos": 1-8}]}` (tối đa 8 sau trưởng nhóm; `pos` trùng/0 = tự xếp ô trống; rỗng = về tự động). |
 | GET | `/arena/leaderboard` |
-| POST | `/arena/challenge` | Tạo trận Võ Đài realtime riêng trên `realtime_preview`; body `{target_player_id}`; hai người dùng HP/Chân Nguyên tạm thời, kết quả đồng bộ xếp hạng, xu Võ Đài và lịch sử. Mất kết nối được 30 giây để quay lại, sau đó xử thua và kết toán như trận kết thúc bình thường. |
+| POST | `/arena/challenge` | Khởi tạo một encounter PvP dạng `active_combat` cho người chơi gọi API và mục tiêu; combat được giải quyết theo lượt, không tạo map/session chiến đấu realtime. Body `{target_player_id}`. |
 | GET | `/arena/shop` |
 | POST | `/arena/shop/buy` |
 | GET | `/leaderboard/:category` | BXH tổng hợp. category: `rank`, `primeval_stones`, `gu_strongest`, `immortal_stones`, `sat_khi`. Trả về top 50, kèm rank người gọi |
@@ -628,7 +628,7 @@ Server trả `204`; response rỗng. Danh tính (player, tab, IP) do server đi�
 
 - Một phiên realtime mỗi tab, chia sẻ giữa world stream (`0x01`) và UI stream (`0x02`). WebTransport dùng QUIC; fallback dùng một WebSocket.
 - **World độc quyền:** kết nối world mới takeover và server đóng session cũ bằng close code `4000` (`superseded_same_tab`). Tab khác cùng tài khoản nhận `4001` (`session_replaced`) và **dừng reconnect**; UI hiện trạng thái tab bị thay thế.
-- **Resume sau mất mạng:** khi world stream/session đóng, phiên được giữ `suspended` theo cặp `(player, tab_id)`: **15 s** cho zone mở, **30 s** cho instance riêng (combat/tribulation/practice/arena). Join lại cùng `tab_id` trong cửa sổ này nhận lại đúng entity/vị trí/HP mà không load lại từ DB; hết hạn mới checkpoint và nhả lease. Trong lúc suspended, nhân vật không nhận damage và không bị quái nhắm, nhưng status/cooldown/hunger vẫn tick.
+- **Resume sau mất mạng:** khi world stream/session đóng, phiên được giữ `suspended` theo cặp `(player, tab_id)`: **15 s** cho zone mở, **30 s** cho instance riêng. Join lại cùng `tab_id` trong cửa sổ này nhận lại đúng entity/vị trí/HP mà không load lại từ DB; hết hạn mới checkpoint và nhả lease. Trong lúc suspended, nhân vật không nhận damage và không bị quái nhắm, nhưng status/cooldown/hunger vẫn tick.
 - **`tab_id`** lấy từ query `?tab_id=<uuid>` (cùng giá trị `sessionStorage.gu_gameplay_tab_id`). `TabIdCoordinator` phát hiện tab bị nhân bản (Chrome duplicate tab sao chép `sessionStorage`) và xoay `tab_id` trước khi kết nối.
 - Client **seed `seq` input từ `snapshot.ack_seq` của `world.welcome`** (không reset về 0) để sim không bỏ toàn bộ input sau resume.
 - UI stream không độc quyền — nhiều tab không đá nhau; `IsConnected` đếm theo subscription còn sống. Mỗi kênh giao cho sink đăng ký sau cùng của player.
@@ -657,8 +657,7 @@ cung cấp vị trí authoritative trong lúc lướt, và `HIT_CONFIRMED` báo 
 | `world:cell` | S→C | Sự kiện Boss/tài nguyên bị tiêu diệt hoặc hồi sinh; payload mang `region_id`, client refetch viewport cells/markers đang mở thay vì poll 30 s |
 | `world:drops` | S→C | Chiến lợi phẩm rơi/nhặt/hết hạn/Admin sửa; payload `{type,region_id,x,y}`, client refetch viewport drops thay vì poll 8 s |
 | `world:points` | S→C | Mỏ tài nguyên thế giới được seed/thu hoạch/di dời; payload `{type,region_id,x,y}`, client refetch danh sách mỏ của region thay vì poll 10–30 s |
-| `combat` | S→C | Biến động chiến đấu realtime |
-| `match:<match_id>` | S→C | Khung hình (frame) mô phỏng đấu trường thời gian thực, 20Hz. Server chỉ gửi cho người chơi có mặt trong trận đó. |
+| `combat` | S→C | Cập nhật trạng thái/kết quả combat cho người chơi; không phải luồng mô phỏng theo tick |
 | `notification` | S→C | Thông báo mới (chuông thông báo) |
 
 Ba kênh `world:*` và các kênh player-scoped (`player`, `refine`, `trade`,
@@ -679,7 +678,6 @@ không dùng lệnh đường đi legacy. Client gửi NDJSON
 | --- | --- | --- |
 | `world.cells_rect` | `{min_x,min_y,max_x,max_y}` | `GET /explore/cells/rect` |
 | `world.objects` | `{}` | `GET /explore/objects` |
-| `match.input` | `{seq, move:{dx,dy}, casts:[{gu_id,rank,mode,ax,ay,target_id}]}` | Giao thức trận realtime cũ; combat realtime đã bị gỡ, không phải API combat hiện hành |
 
 Danh tính người chơi luôn lấy từ phiên realtime đã xác thực, không lấy từ
 payload. Các HTTP endpoint vẫn được giữ làm fallback khi UI stream chưa kết nối.

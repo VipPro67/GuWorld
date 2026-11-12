@@ -26,19 +26,19 @@ export interface GameTabsProps {
 
 const variantTabClasses: Record<GameTabsVariant, { base: string; active: string; inactive: string }> = {
   pills: {
-    base: "rounded-xl transition-all duration-200",
-    active: "bg-surface text-text-primary shadow-md shadow-brand/10 border border-brand/20",
-    inactive: "text-text-muted hover:text-text-secondary hover:bg-surface/30",
+    base: "rounded-lg border transition-all duration-200",
+    active: "bg-brand-dim text-brand border-brand/40 shadow-sm",
+    inactive: "text-text-muted border-transparent hover:text-text-primary hover:bg-elevated/60",
   },
   underline: {
     base: "relative pb-2 transition-colors duration-200",
-    active: "text-text-primary font-bold",
-    inactive: "text-text-muted hover:text-text-secondary",
+    active: "text-brand font-bold",
+    inactive: "text-text-muted hover:text-text-primary",
   },
   segmented: {
-    base: "rounded-xl transition-all duration-200",
-    active: "bg-surface text-text-primary shadow-sm",
-    inactive: "text-text-muted hover:text-text-secondary hover:bg-surface/30",
+    base: "rounded-lg border transition-all duration-200",
+    active: "bg-brand-dim text-brand border-brand/40 shadow-sm",
+    inactive: "text-text-muted border-transparent hover:text-text-primary hover:bg-elevated/60",
   },
   minimal: {
     base: "transition-colors duration-200",
@@ -138,7 +138,7 @@ export const GameTabs = React.forwardRef<HTMLDivElement, GameTabsProps>(
                 onClick={() => !isDisabled && onChange(item.id)}
                 className={[
                   "flex items-center justify-center gap-1.5",
-                  "font-mono font-semibold",
+                  "font-serif font-semibold",
                   "whitespace-nowrap shrink-0",
                   "focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2 focus:ring-offset-bg-primary",
                   base,
@@ -148,6 +148,7 @@ export const GameTabs = React.forwardRef<HTMLDivElement, GameTabsProps>(
                   variant === "underline" && isActive ? "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-1 after:bg-brand after:rounded-full" : "",
                   variant === "underline" ? "border-b-2 border-transparent" : "",
                 ].join(" ")}
+                id={`tab-${item.id}`}
               >
                 {item.icon && <span className="flex-shrink-0" aria-hidden="true">{item.icon}</span>}
                 <span>{item.label}</span>

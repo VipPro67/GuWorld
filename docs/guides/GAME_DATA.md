@@ -1145,7 +1145,7 @@ Các effect key đặc biệt của Consumable (resolve trong `backend/internal/
 - `random_constitution` (value `1`): khi dùng sẽ random **thể chất** mới từ `gamefx.AllConstitutions()`, loại trừ thể chất hiện tại của người chơi. Kết quả được ghi vào `players.constitution`.
 - `random_race` (value `1`): khi dùng sẽ random **chủng tộc** mới từ `gamefx.AllRaces()`, loại trừ chủng tộc hiện tại. Kết quả được ghi vào `players.race`.
 - `increase_aperture_area` (value N): cộng thẳng N vào `immortal_apertures.area_size` (đơn vị mẫu, cùng thang với `area_size` mặc định 3.000.000–10.000.000). Chỉ Cổ Tiên có Tiên Khiếu mới dùng được.
-- `increase_aperture_time_rate` (value N): cộng thẳng N vào `immortal_apertures.time_rate` (hệ số gia tốc, mặc định 10–55). Chỉ Cổ Tiên có Tiên Khiếu mới dùng được.
+- `increase_aperture_time_rate` (value N): cộng thẳng N vào `immortal_apertures.time_rate`; mức khởi tạo theo phẩm cấp tối đa 30, vật phẩm có thể tăng vượt mức này. Chỉ Cổ Tiên có Tiên Khiếu mới dùng được.
 - `add_dao_marks` (value N): cộng N Đạo Ngân vào `immortal_apertures.dao_marks` của **lưu phái ghi trong cột `path` của item** (path đầu tiên, chuẩn hoá qua `gamefx.CleanPath`). Ghi vào `player.DaoMarks` rồi được `UseItem`/`UseItems` persist xuống `immortal_apertures` (giống `soul_boost`). Cần `immortal_only` + Tiên Khiếu tồn tại.
 
 **Đạo Tài (`dao_material_<path>`, rank 6, Consumable):** 44 item sinh sẵn trong `Item.csv`, mỗi phái một món (`path` = `["Fire Path"]`…). Mỗi món khi dùng bổ sung **1.000 Đạo Ngân** đúng phái đó (`IMMORTAL_ONLY` + `ADD_DAO_MARKS` value 1000). Đây là vật hoàn trả của Thanh Đạo Tẩy Thể (30% Đạo Ngân bóc tách, 1.000 Đạo Ngân/món) — xem WIKI §3. Cần import bảng "Vật phẩm" sau khi thêm phái mới.
@@ -1601,7 +1601,8 @@ Effect evaluation is pure and returns domain commands. Handlers/workers remain t
 orchestrators and must apply any database-changing command through their existing
 transaction. Runtime execution contexts carry deterministic RNG, actor/target
 snapshots, rank, mastery, Dao marks, paths, and catalog revision, and enforce event,
-trigger-depth, repeat, and summon budgets. Combat operations are consumed only by their current realtime handlers; the removed turn-based `simulator.SimAction` is not a runtime consumer.
+trigger-depth, repeat, and summon budgets. Combat operations are consumed by the
+turn-based simulator and its handlers; there is no realtime combat executor.
 
 ## Admin audit log fields
 
@@ -1725,4 +1726,3 @@ Toàn bộ 4,713 bản ghi Cổ trùng (`backend/data/Gu.csv`) qua 525 dòng ti�
    - `GU_CHARM_GHOST_I` (R7-R8): Mị Lam Thoát Tục Tiên Cổ (`CHARM_GHOST_COME`)
    - `GU_DANG_HUN_EXPLOSION_I` (R7-R8): Đãng Hồn Tạc Linh Tiên Cổ (`SOUL_EXPLOSION_DANG_HUN`)
    - `GU_SOUL_BEAST_SUMMON_I` (R6-R8): Hồn Thú Triệu Hoán Tiên Cổ (`SOUL_BEAST_SUMMON`)
-

@@ -206,6 +206,17 @@
   --color-zinc-200: var(--mmo-theme-zinc-200, #ebd9b5);
   --color-zinc-100: var(--mmo-theme-zinc-100, #f4e8cb);
   --color-zinc-50: var(--mmo-theme-zinc-50, #fff3d8);
+  --color-slate-950: var(--mmo-theme-zinc-950, #130e0a);
+  --color-slate-900: var(--mmo-theme-zinc-900, #211810);
+  --color-slate-800: var(--mmo-theme-zinc-800, #302318);
+  --color-slate-700: var(--mmo-theme-zinc-700, #4b3827);
+  --color-slate-600: var(--mmo-theme-zinc-600, #756047);
+  --color-slate-500: var(--mmo-theme-zinc-500, #9f8969);
+  --color-slate-400: var(--mmo-theme-zinc-400, #bea987);
+  --color-slate-300: var(--mmo-theme-zinc-300, #dcc8a4);
+  --color-slate-200: var(--mmo-theme-zinc-200, #ebd9b5);
+  --color-slate-100: var(--mmo-theme-zinc-100, #f4e8cb);
+  --color-slate-50: var(--mmo-theme-zinc-50, #fff3d8);
   --bg-primary: var(--mmo-menu-bg, #150f0b);
   --bg-surface: var(--mmo-theme-surface, #241a12);
   --bg-elevated: var(--mmo-theme-elevated, #352618);
@@ -234,6 +245,14 @@
     inset 0 0 0 2px var(--mmo-menu-glow, rgba(238, 211, 158, 0.12)),
     inset 0 0 0 4px rgba(8, 5, 3, 0.3),
     0 8px 28px rgba(0, 0, 0, 0.42);
+}
+
+.mmo-game-modal {
+  background-image:
+    linear-gradient(var(--mmo-menu-gradient-1, rgba(31, 23, 17, 0.94)), var(--mmo-menu-gradient-2, rgba(37, 27, 19, 0.96))),
+    var(--mmo-menu-texture, url("/assets/ui/guworld-rice-paper.webp?v=1"));
+  background-repeat: repeat;
+  background-size: auto, 320px 320px;
 }
 
 .mmo-paper-heading {
@@ -278,6 +297,41 @@
   box-shadow: inset 0 1px rgba(255, 248, 219, 0.9), inset 0 -1px rgba(105, 70, 36, 0.2), 0 1px 0 #75532e;
 }
 
+.mmo-game-tile {
+  border-color: rgba(168, 137, 82, 0.48);
+  background: linear-gradient(145deg, rgba(60, 43, 27, 0.78), rgba(30, 23, 17, 0.9));
+  box-shadow: inset 0 1px rgba(255, 238, 197, 0.06), 0 4px 12px rgba(0, 0, 0, 0.16);
+}
+
+.mmo-game-tile:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--mmo-menu-accent, #e4b96c);
+  background: linear-gradient(145deg, rgba(76, 54, 31, 0.9), rgba(37, 27, 19, 0.96));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+.mmo-game-tile:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.mmo-game-tile[data-locked="true"] {
+  border-color: rgba(112, 87, 58, 0.35);
+  background: rgba(13, 9, 7, 0.4);
+  box-shadow: none;
+}
+
+.mmo-game-tile-icon {
+  border-color: rgba(168, 137, 82, 0.64);
+  color: #e9c77d;
+  background: linear-gradient(145deg, #604326, #3d2b1c);
+}
+
+.mmo-game-tile[data-locked="true"] .mmo-game-tile-icon {
+  border-color: rgba(112, 87, 58, 0.4);
+  color: #756047;
+  background: #130e0a;
+}
+
 .mmo-paper-seal {
   display: inline-grid;
   width: 1.25rem;
@@ -291,6 +345,51 @@
   line-height: 1;
   transform: rotate(-7deg);
   box-shadow: inset 0 0 0 1px rgba(162, 61, 45, 0.24);
+}
+
+.game-disclosure {
+  color: var(--text-secondary);
+}
+
+.game-disclosure-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.game-disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.game-disclosure-summary:hover,
+.game-disclosure[open] > .game-disclosure-summary {
+  color: var(--brand-primary);
+}
+
+.game-disclosure-summary:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 3px;
+}
+
+.game-disclosure-chevron {
+  transition: transform 160ms ease;
+}
+
+.game-disclosure[open] .game-disclosure-chevron {
+  transform: rotate(180deg);
+}
+
+.game-disclosure-content {
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 /* Dense game panels use 8–11px helper labels by default. Keep those readable

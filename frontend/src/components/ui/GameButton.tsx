@@ -23,32 +23,28 @@ export interface GameButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
 }
 
 const sizeClasses: Record<GameButtonSize, string> = {
-  xs: "text-[9px] px-2 py-1",
-  sm: "text-[10px] px-3 py-1.5",
+  xs: "text-[10px] px-2 py-1",
+  sm: "text-[11px] px-3 py-1.5",
   md: "text-xs px-4 py-2",
   lg: "text-sm px-5 py-2.5",
 };
 
 const variantClasses: Record<GameButtonVariant, string> = {
   primary: [
-    "bg-gradient-to-r from-violet-600 to-indigo-600",
-    "hover:from-violet-500 hover:to-indigo-500",
-    "text-white",
-    "border border-transparent",
-    "shadow-md shadow-violet-500/20 hover:shadow-violet-500/35",
-    "disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50",
+    "bg-brand hover:brightness-110",
+    "text-zinc-950",
+    "border border-brand/70",
+    "shadow-md shadow-brand/15",
   ].join(" "),
   secondary: [
-    "bg-zinc-900 hover:bg-zinc-800",
-    "border border-zinc-800",
-    "text-zinc-400 hover:text-zinc-200",
-    "disabled:opacity-30 disabled:hover:bg-zinc-900",
+    "bg-elevated hover:brightness-110",
+    "border border-border",
+    "text-text-primary",
   ].join(" "),
   ghost: [
-    "bg-transparent hover:bg-zinc-900/60",
-    "border border-zinc-900/60 hover:border-zinc-800",
-    "text-zinc-400 hover:text-zinc-100",
-    "disabled:opacity-30",
+    "bg-transparent hover:bg-elevated/60",
+    "border border-transparent hover:border-border",
+    "text-text-secondary hover:text-text-primary",
   ].join(" "),
   danger: [
     "bg-gradient-to-r from-red-600 to-rose-600",
@@ -56,7 +52,6 @@ const variantClasses: Record<GameButtonVariant, string> = {
     "text-white",
     "border border-transparent",
     "shadow-md shadow-red-500/20 hover:shadow-red-500/35",
-    "disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50",
   ].join(" "),
   success: [
     "bg-gradient-to-r from-emerald-600 to-green-600",
@@ -64,7 +59,6 @@ const variantClasses: Record<GameButtonVariant, string> = {
     "text-white",
     "border border-transparent",
     "shadow-md shadow-emerald-500/20 hover:shadow-emerald-500/35",
-    "disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50",
   ].join(" "),
   warning: [
     "bg-gradient-to-r from-amber-500 to-orange-500",
@@ -72,27 +66,24 @@ const variantClasses: Record<GameButtonVariant, string> = {
     "text-zinc-950",
     "border border-transparent",
     "shadow-lg shadow-amber-500/20 hover:shadow-amber-500/35",
-    "disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50",
   ].join(" "),
   brand: [
-    "bg-gradient-to-r from-brand to-brand-dim/50",
-    "hover:from-brand-dim hover:to-brand",
-    "text-white",
-    "border border-brand/20",
-    "shadow-md shadow-brand/20 hover:shadow-brand/35",
-    "disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50",
+    "bg-brand-dim hover:brightness-110",
+    "text-brand",
+    "border border-brand/40",
+    "shadow-sm shadow-brand/10",
   ].join(" "),
 };
 
 const baseClasses = [
   "inline-flex items-center justify-center gap-1.5",
   "font-semibold font-serif",
-  "rounded-xl",
+  "rounded-lg",
   "transition-all duration-200",
   "cursor-pointer",
   "active:scale-[0.98]",
   "focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2 focus:ring-offset-bg-primary",
-  "disabled:cursor-not-allowed",
+  "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100",
 ].join(" ");
 
 export const GameButton = forwardRef<HTMLButtonElement, GameButtonProps>(

@@ -107,6 +107,6 @@ Nguồn chuẩn nằm trong `backend/data/`, gồm dictionary Cổ/vật phẩm/
 - Hướng dẫn phát triển: `docs/guides/DEVELOPMENT.md`.
 - Wiki gameplay: `WIKI.md`.
 
-### Server-authoritative ordinary world monsters
+### Turn-based combat and realtime world transport
 
-The world map uses realtime combat for ordinary monsters, arena matches, training and configured combat instances. The turn-based backend simulator and its combat entrypoints were removed under #272. PvE uses the authoritative map runtime; arena and training use private realtime maps. PostgreSQL remains the static template/spawn source and durable player/reward store.
+Combat encounters are resolved by the backend turn-based simulator. WebTransport/WebSocket remain for world movement and non-combat synchronization such as chat and player events; they are not combat engines. Historical combat-realtime migration notes are in `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.

@@ -69,8 +69,8 @@ No CI/CD. No standalone typecheck script. Backend tests are distributed across p
 - `backend/internal/playerstate/snapshot.go` — canonical `players` row projection, snapshot views, collection revision, lazy repairs
 - `backend/internal/handlers/movement.go` — one guard/destination/publish chain for walk, portal, teleport, Gu teleport, realm and party join
 - `backend/internal/services/*.go` — shared player/inventory/quest persistence (see `handlers/services.go`)
-- `backend/internal/realtime/sim/` — authoritative realtime zone sim (tick 20 Hz): combat, damage, monster AI, status, tribulation
-- `backend/internal/realtime/effects/` — Gu realtime compiler + effect audit (unsupported authored blocks fail closed)
+- `backend/internal/simulator/` — deterministic turn-based combat engine and effect resolution
+- `backend/internal/handlers/combat_*.go` — combat orchestration, persistence, history, and result settlement
 - `frontend/src/store/useGameStore.ts` — Zustand root store composing domain slices in `frontend/src/store/slices/` + shared SSE wiring
 - `frontend/src/app/` — Next.js App Router pages
 ## AI Agent Workflow
@@ -176,12 +176,12 @@ when changing concurrent gameplay logic.
 
 Before modifying combat:
 
-* Inspect `backend/internal/realtime/sim/` (zone sim, damage, monster AI) and `backend/internal/realtime/effects/` (Gu compile/audit).
+* Inspect `backend/internal/simulator/` and `backend/internal/handlers/combat_*.go`.
 * Inspect `backend/internal/handlers/combat.go` (file split: shared mechanics, history, practice endpoints under the combat_ prefix).
 * Inspect relevant player/Gu/effect models.
 * Check mana/energy handling.
 * Check optimistic frontend updates if the API response affects combat state.
-* Preserve deterministic simulation behavior where applicable.
+* Preserve deterministic turn-based simulation behavior. WebTransport/WebSocket support world movement and non-combat synchronization, not combat simulation.
 
 ### Data-Driven Gameplay
 

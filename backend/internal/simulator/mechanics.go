@@ -834,7 +834,7 @@ func ResolveBaseDamage(baseDamage, defense float64) float64 {
 
 // BasicDamageResult is the deterministic, side-effect-free result of routing
 // one ordinary attack through defense, damage reduction, and a virtual shield.
-// It is shared by the turn simulator and real-time world combat.
+// It is shared by turn-based combat flows.
 type BasicDamageResult struct {
 	Damage         float64
 	HPDamage       float64

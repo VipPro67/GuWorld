@@ -10,6 +10,10 @@ export function setTabClaimer(claimer: TabClaimer | null): void {
   defaultTabClaimer = claimer;
 }
 
+export async function claimTabIfConfigured(token: string, tabId: string): Promise<void> {
+  await defaultTabClaimer?.(token, tabId);
+}
+
 const TAB_CHANNEL_NAME = "gu-gameplay-tab";
 
 function randomUUID(): string {

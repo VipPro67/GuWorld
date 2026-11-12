@@ -145,8 +145,8 @@ func PathMasteryLevelRequiredForRank(rank int) int {
 	return 0
 }
 
-// PathMasteryBattleGainLimit keeps the historical per-battle cap for
-// turn-based combat settlement. Realtime settlement does not use this limit.
+// PathMasteryBattleGainLimit returns the per-battle cap for turn-based combat
+// settlement.
 func PathMasteryBattleGainLimit(rank int) int {
 	if rank < 1 {
 		rank = 1

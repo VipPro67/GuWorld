@@ -362,9 +362,8 @@ export class RealtimeUIManager {
   }
 
   /**
-   * Fire-and-forget command. High-frequency callers (the realtime PvP input
-   * loop) must not allocate a promise per frame just to learn that a frame was
-   * accepted; authoritative state arrives on the match channel instead.
+   * Fire-and-forget command for callers that do not need an individual
+   * `command.result` response.
    */
   public command(channel: string, payload?: unknown) {
     if (!this.isConnected()) return;

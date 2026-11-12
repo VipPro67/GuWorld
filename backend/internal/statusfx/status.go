@@ -1,5 +1,5 @@
 // Package statusfx is the canonical, data-driven status/effect registry shared
-// by realtime combat and gameplay effect handlers.
+// by turn-based combat and gameplay effect handlers.
 //
 // It owns no model types, so combat and gameplay packages can import it without
 // an import cycle. Adding a status is a registry entry plus an optional runtime
@@ -126,7 +126,7 @@ const (
 	CategoryImmortal    StatusCategory = "IMMORTAL"
 )
 
-// Behaviour tags drive realtime status application and ticking. Each new status
+// Behaviour tags drive status application and ticking. Each new status
 // maps to one behaviour hook; unknown behaviours fall through to a no-op log.
 const (
 	BehaviourDot                      = "dot"                        // damage over time (bleed, poison, burn, slow_damage)

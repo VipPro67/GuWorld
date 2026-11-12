@@ -2181,7 +2181,7 @@ return (
 
                 {/* Thanh Đạo Tẩy Thể Modal */}
                 {showCleanseModal && typeof document !== "undefined" && createPortal(
-                  <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-900 border border-purple-700/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
                       <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                         <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -3279,7 +3279,7 @@ return (
       </div>
       {/* MODAL 1: HẠ KHIẾU (ANCHOR APERTURE) */}
       {showAnchorModal && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-emerald-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -3355,7 +3355,7 @@ return (
 
       {/* MODAL 2: CẤU HÌNH MÔN HỘ (PORTAL MANAGE) */}
       {showPortalManageModal && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -3418,7 +3418,7 @@ return (
 
       {/* MODAL 3: THU KHIẾU (UNANCHOR APERTURE) */}
       {showUnanchorModal && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-rose-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -3491,7 +3491,7 @@ return (
 
       {/* MODAL 4: QUẢN LÝ NGOẠI KHÁCH (GUEST MATRIX MODAL) */}
       {showGuestModal && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-purple-500/50 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -3589,7 +3589,7 @@ return (
 
       {/* MODAL 5: MINH ƯỚC TÍN ĐẠO (SIGN CONTRACT MODAL) */}
       {contractGuest && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[110] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="mmo-paper-theme fixed inset-0 z-[110] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-purple-500/60 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -3673,4 +3673,3 @@ const Loader: React.FC = () => (
     />
   </svg>
 );
-

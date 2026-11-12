@@ -1,6 +1,7 @@
 "use client";
 
 import React, { forwardRef } from "react";
+import { GameDisclosure } from "./GameDisclosure";
 
 export interface GameSectionProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
@@ -55,7 +56,7 @@ export const GameSection = forwardRef<HTMLDivElement, GameSectionProps>(
               {badge && <span>{badge}</span>}
             </h2>
             {description && (
-              <p className="mt-1 text-sm text-text-muted">{description}</p>
+              <GameDisclosure className="mt-1">{description}</GameDisclosure>
             )}
           </div>
         </div>
@@ -97,7 +98,7 @@ export const GameSectionHeader = ({
           {title}
           {badge && <span>{badge}</span>}
         </h2>
-        {description && <p className="mt-1 text-sm text-text-muted">{description}</p>}
+        {description && <GameDisclosure className="mt-1">{description}</GameDisclosure>}
       </div>
     </div>
     {action && <div className="flex-shrink-0">{action}</div>}

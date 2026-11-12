@@ -1,5 +1,5 @@
-// Package combatmath contains small deterministic combat calculations shared
-// by realtime gameplay systems.
+// Package combatmath contains deterministic combat calculations shared by
+// gameplay systems.
 package combatmath
 
 import "math"

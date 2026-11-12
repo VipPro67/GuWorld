@@ -318,7 +318,7 @@ export const ArenaShopView: React.FC = () => {
       {selectedBuyItem && selectedMeta &&
         createPortal(
           <div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in"
+            className="mmo-paper-theme fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in"
             onClick={() => setSelectedBuyItem(null)}
           >
             <div

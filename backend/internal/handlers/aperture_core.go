@@ -247,7 +247,7 @@ func seedPointCountForGrade(grade string) int {
 func buildApertureByGrade(playerID string, grade string) models.ImmortalAperture {
 	switch grade {
 	case "EXTREME":
-		timeRate := 40.0 + float64(rand.Intn(16)) // 40 to 55
+		timeRate := 22.0 + float64(rand.Intn(9)) // 22 to 30
 		return models.ImmortalAperture{
 			PlayerID:                 playerID,
 			Grade:                    grade,
@@ -260,7 +260,7 @@ func buildApertureByGrade(playerID string, grade string) models.ImmortalAperture
 			State:                    "STABLE",
 		}
 	case "HIGH":
-		timeRate := 30.0 + float64(rand.Intn(11)) // 30 to 40
+		timeRate := 15.0 + float64(rand.Intn(8)) // 15 to 22
 		return models.ImmortalAperture{
 			PlayerID:                 playerID,
 			Grade:                    grade,
@@ -273,7 +273,7 @@ func buildApertureByGrade(playerID string, grade string) models.ImmortalAperture
 			State:                    "STABLE",
 		}
 	case "MID":
-		timeRate := 20.0 + float64(rand.Intn(9)) // 20 to 28
+		timeRate := 10.0 + float64(rand.Intn(6)) // 10 to 15
 		return models.ImmortalAperture{
 			PlayerID:                 playerID,
 			Grade:                    grade,
@@ -286,7 +286,7 @@ func buildApertureByGrade(playerID string, grade string) models.ImmortalAperture
 			State:                    "STABLE",
 		}
 	default: // "LOW"
-		timeRate := 10.0 + float64(rand.Intn(6)) // 10 to 15
+		timeRate := 5.0 + float64(rand.Intn(6)) // 5 to 10
 		return models.ImmortalAperture{
 			PlayerID:                 playerID,
 			Grade:                    grade,

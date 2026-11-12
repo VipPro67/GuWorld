@@ -1205,7 +1205,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
       {/* Buy Quantity Modal */}
       {selectedBuyItem && createPortal(
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setSelectedBuyItem(null)}>
+        <div className="mmo-paper-theme fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setSelectedBuyItem(null)}>
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-4 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"

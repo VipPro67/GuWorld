@@ -220,7 +220,7 @@ export const guidePages: WikiPage[] = [
                 ⚠️ Thất bại giữa chừng (hết giờ / thiếu Nhân Khí / thua Địa Tai): mất part chuẩn bị và 20% Nhân Khí, nhưng giữ nguyên Ngũ Chuyển Đỉnh Phong — có thể liều mạng lại.
               </p>
               <p>
-                Sau khi thăng tiên, đạo hữu sẽ sở hữu <strong>Tiên Khiếu</strong> riêng biệt và phải đối đầu với các <strong>Kiếp Nạn</strong> (Địa Tai, Thiên Kiếp...) định kỳ. Kiếp đầu tiên giáng lâm vào <strong>năm nội bộ thứ 10</strong> — tính ra khoảng <strong>2–10 giờ đời thật</strong> tùy phẩm chất Tiên Khiếu (1 năm nội bộ = 10 giờ đời thật ÷ hệ số gia tốc time_rate 10–55×). Vượt qua kiếp nạn thành công sẽ nhận được lượng lớn Đạo Ngân để gia tăng sức mạnh vượt bậc.
+                Sau khi thăng tiên, đạo hữu sẽ sở hữu <strong>Tiên Khiếu</strong> riêng biệt và phải đối đầu với các <strong>Kiếp Nạn</strong> (Địa Tai, Thiên Kiếp...) định kỳ. Kiếp đầu tiên giáng lâm vào <strong>năm nội bộ thứ 10</strong> — tính ra khoảng <strong>8–48 giờ đời thật</strong> tùy phẩm chất Tiên Khiếu khởi tạo (1 năm nội bộ = 1 ngày đời thật ÷ hệ số gia tốc khởi tạo 5–30×; vật phẩm và hiệu ứng có thể tăng tốc thêm). Vượt qua kiếp nạn thành công sẽ nhận được lượng lớn Đạo Ngân để gia tăng sức mạnh vượt bậc.
               </p>
             </div>
           </div>

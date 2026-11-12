@@ -75,6 +75,10 @@ Hiệu ứng trừng phạt xảy ra khi Cổ sư cố gắng suy diễn một m
 Quy tắc gameplay mô tả sự kiện kích hoạt, điều kiện áp dụng, mục tiêu và những thay đổi trạng thái được tạo ra. Chi phí, hồi chiêu, thời gian tụ lực và cách kích hoạt thuộc hồ sơ sử dụng của từng sản phẩm hoặc ngữ cảnh, không thuộc bản thân effect.
 _Avoid_: Kỹ năng chiến đấu mặc định, hồ sơ thi triển
 
+### Khả Năng Thực Thi Effect Theo Ngữ Cảnh (Context-Specific Effect Support)
+Một effect có thể được dùng ở nhiều ngữ cảnh nếu từng ngữ cảnh hỗ trợ trigger, điều kiện và thao tác của effect đó. Kiểm tra cấu trúc dữ liệu không phụ thuộc ngữ cảnh; ngữ cảnh từ chối tổ hợp không hỗ trợ trước khi effect làm thay đổi trạng thái.
+_Avoid_: effect mặc định chạy được mọi nơi, âm thầm bỏ qua thao tác không hỗ trợ
+
 ### Suy Hao Cảnh Giới Tự Thân (Caster Rank Attenuation)
 Cơ chế suy giảm uy lực và thời lượng của hiệu ứng buff/bảo hộ khi Cổ sư cấp cao sử dụng Cổ trùng có Rank thấp hơn cảnh giới của bản thân áp lên chính mình (ví dụ Cổ Rank 4 tạo hiệu ứng Bất Tử cho Cổ Tiên Rank 9). Hiệu quả bảo vệ suy giảm mạnh theo hàm mũ hoặc chuyển đổi thành giá trị hữu hạn để tránh phá vỡ cân bằng cảnh giới.
 
@@ -198,6 +202,10 @@ _Avoid_: ad-hoc SQL update, unversioned mutation, manual snapshot broadcast
 ### Chiến Đấu Theo Lượt (Turn-Based Combat)
 Mô hình chiến đấu tất định (deterministic) theo lượt tính toán từ phía máy chủ (`backend/internal/simulator/engine.go`), dựa trên snapshot chiến đấu của các bên tham gia (Cổ sư, Hung thú, Phân thân Đạo phái), tính toán hiệu ứng kích hoạt của Cổ trùng, Sát chiêu, Đạo ngân và Buff/Debuff theo từng hiệp. Người chơi có thể lựa chọn điều khiển chiêu thức / theo dõi diễn biến trận chiến qua `CombatScreen.tsx` hoặc Quét trận tức thì (Fast Auto-resolve) qua `combat_auto_resolve.go`.
 _Avoid_: 20Hz continuous tick, physics hitbox
+
+### Chiến Đấu Realtime (Retired Real-Time Combat)
+Mô hình chiến đấu liên tục theo thời gian thực đã bị loại bỏ khỏi gameplay hiện hành. Combat và các effect chiến đấu hiện hành được giải quyết theo lượt; realtime combat không còn là một chế độ chiến đấu hay kênh effect cần hỗ trợ.
+_Avoid_: active real-time combat, realtime combat effects
 
 ### Hiệu Ứng Chiến Đấu Theo Lượt (Turn-Based Combat Effect)
 Hiệu ứng chiến đấu diễn ra và tính toán theo số hiệp (turns) hoặc thời điểm kích hoạt (`ON_ACTION`, `ON_HIT`, `ON_TURN_START`, `ON_DEATH`), tương tác trực tiếp với Chân Nguyên, Sinh Lực, Giáp Ảo và Đạo Ngân lưu phái.

@@ -15,7 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-// loadMartialCombatant loads one combatant's player data for its realtime match.
+// loadMartialCombatant loads one combatant's player data for its match.
 func loadMartialCombatant(q db.Queryer, combatantID string) (*teamMemberCombatant, error) {
 	var m teamMemberCombatant
 	err := q.QueryRow(`

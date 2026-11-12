@@ -19,7 +19,7 @@ export interface GameCardProps extends React.HTMLAttributes<HTMLDivElement> {
 const variantClasses: Record<GameCardVariant, string> = {
   default: "bg-surface/60 border-border",
   hover: "bg-surface/60 border-border transition-all duration-300 hover:bg-surface hover:border-border-hover hover:-translate-y-1 hover:shadow-lg",
-  selected: "bg-brand-dim border-brand/50 shadow-[0_0_12px_rgba(5,150,105,0.15)] ring-1 ring-brand/20",
+  selected: "bg-brand-dim border-brand/50 shadow-sm ring-1 ring-brand/20",
   vital: "bg-amber-950/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)] animate-gold-glow",
   danger: "bg-red-950/10 border-red-500/30",
   compact: "bg-surface/40 border-border",
@@ -58,7 +58,7 @@ export const GameCard = forwardRef<HTMLDivElement, GameCardProps>(
         className={[
           variantClasses[variant],
           paddingClasses[padding],
-          "rounded-2xl",
+          "border rounded-xl",
           clickable ? "cursor-pointer" : "",
           className,
         ].join(" ")}

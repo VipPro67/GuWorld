@@ -27,7 +27,7 @@ const (
 )
 
 // StatusSpec declares how a status behaves. It is the single source of truth
-// realtime combat consults to apply/tick a status, so new statuses are a data
+// turn-based combat consults to apply/tick a status, so new statuses are a data
 // entry plus (optionally) one behaviour hook.
 type StatusSpec struct {
 	ID            string
@@ -214,7 +214,7 @@ var Registry = map[string]StatusSpec{
 	// EVASION is the only dodge source in combat. Self buff, never dispellable,
 	// never gated by CC resist; its proc chance comes from the apply_status
 	// entry (when the profile compiler supports the effect) and its strength from op.Value
-	// (percent). Realtime combat merges multiple EVASION effects by max, capped
+	// (percent). Combat merges multiple EVASION effects by max, capped
 	// at 0.75 in ComputeEffectMultipliers.
 	StatusEvasion: {
 		ID: StatusEvasion, Behaviour: BehaviourEvasion, Label: "Né Tránh",
