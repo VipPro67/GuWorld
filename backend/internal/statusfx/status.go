@@ -98,11 +98,13 @@ const (
 	StatusNinetyNineShield        = "NINETY_NINE_SHIELD"
 
 	// Đợt 6: Tuyệt Đỉnh Sát Chiêu Tiên Đạo (Reverend Insanity Docs Tab)
-	StatusYamaEmperor   = "YAMA_EMPEROR"
-	StatusBloodRobe     = "BLOOD_ROBE"
-	StatusFutureSelf    = "FUTURE_SELF"
-	StatusEatingLoss    = "EATING_LOSS"
-	StatusFarewellCurse = "FAREWELL_CURSE"
+	StatusYamaEmperor     = "YAMA_EMPEROR"
+	StatusBloodRobe       = "BLOOD_ROBE"
+	StatusFutureSelf      = "FUTURE_SELF"
+	StatusSongOfDestiny   = "SONG_OF_DESTINY"
+	StatusDestinySongWeak = "SONG_OF_DESTINY_WEAK"
+	StatusEatingLoss      = "EATING_LOSS"
+	StatusFarewellCurse   = "FAREWELL_CURSE"
 
 	// Đợt 7: Đại Điển Sát Chiêu Tiên Đạo (Reverend Insanity Docs Tab 2)
 	StatusSwordMark       = "SWORD_MARK"
@@ -123,6 +125,7 @@ const (
 	CategoryAperture    StatusCategory = "APERTURE"
 	CategoryDaoConflict StatusCategory = "DAO_CONFLICT"
 	CategoryBuff        StatusCategory = "BUFF"
+	CategoryDebuff      StatusCategory = "DEBUFF"
 	CategoryImmortal    StatusCategory = "IMMORTAL"
 )
 

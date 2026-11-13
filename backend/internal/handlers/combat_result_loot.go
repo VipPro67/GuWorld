@@ -6,7 +6,6 @@ import (
 	"math"
 	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -75,45 +74,8 @@ func queueImmortalGuLootNotice(out []immortalGuLootAnnouncement, playerID uuid.U
 // committed.
 func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *models.CombatState, partyMembers []uuid.UUID, isVirtual bool) (lootDetailLogs []string, pendingNotifications []notify.Notification, immortalAnnouncements []immortalGuLootAnnouncement) {
 	if activeCombat != nil && activeCombat.EnemyType == "PVP" && !isVirtual {
-		if activeCombat.TargetPlayerID != "" && activeCombat.TargetPlayerID != "dummy" {
-			targetUUID, parseErr := uuid.Parse(activeCombat.TargetPlayerID)
-			if parseErr == nil {
-				var targetHP float64
-				var targetX, targetY int
-				var targetRegion string
-				if errHP := tx.QueryRow("SELECT hp, x, y, current_region FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetHP, &targetX, &targetY, &targetRegion); errHP == nil {
-					targetHP -= 30.0
-					if targetHP < 10.0 {
-						targetHP = 10.0
-					}
-					dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, true, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
-					respawn := ResolveDeathRespawn(targetRegion, targetX, targetY)
-					hubRegion, hubX, hubY := respawn.Region, respawn.X, respawn.Y
-					GrantPvpImmunity(tx, targetUUID, 10*time.Minute)
-					worldPosIndex.Set(WorldPosEntry{
-						ID:     targetUUID.String(),
-						X:      hubX,
-						Y:      hubY,
-						Region: hubRegion,
-						TS:     time.Now().UnixMilli(),
-					})
-					_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
-					if dropSummary != "" {
-						pvpMsg := fmt.Sprintf("Chiến thắng PVP vang dội! Rơi rớt từ bại binh: %s.", dropSummary)
-						lootDetailLogs = append(lootDetailLogs, pvpMsg)
-						if n, err := notify.SendDeferred(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg); err == nil {
-							pendingNotifications = append(pendingNotifications, n)
-						}
-					} else {
-						pvpMsg := "Chiến thắng PVP vang dội! Bại binh không có tài sản rơi rớt."
-						lootDetailLogs = append(lootDetailLogs, pvpMsg)
-						if n, err := notify.SendDeferred(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg); err == nil {
-							pendingNotifications = append(pendingNotifications, n)
-						}
-					}
-				}
-			}
-		}
+		// PvP death, drop and respawn settlement is applied once by
+		// settlePvpDefender after the simulator outcome is finalized.
 	} else if activeCombat != nil && activeCombat.LootTableID != "" {
 		loot, rollErr := RollMonsterLoot(tx, activeCombat.LootTableID, activeCombat.EnemyRank, activeCombat.WorldMonsterRegionID, activeCombat.EnemyType)
 		if rollErr != nil {
@@ -246,7 +208,7 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 			}
 			charFX := gamefx.Get(player)
 			effectiveLuck := float64(luckMarks) + charFX.LuckBonus*50.0
-			luckDropChance := math.Min(0.85, effectiveLuck/2000.0 + 0.10)
+			luckDropChance := math.Min(0.85, effectiveLuck/2000.0+0.10)
 			if rand.Float64() < luckDropChance && activeCombat.LootTableID != "" {
 				enemyRank := activeCombat.EnemyRank
 				if enemyRank < 1 {

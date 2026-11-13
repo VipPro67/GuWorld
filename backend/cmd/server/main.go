@@ -183,6 +183,7 @@ func main() {
 	worker.StartGrowthWorker(ctx, db.DB, 1*time.Hour)
 	handlers.StartTribulationWorker(ctx)
 	handlers.StartRefineSessionWorker(ctx)
+	handlers.StartCombatSessionWorker(ctx)
 	handlers.StartWorldIndexSyncWorker(ctx)
 	handlers.StartSpatialRealmExpiryWorker(ctx)
 	handlers.StartPrimevalVeinWorker(ctx)

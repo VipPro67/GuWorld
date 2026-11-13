@@ -104,7 +104,7 @@ func TestSimulator_BackfireOnFailure(t *testing.T) {
 
 func TestSimulator_GuHouseDamageAbsorption(t *testing.T) {
 	player := newTestCombatant("p1", "Player", 1000, 50)
-	player.Speed = 5 // let enemy attack first
+	player.Speed = 20 // same speed; stable order gives both sides one activation
 	player.GuHouse = &GuHouseState{
 		ID:              "house_1",
 		Name:            "Vấn Đạo Lâu",

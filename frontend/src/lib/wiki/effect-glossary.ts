@@ -559,6 +559,8 @@ export const COMBAT_STATUSES: CombatStatusEntry[] = [
   { id: "YAMA_EMPEROR", label: "Diêm Đế Thể", category: "Bất tử", behavior: "Hồn Đạo: Diêm Đế giáng thế, tăng 50% Phòng Ngự và cắn nuốt hồn địch mỗi hiệp.", turns: "4" },
   { id: "BLOOD_ROBE", label: "Huyết Nhiễm Chinh Bào", category: "Buff", behavior: "Huyết Đạo: Hấp thụ 40% sát thương nhận vào chuyển hóa thành Huyết Thuẫn.", turns: "3" },
   { id: "FUTURE_SELF", label: "Vị Lai Thân", category: "Buff", behavior: "Trụ Đạo: Mượn sức mạnh tương lai, tăng 80% Tấn Công và 50% Tốc độ.", turns: "3" },
+  { id: "SONG_OF_DESTINY", label: "Vận Mệnh Ca", category: "Buff", behavior: "Tăng 40% sát thương cho toàn đội trong 1 đơn vị thời gian mô phỏng.", turns: "1" },
+  { id: "SONG_OF_DESTINY_WEAK", label: "Suy Yếu bởi Vận Mệnh Ca", category: "Debuff", behavior: "Giảm 30% sát thương gây ra trong 1 đơn vị thời gian mô phỏng.", turns: "1" },
   { id: "EATING_LOSS", label: "Cật Khuy Thị Phúc", category: "Buff", behavior: "Thực Đạo: Chịu thiệt rèn giũa, tăng tích tầng Công/Thủ mỗi khi bị đánh.", turns: "5" },
   { id: "FAREWELL_CURSE", label: "Tống Hữu Chi Phong", category: "Xung đột đạo", behavior: "Phong Đạo: Gió tiễn bạn vần vũ ăn mòn cốt nhục, trừ 5% MaxHP mỗi hiệp trực tiếp vào HP.", turns: "4" },
   { id: "SWORD_MARK", label: "Kiếm Ngân Tác Mệnh", category: "DoT vật lý", behavior: "Kiếm Đạo: Kiếm ngân róc thịt gọt xương, trừ máu mỗi hiệp và trảm sát tức khắc khi dưới 25% HP.", turns: "4" },

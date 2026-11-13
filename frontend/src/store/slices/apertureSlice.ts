@@ -1184,6 +1184,18 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           lastActiveTribulationPlayerId = currentPlayerId;
           lastActiveTribulationFetchTime = Date.now();
           set({ activeTribulation: data });
+          // A turn-based tribulation may finish on the server while the
+          // player is disconnected. Combat completion clears active_combat,
+          // so the combat screen cannot deliver its normal resolve request
+          // after reconnect. Recover that completed victory when the active
+          // event snapshot confirms every enemy is dead.
+          if (
+            data?.event?.id &&
+            Number(data.total_enemies) > 0 &&
+            Number(data.remaining_enemies) === 0
+          ) {
+            await get().resolveTribulation(data.event.id);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch active tribulation:", err);

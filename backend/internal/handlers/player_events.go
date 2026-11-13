@@ -99,6 +99,14 @@ type PlayerDeltaData struct {
 	MaxMana        *float64            `json:"max_mana,omitempty"`
 	ApertureStress *float64            `json:"aperture_stress,omitempty"`
 	ActiveCombat   *models.CombatState `json:"active_combat,omitempty"`
+	CombatSession  *CombatSessionDelta `json:"combat_session,omitempty"`
+}
+
+type CombatSessionDelta struct {
+	SessionID    string `json:"session_id"`
+	Revision     int64  `json:"revision"`
+	Status       string `json:"status"`
+	PendingActor string `json:"pending_actor,omitempty"`
 }
 
 // PublishPlayerCombatDelta publishes the active encounter through the

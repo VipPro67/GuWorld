@@ -49,7 +49,7 @@ func TestSwordWaveTriple(t *testing.T) {
 // 2. Kiếm Đạo: Kiếm Ngân Tác Mệnh (SWORD_MARK_DEATH)
 func TestSwordMarkDeath(t *testing.T) {
 	player := newTestCombatant("p1", "Phương Nguyên", 1000, 100)
-	enemy := newTestCombatant("e1", "Mục Tiêu", 300, 100) // 300 HP out of 1000 MaxHP
+	enemy := newTestCombatant("e1", "Mục Tiêu", 500, 100) // survive until the first simulated-time mark tick
 	enemy.MaxHP = 1000
 	player.Speed = 20
 	enemy.Speed = 10

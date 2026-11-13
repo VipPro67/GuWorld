@@ -700,9 +700,11 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - Actor quái trên World Map hiện chỉ là snapshot phục vụ hiển thị/quản trị; chúng không tự aggro hay mở combat. Cầu nối từ actor Redis sang encounter chưa được triển khai. Combat theo lượt chỉ chạy trong các flow đã được nối; di chuyển thế giới ngoài combat vẫn realtime.
 - Đồng đội cùng khu vực và cùng map instance tham chiến cùng trưởng nhóm; trạng thái combat khóa thao tác của họ đến khi kết toán. Pet trong đội hình tiếp tục tham chiến theo lượt và lưu HP/kết quả sau trận. Quái dã ngoại chỉ dùng đội hình spawn, không tự sinh hộ vệ ngẫu nhiên.
 - **Phòng tập:** tạo encounter giả lập turn-based. Sinh lực và Chân Nguyên của hình nhân là ảo; kết thúc không ghi đè tài nguyên thật.
+- NPC tự chọn một action theo `AIProfile` của quái: profile tấn công ưu tiên action gây sát thương lớn, profile cân bằng ưu tiên hồi phục/phòng thủ khi HP thấp rồi chuyển sang sát thương; profile cơ bản giữ thứ tự action đã nạp.
 - Cổ sư dùng Cổ trang bị, có thể charge và chọn mục tiêu.
 - Chỉ định mục tiêu hỗ trợ vị trí/hàng/cột/toàn bộ tùy `target_type` của Cổ.
 - **Combat turn-based:** simulator xác định được dùng trong các flow đã nối; chuyển động thế giới vẫn realtime. Các mode PvP, đấu trường, Tông Môn Chiến và Tai Kiếp chưa được xác nhận đầy đủ end-to-end; xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
+- PvP ngoài bản đồ với người chơi online tạo một trận turn-based chung: cả hai người đều bị khóa khỏi di chuyển, lần lượt tự chọn chiêu khi tới lượt; HUB/SAFE_ZONE, cùng tổ đội và người đang bận không thể bị kéo vào trận. Người thua bị xử lý rơi đồ, hồi sinh 1 HP và nhận Miễn Chiến PvP.
 - Simulator theo lượt đọc cấu hình Cổ trang bị và Sát Chiêu hiện hành; các trường loadout, hotbar và effect realtime cũ đã được dọn khỏi schema/dữ liệu.
 - API và handler kết toán realtime đã bị gỡ. Encounter cũ trong DB không còn được hỗ trợ và các khóa combat realtime cũ trong `active_combat` được dọn khi khởi tạo schema.
 - **Chiến báo:** lịch sử combat mới ghi kết quả turn-based; dữ liệu realtime cũ vẫn được giữ để tương thích.
@@ -712,7 +714,7 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - Vật phẩm trong Túi đồ, Danh mục và Thương Đội có icon nhỏ theo hình dạng của tên món; màu nền ô túi vẫn thể hiện bậc vật phẩm.
 - **Chết thì rơi đồ:** khi bại trận dã ngoại, bỏ chạy ngất xỉu hay thua PvP, đạo hữu có thể rơi một phần thạch, nguyên liệu, Cổ không trang bị/không phải Bản Mệnh và Bí phương. Tài sản tạo thành ground drop/hài cốt trên bản đồ thay vì biến mất hoặc chuyển thẳng vào túi người thắng; quyền nhặt tuân theo thời gian khóa mô tả ở mục bản đồ.
 - **Công phá Tông Môn cướp kho:** thắng khiêu chiến Tông Môn sẽ cướp một phần Quỹ, linh tài, Cổ trùng và Bí phương trong bảo khố chia cho đội tấn công. Tuy nhiên **Thiên Đạo cũng tiêu hủy vĩnh viễn ~40% chiến lợi phẩm** (giống cơ chế rơi đồ khi tử đạo: mất đúng 1 đơn vị thì 50% cơ hội bị chấn nát, ngược lại luôn giữ lại ít nhất 1 đơn vị cho đội); tông môn thất thủ được Hộ Sơn Đại Trận bảo hộ.
-- **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu và hồi sinh theo đúng quy tắc hồi sinh sau tử đạo (hồi sinh tại HUB/SAFE_ZONE gần nhất), đồng thời chịu hình phạt rơi đồ như trên. Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
+- **Bỏ chạy trong combat turn-based** là một action theo tốc độ: thành công kết thúc trận và giữ nguyên HP, thất bại tiêu hao lượt; không có hình phạt rơi đồ khi chạy thành công.
 - Khi hệ thống quá tải (tranh chấp khoá dữ liệu do nhiều thao tác cùng lúc), các thao tác chiến đấu (bỏ chạy/rút lui/bắt sủng…) trả về thông báo **bận và yêu cầu thử lại** thay vì treo vô hạn.
 
 ### Kháng hiệu ứng và Tenacity (đọc theo effect)
@@ -754,6 +756,12 @@ Trong tab **Cài đặt** của hồ sơ (Aperture), đạo hữu có thể ch�
 ### Cơ chế chiến đấu realtime (đã gỡ)
 
 Combat realtime 20 Hz, bắt thú theo thời gian thực, lệnh chiến thú tự động và quy tắc chiến thú tử vong/trọng thương đã bị gỡ. Không có các thao tác hoặc luật này trong gameplay hiện hành. Combat được giải quyết theo lượt trong các flow được hỗ trợ; xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md` để biết ranh giới và các phần chưa được nối.
+
+Phòng Tập dùng cùng lựa chọn **Chiến đấu có điều khiển** hoặc **Tự động chiến**; đây là encounter ảo, không thay đổi vị trí, HP, chân nguyên hay tài nguyên chiến đấu của bản thể.
+
+### Tháp Chiến Thuật Vô Tận
+
+Tháp là chiến trường ảo solo theo tầng. Mỗi lượt người chơi chọn Cổ, sát chiêu và mục tiêu; NPC/quái dùng hồ sơ hành vi. Vào trận hồi đầy HP và chân nguyên, không dùng vật phẩm tiêu hao, không lưu chi phí hoặc sát thương lên bản thể và sủng vật. Thắng tầng nhận thưởng ngay và mở tầng tiếp theo; tiến độ tầng cao nhất được lưu, có thể rời giữa các lần khiêu chiến. Mỗi tuần có tối đa 5 lượt thất bại hoặc bỏ trận; thắng không trừ lượt. Bảng xếp hạng ưu tiên tầng cao nhất, sau đó người đạt tầng sớm hơn.
 
 ### Sủng vật (Pets)
 
@@ -1410,6 +1418,8 @@ Actor quái trên World Map hiện là snapshot Redis dùng cho hiển thị và
 Người chơi trong cùng instance realtime có thể được chọn bằng cách nhấp vào nhân vật hoặc dùng phím chuyển mục tiêu. Bảng mục tiêu cho phép xem hồ sơ, mời tổ đội, nhắn riêng và gửi lời mời giao dịch. Tấn công PvP realtime đã gỡ; các flow PvP theo lượt chưa được xác nhận end-to-end.
 
 PvP realtime trên bản đồ đã gỡ. Không sử dụng các mô tả bật/tắt PvP, tấn công trực tiếp hoặc rơi đồ PvP như gameplay hiện hành; việc hỗ trợ PvP theo lượt cần được kiểm tra riêng.
+
+- HUB và SAFE_ZONE luôn cấm khởi tạo PvP, kể cả khi mục tiêu có Sát Khí cao. Miễn Chiến PvP của người chủ động chỉ bị phá khi trận thực sự bắt đầu.
 
 Hồi sinh sau khi tử đạo trong combat:
 - Đạo hữu tử đạo sẽ hồi sinh tại **HUB/SAFE_ZONE an toàn gần nhất** (ưu tiên HUB, fallback SAFE ZONE) **trong Đại Vực tử vong** (không bị kéo sang Đại Vực khác); khi không có HUB/SAFE ZONE hợp lệ trên tầng đó thì hồi sinh tại **vị trí tử vong**.

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"math"
 	"net/http"
 
@@ -52,6 +53,13 @@ func StartPracticeCombat(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	if _, sessionErr := loadCombatSession(tx, playerID, nil, true); sessionErr == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đang có phiên chiến đấu."})
+		return
+	} else if sessionErr != sql.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên chiến đấu."})
+		return
+	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không thể đọc trạng thái nhân vật."})
@@ -100,6 +108,11 @@ func EndPracticeCombat(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	activeSession, sessionErr := loadCombatSession(tx, playerID, nil, true)
+	if sessionErr != nil && sessionErr != sql.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên tập luyện."})
+		return
+	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không thể đọc trạng thái nhân vật."})
@@ -108,6 +121,12 @@ func EndPracticeCombat(c *gin.Context) {
 	if player.ActiveCombat == nil || player.ActiveCombat.EnemyType != "PRACTICE" {
 		c.JSON(http.StatusConflict, gin.H{"code": "training_session_inactive", "error": "Không có phiên tập luyện đang mở."})
 		return
+	}
+	if sessionErr == nil {
+		if _, err := tx.Exec(`UPDATE combat_sessions SET status='abandoned', pending_actor='', deadline_at=NULL, updated_at=NOW() WHERE id=$1 AND status='active'`, activeSession.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc phiên tập luyện."})
+			return
+		}
 	}
 	player.ActiveCombat = nil
 	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET active_combat=NULL WHERE id=$1`, playerID); err != nil {

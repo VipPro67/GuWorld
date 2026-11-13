@@ -137,6 +137,7 @@ func TestEvasionIsNotDispellable(t *testing.T) {
 // holder could never be evaded.
 func TestEvadeMissRollsOffEvasionChanceAlone(t *testing.T) {
 	evaded := 0
+	strikes := 0
 	for seed := int64(1); seed <= 40; seed++ {
 		attacker := newTestCombatant("a", "Player", 1000, 0)
 		attacker.Speed = 100
@@ -151,15 +152,25 @@ func TestEvadeMissRollsOffEvasionChanceAlone(t *testing.T) {
 		}}, seed)
 
 		logs := Simulate(&CombatState{Seed: seed, Allies: []*CombatantAuto{attacker}, Enemies: []*CombatantAuto{defender}})
-		if logCount(logs, "EVADE_MISS") > 0 {
-			evaded++
+		for _, entry := range logs {
+			if entry.Turn > 50 {
+				continue // the five simulated-time-unit EVASION effect has expired
+			}
+			if entry.ActorId == attacker.ID && entry.Action == "BASIC_ATTACK" {
+				strikes++
+			}
+			if entry.Action == "EVADE_MISS" {
+				evaded++
+			}
 		}
 	}
-	if evaded == 0 {
-		t.Fatal("expected EVADE_MISS on at least one seed with 50% evasion")
+	if strikes == 0 {
+		t.Fatal("expected to observe strikes while EVASION was active")
 	}
-	if evaded == 40 {
-		t.Fatal("50% evasion dodged every strike; the roll is not probabilistic")
+	totalStrikes := evaded + strikes
+	rate := float64(evaded) / float64(totalStrikes)
+	if rate < 0.35 || rate > 0.65 {
+		t.Fatalf("50%% evasion should dodge about half of attacks during its active time; got %d/%d (%.0f%%)", evaded, totalStrikes, rate*100)
 	}
 }
 

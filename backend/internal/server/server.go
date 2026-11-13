@@ -791,12 +791,27 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		combat.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			combat.POST("/start", handlers.AutoCombatStart)
+			combat.POST("/session/start", handlers.StartCombatSession)
+			combat.GET("/session", handlers.GetCombatSession)
+			combat.GET("/session/:id", handlers.GetCombatSessionByID)
+			combat.POST("/session/:id/command", handlers.SubmitCombatSessionCommand)
 			combat.POST("/flee/:id", handlers.Flee)
 			combat.POST("/capture", handlers.CaptureMonster)
 			combat.POST("/practice", handlers.StartPracticeCombat)
 			combat.POST("/practice/exit", handlers.EndPracticeCombat)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
+		}
+
+		tower := api.Group("/infinite-tower")
+		tower.Use(middleware.AuthRequired())
+		tower.Use(middleware.RequireOnboarded())
+		tower.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		{
+			tower.GET("/state", handlers.GetInfiniteTowerState)
+			tower.GET("/leaderboard", handlers.GetInfiniteTowerLeaderboard)
+			tower.POST("/challenge", handlers.ChallengeInfiniteTower)
+			tower.POST("/abandon", handlers.AbandonInfiniteTower)
 		}
 
 		// Player-created killer moves use Gu components from player_gu and are

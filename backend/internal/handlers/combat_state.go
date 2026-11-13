@@ -15,10 +15,10 @@ import (
 )
 
 // partyJoinsCombat reports whether the initiating player's party members join
-// the battle. Võ Đài (virtual) is an individual duel: party members stay out,
-// while pets and variant NPCs still take part.
+// the battle. PvP and virtual duels are individual encounters; pets and variant
+// NPCs still take part.
 func partyJoinsCombat(base *models.CombatState) bool {
-	return base != nil && base.CombatMode != "virtual"
+	return base != nil && base.CombatMode != "virtual" && base.EnemyType != "PVP"
 }
 
 func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {

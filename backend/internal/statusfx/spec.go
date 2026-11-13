@@ -386,6 +386,16 @@ var Registry = map[string]StatusSpec{
 		Category: CategoryBuff, Path: "time", BaseChance: 1.0,
 		SelfTarget: true, DefaultTurns: 3,
 	},
+	StatusSongOfDestiny: {
+		ID: StatusSongOfDestiny, Behaviour: BehaviourAtkUp, Label: "Vận Mệnh Ca",
+		Category: CategoryBuff, Path: "luck", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 1,
+	},
+	StatusDestinySongWeak: {
+		ID: StatusDestinySongWeak, Behaviour: BehaviourWeak, Label: "Suy Yếu bởi Vận Mệnh Ca",
+		Category: CategoryDebuff, Path: "luck", BaseChance: 1.0,
+		DefaultTurns: 1,
+	},
 	StatusEatingLoss: {
 		ID: StatusEatingLoss, Behaviour: BehaviourAtkUp, Label: "Cật Khuy Thị Phúc",
 		Category: CategoryBuff, Path: "food", BaseChance: 1.0,

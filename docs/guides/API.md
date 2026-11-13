@@ -71,7 +71,11 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/player/combat-settings` | Đọc chiến thuật tự động turn-based: hồi HP/chân nguyên, thứ tự nhóm hành động, ưu tiên Cổ và sát chiêu, điều kiện sử dụng, và bỏ qua trận. |
 | PUT | `/player/combat-settings` | Lưu chiến thuật tự động turn-based. Các trường điều khiển realtime cũ bị bỏ qua và được dọn khỏi dữ liệu khi khởi tạo schema. |
 | POST | `/combat/start` | Tự động mô phỏng trọn trận turn-based xác định từ `players.active_combat`; body `{ "loadout": { "GuIds": [], "KillerMoveIds": [], "NoGuSkills": false } }`. Trả replay (`logs`, `winner`, `combatants`) sau khi transaction settlement commit. |
-| POST | `/combat/flee/:id` | Bỏ chạy khỏi encounter turn-based của chính người chơi đã đăng nhập; xử lý phản đòn và settlement theo luật encounter. |
+| POST | `/combat/session/start` | Bắt đầu phiên turn-based có điều khiển cho encounter đang hoạt động; body giống `/combat/start`. Trả `session_id`, `revision`, combat roster, các action của actor đang chờ và thời hạn chọn; hết 45 giây không chọn thì actor dùng đòn đánh thường. PvP chưa được chọn điều khiển sau 45 giây sẽ tự mô phỏng theo chiến thuật đã lưu. |
+| GET | `/combat/session` | Khôi phục phiên turn-based đang hoạt động của người chơi hiện tại; trả `404` nếu không có phiên. |
+| GET | `/combat/session/:id` | Tải lại replay theo ID cho một bên tham gia đã xác thực, kể cả session đã kết thúc. SSE `combat.session.updated` thông báo revision/pending actor để client lấy snapshot mới. |
+| POST | `/combat/session/:id/command` | Gửi lựa chọn lượt; trong PvP, chỉ người chơi sở hữu actor đang tới lượt được gửi. Body `{ "command_id": "<UUID>", "expected_revision": 0, "command": { "actor_id": "...", "action_type": "BASIC_ATTACK|GU_SKILL|KILLER_MOVE|FLEE", "source_id": "...", "instance_id": "...", "target_id": "..." } }`. `FLEE` dùng lượt và có tỉ lệ thành công theo tốc độ; thất bại mất lượt, thành công kết thúc trận và giữ HP hiện tại. Lệnh lặp được khử trùng; revision cũ trả `409`, lựa chọn không hợp lệ trả `422`. Hết hạn tự chọn đánh thường. |
+| POST | `/combat/flee/:id` | Endpoint cũ không thực thi bỏ chạy trực tiếp; khi đang chiến đấu phải gửi action `FLEE` qua `/combat/session/:id/command`. |
 | POST | `/combat/capture` | Thử thu phục quái của encounter đang hoạt động; body `{ "player_id": "<player UUID>" }`. Thành công kết thúc encounter và tạo companion beast; thất bại để combat tiếp tục. |
 | GET | `/player/referrals` |
 | POST | `/player/referrals/claim` |
@@ -172,8 +176,12 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 Realtime: Kênh UI `refine` trên stream `0x02` nhận `{type:"refine.session", session, revision}` khi tạo/submit/resolve/abort.
 
 Mã lỗi phiên: `REFINE_SESSION_ACTIVE` (409), `REFINE_SESSION_NOT_FOUND` (404), `REFINE_SESSION_REQUIRED` (400), `REFINE_STEP_NOT_OPEN` (409), `REFINE_STEP_CLOSED` (410), `REFINE_STEP_ALREADY_DONE` (409), `REFINE_NONCE_INVALID` (409), `REFINE_PAYLOAD_INVALID` (400), `REFINE_GU_LOCKED` (409), `REFINE_CONFIG_MISSING` (503), `REFINE_IMMORTAL_CONFLICT` (409).
-| POST | `/combat/practice` | Tạo encounter turn-based ảo với hình nhân; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Không chuyển zone hay tạo realtime session; trả `active_combat` để dùng luồng `/combat/start`. |
-| POST | `/combat/practice/exit` | Hủy encounter tập luyện chưa resolve; không áp dụng phí chiến đấu hoặc thay đổi vị trí. |
+| POST | `/combat/practice` | Tạo encounter turn-based ảo với hình nhân; body tùy chọn `{dummy_hp,dummy_shield,dummy_atk,dummy_def,dummy_speed}`. Trả `active_combat` để chọn `/combat/session/start` điều khiển từng lượt hoặc `/combat/start` mô phỏng tự động. |
+| POST | `/combat/practice/exit` | Hủy encounter tập luyện chưa resolve và đóng session tương tác nếu có; không áp dụng phí chiến đấu hoặc thay đổi vị trí. |
+| GET | `/infinite-tower/state` | Tiến độ tháp, tầng cao nhất, số lần thất bại trong tuần và giới hạn 5 lần. |
+| GET | `/infinite-tower/leaderboard` | Top 100 theo tầng cao nhất; nếu bằng tầng, người đạt trước đứng trên. |
+| POST | `/infinite-tower/challenge` | Bắt đầu tầng kế tiếp bằng encounter ảo; chỉ thất bại hoặc bỏ trận mới trừ lượt tuần. |
+| POST | `/infinite-tower/abandon` | Bỏ trận tháp đang chạy và tính một lượt thất bại. |
 | GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng), **mọi trận boss** (`BOSS`/`World_Boss`/`TRIBULATION_BOSS`, cả thắng lẫn thua), **mọi trận Tông Môn Chiến** (`SECT_WAR`, cả thắng lẫn thua, ghi cho cả người tấn công và từng đệ tử trấn thủ tham chiến với góc nhìn đảo phe), các trận PVE **thua**, và các trận PVE **thắng có rơi Tiên Cổ** (kể cả quái thường/tinh anh, để xem lại vận may); PVE thường thắng không rơi Tiên Cổ thì không lưu. Bản ghi PVE/boss cũ hơn 30 ngày bị worker xóa theo lô (PVP giữ vô hạn). |
 | GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để xem lại trận chiến mô phỏng theo lượt. |
 

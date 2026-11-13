@@ -73,6 +73,13 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	if _, sessionErr := loadCombatSession(tx, authID, nil, true); sessionErr == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Trận chiến này đang được điều khiển trong phiên turn-based."})
+		return
+	} else if sessionErr != sql.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên chiến đấu hiện tại."})
+		return
+	}
 	beginDuration := time.Since(transactionStartedAt)
 
 	playerLoadStartedAt := time.Now()
@@ -102,13 +109,17 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 	worldMonsterCombat := *player.ActiveCombat
-	if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-		return
+	if requiresRegionCombatPolicy(player.ActiveCombat) {
+		if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 	}
-	if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-		return
+	if requiresRegionCombatPolicy(player.ActiveCombat) {
+		if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	// ── Shared outcome path: build snapshot → simulate → outcome → persist ──
@@ -234,6 +245,7 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		BaseDmg:       enemy.BaseAttack,
 		BaseDef:       enemy.BaseDefense,
 		Speed:         enemy.Speed,
+		AIProfile:     enemy.AIProfile,
 		VirtualShield: enemyShield,
 		DaoMarks: func() simulator.DaoMarks {
 			dm := make(simulator.DaoMarks)

@@ -68,7 +68,7 @@ func TestSongOfSeparation(t *testing.T) {
 func TestSongOfDestiny(t *testing.T) {
 	player := newTestCombatant("p1", "Phượng Cửu Ca", 1000, 100)
 	ally := newTestCombatant("p2", "Đồng Đội", 1000, 100)
-	enemy := newTestCombatant("e1", "Kẻ Địch", 1000, 100)
+	enemy := newTestCombatant("e1", "Kẻ Địch", 100, 100)
 	player.Speed = 20
 	ally.Speed = 15
 	enemy.Speed = 10
@@ -105,6 +105,8 @@ func TestSongOfDestiny(t *testing.T) {
 	if !found {
 		t.Fatalf("expected Vận Mệnh Ca log, got: %+v", logs)
 	}
+	ComputeEffectMultipliers(ally)
+	ComputeEffectMultipliers(enemy)
 	if ally.DamageMultiplier < 1.30 {
 		t.Fatalf("expected ally damage multiplier boosted, got: %f", ally.DamageMultiplier)
 	}
@@ -623,7 +625,7 @@ func TestHeavenNetRestriction(t *testing.T) {
 // 14. Trụ Đạo: Vị Lai Thân (FUTURE_SELF)
 func TestFutureSelf(t *testing.T) {
 	player := newTestCombatant("p1", "Phương Nguyên", 1000, 100)
-	enemy := newTestCombatant("e1", "Bát Chuyển Cổ Tiên", 1000, 100)
+	enemy := newTestCombatant("e1", "Bát Chuyển Cổ Tiên", 100, 100)
 	player.Speed = 20
 	enemy.Speed = 10
 	player.Mana = 100
@@ -657,6 +659,7 @@ func TestFutureSelf(t *testing.T) {
 	if !found {
 		t.Fatalf("expected Vị Lai Thân log, got: %+v", logs)
 	}
+	ComputeEffectMultipliers(player)
 	if player.DamageMultiplier < 1.70 {
 		t.Fatalf("expected player damage multiplier boosted, got: %f", player.DamageMultiplier)
 	}

@@ -10,6 +10,12 @@ export interface ArenaSlice {
   fetchArenaLeaderboard: () => Promise<void>;
   fetchArenaShop: () => Promise<void>;
   challengeArena: (targetPlayerId: string) => Promise<boolean>;
+  towerProgress: ApiResponseData | null;
+  towerLeaderboard: ApiResponseData[];
+  fetchTowerState: () => Promise<void>;
+  fetchTowerLeaderboard: () => Promise<void>;
+  challengeTower: () => Promise<boolean>;
+  abandonTower: () => Promise<boolean>;
   buyArenaItem: (itemId: string, quantity?: number) => Promise<boolean>;
   deathArenaTournament: DeathArenaTournament | null;
   deathArenaBracket: DeathArenaMatch[];
@@ -46,6 +52,8 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   arenaLeaderboard: [],
   arenaDailyChallenges: 0,
   arenaShopItems: [],
+  towerProgress: null,
+  towerLeaderboard: [],
   deathArenaTournament: null,
   deathArenaBracket: [],
   deathArenaMyTeam: null,
@@ -143,6 +151,38 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
     } finally { get().endAction("arena"); }
+  },
+
+  fetchTowerState: async () => {
+    const response = await authFetch(`${BACKEND_URL}/api/infinite-tower/state`);
+    if (!response.ok) return;
+    const data = await response.json();
+    set({ towerProgress: data });
+  },
+
+  fetchTowerLeaderboard: async () => {
+    const response = await authFetch(`${BACKEND_URL}/api/infinite-tower/leaderboard`);
+    if (!response.ok) return;
+    const data = await response.json();
+    set({ towerLeaderboard: data.leaderboard || [] });
+  },
+
+  challengeTower: async () => {
+    const response = await authFetch(`${BACKEND_URL}/api/infinite-tower/challenge`, { method: "POST" });
+    const data = await response.json();
+    if (!response.ok) { get().addToast(data.error || "Không thể khiêu chiến tháp.", "error"); return false; }
+    if (data.active_combat) get().setPlayerFromServer({ active_combat: data.active_combat });
+    get().addToast(`Bắt đầu tầng ${data.floor}.`, "success");
+    return true;
+  },
+
+  abandonTower: async () => {
+    const response = await authFetch(`${BACKEND_URL}/api/infinite-tower/abandon`, { method: "POST" });
+    const data = await response.json();
+    if (!response.ok) { get().addToast(data.error || "Không thể rời tháp.", "error"); return false; }
+    get().setPlayerFromServer({ active_combat: null });
+    get().addToast("Đã rời tháp; lượt khiêu chiến tuần này đã được tính.", "info");
+    return true;
   },
 
   fetchDeathArenaCurrent: async () => {

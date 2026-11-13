@@ -299,20 +299,22 @@ type DaoMarks map[string]int64
 
 // CombatantAuto represents a stripped-down, deterministic entity in the combat grid.
 type CombatantAuto struct {
-	ID      string
-	Name    string
-	Kind    string // "Player", "Enemy", "Boss", "Minion"
-	Rank    int
-	SubRank int
-	GridX   int // 1=Front, 2=Mid, 3=Back
-	GridY   int // 1=Top, 2=Mid, 3=Bottom
-	MaxHP   float64
-	HP      float64
-	MaxMana float64
-	Mana    float64
-	BaseDmg float64 // fallback basic-attack damage
-	BaseDef float64
-	Speed   float64
+	ID                string
+	Name              string
+	Kind              string // "Player", "Enemy", "Boss", "Minion"
+	Rank              int
+	SubRank           int
+	GridX             int // 1=Front, 2=Mid, 3=Back
+	GridY             int // 1=Top, 2=Mid, 3=Bottom
+	MaxHP             float64
+	HP                float64
+	MaxMana           float64
+	Mana              float64
+	BaseDmg           float64 // fallback basic-attack damage
+	BaseDef           float64
+	Speed             float64
+	AIProfile         string
+	LastAutoActionKey string `json:"last_auto_action_key,omitempty"`
 
 	// Lifespan (thọ nguyên). Set from the player on build; monsters leave 0 and
 	// the engine falls back to lifespanByRank. Used by ON_BATTLE_START/SEIZE_INITIATIVE.
@@ -488,6 +490,31 @@ type CombatState struct {
 
 	// Pre-battle events logged at Turn 0 (e.g. Steal Gu)
 	InitialLogs []CombatLog
+
+	// Interactive is optional. A caller can replay the initial state with the
+	// accepted command log to reach the next human decision deterministically.
+	Interactive *InteractiveCombat `json:"interactive,omitempty"`
+	FledBy      string             `json:"fled_by,omitempty"`
+}
+
+// CombatCommand selects exactly one loaded action and one legal target. The
+// handler owns command IDs/revisions; the simulator only consumes ordered,
+// already-authorized decisions.
+type CombatCommand struct {
+	ActorID    string `json:"actor_id"`
+	ActionType string `json:"action_type"`
+	SourceID   string `json:"source_id,omitempty"`
+	InstanceID string `json:"instance_id,omitempty"`
+	TargetID   string `json:"target_id,omitempty"`
+}
+
+type InteractiveCombat struct {
+	ManualActors       map[string]bool `json:"manual_actors"`
+	Commands           []CombatCommand `json:"commands"`
+	PendingActor       string          `json:"pending_actor,omitempty"`
+	TribulationEventID string          `json:"tribulation_event_id,omitempty"`
+	Consumed           int             `json:"consumed"`
+	Error              string          `json:"error,omitempty"`
 }
 
 // CombatSnapshot captures full stats of all combatants at a point in time.

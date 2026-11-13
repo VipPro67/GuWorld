@@ -51,6 +51,15 @@ type CombatOutcomeInput struct {
 // It is pure and does not perform I/O, SQL, or network operations.
 func EvaluateCombatOutcome(input CombatOutcomeInput, initialLogs []simulator.CombatLog) *CombatOutcome {
 	enemiesAlive, alliesAlive, finalPlayerHP := combatOutcome(input.SimState, input.PlayerID)
+	if input.SimState != nil && input.SimState.FledBy != "" {
+		if input.SimState.FledBy == input.PlayerID {
+			alliesAlive = false
+			enemiesAlive = true
+		} else {
+			alliesAlive = true
+			enemiesAlive = false
+		}
+	}
 
 	winner := "Phe Địch"
 	if alliesAlive {
@@ -88,10 +97,12 @@ func EvaluateCombatOutcome(input CombatOutcomeInput, initialLogs []simulator.Com
 		enemyRank = input.ActiveCombat.EnemyRank
 	}
 	isPractice := strings.EqualFold(rawEnemyType, "PRACTICE")
+	isTower := strings.EqualFold(rawEnemyType, "TOWER")
+	isPVP := strings.EqualFold(rawEnemyType, "PVP")
 
 	if alliesAlive {
 		if input.IsVirtual {
-			if !isPractice {
+			if !isPractice && !isTower {
 				arenaCoins = 50
 				summary["reward"] = "50 Xu Đấu Trường"
 			}
@@ -100,19 +111,21 @@ func EvaluateCombatOutcome(input CombatOutcomeInput, initialLogs []simulator.Com
 				arenaSwapTargetID = input.ActiveCombat.TargetPlayerID
 			}
 		} else {
-			if !input.IsTribulation && targetSectID == "" {
+			if !input.IsTribulation && !isPVP && targetSectID == "" {
 				shouldClearCell = true
 				clearedCellKey = fmt.Sprintf("%d,%d", input.PlayerX, input.PlayerY)
 			}
 		}
 	} else {
-		if input.IsVirtual && !isPractice {
+		if input.IsVirtual && !isPractice && !isTower {
 			arenaCoins = 1
 		}
 	}
 
 	qiReward := 2.0
-	if alliesAlive {
+	if isTower || isPractice {
+		qiReward = 0
+	} else if alliesAlive {
 		qiReward = combatHumanQiReward(enemyRank)
 	}
 

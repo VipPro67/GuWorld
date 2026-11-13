@@ -40,6 +40,7 @@ const MerchantTradeView = dynamic(() => import("@/components/MerchantTradeView")
 const PremiumStoreView = dynamic(() => import("@/components/PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
 const BaoHoangMarket = dynamic(() => import("@/components/BaoHoangMarket").then(m => m.BaoHoangMarket), { ssr: false });
 const ArenaView = dynamic(() => import("@/components/ArenaView").then(m => m.ArenaView), { ssr: false });
+const InfiniteTowerView = dynamic(() => import("@/components/InfiniteTowerView").then(m => m.InfiniteTowerView), { ssr: false });
 const DeathArenaView = dynamic(() => import("@/components/DeathArena/DeathArenaView"), { ssr: false });
 const MartialArenaView = dynamic(() => import("@/components/MartialArena/MartialArenaView"), { ssr: false });
 const EntertainmentPanel = dynamic(() => import("@/components/EntertainmentPanel").then(m => m.EntertainmentPanel), { ssr: false });
@@ -330,7 +331,7 @@ export default function Home() {
   }
 
   const isFullBleedView = currentView === "practice-room" || isExploreView;
-  const isWideFeatureView = ["aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "death-arena", "martial-arena"].includes(currentView);
+  const isWideFeatureView = ["aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "infinite-tower", "death-arena", "martial-arena"].includes(currentView);
 
   const viewTitles: Record<string, string> = {
     dashboard: "Sảnh chính",
@@ -348,6 +349,7 @@ export default function Home() {
     shop: "Thương hội",
     auction: "Chợ Tiên",
     arena: "Đấu trường",
+    "infinite-tower": "Tháp Chiến Thuật",
     "death-arena": "Sinh tử đài",
     "martial-arena": "Đại Hội Võ Thuật",
     leaderboard: "Bảng xếp hạng",
@@ -658,6 +660,8 @@ export default function Home() {
           />
         ) : currentView === "arena" ? (
           <ArenaView />
+        ) : currentView === "infinite-tower" ? (
+          <InfiniteTowerView />
         ) : currentView === "death-arena" ? (
           <div className="w-full">
             <DeathArenaView />

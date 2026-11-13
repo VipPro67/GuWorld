@@ -1,6 +1,18 @@
 package handlers
 
-import "github.com/vippro67/GuWorld/backend/internal/models"
+import (
+	"strings"
+
+	"github.com/vippro67/GuWorld/backend/internal/models"
+)
+
+func requiresRegionCombatPolicy(combat *models.CombatState) bool {
+	if combat == nil {
+		return true
+	}
+	typeName := strings.ToUpper(strings.TrimSpace(combat.EnemyType))
+	return typeName != "PRACTICE" && typeName != "TOWER"
+}
 
 type CombatContext struct {
 	Attacker    *models.Combatant

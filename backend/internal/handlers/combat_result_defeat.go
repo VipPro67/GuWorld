@@ -25,6 +25,13 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 			})
 			return
 		}
+		if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "TOWER" {
+			defLogs = append(defLogs, simulator.CombatLog{
+				Turn: simState.Turn, Action: "BATTLE_END",
+				Detail: "Đạo hữu thất bại tại tháp chiến thuật. Bản thể không bị ảnh hưởng; lượt khiêu chiến đã được tính.",
+			})
+			return
+		}
 		if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 1); err != nil {
 			logger.S.Errorf("Failed to award arena_coin to %s: %v", player.ID, err)
 		} else {
@@ -89,6 +96,9 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		}
 	}
 	if didRespawn {
+		if isPVP {
+			GrantPvpImmunity(tx, player.ID, 10*time.Minute)
+		}
 		defeatMsg += " " + respawn.Message()
 	}
 

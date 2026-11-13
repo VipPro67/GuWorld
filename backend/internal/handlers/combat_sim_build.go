@@ -242,8 +242,32 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 			}
 		}
 	}
+	if player.ActiveCombat.EnemyType == "TOWER" {
+		for _, ally := range simState.Allies {
+			if ally == nil {
+				continue
+			}
+			ally.HP = ally.MaxHP
+			ally.Mana = ally.MaxMana
+			ally.AutoHealHP = false
+			ally.AutoRestoreMana = false
+			ally.HealCharges = 0
+			ally.Actions = filterTowerActions(ally.Actions)
+		}
+	}
 
 	return simState, nil
+}
+
+func filterTowerActions(actions []simulator.SimAction) []simulator.SimAction {
+	filtered := actions[:0]
+	for _, action := range actions {
+		if action.ActionType == "ITEM" || action.ActionType == "CONSUMABLE" {
+			continue
+		}
+		filtered = append(filtered, action)
+	}
+	return filtered
 }
 
 func applyPveTitleDamage(combatant *simulator.CombatantAuto, activeCombat *models.CombatState) {
@@ -282,7 +306,7 @@ func buildSimVariantNPC(actor *models.Combatant) *simulator.CombatantAuto {
 			}
 		}
 	}
-	return &simulator.CombatantAuto{ID: actor.ID, Name: actor.Name, Kind: "VariantNPC", Rank: actor.Rank, SubRank: actor.SubRank,
+	return &simulator.CombatantAuto{ID: actor.ID, Name: actor.Name, Kind: "VariantNPC", Rank: actor.Rank, SubRank: actor.SubRank, AIProfile: actor.AIProfile,
 		GridX: actor.GridX, GridY: actor.GridY, HP: actor.HP, MaxHP: actor.MaxHP, Mana: actor.CurrentMana, MaxMana: actor.MaxMana,
 		BaseDmg: actor.BaseAttack, BaseDef: actor.BaseDefense, Speed: actor.Speed, Actions: actions, Mechanics: mechanics, GuHunger: hunger}
 }

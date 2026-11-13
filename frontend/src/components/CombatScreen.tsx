@@ -11,6 +11,7 @@ import { masteryKeyForPoints, masteryLevelForPoints, pathLabels } from "@/lib/tr
 import { GamePanel, GameButton, GameCard, GameProgressBar, GameSection } from "@/components/ui";
 import { rankLabel, subRankLabel, typeColor, gridXLabel, getCombatEffects } from "@/lib/combat";
 import { captureBonus, investigation, isCombatEligible, operationsBy } from "@/lib/effect-blocks";
+import { useTribulationCombatResolution } from "@/hooks/useTribulationCombatResolution";
 // UI migrated to shared components
 
 interface CombatScreenProps {
@@ -41,6 +42,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [simulationLogs, setSimulationLogs] = useState<Record<string, unknown>[]>([]);
   const [simulationWinner, setSimulationWinner] = useState<string | null>(null);
   const [simulationCombatants, setSimulationCombatants] = useState<Record<string, unknown>[]>([]);
+  const [interactiveSession, setInteractiveSession] = useState<ApiResponseData | null>(null);
+  const [interactiveTarget, setInteractiveTarget] = useState("");
 
   const [autoHealHP, setAutoHealHP] = useState(false);
   const [healThreshold, setHealThreshold] = useState(30);
@@ -58,6 +61,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [actionLoading]);
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
+  const startCombatSession = useGameStore((state) => state.startCombatSession);
+  const fetchCombatSession = useGameStore((state) => state.fetchCombatSession);
+  const combatSessionEvent = useGameStore((state) => state.combatSessionEvent);
+  const setActiveCombatReplay = useGameStore((state) => state.setActiveCombatReplay);
+  const submitCombatCommand = useGameStore((state) => state.submitCombatCommand);
+  const abandonTower = useGameStore((state) => state.abandonTower);
   const executePracticeCombat = useGameStore((state) => state.executePracticeCombat);
   const killerMoves = useGameStore((state) => state.killerMoves);
   const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
@@ -70,6 +79,100 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const party = useGameStore((state) => state.party);
   const fetchPartyStatus = useGameStore((state) => state.fetchPartyStatus);
   const activeCombatReplay = useGameStore((state) => state.activeCombatReplay);
+
+  const resolveWonTribulation = useTribulationCombatResolution(
+    player.active_combat?.tribulation_event_id,
+    isPracticeMode,
+    resolveTribulation,
+  );
+
+  useEffect(() => {
+    if (!player.active_combat) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const loadSession = async () => {
+      const session = await fetchCombatSession();
+      if (cancelled) return;
+      if (session) {
+        setInteractiveSession((current: ApiResponseData | null) => !current || Number(session.revision) >= Number(current.revision) ? session : current);
+        if (session.status === "active") timer = setTimeout(loadSession, 1000);
+      } else if (player.active_combat?.enemy_type === "PVP") timer = setTimeout(loadSession, 1500);
+    };
+    void loadSession();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [player.active_combat?.combat_id, player.active_combat?.enemy_type, fetchCombatSession]);
+
+  useEffect(() => {
+    const event = combatSessionEvent;
+    if (!event?.session_id) return;
+    let cancelled = false;
+    void fetchCombatSession(event.session_id).then((session) => {
+      if (cancelled || !session) return;
+      if (session.status === "complete") {
+        const logs = (session.logs || []) as ApiResponseData[];
+        const winner = String(session.winner || "Phe Địch");
+        setInteractiveSession(null);
+        setSimulationLogs(logs);
+        setSimulationWinner(winner);
+        void resolveWonTribulation(winner, session.tribulation_event_id as string | undefined);
+        setActiveCombatReplay({
+          logs, winner, enemy: player.active_combat || enemy,
+          combatants: [...((session.allies || []) as ApiResponseData[]), ...((session.enemies || []) as ApiResponseData[])],
+        });
+      } else {
+        setInteractiveSession((current: ApiResponseData | null) => !current || Number(session.revision) >= Number(current.revision) ? session : current);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [combatSessionEvent?.session_id, combatSessionEvent?.revision, fetchCombatSession, setActiveCombatReplay, player.active_combat, enemy, resolveWonTribulation]);
+
+  useEffect(() => {
+    const pendingActor = String(interactiveSession?.pending_actor || "");
+    const allies = (interactiveSession?.allies || []) as ApiResponseData[];
+    const pendingIsAlly = allies.some((combatant) => combatant.id === pendingActor);
+    const targets = (pendingIsAlly ? interactiveSession?.enemies : interactiveSession?.allies) as ApiResponseData[] | undefined;
+    const selectionIsValid = (targets || []).some((target) =>
+      target.id === interactiveTarget && !target.dead && Number(target.hp) > 0,
+    );
+    if (selectionIsValid) return;
+    const firstTarget = (targets || [])
+      .find((target) => !target.dead && Number(target.hp) > 0);
+    setInteractiveTarget(firstTarget?.id || "");
+  }, [interactiveSession?.pending_actor, interactiveSession?.allies, interactiveSession?.enemies, interactiveTarget]);
+
+  const handleStartInteractive = async () => {
+    if (player.active_combat?.enemy_type === "PVP" && player.active_combat.combat_owner_id && player.active_combat.combat_owner_id !== player.id) return;
+    const loadout = {
+      GuIds: selectedGuIds, KillerMoveIds: selectedKmIds, ImmortalGuId: null,
+      NoGuSkills: selectedGuIds.length === 0, AutoHealHP: autoHealHP,
+      HealThreshold: healThreshold, AutoRestoreMana: autoRestoreMana, ManaThreshold: manaThreshold,
+    };
+    const session = await startCombatSession(loadout);
+    if (session) setInteractiveSession(session);
+  };
+
+  const handleSubmitInteractive = async (action: ApiResponseData) => {
+    if (!interactiveSession) return;
+    const actorID = interactiveSession.pending_actor as string;
+    const command = {
+      actor_id: actorID, action_type: action.action_type as string,
+      source_id: (action.source_id as string) || "", instance_id: (action.instance_id as string) || "",
+      target_id: String(action.target_type || "").toUpperCase() === "SELF" ? actorID : interactiveTarget,
+    };
+    const next = await submitCombatCommand(interactiveSession.session_id, interactiveSession.revision, command);
+    if (next) {
+      setInteractiveTarget("");
+      setInteractiveSession(next.status === "complete" ? null : next);
+      if (next.status === "complete" && Array.isArray(next.logs)) {
+        setSimulationLogs(next.logs);
+        setSimulationWinner(next.winner || "Phe Địch");
+        void resolveWonTribulation(next.winner, next.tribulation_event_id as string | undefined);
+      }
+    }
+  };
+
+  const isIncomingPvp = player.active_combat?.enemy_type === "PVP" &&
+    Boolean(player.active_combat.combat_owner_id) && player.active_combat.combat_owner_id !== player.id;
 
   const isPartyLeader = party ? party.leader_id === player.id : true;
   const isPartyMemberNotLeader = Boolean(player.party_id) && (party === null || !isPartyLeader);
@@ -151,7 +254,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [investigationLevel, enemy]);
 
   const handleStartSimulation = async (): Promise<boolean> => {
-    const tribulationEventId = isPracticeMode ? undefined : player.active_combat?.tribulation_event_id;
     const loadout = {
       GuIds: selectedGuIds,
       KillerMoveIds: selectedKmIds,
@@ -175,9 +277,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       setSimulationWinner(result.winner);
       setSimulationCombatants(result.combatants || []);
 
-      if (result.winner === "Phe Ta" && tribulationEventId) {
-        await resolveTribulation(tribulationEventId);
-      }
+      await resolveWonTribulation(result.winner);
 
       return true;
     }
@@ -1026,13 +1126,35 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           {/* Action Buttons (Tấn công, Bắt quái, Rút lui) */}
       <div className="flex gap-4 flex-wrap">
         <button
-          onClick={handleStartSimulation}
-          disabled={actionLoading}
+          onClick={handleStartInteractive}
+          disabled={actionLoading || Boolean(interactiveSession) || isIncomingPvp}
           className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Play className="w-6 h-6" />
-          <span>Tấn Công / Chiến Đấu</span>
+          <span>Chiến đấu có điều khiển</span>
         </button>
+        <button onClick={handleStartSimulation} disabled={actionLoading || Boolean(interactiveSession)} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động chiến</button>
+        {isIncomingPvp && !interactiveSession && <p className="w-full rounded-lg border border-amber-800/50 bg-amber-950/30 p-3 text-sm text-amber-200">Đạo hữu đã bị kéo vào trận PvP. Đang chờ đối thủ nạp đội hình chiến đấu...</p>}
+        {interactiveSession && (() => {
+          const actorSide = [...(interactiveSession.allies || []), ...(interactiveSession.enemies || [])] as ApiResponseData[];
+          const actor = actorSide.find((combatant) => combatant.id === interactiveSession.pending_actor);
+          const pendingIsAlly = ((interactiveSession.allies || []) as ApiResponseData[]).some((combatant) => combatant.id === interactiveSession.pending_actor);
+          const targets = (pendingIsAlly ? interactiveSession.enemies : interactiveSession.allies) as ApiResponseData[];
+          const ownsTurn = actor?.id === player.id;
+          const actions = (actor?.actions || []) as ApiResponseData[];
+          return (
+            <div className="w-full rounded-xl border border-emerald-700/50 bg-zinc-950/80 p-4">
+              <div className="mb-3 text-sm font-semibold text-emerald-300">Lượt của {actor?.name || "đồng minh"}{!ownsTurn && " · đang chờ đối thủ"}</div>
+              <select value={interactiveTarget} onChange={(event) => setInteractiveTarget(event.target.value)} className="mb-3 w-full rounded-lg bg-zinc-900 p-2 text-sm">
+                {targets.filter((target) => !target.dead && Number(target.hp) > 0).map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
+              </select>
+              <div className="flex flex-wrap gap-2">
+                {actions.map((action, index) => <button disabled={!ownsTurn} key={`${action.action_type}-${action.instance_id || action.source_id || index}`} onClick={() => void handleSubmitInteractive(action)} className="rounded-lg border border-emerald-700/60 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-900/50 disabled:opacity-40">{action.name}</button>)}
+              </div>
+            </div>
+          );
+        })()}
+        {player.active_combat?.enemy_type === "TOWER" && <button onClick={() => void abandonTower()} disabled={actionLoading} className="rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50">Rời tháp (tính 1 lượt)</button>}
         {(() => {
           if (isPracticeMode) return null;
           const monsterSpec = monsterDictionary[enemy.enemy_template_id || ""];
@@ -1085,7 +1207,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             </button>
           );
         })()}
-        {onRetreat && (
+        {onRetreat && !interactiveSession && !player.active_combat && (
           <button
             onClick={async () => {
               const res = await onRetreat();

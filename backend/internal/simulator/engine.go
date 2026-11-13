@@ -1103,6 +1103,11 @@ func Simulate(state *CombatState) []CombatLog {
 
 	// Deterministic RNG seeded from the battle seed.
 	rng := rand.New(rand.NewSource(state.Seed))
+	if state.Interactive != nil {
+		state.Interactive.PendingActor = ""
+		state.Interactive.Consumed = 0
+		state.Interactive.Error = ""
+	}
 
 	var logs []CombatLog
 	rebornUses := make(map[string]int)
@@ -1162,7 +1167,12 @@ func Simulate(state *CombatState) []CombatLog {
 		}
 	}
 
-	maxTurns := 100
+	maxTurns := 1000
+	var initiative *InitiativeQueue
+	lastStatusTick := -1
+	actors := append(append([]*CombatantAuto{}, state.Allies...), state.Enemies...)
+	queue := NewInitiativeQueue(actors)
+	initiative = &queue
 
 	// Pre-sort every combatant's actions stably based on explicit Priority if set,
 	// preserving the player's exact per-Gu loadout sequence:
@@ -1217,72 +1227,118 @@ func Simulate(state *CombatState) []CombatLog {
 	for turn := 1; turn <= maxTurns; turn++ {
 		state.Turn = turn
 		var turnLogs []CombatLog
+		activeActorID := ""
+		shouldTick := true
+		if initiative != nil {
+			var combatTime float64
+			var ok bool
+			activeActorID, combatTime, ok = initiative.Next()
+			if !ok {
+				break
+			}
+			tickAt := int(math.Floor(combatTime + 1e-9))
+			shouldTick = tickAt > lastStatusTick
+			if shouldTick {
+				lastStatusTick = tickAt
+			}
+		}
 		turnLogs = append(turnLogs, CombatLog{
 			Turn:   turn,
 			Action: "TURN_START",
 			Detail: fmt.Sprintf("=== LƯỢT %d ===", turn),
 		})
 
-		// ── Tick DoTs for all combatants ──
-		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
-			for _, c := range combatants {
-				if c.HP <= 0 {
-					continue
+		if shouldTick {
+			// ── Tick DoTs for all combatants ──
+			for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+				for _, c := range combatants {
+					if c.HP <= 0 {
+						continue
+					}
+					turnLogs = append(turnLogs, tickDoTs(c, turn)...)
 				}
-				turnLogs = append(turnLogs, tickDoTs(c, turn)...)
 			}
-		}
 
-		// ── Tick resource drain effects (ESSENCE_LEAK) ──
-		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
-			for _, c := range combatants {
-				if c.HP <= 0 {
-					continue
+			// ── Tick resource drain effects (ESSENCE_LEAK) ──
+			for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+				for _, c := range combatants {
+					if c.HP <= 0 {
+						continue
+					}
+					turnLogs = append(turnLogs, tickResourceDrain(c, turn)...)
 				}
-				turnLogs = append(turnLogs, tickResourceDrain(c, turn)...)
 			}
-		}
 
-		// ── Tenacity self-dispel (after DoT damage ticked, before durations tick) ──
-		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
-			for _, c := range combatants {
-				if c.HP <= 0 {
-					continue
+			// ── Tenacity self-dispel (after DoT damage ticked, before durations tick) ──
+			for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+				for _, c := range combatants {
+					if c.HP <= 0 {
+						continue
+					}
+					turnLogs = append(turnLogs, TryTenacityDispel(c, turn, rng)...)
 				}
-				turnLogs = append(turnLogs, TryTenacityDispel(c, turn, rng)...)
 			}
-		}
 
-		// ── Tick status effect durations and compute multipliers ──
-		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
-			for _, c := range combatants {
-				if c.HP <= 0 {
-					continue
-				}
-				turnLogs = append(turnLogs, tickStatusEffects(c, turn)...)
-				ComputeEffectMultipliers(c)
+			// ── Tick status effect durations and compute multipliers ──
+			for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+				for _, c := range combatants {
+					if c.HP <= 0 {
+						continue
+					}
+					turnLogs = append(turnLogs, tickStatusEffects(c, turn)...)
+					ComputeEffectMultipliers(c)
 
-				// Catalog-driven Poem Intent mechanic - start-of-turn logic.
-				if hasMechanic(c.Mechanics, "ON_TURN_START", "POEM_INTENT") {
-					c.CustomState["thi_y"] += 1
-					c.ActiveEffects = append(c.ActiveEffects, Effect{
-						ID:       "thi_ho",
-						Type:     "damage_reduction",
-						Value:    40, // 40% reduction
-						Duration: 2,  // 2 so it lasts until the end of the turn
-					})
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   c.ID,
-						ActorName: c.Name,
-						Action:    "BUFF",
-						Detail:    fmt.Sprintf("[Thơ Cổ] Tích tụ 1 tầng Thi Ý (hiện có %d tầng), tạo Thi Hộ giảm 40%% sát thương nhận vào trong lượt!", c.CustomState["thi_y"]),
-					})
+					// Catalog-driven Poem Intent mechanic - start-of-turn logic.
+					if hasMechanic(c.Mechanics, "ON_TURN_START", "POEM_INTENT") {
+						c.CustomState["thi_y"] += 1
+						c.ActiveEffects = append(c.ActiveEffects, Effect{
+							ID:       "thi_ho",
+							Type:     "damage_reduction",
+							Value:    40, // 40% reduction
+							Duration: 2,  // 2 so it lasts until the end of the turn
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   c.ID,
+							ActorName: c.Name,
+							Action:    "BUFF",
+							Detail:    fmt.Sprintf("[Thơ Cổ] Tích tụ 1 tầng Thi Ý (hiện có %d tầng), tạo Thi Hộ giảm 40%% sát thương nhận vào trong lượt!", c.CustomState["thi_y"]),
+						})
 
-					if c.CustomState["thi_y"] >= 10 {
-						// Immediately destroy all enemies' shields if reaching 10 at start of turn
-						c.CustomState["thi_y"] = 0
-						var enemyTargets []*CombatantAuto
+						if c.CustomState["thi_y"] >= 10 {
+							// Immediately destroy all enemies' shields if reaching 10 at start of turn
+							c.CustomState["thi_y"] = 0
+							var enemyTargets []*CombatantAuto
+							isAlly := false
+							for _, a := range state.Allies {
+								if a.ID == c.ID {
+									isAlly = true
+									break
+								}
+							}
+							if isAlly {
+								enemyTargets = state.Enemies
+							} else {
+								enemyTargets = state.Allies
+							}
+
+							for _, e := range enemyTargets {
+								if e.VirtualShield > 0 {
+									e.VirtualShield = 0
+								}
+							}
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   c.ID,
+								ActorName: c.Name,
+								Action:    "SHIELD_BREAK",
+								Detail:    fmt.Sprintf("[Thơ Cổ] Thi Ý viên mãn (10 tầng)! Phá vỡ hoàn toàn khiên ảo của toàn bộ kẻ địch và reset Thi Ý!"),
+							})
+						}
+					}
+
+					// Tiên Cổ Ốc: Thần Đậu Cung Sinh Cơ (DIVINE_BEAN_ABUNDANCE)
+					if actorHasMechanic(c, "ON_TURN_START", "DIVINE_BEAN_ABUNDANCE") {
 						isAlly := false
 						for _, a := range state.Allies {
 							if a.ID == c.ID {
@@ -1290,270 +1346,253 @@ func Simulate(state *CombatState) []CombatLog {
 								break
 							}
 						}
+						var team []*CombatantAuto
 						if isAlly {
-							enemyTargets = state.Enemies
+							team = state.Allies
 						} else {
-							enemyTargets = state.Allies
+							team = state.Enemies
 						}
-
-						for _, e := range enemyTargets {
-							if e.VirtualShield > 0 {
-								e.VirtualShield = 0
-							}
-						}
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   c.ID,
-							ActorName: c.Name,
-							Action:    "SHIELD_BREAK",
-							Detail:    fmt.Sprintf("[Thơ Cổ] Thi Ý viên mãn (10 tầng)! Phá vỡ hoàn toàn khiên ảo của toàn bộ kẻ địch và reset Thi Ý!"),
-						})
-					}
-				}
-
-				// Tiên Cổ Ốc: Thần Đậu Cung Sinh Cơ (DIVINE_BEAN_ABUNDANCE)
-				if actorHasMechanic(c, "ON_TURN_START", "DIVINE_BEAN_ABUNDANCE") {
-					isAlly := false
-					for _, a := range state.Allies {
-						if a.ID == c.ID {
-							isAlly = true
-							break
-						}
-					}
-					var team []*CombatantAuto
-					if isAlly {
-						team = state.Allies
-					} else {
-						team = state.Enemies
-					}
-					for _, mate := range team {
-						if mate != nil && mate.HP > 0 {
-							cleansed := false
-							newEffects := make([]Effect, 0, len(mate.ActiveEffects))
-							for _, eff := range mate.ActiveEffects {
-								if !cleansed && eff.Type == "debuff" {
-									cleansed = true
-									continue
+						for _, mate := range team {
+							if mate != nil && mate.HP > 0 {
+								cleansed := false
+								newEffects := make([]Effect, 0, len(mate.ActiveEffects))
+								for _, eff := range mate.ActiveEffects {
+									if !cleansed && eff.Type == "debuff" {
+										cleansed = true
+										continue
+									}
+									newEffects = append(newEffects, eff)
 								}
-								newEffects = append(newEffects, eff)
-							}
-							mate.ActiveEffects = newEffects
+								mate.ActiveEffects = newEffects
 
-							healGain := mate.MaxHP * 0.10
-							mate.HP += healGain
-							if mate.HP > mate.MaxHP {
-								mate.HP = mate.MaxHP
+								healGain := mate.MaxHP * 0.10
+								mate.HP += healGain
+								if mate.HP > mate.MaxHP {
+									mate.HP = mate.MaxHP
+								}
+								turnLogs = append(turnLogs, CombatLog{
+									Turn:      turn,
+									ActorId:   c.ID,
+									ActorName: c.Name,
+									Action:    "DIVINE_BEAN_ABUNDANCE",
+									TargetId:  mate.ID,
+									Detail:    fmt.Sprintf("[Tiên Cổ Ốc - Thần Đậu Cung] Thần Đậu nảy mầm tỏa sinh cơ cuồn cuộn, hồi phục %.0f HP và thanh tẩy dị trạng cho %s!", healGain, mate.Name),
+								})
 							}
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   c.ID,
-								ActorName: c.Name,
-								Action:    "DIVINE_BEAN_ABUNDANCE",
-								TargetId:  mate.ID,
-								Detail:    fmt.Sprintf("[Tiên Cổ Ốc - Thần Đậu Cung] Thần Đậu nảy mầm tỏa sinh cơ cuồn cuộn, hồi phục %.0f HP và thanh tẩy dị trạng cho %s!", healGain, mate.Name),
-							})
 						}
 					}
-				}
 
-				// Sát Trận: Lục Cực Tuyệt Sát Trận (SIX_EXTREMITIES_ARRAY)
-				if actorHasMechanic(c, "ON_TURN_START", "SIX_EXTREMITIES_ARRAY") {
-					isAlly := false
-					for _, a := range state.Allies {
-						if a.ID == c.ID {
-							isAlly = true
-							break
-						}
-					}
-					var opponents []*CombatantAuto
-					if isAlly {
-						opponents = state.Enemies
-					} else {
-						opponents = state.Allies
-					}
-					for _, enemy := range opponents {
-						if enemy != nil && enemy.HP > 0 {
-							dmg := c.MaxHP*0.05 + float64(turn)*c.MaxHP*0.02
-							enemy.HP -= dmg
-							if enemy.HP < 0 {
-								enemy.HP = 0
+					// Sát Trận: Lục Cực Tuyệt Sát Trận (SIX_EXTREMITIES_ARRAY)
+					if actorHasMechanic(c, "ON_TURN_START", "SIX_EXTREMITIES_ARRAY") {
+						isAlly := false
+						for _, a := range state.Allies {
+							if a.ID == c.ID {
+								isAlly = true
+								break
 							}
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   c.ID,
-								ActorName: c.Name,
-								Action:    "SIX_EXTREMITIES_ARRAY",
-								TargetId:  enemy.ID,
-								Damage:    dmg,
-								Detail:    fmt.Sprintf("[Sát Trận - Lục Cực Tuyệt Sát] Trận bàn xoay chuyển sát phạt kinh thiên, giáng %.0f sát thương tuyệt diệt lên %s!", dmg, enemy.Name),
-							})
+						}
+						var opponents []*CombatantAuto
+						if isAlly {
+							opponents = state.Enemies
+						} else {
+							opponents = state.Allies
+						}
+						for _, enemy := range opponents {
+							if enemy != nil && enemy.HP > 0 {
+								dmg := c.MaxHP*0.05 + float64(turn)*c.MaxHP*0.02
+								enemy.HP -= dmg
+								if enemy.HP < 0 {
+									enemy.HP = 0
+								}
+								turnLogs = append(turnLogs, CombatLog{
+									Turn:      turn,
+									ActorId:   c.ID,
+									ActorName: c.Name,
+									Action:    "SIX_EXTREMITIES_ARRAY",
+									TargetId:  enemy.ID,
+									Damage:    dmg,
+									Detail:    fmt.Sprintf("[Sát Trận - Lục Cực Tuyệt Sát] Trận bàn xoay chuyển sát phạt kinh thiên, giáng %.0f sát thương tuyệt diệt lên %s!", dmg, enemy.Name),
+								})
+							}
 						}
 					}
-				}
 
-				// Tiên Cổ Ốc: Vạn Niên Đấu Phi Thuyền - Nhật Chiếu Phi Kiếm chi viện mỗi lượt
-				if actorHasMechanic(c, "ON_TURN_START", "MYRIAD_YEAR_WARSHIP") {
-					isAlly := false
-					for _, a := range state.Allies {
-						if a.ID == c.ID {
-							isAlly = true
-							break
+					// Tiên Cổ Ốc: Vạn Niên Đấu Phi Thuyền - Nhật Chiếu Phi Kiếm chi viện mỗi lượt
+					if actorHasMechanic(c, "ON_TURN_START", "MYRIAD_YEAR_WARSHIP") {
+						isAlly := false
+						for _, a := range state.Allies {
+							if a.ID == c.ID {
+								isAlly = true
+								break
+							}
+						}
+						var opponents []*CombatantAuto
+						if isAlly {
+							opponents = state.Enemies
+						} else {
+							opponents = state.Allies
+						}
+						for _, enemy := range opponents {
+							if enemy != nil && enemy.HP > 0 {
+								swordDmg := c.BaseDmg * 0.8
+								if swordDmg < 30.0 {
+									swordDmg = 30.0
+								}
+								enemy.HP -= swordDmg
+								if enemy.HP < 0 {
+									enemy.HP = 0
+								}
+								turnLogs = append(turnLogs, CombatLog{
+									Turn:      turn,
+									ActorId:   c.ID,
+									ActorName: c.Name,
+									Action:    "MYRIAD_YEAR_WARSHIP",
+									TargetId:  enemy.ID,
+									Damage:    swordDmg,
+									Detail:    fmt.Sprintf("[Tiên Cổ Ốc - Vạn Niên Đấu Phi Thuyền] Mũi phi kiếm Nhật Chiếu phóng ra từ boong tàu, chém xuyên phòng tuyến gây %.0f sát thương lên %s!", swordDmg, enemy.Name),
+								})
+								break
+							}
 						}
 					}
-					var opponents []*CombatantAuto
-					if isAlly {
-						opponents = state.Enemies
-					} else {
-						opponents = state.Allies
-					}
-					for _, enemy := range opponents {
-						if enemy != nil && enemy.HP > 0 {
-							swordDmg := c.BaseDmg * 0.8
-							if swordDmg < 30.0 {
-								swordDmg = 30.0
-							}
-							enemy.HP -= swordDmg
-							if enemy.HP < 0 {
-								enemy.HP = 0
-							}
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   c.ID,
-								ActorName: c.Name,
-								Action:    "MYRIAD_YEAR_WARSHIP",
-								TargetId:  enemy.ID,
-								Damage:    swordDmg,
-								Detail:    fmt.Sprintf("[Tiên Cổ Ốc - Vạn Niên Đấu Phi Thuyền] Mũi phi kiếm Nhật Chiếu phóng ra từ boong tàu, chém xuyên phòng tuyến gây %.0f sát thương lên %s!", swordDmg, enemy.Name),
-							})
-							break
-						}
-					}
-				}
 
-				// Sát Chiêu: Diêm Đế / Quỷ Quan Y (YAMA_EMPEROR)
-				if actorHasMechanic(c, "ON_TURN_START", "YAMA_EMPEROR") || hasStatus(c, statusfx.StatusYamaEmperor) {
-					isAlly := false
-					for _, a := range state.Allies {
-						if a.ID == c.ID {
-							isAlly = true
-							break
+					// Sát Chiêu: Diêm Đế / Quỷ Quan Y (YAMA_EMPEROR)
+					if actorHasMechanic(c, "ON_TURN_START", "YAMA_EMPEROR") || hasStatus(c, statusfx.StatusYamaEmperor) {
+						isAlly := false
+						for _, a := range state.Allies {
+							if a.ID == c.ID {
+								isAlly = true
+								break
+							}
+						}
+						var opponents []*CombatantAuto
+						if isAlly {
+							opponents = state.Enemies
+						} else {
+							opponents = state.Allies
+						}
+						for _, enemy := range opponents {
+							if enemy != nil && enemy.HP > 0 {
+								soulLeech := c.BaseDmg * 0.75
+								if soulLeech < 30.0 {
+									soulLeech = 30.0
+								}
+								enemy.HP -= soulLeech
+								if enemy.HP < 0 {
+									enemy.HP = 0
+								}
+								c.HP += soulLeech
+								if c.HP > c.MaxHP {
+									c.HP = c.MaxHP
+								}
+								turnLogs = append(turnLogs, CombatLog{
+									Turn:      turn,
+									ActorId:   c.ID,
+									ActorName: c.Name,
+									Action:    "YAMA_EMPEROR",
+									TargetId:  enemy.ID,
+									Damage:    soulLeech,
+									Detail:    fmt.Sprintf("[Hồn Đạo - Diêm Đế] Diêm La Tử lao ra từ Quỷ Quan Y cắn nuốt %.0f Hồn Lực của %s hồi phục cho Diêm Đế!", soulLeech, enemy.Name),
+								})
+								break
+							}
 						}
 					}
-					var opponents []*CombatantAuto
-					if isAlly {
-						opponents = state.Enemies
-					} else {
-						opponents = state.Allies
-					}
-					for _, enemy := range opponents {
-						if enemy != nil && enemy.HP > 0 {
-							soulLeech := c.BaseDmg * 0.75
-							if soulLeech < 30.0 {
-								soulLeech = 30.0
-							}
-							enemy.HP -= soulLeech
-							if enemy.HP < 0 {
-								enemy.HP = 0
-							}
-							c.HP += soulLeech
-							if c.HP > c.MaxHP {
-								c.HP = c.MaxHP
-							}
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   c.ID,
-								ActorName: c.Name,
-								Action:    "YAMA_EMPEROR",
-								TargetId:  enemy.ID,
-								Damage:    soulLeech,
-								Detail:    fmt.Sprintf("[Hồn Đạo - Diêm Đế] Diêm La Tử lao ra từ Quỷ Quan Y cắn nuốt %.0f Hồn Lực của %s hồi phục cho Diêm Đế!", soulLeech, enemy.Name),
-							})
-							break
-						}
-					}
-				}
 
-				// Tống Hữu Chi Phong phản phệ (StatusFarewellCurse)
-				if hasStatus(c, statusfx.StatusFarewellCurse) {
-					curseDmg := c.MaxHP * 0.05
-					if curseDmg < 10.0 {
-						curseDmg = 10.0
-					}
-					c.HP -= curseDmg
-					if c.HP < 0 {
-						c.HP = 0
-					}
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   c.ID,
-						ActorName: c.Name,
-						Action:    "FAREWELL_CURSE",
-						Damage:    curseDmg,
-						Detail:    fmt.Sprintf("[Phong Đạo - Tống Hữu Phong] Gió Tiễn Bạn vần vũ ăn mòn cốt nhục và hồn phách, %s tự tổn %.0f HP!", c.Name, curseDmg),
-					})
-				}
-
-				// Kiếm Ngân Tác Mệnh phát tác (StatusSwordMark)
-				if hasStatus(c, statusfx.StatusSwordMark) {
-					markStacks := 0
-					for _, eff := range c.ActiveEffects {
-						if eff.ID == statusfx.StatusSwordMark {
-							markStacks++
+					// Tống Hữu Chi Phong phản phệ (StatusFarewellCurse)
+					if hasStatus(c, statusfx.StatusFarewellCurse) {
+						curseDmg := c.MaxHP * 0.05
+						if curseDmg < 10.0 {
+							curseDmg = 10.0
 						}
-					}
-					if markStacks < 1 {
-						markStacks = 1
-					}
-					markDmg := float64(markStacks) * 0.05 * c.MaxHP
-					if markDmg < 20 {
-						markDmg = 20
-					}
-					c.HP -= markDmg
-					if c.HP <= c.MaxHP*0.25 {
-						c.HP = 0
+						c.HP -= curseDmg
+						if c.HP < 0 {
+							c.HP = 0
+						}
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   c.ID,
 							ActorName: c.Name,
-							Action:    "SWORD_MARK_EXECUTE",
-							Damage:    markDmg,
-							Detail:    fmt.Sprintf("[Kiếm Đạo - Kiếm Ngân Tác Mệnh] %d đạo kiếm ngân trong cơ thể %s phát tác xé toạc lục phủ ngũ tạng, trảm sát tức khắc!", markStacks, c.Name),
+							Action:    "FAREWELL_CURSE",
+							Damage:    curseDmg,
+							Detail:    fmt.Sprintf("[Phong Đạo - Tống Hữu Phong] Gió Tiễn Bạn vần vũ ăn mòn cốt nhục và hồn phách, %s tự tổn %.0f HP!", c.Name, curseDmg),
 						})
-					} else {
+					}
+
+					// Kiếm Ngân Tác Mệnh phát tác (StatusSwordMark)
+					if hasStatus(c, statusfx.StatusSwordMark) {
+						markStacks := 0
+						for _, eff := range c.ActiveEffects {
+							if eff.ID == statusfx.StatusSwordMark {
+								markStacks++
+							}
+						}
+						if markStacks < 1 {
+							markStacks = 1
+						}
+						markDmg := float64(markStacks) * 0.05 * c.MaxHP
+						if markDmg < 20 {
+							markDmg = 20
+						}
+						c.HP -= markDmg
+						if c.HP <= c.MaxHP*0.25 {
+							c.HP = 0
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   c.ID,
+								ActorName: c.Name,
+								Action:    "SWORD_MARK_EXECUTE",
+								Damage:    markDmg,
+								Detail:    fmt.Sprintf("[Kiếm Đạo - Kiếm Ngân Tác Mệnh] %d đạo kiếm ngân trong cơ thể %s phát tác xé toạc lục phủ ngũ tạng, trảm sát tức khắc!", markStacks, c.Name),
+							})
+						} else {
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   c.ID,
+								ActorName: c.Name,
+								Action:    "SWORD_MARK",
+								Damage:    markDmg,
+								Detail:    fmt.Sprintf("[Kiếm Đạo - Kiếm Ngân Tác Mệnh] %d đạo kiếm ngân róc thịt gọt xương, %s chịu %.0f sát thương kiếm ngân!", markStacks, c.Name, markDmg),
+							})
+						}
+					}
+
+					// Khô Mộc Phùng Xuân (StatusDryWoodSpring)
+					if hasStatus(c, statusfx.StatusDryWoodSpring) {
+						springHeal := c.MaxHP * 0.15
+						c.HP = math.Min(c.MaxHP, c.HP+springHeal)
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   c.ID,
 							ActorName: c.Name,
-							Action:    "SWORD_MARK",
-							Damage:    markDmg,
-							Detail:    fmt.Sprintf("[Kiếm Đạo - Kiếm Ngân Tác Mệnh] %d đạo kiếm ngân róc thịt gọt xương, %s chịu %.0f sát thương kiếm ngân!", markStacks, c.Name, markDmg),
+							Action:    "DRY_WOOD_SPRING",
+							Detail:    fmt.Sprintf("[Mộc Đạo - Khô Mộc Phùng Xuân] Sinh cơ nảy lộc từ gốc mục, %s hồi phục %.0f HP!", c.Name, springHeal),
 						})
 					}
-				}
-
-				// Khô Mộc Phùng Xuân (StatusDryWoodSpring)
-				if hasStatus(c, statusfx.StatusDryWoodSpring) {
-					springHeal := c.MaxHP * 0.15
-					c.HP = math.Min(c.MaxHP, c.HP+springHeal)
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   c.ID,
-						ActorName: c.Name,
-						Action:    "DRY_WOOD_SPRING",
-						Detail:    fmt.Sprintf("[Mộc Đạo - Khô Mộc Phùng Xuân] Sinh cơ nảy lộc từ gốc mục, %s hồi phục %.0f HP!", c.Name, springHeal),
-					})
 				}
 			}
-		}
 
-		// ── Virtual mode: restore mana for all combatants each turn ──
-		if state.VirtualMode {
-			for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
-				for _, c := range combatants {
-					if c.HP <= 0 {
-						continue
+			// ── Virtual mode: restore mana for all combatants each turn ──
+			if state.VirtualMode {
+				for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+					for _, c := range combatants {
+						if c.HP <= 0 {
+							continue
+						}
+						c.Mana = c.MaxMana
 					}
-					c.Mana = c.MaxMana
+				}
+			}
+
+			if initiative != nil {
+				for _, side := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+					for _, actor := range side {
+						for key, remaining := range actor.ActionCooldowns {
+							if remaining > 0 {
+								actor.ActionCooldowns[key] = remaining - 1
+							}
+						}
+					}
 				}
 			}
 		}
@@ -1580,6 +1619,9 @@ func Simulate(state *CombatState) []CombatLog {
 				})
 			}
 			if seizer != nil {
+				if initiative.Prioritize(seizer.ID) {
+					activeActorID = seizer.ID
+				}
 				reordered := make([]*CombatantAuto, 0, len(allActors))
 				reordered = append(reordered, seizer)
 				for _, a := range allActors {
@@ -1609,6 +1651,9 @@ func Simulate(state *CombatState) []CombatLog {
 					winner = suppB
 				}
 				if winner != nil {
+					if initiative.Prioritize(winner.ID) {
+						activeActorID = winner.ID
+					}
 					reordered := make([]*CombatantAuto, 0, len(allActors))
 					reordered = append(reordered, winner)
 					for _, a := range allActors {
@@ -1628,6 +1673,14 @@ func Simulate(state *CombatState) []CombatLog {
 						Action:    "SUPPRESS_PRIORITY",
 						Detail:    detail,
 					})
+				}
+			}
+		}
+		if initiative != nil {
+			for _, actor := range allActors {
+				if actor.ID == activeActorID {
+					allActors = []*CombatantAuto{actor}
+					break
 				}
 			}
 		}
@@ -3942,14 +3995,14 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				for _, ally := range team {
 					if ally != nil && ally.HP > 0 {
-						ally.DamageMultiplier += 0.40
+						refreshCombatEffect(ally, Effect{ID: statusfx.StatusSongOfDestiny, Type: "buff", Value: 40, Duration: 1})
 						manaGain := ally.MaxMana * 0.20
 						ally.Mana = math.Min(ally.MaxMana, ally.Mana+manaGain)
 					}
 				}
 				for _, opp := range opponents {
 					if opp != nil && opp.HP > 0 {
-						opp.DamageMultiplier = math.Max(0.20, opp.DamageMultiplier-0.30)
+						refreshCombatEffect(opp, Effect{ID: statusfx.StatusDestinySongWeak, Type: "debuff", Value: 30, Duration: 1})
 					}
 				}
 				turnLogs = append(turnLogs, CombatLog{
@@ -4171,9 +4224,8 @@ func Simulate(state *CombatState) []CombatLog {
 				a.Damage *= 1.80
 				operationDamageScale *= 1.80
 				actor.ActiveEffects = append(actor.ActiveEffects, Effect{
-					ID: statusfx.StatusFutureSelf, Duration: 3, Type: "buff",
+					ID: statusfx.StatusFutureSelf, Value: 80, Duration: 3, Type: "buff",
 				})
-				actor.DamageMultiplier += 0.80
 				actor.ActiveEffects = append(actor.ActiveEffects, Effect{
 					ID: statusfx.StatusHaste, Value: 50, Duration: 3, Type: "buff",
 				})
@@ -5410,67 +5462,69 @@ func Simulate(state *CombatState) []CombatLog {
 		// All alive combatants execute pure defensive actions (shield buffs) before attacks land.
 		executedInPrePass := make(map[*CombatantAuto]map[int]bool)
 
-		for _, actor := range allActors {
-			if actor.HP <= 0 || actor.IsDead {
-				continue
-			}
-
-			// Skip if CC'd
-			isDisabled := false
-			for _, eff := range actor.ActiveEffects {
-				if (strings.EqualFold(eff.ID, EffectStun) || strings.EqualFold(eff.ID, statusfx.StatusStun)) && eff.Duration >= 0 {
-					isDisabled = true
-					break
+		if initiative == nil {
+			for _, actor := range allActors {
+				if actor.HP <= 0 || actor.IsDead {
+					continue
 				}
-			}
-			if actor.IsStunned || actor.IsFrozen || actor.IsSleeping || actor.IsBound || actor.IsSilenced || actor.IsFeared {
-				isDisabled = true
-			}
-			if isDisabled {
-				continue
-			}
 
-			// Determine target side
-			isAlly := false
-			for _, a := range state.Allies {
-				if a.ID == actor.ID {
-					isAlly = true
-					break
-				}
-			}
-			var enemyTargets []*CombatantAuto
-			if isAlly {
-				enemyTargets = state.Enemies
-			} else {
-				enemyTargets = state.Allies
-			}
-
-			if actor.IsCharmed {
-				if isAlly {
-					enemyTargets = state.Allies
-				} else {
-					enemyTargets = state.Enemies
-				}
-			}
-
-			for ai := 0; ai < len(actor.Actions); ai++ {
-				a := &actor.Actions[ai]
-				if (a.Defense > 0 || a.DefUpTier > 0 || GetSimActionCategory(*a) == "shield") && a.Damage == 0 {
-					var primaryTgt *CombatantAuto
-					if len(enemyTargets) > 0 {
-						primaryTgt = enemyTargets[0]
+				// Skip if CC'd
+				isDisabled := false
+				for _, eff := range actor.ActiveEffects {
+					if (strings.EqualFold(eff.ID, EffectStun) || strings.EqualFold(eff.ID, statusfx.StatusStun)) && eff.Duration >= 0 {
+						isDisabled = true
+						break
 					}
-					if checkActionCondition(a, actor, primaryTgt) {
-						out := runOne(actor, a, isAlly, enemyTargets)
-						postActionChecks(enemyTargets, actor)
-						if out.executed {
-							if executedInPrePass[actor] == nil {
-								executedInPrePass[actor] = make(map[int]bool)
-							}
-							executedInPrePass[actor][ai] = true
+				}
+				if actor.IsStunned || actor.IsFrozen || actor.IsSleeping || actor.IsBound || actor.IsSilenced || actor.IsFeared {
+					isDisabled = true
+				}
+				if isDisabled {
+					continue
+				}
+
+				// Determine target side
+				isAlly := false
+				for _, a := range state.Allies {
+					if a.ID == actor.ID {
+						isAlly = true
+						break
+					}
+				}
+				var enemyTargets []*CombatantAuto
+				if isAlly {
+					enemyTargets = state.Enemies
+				} else {
+					enemyTargets = state.Allies
+				}
+
+				if actor.IsCharmed {
+					if isAlly {
+						enemyTargets = state.Allies
+					} else {
+						enemyTargets = state.Enemies
+					}
+				}
+
+				for ai := 0; ai < len(actor.Actions); ai++ {
+					a := &actor.Actions[ai]
+					if (a.Defense > 0 || a.DefUpTier > 0 || GetSimActionCategory(*a) == "shield") && a.Damage == 0 {
+						var primaryTgt *CombatantAuto
+						if len(enemyTargets) > 0 {
+							primaryTgt = enemyTargets[0]
 						}
-						if out.abort || actor.HP <= 0 || actor.IsDead {
-							break
+						if checkActionCondition(a, actor, primaryTgt) {
+							out := runOne(actor, a, isAlly, enemyTargets)
+							postActionChecks(enemyTargets, actor)
+							if out.executed {
+								if executedInPrePass[actor] == nil {
+									executedInPrePass[actor] = make(map[int]bool)
+								}
+								executedInPrePass[actor][ai] = true
+							}
+							if out.abort || actor.HP <= 0 || actor.IsDead {
+								break
+							}
 						}
 					}
 				}
@@ -5490,7 +5544,7 @@ func Simulate(state *CombatState) []CombatLog {
 			if !ccCheckedThisTurn[actor] {
 				ccCheckedThisTurn[actor] = true
 
-				if actor.ActionCooldowns != nil {
+				if initiative == nil && actor.ActionCooldowns != nil {
 					for k, cd := range actor.ActionCooldowns {
 						if cd > 0 {
 							actor.ActionCooldowns[k] = cd - 1
@@ -5693,6 +5747,66 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
+			if initiative != nil {
+				control := state.Interactive
+				var chosen *SimAction
+				var target *CombatantAuto
+				if control != nil && control.ManualActors[actor.ID] {
+					if control.Consumed >= len(control.Commands) {
+						control.PendingActor = actor.ID
+						logs = append(logs, turnLogs...)
+						logs = append(logs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "AWAIT_COMMAND", Snapshot: buildSnapshot(state)})
+						return logs
+					}
+					command := control.Commands[control.Consumed]
+					if command.ActorID != actor.ID {
+						control.Error = "command actor does not own the active turn"
+						logs = append(logs, turnLogs...)
+						return logs
+					}
+					var err error
+					chosen, target, err = selectCombatCommand(actor, enemyTargets, command)
+					if err != nil {
+						control.Error = err.Error()
+						logs = append(logs, turnLogs...)
+						return logs
+					}
+					control.Consumed++
+				} else {
+					chosen, target = chooseAutoCombatAction(actor, enemyTargets)
+				}
+				if chosen != nil {
+					if chosen.ActionType == "FLEE" {
+						chance := FleeChance(actor, enemyTargets)
+						if rng.Float64() < chance {
+							state.FledBy = actor.ID
+							turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "FLEE_SUCCESS", Detail: fmt.Sprintf("%s bỏ chạy thành công (tỉ lệ %.0f%%).", actor.Name, chance*100)})
+							logs = append(logs, turnLogs...)
+							return logs
+						}
+						turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "FLEE_FAILED", Detail: fmt.Sprintf("%s bỏ chạy thất bại (tỉ lệ %.0f%%), mất lượt này.", actor.Name, chance*100)})
+					} else if chosen.WarmupTurns > 0 {
+						charged := *chosen
+						if target != nil {
+							charged.TargetX, charged.TargetY = target.GridX, target.GridY
+						}
+						actor.ChargingAction = &charged
+						actor.ChargingTurnsLeft = chosen.WarmupTurns
+						turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "START_CHARGING", Detail: fmt.Sprintf("%s bắt đầu tụ khí [%s].", actor.Name, chosen.Name)})
+					} else {
+						// A copy keeps the loadout's original targeting coordinates intact
+						// when a player selects a different target for this activation.
+						action := *chosen
+						if target != nil {
+							action.TargetX, action.TargetY = target.GridX, target.GridY
+						}
+						runOne(actor, &action, isAlly, enemyTargets)
+						postActionChecks(enemyTargets, actor)
+					}
+				}
+				continue
+			}
+
 			for {
 				executedActionInLoop := false
 				for ai := 0; ai < len(actor.Actions); ai++ {
@@ -5767,6 +5881,19 @@ func Simulate(state *CombatState) []CombatLog {
 		}
 
 		logs = append(logs, turnLogs...)
+		if initiative != nil {
+			initiative.Complete(activeActorID)
+			for _, side := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+				for _, actor := range side {
+					if actor.HP <= 0 || actor.IsDead {
+						initiative.Remove(actor.ID)
+						continue
+					}
+					ComputeEffectMultipliers(actor)
+					initiative.SetSpeed(actor.ID, actor.EffectiveSpeed)
+				}
+			}
+		}
 
 		// ── Death triggers check (REBORN: rewind or in-place) ──
 		// Allies may rewind the battle or stand back up; enemies only stand

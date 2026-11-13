@@ -15,6 +15,19 @@ func dotType(statusID string) string {
 	return strings.ToLower(statusID)
 }
 
+func refreshCombatEffect(actor *CombatantAuto, effect Effect) {
+	if actor == nil {
+		return
+	}
+	for index := range actor.ActiveEffects {
+		if actor.ActiveEffects[index].ID == effect.ID {
+			actor.ActiveEffects[index] = effect
+			return
+		}
+	}
+	actor.ActiveEffects = append(actor.ActiveEffects, effect)
+}
+
 // collectAllStatusOps gathers both explicit StatusOps and legacy tier fields on a SimAction.
 func collectAllStatusOps(a *SimAction) []statusfx.StatusOp {
 	if a == nil {

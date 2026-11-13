@@ -297,6 +297,8 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				SELECT p.id
 				FROM players p
 				WHERE p.id = $1 AND p.id != $2
+				  AND p.active_combat IS NULL
+				  AND (p.party_id IS NULL OR p.party_id IS DISTINCT FROM (SELECT party_id FROM players WHERE id=$2))
 				  AND (p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes')
 				  AND p.map_instance_id IS NOT DISTINCT FROM (SELECT map_instance_id FROM players WHERE id=$2)
 				  AND COALESCE((SELECT world_map_id FROM region_world_maps WHERE region_id=p.current_region),'world_map') =
@@ -304,12 +306,8 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 			`
 			var errTarget error
 			var matchedID uuid.UUID
-			if player.PartyID != nil {
-				queryStr += ` AND (p.party_id IS NULL OR p.party_id != $3)`
-				errTarget = tx.QueryRow(queryStr, targetUUID, player.ID, player.PartyID).Scan(&matchedID)
-			} else {
-				errTarget = tx.QueryRow(queryStr, targetUUID, player.ID).Scan(&matchedID)
-			}
+			queryStr += ` FOR UPDATE OF p`
+			errTarget = tx.QueryRow(queryStr, targetUUID, player.ID).Scan(&matchedID)
 
 			if errTarget != nil {
 				if errTarget != sql.ErrNoRows {
@@ -318,7 +316,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				var exists bool
 				_ = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE id = $1)`, targetUUID).Scan(&exists)
 				if exists {
-					return "Cổ Sư này hiện đang quy ẩn (Offline), không thể khai chiến!", false, nil
+					return "Cổ Sư này đang bận, trong tổ đội của đạo hữu hoặc hiện quy ẩn; không thể khai chiến!", false, nil
 				}
 			}
 
@@ -346,16 +344,6 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				if err := checkRegionEquippedGus(targetPlayer.CurrentRegion, targetPlayer.GuInventory); err != nil {
 					return err.Error(), false, nil
 				}
-				// If attacker has PvP immunity, attacking someone breaks their immunity
-				if player.Statuses.Has("pvp_immunity") {
-					RemovePvpImmunity(tx, player.ID)
-					player.Statuses.Remove("pvp_immunity")
-					logMsg += " [Chủ động khai chiến, trạng thái Miễn Chiến bị phá vỡ!]"
-				}
-
-				// Check target Sát Khí level
-				_, targetSatKhiLevel := getSatKhiMultiplier(tx, targetUUID)
-
 				// Target PvP immunity check (after death/respawn)
 				if targetPlayer.Statuses.Has("pvp_immunity") {
 					return fmt.Sprintf("Cổ Sư %s đang trong thời gian Miễn Chiến sau khi hồi sinh, không thể tấn công!", targetPlayer.Username), false, nil
@@ -371,19 +359,8 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				bonusRange := int(stats["attack_range"]) + int(stats["combat_range"])
 				maxPvPRange := 2 + bonusRange
 
-				// Safe zone check (Wanted criminal with Sát Khí > 10 can be attacked in safe zones)
-				isSafe1 := IsSafeZone(player.CurrentRegion, player.X, player.Y)
-				isSafe2 := IsSafeZone(targetPlayer.CurrentRegion, targetPlayer.X, targetPlayer.Y)
-
-				if targetSatKhiLevel > 10 {
-					// Target's safe zone immunity is stripped due to excessive killing intent
-					isSafe2 = false
-					if isSafe1 {
-						isSafe1 = false // Attacker can strike the wanted criminal from safe zone
-					}
-				}
-
-				if isSafe1 || isSafe2 {
+				// HUB and SAFE_ZONE protect both sides, regardless of Sát Khí.
+				if IsSafeZone(player.CurrentRegion, player.X, player.Y) || IsSafeZone(targetPlayer.CurrentRegion, targetPlayer.X, targetPlayer.Y) {
 					return "Không thể tấn công trong Vùng An Toàn!", false, nil
 				}
 
@@ -396,6 +373,12 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				}
 
 				if dist <= maxPvPRange {
+					// Immunity is lost only when the attack actually starts.
+					if player.Statuses.Has("pvp_immunity") {
+						RemovePvpImmunity(tx, player.ID)
+						player.Statuses.Remove("pvp_immunity")
+						logMsg += " [Chủ động khai chiến, trạng thái Miễn Chiến bị phá vỡ!]"
+					}
 					combatTriggered = true
 					pvpTriggered = true
 					targetStats := calculatePlayerStatsWithTerritory(&targetPlayer, targetTerritory)
@@ -411,8 +394,11 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 					if enemyMaxHP <= 0 {
 						enemyMaxHP = 100.0
 					}
+					combatStartedAt := time.Now().UTC()
 
 					pvpCombat := models.CombatState{
+						CombatOwnerID:       player.ID.String(),
+						CombatStartedAt:     combatStartedAt,
 						EnemyTemplateID:     targetPlayer.ID.String(),
 						EnemyName:           targetPlayer.Username,
 						EnemyAvatarURL:      targetPlayer.AvatarURL,
@@ -435,6 +421,31 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 					}
 					gamefx.ApplyEnemyEffects(&pvpCombat, &targetPlayer)
 					player.ActiveCombat = &pvpCombat
+					attackerStats := CalculatePlayerStats(player)
+					defenderCombat := models.CombatState{
+						CombatOwnerID: player.ID.String(), CombatStartedAt: combatStartedAt,
+						EnemyTemplateID: player.ID.String(), EnemyName: player.Username,
+						EnemyAvatarURL: player.AvatarURL, EnemyType: "PVP", CombatMode: "real",
+						EnemyHP: player.HP, EnemyMaxHP: gamefx.EffectiveMaxHP(player), EnemyMana: player.CurrentMana,
+						EnemyMaxMana: player.MaxMana, EnemyDamage: attackerStats["attack"], EnemyDefense: attackerStats["defense"],
+						EnemySpeed: attackerStats["speed"], EnemyRank: player.Rank, EnemySubRank: player.SubRank,
+						EnemyGuInventory: player.GuInventory, EnemyDaoMarks: player.DaoMarks,
+						EnemyPathMasteries: player.PathMasteries, EnemyCombatSettings: &player.CombatSettings,
+						TargetPlayerID: player.ID.String(),
+					}
+					gamefx.ApplyEnemyEffects(&defenderCombat, player)
+					defenderJSON, marshalErr := json.Marshal(&defenderCombat)
+					if marshalErr != nil {
+						return "", false, marshalErr
+					}
+					updated, updateErr := tx.Exec(`UPDATE players SET active_combat=$1, version=version+1, state_revision=state_revision+1 WHERE id=$2 AND active_combat IS NULL`, string(defenderJSON), targetPlayer.ID)
+					if updateErr != nil {
+						return "", false, updateErr
+					}
+					if rows, _ := updated.RowsAffected(); rows != 1 {
+						player.ActiveCombat = nil
+						return "Cổ Sư này vừa vào một trận chiến khác.", false, nil
+					}
 					logMsg = fmt.Sprintf("Khai chiến! Đạo hữu tấn công Cổ Sư %s tại khoảng cách %d ô!", targetPlayer.Username, dist)
 				} else {
 					return fmt.Sprintf("Khoảng cách quá xa (%d ô)! Cần tiếp cận đối phương trong vòng %d ô để khai chiến.", dist, maxPvPRange), false, nil
@@ -1024,6 +1035,14 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 	if combatTriggered {
 		PublishPlayerCombatDeltaWithPos(&player, CombatEventStarted, player.ActiveCombat)
+		if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" {
+			if defenderID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
+				var defenderCombat models.CombatState
+				if loadErr := db.DB.QueryRow(`SELECT active_combat FROM players WHERE id=$1`, defenderID).Scan(&defenderCombat); loadErr == nil {
+					PublishPlayerCombatDelta(defenderID, CombatEventStarted, &defenderCombat)
+				}
+			}
+		}
 	}
 
 	var finalLog string

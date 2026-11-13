@@ -12,9 +12,11 @@
 - Các cột realtime skill loadout/hotbar, model/snapshot/mutation/API, combat hotbar keybinds và Gu `skill_profile` đã bị gỡ. Schema idempotent xóa các cột cũ trên DB hiện hữu; Gu CSV/import/export không còn profile cast realtime.
 - Profile Sát Chiêu/Trận Kích không còn trường windup/cooldown mili giây hoặc payload `realtime_effects`; schema dọn các khóa cũ khỏi JSONB đã lưu. API và state client cho hotbar kỹ năng realtime 9–12 cũng đã bị gỡ.
 - `/api/combat/practice` hiện tạo encounter giả lập xác định theo lượt và được giữ như tiện ích tập luyện.
-- Cooldown/warmup lượt cho Sát Chiêu/Trận Kích chưa được định nghĩa đồng đều; dữ liệu profile cũ có thể không có các trường `cooldown_turns`/`warmup_turns`. Các effect ngoài tập damage/heal/shield cơ bản, target selection theo hàng/cột và PvP cần được rà soát trước khi khẳng định đã chuyển đầy đủ.
+- Simulator có initiative liên tục theo tốc độ hiệu dụng, trì hoãn lượt theo slow, effect duration theo thời gian chiến đấu, và action control có kiểm tra target/loadout phía server. Phiên điều khiển được lưu bằng revision + command UUID để retry an toàn; timeout tự chọn đánh thường. Vẫn cần rà soát từng effect/Gu trước khi khẳng định mọi kỹ năng đã có biểu diễn turn-based tương đương.
 - Tai kiếp đã có flow encounter/kết toán turn-based qua `/engage`, simulator và `/resolve`; chuyển động quái theo tick, damage node và worker auto-close cũ đã bị gỡ. Mô hình chiến trường/node-defense chưa có luật turn-based.
-- Các mode có PvP/đấu trường cần kiểm tra riêng về settlement, semantics và UI; chưa được audit end-to-end. Những gap này được ghi nhận, không được xem là combat realtime đang chạy.
+- PvP ngoài map đã có session hai phía, block HUB/SAFE_ZONE và cùng party, action bỏ chạy theo lượt, kết toán defeat/drop/respawn/immunity và lưu HP nếu đối thủ rút lui. Giải đấu tự động tiếp tục dùng simulator.
+- Tháp Chiến Thuật Vô Tận đã có tiến độ tầng, giới hạn 5 lượt thua/bỏ trận mỗi tuần, thưởng khi thắng và bảng xếp hạng hòa tầng theo thời điểm đạt trước. Encounter ảo bắt đầu full HP/chân nguyên và không persist tổn thất combat.
+- Các flow PvP ngoài map và tháp mới cần theo dõi thêm qua vận hành production; các hệ thống khác như combat party nhiều người vẫn chưa được nối vào session hai phía.
 
 ## Ranh giới
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -45,6 +46,19 @@ type CombatResolution struct {
 //
 // winner is always derived from the simulation, never from log text.
 func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string) (*CombatResolution, error) {
+	return resolveCombat(tx, player, loadout, loadoutGuIDs, nil)
+}
+
+// ResolveCombatFromSession settles a completed interactive replay through the
+// same mode-specific reward, loss, consumption and history path as auto combat.
+// The supplied state must be the immutable pre-battle state, not a partial
+// simulation. This keeps retry/reconnect results deterministic.
+func ResolveCombatFromSession(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, initialState *simulator.CombatState) (*CombatResolution, error) {
+	return resolveCombat(tx, player, loadout, loadout.GuIds, initialState)
+}
+
+func resolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string, initialState *simulator.CombatState) (*CombatResolution, error) {
+	var err error
 	var pendingNotifications []notify.Notification
 	var immortalAnnouncements []immortalGuLootAnnouncement
 	// immortalGuDropped lets a PVE victory against a normal/elite monster be
@@ -57,15 +71,20 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	if player.ActiveCombat.CombatOwnerID != "" && player.ActiveCombat.CombatOwnerID != player.ID.String() {
 		return nil, fmt.Errorf("party combat is controlled by its initiating player")
 	}
-	if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
-		return nil, err
+	if requiresRegionCombatPolicy(player.ActiveCombat) {
+		if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
+			return nil, err
+		}
 	}
-	if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
-		return nil, err
+	if requiresRegionCombatPolicy(player.ActiveCombat) {
+		if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
+			return nil, err
+		}
 	}
 
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
 	isTribulation := player.ActiveCombat.TribulationEventID != ""
+	isLivePvp := player.ActiveCombat.EnemyType == "PVP" && player.ActiveCombat.CombatMode == "real"
 
 	// Build loadout from the player's saved combat settings when the caller did
 	// not supply one.
@@ -78,9 +97,12 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		}
 	}
 
-	simState, err := buildSimCombatState(tx, player, loadout, isVirtual)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize initiator stats: %w", err)
+	simState := initialState
+	if simState == nil {
+		simState, err = buildSimCombatState(tx, player, loadout, isVirtual)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize initiator stats: %w", err)
+		}
 	}
 	simPlayer := simState.Allies[0]
 
@@ -143,6 +165,9 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	// Run Simulator
 	simState.CaptureTurnSnapshots = true
 	logs := simulator.Simulate(simState)
+	if simState.Interactive != nil && (simState.Interactive.PendingActor != "" || simState.Interactive.Error != "") {
+		return nil, fmt.Errorf("interactive combat has not reached a valid terminal state")
+	}
 
 	formationLogs := BuildFormationLogs(simState.Allies)
 	logs = append(formationLogs, logs...)
@@ -189,7 +214,15 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	if alliesAlive {
 		if isVirtual {
 			isPractice := player.ActiveCombat.EnemyType == "PRACTICE"
-			if !isPractice {
+			isTower := player.ActiveCombat.EnemyType == "TOWER"
+			if isTower {
+				reward, towerErr := settleInfiniteTower(tx, player.ID, player.ActiveCombat.TowerFloor, true)
+				if towerErr != nil {
+					return nil, fmt.Errorf("failed to settle infinite tower victory: %w", towerErr)
+				}
+				logs = append(logs, simulator.CombatLog{Turn: simState.Turn, Action: "TOWER_REWARD", Detail: fmt.Sprintf("Vượt tầng %d, nhận %d Xu Đấu Trường.", player.ActiveCombat.TowerFloor, reward)})
+				summary["reward"] = fmt.Sprintf("%d Xu Đấu Trường", reward)
+			} else if !isPractice {
 				if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", int64(outcome.ArenaCoinsAwarded)); err != nil {
 					logger.S.Errorf("Failed to award arena_coin to %s: %v", player.ID, err)
 				} else {
@@ -201,7 +234,7 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 				}
 			}
 			// Beating a higher-ranked opponent swaps arena ranks.
-			if !isPractice && player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
+			if !isPractice && !isTower && player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
 				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
 				if parseErr == nil {
 					var playerRank, targetRank int
@@ -221,7 +254,9 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 					}
 				}
 			}
-			summary["reward"] = "50 Xu Đấu Trường"
+			if !isTower {
+				summary["reward"] = "50 Xu Đấu Trường"
+			}
 		} else {
 			var partyMembers []uuid.UUID
 			for _, ally := range player.ActiveCombat.Allies {
@@ -291,13 +326,36 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 			summary["loot"] = lootDetailLogs
 		}
 	} else {
-		defLogs := applyAutoCombatDefeat(tx, player, simState, isVirtual, isTribulation)
-		logs = append(logs, defLogs...)
+		if simState.FledBy == player.ID.String() {
+			player.HP = finalPlayerHP
+			logs = append(logs, simulator.CombatLog{Turn: simState.Turn, Action: "BATTLE_END", Detail: "Đạo hữu đã rút lui thành công; giữ nguyên HP hiện tại."})
+			if player.ActiveCombat.EnemyType == "TOWER" {
+				if _, towerErr := settleInfiniteTower(tx, player.ID, player.ActiveCombat.TowerFloor, false); towerErr != nil {
+					return nil, fmt.Errorf("failed to settle infinite tower flee: %w", towerErr)
+				}
+			}
+		} else {
+			if player.ActiveCombat.EnemyType == "TOWER" {
+				if _, towerErr := settleInfiniteTower(tx, player.ID, player.ActiveCombat.TowerFloor, false); towerErr != nil {
+					return nil, fmt.Errorf("failed to settle infinite tower loss: %w", towerErr)
+				}
+			}
+			defLogs := applyAutoCombatDefeat(tx, player, simState, isVirtual, isTribulation)
+			logs = append(logs, defLogs...)
+		}
 	}
 
+	var pvpDefenderRespawn *RespawnResult
 	logs, err = finalizeAutoCombatOutcome(tx, player, simState, isVirtual, isTribulation, alliesAlive, finalMana, before, logs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize combat outcome: %w", err)
+	}
+	if isLivePvp {
+		var settleErr error
+		pvpDefenderRespawn, settleErr = settlePvpDefender(tx, player, simState, &logs)
+		if settleErr != nil {
+			return nil, fmt.Errorf("failed to settle PvP defender: %w", settleErr)
+		}
 	}
 
 	qiGained := AddHumanQi(player, outcome.HumanQiReward)
@@ -372,6 +430,12 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		StonesSpent:   stonesSpent,
 	}
 	res.AfterCommit = func() {
+		if parsedTarget, parseErr := uuid.Parse(targetPlayerID); parseErr == nil && isLivePvp {
+			PublishPlayerCombatDelta(parsedTarget, CombatEventEnded, nil)
+			if pvpDefenderRespawn != nil {
+				PublishRespawnWorldPosition(context.Background(), parsedTarget, pvpDefenderRespawn.Region, pvpDefenderRespawn.X, pvpDefenderRespawn.Y)
+			}
+		}
 		if publishClearedCell {
 			publishCombatClearedCell(clearedRegion, clearedX, clearedY, clearedPlayerID, clearedEnemyName, clearedEnemyTemplateID)
 		}
@@ -413,6 +477,49 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 
 	player.ActiveCombat = nil
 	return res, nil
+}
+
+func settlePvpDefender(tx *sql.Tx, attacker *models.Player, state *simulator.CombatState, logs *[]simulator.CombatLog) (*RespawnResult, error) {
+	if attacker == nil || attacker.ActiveCombat == nil || attacker.ActiveCombat.TargetPlayerID == "" {
+		return nil, nil
+	}
+	defenderID, err := uuid.Parse(attacker.ActiveCombat.TargetPlayerID)
+	if err != nil || defenderID == attacker.ID {
+		return nil, nil
+	}
+	var defender *simulator.CombatantAuto
+	for _, enemy := range state.Enemies {
+		if enemy.ID == defenderID.String() {
+			defender = enemy
+			break
+		}
+	}
+	if defender == nil {
+		return nil, fmt.Errorf("defender %s is missing from the PvP simulation", defenderID)
+	}
+	var region, username string
+	var x, y int
+	if err := tx.QueryRow(`SELECT current_region, x, y, username FROM players WHERE id=$1 FOR UPDATE`, defenderID).Scan(&region, &x, &y, &username); err != nil {
+		return nil, err
+	}
+	if defender.HP <= 0 || defender.IsDead {
+		_ = applyDeathDropRecord(tx, &defenderID, &attacker.ID, true, DeathPos{Region: region, X: x, Y: y, KillerName: attacker.Username})
+		respawn := ResolveDeathRespawn(region, x, y)
+		GrantPvpImmunity(tx, defenderID, 10*time.Minute)
+		if _, err := tx.Exec(`UPDATE players SET hp=1.0, current_region=$1, x=$2, y=$3, active_combat=NULL, version=version+1, state_revision=state_revision+1 WHERE id=$4`, respawn.Region, respawn.X, respawn.Y, defenderID); err != nil {
+			return nil, err
+		}
+		*logs = append(*logs, simulator.CombatLog{Turn: state.Turn, Action: "PVP_DEFEAT", Detail: fmt.Sprintf("%s bị đánh bại, rơi đồ và hồi sinh với 1 HP.", username)})
+		return &respawn, nil
+	}
+	hp := defender.HP
+	if hp > defender.MaxHP {
+		hp = defender.MaxHP
+	}
+	if _, err := tx.Exec(`UPDATE players SET hp=$1, current_mana=$2, active_combat=NULL, version=version+1, state_revision=state_revision+1 WHERE id=$3`, hp, defender.Mana, defenderID); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 // ── helpers ────────────────────────────────────────────────────────────

@@ -257,6 +257,15 @@ export const LobbyView: React.FC = () => {
       iconColor: "text-rose-500",
     },
     {
+      id: "infinite-tower",
+      label: "Tháp Chiến Thuật",
+      icon: Trophy,
+      gradient: "from-amber-500 to-orange-700",
+      glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
+      borderColor: "border-amber-400/30",
+      iconColor: "text-amber-400",
+    },
+    {
       id: "death-arena",
       label: "Đấu Trường Sinh Tử",
       icon: Swords,

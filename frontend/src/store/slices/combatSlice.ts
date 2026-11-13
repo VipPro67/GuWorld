@@ -8,6 +8,9 @@ import type {
 } from "@/store/useGameStore";
 
 export interface CombatSlice {
+  startCombatSession: (loadout: ApiResponseData) => Promise<ApiResponseData | null>;
+  fetchCombatSession: (sessionId?: string) => Promise<ApiResponseData | null>;
+  submitCombatCommand: (sessionId: string, revision: number, command: ApiResponseData) => Promise<ApiResponseData | null>;
   executeAutoCombat: (loadout: ApiResponseData) => Promise<ApiResponseData | null>;
   fleeCombat: () => Promise<ApiResponseData | undefined>;
   captureMonster: () => Promise<ApiResponseData | null>;
@@ -34,6 +37,33 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   combatSettingsLoading: false,
   combatHistory: [],
   combatHistoryLoading: false,
+
+  startCombatSession: async (loadout) => {
+    const response = await authFetch(`${BACKEND_URL}/api/combat/session/start`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ loadout }),
+    });
+    const data = await response.json();
+    if (!response.ok) { get().addToast(data.error || "Không thể bắt đầu phiên chiến đấu.", "error"); return null; }
+    return data;
+  },
+  fetchCombatSession: async (sessionId) => {
+    const sessionPath = sessionId ? `/session/${encodeURIComponent(sessionId)}` : "/session";
+    const response = await authFetch(`${BACKEND_URL}/api/combat${sessionPath}`);
+    if (response.status === 404) return null;
+    const data = await response.json();
+    return response.ok ? data : null;
+  },
+  submitCombatCommand: async (sessionId, revision, command) => {
+    const response = await authFetch(`${BACKEND_URL}/api/combat/session/${sessionId}/command`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command_id: crypto.randomUUID(), expected_revision: revision, command }),
+    });
+    const data = await response.json();
+    if (!response.ok && response.status !== 409 && response.status !== 422) {
+      get().addToast(data.error || "Không gửi được lệnh chiến đấu.", "error"); return null;
+    }
+    return data;
+  },
 
   executeAutoCombat: async (loadout) => {
     const { player, token } = get();

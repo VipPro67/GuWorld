@@ -37,10 +37,10 @@ func TestForgetEgoPercentsAndSeal(t *testing.T) {
 	ally.Speed = 100
 	ally.Actions = []SimAction{{
 		ActionType: "GU_SKILL", Name: "Bản Ngã", Damage: 0,
-		DamageHPPercent: 0.4, ShieldStripPercent: 0.4, DisableGuTurns: 1, BonusTurns: 1,
+		DamageHPPercent: 0.4, ShieldStripPercent: 0.4, DisableGuTurns: 1,
 	}}
 	enemy := newTestCombatant("enemy", "Enemy", 100000, 0)
-	enemy.Speed = 1
+	enemy.Speed = 100
 	enemy.VirtualShield = 500
 	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 20000}}
 
@@ -80,7 +80,7 @@ func TestForgetRealityProcEvasionWeak(t *testing.T) {
 		},
 	}}
 	enemy := newTestCombatant("enemy", "Enemy", 2000, 50)
-	enemy.Speed = 1
+	enemy.Speed = 100
 	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 50}}
 
 	state := &CombatState{Seed: 5, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
@@ -109,7 +109,7 @@ func TestProcGateDefaultsAlways(t *testing.T) {
 // Asserted via the damage breakdown (PathResist 0.65), not final HP.
 func TestAntiHeavenPathResistance(t *testing.T) {
 	ally := newTestCombatant("ally", "Player", 50000, 0)
-	ally.Speed = 1
+	ally.Speed = 100
 	ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Thủ", Damage: 0}}
 	ally.PathResistance = map[string]float64{"heaven": 0.65}
 	enemy := newTestCombatant("enemy", "Enemy", 50000, 0)
@@ -413,17 +413,29 @@ func TestForgetWillSelfHit(t *testing.T) {
 // GU_SEAL enforcement: sealed combatant cannot cast Gu skills.
 func TestGuSealBlocksSkill(t *testing.T) {
 	ally := newTestCombatant("ally", "Player", 1000, 0)
-	ally.Speed = 100
+	ally.Speed = 2
 	sealGuTurns(ally, 1)
 	ally.Actions = []SimAction{{ActionType: "GU_SKILL", Name: "Trảm", Damage: 500}}
 	enemy := newTestCombatant("enemy", "Enemy", 1000, 0)
-	enemy.Speed = 1
+	enemy.Speed = 100
 	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Thủ", Damage: 0}}
 
 	state := &CombatState{Seed: 31, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
 	logs := Simulate(state)
 
-	if logCount(logs, "GU_SEALED") < 1 {
-		t.Fatal("missing GU_SEALED enforcement log")
+	sealExpiredAt := 0
+	for _, entry := range logs {
+		if entry.ActorId == ally.ID && entry.Action == "EFFECT_EXPIRED" && strings.Contains(entry.Detail, "Phong Cổ") {
+			sealExpiredAt = entry.Turn
+			break
+		}
+	}
+	if sealExpiredAt == 0 {
+		t.Fatal("expected the Gu seal to expire after its configured duration")
+	}
+	for _, entry := range logs {
+		if entry.ActorId == ally.ID && entry.Action == "GU_SKILL" && entry.Turn < sealExpiredAt {
+			t.Fatal("auto combat selected a Gu skill before the seal expired")
+		}
 	}
 }

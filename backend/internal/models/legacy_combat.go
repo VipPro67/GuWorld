@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 // StatusEffect is a combat-only, turn-counted effect snapshot. Persistent
@@ -26,6 +27,7 @@ type TitleEffectSnapshot struct {
 type CombatState struct {
 	CombatID                string               `json:"combat_id,omitempty"`
 	CombatOwnerID           string               `json:"combat_owner_id,omitempty"`
+	CombatStartedAt         time.Time            `json:"combat_started_at,omitempty"`
 	TitleEffectSnapshot     *TitleEffectSnapshot `json:"title_effect_snapshot,omitempty"`
 	EnemyTemplateID         string               `json:"enemy_template_id,omitempty"`
 	WorldMonsterRegionID    string               `json:"world_monster_region_id,omitempty"`
@@ -47,6 +49,7 @@ type CombatState struct {
 	EnemySpeed              float64              `json:"enemy_speed,omitempty"`
 	EnemyRank               int                  `json:"enemy_rank,omitempty"`
 	EnemySubRank            int                  `json:"enemy_sub_rank,omitempty"`
+	TowerFloor              int                  `json:"tower_floor,omitempty"`
 	EnemyGuInventory        GuInventory          `json:"enemy_gu_inventory,omitempty"`
 	EnemyDaoMarks           DaoMarksMap          `json:"enemy_dao_marks,omitempty"`
 	EnemyPathMasteries      map[string]int       `json:"enemy_path_masteries,omitempty"`

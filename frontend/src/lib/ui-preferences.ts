@@ -70,7 +70,7 @@ const LEGACY_KEYS = [
 
 export const DEFAULT_LOBBY_ITEMS = [
   "character", "inventory", "refine", "aperture", "premium-store", "shop", "auction",
-  "pets", "sect", "practice-room", "arena", "death-arena", "martial-arena", "achievements",
+  "pets", "sect", "practice-room", "arena", "infinite-tower", "death-arena", "martial-arena", "achievements",
   "utilities", "explore", "dream-realm", "spatial-realms", "gacha", "leaderboard",
   "divination", "feedback", "combat-history", "audit-logs",
 ];

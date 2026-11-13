@@ -85,6 +85,7 @@ export interface Combatant {
 }
 
 export interface CombatState {
+  combat_id?: string; combat_owner_id?: string;
   enemy_name: string; enemy_hp: number; enemy_max_hp: number;
   enemy_damage: number; enemy_defense: number; charge_points: number;
   target_player_id?: string; enemy_template_id?: string;
@@ -1234,6 +1235,7 @@ export interface Region {
 interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, RefineSessionSlice {
   player: Player | null;
   playerStateRevision: number | null;
+  combatSessionEvent: { session_id: string; revision: number; status: string; pending_actor?: string } | null;
   manaSnapshot: ManaSnapshot | null;
   token: string | null;
   isLoading: boolean;
@@ -1316,6 +1318,7 @@ const PLAYER_EVENT_TYPES = [
   "player.updated",
   "combat.started",
   "combat.ended",
+  "combat.session.updated",
   "trade.updated",
   "player.heartbeat",
   "player.position",
@@ -1342,8 +1345,8 @@ type PlayerRealtimeEvent = {
   revision?: number;
   state_revision?: number;
   changed_domains?: PlayerEventDomain[];
-  data?: Partial<Player> & { id?: string; aperture_stress_level?: string };
-  patch?: Partial<Player> & { id?: string; aperture_stress_level?: string };
+  data?: Partial<Player> & { id?: string; aperture_stress_level?: string; combat_session?: { session_id: string; revision: number; status: string; pending_actor?: string } };
+  patch?: Partial<Player> & { id?: string; aperture_stress_level?: string; combat_session?: { session_id: string; revision: number; status: string; pending_actor?: string } };
 };
 
 const lastPlayerEventRevision = new Map<string, number>();
@@ -1410,7 +1413,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (expectedRevision !== undefined && get().playerRevision !== expectedRevision) return false;
     if (player === undefined) return false;
     if (player === null) {
-      set((state) => ({ ...extraState, player: null, playerStateRevision: null, manaSnapshot: null, playerRevision: state.playerRevision + 1 }));
+      set((state) => ({ ...extraState, player: null, playerStateRevision: null, combatSessionEvent: null, manaSnapshot: null, playerRevision: state.playerRevision + 1 }));
       return true;
     }
     const currentPlayer = get().player;
@@ -1786,6 +1789,7 @@ export const useGameStore = create<GameState>((set, get) => {
   applyInventoryFromResponse,
   player: null,
   playerStateRevision: null,
+  combatSessionEvent: null,
   manaSnapshot: null,
   token: null,
   isLoading: false,
@@ -1901,6 +1905,10 @@ export const useGameStore = create<GameState>((set, get) => {
             ? (payload?.state_revision ?? eventData.state_revision)
             : undefined;
           const changedDomains = new Set<PlayerEventDomain>(payload?.changed_domains || []);
+          if (eventType === "combat.session.updated") {
+            if (eventData?.combat_session) set({ combatSessionEvent: eventData.combat_session });
+            return;
+          }
           // Progression screens used to poll on a timer. These domains are
           // published after the owning transaction commits, so refresh them
           // before the player-revision gate: a session/state change does not

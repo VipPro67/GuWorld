@@ -39,18 +39,29 @@ func ResolveTribulation(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// 1. Fetch active event
+	// 1. Lock the event before settlement. Recovery after reconnect and the
+	// normal combat completion callback can race; serializing on this row
+	// ensures only one transaction can award rewards or apply penalties.
 	var ev models.TribulationEvent
 	err = tx.QueryRow(`
-		SELECT id, aperture_id, player_id, tribulation_type, path, reward_dao_marks, started_at
+		SELECT id, aperture_id, player_id, tribulation_type, path, reward_dao_marks, started_at, status
 		FROM tribulation_events
-		WHERE id = $1 AND player_id = $2 AND status = 'ACTIVE'
-	`, eventID, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.RewardDaoMarks, &ev.StartedAt)
+		WHERE id = $1 AND player_id = $2
+		FOR UPDATE
+	`, eventID, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.RewardDaoMarks, &ev.StartedAt, &ev.Status)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Đợt tai kiếp này đã được giải quyết hoặc không tồn tại"})
 		return
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn tai kiếp"})
+		return
+	}
+	if ev.Status != "ACTIVE" {
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Tai kiếp này đã được kết toán trước đó.", "state": ev.Status})
 		return
 	}
 
