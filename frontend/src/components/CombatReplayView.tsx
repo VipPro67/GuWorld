@@ -199,8 +199,11 @@ type ReplayAction =
   | { type: "UPDATE_STATES"; combatants: Record<string, CombatantState> };
 
 const TURN_REGEX = /=== LƯỢT (\d+) ===/;
+const NON_ACTION_LOGS = new Set(["AWAIT_COMMAND", "BATTLE_END", "BATTLE_START", "TURN_END", "TURN_START"]);
 
 let nextEventId = 0;
+
+const isCombatActionLog = (log: CombatLogEntry) => !NON_ACTION_LOGS.has(log.action);
 
 function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
   switch (action.type) {
@@ -1108,10 +1111,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
   const visibleLogs = useMemo(() => logs.slice(0, state.currentIndex + 1), [logs, state.currentIndex]);
 
-  const actionLogs = useMemo(() =>
-    visibleLogs.filter(log =>
-      ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE", "MINE_LOOT", "MINE_OCCUPY", "APERTURE_DAMAGE"].includes(log.action)
-    ), [visibleLogs]);
+  const actionLogs = useMemo(() => visibleLogs.filter(isCombatActionLog), [visibleLogs]);
+  const turnsWithActions = useMemo(() => new Set(actionLogs.map((log) => log.turn)), [actionLogs]);
 
   return (
     <div className="w-full mx-auto flex flex-col gap-4">
@@ -1370,9 +1371,10 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           {visibleLogs.map((log, idx) => {
             const isTurnStart = log.action === "TURN_START";
             const isBattleBoundary = log.action === "BATTLE_START" || log.action === "BATTLE_END";
-            const isAction = ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE", "MINE_LOOT", "MINE_OCCUPY", "SHIELD_PIERCE", "BUFF", "DEFEND", "SHIELD_BYPASS_ATTACK", "EFFECT_EXPIRED", "SLOW_APPLIED", "SLOW1_APPLIED", "SLOW_DAMAGE_APPLIED", "WEAK_APPLIED", "FREEZE_APPLIED", "SILENCE_APPLIED", "THORNS_BUFF", "REGEN_BUFF", "ATK_UP_BUFF", "DEF_UP_BUFF", "TAUNT_BUFF", "TRIGGERED", "INSUFFICIENT_MANA", "PATH_MASTERY_GAIN", "SUMMONED", "TRANSFORM", "DISPEL", "INTERRUPT", "CHAOS_GAMBLE", "LIFESTEAL_SHIELD", "EVADE", "GU_BACKLASH"].includes(log.action);
+            const isAction = isCombatActionLog(log);
 
             if (isTurnStart) {
+              if (!turnsWithActions.has(log.turn)) return null;
               return (
                 <div key={idx} className="flex items-center gap-2 py-2">
                   <div className="flex-1 h-px bg-zinc-800" />
@@ -1416,7 +1418,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                   <span className="text-[8px] text-cyan-500 bg-cyan-950/40 px-1 rounded shrink-0">Kích hoạt</span>
                 )}
                 <span className={`${baseColor} leading-tight ${isCurrent ? 'font-medium' : ''}`}>
-                  <FormattedText text={log.detail ?? ""} />
+                  <FormattedText text={log.detail?.trim() || `${log.actor_name || "Chiến binh"}: ${log.action.replaceAll("_", " ").toLowerCase()}`} />
                 </span>
                 {log.damage && log.damage > 0 && !["DOT_TICK", "SHIELD_GAIN", "SHIELD_ABSORB", "HEAL", "ITEM_HEAL", "LIFESTEAL"].includes(log.action) && (
                   <span className="text-red-400 font-bold shrink-0 ml-auto">

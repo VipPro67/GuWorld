@@ -54,15 +54,25 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
     return response.ok ? data : null;
   },
   submitCombatCommand: async (sessionId, revision, command) => {
-    const response = await authFetch(`${BACKEND_URL}/api/combat/session/${sessionId}/command`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command_id: crypto.randomUUID(), expected_revision: revision, command }),
-    });
-    const data = await response.json();
-    if (!response.ok && response.status !== 409 && response.status !== 422) {
-      get().addToast(data.error || "Không gửi được lệnh chiến đấu.", "error"); return null;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/session/${sessionId}/command`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command_id: crypto.randomUUID(), expected_revision: revision, command }),
+      });
+      const data = await response.json();
+      if (response.status === 422) {
+        get().addToast(data.error || "Chiêu này hiện không thể sử dụng.", "error");
+        return null;
+      }
+      if (!response.ok && response.status !== 409) {
+        get().addToast(data.error || "Không gửi được lệnh chiến đấu.", "error"); return null;
+      }
+      return data;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Không gửi được lệnh chiến đấu.";
+      get().addToast(message, "error");
+      return null;
     }
-    return data;
   },
 
   executeAutoCombat: async (loadout) => {

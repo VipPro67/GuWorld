@@ -12,6 +12,7 @@ import { GamePanel, GameButton, GameCard, GameProgressBar, GameSection } from "@
 import { rankLabel, subRankLabel, typeColor, gridXLabel, getCombatEffects } from "@/lib/combat";
 import { captureBonus, investigation, isCombatEligible, operationsBy } from "@/lib/effect-blocks";
 import { useTribulationCombatResolution } from "@/hooks/useTribulationCombatResolution";
+import { InteractiveCombatPanel } from "./InteractiveCombatPanel";
 // UI migrated to shared components
 
 interface CombatScreenProps {
@@ -42,6 +43,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [simulationLogs, setSimulationLogs] = useState<Record<string, unknown>[]>([]);
   const [simulationWinner, setSimulationWinner] = useState<string | null>(null);
   const [simulationCombatants, setSimulationCombatants] = useState<Record<string, unknown>[]>([]);
+  const [interactiveReport, setInteractiveReport] = useState(false);
   const [interactiveSession, setInteractiveSession] = useState<ApiResponseData | null>(null);
   const [interactiveTarget, setInteractiveTarget] = useState("");
 
@@ -56,6 +58,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startSimulationRef = useRef<() => Promise<boolean>>(async () => false);
   const actionLoadingRef = useRef(actionLoading);
+  const completedInteractiveSessionRef = useRef<string | null>(null);
   useEffect(() => {
     actionLoadingRef.current = actionLoading;
   }, [actionLoading]);
@@ -86,6 +89,31 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     resolveTribulation,
   );
 
+  const showInteractiveReport = useCallback((session: ApiResponseData) => {
+    const sessionId = String(session.session_id || "");
+    if (sessionId && completedInteractiveSessionRef.current === sessionId) return;
+    if (sessionId) completedInteractiveSessionRef.current = sessionId;
+
+    const logs = Array.isArray(session.logs) ? session.logs as ApiResponseData[] : [];
+    const winner = String(session.winner || "Phe Địch");
+    const allies = Array.isArray(session.allies) ? session.allies as ApiResponseData[] : [];
+    const enemies = Array.isArray(session.enemies) ? session.enemies as ApiResponseData[] : [];
+    const combatants = [
+      ...allies.map((combatant) => ({ ...combatant, kind: "ally" })),
+      ...enemies.map((combatant) => ({ ...combatant, kind: "enemy" })),
+    ];
+
+    setInteractiveSession(null);
+    setInteractiveReport(true);
+    setSimulationLogs(logs);
+    setSimulationWinner(winner);
+    setSimulationCombatants(combatants);
+    setActiveCombatReplay({
+      logs, winner, enemy: player.active_combat || enemy, combatants,
+    });
+    void resolveWonTribulation(winner, session.tribulation_event_id as string | undefined);
+  }, [enemy, player.active_combat, resolveWonTribulation, setActiveCombatReplay]);
+
   useEffect(() => {
     if (!player.active_combat) return;
     let cancelled = false;
@@ -109,22 +137,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     void fetchCombatSession(event.session_id).then((session) => {
       if (cancelled || !session) return;
       if (session.status === "complete") {
-        const logs = (session.logs || []) as ApiResponseData[];
-        const winner = String(session.winner || "Phe Địch");
-        setInteractiveSession(null);
-        setSimulationLogs(logs);
-        setSimulationWinner(winner);
-        void resolveWonTribulation(winner, session.tribulation_event_id as string | undefined);
-        setActiveCombatReplay({
-          logs, winner, enemy: player.active_combat || enemy,
-          combatants: [...((session.allies || []) as ApiResponseData[]), ...((session.enemies || []) as ApiResponseData[])],
-        });
+        showInteractiveReport(session);
       } else {
         setInteractiveSession((current: ApiResponseData | null) => !current || Number(session.revision) >= Number(current.revision) ? session : current);
       }
     });
     return () => { cancelled = true; };
-  }, [combatSessionEvent?.session_id, combatSessionEvent?.revision, fetchCombatSession, setActiveCombatReplay, player.active_combat, enemy, resolveWonTribulation]);
+  }, [combatSessionEvent?.session_id, combatSessionEvent?.revision, fetchCombatSession, showInteractiveReport]);
 
   useEffect(() => {
     const pendingActor = String(interactiveSession?.pending_actor || "");
@@ -164,9 +183,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       setInteractiveTarget("");
       setInteractiveSession(next.status === "complete" ? null : next);
       if (next.status === "complete" && Array.isArray(next.logs)) {
-        setSimulationLogs(next.logs);
-        setSimulationWinner(next.winner || "Phe Địch");
-        void resolveWonTribulation(next.winner, next.tribulation_event_id as string | undefined);
+        showInteractiveReport(next);
       }
     }
   };
@@ -358,6 +375,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     setSimulationLogs([]);
     setSimulationCombatants([]);
     setSimulationWinner(null);
+    setInteractiveReport(false);
 
     if (isPracticeMode) {
       return;
@@ -1093,7 +1111,24 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     );
   };
 
-  const renderLoadoutPhase = () => (
+  const renderLoadoutPhase = () => interactiveSession ? (
+    <div className="flex flex-col gap-4">
+      {renderApertureBar()}
+      <InteractiveCombatPanel
+        session={interactiveSession}
+        playerId={player.id}
+        targetId={interactiveTarget}
+        actionLoading={actionLoading}
+        onTarget={setInteractiveTarget}
+        onAction={handleSubmitInteractive}
+      />
+      {player.active_combat?.enemy_type === "TOWER" && (
+        <button onClick={() => void abandonTower()} disabled={actionLoading} className="self-start rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50">
+          Rời tháp (tính 1 lượt)
+        </button>
+      )}
+    </div>
+  ) : (
     <div className="flex flex-col gap-6">
       {/* Aperture (Tiên Khiếu) HP — tribulation combat only */}
       {renderApertureBar()}
@@ -1124,6 +1159,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       ) : (
         <>
           {/* Action Buttons (Tấn công, Bắt quái, Rút lui) */}
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+        <div className="mb-3">
+          <h2 className="text-base font-bold tracking-wide text-zinc-100">Chiến Đấu Mô Phỏng</h2>
+          <p className="mt-1 text-xs text-zinc-400">Chọn điều khiển từng lượt hoặc để hệ thống tự mô phỏng trận đấu.</p>
+        </div>
       <div className="flex gap-4 flex-wrap">
         <button
           onClick={handleStartInteractive}
@@ -1131,29 +1171,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Play className="w-6 h-6" />
-          <span>Chiến đấu có điều khiển</span>
+          <span>Điều khiển từng lượt</span>
         </button>
-        <button onClick={handleStartSimulation} disabled={actionLoading || Boolean(interactiveSession)} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động chiến</button>
+        <button onClick={handleStartSimulation} disabled={actionLoading || Boolean(interactiveSession)} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động mô phỏng</button>
         {isIncomingPvp && !interactiveSession && <p className="w-full rounded-lg border border-amber-800/50 bg-amber-950/30 p-3 text-sm text-amber-200">Đạo hữu đã bị kéo vào trận PvP. Đang chờ đối thủ nạp đội hình chiến đấu...</p>}
-        {interactiveSession && (() => {
-          const actorSide = [...(interactiveSession.allies || []), ...(interactiveSession.enemies || [])] as ApiResponseData[];
-          const actor = actorSide.find((combatant) => combatant.id === interactiveSession.pending_actor);
-          const pendingIsAlly = ((interactiveSession.allies || []) as ApiResponseData[]).some((combatant) => combatant.id === interactiveSession.pending_actor);
-          const targets = (pendingIsAlly ? interactiveSession.enemies : interactiveSession.allies) as ApiResponseData[];
-          const ownsTurn = actor?.id === player.id;
-          const actions = (actor?.actions || []) as ApiResponseData[];
-          return (
-            <div className="w-full rounded-xl border border-emerald-700/50 bg-zinc-950/80 p-4">
-              <div className="mb-3 text-sm font-semibold text-emerald-300">Lượt của {actor?.name || "đồng minh"}{!ownsTurn && " · đang chờ đối thủ"}</div>
-              <select value={interactiveTarget} onChange={(event) => setInteractiveTarget(event.target.value)} className="mb-3 w-full rounded-lg bg-zinc-900 p-2 text-sm">
-                {targets.filter((target) => !target.dead && Number(target.hp) > 0).map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-              </select>
-              <div className="flex flex-wrap gap-2">
-                {actions.map((action, index) => <button disabled={!ownsTurn} key={`${action.action_type}-${action.instance_id || action.source_id || index}`} onClick={() => void handleSubmitInteractive(action)} className="rounded-lg border border-emerald-700/60 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-900/50 disabled:opacity-40">{action.name}</button>)}
-              </div>
-            </div>
-          );
-        })()}
         {player.active_combat?.enemy_type === "TOWER" && <button onClick={() => void abandonTower()} disabled={actionLoading} className="rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50">Rời tháp (tính 1 lượt)</button>}
         {(() => {
           if (isPracticeMode) return null;
@@ -1255,6 +1276,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           </button>
         )}
       </div>
+      </section>
 
       {/* Recommendation Panel */}
       {playerBestPaths.length > 0 && showRecommendation && (
@@ -1360,15 +1382,17 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               )}
               {selectedGuIds.length === 0 && (
                 <span className="text-amber-300/90 flex items-center gap-1">
-                  Không chọn Cổ — sẽ chỉ đánh thường
+                  Không nạp chiêu Cổ chủ động — nội tại vẫn tự kích hoạt
                 </span>
               )}
-              <span className="text-zinc-600 ml-auto">{selectedGuIds.length}/7 đã chọn</span>
+              <span className="text-zinc-600 ml-auto">{selectedGuIds.length}/15 đã chọn</span>
             </div>
           );
         })()}
 
-
+        <p className="mb-3 rounded-lg border border-sky-900/50 bg-sky-950/20 px-3 py-2 text-xs leading-relaxed text-sky-200/80">
+          Cổ có chiêu chủ động sẽ xuất hiện trong bảng ra chiêu khi vào trận. Nội tại của Cổ ACTIVE, đã trang bị và còn no sẽ tự kích hoạt; không cần chọn lại.
+        </p>
 
         {/* Single Gu Selection Grid */}
         <div className="mb-6">
@@ -1642,7 +1666,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         playerName={player.username}
         teamAName={player.username || "Phe Ta"}
         teamBName={enemy?.enemy_name || "Kẻ Địch"}
-        title="Chiến Báo Trận Đấu Mô Phỏng"
+        title={interactiveReport ? "Chiến Báo Trận Đấu Có Điều Khiển" : "Chiến Báo Trận Đấu Mô Phỏng"}
         apertureHp={enemy?.aperture_hp ?? 0}
         apertureMaxHp={enemy?.aperture_max_hp ?? 0}
       />

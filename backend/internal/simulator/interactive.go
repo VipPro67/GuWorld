@@ -32,6 +32,55 @@ func combatActionAvailable(actor *CombatantAuto, action *SimAction, target *Comb
 	return true
 }
 
+// InteractiveActionTargetIDs returns the alive targets that the client may
+// select for an action, using the same formation and stealth rules as command
+// validation.
+func InteractiveActionTargetIDs(actor *CombatantAuto, enemies []*CombatantAuto, action *SimAction) []string {
+	if actor == nil || action == nil {
+		return nil
+	}
+	targets := enemies
+	if strings.EqualFold(action.TargetType, "SELF") {
+		targets = []*CombatantAuto{actor}
+	}
+	result := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if CanSelectCombatTarget(actor, enemies, action, target) {
+			result = append(result, target.ID)
+		}
+	}
+	return result
+}
+
+// CanSelectCombatTarget is shared by the interactive action list and command
+// validation so the client never offers a target rejected by formation rules.
+func CanSelectCombatTarget(actor *CombatantAuto, enemies []*CombatantAuto, action *SimAction, target *CombatantAuto) bool {
+	if actor == nil || action == nil || target == nil {
+		return false
+	}
+	if strings.EqualFold(action.TargetType, "SELF") {
+		return target.ID == actor.ID
+	}
+
+	isAliveEnemy := false
+	for _, enemy := range enemies {
+		if enemy != nil && enemy.ID == target.ID && enemy.HP > 0 && !enemy.IsDead {
+			isAliveEnemy = true
+			break
+		}
+	}
+	if !isAliveEnemy {
+		return false
+	}
+	if action.TargetType == "" || strings.EqualFold(action.TargetType, "TARGET") || strings.EqualFold(action.TargetType, "SINGLE") {
+		copyAction := *action
+		copyAction.TargetX, copyAction.TargetY = target.GridX, target.GridY
+		resolved := resolveTargets(enemies, &copyAction)
+		return len(resolved) > 0 && resolved[0].ID == target.ID
+	}
+	return true
+}
+
 func selectCombatCommand(actor *CombatantAuto, enemies []*CombatantAuto, command CombatCommand) (*SimAction, *CombatantAuto, error) {
 	if command.ActionType == "FLEE" && command.SourceID == "" && command.InstanceID == "" {
 		return &SimAction{ActionType: "FLEE", Name: "Bỏ chạy"}, nil, nil
@@ -74,13 +123,8 @@ func selectCombatCommand(actor *CombatantAuto, enemies []*CombatantAuto, command
 	if !combatActionAvailable(actor, selected, target) {
 		return nil, nil, errors.New("action cannot be used in the current combat state")
 	}
-	if target != nil && (selected.TargetType == "" || strings.EqualFold(selected.TargetType, "TARGET") || strings.EqualFold(selected.TargetType, "SINGLE")) {
-		copyAction := *selected
-		copyAction.TargetX, copyAction.TargetY = target.GridX, target.GridY
-		resolved := resolveTargets(enemies, &copyAction)
-		if len(resolved) == 0 || resolved[0].ID != target.ID {
-			return nil, nil, errors.New("target is protected by formation or stealth")
-		}
+	if target != nil && !CanSelectCombatTarget(actor, enemies, selected, target) {
+		return nil, nil, errors.New("target is protected by formation or stealth")
 	}
 	return selected, target, nil
 }

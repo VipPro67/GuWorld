@@ -312,8 +312,8 @@ func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, l
 		}
 		// Send the current combat roster and the pending actor's prepared actions
 		// so clients can render legal choices without rebuilding simulator rules.
-		response["allies"] = combatSessionSide(state.Allies, state.Interactive.PendingActor)
-		response["enemies"] = combatSessionSide(state.Enemies, state.Interactive.PendingActor)
+		response["allies"] = combatSessionSide(state.Allies, state.Interactive.PendingActor, state.Enemies)
+		response["enemies"] = combatSessionSide(state.Enemies, state.Interactive.PendingActor, state.Allies)
 	}
 	if row.DeadlineAt.Valid {
 		response["deadline_at"] = row.DeadlineAt.Time
@@ -321,7 +321,7 @@ func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, l
 	return response
 }
 
-func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string) []gin.H {
+func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opposingSide []*simulator.CombatantAuto) []gin.H {
 	result := make([]gin.H, 0, len(side))
 	for _, combatant := range side {
 		if combatant == nil {
@@ -331,14 +331,32 @@ func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string) []g
 			"hp": combatant.HP, "max_hp": combatant.MaxHP, "mana": combatant.Mana,
 			"max_mana": combatant.MaxMana, "dead": combatant.IsDead}
 		if combatant.ID == pendingActor {
-			actions := make([]gin.H, 0, len(combatant.Actions)+1)
-			actions = append(actions, gin.H{"action_type": "BASIC_ATTACK", "name": "Đánh thường"})
-			actions = append(actions, gin.H{"action_type": "FLEE", "name": "Bỏ chạy"})
+			actions := make([]gin.H, 0, len(combatant.Actions)+2)
+			fallbackBasicAttack := simulator.SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", TargetType: "SINGLE"}
+			basicAttack := gin.H{"action_type": "BASIC_ATTACK", "name": "Đánh thường",
+				"target_type": fallbackBasicAttack.TargetType,
+				"target_ids":  simulator.InteractiveActionTargetIDs(combatant, opposingSide, &fallbackBasicAttack)}
+			hasBasicAttack := false
 			for _, action := range combatant.Actions {
+				if action.ActionType == "BASIC_ATTACK" {
+					if !hasBasicAttack {
+						basicAttack = gin.H{"action_type": action.ActionType, "source_id": action.SourceID,
+							"instance_id": action.InstanceID, "name": action.Name, "target_type": action.TargetType,
+							"mana_cost": action.ManaCost, "rank": action.Rank, "path": action.Path,
+							"damage": action.Damage, "defense": action.Defense, "healing": action.Healing,
+							"reason": action.Reason, "target_ids": simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action)}
+						hasBasicAttack = true
+					}
+					continue
+				}
 				actions = append(actions, gin.H{"action_type": action.ActionType, "source_id": action.SourceID,
 					"instance_id": action.InstanceID, "name": action.Name, "target_type": action.TargetType,
-					"mana_cost": action.ManaCost})
+					"mana_cost": action.ManaCost, "rank": action.Rank, "path": action.Path,
+					"damage": action.Damage, "defense": action.Defense, "healing": action.Healing,
+					"reason": action.Reason, "target_ids": simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action)})
 			}
+			actions = append([]gin.H{basicAttack}, actions...)
+			actions = append(actions, gin.H{"action_type": "FLEE", "name": "Bỏ chạy"})
 			entry["actions"] = actions
 		}
 		result = append(result, entry)
