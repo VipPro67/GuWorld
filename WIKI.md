@@ -761,7 +761,7 @@ Phòng Tập dùng cùng lựa chọn **Chiến đấu có điều khiển** ho�
 
 ### Tháp Chiến Thuật Vô Tận
 
-Tháp là chiến trường ảo solo theo tầng. Mỗi lượt người chơi chọn Cổ, sát chiêu và mục tiêu; NPC/quái dùng hồ sơ hành vi. Vào trận hồi đầy HP và chân nguyên, không dùng vật phẩm tiêu hao, không lưu chi phí hoặc sát thương lên bản thể và sủng vật. Thắng tầng nhận thưởng ngay và mở tầng tiếp theo; tiến độ tầng cao nhất được lưu, có thể rời giữa các lần khiêu chiến. Mỗi tuần có tối đa 5 lượt thất bại hoặc bỏ trận; thắng không trừ lượt. Bảng xếp hạng ưu tiên tầng cao nhất, sau đó người đạt tầng sớm hơn.
+Tháp là chiến trường ảo solo theo tầng với lịch quái cố định chung cho toàn server: tầng chia hết cho 10 là boss, tầng chia hết cho 5 còn lại là tinh anh, các tầng khác là quái thường. Quái trong từng nhóm được chọn theo danh sách ID ổn định, không phụ thuộc người chơi hay thứ tự registry. Rank quái tăng theo tầng: Rank 1 từ tầng 1, Rank 2 từ tầng 10, Rank 3 từ tầng 20, Rank 4 từ tầng 30, Rank 5 từ tầng 40, rồi mỗi 50 tầng tăng một Rank đến Rank 9 ở tầng 240. Chỉ số dùng đường cong nội suy riêng của tháp để tránh nhảy bậc lớn của RankScale; sau tầng 240 chỉ số vẫn tăng theo từng dải 50 tầng. Mỗi lượt người chơi chọn Cổ, sát chiêu và mục tiêu; NPC/quái dùng hồ sơ hành vi. Vào trận hồi đầy HP và chân nguyên, không dùng vật phẩm tiêu hao, không lưu chi phí hoặc sát thương lên bản thể và sủng vật. Thắng tầng nhận thưởng ngay và mở tầng tiếp theo; tiến độ tầng cao nhất được lưu, có thể rời giữa các lần khiêu chiến. Mỗi tuần có tối đa 5 lượt thất bại hoặc bỏ trận; thắng không trừ lượt. Bảng xếp hạng ưu tiên tầng cao nhất, sau đó người đạt tầng sớm hơn.
 
 ### Sủng vật (Pets)
 

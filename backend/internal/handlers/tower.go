@@ -157,22 +157,25 @@ func ChallengeInfiniteTower(c *gin.Context) {
 			monsters = append(monsters, monster)
 		}
 	}
-	if len(monsters) == 0 {
+	floor := progress.BestFloor + 1
+	monster, found := towerMonsterForFloor(floor, monsters)
+	if !found {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Chưa có quái vật khả dụng cho tháp."})
 		return
 	}
-	sort.Slice(monsters, func(i, j int) bool { return monsters[i].ID < monsters[j].ID })
-	floor := progress.BestFloor + 1
-	monster := monsters[(floor-1)%len(monsters)]
-	rank := max(1, player.Rank)
-	subRank := max(1, player.SubRank+min(floor-1, 1000))
-	encounter := models.BuildCombatStateFromMonster(monster, rank, subRank)
+	rank := towerEnemyRank(floor)
+	subRank := towerEnemySubRank(floor)
+	// Build the template at its Rank 1 baseline, then apply the tower's shared
+	// floor curve. Player rank never changes the enemy assigned to a floor.
+	encounter := models.BuildCombatStateFromMonster(monster, 1, 1)
 	growth := towerEnemyGrowth(floor)
 	encounter.EnemyTemplateID = "tower_floor_" + intToString(floor)
 	encounter.TowerFloor = floor
 	encounter.EnemyName = "Tầng " + intToString(floor) + " · " + monster.Name
 	encounter.EnemyType = "TOWER"
 	encounter.CombatMode = "virtual"
+	encounter.EnemyRank = rank
+	encounter.EnemySubRank = subRank
 	encounter.EnemyHP *= growth
 	encounter.EnemyMaxHP *= growth
 	encounter.EnemyDamage *= growth
@@ -196,11 +199,125 @@ func intToString(value int) string {
 	return strconv.Itoa(value)
 }
 
-func towerEnemyGrowth(floor int) float64 {
-	if floor <= 1 {
+func towerMonsterTier(monsterType string) int {
+	switch strings.ToUpper(monsterType) {
+	case "NORMAL", "MONSTER":
+		return 0
+	case "ELITE":
+		return 1
+	default:
+		return 2
+	}
+}
+
+func towerFloorTier(floor int) int {
+	if floor < 1 {
+		floor = 1
+	}
+	if floor%10 == 0 {
+		return 2 // boss floor overrides the elite cadence
+	}
+	if floor%5 == 0 {
 		return 1
 	}
-	return math.Min(math.Pow(1.08, float64(floor-1)), 1e12)
+	return 0
+}
+
+func towerTierEncounterIndex(floor, tier int) int {
+	if floor < 1 {
+		floor = 1
+	}
+	switch tier {
+	case 1:
+		return floor/5 - floor/10 - 1
+	case 2:
+		return floor/10 - 1
+	default:
+		return floor - floor/5 - 1
+	}
+}
+
+func towerMonsterForFloor(floor int, monsters []models.MonsterTemplate) (models.MonsterTemplate, bool) {
+	if floor < 1 {
+		floor = 1
+	}
+	pools := [3][]models.MonsterTemplate{}
+	for _, monster := range monsters {
+		tier := towerMonsterTier(monster.Type)
+		if tier < len(pools) {
+			pools[tier] = append(pools[tier], monster)
+		}
+	}
+	for tier := range pools {
+		sort.Slice(pools[tier], func(i, j int) bool { return pools[tier][i].ID < pools[tier][j].ID })
+	}
+	tier := towerFloorTier(floor)
+	if len(pools[tier]) == 0 {
+		// Fall back to the next available lower tier if a data import removes
+		// every monster from a scheduled tier.
+		for fallback := tier - 1; fallback >= 0; fallback-- {
+			if len(pools[fallback]) > 0 {
+				tier = fallback
+				break
+			}
+		}
+	}
+	if len(pools[tier]) == 0 {
+		for fallback := tier + 1; fallback < len(pools); fallback++ {
+			if len(pools[fallback]) > 0 {
+				tier = fallback
+				break
+			}
+		}
+	}
+	if len(pools[tier]) == 0 {
+		return models.MonsterTemplate{}, false
+	}
+	index := towerTierEncounterIndex(floor, tier) % len(pools[tier])
+	if index < 0 {
+		index = 0
+	}
+	return pools[tier][index], true
+}
+
+var towerRankFloorStarts = [...]int{1, 10, 20, 30, 40, 90, 140, 190, 240}
+
+func towerEnemyRank(floor int) int {
+	if floor < 1 {
+		return 1
+	}
+	rank := 1
+	for nextRank := 2; nextRank <= 9; nextRank++ {
+		if floor < towerRankFloorStarts[nextRank-1] {
+			break
+		}
+		rank = nextRank
+	}
+	return rank
+}
+
+func towerEnemySubRank(floor int) int {
+	rank := towerEnemyRank(floor)
+	return min(floor-towerRankFloorStarts[rank-1]+1, 10)
+}
+
+func towerEnemyGrowth(floor int) float64 {
+	if floor < 1 {
+		floor = 1
+	}
+	rank := towerEnemyRank(floor)
+	startFloor := towerRankFloorStarts[rank-1]
+	startScale := models.RankScale(rank)
+	if rank < 9 {
+		endFloor := towerRankFloorStarts[rank]
+		endScale := models.RankScale(rank + 1)
+		progress := float64(floor-startFloor) / float64(endFloor-startFloor)
+		return math.Exp(math.Log(startScale) + progress*(math.Log(endScale)-math.Log(startScale)))
+	}
+	// Rank 9 has no higher displayed rank, but the endless tower keeps scaling
+	// by 100x across each additional 50-floor span.
+	extraSpans := float64(floor-startFloor) / 50.0
+	return math.Min(startScale*math.Pow(100, extraSpans), 1e22)
 }
 
 func settleInfiniteTower(tx *sql.Tx, playerID uuid.UUID, floor int, won bool) (int64, error) {
