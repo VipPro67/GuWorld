@@ -31,6 +31,45 @@ export interface AscensionSessionState {
   updated_at: string;
 }
 
+export interface ConceiveCandidate {
+  id: string;
+  rank: number;
+  name: string;
+  paths: string[];
+  primary_path: string;
+  image_url: string;
+  description: string;
+  existing_completion_rate: number;
+  is_unlocked: boolean;
+  required_thought: number;
+  required_stones: number;
+  required_immortal_stones: number;
+  estimated_accuracy: number;
+  has_backlash_risk: boolean;
+  backlash_risk_chance: number;
+}
+
+export interface ConceiveResult {
+  status: "SUCCESS" | "DEVIATED" | "BACKLASH";
+  is_deviated: boolean;
+  recipe_id?: string;
+  gu_id?: string;
+  gu_name?: string;
+  rank?: number;
+  completion_rate: number;
+  is_instant_100: boolean;
+  message: string;
+  catalyst_consumed?: string;
+  thought_cost: number;
+  stones_cost: number;
+  backlash?: {
+    hp_lost: number;
+    mana_lost: number;
+    thought_lost: number;
+    soul_injury_cooldown_minutes: number;
+  };
+}
+
 export interface CultivationSlice {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
@@ -46,6 +85,8 @@ export interface CultivationSlice {
   fetchQuests: () => Promise<void>;
   refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance; rate_breakdown?: RefineRateBreakdown } | null>;
   deduceRecipe: (recipeId: string) => Promise<{ success: boolean; message: string; completion_rate: number } | null>;
+  fetchConceiveCandidates: (params?: { path?: string; rank?: number; search?: string }) => Promise<ConceiveCandidate[]>;
+  conceiveRecipe: (req: { target_gu_id: string; target_rank: number; catalyst_gu_instance_id?: string; catalyst_item_id?: string }) => Promise<ConceiveResult | null>;
   breakWall: (manaSpend: number) => Promise<{ success: boolean; message: string } | null>;
   rechargeWithStones: (stones: number) => Promise<{ success: boolean; message: string } | null>;
   useRelicGu: (relicKey: string) => Promise<{ success: boolean; message: string } | null>;
@@ -215,6 +256,41 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       return { success: true, message: res.data.message, completion_rate: res.data.completion_rate };
     }
     return { success: false, message: res.error || "Thôi diễn thất bại.", completion_rate: 0 };
+  },
+
+  fetchConceiveCandidates: async (params) => {
+    const query = new URLSearchParams();
+    if (params?.path) query.set("path", params.path);
+    if (params?.rank) query.set("rank", String(params.rank));
+    if (params?.search) query.set("search", params.search);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/refine/conceive/candidates?${query.toString()}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.candidates as ConceiveCandidate[]) || [];
+    } catch {
+      return [];
+    }
+  },
+
+  conceiveRecipe: async (req) => {
+    const res = await executeGameAction<ConceiveResult>(get, set, {
+      endpoint: "/api/refine/conceive",
+      actionLock: "player:cultivation",
+      body: req,
+      onSuccess: () => {
+        // Refresh recipes in store so newly conceived recipe appears immediately
+        const { fetchRecipes } = get();
+        if (fetchRecipes) {
+          fetchRecipes(true);
+        }
+      },
+      errorMessage: "Khai sáng bí phương thất bại.",
+    });
+    if (res.ok && res.data) {
+      return res.data;
+    }
+    return null;
   },
 
   breakWall: async (manaSpend) => {

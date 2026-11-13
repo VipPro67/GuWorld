@@ -294,6 +294,16 @@ _Avoid_: Passive HP regen
 Hành động chủ động dùng Chân Nguyên ôn dưỡng (với chấn thương nhẹ) hoặc phối hợp Dược Thảo, Tiên Nguyên Thạch, nguyên liệu luyện Cổ đồng hệ (khi chấn thương nặng hoặc độ bền dưới 20) để chữa lành kết cấu Cổ trùng, khôi phục linh tính thi triển.
 _Avoid_: Blacksmith repair
 
+## Gu Refinement & Recipe Conception (Hợp Luyện Cổ Trùng & Khai Sáng Bí Phương)
+
+### Khai Sáng Tàn Phương (Targeted Recipe Conception)
+Hành vi Cổ sư vận dụng Niệm Lực, Nguyên Thạch kết hợp Chân Ý Cảnh Giới Tam Trụ (Trí Đạo, Luyện Đạo, Bản Lưu Phái Cổ Đích) và Cổ phôi/vật liệu dẫn dắt để định hướng suy diễn thiên cơ, khai sáng tàn phương của một Cổ trùng mục tiêu cụ thể. Tỉ lệ trúng đích Cổ mong muốn phụ thuộc vào Cảnh giới Lưu Phái Cổ Đích; nếu ngộ tính chưa đủ sâu, suy diễn sẽ bị lệch hướng sang Cổ trùng tương đồng cùng hệ.
+_Avoid_: Recipe Crafting, Custom Gu Creation, Free Recipe Pick
+
+### Trí Đạo Phản Phệ (Wisdom Backlash)
+Hiện tượng phản chấn tinh thần và tổn hại tu vi xảy ra khi Cổ sư cố gắng cưỡng ép suy diễn bí phương Cổ trùng hoặc quy tắc thiên cơ vượt quá xa Rank tu vi bản thân, hoặc phàm nhân cưỡng cầu suy diễn Tiên Cổ. Hậu quả làm cạn kiệt toàn bộ Niệm Lực, tổn thương nặng Sinh Mệnh/Chân Nguyên và gây Chấn Thương Hồn Phách đối với Tiên Cổ.
+_Avoid_: Mana Burn Penalty, Cooldown Lock
+
 ## Tiered Gu Storage & Aperture Gu Swarms (Kiến Trúc Phân Tầng Cổ Trùng & Đàn Cổ Tiên Khiếu)
 
 ### Đàn Phàm Cổ Tiên Khiếu (Immortal Aperture Gu Swarm)

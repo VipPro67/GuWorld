@@ -556,6 +556,13 @@ Quái và Cổ trùng **cùng rank là cân bằng** (mất ~3–5 hit để h�
 - Tàn phương (recipe chưa 100%) phải dùng `/api/refine/deduce` để suy diễn lên 100% mới được luyện (không còn Ép Luyện). Tiêu hao 15 Niệm Lực và Nguyên Thạch mỗi lần.
   - **Độ khó suy diễn:** Tiến độ (Improvement %) mỗi lần bấm sẽ bị chia cho hệ số Rank của Cổ (Rank 5 chia 100, Rank 6 chia 1.000, Rank 9 chia 10.000.000). Phàm nhân gần như không thể cày chay Tiên Cổ Phương.
   - **Chìa khóa (Cảnh Giới & Đạo Ngân):** Bù đắp độ khó khổng lồ này bằng Cảnh Giới Trí Đạo (x3), Luyện Đạo (x2), Hệ đích (x1) và Đạo Ngân Trí Đạo (Tăng tiến độ theo hàm Căn bậc hai). Trí Đạo Vô Thượng Đại Tông Sư có thể suy tính nhanh gấp hàng vạn lần kẻ phàm. Mức Cảnh Giới Trí Đạo cũng gia tăng tỷ lệ Linh quang chớp lóe (Inspiration Flash - Lập tức hoàn thiện 100%).
+- **Khai Sáng Tàn Phương (Định Hướng Thôi Diễn Bí Phương - `/api/refine/conceive`):**
+  - Cho phép Cổ sư chủ động lựa chọn Cổ mục tiêu trong Cổ Phổ (`gu_dictionary`) để khai mở tàn phương mới thay vì chờ rơi rớt ngẫu nhiên.
+  - **Tam Trụ Quyết Định:** Tỉ lệ trúng Cổ đích phụ thuộc Cảnh Giới Lưu Phái Cổ Đích + Cảnh Giới Trí Đạo + Đạo Ngân Trí Đạo (tối đa áp trần 88% thiên cơ).
+  - **Vật Dẫn Nghiên Cứu:** Hiến tế Cổ phôi cùng hệ (chưa trang bị, không bản mệnh) tăng `+12%` đến `+20%` tỉ lệ trúng đích; dùng nguyên liệu cùng hệ tăng `+8%` đến `+12%`.
+  - **Rẽ Nhánh Thiên Cơ:** Khi không trúng Cổ đích, hệ thống rẽ nhánh sang lĩnh ngộ tàn phương của Cổ trùng liên quan cùng hệ (cùng Rank hoặc Rank - 1).
+  - **Độ Hoàn Thiện Ban Đầu:** Nhận tàn phương từ 15% - 35% (có xác suất nổ Linh Quang Chớp Lóe hoàn thiện 100%). Sau đó tiếp tục dùng tính năng Thôi Diễn thông thường để đẩy lên 100%.
+  - **Trí Đạo Phản Phệ:** Cố tình suy tính Cổ vượt cấp tu vi bản thân có nguy cơ phản phệ từ 60% đến 85% (hút cạn Niệm Lực, mất 50% HP và Chân Nguyên; Tiên Cổ bị chấn thương hồn phách và hồi chiêu 20 phút). Phàm nhân bị cấm suy tính Tiên Cổ.
 ### Tỉ lệ Luyện Cổ và Hệ quả
 
 Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên các yếu tố sau:

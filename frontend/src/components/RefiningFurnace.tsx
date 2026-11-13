@@ -7,6 +7,7 @@ import { GamePanel, GameCard } from "@/components/ui";
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor, RefineRateBreakdown } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { RefineConceiveTab } from "@/components/RefineConceiveTab";
 import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search, Brain, ShieldCheck, Clock, TrendingUp, Award } from "lucide-react";
 
 interface RefiningFurnaceProps {
@@ -43,6 +44,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [statusTab, setStatusTab] = useState<"all" | "complete" | "incomplete">("all");
+  const [mainTab, setMainTab] = useState<"furnace" | "conceive">("furnace");
   const [isDeducing, setIsDeducing] = useState(false);
   const [showFullDesc, setShowFullDesc] = useState(false);
 
@@ -606,7 +608,54 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
   return (
     <GamePanel variant="default" className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mx-auto relative">
-      {/* 1. LEFT PANEL: Inventory List */}
+      {/* Mode Navigation Tabs */}
+      <div className="lg:col-span-12 flex items-center justify-between border-b border-zinc-800/80 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMainTab("furnace")}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-serif transition-all flex items-center gap-2 cursor-pointer ${
+              mainTab === "furnace"
+                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shadow-sm shadow-amber-500/20"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+            }`}
+          >
+            <Flame className="w-4 h-4 text-amber-400" />
+            <span>Hợp Luyện & Thôi Diễn</span>
+          </button>
+
+          <button
+            onClick={() => setMainTab("conceive")}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-serif transition-all flex items-center gap-2 cursor-pointer ${
+              mainTab === "conceive"
+                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold shadow-sm shadow-indigo-500/20"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+            }`}
+          >
+            <Brain className="w-4 h-4 text-indigo-400" />
+            <span>Khai Sáng Bí Phương</span>
+          </button>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-500 font-serif">
+          <span>Trí Đạo & Luyện Đạo Tương Hỗ</span>
+        </div>
+      </div>
+
+      {mainTab === "conceive" ? (
+        <div className="lg:col-span-12">
+          <RefineConceiveTab
+            player={player}
+            guDictionary={guDictionary}
+            itemDictionary={itemDictionary}
+            onSelectRecipeForRefine={(recipeId) => {
+              setSelectedRecipeId(recipeId);
+              setMainTab("furnace");
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          {/* 1. LEFT PANEL: Inventory List */}
       <div className="lg:col-span-5 glass-panel-gold rounded-3xl p-3 sm:p-5 flex flex-col lg:max-h-[580px] lg:overflow-hidden">
         <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-4 shrink-0">
           <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
@@ -1458,6 +1507,8 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
           </div>
         )}
       </div>
+        </>
+      )}
     </GamePanel>
   );
 };

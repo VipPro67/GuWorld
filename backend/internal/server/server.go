@@ -735,6 +735,8 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		{
 			refining.POST("", handlers.RefineGu)
 			refining.POST("/deduce", handlers.DeduceRecipe)
+			refining.GET("/conceive/candidates", handlers.GetConceiveCandidates)
+			refining.POST("/conceive", handlers.ConceiveRecipe)
 			refining.GET("/preview", handlers.RefinePreview)
 			refining.POST("/sessions", handlers.CreateRefineSession)
 			refining.GET("/sessions/active", handlers.GetActiveRefineSession)
