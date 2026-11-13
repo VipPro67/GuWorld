@@ -25,6 +25,13 @@ func schemaCombat() error {
 	ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS participant_id UUID REFERENCES players(id) ON DELETE CASCADE;`); err != nil {
 		return err
 	}
+	// CREATE TABLE IF NOT EXISTS does not evolve installations that already
+	// have combat_sessions. Ensure the status column exists before its partial
+	// indexes are created below.
+	if err := execSchema("combat_sessions_status_col", `
+	ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'active';`); err != nil {
+		return err
+	}
 	if err := execSchema("combat_session_commands", `
 	CREATE TABLE IF NOT EXISTS combat_session_commands (
 		session_id UUID NOT NULL REFERENCES combat_sessions(id) ON DELETE CASCADE,
