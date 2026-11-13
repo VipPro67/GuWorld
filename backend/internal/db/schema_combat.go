@@ -26,10 +26,12 @@ func schemaCombat() error {
 		return err
 	}
 	// CREATE TABLE IF NOT EXISTS does not evolve installations that already
-	// have combat_sessions. Ensure the status column exists before its partial
-	// indexes are created below.
-	if err := execSchema("combat_sessions_status_col", `
-	ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'active';`); err != nil {
+	// have combat_sessions. Ensure columns added with the session system exist
+	// before their partial indexes are created below.
+	if err := execSchema("combat_sessions_status_deadline_cols", `
+	ALTER TABLE combat_sessions
+		ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'active',
+		ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ;`); err != nil {
 		return err
 	}
 	if err := execSchema("combat_session_commands", `
