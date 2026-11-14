@@ -33,8 +33,20 @@ Node, resource, worker, NPC, swarm và tribulation parameters nằm trong schema
 
 ## Mã nguồn liên quan
 
-- Backend: `backend/internal/handlers/aperture_core.go`, `aperture_portal.go`, `legacy_engage_tribulation.go`, `legacy_resolve_tribulation.go`.
-- Frontend: `frontend/src/store/slices/apertureSlice.ts` và aperture UI components.
+- Backend: `backend/internal/handlers/aperture_core.go`, `aperture_portal.go`, `tribulation_multiform.go`, `tribulation_handlers.go`, `legacy_engage_tribulation.go`, `legacy_resolve_tribulation.go`.
+- Frontend: `frontend/src/store/slices/apertureSlice.ts` và `frontend/src/components/ImmortalApertureView.tsx`.
+
+## Hệ thống Đa Dạng Hóa Tai Kiếp (Multi-form Tribulation)
+Tai kiếp Tiên Khiếu vận hành theo 3 Archetype và vòng đời 3 giai đoạn:
+1. **Giai đoạn Điềm Báo (`HARBINGER`)**: Dự báo trước loại kiếp, thời gian chuẩn bị và lưu phái giáng lâm. Cho phép Cổ Tiên củng cố trận pháp hoặc click "Nghênh Kiếp Sớm" (`POST /api/tribulations/:eventId/start`).
+2. **Giai đoạn Tác Chiến (`ORDEAL_ACTIVE`)**:
+   - `ENVIRONMENTAL`: Thiên tai môi trường sinh thái lan tỏa trên lưới ô, hóa giải bằng Sát Chiêu Tiên Đạo (`POST /api/tribulations/:eventId/mitigate-hazard`).
+   - `BEAST_SWARM`: Đợt thú triều càn quét tài nguyên, hỗ trợ Nô Đạo thu phục khi HP quái ≤ 30% (`POST /api/tribulations/:eventId/capture-beast`).
+   - `ANOMALOUS_COMBAT`: Chiến đấu boss turn-based với hiệu ứng dị biến môi trường (Lôi Đình, Bão Tuyết, Cấm Pháp) và cơ chế Đạo Ngân Xung Đột.
+3. **Giai đoạn Hậu Kiếp & Thu Hoạch (`AFTERMATH`)**:
+   - Rơi rớt Kiếp Tài quý hiếm (`aperture_tribulation_spoils`) trên lưới ô, thu hoạch thủ công hoặc nhờ Dị Nhân càn quét (`POST /api/tribulations/:eventId/claim-all-spoils`).
+   - Dư ba ô nhiễm Đạo Ngân (`aperture_soil_contaminations`): Cổ Tiên chọn **Thanh Tẩy** gột rửa đất đai hoặc **Biến Nguy Thành Cơ** quy hoạch mở mỏ tài nguyên mới (`aperture_resource_points`).
+   - Kết toán hoàn tất (`POST /api/tribulations/:eventId/finalize-aftermath`) đưa Tiên Khiếu trở về `STABLE`.
 
 ## API liên quan
 
@@ -44,5 +56,6 @@ Nhóm aperture/portal/tribulation routes; tra [API guide](../guides/API.md) và 
 
 ```text
 đạt Rank 6 → anchor aperture → đặt quyền PARTY → tạo portal
-→ thành viên đủ quyền entry → quản lý worker/node → tham gia tribulation theo lượt
+→ điềm báo tai kiếp (HARBINGER) → nghênh chiến thiên tai/thú triều/boss (ORDEAL_ACTIVE)
+→ thu hoạch kiếp tài & thanh tẩy/mở mỏ mới (AFTERMATH) → Tiên Khiếu thăng hoa ổn định (STABLE)
 ```

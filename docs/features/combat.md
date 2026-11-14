@@ -10,7 +10,7 @@ Encounter thường bắt đầu từ world trigger, arena hoặc route combat t
 
 ## Cách sử dụng
 
-Vào encounter, chọn đội hình rồi bắt đầu điều khiển theo lượt hoặc mô phỏng tự động. Hiệu ứng kết thúc trận ngay lúc bắt đầu sẽ settle encounter và mở báo cáo kết quả mà không yêu cầu command. Trước khi bắt đầu session, có thể rút lui khỏi encounter; PvP không có thao tác rút lui ở màn hình chuẩn bị. Khi session hoạt động, đọc actor đang chờ và deadline, gửi command với UUID cùng expected revision. Chọn action hoặc plan; PvP dùng PLAN/AUTO và lượt chỉ giải quyết khi hai phía đã sẵn sàng. Sau mỗi response cập nhật session revision.
+Vào encounter, chọn đội hình rồi bắt đầu điều khiển theo lượt hoặc mô phỏng tự động. Hiệu ứng kết thúc trận ngay lúc bắt đầu sẽ settle encounter và mở báo cáo kết quả mà không yêu cầu command. Nếu replay đã kết thúc nhưng session cũ còn trạng thái active, lần đọc session sẽ settle kết quả và mở báo cáo thay vì chờ lượt vô thời hạn. Trước khi bắt đầu session, có thể rút lui khỏi encounter; PvP không có thao tác rút lui ở màn hình chuẩn bị. Khi session hoạt động, đọc actor đang chờ và deadline, gửi command với UUID cùng expected revision. Chọn action hoặc plan; PvP dùng PLAN/AUTO và lượt chỉ giải quyết khi hai phía đã sẵn sàng. Sau mỗi response cập nhật session revision.
 
 ## Luật, chi phí và giới hạn
 

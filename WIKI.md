@@ -88,7 +88,7 @@ Trinh sát gồm xem người chơi ở gần, suy diễn mục tiêu/Cổ, đá
 
 ### Combat theo lượt
 
-Khi gặp encounter, có thể chạy tự động hoặc mở session điều khiển. Nếu hiệu ứng lúc bắt đầu trận kết thúc encounter ngay, kết quả được settle và báo cáo hiện tức thì. Trước khi bắt đầu, người chơi có thể rút lui khỏi encounter; PvP không có lựa chọn này ở màn hình chuẩn bị. Trong session, người chơi chọn kế hoạch hành động/Gu/mục tiêu theo thông tin phiên, rồi gửi lệnh kèm revision hiện tại. PvP giữ kế hoạch của mỗi bên đến lúc cả hai khóa hoặc timeout; revision cũ cần tải lại snapshot trước khi gửi lại.
+Khi gặp encounter, có thể chạy tự động hoặc mở session điều khiển. Nếu hiệu ứng lúc bắt đầu trận kết thúc encounter ngay, kết quả được settle và báo cáo hiện tức thì; session đã có log kết thúc nhưng còn trạng thái active cũng được tự hoàn tất khi tải lại. Trước khi bắt đầu, người chơi có thể rút lui khỏi encounter; PvP không có lựa chọn này ở màn hình chuẩn bị. Trong session, người chơi chọn kế hoạch hành động/Gu/mục tiêu theo thông tin phiên, rồi gửi lệnh kèm revision hiện tại. PvP giữ kế hoạch của mỗi bên đến lúc cả hai khóa hoặc timeout; revision cũ cần tải lại snapshot trước khi gửi lại.
 
 Combat được mô phỏng ở server theo lượt. Kết quả có thể gồm HP/tài nguyên thay đổi, trạng thái, loot, capture, flee hoặc lịch sử/replay. Chỉnh sửa client hay gửi lại command không thay đổi kết quả đã settlement.
 

@@ -17,6 +17,8 @@ import type {
   ApertureVariantNPC,
   TribulationEvent,
   TribulationEnemy,
+  ApertureTribulationSpoil,
+  ApertureSoilContamination,
   AperturePortal,
   ApertureGuest,
 } from "@/store/useGameStore";
@@ -60,6 +62,8 @@ const APERTURE_SWARMS_TTL_MS = 15000;
 export interface ActiveTribulation {
   event: TribulationEvent;
   enemies: TribulationEnemy[];
+  spoils?: ApertureTribulationSpoil[];
+  contaminations?: ApertureSoilContamination[];
   total_enemies?: number;
   defeated_enemies?: number;
   remaining_enemies?: number;
@@ -99,6 +103,14 @@ export interface ApertureSlice {
   manageApertureNodesBatch: (action: "repair" | "upgrade" | "delete", nodeIds: string[]) => Promise<boolean>;
   fetchActiveTribulation: (forceRefresh?: boolean) => Promise<void>;
   engageTribulation: (eventId: string) => Promise<boolean>;
+  startTribulationStage: (eventId: string) => Promise<boolean>;
+  mitigateHazard: (eventId: string, x: number, y: number) => Promise<boolean>;
+  captureBeast: (eventId: string, enemyId: string) => Promise<boolean>;
+  claimTribulationSpoil: (eventId: string, spoilId: string) => Promise<boolean>;
+  claimAllTribulationSpoils: (eventId: string) => Promise<boolean>;
+  cleanseSoil: (x: number, y: number) => Promise<boolean>;
+  pivotSoil: (x: number, y: number) => Promise<boolean>;
+  finalizeTribulationAftermath: (eventId: string) => Promise<boolean>;
   nodeWorkers: ApertureNodeWorker[];
   refinementQueue: ApertureRefinementJob[];
   settlements: ApertureSettlement[];
@@ -1192,7 +1204,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           if (
             data?.event?.id &&
             Number(data.total_enemies) > 0 &&
-            Number(data.remaining_enemies) === 0
+            Number(data.remaining_enemies) === 0 &&
+            data.event.stage !== "AFTERMATH" &&
+            data.event.stage !== "RESOLVED"
           ) {
             await get().resolveTribulation(data.event.id);
           }
@@ -1224,6 +1238,187 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       const message = caught instanceof Error ? caught.message : "Xuất trận nghênh chiến thất bại.";
       set({ error: message }); get().addToast(message, "error"); return false;
     } finally { get().endAction("aperture"); }
+  },
+
+  startTribulationStage: async (eventId: string) => {
+    const { token, player } = get();
+    if (!token || !player || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/start`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Xuất trận nghênh kiếp thất bại.");
+      get().addToast(data.message || "Đã xuất trận nghênh chiến!", "success");
+      await get().fetchActiveTribulation(true);
+      return true;
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "Xuất trận nghênh kiếp thất bại.";
+      get().addToast(msg, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  mitigateHazard: async (eventId: string, x: number, y: number) => {
+    const { token, player } = get();
+    if (!token || !player || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/mitigate-hazard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x, y }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hóa giải hiểm họa thất bại.");
+      get().addToast(data.message || "Đã hóa giải thành công!", "success");
+      await get().fetchActiveTribulation(true);
+      return true;
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "Hóa giải hiểm họa thất bại.";
+      get().addToast(msg, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  captureBeast: async (eventId: string, enemyId: string) => {
+    const { token, player } = get();
+    if (!token || !player || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/capture-beast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enemy_id: enemyId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thu phục quái thú thất bại.");
+      get().addToast(data.message || "Đã thu phục quái thú!", "success");
+      await get().fetchActiveTribulation(true);
+      return true;
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "Thu phục quái thú thất bại.";
+      get().addToast(msg, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  claimTribulationSpoil: async (eventId: string, spoilId: string) => {
+    const { token, player } = get();
+    if (!token || !player || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/claim-spoil`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spoil_id: spoilId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thu hoạch kiếp tài thất bại.");
+      get().addToast(data.message || "Đã thu hoạch kiếp tài!", "success");
+      await get().fetchActiveTribulation(true);
+      return true;
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "Thu hoạch kiếp tài thất bại.";
+      get().addToast(msg, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  claimAllTribulationSpoils: async (eventId: string) => {
+    const { token, player } = get();
+    if (!token || !player || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/claim-all-spoils`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thu gom kiếp tài thất bại.");
+      get().addToast(data.message || "Đã phái dị nhân thu gom toàn bộ!", "success");
+      await get().fetchActiveTribulation(true);
+      return true;
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "Thu gom kiếp tài thất bại.";
+      get().addToast(msg, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  cleanseSoil: async (x: number, y: number) => {
+    const { token, player } = get();
+    if (!token || !player || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/soil/cleanse`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x, y }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thanh tẩy ô đất thất bại.");
+      get().addToast(data.message || "Đã thanh tẩy ô đất!", "success");
+      await get().fetchActiveTribulation(true);
+      await get().fetchAperture(true);
+      return true;
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "Thanh tẩy ô đất thất bại.";
+      get().addToast(msg, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  pivotSoil: async (x: number, y: number) => {
+    const { token, player } = get();
+    if (!token || !player || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/soil/pivot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x, y }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Biến nguy thành cơ thất bại.");
+      get().addToast(data.message || "Đã mở mỏ tài nguyên mới!", "success");
+      await get().fetchActiveTribulation(true);
+      await get().fetchAperture(true);
+      await get().fetchAperturePoints(true);
+      return true;
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "Biến nguy thành cơ thất bại.";
+      get().addToast(msg, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  finalizeTribulationAftermath: async (eventId: string) => {
+    const { token, player } = get();
+    if (!token || !player || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/finalize-aftermath`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Kết toán hoàn tất thất bại.");
+      get().addToast(data.message || "Đã hoàn tất kết toán độ kiếp!", "success");
+      await get().fetchActiveTribulation(true);
+      await get().fetchAperture(true);
+      await get().fetchDaoMarks(true);
+      return true;
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "Kết toán hoàn tất thất bại.";
+      get().addToast(msg, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
   },
 
   useGutsGu: async () => {

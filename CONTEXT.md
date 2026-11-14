@@ -385,4 +385,24 @@ _Avoid_: Admin godmode, simple realm buff
 Trạng thái tiểu thế giới còn sót lại sau khi Chủ Khiếu tử vong hoặc vẫn lạc trong lúc Hạ Khiếu: nhục thân tan rã, cổng Môn Hộ cố định vĩnh viễn ngoài thế giới, quyền quản lý chuyển giao cho Địa Linh chấp niệm bảo vệ di sản và đưa ra điều kiện thử thách để tìm kiếm chủ nhân mới.
 _Avoid_: Expired instance, despawned zone
 
+### Đa Dạng Hóa Tai Kiếp (Multi-form Aperture Tribulation)
+Hệ thống tai kiếp đa hình thái do Thiên Đạo cân bằng giáng xuống Tiên Khiếu dựa trên 3 Archetype cốt lõi: Thiên Tai Sinh Thái (bão tuyết, mưa lửa, độc vũ, địa chấn), Thú Triều Xâm Lăng (quái/trùng theo đợt tấn công tài nguyên), và Dị Tượng Sàn Đấu (giao tranh Turn-based với quy tắc môi trường độc dị và xung đột Đạo Ngân). Phá vỡ định dạng quái đơn lẻ đấm chay truyền thống.
+_Avoid_: Static boss spawn, generic mob wave
+
+### Hóa Giải Môi Trường (Environmental Sát Chiêu Mitigation)
+Cơ chế sử dụng Tiên Đạo Sát Chiêu, Cổ Trùng tương khắc hoặc kích hoạt Trận Pháp phòng thủ Tiên Khiếu để trực tiếp hóa giải, khống chế hoặc chuyển hóa các tai kiếp khí tượng/sinh thái (như dùng Viêm Đạo làm tan tuyết kiếp, Thủy Đạo dập tắt hỏa kiếp, Trí/Hồn Đạo định tâm).
+_Avoid_: Fighting weather with basic sword attacks, unmitigated passive damage
+
+### Sàn Đấu Dị Tượng & Xung Đột Đạo Ngân (Anomalous Combat & Dao Conflict)
+Cơ chế chiến đấu boss theo lượt trong Simulator nâng cấp: sàn đấu áp dụng các hiệu ứng thời tiết dị biến (Sét giáng ngẫu nhiên, Bão tuyết đóng băng tiêu hao Chân Nguyên, Cấm pháp tuyệt vực khóa nhánh Cổ), Đạo Ngân tương khắc làm suy giảm sát thương dị hệ (`1.0 / (1.0 + factor * DaoMarks)`) ngoại trừ Chí Tôn Tiên Thể, cùng chu kỳ Boss tụ lực 2 lượt phát tín hiệu báo trước (Intent Telegraphing) cho phép Cổ Tiên dồn sát thương phá tụ lực (Stance Break).
+_Avoid_: Pure stat-check boss, simple auto-attack combat
+
+### Kiếp Tài Tiên Khiếu (Tribulation Spoils & Residue)
+Nguyên liệu trân quý bậc cao (Lôi tinh, Băng phách, Tàn phách thiên kiếp, Viêm hạch, Gân cốt thú vương) ngưng tụ và rơi rớt trực tiếp trên các ô lưới Tiên Khiếu sau khi Cổ Tiên hóa giải hoặc đẩy lùi tai kiếp thành công, dùng cho việc Luyện chế Tiên Cổ và bảo dưỡng nâng cấp Tiên Cổ Phòng.
+_Avoid_: Direct mail reward, generic dungeon token
+
+### Dư Ba & Ô Nhiễm Đạo Ngân (Dao Contamination & Ecological Fallout)
+Hậu quả môi trường còn sót lại trên thổ nhưỡng và vách ngăn Tiên Khiếu sau đợt kiếp nạn: đất đai bị cằn cỗi/biến dị (dung nham, đầm độc, dải băng), điểm tài nguyên suy giảm sinh lực, hoặc xuất hiện Đạo Ngân dị chủng tương khắc với đạo ngân chủ tu của Cổ Tiên. Cổ Tiên có 2 lựa chọn: **Thanh Tẩy (`CLEANSE`)** phục hồi đất đai hoặc **Biến Nguy Thành Cơ (`ECOLOGICAL_PIVOT`)** quy hoạch mở mỏ tài nguyên mới.
+_Avoid_: Instant clean reset, magic auto-heal after battle
+
 

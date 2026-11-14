@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype: Vòng Đời Độ Kiếp 3 Giai Đoạn & 4 Archetype Tai Kiếp</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(23, 32, 54, 0.7);
+      --border: rgba(148, 163, 184, 0.15);
+      --accent: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.25);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --danger: #ef4444;
+      --success: #10b981;
+      --purple: #a855f7;
+      --cyan: #06b6d4;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 24px; min-height: 100vh; line-height: 1.5; }
+    .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+    
+    header { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; backdrop-filter: blur(12px); }
+    h1 { font-size: 20px; font-weight: 700; color: #fbbf24; display: flex; items-center; gap: 10px; margin-bottom: 8px; }
+    .subtitle { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+    
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+    
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 14px; }
+    .card-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #cbd5e1; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 700; text-transform: uppercase; font-family: monospace; }
+    .badge-harbinger { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-ordeal { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .badge-aftermath { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
+    .badge-resolved { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-archetype { background: rgba(6, 182, 212, 0.2); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.4); }
+
+    .state-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px dashed rgba(148, 163, 184, 0.1); }
+    .state-row:last-child { border-bottom: none; }
+    .state-label { color: var(--text-muted); }
+    .state-val { font-weight: 600; font-family: monospace; color: #e2e8f0; }
+
+    .bar-container { background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border); border-radius: 6px; height: 14px; overflow: hidden; margin-top: 4px; position: relative; }
+    .bar-fill { height: 100%; transition: width 0.3s ease; }
+    .bar-fill-hp { background: linear-gradient(90deg, #10b981, #059669); }
+    .bar-fill-danger { background: linear-gradient(90deg, #ef4444, #b91c1c); }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    button { background: #1e293b; color: #f1f5f9; border: 1px solid rgba(148, 163, 184, 0.2); padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+    button:hover:not(:disabled) { background: #334155; border-color: rgba(245, 158, 11, 0.5); color: #fbbf24; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { background: linear-gradient(135deg, #d97706, #b45309); border-color: #f59e0b; color: #fff; }
+    button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    button.danger { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5; }
+    button.danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.3); }
+
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .tab-btn { background: transparent; border: none; padding: 6px 12px; font-size: 13px; color: var(--text-muted); border-radius: 6px; }
+    .tab-btn.active { background: rgba(245, 158, 11, 0.15); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+    .walkthrough-step { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+    .step-header { font-weight: 700; color: #f59e0b; display: flex; justify-content: space-between; }
+    
+    .log-box { background: rgba(11, 15, 25, 0.9); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; height: 160px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 4px; }
+    .log-entry { color: #94a3b8; }
+    .log-entry.warn { color: #fbbf24; }
+    .log-entry.danger { color: #f87171; }
+    .log-entry.success { color: #34d399; }
+    .log-entry.highlight { color: #38bdf8; font-weight: bold; }
+    
+    .grid-preview { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 8px; }
+    .grid-cell { aspect-ratio: 1; background: #1e293b; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; font-family: monospace; cursor: pointer; transition: all 0.2s; position: relative; }
+    .grid-cell:hover { border-color: #fbbf24; }
+    .grid-cell.hazard { background: rgba(239, 68, 68, 0.25); border-color: #ef4444; color: #fca5a5; }
+    .grid-cell.spoils { background: rgba(168, 85, 247, 0.3); border-color: #c084fc; color: #e9d5ff; font-weight: bold; }
+    .grid-cell.polluted { background: rgba(180, 83, 9, 0.3); border-color: #d97706; color: #fed7aa; }
+    .grid-cell.fortified { outline: 2px solid #06b6d4; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>⚡ Prototype: Máy Trạng Thái Độ Kiếp 3 Giai Đoạn & 4 Archetype</h1>
+    <div class="subtitle">
+      <strong>Mục tiêu:</strong> Kiểm chứng logic chuyển đổi trạng thái của hệ thống tai kiếp Cổ Chân Nhân.
+      Thay vì đơn điệu vào trận đánh 1 boss đấm chay, Cổ Tiên trải qua <strong>3 Giai đoạn (Điềm Báo ➔ Nghênh Kiếp ➔ Thu Hoạch & Dư Ba)</strong> 
+      với <strong>4 Archetype</strong>: <em>Thiên Tai Sinh Thái (Môi trường)</em>, <em>Thú Triều Xâm Lăng (Thủ thành)</em>, <em>Tâm Ma Khảo Nghiệm (Đạo tâm / Thức hải)</em>, và <em>Dị Tượng Sàn Đấu (Quy tắc dị biến)</em>.
+    </div>
+  </header>
+
+  <div class="grid-2">
+    <!-- PANEL 1: CURRENT STATE -->
+    <div class="card">
+      <div class="card-title">
+        <span>Trạng Thái Độ Kiếp Hiện Tại</span>
+        <span id="stageBadge" class="badge badge-harbinger">HARBINGER</span>
+      </div>
+
+      <div class="state-row">
+        <span class="state-label">Cấp Bậc & Loại Kiếp:</span>
+        <span class="state-val" id="valRankType">Rank 6 (Địa Tai)</span>
+      </div>
+      <div class="state-row">
+        <span class="state-label">Archetype (Hình Thái):</span>
+        <span class="state-val" id="valArchetype"><span class="badge badge-archetype">ENVIRONMENTAL</span></span>
+      </div>
+      <div class="state-row">
+        <span class="state-label">Lưu Phái Đạo Ngân:</span>
+        <span class="state-val" id="valPath">Hàn Băng (Ice Path)</span>
+      </div>
+      <div class="state-row">
+        <span class="state-label">Thời Gian Chuẩn Bị (Harbinger):</span>
+        <span class="state-val" id="valPrepTime">120s còn lại</span>
+      </div>
+
+      <div>
+        <div class="state-row">
+          <span class="state-label">Sinh Lực Tiên Khiếu (Aperture HP):</span>
+          <span class="state-val" id="valApertureHp">10,000 / 10,000</span>
+        </div>
+        <div class="bar-container">
+          <div id="hpBar" class="bar-fill bar-fill-hp" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="state-row">
+          <span class="state-label">Mức Độ Hiểm Họa / Tiến Độ Kiếp:</span>
+          <span class="state-val" id="valHazardProgress">6 Ô Nguy Hiểm</span>
+        </div>
+        <div class="bar-container">
+          <div id="hazardBar" class="bar-fill bar-fill-danger" style="width: 60%;"></div>
+        </div>
+      </div>
+
+      <div class="state-row">
+        <span class="state-label">Phần Thưởng Đạo Ngân Dự Kiến:</span>
+        <span class="state-val" style="color: #fbbf24;" id="valRewardMarks">+250 Đạo Ngân</span>
+      </div>
+
+      <!-- Grid Visual Preview -->
+      <div>
+        <span class="state-label" style="font-size: 11px;">Mô Phỏng 25 Ô Lưới Tiên Khiếu:</span>
+        <div class="grid-preview" id="gridPreview"></div>
+      </div>
+    </div>
+
+    <!-- PANEL 2: FREE-PLAY ACTION CONTROLS -->
+    <div class="card">
+      <div class="card-title">
+        <span>Bảng Điều Khiển Tự Do (Free-Play)</span>
+        <span style="font-size: 11px; color: var(--text-muted);">Bấm để kích hoạt trạng thái</span>
+      </div>
+
+      <div>
+        <span class="state-label" style="font-size: 12px; font-weight: bold; color: #cbd5e1;">Khởi Tạo Kiếp Nạn Mới:</span>
+        <div class="btn-group" style="margin-top: 6px;">
+          <button onclick="driveAction('TRIGGER_RANK6_ICE')">❄️ Rank 6: Tuyết Kiếp (Môi Trường)</button>
+          <button onclick="driveAction('TRIGGER_RANK7_SWARM')">🦇 Rank 7: Huyết Thú Triều (Thú Triều)</button>
+          <button onclick="driveAction('TRIGGER_RANK7_MIND')">🧠 Rank 7: Ngũ Uẩn Vấn Tâm (Tâm Ma)</button>
+          <button onclick="driveAction('TRIGGER_RANK7_COMBAT')">⚡ Rank 7: Thần Ma Sàn Đấu (Dị Tượng)</button>
+        </div>
+      </div>
+
+      <div>
+        <span class="state-label" style="font-size: 12px; font-weight: bold; color: #cbd5e1;">Hành Vi Giai Đoạn 1: Điềm Báo (Harbinger):</span>
+        <div class="btn-group" style="margin-top: 6px;">
+          <button id="btnFortify" onclick="driveAction('FORTIFY_FORMATION')">🛡️ Gia Cố Trận Pháp (Hao Tiên Thạch)</button>
+          <button id="btnCommence" class="primary" onclick="driveAction('COMMENCE_ORDEAL')">⚡ Tiến Vào Nghênh Kiếp (Vào Phase 2)</button>
+        </div>
+      </div>
+
+      <div>
+        <span class="state-label" style="font-size: 12px; font-weight: bold; color: #cbd5e1;">Hành Vi Giai Đoạn 2: Nghênh Kiếp (Ordeal Active):</span>
+        <div class="btn-group" style="margin-top: 6px;">
+          <button id="btnMitigate" onclick="driveAction('SAT_CHIEU_MITIGATE')">🔥 Sát Chiêu Khắc Chế (Hao Tiên Nguyên)</button>
+          <button id="btnDefendWave" onclick="driveAction('DEFEND_SWARM_WAVE')">🏹 Tháp Bắn Tỉa & Hộ Vệ Diệt Wave</button>
+          <button id="btnDilemma" onclick="driveAction('RESOLVE_DILEMMA')">⚖️ Lựa Chọn Đạo Tâm / Quyết Đấu Thức Hải</button>
+          <button id="btnCombat" onclick="driveAction('COMBAT_TURN')">⚔️ Đánh Boss Theo Lượt (Phá Tụ Lực)</button>
+          <button id="btnTickDisaster" class="danger" onclick="driveAction('TICK_DISASTER')">⚠️ Kiếp Lực Bộc Phát (Trừ HP Khiếu)</button>
+        </div>
+      </div>
+
+      <div>
+        <span class="state-label" style="font-size: 12px; font-weight: bold; color: #cbd5e1;">Hành Vi Giai Đoạn 3: Dư Ba & Thu Hoạch (Aftermath):</span>
+        <div class="btn-group" style="margin-top: 6px;">
+          <button id="btnCollectSpoils" onclick="driveAction('COLLECT_ALL_SPOILS')">💎 Nhặt Kiếp Tài Rơi Rớt</button>
+          <button id="btnCleanse" onclick="driveAction('CLEANSE_POLLUTION')">🌿 Thanh Tẩy Ô Nhiễm Đạo Ngân</button>
+          <button id="btnFinalize" class="primary" onclick="driveAction('FINALIZE_TRIBULATION')">🏁 Hoàn Tất & Kết Toán Đạo Ngân</button>
+        </div>
+      </div>
+
+      <div>
+        <span class="state-label" style="font-size: 11px;">Nhật Ký Sự Kiện Thời Gian Thực:</span>
+        <div class="log-box" id="logBox"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: GUIDED WALKTHROUGHS -->
+  <div class="card">
+    <div class="card-title">
+      <span>Kịch Bản Mẫu Có Hướng Dẫn (Guided Walkthroughs)</span>
+      <span style="font-size: 12px; color: var(--text-muted);">Bấm từng kịch bản để trải nghiệm chu trình chuẩn</span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchScenario(0)">1. Bão Tuyết Địa Tai (Môi Trường)</button>
+      <button class="tab-btn" onclick="switchScenario(1)">2. Huyết Dơi Xâm Lăng (Thú Triều)</button>
+      <button class="tab-btn" onclick="switchScenario(2)">3. Vấn Tâm & Tâm Ma Thức Hải</button>
+      <button class="tab-btn" onclick="switchScenario(3)">4. Thiên Kiếp Thần Ma (Dị Tượng)</button>
+    </div>
+
+    <div id="walkthroughContent" class="walkthrough-step">
+      <!-- Injected by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- PURE PORTABLE LOGIC MODULE (Can be extracted to backend/frontend) -->
+<script>
+/**
+ * TribulationLifecycleEngine: Pure state machine handling 3-phase tribulation lifecycle
+ */
+class TribulationLifecycleEngine {
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    this.state = {
+      id: "ev-" + Math.floor(Math.random() * 10000),
+      rank: 6,
+      tribulationType: "EARTH_CALAMITY",
+      archetype: "ENVIRONMENTAL",
+      path: "ice",
+      stage: "HARBINGER", // HARBINGER | ORDEAL_ACTIVE | AFTERMATH | RESOLVED | FAILED
+      preparationTimeRemainingSec: 120,
+      apertureHp: 10000,
+      maxApertureHp: 10000,
+      rewardDaoMarks: 250,
+      hazardLevel: 6, // number of active hazard cells or waves
+      maxHazardLevel: 10,
+      fortifiedCells: new Set([12]), // center core is fortified
+      hazardCells: new Set([0, 1, 5, 6, 10, 11]),
+      spoilsCells: new Map(), // cellIndex -> item_id
+      pollutedCells: new Set(),
+      mindSoulProgress: { step: 0, shadowHp: 100, maxShadowHp: 100 },
+      combatProgress: { bossHp: 5000, maxBossHp: 5000, bossCharging: false },
+      logs: []
+    };
+    this.log("Hệ thống khởi tạo: Sẵn sàng thử nghiệm máy trạng thái độ kiếp.", "highlight");
+  }
+
+  log(msg, type = "normal") {
+    this.state.logs.unshift({ msg, type, time: new Date().toLocaleTimeString() });
+  }
+
+  // --- TRANSITIONS ---
+
+  triggerEvent(rank, type, archetype, path, rewardMarks) {
+    this.state.rank = rank;
+    this.state.tribulationType = type;
+    this.state.archetype = archetype;
+    this.state.path = path;
+    this.state.rewardDaoMarks = rewardMarks;
+    this.state.stage = "HARBINGER";
+    this.state.preparationTimeRemainingSec = 120;
+    this.state.hazardCells.clear();
+    this.state.spoilsCells.clear();
+    this.state.pollutedCells.clear();
+
+    if (archetype === "ENVIRONMENTAL") {
+      this.state.hazardLevel = 6;
+      [0, 1, 2, 5, 6, 7].forEach(c => this.state.hazardCells.add(c));
+      this.log(`[ĐIỀM BÁO]: ${type} (${path} path) giáng lâm! Không khí lạnh buốt bao trùm 6 ô dã ngoại. Thời gian chuẩn bị: 120s.`, "warn");
+    } else if (archetype === "BEAST_SWARM") {
+      this.state.hazardLevel = 4; // 4 waves
+      [0, 4, 20, 24].forEach(c => this.state.hazardCells.add(c));
+      this.log(`[ĐIỀM BÁO]: Vết nứt hư không xuất hiện tại 4 góc Tiên Khiếu! Tiếng gầm rú của Thú Triều vang vọng.`, "warn");
+    } else if (archetype === "MIND_SOUL") {
+      this.state.hazardLevel = 3; // 3 dilemma choices
+      this.state.mindSoulProgress = { step: 0, shadowHp: 100, maxShadowHp: 100 };
+      this.log(`[ĐIỀM BÁO]: Thiên Ý thẩm thấu vào thức hải! Tâm cảnh gợn sóng, ảo cảnh tiền kiếp sắp mở ra.`, "warn");
+    } else if (archetype === "ANOMALOUS_COMBAT") {
+      this.state.hazardLevel = 1; // 1 boss with anomalous rules
+      this.state.combatProgress = { bossHp: 8000, maxBossHp: 8000, bossCharging: false };
+      this.state.hazardCells.add(12); // center
+      this.log(`[ĐIỀM BÁO]: Thần Ma Kiếp Lôi ngưng tụ! Sàn đấu xuất hiện dị tượng Cấm Pháp Tuyệt Vực.`, "warn");
+    }
+  }
+
+  fortifyFormation() {
+    if (this.state.stage !== "HARBINGER") {
+      this.log("Chỉ có thể gia cố trận pháp trong giai đoạn Điềm Báo!", "danger");
+      return false;
+    }
+    const newCell = Math.floor(Math.random() * 25);
+    this.state.fortifiedCells.add(newCell);
+    this.log(`Cổ Tiên tiêu hao 50 Tiên Nguyên Thạch gia cố Trận Pháp hộ thể ô [${newCell % 5}, ${Math.floor(newCell / 5)}]!`, "success");
+    return true;
+  }
+
+  commenceOrdeal() {
+    if (this.state.stage !== "HARBINGER") {
+      this.log("Kiếp nạn đã bắt đầu hoặc đã kết thúc!", "danger");
+      return false;
+    }
+    this.state.stage = "ORDEAL_ACTIVE";
+    this.state.preparationTimeRemainingSec = 0;
+    this.log(`[NGHÊNH KIẾP]: Cổ Tiên chính thức bước vào Phase 2! Kiếp lực toàn diện bộc phát.`, "highlight");
+    return true;
+  }
+
+  // Action for ENVIRONMENTAL
+  applySatChieuMitigate() {
+    if (this.state.stage !== "ORDEAL_ACTIVE" || this.state.archetype !== "ENVIRONMENTAL") {
+      this.log("Hành động chỉ khả dụng khi nghênh chiến Thiên Tai Môi Trường!", "danger");
+      return false;
+    }
+    if (this.state.hazardCells.size === 0) {
+      this.log("Thiên tai đã được dập tắt hoàn toàn!", "success");
+      this.resolveOrdeal(true);
+      return true;
+    }
+    // Remove 2 hazard cells
+    const it = this.state.hazardCells.values();
+    const c1 = it.next().value;
+    const c2 = it.next().value;
+    if (c1 !== undefined) {
+      this.state.hazardCells.delete(c1);
+      this.state.pollutedCells.add(c1); // leaves pollution
+      this.state.spoilsCells.set(c1, "ice_crystal_rank6"); // leaves spoil
+    }
+    if (c2 !== undefined) {
+      this.state.hazardCells.delete(c2);
+      this.state.pollutedCells.add(c2);
+      this.state.spoilsCells.set(c2, "ice_cicada_wing_rank6");
+    }
+    this.state.hazardLevel = this.state.hazardCells.size;
+    this.log(`Cổ Tiên thi triển Sát Chiêu Viêm Đạo làm tan băng tuyết 2 ô! Kết tinh Kiếp Tài rơi rớt.`, "success");
+
+    if (this.state.hazardCells.size === 0) {
+      this.resolveOrdeal(true);
+    }
+    return true;
+  }
+
+  // Action for BEAST_SWARM
+  defendSwarmWave() {
+    if (this.state.stage !== "ORDEAL_ACTIVE" || this.state.archetype !== "BEAST_SWARM") {
+      this.log("Hành động chỉ khả dụng khi phòng thủ Thú Triều Xâm Lăng!", "danger");
+      return false;
+    }
+    if (this.state.hazardLevel <= 0) {
+      this.resolveOrdeal(true);
+      return true;
+    }
+    this.state.hazardLevel -= 1;
+    const it = this.state.hazardCells.values();
+    const cell = it.next().value;
+    if (cell !== undefined) {
+      this.state.hazardCells.delete(cell);
+      this.state.spoilsCells.set(cell, "blood_crystal_rank7");
+      this.state.pollutedCells.add(cell);
+    }
+    this.log(`Tháp Trận Pháp cùng Hộ vệ Dị Nhân bắn hạ đợt Huyết Dơi! Thu được Kiếp Tài Thượng Cổ Huyết Tinh.`, "success");
+
+    if (this.state.hazardLevel <= 0) {
+      this.resolveOrdeal(true);
+    }
+    return true;
+  }
+
+  // Action for MIND_SOUL
+  resolveDilemma() {
+    if (this.state.stage !== "ORDEAL_ACTIVE" || this.state.archetype !== "MIND_SOUL") {
+      this.log("Hành động chỉ khả dụng khi khảo nghiệm Tâm Ma!", "danger");
+      return false;
+    }
+    this.state.mindSoulProgress.step += 1;
+    if (this.state.mindSoulProgress.step < 3) {
+      this.log(`Vấn Tâm Giai đoạn ${this.state.mindSoulProgress.step}: Cổ Tiên giữ vững Đạo Tâm trước cám dỗ danh lợi.`, "success");
+      this.state.hazardLevel = 3 - this.state.mindSoulProgress.step;
+    } else {
+      this.log(`Đạo tâm kiên định! Phá tan ảo cảnh tiền kiếp, ngưng tụ Chân Ý Trí Đạo.`, "highlight");
+      this.state.spoilsCells.set(12, "wisdom_pearl_rank7");
+      this.resolveOrdeal(true);
+    }
+    return true;
+  }
+
+  // Action for ANOMALOUS_COMBAT
+  combatTurn() {
+    if (this.state.stage !== "ORDEAL_ACTIVE" || this.state.archetype !== "ANOMALOUS_COMBAT") {
+      this.log("Hành động chỉ khả dụng khi chiến đấu Dị Tượng Sàn Đấu!", "danger");
+      return false;
+    }
+    this.state.combatProgress.bossHp -= 3000;
+    if (this.state.combatProgress.bossHp <= 0) {
+      this.state.combatProgress.bossHp = 0;
+      this.log(`Cổ Tiên tung đòn chí mạng tiêu diệt Thần Ma Kiếp Lôi!`, "highlight");
+      this.state.spoilsCells.set(12, "lightning_crystal_rank7");
+      this.state.hazardCells.clear();
+      this.resolveOrdeal(true);
+    } else {
+      this.log(`Cổ Tiên trảm kích Thần Ma (Boss HP: ${this.state.combatProgress.bossHp}/8000). Sàn đấu lôi đình giáng phạt trừ 500 HP Khiếu!`, "warn");
+      this.state.apertureHp = Math.max(1000, this.state.apertureHp - 500);
+    }
+    return true;
+  }
+
+  // Tick natural disaster damage if not mitigated
+  tickDisaster() {
+    if (this.state.stage !== "ORDEAL_ACTIVE") {
+      this.log("Thiên tai chỉ gây sát thương khi đang ở Phase 2 Nghênh Kiếp!", "warn");
+      return false;
+    }
+    const damage = this.state.hazardCells.size * 300 + 400;
+    this.state.apertureHp = Math.max(0, this.state.apertureHp - damage);
+    this.log(`[CẢNH BÁO]: Kiếp lực bùng phát! Không kịp hóa giải, vách Tiên Khiếu chịu ${damage} sát thương!`, "danger");
+
+    if (this.state.apertureHp <= 500) {
+      this.resolveOrdeal(false);
+    }
+    return true;
+  }
+
+  resolveOrdeal(success) {
+    if (success) {
+      this.state.stage = "AFTERMATH";
+      this.log(`🎉 [KẾT TOÁN THẮNG]: Cổ Tiên đã vượt qua kiếp nạn! Chuyển sang Phase 3: Thu Hoạch & Xử Lý Dư Ba.`, "highlight");
+    } else {
+      this.state.stage = "FAILED";
+      this.log(`💀 [THẤT BẠI]: Tiên Khiếu trọng thương (HP ≤ 5%)! Vách khiếu rạn nứt, rơi vào trạng thái DAMAGED.`, "danger");
+    }
+  }
+
+  collectAllSpoils() {
+    if (this.state.stage !== "AFTERMATH") {
+      this.log("Chỉ có thể thu hoạch Kiếp Tài trong giai đoạn Dư Ba (Aftermath)!", "danger");
+      return false;
+    }
+    const count = this.state.spoilsCells.size;
+    if (count === 0) {
+      this.log("Toàn bộ Kiếp Tài trên lưới ô đã được thu hoạch xong!", "warn");
+      return false;
+    }
+    this.state.spoilsCells.clear();
+    this.log(`Thu hoạch thành công ${count} đống Kiếp Tài quý hiếm vào kho trữ Tiên Khiếu!`, "success");
+    return true;
+  }
+
+  cleansePollution() {
+    if (this.state.stage !== "AFTERMATH") {
+      this.log("Chỉ có thể thanh tẩy thổ nhưỡng trong giai đoạn Dư Ba!", "danger");
+      return false;
+    }
+    const count = this.state.pollutedCells.size;
+    if (count === 0) {
+      this.log("Không có ô đất nào bị ô nhiễm Đạo Ngân dị chủng!", "warn");
+      return false;
+    }
+    this.state.pollutedCells.clear();
+    this.state.apertureHp = Math.min(this.state.maxApertureHp, this.state.apertureHp + 1500);
+    this.log(`Cổ Tiên tiêu hao Tiên Nguyên thanh tẩy ${count} ô đất ô nhiễm! Thổ nhưỡng hồi phục, Aperture HP +1500.`, "success");
+    return true;
+  }
+
+  finalizeTribulation() {
+    if (this.state.stage !== "AFTERMATH") {
+      this.log("Chưa hoàn tất giai đoạn nghênh kiếp để kết toán!", "danger");
+      return false;
+    }
+    this.state.stage = "RESOLVED";
+    this.log(`🏆 [HOÀN TẤT VIÊN MÃN]: Độ kiếp thành công! Cổ Tiên chính thức dung nạp +${this.state.rewardDaoMarks} Đạo Ngân vào bản mệnh!`, "highlight");
+    return true;
+  }
+}
+
+// Global instance
+const engine = new TribulationLifecycleEngine();
+
+// UI Render bindings
+function render() {
+  const s = engine.state;
+  const badge = document.getElementById("stageBadge");
+  badge.textContent = s.stage;
+  badge.className = "badge badge-" + (s.stage.toLowerCase().includes("ordeal") ? "ordeal" : s.stage.toLowerCase().includes("aftermath") ? "aftermath" : s.stage.toLowerCase().includes("resolved") ? "resolved" : "harbinger");
+
+  document.getElementById("valRankType").textContent = `Rank ${s.rank} (${s.tribulationType})`;
+  document.getElementById("valArchetype").innerHTML = `<span class="badge badge-archetype">${s.archetype}</span>`;
+  document.getElementById("valPath").textContent = `${s.path.toUpperCase()} Path`;
+  document.getElementById("valPrepTime").textContent = s.stage === "HARBINGER" ? `${s.preparationTimeRemainingSec}s còn lại` : "Đã Kết Thúc";
+  document.getElementById("valApertureHp").textContent = `${s.apertureHp.toLocaleString()} / ${s.maxApertureHp.toLocaleString()}`;
+  document.getElementById("hpBar").style.width = `${(s.apertureHp / s.maxApertureHp) * 100}%`;
+
+  const hazardPct = Math.min(100, Math.max(0, (s.hazardCells.size / 10) * 100));
+  document.getElementById("valHazardProgress").textContent = s.stage === "ORDEAL_ACTIVE" ? `${s.hazardCells.size} Điểm Đang Bộc Phát` : s.stage === "AFTERMATH" ? `${s.spoilsCells.size} Điểm Kiếp Tài Chờ Nhặt` : "Ổn Định";
+  document.getElementById("hazardBar").style.width = `${s.stage === "ORDEAL_ACTIVE" ? (s.hazardCells.size > 0 ? (s.hazardCells.size/8)*100 : 0) : s.stage === "AFTERMATH" ? 100 : 0}%`;
+  document.getElementById("valRewardMarks").textContent = `+${s.rewardDaoMarks.toLocaleString()} Đạo Ngân`;
+
+  // Buttons states
+  document.getElementById("btnFortify").disabled = s.stage !== "HARBINGER";
+  document.getElementById("btnCommence").disabled = s.stage !== "HARBINGER";
+  document.getElementById("btnMitigate").disabled = s.stage !== "ORDEAL_ACTIVE" || s.archetype !== "ENVIRONMENTAL";
+  document.getElementById("btnDefendWave").disabled = s.stage !== "ORDEAL_ACTIVE" || s.archetype !== "BEAST_SWARM";
+  document.getElementById("btnDilemma").disabled = s.stage !== "ORDEAL_ACTIVE" || s.archetype !== "MIND_SOUL";
+  document.getElementById("btnCombat").disabled = s.stage !== "ORDEAL_ACTIVE" || s.archetype !== "ANOMALOUS_COMBAT";
+  document.getElementById("btnTickDisaster").disabled = s.stage !== "ORDEAL_ACTIVE";
+  document.getElementById("btnCollectSpoils").disabled = s.stage !== "AFTERMATH" || s.spoilsCells.size === 0;
+  document.getElementById("btnCleanse").disabled = s.stage !== "AFTERMATH" || s.pollutedCells.size === 0;
+  document.getElementById("btnFinalize").disabled = s.stage !== "AFTERMATH";
+
+  // Grid preview 25 cells
+  const gridEl = document.getElementById("gridPreview");
+  gridEl.innerHTML = "";
+  for (let i = 0; i < 25; i++) {
+    const cell = document.createElement("div");
+    cell.className = "grid-cell";
+    if (s.fortifiedCells.has(i)) cell.classList.add("fortified");
+    if (s.hazardCells.has(i)) {
+      cell.classList.add("hazard");
+      cell.textContent = "🔥";
+    } else if (s.spoilsCells.has(i)) {
+      cell.classList.add("spoils");
+      cell.textContent = "💎";
+    } else if (s.pollutedCells.has(i)) {
+      cell.classList.add("polluted");
+      cell.textContent = "☣️";
+    } else if (i === 12) {
+      cell.textContent = "🏰"; // Core
+    } else {
+      cell.textContent = `${i % 5},${Math.floor(i / 5)}`;
+    }
+    gridEl.appendChild(cell);
+  }
+
+  // Logs
+  const logBox = document.getElementById("logBox");
+  logBox.innerHTML = s.logs.map(l => `<div class="log-entry ${l.type}">[${l.time}] ${l.msg}</div>`).join("");
+}
+
+function driveAction(action) {
+  switch (action) {
+    case 'TRIGGER_RANK6_ICE':
+      engine.triggerEvent(6, "EARTH_CALAMITY", "ENVIRONMENTAL", "ice", 250);
+      break;
+    case 'TRIGGER_RANK7_SWARM':
+      engine.triggerEvent(7, "HEAVENLY_TRIBULATION", "BEAST_SWARM", "blood", 5000);
+      break;
+    case 'TRIGGER_RANK7_MIND':
+      engine.triggerEvent(7, "HEAVENLY_TRIBULATION", "MIND_SOUL", "wisdom", 5000);
+      break;
+    case 'TRIGGER_RANK7_COMBAT':
+      engine.triggerEvent(7, "HEAVENLY_TRIBULATION", "ANOMALOUS_COMBAT", "lightning", 5000);
+      break;
+    case 'FORTIFY_FORMATION':
+      engine.fortifyFormation();
+      break;
+    case 'COMMENCE_ORDEAL':
+      engine.commenceOrdeal();
+      break;
+    case 'SAT_CHIEU_MITIGATE':
+      engine.applySatChieuMitigate();
+      break;
+    case 'DEFEND_SWARM_WAVE':
+      engine.defendSwarmWave();
+      break;
+    case 'RESOLVE_DILEMMA':
+      engine.resolveDilemma();
+      break;
+    case 'COMBAT_TURN':
+      engine.combatTurn();
+      break;
+    case 'TICK_DISASTER':
+      engine.tickDisaster();
+      break;
+    case 'COLLECT_ALL_SPOILS':
+      engine.collectAllSpoils();
+      break;
+    case 'CLEANSE_POLLUTION':
+      engine.cleansePollution();
+      break;
+    case 'FINALIZE_TRIBULATION':
+      engine.finalizeTribulation();
+      break;
+  }
+  render();
+}
+
+// Guided Scenarios
+const scenarios = [
+  {
+    title: "Kịch bản 1: Bão Tuyết Địa Tai (Environmental - Rank 6)",
+    desc: "Bão tuyết vạn dặm đóng băng 6 ô đất dã ngoại. Cổ Tiên dùng Sát Chiêu Viêm Đạo làm tan băng, nhặt Băng Phách Tiên Tinh và thanh tẩy đất đai.",
+    steps: [
+      { label: "1. Khởi phát Điềm Báo Tuyết Kiếp", act: "TRIGGER_RANK6_ICE" },
+      { label: "2. Gia cố Trận Pháp phòng ngự", act: "FORTIFY_FORMATION" },
+      { label: "3. Xuất trận Nghênh Kiếp (Vào Phase 2)", act: "COMMENCE_ORDEAL" },
+      { label: "4. Tung Sát Chiêu Viêm Đạo đợt 1", act: "SAT_CHIEU_MITIGATE" },
+      { label: "5. Bão tuyết cắn vách khiếu (Tick HP)", act: "TICK_DISASTER" },
+      { label: "6. Tung Sát Chiêu Viêm Đạo đợt 2 (Dập tắt hoàn toàn)", act: "SAT_CHIEU_MITIGATE" },
+      { label: "7. Tung Sát Chiêu dứt điểm (Vào Phase 3)", act: "SAT_CHIEU_MITIGATE" },
+      { label: "8. Nhặt Băng Phách Kiếp Tài trên ô đất", act: "COLLECT_ALL_SPOILS" },
+      { label: "9. Thanh tẩy thổ nhưỡng ô nhiễm", act: "CLEANSE_POLLUTION" },
+      { label: "10. Kết toán vượt kiếp (+250 Đạo Ngân)", act: "FINALIZE_TRIBULATION" },
+    ]
+  },
+  {
+    title: "Kịch bản 2: Huyết Thú Triều Thất Chuyển (Beast Swarm - Rank 7)",
+    desc: "Bầy Dơi Quỷ Thượng Cổ 4 đợt tràn vào cắn phá tài nguyên. Tháp trận pháp và Dị nhân phối hợp tiêu diệt.",
+    steps: [
+      { label: "1. Khởi phát Thú Triều Thất Chuyển", act: "TRIGGER_RANK7_SWARM" },
+      { label: "2. Nghênh chiến Thú Triều", act: "COMMENCE_ORDEAL" },
+      { label: "3. Tháp trận pháp tiêu diệt Wave 1", act: "DEFEND_SWARM_WAVE" },
+      { label: "4. Tháp trận pháp tiêu diệt Wave 2", act: "DEFEND_SWARM_WAVE" },
+      { label: "5. Thú hoang cắn phá vách khiếu (Tick HP)", act: "TICK_DISASTER" },
+      { label: "6. Tiêu diệt Wave 3 & Wave 4 (Hạ Thú Vương)", act: "DEFEND_SWARM_WAVE" },
+      { label: "7. Quét sạch Thú Triều (Vào Phase 3)", act: "DEFEND_SWARM_WAVE" },
+      { label: "8. Thu hoạch Huyết Ma Tinh rơi rớt", act: "COLLECT_ALL_SPOILS" },
+      { label: "9. Kết toán nhận +5,000 Đạo Ngân Huyết Đạo", act: "FINALIZE_TRIBULATION" },
+    ]
+  },
+  {
+    title: "Kịch bản 3: Ngũ Uẩn Vấn Tâm (Mind Soul - Rank 7)",
+    desc: "Thiên Ý xâm nhập thức hải khơi gợi ảo cảnh. Cổ Tiên lựa chọn kiên định, phá vỡ ảo mộng thu nhận Chân Ý.",
+    steps: [
+      { label: "1. Khởi phát Tâm Kiếp Ngũ Uẩn", act: "TRIGGER_RANK7_MIND" },
+      { label: "2. Chìm vào Thức Hải Nghênh Kiếp", act: "COMMENCE_ORDEAL" },
+      { label: "3. Hóa giải Ảo Cảnh Thọ Nguyên (Bước 1)", act: "RESOLVE_DILEMMA" },
+      { label: "4. Hóa giải Ảo Cảnh Ân Oán Tiền Kiếp (Bước 2)", act: "RESOLVE_DILEMMA" },
+      { label: "5. Định Lực Phá Vỡ Tâm Ma (Bước 3 - Thành Công)", act: "RESOLVE_DILEMMA" },
+      { label: "6. Thu gom Trí Tuệ Linh Tinh ngưng tụ", act: "COLLECT_ALL_SPOILS" },
+      { label: "7. Dung nạp +5,000 Đạo Ngân Trí Đạo", act: "FINALIZE_TRIBULATION" },
+    ]
+  },
+  {
+    title: "Kịch bản 4: Thiên Kiếp Thần Ma (Anomalous Combat - Rank 7)",
+    desc: "Thần Ma giáng lâm sàn đấu với quy tắc cấm pháp. Cổ Tiên giao tranh turn-based, phá vỡ tụ lực và trảm sát thần ma.",
+    steps: [
+      { label: "1. Khởi phát Thiên Kiếp Thần Ma", act: "TRIGGER_RANK7_COMBAT" },
+      { label: "2. Xuất trận giao tranh Turn-based", act: "COMMENCE_ORDEAL" },
+      { label: "3. Trảm kích phá vỡ Tụ Lực Turn 1", act: "COMBAT_TURN" },
+      { label: "4. Lôi phạt dội sàn đấu (Trừ HP Khiếu)", act: "TICK_DISASTER" },
+      { label: "5. Tung sát chiêu kết liễu Thần Ma", act: "COMBAT_TURN" },
+      { label: "6. Trảm sát thành công (Vào Phase 3)", act: "COMBAT_TURN" },
+      { label: "7. Thu gom Thiên Kiếp Toái Phiến", act: "COLLECT_ALL_SPOILS" },
+      { label: "8. Kết toán nhận +5,000 Đạo Ngân Lôi Đạo", act: "FINALIZE_TRIBULATION" },
+    ]
+  }
+];
+
+let currentScenarioIdx = 0;
+let currentStepIdx = 0;
+
+function switchScenario(idx) {
+  currentScenarioIdx = idx;
+  currentStepIdx = 0;
+  const sc = scenarios[idx];
+  document.querySelectorAll(".tab-btn").forEach((b, i) => b.classList.toggle("active", i === idx));
+
+  // Reset engine to scenario's first act
+  driveAction(sc.steps[0].act);
+
+  renderScenarioView();
+}
+
+function renderScenarioView() {
+  const sc = scenarios[currentScenarioIdx];
+  const box = document.getElementById("walkthroughContent");
+  box.innerHTML = `
+    <div class="step-header">
+      <span>${sc.title}</span>
+      <span>Bước ${currentStepIdx + 1} / ${sc.steps.length}</span>
+    </div>
+    <p style="color: #cbd5e1; font-size: 12px; margin: 4px 0;">${sc.desc}</p>
+    <div style="margin-top: 8px; display: flex; align-items: center; gap: 10px;">
+      <button class="primary" style="font-size: 13px; padding: 10px 18px;" onclick="runScenarioStep()">
+        ▶️ Thực Hiện Bước ${currentStepIdx + 1}: ${sc.steps[currentStepIdx].label}
+      </button>
+      <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">(Hành động: ${sc.steps[currentStepIdx].act})</span>
+    </div>
+  `;
+}
+
+function runScenarioStep() {
+  const sc = scenarios[currentScenarioIdx];
+  const step = sc.steps[currentStepIdx];
+  driveAction(step.act);
+  currentStepIdx++;
+  if (currentStepIdx >= sc.steps.length) {
+    currentStepIdx = 0; // loop
+  }
+  renderScenarioView();
+}
+
+// Initial setup
+switchScenario(0);
+</script>
+
+</body>
+</html>

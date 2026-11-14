@@ -50,7 +50,7 @@ Base path: `/api`. Route được đăng ký trong `backend/internal/server/serv
 | `/pets` | GET `/`; POST `/feed`, `/formation`, `/sleep`, `/release`, `/merge` |
 | `/actors` | GET `/`, `/:id`; chỉ đọc roster actor của player hiện tại |
 
-Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/combat/session/*` dành cho session command có revision. `POST /combat/session/start` có thể trả session `complete` ngay nếu hiệu ứng lúc bắt đầu trận đã kết thúc encounter; client hiển thị báo cáo kết quả mà không chờ command. `/combat/retreat/:id` cho phép rút lui khỏi encounter trước khi session bắt đầu; PvP không hỗ trợ rút lui ở bước chuẩn bị. `/combat/flee/:id` giữ tương thích; khi session hoạt động, flee phải gửi như command trong lượt.
+Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/combat/session/*` dành cho session command có revision. `POST /combat/session/start` có thể trả session `complete` ngay nếu hiệu ứng lúc bắt đầu trận đã kết thúc encounter; client hiển thị báo cáo kết quả mà không chờ command. `GET /combat/session` và `GET /combat/session/:id` cũng settle và đóng phiên cũ nếu replay đã có `BATTLE_END` nhưng không còn actor chờ. `/combat/retreat/:id` cho phép rút lui khỏi encounter trước khi session bắt đầu; PvP không hỗ trợ rút lui ở bước chuẩn bị. `/combat/flee/:id` giữ tương thích; khi session hoạt động, flee phải gửi như command trong lượt.
 
 ## Thế giới, aperture và instance
 
@@ -61,7 +61,7 @@ Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/co
 | `/teleport` | GET `/templates`, `/effect-options`, `/mine`, `/directory`; POST `/preview`, `/build`, `/travel`, `/manage`, `/repair`, `/withdraw`, `/dismantle` |
 | `/immortal-aperture` | GET aperture, nodes, points, world-points, workers, portal, guests, swarms, refinement queue, settlements, NPCs; POST/DELETE quản lý nodes, resource points/workers, time rate/labor, portals/guest, Gu swarms, refinement, settlements, NPCs |
 | `/dao-marks` | GET `/`, `/dao-ngan` |
-| `/tribulations` | GET `/active`; POST `/:eventId/engage`, `/:eventId/resolve` |
+| `/tribulations` | GET `/active`; POST `/:eventId/engage`, `/:eventId/resolve`, `/:eventId/start`, `/:eventId/mitigate-hazard`, `/:eventId/capture-beast`, `/:eventId/claim-spoil`, `/:eventId/claim-all-spoils`, `/:eventId/finalize-aftermath` |
 | `/instance` | GET `/active`, `/list`, `/spatial`, `/spatial/active`; POST `/enter`, `/action`, `/spatial/enter`, `/spatial/exit` |
 | `/spatial-realms` | GET `/`, `/active`, `/altar-info`; POST `/enter`, `/exit`, `/claim-altar` |
 | `/dream-realms` | GET `/`, `/active`; POST `/enter`, `/action`, `/exit` |

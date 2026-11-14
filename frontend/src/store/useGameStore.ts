@@ -799,6 +799,49 @@ export interface ApertureVariantNPC {
   updated_at: string;
 }
 
+export interface TribulationHazardCell {
+  x: number;
+  y: number;
+  path: string;
+  severity: number;
+  extinguished: boolean;
+}
+
+export interface TribulationHazardMetadata {
+  archetype?: string;
+  hazard_path?: string;
+  calamity_name?: string;
+  cells?: TribulationHazardCell[];
+  hazard_modifier?: string;
+  wave?: number;
+  total_waves?: number;
+}
+
+export interface ApertureTribulationSpoil {
+  id: string;
+  event_id: string;
+  aperture_id: string;
+  player_id: string;
+  item_id: string;
+  item_name: string;
+  quantity: number;
+  x: number;
+  y: number;
+  claimed: boolean;
+  created_at?: string;
+}
+
+export interface ApertureSoilContamination {
+  id: string;
+  aperture_id: string;
+  x: number;
+  y: number;
+  contam_type: string;
+  path: string;
+  severity: number;
+  created_at?: string;
+}
+
 export interface TribulationEvent {
   id: string;
   aperture_id: string;
@@ -811,6 +854,11 @@ export interface TribulationEvent {
   reward_dao_marks: number;
   started_at: string;
   ended_at: string | null;
+  archetype?: 'ENVIRONMENTAL' | 'BEAST_SWARM' | 'ANOMALOUS_COMBAT';
+  stage?: 'HARBINGER' | 'ORDEAL_ACTIVE' | 'AFTERMATH' | 'RESOLVED';
+  preparation_ends_at?: string | null;
+  hazard_metadata?: TribulationHazardMetadata;
+  spoils_collected?: boolean;
 }
 
 export interface TribulationEnemy {

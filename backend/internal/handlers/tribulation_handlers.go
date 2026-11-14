@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -24,13 +25,17 @@ func GetActiveTribulation(c *gin.Context) {
 	var ev models.TribulationEvent
 	var endedAt sql.NullTime
 	var hpAfter sql.NullFloat64
+	var prepEndsAt sql.NullTime
+	var hazardMeta []byte
 	err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, aperture_id, player_id, tribulation_type, path, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at
+		SELECT id, aperture_id, player_id, tribulation_type, path, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at,
+		       COALESCE(archetype, 'ANOMALOUS_COMBAT'), COALESCE(stage, 'ORDEAL_ACTIVE'), preparation_ends_at, COALESCE(hazard_metadata, '{}'::jsonb), COALESCE(spoils_collected, false)
 		FROM tribulation_events
 		WHERE player_id = $1 AND status = 'ACTIVE'
 		ORDER BY started_at DESC
 		LIMIT 1
-	`, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Status, &ev.ApertureHPBefore, &hpAfter, &ev.RewardDaoMarks, &ev.StartedAt, &endedAt)
+	`, playerID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Status, &ev.ApertureHPBefore, &hpAfter, &ev.RewardDaoMarks, &ev.StartedAt, &endedAt,
+		&ev.Archetype, &ev.Stage, &prepEndsAt, &hazardMeta, &ev.SpoilsCollected)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusOK, nil)
@@ -38,6 +43,19 @@ func GetActiveTribulation(c *gin.Context) {
 	} else if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi truy vấn kiếp nạn", err))
 		return
+	}
+
+	if prepEndsAt.Valid {
+		ev.PreparationEndsAt = &prepEndsAt.Time
+		if ev.Stage == "HARBINGER" && time.Now().After(prepEndsAt.Time) {
+			ev.Stage = "ORDEAL_ACTIVE"
+			_, _ = db.DB.ExecContext(c.Request.Context(), `
+				UPDATE tribulation_events SET stage = 'ORDEAL_ACTIVE' WHERE id = $1
+			`, ev.ID)
+		}
+	}
+	if len(hazardMeta) > 0 {
+		ev.HazardMetadata = hazardMeta
 	}
 
 	// If an active event exists, check if dead aperture suppression applies (zombie/undead immortals)
@@ -115,9 +133,47 @@ func GetActiveTribulation(c *gin.Context) {
 		defeated = 0
 	}
 
+	// 3. Fetch spoils for this event
+	spoils := []models.ApertureTribulationSpoil{}
+	spoilRows, errS := db.DB.QueryContext(c.Request.Context(), `
+		SELECT id, event_id, aperture_id, player_id, item_id, item_name, quantity, x, y, claimed, created_at
+		FROM aperture_tribulation_spoils
+		WHERE event_id = $1
+		ORDER BY claimed ASC, created_at ASC
+	`, ev.ID)
+	if errS == nil {
+		defer spoilRows.Close()
+		for spoilRows.Next() {
+			var sp models.ApertureTribulationSpoil
+			if err := spoilRows.Scan(&sp.ID, &sp.EventID, &sp.ApertureID, &sp.PlayerID, &sp.ItemID, &sp.ItemName, &sp.Quantity, &sp.X, &sp.Y, &sp.Claimed, &sp.CreatedAt); err == nil {
+				spoils = append(spoils, sp)
+			}
+		}
+	}
+
+	// 4. Fetch soil contaminations
+	contams := []models.ApertureSoilContamination{}
+	contamRows, errC := db.DB.QueryContext(c.Request.Context(), `
+		SELECT id, aperture_id, x, y, contam_type, path, severity, created_at
+		FROM aperture_soil_contaminations
+		WHERE aperture_id = $1
+		ORDER BY created_at ASC
+	`, ev.ApertureID)
+	if errC == nil {
+		defer contamRows.Close()
+		for contamRows.Next() {
+			var ct models.ApertureSoilContamination
+			if err := contamRows.Scan(&ct.ID, &ct.ApertureID, &ct.X, &ct.Y, &ct.ContamType, &ct.Path, &ct.Severity, &ct.CreatedAt); err == nil {
+				contams = append(contams, ct)
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"event":             ev,
 		"enemies":           enemies,
+		"spoils":            spoils,
+		"contaminations":    contams,
 		"total_enemies":     totalEnemies,
 		"defeated_enemies":  defeated,
 		"remaining_enemies": remaining,

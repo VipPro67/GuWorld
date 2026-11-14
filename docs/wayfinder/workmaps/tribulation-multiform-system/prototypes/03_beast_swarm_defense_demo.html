@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype: Thú Triều Xâm Lăng & Phòng Thủ Cứ Điểm Đa Tầng</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(22, 30, 49, 0.75);
+      --border: rgba(148, 163, 184, 0.18);
+      --accent: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.25);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --danger: #ef4444;
+      --success: #10b981;
+      --cyan: #06b6d4;
+      --purple: #a855f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; min-height: 100vh; font-size: 13px; line-height: 1.5; }
+    .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+    
+    header { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; backdrop-filter: blur(12px); }
+    h1 { font-size: 19px; font-weight: 700; color: #fbbf24; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .subtitle { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+    
+    .layout { display: grid; grid-template-columns: 480px 1fr; gap: 20px; }
+    @media (max-width: 950px) { .layout { grid-template-columns: 1fr; } }
+    
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 12px; }
+    .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #cbd5e1; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    
+    /* 10x10 Grid */
+    .grid-board { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; background: rgba(11, 15, 25, 0.9); padding: 8px; border-radius: 8px; border: 1px solid var(--border); aspect-ratio: 1; }
+    .cell { aspect-ratio: 1; background: #1e293b; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; transition: all 0.15s; position: relative; user-select: none; }
+    .cell:hover { border-color: #fbbf24; transform: scale(1.04); z-index: 5; }
+    .cell.selected { outline: 2px solid #fbbf24; z-index: 10; }
+    
+    .cell.spawn-point { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); }
+    .cell.has-monster { background: rgba(239, 68, 68, 0.3) !important; border-color: #ef4444 !important; font-weight: bold; }
+    .cell.has-boss { background: rgba(220, 38, 38, 0.5) !important; border-color: #f87171 !important; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+    .cell.has-tower { background: rgba(6, 182, 212, 0.25) !important; border-color: #06b6d4 !important; }
+    .cell.has-guard { background: rgba(16, 185, 129, 0.25) !important; border-color: #10b981 !important; }
+    .cell.tower-range { outline: 1px dashed rgba(6, 182, 212, 0.5); }
+    .cell.spoils { background: rgba(234, 179, 8, 0.3) !important; border-color: #eab308 !important; }
+
+    .state-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px dashed rgba(148, 163, 184, 0.1); }
+    .state-row:last-child { border-bottom: none; }
+    .state-label { color: var(--text-muted); }
+    .state-val { font-weight: 600; font-family: monospace; color: #e2e8f0; }
+
+    .bar-container { background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border); border-radius: 6px; height: 12px; overflow: hidden; margin-top: 3px; position: relative; }
+    .bar-fill { height: 100%; transition: width 0.3s ease; }
+    .bar-hp { background: linear-gradient(90deg, #10b981, #059669); }
+    .bar-danger { background: linear-gradient(90deg, #ef4444, #b91c1c); }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    button { background: #1e293b; color: #f1f5f9; border: 1px solid rgba(148, 163, 184, 0.2); padding: 7px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+    button:hover:not(:disabled) { background: #334155; border-color: rgba(245, 158, 11, 0.5); color: #fbbf24; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    button.primary { background: linear-gradient(135deg, #d97706, #b45309); border-color: #f59e0b; color: #fff; }
+    button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    button.danger { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5; }
+    button.danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.3); }
+
+    .log-box { background: rgba(11, 15, 25, 0.95); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; height: 160px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 3px; }
+    .log-entry { color: #94a3b8; }
+    .log-entry.warn { color: #fbbf24; }
+    .log-entry.danger { color: #f87171; }
+    .log-entry.success { color: #34d399; }
+    .log-entry.highlight { color: #38bdf8; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🐺🏹 Prototype: Thú Triều Xâm Lăng & Phòng Thủ Cứ Điểm Đa Tầng</h1>
+    <div class="subtitle">
+      <strong>Mục tiêu (Ticket 03):</strong> Kiểm chứng cơ chế <strong>Thú Triều Xâm Lăng (`BEAST_SWARM`)</strong>: Quái vật xuất hiện từ 4 vết nứt không gian, 
+      di chuyển theo đợt (Waves) có AI ưu tiên cắn phá <em>Điểm Tài Nguyên</em> và <em>Bản Dị Nhân</em> trước khi tiến về Hạch Tâm. 
+      Phối hợp phòng thủ 3 tầng: <strong>Tháp Trận bắn tỉa</strong>, <strong>Hộ Vệ Dị Nhân chặn bước</strong>, và <strong>Cổ Tiên nã pháo / Nô Dịch bắt sống</strong>.
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- LEFT: GRID BOARD & INSPECTOR -->
+    <div class="card">
+      <div class="card-title">
+        <span>Bản Đồ Chiến Tuyến Tiên Khiếu (10×10 Grid)</span>
+        <span id="txtWaveBadge" style="font-size: 11px; color: #fbbf24; font-weight: bold;">Wave 0 / 3</span>
+      </div>
+
+      <div class="grid-board" id="gridBoard"></div>
+
+      <!-- Cell Details -->
+      <div id="cellDetails" style="background: rgba(15,23,42,0.6); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+        <div style="font-weight: bold; color: #cbd5e1; margin-bottom: 4px;" id="cellCoord">Click vào một ô trên bản đồ để xem chi tiết</div>
+        <div id="cellInfo" style="color: var(--text-muted); font-size: 12px;">Chưa chọn ô nào.</div>
+      </div>
+
+      <!-- Legend -->
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 10px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 8px;">
+        <span>🏰 Hạch Tâm</span>
+        <span>🌲 Mỏ Thảo Mộc</span>
+        <span>💎 Mỏ Khoáng</span>
+        <span>🛖 Khu Dị Nhân</span>
+        <span style="color: #06b6d4;">🏹 Tháp Trận</span>
+        <span style="color: #10b981;">🛡️ Hộ Vệ</span>
+        <span style="color: #ef4444;">🐺 Quái Thường</span>
+        <span style="color: #f87171; font-weight: bold;">👹 Thú Vương (Boss)</span>
+        <span style="color: #fbbf24;">✨ Kiếp Tài</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: CONTROLS & STATE -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <!-- STATS PANEL -->
+      <div class="card">
+        <div class="card-title">
+          <span>Tình Trạng Phòng Thủ Tiên Khiếu</span>
+          <span id="txtStatus" style="color: #34d399; font-weight: bold;">Chiến Tuyến Ổn Định</span>
+        </div>
+
+        <div>
+          <div class="state-row">
+            <span class="state-label">Vách Ngăn Tiên Khiếu (Aperture HP):</span>
+            <span class="state-val" id="valApertureHp">10,000 / 10,000</span>
+          </div>
+          <div class="bar-container">
+            <div id="barHp" class="bar-fill bar-hp" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <div class="state-row">
+          <span class="state-label">Tổng Quái Đang Trên Bản Đồ:</span>
+          <span class="state-val" id="valMonsterCount" style="color: #f87171;">0 Con</span>
+        </div>
+        <div class="state-row">
+          <span class="state-label">Sinh Lực Mỏ Thảo Mộc & Khoáng:</span>
+          <span class="state-val" id="valResourceVitality">250 / 250 Điểm</span>
+        </div>
+        <div class="state-row">
+          <span class="state-label">Dân Số Khu Dị Nhân:</span>
+          <span class="state-val" id="valPopulation">1,200 Người</span>
+        </div>
+        <div class="state-row">
+          <span class="state-label">Thú Hoang Đã Thu Phục (Nô Đạo):</span>
+          <span class="state-val" id="valEnslavedCount" style="color: #a855f7;">0 Con</span>
+        </div>
+      </div>
+
+      <!-- WAVE & MOVEMENT CONTROLS -->
+      <div class="card">
+        <div class="card-title">
+          <span>Tiến Trình Đợt Tấn Công (Wave Spawning & AI)</span>
+          <span style="font-size: 11px; color: var(--text-muted);">Mô phỏng từng bước</span>
+        </div>
+
+        <div>
+          <span class="state-label" style="font-weight: bold; color: #cbd5e1;">1. Kích Hoạt Đợt Thú Triều Mới:</span>
+          <div class="btn-group">
+            <button class="primary" onclick="engine.spawnNextWave()">🌊 Phát Động Đợt Quái Tiếp Theo (Spawn Wave)</button>
+            <button class="danger" onclick="engine.tickMonsterStep()">👣 Thú Triều Tiến Bước Về Mục Tiêu (1 Step AI)</button>
+          </div>
+        </div>
+
+        <div>
+          <span class="state-label" style="font-weight: bold; color: #cbd5e1;">2. Tác Chiến Đa Tầng (Phòng Thủ & Đánh Chặn):</span>
+          <div class="btn-group">
+            <button onclick="engine.towersAutoFire()">🏹 Tháp Trận Tự Động Bắn Tỉa (Tầm 2 Ô)</button>
+            <button onclick="engine.guardsClash()">⚔️ Đội Hộ Vệ Giao Tranh Chặn Cửa</button>
+            <button style="border-color: #f59e0b; color: #fbbf24;" onclick="engine.castHouseArtillery()">🚀 Tiên Cổ Phòng Oanh Kích Diện Rộng (Ô Đang Chọn)</button>
+          </div>
+        </div>
+
+        <div>
+          <span class="state-label" style="font-weight: bold; color: #cbd5e1;">3. Nô Đạo & Thu Hoạch Chiến Lợi Phẩm:</span>
+          <div class="btn-group">
+            <button style="border-color: #a855f7; color: #d8b4fe;" onclick="engine.enslaveTargetMonster()">🕸️ Nô Đạo Cổ Trùng Bắt Sống Quái Yếu (HP &lt; 30%)</button>
+            <button onclick="engine.collectAllSpoils()">💎 Thu Nhặt Da Lông & Cốt Tủy Kiếp Tài</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOG BOX -->
+      <div class="card">
+        <div class="card-title">
+          <span>Chiến Báo Phòng Thủ Tiên Khiếu</span>
+          <button style="padding: 2px 6px; font-size: 10px;" onclick="engine.clearLogs()">Xóa</button>
+        </div>
+        <div class="log-box" id="logBox"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * BeastSwarmDefenseEngine: Pure logic for Wave defense, pathfinding, and multi-tier counters
+ */
+class BeastSwarmDefenseEngine {
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    this.gridSize = 10;
+    this.apertureHp = 10000;
+    this.maxApertureHp = 10000;
+    this.currentWave = 0;
+    this.maxWaves = 3;
+    this.selectedCellIdx = 44;
+    this.enslavedCount = 0;
+    this.spoilsCount = 0;
+    this.resourceVitality = 250;
+    this.population = 1200;
+
+    // Grid data
+    this.cells = Array.from({ length: 100 }, (_, i) => ({
+      idx: i,
+      x: i % 10,
+      y: Math.floor(i / 10),
+      building: null, // 'CORE' | 'WOOD_MINE' | 'MINERAL_MINE' | 'SETTLEMENT' | 'TOWER' | 'GUARD'
+      vitality: 0,
+      monsters: [], // Array of { id, name, isBoss, hp, maxHp, attack }
+      spoils: null
+    }));
+
+    // Setup base defenses & targets
+    this.cells[44].building = 'CORE'; // Core Blessed Land
+    this.cells[22].building = 'WOOD_MINE'; this.cells[22].vitality = 100; // Herb mine
+    this.cells[77].building = 'MINERAL_MINE'; this.cells[77].vitality = 150; // Metal mine
+    this.cells[63].building = 'SETTLEMENT'; // Variant Human Tribe
+
+    // Towers & Guards
+    this.cells[33].building = 'TOWER'; // Tower guarding North-West
+    this.cells[66].building = 'TOWER'; // Tower guarding South-East
+    this.cells[34].building = 'GUARD'; this.cells[34].guardHp = 300; // Guard outpost
+    this.cells[54].building = 'GUARD'; this.cells[54].guardHp = 300; // Guard outpost
+
+    this.logs = [];
+    this.log("Khởi tạo chiến tuyến Thú Triều: 1 Hạch Tâm, 2 Mỏ Tài Nguyên, 1 Bản Dị Nhân, 2 Tháp Trận và 2 Đội Hộ Vệ.", "highlight");
+  }
+
+  log(msg, type = "normal") {
+    this.logs.unshift({ msg, type, time: new Date().toLocaleTimeString() });
+  }
+
+  clearLogs() {
+    this.logs = [];
+    render();
+  }
+
+  spawnNextWave() {
+    if (this.currentWave >= this.maxWaves) {
+      this.log("Toàn bộ 3 đợt Thú Triều đã được kích hoạt hết!", "warn");
+      return;
+    }
+    this.currentWave++;
+
+    // 4 Corner Spawns
+    const spawnCorners = [0, 9, 90, 99];
+    let spawnedCount = 0;
+
+    if (this.currentWave === 1) {
+      // Wave 1: 4 Minions at corners
+      spawnCorners.forEach(idx => {
+        this.cells[idx].monsters.push({
+          id: "m-" + Math.random().toString(36).substr(2, 5),
+          name: "Thiết Bì Lang",
+          isBoss: false,
+          hp: 200,
+          maxHp: 200,
+          attack: 30
+        });
+        spawnedCount++;
+      });
+      this.log(`🌊 [ĐỢT 1]: Thú Triều xuất hiện! 4 Thiết Bì Lang xé rách không gian ở 4 góc bản đồ.`, "warn");
+    } else if (this.currentWave === 2) {
+      // Wave 2: 6 Minions + 2 Elite
+      spawnCorners.forEach((idx, i) => {
+        this.cells[idx].monsters.push({
+          id: "m-" + Math.random().toString(36).substr(2, 5),
+          name: i % 2 === 0 ? "Cuồng Huyết Báo" : "Huyết Giáp Trùng",
+          isBoss: false,
+          hp: 350,
+          maxHp: 350,
+          attack: 50
+        });
+        spawnedCount++;
+      });
+      this.log(`🌊 [ĐỢT 2]: Thú Triều gia tăng cường độ! Cuồng Huyết Báo và Huyết Giáp Trùng tràn vào.`, "warn");
+    } else if (this.currentWave === 3) {
+      // Wave 3: Boss + Minions
+      this.cells[0].monsters.push({
+        id: "boss-1",
+        name: "Thượng Cổ Thiết Bì Tê Vương",
+        isBoss: true,
+        hp: 1200,
+        maxHp: 1200,
+        attack: 150
+      });
+      spawnCorners.slice(1).forEach(idx => {
+        this.cells[idx].monsters.push({
+          id: "m-" + Math.random().toString(36).substr(2, 5),
+          name: "Huyết Dơi Quỷ",
+          isBoss: false,
+          hp: 400,
+          maxHp: 400,
+          attack: 60
+        });
+      });
+      this.log(`👹 [ĐỢT 3 - TỔNG LỰC]: Thượng Cổ Thiết Bì Tê Vương giáng lâm tại góc Tây Bắc! Thú Triều bao vây toàn diện.`, "danger");
+    }
+
+    render();
+  }
+
+  // Monsters AI step towards nearest target: Resource Mine, Settlement, or Core
+  tickMonsterStep() {
+    const targets = [
+      { x: 2, y: 2, type: 'WOOD_MINE' },
+      { x: 7, y: 7, type: 'MINERAL_MINE' },
+      { x: 3, y: 6, type: 'SETTLEMENT' },
+      { x: 4, y: 4, type: 'CORE' }
+    ];
+
+    const moves = []; // { fromCell, toCell, monster }
+    let totalMonsters = 0;
+    let damageToCore = 0;
+    let damageToResource = 0;
+
+    this.cells.forEach(cell => {
+      if (cell.monsters.length > 0) {
+        // If cell has Guard or Tower blocking, monster stays to attack it
+        if (cell.building === 'GUARD') {
+          cell.monsters.forEach(m => {
+            cell.guardHp -= m.attack;
+            this.log(`⚔️ Quái vật ${m.name} tấn công Đội Hộ Vệ tại [${cell.x}, ${cell.y}] (Hộ vệ HP: ${Math.max(0, cell.guardHp)})!`, "warn");
+          });
+          if (cell.guardHp <= 0) {
+            cell.building = null;
+            this.log(`💀 Đội Hộ Vệ tại [${cell.x}, ${cell.y}] đã anh dũng hy sinh! Điểm chốt chặn bị phá vỡ.`, "danger");
+          }
+          return;
+        }
+
+        // If cell has Resource or Settlement, monster attacks it
+        if (cell.building === 'WOOD_MINE' || cell.building === 'MINERAL_MINE') {
+          cell.vitality = Math.max(0, cell.vitality - 20);
+          this.resourceVitality = Math.max(0, this.resourceVitality - 20);
+          this.log(`⚠️ Quái vật đang cắn phá Mỏ Tài Nguyên tại [${cell.x}, ${cell.y}] (Vitality: ${cell.vitality})!`, "danger");
+          return;
+        }
+
+        if (cell.building === 'SETTLEMENT') {
+          this.population = Math.max(0, this.population - 50);
+          this.log(`⚠️ Quái vật tấn công Bản Dị Nhân tại [${cell.x}, ${cell.y}]! Tổn thất 50 người!`, "danger");
+          return;
+        }
+
+        if (cell.building === 'CORE') {
+          this.apertureHp = Math.max(0, this.apertureHp - 200);
+          this.log(`🚨 NGUY CẤP: Quái vật đang công phá Tiên Khiếu Hạch Tâm [4, 4] (-200 HP)!`, "danger");
+          return;
+        }
+
+        // Otherwise move towards closest target
+        cell.monsters.forEach(m => {
+          totalMonsters++;
+          // Find closest target
+          let bestTarget = targets[0];
+          let minDist = 999;
+          targets.forEach(t => {
+            const d = Math.abs(cell.x - t.x) + Math.abs(cell.y - t.y);
+            if (d < minDist) {
+              minDist = d;
+              bestTarget = t;
+            }
+          });
+
+          // Step 1 cell closer (x or y)
+          let nx = cell.x;
+          let ny = cell.y;
+          if (nx < bestTarget.x) nx++;
+          else if (nx > bestTarget.x) nx--;
+          else if (ny < bestTarget.y) ny++;
+          else if (ny > bestTarget.y) ny--;
+
+          moves.push({ fromIdx: cell.idx, toIdx: ny * 10 + nx, monster: m });
+        });
+      }
+    });
+
+    if (totalMonsters === 0) {
+      this.log("Hiện không còn quái vật nào trên bản đồ!", "warn");
+      return;
+    }
+
+    // Clear old monsters that moved
+    moves.forEach(mv => {
+      const fromC = this.cells[mv.fromIdx];
+      fromC.monsters = fromC.monsters.filter(m => m.id !== mv.monster.id);
+    });
+
+    // Place into new cells
+    moves.forEach(mv => {
+      this.cells[mv.toIdx].monsters.push(mv.monster);
+    });
+
+    this.log(`🐾 ${moves.length} quái vật tiến thêm 1 bước về phía các mục tiêu trọng yếu.`, "normal");
+    render();
+  }
+
+  towersAutoFire() {
+    const towerIndices = [33, 66];
+    let shotCount = 0;
+
+    towerIndices.forEach(tIdx => {
+      const tCell = this.cells[tIdx];
+      // Range = 2
+      let targets = [];
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = tCell.x + dx;
+          const ny = tCell.y + dy;
+          if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
+            const c = this.cells[ny * 10 + nx];
+            if (c.monsters.length > 0) {
+              targets.push({ cell: c, monster: c.monsters[0] });
+            }
+          }
+        }
+      }
+
+      if (targets.length > 0) {
+        // Shoot first target
+        const tgt = targets[0];
+        tgt.monster.hp -= 150;
+        shotCount++;
+        this.log(`🏹 Tháp Trận [${tCell.x}, ${tCell.y}] bắn tỉa ${tgt.monster.name} (-150 HP)!`, "highlight");
+
+        if (tgt.monster.hp <= 0) {
+          this.log(`💥 ${tgt.monster.name} bị Tháp Trận bắn hạ! Kết tinh Kiếp Tài rơi rớt.`, "success");
+          tgt.cell.monsters = tgt.cell.monsters.filter(m => m.id !== tgt.monster.id);
+          tgt.cell.spoils = tgt.monster.isBoss ? "ancient_beast_horn" : "beast_bone_shard";
+        }
+      }
+    });
+
+    if (shotCount === 0) {
+      this.log("Không có quái vật nào trong tầm bắn (bán kính 2 ô) của Tháp Trận!", "warn");
+    }
+    render();
+  }
+
+  guardsClash() {
+    let clashCount = 0;
+    this.cells.forEach(c => {
+      if (c.building === 'GUARD' && c.monsters.length > 0) {
+        const m = c.monsters[0];
+        m.hp -= 100;
+        clashCount++;
+        this.log(`🛡️ Đội Hộ Vệ chém kích ${m.name} (-100 HP, quái còn: ${Math.max(0, m.hp)})!`, "success");
+
+        if (m.hp <= 0) {
+          this.log(`🎉 Hộ vệ đã tiêu diệt ${m.name}!`, "highlight");
+          c.monsters.shift();
+          c.spoils = "wolf_king_fang";
+        }
+      }
+    });
+
+    if (clashCount === 0) {
+      this.log("Không có quái vật nào đang giáp lá cà với Đội Hộ Vệ!", "warn");
+    }
+    render();
+  }
+
+  castHouseArtillery() {
+    const sel = this.cells[this.selectedCellIdx];
+    // AoE 3x3 bombardment
+    let killed = 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = sel.x + dx;
+        const ny = sel.y + dy;
+        if (nx >= 0 && nx < 10 && ny >= 0 && ny < 10) {
+          const c = this.cells[ny * 10 + nx];
+          if (c.monsters.length > 0) {
+            c.monsters.forEach(m => {
+              m.hp -= 350;
+              if (m.hp <= 0) {
+                c.spoils = "metal_ore_rank6";
+                killed++;
+              }
+            });
+            c.monsters = c.monsters.filter(m => m.hp > 0);
+          }
+        }
+      }
+    }
+
+    this.log(`🚀 Cổ Tiên hạ lệnh: Tiên Cổ Phòng nã Trận Kích Pháo oanh tạc vùng [${sel.x}, ${sel.y}]! Tiêu diệt ${killed} quái vật!`, "highlight");
+    render();
+  }
+
+  enslaveTargetMonster() {
+    const sel = this.cells[this.selectedCellIdx];
+    if (sel.monsters.length === 0) {
+      this.log("Ô được chọn không có quái vật nào!", "warn");
+      return;
+    }
+    const m = sel.monsters[0];
+    if (m.hp > m.maxHp * 0.3) {
+      this.log(`Không thể nô dịch ${m.name}! Thú hoang còn quá sung mãn (HP > 30%). Cần bào mòn sinh lực trước!`, "warn");
+      return;
+    }
+
+    // Enslave success
+    sel.monsters.shift();
+    this.enslavedCount++;
+    this.log(`🕸️ [NÔ ĐẠO THÀNH CÔNG]: Đã gieo Cổ Nô Dịch thu phục ${m.name}! Quái vật quy phục, trở thành Thú Hộ Vệ Tiên Khiếu!`, "success");
+    render();
+  }
+
+  collectAllSpoils() {
+    let collected = 0;
+    this.cells.forEach(c => {
+      if (c.spoils) {
+        c.spoils = null;
+        collected++;
+      }
+    });
+    if (collected === 0) {
+      this.log("Không có Kiếp Tài nào trên bản đồ để nhặt!", "warn");
+      return;
+    }
+    this.spoilsCount += collected;
+    this.log(`💎 Đã nhặt ${collected} đống Kiếp Tài (da lông, cốt tủy) vào kho!`, "success");
+    render();
+  }
+}
+
+const engine = new BeastSwarmDefenseEngine();
+
+function render() {
+  const board = document.getElementById("gridBoard");
+  board.innerHTML = "";
+
+  let totalMonsters = 0;
+
+  engine.cells.forEach((cell, idx) => {
+    const el = document.createElement("div");
+    el.className = "cell";
+    if (idx === engine.selectedCellIdx) el.classList.add("selected");
+
+    // Spawn corners
+    if ([0, 9, 90, 99].includes(idx)) el.classList.add("spawn-point");
+
+    // Tower range hint
+    if ([33, 66].includes(idx)) {
+      el.classList.add("has-tower");
+    }
+
+    if (cell.monsters.length > 0) {
+      totalMonsters += cell.monsters.length;
+      const topM = cell.monsters[0];
+      if (topM.isBoss) {
+        el.classList.add("has-boss");
+        el.textContent = "👹";
+      } else {
+        el.classList.add("has-monster");
+        el.textContent = "🐺";
+      }
+      if (cell.monsters.length > 1) {
+        const cntBadge = document.createElement("span");
+        cntBadge.style.position = "absolute";
+        cntBadge.style.bottom = "1px";
+        cntBadge.style.right = "2px";
+        cntBadge.style.fontSize = "8px";
+        cntBadge.style.color = "#fca5a5";
+        cntBadge.textContent = "x" + cell.monsters.length;
+        el.appendChild(cntBadge);
+      }
+    } else if (cell.spoils) {
+      el.classList.add("spoils");
+      el.textContent = "✨";
+    } else if (cell.building === 'CORE') {
+      el.textContent = "🏰";
+    } else if (cell.building === 'WOOD_MINE') {
+      el.textContent = "🌲";
+    } else if (cell.building === 'MINERAL_MINE') {
+      el.textContent = "💎";
+    } else if (cell.building === 'SETTLEMENT') {
+      el.textContent = "🛖";
+    } else if (cell.building === 'TOWER') {
+      el.textContent = "🏹";
+    } else if (cell.building === 'GUARD') {
+      el.classList.add("has-guard");
+      el.textContent = "🛡️";
+    } else {
+      el.textContent = `${cell.x},${cell.y}`;
+      el.style.fontSize = "9px";
+      el.style.color = "rgba(148, 163, 184, 0.4)";
+    }
+
+    el.onclick = () => {
+      engine.selectedCellIdx = idx;
+      render();
+    };
+
+    board.appendChild(el);
+  });
+
+  // State metrics
+  document.getElementById("txtWaveBadge").textContent = `Wave ${engine.currentWave} / ${engine.maxWaves}`;
+  document.getElementById("valApertureHp").textContent = `${engine.apertureHp.toLocaleString()} / ${engine.maxApertureHp.toLocaleString()}`;
+  document.getElementById("barHp").style.width = `${(engine.apertureHp / engine.maxApertureHp) * 100}%`;
+  document.getElementById("valMonsterCount").textContent = `${totalMonsters} Con`;
+  document.getElementById("valResourceVitality").textContent = `${engine.resourceVitality} / 250 Điểm`;
+  document.getElementById("valPopulation").textContent = `${engine.population.toLocaleString()} Người`;
+  document.getElementById("valEnslavedCount").textContent = `${engine.enslavedCount} Con`;
+
+  // Selected cell
+  const sel = engine.cells[engine.selectedCellIdx];
+  document.getElementById("cellCoord").textContent = `Tọa độ Ô: [X: ${sel.x}, Y: ${sel.y}]`;
+  let desc = `Công trình: <strong>${sel.building || "Đất trống dã ngoại"}</strong><br>`;
+  if (sel.guardHp) desc += `Sinh lực Đội Hộ Vệ: <strong style="color:#10b981;">${sel.guardHp}/300 HP</strong><br>`;
+  if (sel.vitality > 0) desc += `Độ phì nhiêu Mỏ: <strong style="color:#38bdf8;">${sel.vitality} Vitality</strong><br>`;
+  if (sel.monsters.length > 0) {
+    desc += `Quái vật chiếm đóng (${sel.monsters.length} con):<br>`;
+    sel.monsters.forEach(m => {
+      desc += `- <strong>${m.name}</strong> [HP: ${m.hp}/${m.maxHp}, Công: ${m.attack}] ${m.hp <= m.maxHp*0.3 ? '<span style="color:#a855f7;">(Có thể Nô Dịch!)</span>' : ''}<br>`;
+    });
+  } else if (sel.spoils) {
+    desc += `<strong style="color:#fbbf24;">Có Kiếp Tài rơi rớt (${sel.spoils})</strong><br>`;
+  } else {
+    desc += `Trạng thái: An toàn.`;
+  }
+  document.getElementById("cellInfo").innerHTML = desc;
+
+  // Logs
+  const logBox = document.getElementById("logBox");
+  logBox.innerHTML = engine.logs.map(l => `<div class="log-entry ${l.type}">[${l.time}] ${l.msg}</div>`).join("");
+}
+
+// Initial render
+render();
+</script>
+
+</body>
+</html>

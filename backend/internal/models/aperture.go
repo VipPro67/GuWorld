@@ -237,17 +237,47 @@ type ApertureGridCell struct {
 }
 
 type TribulationEvent struct {
-	ID               string     `json:"id"`
-	ApertureID       string     `json:"aperture_id"`
-	PlayerID         string     `json:"player_id"`
-	TribulationType  string     `json:"tribulation_type"` // 'EARTH_CALAMITY' | 'HEAVENLY_TRIBULATION' | 'GRAND_TRIBULATION' | 'MYRIAD_TRIBULATION' | 'CHAOS_CALAMITY'
-	Path             string     `json:"path"`
-	Status           string     `json:"status"` // 'ACTIVE' | 'SUCCESS' | 'FAILED'
-	ApertureHPBefore float64    `json:"aperture_hp_before"`
-	ApertureHPAfter  *float64   `json:"aperture_hp_after"`
-	RewardDaoMarks   int64      `json:"reward_dao_marks"`
-	StartedAt        time.Time  `json:"started_at"`
-	EndedAt          *time.Time `json:"ended_at"`
+	ID                string          `json:"id"`
+	ApertureID        string          `json:"aperture_id"`
+	PlayerID          string          `json:"player_id"`
+	TribulationType   string          `json:"tribulation_type"` // 'EARTH_CALAMITY' | 'HEAVENLY_TRIBULATION' | 'GRAND_TRIBULATION' | 'MYRIAD_TRIBULATION' | 'CHAOS_CALAMITY'
+	Path              string          `json:"path"`
+	Status            string          `json:"status"` // 'ACTIVE' | 'SUCCESS' | 'FAILED'
+	ApertureHPBefore  float64         `json:"aperture_hp_before"`
+	ApertureHPAfter   *float64        `json:"aperture_hp_after"`
+	RewardDaoMarks    int64           `json:"reward_dao_marks"`
+	StartedAt         time.Time       `json:"started_at"`
+	EndedAt           *time.Time      `json:"ended_at"`
+	Archetype         string          `json:"archetype"` // 'ENVIRONMENTAL' | 'BEAST_SWARM' | 'ANOMALOUS_COMBAT'
+	Stage             string          `json:"stage"`     // 'HARBINGER' | 'ORDEAL_ACTIVE' | 'AFTERMATH' | 'RESOLVED'
+	PreparationEndsAt *time.Time      `json:"preparation_ends_at,omitempty"`
+	HazardMetadata    json.RawMessage `json:"hazard_metadata,omitempty"`
+	SpoilsCollected   bool            `json:"spoils_collected"`
+}
+
+type ApertureTribulationSpoil struct {
+	ID         string    `json:"id"`
+	EventID    string    `json:"event_id"`
+	ApertureID string    `json:"aperture_id"`
+	PlayerID   string    `json:"player_id"`
+	ItemID     string    `json:"item_id"`
+	ItemName   string    `json:"item_name"`
+	Quantity   int       `json:"quantity"`
+	X          int       `json:"x"`
+	Y          int       `json:"y"`
+	Claimed    bool      `json:"claimed"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type ApertureSoilContamination struct {
+	ID         string    `json:"id"`
+	ApertureID string    `json:"aperture_id"`
+	X          int       `json:"x"`
+	Y          int       `json:"y"`
+	ContamType string    `json:"contam_type"` // 'fire', 'ice', 'poison', 'lightning'
+	Path       string    `json:"path"`
+	Severity   int       `json:"severity"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type TribulationEnemy struct {
@@ -397,6 +427,24 @@ type ApertureVariantNPC struct {
 type TribTypeConfig struct {
 	Type     string
 	Interval float64
+}
+
+// GetTribulationTypeName returns human-readable Vietnamese name for tribulation type
+func GetTribulationTypeName(tribType string) string {
+	switch tribType {
+	case "EARTH_CALAMITY":
+		return "Địa Tai"
+	case "HEAVENLY_TRIBULATION":
+		return "Thiên Kiếp"
+	case "GRAND_TRIBULATION":
+		return "Hạo Kiếp"
+	case "MYRIAD_TRIBULATION":
+		return "Vạn Kiếp"
+	case "CHAOS_CALAMITY", "CHAOTIC_TRIBULATION":
+		return "Hỗn Độn Kiếp"
+	default:
+		return tribType
+	}
 }
 
 func GetTribulationInterval(rank int, tribType string) float64 {

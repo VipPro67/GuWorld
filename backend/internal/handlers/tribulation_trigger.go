@@ -717,7 +717,7 @@ func CheckAndTriggerTribulations() error {
 	autoRows, err := db.DB.Query(`
 		SELECT id, player_id
 		FROM tribulation_events
-		WHERE status = 'ACTIVE' AND started_at < NOW() - INTERVAL '24 hours'
+		WHERE status = 'ACTIVE' AND COALESCE(stage, '') != 'AFTERMATH' AND started_at < NOW() - INTERVAL '24 hours'
 	`)
 	if err == nil {
 		type EventResolve struct {
@@ -876,12 +876,53 @@ func spawnTribulationEventWorker(apertureID string, playerID string, currentHP f
 	}
 	rewardMarks = int64(float64(rewardMarks) * rewardMult)
 
+	// Determine Archetype and Stage
+	archetypes := []string{"ENVIRONMENTAL", "BEAST_SWARM", "ANOMALOUS_COMBAT"}
+	archetype := archetypes[rand.Intn(len(archetypes))]
+	stage := "HARBINGER"
+	prepDuration := 15 * time.Minute
+	prepEndsAt := time.Now().Add(prepDuration)
+
+	hazardMetaObj := map[string]interface{}{
+		"archetype":     archetype,
+		"hazard_path":   path,
+		"calamity_name": fmt.Sprintf("Kiếp Nạn %s (%s)", strings.ToUpper(path), models.GetTribulationTypeName(tribulationType)),
+	}
+
+	if archetype == "ENVIRONMENTAL" {
+		numCells := 4 + rand.Intn(4)
+		cells := make([]map[string]interface{}, 0, numCells)
+		for i := 0; i < numCells; i++ {
+			cells = append(cells, map[string]interface{}{
+				"x":            rand.Intn(20),
+				"y":            rand.Intn(20),
+				"path":         path,
+				"severity":     1 + rand.Intn(3),
+				"extinguished": false,
+			})
+		}
+		hazardMetaObj["cells"] = cells
+	} else if archetype == "BEAST_SWARM" {
+		hazardMetaObj["wave"] = 1
+		hazardMetaObj["total_waves"] = 3
+	} else {
+		hazardModifier := "FIELD_LIGHTNING"
+		if path == "ice" || path == "water" {
+			hazardModifier = "PERMAFROST"
+		} else if path == "fire" || path == "poison" {
+			hazardModifier = "GU_RESTRICTION"
+		}
+		hazardMetaObj["hazard_modifier"] = hazardModifier
+	}
+
+	hazardMetaBytes, _ := json.Marshal(hazardMetaObj)
+
 	// Insert Tribulation Event
 	eventID := uuid.New()
 	_, err = tx.Exec(`
-		INSERT INTO tribulation_events (id, aperture_id, player_id, tribulation_type, path, status, aperture_hp_before, reward_dao_marks, started_at)
-		VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6, $7, NOW())
-	`, eventID, apertureID, playerID, tribulationType, path, currentHP, rewardMarks)
+		INSERT INTO tribulation_events (id, aperture_id, player_id, tribulation_type, path, status, aperture_hp_before, reward_dao_marks, started_at, archetype, stage, preparation_ends_at, hazard_metadata, spoils_collected)
+		VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6, $7, NOW(), $8, $9, $10, $11, false)
+	`, eventID, apertureID, playerID, tribulationType, path, currentHP, rewardMarks, archetype, stage, prepEndsAt, hazardMetaBytes)
 	if err != nil {
 		return err
 	}

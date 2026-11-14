@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype: Sàn Đấu Dị Tượng & Xung Đột Đạo Ngân Trong Simulator Theo Lượt</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(23, 32, 54, 0.75);
+      --border: rgba(148, 163, 184, 0.2);
+      --accent: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.3);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --danger: #ef4444;
+      --success: #10b981;
+      --lightning: #eab308;
+      --ice: #38bdf8;
+      --fire: #f97316;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; min-height: 100vh; font-size: 13px; line-height: 1.5; }
+    .container { max-width: 1150px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+    
+    header { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; backdrop-filter: blur(12px); }
+    h1 { font-size: 19px; font-weight: 700; color: #fbbf24; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .subtitle { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+    
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 12px; }
+    .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #cbd5e1; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    
+    /* Combat Arena HUD */
+    .arena-box { background: radial-gradient(circle at center, rgba(30, 41, 59, 0.4), rgba(11, 15, 25, 0.95)); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 16px; position: relative; overflow: hidden; }
+    .anomaly-banner { background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); border-radius: 6px; padding: 8px 12px; font-size: 12px; color: #fde047; display: flex; justify-content: space-between; align-items: center; }
+    
+    .combatants-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+    .combatant-panel { background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border); border-radius: 8px; padding: 14px; width: 48%; display: flex; flex-direction: column; gap: 8px; }
+    .combatant-panel.boss { border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 0 12px rgba(239, 68, 68, 0.15); }
+    .combatant-header { display: flex; justify-content: space-between; align-items: center; }
+    
+    .bar-container { background: rgba(15, 23, 42, 0.9); border: 1px solid var(--border); border-radius: 6px; height: 12px; overflow: hidden; position: relative; }
+    .bar-fill { height: 100%; transition: width 0.3s ease; }
+    .bar-hp { background: linear-gradient(90deg, #10b981, #059669); }
+    .bar-boss-hp { background: linear-gradient(90deg, #ef4444, #991b1b); }
+    .bar-mana { background: linear-gradient(90deg, #38bdf8, #0284c7); }
+    
+    .intent-box { background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #fca5a5; display: flex; align-items: center; gap: 6px; font-weight: bold; }
+    .intent-box.charging { animation: pulse 1s infinite; background: rgba(220, 38, 38, 0.35); }
+    
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    .state-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px dashed rgba(148, 163, 184, 0.1); }
+    .state-row:last-child { border-bottom: none; }
+    .state-label { color: var(--text-muted); }
+    .state-val { font-weight: 600; font-family: monospace; color: #f1f5f9; }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    button { background: #1e293b; color: #f1f5f9; border: 1px solid rgba(148, 163, 184, 0.2); padding: 7px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+    button:hover:not(:disabled) { background: #334155; border-color: rgba(245, 158, 11, 0.5); color: #fbbf24; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    button.primary { background: linear-gradient(135deg, #d97706, #b45309); border-color: #f59e0b; color: #fff; }
+    button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    button.danger { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5; }
+    button.danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.3); }
+
+    .log-box { background: rgba(11, 15, 25, 0.95); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; height: 180px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 3px; }
+    .log-entry { color: #94a3b8; }
+    .log-entry.warn { color: #fbbf24; }
+    .log-entry.danger { color: #f87171; }
+    .log-entry.success { color: #34d399; }
+    .log-entry.highlight { color: #38bdf8; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>⚡⚔️ Prototype: Sàn Đấu Dị Tượng & Xung Đột Đạo Ngân Trong Simulator</h1>
+    <div class="subtitle">
+      <strong>Mục tiêu (Ticket 05):</strong> Kiểm chứng nâng cấp trận đánh Boss Thần Ma trong Turn-based Simulator: 
+      Tích hợp <strong>Dị Tượng Môi Trường (Hazard Modifiers)</strong> như Lôi Đình Giáng Phạt, Cấm Pháp Tuyệt Vực; 
+      cơ chế <strong>Đạo Ngân Xung Đột (Dao Mark Conflict)</strong> làm suy giảm sát thương dị hệ; 
+      và chu kỳ <strong>Boss Tụ Lực 2 Lượt (Intent Telegraphing & Stance Break)</strong> thay vì đấm chay nhàm chán.
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- LEFT: COMBAT ARENA HUD -->
+    <div class="card">
+      <div class="card-title">
+        <span>Giao Diện Chiến Đấu Theo Lượt (Turn-based HUD)</span>
+        <span id="txtTurnCounter" style="color: #38bdf8; font-weight: bold;">Lượt 1</span>
+      </div>
+
+      <div class="arena-box">
+        <!-- Environmental Anomaly Banner -->
+        <div class="anomaly-banner" id="anomalyBanner">
+          <span>⚡ <strong>Dị Tượng:</strong> Lôi Đình Chi Địa (Mỗi đầu lượt sét đánh ngẫu nhiên -200 HP & trừ 15 Mana)</span>
+          <span style="font-size: 10px; font-family: monospace; color: #fef08a;">[ANOMALOUS_COMBAT]</span>
+        </div>
+
+        <!-- Combatants -->
+        <div class="combatants-row">
+          <!-- Player Combatant -->
+          <div class="combatant-panel">
+            <div class="combatant-header">
+              <strong style="color: #38bdf8;">Cổ Tiên (Player)</strong>
+              <span id="badgePlayerDao" style="font-size: 10px; color: #fbbf24;">Viêm Đạo (5,000 ĐN)</span>
+            </div>
+            <div>
+              <div class="state-row">
+                <span class="state-label">HP Nhục Thân:</span>
+                <span class="state-val" id="valPlayerHp">3,500 / 3,500</span>
+              </div>
+              <div class="bar-container">
+                <div id="barPlayerHp" class="bar-fill bar-hp" style="width: 100%;"></div>
+              </div>
+            </div>
+            <div>
+              <div class="state-row">
+                <span class="state-label">Tiên Nguyên / Mana:</span>
+                <span class="state-val" id="valPlayerMana" style="color: #38bdf8;">100 / 100</span>
+              </div>
+              <div class="bar-container">
+                <div id="barPlayerMana" class="bar-fill bar-mana" style="width: 100%;"></div>
+              </div>
+            </div>
+            <div class="state-row">
+              <span class="state-label">Tiên Cổ Phòng:</span>
+              <span class="state-val" id="valGuHouseStatus" style="color: #94a3b8;">Không Dung Nhập</span>
+            </div>
+          </div>
+
+          <!-- Boss Combatant -->
+          <div class="combatant-panel boss">
+            <div class="combatant-header">
+              <strong style="color: #f87171;">Thần Ma Kiếp Lôi</strong>
+              <span style="font-size: 10px; color: #eab308;">Lôi Đạo (10,000 ĐN)</span>
+            </div>
+            <div>
+              <div class="state-row">
+                <span class="state-label">Sinh Lực Thần Ma:</span>
+                <span class="state-val" id="valBossHp" style="color: #f87171;">8,000 / 8,000</span>
+              </div>
+              <div class="bar-container">
+                <div id="barBossHp" class="bar-fill bar-boss-hp" style="width: 100%;"></div>
+              </div>
+            </div>
+            <!-- Intent Box -->
+            <div class="intent-box" id="bossIntentBox">
+              <span>🎯 Ý đồ lượt này: Đánh Thường (Gây 300 sát thương)</span>
+            </div>
+            <div class="state-row">
+              <span class="state-label">Ngưỡng Phá Tụ Lực:</span>
+              <span class="state-val" id="valBreakThreshold" style="color: #94a3b8;">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Skill Palette -->
+      <div>
+        <span class="state-label" style="font-weight: bold; color: #cbd5e1;">Bảng Sát Chiêu Cổ Tiên (Palette):</span>
+        <div class="btn-group" style="margin-top: 6px;">
+          <button style="border-color: #f97316; color: #fdba74;" onclick="engine.playerAction('FIRE_SLASH')">🔥 Sát Chiêu Viêm Đạo (Đồng hệ +5,000 ĐN)</button>
+          <button style="border-color: #38bdf8; color: #7dd3fc;" id="btnWaterSlash" onclick="engine.playerAction('WATER_SLASH')">💧 Sát Chiêu Thủy Đạo (Dị hệ bị Đạo Ngân cản)</button>
+          <button style="border-color: #10b981; color: #86efac;" onclick="engine.playerAction('SHIELD')">🛡️ Hộ Thân Kim Giáp (Giảm 50% sát thương lượt này)</button>
+          <button style="border-color: #fbbf24; color: #fde047;" onclick="engine.playerAction('TOGGLE_GU_HOUSE')">🏰 Dung Nhập Tiên Cổ Phòng</button>
+        </div>
+      </div>
+
+      <!-- Quick Action Execution -->
+      <div style="display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 8px;">
+        <button class="primary" onclick="engine.resolveRound()">⏩ Kết Thúc Lượt & Sang Lượt Tiếp Theo</button>
+        <button onclick="engine.reset()">🔄 Đặt Lại Trận Đấu</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: CONFIG & LOGS -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <!-- ANOMALY & DAO CONFLICT CONFIG -->
+      <div class="card">
+        <div class="card-title">
+          <span>Cấu Hình Cơ Chế Dị Tượng & Đạo Ngân</span>
+          <span style="font-size: 11px; color: var(--text-muted);">Thử nghiệm biến thiên</span>
+        </div>
+
+        <div>
+          <span class="state-label" style="font-weight: bold; color: #cbd5e1;">1. Chọn Dị Tượng Sàn Đấu (Battlefield Anomaly):</span>
+          <div class="btn-group">
+            <button onclick="engine.setAnomaly('FIELD_LIGHTNING')">⚡ Lôi Đình Chi Địa (Sét đánh mỗi turn)</button>
+            <button onclick="engine.setAnomaly('PERMAFROST')">❄️ Vạn Dặm Băng Phong (Hao 1.5x Mana)</button>
+            <button onclick="engine.setAnomaly('GU_RESTRICTION')">🚫 Cấm Pháp Tuyệt Vực (Khóa Thủy Đạo)</button>
+            <button onclick="engine.setAnomaly('NONE')">⚪ Bình Thường</button>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--border); padding-top: 8px;">
+          <span class="state-label" style="font-weight: bold; color: #cbd5e1;">2. Thể Chất & Đạo Ngân Cổ Tiên:</span>
+          <div class="btn-group">
+            <button id="btnToggleSovereign" onclick="engine.toggleSovereignBody()">💎 Thể Chất: Phàm Thể (Có Xung Đột ĐN)</button>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            *Khi chuyển sang <strong>Chí Tôn Tiên Thể</strong> (Sovereign Body), Cổ Tiên miễn nhiễm 100% xung đột Đạo Ngân, chiêu thức dị hệ không bị suy giảm sát thương!
+          </div>
+        </div>
+      </div>
+
+      <!-- LOG BOX -->
+      <div class="card">
+        <div class="card-title">
+          <span>Diễn Biến Chiến Đấu Simulator (Battle Log)</span>
+          <button style="padding: 2px 6px; font-size: 10px;" onclick="engine.clearLogs()">Xóa</button>
+        </div>
+        <div class="log-box" id="logBox"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * AnomalousCombatSimulatorEngine: Turn-based simulator with hazard modifiers, dao conflict, and boss intents
+ */
+class AnomalousCombatSimulatorEngine {
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    this.turn = 1;
+    this.playerHp = 3500;
+    this.maxPlayerHp = 3500;
+    this.playerMana = 100;
+    this.maxPlayerMana = 100;
+    this.playerDaoMarks = 5000; // Fire
+    this.playerPrimaryPath = "fire";
+    this.hasSovereignBody = false;
+    this.guHouseActive = false;
+    this.shieldActive = false;
+
+    // Boss
+    this.bossHp = 8000;
+    this.maxBossHp = 8000;
+    this.bossDaoMarks = 10000; // Lightning
+    this.bossPath = "lightning";
+    this.bossIntent = "NORMAL_ATTACK"; // 'NORMAL_ATTACK' | 'CHARGING_LIGHTNING' | 'RELEASE_LIGHTNING' | 'SIPHON_APERTURE'
+    this.bossCharging = false;
+    this.breakThreshold = 0; // Damage needed to break charge
+    this.damageDoneThisTurn = 0;
+
+    // Anomaly
+    this.anomaly = "FIELD_LIGHTNING"; // 'FIELD_LIGHTNING' | 'PERMAFROST' | 'GU_RESTRICTION' | 'NONE'
+
+    this.logs = [];
+    this.log("Bắt đầu trận chiến Dị Tượng: Cổ Tiên vs Thần Ma Kiếp Lôi (Rank 7).", "highlight");
+    this.updateBossIntent();
+  }
+
+  log(msg, type = "normal") {
+    this.logs.unshift({ msg, type, time: new Date().toLocaleTimeString() });
+  }
+
+  clearLogs() {
+    this.logs = [];
+    render();
+  }
+
+  setAnomaly(type) {
+    this.anomaly = type;
+    this.log(`Thay đổi dị tượng sàn đấu sang: ${type}`, "warn");
+    render();
+  }
+
+  toggleSovereignBody() {
+    this.hasSovereignBody = !this.hasSovereignBody;
+    this.log(this.hasSovereignBody ? "✨ Kích hoạt Chí Tôn Tiên Thể: Miễn nhiễm hoàn toàn xung đột Đạo Ngân!" : "Chuyển về Phàm Thể Cổ Tiên: Chịu ma sát xung đột Đạo Ngân.", "highlight");
+    render();
+  }
+
+  updateBossIntent() {
+    if (this.bossCharging) {
+      this.bossIntent = "RELEASE_LIGHTNING";
+    } else if (this.turn % 3 === 2) {
+      this.bossIntent = "CHARGING_LIGHTNING";
+      this.bossCharging = true;
+      this.breakThreshold = 1500;
+      this.damageDoneThisTurn = 0;
+      this.log("⚠️ CẢNH BÁO: Thần Ma Kiếp Lôi đang tụ lực 'Cửu Thiên Diệt Thế Lôi' (Phóng ở lượt sau, 1200 sát thương)! Cần gây 1,500 sát thương để Phá Tụ Lực!", "danger");
+    } else if (this.turn % 4 === 0) {
+      this.bossIntent = "SIPHON_APERTURE";
+    } else {
+      this.bossIntent = "NORMAL_ATTACK";
+    }
+  }
+
+  playerAction(act) {
+    let manaCost = 20;
+    if (this.anomaly === "PERMAFROST") manaCost = 30; // 1.5x mana
+
+    if (act === 'TOGGLE_GU_HOUSE') {
+      this.guHouseActive = !this.guHouseActive;
+      this.log(this.guHouseActive ? "🏰 Cổ Tiên dung nhập vào Tiên Cổ Phòng: Form HP kích hoạt hấp thụ 100% sát thương!" : "Cổ Tiên chủ động thoát Tiên Cổ Phòng.", "highlight");
+      render();
+      return;
+    }
+
+    if (act === 'SHIELD') {
+      if (this.playerMana < manaCost) {
+        this.log("Không đủ Tiên Nguyên để bật Hộ Thân Kim Giáp!", "danger");
+        return;
+      }
+      this.playerMana -= manaCost;
+      this.shieldActive = true;
+      this.log("🛡️ Cổ Tiên kích hoạt Hộ Thân Kim Giáp: Giảm 50% sát thương nhận vào trong lượt này!", "success");
+      render();
+      return;
+    }
+
+    if (act === 'WATER_SLASH' && this.anomaly === "GU_RESTRICTION") {
+      this.log("🚫 Cấm Pháp Tuyệt Vực đang phong ấn Thủy Đạo! Không thể thi triển chiêu thức này!", "danger");
+      return;
+    }
+
+    if (this.playerMana < manaCost) {
+      this.log("Không đủ Tiên Nguyên để thi triển Sát Chiêu!", "danger");
+      return;
+    }
+    this.playerMana -= manaCost;
+
+    let baseDamage = 800;
+    let actualDamage = baseDamage;
+
+    if (act === 'FIRE_SLASH') {
+      // Primary path: boosted by player dao marks (+25%)
+      actualDamage = Math.round(baseDamage * (1 + (this.playerDaoMarks / 1000) * 0.05));
+      this.log(`🔥 Thi triển Sát Chiêu Viêm Đạo: Đạo Ngân bản mệnh (+5,000 ĐN) cộng hưởng tăng uy lực ➔ Gây ${actualDamage} sát thương!`, "success");
+    } else if (act === 'WATER_SLASH') {
+      // Dị hệ: subjected to Dao Conflict unless Sovereign body
+      if (this.hasSovereignBody) {
+        actualDamage = baseDamage;
+        this.log(`💧 Thi triển Sát Chiêu Thủy Đạo: Chí Tôn Tiên Thể miễn nhiễm xung đột ➔ Gây trọn vẹn ${actualDamage} sát thương!`, "highlight");
+      } else {
+        // Reduced by 60% due to conflict with player's Fire dao marks & Boss Lightning dao marks
+        const conflictFactor = 1.0 / (1.0 + 0.00015 * (this.playerDaoMarks + this.bossDaoMarks));
+        actualDamage = Math.round(baseDamage * conflictFactor);
+        this.log(`💧 Thi triển Sát Chiêu Thủy Đạo: Xung đột Đạo Ngân (Viêm vs Thủy vs Lôi) suy giảm -${Math.round((1 - conflictFactor)*100)}% ➔ Chỉ gây ${actualDamage} sát thương bọt bèo!`, "warn");
+      }
+    }
+
+    this.bossHp = Math.max(0, this.bossHp - actualDamage);
+    this.damageDoneThisTurn += actualDamage;
+
+    // Check Stance Break if charging
+    if (this.bossCharging && this.damageDoneThisTurn >= this.breakThreshold) {
+      this.bossCharging = false;
+      this.bossIntent = "STUNNED";
+      this.log("💥 [PHÁ TỤ LỰC THÀNH CÔNG]: Dồn sát thương vượt ngưỡng 1,500! Thần Ma Kiếp Lôi bị choáng váng, đòn tụ lực bị hủy bỏ!", "highlight");
+    }
+
+    render();
+  }
+
+  resolveRound() {
+    this.log(`--- [KẾT THÚC LƯỢT ${this.turn}] ---`, "highlight");
+
+    // 1. Environmental Hazard Trigger
+    if (this.anomaly === "FIELD_LIGHTNING") {
+      const strikeDmg = 200;
+      this.playerHp = Math.max(0, this.playerHp - strikeDmg);
+      this.playerMana = Math.max(0, this.playerMana - 15);
+      this.log(`⚡ [DỊ TƯỢNG]: Sàn đấu giáng sấm sét bất ngờ: Trừ -${strikeDmg} HP nhục thân và -15 Mana Cổ Tiên!`, "danger");
+    }
+
+    // 2. Boss Action Execution
+    if (this.bossHp > 0) {
+      if (this.bossIntent === "STUNNED") {
+        this.log("Thần Ma đang bị choáng, không thể hành động trong lượt này!", "success");
+        this.bossIntent = "NORMAL_ATTACK";
+      } else if (this.bossIntent === "RELEASE_LIGHTNING") {
+        let bossDmg = 1200;
+        if (this.shieldActive) bossDmg = Math.round(bossDmg * 0.5);
+        if (this.guHouseActive) {
+          this.log(`🏰 Tiên Cổ Phòng hấp thụ trọn vẹn 1,200 sát thương 'Cửu Thiên Diệt Thế Lôi'! Nhục thân vô sự!`, "highlight");
+        } else {
+          this.playerHp = Math.max(0, this.playerHp - bossDmg);
+          this.log(`⚡ Thần Ma xả đòn 'Cửu Thiên Diệt Thế Lôi' tàn bạo: Gây -${bossDmg} sát thương sấm phạt!`, "danger");
+        }
+        this.bossCharging = false;
+      } else if (this.bossIntent === "SIPHON_APERTURE") {
+        this.bossHp = Math.min(this.maxBossHp, this.bossHp + 600);
+        this.log("🩸 Thần Ma hấp thu nguyên khí vách khiếu: Hồi phục +600 HP!", "warn");
+      } else {
+        // Normal attack
+        let bossDmg = 350;
+        if (this.shieldActive) bossDmg = Math.round(bossDmg * 0.5);
+        if (this.guHouseActive) {
+          this.log(`🏰 Tiên Cổ Phòng chắn đỡ -${bossDmg} sát thương đánh thường của Boss!`, "success");
+        } else {
+          this.playerHp = Math.max(0, this.playerHp - bossDmg);
+          this.log(`Thần Ma đánh thường cào xé nhục thân: -${bossDmg} HP.`, "danger");
+        }
+      }
+    }
+
+    // Mana natural regen
+    this.playerMana = Math.min(this.maxPlayerMana, this.playerMana + 15);
+    this.shieldActive = false;
+
+    // Victory or Defeat
+    if (this.bossHp <= 0) {
+      this.log("🎉 [CHIẾN THẮNG]: Đã trảm sát Thần Ma Kiếp Lôi! Hoàn tất độ kiếp theo lượt!", "highlight");
+      render();
+      return;
+    }
+    if (this.playerHp <= 0) {
+      this.log("💀 [THẤT BẠI]: Cổ Tiên tử trận dưới tay Thần Ma! Vượt kiếp thất bại.", "danger");
+      render();
+      return;
+    }
+
+    // Next turn
+    this.turn++;
+    this.updateBossIntent();
+    render();
+  }
+}
+
+const engine = new AnomalousCombatSimulatorEngine();
+
+function render() {
+  document.getElementById("txtTurnCounter").textContent = `Lượt ${engine.turn}`;
+  document.getElementById("valPlayerHp").textContent = `${engine.playerHp} / ${engine.maxPlayerHp}`;
+  document.getElementById("barPlayerHp").style.width = `${(engine.playerHp / engine.maxPlayerHp) * 100}%`;
+  document.getElementById("valPlayerMana").textContent = `${engine.playerMana} / ${engine.maxPlayerMana}`;
+  document.getElementById("barPlayerMana").style.width = `${(engine.playerMana / engine.maxPlayerMana) * 100}%`;
+  document.getElementById("valGuHouseStatus").textContent = engine.guHouseActive ? "Đang Dung Nhập (Khiên Chắn 100%)" : "Không Dung Nhập";
+  document.getElementById("valGuHouseStatus").style.color = engine.guHouseActive ? "#fbbf24" : "#94a3b8";
+
+  document.getElementById("valBossHp").textContent = `${engine.bossHp} / ${engine.maxBossHp}`;
+  document.getElementById("barBossHp").style.width = `${(engine.bossHp / engine.maxBossHp) * 100}%`;
+
+  // Anomaly banner
+  const banner = document.getElementById("anomalyBanner");
+  if (engine.anomaly === "FIELD_LIGHTNING") {
+    banner.innerHTML = `<span>⚡ <strong>Dị Tượng:</strong> Lôi Đình Chi Địa (Mỗi đầu lượt sét đánh ngẫu nhiên -200 HP & trừ 15 Mana)</span>`;
+  } else if (engine.anomaly === "PERMAFROST") {
+    banner.innerHTML = `<span>❄️ <strong>Dị Tượng:</strong> Vạn Dặm Băng Phong (Hàn khí đóng băng, tiêu hao Tiên Nguyên x1.5)</span>`;
+  } else if (engine.anomaly === "GU_RESTRICTION") {
+    banner.innerHTML = `<span>🚫 <strong>Dị Tượng:</strong> Cấm Pháp Tuyệt Vực (Khóa hoàn toàn các Cổ Trùng Thủy Đạo)</span>`;
+  } else {
+    banner.innerHTML = `<span>⚪ Sàn Đấu Bình Thường (Không có dị tượng môi trường)</span>`;
+  }
+
+  // Button restrictions
+  document.getElementById("btnWaterSlash").disabled = engine.anomaly === "GU_RESTRICTION";
+
+  // Boss Intent Box
+  const intentBox = document.getElementById("bossIntentBox");
+  if (engine.bossIntent === "CHARGING_LIGHTNING") {
+    intentBox.className = "intent-box charging";
+    intentBox.innerHTML = `<span>⚡ ĐANG TỤ LỰC: 'Cửu Thiên Diệt Thế Lôi' (Phóng ở lượt sau, 1200 ST)!</span>`;
+    document.getElementById("valBreakThreshold").textContent = `${engine.damageDoneThisTurn} / ${engine.breakThreshold} ST`;
+  } else if (engine.bossIntent === "RELEASE_LIGHTNING") {
+    intentBox.className = "intent-box charging";
+    intentBox.innerHTML = `<span>💥 CHUẨN BỊ XẢ ĐÒN DIỆT THẾ LÔI (1200 ST)!</span>`;
+    document.getElementById("valBreakThreshold").textContent = "--";
+  } else if (engine.bossIntent === "STUNNED") {
+    intentBox.className = "intent-box";
+    intentBox.innerHTML = `<span>💫 ĐANG BỊ CHOÁNG (Bị phá tụ lực)</span>`;
+    document.getElementById("valBreakThreshold").textContent = "--";
+  } else if (engine.bossIntent === "SIPHON_APERTURE") {
+    intentBox.className = "intent-box";
+    intentBox.innerHTML = `<span>🩸 Hút Nguyên Khí Khiếu Vách (Hồi 600 HP)</span>`;
+    document.getElementById("valBreakThreshold").textContent = "--";
+  } else {
+    intentBox.className = "intent-box";
+    intentBox.innerHTML = `<span>🎯 Đánh Thường (Gây 350 sát thương)</span>`;
+    document.getElementById("valBreakThreshold").textContent = "--";
+  }
+
+  // Sovereign button
+  const sovBtn = document.getElementById("btnToggleSovereign");
+  sovBtn.textContent = engine.hasSovereignBody ? "✨ Thể Chất: Chí Tôn Tiên Thể (Miễn Nhiễm Xung Đột)" : "💎 Thể Chất: Phàm Thể (Có Xung Đột ĐN)";
+  sovBtn.style.borderColor = engine.hasSovereignBody ? "#38bdf8" : "#94a3b8";
+
+  // Logs
+  const logBox = document.getElementById("logBox");
+  logBox.innerHTML = engine.logs.map(l => `<div class="log-entry ${l.type}">[${l.time}] ${l.msg}</div>`).join("");
+}
+
+// Initial render
+render();
+</script>
+
+</body>
+</html>

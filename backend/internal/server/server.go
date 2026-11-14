@@ -918,6 +918,8 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			aperture.POST("/npcs/:npc_id/gu/equip", handlers.EquipNPCGu)
 			aperture.DELETE("/npcs/:npc_id/gu/:gu_id", handlers.UnequipNPCGu)
 			aperture.DELETE("/npcs/:npc_id", handlers.DismissNPC)
+			aperture.POST("/soil/cleanse", handlers.CleanseSoilContamination)
+			aperture.POST("/soil/pivot", handlers.PivotSoilContamination)
 		}
 
 		// Dao Marks — group: 20/min, per player: 15/min
@@ -939,6 +941,12 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			tribulations.GET("/active", handlers.GetActiveTribulation)
 			tribulations.POST("/:eventId/engage", handlers.EngageTribulation)
 			tribulations.POST("/:eventId/resolve", handlers.ResolveTribulation)
+			tribulations.POST("/:eventId/start", handlers.AdvanceTribulationStage)
+			tribulations.POST("/:eventId/mitigate-hazard", handlers.MitigateEnvironmentalHazard)
+			tribulations.POST("/:eventId/capture-beast", handlers.CaptureBeast)
+			tribulations.POST("/:eventId/claim-spoil", handlers.ClaimTribulationSpoil)
+			tribulations.POST("/:eventId/claim-all-spoils", handlers.ClaimAllTribulationSpoils)
+			tribulations.POST("/:eventId/finalize-aftermath", handlers.FinalizeTribulationAftermath)
 		}
 
 		// Arena — group: 40/min, per player: 25/min

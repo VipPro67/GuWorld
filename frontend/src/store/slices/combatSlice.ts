@@ -188,7 +188,11 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       if (get().player) await get().fetchPlayerStatus(get().player!.id, true);
       await get().fetchAperture(true);
       await get().fetchDaoMarks(true);
-      set({ activeTribulation: null });
+      if (data.stage === "AFTERMATH") {
+        await get().fetchActiveTribulation(true);
+      } else {
+        set({ activeTribulation: null });
+      }
       return true;
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Kết toán tai kiếp thất bại.";

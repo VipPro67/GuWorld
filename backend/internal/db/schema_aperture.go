@@ -450,12 +450,69 @@ func schemaAperture() error {
 		aperture_hp_after DOUBLE PRECISION,
 		reward_dao_marks BIGINT NOT NULL DEFAULT 0,
 		started_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-		ended_at TIMESTAMP WITH TIME ZONE
+		ended_at TIMESTAMP WITH TIME ZONE,
+		archetype VARCHAR(30) NOT NULL DEFAULT 'ANOMALOUS_COMBAT',
+		stage VARCHAR(30) NOT NULL DEFAULT 'ORDEAL_ACTIVE',
+		preparation_ends_at TIMESTAMP WITH TIME ZONE,
+		hazard_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+		spoils_collected BOOLEAN NOT NULL DEFAULT false
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("tribulation_events_multiform_compat", `
+	ALTER TABLE tribulation_events ADD COLUMN IF NOT EXISTS archetype VARCHAR(30) NOT NULL DEFAULT 'ANOMALOUS_COMBAT';
+	ALTER TABLE tribulation_events ADD COLUMN IF NOT EXISTS stage VARCHAR(30) NOT NULL DEFAULT 'ORDEAL_ACTIVE';
+	ALTER TABLE tribulation_events ADD COLUMN IF NOT EXISTS preparation_ends_at TIMESTAMP WITH TIME ZONE;
+	ALTER TABLE tribulation_events ADD COLUMN IF NOT EXISTS hazard_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+	ALTER TABLE tribulation_events ADD COLUMN IF NOT EXISTS spoils_collected BOOLEAN NOT NULL DEFAULT false;
+	`); err != nil {
 		return err
 	}
 	if err := execSchema("tribulation_events_player_status_idx", `
 	CREATE INDEX IF NOT EXISTS idx_tribulation_events_player_status ON tribulation_events (player_id, status);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("aperture_tribulation_spoils", `
+	CREATE TABLE IF NOT EXISTS aperture_tribulation_spoils (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		event_id UUID NOT NULL REFERENCES tribulation_events(id) ON DELETE CASCADE,
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		item_id VARCHAR(100) NOT NULL,
+		item_name VARCHAR(100) NOT NULL,
+		quantity INTEGER NOT NULL DEFAULT 1,
+		x INTEGER NOT NULL,
+		y INTEGER NOT NULL,
+		claimed BOOLEAN NOT NULL DEFAULT false,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_tribulation_spoils_event_idx", `
+	CREATE INDEX IF NOT EXISTS idx_tribulation_spoils_event ON aperture_tribulation_spoils (event_id, claimed);
+	CREATE INDEX IF NOT EXISTS idx_tribulation_spoils_aperture ON aperture_tribulation_spoils (aperture_id, claimed);
+	`); err != nil {
+		return err
+	}
+
+	if err := execSchema("aperture_soil_contaminations", `
+	CREATE TABLE IF NOT EXISTS aperture_soil_contaminations (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		x INTEGER NOT NULL,
+		y INTEGER NOT NULL,
+		contam_type VARCHAR(30) NOT NULL,
+		path VARCHAR(50) NOT NULL,
+		severity INTEGER NOT NULL DEFAULT 1,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		CONSTRAINT uq_aperture_soil_cell UNIQUE (aperture_id, x, y)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_soil_contaminations_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_soil_aperture ON aperture_soil_contaminations (aperture_id);
+	`); err != nil {
 		return err
 	}
 

@@ -281,6 +281,14 @@ export const ImmortalApertureView: React.FC = () => {
     manageApertureNodesBatch,
     fetchActiveTribulation,
     engageTribulation,
+    startTribulationStage,
+    mitigateHazard,
+    captureBeast,
+    claimTribulationSpoil,
+    claimAllTribulationSpoils,
+    cleanseSoil,
+    pivotSoil,
+    finalizeTribulationAftermath,
     useItems: consumeItems,
     setView,
     showConfirm,
@@ -1502,7 +1510,20 @@ return (
                       const starvingCarn = isCarn && hCount === 0;
                       const isEcosystemStressed = overgrazed || starvingHerb || starvingCarn;
 
-                      if (enemy) {
+                      const spoilHere = activeTribulation?.spoils?.find(s => s.x === x && s.y === y && !s.claimed);
+                      const contamHere = activeTribulation?.contaminations?.find(c => c.x === x && c.y === y);
+                      const hazardCellHere = activeTribulation?.event?.hazard_metadata?.cells?.find(c => c.x === x && c.y === y && !c.extinguished);
+
+                      if (spoilHere) {
+                        cellIcon = "✨";
+                        cellColor = "bg-amber-950/70 border-amber-400 animate-pulse cursor-pointer shadow-[0_0_10px_rgba(245,158,11,0.6)]";
+                      } else if (contamHere) {
+                        cellIcon = contamHere.contam_type === "fire" ? "🌋" : contamHere.contam_type === "ice" ? "❄️" : "☠️";
+                        cellColor = "bg-purple-950/70 border-purple-500/50 cursor-pointer shadow-[0_0_8px_rgba(168,85,247,0.4)]";
+                      } else if (hazardCellHere) {
+                        cellIcon = "🔥";
+                        cellColor = "bg-red-950/70 border-red-500/60 animate-pulse cursor-pointer shadow-[0_0_8px_rgba(239,68,68,0.5)]";
+                      } else if (enemy) {
                         cellIcon = "💀";
                         cellColor = "bg-rose-950/60 border-rose-500/40 animate-pulse cursor-pointer shadow-[0_0_8px_rgba(239,68,68,0.2)]";
                       } else if (!node && hasPoint && pointsHere) {
@@ -1618,110 +1639,258 @@ return (
                       Chi Tiết Tai Kiếp
                     </h3>
 
+                    {/* Stage & Calamity general info */}
                     <div className="p-4 bg-rose-950/20 border border-rose-500/20 rounded-xl space-y-2 text-xs">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-rose-300 text-sm">
                           {getRankName(rank)} - {getTribulationTypeName(activeTribulation.event.tribulation_type)}
                         </span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          (activeTribulation.event.stage || "ORDEAL_ACTIVE") === "HARBINGER"
+                            ? "bg-amber-900/80 text-amber-300 border border-amber-500/40"
+                            : (activeTribulation.event.stage || "ORDEAL_ACTIVE") === "AFTERMATH"
+                            ? "bg-emerald-900/80 text-emerald-300 border border-emerald-500/40"
+                            : "bg-rose-900/80 text-rose-300 border border-rose-500/40"
+                        }`}>
+                          {activeTribulation.event.stage || "ORDEAL_ACTIVE"}
+                        </span>
                       </div>
-                      <div className="text-sm font-bold text-slate-200 uppercase tracking-wide">
-                        {activeTribulation.event.path.toUpperCase()} PATH
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-bold text-slate-200 uppercase tracking-wide">
+                          {activeTribulation.event.path.toUpperCase()} PATH · {activeTribulation.event.archetype || "ANOMALOUS_COMBAT"}
+                        </span>
                       </div>
                       <div className="text-yellow-400 font-extrabold flex items-center gap-1 pt-1 border-t border-rose-950/50">
                         Phần thưởng: +{activeTribulation.event.reward_dao_marks} Đạo Ngân
                       </div>
                     </div>
 
-                    {/* Enemies summary + engage */}
-                    <div className="space-y-3">
-                      <div className="text-xs font-bold text-slate-300 flex justify-between items-center">
-                        <span>Quái Tai Kiếp</span>
-                        <span className="text-slate-500 font-normal">
-                          Đã diệt: {activeTribulation.defeated_enemies ?? Math.max(0, (activeTribulation.total_enemies ?? activeTribulation.enemies.length) - activeTribulation.enemies.length)}
-                          /{activeTribulation.total_enemies ?? activeTribulation.enemies.length} · Còn lại: {activeTribulation.remaining_enemies ?? activeTribulation.enemies.length} quái
-                        </span>
-                      </div>
-
-                      <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
-                        {activeTribulation.enemies.map((enemy) => (
-                          <div
-                            key={enemy.id}
-                            className="p-2 rounded-lg text-xs flex justify-between items-center bg-slate-900 border border-transparent text-slate-400"
-                          >
-                            <div>
-                              <div className="font-bold flex items-center gap-1.5">
-                                <span>{enemy.is_boss ? "👑" : "👾"}</span>
-                                <span>{enemy.name}</span>
-                                {enemy.rank && (
-                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-500/30 text-rose-300 font-semibold">
-                                    {getRankName(enemy.rank)}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
-                                <span>Tọa độ: ({enemy.x}, {enemy.y})</span>
-                                <span className="text-rose-400 font-semibold">⚔️ Công: <Num value={enemy.attack} /></span>
-                                <span className="text-emerald-400 font-semibold">🛡️ Thủ: <Num value={enemy.defense} /></span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-bold text-rose-400"><Num value={enemy.hp} /> HP</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/30 text-[11px] text-amber-200/90 leading-relaxed space-y-1.5">
-                        <p className="font-bold text-amber-300 flex items-center gap-1.5">
-                          <Sparkles className="w-4 h-4 text-amber-400" />
-                          Chiến Đấu Tai Kiếp Theo Lượt:
+                    {/* STAGE 1: HARBINGER */}
+                    {(activeTribulation.event.stage === "HARBINGER") && (
+                      <div className="space-y-3 p-3.5 bg-amber-950/30 border border-amber-500/40 rounded-xl text-xs">
+                        <div className="flex items-center gap-2 font-bold text-amber-300">
+                          <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+                          <span>⚡ Điềm Báo Tai Kiếp Đang Tụ Nguyên Khí</span>
+                        </div>
+                        <p className="text-slate-300 text-[11px] leading-relaxed">
+                          Thiên Đạo đang cân bằng nguyên khí giáng phạt. Cổ Tiên có thời gian gia cố trận pháp phòng thủ, bố trí tài nguyên và điều chỉnh sát chiêu trước khi kiếp nạn chính thức bùng nổ.
                         </p>
-                        <p>
-                          Khi xuất trận, hệ thống tạo trận chiến theo lượt từ đội hình và hiệu ứng hiện có. Chọn hành động trong giao diện chiến đấu để đối đầu với các Boss Kiếp Nạn; kết quả được ghi nhận khi trận chiến kết thúc.
-                        </p>
-                      </div>
-
-                      {/* Co-op Tribulation Assistance Details */}
-                      {guests.length > 0 && (() => {
-                        const assistants = guests.filter((g) => g.role === "ASSISTANT");
-                        let coopMult = 1.0;
-                        for (const g of assistants) {
-                          const deltaR = Math.max(0, (g.rank || 1) - rank);
-                          coopMult += 0.4 + 0.3 * deltaR;
-                        }
-
-                        return (
-                          <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/40 text-[11px] text-purple-200 leading-relaxed space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="font-bold text-purple-300 flex items-center gap-1.5">
-                                <Users className="w-4 h-4 text-purple-400" />
-                                Trợ Trận Độ Kiếp ({assistants.length} Hộ Pháp)
-                              </span>
-                              <span className="px-2 py-0.5 rounded bg-purple-900/60 border border-purple-400/30 text-amber-300 font-bold font-mono text-[10px]">
-                                Kiếp Lực ×{coopMult.toFixed(1)}
-                              </span>
-                            </div>
-                            <p className="text-slate-300">
-                              Hộ pháp hỗ trợ chống đỡ tai kiếp. Toàn bộ <strong>100% Đạo Ngân</strong> ({activeTribulation.event.reward_dao_marks} Đạo Ngân) thuộc về Chủ Khiếu; Hộ pháp nhận Tiên Nguyên Thạch theo thù lao thỏa thuận.
-                            </p>
-                            <div className="p-2 rounded-lg bg-black/40 border border-purple-900/50 text-[10px] text-amber-300/90">
-                              ⚠️ <strong>Thiên Đạo Thích Ứng & Biến Dị:</strong> Thiên Đạo nhận biết ngoại nhân can thiệp, kiếp nạn sẽ gia tăng quái dị biến và sản sinh lưu phái tương khắc với Hộ Pháp!
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button
-                          onClick={handleStartTribulation}
+                          onClick={() => startTribulationStage(activeTribulation.event.id)}
                           disabled={actionLoading}
-                          className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-rose-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg ring-1 ring-amber-400/40"
+                          className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
                         >
                           <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                          Xuất trận nghênh chiến tai kiếp (Turn-based)
+                          ⚡ Xuất Trận Nghênh Kiếp Sớm (Vào Tác Chiến Ngay)
                         </button>
                       </div>
-                    </div>
+                    )}
+
+                    {/* STAGE 2: ORDEAL_ACTIVE */}
+                    {((!activeTribulation.event.stage || activeTribulation.event.stage === "ORDEAL_ACTIVE") && (
+                      <div className="space-y-3">
+                        {/* Environmental Hazards */}
+                        {activeTribulation.event.archetype === "ENVIRONMENTAL" && (
+                          <div className="space-y-2 p-3 bg-cyan-950/20 border border-cyan-500/30 rounded-xl">
+                            <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              Vùng Hiểm Họa Thiên Tai Trên Bản Đồ:
+                            </span>
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                              {activeTribulation.event.hazard_metadata?.cells?.map((cell, idx) => (
+                                <div key={idx} className="p-2 rounded-lg text-xs flex justify-between items-center bg-slate-900 border border-slate-800">
+                                  <div>
+                                    <span className="font-bold text-rose-300 flex items-center gap-1.5">
+                                      <span>{cell.extinguished ? "✅" : "🔥"}</span>
+                                      <span>Tọa độ ({cell.x}, {cell.y}) · Cấp {cell.severity}</span>
+                                    </span>
+                                    <span className="text-[10px] text-slate-500">{cell.extinguished ? "Đã dập tắt" : "Đang thiêu đốt vách khiếu"}</span>
+                                  </div>
+                                  {!cell.extinguished && (
+                                    <button
+                                      onClick={() => mitigateHazard(activeTribulation.event.id, cell.x, cell.y)}
+                                      disabled={actionLoading}
+                                      className="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] rounded-lg transition"
+                                    >
+                                      Dập Tắt (Sát Chiêu)
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Enemies summary + engage */}
+                        <div className="text-xs font-bold text-slate-300 flex justify-between items-center">
+                          <span>Quái Tai Kiếp</span>
+                          <span className="text-slate-500 font-normal">
+                            Đã diệt: {activeTribulation.defeated_enemies ?? Math.max(0, (activeTribulation.total_enemies ?? activeTribulation.enemies.length) - activeTribulation.enemies.length)}
+                            /{activeTribulation.total_enemies ?? activeTribulation.enemies.length} · Còn lại: {activeTribulation.remaining_enemies ?? activeTribulation.enemies.length} quái
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
+                          {activeTribulation.enemies.map((enemy) => (
+                            <div
+                              key={enemy.id}
+                              className="p-2 rounded-lg text-xs flex justify-between items-center bg-slate-900 border border-transparent text-slate-400"
+                            >
+                              <div>
+                                <div className="font-bold flex items-center gap-1.5">
+                                  <span>{enemy.is_boss ? "👑" : "👾"}</span>
+                                  <span>{enemy.name}</span>
+                                  {enemy.rank && (
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-500/30 text-rose-300 font-semibold">
+                                      {getRankName(enemy.rank)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                                  <span>Tọa độ: ({enemy.x}, {enemy.y})</span>
+                                  <span className="text-rose-400 font-semibold">⚔️ Công: <Num value={enemy.attack} /></span>
+                                  <span className="text-emerald-400 font-semibold">🛡️ Thủ: <Num value={enemy.defense} /></span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="font-bold text-rose-400"><Num value={enemy.hp} /> HP</div>
+                                {enemy.hp <= enemy.max_hp * 0.3 && !enemy.is_dead && (
+                                  <button
+                                    onClick={() => captureBeast(activeTribulation.event.id, enemy.id)}
+                                    disabled={actionLoading}
+                                    className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] rounded transition shadow"
+                                  >
+                                    🪤 Thu Phục
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Co-op Tribulation Assistance Details */}
+                        {guests.length > 0 && (() => {
+                          const assistants = guests.filter((g) => g.role === "ASSISTANT");
+                          let coopMult = 1.0;
+                          for (const g of assistants) {
+                            const deltaR = Math.max(0, (g.rank || 1) - rank);
+                            coopMult += 0.4 + 0.3 * deltaR;
+                          }
+
+                          return (
+                            <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/40 text-[11px] text-purple-200 leading-relaxed space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold text-purple-300 flex items-center gap-1.5">
+                                  <Users className="w-4 h-4 text-purple-400" />
+                                  Trợ Trận Độ Kiếp ({assistants.length} Hộ Pháp)
+                                </span>
+                                <span className="px-2 py-0.5 rounded bg-purple-900/60 border border-purple-400/30 text-amber-300 font-bold font-mono text-[10px]">
+                                  Kiếp Lực ×{coopMult.toFixed(1)}
+                                </span>
+                              </div>
+                              <p className="text-slate-300">
+                                Hộ pháp hỗ trợ chống đỡ tai kiếp. Toàn bộ <strong>100% Đạo Ngân</strong> ({activeTribulation.event.reward_dao_marks} Đạo Ngân) thuộc về Chủ Khiếu; Hộ pháp nhận Tiên Nguyên Thạch theo thù lao thỏa thuận.
+                              </p>
+                            </div>
+                          );
+                        })()}
+
+                        <div className="grid grid-cols-1 gap-3">
+                          <button
+                            onClick={handleStartTribulation}
+                            disabled={actionLoading}
+                            className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-rose-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg ring-1 ring-amber-400/40"
+                          >
+                            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                            Xuất trận nghênh chiến tai kiếp (Turn-based)
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* STAGE 3: AFTERMATH */}
+                    {(activeTribulation.event.stage === "AFTERMATH") && (
+                      <div className="space-y-4 p-3.5 bg-emerald-950/20 border border-emerald-500/40 rounded-xl text-xs">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-emerald-400" />
+                            🌾 Kết Toán Dư Ba & Thu Hoạch Kiếp Tài
+                          </span>
+                          <button
+                            onClick={() => claimAllTribulationSpoils(activeTribulation.event.id)}
+                            disabled={actionLoading || !activeTribulation.spoils?.some(s => !s.claimed)}
+                            className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white font-bold text-[10px] rounded-lg transition"
+                          >
+                            ⚡ Dị Nhân Gom Tất Cả
+                          </button>
+                        </div>
+
+                        {/* Spoils Drops */}
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                          {activeTribulation.spoils?.map((spoil) => (
+                            <div key={spoil.id} className="p-2 rounded-lg text-xs flex justify-between items-center bg-slate-900 border border-amber-900/40">
+                              <div>
+                                <span className="font-bold text-amber-200">✨ {spoil.item_name} x{spoil.quantity}</span>
+                                <span className="text-[10px] text-slate-500 block">Tọa độ: ({spoil.x}, {spoil.y})</span>
+                              </div>
+                              {spoil.claimed ? (
+                                <span className="text-[10px] text-emerald-400 font-semibold">Đã thu</span>
+                              ) : (
+                                <button
+                                  onClick={() => claimTribulationSpoil(activeTribulation.event.id, spoil.id)}
+                                  disabled={actionLoading}
+                                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] rounded transition"
+                                >
+                                  Thu Hoạch
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Contaminations */}
+                        {activeTribulation.contaminations && activeTribulation.contaminations.length > 0 && (
+                          <div className="space-y-2 pt-2 border-t border-slate-800">
+                            <span className="text-xs font-bold text-purple-300">⚠️ Ô Đất Bị Nhiễm Đạo Ngân:</span>
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                              {activeTribulation.contaminations.map((ct, idx) => (
+                                <div key={idx} className="p-2 rounded-lg text-xs flex justify-between items-center bg-slate-900 border border-purple-900/40">
+                                  <div>
+                                    <span className="font-bold text-purple-200">({ct.x}, {ct.y}) · Hệ {ct.path.toUpperCase()}</span>
+                                    <span className="text-[10px] text-slate-500 block">Loại: {ct.contam_type} (Cấp {ct.severity})</span>
+                                  </div>
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      onClick={() => cleanseSoil(ct.x, ct.y)}
+                                      disabled={actionLoading}
+                                      className="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-[10px] rounded transition"
+                                    >
+                                      🌿 Thanh Tẩy
+                                    </button>
+                                    <button
+                                      onClick={() => pivotSoil(ct.x, ct.y)}
+                                      disabled={actionLoading}
+                                      className="px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white font-bold text-[10px] rounded transition"
+                                    >
+                                      ✨ Khai Mỏ
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={() => finalizeTribulationAftermath(activeTribulation.event.id)}
+                          disabled={actionLoading}
+                          className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
+                        >
+                          <Shield className="w-4 h-4 text-emerald-300" />
+                          🏆 Hoàn Tất Độ Kiếp & Ổn Định Tiên Khiếu
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Turn-based settlement panel */}

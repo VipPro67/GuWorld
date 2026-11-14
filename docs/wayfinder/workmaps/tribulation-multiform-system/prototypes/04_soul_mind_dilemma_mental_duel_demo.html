@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype: Tâm Ma Khảo Nghiệm & Quyết Đấu Thần Hồn Thức Hải</title>
+  <style>
+    :root {
+      --bg: #090a14;
+      --card-bg: rgba(22, 19, 43, 0.75);
+      --border: rgba(168, 85, 247, 0.2);
+      --accent: #c084fc;
+      --accent-glow: rgba(192, 132, 252, 0.3);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --danger: #ef4444;
+      --success: #10b981;
+      --soul: #a855f7;
+      --wisdom: #38bdf8;
+      --shadow: #6b21a8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; min-height: 100vh; font-size: 13px; line-height: 1.5; }
+    .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+    
+    header { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; backdrop-filter: blur(12px); box-shadow: 0 0 20px rgba(168, 85, 247, 0.1); }
+    h1 { font-size: 19px; font-weight: 700; color: #d8b4fe; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .subtitle { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+    
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 850px) { .layout { grid-template-columns: 1fr; } }
+    
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 12px; }
+    .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #e9d5ff; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-family: monospace; }
+    .badge-dilemma { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+    .badge-duel { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .badge-enlightened { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+
+    .state-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px dashed rgba(168, 85, 247, 0.15); }
+    .state-row:last-child { border-bottom: none; }
+    .state-label { color: var(--text-muted); }
+    .state-val { font-weight: 600; font-family: monospace; color: #f1f5f9; }
+
+    .bar-container { background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border); border-radius: 6px; height: 14px; overflow: hidden; margin-top: 3px; position: relative; }
+    .bar-fill { height: 100%; transition: width 0.3s ease; }
+    .bar-soul { background: linear-gradient(90deg, #a855f7, #7e22ce); }
+    .bar-shadow { background: linear-gradient(90deg, #ef4444, #991b1b); }
+
+    .choice-box { background: rgba(15, 17, 30, 0.8); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .choice-question { font-size: 13px; font-weight: 600; color: #f3e8ff; line-height: 1.5; }
+    .choice-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    
+    .choice-btn { background: #1e1b4b; border: 1px solid rgba(168, 85, 247, 0.3); color: #e9d5ff; padding: 10px 14px; border-radius: 8px; text-align: left; cursor: pointer; transition: all 0.2s; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+    .choice-btn:hover:not(:disabled) { background: #2e1065; border-color: #c084fc; color: #fff; transform: translateX(3px); }
+    .choice-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .choice-btn .tag { font-size: 10px; font-weight: bold; color: #38bdf8; }
+
+    button { background: #1e1b4b; color: #f1f5f9; border: 1px solid rgba(168, 85, 247, 0.3); padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+    button:hover:not(:disabled) { background: #2e1065; border-color: #c084fc; color: #fff; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { background: linear-gradient(135deg, #7e22ce, #581c87); border-color: #a855f7; color: #fff; }
+    button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #9333ea, #6b21a8); }
+
+    .log-box { background: rgba(8, 7, 18, 0.95); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; height: 160px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 3px; }
+    .log-entry { color: #94a3b8; }
+    .log-entry.warn { color: #fbbf24; }
+    .log-entry.danger { color: #f87171; }
+    .log-entry.success { color: #34d399; }
+    .log-entry.highlight { color: #c084fc; font-weight: bold; }
+
+    /* Duel Arena */
+    .duel-arena { background: radial-gradient(circle at center, rgba(168, 85, 247, 0.15), rgba(9, 10, 20, 0.9)); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 14px; text-align: center; }
+    .duel-combatants { display: flex; justify-content: space-around; align-items: center; margin-top: 6px; }
+    .combatant-card { background: rgba(30, 27, 75, 0.6); border: 1px solid var(--border); border-radius: 8px; padding: 12px; width: 140px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .combatant-avatar { font-size: 32px; filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.5)); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🧠🌌 Prototype: Tâm Ma Khảo Nghiệm & Quyết Đấu Thần Hồn Thức Hải</h1>
+    <div class="subtitle">
+      <strong>Mục tiêu (Ticket 04):</strong> Kiểm chứng cơ chế <strong>Tâm Ma Khảo Nghiệm (`MIND_SOUL`)</strong> trong tiểu thuyết Cổ Chân Nhân. 
+      Thiên Ý không phái quái vật vật lý mà thẩm thấu thẳng vào thức hải: qua chuỗi <strong>Ngã Rẽ Vấn Tâm (Heart Dilemmas)</strong> thử thách Đạo Tâm. 
+      Nếu ý chí kiên định ➔ Phá mộng đốn ngộ Chân Ý; nếu định lực dao động ➔ Kích phát <strong>Tâm Ma Bản Thể (Shadow Self)</strong> quyết đấu bằng thanh máu Hồn Phách (`Soul HP`).
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- LEFT: PLAYER SOUL STATUS & EVENT CONTROLS -->
+    <div class="card">
+      <div class="card-title">
+        <span>Thần Hồn & Bản Mệnh Tiên Khiếu</span>
+        <span id="txtPhaseBadge" class="badge badge-dilemma">PHASE 1: VẤN TÂM</span>
+      </div>
+
+      <div>
+        <div class="state-row">
+          <span class="state-label">Hồn Phách Bản Mệnh (Soul HP):</span>
+          <span class="state-val" id="valSoulHp" style="color: #c084fc;">100 / 100</span>
+        </div>
+        <div class="bar-container">
+          <div id="barSoulHp" class="bar-fill bar-soul" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <div class="state-row">
+        <span class="state-label">Niệm Đầu Thức Hải (Current Thoughts):</span>
+        <span class="state-val" id="valThoughts" style="color: #38bdf8;">80 / 100 Ý Niệm</span>
+      </div>
+      <div class="state-row">
+        <span class="state-label">Cấp Bậc Thần Hồn (Soul Tier):</span>
+        <span class="state-val" id="valSoulTier">Thiên Nhân Hồn (Tier 3)</span>
+      </div>
+      <div class="state-row">
+        <span class="state-label">Cảnh Giới Trí Đạo / Hồn Đạo:</span>
+        <span class="state-val" style="color: #fbbf24;">Đại Sư (Master Level 2)</span>
+      </div>
+      <div class="state-row">
+        <span class="state-label">Điểm Ám Ảnh Tâm Ma (Stigma Points):</span>
+        <span class="state-val" id="valStigma" style="color: #f87171;">0 Điểm</span>
+      </div>
+
+      <div style="border-top: 1px solid var(--border); padding-top: 8px;">
+        <span class="state-label" style="font-weight: bold; color: #cbd5e1;">Hành Động Khởi Tạo:</span>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button onclick="engine.reset()">🔄 Tái Thiết Lập Thử Nghiệm</button>
+          <button class="primary" onclick="engine.startNewTrial()">⚡ Khởi Phát Tâm Kiếp Ngũ Uẩn</button>
+        </div>
+      </div>
+
+      <!-- LOG BOX -->
+      <div style="margin-top: 8px;">
+        <span class="state-label" style="font-size: 11px;">Nhật Ký Thức Hải & Vấn Tâm:</span>
+        <div class="log-box" id="logBox"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: INTERACTIVE TRIAL / DUEL ARENA -->
+    <div class="card" id="rightPanel">
+      <!-- PHASE 1: DILEMMA CHOICES -->
+      <div id="dilemmaContainer" style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="card-title">
+          <span>Khảo Nghiệm Đạo Tâm (Ngã Rẽ Vấn Tâm)</span>
+          <span id="txtStepCount" style="font-size: 11px; color: #c084fc;">Vòng 1 / 3</span>
+        </div>
+
+        <div class="choice-box">
+          <div class="choice-question" id="dilemmaTitle">Đang nạp ảo cảnh thiên ý...</div>
+          <div class="choice-desc" id="dilemmaDesc">...</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;" id="choiceButtons">
+          <!-- Injected by JS -->
+        </div>
+      </div>
+
+      <!-- PHASE 2: MENTAL DUEL ARENA (Hidden by default) -->
+      <div id="duelContainer" style="display: none; flex-direction: column; gap: 12px;">
+        <div class="card-title">
+          <span style="color: #f87171;">Quyết Đấu Thức Hải: Đối Mặt Tâm Ma</span>
+          <span class="badge badge-duel">SINH TỬ ĐẤU</span>
+        </div>
+
+        <div class="duel-arena">
+          <div style="font-size: 12px; color: #e9d5ff;">
+            Tẩu hỏa nhập ma! Tâm ma phản chiếu sinh ra từ ám ảnh đang tìm cách chiếm đoạt thức hải!
+          </div>
+
+          <div class="duel-combatants">
+            <!-- Player -->
+            <div class="combatant-card">
+              <div class="combatant-avatar">🧘‍♂️</div>
+              <div style="font-weight: bold; color: #38bdf8;">Bản Thể Cổ Tiên</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Soul HP: <span id="txtPlayerSoul">100</span></div>
+            </div>
+
+            <div style="font-size: 20px; font-weight: bold; color: #f87171;">VS</div>
+
+            <!-- Shadow Self -->
+            <div class="combatant-card" style="border-color: #ef4444;">
+              <div class="combatant-avatar">👤👿</div>
+              <div style="font-weight: bold; color: #f87171;">Tâm Ma Bản Thể</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Tâm Ma HP: <span id="txtShadowHp">150</span></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="state-row">
+              <span class="state-label">Sinh Lực Tâm Ma Bản Thể:</span>
+              <span class="state-val" id="valShadowBarText" style="color: #f87171;">150 / 150</span>
+            </div>
+            <div class="bar-container">
+              <div id="barShadowHp" class="bar-fill bar-shadow" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Duel Skills -->
+        <div>
+          <span class="state-label" style="font-weight: bold; color: #cbd5e1;">Tung Sát Chiêu Thức Hải (Tiêu hao Hồn Phách / Ý Niệm):</span>
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
+            <button onclick="engine.castSoulAttack('SOUL_BLADE')">🗡️ Hồn Đạo: Toái Hồn Sát Kiếm (Sát thương x1.5, hao 15 Niệm Đầu)</button>
+            <button onclick="engine.castSoulAttack('WISDOM_LIGHT')">✨ Trí Đạo: Trí Tuệ Tịnh Hóa Quang (Trừ 40 HP Tâm Ma, hồi 15 Soul HP)</button>
+            <button onclick="engine.castSoulAttack('WILLPOWER_SMITE')">⚡ Ý Chí: Duy Ngã Độc Tôn (Đòn Định Lực gõ tan ảo ảnh, hao 20 Niệm Đầu)</button>
+            <button style="border-color: #64748b; color: #94a3b8;" onclick="engine.castSoulAttack('PHYSICAL_STRIKE')">👊 Lực Đạo Đấm Chay (Bị giảm 50% hiệu quả trong thức hải)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * MindSoulTrialEngine: Pure state model for Dilemma narrative & Sea of Consciousness duel
+ */
+class MindSoulTrialEngine {
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    this.stage = "DILEMMA"; // 'DILEMMA' | 'DUEL' | 'ENLIGHTENED' | 'FAILED'
+    this.soulHp = 100;
+    this.maxSoulHp = 100;
+    this.thoughts = 80;
+    this.maxThoughts = 100;
+    this.stigmaPoints = 0; // Accumulated doubt/guilt
+    this.currentStep = 0;
+
+    // Shadow Self Duel Stats
+    this.shadowHp = 100;
+    this.maxShadowHp = 100;
+
+    this.dilemmas = [
+      {
+        title: "Vòng 1: Cám Dỗ Thọ Nguyên & Phàm Trần",
+        desc: "Thiên Ý tái hiện ký ức thanh xuân tại Cổ Nguyệt Sơn Trại. Cha mẹ, bằng hữu thuở nhỏ xuất hiện vẫy gọi đạo hữu buông bỏ đồ đao, trở về cuộc sống ấm êm trăm năm bình dị.",
+        choices: [
+          {
+            label: "A. Đạo Tâm Băng Lãnh: 'Đại đạo độc hành, trường sinh bất tử mới là chân lý!'",
+            req: "Yêu cầu: Soul HP ≥ 40 hoặc Trí Đạo Đại Sư",
+            stigma: 0,
+            soulCost: 0,
+            outcome: "Định lực kiên định! Đạo tâm không vướng bận hồng trần, phá tan lớp sương mờ đầu tiên."
+          },
+          {
+            label: "B. Trầm Luân Do Dự: Chạnh lòng rơi lệ nhớ về hơi ấm gia đình thuở thiếu thời.",
+            req: "Không yêu cầu",
+            stigma: 1,
+            soulCost: 20,
+            outcome: "Tâm tư dao động! Bị Thiên Ý xâm nhập thần hồn làm tổn thương 20 Soul HP (+1 Ám Ảnh Tâm Ma)."
+          }
+        ]
+      },
+      {
+        title: "Vòng 2: Lưỡng Nan Sinh Tử & Đại Cục",
+        desc: "Trong ảo cảnh, vách Tiên Khiếu nứt vỡ. Hoặc là lập tức tế hiến sinh linh 1,000 Dị nhân Mao Dân để bịt miệng lỗ hổng; hoặc tự lấy hồn phách bản thân ra gánh chịu lôi đình.",
+        choices: [
+          {
+            label: "A. Quyết Đoán Cực Hạn: Tế hiến sinh linh dị nhân, bảo toàn tính mạng bản thân làm trọng!",
+            req: "Yêu cầu: Trí Đạo Đại Sư (Tâm địa ma đạo quyết tuyệt)",
+            stigma: 0,
+            soulCost: 0,
+            outcome: "Ma đạo tột bực, không chút do dự! Thiên Ý không thể tìm thấy kẽ hở nhân từ để khoét sâu."
+          },
+          {
+            label: "B. Nhân Từ Lưỡng Lự: 'Dị nhân vô tội, sao nỡ nhẫn tâm hạ sát?' Tự dùng thân mình che chắn.",
+            req: "Không yêu cầu",
+            stigma: 2,
+            soulCost: 35,
+            outcome: "Bị Thiên Ý bẫy vào đạo đức giả tạo! Lôi đình đánh thẳng vào thức hải (-35 Soul HP, +2 Ám Ảnh Tâm Ma)."
+          }
+        ]
+      },
+      {
+        title: "Vòng 3: Đột Phá Chân Ngụy & Bản Ngã",
+        desc: "Trước mắt xuất hiện một vị Thần Ma mang dung mạo y hệt đạo hữu, chế giễu: 'Ngươi tu tiên cả đời tranh đấu, giết chóc vô số, cuối cùng cũng chỉ là con rối trong tay Thiên Đạo mà thôi!'",
+        choices: [
+          {
+            label: "A. Tiếng Cười Vang Vọng: 'Dù là con rối cũng phải xé rách dây cương nghịch thiên mà đi!'",
+            req: "Yêu cầu: Soul HP ≥ 50",
+            stigma: 0,
+            soulCost: 0,
+            outcome: "Ý chí trường sinh bùng nổ! Chân ngã sáng rực xua tan toàn bộ bóng ma hoài nghi."
+          },
+          {
+            label: "B. Bế Tắc Tuyệt Vọng: Bị câu nói của Thần Ma đánh trúng nỗi sợ sâu kín nhất.",
+            req: "Không yêu cầu",
+            stigma: 2,
+            soulCost: 30,
+            outcome: "Đạo tâm rạn nứt! Thần hồn trọng thương (-30 Soul HP, +2 Ám Ảnh Tâm Ma)."
+          }
+        ]
+      }
+    ];
+
+    this.logs = [];
+    this.log("Khởi tạo Thức Hải: Sẵn sàng nghênh tiếp Tâm Kiếp Khảo Nghiệm.", "highlight");
+  }
+
+  log(msg, type = "normal") {
+    this.logs.unshift({ msg, type, time: new Date().toLocaleTimeString() });
+  }
+
+  startNewTrial() {
+    this.reset();
+    this.stage = "DILEMMA";
+    this.currentStep = 0;
+    this.log("⚡ [TÂM KIẾP KHỞI PHÁT]: Thiên Ý thẩm thấu vào Thức Hải, mở ra Vòng 1 Vấn Tâm!", "warn");
+    render();
+  }
+
+  chooseDilemma(choiceIdx) {
+    if (this.stage !== "DILEMMA") return;
+    const cur = this.dilemmas[this.currentStep];
+    const c = cur.choices[choiceIdx];
+
+    this.stigmaPoints += c.stigma;
+    this.soulHp = Math.max(1, this.soulHp - c.soulCost);
+    this.log(c.outcome, c.stigma > 0 ? "danger" : "success");
+
+    this.currentStep++;
+    if (this.currentStep >= this.dilemmas.length) {
+      // Conclude Dilemma Phase
+      if (this.stigmaPoints === 0) {
+        // Perfect Enlightenment!
+        this.stage = "ENLIGHTENED";
+        this.log("🏆 [ĐỐN NGỘ VIÊN MÃN]: Đạo tâm không một vết gợn! Thiên Ý bất lực rút lui, ngưng tụ Chân Ý Trí Đạo (+5,000 Đạo Ngân)!", "highlight");
+      } else {
+        // Trigger Mental Duel with Shadow Self!
+        this.stage = "DUEL";
+        this.maxShadowHp = 100 + this.stigmaPoints * 35;
+        this.shadowHp = this.maxShadowHp;
+        this.log(`👿 [TẨU HỎA NHẬP MA]: Tích lũy ${this.stigmaPoints} điểm Ám Ảnh! Tâm Ma Bản Thể ngưng tụ trong Thức Hải (HP: ${this.shadowHp}). Bước vào Quyết Đấu Sinh Tử!`, "danger");
+      }
+    }
+    render();
+  }
+
+  castSoulAttack(type) {
+    if (this.stage !== "DUEL") return;
+
+    let playerDamage = 0;
+    let thoughtCost = 0;
+    let heal = 0;
+
+    if (type === 'SOUL_BLADE') {
+      thoughtCost = 15;
+      playerDamage = 50; // 150% boosted
+      this.log("🗡️ Cổ Tiên phóng xuất Toái Hồn Sát Kiếm: Chém rách hư ảnh Tâm Ma (-50 HP)!", "success");
+    } else if (type === 'WISDOM_LIGHT') {
+      thoughtCost = 20;
+      playerDamage = 40;
+      heal = 15;
+      this.soulHp = Math.min(this.maxSoulHp, this.soulHp + heal);
+      this.log("✨ Trí Tuệ Tịnh Hóa Quang bao phủ Thức Hải: Gây 40 sát thương và thanh tẩy phục hồi +15 Soul HP!", "highlight");
+    } else if (type === 'WILLPOWER_SMITE') {
+      thoughtCost = 25;
+      playerDamage = 60;
+      this.log("⚡ Đòn Định Lực 'Duy Ngã Độc Tôn' giáng phạt: Tâm ma rú lên đau đớn (-60 HP)!", "success");
+    } else if (type === 'PHYSICAL_STRIKE') {
+      thoughtCost = 5;
+      playerDamage = 15; // 50% penalized
+      this.log("👊 Nắm đấm vật lý xuyên qua hư ảnh tâm ma: Chỉ gây -15 sát thương bọt bèo!", "warn");
+    }
+
+    if (this.thoughts < thoughtCost) {
+      this.log("Không đủ Niệm Đầu trong Thức Hải để ra chiêu!", "danger");
+      return;
+    }
+    this.thoughts -= thoughtCost;
+    this.shadowHp = Math.max(0, this.shadowHp - playerDamage);
+
+    // Check Shadow Defeat
+    if (this.shadowHp <= 0) {
+      this.stage = "ENLIGHTENED";
+      this.log("🎉 [TRẢM SÁT TÂM MA]: Bản thể bóng tối tan vỡ! Cổ Tiên hấp thụ tàn niệm tinh thuần, Max Soul +100, độ kiếp thành công!", "highlight");
+      render();
+      return;
+    }
+
+    // Shadow Retaliation
+    const shadowDmg = Math.floor(Math.random() * 20) + 15;
+    this.soulHp = Math.max(0, this.soulHp - shadowDmg);
+    this.log(`👿 Tâm Ma cười lạnh phản đòn tâm thức: Bào mòn -${shadowDmg} Soul HP của Bản Thể!`, "danger");
+
+    if (this.soulHp <= 0) {
+      this.stage = "FAILED";
+      this.log("💀 [THẦN HỒN TRỌNG THƯƠNG]: Soul HP về 0! Thức hải sụp đổ, tẩu hỏa nhập ma hoàn toàn. Độ kiếp thất bại thảm hại!", "danger");
+    }
+
+    render();
+  }
+}
+
+const engine = new MindSoulTrialEngine();
+
+function render() {
+  const badge = document.getElementById("txtPhaseBadge");
+  badge.textContent = engine.stage === "DILEMMA" ? "PHASE 1: VẤN TÂM" : engine.stage === "DUEL" ? "PHASE 2: QUYẾT ĐẤU" : engine.stage === "ENLIGHTENED" ? "KẾT TOÁN VIÊN MÃN" : "THẤT BẠI";
+  badge.className = "badge " + (engine.stage === "DILEMMA" ? "badge-dilemma" : engine.stage === "DUEL" ? "badge-duel" : engine.stage === "ENLIGHTENED" ? "badge-enlightened" : "badge-duel");
+
+  document.getElementById("valSoulHp").textContent = `${engine.soulHp} / ${engine.maxSoulHp}`;
+  document.getElementById("barSoulHp").style.width = `${(engine.soulHp / engine.maxSoulHp) * 100}%`;
+  document.getElementById("valThoughts").textContent = `${engine.thoughts} / ${engine.maxThoughts} Ý Niệm`;
+  document.getElementById("valStigma").textContent = `${engine.stigmaPoints} Điểm Ám Ảnh`;
+
+  const dContainer = document.getElementById("dilemmaContainer");
+  const duelContainer = document.getElementById("duelContainer");
+
+  if (engine.stage === "DILEMMA") {
+    dContainer.style.display = "flex";
+    duelContainer.style.display = "none";
+
+    const d = engine.dilemmas[engine.currentStep];
+    document.getElementById("txtStepCount").textContent = `Vòng ${engine.currentStep + 1} / ${engine.dilemmas.length}`;
+    document.getElementById("dilemmaTitle").textContent = d.title;
+    document.getElementById("dilemmaDesc").textContent = d.desc;
+
+    const btnBox = document.getElementById("choiceButtons");
+    btnBox.innerHTML = d.choices.map((c, i) => `
+      <button class="choice-btn" onclick="engine.chooseDilemma(${i})">
+        <span style="font-weight: bold;">${c.label}</span>
+        <span class="tag">${c.req}</span>
+      </button>
+    `).join("");
+  } else if (engine.stage === "DUEL") {
+    dContainer.style.display = "none";
+    duelContainer.style.display = "flex";
+
+    document.getElementById("txtPlayerSoul").textContent = engine.soulHp;
+    document.getElementById("txtShadowHp").textContent = engine.shadowHp;
+    document.getElementById("valShadowBarText").textContent = `${engine.shadowHp} / ${engine.maxShadowHp}`;
+    document.getElementById("barShadowHp").style.width = `${(engine.shadowHp / engine.maxShadowHp) * 100}%`;
+  } else {
+    // Finished (Enlightened or Failed)
+    dContainer.style.display = "flex";
+    duelContainer.style.display = "none";
+
+    document.getElementById("txtStepCount").textContent = "Đã Kết Thúc";
+    document.getElementById("dilemmaTitle").textContent = engine.stage === "ENLIGHTENED" ? "✨ Đạo Tâm Viên Dung Đốn Ngộ" : "💀 Thần Hồn Tan Rã";
+    document.getElementById("dilemmaDesc").textContent = engine.stage === "ENLIGHTENED" 
+      ? `Chúc mừng đạo hữu! Đã hóa giải toàn bộ tâm ma, ngưng tụ Chân Ý Trí Đạo/Hồn Đạo. Kiếp Tài rơi rớt: Thượng Cổ Sinh Tử Sa & Mộng Cảnh Châu.` 
+      : `Đạo tâm rạn nứt, rơi vào trạng thái Hồn Phách Trọng Thương trong 24h. Cần dùng Thọ Cổ hoặc Đan Dược Định Thần chữa lành.`;
+    document.getElementById("choiceButtons").innerHTML = `
+      <button class="primary" style="padding: 12px;" onclick="engine.startNewTrial()">🔄 Thử Nghiệm Lại Khảo Nghiệm Tâm Ma</button>
+    `;
+  }
+
+  // Logs
+  const logBox = document.getElementById("logBox");
+  logBox.innerHTML = engine.logs.map(l => `<div class="log-entry ${l.type}">[${l.time}] ${l.msg}</div>`).join("");
+}
+
+// Initial render
+render();
+</script>
+
+</body>
+</html>
