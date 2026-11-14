@@ -56,7 +56,7 @@ func TestInteractiveCombatAcceptsAutoActionForPlayerTurn(t *testing.T) {
 	if state.Enemies[0].HP >= 1000 {
 		t.Fatal("auto command did not select and execute a legal action")
 	}
-	if len(logs) == 0 || logs[len(logs)-1].Action == "AWAIT_COMMAND" {
+	if len(logs) == 0 || (logs[len(logs)-1].Action == "AWAIT_COMMAND" && logs[len(logs)-1].Turn == 1) {
 		t.Fatal("auto command should resolve the player's activation before pausing again")
 	}
 }

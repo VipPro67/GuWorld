@@ -5988,14 +5988,15 @@ func Simulate(state *CombatState) []CombatLog {
 						control.Consumed++
 					}
 				} else {
-					maxActions := state.MaxGuActionsPerTurn
-					if maxActions < 1 {
-						maxActions = 3
+					if state.MaxGuActionsPerTurn > 0 || (control != nil && control.MaxGuActions > 0) {
+						maxActions := state.MaxGuActionsPerTurn
+						if control != nil && control.MaxGuActions > 0 {
+							maxActions = control.MaxGuActions
+						}
+						selectedPlan = BuildAutomaticCombatPlan(actor, enemyTargets, maxActions)
+					} else {
+						chosen, target = chooseAutoCombatAction(actor, enemyTargets)
 					}
-					if control != nil && control.MaxGuActions > 0 {
-						maxActions = control.MaxGuActions
-					}
-					selectedPlan = BuildAutomaticCombatPlan(actor, enemyTargets, maxActions)
 				}
 				if len(selectedPlan) > 0 {
 					for _, item := range selectedPlan {
