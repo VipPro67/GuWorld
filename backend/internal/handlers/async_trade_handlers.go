@@ -13,6 +13,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -138,7 +139,7 @@ func CreateTradeOffer(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -184,7 +185,7 @@ func CreateTradeOffer(c *gin.Context) {
 		}
 		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, pricing.Quantize(offered.PrimevalStones), creator.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ Nguyên Thạch"})
+			httperr.Respond(c, httperr.Internal("Lỗi trừ Nguyên Thạch", err))
 			return
 		}
 	}
@@ -199,7 +200,7 @@ func CreateTradeOffer(c *gin.Context) {
 		}
 		_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, pricing.Quantize(offered.ImmortalStones), creator.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ Tiên Nguyên Thạch"})
+			httperr.Respond(c, httperr.Internal("Lỗi trừ Tiên Nguyên Thạch", err))
 			return
 		}
 	}
@@ -214,7 +215,7 @@ func CreateTradeOffer(c *gin.Context) {
 			return
 		}
 		if err := deductMaterialTx(tx, creator.ID, matID, qty); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ nguyên liệu trao đổi"})
+			httperr.Respond(c, httperr.Internal("Lỗi trừ nguyên liệu trao đổi", err))
 			return
 		}
 	}
@@ -247,7 +248,7 @@ func CreateTradeOffer(c *gin.Context) {
 		// Lock Gu to system BHTH UUID
 		_, err = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, BHTHSystemUUID, guInstID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khóa Cổ trùng trao đổi"})
+			httperr.Respond(c, httperr.Internal("Lỗi khóa Cổ trùng trao đổi", err))
 			return
 		}
 	}
@@ -259,7 +260,7 @@ func CreateTradeOffer(c *gin.Context) {
 			return
 		}
 		if err := RecipeSvc.Delete(tx, creator.ID.String(), recID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khóa Bí phương trao đổi"})
+			httperr.Respond(c, httperr.Internal("Lỗi khóa Bí phương trao đổi", err))
 			return
 		}
 		if rate <= 0 {
@@ -279,12 +280,12 @@ func CreateTradeOffer(c *gin.Context) {
 		creator.ID, targetPlayerID, offeredJSON, requestedJSON, req.DurationHours, endTime,
 	).Scan(&offerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo đơn trao đổi"})
+		httperr.Respond(c, httperr.Internal("Lỗi tạo đơn trao đổi", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error"})
+		httperr.Respond(c, httperr.Internal("Commit error", err))
 		return
 	}
 
@@ -317,7 +318,7 @@ func GetTradeOffers(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB error"})
+		httperr.Respond(c, httperr.Internal("DB error", err))
 		return
 	}
 	player, err := evaluateManaTx(tx, authID)
@@ -337,7 +338,7 @@ func GetTradeOffers(c *gin.Context) {
 		  AND (t.player_id = t.creator_id OR t.player_id = $1 OR t.creator_id = $1)
 		ORDER BY t.created_at DESC LIMIT 100`, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query error"})
+		httperr.Respond(c, httperr.Internal("Query error", err))
 		return
 	}
 	defer rows.Close()
@@ -410,7 +411,7 @@ func AcceptTradeOffer(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -471,7 +472,7 @@ func AcceptTradeOffer(c *gin.Context) {
 
 	// Verify creator dual-gu access
 	if creatorErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xử lý giao dịch với người tạo đơn: " + creatorErr.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể xử lý giao dịch với người tạo đơn: "+creatorErr.Error(), creatorErr))
 		return
 	}
 	if !HasBaoHoangAccess(creator.GuInventory) {
@@ -570,7 +571,7 @@ func AcceptTradeOffer(c *gin.Context) {
 		}
 		reserved, reservationErr := guHasActiveProductReservation(tx, guInstID)
 		if reservationErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
 			return
 		}
 		if reserved {
@@ -613,7 +614,7 @@ func AcceptTradeOffer(c *gin.Context) {
 		}
 		result, err := tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2 AND player_id = $3`, creator.ID, guInstID, acceptor.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi chuyển giao Cổ trùng yêu cầu"})
+			httperr.Respond(c, httperr.Internal("Lỗi chuyển giao Cổ trùng yêu cầu", err))
 			return
 		}
 		if affected, err := result.RowsAffected(); err != nil || affected != 1 {
@@ -675,12 +676,12 @@ func AcceptTradeOffer(c *gin.Context) {
 	// Mark completed and record acceptor as player_id
 	_, err = tx.Exec(`UPDATE trade_offers SET status = 'COMPLETED', player_id = $1 WHERE id = $2`, acceptor.ID, offerUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái đơn trao đổi"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật trạng thái đơn trao đổi", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error"})
+		httperr.Respond(c, httperr.Internal("Commit error", err))
 		return
 	}
 
@@ -728,7 +729,7 @@ func CancelTradeOffer(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -762,18 +763,18 @@ func CancelTradeOffer(c *gin.Context) {
 	_ = json.Unmarshal(offJSON, &offered)
 
 	if err := restoreTradeOfferItems(tx, creator.ID, offered); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn trả vật phẩm"})
+		httperr.Respond(c, httperr.Internal("Lỗi hoàn trả vật phẩm", err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE trade_offers SET status = 'CANCELLED' WHERE id = $1`, offerUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật đơn trao đổi"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật đơn trao đổi", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error"})
+		httperr.Respond(c, httperr.Internal("Commit error", err))
 		return
 	}
 

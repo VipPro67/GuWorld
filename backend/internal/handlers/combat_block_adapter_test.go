@@ -139,4 +139,3 @@ func TestAdaptBlockCombatOperationPassesThroughUniqueMechanics(t *testing.T) {
 		t.Fatalf("unique mechanic was not preserved on operation child action: %+v", effects)
 	}
 }
-

@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/playerstate"
@@ -154,7 +155,7 @@ func RegisterPlayer(c *gin.Context) {
 	// 1. Hash password with bcrypt
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to secure password"})
+		httperr.Respond(c, httperr.Internal("Failed to secure password", err))
 		return
 	}
 	passwordHash := string(hashedBytes)
@@ -249,7 +250,7 @@ func RegisterPlayer(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -264,7 +265,7 @@ func RegisterPlayer(c *gin.Context) {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Mã xác thực OTP chưa được gửi hoặc đã bị xóa!"})
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi xác thực OTP"})
+				httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi xác thực OTP", err))
 			}
 			return
 		}
@@ -299,7 +300,7 @@ func RegisterPlayer(c *gin.Context) {
 	var usernameExists bool
 	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE LOWER(username) = LOWER($1))", req.Username).Scan(&usernameExists)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra đạo hiệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra đạo hiệu", err))
 		return
 	}
 	if usernameExists {
@@ -311,7 +312,7 @@ func RegisterPlayer(c *gin.Context) {
 	var fingerprintCount int
 	err = tx.QueryRow("SELECT COUNT(1) FROM players WHERE register_fingerprint = $1", strings.TrimSpace(req.Fingerprint)).Scan(&fingerprintCount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra giới hạn thiết bị đăng ký"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra giới hạn thiết bị đăng ký", err))
 		return
 	}
 	if fingerprintCount >= 2 {
@@ -320,7 +321,7 @@ func RegisterPlayer(c *gin.Context) {
 	}
 
 	if blocked, errBlock := deviceBlocked(tx, c.ClientIP(), strings.TrimSpace(req.Fingerprint)); errBlock != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra thiết bị"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra thiết bị", errBlock))
 		return
 	} else if blocked {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Thiết bị này đã bị chặn. Vui lòng liên hệ bộ phận hỗ trợ."})
@@ -344,18 +345,18 @@ func RegisterPlayer(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu này đã tồn tại (không phân biệt chữ hoa/thường)!"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create player: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to create player: "+err.Error(), err))
 		return
 	}
 	player, err = playerstate.Load(tx, newPlayerID, playerstate.Options{Gu: playerstate.GuNone})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load created player: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load created player: "+err.Error(), err))
 		return
 	}
 
 	// Persist starter Gus in the player_gu table (the players.gu_inventory column is gone).
 	if err := db.AddPlayerGusBulk(tx, player.ID.String(), starterGu); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to seed starter Gus: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to seed starter Gus: "+err.Error(), err))
 		return
 	}
 	player.GuInventory = starterGu
@@ -387,7 +388,7 @@ func RegisterPlayer(c *gin.Context) {
 					VALUES ($1, $2, $3, $4, $5)
 				`, referrerID, player.ID, clientIP, userAgent, isSuspicious)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record referral: " + err.Error()})
+					httperr.Respond(c, httperr.Internal("Failed to record referral: "+err.Error(), err))
 					return
 				}
 
@@ -403,7 +404,7 @@ func RegisterPlayer(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player record: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to save player record: "+err.Error(), err))
 		return
 	}
 
@@ -415,13 +416,13 @@ func RegisterPlayer(c *gin.Context) {
 	sessionID := uuid.New().String()
 	_, err = db.DB.Exec(`UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session"})
+		httperr.Respond(c, httperr.Internal("Failed to update session", err))
 		return
 	}
 
 	token, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create access token"})
+		httperr.Respond(c, httperr.Internal("Failed to create access token", err))
 		return
 	}
 	setAuthCookie(c, token)
@@ -446,14 +447,14 @@ func CompleteTutorial(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -463,12 +464,12 @@ func CompleteTutorial(c *gin.Context) {
 	}
 
 	if _, err := tx.Exec(`UPDATE players SET rank = 1, sub_rank = GREATEST(sub_rank, 1) WHERE id = $1`, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save tutorial completion"})
+		httperr.Respond(c, httperr.Internal("Failed to save tutorial completion", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+		httperr.Respond(c, httperr.Internal("Failed to save", err))
 		return
 	}
 
@@ -537,14 +538,14 @@ func CompleteOnboarding(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -583,7 +584,7 @@ func CompleteOnboarding(c *gin.Context) {
 			} else {
 				// Regular item
 				if err := InventorySvc.AddItem(tx, playerID.String(), food, "materials", 20); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add food items: " + err.Error()})
+					httperr.Respond(c, httperr.Internal("Failed to add food items: "+err.Error(), err))
 					return
 				}
 			}
@@ -596,16 +597,16 @@ func CompleteOnboarding(c *gin.Context) {
 		WHERE id = $7
 	`, startingRegion, spawnX, spawnY, equippedGus, player.PrimevalStones, player.ImmortalStones, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save onboarding: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to save onboarding: "+err.Error(), err))
 		return
 	}
 	if err := db.AddPlayerGusBulk(tx, playerID.String(), newGu); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save starter Gus: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to save starter Gus: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+		httperr.Respond(c, httperr.Internal("Failed to save", err))
 		return
 	}
 

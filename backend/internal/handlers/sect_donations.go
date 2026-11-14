@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -31,14 +32,14 @@ func DonateStones(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
@@ -64,14 +65,14 @@ func DonateStones(c *gin.Context) {
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, req.Amount, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
+		httperr.Respond(c, httperr.Internal("Failed to update sect funds", err))
 		return
 	}
 
 	qiGained := 0.0
 	res, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1`, req.Amount, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
+		httperr.Respond(c, httperr.Internal("Failed to deduct stones", err))
 		return
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
@@ -81,12 +82,12 @@ func DonateStones(c *gin.Context) {
 
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to award contribution"})
+		httperr.Respond(c, httperr.Internal("Failed to award contribution", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -121,20 +122,20 @@ func DonateMaterials(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
 	rows, err := tx.Query(`SELECT category, quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, playerID.String(), req.MaterialID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking inventory"})
+		httperr.Respond(c, httperr.Internal("Database error checking inventory", err))
 		return
 	}
 
@@ -148,7 +149,7 @@ func DonateMaterials(c *gin.Context) {
 		var iv invItem
 		if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
 			rows.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error scanning inventory"})
+			httperr.Respond(c, httperr.Internal("Database error scanning inventory", err))
 			return
 		}
 		invs = append(invs, iv)
@@ -223,7 +224,7 @@ func DonateMaterials(c *gin.Context) {
 				deduct = remainingDeduct
 			}
 			if err := InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, iv.category, deduct); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+				httperr.Respond(c, httperr.Internal("Không thể xóa vật phẩm khỏi túi đồ", err))
 				return
 			}
 			remainingDeduct -= deduct
@@ -240,7 +241,7 @@ func DonateMaterials(c *gin.Context) {
 					deduct = remainingDeduct
 				}
 				if err := InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, iv.category, deduct); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+					httperr.Respond(c, httperr.Internal("Không thể xóa vật phẩm khỏi túi đồ", err))
 					return
 				}
 				remainingDeduct -= deduct
@@ -257,7 +258,7 @@ func DonateMaterials(c *gin.Context) {
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
+		httperr.Respond(c, httperr.Internal("Failed to update sect funds", err))
 		return
 	}
 
@@ -270,24 +271,24 @@ func DonateMaterials(c *gin.Context) {
 			updated_at = NOW()
 	`, m.SectID, req.MaterialID, req.Amount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault materials: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update sect vault materials: "+err.Error(), err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
+		httperr.Respond(c, httperr.Internal("Failed to update contribution", err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		httperr.Respond(c, httperr.Internal("Failed to update human qi", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -336,14 +337,14 @@ func DonateGu(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
@@ -455,7 +456,7 @@ func DonateGu(c *gin.Context) {
 	`, rowID, m.SectID, guInstance.GuID, guInstance.Rank)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update sect vault Gu: "+err.Error(), err))
 		return
 	}
 
@@ -467,12 +468,12 @@ func DonateGu(c *gin.Context) {
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
+		httperr.Respond(c, httperr.Internal("Failed to update sect funds", err))
 		return
 	}
 
 	if err := db.RemovePlayerGu(tx, guInstance.InstanceID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
+		httperr.Respond(c, httperr.Internal("Failed to update gu inventory", err))
 		return
 	}
 
@@ -487,18 +488,18 @@ func DonateGu(c *gin.Context) {
 	})
 	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
+		httperr.Respond(c, httperr.Internal("Failed to update gu inventory", err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
+		httperr.Respond(c, httperr.Internal("Failed to update contribution", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -538,14 +539,14 @@ func DonateRecipe(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
@@ -594,7 +595,7 @@ func DonateRecipe(c *gin.Context) {
 	}
 
 	if err := RecipeSvc.Delete(tx, playerID.String(), req.RecipeID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa Bí phương khỏi túi đồ"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa Bí phương khỏi túi đồ", err))
 		return
 	}
 
@@ -604,7 +605,7 @@ func DonateRecipe(c *gin.Context) {
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
+		httperr.Respond(c, httperr.Internal("Failed to update sect funds", err))
 		return
 	}
 
@@ -617,24 +618,24 @@ func DonateRecipe(c *gin.Context) {
 			unlocked_at = NOW()
 	`, m.SectID, req.RecipeID, progress.CompletionRate)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update sect vault recipes: "+err.Error(), err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
+		httperr.Respond(c, httperr.Internal("Failed to update contribution", err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		httperr.Respond(c, httperr.Internal("Failed to update human qi", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -724,14 +725,14 @@ func DonateBulk(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -763,7 +764,7 @@ func DonateBulk(c *gin.Context) {
 		}
 		res, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1`, req.Stones, player.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
+			httperr.Respond(c, httperr.Internal("Failed to deduct stones", err))
 			return
 		}
 		if rows, _ := res.RowsAffected(); rows == 0 {
@@ -780,7 +781,7 @@ func DonateBulk(c *gin.Context) {
 		for _, matReq := range req.Materials {
 			rows, err := tx.Query(`SELECT category, quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, playerID.String(), matReq.MaterialID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking inventory"})
+				httperr.Respond(c, httperr.Internal("Database error checking inventory", err))
 				return
 			}
 
@@ -794,7 +795,7 @@ func DonateBulk(c *gin.Context) {
 				var iv invItem
 				if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
 					rows.Close()
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error scanning inventory"})
+					httperr.Respond(c, httperr.Internal("Database error scanning inventory", err))
 					return
 				}
 				invs = append(invs, iv)
@@ -852,7 +853,7 @@ func DonateBulk(c *gin.Context) {
 						deduct = remainingDeduct
 					}
 					if err := InventorySvc.RemoveItem(tx, playerID.String(), matReq.MaterialID, iv.category, deduct); err != nil {
-						c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+						httperr.Respond(c, httperr.Internal("Không thể xóa vật phẩm khỏi túi đồ", err))
 						return
 					}
 					remainingDeduct -= deduct
@@ -869,7 +870,7 @@ func DonateBulk(c *gin.Context) {
 							deduct = remainingDeduct
 						}
 						if err := InventorySvc.RemoveItem(tx, playerID.String(), matReq.MaterialID, iv.category, deduct); err != nil {
-							c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+							httperr.Respond(c, httperr.Internal("Không thể xóa vật phẩm khỏi túi đồ", err))
 							return
 						}
 						remainingDeduct -= deduct
@@ -889,7 +890,7 @@ func DonateBulk(c *gin.Context) {
 					updated_at = NOW()
 			`, m.SectID, matReq.MaterialID, matReq.Amount)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault materials: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to update sect vault materials: "+err.Error(), err))
 				return
 			}
 			addSummary(materialName, matReq.Amount)
@@ -982,7 +983,7 @@ func DonateBulk(c *gin.Context) {
 						updated_at = NOW()
 				`, rowID, m.SectID, gi.GuID, gi.Rank, instIDToStore)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
+					httperr.Respond(c, httperr.Internal("Failed to update sect vault Gu: "+err.Error(), err))
 					return
 				}
 
@@ -1002,7 +1003,7 @@ func DonateBulk(c *gin.Context) {
 
 		// Save player Gu inventory
 		if err := db.RemovePlayerGus(tx, removedIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
+			httperr.Respond(c, httperr.Internal("Failed to update gu inventory", err))
 			return
 		}
 	}
@@ -1053,7 +1054,7 @@ func DonateBulk(c *gin.Context) {
 			totalGainedContribution += int64(gained)
 
 			if err := RecipeSvc.Delete(tx, playerID.String(), recipeID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể xóa Bí phương %s", recipeID)})
+				httperr.Respond(c, httperr.Internal(fmt.Sprintf("Không thể xóa Bí phương %s", recipeID), err))
 				return
 			}
 
@@ -1065,7 +1066,7 @@ func DonateBulk(c *gin.Context) {
 					unlocked_at = NOW()
 			`, m.SectID, recipeID, progress.CompletionRate)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to update sect vault recipes: "+err.Error(), err))
 				return
 			}
 
@@ -1090,26 +1091,26 @@ func DonateBulk(c *gin.Context) {
 	// Update Sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, totalGainedContribution, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
+		httperr.Respond(c, httperr.Internal("Failed to update sect funds", err))
 		return
 	}
 
 	// Update player points
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
+		httperr.Respond(c, httperr.Internal("Failed to update contribution", err))
 		return
 	}
 
 	// Update player Human Qi
 	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		httperr.Respond(c, httperr.Internal("Failed to update human qi", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 

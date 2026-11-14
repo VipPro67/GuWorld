@@ -14,6 +14,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/sectmechanics"
@@ -211,7 +212,7 @@ func GetSectsMap(c *gin.Context) {
 		ORDER BY s.level DESC, s.funds DESC
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sects map"})
+		httperr.Respond(c, httperr.Internal("Failed to load sects map", err))
 		return
 	}
 	defer rows.Close()
@@ -260,7 +261,7 @@ func DefendSect(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -322,7 +323,7 @@ func DefendSect(c *gin.Context) {
 
 		player, lerr := evaluateManaTxEquipped(tx, pid)
 		if lerr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+			httperr.Respond(c, httperr.Internal("Failed to load player", lerr))
 			return
 		}
 		power := computeMemberPower(&player)
@@ -332,7 +333,7 @@ func DefendSect(c *gin.Context) {
 			VALUES ($1, 'member', $2, $3, $4, now())
 		`, sectID, pid, targetName, power)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign defender"})
+			httperr.Respond(c, httperr.Internal("Failed to assign defender", err))
 			return
 		}
 		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s đã được phong làm thủ hộ tông môn.", targetName))
@@ -369,12 +370,12 @@ func DefendSect(c *gin.Context) {
 			VALUES ($1, 'beast', $2, $3, $4, 1, $5, now())
 		`, sectID, name, req.MonsterID, rank, power)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hire beast"})
+			httperr.Respond(c, httperr.Internal("Failed to hire beast", err))
 			return
 		}
 		_, err = tx.Exec(`UPDATE sects SET funds = funds - $1 WHERE id = $2`, cost, sectID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct funds"})
+			httperr.Respond(c, httperr.Internal("Failed to deduct funds", err))
 			return
 		}
 		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Tông môn đã thuê %s làm thần thú hộ sơn. Tiêu hao %d Quỹ, còn lại %d Quỹ.", name, cost, funds-cost))
@@ -402,7 +403,7 @@ func DefendSect(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -450,7 +451,7 @@ func UndefendSect(c *gin.Context) {
 
 	_, err = db.DB.Exec(`DELETE FROM sect_defenders WHERE id = $1`, did)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể rút phòng thủ"})
+		httperr.Respond(c, httperr.Internal("Không thể rút phòng thủ", err))
 		return
 	}
 
@@ -489,7 +490,7 @@ func ToggleDefendSect(c *gin.Context) {
 		var sectX, sectY int
 		err = db.DB.QueryRowContext(c.Request.Context(), `SELECT region, map_x, map_y FROM sects WHERE id = $1`, sectID).Scan(&sectRegion, &sectX, &sectY)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy tông môn!"})
+			httperr.Respond(c, httperr.Internal("Không tìm thấy tông môn!", err))
 			return
 		}
 
@@ -497,7 +498,7 @@ func ToggleDefendSect(c *gin.Context) {
 		var pX, pY int
 		err = db.DB.QueryRowContext(c.Request.Context(), `SELECT current_region, x, y FROM players WHERE id = $1`, playerID).Scan(&pRegion, &pX, &pY)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin đạo hữu!"})
+			httperr.Respond(c, httperr.Internal("Không tìm thấy thông tin đạo hữu!", err))
 			return
 		}
 
@@ -509,7 +510,7 @@ func ToggleDefendSect(c *gin.Context) {
 
 	_, err = db.DB.ExecContext(c.Request.Context(), `UPDATE sect_members SET is_defending = NOT is_defending WHERE player_id = $1`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cập nhật trạng thái thất bại"})
+		httperr.Respond(c, httperr.Internal("Cập nhật trạng thái thất bại", err))
 		return
 	}
 
@@ -565,7 +566,7 @@ func AttackSect(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -598,7 +599,7 @@ func AttackSect(c *gin.Context) {
 	}
 	var activeSectWar bool
 	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE active_combat->>'target_sect_id'=$1)`, req.TargetSectID).Scan(&activeSectWar); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra chiến trận đang diễn ra."})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra chiến trận đang diễn ra.", err))
 		return
 	}
 	if activeSectWar {
@@ -609,7 +610,7 @@ func AttackSect(c *gin.Context) {
 	// Load attacker and check position
 	attacker, aerr := evaluateManaTxEquipped(tx, playerID)
 	if aerr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", aerr))
 		return
 	}
 	if attacker.ActiveCombat != nil {
@@ -632,7 +633,7 @@ func AttackSect(c *gin.Context) {
 		shieldUntil := now.Add(sectArrayRallyWindow)
 		readyAt := now.Add(sectArrayCooldown)
 		if _, err = tx.Exec(`UPDATE sects SET shield_until = $1, defensive_array_ready_at = $2 WHERE id = $3`, shieldUntil, readyAt, req.TargetSectID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kích hoạt Hộ Sơn Đại Trận"})
+			httperr.Respond(c, httperr.Internal("Không thể kích hoạt Hộ Sơn Đại Trận", err))
 			return
 		}
 		var memberIDs []uuid.UUID
@@ -661,7 +662,7 @@ func AttackSect(c *gin.Context) {
 		})
 
 		if err = tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 			return
 		}
 		alert := fmt.Sprintf("[Hộ Sơn Đại Trận] Đã chặn đợt tập kích của %s! Toàn tông có 10 phút tập hợp trấn thủ trước khi sơn môn có thể bị công kích lại.", attacker.Username)
@@ -683,7 +684,7 @@ func AttackSect(c *gin.Context) {
 		LIMIT 8
 	`, req.TargetSectID, targetRegion, targetMapX, targetMapY)
 	if derr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải đội hình phòng thủ."})
+		httperr.Respond(c, httperr.Internal("Không thể tải đội hình phòng thủ.", derr))
 		return
 	}
 	for defRows.Next() {
@@ -695,7 +696,7 @@ func AttackSect(c *gin.Context) {
 	}
 	if rowsErr := defRows.Err(); rowsErr != nil {
 		defRows.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải đội hình phòng thủ."})
+		httperr.Respond(c, httperr.Internal("Không thể tải đội hình phòng thủ.", rowsErr))
 		return
 	}
 	defRows.Close()
@@ -738,11 +739,11 @@ func AttackSect(c *gin.Context) {
 	qiGained := AddHumanQi(&attacker, 5)
 	combatBytes, err := json.Marshal(attacker.ActiveCombat)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo trạng thái chiến đấu."})
+		httperr.Respond(c, httperr.Internal("Không thể tạo trạng thái chiến đấu.", err))
 		return
 	}
 	if _, err := tx.Exec(`UPDATE players SET active_combat=$1,human_qi=$2 WHERE id=$3`, string(combatBytes), attacker.HumanQi, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái chiến đấu."})
+		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái chiến đấu.", err))
 		return
 	}
 	auditlog.Log(tx, auditlog.Entry{
@@ -752,7 +753,7 @@ func AttackSect(c *gin.Context) {
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	committed = true

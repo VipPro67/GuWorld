@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
@@ -479,7 +480,7 @@ func StartCombatSession(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -487,12 +488,12 @@ func StartCombatSession(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "An interactive combat session is already active"})
 		return
 	} else if existingErr != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to inspect combat session"})
+		httperr.Respond(c, httperr.Internal("Failed to inspect combat session", existingErr))
 		return
 	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 	if player.ActiveCombat == nil || !combatOwnedByPlayer(player.ActiveCombat, player.ID.String()) {
@@ -522,7 +523,7 @@ func StartCombatSession(c *gin.Context) {
 	}
 	state, err := buildSimCombatState(tx, &player, &req.Loadout, isVirtual)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare combat"})
+		httperr.Respond(c, httperr.Internal("Failed to prepare combat", err))
 		return
 	}
 	state.CaptureTurnSnapshots = true
@@ -545,18 +546,18 @@ func StartCombatSession(c *gin.Context) {
 	}
 	initialJSON, err := json.Marshal(state)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode combat"})
+		httperr.Respond(c, httperr.Internal("Failed to encode combat", err))
 		return
 	}
 	loadoutJSON, err := json.Marshal(req.Loadout)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode loadout"})
+		httperr.Respond(c, httperr.Internal("Failed to encode loadout", err))
 		return
 	}
 	row := combatSessionRow{PlayerID: playerID, ParticipantID: participantID, InitialState: initialJSON, Loadout: loadoutJSON, Commands: []byte("[]"), Revision: 0, Status: "active"}
 	state, logs, _, err := replayCombatSession(row, nil)
 	if err != nil || state.Interactive.Error != "" || state.Interactive.PendingActor == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Combat did not reach a player decision"})
+		httperr.Respond(c, httperr.Internal("Combat did not reach a player decision", err))
 		return
 	}
 	deadline := time.Now().Add(combatDecisionTimeout)
@@ -569,7 +570,7 @@ func StartCombatSession(c *gin.Context) {
 	row.DeadlineAt = sql.NullTime{Time: deadline, Valid: true}
 	row.PendingActor = state.Interactive.PendingActor
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat session"})
+		httperr.Respond(c, httperr.Internal("Failed to commit combat session", err))
 		return
 	}
 	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
@@ -587,7 +588,7 @@ func GetCombatSession(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -597,12 +598,12 @@ func GetCombatSession(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load combat session"})
+		httperr.Respond(c, httperr.Internal("Failed to load combat session", err))
 		return
 	}
 	state, logs, _, err := replayCombatSession(row, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
+		httperr.Respond(c, httperr.Internal("Failed to replay combat session", err))
 		return
 	}
 	response := combatSessionResponseForPlayer(row, state, logs, playerID)
@@ -622,7 +623,7 @@ func GetCombatSessionByID(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -632,12 +633,12 @@ func GetCombatSessionByID(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load combat session"})
+		httperr.Respond(c, httperr.Internal("Failed to load combat session", err))
 		return
 	}
 	state, logs, _, err := replayCombatSession(row, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
+		httperr.Respond(c, httperr.Internal("Failed to replay combat session", err))
 		return
 	}
 	response := combatSessionResponseForPlayer(row, state, logs, playerID)
@@ -694,7 +695,7 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -704,13 +705,13 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock combat session"})
+		httperr.Respond(c, httperr.Internal("Failed to lock combat session", err))
 		return
 	}
 	if row.Status != "active" {
 		state, logs, _, replayErr := replayCombatSession(row, nil)
 		if replayErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay completed combat"})
+			httperr.Respond(c, httperr.Internal("Failed to replay completed combat", replayErr))
 			return
 		}
 		response := combatSessionResponseForPlayer(row, state, logs, playerID)
@@ -731,13 +732,13 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 	}
 	var seen bool
 	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM combat_session_commands WHERE session_id=$1 AND command_id=$2)`, row.ID, req.CommandID).Scan(&seen); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check command ID"})
+		httperr.Respond(c, httperr.Internal("Failed to check command ID", err))
 		return
 	}
 	if seen || req.ExpectedRevision != row.Revision {
 		state, logs, _, replayErr := replayCombatSession(row, nil)
 		if replayErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
+			httperr.Respond(c, httperr.Internal("Failed to replay combat session", replayErr))
 			return
 		}
 		c.JSON(http.StatusConflict, combatSessionResponseForPlayer(row, state, logs, playerID))
@@ -770,7 +771,7 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 		plans[playerID.String()] = req.Command
 		plansJSON, marshalErr := json.Marshal(plans)
 		if marshalErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode PvP plan"})
+			httperr.Respond(c, httperr.Internal("Failed to encode PvP plan", marshalErr))
 			return
 		}
 		row.Revision++
@@ -781,11 +782,11 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 				_, err = tx.Exec(`INSERT INTO combat_session_commands(session_id, command_id, revision) VALUES($1,$2,$3)`, row.ID, req.CommandID, row.Revision)
 			}
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save PvP plan"})
+				httperr.Respond(c, httperr.Internal("Failed to save PvP plan", err))
 				return
 			}
 			if err := tx.Commit(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit PvP plan"})
+				httperr.Respond(c, httperr.Internal("Failed to commit PvP plan", err))
 				return
 			}
 			row.PendingPlans, row.DeadlineAt = plansJSON, sql.NullTime{Time: deadline, Valid: true}
@@ -807,12 +808,12 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 			commands = append(commands, orderedPlans...)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode combat commands"})
+			httperr.Respond(c, httperr.Internal("Failed to decode combat commands", err))
 			return
 		}
 		commandsJSON, marshalErr := json.Marshal(commands)
 		if marshalErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode combat commands"})
+			httperr.Respond(c, httperr.Internal("Failed to encode combat commands", marshalErr))
 			return
 		}
 		row.Commands, row.PendingPlans = commandsJSON, []byte("{}")
@@ -821,7 +822,7 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 		if req.Command.ActionType == "PLAN" {
 			current, _, _, replayErr := replayCombatSession(row, nil)
 			if replayErr != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
+				httperr.Respond(c, httperr.Internal("Failed to replay combat session", replayErr))
 				return
 			}
 			if planErr := simulator.ValidateCombatPlan(current, playerID.String(), req.Command.Plan, maxCombatGuActionsPerTurn()); planErr != nil {
@@ -832,13 +833,13 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 		state, logs, commands, err = replayCombatSession(row, &req.Command)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat command"})
+		httperr.Respond(c, httperr.Internal("Failed to replay combat command", err))
 		return
 	}
 	if state.Interactive.Error != "" || (state.Interactive.PendingActor != "" && state.Interactive.Consumed != len(commands)) {
 		current, currentLogs, _, replayErr := replayCombatSession(row, nil)
 		if replayErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
+			httperr.Respond(c, httperr.Internal("Failed to replay combat session", replayErr))
 			return
 		}
 		response := combatSessionResponseForPlayer(row, current, currentLogs, playerID)
@@ -848,7 +849,7 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 	}
 	commandsJSON, err := json.Marshal(commands)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode commands"})
+		httperr.Respond(c, httperr.Internal("Failed to encode commands", err))
 		return
 	}
 	row.Revision++
@@ -865,17 +866,17 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 	} else {
 		var playerLoadout simulator.CombatLoadout
 		if err = json.Unmarshal(row.Loadout, &playerLoadout); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode combat loadout"})
+			httperr.Respond(c, httperr.Internal("Failed to decode combat loadout", err))
 			return
 		}
 		player, err = evaluateManaTxEquipped(tx, row.PlayerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to evaluate player state"})
+			httperr.Respond(c, httperr.Internal("Failed to evaluate player state", err))
 			return
 		}
 		var initial simulator.CombatState
 		if err = json.Unmarshal(row.InitialState, &initial); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode initial combat state"})
+			httperr.Respond(c, httperr.Internal("Failed to decode initial combat state", err))
 			return
 		}
 		initial.Interactive.Commands = commands
@@ -887,15 +888,15 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 		}
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat command"})
+		httperr.Respond(c, httperr.Internal("Failed to save combat command", err))
 		return
 	}
 	if _, err := tx.Exec(`INSERT INTO combat_session_commands(session_id, command_id, revision) VALUES($1,$2,$3)`, row.ID, req.CommandID, row.Revision); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record command ID"})
+		httperr.Respond(c, httperr.Internal("Failed to record command ID", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat command"})
+		httperr.Respond(c, httperr.Internal("Failed to commit combat command", err))
 		return
 	}
 	if row.Status == "complete" {

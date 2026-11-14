@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -125,7 +126,7 @@ func GetArenaShop(c *gin.Context) {
 
 	items, err := loadArenaShopItems()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải Shop Đấu Trường"})
+		httperr.Respond(c, httperr.Internal("Không thể tải Shop Đấu Trường", err))
 		return
 	}
 
@@ -198,14 +199,14 @@ func BuyArenaShopItem(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -231,12 +232,12 @@ func BuyArenaShopItem(c *gin.Context) {
 	}
 
 	if giveErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm vật phẩm"})
+		httperr.Respond(c, httperr.Internal("Lỗi thêm vật phẩm", giveErr))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu giao dịch", err))
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -38,7 +39,7 @@ func GetGrid(c *gin.Context) {
 		player, err = PlayerSvc.ProjectAndPersistBestEffort(authID, false)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
+		httperr.Respond(c, httperr.Internal("Failed to load player Aperture", err))
 		return
 	}
 

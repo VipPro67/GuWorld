@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -52,17 +53,17 @@ func GetInfiniteTowerState(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{ReadOnly: false})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải tiến độ tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể tải tiến độ tháp.", err))
 		return
 	}
 	defer tx.Rollback()
 	progress, err := ensureTowerProgress(tx, playerID, false)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải tiến độ tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể tải tiến độ tháp.", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải tiến độ tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể tải tiến độ tháp.", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"progress": progress, "next_floor": progress.BestFloor + 1})
@@ -73,7 +74,7 @@ func GetInfiniteTowerLeaderboard(c *gin.Context) {
 		FROM infinite_tower_progress t JOIN players p ON p.id=t.player_id
 		WHERE t.best_floor > 0 ORDER BY t.best_floor DESC, t.best_floor_at ASC NULLS LAST, p.username ASC LIMIT 100`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải bảng xếp hạng tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể tải bảng xếp hạng tháp.", err))
 		return
 	}
 	type entry struct {
@@ -89,7 +90,7 @@ func GetInfiniteTowerLeaderboard(c *gin.Context) {
 		var reachedAt sql.NullTime
 		if err := rows.Scan(&id, &item.Username, &item.BestFloor, &reachedAt); err != nil {
 			rows.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc bảng xếp hạng tháp."})
+			httperr.Respond(c, httperr.Internal("Không thể đọc bảng xếp hạng tháp.", err))
 			return
 		}
 		item.PlayerID = id.String()
@@ -100,7 +101,7 @@ func GetInfiniteTowerLeaderboard(c *gin.Context) {
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc bảng xếp hạng tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể đọc bảng xếp hạng tháp.", err))
 		return
 	}
 	rows.Close()
@@ -117,7 +118,7 @@ func ChallengeInfiniteTower(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở chiến trường tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể mở chiến trường tháp.", err))
 		return
 	}
 	defer tx.Rollback()
@@ -125,7 +126,7 @@ func ChallengeInfiniteTower(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đang có phiên chiến đấu."})
 		return
 	} else if sessionErr != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên chiến đấu."})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra phiên chiến đấu.", sessionErr))
 		return
 	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
@@ -143,7 +144,7 @@ func ChallengeInfiniteTower(c *gin.Context) {
 	}
 	progress, err := ensureTowerProgress(tx, player.ID, true)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc tiến độ tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể đọc tiến độ tháp.", err))
 		return
 	}
 	if progress.WeeklyLosses >= progress.LossLimit {
@@ -184,11 +185,11 @@ func ChallengeInfiniteTower(c *gin.Context) {
 	encounter.LootTableID = ""
 	player.ActiveCombat = InitializeCombatState(tx, &encounter, &player)
 	if _, err := tx.Exec(`UPDATE players SET active_combat=$1 WHERE id=$2`, player.ActiveCombat, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuẩn bị tầng tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể chuẩn bị tầng tháp.", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuẩn bị tầng tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể chuẩn bị tầng tháp.", err))
 		return
 	}
 	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
@@ -349,12 +350,12 @@ func AbandonInfiniteTower(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể rời khỏi tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể rời khỏi tháp.", err))
 		return
 	}
 	defer tx.Rollback()
 	if _, sessionErr := loadCombatSession(tx, playerID, nil, true); sessionErr != nil && sessionErr != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa phiên tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể khóa phiên tháp.", sessionErr))
 		return
 	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
@@ -367,19 +368,19 @@ func AbandonInfiniteTower(c *gin.Context) {
 		floor = 1
 	}
 	if _, err := settleInfiniteTower(tx, player.ID, floor, false); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi nhận lượt rời tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể ghi nhận lượt rời tháp.", err))
 		return
 	}
 	if _, err := tx.Exec(`UPDATE combat_sessions SET status='abandoned', pending_actor='', deadline_at=NULL, updated_at=NOW() WHERE player_id=$1 AND status='active'`, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc trận tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể kết thúc trận tháp.", err))
 		return
 	}
 	if _, err := tx.Exec(`UPDATE players SET active_combat=NULL WHERE id=$1`, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc trận tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể kết thúc trận tháp.", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể rời khỏi tháp."})
+		httperr.Respond(c, httperr.Internal("Không thể rời khỏi tháp.", err))
 		return
 	}
 	PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)

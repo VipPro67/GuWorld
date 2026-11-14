@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -22,7 +23,7 @@ func AdminListSectRequests(c *gin.Context) {
 			FROM sect_promotion_requests r JOIN players p ON p.id=r.player_id WHERE r.sect_id=$1
 		) requests ORDER BY created_at`, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải yêu cầu tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể tải yêu cầu tông môn", err))
 		return
 	}
 	defer rows.Close()
@@ -30,13 +31,13 @@ func AdminListSectRequests(c *gin.Context) {
 	for rows.Next() {
 		var raw []byte
 		if err := rows.Scan(&raw); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc yêu cầu tông môn"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc yêu cầu tông môn", err))
 			return
 		}
 		items = append(items, json.RawMessage(raw))
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách yêu cầu"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách yêu cầu", err))
 		return
 	}
 	c.JSON(http.StatusOK, items)
@@ -59,12 +60,12 @@ func AdminDeleteSectRequest(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), "DELETE FROM "+table+" WHERE id=$1 AND sect_id=$2 AND status='PENDING'", c.Param("request_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy yêu cầu tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể hủy yêu cầu tông môn", err))
 		return
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận thao tác"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận thao tác", err))
 		return
 	}
 	if n == 0 {

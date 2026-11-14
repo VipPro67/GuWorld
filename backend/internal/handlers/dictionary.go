@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -188,7 +189,7 @@ func getCachedDictionaryPartWithError(c *gin.Context, key string, target interfa
 		val, err := build()
 		if err != nil {
 			logger.S.Errorf("dictionary cache %s rebuild failed: %v", key, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách dữ liệu"})
+			httperr.Respond(c, httperr.Internal("Không thể tải danh sách dữ liệu", err))
 			return
 		}
 		if valid != nil && !valid(val) {

@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -55,14 +56,14 @@ func SendPrivateMail(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player status"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player status", err))
 		return
 	}
 	if gamefx.IsDeadState(&player) {
@@ -78,7 +79,7 @@ func SendPrivateMail(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm người nhận"})
+		httperr.Respond(c, httperr.Internal("Không thể tìm người nhận", err))
 		return
 	}
 	if receiverID == player.ID {
@@ -91,7 +92,7 @@ func SendPrivateMail(c *gin.Context) {
 		ON CONFLICT DO NOTHING
 	`, pairA, pairB)
 	if connectionErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở kết nối truyền tin"})
+		httperr.Respond(c, httperr.Internal("Không thể mở kết nối truyền tin", connectionErr))
 		return
 	}
 	connectionRows, _ := connectionResult.RowsAffected()
@@ -102,7 +103,7 @@ func SendPrivateMail(c *gin.Context) {
 	}
 	res, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET primeval_stones=primeval_stones-$1 WHERE id=$2 AND primeval_stones >= $1`, fee, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ Nguyên Thạch"})
+		httperr.Respond(c, httperr.Internal("Không thể trừ Nguyên Thạch", err))
 		return
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
@@ -117,12 +118,12 @@ func SendPrivateMail(c *gin.Context) {
 		RETURNING id
 	`, player.ID, receiverID, req.Content).Scan(&messageID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send message"})
+		httperr.Respond(c, httperr.Internal("Failed to send message", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 
@@ -188,7 +189,7 @@ func GetPrivateConversations(c *gin.Context) {
 		WHERE ranked.rn=1 ORDER BY ranked.created_at DESC LIMIT 100
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách hội thoại"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách hội thoại", err))
 		return
 	}
 	defer rows.Close()
@@ -196,13 +197,13 @@ func GetPrivateConversations(c *gin.Context) {
 	for rows.Next() {
 		var item PrivateConversation
 		if err := rows.Scan(&item.PlayerID, &item.Username, &item.Avatar, &item.LastMessage, &item.LastMessageAt, &item.UnreadCount, &item.LastMessageMine); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc hội thoại", err))
 			return
 		}
 		conversations = append(conversations, item)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc hội thoại", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"conversations": conversations})
@@ -237,7 +238,7 @@ func GetPrivateThread(c *gin.Context) {
 		) thread ORDER BY created_at ASC
 	`, playerID, otherID, globalUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải hội thoại"})
+		httperr.Respond(c, httperr.Internal("Không thể tải hội thoại", err))
 		return
 	}
 	messages := make([]ChatItem, 0)
@@ -245,14 +246,14 @@ func GetPrivateThread(c *gin.Context) {
 		var item ChatItem
 		if err := rows.Scan(&item.ID, &item.SenderID, &item.SenderUsername, &item.SenderAvatar, &item.SenderTitle, &item.SenderRank, &item.Content, &item.Channel, &item.CreatedAt); err != nil {
 			rows.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc hội thoại", err))
 			return
 		}
 		messages = append(messages, item)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc hội thoại", err))
 		return
 	}
 	rows.Close()
@@ -276,7 +277,7 @@ func GetInbox(c *gin.Context) {
 		LIMIT 50
 	`, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load messages"})
+		httperr.Respond(c, httperr.Internal("Failed to load messages", err))
 		return
 	}
 	defer rows.Close()
@@ -498,7 +499,7 @@ func GetBaoHoangMessages(c *gin.Context) {
 
 	messages, err := loadBaoHoangMessagesContext(c.Request.Context(), channel, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load global chat"})
+		httperr.Respond(c, httperr.Internal("Failed to load global chat", err))
 		return
 	}
 

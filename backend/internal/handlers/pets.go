@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -46,7 +47,7 @@ func ListPlayerPets(c *gin.Context) {
 
 	pets, err := models.LoadPlayerPets(db.DB, authID.String())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load pets"})
+		httperr.Respond(c, httperr.Internal("Failed to load pets", err))
 		return
 	}
 
@@ -68,13 +69,13 @@ func FeedPet(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin người chơi", err))
 		return
 	}
 	if err := checkRegionAction(player.CurrentRegion, "item_use"); err != nil {
@@ -112,7 +113,7 @@ func FeedPet(c *gin.Context) {
 	// Check item exists in inventory (any bucket)
 	qty, itemCategory, err := InventorySvc.GetQuantityInAnyCategory(tx, authID.String(), req.ItemID, "consumables", "materials")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra túi đồ."})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra túi đồ.", err))
 		return
 	}
 	if qty <= 0 {
@@ -128,7 +129,7 @@ func FeedPet(c *gin.Context) {
 
 	// Consume item
 	if err := InventorySvc.RemoveItem(tx, authID.String(), req.ItemID, itemCategory, 1); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu hao vật phẩm."})
+		httperr.Respond(c, httperr.Internal("Không thể tiêu hao vật phẩm.", err))
 		return
 	}
 
@@ -141,12 +142,12 @@ func FeedPet(c *gin.Context) {
 	}
 	_, err = tx.Exec(`UPDATE non_player_actors SET hunger = $1, hunger_updated_at = NOW(), updated_at = NOW(), version = version + 1 WHERE id = $2`, newHunger, petID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pet hunger"})
+		httperr.Respond(c, httperr.Internal("Failed to update pet hunger", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 
@@ -202,7 +203,7 @@ func SetPetSleep(c *gin.Context) {
 		WHERE id = $2 AND owner_player_id = $3 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
 	`, newState, req.PetID, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pet state"})
+		httperr.Respond(c, httperr.Internal("Failed to update pet state", err))
 		return
 	}
 
@@ -232,7 +233,7 @@ func SetPetFormation(c *gin.Context) {
 	var playerRank int
 	err := db.DB.QueryRow(`SELECT rank FROM players WHERE id = $1`, authID).Scan(&playerRank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -249,7 +250,7 @@ func SetPetFormation(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -258,7 +259,7 @@ func SetPetFormation(c *gin.Context) {
 		if err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM non_player_actors
 			WHERE owner_player_id=$1 AND actor_kind='VARIANT_NPC' AND lifecycle_state='ACTIVE'
 			  AND formation_slot BETWEEN 1 AND $2)`, authID, len(req.Slots)).Scan(&occupied); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate formation"})
+			httperr.Respond(c, httperr.Internal("Failed to validate formation", err))
 			return
 		}
 		if occupied {
@@ -270,7 +271,7 @@ func SetPetFormation(c *gin.Context) {
 	// Reset all formation slots
 	_, err = tx.Exec(`UPDATE non_player_actors SET formation_slot = 0, updated_at = NOW(), version = version + 1 WHERE owner_player_id = $1 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'`, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset formation"})
+		httperr.Respond(c, httperr.Internal("Failed to reset formation", err))
 		return
 	}
 
@@ -290,7 +291,7 @@ func SetPetFormation(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 
@@ -314,7 +315,7 @@ func ReleasePet(c *gin.Context) {
 		DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
 	`, req.PetID, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to release pet"})
+		httperr.Respond(c, httperr.Internal("Failed to release pet", err))
 		return
 	}
 
@@ -360,7 +361,7 @@ func MergePets(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -385,7 +386,7 @@ func MergePets(c *gin.Context) {
 	var maxSoul int
 	err = tx.QueryRow(`SELECT max_soul FROM players WHERE id = $1`, authID).Scan(&maxSoul)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Hồn Phách."})
+		httperr.Respond(c, httperr.Internal("Không thể đọc Hồn Phách.", err))
 		return
 	}
 	mergeLimit := mergePackLimit(maxSoul)
@@ -445,7 +446,7 @@ func MergePets(c *gin.Context) {
 		WHERE id = $6
 	`, newCount, newMaxHP, newMaxHP, newAtk, newDef, targetID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to merge pets"})
+		httperr.Respond(c, httperr.Internal("Failed to merge pets", err))
 		return
 	}
 
@@ -477,7 +478,7 @@ func MergePets(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 

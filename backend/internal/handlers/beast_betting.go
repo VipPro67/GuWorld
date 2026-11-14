@@ -17,6 +17,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -627,19 +628,19 @@ func GetCurrentBettingRound(c *gin.Context) {
 	if err := cache.GetJSON("beast_betting_current_round", &r); err != nil || r == nil {
 		tx, err := db.DB.Begin()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Respond(c, httperr.Internal(err.Error(), err))
 			return
 		}
 		defer tx.Rollback()
 
 		createdRound, err := getOrCreateCurrentRound(tx, time.Now())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Respond(c, httperr.Internal(err.Error(), err))
 			return
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Respond(c, httperr.Internal(err.Error(), err))
 			return
 		}
 		r = createdRound
@@ -654,7 +655,7 @@ func GetCurrentBettingRound(c *gin.Context) {
 		WHERE round_id = $1 AND player_id = $2
 	`, r.ID, userID).Scan(&myBetTeam, &myBetAmount)
 	if queryErr != nil && queryErr != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": queryErr.Error()})
+		httperr.Respond(c, httperr.Internal(queryErr.Error(), queryErr))
 		return
 	}
 
@@ -675,7 +676,7 @@ func GetBettingHistory(c *gin.Context) {
 		LIMIT 10
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -685,7 +686,7 @@ func GetBettingHistory(c *gin.Context) {
 		var r BettingRound
 		var resolvedAt sql.NullTime
 		if err := rows.Scan(&r.ID, &r.Status, &r.Winner, &r.TeamAName, &r.TeamBName, &r.TotalBetA, &r.TotalBetB, &r.BattleLog, &r.CreatedAt, &resolvedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Respond(c, httperr.Internal(err.Error(), err))
 			return
 		}
 		if resolvedAt.Valid {
@@ -726,14 +727,14 @@ func PlaceBeastBet(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	defer tx.Rollback()
 
 	r, err := getOrCreateCurrentRound(tx, time.Now())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 
@@ -751,7 +752,7 @@ func PlaceBeastBet(c *gin.Context) {
 	`, r.ID, userID).Scan(&existingBetID, &existingTeam, &existingAmount)
 
 	if err != nil && err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 
@@ -772,12 +773,12 @@ func PlaceBeastBet(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật số dư ví"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật số dư ví", err))
 		return
 	}
 
 	if err := insertWalletTx(tx, userID, "SPEND", "PRIMEVAL_STONE", -int64(req.Amount), int64(balance), int64(newBalance), nil, nil, fmt.Sprintf("Đặt cược Đấu Thú: %s", req.Team)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 
@@ -794,7 +795,7 @@ func PlaceBeastBet(c *gin.Context) {
 		`, r.ID, userID, req.Team, req.Amount)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 
@@ -804,7 +805,7 @@ func PlaceBeastBet(c *gin.Context) {
 		_, err = tx.Exec("UPDATE beast_betting_rounds SET total_bet_b = total_bet_b + $1 WHERE id = $2", req.Amount, r.ID)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 
@@ -827,7 +828,7 @@ func PlaceBeastBet(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	_ = cache.Delete("beast_betting_current_round")

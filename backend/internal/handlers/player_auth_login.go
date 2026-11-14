@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
@@ -117,7 +118,7 @@ func LoginPlayer(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu: "+err.Error(), err))
 		}
 		return
 	}
@@ -142,7 +143,7 @@ func LoginPlayer(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu: "+err.Error(), err))
 		}
 		return
 	}
@@ -162,7 +163,7 @@ func LoginPlayer(c *gin.Context) {
 		fingerprint, player.ID).Scan(&otherAccountsCount)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra thiết bị đăng nhập"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kiểm tra thiết bị đăng nhập", err))
 		return
 	}
 
@@ -214,14 +215,14 @@ func LoginPlayer(c *gin.Context) {
 		WHERE id = $4`,
 		fingerprint, c.ClientIP(), sessionID, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên đăng nhập"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật phiên đăng nhập", err))
 		return
 	}
 	middleware.SetSessionCache(player.ID, sessionID)
 
 	token, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
+		httperr.Respond(c, httperr.Internal("Failed to sign access token", err))
 		return
 	}
 	if player.IsAdmin {
@@ -304,7 +305,7 @@ func GetCurrentPlayer(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to evaluate player status: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to evaluate player status: "+err.Error(), err))
 		}
 		return
 	}

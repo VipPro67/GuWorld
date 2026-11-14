@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -20,7 +21,7 @@ func ListActors(c *gin.Context) {
 	}
 	actors, err := models.LoadOwnedNonPlayerActors(c.Request.Context(), db.DB, playerID.String())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load actors"})
+		httperr.Respond(c, httperr.Internal("Failed to load actors", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"actors": actors})
@@ -44,7 +45,7 @@ func GetActor(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load actor"})
+		httperr.Respond(c, httperr.Internal("Failed to load actor", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"actor": actor})

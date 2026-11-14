@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -31,7 +32,7 @@ func InitiateTrade(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -43,7 +44,7 @@ func InitiateTrade(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy người nhận chỉ định"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+			httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		}
 		return
 	}
@@ -57,23 +58,23 @@ func InitiateTrade(c *gin.Context) {
 	if authID.String() < receiverID.String() {
 		sender, err = evaluateManaTx(tx, authID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+			httperr.Respond(c, httperr.Internal("Failed to load sender details", err))
 			return
 		}
 		receiver, err = evaluateManaTx(tx, receiverID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+			httperr.Respond(c, httperr.Internal("Failed to load receiver details", err))
 			return
 		}
 	} else {
 		receiver, err = evaluateManaTx(tx, receiverID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+			httperr.Respond(c, httperr.Internal("Failed to load receiver details", err))
 			return
 		}
 		sender, err = evaluateManaTx(tx, authID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+			httperr.Respond(c, httperr.Internal("Failed to load sender details", err))
 			return
 		}
 	}
@@ -125,7 +126,7 @@ func InitiateTrade(c *gin.Context) {
 		)
 	`, sender.ID, receiver.ID).Scan(&activeExists)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database check failed"})
+		httperr.Respond(c, httperr.Internal("Database check failed", err))
 		return
 	}
 	if activeExists {
@@ -141,12 +142,12 @@ func InitiateTrade(c *gin.Context) {
 		RETURNING id
 	`, sender.ID, receiver.ID).Scan(&tradeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phòng giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo phòng giao dịch", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit trade request"})
+		httperr.Respond(c, httperr.Internal("Failed to commit trade request", err))
 		return
 	}
 	notifyTradeParticipants(sender.ID, receiver.ID)
@@ -165,7 +166,7 @@ func GetActiveTrade(c *gin.Context) {
 
 	trade, err := LoadActiveTrade(authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query active trade: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to query active trade: "+err.Error(), err))
 		return
 	}
 
@@ -192,12 +193,12 @@ func AcceptTrade(c *gin.Context) {
 		WHERE id = $1 AND receiver_id = $2 AND status = 'PENDING'
 	`, tradeID, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chấp nhận giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể chấp nhận giao dịch", err))
 		return
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận trạng thái giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận trạng thái giao dịch", err))
 		return
 	}
 	if rowsAffected != 1 {
@@ -229,7 +230,7 @@ func DeclineTrade(c *gin.Context) {
 		WHERE id = $1 AND receiver_id = $2 AND status = 'PENDING'
 	`, tradeID, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể từ chối giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể từ chối giao dịch", err))
 		return
 	}
 
@@ -263,7 +264,7 @@ func CancelTrade(c *gin.Context) {
 		WHERE id = $1 AND (sender_id = $2 OR receiver_id = $2) AND status IN ('PENDING', 'ACCEPTED')
 	`, tradeID, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể hủy giao dịch", err))
 		return
 	}
 

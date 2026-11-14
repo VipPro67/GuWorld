@@ -11,6 +11,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/playerstate"
@@ -42,7 +43,7 @@ func GetPlayerInventoryGus(c *gin.Context) {
 
 	guInv, err := db.LoadPlayerGus(db.DB, authID.String(), false)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Gu inventory: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load Gu inventory: "+err.Error(), err))
 		return
 	}
 
@@ -462,7 +463,7 @@ func FeedGroup(c *gin.Context) {
 		}
 	}
 	if !found {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gu definition not found in registry"})
+		httperr.Respond(c, httperr.Internal("Gu definition not found in registry", nil))
 		return
 	}
 

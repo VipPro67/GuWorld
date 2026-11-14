@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -69,7 +70,7 @@ func GetFeedbacks(c *gin.Context) {
 	if exists {
 		err := db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(is_admin, false) FROM players WHERE id = $1", authID).Scan(&isAdmin)
 		if err != nil && err != sql.ErrNoRows {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 			return
 		}
 	}
@@ -127,7 +128,7 @@ func GetFeedbacks(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch feedbacks: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to fetch feedbacks: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -143,7 +144,7 @@ func GetFeedbacks(c *gin.Context) {
 			&userVote, &f.CommentCount,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning feedback: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Error scanning feedback: "+err.Error(), err))
 			return
 		}
 
@@ -211,7 +212,7 @@ func SubmitFeedback(c *gin.Context) {
 	`, authID, req.Title, req.Description, categoryUpper, status).Scan(&newID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Thỉnh nguyện lên Thiên Đạo thất bại: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Thỉnh nguyện lên Thiên Đạo thất bại: "+err.Error(), err))
 		return
 	}
 
@@ -254,7 +255,7 @@ func VoteFeedback(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 	defer tx.Rollback()
@@ -263,7 +264,7 @@ func VoteFeedback(c *gin.Context) {
 	var rank int
 	err = tx.QueryRow("SELECT rank FROM players WHERE id = $1", authID).Scan(&rank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải thông tin cổ sư: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tải thông tin cổ sư: "+err.Error(), err))
 		return
 	}
 
@@ -279,7 +280,7 @@ func VoteFeedback(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Góp ý không tồn tại!"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 
@@ -302,7 +303,7 @@ func VoteFeedback(c *gin.Context) {
 		// Existing vote found
 		hasVoted = true
 	} else {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking vote: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error checking vote", err))
 		return
 	}
 
@@ -310,7 +311,7 @@ func VoteFeedback(c *gin.Context) {
 		// Insert new vote
 		_, err = tx.Exec("INSERT INTO feedback_votes (feedback_id, user_id, vote_type) VALUES ($1, $2, $3)", feedbackID, authID, req.VoteType)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu lượt vote: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi lưu lượt vote: "+err.Error(), err))
 			return
 		}
 		voteDiff = req.VoteType
@@ -319,7 +320,7 @@ func VoteFeedback(c *gin.Context) {
 			// Clicked same vote type again -> Cancel vote
 			_, err = tx.Exec("DELETE FROM feedback_votes WHERE feedback_id = $1 AND user_id = $2", feedbackID, authID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa lượt vote: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Lỗi xóa lượt vote: "+err.Error(), err))
 				return
 			}
 			voteDiff = -existingVoteType
@@ -327,7 +328,7 @@ func VoteFeedback(c *gin.Context) {
 			// Changed vote type
 			_, err = tx.Exec("UPDATE feedback_votes SET vote_type = $1 WHERE feedback_id = $2 AND user_id = $3", req.VoteType, feedbackID, authID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật lượt vote: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Lỗi cập nhật lượt vote: "+err.Error(), err))
 				return
 			}
 			voteDiff = 2 * req.VoteType
@@ -344,13 +345,13 @@ func VoteFeedback(c *gin.Context) {
 	`, voteDiff, feedbackID).Scan(&newTotalVotes)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tổng số lượt vote: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật tổng số lượt vote: "+err.Error(), err))
 		return
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failure: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Commit failure: "+err.Error(), err))
 		return
 	}
 
@@ -414,7 +415,7 @@ func UpdateFeedbackStatus(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 	defer tx.Rollback()
@@ -423,7 +424,7 @@ func UpdateFeedbackStatus(c *gin.Context) {
 	var isAdmin bool
 	err = tx.QueryRow("SELECT COALESCE(is_admin, false) FROM players WHERE id = $1", authID).Scan(&isAdmin)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error validating admin status"})
+		httperr.Respond(c, httperr.Internal("Database error validating admin status", err))
 		return
 	}
 
@@ -445,7 +446,7 @@ func UpdateFeedbackStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy góp ý này!"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 
@@ -462,7 +463,7 @@ func UpdateFeedbackStatus(c *gin.Context) {
 		WHERE id = $3
 	`, statusLower, devResp, feedbackID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái góp ý: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật trạng thái góp ý: "+err.Error(), err))
 		return
 	}
 
@@ -522,7 +523,7 @@ func UpdateFeedbackStatus(c *gin.Context) {
 
 	err = tx.Commit()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit transaction: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi commit transaction: "+err.Error(), err))
 		return
 	}
 
@@ -543,7 +544,7 @@ func GetFeedbackComments(c *gin.Context) {
 	var exists bool
 	err = db.DB.QueryRowContext(c.Request.Context(), "SELECT EXISTS(SELECT 1 FROM feedback WHERE id = $1)", feedbackID).Scan(&exists)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 	if !exists {
@@ -568,7 +569,7 @@ func GetFeedbackComments(c *gin.Context) {
 		ORDER BY c.created_at ASC
 	`, feedbackID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải góp ý: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tải góp ý: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -577,7 +578,7 @@ func GetFeedbackComments(c *gin.Context) {
 	for rows.Next() {
 		var cm models.FeedbackComment
 		if err := rows.Scan(&cm.ID, &cm.FeedbackID, &cm.UserID, &cm.Username, &cm.Content, &cm.CreatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc góp ý: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc góp ý: "+err.Error(), err))
 			return
 		}
 		comments = append(comments, cm)
@@ -620,7 +621,7 @@ func AddFeedbackComment(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 	defer tx.Rollback()
@@ -629,7 +630,7 @@ func AddFeedbackComment(c *gin.Context) {
 	var rank int
 	err = tx.QueryRow("SELECT rank FROM players WHERE id = $1", authID).Scan(&rank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải thông tin cổ sư: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tải thông tin cổ sư: "+err.Error(), err))
 		return
 	}
 	if rank < 2 {
@@ -644,7 +645,7 @@ func AddFeedbackComment(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Góp ý không tồn tại!"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 
@@ -664,19 +665,19 @@ func AddFeedbackComment(c *gin.Context) {
 		RETURNING id, created_at
 	`, feedbackID, authID, strings.TrimSpace(req.Content)).Scan(&commentID, &createdAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu góp ý: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu góp ý: "+err.Error(), err))
 		return
 	}
 
 	var commentCount int
 	err = tx.QueryRow("SELECT COUNT(1) FROM feedback_comments WHERE feedback_id = $1", feedbackID).Scan(&commentCount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đếm góp ý: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi đếm góp ý: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failure: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Commit failure: "+err.Error(), err))
 		return
 	}
 
@@ -707,7 +708,7 @@ func DeleteFeedbackComment(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 	defer tx.Rollback()
@@ -719,7 +720,7 @@ func DeleteFeedbackComment(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Góp ý không tồn tại!"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		return
 	}
 
@@ -733,12 +734,12 @@ func DeleteFeedbackComment(c *gin.Context) {
 
 	_, err = tx.Exec("DELETE FROM feedback_comments WHERE id = $1", commentID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa góp ý: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi xóa góp ý: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failure: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Commit failure: "+err.Error(), err))
 		return
 	}
 

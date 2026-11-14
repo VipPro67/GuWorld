@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -40,7 +41,7 @@ func GetJoinRequests(c *gin.Context) {
 		ORDER BY r.created_at ASC
 	`, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch join requests: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to fetch join requests: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -83,7 +84,7 @@ func ActionJoinRequest(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -132,21 +133,21 @@ func ActionJoinRequest(c *gin.Context) {
 			VALUES ($1, $2, 'NGOAI_MON', 0)
 		`, sectID, targetPlayerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add member to sect: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to add member to sect: "+err.Error(), err))
 			return
 		}
 
 		// Delete all pending requests for this player (since they joined this sect now)
 		_, err = tx.Exec(`DELETE FROM sect_join_requests WHERE player_id = $1`, targetPlayerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clean join requests: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to clean join requests: "+err.Error(), err))
 			return
 		}
 	} else if strings.ToLower(req.Action) == "reject" {
 		// Just delete the request to allow them to apply again later
 		_, err = tx.Exec(`DELETE FROM sect_join_requests WHERE id = $1`, requestID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reject join request: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to reject join request: "+err.Error(), err))
 			return
 		}
 	} else {
@@ -155,7 +156,7 @@ func ActionJoinRequest(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 
@@ -200,7 +201,7 @@ func GetPromotionRequests(c *gin.Context) {
 		ORDER BY r.created_at ASC
 	`, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch promotion requests: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to fetch promotion requests: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -243,7 +244,7 @@ func ActionPromotionRequest(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -283,14 +284,14 @@ func ActionPromotionRequest(c *gin.Context) {
 		// Update member rank in sect_members
 		_, err = tx.Exec(`UPDATE sect_members SET member_rank = $1 WHERE player_id = $2`, targetRank, targetPlayerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update member rank: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update member rank: "+err.Error(), err))
 			return
 		}
 
 		// Delete request
 		_, err = tx.Exec(`DELETE FROM sect_promotion_requests WHERE id = $1`, requestID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete request: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to delete request: "+err.Error(), err))
 			return
 		}
 	} else if strings.ToLower(req.Action) == "reject" {
@@ -312,7 +313,7 @@ func ActionPromotionRequest(c *gin.Context) {
 		if costPoints > 0 {
 			_, err = tx.Exec(`UPDATE sect_members SET contribution_points = contribution_points + $1 WHERE player_id = $2`, costPoints, targetPlayerID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refund contribution points: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to refund contribution points: "+err.Error(), err))
 				return
 			}
 		}
@@ -320,7 +321,7 @@ func ActionPromotionRequest(c *gin.Context) {
 		// Delete request
 		_, err = tx.Exec(`DELETE FROM sect_promotion_requests WHERE id = $1`, requestID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete request: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to delete request: "+err.Error(), err))
 			return
 		}
 	} else {
@@ -329,7 +330,7 @@ func ActionPromotionRequest(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 

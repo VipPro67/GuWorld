@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -32,12 +33,12 @@ func AdminListResidualTraces(c *gin.Context) {
 	pattern := "%" + search + "%"
 	var total int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM world_residual_traces t JOIN players p ON p.id=t.player_id WHERE $1='' OR t.region_id ILIKE $2 OR t.action_type ILIKE $2 OR t.dominant_path ILIKE $2 OR p.username ILIKE $2 OR t.player_id::text ILIKE $2`, search, pattern).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm dấu vết thế giới"})
+		httperr.Respond(c, httperr.Internal("Không thể đếm dấu vết thế giới", err))
 		return
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT t.id,t.region_id,t.x,t.y,t.player_id,p.username,t.action_type,t.dominant_path,t.dao_pulse_strength,t.expires_at,t.created_at FROM world_residual_traces t JOIN players p ON p.id=t.player_id WHERE $1='' OR t.region_id ILIKE $2 OR t.action_type ILIKE $2 OR t.dominant_path ILIKE $2 OR p.username ILIKE $2 OR t.player_id::text ILIKE $2 ORDER BY t.created_at DESC,t.id LIMIT $3 OFFSET $4`, search, pattern, limit, (page-1)*limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải dấu vết thế giới"})
+		httperr.Respond(c, httperr.Internal("Không thể tải dấu vết thế giới", err))
 		return
 	}
 	defer rows.Close()
@@ -48,13 +49,13 @@ func AdminListResidualTraces(c *gin.Context) {
 		var pulse float64
 		var expires, created time.Time
 		if err := rows.Scan(&id, &regionID, &x, &y, &playerID, &username, &actionType, &path, &pulse, &expires, &created); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dấu vết thế giới"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc dấu vết thế giới", err))
 			return
 		}
 		data = append(data, gin.H{"id": id, "region_id": regionID, "x": x, "y": y, "player_id": playerID, "player_username": username, "action_type": actionType, "dominant_path": path, "dao_pulse_strength": pulse, "expires_at": expires, "created_at": created})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dấu vết thế giới"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc dấu vết thế giới", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": total, "page": page, "limit": limit})
@@ -130,7 +131,7 @@ func AdminDeleteResidualTrace(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM world_residual_traces WHERE id=$1`, traceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa dấu vết"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa dấu vết", err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {

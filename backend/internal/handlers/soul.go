@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -58,14 +59,14 @@ func RefineSoul(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to begin transaction", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player: "+err.Error(), err))
 		return
 	}
 
@@ -94,7 +95,7 @@ func RefineSoul(c *gin.Context) {
 		WHERE id = $5
 	`, player.SoulTier, player.NeedsSoulRefine, player.SoulHP, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to save player: "+err.Error(), err))
 		return
 	}
 
@@ -117,7 +118,7 @@ func RefineSoul(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to commit transaction: "+err.Error(), err))
 		return
 	}
 

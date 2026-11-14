@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -497,7 +498,7 @@ func ListGuHouses(c *gin.Context) {
 		ORDER BY created_at DESC
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách Tiên Cổ Ốc"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách Tiên Cổ Ốc", err))
 		return
 	}
 	defer rows.Close()
@@ -507,28 +508,28 @@ func ListGuHouses(c *gin.Context) {
 		var r guHouseRecord
 		var coreBytes, profBytes []byte
 		if err := rows.Scan(&r.ID, &r.PlayerID, &r.Name, &r.Rank, &coreBytes, &r.AuxGuCount, &profBytes, &r.CurrentDurability, &r.IsEquipped, &r.CreatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu Tiên Cổ Ốc"})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc dữ liệu Tiên Cổ Ốc", err))
 			return
 		}
 		_ = json.Unmarshal(coreBytes, &r.CoreGuInstances)
 		if err := json.Unmarshal(profBytes, &r.HouseProfile); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Profile Block v2 của Tiên Cổ Ốc không hợp lệ"})
+			httperr.Respond(c, httperr.Internal("Profile Block v2 của Tiên Cổ Ốc không hợp lệ", err))
 			return
 		}
 		list = append(list, r)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu Tiên Cổ Ốc"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc dữ liệu Tiên Cổ Ốc", err))
 		return
 	}
 	if err := rows.Close(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đóng danh sách Tiên Cổ Ốc"})
+		httperr.Respond(c, httperr.Internal("Không thể đóng danh sách Tiên Cổ Ốc", err))
 		return
 	}
 
 	templates, err := listAdminCompositionTemplates(c.Request.Context(), composition.GuHouseActionProfile().ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải composition templates Tiên Cổ Ốc"})
+		httperr.Respond(c, httperr.Internal("Không thể tải composition templates Tiên Cổ Ốc", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -554,7 +555,7 @@ func PreviewGuHouse(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -590,7 +591,7 @@ func CreateGuHouse(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -601,7 +602,7 @@ func CreateGuHouse(c *gin.Context) {
 
 	var count int
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM player_gu_houses WHERE player_id = $1`, playerID).Scan(&count); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giới hạn"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra giới hạn", err))
 		return
 	}
 	if count >= guHouseProductProfile.MaxSaved {
@@ -627,7 +628,7 @@ func CreateGuHouse(c *gin.Context) {
 	profile.PreviewFingerprint = ""
 	profBytes, err := json.Marshal(profile)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuẩn hóa Block v2 của Trận Kích"})
+		httperr.Respond(c, httperr.Internal("Không thể chuẩn hóa Block v2 của Trận Kích", err))
 		return
 	}
 
@@ -638,7 +639,7 @@ func CreateGuHouse(c *gin.Context) {
 		RETURNING id::text
 	`, playerID, name, highestRank, coreBytes, req.AuxGuCount, profBytes).Scan(&houseID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Tiên Cổ Ốc"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu Tiên Cổ Ốc", err))
 		return
 	}
 
@@ -658,7 +659,7 @@ func CreateGuHouse(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận giao dịch", err))
 		return
 	}
 
@@ -678,7 +679,7 @@ func EquipGuHouse(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -725,11 +726,11 @@ func EquipGuHouse(c *gin.Context) {
 			// Release the outgoing house first. Any later error rolls the entire
 			// transaction back, and this permits two saved houses to share a core.
 			if _, err = tx.Exec(`UPDATE player_gu_houses SET is_equipped=false,updated_at=NOW() WHERE player_id=$1 AND is_equipped=true AND id<>$2`, playerID, houseID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tháo Tiên Cổ Ốc đang hoạt động"})
+				httperr.Respond(c, httperr.Internal("Không thể tháo Tiên Cổ Ốc đang hoạt động", err))
 				return
 			}
 			if _, err = tx.Exec(`DELETE FROM player_gu_house_core_reservations WHERE player_id=$1 AND gu_house_id IN (SELECT id FROM player_gu_houses WHERE player_id=$1 AND is_equipped=false) AND gu_house_id<>$2`, playerID, houseID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giải phóng Cổ hạch tâm cũ"})
+				httperr.Respond(c, httperr.Internal("Không thể giải phóng Cổ hạch tâm cũ", err))
 				return
 			}
 		}
@@ -779,7 +780,7 @@ func EquipGuHouse(c *gin.Context) {
 				return
 			}
 			if reservationErr != sql.ErrNoRows {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Trận Pháp"})
+				httperr.Respond(c, httperr.Internal("Không thể kiểm tra giữ chỗ Trận Pháp", reservationErr))
 				return
 			}
 			var heldByMove string
@@ -789,7 +790,7 @@ func EquipGuHouse(c *gin.Context) {
 				return
 			}
 			if reservationErr != sql.ErrNoRows {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Cổ hạch tâm"})
+				httperr.Respond(c, httperr.Internal("Không thể kiểm tra giữ chỗ Cổ hạch tâm", reservationErr))
 				return
 			}
 			var heldByHouse string
@@ -799,7 +800,7 @@ func EquipGuHouse(c *gin.Context) {
 				return
 			}
 			if reservationErr != nil && reservationErr != sql.ErrNoRows {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Cổ hạch tâm"})
+				httperr.Respond(c, httperr.Internal("Không thể kiểm tra giữ chỗ Cổ hạch tâm", reservationErr))
 				return
 			}
 			var legacyMoveUse bool
@@ -807,7 +808,7 @@ func EquipGuHouse(c *gin.Context) {
 				SELECT 1 FROM player_killer_moves AS move, jsonb_array_elements(move.components) AS component
 				WHERE move.player_id=$1 AND move.is_equipped=true AND component->>'instance_id'=$2
 			)`, playerID, coreID).Scan(&legacyMoveUse); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Sát Chiêu đang active"})
+				httperr.Respond(c, httperr.Internal("Không thể kiểm tra Sát Chiêu đang active", err))
 				return
 			}
 			if legacyMoveUse {
@@ -827,7 +828,7 @@ func EquipGuHouse(c *gin.Context) {
 		if relinkedHouse {
 			newCoreBytes, _ := json.Marshal(coreIDs)
 			if _, err = tx.Exec(`UPDATE player_gu_houses SET core_gu_instances=$1 WHERE id=$2`, newCoreBytes, houseID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Cổ hạch tâm đã tái liên kết"})
+				httperr.Respond(c, httperr.Internal("Không thể cập nhật Cổ hạch tâm đã tái liên kết", err))
 				return
 			}
 		}
@@ -835,18 +836,18 @@ func EquipGuHouse(c *gin.Context) {
 
 	_, err = tx.Exec(`UPDATE player_gu_houses SET is_equipped=$1, updated_at=NOW() WHERE id=$2 AND player_id=$3`, newState, houseID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái trang bị"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật trạng thái trang bị", err))
 		return
 	}
 	if !newState && guHouseProductProfile.GuPolicy == composition.GuPolicyReserveActive {
 		if _, err = tx.Exec(`DELETE FROM player_gu_house_core_reservations WHERE gu_house_id=$1 AND player_id=$2`, houseID, playerID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giải phóng Cổ hạch tâm"})
+			httperr.Respond(c, httperr.Internal("Không thể giải phóng Cổ hạch tâm", err))
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận", err))
 		return
 	}
 
@@ -923,7 +924,7 @@ func RepairGuHouse(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -1018,7 +1019,7 @@ func RepairGuHouse(c *gin.Context) {
 			WHERE id = $5
 		`, currentDurability, highestRank, newCoreBytes, newProfBytes, houseID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái Tiên Cổ Ốc"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật trạng thái Tiên Cổ Ốc", err))
 			return
 		}
 
@@ -1040,7 +1041,7 @@ func RepairGuHouse(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận", err))
 		return
 	}
 

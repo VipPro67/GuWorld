@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
@@ -293,14 +294,14 @@ func HarvestVein(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -317,7 +318,7 @@ func HarvestVein(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Nguyên Tuyền không còn tồn tại"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load vein"})
+			httperr.Respond(c, httperr.Internal("Failed to load vein", err))
 		}
 		return
 	}
@@ -354,12 +355,12 @@ func HarvestVein(c *gin.Context) {
 		    human_qi = LEAST(human_qi + $3, %d)
 		WHERE id = $4
 	`, int(MaxHumanQi)), stonesAdd, immortalAdd, qi, authID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add vein rewards"})
+		httperr.Respond(c, httperr.Internal("Failed to add vein rewards", err))
 		return
 	}
 	if chests > 0 {
 		if err = InventorySvc.AddItem(tx, authID.String(), veinChestItemID(v.VeinType), "materials", int64(chests)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add vein chests"})
+			httperr.Respond(c, httperr.Internal("Failed to add vein chests", err))
 			return
 		}
 	}
@@ -372,7 +373,7 @@ func HarvestVein(c *gin.Context) {
 		_, err = tx.Exec(`UPDATE primeval_veins SET accumulated_since = $1, produced_minutes = $2 WHERE id = $3`, now, produced, v.ID)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vein"})
+		httperr.Respond(c, httperr.Internal("Failed to update vein", err))
 		return
 	}
 
@@ -398,7 +399,7 @@ func HarvestVein(c *gin.Context) {
 	})
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 

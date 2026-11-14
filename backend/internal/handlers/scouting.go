@@ -14,6 +14,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -62,7 +63,7 @@ func InspectLocalPlayer(c *gin.Context) {
 		&viewer.GuInventory, &viewer.PathMasteries,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load viewer data: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load viewer data: "+err.Error(), err))
 		return
 	}
 
@@ -111,7 +112,7 @@ func InspectLocalPlayer(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ sư này!"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn mục tiêu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn mục tiêu: "+err.Error(), err))
 		return
 	}
 	if middleware.IsRealtimeWorldOwned(target.ID) {
@@ -334,7 +335,7 @@ func ExecuteDivination(c *gin.Context) {
 		&viewer.CurrentRegion, &viewer.X, &viewer.Y, &viewer.GuInventory, &viewer.PathMasteries, &viewer.Statuses,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load viewer data: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load viewer data: "+err.Error(), err))
 		return
 	}
 
@@ -393,7 +394,7 @@ func ExecuteDivination(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Thiên cơ mờ mịt, không tìm thấy nhân quả của cổ sư này!"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn thiên cơ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn thiên cơ: "+err.Error(), err))
 		return
 	}
 
@@ -442,7 +443,7 @@ func ExecuteDivination(c *gin.Context) {
 	// Deduct resources & apply damage in transaction
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi transaction"})
+		httperr.Respond(c, httperr.Internal("Lỗi transaction", err))
 		return
 	}
 	defer tx.Rollback()
@@ -501,12 +502,12 @@ func ExecuteDivination(c *gin.Context) {
 		WHERE id = $6
 	`, newStones, newImmortalStones, newMana, newHP, newSoulHP, viewer.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài nguyên: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật tài nguyên: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit transaction"})
+		httperr.Respond(c, httperr.Internal("Lỗi commit transaction", err))
 		return
 	}
 
@@ -630,7 +631,7 @@ func ApplyTrackingMark(c *gin.Context) {
 		VALUES($1, $2, $3, $4, $5)
 	`, viewerID, targetUUID, markType, float64(viewerRank)*10.0, expiresAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi gieo ấn ký: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi gieo ấn ký: "+err.Error(), err))
 		return
 	}
 
@@ -660,7 +661,7 @@ func GetTrackedTargets(c *gin.Context) {
 		ORDER BY m.expires_at DESC
 	`, viewerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn danh sách theo dõi: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn danh sách theo dõi: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -699,7 +700,7 @@ func SeverClues(c *gin.Context) {
 		&player.CurrentRegion, &player.X, &player.Y, &player.GuInventory, &player.PathMasteries,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải thông tin cổ sư: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tải thông tin cổ sư: "+err.Error(), err))
 		return
 	}
 
@@ -712,7 +713,7 @@ func SeverClues(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi transaction"})
+		httperr.Respond(c, httperr.Internal("Lỗi transaction", err))
 		return
 	}
 	defer tx.Rollback()
@@ -724,7 +725,7 @@ func SeverClues(c *gin.Context) {
 		WHERE id = $2
 	`, manaCost, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật chân nguyên: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật chân nguyên: "+err.Error(), err))
 		return
 	}
 
@@ -733,7 +734,7 @@ func SeverClues(c *gin.Context) {
 		DELETE FROM player_tracking_marks WHERE target_id = $1
 	`, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thanh tẩy ấn ký: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi thanh tẩy ấn ký: "+err.Error(), err))
 		return
 	}
 	purgedMarks, _ := resMarks.RowsAffected()
@@ -744,13 +745,13 @@ func SeverClues(c *gin.Context) {
 		WHERE player_id = $1 AND region_id = $2 AND x = $3 AND y = $4
 	`, player.ID, player.CurrentRegion, player.X, player.Y)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa tàn dư ô bản đồ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi xóa tàn dư ô bản đồ: "+err.Error(), err))
 		return
 	}
 	purgedTraces, _ := resTraces.RowsAffected()
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})
+		httperr.Respond(c, httperr.Internal("Lỗi commit", err))
 		return
 	}
 
@@ -785,7 +786,7 @@ func ResonanceScan(c *gin.Context) {
 		&viewer.PrimevalStones, &viewer.CurrentRegion, &viewer.X, &viewer.Y,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải thông tin người chơi"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải thông tin người chơi", err))
 		return
 	}
 
@@ -953,7 +954,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		&viewer.CurrentRegion, &viewer.X, &viewer.Y, &viewer.GuInventory, &viewer.PathMasteries,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin người suy diễn: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin người suy diễn: "+err.Error(), err))
 		return
 	}
 
@@ -1042,7 +1043,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		if logger.S != nil {
 			logger.S.Errorf("scouting: ExecuteDivineGu queryPlayers error: %v", err)
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ vị trí Cổ trùng"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm chứng đầy đủ vị trí Cổ trùng", err))
 		return
 	} else {
 		defer pRows.Close()
@@ -1062,7 +1063,7 @@ func ExecuteDivineGu(c *gin.Context) {
 				if logger.S != nil {
 					logger.S.Errorf("scouting: ExecuteDivineGu player scan error: %v", err)
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng trong túi người chơi không hợp lệ"})
+				httperr.Respond(c, httperr.Internal("Dữ liệu Cổ trùng trong túi người chơi không hợp lệ", err))
 				return
 			}
 			if middleware.IsRealtimeWorldOwned(pID) {
@@ -1112,7 +1113,7 @@ func ExecuteDivineGu(c *gin.Context) {
 			playerCount++
 		}
 		if err := pRows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết vị trí Cổ trùng trong túi người chơi"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc hết vị trí Cổ trùng trong túi người chơi", err))
 			return
 		}
 	}
@@ -1132,7 +1133,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		if logger.S != nil {
 			logger.S.Errorf("scouting: ExecuteDivineGu querySects error: %v", err)
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ kho Tông Môn"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm chứng đầy đủ kho Tông Môn", err))
 		return
 	} else {
 		defer sRows.Close()
@@ -1143,7 +1144,7 @@ func ExecuteDivineGu(c *gin.Context) {
 				if logger.S != nil {
 					logger.S.Errorf("scouting: ExecuteDivineGu sect scan error: %v", err)
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng trong kho Tông Môn không hợp lệ"})
+				httperr.Respond(c, httperr.Internal("Dữ liệu Cổ trùng trong kho Tông Môn không hợp lệ", err))
 				return
 			}
 			sectDef := float64(sLevel*20 + 10)
@@ -1167,7 +1168,7 @@ func ExecuteDivineGu(c *gin.Context) {
 			sectVaultCount += qty
 		}
 		if err := sRows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết kho Tông Môn"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc hết kho Tông Môn", err))
 			return
 		}
 	}
@@ -1199,7 +1200,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		if logger.S != nil {
 			logger.S.Errorf("scouting: ExecuteDivineGu queryAuctions error: %v", err)
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ Cổ trùng trên chợ"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm chứng đầy đủ Cổ trùng trên chợ", err))
 		return
 	} else {
 		defer aRows.Close()
@@ -1216,7 +1217,7 @@ func ExecuteDivineGu(c *gin.Context) {
 				if logger.S != nil {
 					logger.S.Errorf("scouting: ExecuteDivineGu auction scan error: %v", err)
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu niêm yết Cổ trùng không hợp lệ"})
+				httperr.Respond(c, httperr.Internal("Dữ liệu niêm yết Cổ trùng không hợp lệ", err))
 				return
 			}
 			currLabel := "Nguyên Thạch"
@@ -1241,7 +1242,7 @@ func ExecuteDivineGu(c *gin.Context) {
 			marketCount += qty
 		}
 		if err := aRows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết niêm yết Cổ trùng"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc hết niêm yết Cổ trùng", err))
 			return
 		}
 	}
@@ -1284,7 +1285,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		if logger.S != nil {
 			logger.S.Errorf("scouting: ExecuteDivineGu queryMarketEscrow error: %v", err)
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ Cổ trùng ký gửi trên chợ"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm chứng đầy đủ Cổ trùng ký gửi trên chợ", err))
 		return
 	}
 	defer escrowRows.Close()
@@ -1292,7 +1293,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		var source, creatorName, region, guID string
 		var x, y, guRank int
 		if err := escrowRows.Scan(&source, &creatorName, &region, &x, &y, &guID, &guRank); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng ký gửi trên chợ không hợp lệ"})
+			httperr.Respond(c, httperr.Internal("Dữ liệu Cổ trùng ký gửi trên chợ không hợp lệ", err))
 			return
 		}
 		label := "Đơn trao đổi"
@@ -1307,7 +1308,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		marketCount++
 	}
 	if err := escrowRows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết Cổ trùng ký gửi trên chợ"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc hết Cổ trùng ký gửi trên chợ", err))
 		return
 	}
 
@@ -1332,7 +1333,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		if logger.S != nil {
 			logger.S.Errorf("scouting: ExecuteDivineGu queryGroundDrops error: %v", err)
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ Cổ trùng rơi trên bản đồ"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm chứng đầy đủ Cổ trùng rơi trên bản đồ", err))
 		return
 	} else {
 		defer dropRows.Close()
@@ -1343,7 +1344,7 @@ func ExecuteDivineGu(c *gin.Context) {
 				if logger.S != nil {
 					logger.S.Errorf("scouting: ExecuteDivineGu ground drop scan error: %v", err)
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng rơi trên bản đồ không hợp lệ"})
+				httperr.Respond(c, httperr.Internal("Dữ liệu Cổ trùng rơi trên bản đồ không hợp lệ", err))
 				return
 			}
 			allHolders = append(allHolders, holderData{
@@ -1357,7 +1358,7 @@ func ExecuteDivineGu(c *gin.Context) {
 			groundDropCount++
 		}
 		if err := dropRows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết Cổ trùng rơi trên bản đồ"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc hết Cổ trùng rơi trên bản đồ", err))
 			return
 		}
 	}
@@ -1388,7 +1389,7 @@ func ExecuteDivineGu(c *gin.Context) {
 	// 7. Transaction: Apply cost & backfire damage
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi transaction"})
+		httperr.Respond(c, httperr.Internal("Lỗi transaction", err))
 		return
 	}
 	defer tx.Rollback()
@@ -1437,12 +1438,12 @@ func ExecuteDivineGu(c *gin.Context) {
 		WHERE id = $6
 	`, newStones, newImmortalStones, newMana, newHP, newSoulHP, viewer.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài nguyên: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật tài nguyên: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu dữ liệu: "+err.Error(), err))
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 )
 
 func AdminEffectCatalogMetadata(c *gin.Context) {
@@ -52,7 +53,7 @@ func AdminValidateGuEffects(c *gin.Context) {
 	if len(issues) == 0 {
 		blocks, err := gameplayeffects.DecodeBlockSet(req.Effects)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể phân tích Block v2 sau khi validation thành công"})
+			httperr.Respond(c, httperr.Internal("Không thể phân tích Block v2 sau khi validation thành công", err))
 			return
 		}
 		response["compatibility"] = analyzeEffectCompatibility([]gameplayeffects.Block(blocks))
@@ -66,7 +67,7 @@ func AdminAuditGuEffects(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, rank, effects FROM gu_dictionary ORDER BY id, rank`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc catalog Cổ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể đọc catalog Cổ: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -77,7 +78,7 @@ func AdminAuditGuEffects(c *gin.Context) {
 		var entry effectcatalog.GuEntry
 		var effects []byte
 		if err := rows.Scan(&entry.ID, &entry.Rank, &effects); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc effect Cổ: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể đọc effect Cổ: "+err.Error(), err))
 			return
 		}
 		if len(entries) >= maxGuCatalogEntries || totalBytes+len(effects) > maxGuCatalogEffectBytes {
@@ -89,7 +90,7 @@ func AdminAuditGuEffects(c *gin.Context) {
 		totalBytes += len(effects)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khi duyệt catalog Cổ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi khi duyệt catalog Cổ: "+err.Error(), err))
 		return
 	}
 
@@ -119,7 +120,7 @@ func AdminAuditEffectCatalog(c *gin.Context) {
 	for _, q := range queries {
 		rows, err := db.DB.QueryContext(c.Request.Context(), q.sql)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc effect catalog: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể đọc effect catalog: "+err.Error(), err))
 			return
 		}
 		row := 0
@@ -129,7 +130,7 @@ func AdminAuditEffectCatalog(c *gin.Context) {
 			var raw []byte
 			if err := rows.Scan(&key, &raw); err != nil {
 				rows.Close()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				httperr.Respond(c, httperr.Internal(err.Error(), err))
 				return
 			}
 			entries++
@@ -142,7 +143,7 @@ func AdminAuditEffectCatalog(c *gin.Context) {
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Respond(c, httperr.Internal(err.Error(), err))
 			return
 		}
 		rows.Close()

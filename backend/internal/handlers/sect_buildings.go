@@ -120,7 +120,7 @@ func UpgradeSectBuilding(c *gin.Context) {
 		newRadius := 5 + targetLevel
 		hasOverlap, conflictingSect, errOverlap := CheckTerritoryOverlap(tx, sectRegion, mapX, mapY, newRadius, sectID)
 		if errOverlap != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Kiểm tra mở rộng lãnh địa thất bại: " + errOverlap.Error()})
+			httperr.Respond(c, httperr.Internal("Kiểm tra mở rộng lãnh địa thất bại: "+errOverlap.Error(), errOverlap))
 			return
 		}
 		if hasOverlap {

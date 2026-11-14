@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -35,7 +36,7 @@ func GetPlayerStatus(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to project player status: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to project player status: "+err.Error(), err))
 		}
 		return
 	}
@@ -73,7 +74,7 @@ type playerStatusResponse struct {
 func writeTrimmedPlayerStatus(c *gin.Context, player models.Player) {
 	payload, err := json.Marshal(playerStatusResponse{playerStatusPayload: playerStatusPayload(player)})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize player status"})
+		httperr.Respond(c, httperr.Internal("Failed to serialize player status", err))
 		return
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", payload)

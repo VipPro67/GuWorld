@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -171,25 +172,25 @@ func GetDailyMissions(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
 	var rank int
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT rank FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&rank); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải cảnh giới"})
+		httperr.Respond(c, httperr.Internal("Không thể tải cảnh giới", err))
 		return
 	}
 	now := time.Now()
 	dayKey, resetAt := dailyMissionDay(now)
 	if err := ensureDailyMissionSet(tx, playerID, rank, now); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo nhiệm vụ hằng ngày"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo nhiệm vụ hằng ngày", err))
 		return
 	}
 	rows, err := tx.QueryContext(c.Request.Context(), `SELECT mission_id,mission_type,target_id,target_amount,progress,reward_type,reward_amount,completed_at,claimed_at
 		FROM player_daily_missions WHERE player_id=$1 AND day_key=$2::date ORDER BY mission_id`, playerID, dayKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhiệm vụ hằng ngày"})
+		httperr.Respond(c, httperr.Internal("Không thể tải nhiệm vụ hằng ngày", err))
 		return
 	}
 	missions := make([]dailyMissionState, 0, 5)
@@ -199,7 +200,7 @@ func GetDailyMissions(c *gin.Context) {
 		var completedAt, claimedAt sql.NullTime
 		if err := rows.Scan(&m.ID, &missionType, &targetID, &m.Target, &m.Progress, &m.RewardType, &m.Reward, &completedAt, &claimedAt); err != nil {
 			rows.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc nhiệm vụ hằng ngày"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc nhiệm vụ hằng ngày", err))
 			return
 		}
 		m.Type, m.TargetID = missionType, targetID
@@ -216,12 +217,12 @@ func GetDailyMissions(c *gin.Context) {
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc nhiệm vụ hằng ngày"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc nhiệm vụ hằng ngày", err))
 		return
 	}
 	rows.Close()
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu nhiệm vụ hằng ngày"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu nhiệm vụ hằng ngày", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"day_key": dayKey, "reset_at": resetAt, "missions": missions})
@@ -242,18 +243,18 @@ func ClaimDailyMission(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
 	dayKey, _ := dailyMissionDay(time.Now())
 	var rank int
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT rank FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&rank); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải cảnh giới"})
+		httperr.Respond(c, httperr.Internal("Không thể tải cảnh giới", err))
 		return
 	}
 	if err := ensureDailyMissionSet(tx, playerID, rank, time.Now()); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo nhiệm vụ hằng ngày"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo nhiệm vụ hằng ngày", err))
 		return
 	}
 	var rewardType string
@@ -266,7 +267,7 @@ func ClaimDailyMission(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể nhận thưởng"})
+		httperr.Respond(c, httperr.Internal("Không thể nhận thưởng", err))
 		return
 	}
 	var query string
@@ -276,16 +277,16 @@ func ClaimDailyMission(c *gin.Context) {
 	case "immortal_stones":
 		query = `UPDATE players SET immortal_stones=immortal_stones+$1 WHERE id=$2`
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Loại phần thưởng không hợp lệ"})
+		httperr.Respond(c, httperr.Internal("Loại phần thưởng không hợp lệ", nil))
 		return
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), query, reward, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cấp phần thưởng"})
+		httperr.Respond(c, httperr.Internal("Không thể cấp phần thưởng", err))
 		return
 	}
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải nhân vật", err))
 		return
 	}
 	rewardName := "Nguyên Thạch"
@@ -309,7 +310,7 @@ func ClaimDailyMission(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phần thưởng"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu phần thưởng", err))
 		return
 	}
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": "Đã nhận thưởng nhiệm vụ", "reward_type": rewardType, "reward": reward})

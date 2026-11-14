@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -24,7 +25,7 @@ func AdminListPlayerSectMissions(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT pm.id,pm.mission_id,sm.title,sm.sect_id,s.name,sm.mission_type,sm.target_id,sm.target_amount,sm.reward_contribution,pm.current_progress,pm.status,pm.assigned_at,pm.expires_at FROM player_sect_missions pm JOIN sect_missions sm ON sm.id=pm.mission_id JOIN sects s ON s.id=sm.sect_id WHERE pm.player_id=$1 ORDER BY pm.assigned_at DESC,pm.id`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhiệm vụ tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể tải nhiệm vụ tông môn", err))
 		return
 	}
 	defer rows.Close()
@@ -35,7 +36,7 @@ func AdminListPlayerSectMissions(c *gin.Context) {
 		var assigned time.Time
 		var expires sql.NullTime
 		if err := rows.Scan(&id, &missionID, &title, &sectID, &sectName, &missionType, &targetID, &targetAmount, &reward, &progress, &status, &assigned, &expires); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc nhiệm vụ tông môn"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc nhiệm vụ tông môn", err))
 			return
 		}
 		var expiresValue any
@@ -45,7 +46,7 @@ func AdminListPlayerSectMissions(c *gin.Context) {
 		data = append(data, gin.H{"id": id, "mission_id": missionID, "title": title, "sect_id": sectID, "sect_name": sectName, "mission_type": missionType, "target_id": targetID, "target_amount": targetAmount, "reward_contribution": reward, "current_progress": progress, "status": status, "assigned_at": assigned, "expires_at": expiresValue})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc nhiệm vụ tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc nhiệm vụ tông môn", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": len(data)})
@@ -101,7 +102,7 @@ func AdminUpdatePlayerSectMission(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tiến độ nhiệm vụ của người chơi"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tiến độ nhiệm vụ"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật tiến độ nhiệm vụ", err))
 		}
 		return
 	}

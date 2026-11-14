@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -211,14 +212,14 @@ func AdminBanPlayer(c *gin.Context) {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin thiết bị"})
+			httperr.Respond(c, httperr.Internal("Không thể tải thông tin thiết bị", err))
 		}
 		return
 	}
 
 	spec := BanSpec{Reason: req.Reason, Until: until, BannedBy: adminID, BlockDevice: req.BlockDevice, IP: ip, Fingerprint: fingerprint}
 	if err := ApplyPlayerBan(c.Request.Context(), playerID, spec); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa tài khoản"})
+		httperr.Respond(c, httperr.Internal("Không thể khóa tài khoản", err))
 		return
 	}
 
@@ -259,7 +260,7 @@ func AdminUnbanPlayer(c *gin.Context) {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin người chơi"})
+			httperr.Respond(c, httperr.Internal("Không thể tải thông tin người chơi", err))
 		}
 		return
 	}
@@ -268,7 +269,7 @@ func AdminUnbanPlayer(c *gin.Context) {
 		UPDATE players
 		SET is_banned=false, ban_reason='', banned_until=NULL, banned_by=NULL, banned_at=NULL
 		WHERE id=$1`, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở khóa tài khoản"})
+		httperr.Respond(c, httperr.Internal("Không thể mở khóa tài khoản", err))
 		return
 	}
 	if ip != "" || fingerprint != "" {
@@ -317,7 +318,7 @@ func AdminMutePlayer(c *gin.Context) {
 		return
 	}
 	if err := applyChatMute(c.Request.Context(), playerID, true, until); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hạn chế chat"})
+		httperr.Respond(c, httperr.Internal("Không thể hạn chế chat", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
@@ -343,7 +344,7 @@ func AdminUnmutePlayer(c *gin.Context) {
 		return
 	}
 	if err := applyChatMute(c.Request.Context(), playerID, false, sql.NullTime{}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bỏ hạn chế chat"})
+		httperr.Respond(c, httperr.Internal("Không thể bỏ hạn chế chat", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{

@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/sectmechanics"
@@ -148,7 +149,7 @@ func GetSectRelocationEstimate(c *gin.Context) {
 		FROM players WHERE id = $1
 	`, playerID).Scan(&player.ID, &player.Username, &player.CurrentRegion, &player.X, &player.Y)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không tìm thấy thông tin nhân vật", err))
 		return
 	}
 
@@ -171,7 +172,7 @@ func GetSectRelocationEstimate(c *gin.Context) {
 		FROM sects WHERE id = $1
 	`, m.SectID).Scan(&sectName, &sectRegion, &sectX, &sectY, &sectFunds, &lastRelocatedAt, &buildingsJSON)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin tông môn", err))
 		return
 	}
 
@@ -180,7 +181,7 @@ func GetSectRelocationEstimate(c *gin.Context) {
 
 	totalCost, breakdown, err := CalculateSectRelocationCost(db.DB, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tính toán chi phí di dời: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tính toán chi phí di dời: "+err.Error(), err))
 		return
 	}
 
@@ -281,14 +282,14 @@ func RelocateSect(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khởi tạo giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khởi tạo giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 	if gamefx.IsDeadState(&player) {
@@ -320,7 +321,7 @@ func RelocateSect(c *gin.Context) {
 		FROM sects WHERE id = $1 FOR UPDATE
 	`, m.SectID).Scan(&sectName, &sectRegion, &sectX, &sectY, &sectFunds, &lastRelocatedAt, &buildingsJSON)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm thấy tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể tìm thấy tông môn", err))
 		return
 	}
 
@@ -361,7 +362,7 @@ func RelocateSect(c *gin.Context) {
 
 	hasOverlap, conflictingSect, errOverlap := CheckTerritoryOverlap(tx, player.CurrentRegion, player.X, player.Y, radius, m.SectID)
 	if errOverlap != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Kiểm tra lãnh địa thất bại: " + errOverlap.Error()})
+		httperr.Respond(c, httperr.Internal("Kiểm tra lãnh địa thất bại: "+errOverlap.Error(), errOverlap))
 		return
 	}
 	if hasOverlap {
@@ -374,7 +375,7 @@ func RelocateSect(c *gin.Context) {
 	// 4. Calculate cost
 	totalCost, breakdown, err := CalculateSectRelocationCost(tx, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tính toán chi phí di dời: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tính toán chi phí di dời: "+err.Error(), err))
 		return
 	}
 
@@ -392,7 +393,7 @@ func RelocateSect(c *gin.Context) {
 		WHERE id = $5 AND funds >= $4
 	`, player.CurrentRegion, player.X, player.Y, totalCost, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cập nhật vị trí sơn môn thất bại: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Cập nhật vị trí sơn môn thất bại: "+err.Error(), err))
 		return
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
@@ -419,7 +420,7 @@ func RelocateSect(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn tất giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi hoàn tất giao dịch", err))
 		return
 	}
 

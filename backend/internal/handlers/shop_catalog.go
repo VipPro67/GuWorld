@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 	"sync"
@@ -394,7 +395,7 @@ func GetShopList(c *gin.Context) {
 	items, err := loadCaravanShopCatalog()
 	if err != nil {
 		logger.S.Errorf("Error loading shop catalog: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách Thương Đội"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách Thương Đội", err))
 		return
 	}
 

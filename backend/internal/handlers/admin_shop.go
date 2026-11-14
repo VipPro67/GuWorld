@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
@@ -41,7 +42,7 @@ func AdminListShopItems(c *gin.Context) {
 		ORDER BY c.sort_order, c.id, c.rank
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách shop: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách shop: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -50,17 +51,17 @@ func AdminListShopItems(c *gin.Context) {
 	for rows.Next() {
 		var item AdminShopItem
 		if err := rows.Scan(&item.ID, &item.Rank, &item.Price, &item.Stock, &item.IsDefault, &item.SortOrder, &item.Name, &item.ItemType); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách cửa hàng"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc đầy đủ danh sách cửa hàng", err))
 			return
 		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cửa hàng"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách cửa hàng", err))
 		return
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cửa hàng"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách cửa hàng", err))
 		return
 	}
 
@@ -95,7 +96,7 @@ func AdminCreateShopItem(c *gin.Context) {
 	// Verify item exists in item_dictionary, gu_dictionary, or refining_recipes
 	var exists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, req.ID).Scan(&exists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh mặt hàng"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh mặt hàng", err))
 		return
 	}
 	if !exists {
@@ -106,7 +107,7 @@ func AdminCreateShopItem(c *gin.Context) {
 	if req.Rank > 0 {
 		var guRankExists bool
 		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.ID, req.Rank).Scan(&guRankExists); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh bậc cổ trùng"})
+			httperr.Respond(c, httperr.Internal("Không thể xác minh bậc cổ trùng", err))
 			return
 		}
 		if !guRankExists {
@@ -118,7 +119,7 @@ func AdminCreateShopItem(c *gin.Context) {
 	_, err := db.DB.Exec(`INSERT INTO caravan_shop_items (id, rank, price, stock, is_default, sort_order) VALUES ($1,$2,$3,$4,$5,$6)`,
 		req.ID, req.Rank, req.Price, req.Stock, req.IsDefault, req.SortOrder)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể thêm: "+err.Error(), err))
 		return
 	}
 
@@ -151,12 +152,12 @@ func AdminUpdateShopItem(c *gin.Context) {
 	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE caravan_shop_items SET price=$1, stock=$2, is_default=$3, sort_order=$4, updated_at=NOW() WHERE id=$5 AND rank=$6`,
 		req.Price, req.Stock, req.IsDefault, req.SortOrder, itemID, rank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật: "+err.Error(), err))
 		return
 	}
 	updated, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng đã cập nhật"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận mặt hàng đã cập nhật", err))
 		return
 	}
 	if updated == 0 {
@@ -183,12 +184,12 @@ func AdminDeleteShopItem(c *gin.Context) {
 
 	result, err := db.DB.Exec(`DELETE FROM caravan_shop_items WHERE id=$1 AND rank=$2`, itemID, rank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể xóa: "+err.Error(), err))
 		return
 	}
 	deleted, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng đã xóa"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận mặt hàng đã xóa", err))
 		return
 	}
 	if deleted == 0 {
@@ -228,7 +229,7 @@ func AdminListArenaShopItems(c *gin.Context) {
 		ORDER BY a.sort_order, a.id
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách arena shop: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách arena shop: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -237,13 +238,13 @@ func AdminListArenaShopItems(c *gin.Context) {
 	for rows.Next() {
 		var item AdminArenaShopItem
 		if err := rows.Scan(&item.ID, &item.Price, &item.Qty, &item.Stock, &item.IsDefault, &item.SortOrder, &item.Name); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách Arena Shop"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc đầy đủ danh sách Arena Shop", err))
 			return
 		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách Arena Shop"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách Arena Shop", err))
 		return
 	}
 
@@ -278,7 +279,7 @@ func AdminCreateArenaShopItem(c *gin.Context) {
 	// Verify item exists in item_dictionary, gu_dictionary, or refining_recipes
 	var exists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, req.ID).Scan(&exists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh mặt hàng"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh mặt hàng", err))
 		return
 	}
 	if !exists {
@@ -289,7 +290,7 @@ func AdminCreateArenaShopItem(c *gin.Context) {
 	_, err := db.DB.Exec(`INSERT INTO arena_shop_items (id, price, qty, stock, is_default, sort_order) VALUES ($1,$2,$3,$4,$5,$6)`,
 		req.ID, req.Price, req.Qty, req.Stock, req.IsDefault, req.SortOrder)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể thêm: "+err.Error(), err))
 		return
 	}
 
@@ -317,12 +318,12 @@ func AdminUpdateArenaShopItem(c *gin.Context) {
 	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE arena_shop_items SET price=$1, qty=$2, stock=$3, is_default=$4, sort_order=$5, updated_at=NOW() WHERE id=$6`,
 		req.Price, req.Qty, req.Stock, req.IsDefault, req.SortOrder, itemID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật: "+err.Error(), err))
 		return
 	}
 	updated, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng Arena Shop đã cập nhật"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận mặt hàng Arena Shop đã cập nhật", err))
 		return
 	}
 	if updated == 0 {
@@ -344,12 +345,12 @@ func AdminDeleteArenaShopItem(c *gin.Context) {
 
 	result, err := db.DB.Exec(`DELETE FROM arena_shop_items WHERE id=$1`, itemID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể xóa: "+err.Error(), err))
 		return
 	}
 	deleted, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng Arena Shop đã xóa"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận mặt hàng Arena Shop đã xóa", err))
 		return
 	}
 	if deleted == 0 {

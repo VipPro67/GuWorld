@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -34,13 +35,13 @@ func UseGuHouse(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải nhân vật", err))
 		return
 	}
 	if player.ActiveCombat != nil {
@@ -58,7 +59,7 @@ func UseGuHouse(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải Tiên Cổ Ốc"})
+		httperr.Respond(c, httperr.Internal("Không thể tải Tiên Cổ Ốc", err))
 		return
 	}
 	if durability <= 0 {
@@ -80,7 +81,7 @@ func UseGuHouse(c *gin.Context) {
 	}
 	var reserved bool
 	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM player_gu_house_core_reservations WHERE gu_instance_id=$1 AND gu_house_id=$2 AND player_id=$3)`, req.CoreGuInstanceID, houseID, playerID).Scan(&reserved); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh Cổ hạch tâm"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh Cổ hạch tâm", err))
 		return
 	}
 	if !reserved {
@@ -89,7 +90,7 @@ func UseGuHouse(c *gin.Context) {
 	}
 	owned, err := loadOwnedKillerMoveGus(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải Cổ hạch tâm"})
+		httperr.Respond(c, httperr.Internal("Không thể tải Cổ hạch tâm", err))
 		return
 	}
 	gu, exists := owned[req.CoreGuInstanceID]
@@ -131,12 +132,12 @@ func UseGuHouse(c *gin.Context) {
 		return
 	}
 	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2,statuses=$3,version=version+1,state_revision=state_revision+1 WHERE id=$4`, player.HP, player.CurrentMana, player.Statuses, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái nhân vật", err))
 		return
 	}
 	auditlog.Log(tx, auditlog.Entry{PlayerID: &playerID, Action: "gu_house.use", EntityType: "gu_house", EntityID: houseID, RequestSummary: "Dùng effect ON_USE từ Tiên Cổ Ốc " + houseName + ": " + outcome.EffectsSummary, Metadata: map[string]interface{}{"house_id": houseID, "core_gu_instance_id": gu.InstanceID, "effect_key": selected.Key, "mana_cost": cost}, IPAddress: c.ClientIP(), Success: true})
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất effect Tiên Cổ Ốc"})
+		httperr.Respond(c, httperr.Internal("Không thể hoàn tất effect Tiên Cổ Ốc", err))
 		return
 	}
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": "Tiên Cổ Ốc [" + houseName + "] đã thi triển: " + outcome.EffectsSummary, "gu_house_id": houseID, "success": true})

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -97,7 +98,7 @@ func AdminListPlayers(c *gin.Context) {
 		total, err = fastCountTable(c, "players", "admin:players:total_count", 60*time.Second)
 		if err != nil {
 			logger.S.Errorf("admin players: count failed: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng người chơi"})
+			httperr.Respond(c, httperr.Internal("Không thể đếm số lượng người chơi", err))
 			return
 		}
 	} else {
@@ -105,7 +106,7 @@ func AdminListPlayers(c *gin.Context) {
 		countQuery := `SELECT COUNT(*) FROM players WHERE ` + where
 		if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
 			logger.S.Errorf("admin players: count failed: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng người chơi"})
+			httperr.Respond(c, httperr.Internal("Không thể đếm số lượng người chơi", err))
 			return
 		}
 	}
@@ -122,7 +123,7 @@ func AdminListPlayers(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
 	if err != nil {
 		logger.S.Errorf("admin players: list failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách người chơi", err))
 		return
 	}
 	defer rows.Close()
@@ -139,7 +140,7 @@ func AdminListPlayers(c *gin.Context) {
 		var createdAt time.Time
 
 		if err := rows.Scan(&id, &username, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan, &isBanned); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu người chơi"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc dữ liệu người chơi", err))
 			fmt.Println("Error scanning player row:", err)
 			return
 		}
@@ -166,7 +167,7 @@ func AdminListPlayers(c *gin.Context) {
 	}
 	if err := rows.Err(); err != nil {
 		logger.S.Errorf("admin players: row iteration failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc dữ liệu người chơi", err))
 		return
 	}
 
@@ -350,7 +351,7 @@ func AdminListPlayerItems(c *gin.Context) {
 	query := `SELECT item_id, category, quantity, created_at, updated_at FROM player_inventory_items WHERE ` + where + ` ORDER BY item_id ASC`
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải vật phẩm"})
+		httperr.Respond(c, httperr.Internal("Không thể tải vật phẩm", err))
 		return
 	}
 	defer rows.Close()
@@ -474,7 +475,7 @@ func AdminListPlayerGus(c *gin.Context) {
 	// Expose persistence fields used by the admin editor, including read-only ownership metadata.
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, gu_id, gu_rank, rank, level, hunger, refinement_progress, durability, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours, created_at, updated_at, last_fed_at FROM player_gu WHERE player_id=$1 AND location <> 'ACTOR' ORDER BY created_at ASC, id ASC`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc chi tiết cổ trùng", err))
 		return
 	}
 	defer rows.Close()
@@ -486,7 +487,7 @@ func AdminListPlayerGus(c *gin.Context) {
 		var locked, equipped, vital bool
 		var equippedAt, createdAt, updatedAt, lastFedAt interface{}
 		if err := rows.Scan(&id, &guID, &guRank, &rank, &level, &hunger, &refinementProgress, &durability, &state, &location, &locked, &equipped, &vital, &integrationTime, &equippedAt, &growthHours, &createdAt, &updatedAt, &lastFedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc chi tiết cổ trùng", err))
 			return
 		}
 		name := guID
@@ -520,7 +521,7 @@ func AdminListPlayerGus(c *gin.Context) {
 		})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc chi tiết cổ trùng", err))
 		return
 	}
 	if search != "" {
@@ -683,7 +684,7 @@ func AdminSearchGus(c *gin.Context) {
 
 	var total int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM (`+union+`) AS t`, args...).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm cổ trùng"})
+		httperr.Respond(c, httperr.Internal("Không thể tìm cổ trùng", err))
 		return
 	}
 
@@ -692,7 +693,7 @@ func AdminSearchGus(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm cổ trùng"})
+		httperr.Respond(c, httperr.Internal("Không thể tìm cổ trùng", err))
 		return
 	}
 	defer rows.Close()

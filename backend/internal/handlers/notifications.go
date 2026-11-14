@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -43,7 +44,7 @@ func GetNotifications(c *gin.Context) {
 		LIMIT $2 OFFSET $3`, playerID, pageSize, offset)
 	if err != nil {
 		logger.S.Errorf("notify: query failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load notifications"})
+		httperr.Respond(c, httperr.Internal("failed to load notifications", err))
 		return
 	}
 	defer rows.Close()
@@ -71,7 +72,7 @@ func GetUnreadNotificationsCount(c *gin.Context) {
 	var count int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM notifications WHERE player_id = $1 AND is_read = FALSE`, playerID).Scan(&count); err != nil {
 		logger.S.Errorf("notify: unread count failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load unread count"})
+		httperr.Respond(c, httperr.Internal("failed to load unread count", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"unread": count})
@@ -98,7 +99,7 @@ func MarkNotificationsRead(c *gin.Context) {
 	}
 	if _, err := db.DB.ExecContext(c.Request.Context(), `UPDATE notifications SET is_read = TRUE WHERE player_id = $1 AND id = ANY($2)`, playerID, pq.Array(payload.IDs)); err != nil {
 		logger.S.Errorf("notify: mark read failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
+		httperr.Respond(c, httperr.Internal("failed to update", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -114,7 +115,7 @@ func MarkAllNotificationsRead(c *gin.Context) {
 	}
 	if _, err := db.DB.ExecContext(c.Request.Context(), `UPDATE notifications SET is_read = TRUE WHERE player_id = $1 AND is_read = FALSE`, playerID); err != nil {
 		logger.S.Errorf("notify: mark all read failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
+		httperr.Respond(c, httperr.Internal("failed to update", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})

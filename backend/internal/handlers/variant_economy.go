@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -52,7 +53,7 @@ func GetApertureNodeWorkers(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -64,7 +65,7 @@ func GetApertureNodeWorkers(c *gin.Context) {
 		ORDER BY vh.race
 	`, nodeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer rows.Close()
@@ -111,7 +112,7 @@ func AssignWorkerToNode(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -128,7 +129,7 @@ func AssignWorkerToNode(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -144,7 +145,7 @@ func AssignWorkerToNode(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -156,7 +157,7 @@ func AssignWorkerToNode(c *gin.Context) {
 		FROM aperture_node_workers
 		WHERE variant_human_id = $1 AND node_id <> $2
 	`, req.VariantHumanID, nodeID).Scan(&assignedElsewhere); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	if assignedElsewhere+req.AssignedPopulation > vhPop {
@@ -172,7 +173,7 @@ func AssignWorkerToNode(c *gin.Context) {
 		DO UPDATE SET assigned_population = $3, updated_at = NOW()
 	`, nodeID, req.VariantHumanID, req.AssignedPopulation)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -207,7 +208,7 @@ func RemoveWorkerFromNode(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -215,7 +216,7 @@ func RemoveWorkerFromNode(c *gin.Context) {
 		DELETE FROM aperture_node_workers WHERE id = $1 AND node_id = $2
 	`, workerID, nodeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	rowsAffected, _ := result.RowsAffected()
@@ -246,7 +247,7 @@ func ListRefinementQueue(c *gin.Context) {
 		ORDER BY rq.priority DESC, rq.created_at ASC
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer rows.Close()
@@ -291,7 +292,7 @@ func CreateRefinementJob(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -303,7 +304,7 @@ func CreateRefinementJob(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cần có Mao Dân trong Tiên Khiếu để tự động luyện Cổ"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -339,7 +340,7 @@ func CreateRefinementJob(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -367,7 +368,7 @@ func CreateRefinementJob(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	actualRecipeID = exactRecipeID
@@ -380,7 +381,7 @@ func CreateRefinementJob(c *gin.Context) {
 	if reqMatsJSON.Valid && reqMatsJSON.String != "" && reqMatsJSON.String != "{}" {
 		var reqMats map[string]int
 		if err := json.Unmarshal([]byte(reqMatsJSON.String), &reqMats); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu bí phương không hợp lệ"})
+			httperr.Respond(c, httperr.Internal("Dữ liệu bí phương không hợp lệ", err))
 			return
 		} else if len(reqMats) > 0 {
 			var parts []string
@@ -410,7 +411,7 @@ func CreateRefinementJob(c *gin.Context) {
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`, id, apertureID, actualRecipeID, req.Mode, req.TargetQuantity, req.Priority)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -444,7 +445,7 @@ func DeleteRefinementJob(c *gin.Context) {
 		WHERE rq.aperture_id = a.id AND rq.id = $1 AND a.player_id = $2
 	`, jobID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	rowsAffected, _ := result.RowsAffected()
@@ -475,7 +476,7 @@ func GetSettlements(c *gin.Context) {
 		ORDER BY s.race
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer rows.Close()
@@ -518,7 +519,7 @@ func BuildSettlement(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -531,7 +532,7 @@ func BuildSettlement(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -598,7 +599,7 @@ func BuildSettlement(c *gin.Context) {
 		RETURNING id
 	`, apertureID, req.Race, name, settlementType, capacity, housing, foodStorage, security).Scan(&newID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo thành trì"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo thành trì", err))
 		return
 	}
 
@@ -612,12 +613,12 @@ func BuildSettlement(c *gin.Context) {
 		    food_stored = GREATEST(aperture_variant_humans.food_stored, $3), updated_at = NOW()
 	`, apertureID, req.Race, foodStorage)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -658,7 +659,7 @@ func UpgradeSettlement(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -678,7 +679,7 @@ func UpgradeSettlement(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -744,7 +745,7 @@ func UpgradeSettlement(c *gin.Context) {
 		WHERE id = $1
 	`, settlementID, newType, newName, newCap, newHousing, newFoodStorage, newSecurity)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -784,7 +785,7 @@ func GetApertureNPCs(c *gin.Context) {
 		ORDER BY n.race, n.rank DESC, n.name
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer rows.Close()
@@ -838,7 +839,7 @@ func AssignNPCRole(c *gin.Context) {
 		  AND n.execution_state IN ('STORED','WORKING')
 	`, npcID, playerID, req.Role)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	rowsAffected, _ := result.RowsAffected()
@@ -860,7 +861,7 @@ func DismissNPC(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -878,7 +879,7 @@ func DismissNPC(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -886,12 +887,12 @@ func DismissNPC(c *gin.Context) {
 		SET lifecycle_state = 'DISMISSED', execution_state = 'DISMISSED', updated_at = NOW(), version = version + 1
 		WHERE id = $1`, npcID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	err = releaseActorGu(tx, npcID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -901,7 +902,7 @@ func DismissNPC(c *gin.Context) {
 		WHERE aperture_id = $1 AND race = $2
 	`, apertureID, race)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 

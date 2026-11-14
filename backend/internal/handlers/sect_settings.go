@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -22,7 +23,7 @@ func UpgradeSect(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -55,7 +56,7 @@ func UpgradeSect(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ để nâng cấp!"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upgrade sect"})
+		httperr.Respond(c, httperr.Internal("Failed to upgrade sect", err))
 		return
 	}
 	level := newLevel
@@ -76,7 +77,7 @@ func UpgradeSect(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -112,7 +113,7 @@ func ToggleSectApproval(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -137,7 +138,7 @@ func ToggleSectApproval(c *gin.Context) {
 
 	_, err = tx.Exec(`UPDATE sects SET require_approval = $1 WHERE id = $2`, req.RequireApproval, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect setting"})
+		httperr.Respond(c, httperr.Internal("Failed to update sect setting", err))
 		return
 	}
 
@@ -154,7 +155,7 @@ func ToggleSectApproval(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -189,7 +190,7 @@ func ToggleSectPromotionApproval(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -208,7 +209,7 @@ func ToggleSectPromotionApproval(c *gin.Context) {
 
 	_, err = tx.Exec(`UPDATE sects SET require_promotion_approval = $1 WHERE id = $2`, req.RequirePromotionApproval, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect setting"})
+		httperr.Respond(c, httperr.Internal("Failed to update sect setting", err))
 		return
 	}
 
@@ -225,7 +226,7 @@ func ToggleSectPromotionApproval(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 

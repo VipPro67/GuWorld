@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -35,7 +36,7 @@ func GetActiveTribulation(c *gin.Context) {
 		c.JSON(http.StatusOK, nil)
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn kiếp nạn"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn kiếp nạn", err))
 		return
 	}
 
@@ -68,7 +69,7 @@ func GetActiveTribulation(c *gin.Context) {
 		WHERE event_id = $1 AND is_dead = false
 	`, ev.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách quái tai kiếp"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy danh sách quái tai kiếp", err))
 		return
 	}
 	defer rows.Close()
@@ -90,7 +91,7 @@ func GetActiveTribulation(c *gin.Context) {
 	if err := db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT COUNT(1) FROM tribulation_enemies WHERE event_id = $1
 	`, ev.ID).Scan(&totalEnemies); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đếm quái tai kiếp"})
+		httperr.Respond(c, httperr.Internal("Lỗi đếm quái tai kiếp", err))
 		return
 	}
 

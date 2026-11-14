@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -70,7 +71,7 @@ func ManageApertureNodesBatch(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -91,7 +92,7 @@ func ManageApertureNodesBatch(c *gin.Context) {
 		ORDER BY n.id FOR UPDATE OF n
 	`, pq.Array(nodeIDs), playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách node"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải danh sách node", err))
 		return
 	}
 	nodes := make([]batchNode, 0, len(nodeIDs))
@@ -99,14 +100,14 @@ func ManageApertureNodesBatch(c *gin.Context) {
 		var n batchNode
 		if err := rows.Scan(&n.ID, &n.ApertureID, &n.Name, &n.Type, &n.Category, &n.Level, &n.HP, &n.MaxHP, &n.Destroyed, &n.ProductionAmount, &n.DefensePower, &n.HPBonus); err != nil {
 			rows.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thông tin node"})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc thông tin node", err))
 			return
 		}
 		nodes = append(nodes, n)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc danh sách node"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc danh sách node", err))
 		return
 	}
 	rows.Close()
@@ -148,7 +149,7 @@ func ManageApertureNodesBatch(c *gin.Context) {
 		}
 		var stones int
 		if err := tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&stones); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư Tiên Nguyên Thạch"})
+			httperr.Respond(c, httperr.Internal("Lỗi lấy số dư Tiên Nguyên Thạch", err))
 			return
 		}
 		if stones < totalCost {
@@ -160,7 +161,7 @@ func ManageApertureNodesBatch(c *gin.Context) {
 	var newStones float64
 	if totalCost > 0 {
 		if err := tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, totalCost, playerID).Scan(&newStones); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
+			httperr.Respond(c, httperr.Internal("Lỗi khấu trừ Tiên Nguyên Thạch", err))
 			return
 		}
 	}
@@ -168,7 +169,7 @@ func ManageApertureNodesBatch(c *gin.Context) {
 		switch req.Action {
 		case "repair":
 			if _, err := tx.Exec(`UPDATE aperture_resource_nodes SET hp = max_hp, updated_at = NOW() WHERE id = $1`, n.ID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi sửa chữa node"})
+				httperr.Respond(c, httperr.Internal("Lỗi sửa chữa node", err))
 				return
 			}
 		case "upgrade":
@@ -194,24 +195,24 @@ func ManageApertureNodesBatch(c *gin.Context) {
 				}
 			}
 			if _, err := tx.Exec(`UPDATE aperture_resource_nodes SET level=$1, max_hp=$2, hp=hp+500, production_amount=$3, defense_power=$4, hp_bonus=$5, updated_at=NOW() WHERE id=$6`, newLevel, newMaxHP, newProduction, newDefense, newHPBonus, n.ID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi nâng cấp node"})
+				httperr.Respond(c, httperr.Internal("Lỗi nâng cấp node", err))
 				return
 			}
 		case "delete":
 			if err := updateVariantHumanOnNodeChange(tx, n.ApertureID, n.Type, -50); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật dân số dị nhân"})
+				httperr.Respond(c, httperr.Internal("Lỗi cập nhật dân số dị nhân", err))
 				return
 			}
 		}
 	}
 	if req.Action == "delete" {
 		if _, err := tx.Exec(`DELETE FROM aperture_resource_nodes WHERE id = ANY($1::uuid[])`, pq.Array(nodeIDs)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi san phẳng node đã chọn"})
+			httperr.Respond(c, httperr.Internal("Lỗi san phẳng node đã chọn", err))
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thao tác hàng loạt"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu thao tác hàng loạt", err))
 		return
 	}
 	actionLabel := map[string]string{"repair": "Sửa chữa", "upgrade": "Nâng cấp", "delete": "San phẳng"}[req.Action]
@@ -315,7 +316,7 @@ func PlaceApertureNode(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -329,7 +330,7 @@ func PlaceApertureNode(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Tiên Khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Tiên Khiếu", err))
 		return
 	}
 
@@ -353,7 +354,7 @@ func PlaceApertureNode(c *gin.Context) {
 			SELECT COUNT(1) FROM aperture_resource_nodes
 			WHERE aperture_id = $1 AND is_destroyed = false AND COALESCE(node_category, 'RESOURCE') = 'RESOURCE'
 		`, ap.ID).Scan(&resourceCount); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra số khu tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra số khu tài nguyên", err))
 			return
 		}
 		if resourceCount >= maxNodes {
@@ -367,7 +368,7 @@ func PlaceApertureNode(c *gin.Context) {
 		SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1 FOR UPDATE
 	`, playerID).Scan(&immortalStones)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy số dư tài khoản", err))
 		return
 	}
 
@@ -385,7 +386,7 @@ func PlaceApertureNode(c *gin.Context) {
 			)
 		`, ap.ID, cell.X, cell.Y).Scan(&collision)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra ô đất đang sử dụng"})
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra ô đất đang sử dụng", err))
 			return
 		}
 		if collision {
@@ -402,7 +403,7 @@ func PlaceApertureNode(c *gin.Context) {
 			WHERE aperture_id = $1 AND node_type = 'BARRACKS' AND is_destroyed = false
 		`, ap.ID).Scan(&barrackCount)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Doanh Trại"})
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Doanh Trại", err))
 			return
 		}
 		if barrackCount >= 1 {
@@ -420,7 +421,7 @@ func PlaceApertureNode(c *gin.Context) {
 	nodeItemID := "node_" + strings.ToLower(req.NodeType)
 	qty, err := InventorySvc.GetQuantity(tx, playerID.String(), nodeItemID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn túi đồ"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn túi đồ", err))
 		return
 	}
 	hasItem := qty > 0
@@ -428,7 +429,7 @@ func PlaceApertureNode(c *gin.Context) {
 	var newStones float64
 	if hasItem {
 		if err := InventorySvc.RemoveItem(tx, playerID.String(), nodeItemID, "materials", 1); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao vật phẩm mỏ"})
+			httperr.Respond(c, httperr.Internal("Lỗi tiêu hao vật phẩm mỏ", err))
 			return
 		}
 		_ = tx.QueryRow(`SELECT immortal_stones FROM players WHERE id = $1`, playerID).Scan(&newStones)
@@ -444,7 +445,7 @@ func PlaceApertureNode(c *gin.Context) {
 			RETURNING immortal_stones
 		`, template.CostStones, playerID).Scan(&newStones)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ chi phí"})
+			httperr.Respond(c, httperr.Internal("Lỗi khấu trừ chi phí", err))
 			return
 		}
 	}
@@ -466,13 +467,13 @@ func PlaceApertureNode(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần sở hữu Cổ trùng %s (rank %d+, không phải Bản Mệnh/đang trang bị) để xây dựng %s", requiredGuID, template.CostGuRank, template.Name)})
 				return
 			} else if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn cổ trùng"})
+				httperr.Respond(c, httperr.Internal("Lỗi truy vấn cổ trùng", err))
 				return
 			}
 			// Consume the Gu (destroy it)
 			_, err = tx.Exec(`DELETE FROM player_gu WHERE id = $1 AND is_vital = false`, guInstanceID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao cổ trùng"})
+				httperr.Respond(c, httperr.Internal("Lỗi tiêu hao cổ trùng", err))
 				return
 			}
 			// Audit log for the consumed Gu
@@ -530,7 +531,7 @@ func PlaceApertureNode(c *gin.Context) {
 		strings.Join(template.CostGu, ","), template.CostGuRank,
 		template.ZoneType, template.FoodPath, template.ItemTier, nodeProdKey).Scan(&node.ID, &createdAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu điểm tài nguyên: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu điểm tài nguyên: "+err.Error(), err))
 		return
 	}
 	for _, cell := range req.Cells {
@@ -540,19 +541,19 @@ func PlaceApertureNode(c *gin.Context) {
 				c.JSON(http.StatusConflict, gin.H{"error": "Một ô trong khu vừa được sử dụng. Hãy chọn vùng khác."})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu diện tích khu tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Lỗi lưu diện tích khu tài nguyên", err))
 			return
 		}
 	}
 
 	err = updateVariantHumanOnNodeChange(tx, ap.ID, template.NodeType, 50)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật số lượng dị nhân: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật số lượng dị nhân: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit"})
+		httperr.Respond(c, httperr.Internal("Failed to commit", err))
 		return
 	}
 
@@ -637,7 +638,7 @@ func UninstallApertureNode(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -655,7 +656,7 @@ func UninstallApertureNode(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 
@@ -668,25 +669,25 @@ func UninstallApertureNode(c *gin.Context) {
 	nodeItemID := "node_" + strings.ToLower(n.NodeType)
 	err = InventorySvc.AddItem(tx, playerID.String(), nodeItemID, "materials", 1)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn trả vật phẩm khi thu hồi mỏ"})
+		httperr.Respond(c, httperr.Internal("Lỗi hoàn trả vật phẩm khi thu hồi mỏ", err))
 		return
 	}
 
 	// 3. Delete node from database completely
 	_, err = tx.Exec(`DELETE FROM aperture_resource_nodes WHERE id = $1`, nodeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa điểm tài nguyên trong cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi xóa điểm tài nguyên trong cơ sở dữ liệu", err))
 		return
 	}
 
 	err = updateVariantHumanOnNodeChange(tx, n.ApertureID, n.NodeType, -50)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật số lượng dị nhân: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật số lượng dị nhân: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to uninstall node"})
+		httperr.Respond(c, httperr.Internal("Failed to uninstall node", err))
 		return
 	}
 
@@ -713,7 +714,7 @@ func DeleteApertureNode(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -731,25 +732,25 @@ func DeleteApertureNode(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 
 	// 2. Delete node from database
 	_, err = tx.Exec(`DELETE FROM aperture_resource_nodes WHERE id = $1`, nodeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa điểm tài nguyên trong cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi xóa điểm tài nguyên trong cơ sở dữ liệu", err))
 		return
 	}
 
 	err = updateVariantHumanOnNodeChange(tx, n.ApertureID, n.NodeType, -50)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật số lượng dị nhân: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật số lượng dị nhân: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete node"})
+		httperr.Respond(c, httperr.Internal("Failed to delete node", err))
 		return
 	}
 

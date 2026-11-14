@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -27,7 +28,7 @@ func ListDreamRealms(c *gin.Context) {
 		ORDER BY required_rank ASC, id ASC
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách mộng cảnh: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách mộng cảnh: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -36,13 +37,13 @@ func ListDreamRealms(c *gin.Context) {
 	for rows.Next() {
 		var it InstanceListItem
 		if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.RequiredRank, &it.EntryItem, &it.Description, &it.Rewards, &it.CooldownHours); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc mộng cảnh: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc mộng cảnh: "+err.Error(), err))
 			return
 		}
 		items = append(items, it)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi duyệt danh sách mộng cảnh: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi duyệt danh sách mộng cảnh: "+err.Error(), err))
 		return
 	}
 
@@ -115,7 +116,7 @@ func GetActiveDreamSession(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusOK, gin.H{"active": false})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn phiên mộng cảnh: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi truy vấn phiên mộng cảnh: "+err.Error(), err))
 		}
 		return
 	}
@@ -132,7 +133,7 @@ func GetActiveDreamSession(c *gin.Context) {
 			&template.CooldownHours,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải mẫu mộng cảnh: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể tải mẫu mộng cảnh: "+err.Error(), err))
 			return
 		}
 	}
@@ -183,7 +184,7 @@ func ActionDreamRealm(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có mộng cảnh nào đang hoạt động!"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu: "+err.Error(), err))
 		}
 		return
 	}
@@ -202,7 +203,7 @@ func ExitDreamRealm(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi bắt đầu giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi bắt đầu giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -224,7 +225,7 @@ func ExitDreamRealm(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có mộng cảnh nào đang hoạt động!"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu: "+err.Error(), err))
 		}
 		return
 	}
@@ -235,18 +236,18 @@ func ExitDreamRealm(c *gin.Context) {
 		UPDATE player_instance_sessions SET status = 'FAILED' WHERE id = $1
 	`, session.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thoát mộng cảnh: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể thoát mộng cảnh: "+err.Error(), err))
 		return
 	}
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải dữ liệu nhân vật: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tải dữ liệu nhân vật: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi commit: "+err.Error(), err))
 		return
 	}
 

@@ -17,6 +17,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -394,7 +395,7 @@ func GetWorldMonsters(c *gin.Context) {
 		FROM monster_spawns WHERE is_active=TRUE AND is_boss_spawn=FALSE AND x IS NOT NULL AND y IS NOT NULL
 		AND region_id = ANY($1) AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5 ORDER BY region_id, monster_id`, pq.Array(scopeRegions), entry.X-radius, entry.X+radius, entry.Y-radius, entry.Y+radius)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot load monster spawns"})
+		httperr.Respond(c, httperr.Internal("Cannot load monster spawns", err))
 		return
 	}
 	defer rows.Close()
@@ -426,7 +427,7 @@ func GetWorldMonsters(c *gin.Context) {
 		staticRequests = append(staticRequests, cache.WorldMonsterMaterialization{Monster: candidate, BucketX: bx, BucketY: by, TTL: monsterTTL(spawn.RespawnSeconds)})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot read monster spawns"})
+		httperr.Respond(c, httperr.Internal("Cannot read monster spawns", err))
 		return
 	}
 	_ = rows.Close()
@@ -462,7 +463,7 @@ func GetWorldMonsters(c *gin.Context) {
 		ORDER BY region_id,x,y`, pq.Array(scopeRegions))
 	if bossErr != nil {
 		logger.S.Errorf("load map-cell bosses in region %s: %v", entry.Region, bossErr)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot load map-cell bosses"})
+		httperr.Respond(c, httperr.Internal("Cannot load map-cell bosses", bossErr))
 		return
 	}
 	defer bossRows.Close()
@@ -505,7 +506,7 @@ func GetWorldMonsters(c *gin.Context) {
 	}
 	if err := bossRows.Err(); err != nil {
 		logger.S.Errorf("read map-cell bosses in region %s: %v", entry.Region, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot read map-cell bosses"})
+		httperr.Respond(c, httperr.Internal("Cannot read map-cell bosses", err))
 		return
 	}
 	_ = bossRows.Close()

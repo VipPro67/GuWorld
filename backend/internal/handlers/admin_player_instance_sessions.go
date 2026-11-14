@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -33,7 +34,7 @@ func AdminListPlayerInstanceSessions(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, instance_id, current_stage, status, temp_inventory, created_at FROM player_instance_sessions WHERE player_id=$1 ORDER BY created_at DESC`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải phiên mộng cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể tải phiên mộng cảnh", err))
 		return
 	}
 	defer rows.Close()
@@ -45,13 +46,13 @@ func AdminListPlayerInstanceSessions(c *gin.Context) {
 		var tempInventory json.RawMessage
 		var createdAt time.Time
 		if err := rows.Scan(&id, &instanceID, &stage, &status, &tempInventory, &createdAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc phiên mộng cảnh"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc phiên mộng cảnh", err))
 			return
 		}
 		data = append(data, gin.H{"id": id, "player_id": playerID, "instance_id": instanceID, "current_stage": stage, "status": status, "temp_inventory": tempInventory, "created_at": createdAt})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc phiên mộng cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc phiên mộng cảnh", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": len(data)})
@@ -92,7 +93,7 @@ func AdminUpdatePlayerInstanceSession(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -106,13 +107,13 @@ func AdminUpdatePlayerInstanceSession(c *gin.Context) {
 			if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 				c.JSON(http.StatusConflict, gin.H{"error": "Người chơi đã có một phiên ACTIVE khác"})
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phiên mộng cảnh"})
+				httperr.Respond(c, httperr.Internal("Không thể cập nhật phiên mộng cảnh", err))
 			}
 		}
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phiên mộng cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu phiên mộng cảnh", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_instance_session", EntityType: "player_instance_sessions", EntityID: sessionID.String(), RequestSummary: fmt.Sprintf("player=%s instance=%s stage=%d status=%s", playerID, instanceID, req.CurrentStage, req.Status), IPAddress: c.ClientIP(), Success: true})
@@ -136,7 +137,7 @@ func AdminDeletePlayerInstanceSession(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM player_instance_sessions WHERE id=$1 AND player_id=$2`, sessionID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa phiên mộng cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa phiên mộng cảnh", err))
 		return
 	}
 	count, _ := result.RowsAffected()

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -52,7 +53,7 @@ func ListCombatHistory(c *gin.Context) {
 		authID,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch combat history"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch combat history", err))
 		return
 	}
 	defer rows.Close()

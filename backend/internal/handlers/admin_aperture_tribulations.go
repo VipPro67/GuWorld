@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 )
 
 func AdminListApertureTribulations(c *gin.Context) {
@@ -24,7 +25,7 @@ func AdminListApertureTribulations(c *gin.Context) {
 	apertureID := c.Param("id")
 	var total int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM tribulation_events WHERE aperture_id=$1`, apertureID).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm lịch sử tai kiếp"})
+		httperr.Respond(c, httperr.Internal("Không thể đếm lịch sử tai kiếp", err))
 		return
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
@@ -40,7 +41,7 @@ func AdminListApertureTribulations(c *gin.Context) {
 		ORDER BY e.started_at DESC NULLS LAST, e.id
 		LIMIT $2 OFFSET $3`, apertureID, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải lịch sử tai kiếp"})
+		httperr.Respond(c, httperr.Internal("Không thể tải lịch sử tai kiếp", err))
 		return
 	}
 	defer rows.Close()
@@ -48,13 +49,13 @@ func AdminListApertureTribulations(c *gin.Context) {
 	for rows.Next() {
 		var raw []byte
 		if err := rows.Scan(&raw); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc lịch sử tai kiếp"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc lịch sử tai kiếp", err))
 			return
 		}
 		items = append(items, json.RawMessage(raw))
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc lịch sử tai kiếp"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc lịch sử tai kiếp", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": items, "total": total, "limit": limit, "offset": offset})

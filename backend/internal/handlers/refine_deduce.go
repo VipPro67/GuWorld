@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -38,7 +39,7 @@ func DeduceRecipe(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -48,7 +49,7 @@ func DeduceRecipe(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player status"})
+			httperr.Respond(c, httperr.Internal("Failed to lock player status", err))
 		}
 		return
 	}
@@ -218,12 +219,12 @@ func DeduceRecipe(c *gin.Context) {
 	`
 	_, err = tx.Exec(updateQuery, player.CurrentThought, player.PrimevalStones, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save deduction results"})
+		httperr.Respond(c, httperr.Internal("Failed to save deduction results", err))
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to commit transaction", err))
 		return
 	}
 

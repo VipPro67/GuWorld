@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -124,7 +125,7 @@ func GetAchievements(c *gin.Context) {
 	var selectedTitle, selectedFrame string
 	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(earned_achievements, '[]'::jsonb), COALESCE(selected_title, ''), COALESCE(selected_frame, '') FROM players WHERE id = $1`, playerID).Scan(&earnedJSON, &selectedTitle, &selectedFrame)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 
@@ -137,7 +138,7 @@ func GetAchievements(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT achievement_id, unlocked_at FROM player_achievements WHERE player_id = $1`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách thành tựu"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải danh sách thành tựu", err))
 		return
 	}
 	for rows.Next() {
@@ -145,7 +146,7 @@ func GetAchievements(c *gin.Context) {
 		var unlockedAt time.Time
 		if err := rows.Scan(&entry.AchievementID, &unlockedAt); err != nil {
 			rows.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc thành tựu", err))
 			return
 		}
 		entry.ClaimedAt = unlockedAt.Format(time.RFC3339)
@@ -162,7 +163,7 @@ func GetAchievements(c *gin.Context) {
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc thành tựu", err))
 		return
 	}
 	rows.Close()
@@ -202,7 +203,7 @@ func ClaimAchievement(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -215,13 +216,13 @@ func ClaimAchievement(c *gin.Context) {
 
 	var earnedJSON []byte
 	if err := tx.QueryRow(`SELECT COALESCE(earned_achievements, '[]'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&earnedJSON); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc thành tựu", err))
 		return
 	}
 	var earned []PlayerAchievementData
 	if len(earnedJSON) > 0 {
 		if err := json.Unmarshal(earnedJSON, &earned); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu thành tựu không hợp lệ"})
+			httperr.Respond(c, httperr.Internal("Dữ liệu thành tựu không hợp lệ", err))
 			return
 		}
 	}
@@ -234,7 +235,7 @@ func ClaimAchievement(c *gin.Context) {
 	}
 	var adminGranted bool
 	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM player_achievements WHERE player_id = $1 AND achievement_id = $2)`, playerID, req.AchievementID).Scan(&adminGranted); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc thành tựu", err))
 		return
 	}
 	if adminGranted {
@@ -244,7 +245,7 @@ func ClaimAchievement(c *gin.Context) {
 
 	conditionMet, conditionErr := checkAchievementCondition(tx, ach, &player)
 	if conditionErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra điều kiện thành tựu"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra điều kiện thành tựu", conditionErr))
 		return
 	}
 	if !conditionMet {
@@ -266,12 +267,12 @@ func ClaimAchievement(c *gin.Context) {
 		player.ImmortalStones += float64(ach.RewardVal)
 	} else if ach.RewardType == "item" {
 		if err := InventorySvc.AddItem(tx, playerID.String(), ach.RewardID, "materials", int64(ach.RewardVal)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật vật phẩm"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật vật phẩm", err))
 			return
 		}
 	}
 	if _, err := tx.Exec(`INSERT INTO player_achievements (player_id, achievement_id) VALUES ($1, $2) ON CONFLICT (player_id, achievement_id) DO NOTHING`, playerID, req.AchievementID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu thành tựu"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu thành tựu", err))
 		return
 	}
 
@@ -280,7 +281,7 @@ func ClaimAchievement(c *gin.Context) {
 	_, err = tx.Exec(`UPDATE players SET earned_achievements = $1, primeval_stones = $2, immortal_stones = $3, human_qi = $4 WHERE id = $5`,
 		earnedBytes, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật", err))
 		return
 	}
 
@@ -302,7 +303,7 @@ func ClaimAchievement(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})
+		httperr.Respond(c, httperr.Internal("Lỗi commit", err))
 		return
 	}
 
@@ -439,7 +440,7 @@ func SelectTitleFrame(c *gin.Context) {
 
 	_, err := db.DB.Exec(`UPDATE players SET selected_title = $1, selected_frame = $2 WHERE id = $3`, req.Title, req.Frame, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật", err))
 		return
 	}
 
@@ -449,7 +450,7 @@ func SelectTitleFrame(c *gin.Context) {
 func playerOwnsAchievement(c *gin.Context, playerID, achievementID string) bool {
 	var exists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM player_achievements WHERE player_id = $1 AND achievement_id = $2)`, playerID, achievementID).Scan(&exists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc thành tựu", err))
 		return false
 	}
 	if exists {
@@ -457,12 +458,12 @@ func playerOwnsAchievement(c *gin.Context, playerID, achievementID string) bool 
 	}
 	var earnedJSON []byte
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(earned_achievements, '[]'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&earnedJSON); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc thành tựu", err))
 		return false
 	}
 	var earned []PlayerAchievementData
 	if err := json.Unmarshal(earnedJSON, &earned); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu thành tựu không hợp lệ"})
+		httperr.Respond(c, httperr.Internal("Dữ liệu thành tựu không hợp lệ", err))
 		return false
 	}
 	for _, entry := range earned {

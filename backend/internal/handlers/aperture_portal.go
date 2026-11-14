@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -36,7 +37,7 @@ func GetAperturePortal(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"portal": nil, "message": "Chưa hạ khiếu hoặc môn hộ chưa mở"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Môn Hộ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn Môn Hộ: "+err.Error(), err))
 		return
 	}
 
@@ -75,7 +76,7 @@ func ManageAperturePortal(c *gin.Context) {
 		WHERE p.aperture_id = a.id AND a.player_id = $3 AND p.is_active = true
 	`, req.Name, req.AccessPolicy, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Môn Hộ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật Môn Hộ: "+err.Error(), err))
 		return
 	}
 	rowsAffected, _ := res.RowsAffected()
@@ -150,7 +151,7 @@ func EnterAperturePortal(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -198,7 +199,7 @@ func EnterAperturePortal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Môn Hộ không tồn tại hoặc đã khép lại"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Môn Hộ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn Môn Hộ: "+err.Error(), err))
 		return
 	}
 
@@ -250,7 +251,7 @@ func EnterAperturePortal(c *gin.Context) {
 		SET role = 'VISITOR', entered_at = NOW()
 	`, portal.ApertureID, guest.ID, portal.OwnerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi nhận danh sách khách: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi ghi nhận danh sách khách: "+err.Error(), err))
 		return
 	}
 
@@ -265,12 +266,12 @@ func EnterAperturePortal(c *gin.Context) {
 		WHERE id = $3
 	`, portal.ApertureID, apertureInstanceID, guest.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi chuyển dịch vào Tiên Khiếu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi chuyển dịch vào Tiên Khiếu: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn tất bước vào Môn Hộ"})
+		httperr.Respond(c, httperr.Internal("Lỗi hoàn tất bước vào Môn Hộ", err))
 		return
 	}
 
@@ -328,7 +329,7 @@ func LeaveAperture(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -408,12 +409,12 @@ func LeaveAperture(c *gin.Context) {
 		WHERE id = $4
 	`, returnRegion, int(returnX), int(returnY), playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đưa nhân vật trở lại thế giới: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi đưa nhân vật trở lại thế giới: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu rời khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu dữ liệu rời khiếu", err))
 		return
 	}
 
@@ -448,7 +449,7 @@ func GetApertureGuests(c *gin.Context) {
 		ORDER BY g.entered_at ASC
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn danh sách khách: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn danh sách khách: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -500,7 +501,7 @@ func SetGuestRole(c *gin.Context) {
 		WHERE g.aperture_id = a.id AND a.player_id = $2 AND g.player_id = $3
 	`, req.Role, hostID, guestUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi phân quyền khách: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi phân quyền khách: "+err.Error(), err))
 		return
 	}
 	rowsAffected, _ := res.RowsAffected()
@@ -555,7 +556,7 @@ func EvictGuest(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -580,7 +581,7 @@ func EvictGuest(c *gin.Context) {
 		DELETE FROM aperture_guest_roster WHERE aperture_id = $1 AND player_id = $2
 	`, apertureID, guestUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa danh sách khách"})
+		httperr.Respond(c, httperr.Internal("Lỗi xóa danh sách khách", err))
 		return
 	}
 	rowsAffected, _ := res.RowsAffected()
@@ -598,12 +599,12 @@ func EvictGuest(c *gin.Context) {
 		WHERE id = $4
 	`, returnRegion, int(returnX), int(returnY), guestUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi dịch chuyển khách ra ngoài: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi dịch chuyển khách ra ngoài: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu trục xuất"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu dữ liệu trục xuất", err))
 		return
 	}
 
@@ -652,7 +653,7 @@ func SignAllianceContract(c *gin.Context) {
 		VALUES ($1, $2, $3, $4, true, NOW())
 	`, apertureID, hostID, guestUUID, req.ContractTier)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lập Minh Ước: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi lập Minh Ước: "+err.Error(), err))
 		return
 	}
 

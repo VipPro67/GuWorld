@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -31,7 +32,7 @@ func AdminListApertureRefinementJobs(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id,aperture_id,recipe_id,mode,target_quantity,current_quantity,priority,enabled,last_error,last_processed_at,created_at,updated_at FROM aperture_refinement_queue WHERE aperture_id=$1 ORDER BY priority DESC,created_at`, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải hàng đợi luyện cổ"})
+		httperr.Respond(c, httperr.Internal("Không thể tải hàng đợi luyện cổ", err))
 		return
 	}
 	defer rows.Close()
@@ -39,13 +40,13 @@ func AdminListApertureRefinementJobs(c *gin.Context) {
 	for rows.Next() {
 		var r AdminRefinementJob
 		if err := rows.Scan(&r.ID, &r.ApertureID, &r.RecipeID, &r.Mode, &r.TargetQuantity, &r.CurrentQuantity, &r.Priority, &r.Enabled, &r.LastError, &r.LastProcessedAt, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hàng đợi luyện cổ"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc hàng đợi luyện cổ", err))
 			return
 		}
 		list = append(list, r)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hàng đợi luyện cổ"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc hàng đợi luyện cổ", err))
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -86,7 +87,7 @@ func AdminCreateApertureRefinementJob(c *gin.Context) {
 	}
 	var exists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM refining_recipes WHERE ('recipe_'||target_gu_id||'_'||target_rank::text||'_'||variant::text)=$1)`, req.RecipeID).Scan(&exists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh bí phương"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh bí phương", err))
 		return
 	}
 	if !exists {
@@ -95,7 +96,7 @@ func AdminCreateApertureRefinementJob(c *gin.Context) {
 	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `INSERT INTO aperture_refinement_queue(aperture_id,recipe_id,mode,target_quantity,current_quantity,priority,enabled,last_error,last_processed_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, c.Param("id"), req.RecipeID, req.Mode, req.TargetQuantity, req.CurrentQuantity, req.Priority, req.Enabled, req.LastError, req.LastProcessedAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo công việc luyện cổ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo công việc luyện cổ: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_aperture_refinement_job", "aperture=%s recipe=%s", c.Param("id"), req.RecipeID)
@@ -118,7 +119,7 @@ func AdminUpdateApertureRefinementJob(c *gin.Context) {
 	}
 	var exists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM refining_recipes WHERE ('recipe_'||target_gu_id||'_'||target_rank::text||'_'||variant::text)=$1)`, req.RecipeID).Scan(&exists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh bí phương"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh bí phương", err))
 		return
 	}
 	if !exists {
@@ -127,7 +128,7 @@ func AdminUpdateApertureRefinementJob(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE aperture_refinement_queue SET recipe_id=$1,mode=$2,target_quantity=$3,current_quantity=$4,priority=$5,enabled=$6,last_error=$7,last_processed_at=$8,updated_at=NOW() WHERE id=$9 AND aperture_id=$10`, req.RecipeID, req.Mode, req.TargetQuantity, req.CurrentQuantity, req.Priority, req.Enabled, req.LastError, req.LastProcessedAt, c.Param("job_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật công việc luyện cổ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật công việc luyện cổ: "+err.Error(), err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -145,7 +146,7 @@ func AdminDeleteApertureRefinementJob(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM aperture_refinement_queue WHERE id=$1 AND aperture_id=$2`, c.Param("job_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa công việc luyện cổ"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa công việc luyện cổ", err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {

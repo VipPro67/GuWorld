@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -25,7 +26,7 @@ func AdminListPlayerAchievements(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT player_id,achievement_id,selected_title,selected_frame,unlocked_at FROM player_achievements WHERE player_id=$1 ORDER BY unlocked_at DESC,achievement_id`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thành tựu", err))
 		return
 	}
 	defer rows.Close()
@@ -34,13 +35,13 @@ func AdminListPlayerAchievements(c *gin.Context) {
 		var pID, achievementID, title, frame string
 		var unlocked time.Time
 		if err := rows.Scan(&pID, &achievementID, &title, &frame, &unlocked); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc thành tựu"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc thành tựu", err))
 			return
 		}
 		data = append(data, gin.H{"player_id": pID, "achievement_id": achievementID, "selected_title": title, "selected_frame": frame, "unlocked_at": unlocked})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc thành tựu", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": len(data), "available": achievementRegistry})
@@ -79,7 +80,7 @@ func AdminAddPlayerAchievement(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu cấp thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu cấp thành tựu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -90,7 +91,7 @@ func AdminAddPlayerAchievement(c *gin.Context) {
 	}
 	result, err := tx.ExecContext(c.Request.Context(), `INSERT INTO player_achievements(player_id,achievement_id) VALUES($1,$2) ON CONFLICT(player_id,achievement_id) DO NOTHING`, playerID, achievementID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cấp thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể cấp thành tựu", err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -99,13 +100,13 @@ func AdminAddPlayerAchievement(c *gin.Context) {
 	}
 	var earned []PlayerAchievementData
 	if err := json.Unmarshal(earnedJSON, &earned); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu thành tựu không hợp lệ"})
+		httperr.Respond(c, httperr.Internal("Dữ liệu thành tựu không hợp lệ", err))
 		return
 	}
 	for _, entry := range earned {
 		if entry.AchievementID == achievementID {
 			if err := tx.Commit(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu cấp thành tựu"})
+				httperr.Respond(c, httperr.Internal("Không thể lưu cấp thành tựu", err))
 				return
 			}
 			auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.add_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("achievement=%s reason=%s", achievementID, req.Reason), IPAddress: c.ClientIP(), Success: true})
@@ -116,15 +117,15 @@ func AdminAddPlayerAchievement(c *gin.Context) {
 	earned = append(earned, PlayerAchievementData{AchievementID: achievementID, ClaimedAt: time.Now().Format(time.RFC3339)})
 	earnedBytes, err := json.Marshal(earned)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ thành tựu", err))
 		return
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET earned_achievements=$1::jsonb WHERE id=$2`, string(earnedBytes), playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ thành tựu", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu cấp thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu cấp thành tựu", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.add_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("achievement=%s reason=%s", achievementID, req.Reason), IPAddress: c.ClientIP(), Success: true})
@@ -165,7 +166,7 @@ func AdminUpdatePlayerAchievement(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thành tựu của người chơi"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thành tựu"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật thành tựu", err))
 		}
 		return
 	}
@@ -194,7 +195,7 @@ func AdminDeletePlayerAchievement(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu thu hồi thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu thu hồi thành tựu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -205,7 +206,7 @@ func AdminDeletePlayerAchievement(c *gin.Context) {
 	}
 	var earned []PlayerAchievementData
 	if err := json.Unmarshal(earnedJSON, &earned); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu thành tựu không hợp lệ"})
+		httperr.Respond(c, httperr.Internal("Dữ liệu thành tựu không hợp lệ", err))
 		return
 	}
 	filtered := earned[:0]
@@ -220,7 +221,7 @@ func AdminDeletePlayerAchievement(c *gin.Context) {
 	earned = filtered
 	result, err := tx.ExecContext(c.Request.Context(), `DELETE FROM player_achievements WHERE player_id=$1 AND achievement_id=$2`, playerID, achievementID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thu hồi thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể thu hồi thành tựu", err))
 		return
 	}
 	deleted, _ := result.RowsAffected()
@@ -230,15 +231,15 @@ func AdminDeletePlayerAchievement(c *gin.Context) {
 	}
 	legacyBytes, err := json.Marshal(earned)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ dữ liệu thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ dữ liệu thành tựu", err))
 		return
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET earned_achievements=$1::jsonb, selected_title=CASE WHEN selected_title=$2 THEN '' ELSE selected_title END, selected_frame=CASE WHEN selected_frame=$2 THEN '' ELSE selected_frame END WHERE id=$3`, string(legacyBytes), achievementID, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể gỡ danh hiệu và hiệu ứng"})
+		httperr.Respond(c, httperr.Internal("Không thể gỡ danh hiệu và hiệu ứng", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thu hồi thành tựu"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu thu hồi thành tựu", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("reason=%s", req.Reason), IPAddress: c.ClientIP(), Success: true})

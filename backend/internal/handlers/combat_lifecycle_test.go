@@ -106,4 +106,3 @@ func TestCombatLifecycleSettleEnforcesPartyOwner(t *testing.T) {
 		t.Fatalf("expected party combat owner error, got %v", err)
 	}
 }
-

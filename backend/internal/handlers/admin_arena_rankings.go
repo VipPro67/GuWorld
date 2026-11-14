@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -23,7 +24,7 @@ func AdminListArenaRankings(c *gin.Context) {
 	filter := `($1 = '' OR a.player_id::text ILIKE $2 OR p.username ILIKE $2)`
 	var total int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM arena_rankings a JOIN players p ON p.id=a.player_id WHERE `+filter, search, pattern).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm xếp hạng đấu trường"})
+		httperr.Respond(c, httperr.Internal("Không thể đếm xếp hạng đấu trường", err))
 		return
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
@@ -33,7 +34,7 @@ func AdminListArenaRankings(c *gin.Context) {
 		ORDER BY a.rank ASC, a.player_id
 		LIMIT $3 OFFSET $4`, search, pattern, limit, (page-1)*limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải xếp hạng đấu trường"})
+		httperr.Respond(c, httperr.Internal("Không thể tải xếp hạng đấu trường", err))
 		return
 	}
 	defer rows.Close()
@@ -43,13 +44,13 @@ func AdminListArenaRankings(c *gin.Context) {
 		var rank, points, dailyChallenges int
 		var lastChallengeAt, updatedAt sql.NullTime
 		if err := rows.Scan(&playerID, &username, &rank, &points, &dailyChallenges, &lastChallengeAt, &updatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc xếp hạng đấu trường"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc xếp hạng đấu trường", err))
 			return
 		}
 		data = append(data, gin.H{"player_id": playerID, "username": username, "rank": rank, "points": points, "daily_challenges": dailyChallenges, "last_challenge_at": arenaNullableTime(lastChallengeAt), "updated_at": arenaNullableTime(updatedAt)})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc xếp hạng đấu trường"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc xếp hạng đấu trường", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": total, "page": page, "limit": limit})
@@ -92,7 +93,7 @@ func AdminUpdateArenaRanking(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Người chơi chưa có hạng đấu trường"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật xếp hạng đấu trường"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật xếp hạng đấu trường", err))
 		}
 		return
 	}

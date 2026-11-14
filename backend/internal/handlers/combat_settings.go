@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -22,7 +23,7 @@ func GetCombatSettings(c *gin.Context) {
 	if err := db.DB.QueryRowContext(c.Request.Context(),
 		`SELECT combat_settings FROM players WHERE id = $1`, authID,
 	).Scan(&settings); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
@@ -53,7 +54,7 @@ func UpdateCombatSettings(c *gin.Context) {
 	if _, err = db.DB.ExecContext(c.Request.Context(),
 		`UPDATE players SET combat_settings = $1 WHERE id = $2`, settingsJSON, authID,
 	); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat settings"})
+		httperr.Respond(c, httperr.Internal("Failed to save combat settings", err))
 		return
 	}
 

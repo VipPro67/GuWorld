@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -191,7 +192,7 @@ func CaptureMonster(c *gin.Context) {
 		)
 		if errPet != nil {
 			logger.S.Errorf("CaptureMonster: failed to insert pet: %v", errPet)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu pet."})
+			httperr.Respond(c, httperr.Internal("Không thể lưu pet.", errPet))
 			return
 		}
 
@@ -221,7 +222,7 @@ func CaptureMonster(c *gin.Context) {
 		_, errUpd := tx.Exec(`UPDATE players SET active_combat = NULL, cleared_cells = $1 WHERE id = $2`, player.ClearedCells, player.ID)
 		if errUpd != nil {
 			logger.S.Errorf("CaptureMonster: failed to clear combat: %v", errUpd)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái chiến đấu."})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật trạng thái chiến đấu.", errUpd))
 			return
 		}
 

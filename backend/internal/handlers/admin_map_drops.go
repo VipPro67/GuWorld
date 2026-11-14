@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
@@ -29,7 +30,7 @@ func AdminListMapGroundDrops(c *gin.Context) {
 	filter := `($1 = '' OR d.id::text ILIKE $2 OR d.region_id ILIKE $2 OR d.loser_name ILIKE $2 OR COALESCE(d.killer_name, '') ILIKE $2 OR d.loser_id::text ILIKE $2 OR COALESCE(d.killer_id::text, '') ILIKE $2 OR d.loot_data::text ILIKE $2) AND ($3 = '' OR ($3 = 'active' AND d.expires_at > NOW()) OR ($3 = 'expired' AND d.expires_at <= NOW()))`
 	var total int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM map_ground_drops d WHERE `+filter, search, pattern, status).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm Cổ rơi trên bản đồ"})
+		httperr.Respond(c, httperr.Internal("Không thể đếm Cổ rơi trên bản đồ", err))
 		return
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
@@ -41,7 +42,7 @@ func AdminListMapGroundDrops(c *gin.Context) {
 		ORDER BY d.created_at DESC, d.id
 		LIMIT $4 OFFSET $5`, search, pattern, status, limit, (page-1)*limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải Cổ rơi trên bản đồ"})
+		httperr.Respond(c, httperr.Internal("Không thể tải Cổ rơi trên bản đồ", err))
 		return
 	}
 	defer rows.Close()
@@ -54,7 +55,7 @@ func AdminListMapGroundDrops(c *gin.Context) {
 		var protectedUntil sql.NullTime
 		var expiresAt, createdAt time.Time
 		if err := rows.Scan(&id, &regionID, &x, &y, &loserID, &loserName, &killerID, &killerName, &lootData, &protectedUntil, &expiresAt, &createdAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Cổ rơi trên bản đồ"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc Cổ rơi trên bản đồ", err))
 			return
 		}
 		var protected any
@@ -68,7 +69,7 @@ func AdminListMapGroundDrops(c *gin.Context) {
 		data = append(data, gin.H{"id": id, "region_id": regionID, "x": x, "y": y, "loser_id": loserID, "loser_name": loserName, "killer_id": killer, "killer_name": killerName, "loot_data": json.RawMessage(lootData), "protected_until": protected, "expires_at": expiresAt, "created_at": createdAt, "is_expired": !expiresAt.After(time.Now())})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Cổ rơi trên bản đồ"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc Cổ rơi trên bản đồ", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": total, "page": page, "limit": limit})
@@ -176,7 +177,7 @@ func AdminDeleteMapGroundDrop(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy map drop"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa map drop"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa map drop", err))
 		return
 	}
 	publishWorldDropsChanged(regionID, x, y)
@@ -197,7 +198,7 @@ func AdminReturnMapGroundDrop(c *gin.Context) {
 	ctx := c.Request.Context()
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -215,26 +216,26 @@ func AdminReturnMapGroundDrop(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy map drop"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc map drop"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc map drop", err))
 		}
 		return
 	}
 	var loot GroundLootData
 	if err := json.Unmarshal(lootBytes, &loot); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "loot_data không hợp lệ"})
+		httperr.Respond(c, httperr.Internal("loot_data không hợp lệ", err))
 		return
 	}
 	logs, err := applyGroundLoot(tx, loserID, loot)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trả chiến lợi phẩm; chưa có thay đổi nào được lưu"})
+		httperr.Respond(c, httperr.Internal("Không thể trả chiến lợi phẩm; chưa có thay đổi nào được lưu", err))
 		return
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM map_ground_drops WHERE id=$1`, dropID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa map drop"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa map drop", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu thay đổi", err))
 		return
 	}
 	publishWorldDropsChanged(regionID, x, y)

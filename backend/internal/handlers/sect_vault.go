@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -213,7 +214,7 @@ func StockSectVault(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -240,7 +241,7 @@ func StockSectVault(c *gin.Context) {
 		FOR UPDATE
 	`, sectID).Scan(&s.ID, &s.Funds, &s.Level)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load sect details: "+err.Error(), err))
 		return
 	}
 
@@ -280,7 +281,7 @@ func StockSectVault(c *gin.Context) {
 	s.Funds -= totalCost
 	_, err = tx.Exec(`UPDATE sects SET funds = $1 WHERE id = $2`, s.Funds, s.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update sect funds: "+err.Error(), err))
 		return
 	}
 
@@ -309,7 +310,7 @@ func StockSectVault(c *gin.Context) {
 				updated_at = NOW()
 		`, rowID, s.ID, req.ItemID, stockGuRank, req.Quantity, stockInstID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update sect vault Gu: "+err.Error(), err))
 			return
 		}
 	} else if itemType == "recipe" {
@@ -320,7 +321,7 @@ func StockSectVault(c *gin.Context) {
 				completion_rate = 100.0, unlocked_at = NOW()
 		`, s.ID, req.ItemID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update sect vault recipes: "+err.Error(), err))
 			return
 		}
 	} else {
@@ -332,13 +333,13 @@ func StockSectVault(c *gin.Context) {
 				updated_at = NOW()
 		`, s.ID, req.ItemID, req.Quantity)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault materials: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update sect vault materials: "+err.Error(), err))
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -410,7 +411,7 @@ func DestroySectVaultItem(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -439,21 +440,21 @@ func DestroySectVaultItem(c *gin.Context) {
 		}
 		res, err := tx.Exec(`DELETE FROM sect_vault_gu WHERE sect_id = $1 AND gu_id = $2 AND rank = $3`, sectID, req.ItemID, req.Rank)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu huỷ: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể tiêu huỷ: "+err.Error(), err))
 			return
 		}
 		affected, _ = res.RowsAffected()
 	case "material":
 		res, err := tx.Exec(`DELETE FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2`, sectID, req.ItemID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu huỷ: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể tiêu huỷ: "+err.Error(), err))
 			return
 		}
 		affected, _ = res.RowsAffected()
 	case "recipe":
 		res, err := tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = $2`, sectID, req.ItemID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu huỷ: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể tiêu huỷ: "+err.Error(), err))
 			return
 		}
 		affected, _ = res.RowsAffected()
@@ -467,7 +468,7 @@ func DestroySectVaultItem(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -517,7 +518,7 @@ func StockSectVaultBulk(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -537,7 +538,7 @@ func StockSectVaultBulk(c *gin.Context) {
 	var s Sect
 	err = tx.QueryRow(`SELECT id, funds, level FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&s.ID, &s.Funds, &s.Level)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load sect details: "+err.Error(), err))
 		return
 	}
 
@@ -587,7 +588,7 @@ func StockSectVaultBulk(c *gin.Context) {
 	s.Funds -= totalCost
 	_, err = tx.Exec(`UPDATE sects SET funds = $1 WHERE id = $2`, s.Funds, s.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update sect funds: "+err.Error(), err))
 		return
 	}
 
@@ -616,7 +617,7 @@ func StockSectVaultBulk(c *gin.Context) {
 					updated_at = NOW()
 			`, rowID, s.ID, line.itemID, stockGuRank, line.quantity, stockInstID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to update sect vault Gu: "+err.Error(), err))
 				return
 			}
 		} else if line.itemType == "recipe" {
@@ -627,7 +628,7 @@ func StockSectVaultBulk(c *gin.Context) {
 					completion_rate = 100.0, unlocked_at = NOW()
 			`, s.ID, line.itemID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to update sect vault recipes: "+err.Error(), err))
 				return
 			}
 		} else {
@@ -639,7 +640,7 @@ func StockSectVaultBulk(c *gin.Context) {
 					updated_at = NOW()
 			`, s.ID, line.itemID, line.quantity)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault materials: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to update sect vault materials: "+err.Error(), err))
 				return
 			}
 		}
@@ -663,7 +664,7 @@ func StockSectVaultBulk(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 
@@ -706,7 +707,7 @@ func BuyFromSectVault(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -715,7 +716,7 @@ func BuyFromSectVault(c *gin.Context) {
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
@@ -754,7 +755,7 @@ func BuyFromSectVault(c *gin.Context) {
 			FOR UPDATE
 		`, m.SectID, req.ItemID, req.Rank)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn bảo khố: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi truy vấn bảo khố: "+err.Error(), err))
 			return
 		}
 
@@ -763,7 +764,7 @@ func BuyFromSectVault(c *gin.Context) {
 			var r VaultGuRow
 			if err := rows.Scan(&r.ID, &r.GuID, &r.Rank, &r.Quantity, &r.InstanceID); err != nil {
 				rows.Close()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu bảo khố: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Lỗi đọc dữ liệu bảo khố: "+err.Error(), err))
 				return
 			}
 			r.Cost = sectVaultGuCost(r.GuID, r.Rank)
@@ -791,7 +792,7 @@ func BuyFromSectVault(c *gin.Context) {
 				_, err = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, p.Deduct, p.ID)
 			}
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct Gu from vault: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to deduct Gu from vault: "+err.Error(), err))
 				return
 			}
 		}
@@ -828,7 +829,7 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
+			httperr.Respond(c, httperr.Internal("Failed to save Gu inventory", err))
 			return
 		}
 
@@ -853,7 +854,7 @@ func BuyFromSectVault(c *gin.Context) {
 			WHERE sect_id = $2 AND item_id = $3 AND quantity >= $1
 		`, quantity, m.SectID, req.ItemID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vault materials: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update vault materials: "+err.Error(), err))
 			return
 		}
 		if rows, _ := res.RowsAffected(); rows == 0 {
@@ -879,7 +880,7 @@ func BuyFromSectVault(c *gin.Context) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Công thức này không có sẵn trong Bảo khố!"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 			return
 		}
 
@@ -905,7 +906,7 @@ func BuyFromSectVault(c *gin.Context) {
 
 		_, err = tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = $2`, m.SectID, req.ItemID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update sect vault recipes: "+err.Error(), err))
 			return
 		}
 
@@ -934,7 +935,7 @@ func BuyFromSectVault(c *gin.Context) {
 			newProgress.Favorite = existingProgress.Favorite
 		}
 		if err := RecipeSvc.Upsert(tx, newProgress); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể học công thức từ bảo khố"})
+			httperr.Respond(c, httperr.Internal("Không thể học công thức từ bảo khố", err))
 			return
 		}
 		learnedRecipe = true
@@ -947,18 +948,18 @@ func BuyFromSectVault(c *gin.Context) {
 
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
+		httperr.Respond(c, httperr.Internal("Failed to update contribution", err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		httperr.Respond(c, httperr.Internal("Failed to update human qi", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 

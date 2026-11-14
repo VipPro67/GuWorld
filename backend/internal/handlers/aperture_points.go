@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -924,7 +925,7 @@ func GetApertureResourcePoints(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -939,7 +940,7 @@ func GetApertureResourcePoints(c *gin.Context) {
 	areaSize, effectiveTimeRate := effectiveApertureTimeRate(tx, playerID.String())
 	ctx, err := loadAperturePointRewardContext(tx, playerID, apertureID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải bối cảnh sản lượng"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải bối cảnh sản lượng", err))
 		return
 	}
 
@@ -950,7 +951,7 @@ func GetApertureResourcePoints(c *gin.Context) {
 		ORDER BY created_at ASC
 	`, apertureID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải điểm tài nguyên", err))
 		return
 	}
 	defer rows.Close()
@@ -982,7 +983,7 @@ func GetApertureResourcePoints(c *gin.Context) {
 			workerMult = 1 + 0.25*math.Min(1.0, float64(pop)/500.0)
 		}
 		if err := accrueAperturePoint(tx, &p.ApertureResourcePoint, p.template, effectiveTimeRate, areaSize, ctx, workerMult); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tích lũy sản lượng"})
+			httperr.Respond(c, httperr.Internal("Lỗi tích lũy sản lượng", err))
 			return
 		}
 		preview := aperturePointYield(ctx, p.ApertureResourcePoint, p.template, areaSize, workerMult)
@@ -990,7 +991,7 @@ func GetApertureResourcePoints(c *gin.Context) {
 		points[i] = p.ApertureResourcePoint
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu tích lũy"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu tích lũy", err))
 		return
 	}
 	c.JSON(http.StatusOK, points)
@@ -1012,7 +1013,7 @@ func GetWorldResourcePoints(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -1028,7 +1029,7 @@ func GetWorldResourcePoints(c *gin.Context) {
 	// Lazy top-up: a region must have mines the first time anyone looks at it,
 	// before the periodic sweep (StartWorldResourcePointWorker) reaches it.
 	if _, _, err := ensureWorldResourcePoints(c.Request.Context(), tx, regionID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi sinh điểm tài nguyên thế giới"})
+		httperr.Respond(c, httperr.Internal("Lỗi sinh điểm tài nguyên thế giới", err))
 		return
 	}
 
@@ -1038,7 +1039,7 @@ func GetWorldResourcePoints(c *gin.Context) {
 		WHERE scope = 'WORLD' AND region_id = $1
 	`, regionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải điểm tài nguyên thế giới"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải điểm tài nguyên thế giới", err))
 		return
 	}
 	defer rows.Close()
@@ -1078,7 +1079,7 @@ func GetWorldResourcePoints(c *gin.Context) {
 	// row (the transplant handler does the same, avoiding a lock inversion).
 	ritualAborted, err := abortPointTransplantWithoutPresence(tx, playerID, regionID, worldX, worldY)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra nghi thức di dời"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra nghi thức di dời", err))
 		return
 	}
 
@@ -1092,7 +1093,7 @@ func GetWorldResourcePoints(c *gin.Context) {
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu tích lũy"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu tích lũy", err))
 		return
 	}
 	if ritualAborted {
@@ -1120,7 +1121,7 @@ func CollectWorldResourcePoint(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -1140,7 +1141,7 @@ func CollectWorldResourcePoint(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 	if p.Scope != "WORLD" {
@@ -1153,7 +1154,7 @@ func CollectWorldResourcePoint(c *gin.Context) {
 	var playerRegion string
 	var px, py float64
 	if err := tx.QueryRow(`SELECT COALESCE(current_region, ''), COALESCE(world_x, 0), COALESCE(world_y, 0) FROM players WHERE id = $1`, playerID).Scan(&playerRegion, &px, &py); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi vị trí đạo hữu"})
+		httperr.Respond(c, httperr.Internal("Lỗi vị trí đạo hữu", err))
 		return
 	}
 	distance := math.Max(math.Abs(px-float64(p.X)), math.Abs(py-float64(p.Y)))
@@ -1177,7 +1178,7 @@ func CollectWorldResourcePoint(c *gin.Context) {
 	// 3. Harvest on the shared flow (world pace: 1x, no owner boosts).
 	message, granted, err := harvestPointRow(tx, playerID, &p)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	if granted {
@@ -1187,7 +1188,7 @@ func CollectWorldResourcePoint(c *gin.Context) {
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu thu hoạch"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu thu hoạch", err))
 		return
 	}
 	if granted {
@@ -1625,7 +1626,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -1641,14 +1642,14 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		SELECT rank, COALESCE(current_mana, 0), COALESCE(current_region, ''), COALESCE(world_x, 0), COALESCE(world_y, 0)
 		FROM players WHERE id = $1
 	`, playerID).Scan(&rank, &currentMana, &playerRegion, &playerX, &playerY); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi vị trí đạo hữu"})
+		httperr.Respond(c, httperr.Internal("Lỗi vị trí đạo hữu", err))
 		return
 	}
 
 	now := time.Now()
 	ritual, err := loadPointTransplantRitual(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra nghi thức di dời"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra nghi thức di dời", err))
 		return
 	}
 	// breakRitual ends the ritual (the burnt Tiên Nguyên is never refunded) and
@@ -1656,11 +1657,11 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	// leaving a row that would keep the mine claimed.
 	breakRitual := func(message string, status int) {
 		if err := clearPointTransplantRitual(tx, playerID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hủy nghi thức di dời"})
+			httperr.Respond(c, httperr.Internal("Lỗi hủy nghi thức di dời", err))
 			return
 		}
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái nghi thức"})
+			httperr.Respond(c, httperr.Internal("Lỗi lưu trạng thái nghi thức", err))
 			return
 		}
 		notify.Send(db.DB, playerID, "point_transplant", "Nghi Thức Tan", message)
@@ -1670,7 +1671,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		var pointX, pointY int
 		scanErr := tx.QueryRow(`SELECT x, y FROM aperture_resource_points WHERE id = $1`, ritual.PointID).Scan(&pointX, &pointY)
 		if scanErr != nil && scanErr != sql.ErrNoRows {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", scanErr))
 			return
 		}
 		// Presence is the whole mechanic: stepping away (or the mine vanishing)
@@ -1702,7 +1703,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 			breakRitual("Mỏ đã biến mất khỏi thế giới — nghi thức tan.", http.StatusNotFound)
 			return
 		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 			return
 		}
 		if pointScope != "WORLD" || pointRegion != ritual.RegionID || !worldPointInReach(playerRegion, pointRegion, playerX, playerY, pointX, pointY) {
@@ -1714,7 +1715,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 			breakRitual("Đạo hữu chưa khai mở Tiên Khiếu — không có đâu để đặt núi!", http.StatusBadRequest)
 			return
 		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Tiên Khiếu"})
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Tiên Khiếu", err))
 			return
 		}
 		if pointCount >= aperturePointPointGenCap {
@@ -1730,15 +1731,15 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 			breakRitual("Mỏ đã bị người khác di dời trước — nghi thức tan và Tiên Nguyên đã mất.", http.StatusConflict)
 			return
 		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi di dời điểm tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Lỗi di dời điểm tài nguyên", err))
 			return
 		}
 		if err := clearPointTransplantRitual(tx, playerID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kết thúc nghi thức di dời"})
+			httperr.Respond(c, httperr.Internal("Lỗi kết thúc nghi thức di dời", err))
 			return
 		}
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu di dời"})
+			httperr.Respond(c, httperr.Internal("Lỗi lưu di dời", err))
 			return
 		}
 		publishWorldPointsChanged(pointRegion, pointX, pointY)
@@ -1763,7 +1764,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 	if rank < 6 {
@@ -1787,7 +1788,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu — không có đâu để đặt núi!"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Tiên Khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Tiên Khiếu", err))
 		return
 	}
 	if pointCount >= aperturePointPointGenCap {
@@ -1798,13 +1799,13 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	// new claimant forever (the owner is notified once this transaction is in).
 	releasedOwners, err := expirePointTransplants(tx, pointID.String())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi dọn nghi thức di dời cũ"})
+		httperr.Respond(c, httperr.Internal("Lỗi dọn nghi thức di dời cũ", err))
 		return
 	}
 	// A mine already under a live ritual cannot be claimed twice.
 	var claimed bool
 	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM aperture_point_transplants WHERE point_id = $1)`, pointID).Scan(&claimed); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra nghi thức di dời"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra nghi thức di dời", err))
 		return
 	}
 	if claimed {
@@ -1822,7 +1823,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	// lock, so a concurrent spender can never push the pool below zero.
 	burn, err := tx.Exec(`UPDATE players SET current_mana = current_mana - $1, version = version + 1, state_revision = state_revision + 1 WHERE id = $2 AND current_mana >= $1`, cost, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi khấu trừ Tiên Nguyên", err))
 		return
 	}
 	if affected, rowsErr := burn.RowsAffected(); rowsErr == nil && affected == 0 {
@@ -1837,11 +1838,11 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		    mana_spent = EXCLUDED.mana_spent, started_at = EXCLUDED.started_at,
 		    completes_at = EXCLUDED.completes_at, created_at = NOW()
 	`, playerID, pointID, regionID, cost, now, completesAt); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi bắt đầu nghi thức di dời"})
+		httperr.Respond(c, httperr.Internal("Lỗi bắt đầu nghi thức di dời", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu nghi thức di dời"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu nghi thức di dời", err))
 		return
 	}
 	notifyAbandonedTransplants(releasedOwners)
@@ -1910,7 +1911,7 @@ func CollectAperturePointStock(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -1926,13 +1927,13 @@ func CollectAperturePointStock(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 
 	message, granted, err := harvestAperturePoint(tx, playerID, apertureID, pointID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 
@@ -1940,13 +1941,13 @@ func CollectAperturePointStock(c *gin.Context) {
 		var rank int
 		if err := tx.QueryRow(`SELECT rank FROM players WHERE id=$1`, playerID).Scan(&rank); err == nil {
 			if err := TrackDailyMissionProgress(tx, playerID, rank, "point-collect:"+pointID.String(), "aperture_collect", "", 1); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật nhiệm vụ hằng ngày"})
+				httperr.Respond(c, httperr.Internal("Lỗi cập nhật nhiệm vụ hằng ngày", err))
 				return
 			}
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu thu hoạch"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu thu hoạch", err))
 		return
 	}
 	if granted {
@@ -2134,7 +2135,7 @@ func CollectAllAperturePointStocks(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -2151,7 +2152,7 @@ func CollectAllAperturePointStocks(c *gin.Context) {
 	pointIDs := []uuid.UUID{}
 	rows, err := tx.Query(`SELECT id FROM aperture_resource_points WHERE aperture_id = $1 AND state <> 'GONE' FOR UPDATE`, apertureID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải điểm tài nguyên", err))
 		return
 	}
 	for rows.Next() {
@@ -2182,7 +2183,7 @@ func CollectAllAperturePointStocks(c *gin.Context) {
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu thu hoạch"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu thu hoạch", err))
 		return
 	}
 
@@ -2213,7 +2214,7 @@ func RevitalizeAperturePoint(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -2230,7 +2231,7 @@ func RevitalizeAperturePoint(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 	if pt.Vitality >= 100 {
@@ -2248,7 +2249,7 @@ func RevitalizeAperturePoint(c *gin.Context) {
 
 	have, err := InventorySvc.GetQuantity(tx, playerID.String(), itemID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn túi đồ"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn túi đồ", err))
 		return
 	}
 	if have <= 0 {
@@ -2261,7 +2262,7 @@ func RevitalizeAperturePoint(c *gin.Context) {
 	}
 	unitsPaid := min(unitsNeeded, int64(have))
 	if err := InventorySvc.RemoveItem(tx, playerID.String(), itemID, "materials", unitsPaid); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao vật liệu bồi dưỡng"})
+		httperr.Respond(c, httperr.Internal("Lỗi tiêu hao vật liệu bồi dưỡng", err))
 		return
 	}
 	restored := int(math.Max(1, math.Round(float64(unitsPaid)/6.0)))
@@ -2278,11 +2279,11 @@ func RevitalizeAperturePoint(c *gin.Context) {
 	if _, err := tx.Exec(`
 		UPDATE aperture_resource_points SET vitality = $1, state = $2, updated_at = NOW() WHERE id = $3
 	`, newVitality, newState, pt.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu bồi dưỡng"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu bồi dưỡng", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu bồi dưỡng"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu bồi dưỡng", err))
 		return
 	}
 	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
@@ -2307,7 +2308,7 @@ func UpgradeAperturePoint(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -2323,7 +2324,7 @@ func UpgradeAperturePoint(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 	if pt.Level >= MaxPointLevel {
@@ -2334,7 +2335,7 @@ func UpgradeAperturePoint(c *gin.Context) {
 	upgradeCost := int(float64(templateUpgradeBase) * float64(pt.Level) * 1.5)
 	var stones int
 	if err := tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy số dư tài khoản", err))
 		return
 	}
 	if stones < upgradeCost {
@@ -2343,16 +2344,16 @@ func UpgradeAperturePoint(c *gin.Context) {
 	}
 	var newStones float64
 	if err := tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, upgradeCost, playerID).Scan(&newStones); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khấu trừ Tiên Nguyên Thạch", err))
 		return
 	}
 	newLevel := pt.Level + 1
 	if _, err := tx.Exec(`UPDATE aperture_resource_points SET level = $1, updated_at = NOW() WHERE id = $2`, newLevel, pt.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi nâng cấp điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi nâng cấp điểm tài nguyên", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu nâng cấp"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu nâng cấp", err))
 		return
 	}
 	notify.Send(db.DB, playerID, "aperture_upgrade", "Nâng Cấp Điểm Tài Nguyên",
@@ -2395,7 +2396,7 @@ func GetAperturePointWorkers(c *gin.Context) {
 		WHERE w.point_id = $1 AND a.player_id = $2
 	`, pointUUID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải phân công lao động"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải phân công lao động", err))
 		return
 	}
 	defer rows.Close()
@@ -2430,7 +2431,7 @@ func AssignWorkerToPoint(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -2445,7 +2446,7 @@ func AssignWorkerToPoint(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy điểm tài nguyên"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 
@@ -2459,7 +2460,7 @@ func AssignWorkerToPoint(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy dị nhân"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 
@@ -2471,7 +2472,7 @@ func AssignWorkerToPoint(c *gin.Context) {
 			WHERE variant_human_id = $1 AND point_id <> $2
 		) AS w
 	`, req.VariantHumanID, pointID).Scan(&assignedElsewhere); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	if assignedElsewhere+req.AssignedPopulation > vhPop {
@@ -2485,12 +2486,12 @@ func AssignWorkerToPoint(c *gin.Context) {
 		ON CONFLICT (point_id, variant_human_id)
 		DO UPDATE SET assigned_population = $3, updated_at = NOW()
 	`, pointID, req.VariantHumanID, req.AssignedPopulation); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu phân công"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu phân công", err))
 		return
 	}
 	notify.Send(db.DB, playerID, "worker_assigned", "⛏️ Phân Công Lao Động Dị Nhân", fmt.Sprintf(
@@ -2520,7 +2521,7 @@ func RemoveWorkerFromPoint(c *gin.Context) {
 		WHERE w.point_id = p.id AND w.id = $1 AND p.id = $2 AND a.player_id = $3
 	`, workerRowID, pointID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	rowsAffected, _ := result.RowsAffected()

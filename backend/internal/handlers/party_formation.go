@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -145,14 +146,14 @@ func SavePartyFormation(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải nhân vật", err))
 		return
 	}
 	if player.PartyID == nil {
@@ -206,11 +207,11 @@ func SavePartyFormation(c *gin.Context) {
 
 	formationBytes, _ := json.Marshal(entries)
 	if _, err := tx.Exec(`UPDATE parties SET formation = $1 WHERE id = $2`, formationBytes, player.PartyID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu đội hình"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu đội hình", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã lưu đội hình xuất trận", "formation": entries})

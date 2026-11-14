@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 )
 
 type adminRole struct {
@@ -35,7 +36,7 @@ func AdminListRoles(c *gin.Context) {
 	}
 	roles, err := queryAdminRoles(db.DB)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách vai trò"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách vai trò", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"roles": roles})
@@ -52,7 +53,7 @@ func AdminGetPlayerRoles(c *gin.Context) {
 	}
 	var exists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM players WHERE id=$1)`, playerID).Scan(&exists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	if !exists {
@@ -61,7 +62,7 @@ func AdminGetPlayerRoles(c *gin.Context) {
 	}
 	roles, err := queryPlayerAdminRoles(db.DB, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải vai trò người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể tải vai trò người chơi", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"player_id": playerID, "roles": roles})
@@ -85,7 +86,7 @@ func AdminUpdatePlayerRoles(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -93,31 +94,31 @@ func AdminUpdatePlayerRoles(c *gin.Context) {
 	// Serialize all role writes. This makes the last-super-admin count safe
 	// even when two different super admins are demoted concurrently.
 	if _, err = tx.ExecContext(c.Request.Context(), `SELECT pg_advisory_xact_lock(782014621)`); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa cập nhật vai trò"})
+		httperr.Respond(c, httperr.Internal("Không thể khóa cập nhật vai trò", err))
 		return
 	}
 	if err = lockRolePlayers(tx, actorID, targetID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+			httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		}
 		return
 	}
 
 	catalog, err := queryAdminRoles(tx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách vai trò"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách vai trò", err))
 		return
 	}
 	actorRoles, err := queryPlayerAdminRoles(tx, actorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra quyền quản trị"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra quyền quản trị", err))
 		return
 	}
 	before, err := queryPlayerAdminRoles(tx, targetID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải vai trò người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể tải vai trò người chơi", err))
 		return
 	}
 	after, validationErr := validateAdminRoleChange(actorID, targetID, actorRoles, before, *req.Roles, catalog)
@@ -133,7 +134,7 @@ func AdminUpdatePlayerRoles(c *gin.Context) {
 	if containsRole(before, "super_admin") && !containsRole(after, "super_admin") {
 		var count int
 		if err := tx.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_admin_roles WHERE role_key='super_admin'`).Scan(&count); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra super admin"})
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra super admin", err))
 			return
 		}
 		if wouldRemoveLastSuperAdmin(before, after, count) {
@@ -143,25 +144,25 @@ func AdminUpdatePlayerRoles(c *gin.Context) {
 	}
 
 	if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM player_admin_roles WHERE player_id=$1`, targetID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật vai trò"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật vai trò", err))
 		return
 	}
 	for _, role := range after {
 		if _, err := tx.ExecContext(c.Request.Context(), `INSERT INTO player_admin_roles (player_id, role_key, assigned_by) VALUES ($1,$2,$3)`, targetID, role.Key, actorID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật vai trò"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật vai trò", err))
 			return
 		}
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET is_admin=$2 WHERE id=$1`, targetID, len(after) > 0); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ quyền quản trị"})
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ quyền quản trị", err))
 		return
 	}
 	if err := insertRoleAudit(tx, actorID, targetID, roleKeys(before), roleKeys(after), c.ClientIP()); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit vai trò"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi audit vai trò", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất cập nhật vai trò"})
+		httperr.Respond(c, httperr.Internal("Không thể hoàn tất cập nhật vai trò", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"player_id": targetID, "roles": after})

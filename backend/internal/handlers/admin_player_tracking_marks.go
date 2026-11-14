@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -24,7 +25,7 @@ func AdminListPlayerTrackingMarks(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT m.id,m.tracker_id,COALESCE(t.username,''),m.target_id,COALESCE(p.username,''),m.mark_type,m.power,m.expires_at,m.created_at FROM player_tracking_marks m JOIN players t ON t.id=m.tracker_id JOIN players p ON p.id=m.target_id WHERE m.tracker_id=$1 OR m.target_id=$1 ORDER BY m.created_at DESC,m.id`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải ấn ký truy tung"})
+		httperr.Respond(c, httperr.Internal("Không thể tải ấn ký truy tung", err))
 		return
 	}
 	defer rows.Close()
@@ -34,13 +35,13 @@ func AdminListPlayerTrackingMarks(c *gin.Context) {
 		var power float64
 		var expires, created time.Time
 		if err := rows.Scan(&id, &trackerID, &trackerName, &targetID, &targetName, &markType, &power, &expires, &created); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc ấn ký truy tung"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc ấn ký truy tung", err))
 			return
 		}
 		data = append(data, gin.H{"id": id, "tracker_id": trackerID, "tracker_username": trackerName, "target_id": targetID, "target_username": targetName, "mark_type": markType, "power": power, "expires_at": expires, "created_at": created, "is_tracker": trackerID == playerID.String()})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc ấn ký truy tung"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc ấn ký truy tung", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": len(data)})
@@ -89,7 +90,7 @@ func AdminUpdatePlayerTrackingMark(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy ấn ký của người chơi"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật ấn ký"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật ấn ký", err))
 		}
 		return
 	}
@@ -122,7 +123,7 @@ func AdminDeletePlayerTrackingMark(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM player_tracking_marks WHERE id=$1 AND (tracker_id=$2 OR target_id=$2)`, markID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thu hồi ấn ký"})
+		httperr.Respond(c, httperr.Internal("Không thể thu hồi ấn ký", err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {

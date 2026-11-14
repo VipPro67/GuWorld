@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -168,7 +169,7 @@ func GetRegionDetails(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Khu vực không tồn tại"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn khu vực"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn khu vực", err))
 		return
 	}
 	if poolRaw != "" && poolRaw != "{}" {
@@ -488,7 +489,7 @@ func GetWorldMaps(c *gin.Context) {
 		       COALESCE(rules::text, '{}'), is_active
 		FROM world_maps ORDER BY CASE id WHEN 'world_map' THEN 0 WHEN 'bai_thien' THEN 1 WHEN 'hac_thien' THEN 2 ELSE 3 END, id`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách tầng bản đồ"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách tầng bản đồ", err))
 		return
 	}
 	defer rows.Close()
@@ -508,13 +509,13 @@ func GetWorldMaps(c *gin.Context) {
 	for rows.Next() {
 		var item worldMap
 		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.MapType, &item.Width, &item.Height, &item.MinRank, &item.MaxRank, &item.Rules, &item.IsActive); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu tầng bản đồ"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc dữ liệu tầng bản đồ", err))
 			return
 		}
 		maps = append(maps, item)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách tầng bản đồ"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách tầng bản đồ", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"maps": maps})

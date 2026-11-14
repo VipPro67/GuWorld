@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -42,19 +43,19 @@ func EngageTribulation(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	suppressed, err := suppressTribulationsForDeadAperture(tx, playerID.String())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra trạng thái Tiên Cương"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra trạng thái Tiên Cương", err))
 		return
 	}
 	if suppressed {
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 			return
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cương có Tử Khiếu, không phải chịu tai kiếp"})
@@ -71,7 +72,7 @@ func EngageTribulation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đợt tai kiếp này đã kết thúc hoặc không tồn tại"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra tai kiếp"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra tai kiếp", err))
 		return
 	}
 
@@ -88,7 +89,7 @@ func EngageTribulation(c *gin.Context) {
 	// 3. Load player (equipped/vital inventory) and reject if already in combat.
 	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin cổ sư"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy thông tin cổ sư", err))
 		return
 	}
 	if player.ActiveCombat != nil {
@@ -116,7 +117,7 @@ func EngageTribulation(c *gin.Context) {
 		ORDER BY is_boss DESC, max_hp DESC
 	`, eventID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách quái tai kiếp"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy danh sách quái tai kiếp", err))
 		return
 	}
 	defer rows.Close()
@@ -137,7 +138,7 @@ func EngageTribulation(c *gin.Context) {
 		var e liveEnemy
 		if err := rows.Scan(&e.ID, &e.Name, &e.HP, &e.MaxHP, &e.Attack, &e.Defense, &e.IsBoss, &e.Rank, &e.SubRank); err != nil {
 			logger.S.Errorf("EngageTribulation rows.Scan failed for event %s: %v", eventID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc quái tai kiếp"})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc quái tai kiếp", err))
 			return
 		}
 		enemies = append(enemies, e)
@@ -233,18 +234,18 @@ func EngageTribulation(c *gin.Context) {
 
 	combatBytes, err := json.Marshal(state)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo trạng thái chiến đấu"})
+		httperr.Respond(c, httperr.Internal("Lỗi tạo trạng thái chiến đấu", err))
 		return
 	}
 	_, err = tx.Exec(`UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3`, string(combatBytes), MaxHumanQi, playerID)
 	if err != nil {
 		logger.S.Errorf("StartTribulation: failed to save active combat for player=%s, event=%s, enemies=%d: %v", playerID, eventIDStr, len(state.Enemies), err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái chiến đấu"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu trạng thái chiến đấu", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	committed = true

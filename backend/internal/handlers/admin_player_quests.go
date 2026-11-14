@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -32,7 +33,7 @@ func AdminListPlayerQuests(c *gin.Context) {
 	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT quest_id, status, progress_data, completed_at, created_at, updated_at FROM player_quest_progress WHERE player_id=$1 ORDER BY quest_id`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải tiến độ nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể tải tiến độ nhiệm vụ", err))
 		return
 	}
 	defer rows.Close()
@@ -42,7 +43,7 @@ func AdminListPlayerQuests(c *gin.Context) {
 		var progressData json.RawMessage
 		var completedAt, createdAt, updatedAt *time.Time
 		if err := rows.Scan(&questID, &status, &progressData, &completedAt, &createdAt, &updatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc tiến độ nhiệm vụ"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc tiến độ nhiệm vụ", err))
 			return
 		}
 		if search != "" && !strings.Contains(strings.ToLower(questID), search) {
@@ -101,7 +102,7 @@ func AdminUpdatePlayerQuest(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -110,11 +111,11 @@ func AdminUpdatePlayerQuest(c *gin.Context) {
 		return
 	}
 	if err := QuestSvc.Upsert(tx, &services.QuestProgress{PlayerID: playerID.String(), QuestID: questID, Status: req.Status, ProgressData: req.ProgressData, CompletedAt: completedAt}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật nhiệm vụ", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu nhiệm vụ", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_quest_progress", EntityType: "player_quest_progress", EntityID: playerID.String() + ":" + questID, RequestSummary: fmt.Sprintf("quest=%s status=%s", questID, req.Status), IPAddress: c.ClientIP(), Success: true})
@@ -138,13 +139,13 @@ func AdminDeletePlayerQuest(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
 	res, err := tx.Exec(`DELETE FROM player_quest_progress WHERE player_id=$1 AND quest_id=$2`, playerID, questID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa nhiệm vụ", err))
 		return
 	}
 	count, _ := res.RowsAffected()
@@ -153,7 +154,7 @@ func AdminDeletePlayerQuest(c *gin.Context) {
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thay đổi"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu thay đổi", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_quest_progress", EntityType: "player_quest_progress", EntityID: playerID.String() + ":" + questID, IPAddress: c.ClientIP(), Success: true})

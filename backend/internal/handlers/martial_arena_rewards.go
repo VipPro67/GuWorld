@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -171,7 +172,7 @@ func GetMyMartialRewards(c *gin.Context) {
 		ORDER BY mcr.created_at DESC
 	`, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch rewards"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch rewards", err))
 		return
 	}
 	defer rows.Close()
@@ -213,7 +214,7 @@ func ClaimMartialReward(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -228,7 +229,7 @@ func ClaimMartialReward(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phần thưởng"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	if r.Claimed {
@@ -238,19 +239,19 @@ func ClaimMartialReward(c *gin.Context) {
 
 	if r.RewardStones > 0 {
 		if _, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, r.RewardStones, authID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to award stones"})
+			httperr.Respond(c, httperr.Internal("Failed to award stones", err))
 			return
 		}
 	}
 	if r.RewardImmortalStones > 0 {
 		if _, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id = $2`, r.RewardImmortalStones, authID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to award immortal stones"})
+			httperr.Respond(c, httperr.Internal("Failed to award immortal stones", err))
 			return
 		}
 	}
 	if r.Title != "" {
 		if _, err = tx.Exec(`UPDATE players SET martial_title = $1 WHERE id = $2`, r.Title, authID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to award title"})
+			httperr.Respond(c, httperr.Internal("Failed to award title", err))
 			return
 		}
 	}
@@ -280,7 +281,7 @@ func ClaimMartialReward(c *gin.Context) {
 	}
 
 	if _, err = tx.Exec(`UPDATE martial_champion_rewards SET claimed = true, claimed_at = NOW() WHERE id = $1`, rewardUUID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark as claimed"})
+		httperr.Respond(c, httperr.Internal("Failed to mark as claimed", err))
 		return
 	}
 
@@ -300,12 +301,12 @@ func ClaimMartialReward(c *gin.Context) {
 		IPAddress: c.ClientIP(),
 		Success:   true,
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi audit", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failed"})
+		httperr.Respond(c, httperr.Internal("Database commit failed", err))
 		return
 	}
 

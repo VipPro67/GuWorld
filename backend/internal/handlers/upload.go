@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -72,7 +73,7 @@ func AdminUploadImage(c *gin.Context) {
 
 	uploadDir := filepath.Join("storage", "images", entityType)
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo thư mục lưu ảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo thư mục lưu ảnh", err))
 		return
 	}
 
@@ -81,13 +82,13 @@ func AdminUploadImage(c *gin.Context) {
 
 	out, err := os.Create(filePath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu file ảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu file ảnh", err))
 		return
 	}
 	defer out.Close()
 
 	if _, err := io.Copy(out, file); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi file ảnh"})
+		httperr.Respond(c, httperr.Internal("Lỗi ghi file ảnh", err))
 		return
 	}
 
@@ -99,7 +100,7 @@ func AdminUploadImage(c *gin.Context) {
 	)
 	if err != nil {
 		os.Remove(filePath)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật database: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật database: "+err.Error(), err))
 		return
 	}
 

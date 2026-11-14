@@ -15,6 +15,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -445,7 +446,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -495,7 +496,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 	// Bulk upsert all item rewards in 1 query
 	if len(itemQtyMap) > 0 {
 		if err := InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", itemQtyMap); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật vật phẩm"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật vật phẩm", err))
 			return
 		}
 	}
@@ -505,7 +506,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 	updateQuery, updateArgs := buildGachaUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật người chơi"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật người chơi", err))
 		fmt.Println("Error updating player:", err)
 		return
 	}
@@ -515,7 +516,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 			fmt.Println("Gacha immortal conflict:", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật cổ trùng", err))
 		fmt.Println("Error saving player Gu inventory:", err)
 		return
 	}
@@ -538,12 +539,12 @@ func runGachaOpen(c *gin.Context, forced int) {
 		IPAddress: c.ClientIP(),
 		Success:   true,
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi audit", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})
+		httperr.Respond(c, httperr.Internal("Lỗi commit", err))
 		fmt.Println("Error committing transaction:", err)
 		return
 	}

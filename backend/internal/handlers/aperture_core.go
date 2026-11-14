@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -56,25 +57,25 @@ func GetImmortalAperture(c *gin.Context) {
 		// Auto-create aperture (fallback for legacy players) — grade rolled from current Nhân Khí
 		tx, txErr := db.DB.Begin()
 		if txErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			httperr.Respond(c, httperr.Internal("Database error", txErr))
 			return
 		}
 		defer tx.Rollback()
 
 		ap, err = createAperture(tx, playerID.String(), player.HumanQi, player.CurrentMana)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khai mở Tiên Khiếu: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể khai mở Tiên Khiếu: "+err.Error(), err))
 			return
 		}
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Tiên Khiếu: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể lưu Tiên Khiếu: "+err.Error(), err))
 			return
 		}
 		createdAt = ap.CreatedAt
 		updatedAt = ap.UpdatedAt
 	} else if err != nil {
 		logger.S.Errorf("Error fetching aperture for player %s: %v", playerID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Tiên Khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn Tiên Khiếu", err))
 		return
 	}
 
@@ -83,17 +84,17 @@ func GetImmortalAperture(c *gin.Context) {
 	if isImmortalPlayer && raceHasDeadAperture(player.Race) {
 		tx, txErr := db.DB.BeginTx(c.Request.Context(), nil)
 		if txErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra trạng thái Tiên Cương"})
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra trạng thái Tiên Cương", txErr))
 			return
 		}
 		suppressed, suppressErr := suppressTribulationsForDeadAperture(tx, playerID.String())
 		if suppressErr != nil {
 			_ = tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đồng bộ trạng thái Tiên Cương"})
+			httperr.Respond(c, httperr.Internal("Lỗi đồng bộ trạng thái Tiên Cương", suppressErr))
 			return
 		}
 		if commitErr := tx.Commit(); commitErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái Tiên Cương"})
+			httperr.Respond(c, httperr.Internal("Lỗi lưu trạng thái Tiên Cương", commitErr))
 			return
 		}
 		if suppressed {
@@ -314,7 +315,7 @@ func GetDaoMarks(c *gin.Context) {
 	if err == sql.ErrNoRows {
 		daoJSON = []byte("{}")
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Dao Marks"})
+		httperr.Respond(c, httperr.Internal("Failed to load Dao Marks", err))
 		return
 	}
 
@@ -363,7 +364,7 @@ func GetApertureNodes(c *gin.Context) {
 		  AND COALESCE(n.node_category, 'DEFENSE') = 'DEFENSE'
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách công trình: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy danh sách công trình: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -437,7 +438,7 @@ func AnchorAperture(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -496,7 +497,7 @@ func AnchorAperture(c *gin.Context) {
 		WHERE id = $4
 	`, player.CurrentRegion, float64(player.X), float64(player.Y), ap.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái Hạ Khiếu"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật trạng thái Hạ Khiếu", err))
 		return
 	}
 
@@ -509,7 +510,7 @@ func AnchorAperture(c *gin.Context) {
 		    access_policy = EXCLUDED.access_policy, is_active = true, updated_at = NOW()
 	`, ap.ID, player.ID, player.CurrentRegion, float64(player.X), float64(player.Y), req.PortalName, req.AccessPolicy)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khởi tạo Môn Hộ thế giới: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể khởi tạo Môn Hộ thế giới: "+err.Error(), err))
 		return
 	}
 
@@ -525,12 +526,12 @@ func AnchorAperture(c *gin.Context) {
 		WHERE id = $3
 	`, ap.ID, apertureInstanceID, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển dịch thân thể vào Tiên Khiếu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể chuyển dịch thân thể vào Tiên Khiếu: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu Hạ Khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu dữ liệu Hạ Khiếu", err))
 		return
 	}
 
@@ -601,7 +602,7 @@ func UnanchorAperture(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
@@ -676,7 +677,7 @@ func UnanchorAperture(c *gin.Context) {
 		WHERE id = $4
 	`, newHeavenQi, newEarthQi, newState, ap.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thu hồi Tiên Khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi thu hồi Tiên Khiếu", err))
 		return
 	}
 
@@ -702,12 +703,12 @@ func UnanchorAperture(c *gin.Context) {
 		WHERE id = $4
 	`, destRegion, destX, destY, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn nguyên thân thể về thế giới: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi hoàn nguyên thân thể về thế giới: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu thu hồi"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu dữ liệu thu hồi", err))
 		return
 	}
 

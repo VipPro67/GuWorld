@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -33,7 +34,7 @@ func UpdateTradeOffer(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -82,7 +83,7 @@ func UpdateTradeOffer(c *gin.Context) {
 	// 2. Load player inventories & check assets
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player details"})
+		httperr.Respond(c, httperr.Internal("Failed to load player details", err))
 		return
 	}
 
@@ -118,7 +119,7 @@ func UpdateTradeOffer(c *gin.Context) {
 		}
 		reserved, reservationErr := guHasActiveProductReservation(tx, instID)
 		if reservationErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
 			return
 		}
 		if reserved {
@@ -156,7 +157,7 @@ func UpdateTradeOffer(c *gin.Context) {
 	// Serialize offer
 	offerJSON, err := json.Marshal(offer)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize offer"})
+		httperr.Respond(c, httperr.Internal("Failed to serialize offer", err))
 		return
 	}
 
@@ -179,12 +180,12 @@ func UpdateTradeOffer(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update trade offer"})
+		httperr.Respond(c, httperr.Internal("Failed to update trade offer", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
@@ -202,7 +203,7 @@ func LockTrade(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -238,12 +239,12 @@ func LockTrade(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lock failed"})
+		httperr.Respond(c, httperr.Internal("Lock failed", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
@@ -260,7 +261,7 @@ func UnlockTrade(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -296,12 +297,12 @@ func UnlockTrade(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unlock failed"})
+		httperr.Respond(c, httperr.Internal("Unlock failed", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
@@ -318,7 +319,7 @@ func ConfirmTrade(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -367,7 +368,7 @@ func ConfirmTrade(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Confirm update failed"})
+		httperr.Respond(c, httperr.Internal("Confirm update failed", err))
 		return
 	}
 
@@ -382,23 +383,23 @@ func ConfirmTrade(c *gin.Context) {
 		if senderID.String() < receiverID.String() {
 			sender, err = evaluateManaTx(tx, senderID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+				httperr.Respond(c, httperr.Internal("Failed to load sender details", err))
 				return
 			}
 			receiver, err = evaluateManaTx(tx, receiverID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+				httperr.Respond(c, httperr.Internal("Failed to load receiver details", err))
 				return
 			}
 		} else {
 			receiver, err = evaluateManaTx(tx, receiverID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+				httperr.Respond(c, httperr.Internal("Failed to load receiver details", err))
 				return
 			}
 			sender, err = evaluateManaTx(tx, senderID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+				httperr.Respond(c, httperr.Internal("Failed to load sender details", err))
 				return
 			}
 		}
@@ -468,12 +469,12 @@ func ConfirmTrade(c *gin.Context) {
 			}
 		}
 		if err := InventorySvc.BulkRemoveItems(tx, sender.ID.String(), "materials", senderOffer.Materials); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ vật phẩm của người gửi"})
+			httperr.Respond(c, httperr.Internal("Không thể trừ vật phẩm của người gửi", err))
 			return
 		}
 		// Add to receiver
 		if err := InventorySvc.BulkAddItems(tx, receiver.ID.String(), "materials", senderOffer.Materials); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm vật phẩm cho người nhận"})
+			httperr.Respond(c, httperr.Internal("Không thể thêm vật phẩm cho người nhận", err))
 			return
 		}
 
@@ -523,12 +524,12 @@ func ConfirmTrade(c *gin.Context) {
 			}
 		}
 		if err := InventorySvc.BulkRemoveItems(tx, receiver.ID.String(), "materials", receiverOffer.Materials); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ vật phẩm của người nhận"})
+			httperr.Respond(c, httperr.Internal("Không thể trừ vật phẩm của người nhận", err))
 			return
 		}
 		// Add to sender
 		if err := InventorySvc.BulkAddItems(tx, sender.ID.String(), "materials", receiverOffer.Materials); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm vật phẩm cho người gửi"})
+			httperr.Respond(c, httperr.Internal("Không thể thêm vật phẩm cho người gửi", err))
 			return
 		}
 
@@ -551,31 +552,31 @@ func ConfirmTrade(c *gin.Context) {
 		// this avoids rewriting both players' entire Gu inventories.
 		for _, instID := range senderOffer.Gus {
 			if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, updated_at = NOW() WHERE id = $2`, receiver.ID, instID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển Cổ trùng trong giao dịch"})
+				httperr.Respond(c, httperr.Internal("Không thể chuyển Cổ trùng trong giao dịch", err))
 				return
 			}
 		}
 		for _, instID := range receiverOffer.Gus {
 			if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, updated_at = NOW() WHERE id = $2`, sender.ID, instID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển Cổ trùng trong giao dịch"})
+				httperr.Respond(c, httperr.Internal("Không thể chuyển Cổ trùng trong giao dịch", err))
 				return
 			}
 		}
 
 		// Update both players' balances in the database
 		if _, err := tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, sender.EquippedGus, sender.PrimevalStones, sender.ImmortalStones, sender.HumanQi, sender.ID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ người gửi"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật túi đồ người gửi", err))
 			return
 		}
 		if _, err := tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, receiver.EquippedGus, receiver.PrimevalStones, receiver.ImmortalStones, receiver.HumanQi, receiver.ID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ người nhận"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật túi đồ người nhận", err))
 			return
 		}
 
 		// Update trade status to COMPLETED
 		_, err = tx.Exec(`UPDATE trades SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`, tradeID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update trade completion status"})
+			httperr.Respond(c, httperr.Internal("Failed to update trade completion status", err))
 			return
 		}
 	}
@@ -590,7 +591,7 @@ func ConfirmTrade(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)

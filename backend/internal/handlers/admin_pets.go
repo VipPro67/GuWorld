@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 )
 
 func AdminListPlayerPets(c *gin.Context) {
@@ -30,7 +31,7 @@ func AdminListPlayerPets(c *gin.Context) {
 		ORDER BY formation_slot ASC, created_at ASC
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query pets"})
+		httperr.Respond(c, httperr.Internal("Failed to query pets", err))
 		return
 	}
 	defer pets.Close()
@@ -81,7 +82,7 @@ func AdminDeletePlayerPet(c *gin.Context) {
 
 	result, err := db.DB.Exec(`DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST'`, petID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete pet"})
+		httperr.Respond(c, httperr.Internal("Failed to delete pet", err))
 		return
 	}
 
@@ -157,7 +158,7 @@ func AdminCreatePlayerPet(c *gin.Context) {
 		playerID, req.MonsterTemplateID, req.Nickname, req.Rank, req.SubRank, req.HP, req.MaxHP, req.BaseAttack, req.BaseDefense, req.Speed, req.Count, req.Hunger, req.MaxHunger, req.PetHungerPerHour, req.State, req.FormationSlot)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo linh thú: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo linh thú: "+err.Error(), err))
 		return
 	}
 
@@ -197,7 +198,7 @@ func AdminUpdatePlayerPet(c *gin.Context) {
 		req.Nickname, req.Rank, req.SubRank, req.HP, req.MaxHP, req.BaseAttack, req.BaseDefense, req.Speed, req.Count, req.Hunger, req.MaxHunger, req.PetHungerPerHour, req.State, req.FormationSlot, petID, playerID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật linh thú: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật linh thú: "+err.Error(), err))
 		return
 	}
 	if affected, rowsErr := result.RowsAffected(); rowsErr != nil || affected == 0 {

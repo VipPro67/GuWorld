@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -32,14 +33,14 @@ func CreateParty(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player status"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player status", err))
 		return
 	}
 
@@ -56,18 +57,18 @@ func CreateParty(c *gin.Context) {
 
 	_, err = tx.Exec("INSERT INTO parties (id, leader_id, members) VALUES ($1, $2, $3)", partyID, player.ID, membersBytes)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create party"})
+		httperr.Respond(c, httperr.Internal("Failed to create party", err))
 		return
 	}
 
 	_, err = tx.Exec("UPDATE players SET party_id = $1 WHERE id = $2", partyID, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player party"})
+		httperr.Respond(c, httperr.Internal("Failed to update player party", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to commit transaction", err))
 		return
 	}
 
@@ -130,14 +131,14 @@ func InvitePlayer(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player status"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player status", err))
 		return
 	}
 
@@ -206,14 +207,14 @@ func InvitePlayer(c *gin.Context) {
 		ON CONFLICT (party_id, invitee_id) DO UPDATE SET status = 'PENDING', created_at = CURRENT_TIMESTAMP
 	`, player.PartyID, player.ID, targetPlayer.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gửi lời mời thất bại"})
+		httperr.Respond(c, httperr.Internal("Gửi lời mời thất bại", err))
 		return
 	}
 
 	notify.Send(tx, targetPlayer.ID, "PARTY_INVITE", "Lời Mời Tổ Đội", fmt.Sprintf("Cổ sư %s đã mời bạn tham gia tổ đội!", player.Username))
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -237,14 +238,14 @@ func LeaveParty(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
@@ -276,7 +277,7 @@ func LeaveParty(c *gin.Context) {
 
 	_, err = tx.Exec("UPDATE players SET party_id = NULL WHERE id = $1", player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database update failed"})
+		httperr.Respond(c, httperr.Internal("Database update failed", err))
 		return
 	}
 
@@ -298,7 +299,7 @@ func LeaveParty(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -318,7 +319,7 @@ func GetPendingInvitations(c *gin.Context) {
 		WHERE i.invitee_id = $1 AND i.status = 'PENDING'
 	`, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer rows.Close()
@@ -363,7 +364,7 @@ func RespondToInvitation(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -398,14 +399,14 @@ func RespondToInvitation(c *gin.Context) {
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 	if errMove := checkMovement(tx, &player, movementSpec{kind: movementPartyJoin}); errMove != nil {
 		if respondMovementError(c, errMove) {
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+		httperr.Respond(c, httperr.Internal(errMove.Error(), errMove))
 		return
 	}
 	if player.PartyID != nil {
@@ -414,7 +415,7 @@ func RespondToInvitation(c *gin.Context) {
 	}
 	var playerMapInstance sql.NullString
 	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&playerMapInstance); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra bản đồ hiện tại"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra bản đồ hiện tại", err))
 		return
 	}
 	if playerMapInstance.Valid && playerMapInstance.String != "" {
@@ -439,7 +440,7 @@ func RespondToInvitation(c *gin.Context) {
 	err = tx.QueryRow(`SELECT current_region,x,y,map_instance_id::text FROM players WHERE id=$1`, leaderID).
 		Scan(&leaderRegion, &leaderX, &leaderY, &leaderMapInstance)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra vị trí đội trưởng"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra vị trí đội trưởng", err))
 		return
 	}
 	if leaderMapInstance.Valid && leaderMapInstance.String != "" {
@@ -472,7 +473,7 @@ func RespondToInvitation(c *gin.Context) {
 
 	_, err = tx.Exec("UPDATE parties SET members = $1 WHERE id = $2", newMembersBytes, partyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tổ đội"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật tổ đội", err))
 		return
 	}
 
@@ -501,7 +502,7 @@ func RespondToInvitation(c *gin.Context) {
 	}
 	_, err = tx.Exec("UPDATE players SET party_id = $1, current_region = $2, x = $3, y = $4, statuses = $5 WHERE id = $6", partyID, player.CurrentRegion, player.X, player.Y, player.Statuses, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật thông tin nhân vật", err))
 		return
 	}
 
@@ -514,7 +515,7 @@ func RespondToInvitation(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit error"})
+		httperr.Respond(c, httperr.Internal("Database commit error", err))
 		return
 	}
 

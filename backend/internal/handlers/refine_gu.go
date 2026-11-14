@@ -14,6 +14,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -37,7 +38,7 @@ func RefineGu(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -48,7 +49,7 @@ func RefineGu(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player status"})
+			httperr.Respond(c, httperr.Internal("Failed to lock player status", err))
 		}
 		return
 	}
@@ -154,7 +155,7 @@ func RefineGu(c *gin.Context) {
 	if err := tx.QueryRow(`SELECT COUNT(1) FROM player_gu WHERE player_id = $1 AND id = ANY($2::text[]) AND is_locked`,
 		player.ID, pq.Array(req.SelectedGuInstanceIDs)).Scan(&lockedCount); err != nil {
 		logger.S.Errorf("RefineGu: locked Gu check error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra Gu bị khóa"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kiểm tra Gu bị khóa", err))
 		return
 	}
 	if lockedCount > 0 {
@@ -169,7 +170,7 @@ func RefineGu(c *gin.Context) {
 		exists, err := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
 		if err != nil {
 			logger.S.Errorf("RefineGu: CheckImmortalGuExists error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra Cổ duy nhất"})
+			httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kiểm tra Cổ duy nhất", err))
 			return
 		}
 		isUniqueImmortalFail = exists
@@ -190,7 +191,7 @@ func RefineGu(c *gin.Context) {
 		requirementsNotMet:   guRequirementsNotMet,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute refine rate: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to compute refine rate: "+err.Error(), err))
 		return
 	}
 	finalSuccessRate := rateSnapshot.Breakdown.FinalRate
@@ -225,7 +226,7 @@ func RefineGu(c *gin.Context) {
 						c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
 					} else {
 						logger.S.Error("RefineGu FailSafe DeductItem error:", err)
-						c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi trừ nguyên liệu"})
+						httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi trừ nguyên liệu", err))
 					}
 					return
 				}
@@ -242,7 +243,7 @@ func RefineGu(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
 				} else {
 					logger.S.Error("RefineGu DeductItem error:", err)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi trừ nguyên liệu"})
+					httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi trừ nguyên liệu", err))
 				}
 				return
 			}
@@ -433,7 +434,7 @@ func RefineGu(c *gin.Context) {
 	if len(consumedGuIDs) > 0 {
 		if err := db.RemovePlayerGus(tx, consumedGuIDs); err != nil {
 			logger.S.Error("RefineGu: failed to remove consumed Gus:", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể lưu túi đồ: "+err.Error(), err))
 			return
 		}
 	}
@@ -443,22 +444,22 @@ func RefineGu(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể lưu túi đồ: "+err.Error(), err))
 		return
 	}
 	if err := updateRefinePlayerResources(tx, &player); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
+		httperr.Respond(c, httperr.Internal("Failed to save refining results", err))
 		return
 	}
 	if outcome == OutcomeSuccess {
 		if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "refine:"+newGuInstance.InstanceID, "refine", "", 1); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật nhiệm vụ hằng ngày"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật nhiệm vụ hằng ngày", err))
 			return
 		}
 	}
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit refining transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to commit refining transaction", err))
 		return
 	}
 

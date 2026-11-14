@@ -19,6 +19,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -32,7 +33,7 @@ func writeImportError(c *gin.Context, prefix string, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": prefix, "issues": validation.Issues})
 		return
 	}
-	c.JSON(http.StatusInternalServerError, gin.H{"error": prefix + ": " + err.Error()})
+	httperr.Respond(c, httperr.Internal(prefix, err))
 }
 
 const importPreflightTTL = 15 * time.Minute
@@ -345,11 +346,11 @@ func commitImport(c *gin.Context, table string) {
 	}
 	if err := auditlog.LogChecked(tx, auditlog.Entry{PlayerID: &adminID, Action: action, EntityType: "game_data", EntityID: entityID, RequestSummary: strings.TrimSpace(request.Reason), IPAddress: c.ClientIP(), Success: true, Metadata: map[string]interface{}{"preflight_id": request.PreflightID, "source_digest": stage.Digest, "totals": plan.Totals}}); err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit; transaction đã rollback"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi audit; transaction đã rollback", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể commit transaction: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể commit transaction: "+err.Error(), err))
 		return
 	}
 	var warnings []string
@@ -475,7 +476,7 @@ func AdminExportData(c *gin.Context) {
 	}
 
 	if err := db.ExportToCSV(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Export thất bại: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Export thất bại: "+err.Error(), err))
 		return
 	}
 
@@ -533,7 +534,7 @@ func AdminExportTable(c *gin.Context) {
 	table := c.Param("table")
 
 	if err := db.TableExport(table); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Export bảng " + table + " thất bại: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Export bảng "+table+" thất bại: "+err.Error(), err))
 		return
 	}
 
@@ -647,7 +648,7 @@ func AdminClearRedisCache(c *gin.Context) {
 	if cache.Client != nil {
 		if err := cache.Client.FlushAll(cache.Ctx).Err(); err != nil {
 			logger.S.Errorf("Failed to flush redis cache: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa toàn bộ cache Redis"})
+			httperr.Respond(c, httperr.Internal("Không thể xóa toàn bộ cache Redis", err))
 			return
 		}
 	}
@@ -711,7 +712,7 @@ func AdminGetAuditLogs(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể truy vấn nhật ký: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể truy vấn nhật ký: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -726,7 +727,7 @@ func AdminGetAuditLogs(c *gin.Context) {
 			&logRow.Success, &logRow.ErrorMessage, &logRow.CreatedAt,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc nhật ký: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể đọc nhật ký: "+err.Error(), err))
 			return
 		}
 		if len(metaJSON) > 0 {
@@ -778,12 +779,12 @@ func AdminGetAuditLogs(c *gin.Context) {
 		var err error
 		total, err = fastCountTable(c, "audit_logs", "admin:audit_logs:total_count", 60*time.Second)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm nhật ký"})
+			httperr.Respond(c, httperr.Internal("Không thể đếm nhật ký", err))
 			return
 		}
 	} else {
 		if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm nhật ký"})
+			httperr.Respond(c, httperr.Internal("Không thể đếm nhật ký", err))
 			return
 		}
 	}

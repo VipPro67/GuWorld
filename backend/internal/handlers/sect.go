@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
@@ -326,7 +327,7 @@ func GetSects(c *gin.Context) {
 		ORDER BY level DESC, funds DESC
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sects: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to fetch sects: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -363,7 +364,7 @@ func JoinSect(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -400,7 +401,7 @@ func JoinSect(c *gin.Context) {
 			ON CONFLICT (sect_id, player_id) DO UPDATE SET status = 'PENDING', created_at = now()
 		`, sectID, playerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit join request: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to submit join request: "+err.Error(), err))
 			return
 		}
 
@@ -413,7 +414,7 @@ func JoinSect(c *gin.Context) {
 		})
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+			httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 			return
 		}
 
@@ -427,7 +428,7 @@ func JoinSect(c *gin.Context) {
 		VALUES ($1, $2, 'NGOAI_MON', 0)
 	`, sectID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to join sect: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to join sect: "+err.Error(), err))
 		return
 	}
 
@@ -440,7 +441,7 @@ func JoinSect(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 
@@ -466,7 +467,7 @@ func CancelSectJoinRequest(c *gin.Context) {
 
 	_, err := db.DB.Exec(`DELETE FROM sect_join_requests WHERE player_id = $1 AND status = 'PENDING'`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel join request: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to cancel join request: "+err.Error(), err))
 		return
 	}
 
@@ -492,7 +493,7 @@ func LeaveSect(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -513,7 +514,7 @@ func LeaveSect(c *gin.Context) {
 	// Delete membership
 	_, err = tx.Exec(`DELETE FROM sect_members WHERE player_id = $1`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to leave sect"})
+		httperr.Respond(c, httperr.Internal("Failed to leave sect", err))
 		return
 	}
 
@@ -532,7 +533,7 @@ func LeaveSect(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 
@@ -578,7 +579,7 @@ func GetMySectStatus(c *gin.Context) {
 				"pending_sect_name": pendingSectName,
 			})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		}
 		return
 	}
@@ -592,7 +593,7 @@ func GetMySectStatus(c *gin.Context) {
 		WHERE id = $1
 	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &mapX, &mapY, &s.ShieldUntil, &s.Buildings, &s.LastRelocatedAt, &unpaidMaintenanceCount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
+		httperr.Respond(c, httperr.Internal("Failed to load sect details", err))
 		return
 	}
 	s.MapX = &mapX
@@ -683,14 +684,14 @@ func PromoteSectRank(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -778,7 +779,7 @@ func PromoteSectRank(c *gin.Context) {
 		// Deduct points from database
 		_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, playerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution points: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update contribution points: "+err.Error(), err))
 			return
 		}
 
@@ -789,7 +790,7 @@ func PromoteSectRank(c *gin.Context) {
 			ON CONFLICT (sect_id, player_id) DO UPDATE SET current_rank = $3, target_rank = $4, status = 'PENDING', created_at = now()
 		`, m.SectID, playerID, m.MemberRank, nextRank)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit promotion request: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to submit promotion request: "+err.Error(), err))
 			return
 		}
 
@@ -809,7 +810,7 @@ func PromoteSectRank(c *gin.Context) {
 		})
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+			httperr.Respond(c, httperr.Internal("Commit failed", err))
 			return
 		}
 
@@ -828,7 +829,7 @@ func PromoteSectRank(c *gin.Context) {
 		WHERE player_id = $3
 	`, m.MemberRank, m.ContributionPoints, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update member rank"})
+		httperr.Respond(c, httperr.Internal("Failed to update member rank", err))
 		return
 	}
 
@@ -847,7 +848,7 @@ func PromoteSectRank(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -200,7 +201,7 @@ func GetActiveInstance(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusOK, gin.H{"active": false})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		}
 		return
 	}
@@ -220,7 +221,7 @@ func GetActiveInstance(c *gin.Context) {
 			&template.CooldownHours,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance template: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to fetch instance template: "+err.Error(), err))
 			return
 		}
 	}
@@ -270,7 +271,7 @@ func ListInstances(c *gin.Context) {
 			ORDER BY required_rank ASC, id ASC
 		`)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance templates: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to fetch instance templates: "+err.Error(), err))
 			return
 		}
 		defer rows.Close()
@@ -278,13 +279,13 @@ func ListInstances(c *gin.Context) {
 		for rows.Next() {
 			var it InstanceListItem
 			if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.RequiredRank, &it.EntryItem, &it.Description, &it.Rewards, &it.CooldownHours); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan instance template: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to scan instance template: "+err.Error(), err))
 				return
 			}
 			items = append(items, it)
 		}
 		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to iterate instance templates: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to iterate instance templates: "+err.Error(), err))
 			return
 		}
 	}
@@ -361,7 +362,7 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, required
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction start failed"})
+		httperr.Respond(c, httperr.Internal("Transaction start failed", err))
 		return
 	}
 	defer tx.Rollback()
@@ -394,7 +395,7 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, required
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mộng cảnh yêu cầu!"})
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 			}
 			return
 		}
@@ -418,7 +419,7 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, required
 			  AND it.type IN ('DREAM_REALM', 'SECRET_REALM')
 		`, playerID).Scan(&dailyEntries)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking daily limit: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error checking daily limit: "+err.Error(), err))
 			return
 		}
 		if dailyEntries >= MaxDailyInstanceEntries {
@@ -443,7 +444,7 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, required
 			return
 		}
 		if err != nil && err != sql.ErrNoRows {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 			return
 		}
 	}
@@ -451,7 +452,7 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, required
 	// 3. Load player stats
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player data: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load player data: "+err.Error(), err))
 		return
 	}
 
@@ -474,7 +475,7 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, required
 			return
 		}
 		if err := InventorySvc.RemoveItem(tx, player.ID.String(), template.EntryItem, "materials", 1); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume entry item: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to consume entry item: "+err.Error(), err))
 			return
 		}
 	}
@@ -493,12 +494,12 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, required
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`, session.ID, session.PlayerID, session.InstanceID, session.CurrentStage, session.Status, session.TempInventory)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create instance session: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to create instance session: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to commit: "+err.Error(), err))
 		return
 	}
 
@@ -542,7 +543,7 @@ func ActionInstance(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction failure"})
+		httperr.Respond(c, httperr.Internal("Transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -562,7 +563,7 @@ func ActionInstance(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có mộng cảnh nào đang hoạt động!"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		}
 		return
 	}
@@ -579,14 +580,14 @@ func ActionInstance(c *gin.Context) {
 		&template.CooldownHours,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance template: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to fetch instance template: "+err.Error(), err))
 		return
 	}
 
 	// 3. Load player
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player status: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load player status: "+err.Error(), err))
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
@@ -594,7 +595,7 @@ func ActionInstance(c *gin.Context) {
 	// 4. Parse map data stages
 	var stages []InstanceStage
 	if err := json.Unmarshal(template.MapData, &stages); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse template map data"})
+		httperr.Respond(c, httperr.Internal("Failed to parse template map data", err))
 		return
 	}
 
@@ -607,7 +608,7 @@ func ActionInstance(c *gin.Context) {
 	}
 
 	if currentStage == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy giai đoạn hiện tại của phó bản!"})
+		httperr.Respond(c, httperr.Internal("Không tìm thấy giai đoạn hiện tại của phó bản!", currentStage))
 		return
 	}
 
@@ -624,7 +625,7 @@ func ActionInstance(c *gin.Context) {
 		if minSoulVal, hasMinSoul := option.Requirements["min_soul_hp"]; hasMinSoul {
 			minSoulFloat, ok := minSoulVal.(float64)
 			if !ok {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid min_soul_hp format in template"})
+				httperr.Respond(c, httperr.Internal("Invalid min_soul_hp format in template", nil))
 				return
 			}
 			if float64(player.SoulHP) < minSoulFloat {
@@ -639,7 +640,7 @@ func ActionInstance(c *gin.Context) {
 			amtVal, hasAmt := option.Requirements["amount"]
 			amtFloat, ok2 := amtVal.(float64)
 			if !ok1 || !ok2 || !hasAmt {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid material requirement template"})
+				httperr.Respond(c, httperr.Internal("Invalid material requirement template", nil))
 				return
 			}
 			requiredAmt := int64(amtFloat)
@@ -650,7 +651,7 @@ func ActionInstance(c *gin.Context) {
 			}
 			// Deduct material
 			if err := InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", requiredAmt); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct material: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to deduct material: "+err.Error(), err))
 				return
 			}
 		}
@@ -661,7 +662,7 @@ func ActionInstance(c *gin.Context) {
 			amtVal, hasAmt := option.Requirements["amount"]
 			amtFloat, ok2 := amtVal.(float64)
 			if !ok1 || !ok2 || !hasAmt {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid gu requirement template"})
+				httperr.Respond(c, httperr.Internal("Invalid gu requirement template", nil))
 				return
 			}
 			requiredAmt := int(amtFloat)
@@ -692,7 +693,7 @@ func ActionInstance(c *gin.Context) {
 			// Explicit delete — SyncPlayerGus no longer deletes.
 			if len(consumedIDs) > 0 {
 				if err := db.RemovePlayerGus(tx, consumedIDs); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume Gu for instance"})
+					httperr.Respond(c, httperr.Internal("Failed to consume Gu for instance", err))
 					return
 				}
 			}
@@ -761,12 +762,12 @@ func ActionInstance(c *gin.Context) {
 			WHERE id = $1
 		`, session.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update session: "+err.Error(), err))
 			return
 		}
 
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update player: "+err.Error(), err))
 			return
 		}
 		_, err = tx.Exec(`
@@ -775,12 +776,12 @@ func ActionInstance(c *gin.Context) {
 			WHERE id = $5
 		`, player.HP, player.SoulHP, player.CurrentMana, player.HumanQi, player.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update player: "+err.Error(), err))
 			return
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit session failure: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to commit session failure: "+err.Error(), err))
 			return
 		}
 
@@ -801,12 +802,12 @@ func ActionInstance(c *gin.Context) {
 			WHERE id = $2
 		`, nextStage, session.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update stage: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update stage: "+err.Error(), err))
 			return
 		}
 
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update player: "+err.Error(), err))
 			return
 		}
 		_, err = tx.Exec(`
@@ -815,12 +816,12 @@ func ActionInstance(c *gin.Context) {
 			WHERE id = $4
 		`, player.HP, player.SoulHP, player.HumanQi, player.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update player: "+err.Error(), err))
 			return
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transition: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to commit transition: "+err.Error(), err))
 			return
 		}
 
@@ -894,7 +895,7 @@ func ActionInstance(c *gin.Context) {
 			} else if len(rewards.DaoMarks) > 0 {
 				// Bí cảnh: award Đạo Ngân (Dao Marks) directly.
 				if _, err := addMultipleDaoMarksTx(tx, player.ID.String(), rewards.DaoMarks); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân từ mộng cảnh: " + err.Error()})
+					httperr.Respond(c, httperr.Internal("Lỗi cộng Đạo Ngân từ mộng cảnh: "+err.Error(), err))
 					return
 				}
 				daoTexts := make([]string, 0, len(rewards.DaoMarks))
@@ -913,12 +914,12 @@ func ActionInstance(c *gin.Context) {
 			WHERE id = $1
 		`, session.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete session: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to complete session: "+err.Error(), err))
 			return
 		}
 
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player rewards: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update player rewards: "+err.Error(), err))
 			return
 		}
 		_, err = tx.Exec(`
@@ -927,12 +928,12 @@ func ActionInstance(c *gin.Context) {
 			WHERE id = $6
 		`, player.HP, player.SoulHP, player.PrimevalStones, player.PathMasteries, player.HumanQi, player.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player rewards: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update player rewards: "+err.Error(), err))
 			return
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit rewards: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to commit rewards: "+err.Error(), err))
 			return
 		}
 
@@ -951,12 +952,12 @@ func ActionInstance(c *gin.Context) {
 		WHERE id = $1
 	`, session.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fail session: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to fail session: "+err.Error(), err))
 		return
 	}
 
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update player: "+err.Error(), err))
 		return
 	}
 	_, err = tx.Exec(`
@@ -965,12 +966,12 @@ func ActionInstance(c *gin.Context) {
 		WHERE id = $4
 	`, player.HP, player.SoulHP, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player status: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update player status: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit fail session: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to commit fail session: "+err.Error(), err))
 		return
 	}
 

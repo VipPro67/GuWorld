@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -39,12 +40,12 @@ func GetPendingRespawn(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải lựa chọn hồi sinh"})
+		httperr.Respond(c, httperr.Internal("Không thể tải lựa chọn hồi sinh", err))
 		return
 	}
 	var options []respawnChoice
 	if err := json.Unmarshal(raw, &options); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu hồi sinh không hợp lệ"})
+		httperr.Respond(c, httperr.Internal("Dữ liệu hồi sinh không hợp lệ", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"pending": true, "options": options})
@@ -78,7 +79,7 @@ func ChooseRespawn(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu hồi sinh"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu hồi sinh", err))
 		return
 	}
 	defer func() { _ = tx.Rollback() }()
@@ -92,12 +93,12 @@ func ChooseRespawn(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận lựa chọn hồi sinh"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận lựa chọn hồi sinh", err))
 		return
 	}
 	var options []respawnChoice
 	if err := json.Unmarshal(raw, &options); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu hồi sinh không hợp lệ"})
+		httperr.Respond(c, httperr.Internal("Dữ liệu hồi sinh không hợp lệ", err))
 		return
 	}
 	var chosen *respawnChoice
@@ -114,7 +115,7 @@ func ChooseRespawn(c *gin.Context) {
 	var regionExists bool
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM regions WHERE id=$1 AND is_active=TRUE)`, chosen.Region).Scan(&regionExists); err != nil {
 		logger.S.Errorf("respawn choice: validate region player=%s region=%q: %v", playerID, chosen.Region, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác thực khu vực hồi sinh"})
+		httperr.Respond(c, httperr.Internal("Không thể xác thực khu vực hồi sinh", err))
 		return
 	}
 	if !regionExists {
@@ -123,15 +124,15 @@ func ChooseRespawn(c *gin.Context) {
 	}
 	if err := RelocatePlayerRespawn(c.Request.Context(), tx, playerID, chosen.Region, chosen.X, chosen.Y); err != nil {
 		logger.S.Errorf("respawn choice: relocate player=%s region=%q x=%d y=%d: %v", playerID, chosen.Region, chosen.X, chosen.Y, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu vị trí hồi sinh"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu vị trí hồi sinh", err))
 		return
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM player_pending_respawns WHERE player_id=$1`, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất hồi sinh"})
+		httperr.Respond(c, httperr.Internal("Không thể hoàn tất hồi sinh", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận hồi sinh"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận hồi sinh", err))
 		return
 	}
 	middleware.FinishRealtimeHandoff(playerID)

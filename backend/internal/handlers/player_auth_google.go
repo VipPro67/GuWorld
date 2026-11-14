@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -29,7 +30,7 @@ var googleOAuthHTTPClient = &http.Client{Timeout: 5 * time.Second}
 func GoogleLogin(c *gin.Context) {
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
 	if clientID == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Google Client ID is not configured"})
+		httperr.Respond(c, httperr.Internal("Google Client ID is not configured", nil))
 		return
 	}
 
@@ -40,7 +41,7 @@ func GoogleLogin(c *gin.Context) {
 
 	stateToken := make([]byte, 16)
 	if _, err := crypto_rand.Read(stateToken); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate security state"})
+		httperr.Respond(c, httperr.Internal("Failed to generate security state", err))
 		return
 	}
 	stateStr := hex.EncodeToString(stateToken)
@@ -97,7 +98,7 @@ func GoogleCallback(c *gin.Context) {
 
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
 	if clientID == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Google Client ID is not configured"})
+		httperr.Respond(c, httperr.Internal("Google Client ID is not configured", nil))
 		return
 	}
 
@@ -118,13 +119,13 @@ func GoogleCallback(c *gin.Context) {
 
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Google token request"})
+		httperr.Respond(c, httperr.Internal("Failed to create Google token request", err))
 		return
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := googleOAuthHTTPClient.Do(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange authorization code: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to exchange authorization code: "+err.Error(), err))
 		return
 	}
 	defer resp.Body.Close()
@@ -141,7 +142,7 @@ func GoogleCallback(c *gin.Context) {
 		IDToken     string `json:"id_token"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse token response"})
+		httperr.Respond(c, httperr.Internal("Failed to parse token response", err))
 		return
 	}
 
@@ -149,13 +150,13 @@ func GoogleCallback(c *gin.Context) {
 	userinfoURL := "https://www.googleapis.com/oauth2/v2/userinfo"
 	userinfoReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, userinfoURL, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Google user info request"})
+		httperr.Respond(c, httperr.Internal("Failed to create Google user info request", err))
 		return
 	}
 	userinfoReq.Header.Set("Authorization", "Bearer "+tokenResp.AccessToken)
 	userinfoResp, err := googleOAuthHTTPClient.Do(userinfoReq)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to get user info: "+err.Error(), err))
 		return
 	}
 	defer userinfoResp.Body.Close()
@@ -171,7 +172,7 @@ func GoogleCallback(c *gin.Context) {
 		Name  string `json:"name"`
 	}
 	if err := json.NewDecoder(userinfoResp.Body).Decode(&googleUser); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse user info"})
+		httperr.Respond(c, httperr.Internal("Failed to parse user info", err))
 		return
 	}
 
@@ -186,7 +187,7 @@ func GoogleCallback(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -194,7 +195,7 @@ func GoogleCallback(c *gin.Context) {
 	_, _ = tx.ExecContext(c.Request.Context(), "SET LOCAL lock_timeout = '3000ms'")
 
 	if blocked, errBlock := deviceBlocked(tx, c.ClientIP(), fingerprint); errBlock != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra thiết bị"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra thiết bị", errBlock))
 		return
 	} else if blocked {
 		googleAuthErrorRedirect(c, "Thiết bị này đã bị chặn. Vui lòng liên hệ bộ phận hỗ trợ.")
@@ -210,7 +211,7 @@ func GoogleCallback(c *gin.Context) {
 	if err == nil {
 		hasPlayer = true
 	} else if err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking google_id: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Database error checking google_id", err))
 		return
 	}
 
@@ -221,12 +222,12 @@ func GoogleCallback(c *gin.Context) {
 			// Merge Account: update players table to link Google account ID
 			_, err = tx.ExecContext(c.Request.Context(), "UPDATE players SET google_id = $1 WHERE id = $2", googleUser.ID, existingPlayerID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to merge account: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Failed to merge account: "+err.Error(), err))
 				return
 			}
 			hasPlayer = true
 		} else if err != sql.ErrNoRows {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking email: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error checking email", err))
 			return
 		}
 	}
@@ -234,7 +235,7 @@ func GoogleCallback(c *gin.Context) {
 	if hasPlayer {
 		player, err = PlayerSvc.ProjectStatusEquipped(tx, existingPlayerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to load player: "+err.Error(), err))
 			return
 		}
 		if banned, reason, until, banErr := playerBanStatus(tx, player.ID); banErr == nil && banIsActive(banned, until) {
@@ -269,7 +270,7 @@ func GoogleCallback(c *gin.Context) {
 			var exists bool
 			err = tx.QueryRowContext(c.Request.Context(), "SELECT EXISTS(SELECT 1 FROM players WHERE LOWER(username) = LOWER($1))", username).Scan(&exists)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra đạo hiệu"})
+				httperr.Respond(c, httperr.Internal("Không thể kiểm tra đạo hiệu", err))
 				return
 			}
 			if !exists {
@@ -364,18 +365,18 @@ func GoogleCallback(c *gin.Context) {
 				c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu vừa được đăng ký bởi người khác, vui lòng thử đăng nhập lại"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new player record: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to create new player record: "+err.Error(), err))
 			return
 		}
 		player, err = playerstate.Load(tx, newPlayerID, playerstate.Options{Gu: playerstate.GuNone})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load new player record: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to load new player record: "+err.Error(), err))
 			return
 		}
 
 		// Persist starter Gus in the player_gu table (the gu_inventory column is gone).
 		if err := db.AddPlayerGusBulk(tx, player.ID.String(), starterGu); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to seed starter Gus: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to seed starter Gus: "+err.Error(), err))
 			return
 		}
 		player.GuInventory = starterGu
@@ -401,7 +402,7 @@ func GoogleCallback(c *gin.Context) {
 						VALUES ($1, $2, $3, $4, $5)
 					`, referrerID, player.ID, clientIP, userAgent, isSuspicious)
 					if err != nil {
-						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record referral: " + err.Error()})
+						httperr.Respond(c, httperr.Internal("Failed to record referral: "+err.Error(), err))
 						return
 					}
 				}
@@ -424,7 +425,7 @@ func GoogleCallback(c *gin.Context) {
 		fingerprint, player.ID).Scan(&otherAccountsCount)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra thiết bị"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kiểm tra thiết bị", err))
 		return
 	}
 
@@ -486,19 +487,19 @@ func GoogleCallback(c *gin.Context) {
 		WHERE id = $4`,
 		fingerprint, c.ClientIP(), sessionID, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Google login details"})
+		httperr.Respond(c, httperr.Internal("Failed to update Google login details", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Google login state"})
+		httperr.Respond(c, httperr.Internal("Failed to save Google login state", err))
 		return
 	}
 
 	// Generate JWT session token
 	token, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
+		httperr.Respond(c, httperr.Internal("Failed to sign access token", err))
 		return
 	}
 	setAuthCookie(c, token)

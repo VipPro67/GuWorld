@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -49,7 +50,7 @@ func StartPracticeCombat(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở phiên tập luyện."})
+		httperr.Respond(c, httperr.Internal("Không thể mở phiên tập luyện.", err))
 		return
 	}
 	defer tx.Rollback()
@@ -57,7 +58,7 @@ func StartPracticeCombat(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đang có phiên chiến đấu."})
 		return
 	} else if sessionErr != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên chiến đấu."})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra phiên chiến đấu.", sessionErr))
 		return
 	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
@@ -83,11 +84,11 @@ func StartPracticeCombat(c *gin.Context) {
 		player.ActiveCombat.Enemies[0].VirtualShield = config.DummyShield
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET active_combat=$1 WHERE id=$2`, player.ActiveCombat, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phiên tập luyện."})
+		httperr.Respond(c, httperr.Internal("Không thể lưu phiên tập luyện.", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu phiên tập luyện."})
+		httperr.Respond(c, httperr.Internal("Không thể lưu phiên tập luyện.", err))
 		return
 	}
 	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
@@ -104,13 +105,13 @@ func EndPracticeCombat(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc tập luyện."})
+		httperr.Respond(c, httperr.Internal("Không thể kết thúc tập luyện.", err))
 		return
 	}
 	defer tx.Rollback()
 	activeSession, sessionErr := loadCombatSession(tx, playerID, nil, true)
 	if sessionErr != nil && sessionErr != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên tập luyện."})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra phiên tập luyện.", sessionErr))
 		return
 	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
@@ -124,17 +125,17 @@ func EndPracticeCombat(c *gin.Context) {
 	}
 	if sessionErr == nil {
 		if _, err := tx.Exec(`UPDATE combat_sessions SET status='abandoned', pending_actor='', deadline_at=NULL, updated_at=NOW() WHERE id=$1 AND status='active'`, activeSession.ID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc phiên tập luyện."})
+			httperr.Respond(c, httperr.Internal("Không thể kết thúc phiên tập luyện.", err))
 			return
 		}
 	}
 	player.ActiveCombat = nil
 	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET active_combat=NULL WHERE id=$1`, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc tập luyện."})
+		httperr.Respond(c, httperr.Internal("Không thể kết thúc tập luyện.", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kết thúc tập luyện."})
+		httperr.Respond(c, httperr.Internal("Không thể kết thúc tập luyện.", err))
 		return
 	}
 	PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)

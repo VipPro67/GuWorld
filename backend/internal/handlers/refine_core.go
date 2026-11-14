@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -390,7 +391,7 @@ func GetRecipes(c *gin.Context) {
 	if c.Query("all") == "true" {
 		masterRecipes, err := loadMasterRecipes()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
+			httperr.Respond(c, httperr.Internal("Failed to query recipes catalog", err))
 			return
 		}
 		writeRecipeCatalogResponse(c, masterRecipes)
@@ -434,7 +435,7 @@ func GetRecipes(c *gin.Context) {
 	recipeProgresses, err := RecipeSvc.ListByPlayerContext(c.Request.Context(), db.DB, playerID.String())
 	if err != nil {
 		logger.S.Error(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player recipes"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player recipes", err))
 		return
 	}
 
@@ -449,7 +450,7 @@ func GetRecipes(c *gin.Context) {
 	// 2. Query global database or cache
 	masterRecipes, err := loadMasterRecipes()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
+		httperr.Respond(c, httperr.Internal("Failed to query recipes catalog", err))
 		return
 	}
 

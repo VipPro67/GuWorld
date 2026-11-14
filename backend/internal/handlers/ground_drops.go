@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -192,7 +193,7 @@ func LootGroundDrop(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -223,7 +224,7 @@ func LootGroundDrop(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Chiến lợi phẩm không tồn tại hoặc đã biến mất"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query error"})
+		httperr.Respond(c, httperr.Internal("Database query error", err))
 		return
 	}
 
@@ -237,7 +238,7 @@ func LootGroundDrop(c *gin.Context) {
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
@@ -260,14 +261,14 @@ func LootGroundDrop(c *gin.Context) {
 
 	var loot GroundLootData
 	if err := json.Unmarshal(lootBytes, &loot); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse loot data"})
+		httperr.Respond(c, httperr.Internal("Failed to parse loot data", err))
 		return
 	}
 
 	logs, errApply := applyGroundLoot(tx, player.ID, loot)
 	if errApply != nil {
 		logger.S.Errorf("Failed to apply ground drop loot to player %s: %v", player.ID, errApply)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add loot"})
+		httperr.Respond(c, httperr.Internal("Failed to add loot", errApply))
 		return
 	}
 	player.PrimevalStones += loot.PrimevalStones
@@ -293,12 +294,12 @@ func LootGroundDrop(c *gin.Context) {
 
 	// Xóa đống đồ sau khi nhặt
 	if _, errDel := tx.Exec("DELETE FROM map_ground_drops WHERE id = $1", dropUUID); errDel != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear ground drop"})
+		httperr.Respond(c, httperr.Internal("Failed to clear ground drop", errDel))
 		return
 	}
 
 	if errCommit := tx.Commit(); errCommit != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to commit transaction", errCommit))
 		return
 	}
 	publishWorldDropsChanged(dropRegion, dropX, dropY)

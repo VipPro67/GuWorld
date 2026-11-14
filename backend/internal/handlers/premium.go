@@ -25,6 +25,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
@@ -261,7 +262,7 @@ func GetWallet(c *gin.Context) {
 	wallet, err := ensureWalletContext(c.Request.Context(), db.DB, playerID)
 	if err != nil {
 		logger.S.Errorf("GetWallet failed for player %s: %v", playerID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải dữ liệu ví"})
+		httperr.Respond(c, httperr.Internal("Không thể tải dữ liệu ví", err))
 		return
 	}
 	c.JSON(http.StatusOK, wallet)
@@ -270,7 +271,7 @@ func GetWallet(c *gin.Context) {
 func GetTopupPackages(c *gin.Context) {
 	packages, err := loadTopupPackages()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải gói nạp"})
+		httperr.Respond(c, httperr.Internal("Không thể tải gói nạp", err))
 		return
 	}
 	c.JSON(http.StatusOK, packages)
@@ -311,7 +312,7 @@ func GetTopupOrder(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải đơn nạp"})
+		httperr.Respond(c, httperr.Internal("Không thể tải đơn nạp", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"orderCode": row.OrderCode, "amountVnd": row.AmountVND, "jadeAmount": row.Jade, "status": row.Status, "checkoutUrl": row.Checkout.String, "qrCode": row.QR.String, "createdAt": row.CreatedAt, "paidAt": nullableTime(row.PaidAt)})
@@ -378,7 +379,7 @@ func GetPremiumShopPackages(c *gin.Context) {
 	}
 	packages, err := loadPremiumShopPackages()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải gói shop"})
+		httperr.Respond(c, httperr.Internal("Không thể tải gói shop", err))
 		return
 	}
 	result := make([]ShopPackageDTO, 0, len(packages))
@@ -416,14 +417,14 @@ func BuyPremiumPackage(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể khóa người chơi", err))
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
@@ -436,12 +437,12 @@ func BuyPremiumPackage(c *gin.Context) {
 
 	wallet, err := ensureWalletTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải ví"})
+		httperr.Respond(c, httperr.Internal("Không thể tải ví", err))
 		return
 	}
 	remaining, err := remainingPurchases(tx, playerID, pkg)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giới hạn mua"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra giới hạn mua", err))
 		return
 	}
 	if remaining <= 0 {
@@ -456,11 +457,11 @@ func BuyPremiumPackage(c *gin.Context) {
 	jadeBefore := wallet.ImmortalJade
 	wallet.ImmortalJade -= pkg.PriceJade
 	if _, err = tx.Exec(`UPDATE wallets SET immortal_jade=$1, updated_at=CURRENT_TIMESTAMP WHERE user_id=$2`, wallet.ImmortalJade, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ Tiên Ngọc"})
+		httperr.Respond(c, httperr.Internal("Không thể trừ Tiên Ngọc", err))
 		return
 	}
 	if err = insertWalletTx(tx, playerID, "SPEND", CurrencyImmortalJade, -pkg.PriceJade, jadeBefore, wallet.ImmortalJade, nil, &pkg.ID, "Mua gói tu luyện"); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch trừ Tiên Ngọc"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi giao dịch trừ Tiên Ngọc", err))
 		return
 	}
 
@@ -471,7 +472,7 @@ func BuyPremiumPackage(c *gin.Context) {
 			player.PrimevalStones += float64(reward.Amount)
 			wallet.PrimevalStone = player.PrimevalStones
 			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyPrimevalStone, reward.Amount, before, player.PrimevalStones, nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Nguyên Thạch"})
+				httperr.Respond(c, httperr.Internal("Không thể ghi giao dịch thưởng Nguyên Thạch", err))
 				return
 			}
 		case CurrencyImmortalEssenceStone:
@@ -479,7 +480,7 @@ func BuyPremiumPackage(c *gin.Context) {
 			player.ImmortalStones += float64(reward.Amount)
 			wallet.ImmortalEssenceStone = player.ImmortalStones
 			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyImmortalEssenceStone, reward.Amount, before, player.ImmortalStones, nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Tiên Nguyên Thạch"})
+				httperr.Respond(c, httperr.Internal("Không thể ghi giao dịch thưởng Tiên Nguyên Thạch", err))
 				return
 			}
 		default:
@@ -498,24 +499,24 @@ func BuyPremiumPackage(c *gin.Context) {
 	}
 
 	if err := db.SyncPlayerGus(tx, playerID.String(), before, player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phần thưởng"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật phần thưởng", err))
 		return
 	}
 	if _, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2 WHERE id=$3`, player.PrimevalStones, player.ImmortalStones, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phần thưởng"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật phần thưởng", err))
 		return
 	}
 	if _, err = tx.Exec(`UPDATE wallets SET immortal_jade=$1, updated_at=CURRENT_TIMESTAMP WHERE user_id=$2`, wallet.ImmortalJade, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật ví"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật ví", err))
 		return
 	}
 	rewardsJSON, _ := json.Marshal(pkg.Rewards)
 	if _, err = tx.Exec(`INSERT INTO shop_package_purchases (user_id, package_id, price_jade, rewards_snapshot) VALUES ($1,$2,$3,$4)`, playerID, pkg.ID, pkg.PriceJade, string(rewardsJSON)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi lịch sử mua gói"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi lịch sử mua gói", err))
 		return
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
@@ -574,19 +575,19 @@ func ExchangeStones(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể khóa người chơi", err))
 		return
 	}
 	wallet, err := ensureWalletTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải ví"})
+		httperr.Respond(c, httperr.Internal("Không thể tải ví", err))
 		return
 	}
 
@@ -612,7 +613,7 @@ func ExchangeStones(c *gin.Context) {
 	wallet.ImmortalEssenceStone = player.ImmortalStones
 
 	if _, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2 WHERE id=$3`, player.PrimevalStones, player.ImmortalStones, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật đá"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật đá", err))
 		return
 	}
 	// Stones are authoritative in the players table, no need to update wallets
@@ -628,7 +629,7 @@ func ExchangeStones(c *gin.Context) {
 		}
 		return wallet.PrimevalStone
 	}(), nil, nil, "Đổi sang loại đá khác"); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch trừ đá"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi giao dịch trừ đá", err))
 		return
 	}
 	if err = insertWalletTx(tx, playerID, "EXCHANGE", func() string {
@@ -652,12 +653,12 @@ func ExchangeStones(c *gin.Context) {
 		}
 		return wallet.ImmortalEssenceStone
 	}(), nil, nil, "Nhận từ đổi đá"); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch nhận đá"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi giao dịch nhận đá", err))
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
@@ -970,19 +971,19 @@ func AdminListTopupOrders(c *gin.Context) {
 		var err error
 		total, err = fastCountTable(c, "topup_orders", "admin:topup_orders:total_count", 60*time.Second)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm danh sách đơn nạp"})
+			httperr.Respond(c, httperr.Internal("Không thể đếm danh sách đơn nạp", err))
 			return
 		}
 	} else {
 		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM topup_orders`+where, args...).Scan(&total); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm danh sách đơn nạp"})
+			httperr.Respond(c, httperr.Internal("Không thể đếm danh sách đơn nạp", err))
 			return
 		}
 	}
 	query := `SELECT order_code, user_id, amount_vnd, jade_amount, status, provider, checkout_url, created_at, paid_at FROM topup_orders` + where + ` ORDER BY ` + paging.Sort + ` ` + paging.Direction + `, order_code DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, append(args, paging.PageSize, paging.Offset)...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách đơn nạp"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách đơn nạp", err))
 		return
 	}
 	defer rows.Close()
@@ -995,7 +996,7 @@ func AdminListTopupOrders(c *gin.Context) {
 		var createdAt time.Time
 		var paidAt sql.NullTime
 		if err := rows.Scan(&orderCode, &userID, &amountVND, &jadeAmount, &status, &provider, &checkout, &createdAt, &paidAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách đơn nạp"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc danh sách đơn nạp", err))
 			return
 		}
 		orders = append(orders, gin.H{"orderCode": orderCode, "userId": userID, "amountVnd": amountVND, "jadeAmount": jadeAmount, "status": status, "provider": provider, "checkoutUrl": checkout.String, "createdAt": createdAt, "paidAt": nullableTime(paidAt)})
@@ -1032,13 +1033,13 @@ func AdminListWalletTransactions(c *gin.Context) {
 	}
 	var total int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM (`+query+`) wallet_results`, args...).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm giao dịch ví"})
+		httperr.Respond(c, httperr.Internal("Không thể đếm giao dịch ví", err))
 		return
 	}
 	query += ` ORDER BY ` + paging.Sort + ` ` + paging.Direction + `, id DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, append(args, paging.PageSize, paging.Offset)...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải giao dịch ví"})
+		httperr.Respond(c, httperr.Internal("Không thể tải giao dịch ví", err))
 		return
 	}
 	defer rows.Close()
@@ -1051,7 +1052,7 @@ func AdminListWalletTransactions(c *gin.Context) {
 		var refPackage, note sql.NullString
 		var createdAt time.Time
 		if err := rows.Scan(&id, &uid, &txType, &currency, &amount, &before, &after, &refOrder, &refPackage, &note, &createdAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc giao dịch ví"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc giao dịch ví", err))
 			return
 		}
 		transactions = append(transactions, gin.H{"id": id, "userId": uid, "type": txType, "currency": currency, "amount": amount, "balanceBefore": before, "balanceAfter": after, "refOrderCode": refOrder.Int64, "refPackageId": refPackage.String, "note": note.String, "createdAt": createdAt})

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -386,14 +387,14 @@ func CompleteQuest(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
@@ -404,13 +405,13 @@ func CompleteQuest(c *gin.Context) {
 	}
 
 	if err := applyQuestRewardsTx(tx, &player, quest.Rewards); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to apply rewards"})
+		httperr.Respond(c, httperr.Internal("Failed to apply rewards", err))
 		return
 	}
 
 	completed, err := QuestSvc.Complete(tx, player.ID.String(), req.QuestID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error completing quest"})
+		httperr.Respond(c, httperr.Internal("Database error completing quest", err))
 		return
 	}
 	if !completed {
@@ -423,7 +424,7 @@ func CompleteQuest(c *gin.Context) {
 	updateQuery, updateArgs := buildQuestUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player"})
+		httperr.Respond(c, httperr.Internal("Failed to update player", err))
 		return
 	}
 
@@ -435,12 +436,12 @@ func CompleteQuest(c *gin.Context) {
 			player.DaoMarks, player.ID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update aperture Dao Marks"})
+			httperr.Respond(c, httperr.Internal("Failed to update aperture Dao Marks", err))
 			return
 		}
 	}
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player Gus"})
+		httperr.Respond(c, httperr.Internal("Failed to update player Gus", err))
 		return
 	}
 
@@ -462,7 +463,7 @@ func CompleteQuest(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/playerstate"
@@ -56,7 +57,7 @@ func GetApertureGuSwarms(c *gin.Context) {
 	`, apertureID)
 	if err != nil {
 		logger.S.Errorf("GetApertureGuSwarms query error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Đàn Cổ"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn Đàn Cổ", err))
 		return
 	}
 	defer rows.Close()
@@ -70,7 +71,7 @@ func GetApertureGuSwarms(c *gin.Context) {
 			&sw.GuName, &sw.GuType, pq.Array(&paths), &sw.Description, &sw.Food,
 		); err != nil {
 			logger.S.Errorf("GetApertureGuSwarms scan error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu Đàn Cổ"})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc dữ liệu Đàn Cổ", err))
 			return
 		}
 		sw.Paths = paths
@@ -111,7 +112,7 @@ func MaterializeGuFromSwarm(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khởi tạo giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khởi tạo giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -149,7 +150,7 @@ func MaterializeGuFromSwarm(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Loài Cổ này chưa được nuôi dưỡng trong Tiên Khiếu"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra số lượng Đàn Cổ"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra số lượng Đàn Cổ", err))
 		return
 	}
 
@@ -196,7 +197,7 @@ func MaterializeGuFromSwarm(c *gin.Context) {
 	`, newInstanceID, playerID, req.GuID, req.GuRank, req.Equip, now)
 	if err != nil {
 		logger.S.Errorf("MaterializeGuFromSwarm insert player_gu error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo thực thể Cổ cá thể"})
+		httperr.Respond(c, httperr.Internal("Lỗi tạo thực thể Cổ cá thể", err))
 		return
 	}
 
@@ -205,13 +206,13 @@ func MaterializeGuFromSwarm(c *gin.Context) {
 		equippedGus = append(equippedGus, newInstanceID)
 		newEquippedJSON, _ := json.Marshal(equippedGus)
 		if _, err := tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, newEquippedJSON, playerID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật danh sách trang bị"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật danh sách trang bị", err))
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cam kết giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi cam kết giao dịch", err))
 		return
 	}
 
@@ -252,7 +253,7 @@ func DematerializeGuToSwarm(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khởi tạo giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khởi tạo giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -297,7 +298,7 @@ func DematerializeGuToSwarm(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng trong túi thân"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Cổ trùng"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Cổ trùng", err))
 		return
 	}
 
@@ -316,7 +317,7 @@ func DematerializeGuToSwarm(c *gin.Context) {
 	}
 	reserved, reservationErr := guHasActiveProductReservation(tx, req.InstanceID)
 	if reservationErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
 		return
 	}
 	if reserved {
@@ -342,7 +343,7 @@ func DematerializeGuToSwarm(c *gin.Context) {
 			}
 			newJSON, _ := json.Marshal(newEquipped)
 			if _, err := tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, newJSON, playerID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi gỡ Cổ trang bị"})
+				httperr.Respond(c, httperr.Internal("Lỗi gỡ Cổ trang bị", err))
 				return
 			}
 		}
@@ -350,7 +351,7 @@ func DematerializeGuToSwarm(c *gin.Context) {
 
 	// 4. Xóa bản ghi cá thể
 	if _, err := tx.Exec(`DELETE FROM player_gu WHERE id = $1 AND player_id = $2`, req.InstanceID, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa bản ghi Cổ cá thể"})
+		httperr.Respond(c, httperr.Internal("Lỗi xóa bản ghi Cổ cá thể", err))
 		return
 	}
 
@@ -365,12 +366,12 @@ func DematerializeGuToSwarm(c *gin.Context) {
 	`, apertureID, guID, guRank).Scan(&newSwarmQty)
 	if err != nil {
 		logger.S.Errorf("DematerializeGuToSwarm upsert swarm error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng dồn vào Đàn Cổ"})
+		httperr.Respond(c, httperr.Internal("Lỗi cộng dồn vào Đàn Cổ", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cam kết giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi cam kết giao dịch", err))
 		return
 	}
 
@@ -399,7 +400,7 @@ func DepositAllHealthyGus(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khởi tạo giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khởi tạo giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -434,7 +435,7 @@ func DepositAllHealthyGus(c *gin.Context) {
 		FOR UPDATE
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi quét danh sách Cổ lành lặn"})
+		httperr.Respond(c, httperr.Internal("Lỗi quét danh sách Cổ lành lặn", err))
 		return
 	}
 	defer rows.Close()
@@ -486,7 +487,7 @@ func DepositAllHealthyGus(c *gin.Context) {
 		`, apertureID, gID, gRank, qty)
 		if err != nil {
 			logger.S.Errorf("DepositAllHealthyGus upsert error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Đàn Cổ"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật Đàn Cổ", err))
 			return
 		}
 	}
@@ -494,12 +495,12 @@ func DepositAllHealthyGus(c *gin.Context) {
 	// Xóa các bản ghi cá thể
 	if _, err := tx.Exec(`DELETE FROM player_gu WHERE id = ANY($1::text[])`, pq.Array(idsToDelete)); err != nil {
 		logger.S.Errorf("DepositAllHealthyGus delete error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa bản ghi Cổ sau thu hồi"})
+		httperr.Respond(c, httperr.Internal("Lỗi xóa bản ghi Cổ sau thu hồi", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cam kết giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi cam kết giao dịch", err))
 		return
 	}
 

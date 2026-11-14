@@ -93,12 +93,20 @@ func Conflict(message string, internalErr ...error) *AppError {
 
 // Internal constructs a 500 Internal Server Error AppError.
 func Internal(message string, internalErr error) *AppError {
+	if internalErr != nil && message != "" {
+		// Some legacy handlers appended err.Error() to their client message.
+		// Keep the human-readable prefix while ensuring the raw cause stays in logs.
+		message = strings.TrimSpace(strings.ReplaceAll(message, internalErr.Error(), ""))
+		message = strings.TrimRight(message, ":-— ")
+	}
 	return New(http.StatusInternalServerError, message, internalErr)
 }
 
 func isDebugMode() bool {
-	return os.Getenv("DEBUG_ERRORS") == "true" ||
-		(strings.ToLower(os.Getenv("PROD_ENV")) != "production" && os.Getenv("GIN_MODE") != "release")
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("PROD_ENV")), "production") {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("DEBUG_ERRORS")), "true")
 }
 
 // Respond handles error emission across the handler seam:

@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -110,7 +111,7 @@ func ListSpatialRealms(c *gin.Context) {
 		WHERE t.type IN ('SPATIAL_REALM', 'SPATIAL_INHERITANCE') AND t.spatial_region_id IS NOT NULL
 		ORDER BY t.required_rank, t.id`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách bí cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách bí cảnh", err))
 		return
 	}
 	defer rows.Close()
@@ -121,7 +122,7 @@ func ListSpatialRealms(c *gin.Context) {
 		var rawRules []byte
 		if err := rows.Scan(&item.TemplateID, &item.Name, &item.Type, &item.Scope, &item.Description, &item.RequiredRank, &item.RegionID,
 			&item.EntryRegionID, &item.EntryX, &item.EntryY, &item.DurationMinutes, &rawRules, &item.InstanceID, &opened, &expires, &item.PlayerCount); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách bí cảnh: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể đọc danh sách bí cảnh: "+err.Error(), err))
 			return
 		}
 		item.Rules = parseRealmRules(rawRules, item.DurationMinutes)
@@ -134,7 +135,7 @@ func ListSpatialRealms(c *gin.Context) {
 		result = append(result, item)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách bí cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách bí cảnh", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"realms": result})
@@ -164,7 +165,7 @@ func GetActiveSpatialRealm(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải bí cảnh hiện tại"})
+		httperr.Respond(c, httperr.Internal("Không thể tải bí cảnh hiện tại", err))
 		return
 	}
 	item.Rules = parseRealmRules(rawRules, item.DurationMinutes)
@@ -202,7 +203,7 @@ func EnterSpatialRealm(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -218,7 +219,7 @@ func EnterSpatialRealm(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải nhân vật", err))
 		return
 	}
 	if oldInstance.Valid || oldWorldInstance != "" {
@@ -227,7 +228,7 @@ func EnterSpatialRealm(c *gin.Context) {
 	}
 	var hasStageSession bool
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM player_instance_sessions WHERE player_id=$1 AND status='ACTIVE')`, playerID).Scan(&hasStageSession); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên phó bản hiện tại"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra phiên phó bản hiện tại", err))
 		return
 	}
 	if hasStageSession {
@@ -248,7 +249,7 @@ func EnterSpatialRealm(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải cấu hình bí cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể tải cấu hình bí cảnh", err))
 		return
 	}
 
@@ -266,7 +267,7 @@ func EnterSpatialRealm(c *gin.Context) {
 			  AND UPPER(cell_type)='ENTRY_PORTAL' AND content_id=$4
 			  AND (UPPER(COALESCE(metadata->>'action','')) IN ('ENTER_SPATIAL_REALM', 'ENTER_INHERITANCE') OR UPPER(COALESCE(content_id,''))=$4)
 		)`, oldRegion, oldX, oldY, req.TemplateID).Scan(&atEntryPortal); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra cổng vào bí cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra cổng vào bí cảnh", err))
 		return
 	}
 	if !atEntryPortal {
@@ -277,7 +278,7 @@ func EnterSpatialRealm(c *gin.Context) {
 	// Check rank requirements
 	var playerRank int
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT rank FROM players WHERE id=$1`, playerID).Scan(&playerRank); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra cảnh giới"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra cảnh giới", err))
 		return
 	}
 	if playerRank < requiredRank {
@@ -291,7 +292,7 @@ func EnterSpatialRealm(c *gin.Context) {
 
 	inventory, err := db.LoadPlayerGus(tx, playerID.String(), false)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ trùng đang trang bị"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ trùng đang trang bị", err))
 		return
 	}
 	if err := checkRegionEntry(regionID, playerRank, inventory); err != nil {
@@ -316,7 +317,7 @@ func EnterSpatialRealm(c *gin.Context) {
 			return
 		}
 		if err := InventorySvc.RemoveItem(tx, playerID.String(), neededItem, "materials", int64(neededCount)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu hao vật phẩm vào bí cảnh: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể tiêu hao vật phẩm vào bí cảnh: "+err.Error(), err))
 			return
 		}
 	}
@@ -354,7 +355,7 @@ func EnterSpatialRealm(c *gin.Context) {
 			`, req.TemplateID, regionID, partyID, duration).Scan(&instanceID)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên truyền thừa tổ đội: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể tạo phiên truyền thừa tổ đội: "+err.Error(), err))
 			return
 		}
 	} else if scope == "SOLO" {
@@ -370,7 +371,7 @@ func EnterSpatialRealm(c *gin.Context) {
 			`, req.TemplateID, regionID, playerID, duration).Scan(&instanceID)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên truyền thừa cá nhân: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể tạo phiên truyền thừa cá nhân: "+err.Error(), err))
 			return
 		}
 	} else {
@@ -387,14 +388,14 @@ func EnterSpatialRealm(c *gin.Context) {
 			`, req.TemplateID, regionID, duration).Scan(&instanceID)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở phiên bí cảnh chung: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể mở phiên bí cảnh chung: "+err.Error(), err))
 			return
 		}
 	}
 
 	var regionZoneType, assignedMap string
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(r.zone_type,''),COALESCE(w.world_map_id,'') FROM regions r LEFT JOIN region_world_maps w ON w.region_id=r.id WHERE r.id=$1`, regionID).Scan(&regionZoneType, &assignedMap); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải bản đồ Bí Cảnh."})
+		httperr.Respond(c, httperr.Internal("Không thể tải bản đồ Bí Cảnh.", err))
 		return
 	}
 	realmZoneID := realtimeMapID(regionID, regionZoneType, assignedMap)
@@ -410,11 +411,11 @@ func EnterSpatialRealm(c *gin.Context) {
 	}
 	_, err = tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=$4,world_zone_id=$5,world_instance_id=$6,world_x=$7,world_y=$8,world_safe_x=$7,world_safe_y=$8,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$9`, regionID, entryX, entryY, instanceID, realmZoneID, "realm:"+instanceID.String(), entryX, entryY, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển nhân vật vào bí cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể chuyển nhân vật vào bí cảnh", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái vào bí cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái vào bí cảnh", err))
 		return
 	}
 	if handedOff {
@@ -445,7 +446,7 @@ func ExitSpatialRealm(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -459,12 +460,12 @@ func ExitSpatialRealm(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải trạng thái bí cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể tải trạng thái bí cảnh", err))
 		return
 	}
 	var atExitPortal bool
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM map_cells WHERE region_id=$1 AND x=$2 AND y=$3 AND (UPPER(cell_type) IN ('EXIT_PORTAL','PORTAL_EXIT') OR UPPER(COALESCE(content_id,''))='EXIT_SPATIAL_REALM' OR UPPER(COALESCE(metadata->>'action',''))='EXIT_SPATIAL_REALM'))`, currentRegion, currentX, currentY).Scan(&atExitPortal); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra cổng thoát"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra cổng thoát", err))
 		return
 	}
 	if !atExitPortal {
@@ -473,13 +474,13 @@ func ExitSpatialRealm(c *gin.Context) {
 	}
 	var returnZoneType, returnMap string
 	if err := tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(r.zone_type,''),COALESCE(w.world_map_id,'') FROM regions r LEFT JOIN region_world_maps w ON w.region_id=r.id WHERE r.id=$1`, region).Scan(&returnZoneType, &returnMap); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác định bản đồ quay về."})
+		httperr.Respond(c, httperr.Internal("Không thể xác định bản đồ quay về.", err))
 		return
 	}
 	returnZone := realtimeMapID(region, returnZoneType, returnMap)
 	result, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,world_zone_id=$6,world_instance_id='',world_x=$7,world_y=$8,world_safe_x=$7,world_safe_y=$8,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, region, x, y, playerID, instanceID, returnZone, x, y)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đưa nhân vật về vị trí cũ"})
+		httperr.Respond(c, httperr.Internal("Không thể đưa nhân vật về vị trí cũ", err))
 		return
 	}
 	updated, err := result.RowsAffected()
@@ -488,11 +489,11 @@ func ExitSpatialRealm(c *gin.Context) {
 		return
 	}
 	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE shared_spatial_instance_members SET exited_at=NOW(),exit_reason='PORTAL' WHERE player_id=$1 AND exited_at IS NULL`, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất thoát bí cảnh"})
+		httperr.Respond(c, httperr.Internal("Không thể hoàn tất thoát bí cảnh", err))
 		return
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái thoát"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái thoát", err))
 		return
 	}
 	if handedOff {
@@ -900,14 +901,14 @@ func ClaimInheritanceAltar(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khởi tạo giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khởi tạo giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải dữ liệu người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể tải dữ liệu người chơi", err))
 		return
 	}
 
@@ -939,7 +940,7 @@ func ClaimInheritanceAltar(c *gin.Context) {
 
 	var meta AltarMetadata
 	if err := json.Unmarshal([]byte(metaRaw), &meta); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cấu hình Đài Truyền Thừa không hợp lệ"})
+		httperr.Respond(c, httperr.Internal("Cấu hình Đài Truyền Thừa không hợp lệ", err))
 		return
 	}
 	if meta.Tier == "" {
@@ -1011,7 +1012,7 @@ func ClaimInheritanceAltar(c *gin.Context) {
 				return
 			}
 			if err := InventorySvc.RemoveItem(tx, playerID.String(), meta.RequiredItem, cat, reqCount); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ tín vật truyền thừa"})
+				httperr.Respond(c, httperr.Internal("Không thể trừ tín vật truyền thừa", err))
 				return
 			}
 		}
@@ -1045,7 +1046,7 @@ func ClaimInheritanceAltar(c *gin.Context) {
 			return
 		}
 	} else if err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra lịch sử truyền thừa"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra lịch sử truyền thừa", err))
 		return
 	}
 
@@ -1075,7 +1076,7 @@ func ClaimInheritanceAltar(c *gin.Context) {
 	}
 	if len(grantedGus) > 0 {
 		if err := db.SyncPlayerGus(tx, playerID.String(), beforeGus, player.GuInventory); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cấp phát Cổ trùng truyền thừa"})
+			httperr.Respond(c, httperr.Internal("Không thể cấp phát Cổ trùng truyền thừa", err))
 			return
 		}
 	}
@@ -1100,7 +1101,7 @@ func ClaimInheritanceAltar(c *gin.Context) {
 	if meta.Rewards.PrimevalStones > 0 {
 		player.PrimevalStones += float64(meta.Rewards.PrimevalStones)
 		if _, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET primeval_stones = $1, version = version + 1 WHERE id = $2`, player.PrimevalStones, playerID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cấp phát nguyên thạch truyền thừa"})
+			httperr.Respond(c, httperr.Internal("Không thể cấp phát nguyên thạch truyền thừa", err))
 			return
 		}
 	}
@@ -1116,7 +1117,7 @@ func ClaimInheritanceAltar(c *gin.Context) {
 				cat = strings.ToLower(itemSpec.ItemType)
 			}
 			if err := InventorySvc.AddItem(tx, playerID.String(), matID, cat, count); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cấp phát nguyên liệu truyền thừa"})
+				httperr.Respond(c, httperr.Internal("Không thể cấp phát nguyên liệu truyền thừa", err))
 				return
 			}
 		}
@@ -1138,12 +1139,12 @@ func ClaimInheritanceAltar(c *gin.Context) {
 		INSERT INTO player_inheritance_claims (player_id, altar_id, template_id, claimed_at, tier, rewards_snapshot)
 		VALUES ($1, $2, $3, NOW(), $4, $5)
 	`, playerID, req.AltarID, templateID, meta.Tier, rewardsJSON); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu hồ sơ khảo nghiệm truyền thừa"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu hồ sơ khảo nghiệm truyền thừa", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất tiếp nhận truyền thừa"})
+		httperr.Respond(c, httperr.Internal("Không thể hoàn tất tiếp nhận truyền thừa", err))
 		return
 	}
 	if handedOff {

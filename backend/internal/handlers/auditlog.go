@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -97,7 +98,7 @@ func GetMyAuditLogs(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query audit logs: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to query audit logs: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -112,7 +113,7 @@ func GetMyAuditLogs(c *gin.Context) {
 			&logRow.Success, &logRow.ErrorMessage, &logRow.CreatedAt,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan audit log: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to scan audit log: "+err.Error(), err))
 			return
 		}
 		if len(metaJSON) > 0 {

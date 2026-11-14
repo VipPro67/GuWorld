@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -209,7 +210,7 @@ func GetMyMartialMatches(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"matches": []MartialMatch{}})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -228,7 +229,7 @@ func GetMyMartialMatches(c *gin.Context) {
 		ORDER BY m.round_number, m.bracket_position
 	`, combatantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch matches"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch matches", err))
 		return
 	}
 	defer rows.Close()
@@ -300,7 +301,7 @@ func GetMartialMatchCombatLog(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy trận đấu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn trận đấu"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn trận đấu", err))
 		return
 	}
 
@@ -343,7 +344,7 @@ func GetMartialHistory(c *gin.Context) {
 		LIMIT 40
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch history"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch history", err))
 		return
 	}
 	defer rows.Close()

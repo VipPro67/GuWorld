@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -40,7 +41,7 @@ func AdminListSects(c *gin.Context) {
 		ORDER BY s.name
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách tông môn", err))
 		return
 	}
 	defer rows.Close()
@@ -119,7 +120,7 @@ func AdminGetSectDetail(c *gin.Context) {
 			END, sm.contribution_points DESC
 	`, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thành viên"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thành viên", err))
 		return
 	}
 	defer rows.Close()
@@ -220,7 +221,7 @@ func AdminUpdateSect(c *gin.Context) {
 	query := `UPDATE sects SET ` + strings.Join(sets, ", ") + ` WHERE id=$` + strconv.Itoa(idx)
 
 	if _, err := db.DB.Exec(query, args...); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật tông môn", err))
 		return
 	}
 
@@ -253,7 +254,7 @@ func AdminSetSectLeader(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -269,19 +270,19 @@ func AdminSetSectLeader(c *gin.Context) {
 	// Demote all existing leaders
 	_, err = tx.Exec(`UPDATE sect_members SET member_rank = 'TRUONG_LAO' WHERE sect_id = $1 AND member_rank = 'CHUONG_MON'`, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thay đổi chức vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể thay đổi chức vụ", err))
 		return
 	}
 
 	// Set new leader
 	_, err = tx.Exec(`UPDATE sect_members SET member_rank = 'CHUONG_MON' WHERE player_id = $1 AND sect_id = $2`, memberID, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bổ nhiệm tân Chưởng môn"})
+		httperr.Respond(c, httperr.Internal("Không thể bổ nhiệm tân Chưởng môn", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -310,7 +311,7 @@ func AdminKickSectMember(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -328,7 +329,7 @@ func AdminKickSectMember(c *gin.Context) {
 	// Delete member
 	_, err = tx.Exec(`DELETE FROM sect_members WHERE player_id = $1 AND sect_id = $2`, memberID, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa thành viên"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa thành viên", err))
 		return
 	}
 
@@ -378,7 +379,7 @@ func AdminAddToSect(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -414,7 +415,7 @@ func AdminAddToSect(c *gin.Context) {
 
 	_, err = tx.Exec(`INSERT INTO sect_members (sect_id, player_id, member_rank, contribution_points) VALUES ($1, $2, $3, 0)`, sectID, playerUUID, req.MemberRank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm thành viên"})
+		httperr.Respond(c, httperr.Internal("Không thể thêm thành viên", err))
 		return
 	}
 
@@ -452,7 +453,7 @@ func AdminStockSectVault(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -526,7 +527,7 @@ func AdminStockSectVault(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật bảo khố: "+err.Error(), err))
 		return
 	}
 
@@ -555,7 +556,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -568,7 +569,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 			ORDER BY id ASC FOR UPDATE
 		`, sectID, req.ItemID, req.Rank)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn bảo khố"})
+			httperr.Respond(c, httperr.Internal("Lỗi truy vấn bảo khố", err))
 			return
 		}
 		type guRemoval struct {
@@ -581,7 +582,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 			var r guRemoval
 			if err := rows.Scan(&r.id, &r.quantity); err != nil {
 				rows.Close()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu"})
+				httperr.Respond(c, httperr.Internal("Lỗi đọc dữ liệu", err))
 				return
 			}
 			removals = append(removals, r)
@@ -613,7 +614,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 				_, err = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, toDeduct, r.id)
 			}
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Không thể cập nhật bảo khố: "+err.Error(), err))
 				return
 			}
 			remaining -= toDeduct
@@ -626,7 +627,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 			WHERE sect_id = $2 AND item_id = $3 AND quantity >= $1
 		`, req.Quantity, sectID, req.ItemID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật bảo khố: "+err.Error(), err))
 			return
 		}
 		if rows, _ := res.RowsAffected(); rows == 0 {
@@ -638,7 +639,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 	case "recipe":
 		res, err := tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = $2`, sectID, req.ItemID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật bảo khố: "+err.Error(), err))
 			return
 		}
 		if rows, _ := res.RowsAffected(); rows == 0 {
@@ -652,7 +653,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật bảo khố: "+err.Error(), err))
 		return
 	}
 
@@ -677,7 +678,7 @@ func AdminListSectMissions(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank, expires_at FROM sect_missions WHERE sect_id = $1 ORDER BY required_member_rank, title`, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể tải nhiệm vụ", err))
 		return
 	}
 	defer rows.Close()
@@ -750,7 +751,7 @@ func AdminCreateSectMission(c *gin.Context) {
 	_, err := db.DB.Exec(`INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		sectID, req.Title, req.Description, req.MissionType, req.TargetID, req.TargetAmount, req.RewardContribution, req.RequiredMemberRank, expiresAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo nhiệm vụ", err))
 		return
 	}
 
@@ -773,7 +774,7 @@ func AdminDeleteSectMission(c *gin.Context) {
 
 	_, err := db.DB.Exec(`DELETE FROM sect_missions WHERE id = $1`, missionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa nhiệm vụ", err))
 		return
 	}
 
@@ -804,7 +805,7 @@ func AdminDeleteSect(c *gin.Context) {
 
 	// CASCADE will delete sect_members, sect_missions, player_sect_missions, etc
 	if _, err := db.DB.Exec(`DELETE FROM sects WHERE id = $1`, sectID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa tông môn", err))
 		return
 	}
 

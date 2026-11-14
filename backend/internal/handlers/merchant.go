@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -322,7 +323,7 @@ func GetMerchants(c *gin.Context) {
 	}
 	entry, err := loadRegionMerchantCache(region)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thương nhân"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thương nhân", err))
 		return
 	}
 	atVillage := entry.zoneType == "HUB" || entry.zoneType == "SAFE_ZONE"
@@ -735,13 +736,13 @@ func SellToMerchant(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		httperr.Respond(c, httperr.Internal("Failed to lock player Aperture", err))
 		return
 	}
 	if gamefx.IsDeadState(&player) {
@@ -770,17 +771,17 @@ func SellToMerchant(c *gin.Context) {
 	RebuildEquippedGus(&player)
 	if guSold {
 		if err := db.RemovePlayerGus(tx, removedGuIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lưu được thay đổi Cổ trùng"})
+			httperr.Respond(c, httperr.Internal("Không lưu được thay đổi Cổ trùng", err))
 			return
 		}
 	}
 	if _, err := tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2, equipped_gus=$3 WHERE id=$4`,
 		player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lưu được giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không lưu được giao dịch", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	gainSummary := formatGainSummary(primeval, immortal)
@@ -838,13 +839,13 @@ func BuyFromMerchant(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		httperr.Respond(c, httperr.Internal("Failed to lock player Aperture", err))
 		return
 	}
 	if gamefx.IsDeadState(&player) {
@@ -902,7 +903,7 @@ func BuyFromMerchant(c *gin.Context) {
 			guBought = true
 		} else if isRecipeItem(tx, line.ItemID) {
 			if RecipeSvc == nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở khóa bí phương"})
+				httperr.Respond(c, httperr.Internal("Không thể mở khóa bí phương", RecipeSvc))
 				return
 			}
 			if err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
@@ -911,7 +912,7 @@ func BuyFromMerchant(c *gin.Context) {
 				CompletionRate: 0,
 				IsUnlocked:     true,
 			}); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi mở khóa bí phương"})
+				httperr.Respond(c, httperr.Internal("Lỗi mở khóa bí phương", err))
 				return
 			}
 		} else {
@@ -927,27 +928,27 @@ func BuyFromMerchant(c *gin.Context) {
 				category = "immortal_materials"
 			}
 			if err := InventorySvc.AddItem(tx, player.ID.String(), line.ItemID, category, line.Quantity); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm vật phẩm vào túi đồ"})
+				httperr.Respond(c, httperr.Internal("Lỗi thêm vật phẩm vào túi đồ", err))
 				return
 			}
 		}
 		if stock >= 0 {
 			if _, err := tx.Exec(`UPDATE merchant_stock SET stock = stock - $1 WHERE merchant_id=$2 AND item_id=$3 AND rank=$4`,
 				line.Quantity, req.MerchantID, line.ItemID, rank); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không cập nhật được kho thương nhân"})
+				httperr.Respond(c, httperr.Internal("Không cập nhật được kho thương nhân", err))
 				return
 			}
 		}
 	}
 	if guBought {
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lưu được Cổ trùng mới"})
+			httperr.Respond(c, httperr.Internal("Không lưu được Cổ trùng mới", err))
 			return
 		}
 	}
 	if _, err := tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2 WHERE id=$3`,
 		player.PrimevalStones, player.ImmortalStones, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lưu được giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không lưu được giao dịch", err))
 		return
 	}
 	spentPrimeval := beforePrimeval - player.PrimevalStones
@@ -972,11 +973,11 @@ func BuyFromMerchant(c *gin.Context) {
 		IPAddress: c.ClientIP(),
 		Success:   true,
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi audit", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": "Mua hàng thành công!"})

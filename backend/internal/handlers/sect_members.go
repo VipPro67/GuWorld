@@ -12,6 +12,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -69,14 +70,14 @@ func CreateSect(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
@@ -117,7 +118,7 @@ func CreateSect(c *gin.Context) {
 	// Deduct resources
 	res, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1`, cost, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Deduct primeval stones failed"})
+		httperr.Respond(c, httperr.Internal("Deduct primeval stones failed", err))
 		return
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
@@ -142,7 +143,7 @@ func CreateSect(c *gin.Context) {
 	// Verify territory does not overlap with any existing sect (initial radius = 5 + 1 = 6)
 	hasOverlap, conflictingSect, errOverlap := CheckTerritoryOverlap(tx, currentRegion, player.X, player.Y, 6, "")
 	if errOverlap != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Kiểm tra lãnh địa thất bại: " + errOverlap.Error()})
+		httperr.Respond(c, httperr.Internal("Kiểm tra lãnh địa thất bại: "+errOverlap.Error(), errOverlap))
 		return
 	}
 	if hasOverlap {
@@ -156,7 +157,7 @@ func CreateSect(c *gin.Context) {
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`, sectID, req.Name, req.Description, currentRegion, player.X, player.Y)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create sect record: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to create sect record: "+err.Error(), err))
 		return
 	}
 
@@ -166,7 +167,7 @@ func CreateSect(c *gin.Context) {
 		VALUES ($1, $2, 'CHUONG_MON', 10000)
 	`, sectID, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register founder record: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to register founder record: "+err.Error(), err))
 		return
 	}
 
@@ -186,7 +187,7 @@ func CreateSect(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit transaction failed"})
+		httperr.Respond(c, httperr.Internal("Commit transaction failed", err))
 		return
 	}
 
@@ -238,7 +239,7 @@ func GetSectMembers(c *gin.Context) {
 			END, sm.contribution_points DESC
 	`, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect members: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to fetch sect members: "+err.Error(), err))
 		return
 	}
 	type MemberInfo struct {
@@ -415,7 +416,7 @@ func SetMemberRank(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -454,7 +455,7 @@ func SetMemberRank(c *gin.Context) {
 	// Update rank
 	_, err = tx.Exec(`UPDATE sect_members SET member_rank = $1 WHERE player_id = $2`, req.Rank, targetMemberID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update member rank"})
+		httperr.Respond(c, httperr.Internal("Failed to update member rank", err))
 		return
 	}
 
@@ -462,7 +463,7 @@ func SetMemberRank(c *gin.Context) {
 	if req.Rank == "CHUONG_MON" {
 		_, err = tx.Exec(`UPDATE sect_members SET member_rank = 'TRUONG_LAO' WHERE player_id = $1`, playerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to step down from Chưởng môn"})
+			httperr.Respond(c, httperr.Internal("Failed to step down from Chưởng môn", err))
 			return
 		}
 	}
@@ -481,7 +482,7 @@ func SetMemberRank(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -505,7 +506,7 @@ func KickMember(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -553,7 +554,7 @@ func KickMember(c *gin.Context) {
 	// Delete member
 	_, err = tx.Exec(`DELETE FROM sect_members WHERE player_id = $1`, targetMemberID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to expel member"})
+		httperr.Respond(c, httperr.Internal("Failed to expel member", err))
 		return
 	}
 
@@ -581,7 +582,7 @@ func KickMember(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -603,7 +604,7 @@ func ClaimSectLeadership(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khởi tạo giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể khởi tạo giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -646,7 +647,7 @@ func ClaimSectLeadership(c *gin.Context) {
 		FOR UPDATE OF sm
 	`, callerSectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Chưởng Môn: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn Chưởng Môn: "+err.Error(), err))
 		return
 	}
 	for rows.Next() {
@@ -711,7 +712,7 @@ func ClaimSectLeadership(c *gin.Context) {
 		FOR UPDATE OF sm
 	`, callerSectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn danh sách kế vị: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn danh sách kế vị: "+err.Error(), err))
 		return
 	}
 
@@ -743,7 +744,7 @@ func ClaimSectLeadership(c *gin.Context) {
 	for _, oldLeader := range leaders {
 		_, err = tx.Exec(`UPDATE sect_members SET member_rank = 'TRUONG_LAO' WHERE player_id = $1`, oldLeader.PlayerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giáng chức Chưởng Môn cũ: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi giáng chức Chưởng Môn cũ: "+err.Error(), err))
 			return
 		}
 	}
@@ -751,7 +752,7 @@ func ClaimSectLeadership(c *gin.Context) {
 	// Promote caller to CHUONG_MON
 	_, err = tx.Exec(`UPDATE sect_members SET member_rank = 'CHUONG_MON' WHERE player_id = $1 AND sect_id = $2`, playerID, callerSectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tấn phong Chưởng Môn: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tấn phong Chưởng Môn: "+err.Error(), err))
 		return
 	}
 
@@ -769,7 +770,7 @@ func ClaimSectLeadership(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Hoàn tất giao dịch thất bại: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Hoàn tất giao dịch thất bại: "+err.Error(), err))
 		return
 	}
 

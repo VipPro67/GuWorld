@@ -16,6 +16,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -199,7 +200,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -211,7 +212,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Tiên Khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Tiên Khiếu", err))
 		return
 	}
 
@@ -223,7 +224,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 		FOR UPDATE
 	`, apertureID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách công trình"})
+		httperr.Respond(c, httperr.Internal("Lỗi tải danh sách công trình", err))
 		return
 	}
 
@@ -240,7 +241,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 		var hp, maxHP int
 		if err := rows.Scan(&id, &name, &hp, &maxHP); err != nil {
 			rows.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu công trình"})
+			httperr.Respond(c, httperr.Internal("Lỗi đọc dữ liệu công trình", err))
 			return
 		}
 		_, cost := computeBulkRepairCost(hp, maxHP, false, 1.3)
@@ -261,7 +262,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 	var stones int
 	err = tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy số dư tài khoản", err))
 		return
 	}
 
@@ -273,7 +274,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 	// 4. Deduct + repair
 	var newStones float64
 	if err := tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, totalCost, playerID).Scan(&newStones); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khấu trừ Tiên Nguyên Thạch", err))
 		return
 	}
 
@@ -288,7 +289,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 			WHERE id = ANY($1::uuid[]) AND is_destroyed = false
 		`, pq.Array(nodeIDs))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái sửa chữa"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật trạng thái sửa chữa", err))
 			return
 		}
 		if repaired, rowsErr := res.RowsAffected(); rowsErr != nil || repaired != int64(len(nodeIDs)) {
@@ -298,7 +299,7 @@ func RepairAllApertureNodes(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save repair"})
+		httperr.Respond(c, httperr.Internal("Failed to save repair", err))
 		return
 	}
 

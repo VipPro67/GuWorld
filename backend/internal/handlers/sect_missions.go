@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -40,7 +41,7 @@ func GetSectMissions(c *gin.Context) {
 		ORDER BY required_member_rank, title
 	`, m.SectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch missions"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch missions", err))
 		return
 	}
 	defer rows.Close()
@@ -73,7 +74,7 @@ func AcceptSectMission(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -142,7 +143,7 @@ func AcceptSectMission(c *gin.Context) {
 		WHERE player_sect_missions.status <> 'COMPLETED'
 	`, playerID, sm.ID, sm.ExpiresAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to accept mission: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to accept mission: "+err.Error(), err))
 		return
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
@@ -151,7 +152,7 @@ func AcceptSectMission(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -175,14 +176,14 @@ func CompleteSectMission(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))
 		return
 	}
 
@@ -205,7 +206,7 @@ func CompleteSectMission(c *gin.Context) {
 		WHERE id = $1
 	`, missionID).Scan(&sm.ID, &sm.SectID, &sm.Title, &sm.MissionType, &sm.TargetID, &sm.TargetAmount, &sm.RewardContribution)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load mission parameters"})
+		httperr.Respond(c, httperr.Internal("Failed to load mission parameters", err))
 		return
 	}
 
@@ -258,7 +259,7 @@ func CompleteSectMission(c *gin.Context) {
 		donatedInstanceID := player.GuInventory[targetIdx].InstanceID
 		player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
 		if err := db.RemovePlayerGu(tx, donatedInstanceID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
+			httperr.Respond(c, httperr.Internal("Failed to update gu inventory", err))
 			return
 		}
 
@@ -300,7 +301,7 @@ func CompleteSectMission(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ để chi trả nhiệm vụ này!"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to charge sect funds: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to charge sect funds: "+err.Error(), err))
 		return
 	}
 
@@ -308,7 +309,7 @@ func CompleteSectMission(c *gin.Context) {
 	// player cannot accept-and-complete it over and over for repeat rewards.
 	_, err = tx.Exec(`UPDATE player_sect_missions SET status = 'COMPLETED' WHERE id = $1`, psm.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete mission"})
+		httperr.Respond(c, httperr.Internal("Failed to complete mission", err))
 		return
 	}
 
@@ -320,19 +321,19 @@ func CompleteSectMission(c *gin.Context) {
 		WHERE player_id = $1
 	`, playerID).Scan(&m.SectID, &m.ContributionPoints)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get contribution info"})
+		httperr.Respond(c, httperr.Internal("Failed to get contribution info", err))
 		return
 	}
 
 	m.ContributionPoints += int64(sm.RewardContribution)
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add contribution points"})
+		httperr.Respond(c, httperr.Internal("Failed to add contribution points", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -407,19 +408,19 @@ func DeleteSectMission(c *gin.Context) {
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	_, err = tx.Exec(`DELETE FROM sect_missions WHERE id = $1`, missionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa nhiệm vụ", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 
@@ -446,7 +447,7 @@ func AbandonSectMission(c *gin.Context) {
 		WHERE player_id = $1 AND mission_id = $2 AND status = 'IN_PROGRESS'
 	`, playerID, missionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy nhiệm vụ"})
+		httperr.Respond(c, httperr.Internal("Không thể hủy nhiệm vụ", err))
 		return
 	}
 
@@ -488,7 +489,7 @@ func CreateCustomMission(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -513,7 +514,7 @@ func CreateCustomMission(c *gin.Context) {
 	var currentFunds int64
 	missionCost := req.RewardContribution
 	if err = tx.QueryRow(`SELECT funds FROM sects WHERE id = $1`, callerSectID).Scan(&currentFunds); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect funds: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load sect funds: "+err.Error(), err))
 		return
 	}
 	if currentFunds < missionCost {
@@ -539,12 +540,12 @@ func CreateCustomMission(c *gin.Context) {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`, callerSectID, req.Title, req.Description, req.MissionType, req.TargetID, req.TargetAmount, req.RewardContribution, req.RequiredMemberRank, expiresAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create mission record: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to create mission record: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 

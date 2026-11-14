@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -31,7 +32,7 @@ func AdminListApertureSettlements(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id,aperture_id,race,COALESCE(name,''),settlement_type,population_capacity,housing,food_storage,security,created_at,updated_at FROM aperture_variant_settlements WHERE aperture_id=$1 ORDER BY race`, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải khu định cư tiên khiếu"})
+		httperr.Respond(c, httperr.Internal("Không thể tải khu định cư tiên khiếu", err))
 		return
 	}
 	defer rows.Close()
@@ -39,13 +40,13 @@ func AdminListApertureSettlements(c *gin.Context) {
 	for rows.Next() {
 		var r AdminApertureSettlement
 		if err := rows.Scan(&r.ID, &r.ApertureID, &r.Race, &r.Name, &r.SettlementType, &r.PopulationCapacity, &r.Housing, &r.FoodStorage, &r.Security, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc khu định cư"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc khu định cư", err))
 			return
 		}
 		list = append(list, r)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc khu định cư"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc khu định cư", err))
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -82,7 +83,7 @@ func AdminCreateApertureSettlement(c *gin.Context) {
 	}
 	var raceExists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM aperture_variant_humans WHERE aperture_id=$1 AND race=$2)`, c.Param("id"), strings.TrimSpace(req.Race)).Scan(&raceExists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh chủng tộc"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh chủng tộc", err))
 		return
 	}
 	if !raceExists {
@@ -91,7 +92,7 @@ func AdminCreateApertureSettlement(c *gin.Context) {
 	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `INSERT INTO aperture_variant_settlements(aperture_id,race,name,settlement_type,population_capacity,housing,food_storage,security) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8)`, c.Param("id"), strings.TrimSpace(req.Race), strings.TrimSpace(req.Name), req.SettlementType, req.PopulationCapacity, req.Housing, req.FoodStorage, req.Security)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo khu định cư: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo khu định cư: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_aperture_settlement", "aperture=%s race=%s", c.Param("id"), req.Race)
@@ -114,7 +115,7 @@ func AdminUpdateApertureSettlement(c *gin.Context) {
 	}
 	var raceExists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM aperture_variant_humans WHERE aperture_id=$1 AND race=$2)`, c.Param("id"), strings.TrimSpace(req.Race)).Scan(&raceExists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh chủng tộc"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh chủng tộc", err))
 		return
 	}
 	if !raceExists {
@@ -123,7 +124,7 @@ func AdminUpdateApertureSettlement(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE aperture_variant_settlements SET race=$1,name=NULLIF($2,''),settlement_type=$3,population_capacity=$4,housing=$5,food_storage=$6,security=$7,updated_at=NOW() WHERE id=$8 AND aperture_id=$9`, strings.TrimSpace(req.Race), strings.TrimSpace(req.Name), req.SettlementType, req.PopulationCapacity, req.Housing, req.FoodStorage, req.Security, c.Param("settlement_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật khu định cư: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật khu định cư: "+err.Error(), err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -141,7 +142,7 @@ func AdminDeleteApertureSettlement(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM aperture_variant_settlements WHERE id=$1 AND aperture_id=$2`, c.Param("settlement_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa khu định cư"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa khu định cư", err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -48,7 +49,7 @@ func ClaimReferralReward(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -73,7 +74,7 @@ func ClaimReferralReward(c *gin.Context) {
 	var refereeRank int
 	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, refereeUUID).Scan(&refereeRank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch referee stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch referee stats", err))
 		return
 	}
 
@@ -84,7 +85,7 @@ func ClaimReferralReward(c *gin.Context) {
 		WHERE player_id = $1 AND status = 'COMPLETED' AND quest_id IN ('quest_1_awaken', 'quest_2_vital_gu')
 	`, refereeUUID).Scan(&completedCount)
 	if err != nil && err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check referee quests"})
+		httperr.Respond(c, httperr.Internal("Failed to check referee quests", err))
 		return
 	}
 	verified := refereeRank >= 2 || completedCount >= 2
@@ -103,7 +104,7 @@ func ClaimReferralReward(c *gin.Context) {
 		FOR UPDATE
 	`, playerID).Scan(&referrerUsername, &referrerStones)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch referrer details"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch referrer details", err))
 		return
 	}
 
@@ -157,7 +158,7 @@ func ClaimReferralReward(c *gin.Context) {
 		milestone3Rewarded = true
 		message = fmt.Sprintf("Nhận thành công 1 %s (Tam Chuyển)!", guSpec.Name)
 		if err := db.AddPlayerGu(tx, playerID.String(), newGu); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
+			httperr.Respond(c, httperr.Internal("Failed to save Gu inventory", err))
 			return
 		}
 	case 4:
@@ -198,7 +199,7 @@ func ClaimReferralReward(c *gin.Context) {
 	if stonesAdded > 0 {
 		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, stonesAdded, playerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update resources"})
+			httperr.Respond(c, httperr.Internal("Failed to update resources", err))
 			return
 		}
 	}
@@ -208,12 +209,12 @@ func ClaimReferralReward(c *gin.Context) {
 		WHERE id = $6
 	`, milestone1Rewarded, milestone2Rewarded, milestone3Rewarded, milestone4Rewarded, milestone5Rewarded, refID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update milestone flags"})
+		httperr.Respond(c, httperr.Internal("Failed to update milestone flags", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to commit transaction", err))
 		return
 	}
 
@@ -252,7 +253,7 @@ func SimulateDeposit(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -266,7 +267,7 @@ func SimulateDeposit(c *gin.Context) {
 		FOR UPDATE
 	`, playerID).Scan(&currentStones)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stones"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stones", err))
 		return
 	}
 
@@ -277,7 +278,7 @@ func SimulateDeposit(c *gin.Context) {
 		WHERE id = $2
 	`, currentStones, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player stones"})
+		httperr.Respond(c, httperr.Internal("Failed to update player stones", err))
 		return
 	}
 
@@ -303,18 +304,18 @@ func SimulateDeposit(c *gin.Context) {
 			WHERE id = $3
 		`, hasDeposited, depositAmountStones, refID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record referral deposit"})
+			httperr.Respond(c, httperr.Internal("Failed to record referral deposit", err))
 			return
 		}
 	} else if err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking referral status"})
+		httperr.Respond(c, httperr.Internal("Database error checking referral status", err))
 		return
 	}
 
 	// 3. (Old logic for checking milestones was removed since it's now manually claimed)
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit deposit transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to commit deposit transaction", err))
 		return
 	}
 
@@ -348,7 +349,7 @@ func GetReferralStats(c *gin.Context) {
 		WHERE id = $1
 	`, playerID).Scan(&refCode, &rank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch referral code"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch referral code", err))
 		return
 	}
 
@@ -371,7 +372,7 @@ func GetReferralStats(c *gin.Context) {
 		ORDER BY r.created_at DESC
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch referrals stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch referrals stats", err))
 		return
 	}
 	defer rows.Close()
@@ -400,7 +401,7 @@ func GetReferralStats(c *gin.Context) {
 			&r.Milestone1Rewarded, &r.Milestone2Rewarded, &r.Milestone3Rewarded, &r.Milestone4Rewarded, &r.Milestone5Rewarded, &r.CreatedAt, &completedQuests,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse referee details"})
+			httperr.Respond(c, httperr.Internal("Failed to parse referee details", err))
 			return
 		}
 
@@ -439,7 +440,7 @@ func BindReferralCode(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kết nối cơ sở dữ liệu."})
+		httperr.Respond(c, httperr.Internal("Lỗi kết nối cơ sở dữ liệu.", err))
 		return
 	}
 	defer tx.Rollback()
@@ -448,7 +449,7 @@ func BindReferralCode(c *gin.Context) {
 	var rank int
 	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&rank)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra thông tin người chơi."})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra thông tin người chơi.", err))
 		return
 	}
 	if rank > 1 {
@@ -460,7 +461,7 @@ func BindReferralCode(c *gin.Context) {
 	var existingCount int
 	err = tx.QueryRow(`SELECT COUNT(*) FROM referrals WHERE referee_id = $1`, playerID).Scan(&existingCount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu."})
+		httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu.", err))
 		return
 	}
 	if existingCount > 0 {
@@ -493,12 +494,12 @@ func BindReferralCode(c *gin.Context) {
 		VALUES ($1, $2, $3, $4, $5)
 	`, referrerID, playerID, clientIP, userAgent, isSuspicious)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo liên kết giới thiệu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tạo liên kết giới thiệu: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu."})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu dữ liệu.", err))
 		return
 	}
 

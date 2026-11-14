@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -23,7 +24,7 @@ func GetGuHistory(c *gin.Context) {
 	logs, err := db.FetchGuHistoryLogs(db.DB, instanceID)
 	if err != nil {
 		logger.S.Errorf("GetGuHistory failed for instance_id %s: %v", instanceID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch Gu history logs"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch Gu history logs", err))
 		return
 	}
 
@@ -67,7 +68,7 @@ func AdminListGuHistory(c *gin.Context) {
 		var err error
 		total, err = fastCountTable(c, "gu_history_logs", "admin:gu_history_logs:total_count", 60*time.Second)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count gu history logs"})
+			httperr.Respond(c, httperr.Internal("Failed to count gu history logs", err))
 			return
 		}
 	} else {
@@ -80,7 +81,7 @@ func AdminListGuHistory(c *gin.Context) {
 		`, whereClause)
 
 		if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count gu history logs"})
+			httperr.Respond(c, httperr.Internal("Failed to count gu history logs", err))
 			return
 		}
 	}
@@ -101,7 +102,7 @@ func AdminListGuHistory(c *gin.Context) {
 	queryArgs := append(args, paging.PageSize, paging.Offset)
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, queryArgs...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query gu history logs"})
+		httperr.Respond(c, httperr.Internal("Failed to query gu history logs", err))
 		return
 	}
 	defer rows.Close()
@@ -118,7 +119,7 @@ func AdminListGuHistory(c *gin.Context) {
 			&l.Summary, &metaRaw, &l.CreatedAt,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning gu history row"})
+			httperr.Respond(c, httperr.Internal("Error scanning gu history row", err))
 			return
 		}
 		if actorID.Valid {

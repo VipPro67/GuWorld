@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -78,7 +79,7 @@ func BuyShopItem(c *gin.Context) {
 	// 2. Begin DB Transaction
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -86,7 +87,7 @@ func BuyShopItem(c *gin.Context) {
 	// 3. Lock & Load Player row
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		httperr.Respond(c, httperr.Internal("Failed to lock player Aperture", err))
 		return
 	}
 	if gamefx.IsDeadState(&player) {
@@ -104,7 +105,7 @@ func BuyShopItem(c *gin.Context) {
 			VALUES (CURRENT_DATE, $1, $2, $3)
 			ON CONFLICT (day, id, rank) DO NOTHING
 		`, selectedItem.ID, selectedItem.Rank, limit); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tồn kho."})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật tồn kho.", err))
 			return
 		}
 		// Atomically decrement only if enough stock remains (race-safe).
@@ -114,7 +115,7 @@ func BuyShopItem(c *gin.Context) {
 			WHERE day = CURRENT_DATE AND id = $1 AND rank = $2 AND remaining >= $3
 		`, selectedItem.ID, selectedItem.Rank, req.Quantity)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tồn kho."})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật tồn kho.", err))
 			return
 		}
 		if affected, _ := res.RowsAffected(); affected == 0 {
@@ -136,7 +137,7 @@ func BuyShopItem(c *gin.Context) {
 			AND stock >= $3
 		`, selectedItem.ID, req.Rank, req.Quantity)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tồn kho."})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật tồn kho.", err))
 			return
 		}
 		if affected, _ := res.RowsAffected(); affected == 0 {
@@ -195,7 +196,7 @@ func BuyShopItem(c *gin.Context) {
 			spec, ok = models.GetGuAny(selectedItem.ID)
 		}
 		if !ok {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng trong Dictionary"})
+			httperr.Respond(c, httperr.Internal("Không tìm thấy định nghĩa của Cổ trùng trong Dictionary", nil))
 			return
 		}
 
@@ -212,22 +213,22 @@ func BuyShopItem(c *gin.Context) {
 		}
 	case "Material", "Recipe", "RefiningRecipe", "Food":
 		if err := InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "materials", req.Quantity); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm vật phẩm vào túi đồ"})
+			httperr.Respond(c, httperr.Internal("Lỗi thêm vật phẩm vào túi đồ", err))
 			return
 		}
 	case "Consumable":
 		if err := InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "consumables", req.Quantity); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm vật phẩm tiêu hao vào túi đồ"})
+			httperr.Respond(c, httperr.Internal("Lỗi thêm vật phẩm tiêu hao vào túi đồ", err))
 			return
 		}
 	case "Treasure":
 		if err := InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "treasures", req.Quantity); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm bảo vật vào túi đồ"})
+			httperr.Respond(c, httperr.Internal("Lỗi thêm bảo vật vào túi đồ", err))
 			return
 		}
 	case "ImmortalMaterial":
 		if err := InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "immortal_materials", req.Quantity); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm tiên tài vào túi đồ"})
+			httperr.Respond(c, httperr.Internal("Lỗi thêm tiên tài vào túi đồ", err))
 			return
 		}
 	}
@@ -236,7 +237,7 @@ func BuyShopItem(c *gin.Context) {
 	qiGained := 0.0
 	if selectedItem.Type == "Gu" {
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Cổ trùng mới vào CSDL"})
+			httperr.Respond(c, httperr.Internal("Không thể lưu Cổ trùng mới vào CSDL", err))
 			return
 		}
 	}
@@ -247,13 +248,13 @@ func BuyShopItem(c *gin.Context) {
 	`
 	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
+		httperr.Respond(c, httperr.Internal("Failed to update player state", err))
 		return
 	}
 
 	// Commit Transaction
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	invalidateShopCatalogCache()

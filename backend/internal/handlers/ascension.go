@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -258,23 +259,23 @@ func GetAscensionSession(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 	session, err := loadAscensionSession(tx, &player)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn phiên Thăng Tiên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn phiên Thăng Tiên", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 
@@ -307,14 +308,14 @@ func AscensionShatter(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 	if gamefx.HasBlockedAction(&player, gamefx.ActionCultivate) {
@@ -346,7 +347,7 @@ func AscensionShatter(c *gin.Context) {
 
 	session, err := loadAscensionSession(tx, &player)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn phiên Thăng Tiên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn phiên Thăng Tiên", err))
 		return
 	}
 	if session != nil {
@@ -358,7 +359,7 @@ func AscensionShatter(c *gin.Context) {
 			// continue accumulating attempts
 		default: // FAILED / COMPLETED — start over
 			if _, err := tx.Exec(`DELETE FROM ascension_sessions WHERE id = $1`, session.ID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi reset phiên Thăng Tiên"})
+				httperr.Respond(c, httperr.Internal("Lỗi reset phiên Thăng Tiên", err))
 				return
 			}
 			session = nil
@@ -394,7 +395,7 @@ func AscensionShatter(c *gin.Context) {
 			`, AscensionStepGuidQi, attempts+1, expires, session.ID)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi mở phiên Thăng Tiên"})
+			httperr.Respond(c, httperr.Internal("Lỗi mở phiên Thăng Tiên", err))
 			return
 		}
 	} else {
@@ -407,17 +408,17 @@ func AscensionShatter(c *gin.Context) {
 			_, err = tx.Exec(`UPDATE ascension_sessions SET attempts = $1, updated_at = NOW() WHERE id = $2`, attempts+1, session.ID)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên Thăng Tiên"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật phiên Thăng Tiên", err))
 			return
 		}
 	}
 
 	if _, err := tx.Exec(`UPDATE players SET current_mana = $1, last_mana_update = $2 WHERE id = $3`, player.CurrentMana, player.LastManaUpdate, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật chân nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật chân nguyên", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 
@@ -468,19 +469,19 @@ func AscensionTemper(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 	session, err := loadAscensionSession(tx, &player)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn phiên Thăng Tiên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn phiên Thăng Tiên", err))
 		return
 	}
 	if session == nil || session.Step != AscensionStepGuidQi {
@@ -529,15 +530,15 @@ func AscensionTemper(c *gin.Context) {
 		// Final balance check: Nhân Khí below the MIN requirement = thất bại.
 		if player.HumanQi < AscensionMinHumanQi {
 			if err := failAscensionSession(tx, &player, session, "Nhân Khí bất túc, không thể cân bằng 2 khí thiên địa"); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên Thăng Tiên"})
+				httperr.Respond(c, httperr.Internal("Lỗi cập nhật phiên Thăng Tiên", err))
 				return
 			}
 			if _, err := tx.Exec(`UPDATE players SET soul_hp = $1, current_mana = $2, primeval_stones = $3 WHERE id = $4`, player.SoulHP, player.CurrentMana, player.PrimevalStones, player.ID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ sư"})
+				httperr.Respond(c, httperr.Internal("Lỗi cập nhật cổ sư", err))
 				return
 			}
 			if err := tx.Commit(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+				httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 				return
 			}
 			ClearPendingPlayerQueues(player.ID.String())
@@ -550,7 +551,7 @@ func AscensionTemper(c *gin.Context) {
 			UPDATE ascension_sessions SET step = $1, temper_stage = $2, temper_choices = $3, ascension_qi = $4, updated_at = NOW() WHERE id = $5
 		`, AscensionStepCalamity, newStage, choicesJSON(choices), player.HumanQi, session.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên Thăng Tiên"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật phiên Thăng Tiên", err))
 			return
 		}
 		session.Step = AscensionStepCalamity
@@ -562,7 +563,7 @@ func AscensionTemper(c *gin.Context) {
 			UPDATE ascension_sessions SET temper_stage = $1, temper_choices = $2, updated_at = NOW() WHERE id = $3
 		`, newStage, choicesJSON(choices), session.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên Thăng Tiên"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật phiên Thăng Tiên", err))
 			return
 		}
 		session.TemperStage = newStage
@@ -570,11 +571,11 @@ func AscensionTemper(c *gin.Context) {
 	}
 
 	if _, err := tx.Exec(`UPDATE players SET soul_hp = $1, current_mana = $2, primeval_stones = $3 WHERE id = $4`, player.SoulHP, player.CurrentMana, player.PrimevalStones, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ sư"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật cổ sư", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 
@@ -642,14 +643,14 @@ func AscensionEngageCalamity(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin cổ sư"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy thông tin cổ sư", err))
 		return
 	}
 	if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
@@ -663,7 +664,7 @@ func AscensionEngageCalamity(c *gin.Context) {
 
 	session, err := loadAscensionSession(tx, &player)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn phiên Thăng Tiên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn phiên Thăng Tiên", err))
 		return
 	}
 	if session == nil || session.Step != AscensionStepCalamity {
@@ -682,7 +683,7 @@ func AscensionEngageCalamity(c *gin.Context) {
 		&boss.MaxHP, &boss.BaseAttack, &boss.BaseDefense,
 		&bossGu, &boss.AIProfile, &boss.LootTableID, &boss.Description,
 	); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy mẫu Địa Tai"})
+		httperr.Respond(c, httperr.Internal("Không tìm thấy mẫu Địa Tai", err))
 		return
 	}
 	bossHP, bossAtk, bossDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, 5, 4, boss.Type)
@@ -693,7 +694,7 @@ func AscensionEngageCalamity(c *gin.Context) {
 		SELECT COALESCE(NULLIF(world_zone_id,''), current_region), world_x, world_y
 		FROM players WHERE id = $1
 	`, player.ID).Scan(&originZone, &worldX, &worldY); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc vị trí hiện tại"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc vị trí hiện tại", err))
 		return
 	}
 	if originZone == "" {
@@ -705,18 +706,18 @@ func AscensionEngageCalamity(c *gin.Context) {
 		UPDATE players SET world_instance_id = '', world_location_revision = world_location_revision + 1
 		WHERE id = $1 AND world_instance_id != ''
 	`, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi dọn dẹp trạng thái phiên cũ"})
+		httperr.Respond(c, httperr.Internal("Lỗi dọn dẹp trạng thái phiên cũ", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 
 	// Spawn the Địa Tai boss in the world zone right at or near player position
 	if err := spawner(c.Request.Context(), player.ID, originZone, worldX, worldY, bossHP, bossAtk, bossDef); err != nil {
 		logger.S.Errorf("Failed to spawn ascension boss in world: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể triệu hồi Địa Tai trên bản đồ thế giới: %v", err)})
+		httperr.Respond(c, httperr.Internal(fmt.Sprintf("Không thể triệu hồi Địa Tai trên bản đồ thế giới: %v", err), err))
 		return
 	}
 
@@ -785,19 +786,19 @@ func AscensionRelease(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 	session, err := loadAscensionSession(tx, &player)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn phiên Thăng Tiên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn phiên Thăng Tiên", err))
 		return
 	}
 	if session == nil || session.Step != AscensionStepRelease {
@@ -828,7 +829,7 @@ func AscensionRelease(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không tồn tại trong túi đồ"})
 			return
 		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn cổ trùng"})
+			httperr.Respond(c, httperr.Internal("Lỗi truy vấn cổ trùng", err))
 			return
 		}
 		if guRank != 5 {
@@ -841,7 +842,7 @@ func AscensionRelease(c *gin.Context) {
 		}
 		reserved, reservationErr := guHasActiveProductReservation(tx, instID.String())
 		if reservationErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
 			return
 		}
 		if reserved {
@@ -866,7 +867,7 @@ func AscensionRelease(c *gin.Context) {
 			return
 		}
 		if _, err := tx.Exec(`DELETE FROM player_gu WHERE id = $1 AND player_id = $2 AND is_vital = false`, instID, player.ID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hủy cổ trùng"})
+			httperr.Respond(c, httperr.Internal("Lỗi tiêu hủy cổ trùng", err))
 			return
 		}
 		daoGain[path] += AscensionDaoMarksPerGu
@@ -880,11 +881,11 @@ func AscensionRelease(c *gin.Context) {
 	grade := AscensionGradeForHumanQi(session.AscensionQi)
 	if grade == "" {
 		if err := failAscensionSession(tx, &player, session, "Nhân Khí bất túc"); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên Thăng Tiên"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật phiên Thăng Tiên", err))
 			return
 		}
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+			httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 			return
 		}
 		ClearPendingPlayerQueues(player.ID.String())
@@ -902,7 +903,7 @@ func AscensionRelease(c *gin.Context) {
 
 	ap, apErr := createAperture(tx, player.ID.String(), session.AscensionQi, player.CurrentMana)
 	if apErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Thăng tiên thành công nhưng không thể khai mở Tiên Khiếu: " + apErr.Error()})
+		httperr.Respond(c, httperr.Internal("Thăng tiên thành công nhưng không thể khai mở Tiên Khiếu: "+apErr.Error(), apErr))
 		return
 	}
 	// Merge the released-path Dao Marks into the fresh aperture.
@@ -915,7 +916,7 @@ func AscensionRelease(c *gin.Context) {
 	if _, err := tx.Exec(`
 		UPDATE immortal_apertures SET dao_marks = $1, updated_at = NOW() WHERE id = $2
 	`, ap.DaoMarks, ap.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi Đạo Ngân vào Tiên Khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi ghi Đạo Ngân vào Tiên Khiếu", err))
 		return
 	}
 
@@ -923,17 +924,17 @@ func AscensionRelease(c *gin.Context) {
 		UPDATE players SET rank = $1, sub_rank = $2, human_qi = $3, next_tribulation_time = $4, immortal_stones = $5
 		WHERE id = $6
 	`, player.Rank, player.SubRank, player.HumanQi, player.NextTribulationTime, player.ImmortalStones, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ sư"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật cổ sư", err))
 		return
 	}
 	if _, err := tx.Exec(`UPDATE ascension_sessions SET step = $1, updated_at = NOW() WHERE id = $2`, AscensionStepCompleted, session.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên Thăng Tiên"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật phiên Thăng Tiên", err))
 		return
 	}
 	session.Step = AscensionStepCompleted
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
 	}
 

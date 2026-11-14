@@ -176,7 +176,9 @@ Rules:
 ### Observability & Debugging
 
 - **Trace ID**: Mỗi request HTTP và tick worker có một Trace ID độc bản (`X-Trace-ID`), tự động liên kết từ Client Toast -> HTTP Response -> Middleware -> Context Logger -> Admin Monitor.
-- `DEBUG_ERRORS=true`: Khi bật biến môi trường này hoặc ở môi trường dev (`PROD_ENV != production`), response lỗi 500 từ `httperr` sẽ đính kèm trường `"debug"` chứa chi tiết raw error từ DB/runtime. Ở production, raw error được giấu an toàn và chỉ ghi lại tại backend Zap log + monitor trace.
+- `LOG_LEVEL`: Mức thấp nhất được ghi ra log. Hỗ trợ `DEBUG`, `INFO` (mặc định), `WARN`, `ERROR`, `DPANIC`, `PANIC`, `FATAL`; không phân biệt hoa thường và bỏ khoảng trắng ở hai đầu. Giá trị không hợp lệ phát cảnh báo rồi dùng `INFO`. Cần khởi động lại backend sau khi đổi `.env`.
+- `DEBUG_ERRORS=true`: Chỉ khi bật tường minh ngoài production, response lỗi từ `httperr` mới đính kèm trường `"debug"` chứa lỗi gốc. Mặc định JSON không lộ lỗi gốc; production luôn ẩn trường này. Lỗi vẫn được ghi trong structured Zap log kèm trace ID. Thông điệp JSON giữ phần mô tả thân thiện, không kèm `err.Error()`.
+- Lỗi nội bộ trong handlers cần đi qua `httperr.Respond` (hoặc `httperr.AbortInternal`) với nguyên nhân gốc. Middleware ghi riêng lỗi handler và bản tổng kết request; dùng cùng trace ID để nối hai bản ghi.
 - Tra cứu Trace: Trên giao diện Admin (tab "Giám sát"), nhập mã Trace ID vào ô tìm kiếm để xem toàn bộ thông tin chi tiết của request/worker gặp lỗi.
 
 ## Quản lý dữ liệu gameplay

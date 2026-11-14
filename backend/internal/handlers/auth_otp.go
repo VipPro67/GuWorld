@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 )
 
 type SendOTPRequest struct {
@@ -50,7 +51,7 @@ func SendOTP(c *gin.Context) {
 	var emailExists bool
 	err := db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE email = $1)", req.Email).Scan(&emailExists)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kết nối cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi kết nối cơ sở dữ liệu", err))
 		return
 	}
 	if emailExists {
@@ -69,7 +70,7 @@ func SendOTP(c *gin.Context) {
 	// 2. Generate OTP
 	otp, err := auth.GenerateOTP()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo mã xác thực"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo mã xác thực", err))
 		return
 	}
 
@@ -83,7 +84,7 @@ func SendOTP(c *gin.Context) {
 		SET otp = EXCLUDED.otp, expires_at = EXCLUDED.expires_at, created_at = NOW()
 	`, req.Email, otp, expiresAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu mã xác thực"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu mã xác thực", err))
 		return
 	}
 
@@ -92,7 +93,7 @@ func SendOTP(c *gin.Context) {
 	if err != nil {
 		// Clean up the generated OTP on failure so we don't hold bad state
 		_, _ = db.DB.Exec("DELETE FROM email_otps WHERE email = $1", req.Email)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gửi email xác thực thất bại. Vui lòng kiểm tra lại địa chỉ email hoặc liên hệ Admin."})
+		httperr.Respond(c, httperr.Internal("Gửi email xác thực thất bại. Vui lòng kiểm tra lại địa chỉ email hoặc liên hệ Admin.", err))
 		return
 	}
 

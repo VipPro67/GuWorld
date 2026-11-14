@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -55,7 +56,7 @@ func GetCurrentTournament(c *gin.Context) {
 				return
 			}
 		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tournament"})
+			httperr.Respond(c, httperr.Internal("Failed to fetch tournament", err))
 			return
 		}
 		found = true
@@ -145,7 +146,7 @@ func RegisterForTournament(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -160,7 +161,7 @@ func RegisterForTournament(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có giải đấu nào đang mở đăng ký"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -194,7 +195,7 @@ func RegisterForTournament(c *gin.Context) {
 		SELECT hp, base_hp, current_mana, max_mana FROM players WHERE id = $1
 	`, authID).Scan(&playerHP, &playerMaxHP, &playerMana, &playerMaxMana)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 
@@ -235,12 +236,12 @@ func RegisterForTournament(c *gin.Context) {
 			VALUES ($1, $2, $3) RETURNING id
 		`, tournamentID, teamName, seedNum).Scan(&teamID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo đội mới"})
+			httperr.Respond(c, httperr.Internal("Không thể tạo đội mới", err))
 			return
 		}
 		teamMemberCount = 0
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -250,7 +251,7 @@ func RegisterForTournament(c *gin.Context) {
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`, teamID, authID, playerHP, playerMaxHP, playerMana, playerMaxMana)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm vào đội"})
+		httperr.Respond(c, httperr.Internal("Không thể thêm vào đội", err))
 		return
 	}
 
@@ -263,12 +264,12 @@ func RegisterForTournament(c *gin.Context) {
 		WHERE id = $1
 	`, tournamentID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật giải đấu"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật giải đấu", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failed"})
+		httperr.Respond(c, httperr.Internal("Database commit failed", err))
 		return
 	}
 
@@ -289,7 +290,7 @@ func UnregisterFromTournament(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -304,7 +305,7 @@ func UnregisterFromTournament(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có giải đấu nào đang mở đăng ký"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -319,7 +320,7 @@ func UnregisterFromTournament(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa đăng ký giải đấu này"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -328,7 +329,7 @@ func UnregisterFromTournament(c *gin.Context) {
 		DELETE FROM death_arena_team_members WHERE player_id = $1 AND team_id = $2
 	`, authID, teamID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy đăng ký"})
+		httperr.Respond(c, httperr.Internal("Không thể hủy đăng ký", err))
 		return
 	}
 
@@ -352,7 +353,7 @@ func UnregisterFromTournament(c *gin.Context) {
 	`, tournamentID)
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failed"})
+		httperr.Respond(c, httperr.Internal("Database commit failed", err))
 		return
 	}
 

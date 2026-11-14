@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -98,7 +99,7 @@ func GetConceiveCandidates(c *gin.Context) {
 
 	player, err := PlayerSvc.ProjectStatusEquipped(db.DB, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player state"})
+		httperr.Respond(c, httperr.Internal("Failed to load player state", err))
 		return
 	}
 
@@ -138,7 +139,7 @@ func GetConceiveCandidates(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, player.ID.String(), pathFilter, rankFilter, searchFilter, limit, offset)
 	if err != nil {
 		logger.S.Errorf("GetConceiveCandidates query failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query candidates"})
+		httperr.Respond(c, httperr.Internal("Failed to query candidates", err))
 		return
 	}
 	defer rows.Close()
@@ -223,7 +224,7 @@ func ConceiveRecipe(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -233,7 +234,7 @@ func ConceiveRecipe(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player status"})
+			httperr.Respond(c, httperr.Internal("Failed to lock player status", err))
 		}
 		return
 	}
@@ -246,7 +247,7 @@ func ConceiveRecipe(c *gin.Context) {
 
 	// 2. Validate Target Gu
 	var (
-		targetGuName string
+		targetGuName  string
 		targetPathRaw []byte
 	)
 	err = tx.QueryRow(`SELECT name, path FROM gu_dictionary WHERE id = $1 AND rank = $2`, req.TargetGuID, req.TargetRank).Scan(&targetGuName, &targetPathRaw)
@@ -353,7 +354,7 @@ func ConceiveRecipe(c *gin.Context) {
 
 		// Remove Gu instance from player_gu table and memory inventory
 		if err := db.RemovePlayerGuForPlayer(tx, player.ID.String(), req.CatalystGuInstanceID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khi tiêu hao Cổ phôi"})
+			httperr.Respond(c, httperr.Internal("Lỗi khi tiêu hao Cổ phôi", err))
 			return
 		}
 		player.GuInventory = models.RemoveGuByInstanceID(player.GuInventory, req.CatalystGuInstanceID)
@@ -361,9 +362,9 @@ func ConceiveRecipe(c *gin.Context) {
 	} else if req.CatalystItemID != "" {
 		// Using material catalyst
 		var (
-			matName string
-			matType string
-			matRank int
+			matName    string
+			matType    string
+			matRank    int
 			matPathRaw []byte
 		)
 		err = tx.QueryRow(`SELECT name, item_type, rank, path FROM item_dictionary WHERE id = $1`, req.CatalystItemID).Scan(&matName, &matType, &matRank, &matPathRaw)
@@ -401,7 +402,7 @@ func ConceiveRecipe(c *gin.Context) {
 
 		requiredQty := gamefx.MaterialCatalystRequiredQty(matRank, req.TargetRank)
 		if InventorySvc == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Dịch vụ kho đồ không khả dụng"})
+			httperr.Respond(c, httperr.Internal("Dịch vụ kho đồ không khả dụng", InventorySvc))
 			return
 		}
 		if err := InventorySvc.DeductItem(tx, player.ID.String(), req.CatalystItemID, requiredQty); err != nil {
@@ -457,12 +458,12 @@ func ConceiveRecipe(c *gin.Context) {
 		`, player.CurrentThought, player.PrimevalStones, player.ImmortalStones,
 			player.CurrentMana, player.HP, player.Statuses, player.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu kết quả phản phệ"})
+			httperr.Respond(c, httperr.Internal("Lỗi lưu kết quả phản phệ", err))
 			return
 		}
 
 		if err = tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit phản phệ"})
+			httperr.Respond(c, httperr.Internal("Lỗi commit phản phệ", err))
 			return
 		}
 
@@ -533,7 +534,7 @@ func ConceiveRecipe(c *gin.Context) {
 		existingRecipeProg.DeduceCount++
 		existingRecipeProg.LastDeduceAt = &now
 		if err := RecipeSvc.Upsert(tx, existingRecipeProg); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu tiến trình tàn phương"})
+			httperr.Respond(c, httperr.Internal("Lỗi lưu tiến trình tàn phương", err))
 			return
 		}
 	} else {
@@ -546,7 +547,7 @@ func ConceiveRecipe(c *gin.Context) {
 			DeduceCount:    1,
 			LastDeduceAt:   &now,
 		}); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo tàn phương"})
+			httperr.Respond(c, httperr.Internal("Lỗi tạo tàn phương", err))
 			return
 		}
 	}
@@ -559,12 +560,12 @@ func ConceiveRecipe(c *gin.Context) {
 		WHERE id = $4
 	`, player.CurrentThought, player.PrimevalStones, player.ImmortalStones, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu tài nguyên người chơi"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu tài nguyên người chơi", err))
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi commit giao dịch", err))
 		return
 	}
 

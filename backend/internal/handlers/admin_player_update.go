@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -87,7 +88,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -109,7 +110,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 		}
 		var exists bool
 		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE LOWER(username)=LOWER($1) AND id<>$2)`, username, playerID).Scan(&exists); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra tên đăng nhập"})
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra tên đăng nhập", err))
 			return
 		}
 		if exists {
@@ -128,7 +129,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 		}
 		var exists bool
 		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE email=$1 AND id<>$2)`, email, playerID).Scan(&exists); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra email"})
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra email", err))
 			return
 		}
 		if exists {
@@ -402,7 +403,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 	if req.ImmortalJade != nil {
 		_, err := tx.Exec(`INSERT INTO wallets (user_id, immortal_jade) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET immortal_jade = EXCLUDED.immortal_jade, updated_at = NOW()`, playerID, *req.ImmortalJade)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Tiên Ngọc"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật Tiên Ngọc", err))
 			return
 		}
 	}
@@ -417,7 +418,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Tên đăng nhập đã được sử dụng (không phân biệt chữ hoa/thường)"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật thông tin người chơi", err))
 		return
 	}
 	if req.Rank != nil && *req.Rank >= 6 {

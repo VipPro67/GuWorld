@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -34,7 +35,7 @@ func AdminListGuItems(c *gin.Context) {
 		, COALESCE(composition_contributions,'{"schema_version":1,"grants":[]}'::jsonb)
 		FROM gu_dictionary ORDER BY name`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -249,7 +250,7 @@ func AdminCreateGuItem(c *gin.Context) {
 	var existingCoefficient float64
 	existingCoefficientErr := db.DB.QueryRow(`SELECT player_atk_coefficient FROM gu_dictionary WHERE id=$1 ORDER BY rank LIMIT 1`, req.ID).Scan(&existingCoefficient)
 	if existingCoefficientErr != nil && existingCoefficientErr != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hệ số ATK người chơi hiện có: " + existingCoefficientErr.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể đọc hệ số ATK người chơi hiện có: "+existingCoefficientErr.Error(), existingCoefficientErr))
 		return
 	}
 	if existingCoefficientErr == nil {
@@ -267,11 +268,11 @@ func AdminCreateGuItem(c *gin.Context) {
 		req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.PrimaryRole,
 		marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL, req.CompositionContributions)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo: "+err.Error(), err))
 		return
 	}
 	if err := models.LoadGuRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã ghi dữ liệu nhưng không thể tải lại catalog Cổ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã ghi dữ liệu nhưng không thể tải lại catalog Cổ: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_gu", "id=%s name=%s", req.ID, req.Name)
@@ -439,12 +440,12 @@ func AdminUpdateGuItem(c *gin.Context) {
 		args = append(args, guID, oldRank)
 		_, err := db.DB.Exec(`UPDATE gu_dictionary SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx)+` AND rank=$`+strconv.Itoa(idx+1), args...)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật: "+err.Error(), err))
 			return
 		}
 		if req.PlayerATKCoefficient != nil {
 			if _, err := db.DB.Exec(`UPDATE gu_dictionary SET player_atk_coefficient=$1 WHERE id=$2`, *req.PlayerATKCoefficient, guID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ hệ số ATK người chơi giữa các rank: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Không thể đồng bộ hệ số ATK người chơi giữa các rank: "+err.Error(), err))
 				return
 			}
 		}
@@ -464,19 +465,19 @@ func AdminUpdateGuItem(c *gin.Context) {
 			req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.PrimaryRole,
 			marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL, nullableJSON(req.CompositionContributions), guID, oldRank)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật: "+err.Error(), err))
 			return
 		}
 		if req.PlayerATKCoefficient != nil {
 			_, err := db.DB.Exec(`UPDATE gu_dictionary SET player_atk_coefficient=$1 WHERE id=$2`, *req.PlayerATKCoefficient, guID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật hệ số ATK người chơi: " + err.Error()})
+				httperr.Respond(c, httperr.Internal("Không thể cập nhật hệ số ATK người chơi: "+err.Error(), err))
 				return
 			}
 		}
 	}
 	if err := models.LoadGuRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã ghi dữ liệu nhưng không thể tải lại catalog Cổ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã ghi dữ liệu nhưng không thể tải lại catalog Cổ: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_gu", "id=%s", guID)
@@ -492,7 +493,7 @@ func AdminDeleteGuItem(c *gin.Context) {
 
 	var ownedCount int
 	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE gu_id = $1`, guID).Scan(&ownedCount); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra sở hữu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra sở hữu: "+err.Error(), err))
 		return
 	}
 	if ownedCount > 0 {
@@ -501,7 +502,7 @@ func AdminDeleteGuItem(c *gin.Context) {
 	}
 	var compositionCount int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM admin_effect_composition_drafts WHERE status='DRAFT' AND definition->'sources' @> jsonb_build_array(jsonb_build_object('gu_id',$1))`, guID).Scan(&compositionCount); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra composition draft: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra composition draft: "+err.Error(), err))
 		return
 	}
 	if compositionCount > 0 {
@@ -511,11 +512,11 @@ func AdminDeleteGuItem(c *gin.Context) {
 
 	_, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM gu_dictionary WHERE id=$1`, guID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể xóa: "+err.Error(), err))
 		return
 	}
 	if err := models.LoadGuRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa dữ liệu nhưng không thể tải lại catalog Cổ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã xóa dữ liệu nhưng không thể tải lại catalog Cổ: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_gu", "id=%s", guID)
@@ -530,7 +531,7 @@ func AdminListItemItems(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, item_type, rank, effects, COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), COALESCE(rarity,0), COALESCE(path,'') FROM item_dictionary ORDER BY name`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -551,13 +552,13 @@ func AdminListItemItems(c *gin.Context) {
 	for rows.Next() {
 		var r ItemRow
 		if err := rows.Scan(&r.ID, &r.Name, &r.ItemType, &r.Rank, &r.Effects, &r.Description, &r.BasePrice, &r.ImageURL, &r.Rarity, &r.Path); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ từ điển vật phẩm"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc đầy đủ từ điển vật phẩm", err))
 			return
 		}
 		items = append(items, r)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc từ điển vật phẩm"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc từ điển vật phẩm", err))
 		return
 	}
 	c.JSON(http.StatusOK, items)
@@ -617,11 +618,11 @@ func AdminCreateItemItem(c *gin.Context) {
 	_, err := db.DB.Exec(`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,base_price,image_url,rarity,path) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 		req.ID, req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL, req.Rarity, req.Path)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	if err := models.LoadItemRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu vật phẩm nhưng không thể tải lại catalog: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã lưu vật phẩm nhưng không thể tải lại catalog: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_item", "id=%s", req.ID)
@@ -656,12 +657,12 @@ func AdminUpdateItemItem(c *gin.Context) {
 	result, err := db.DB.Exec(`UPDATE item_dictionary SET name=$1,item_type=$2,rank=$3,effects=$4,description=$5,base_price=$6,image_url=$7,rarity=$8,path=$9 WHERE id=$10`,
 		req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL, req.Rarity, req.Path, itemID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	count, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận vật phẩm đã được cập nhật"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận vật phẩm đã được cập nhật", err))
 		return
 	}
 	if count == 0 {
@@ -669,7 +670,7 @@ func AdminUpdateItemItem(c *gin.Context) {
 		return
 	}
 	if err := models.LoadItemRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu vật phẩm nhưng không thể tải lại catalog: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã lưu vật phẩm nhưng không thể tải lại catalog: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_item", "id=%s", itemID)
@@ -684,7 +685,7 @@ func AdminDeleteItemItem(c *gin.Context) {
 	itemID := c.Param("id")
 	var owned int64
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_inventory_items WHERE item_id=$1`, itemID).Scan(&owned); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra túi đồ người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra túi đồ người chơi", err))
 		return
 	}
 	if owned > 0 {
@@ -693,7 +694,7 @@ func AdminDeleteItemItem(c *gin.Context) {
 	}
 	var shopEntries int64
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM caravan_shop_items WHERE id=$1`, itemID).Scan(&shopEntries); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra vật phẩm trong cửa hàng"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra vật phẩm trong cửa hàng", err))
 		return
 	}
 	if shopEntries > 0 {
@@ -702,12 +703,12 @@ func AdminDeleteItemItem(c *gin.Context) {
 	}
 	result, err := db.DB.Exec(`DELETE FROM item_dictionary WHERE id=$1`, itemID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	count, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận vật phẩm đã được xóa"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận vật phẩm đã được xóa", err))
 		return
 	}
 	if count == 0 {
@@ -715,7 +716,7 @@ func AdminDeleteItemItem(c *gin.Context) {
 		return
 	}
 	if err := models.LoadItemRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa vật phẩm nhưng không thể tải lại catalog: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã xóa vật phẩm nhưng không thể tải lại catalog: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_item", "id=%s", itemID)
@@ -730,7 +731,7 @@ func AdminListRecipes(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT r.target_gu_id, r.target_rank, r.variant, COALESCE(g.name, ''), r.required_gus, r.required_materials, r.success_rate, r.primeval_stones_cost, COALESCE(r.immortal_essence_stones_cost,0) FROM refining_recipes r LEFT JOIN gu_dictionary g ON r.target_gu_id = g.id AND r.target_rank = g.rank ORDER BY r.target_gu_id, r.target_rank, r.variant`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -752,7 +753,7 @@ func AdminListRecipes(c *gin.Context) {
 		var targetGuID string
 		var targetRank, variant int
 		if err := rows.Scan(&targetGuID, &targetRank, &variant, &r.TargetGuName, &r.RequiredGus, &r.RequiredMaterials, &r.SuccessRate, &r.PrimevalStonesCost, &r.ImmortalEssenceStonesCost); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách cổ phương"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc đầy đủ danh sách cổ phương", err))
 			return
 		}
 		r.TargetGuID = targetGuID
@@ -761,7 +762,7 @@ func AdminListRecipes(c *gin.Context) {
 		items = append(items, r)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách cổ phương"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc đầy đủ danh sách cổ phương", err))
 		return
 	}
 	c.JSON(http.StatusOK, items)
@@ -820,7 +821,7 @@ func AdminCreateRecipe(c *gin.Context) {
 	targetRank := req.TargetRank
 	var exists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.TargetGuID, targetRank).Scan(&exists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác thực cổ trùng đích"})
+		httperr.Respond(c, httperr.Internal("Không thể xác thực cổ trùng đích", err))
 		return
 	}
 	if !exists {
@@ -832,7 +833,7 @@ func AdminCreateRecipe(c *gin.Context) {
 		variant = v
 	} else {
 		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(MAX(variant), 0) + 1 FROM refining_recipes WHERE target_gu_id = $1 AND target_rank = $2`, req.TargetGuID, targetRank).Scan(&variant); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác định biến thể cổ phương"})
+			httperr.Respond(c, httperr.Internal("Không thể xác định biến thể cổ phương", err))
 			return
 		}
 	}
@@ -840,7 +841,7 @@ func AdminCreateRecipe(c *gin.Context) {
 	_, err := db.DB.Exec(`INSERT INTO refining_recipes(target_gu_id,target_rank,variant,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
 		req.TargetGuID, targetRank, variant, req.RequiredGus, req.RequiredMaterials, req.SuccessRate, req.PrimevalStonesCost, req.ImmortalEssenceStonesCost)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	generatedID := fmt.Sprintf("recipe_%s_%d_%d", req.TargetGuID, targetRank, variant)
@@ -881,7 +882,7 @@ func AdminUpdateRecipe(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ phương"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	revision := invalidateRecipeCatalog()
@@ -902,12 +903,12 @@ func AdminDeleteRecipe(c *gin.Context) {
 	}
 	result, err := db.DB.Exec(`DELETE FROM refining_recipes WHERE target_gu_id=$1 AND target_rank=$2 AND variant=$3`, targetGuID, targetRank, variant)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	deleted, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận cổ phương đã được xóa"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận cổ phương đã được xóa", err))
 		return
 	}
 	if deleted == 0 {

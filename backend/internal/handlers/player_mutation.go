@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 )
@@ -34,7 +35,7 @@ func HandleMutationError(c *gin.Context, err error) {
 		c.JSON(mErr.StatusCode, gin.H{"error": mErr.Message})
 		return
 	}
-	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	httperr.Respond(c, httperr.Internal("Lỗi cập nhật trạng thái người chơi", err))
 }
 
 // PlayerMutationOptions configures the player mutation pipeline.

@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
@@ -69,7 +70,7 @@ func AutoCombatStart(c *gin.Context) {
 	transactionStartedAt := time.Now()
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -77,7 +78,7 @@ func AutoCombatStart(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Trận chiến này đang được điều khiển trong phiên turn-based."})
 		return
 	} else if sessionErr != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên chiến đấu hiện tại."})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra phiên chiến đấu hiện tại.", sessionErr))
 		return
 	}
 	beginDuration := time.Since(transactionStartedAt)
@@ -85,7 +86,7 @@ func AutoCombatStart(c *gin.Context) {
 	playerLoadStartedAt := time.Now()
 	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 	playerLoadDuration := time.Since(playerLoadStartedAt)
@@ -127,14 +128,14 @@ func AutoCombatStart(c *gin.Context) {
 	res, err := ResolveCombat(tx, &player, &req.Loadout, req.Loadout.GuIds)
 	if err != nil {
 		logger.S.Errorf("AutoCombatStart: resolve failed for player=%s: %v", player.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat outcome"})
+		httperr.Respond(c, httperr.Internal("Failed to save combat outcome", err))
 		return
 	}
 	resolveDuration := time.Since(resolveStartedAt)
 
 	commitStartedAt := time.Now()
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to commit combat transaction", err))
 		return
 	}
 	PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)

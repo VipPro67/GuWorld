@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -44,7 +45,7 @@ func AdminListOnlinePlayers(c *gin.Context) {
 		LIMIT 100
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -79,7 +80,7 @@ func AdminListMonsters(c *gin.Context) {
 		COALESCE(is_capturable,false), COALESCE(capture_chance,0.20), COALESCE(pet_hunger_per_hour,2.0)
 		FROM monster_templates ORDER BY name`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -111,13 +112,13 @@ func AdminListMonsters(c *gin.Context) {
 			&r.GuInventory, &r.GuPool, &r.ItemInventory, &r.DaoMarks, &r.PathMasteries,
 			&r.AIProfile, &r.LootTableID, &r.Description, &r.IsActive,
 			&r.IsCapturable, &r.CaptureChance, &r.PetHungerPerHour); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ dữ liệu quái vật"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc đầy đủ dữ liệu quái vật", err))
 			return
 		}
 		items = append(items, r)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách quái vật"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách quái vật", err))
 		return
 	}
 	c.JSON(http.StatusOK, items)
@@ -228,11 +229,11 @@ func AdminCreateMonster(c *gin.Context) {
 		req.AIProfile, lootTableID, req.Description, *req.IsActive, *req.IsCapturable,
 		req.CaptureChance, req.PetHungerPerHour)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo: "+err.Error(), err))
 		return
 	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu quái vật nhưng không thể tải lại catalog: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã lưu quái vật nhưng không thể tải lại catalog: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_monster", "id=%s name=%s", req.ID, req.Name)
@@ -265,12 +266,12 @@ func AdminUpdateMonster(c *gin.Context) {
 	result, err := db.DB.Exec(`UPDATE monster_templates SET name=$1,type=$2,max_hp=$3,base_attack=$4,base_defense=$5,gu_inventory=$6,gu_pool=$7,item_inventory=$8,dao_marks=$9,path_masteries=$10,ai_profile=$11,loot_table_id=$12,description=$13,is_active=$14,is_capturable=$15,capture_chance=$16,pet_hunger_per_hour=$17,updated_at=NOW() WHERE id=$18`,
 		req.Name, req.Type, req.MaxHP, req.BaseAttack, req.BaseDefense, req.GuInventory, req.GuPool, req.ItemInventory, req.DaoMarks, req.PathMasteries, req.AIProfile, lootTableID, req.Description, *req.IsActive, *req.IsCapturable, req.CaptureChance, req.PetHungerPerHour, monsterID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật: "+err.Error(), err))
 		return
 	}
 	updated, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận quái vật đã được cập nhật"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận quái vật đã được cập nhật", err))
 		return
 	}
 	if updated == 0 {
@@ -278,7 +279,7 @@ func AdminUpdateMonster(c *gin.Context) {
 		return
 	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu quái vật nhưng không thể tải lại catalog: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã lưu quái vật nhưng không thể tải lại catalog: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_monster", "id=%s", monsterID)
@@ -293,12 +294,12 @@ func AdminDeleteMonster(c *gin.Context) {
 	monsterID := c.Param("id")
 	result, err := db.DB.Exec(`DELETE FROM monster_templates WHERE id=$1`, monsterID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể xóa: "+err.Error(), err))
 		return
 	}
 	deleted, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận quái vật đã được xóa"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận quái vật đã được xóa", err))
 		return
 	}
 	if deleted == 0 {
@@ -306,7 +307,7 @@ func AdminDeleteMonster(c *gin.Context) {
 		return
 	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa quái vật nhưng không thể tải lại catalog: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Đã xóa quái vật nhưng không thể tải lại catalog: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_monster", "id=%s", monsterID)
@@ -321,7 +322,7 @@ func AdminListLootTables(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, COALESCE(entries,'[]'::jsonb) FROM loot_tables ORDER BY name`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -335,13 +336,13 @@ func AdminListLootTables(c *gin.Context) {
 	for rows.Next() {
 		var r LootTableRow
 		if err := rows.Scan(&r.ID, &r.Name, &r.Entries); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách bảng loot"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc đầy đủ danh sách bảng loot", err))
 			return
 		}
 		items = append(items, r)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách bảng loot"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách bảng loot", err))
 		return
 	}
 	c.JSON(http.StatusOK, items)
@@ -388,7 +389,7 @@ func AdminCreateLootTable(c *gin.Context) {
 	_, err := db.DB.Exec(`INSERT INTO loot_tables(id,name,entries) VALUES($1,$2,$3::jsonb)`,
 		req.ID, req.Name, req.Entries)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_loot_table", "id=%s name=%s", req.ID, req.Name)
@@ -423,7 +424,7 @@ func AdminUpdateLootTable(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bảng loot"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_loot_table", "id=%s", tableID)
@@ -440,12 +441,12 @@ func AdminDeleteLootTable(c *gin.Context) {
 	tableID := c.Param("id")
 	result, err := db.DB.Exec(`DELETE FROM loot_tables WHERE id=$1`, tableID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể xóa: "+err.Error(), err))
 		return
 	}
 	deleted, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận bảng loot đã được xóa"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận bảng loot đã được xóa", err))
 		return
 	}
 	if deleted == 0 {

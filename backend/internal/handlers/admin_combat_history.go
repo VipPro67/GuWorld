@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -41,7 +42,7 @@ func AdminListCombatHistory(c *gin.Context) {
 	}
 	if err != nil {
 		logger.S.Errorf("admin combat history: count failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm lịch sử chiến đấu"})
+		httperr.Respond(c, httperr.Internal("Không thể đếm lịch sử chiến đấu", err))
 		return
 	}
 
@@ -58,7 +59,7 @@ func AdminListCombatHistory(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, queryArgs...)
 	if err != nil {
 		logger.S.Errorf("admin combat history: list failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải lịch sử chiến đấu"})
+		httperr.Respond(c, httperr.Internal("Không thể tải lịch sử chiến đấu", err))
 		return
 	}
 	defer rows.Close()
@@ -70,13 +71,13 @@ func AdminListCombatHistory(c *gin.Context) {
 		var logsCount int
 		var createdAt time.Time
 		if err := rows.Scan(&id, &playerID, &username, &winner, &summary, &enemyName, &enemyType, &region, &logsCount, &createdAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc lịch sử chiến đấu"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc lịch sử chiến đấu", err))
 			return
 		}
 		data = append(data, gin.H{"id": id, "player_id": playerID, "player_username": username, "winner": winner, "summary": json.RawMessage(summary), "enemy_name": enemyName, "enemy_type": enemyType, "region": region, "logs_count": logsCount, "created_at": createdAt})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc lịch sử chiến đấu"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc lịch sử chiến đấu", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": total, "page": page, "limit": limit})
@@ -105,7 +106,7 @@ func AdminGetCombatHistory(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy lịch sử chiến đấu"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải chi tiết lịch sử chiến đấu"})
+			httperr.Respond(c, httperr.Internal("Không thể tải chi tiết lịch sử chiến đấu", err))
 		}
 		return
 	}

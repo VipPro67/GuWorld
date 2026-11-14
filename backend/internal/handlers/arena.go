@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -81,24 +82,24 @@ func GetArenaLeaderboard(c *gin.Context) {
 		// Slow path for first-time visitors: initialize ranking
 		tx, errTx := db.DB.BeginTx(c.Request.Context(), nil)
 		if errTx != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			httperr.Respond(c, httperr.Internal("Database error", errTx))
 			return
 		}
 		defer tx.Rollback()
 
 		_, err = EnsurePlayerArenaRanking(tx, authID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thiết lập thứ hạng Võ Đài"})
+			httperr.Respond(c, httperr.Internal("Không thể thiết lập thứ hạng Võ Đài", err))
 			return
 		}
 		if errCommit := tx.Commit(); errCommit != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failure"})
+			httperr.Respond(c, httperr.Internal("Database commit failure", errCommit))
 			return
 		}
 		dailyChallenges = 0
 		lastChallengeAt = time.Now()
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player ranking"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player ranking", err))
 		return
 	}
 
@@ -110,7 +111,7 @@ func GetArenaLeaderboard(c *gin.Context) {
 		LIMIT 50
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch leaderboard", err))
 		return
 	}
 	defer rows.Close()
@@ -157,13 +158,13 @@ func ChallengeArena(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 	if player.ActiveCombat != nil {
@@ -171,17 +172,17 @@ func ChallengeArena(c *gin.Context) {
 		return
 	}
 	if _, err = EnsurePlayerArenaRanking(tx, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thiết lập thứ hạng của bạn: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể thiết lập thứ hạng của bạn: "+err.Error(), err))
 		return
 	}
 	if _, err = EnsurePlayerArenaRanking(tx, targetUUID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thiết lập thứ hạng đối thủ: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể thiết lập thứ hạng đối thủ: "+err.Error(), err))
 		return
 	}
 	var dailyChallenges int
 	var lastChallengeAt time.Time
 	if err = tx.QueryRow("SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&dailyChallenges, &lastChallengeAt); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn thông tin Võ Đài: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn thông tin Võ Đài: "+err.Error(), err))
 		return
 	}
 	now := time.Now()
@@ -194,7 +195,7 @@ func ChallengeArena(c *gin.Context) {
 		return
 	}
 	if _, err = tx.Exec("UPDATE arena_rankings SET daily_challenges = $1, last_challenge_at = $2 WHERE player_id = $3", dailyChallenges+1, now, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật lượt khiêu chiến: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật lượt khiêu chiến: "+err.Error(), err))
 		return
 	}
 	targetPlayer, err := evaluateManaTxEquippedReadonly(tx, targetUUID)
@@ -221,11 +222,11 @@ func ChallengeArena(c *gin.Context) {
 	qiGained := AddHumanQi(&player, 3.0)
 	player.ActiveCombat = InitializeCombatState(tx, &pvpCombat, &player)
 	if _, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = $2 WHERE id = $3", player.ActiveCombat, player.HumanQi, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize arena combat"})
+		httperr.Respond(c, httperr.Internal("Failed to initialize arena combat", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failed"})
+		httperr.Respond(c, httperr.Internal("Database commit failed", err))
 		return
 	}
 	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)

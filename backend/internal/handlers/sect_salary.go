@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -68,7 +69,7 @@ func PaySectSalary(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -105,7 +106,7 @@ func PaySectSalary(c *gin.Context) {
 		WHERE sm.sect_id = $1
 	`, sectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect members"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch sect members", err))
 		return
 	}
 	defer rows.Close()
@@ -115,7 +116,7 @@ func PaySectSalary(c *gin.Context) {
 	for rows.Next() {
 		var m SectMemberSalaryInfo
 		if err := rows.Scan(&m.PlayerID, &m.Username, &m.MemberRank, &m.ContributionPts); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan member"})
+			httperr.Respond(c, httperr.Internal("Failed to scan member", err))
 			return
 		}
 		m.Salary = calculateSalary(sectLevel, m.MemberRank)
@@ -145,14 +146,14 @@ func PaySectSalary(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn đã phát lương hôm nay hoặc quỹ tông môn không đủ!"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
+		httperr.Respond(c, httperr.Internal("Failed to update sect funds", err))
 		return
 	}
 
 	for _, m := range members {
 		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, m.Salary, m.PlayerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player stones"})
+			httperr.Respond(c, httperr.Internal("Failed to update player stones", err))
 			return
 		}
 	}
@@ -200,7 +201,7 @@ func PaySectSalary(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		httperr.Respond(c, httperr.Internal("Commit failed", err))
 		return
 	}
 

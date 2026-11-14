@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -57,14 +58,14 @@ func UseItem(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
+		httperr.Respond(c, httperr.Internal("Failed to load player Aperture", err))
 		return
 	}
 
@@ -129,7 +130,7 @@ func UseItem(c *gin.Context) {
 		player.ID,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update player state: "+err.Error(), err))
 		return
 	}
 
@@ -141,13 +142,13 @@ func UseItem(c *gin.Context) {
 			player.DaoMarks, player.ID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update aperture Dao Marks: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update aperture Dao Marks: "+err.Error(), err))
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	if item.HasEffect("exit_spatial_realm") {
@@ -197,14 +198,14 @@ func UseItems(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
+		httperr.Respond(c, httperr.Internal("Failed to load player Aperture", err))
 		return
 	}
 	initialHP := player.HP
@@ -281,7 +282,7 @@ func UseItems(c *gin.Context) {
 		player.ID,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to update player state: "+err.Error(), err))
 		return
 	}
 
@@ -293,13 +294,13 @@ func UseItems(c *gin.Context) {
 			player.DaoMarks, player.ID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update aperture Dao Marks: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Failed to update aperture Dao Marks: "+err.Error(), err))
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	for _, usedID := range req.ItemIDs {
@@ -423,14 +424,14 @@ func SetVitalGu(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 
@@ -518,11 +519,11 @@ func SetVitalGu(c *gin.Context) {
 	// Persist with two targeted statements: clear the old vital flag if one existed,
 	// then mark the target, without locking or rewriting the whole inventory.
 	if _, err := tx.Exec(`UPDATE player_gu SET is_vital = false, updated_at = NOW() WHERE player_id = $1 AND is_vital = true AND id <> $2`, player.ID, player.GuInventory[targetIndex].InstanceID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
+		httperr.Respond(c, httperr.Internal("Failed to update player vital Gu status", err))
 		return
 	}
 	if _, err := tx.Exec(`UPDATE player_gu SET is_vital = true, state = 'ACTIVE', equipped = true, updated_at = NOW() WHERE id = $1`, player.GuInventory[targetIndex].InstanceID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
+		httperr.Respond(c, httperr.Internal("Failed to update player vital Gu status", err))
 		return
 	}
 
@@ -536,12 +537,12 @@ func SetVitalGu(c *gin.Context) {
 		player.HP, player.EquippedGus, player.Statuses, player.ID,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
+		httperr.Respond(c, httperr.Internal("Failed to update player vital Gu status", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 
@@ -574,13 +575,13 @@ func DropGu(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 
@@ -611,7 +612,7 @@ func DropGu(c *gin.Context) {
 	player.GuInventory = newInv
 	RebuildEquippedGus(&player)
 	if err := db.RemovePlayerGuForPlayer(tx, player.ID.String(), droppedInstanceID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
+		httperr.Respond(c, httperr.Internal("Failed to drop Gu", err))
 		return
 	}
 	// Terminal log cho Tiên Cổ: thả = end lifecycle instance_id này.
@@ -620,11 +621,11 @@ func DropGu(c *gin.Context) {
 		map[string]interface{}{"terminal": true, "reason": "drop"})
 	_, err = tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, player.EquippedGus, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
+		httperr.Respond(c, httperr.Internal("Failed to drop Gu", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
@@ -658,13 +659,13 @@ func DropGus(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 
@@ -701,7 +702,7 @@ func DropGus(c *gin.Context) {
 	player.GuInventory = newInv
 	RebuildEquippedGus(&player)
 	if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), req.GuInstanceIDs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})
+		httperr.Respond(c, httperr.Internal("Failed to drop Gus", err))
 		return
 	}
 	for _, dg := range droppedGus {
@@ -711,11 +712,11 @@ func DropGus(c *gin.Context) {
 	}
 	_, err = tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, player.EquippedGus, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})
+		httperr.Respond(c, httperr.Internal("Failed to drop Gus", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{

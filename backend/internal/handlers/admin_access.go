@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/admincatalog"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -24,7 +25,7 @@ func AdminGetMe(c *gin.Context) {
 	}
 	var username string
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT username FROM players WHERE id=$1`, actorID).Scan(&username); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin admin"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin admin", err))
 		return
 	}
 

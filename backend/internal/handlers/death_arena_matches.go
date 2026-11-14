@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -48,7 +49,7 @@ func GetBracket(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"tournament": nil, "matches": []Match{}})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tournament"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch tournament", err))
 		return
 	}
 
@@ -67,7 +68,7 @@ func GetBracket(c *gin.Context) {
 	`, t.ID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch matches"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch matches", err))
 		return
 	}
 	defer rows.Close()
@@ -115,7 +116,7 @@ func GetMyTeam(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"team": nil, "message": "Không có giải đấu nào"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -133,7 +134,7 @@ func GetMyTeam(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"team": nil, "tournament_status": tournamentStatus})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -154,7 +155,7 @@ func GetMyTeam(c *gin.Context) {
 		&team.MemberCount, &team.AvgHP)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -170,7 +171,7 @@ func GetMyTeam(c *gin.Context) {
 	`, team.ID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch team members"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch team members", err))
 		return
 	}
 	defer rows.Close()
@@ -214,7 +215,7 @@ func GetMyMatches(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"matches": []Match{}})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -233,7 +234,7 @@ func GetMyMatches(c *gin.Context) {
 	`, teamID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch matches"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch matches", err))
 		return
 	}
 	defer rows.Close()
@@ -303,7 +304,7 @@ func GetMatchCombatLog(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy trận đấu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn trận đấu"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn trận đấu", err))
 		return
 	}
 

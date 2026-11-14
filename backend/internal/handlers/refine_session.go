@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
+
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -283,7 +285,7 @@ func CreateRefineSession(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -293,7 +295,7 @@ func CreateRefineSession(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(404, gin.H{"error": "Player not found"})
 		} else {
-			c.JSON(500, gin.H{"error": "Failed to lock player status"})
+			httperr.Respond(c, httperr.Internal("Failed to lock player status", err))
 		}
 		return
 	}
@@ -309,7 +311,7 @@ func CreateRefineSession(c *gin.Context) {
 		c.JSON(409, gin.H{"error": "Đạo hữu đang có một phiên luyện Cổ đang chạy!", "code": refineCodeSessionActive})
 		return
 	} else if err != sql.ErrNoRows {
-		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi kiểm tra phiên luyện"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kiểm tra phiên luyện", err))
 		return
 	}
 
@@ -391,7 +393,7 @@ func CreateRefineSession(c *gin.Context) {
 	)`,
 		player.ID, pq.Array(req.SelectedGuInstanceIDs)).Scan(&lockedCount); err != nil {
 		logger.S.Errorf("CreateRefineSession: locked check error: %v", err)
-		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi kiểm tra Gu bị khóa"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kiểm tra Gu bị khóa", err))
 		return
 	}
 	if lockedCount > 0 {
@@ -412,7 +414,7 @@ func CreateRefineSession(c *gin.Context) {
 		player.ID, pq.Array(req.SelectedGuInstanceIDs))
 	if err != nil {
 		logger.S.Errorf("CreateRefineSession: lock Gus error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể khóa Cổ nguyên liệu"})
+		httperr.Respond(c, httperr.Internal("Không thể khóa Cổ nguyên liệu", err))
 		return
 	}
 	if rows, _ := res.RowsAffected(); rows != int64(len(req.SelectedGuInstanceIDs)) {
@@ -431,7 +433,7 @@ func CreateRefineSession(c *gin.Context) {
 				c.JSON(400, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName), "code": "REFINE_NOT_ENOUGH_MATERIALS"})
 			} else {
 				logger.S.Errorf("CreateRefineSession: DeductItem error: %v", err)
-				c.JSON(500, gin.H{"error": "Lỗi hệ thống khi trừ nguyên liệu"})
+				httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi trừ nguyên liệu", err))
 			}
 			return
 		}
@@ -453,14 +455,14 @@ func CreateRefineSession(c *gin.Context) {
 	})
 	if err != nil {
 		logger.S.Errorf("CreateRefineSession: computeRefineRate error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể tính tỉ lệ luyện"})
+		httperr.Respond(c, httperr.Internal("Không thể tính tỉ lệ luyện", err))
 		return
 	}
 
 	decisions, err := loadRefineDecisionsDB(tx)
 	if err != nil {
 		logger.S.Errorf("CreateRefineSession: loadRefineDecisions error: %v", err)
-		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi đọc kịch bản luyện"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi đọc kịch bản luyện", err))
 		return
 	}
 
@@ -483,28 +485,28 @@ func CreateRefineSession(c *gin.Context) {
 	plan, err := buildRefinePlan(&planStage, &recipe, decisions, startedAt, endsAt)
 	if err != nil {
 		logger.S.Errorf("CreateRefineSession: buildRefinePlan error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể sinh lịch luyện"})
+		httperr.Respond(c, httperr.Internal("Không thể sinh lịch luyện", err))
 		return
 	}
 
 	planRaw, err := json.Marshal(plan)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Không thể mã hóa lịch luyện"})
+		httperr.Respond(c, httperr.Internal("Không thể mã hóa lịch luyện", err))
 		return
 	}
 	guSnapshotRaw, err := json.Marshal(guSnapshot)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Không thể mã hóa snapshot Cổ"})
+		httperr.Respond(c, httperr.Internal("Không thể mã hóa snapshot Cổ", err))
 		return
 	}
 	materialsRaw, err := json.Marshal(materialsDeducted)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Không thể mã hóa nguyên liệu"})
+		httperr.Respond(c, httperr.Internal("Không thể mã hóa nguyên liệu", err))
 		return
 	}
 	rateRaw, err := json.Marshal(rateSnapshot)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Không thể mã hóa tỉ lệ"})
+		httperr.Respond(c, httperr.Internal("Không thể mã hóa tỉ lệ", err))
 		return
 	}
 
@@ -512,7 +514,7 @@ func CreateRefineSession(c *gin.Context) {
 		UPDATE players SET primeval_stones = $1, immortal_stones = $2, current_mana = $3 WHERE id = $4`,
 		player.PrimevalStones, player.ImmortalStones, player.CurrentMana, player.ID); err != nil {
 		logger.S.Errorf("CreateRefineSession: update player error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể trừ tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Không thể trừ tài nguyên", err))
 		return
 	}
 
@@ -533,12 +535,12 @@ func CreateRefineSession(c *gin.Context) {
 			return
 		}
 		logger.S.Errorf("CreateRefineSession: insert error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể tạo phiên luyện"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo phiên luyện", err))
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Failed to commit refine session"})
+		httperr.Respond(c, httperr.Internal("Failed to commit refine session", err))
 		return
 	}
 
@@ -549,7 +551,7 @@ func CreateRefineSession(c *gin.Context) {
 	session, err := getRefineSessionRow(db.DB, sessionID, player.ID.String())
 	if err != nil {
 		logger.S.Errorf("CreateRefineSession: reload error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể đọc lại phiên luyện"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc lại phiên luyện", err))
 		return
 	}
 	view := publicSessionView(session, time.Now().UTC())
@@ -608,14 +610,14 @@ func GetActiveRefineSession(c *gin.Context) {
 		row, serr := scanRefineSessionRow(db.DB.QueryRow(refineSessionSelect+` WHERE id=$1`, activeID))
 		if serr != nil {
 			logger.S.Errorf("GetActiveRefineSession: scan error: %v", serr)
-			c.JSON(500, gin.H{"error": "Lỗi hệ thống khi đọc phiên luyện"})
+			httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi đọc phiên luyện", serr))
 			return
 		}
 		if !row.EndsAt.After(now) {
 			resolved, rerr := resolveRefineSession(c.Request.Context(), row.ID, "expired")
 			if rerr != nil {
 				logger.S.Errorf("GetActiveRefineSession: resolve error: %v", rerr)
-				c.JSON(500, gin.H{"error": "Lỗi hệ thống khi kết thúc phiên luyện"})
+				httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kết thúc phiên luyện", rerr))
 				return
 			}
 			c.JSON(200, gin.H{"session": publicSessionView(resolved, now)})
@@ -625,7 +627,7 @@ func GetActiveRefineSession(c *gin.Context) {
 		return
 	} else if err != sql.ErrNoRows {
 		logger.S.Errorf("GetActiveRefineSession: query error: %v", err)
-		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi kiểm tra phiên luyện"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kiểm tra phiên luyện", err))
 		return
 	}
 
@@ -642,13 +644,13 @@ func GetActiveRefineSession(c *gin.Context) {
 	}
 	if err != nil {
 		logger.S.Errorf("GetActiveRefineSession: recent query error: %v", err)
-		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi đọc phiên luyện"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi đọc phiên luyện", err))
 		return
 	}
 	row, err := scanRefineSessionRow(db.DB.QueryRow(refineSessionSelect+` WHERE id=$1`, recentID))
 	if err != nil {
 		logger.S.Errorf("GetActiveRefineSession: scan error: %v", err)
-		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi đọc phiên luyện"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi đọc phiên luyện", err))
 		return
 	}
 	c.JSON(200, gin.H{"session": publicSessionView(row, now)})
@@ -668,7 +670,7 @@ func GetRefineSession(c *gin.Context) {
 			c.JSON(404, gin.H{"error": "Không tìm thấy phiên luyện", "code": refineCodeSessionNotFound})
 		} else {
 			logger.S.Errorf("GetRefineSession: %v", err)
-			c.JSON(500, gin.H{"error": "Lỗi hệ thống khi đọc phiên luyện"})
+			httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi đọc phiên luyện", err))
 		}
 		return
 	}
@@ -677,7 +679,7 @@ func GetRefineSession(c *gin.Context) {
 		resolved, rerr := resolveRefineSession(c.Request.Context(), row.ID, "expired")
 		if rerr != nil {
 			logger.S.Errorf("GetRefineSession: resolve error: %v", rerr)
-			c.JSON(500, gin.H{"error": "Lỗi hệ thống khi kết thúc phiên luyện"})
+			httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi kết thúc phiên luyện", rerr))
 			return
 		}
 		c.JSON(200, gin.H{"session": publicSessionView(resolved, now)})
@@ -714,7 +716,7 @@ func SubmitRefineSessionStep(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -725,7 +727,7 @@ func SubmitRefineSessionStep(c *gin.Context) {
 			c.JSON(404, gin.H{"error": "Không tìm thấy phiên luyện", "code": refineCodeSessionNotFound})
 		} else {
 			logger.S.Errorf("SubmitRefineSessionStep: scan error: %v", err)
-			c.JSON(500, gin.H{"error": "Lỗi hệ thống khi đọc phiên luyện"})
+			httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi đọc phiên luyện", err))
 		}
 		return
 	}
@@ -804,17 +806,17 @@ func SubmitRefineSessionStep(c *gin.Context) {
 
 	stepResultsRaw, err := json.Marshal(session.StepResults)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Không thể lưu kết quả bước"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu kết quả bước", err))
 		return
 	}
 	if _, err := tx.Exec(`UPDATE refine_sessions SET step_results=$1, accuracy=$2 WHERE id=$3`,
 		string(stepResultsRaw), accuracy, session.ID); err != nil {
 		logger.S.Errorf("SubmitRefineSessionStep: update error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể lưu kết quả bước"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu kết quả bước", err))
 		return
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Failed to commit step"})
+		httperr.Respond(c, httperr.Internal("Failed to commit step", err))
 		return
 	}
 
@@ -841,7 +843,7 @@ func SubmitRefineSessionStep(c *gin.Context) {
 		resolved, rerr := resolveRefineSession(c.Request.Context(), session.ID, "completed")
 		if rerr != nil {
 			logger.S.Errorf("SubmitRefineSessionStep: resolve error: %v", rerr)
-			c.JSON(500, gin.H{"error": "Lỗi hệ thống khi chốt phiên luyện"})
+			httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi chốt phiên luyện", rerr))
 			return
 		}
 		finalView := publicSessionView(resolved, time.Now().UTC())
@@ -910,7 +912,7 @@ func AbortRefineSession(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -921,7 +923,7 @@ func AbortRefineSession(c *gin.Context) {
 			c.JSON(404, gin.H{"error": "Không tìm thấy phiên luyện", "code": refineCodeSessionNotFound})
 		} else {
 			logger.S.Errorf("AbortRefineSession: scan error: %v", err)
-			c.JSON(500, gin.H{"error": "Lỗi hệ thống khi đọc phiên luyện"})
+			httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi đọc phiên luyện", err))
 		}
 		return
 	}
@@ -945,7 +947,7 @@ func AbortRefineSession(c *gin.Context) {
 		}
 		if err := InventorySvc.AddItem(tx, authID.String(), matID, category, refund); err != nil {
 			logger.S.Errorf("AbortRefineSession: refund material %s error: %v", matID, err)
-			c.JSON(500, gin.H{"error": "Không thể hoàn nguyên liệu"})
+			httperr.Respond(c, httperr.Internal("Không thể hoàn nguyên liệu", err))
 			return
 		}
 	}
@@ -954,7 +956,7 @@ func AbortRefineSession(c *gin.Context) {
 	if _, err := tx.Exec(`UPDATE player_gu SET is_locked=false, hunger=1, state='DYING', equipped=false, updated_at=NOW()
 		WHERE player_id=$1 AND id = ANY($2::text[])`, authID, pq.Array(row.SelectedGuIDs)); err != nil {
 		logger.S.Errorf("AbortRefineSession: unlock/dying error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể hoàn trạng thái Cổ"})
+		httperr.Respond(c, httperr.Internal("Không thể hoàn trạng thái Cổ", err))
 		return
 	}
 
@@ -964,7 +966,7 @@ func AbortRefineSession(c *gin.Context) {
 	playerGu, err := db.LoadPlayerGus(tx, authID.String(), false)
 	if err != nil {
 		logger.S.Errorf("AbortRefineSession: load gus error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể đọc Cổ"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc Cổ", err))
 		return
 	}
 	activeSet := make(map[string]struct{})
@@ -983,7 +985,7 @@ func AbortRefineSession(c *gin.Context) {
 		`SELECT COALESCE(equipped_gus, '[]'::jsonb) FROM players WHERE id=$1`, authID,
 	).Scan(&savedOrder); err != nil {
 		logger.S.Errorf("AbortRefineSession: read equipped order error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể đọc Cổ trang bị"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc Cổ trang bị", err))
 		return
 	}
 	for _, id := range savedOrder {
@@ -1009,7 +1011,7 @@ func AbortRefineSession(c *gin.Context) {
 	equipped := ordered
 	if _, err := tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, equipped, authID); err != nil {
 		logger.S.Errorf("AbortRefineSession: update equipped error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể cập nhật Cổ trang bị"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật Cổ trang bị", err))
 		return
 	}
 
@@ -1024,21 +1026,21 @@ func AbortRefineSession(c *gin.Context) {
 	if _, err := tx.Exec(`UPDATE refine_sessions SET status='ABORTED', resolved_at=NOW(), result=$1 WHERE id=$2 AND status='ACTIVE'`,
 		string(resultRaw), row.ID); err != nil {
 		logger.S.Errorf("AbortRefineSession: update session error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể hủy phiên luyện"})
+		httperr.Respond(c, httperr.Internal("Không thể hủy phiên luyện", err))
 		return
 	}
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		logger.S.Errorf("AbortRefineSession: reload player error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể đọc trạng thái người chơi"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc trạng thái người chơi", err))
 		return
 	}
 	player.GuInventory = playerGu
 	player.EquippedGus = equipped
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Failed to commit abort"})
+		httperr.Respond(c, httperr.Internal("Failed to commit abort", err))
 		return
 	}
 
@@ -1080,7 +1082,7 @@ func AckRefineSession(c *gin.Context) {
 		WHERE id=$1 AND player_id=$2 AND acknowledged_at IS NULL`, sessionID, authID)
 	if err != nil {
 		logger.S.Errorf("AckRefineSession: %v", err)
-		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi xác nhận phiên luyện"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi xác nhận phiên luyện", err))
 		return
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
@@ -1114,7 +1116,7 @@ func RefinePreview(c *gin.Context) {
 	player, err := PlayerSvc.Load(db.DB, authID, false)
 	if err != nil {
 		logger.S.Errorf("RefinePreview: load player error: %v", err)
-		c.JSON(500, gin.H{"error": "Lỗi hệ thống khi đọc trạng thái người chơi"})
+		httperr.Respond(c, httperr.Internal("Lỗi hệ thống khi đọc trạng thái người chơi", err))
 		return
 	}
 
@@ -1169,7 +1171,7 @@ func RefinePreview(c *gin.Context) {
 	rateSnapshot, err := computeRefineRate(db.DB, &player, recipe, stage, refineRateInput{pityEligible: true})
 	if err != nil {
 		logger.S.Errorf("RefinePreview: computeRefineRate error: %v", err)
-		c.JSON(500, gin.H{"error": "Không thể tính tỉ lệ luyện"})
+		httperr.Respond(c, httperr.Internal("Không thể tính tỉ lệ luyện", err))
 		return
 	}
 

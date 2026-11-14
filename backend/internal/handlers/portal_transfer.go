@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -47,14 +48,14 @@ func PortalTransfer(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kết nối cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi kết nối cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 
@@ -94,12 +95,12 @@ func PortalTransfer(c *gin.Context) {
 		if respondMovementError(c, errMove) {
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+		httperr.Respond(c, httperr.Internal(errMove.Error(), errMove))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận chuyển vùng"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận chuyển vùng", err))
 		return
 	}
 

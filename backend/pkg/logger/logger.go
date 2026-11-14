@@ -116,21 +116,13 @@ func Sync() error {
 
 func Init() error {
 	level := zapcore.InfoLevel
-	switch strings.ToUpper(os.Getenv("LOG_LEVEL")) {
-	case "DEBUG":
-		level = zapcore.DebugLevel
-	case "INFO":
-		level = zapcore.InfoLevel
-	case "WARN":
-		level = zapcore.WarnLevel
-	case "ERROR":
-		level = zapcore.ErrorLevel
-	case "DPANIC":
-		level = zapcore.DPanicLevel
-	case "PANIC":
-		level = zapcore.PanicLevel
-	case "FATAL":
-		level = zapcore.FatalLevel
+	configuredLevel := strings.TrimSpace(os.Getenv("LOG_LEVEL"))
+	var invalidLevel string
+	if configuredLevel != "" {
+		if err := level.UnmarshalText([]byte(strings.ToLower(configuredLevel))); err != nil {
+			invalidLevel = configuredLevel
+			level = zapcore.InfoLevel
+		}
 	}
 
 	encoderConfig := zapcore.EncoderConfig{
@@ -168,5 +160,8 @@ func Init() error {
 
 	L = logger
 	S = logger.Sugar()
+	if invalidLevel != "" {
+		S.Warnw("invalid LOG_LEVEL; using INFO", "configured_level", invalidLevel)
+	}
 	return nil
 }

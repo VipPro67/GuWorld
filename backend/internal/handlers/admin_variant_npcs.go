@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -57,7 +58,7 @@ func AdminListVariantNPCs(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT to_jsonb(n) || jsonb_build_object('owner_username',COALESCE(p.username,''),'equipped_gu',COALESCE((SELECT jsonb_agg(jsonb_build_object('player_gu_id',pg.id,'gu_id',pg.gu_id,'rank',pg.gu_rank,'slot',e.slot,'state',pg.state) ORDER BY e.slot) FROM actor_gu_equipment e JOIN player_gu pg ON pg.id=e.player_gu_id WHERE e.actor_id=n.id),'[]'::jsonb)) FROM non_player_actors n LEFT JOIN players p ON p.id=n.owner_player_id WHERE n.aperture_id=$1 AND n.actor_kind='VARIANT_NPC' ORDER BY n.lifecycle_state,n.race,n.rank DESC,n.name`, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách cổ sư dị nhân"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách cổ sư dị nhân", err))
 		return
 	}
 	defer rows.Close()
@@ -65,13 +66,13 @@ func AdminListVariantNPCs(c *gin.Context) {
 	for rows.Next() {
 		var raw []byte
 		if err := rows.Scan(&raw); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu cổ sư dị nhân"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc dữ liệu cổ sư dị nhân", err))
 			return
 		}
 		list = append(list, json.RawMessage(raw))
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cổ sư dị nhân"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách cổ sư dị nhân", err))
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -163,7 +164,7 @@ func validateAdminVariantNPC(c *gin.Context, r *AdminVariantNPCInput) bool {
 	}
 	var raceExists bool
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM aperture_variant_humans WHERE aperture_id=$1 AND race=$2)`, c.Param("id"), r.Race).Scan(&raceExists); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh chủng tộc cổ sư"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh chủng tộc cổ sư", err))
 		return false
 	}
 	if !raceExists {
@@ -235,7 +236,7 @@ func AdminCreateVariantNPC(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu tạo cổ sư"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu tạo cổ sư", err))
 		return
 	}
 	defer tx.Rollback()
@@ -251,17 +252,17 @@ func AdminCreateVariantNPC(c *gin.Context) {
 	}
 	_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO non_player_actors(actor_kind,owner_player_id,aperture_id,template_source,template_id,species,race,name,rank,sub_rank,experience,talent,loyalty,hp,max_hp,base_attack,base_defense,speed,count,hunger,max_hunger,upkeep_rate,hunger_updated_at,lifecycle_state,execution_state,behavior_profile,ai_profile,capabilities,traits,progression,formation_slot,path,role) VALUES('VARIANT_NPC',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)`, ownerID, c.Param("id"), r.TemplateSource, r.TemplateID, r.Species, r.Race, r.Name, r.Rank, r.SubRank, r.Experience, r.Talent, r.Loyalty, r.HP, r.MaxHP, r.BaseAttack, r.BaseDefense, r.Speed, r.Count, r.Hunger, r.MaxHunger, r.UpkeepRate, r.HungerUpdatedAt, r.LifecycleState, r.ExecutionState, r.BehaviorProfile, r.AIProfile, r.Capabilities, r.Traits, r.Progression, r.FormationSlot, r.Path, r.Role)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo cổ sư dị nhân: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo cổ sư dị nhân: "+err.Error(), err))
 		return
 	}
 	if r.LifecycleState == "ACTIVE" {
 		if _, err = tx.ExecContext(c.Request.Context(), `UPDATE aperture_variant_humans SET gu_master_count=gu_master_count+1,updated_at=NOW() WHERE aperture_id=$1 AND race=$2`, c.Param("id"), r.Race); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bộ đếm cổ sư"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật bộ đếm cổ sư", err))
 			return
 		}
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận cổ sư đã tạo"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận cổ sư đã tạo", err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_variant_npc", "aperture=%s race=%s name=%s", c.Param("id"), r.Race, r.Name)
@@ -283,7 +284,7 @@ func AdminUpdateVariantNPC(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu cập nhật cổ sư"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu cập nhật cổ sư", err))
 		return
 	}
 	defer tx.Rollback()
@@ -292,7 +293,7 @@ func AdminUpdateVariantNPC(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tiên khiếu"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa tiên khiếu"})
+			httperr.Respond(c, httperr.Internal("Không thể khóa tiên khiếu", err))
 		}
 		return
 	}
@@ -306,18 +307,18 @@ func AdminUpdateVariantNPC(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ sư dị nhân"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa cổ sư dị nhân"})
+			httperr.Respond(c, httperr.Internal("Không thể khóa cổ sư dị nhân", err))
 		}
 		return
 	}
 	_, err = tx.ExecContext(c.Request.Context(), `UPDATE non_player_actors SET template_source=$1,template_id=$2,species=$3,race=$4,name=$5,rank=$6,sub_rank=$7,experience=$8,talent=$9,loyalty=$10,hp=$11,max_hp=$12,base_attack=$13,base_defense=$14,speed=$15,count=$16,hunger=$17,max_hunger=$18,upkeep_rate=$19,hunger_updated_at=$20,lifecycle_state=$21,execution_state=$22,behavior_profile=$23,ai_profile=$24,capabilities=$25,traits=$26,progression=$27,formation_slot=$28,path=$29,role=$30,updated_at=NOW(),version=version+1 WHERE id=$31 AND aperture_id=$32 AND actor_kind='VARIANT_NPC'`, r.TemplateSource, r.TemplateID, r.Species, r.Race, r.Name, r.Rank, r.SubRank, r.Experience, r.Talent, r.Loyalty, r.HP, r.MaxHP, r.BaseAttack, r.BaseDefense, r.Speed, r.Count, r.Hunger, r.MaxHunger, r.UpkeepRate, r.HungerUpdatedAt, r.LifecycleState, r.ExecutionState, r.BehaviorProfile, r.AIProfile, r.Capabilities, r.Traits, r.Progression, r.FormationSlot, r.Path, r.Role, c.Param("npc_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật cổ sư dị nhân: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật cổ sư dị nhân: "+err.Error(), err))
 		return
 	}
 	if r.LifecycleState != "ACTIVE" {
 		if err := releaseActorGu(tx, c.Param("npc_id")); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tháo cổ trùng đang trang bị"})
+			httperr.Respond(c, httperr.Internal("Không thể tháo cổ trùng đang trang bị", err))
 			return
 		}
 	}
@@ -329,7 +330,7 @@ func AdminUpdateVariantNPC(c *gin.Context) {
 	} else if oldLifecycle == "ACTIVE" && r.LifecycleState == "ACTIVE" && r.Rank < oldRank {
 		var invalid bool
 		if err := tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM actor_gu_equipment WHERE actor_id=$1 AND slot>$2)`, c.Param("npc_id"), r.Rank).Scan(&invalid); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra ô Cổ đang dùng"})
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra ô Cổ đang dùng", err))
 			return
 		}
 		if invalid {
@@ -341,32 +342,32 @@ func AdminUpdateVariantNPC(c *gin.Context) {
 		if oldLifecycle == "ACTIVE" {
 			_, err = tx.ExecContext(c.Request.Context(), `UPDATE aperture_variant_humans SET gu_master_count=GREATEST(0,gu_master_count-1),updated_at=NOW() WHERE aperture_id=$1 AND race=$2`, c.Param("id"), oldRace)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bộ đếm chủng tộc cũ"})
+				httperr.Respond(c, httperr.Internal("Không thể cập nhật bộ đếm chủng tộc cũ", err))
 				return
 			}
 		}
 		if r.LifecycleState == "ACTIVE" {
 			_, err = tx.ExecContext(c.Request.Context(), `UPDATE aperture_variant_humans SET gu_master_count=gu_master_count+1,updated_at=NOW() WHERE aperture_id=$1 AND race=$2`, c.Param("id"), r.Race)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bộ đếm chủng tộc mới"})
+				httperr.Respond(c, httperr.Internal("Không thể cập nhật bộ đếm chủng tộc mới", err))
 				return
 			}
 		}
 	} else if oldLifecycle != "ACTIVE" && r.LifecycleState == "ACTIVE" {
 		_, err = tx.ExecContext(c.Request.Context(), `UPDATE aperture_variant_humans SET gu_master_count=gu_master_count+1,updated_at=NOW() WHERE aperture_id=$1 AND race=$2`, c.Param("id"), r.Race)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bộ đếm cổ sư"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật bộ đếm cổ sư", err))
 			return
 		}
 	} else if oldLifecycle == "ACTIVE" && r.LifecycleState != "ACTIVE" {
 		_, err = tx.ExecContext(c.Request.Context(), `UPDATE aperture_variant_humans SET gu_master_count=GREATEST(0,gu_master_count-1),updated_at=NOW() WHERE aperture_id=$1 AND race=$2`, c.Param("id"), oldRace)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bộ đếm cổ sư"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật bộ đếm cổ sư", err))
 			return
 		}
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận cổ sư đã cập nhật"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận cổ sư đã cập nhật", err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_variant_npc", "npc=%s", c.Param("npc_id"))
@@ -380,7 +381,7 @@ func AdminDismissVariantNPC(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu giải tán cổ sư"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu giải tán cổ sư", err))
 		return
 	}
 	defer tx.Rollback()
@@ -389,20 +390,20 @@ func AdminDismissVariantNPC(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ sư đang hoạt động"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giải tán cổ sư"})
+			httperr.Respond(c, httperr.Internal("Không thể giải tán cổ sư", err))
 		}
 		return
 	}
 	if err := releaseActorGu(tx, c.Param("npc_id")); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tháo cổ trùng đang trang bị"})
+		httperr.Respond(c, httperr.Internal("Không thể tháo cổ trùng đang trang bị", err))
 		return
 	}
 	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE aperture_variant_humans SET gu_master_count=GREATEST(0,gu_master_count-1),updated_at=NOW() WHERE aperture_id=$1 AND race=$2`, c.Param("id"), race); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ bộ đếm cổ sư"})
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ bộ đếm cổ sư", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận giải tán cổ sư"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận giải tán cổ sư", err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.dismiss_variant_npc", "npc=%s", c.Param("npc_id"))

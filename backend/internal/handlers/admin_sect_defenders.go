@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -22,7 +23,7 @@ func AdminListSectDefenders(c *gin.Context) {
 		LEFT JOIN monster_templates m ON m.id=d.monster_id
 		WHERE d.sect_id=$1 ORDER BY d.assigned_at, d.id`, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách phòng thủ tông môn"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách phòng thủ tông môn", err))
 		return
 	}
 	defer rows.Close()
@@ -30,13 +31,13 @@ func AdminListSectDefenders(c *gin.Context) {
 	for rows.Next() {
 		var row []byte
 		if err := rows.Scan(&row); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu phòng thủ"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc dữ liệu phòng thủ", err))
 			return
 		}
 		items = append(items, json.RawMessage(row))
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách phòng thủ"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc danh sách phòng thủ", err))
 		return
 	}
 	c.JSON(http.StatusOK, items)
@@ -49,12 +50,12 @@ func AdminRemoveSectDefender(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM sect_defenders WHERE id=$1 AND sect_id=$2`, c.Param("defender_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể rút lực lượng phòng thủ"})
+		httperr.Respond(c, httperr.Internal("Không thể rút lực lượng phòng thủ", err))
 		return
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận thao tác"})
+		httperr.Respond(c, httperr.Internal("Không thể xác nhận thao tác", err))
 		return
 	}
 	if n == 0 {

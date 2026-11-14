@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -219,7 +220,7 @@ func GetZoneMapObjects(c *gin.Context) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi."})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác định khu vực hiện tại."})
+			httperr.Respond(c, httperr.Internal("Không thể xác định khu vực hiện tại.", err))
 			return
 		}
 		regionID = player.CurrentRegion

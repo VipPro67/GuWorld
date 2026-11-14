@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -53,7 +54,7 @@ func CleanseDaoMarks(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -115,7 +116,7 @@ func CleanseDaoMarks(c *gin.Context) {
 	if err := tx.QueryRowContext(c.Request.Context(),
 		`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1 FOR UPDATE`, playerID,
 	).Scan(&stones); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Tiên Nguyên Thạch"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra Tiên Nguyên Thạch", err))
 		return
 	}
 	if stones < stoneCost {
@@ -140,7 +141,7 @@ func CleanseDaoMarks(c *gin.Context) {
 
 	newDaoJSON, err := json.Marshal(daoMarks)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi mã hoá Đạo Ngân"})
+		httperr.Respond(c, httperr.Internal("Lỗi mã hoá Đạo Ngân", err))
 		return
 	}
 
@@ -149,7 +150,7 @@ func CleanseDaoMarks(c *gin.Context) {
 		`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`,
 		stoneCost, playerID,
 	).Scan(&newStones); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ Tiên Nguyên Thạch"})
+		httperr.Respond(c, httperr.Internal("Lỗi trừ Tiên Nguyên Thạch", err))
 		return
 	}
 
@@ -157,7 +158,7 @@ func CleanseDaoMarks(c *gin.Context) {
 		`UPDATE immortal_apertures SET dao_marks = $1, last_cleanse_at = NOW(), updated_at = NOW() WHERE player_id = $2`,
 		newDaoJSON, playerID,
 	); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Đạo Ngân"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật Đạo Ngân", err))
 		return
 	}
 
@@ -171,7 +172,7 @@ func CleanseDaoMarks(c *gin.Context) {
 			logger.S.Warnf("cleanse refund skipped: item %s not in registry", refundItem)
 			refundQty = 0
 		} else if err := InventorySvc.AddItem(tx, playerID.String(), refundItem, "materials", refundQty); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn trả Đạo Tài"})
+			httperr.Respond(c, httperr.Internal("Lỗi hoàn trả Đạo Tài", err))
 			return
 		}
 	}
@@ -194,12 +195,12 @@ func CleanseDaoMarks(c *gin.Context) {
 		IPAddress: c.ClientIP(),
 		Success:   true,
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi audit", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất tẩy thể"})
+		httperr.Respond(c, httperr.Internal("Không thể hoàn tất tẩy thể", err))
 		return
 	}
 

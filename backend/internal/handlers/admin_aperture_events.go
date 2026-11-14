@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -31,7 +32,7 @@ func AdminListApertureEvents(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id,aperture_id,event_type,COALESCE(race,''),severity,COALESCE(description,''),effects,resolved,created_at,resolved_at FROM aperture_variant_events WHERE aperture_id=$1 ORDER BY resolved,created_at DESC`, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải sự kiện xã hội"})
+		httperr.Respond(c, httperr.Internal("Không thể tải sự kiện xã hội", err))
 		return
 	}
 	defer rows.Close()
@@ -39,13 +40,13 @@ func AdminListApertureEvents(c *gin.Context) {
 	for rows.Next() {
 		var e AdminApertureEvent
 		if err := rows.Scan(&e.ID, &e.ApertureID, &e.EventType, &e.Race, &e.Severity, &e.Description, &e.Effects, &e.Resolved, &e.CreatedAt, &e.ResolvedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc sự kiện xã hội"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc sự kiện xã hội", err))
 			return
 		}
 		events = append(events, e)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc sự kiện xã hội"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc sự kiện xã hội", err))
 		return
 	}
 	c.JSON(http.StatusOK, events)
@@ -82,7 +83,7 @@ func validateAdminApertureEvent(c *gin.Context, e *AdminApertureEvent) bool {
 	if e.Race != "" {
 		var exists bool
 		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM aperture_variant_humans WHERE aperture_id=$1 AND race=$2)`, c.Param("id"), e.Race).Scan(&exists); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh chủng tộc của sự kiện"})
+			httperr.Respond(c, httperr.Internal("Không thể xác minh chủng tộc của sự kiện", err))
 			return false
 		}
 		if !exists {
@@ -116,7 +117,7 @@ func AdminCreateApertureEvent(c *gin.Context) {
 	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `INSERT INTO aperture_variant_events(aperture_id,event_type,race,severity,description,effects,resolved,resolved_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8)`, c.Param("id"), e.EventType, e.Race, e.Severity, e.Description, e.Effects, e.Resolved, resolvedAt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo sự kiện xã hội: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo sự kiện xã hội: "+err.Error(), err))
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_aperture_event", "aperture=%s event=%s", c.Param("id"), e.EventType)
@@ -146,7 +147,7 @@ func AdminUpdateApertureEvent(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE aperture_variant_events SET event_type=$1,race=NULLIF($2,''),severity=$3,description=$4,effects=$5,resolved=$6,resolved_at=$7 WHERE id=$8 AND aperture_id=$9`, e.EventType, e.Race, e.Severity, e.Description, e.Effects, e.Resolved, resolvedAt, c.Param("event_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật sự kiện xã hội: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật sự kiện xã hội: "+err.Error(), err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -164,7 +165,7 @@ func AdminDeleteApertureEvent(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM aperture_variant_events WHERE id=$1 AND aperture_id=$2`, c.Param("event_id"), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa sự kiện xã hội"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa sự kiện xã hội", err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {

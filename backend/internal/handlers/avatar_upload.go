@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/storage"
 )
@@ -47,19 +48,19 @@ func UploadAvatar(c *gin.Context) {
 
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc file"})
+		httperr.Respond(c, httperr.Internal("Lỗi đọc file", err))
 		return
 	}
 
 	avatarURL, err := storage.PutAvatar(c.Request.Context(), playerID.String(), contentType, fileBytes, time.Now().Unix())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 
 	_, err = db.DB.Exec(`UPDATE players SET avatar_url = $1 WHERE id = $2`, avatarURL, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu avatar vào database"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu avatar vào database", err))
 		return
 	}
 

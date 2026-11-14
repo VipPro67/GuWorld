@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -72,7 +73,7 @@ func AdminListWorldBosses(c *gin.Context) {
 	regionFilter := strings.TrimSpace(c.Query("region_id"))
 	regions, err := cache.WorldBossRegionIDs(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể liệt kê khu vực có boss: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể liệt kê khu vực có boss: "+err.Error(), err))
 		return
 	}
 	bosses := make([]AdminWorldBoss, 0, len(regions))
@@ -82,7 +83,7 @@ func AdminListWorldBosses(c *gin.Context) {
 		}
 		members, err := cache.WorldBossesInRegion(c.Request.Context(), regionID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể đọc boss khu vực %s: %v", regionID, err)})
+			httperr.Respond(c, httperr.Internal(fmt.Sprintf("Không thể đọc boss khu vực %s: %v", regionID, err), err))
 			return
 		}
 		for _, member := range members {
@@ -231,7 +232,7 @@ func AdminUpdateWorldBoss(c *gin.Context) {
 
 	monster, exists, err := cache.GetWorldMonster(c.Request.Context(), regionID, instanceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc boss: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể đọc boss: "+err.Error(), err))
 		return
 	}
 	// world:monster:{region}:{instance} also holds ordinary monsters, so this
@@ -256,7 +257,7 @@ func AdminUpdateWorldBoss(c *gin.Context) {
 	newBucketX, newBucketY := monsterBucket(int(monster.X), int(monster.Y))
 	written, err := casWorldMonster(c.Request.Context(), monster, monster, monster.Revision-1, oldBucketX, oldBucketY, newBucketX, newBucketY, monsterTTL(monster.RespawnSeconds))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi boss: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể ghi boss: "+err.Error(), err))
 		return
 	}
 	if !written {
@@ -318,7 +319,7 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 	query += ` ORDER BY region_id,x,y`
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc ô boss: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể đọc ô boss: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -385,7 +386,7 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 		revived++
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc ô boss: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể đọc ô boss: "+err.Error(), err))
 		return
 	}
 	if created+revived+alive == 0 && len(failures) == 0 {
@@ -443,7 +444,7 @@ func AdminPurgeWorldBosses(c *gin.Context) {
 		return
 	}
 	if err := cache.PruneWorldBosses(c.Request.Context(), regionID, map[string]struct{}{}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xoá boss: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể xoá boss: "+err.Error(), err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xoá boss đang sống của khu vực; snapshot kế tiếp sẽ tạo lại từ dữ liệu tĩnh"})

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -88,13 +89,13 @@ func SetNPCFormation(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 	var playerRank int
 	if err = tx.QueryRow(`SELECT rank FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&playerRank); err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	maxSlots := 1 + playerRank
@@ -108,7 +109,7 @@ func SetNPCFormation(c *gin.Context) {
 	if req.Slot > 0 {
 		var occupied bool
 		if err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM non_player_actors WHERE owner_player_id=$1 AND lifecycle_state='ACTIVE' AND formation_slot=$2 AND id<>$3)`, playerID, req.Slot, c.Param("npc_id")).Scan(&occupied); err != nil {
-			c.JSON(500, gin.H{"error": "Database error"})
+			httperr.Respond(c, httperr.Internal("Database error", err))
 			return
 		}
 		if occupied {
@@ -120,7 +121,7 @@ func SetNPCFormation(c *gin.Context) {
 		WHERE id=$1 AND owner_player_id=$2 AND actor_kind='VARIANT_NPC' AND lifecycle_state='ACTIVE'
 		  AND role='NONE' AND execution_state='STORED'`, c.Param("npc_id"), playerID, req.Slot)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	if n, _ := result.RowsAffected(); n != 1 {
@@ -128,7 +129,7 @@ func SetNPCFormation(c *gin.Context) {
 		return
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"formation_slot": req.Slot})
@@ -152,7 +153,7 @@ func EquipNPCGu(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -176,7 +177,7 @@ func EquipNPCGu(c *gin.Context) {
 		for slot := 1; slot <= actorRank; slot++ {
 			var used bool
 			if err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM actor_gu_equipment WHERE actor_id=$1 AND slot=$2)`, c.Param("npc_id"), slot).Scan(&used); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+				httperr.Respond(c, httperr.Internal("Database error", err))
 				return
 			}
 			if !used {
@@ -195,7 +196,7 @@ func EquipNPCGu(c *gin.Context) {
 	}
 	reserved, reservationErr := guHasActiveProductReservation(tx, req.GuInstanceID)
 	if reservationErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
 		return
 	}
 	if reserved {
@@ -203,7 +204,7 @@ func EquipNPCGu(c *gin.Context) {
 		return
 	}
 	if _, err = tx.Exec(`UPDATE player_gu SET location='ACTOR',equipped=false,is_vital=false,updated_at=NOW() WHERE id=$1`, req.GuInstanceID); err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	if _, err = tx.Exec(`INSERT INTO actor_gu_equipment(actor_id,player_gu_id,slot) VALUES($1,$2,$3)`, c.Param("npc_id"), req.GuInstanceID, req.Slot); err != nil {
@@ -211,7 +212,7 @@ func EquipNPCGu(c *gin.Context) {
 		return
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"equipped": true})
@@ -225,7 +226,7 @@ func UnequipNPCGu(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -237,15 +238,15 @@ func UnequipNPCGu(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	if _, err = tx.Exec(`UPDATE player_gu SET location='INVENTORY',updated_at=NOW() WHERE id=$1`, guID); err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"equipped": false})
@@ -259,7 +260,7 @@ func CultivateNPC(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -282,7 +283,7 @@ func CultivateNPC(c *gin.Context) {
 	threshold := int64(rank * subRank * 100)
 	res, err := tx.Exec(`UPDATE players SET primeval_stones=primeval_stones-$2 WHERE id=$1 AND primeval_stones >= $2`, playerID, cost)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	if n, _ := res.RowsAffected(); n != 1 {
@@ -306,11 +307,11 @@ func CultivateNPC(c *gin.Context) {
 	speed := 8 + float64(rank) + talent*.02
 	_, err = tx.Exec(`UPDATE non_player_actors SET rank=$2,sub_rank=$3,experience=$4,max_hp=$5,hp=LEAST($5,hp+($5-max_hp)),base_attack=$6,base_defense=$7,speed=$8,updated_at=NOW(),version=version+1 WHERE id=$1`, c.Param("npc_id"), rank, subRank, experience, maxHP, attack, defense, speed)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	if err = tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"rank": rank, "sub_rank": subRank, "experience": experience, "next_experience": threshold, "gained": gain, "cost": cost})

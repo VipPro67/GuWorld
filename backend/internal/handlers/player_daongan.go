@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -24,7 +25,7 @@ func GetPassiveStatsHandler(c *gin.Context) {
 	// persistence here: polling this endpoint must never hold a player row lock.
 	player, err := PlayerSvc.ProjectStatus(db.DB, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -197,7 +198,7 @@ func GetDaoNganHandler(c *gin.Context) {
 	if err == sql.ErrNoRows {
 		daoJSON = []byte("{}")
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Dao Marks"})
+		httperr.Respond(c, httperr.Internal("Failed to load Dao Marks", err))
 		return
 	}
 
@@ -214,7 +215,7 @@ func GetDaoNganHandler(c *gin.Context) {
 		`SELECT COALESCE(p.constitution, ''), COALESCE(p.race, 'human'), COALESCE(p.path_masteries, '{}'::jsonb), COALESCE(p.body_mods, '[]'::jsonb), `+db.GuInventoryAggregate("p.id")+` FROM players p WHERE p.id = $1`, playerID,
 	).Scan(&constitution, &race, &pathMasteriesJSON, &bodyMods, &guInventory)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Dao effects"})
+		httperr.Respond(c, httperr.Internal("Failed to load player Dao effects", err))
 		return
 	}
 

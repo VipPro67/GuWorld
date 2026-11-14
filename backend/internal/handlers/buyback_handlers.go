@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -118,14 +119,14 @@ func CreateBuybackOrder(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	creator, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player details"})
+		httperr.Respond(c, httperr.Internal("Failed to load player details", err))
 		return
 	}
 	if gamefx.IsDeadState(&creator) {
@@ -161,7 +162,7 @@ func CreateBuybackOrder(c *gin.Context) {
 			_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, totalLocked, creator.ID)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ tài sản"})
+			httperr.Respond(c, httperr.Internal("Lỗi khấu trừ tài sản", err))
 			return
 		}
 	} else {
@@ -180,7 +181,7 @@ func CreateBuybackOrder(c *gin.Context) {
 			_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, upfrontFee, creator.ID)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ phí niêm yết"})
+			httperr.Respond(c, httperr.Internal("Lỗi khấu trừ phí niêm yết", err))
 			return
 		}
 
@@ -193,7 +194,7 @@ func CreateBuybackOrder(c *gin.Context) {
 				return
 			}
 			if err := deductMaterialTx(tx, creator.ID, targetMat, req.QuantityRequested); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ nguyên liệu rao bán"})
+				httperr.Respond(c, httperr.Internal("Lỗi trừ nguyên liệu rao bán", err))
 				return
 			}
 		} else if req.ItemType == "Gu" {
@@ -243,7 +244,7 @@ func CreateBuybackOrder(c *gin.Context) {
 				}
 				reserved, reservationErr := guHasActiveProductReservation(tx, instID)
 				if reservationErr != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+					httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
 					return
 				}
 				if reserved {
@@ -252,7 +253,7 @@ func CreateBuybackOrder(c *gin.Context) {
 				}
 				_, err = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, BHTHSystemUUID, instID)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khóa Cổ trùng rao bán"})
+					httperr.Respond(c, httperr.Internal("Lỗi khóa Cổ trùng rao bán", err))
 					return
 				}
 			}
@@ -266,7 +267,7 @@ func CreateBuybackOrder(c *gin.Context) {
 				return
 			}
 			if err := RecipeSvc.Delete(tx, creator.ID.String(), recTarget); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khóa Bí phương rao bán"})
+				httperr.Respond(c, httperr.Internal("Lỗi khóa Bí phương rao bán", err))
 				return
 			}
 			itemDataJSON, _ = json.Marshal(recProgress)
@@ -283,12 +284,12 @@ func CreateBuybackOrder(c *gin.Context) {
 		creator.ID, req.OrderType, req.ItemType, req.ItemTarget, itemDataJSON, req.UnitPrice, req.QuantityRequested, req.Currency, upfrontFee, totalLocked, req.DurationHours, endTime,
 	).Scan(&orderID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo đơn giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi tạo đơn giao dịch", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit transaction error"})
+		httperr.Respond(c, httperr.Internal("Commit transaction error", err))
 		return
 	}
 
@@ -319,7 +320,7 @@ func GetBuybackOrders(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB error"})
+		httperr.Respond(c, httperr.Internal("DB error", err))
 		return
 	}
 	player, err := evaluateManaTx(tx, authID)
@@ -336,7 +337,7 @@ func GetBuybackOrders(c *gin.Context) {
 		WHERE b.status = 'ACTIVE' AND b.end_time > NOW()
 		ORDER BY b.created_at DESC LIMIT 100`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query error"})
+		httperr.Respond(c, httperr.Internal("Query error", err))
 		return
 	}
 	defer rows.Close()
@@ -375,7 +376,7 @@ func SellToBuybackOrder(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -403,7 +404,7 @@ func SellToBuybackOrder(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Đơn không tồn tại"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Query error"})
+			httperr.Respond(c, httperr.Internal("Query error", err))
 		}
 		return
 	}
@@ -510,7 +511,7 @@ func SellToBuybackOrder(c *gin.Context) {
 				}
 				reserved, reservationErr := guHasActiveProductReservation(tx, instID)
 				if reservationErr != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ đang được công trình giữ chỗ"})
+					httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
 					return
 				}
 				if reserved {
@@ -518,7 +519,7 @@ func SellToBuybackOrder(c *gin.Context) {
 					return
 				}
 				if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2 AND player_id = $3`, buyerUUID, instID, actor.ID); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi chuyển giao Cổ trùng"})
+					httperr.Respond(c, httperr.Internal("Lỗi chuyển giao Cổ trùng", err))
 					return
 				}
 			}
@@ -531,7 +532,7 @@ func SellToBuybackOrder(c *gin.Context) {
 				return
 			}
 			if err := transferRecipe(tx, actor.ID.String(), buyerUUID.String(), recTarget, recProgress.CompletionRate); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi chuyển giao Bí phương"})
+				httperr.Respond(c, httperr.Internal("Lỗi chuyển giao Bí phương", err))
 				return
 			}
 		}
@@ -550,7 +551,7 @@ func SellToBuybackOrder(c *gin.Context) {
 		_, _ = tx.Exec(`UPDATE buyback_orders SET quantity_filled = $1, status = $2 WHERE id = $3`, newFilled, newStatus, orderUUID)
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Commit error: "+err.Error(), err))
 			return
 		}
 
@@ -647,7 +648,7 @@ func SellToBuybackOrder(c *gin.Context) {
 		_, _ = tx.Exec(`UPDATE buyback_orders SET quantity_filled = $1, status = $2 WHERE id = $3`, newFilled, newStatus, orderUUID)
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Commit error: "+err.Error(), err))
 			return
 		}
 
@@ -727,7 +728,7 @@ func CancelBuybackOrder(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -783,7 +784,7 @@ func CancelBuybackOrder(c *gin.Context) {
 			_ = json.Unmarshal(itemData, &lockedGuIDs)
 			remainingGuIDs, ok := remainingLockedGuIDs(lockedGuIDs, qtyFilled)
 			if !ok {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng khóa không hợp lệ"})
+				httperr.Respond(c, httperr.Internal("Dữ liệu Cổ trùng khóa không hợp lệ", nil))
 				return
 			}
 			for _, instID := range remainingGuIDs {
@@ -803,12 +804,12 @@ func CancelBuybackOrder(c *gin.Context) {
 
 	_, err = tx.Exec(`UPDATE buyback_orders SET status = 'CANCELLED' WHERE id = $1`, orderUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái đơn: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật trạng thái đơn: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Commit error: "+err.Error(), err))
 		return
 	}
 

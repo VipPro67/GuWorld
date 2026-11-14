@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -77,14 +78,14 @@ func UpdateProfileSettings(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch player stats", err))
 		return
 	}
 
@@ -161,7 +162,7 @@ func UpdateProfileSettings(c *gin.Context) {
 		var exists bool
 		err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE LOWER(username) = LOWER($1) AND id <> $2)`, username, player.ID).Scan(&exists)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			httperr.Respond(c, httperr.Internal("Database error", err))
 			return
 		}
 		if exists {
@@ -240,7 +241,7 @@ func UpdateProfileSettings(c *gin.Context) {
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi mã hóa mật khẩu"})
+			httperr.Respond(c, httperr.Internal("Lỗi mã hóa mật khẩu", err))
 			return
 		}
 		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6, password_hash = $7, primeval_stones = $8, immortal_stones = $9, sub_rank = $10, wall_progress = $11, aperture_stress = $12, path_masteries = $13 WHERE id = $14`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, string(hash), player.PrimevalStones, player.ImmortalStones, player.SubRank, player.WallProgress, player.ApertureStress, player.PathMasteries, player.ID)
@@ -251,7 +252,7 @@ func UpdateProfileSettings(c *gin.Context) {
 				return
 			}
 			logger.S.Errorf("Failed to update profile settings for player %s: %v", player.ID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu cài đặt hồ sơ: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể lưu cài đặt hồ sơ: "+err.Error(), err))
 			return
 		}
 	} else {
@@ -263,13 +264,13 @@ func UpdateProfileSettings(c *gin.Context) {
 				return
 			}
 			logger.S.Errorf("Failed to update profile settings for player %s: %v", player.ID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu cài đặt hồ sơ: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể lưu cài đặt hồ sơ: "+err.Error(), err))
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save profile settings"})
+		httperr.Respond(c, httperr.Internal("Failed to save profile settings", err))
 		return
 	}
 

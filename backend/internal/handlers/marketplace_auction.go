@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -21,7 +22,7 @@ import (
 func SettleExpiredAuctions(c *gin.Context) {
 	if err := settleExpiredAuctions(); err != nil {
 		logger.S.Errorf("Failed to settle expired auctions: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to settle expired auctions"})
+		httperr.Respond(c, httperr.Internal("Failed to settle expired auctions", err))
 		return
 	}
 

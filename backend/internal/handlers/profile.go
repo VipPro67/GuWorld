@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -110,7 +111,7 @@ func GetPlayerProfile(c *gin.Context) {
 		WHERE id = $1
 	`, viewerID).Scan(&viewerRank, &viewerRegion, &viewerX, &viewerY, &viewerPartyID, &viewerGuInventory, &viewerPathMasteries)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load viewer data: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Failed to load viewer data: "+err.Error(), err))
 		return
 	}
 
@@ -140,7 +141,7 @@ func GetPlayerProfile(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ sư này!"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tìm kiếm: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi tìm kiếm: "+err.Error(), err))
 		return
 	}
 

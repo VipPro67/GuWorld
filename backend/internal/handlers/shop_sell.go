@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -56,13 +57,13 @@ func resolveVillageMerchant(tx *sql.Tx, regionID string) (string, merchantProfil
 func runCaravanSell(c *gin.Context, authID uuid.UUID, lines []merchantSellLine, action string) {
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		httperr.Respond(c, httperr.Internal("Failed to lock player Aperture", err))
 		return
 	}
 	if gamefx.IsDeadState(&player) {
@@ -71,7 +72,7 @@ func runCaravanSell(c *gin.Context, authID uuid.UUID, lines []merchantSellLine, 
 	}
 	merchantID, profile, err := resolveVillageMerchant(tx, player.CurrentRegion)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thương nhân khu vực"})
+		httperr.Respond(c, httperr.Internal("Không tìm thấy thương nhân khu vực", err))
 		return
 	}
 	primeval, immortal, summaries, removedGuIDs, guSold, err := executeMerchantSale(tx, &player, merchantID, &profile, lines)
@@ -84,17 +85,17 @@ func runCaravanSell(c *gin.Context, authID uuid.UUID, lines []merchantSellLine, 
 	RebuildEquippedGus(&player)
 	if guSold {
 		if err := db.RemovePlayerGus(tx, removedGuIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory changes"})
+			httperr.Respond(c, httperr.Internal("Failed to save Gu inventory changes", err))
 			return
 		}
 	}
 	if _, err := tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2, equipped_gus=$3 WHERE id=$4`,
 		player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
+		httperr.Respond(c, httperr.Internal("Failed to save sell transaction", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	gainSummary := formatGainSummary(primeval, immortal)

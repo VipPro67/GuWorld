@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -274,13 +275,13 @@ func GetKillerMoveOptions(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 	owned, err := loadOwnedKillerMoveGus(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải Cổ thành phần"})
+		httperr.Respond(c, httperr.Internal("Không thể tải Cổ thành phần", err))
 		return
 	}
 	instances := make([]ownedKillerMoveGu, 0, len(owned))
@@ -306,7 +307,7 @@ func GetKillerMoveOptions(c *gin.Context) {
 	profile := composition.KillerMoveProfile()
 	templates, err := listAdminCompositionTemplates(c.Request.Context(), profile.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải composition templates"})
+		httperr.Respond(c, httperr.Internal("Không thể tải composition templates", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"gus": instances, "effect_options": options, "composition_templates": templates, "composition_rule_set": composition.KillerMoveRuleSet(), "max_saved": profile.MaxSaved, "max_equipped": profile.MaxEquipped, "max_components": profile.MaxGuComponents, "max_effects": profile.MaxNodes})
@@ -660,7 +661,7 @@ func PreviewKillerMove(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -693,7 +694,7 @@ func CreateKillerMove(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -709,7 +710,7 @@ func CreateKillerMove(c *gin.Context) {
 	productProfile := composition.KillerMoveProfile()
 	var count int
 	if err = tx.QueryRow(`SELECT COUNT(*) FROM player_killer_moves WHERE player_id=$1`, playerID).Scan(&count); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giới hạn sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra giới hạn sát chiêu", err))
 		return
 	}
 	if count >= productProfile.MaxSaved {
@@ -734,7 +735,7 @@ func CreateKillerMove(c *gin.Context) {
 	selected, _ := json.Marshal(preview.SelectedEffects)
 	compiled, err := json.Marshal(gameplayeffects.BlockSet(preview.CompiledEffects))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuẩn hóa Block v2 của sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể chuẩn hóa Block v2 của sát chiêu", err))
 		return
 	}
 	profBytes, _ := json.Marshal(preview.CombatProfile)
@@ -742,7 +743,7 @@ func CreateKillerMove(c *gin.Context) {
 	err = tx.QueryRow(`INSERT INTO player_killer_moves(player_id,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,composition_graph,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,balance_version,combat_profile)
 	VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb) RETURNING id`, playerID, name, main.InstanceID, main.GuID, main.Rank, components, compositionGraph, selected, compiled, preview.Path, preview.PathMasteryLevel, preview.PowerBudget, preview.PowerLoad, preview.Harmony, preview.Complexity, preview.SuccessChance, killerMoveBalanceVersion, profBytes).Scan(&id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu sát chiêu", err))
 		return
 	}
 	auditlog.Log(tx, auditlog.Entry{
@@ -769,7 +770,7 @@ func CreateKillerMove(c *gin.Context) {
 		Success:   true,
 	})
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu sát chiêu", err))
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"id": id, "message": "Đã sáng tạo sát chiêu"})
@@ -782,13 +783,13 @@ func ListKillerMoves(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id::text,name,main_gu_instance_id,main_gu_id,main_gu_rank,components,composition_graph,selected_effects,compiled_effects,path,creation_path_mastery_level,power_budget,power_load,harmony,complexity,success_chance,mastery_xp,is_equipped,balance_version,COALESCE(combat_profile,'{}'::jsonb) FROM player_killer_moves WHERE player_id=$1 ORDER BY created_at DESC`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể tải sát chiêu", err))
 		return
 	}
 	defer rows.Close()
 	owned, err := db.DB.QueryContext(c.Request.Context(), `SELECT id,gu_id,gu_rank,hunger,state,location,is_locked FROM player_gu WHERE player_id=$1`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh Cổ thành phần"})
+		httperr.Respond(c, httperr.Internal("Không thể xác minh Cổ thành phần", err))
 		return
 	}
 	ownedSet := map[string]ownedKillerMoveGu{}
@@ -808,7 +809,7 @@ func ListKillerMoves(c *gin.Context) {
 		var m storedKillerMove
 		var components, compositionGraph, selected, compiled, combatProf []byte
 		if err := rows.Scan(&m.ID, &m.Name, &m.MainGuInstance, &m.MainGuID, &m.MainGuRank, &components, &compositionGraph, &selected, &compiled, &m.Path, &m.CreationPathMasteryLevel, &m.PowerBudget, &m.PowerLoad, &m.Harmony, &m.Complexity, &m.SuccessChance, &m.MasteryXP, &m.Equipped, &m.BalanceVersion, &combatProf); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc sát chiêu"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc sát chiêu", err))
 			return
 		}
 		var snapshotErr error
@@ -864,7 +865,7 @@ func ListKillerMoves(c *gin.Context) {
 		result = append(result, m)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc sát chiêu", err))
 		return
 	}
 	productProfile := composition.KillerMoveProfile()
@@ -879,7 +880,7 @@ func EquipKillerMove(c *gin.Context) {
 	moveID := c.Param("id")
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -896,7 +897,7 @@ func EquipKillerMove(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc sát chiêu", err))
 		return
 	}
 	var components []killerMoveComponent
@@ -947,7 +948,7 @@ func EquipKillerMove(c *gin.Context) {
 					return
 				}
 				if arrayReservationErr != sql.ErrNoRows {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Trận Pháp"})
+					httperr.Respond(c, httperr.Internal("Không thể kiểm tra giữ chỗ Trận Pháp", arrayReservationErr))
 					return
 				}
 				var reservedByHouse string
@@ -957,7 +958,7 @@ func EquipKillerMove(c *gin.Context) {
 					return
 				}
 				if houseReservationErr != sql.ErrNoRows {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Tiên Cổ Ốc"})
+					httperr.Respond(c, httperr.Internal("Không thể kiểm tra giữ chỗ Tiên Cổ Ốc", houseReservationErr))
 					return
 				}
 				var reservedBy string
@@ -967,7 +968,7 @@ func EquipKillerMove(c *gin.Context) {
 					return
 				}
 				if reservationErr != nil && reservationErr != sql.ErrNoRows {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra giữ chỗ Cổ thành phần"})
+					httperr.Respond(c, httperr.Internal("Không thể kiểm tra giữ chỗ Cổ thành phần", reservationErr))
 					return
 				}
 				var inLegacyEquippedMove bool
@@ -977,7 +978,7 @@ func EquipKillerMove(c *gin.Context) {
 					WHERE other_move.player_id=$1 AND other_move.id<>$2 AND other_move.is_equipped=true
 					AND component->>'instance_id'=$3
 				)`, playerID, moveID, component.InstanceID).Scan(&inLegacyEquippedMove); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Sát Chiêu đang hoạt động"})
+					httperr.Respond(c, httperr.Internal("Không thể kiểm tra Sát Chiêu đang hoạt động", err))
 					return
 				}
 				if inLegacyEquippedMove {
@@ -998,7 +999,7 @@ func EquipKillerMove(c *gin.Context) {
 		}
 		var count int
 		if err = tx.QueryRow(`SELECT COUNT(*) FROM player_killer_moves WHERE player_id=$1 AND is_equipped=true`, playerID).Scan(&count); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra ô trang bị"})
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra ô trang bị", err))
 			return
 		}
 		if count >= productProfile.MaxEquipped {
@@ -1007,12 +1008,12 @@ func EquipKillerMove(c *gin.Context) {
 		}
 	}
 	if _, err = tx.Exec(`UPDATE player_killer_moves SET is_equipped=$1,updated_at=NOW() WHERE id=$2 AND player_id=$3`, !equipped, moveID, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trang bị"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật trang bị", err))
 		return
 	}
 	if equipped && productProfile.GuPolicy == composition.GuPolicyReserveActive {
 		if _, err = tx.Exec(`DELETE FROM player_killer_move_gu_reservations WHERE killer_move_id=$1 AND player_id=$2`, moveID, playerID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giải phóng Cổ thành phần"})
+			httperr.Respond(c, httperr.Internal("Không thể giải phóng Cổ thành phần", err))
 			return
 		}
 	}
@@ -1035,7 +1036,7 @@ func EquipKillerMove(c *gin.Context) {
 		Success:   true,
 	})
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trang bị"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật trang bị", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"is_equipped": !equipped})
@@ -1049,7 +1050,7 @@ func DeleteKillerMove(c *gin.Context) {
 	moveID := c.Param("id")
 	res, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM player_killer_moves WHERE id=$1 AND player_id=$2`, moveID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể xóa sát chiêu", err))
 		return
 	}
 	n, _ := res.RowsAffected()
@@ -1081,7 +1082,7 @@ func RepairKillerMove(c *gin.Context) {
 	moveID := c.Param("id")
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -1099,7 +1100,7 @@ func RepairKillerMove(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận", err))
 		return
 	}
 
@@ -1330,13 +1331,13 @@ func UseKillerMove(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải nhân vật", err))
 		return
 	}
 	var move storedKillerMove
@@ -1347,7 +1348,7 @@ func UseKillerMove(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể tải sát chiêu", err))
 		return
 	}
 	if err := json.Unmarshal(componentsRaw, &move.Components); err != nil || json.Unmarshal(graphRaw, &move.CompositionGraph) != nil || json.Unmarshal(selectedRaw, &move.SelectedEffects) != nil {
@@ -1456,7 +1457,7 @@ func UseKillerMove(c *gin.Context) {
 		}
 		message = fmt.Sprintf("Sát chiêu [%s] thành công: %s.", move.Name, outcome.EffectsSummary)
 		if _, err := tx.Exec(`UPDATE player_killer_moves SET mastery_xp=LEAST(5000,mastery_xp+1),updated_at=NOW() WHERE id=$1 AND player_id=$2`, move.ID, playerID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi nhận thành thạo sát chiêu"})
+			httperr.Respond(c, httperr.Internal("Không thể ghi nhận thành thạo sát chiêu", err))
 			return
 		}
 		// Sát chiêu thành công cộng Chân Ý cho path hạch tâm, cùng bảng rank
@@ -1473,13 +1474,13 @@ func UseKillerMove(c *gin.Context) {
 	} else {
 		player.CurrentMana -= cost
 		if err := deductGuHungerTx(tx, playerID, &player, componentIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giảm độ no Cổ thành phần"})
+			httperr.Respond(c, httperr.Internal("Không thể giảm độ no Cổ thành phần", err))
 			return
 		}
 		message = fmt.Sprintf("Thôi động [%s] thất bại (%.0f%% / tỉ lệ %.0f%%). Các Cổ thành phần vẫn hao độ no.", move.Name, roll*100, chance*100)
 	}
 	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2,path_masteries=$3,statuses=$4,version=version+1,state_revision=state_revision+1 WHERE id=$5`, player.HP, player.CurrentMana, player.PathMasteries, player.Statuses, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái nhân vật", err))
 		return
 	}
 	auditlog.Log(tx, auditlog.Entry{
@@ -1506,7 +1507,7 @@ func UseKillerMove(c *gin.Context) {
 		Success:   true,
 	})
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất sát chiêu"})
+		httperr.Respond(c, httperr.Internal("Không thể hoàn tất sát chiêu", err))
 		return
 	}
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": message, "killer_move_id": move.ID, "success": success, "success_chance": chance, "path": cleanPath, "path_gain": pathGain, "path_masteries": player.PathMasteries})

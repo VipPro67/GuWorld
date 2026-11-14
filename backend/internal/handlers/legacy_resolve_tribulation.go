@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -34,7 +35,7 @@ func ResolveTribulation(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -53,12 +54,12 @@ func ResolveTribulation(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Đợt tai kiếp này đã được giải quyết hoặc không tồn tại"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn tai kiếp"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn tai kiếp", err))
 		return
 	}
 	if ev.Status != "ACTIVE" {
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "Tai kiếp này đã được kết toán trước đó.", "state": ev.Status})
@@ -71,7 +72,7 @@ func ResolveTribulation(c *gin.Context) {
 		SELECT COUNT(1) FROM tribulation_enemies WHERE event_id = $1 AND is_dead = false
 	`, ev.ID).Scan(&remainingEnemies)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra số quái còn sống"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra số quái còn sống", err))
 		return
 	}
 
@@ -83,7 +84,7 @@ func ResolveTribulation(c *gin.Context) {
 	`, ev.ApertureID).Scan(&ap.ID, &ap.ApertureHP, &ap.MaxApertureHP, &ap.NextTribulationYear,
 		&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.InternalYearsPassed)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin Tiên Khiếu"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy thông tin Tiên Khiếu", err))
 		return
 	}
 
@@ -179,7 +180,7 @@ func ResolveTribulation(c *gin.Context) {
 		rewards := distributeDaoMarks(ev.Path, ev.RewardDaoMarks)
 		daoMap, errDao := addMultipleDaoMarksTx(tx, playerID.String(), rewards)
 		if errDao != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + errDao.Error()})
+			httperr.Respond(c, httperr.Internal("Lỗi cộng Đạo Ngân: "+errDao.Error(), errDao))
 			return
 		}
 		updatedDaoMarks = daoMap
@@ -197,7 +198,7 @@ func ResolveTribulation(c *gin.Context) {
 			ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount,
 			ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Tiên Khiếu"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật Tiên Khiếu", err))
 			return
 		}
 
@@ -258,12 +259,12 @@ func ResolveTribulation(c *gin.Context) {
 
 	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 10, $1) WHERE id = $2", MaxHumanQi, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật Nhân Khí", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 

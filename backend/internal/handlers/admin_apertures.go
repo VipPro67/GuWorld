@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -54,7 +55,7 @@ func AdminListApertures(c *gin.Context) {
 	var total int
 	countQuery := `SELECT COUNT(*) FROM immortal_apertures ia JOIN players p ON ia.player_id = p.id` + where
 	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng tiên khiếu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể đếm số lượng tiên khiếu: "+err.Error(), err))
 		return
 	}
 
@@ -75,7 +76,7 @@ func AdminListApertures(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách tiên khiếu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách tiên khiếu: "+err.Error(), err))
 		return
 	}
 	defer rows.Close()
@@ -96,7 +97,7 @@ func AdminListApertures(c *gin.Context) {
 			&createdAt, &updatedAt,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu tiên khiếu: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể đọc dữ liệu tiên khiếu: "+err.Error(), err))
 			return
 		}
 
@@ -239,7 +240,7 @@ func AdminUpdateAperture(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -358,12 +359,12 @@ func AdminUpdateAperture(c *gin.Context) {
 	args = append(args, apertureID)
 	updateQuery := fmt.Sprintf("UPDATE immortal_apertures SET %s WHERE id = $%d", strings.Join(sets, ", "), argIdx)
 	if _, err := tx.Exec(updateQuery, args...); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tiên khiếu: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật tiên khiếu: "+err.Error(), err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể commit transaction"})
+		httperr.Respond(c, httperr.Internal("Không thể commit transaction", err))
 		return
 	}
 

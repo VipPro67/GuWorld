@@ -13,6 +13,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -51,7 +52,7 @@ func beginCombatTx(c *gin.Context) (*sql.Tx, context.CancelFunc) {
 		if isTimeoutOrBusy(err) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Hệ thống đang bận — quá nhiều thao tác cùng lúc, đạo hữu thử lại chút nữa nhé."})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+			httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		}
 		return nil, nil
 	}
@@ -81,7 +82,7 @@ func respondCombatTxErr(c *gin.Context, err error, fallback string) {
 	if msg == "" {
 		msg = "Giao dịch thất bại, vui lòng thử lại."
 	}
-	c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+	httperr.Respond(c, httperr.Internal(msg, err))
 }
 
 func Retreat(c *gin.Context) {

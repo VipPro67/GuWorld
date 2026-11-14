@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -203,7 +204,7 @@ func GetMyTeleportArrays(c *gin.Context) {
 	rows, err := db.DB.Query(query, args...)
 	if err != nil {
 		logger.S.Errorf("GetMyTeleportArrays query failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer rows.Close()
@@ -277,14 +278,14 @@ func BuildTeleportArray(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giao dịch cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi giao dịch cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 	var effectProfile teleportArrayEffectProfile
@@ -302,7 +303,7 @@ func BuildTeleportArray(c *gin.Context) {
 		}
 		effectProfileJSON, err = json.Marshal(effectProfile)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu effect profile Trận Pháp"})
+			httperr.Respond(c, httperr.Internal("Không thể lưu effect profile Trận Pháp", err))
 			return
 		}
 	} else if req.PreviewFingerprint != "" {
@@ -317,7 +318,7 @@ func BuildTeleportArray(c *gin.Context) {
 	// a way to escape their timer, exit gate, or destination policy.
 	var mapInstanceID sql.NullString
 	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&mapInstanceID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra bản đồ hiện tại"})
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra bản đồ hiện tại", err))
 		return
 	}
 	if mapInstanceID.Valid && mapInstanceID.String != "" {
@@ -343,7 +344,7 @@ func BuildTeleportArray(c *gin.Context) {
 	var existingCount int
 	err = tx.QueryRow(`SELECT COUNT(*) FROM teleport_arrays WHERE region_id = $1 AND x = $2 AND y = $3`, player.CurrentRegion, player.X, player.Y).Scan(&existingCount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra vị trí trận pháp"})
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra vị trí trận pháp", err))
 		return
 	}
 	if existingCount > 0 {
@@ -410,7 +411,7 @@ func BuildTeleportArray(c *gin.Context) {
 			req.FeeEnabled, req.FeeCurrency, req.FeeAmount, tpl.MaxDurability, teleportArrayRequestHasEffect(req), effectProfileJSON)
 		if err != nil {
 			logger.S.Errorf("BuildTeleportArray insert error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Trận Pháp vào cơ sở dữ liệu"})
+			httperr.Respond(c, httperr.Internal("Không thể lưu Trận Pháp vào cơ sở dữ liệu", err))
 			return
 		}
 		if teleportArrayRequestHasEffect(req) {
@@ -423,7 +424,7 @@ func BuildTeleportArray(c *gin.Context) {
 		_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, path_masteries = $3 WHERE id = $4`,
 			player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật tài sản nhân vật", err))
 			return
 		}
 
@@ -457,7 +458,7 @@ func BuildTeleportArray(c *gin.Context) {
 		})
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
+			httperr.Respond(c, httperr.Internal("Lỗi xác nhận giao dịch", err))
 			return
 		}
 
@@ -519,7 +520,7 @@ func BuildTeleportArray(c *gin.Context) {
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, path_masteries = $3 WHERE id = $4`,
 		player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật tài sản nhân vật", err))
 		return
 	}
 
@@ -546,7 +547,7 @@ func BuildTeleportArray(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận giao dịch", err))
 		return
 	}
 
@@ -573,7 +574,7 @@ func GetTeleportDirectory(c *gin.Context) {
 
 	player, err := PlayerSvc.LoadEquipped(db.DB, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player data"})
+		httperr.Respond(c, httperr.Internal("Failed to load player data", err))
 		return
 	}
 	if region, x, y, ok := middleware.RealtimePlayerLocation(authID); ok {
@@ -616,7 +617,7 @@ func GetTeleportDirectory(c *gin.Context) {
 			return
 		}
 		logger.S.Errorf("GetTeleportDirectory error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 
@@ -656,7 +657,7 @@ func GetTeleportDirectory(c *gin.Context) {
 	rows, err := db.DB.Query(query, args...)
 	if err != nil {
 		logger.S.Errorf("GetTeleportDirectory candidates query failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer rows.Close()
@@ -830,14 +831,14 @@ func TravelTeleport(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giao dịch cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi giao dịch cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 
@@ -948,7 +949,7 @@ func TravelTeleport(c *gin.Context) {
 		if respondMovementError(c, errMove) {
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+		httperr.Respond(c, httperr.Internal(errMove.Error(), errMove))
 		return
 	}
 	if player.PartyID != nil {
@@ -956,7 +957,7 @@ func TravelTeleport(c *gin.Context) {
 		if err := tx.QueryRow(`SELECT leader_id = $1 FROM parties WHERE id = $2`, player.ID, player.PartyID).Scan(&isPartyLeader); err == nil && isPartyLeader {
 			members, err := tx.Query(`SELECT id::text, rank FROM players WHERE party_id=$1 AND id<>$2`, player.PartyID, player.ID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra điều kiện tổ đội"})
+				httperr.Respond(c, httperr.Internal("Không thể kiểm tra điều kiện tổ đội", err))
 				return
 			}
 			type partyEntry struct {
@@ -968,21 +969,21 @@ func TravelTeleport(c *gin.Context) {
 				var member partyEntry
 				if err := members.Scan(&member.id, &member.rank); err != nil {
 					_ = members.Close()
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc điều kiện thành viên tổ đội"})
+					httperr.Respond(c, httperr.Internal("Không thể đọc điều kiện thành viên tổ đội", err))
 					return
 				}
 				partyMembers = append(partyMembers, member)
 			}
 			if err := members.Err(); err != nil {
 				_ = members.Close()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc điều kiện thành viên tổ đội"})
+				httperr.Respond(c, httperr.Internal("Không thể đọc điều kiện thành viên tổ đội", err))
 				return
 			}
 			_ = members.Close()
 			for _, member := range partyMembers {
 				inventory, err := db.LoadPlayerGus(tx, member.id, false)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ trùng của tổ đội"})
+					httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ trùng của tổ đội", err))
 					return
 				}
 				if err := checkRegionEntry(dest.RegionID, member.rank, inventory); err != nil {
@@ -1021,7 +1022,7 @@ func TravelTeleport(c *gin.Context) {
 		vaultShare := int64(float64(feePaid) * 0.95)
 		_, err = tx.Exec(`UPDATE teleport_arrays SET vault_balance = vault_balance + $1 WHERE id = $2`, vaultShare, dest.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi chuyển phí vào Két Trận Pháp"})
+			httperr.Respond(c, httperr.Internal("Lỗi chuyển phí vào Két Trận Pháp", err))
 			return
 		}
 	}
@@ -1032,7 +1033,7 @@ func TravelTeleport(c *gin.Context) {
 	_, err = tx.Exec(`UPDATE teleport_arrays SET current_durability = $1, is_active = $2 WHERE id = $3`,
 		source.CurrentDurability, sourceActive, source.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật độ bền trận pháp"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật độ bền trận pháp", err))
 		return
 	}
 
@@ -1044,18 +1045,18 @@ func TravelTeleport(c *gin.Context) {
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 		)
 	`, dest.ID, player.ID, source.RegionID, source.X, source.Y, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi nhật ký truyền tống"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi nhật ký truyền tống", err))
 		return
 	}
 	arrivalEffectMessage := ""
 	if dest.EffectEnabled {
 		if _, validationErr := validateTeleportArrayEffectProfile(destEffectProfile); validationErr != nil {
 			if _, err = tx.Exec(`UPDATE teleport_arrays SET effect_enabled=false WHERE id=$1`, dest.ID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tự tháo effect Trận Pháp lỗi"})
+				httperr.Respond(c, httperr.Internal("Không thể tự tháo effect Trận Pháp lỗi", err))
 				return
 			}
 			if _, err = tx.Exec(`DELETE FROM teleport_array_gu_reservations WHERE array_id=$1`, dest.ID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giải phóng Cổ của effect Trận Pháp lỗi"})
+				httperr.Respond(c, httperr.Internal("Không thể giải phóng Cổ của effect Trận Pháp lỗi", err))
 				return
 			}
 			dest.EffectEnabled = false
@@ -1082,11 +1083,11 @@ func TravelTeleport(c *gin.Context) {
 		if respondMovementError(c, errMove) {
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": errMove.Error()})
+		httperr.Respond(c, httperr.Internal(errMove.Error(), errMove))
 		return
 	}
 	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2 WHERE id=$3`, player.HP, player.CurrentMana, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu effect Trận Pháp sau truyền tống"})
+		httperr.Respond(c, httperr.Internal("Không thể lưu effect Trận Pháp sau truyền tống", err))
 		return
 	}
 
@@ -1125,7 +1126,7 @@ func TravelTeleport(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận truyền tống"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận truyền tống", err))
 		return
 	}
 
@@ -1210,7 +1211,7 @@ func ManageTeleportArray(c *gin.Context) {
 		WHERE id = $7
 	`, currentName, currentDirection, currentPolicy, currentFeeEnabled, currentCurrency, currentFeeAmount, arrayUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cấu hình trận pháp"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật cấu hình trận pháp", err))
 		return
 	}
 
@@ -1259,14 +1260,14 @@ func RepairTeleportArray(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giao dịch cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi giao dịch cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 
@@ -1338,13 +1339,13 @@ func RepairTeleportArray(c *gin.Context) {
 		WHERE id = $3
 	`, curDur, maxDur, arrayUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật độ bền"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật độ bền", err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, path_masteries = $2 WHERE id = $3`, player.PrimevalStones, player.PathMasteries, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật tài sản nhân vật", err))
 		return
 	}
 
@@ -1371,7 +1372,7 @@ func RepairTeleportArray(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận giao dịch", err))
 		return
 	}
 
@@ -1415,14 +1416,14 @@ func WithdrawTeleportVault(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giao dịch cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi giao dịch cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 
@@ -1460,14 +1461,14 @@ func WithdrawTeleportVault(c *gin.Context) {
 
 	_, err = tx.Exec(`UPDATE teleport_arrays SET vault_balance = vault_balance - $1 WHERE id = $2`, withdrawAmt, arrayUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ số dư Két Sắt"})
+		httperr.Respond(c, httperr.Internal("Lỗi trừ số dư Két Sắt", err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
 		player.PrimevalStones, player.ImmortalStones, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng tiền cho đạo hữu"})
+		httperr.Respond(c, httperr.Internal("Lỗi cộng tiền cho đạo hữu", err))
 		return
 	}
 
@@ -1487,12 +1488,12 @@ func WithdrawTeleportVault(c *gin.Context) {
 		IPAddress: c.ClientIP(),
 		Success:   true,
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit"})
+		httperr.Respond(c, httperr.Internal("Không thể ghi audit", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận giao dịch", err))
 		return
 	}
 
@@ -1525,14 +1526,14 @@ func DismantleTeleportArray(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giao dịch cơ sở dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi giao dịch cơ sở dữ liệu", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
+		httperr.Respond(c, httperr.Internal("Không thể tải thông tin nhân vật", err))
 		return
 	}
 
@@ -1580,14 +1581,14 @@ func DismantleTeleportArray(c *gin.Context) {
 
 	_, err = tx.Exec(`DELETE FROM teleport_arrays WHERE id = $1`, arrayUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa Trận Pháp"})
+		httperr.Respond(c, httperr.Internal("Lỗi xóa Trận Pháp", err))
 		return
 	}
 
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
 		player.PrimevalStones, player.ImmortalStones, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật tài sản nhân vật", err))
 		return
 	}
 
@@ -1613,7 +1614,7 @@ func DismantleTeleportArray(c *gin.Context) {
 	})
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi xác nhận giao dịch", err))
 		return
 	}
 

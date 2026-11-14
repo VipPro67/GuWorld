@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 )
 
 type adminCompositionSource struct {
@@ -124,7 +125,7 @@ func AdminEffectCompositionCatalog(c *gin.Context) {
 		var err error
 		options, err = listAdminCompositionSourceOptions(c, profile)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc effect source: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Không thể đọc effect source: "+err.Error(), err))
 			return
 		}
 	}
@@ -359,7 +360,7 @@ func AdminListEffectCompositionDrafts(c *gin.Context) {
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id,name,product_profile,definition,created_at,updated_at FROM admin_effect_composition_drafts WHERE status='DRAFT' ORDER BY updated_at DESC`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc composition draft"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc composition draft", err))
 		return
 	}
 	defer rows.Close()
@@ -377,7 +378,7 @@ func AdminListEffectCompositionDrafts(c *gin.Context) {
 		var raw []byte
 		var createdAt, updatedAt any
 		if err := rows.Scan(&item.ID, &item.Name, &item.ProductProfile, &raw, &createdAt, &updatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Respond(c, httperr.Internal(err.Error(), err))
 			return
 		}
 		if err := json.Unmarshal(raw, &item.Definition); err != nil {
@@ -387,7 +388,7 @@ func AdminListEffectCompositionDrafts(c *gin.Context) {
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"drafts": items})
@@ -413,7 +414,7 @@ func saveAdminEffectCompositionDraft(c *gin.Context, update bool) {
 	}
 	definition, err := json.Marshal(resolved.Draft)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể serialize draft"})
+		httperr.Respond(c, httperr.Internal("Không thể serialize draft", err))
 		return
 	}
 	if update {
@@ -424,7 +425,7 @@ func saveAdminEffectCompositionDraft(c *gin.Context, update bool) {
 		}
 		result, execErr := db.DB.ExecContext(c.Request.Context(), `UPDATE admin_effect_composition_drafts SET name=$1,product_profile=$2,definition=$3::jsonb,updated_by=$4,updated_at=NOW() WHERE id=$5 AND status='DRAFT'`, resolved.Draft.Name, resolved.Draft.ProductProfile, string(definition), adminID, id)
 		if execErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": execErr.Error()})
+			httperr.Respond(c, httperr.Internal(execErr.Error(), execErr))
 			return
 		}
 		changed, _ := result.RowsAffected()
@@ -438,7 +439,7 @@ func saveAdminEffectCompositionDraft(c *gin.Context, update bool) {
 	var id uuid.UUID
 	err = db.DB.QueryRowContext(c.Request.Context(), `INSERT INTO admin_effect_composition_drafts(name,product_profile,definition,created_by,updated_by) VALUES($1,$2,$3::jsonb,$4,$4) RETURNING id`, resolved.Draft.Name, resolved.Draft.ProductProfile, string(definition), adminID).Scan(&id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"id": id.String(), "preview": resolved})
@@ -458,7 +459,7 @@ func AdminArchiveEffectCompositionDraft(c *gin.Context) {
 	}
 	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE admin_effect_composition_drafts SET status='ARCHIVED',updated_at=NOW() WHERE id=$1 AND status='DRAFT'`, id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Respond(c, httperr.Internal(err.Error(), err))
 		return
 	}
 	changed, _ := result.RowsAffected()

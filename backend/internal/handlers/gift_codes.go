@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -98,7 +99,7 @@ func AdminCreateGiftCode(c *gin.Context) {
 
 	rewardsJSON, err := json.Marshal(req.Rewards)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xử lý rewards"})
+		httperr.Respond(c, httperr.Internal("Lỗi xử lý rewards", err))
 		return
 	}
 
@@ -113,7 +114,7 @@ func AdminCreateGiftCode(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Mã quà này đã tồn tại"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo mã quà: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Không thể tạo mã quà: "+err.Error(), err))
 		return
 	}
 
@@ -143,7 +144,7 @@ func AdminListGiftCodes(c *gin.Context) {
 		LIMIT 200
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách mã quà"})
+		httperr.Respond(c, httperr.Internal("Không thể tải danh sách mã quà", err))
 		return
 	}
 	defer rows.Close()
@@ -191,7 +192,7 @@ func RedeemGiftCode(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 	defer tx.Rollback()
@@ -216,7 +217,7 @@ func RedeemGiftCode(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		httperr.Respond(c, httperr.Internal("Lỗi database", err))
 		return
 	}
 
@@ -256,7 +257,7 @@ func RedeemGiftCode(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi áp dụng phần thưởng: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi áp dụng phần thưởng: "+err.Error(), err))
 		return
 	}
 
@@ -265,7 +266,7 @@ func RedeemGiftCode(c *gin.Context) {
 	updateQuery, updateArgs := buildGiftCodeUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật người chơi"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật người chơi", err))
 		return
 	}
 
@@ -277,12 +278,12 @@ func RedeemGiftCode(c *gin.Context) {
 			player.DaoMarks, player.ID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Dao Marks Tiên Khiếu"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật Dao Marks Tiên Khiếu", err))
 			return
 		}
 	}
 	if err := db.AddPlayerGusBulk(tx, player.ID.String(), applyResult.NewGus); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật cổ trùng", err))
 		return
 	}
 
@@ -292,7 +293,7 @@ func RedeemGiftCode(c *gin.Context) {
 		WHERE id = $1 AND is_active = true AND expires_at > NOW() AND used_count < max_uses
 	`, gc.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật mã quà"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật mã quà", err))
 		return
 	}
 	if rowsAffected, _ := res.RowsAffected(); rowsAffected == 0 {
@@ -302,12 +303,12 @@ func RedeemGiftCode(c *gin.Context) {
 
 	_, err = tx.Exec(`INSERT INTO gift_code_redemptions (gift_code_id, player_id) VALUES ($1, $2)`, gc.ID, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi nhận đổi thưởng"})
+		httperr.Respond(c, httperr.Internal("Lỗi ghi nhận đổi thưởng", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})
+		httperr.Respond(c, httperr.Internal("Lỗi commit", err))
 		return
 	}
 

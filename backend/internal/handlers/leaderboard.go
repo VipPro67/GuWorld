@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
@@ -272,7 +273,7 @@ func GetLeaderboard(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
+		httperr.Respond(c, httperr.Internal("Failed to fetch leaderboard", err))
 		return
 	}
 	defer rows.Close()
@@ -419,7 +420,7 @@ func ToggleLeaderboardVisibility(c *gin.Context) {
 		WHERE player_id = $1
 	`, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to toggle visibility"})
+		httperr.Respond(c, httperr.Internal("Failed to toggle visibility", err))
 		return
 	}
 
@@ -444,7 +445,7 @@ func GetLeaderboardSettings(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			show = true
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch settings"})
+			httperr.Respond(c, httperr.Internal("Failed to fetch settings", err))
 			return
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -40,7 +41,7 @@ func SetApertureTimeRate(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giao dịch"})
+		httperr.Respond(c, httperr.Internal("Lỗi giao dịch", err))
 		return
 	}
 	defer tx.Rollback()
@@ -57,7 +58,7 @@ func SetApertureTimeRate(c *gin.Context) {
 		WHERE ia.player_id = p.id AND ia.player_id = $3
 	`, req.TimeRate, now, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật dòng thời gian"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật dòng thời gian", err))
 		return
 	}
 
@@ -68,7 +69,7 @@ func SetApertureTimeRate(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi dữ liệu"})
+		httperr.Respond(c, httperr.Internal("Lỗi ghi dữ liệu", err))
 		return
 	}
 
@@ -101,7 +102,7 @@ func SetApertureLabor(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -119,12 +120,12 @@ func SetApertureLabor(c *gin.Context) {
 		WHERE aperture_id = $2 AND race = $3
 	`, intensity, apID, req.Race)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cường độ lao động"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật cường độ lao động", err))
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu cường độ lao động"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu cường độ lao động", err))
 		return
 	}
 
@@ -147,7 +148,7 @@ func RepairApertureNode(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -166,7 +167,7 @@ func RepairApertureNode(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 
@@ -180,7 +181,7 @@ func RepairApertureNode(c *gin.Context) {
 	var stones int
 	err = tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy số dư tài khoản", err))
 		return
 	}
 
@@ -193,7 +194,7 @@ func RepairApertureNode(c *gin.Context) {
 	var newStones float64
 	err = tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, cost, playerID).Scan(&newStones)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khấu trừ Tiên Nguyên Thạch", err))
 		return
 	}
 
@@ -204,7 +205,7 @@ func RepairApertureNode(c *gin.Context) {
 		WHERE id = $1 AND is_destroyed = false
 	`, nodeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái sửa chữa"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật trạng thái sửa chữa", err))
 		return
 	}
 	if repaired, rowsErr := res.RowsAffected(); rowsErr != nil || repaired != 1 {
@@ -213,7 +214,7 @@ func RepairApertureNode(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái sửa chữa"})
+		httperr.Respond(c, httperr.Internal("Lỗi lưu trạng thái sửa chữa", err))
 		return
 	}
 
@@ -245,7 +246,7 @@ func UpgradeApertureNode(c *gin.Context) {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		httperr.Respond(c, httperr.Internal("Database error", err))
 		return
 	}
 	defer tx.Rollback()
@@ -267,7 +268,7 @@ func UpgradeApertureNode(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
 	}
 
@@ -296,7 +297,7 @@ func UpgradeApertureNode(c *gin.Context) {
 	var stones int
 	err = tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy số dư tài khoản", err))
 		return
 	}
 
@@ -309,7 +310,7 @@ func UpgradeApertureNode(c *gin.Context) {
 	var newStones float64
 	err = tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, upgradeCost, playerID).Scan(&newStones)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
+		httperr.Respond(c, httperr.Internal("Lỗi khấu trừ Tiên Nguyên Thạch", err))
 		return
 	}
 
@@ -349,7 +350,7 @@ func UpgradeApertureNode(c *gin.Context) {
 		WHERE id = $7
 	`, newLevel, newMaxHP, hpGain, newProductionAmount, newDefensePower, newHPBonus, nodeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi nâng cấp: " + err.Error()})
+		httperr.Respond(c, httperr.Internal("Lỗi nâng cấp: "+err.Error(), err))
 		return
 	}
 
@@ -381,7 +382,7 @@ func GetApertureVariantHumans(c *gin.Context) {
 		WHERE a.player_id = $1
 	`, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin dị nhân"})
+		httperr.Respond(c, httperr.Internal("Lỗi lấy thông tin dị nhân", err))
 		return
 	}
 	defer rows.Close()

@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -332,13 +333,13 @@ func TeleportArrayEffectOptions(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở danh sách Cổ Trận Pháp"})
+		httperr.Respond(c, httperr.Internal("Không thể mở danh sách Cổ Trận Pháp", err))
 		return
 	}
 	defer tx.Rollback()
 	owned, err := loadOwnedKillerMoveGus(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Cổ thành phần Trận Pháp"})
+		httperr.Respond(c, httperr.Internal("Không thể đọc Cổ thành phần Trận Pháp", err))
 		return
 	}
 	ids := make([]string, 0, len(owned))
@@ -356,7 +357,7 @@ func TeleportArrayEffectOptions(c *gin.Context) {
 		}
 		guOptions, err := getKillerMoveEffectOptions(gu)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc effect Cổ cho Trận Pháp"})
+			httperr.Respond(c, httperr.Internal("Không thể đọc effect Cổ cho Trận Pháp", err))
 			return
 		}
 		for _, option := range guOptions {
@@ -368,7 +369,7 @@ func TeleportArrayEffectOptions(c *gin.Context) {
 	productProfile := composition.TeleportFormationProfile()
 	templates, err := listAdminCompositionTemplates(c.Request.Context(), productProfile.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải composition templates Trận Pháp"})
+		httperr.Respond(c, httperr.Internal("Không thể tải composition templates Trận Pháp", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -396,7 +397,7 @@ func PreviewTeleportArray(c *gin.Context) {
 	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở preview Trận Pháp"})
+		httperr.Respond(c, httperr.Internal("Không thể mở preview Trận Pháp", err))
 		return
 	}
 	defer tx.Rollback()

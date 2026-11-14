@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -79,14 +80,14 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 	if channel == "general" {
 		tx, err := db.DB.Begin()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			httperr.Respond(c, httperr.Internal("Database error", err))
 			return "", false
 		}
 		defer tx.Rollback()
 		var hasConnectingHeaven, hasDivineSense bool
 		player, err := evaluateManaTx(tx, playerID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+			httperr.Respond(c, httperr.Internal("Failed to load player", err))
 			return "", false
 		}
 
@@ -105,7 +106,7 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa gia nhập tông môn nào, không thể xem tin nhắn kênh tông môn!"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			httperr.Respond(c, httperr.Internal("Database error: "+err.Error(), err))
 		}
 		return "", false
 	}

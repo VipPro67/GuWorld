@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -92,13 +93,13 @@ func CreateListing(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 	if gamefx.IsDeadState(&player) {
@@ -131,7 +132,7 @@ func CreateListing(c *gin.Context) {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy người nhận chỉ định"})
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn cơ sở dữ liệu"})
+				httperr.Respond(c, httperr.Internal("Lỗi truy vấn cơ sở dữ liệu", err))
 			}
 			return
 		}
@@ -192,7 +193,7 @@ func CreateListing(c *gin.Context) {
 		itemDataJSON, err = json.Marshal(recipeToSell)
 		if err != nil {
 			logger.S.Errorf("Failed to marshal recipe: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán phương thức"})
+			httperr.Respond(c, httperr.Internal("Không thể đăng bán phương thức", err))
 			return
 		}
 	} else if req.ItemType == "Gu" {
@@ -264,7 +265,7 @@ func CreateListing(c *gin.Context) {
 		itemDataJSON, err = json.Marshal(gusToSell)
 		if err != nil {
 			logger.S.Errorf("Failed to marshal Gu: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán Cổ trùng"})
+			httperr.Respond(c, httperr.Internal("Không thể đăng bán Cổ trùng", err))
 			return
 		}
 	} else if req.ItemType == "ResourcePoint" {
@@ -298,7 +299,7 @@ func CreateListing(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại"})
 			return
 		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 			return
 		}
 		if scope != "APERTURE" {
@@ -320,7 +321,7 @@ func CreateListing(c *gin.Context) {
 		itemDataJSON, err = json.Marshal(ResourcePointItemData{PointID: req.ItemID, PointName: pointName})
 		if err != nil {
 			logger.S.Errorf("Failed to marshal resource point: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán điểm tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Không thể đăng bán điểm tài nguyên", err))
 			return
 		}
 	} else {
@@ -333,14 +334,14 @@ func CreateListing(c *gin.Context) {
 			return
 		}
 		if err := InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, "materials", req.Quantity); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật vật phẩm"})
+			httperr.Respond(c, httperr.Internal("Lỗi cập nhật vật phẩm", err))
 			return
 		}
 		itemData := req.ItemID
 		itemDataJSON, err = json.Marshal(itemData)
 		if err != nil {
 			logger.S.Errorf("Failed to marshal material: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán vật phẩm"})
+			httperr.Respond(c, httperr.Internal("Không thể đăng bán vật phẩm", err))
 			return
 		}
 	}
@@ -356,7 +357,7 @@ func CreateListing(c *gin.Context) {
 	_, err = tx.Exec(`INSERT INTO auction(id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,listing_type,created_at,target_buyer_id,duration_hours) VALUES($1,$2,$3,$4,$5,$6,$7,$7,NULL,$8,'ACTIVE',$9,NOW(),$10,$11)`, listingID, player.ID, req.ItemType, itemDataJSON, req.Quantity, req.Currency, req.Price, end, req.ListingType, targetBuyerParam, req.DurationHours)
 	if err != nil {
 		logger.S.Errorf("Failed to create auction listing: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên giao dịch"})
+		httperr.Respond(c, httperr.Internal("Không thể tạo phiên giao dịch", err))
 		return
 	}
 	if req.ItemType == "ResourcePoint" {
@@ -364,7 +365,7 @@ func CreateListing(c *gin.Context) {
 		res, err := tx.Exec(`UPDATE aperture_resource_points SET listed = true, updated_at = NOW() WHERE id = $1 AND listed = false`, req.ItemID)
 		if err != nil {
 			logger.S.Errorf("Failed to mark resource point listed: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể niêm yết điểm tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Không thể niêm yết điểm tài nguyên", err))
 			return
 		}
 		if rows, err := res.RowsAffected(); err != nil || rows == 0 {
@@ -374,7 +375,7 @@ func CreateListing(c *gin.Context) {
 	}
 	if req.ItemType == "Gu" {
 		if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), guIDsToSell); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật túi đồ", err))
 			return
 		}
 		for _, g := range gusToSell {
@@ -392,11 +393,11 @@ func CreateListing(c *gin.Context) {
 	}
 	_, err = tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật túi đồ", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	ClearPendingPlayerQueues(player.ID.String())
@@ -480,7 +481,7 @@ func ListListings(c *gin.Context) {
 		`)
 	}
 	if queryErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query marketplace"})
+		httperr.Respond(c, httperr.Internal("Failed to query marketplace", queryErr))
 		return
 	}
 	defer rows.Close()
@@ -542,14 +543,14 @@ func PlaceBid(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 	if gamefx.IsDeadState(&player) {
@@ -640,7 +641,7 @@ func PlaceBid(c *gin.Context) {
 			current, prevBidderID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "refund failed"})
+			httperr.Respond(c, httperr.Internal("refund failed", err))
 			return
 		}
 		notify.Send(tx, prevBidderID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.3f %s.", current, currency))
@@ -652,19 +653,19 @@ func PlaceBid(c *gin.Context) {
 		_, err = tx.Exec(`UPDATE players SET immortal_stones=$1, human_qi=$2 WHERE id=$3`, player.ImmortalStones, player.HumanQi, player.ID)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
+		httperr.Respond(c, httperr.Internal("update failed", err))
 		return
 	}
 	_, err = tx.Exec(`UPDATE auction SET current_price=$1, highest_bidder_id=$2 WHERE id=$3`, req.Amount, player.ID, req.ListingID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "bid failed"})
+		httperr.Respond(c, httperr.Internal("bid failed", err))
 		return
 	}
 
 	itemName := GetItemName(itemType, rawItemData)
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	ClearPendingPlayerQueues(player.ID.String())
@@ -710,14 +711,14 @@ func BuyListing(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
 
 	buyer, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load buyer details"})
+		httperr.Respond(c, httperr.Internal("Failed to load buyer details", err))
 		return
 	}
 	if gamefx.IsDeadState(&buyer) {
@@ -802,7 +803,7 @@ func BuyListing(c *gin.Context) {
 
 	seller, err := evaluateManaTx(tx, sellerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load seller details"})
+		httperr.Respond(c, httperr.Internal("Failed to load seller details", err))
 		return
 	}
 	sellerBefore := append(models.GuInventory(nil), seller.GuInventory...)
@@ -858,18 +859,18 @@ func BuyListing(c *gin.Context) {
 			return
 		}
 	} else if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemDataToSend, purchaseQty); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển giao vật phẩm"})
+		httperr.Respond(c, httperr.Internal("Không thể chuyển giao vật phẩm", err))
 		return
 	}
 
 	if err := updatePlayerInventory(tx, buyer, buyerBefore); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật kho đồ người mua"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật kho đồ người mua", err))
 		fmt.Println("Error updating buyer inventory:", err)
 		return
 	}
 
 	if err := updatePlayerInventory(tx, seller, sellerBefore); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản người bán"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật tài sản người bán", err))
 		return
 	}
 
@@ -890,14 +891,14 @@ func BuyListing(c *gin.Context) {
 		}
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái đơn hàng"})
+		httperr.Respond(c, httperr.Internal("Lỗi cập nhật trạng thái đơn hàng", err))
 		return
 	}
 
 	itemName := GetItemName(itemType, rawItemData)
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete purchase"})
+		httperr.Respond(c, httperr.Internal("Failed to complete purchase", err))
 		return
 	}
 	if sellerID != authID {
@@ -947,7 +948,7 @@ func CancelListing(c *gin.Context) {
 	}
 	tx, err := db.DB.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
@@ -983,7 +984,7 @@ func CancelListing(c *gin.Context) {
 	}
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		httperr.Respond(c, httperr.Internal("Failed to load player", err))
 		return
 	}
 
@@ -999,29 +1000,29 @@ func CancelListing(c *gin.Context) {
 		// Điểm tài nguyên chưa bao giờ rời Tiên Khiếu của người bán: hủy chỉ
 		// cần gỡ cờ listed, không có gì để hoàn trả vào túi đồ.
 		if err := unlistResourcePoint(tx, itemData); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn trả điểm tài nguyên"})
+			httperr.Respond(c, httperr.Internal("Không thể hoàn trả điểm tài nguyên", err))
 			return
 		}
 	} else {
 		if err := addAuctionItemToPlayer(tx, &player, itemType, itemData, int64(qty)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn trả vật phẩm"})
+			httperr.Respond(c, httperr.Internal("Không thể hoàn trả vật phẩm", err))
 			return
 		}
 		if err := updatePlayerInventory(tx, player, playerBefore); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
+			httperr.Respond(c, httperr.Internal("Không thể cập nhật túi đồ", err))
 			return
 		}
 	}
 	_, err = tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, req.ListingID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy listing"})
+		httperr.Respond(c, httperr.Internal("Không thể hủy listing", err))
 		return
 	}
 
 	itemName := GetItemName(itemType, rawItemData)
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
 	ClearPendingPlayerQueues(player.ID.String())
