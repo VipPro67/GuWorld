@@ -32,10 +32,18 @@ interface GridData {
   max_vision_radius?: number;
   cells: GridCell[];
   stats: { movement?: number; investigation?: number };
-  players_on_map?: { id: string; username: string; avatar_url: string; x: number; y: number }[];
+  players_on_map?: MapPlayer[];
   ground_drops?: { id: string; x: number; y: number; loser_name?: string }[];
   world_width?: number;
   world_height?: number;
+}
+
+interface MapPlayer {
+  id: string;
+  username: string;
+  avatar_url: string;
+  x: number;
+  y: number;
 }
 
 export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
@@ -75,6 +83,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     return 2; // Mặc định 5x5
   });
   const [lastLog, setLastLog] = useState<string | null>(null);
+  const [selectedPvpTarget, setSelectedPvpTarget] = useState<MapPlayer | null>(null);
   const [showAtlas, setShowAtlas] = useState(false);
   const [showBuildTeleport, setShowBuildTeleport] = useState(false);
   const [showDirectoryModal, setShowDirectoryModal] = useState(false);
@@ -138,6 +147,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const regionName = currentRegion?.name || "Thế Giới Cổ Sư";
 
   const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean }, resourcePointId?: string) => {
+    const playerOnCell = gridData?.players_on_map?.find((target) => target.x === x && target.y === y && target.id !== player.id);
+    if (playerOnCell) {
+      setSelectedPvpTarget(playerOnCell);
+      return;
+    }
     if (marker?.kind === "aperture_portal" && !marker.isMine && Math.hypot(x - player.x, y - player.y) <= 3) {
       await enterAperturePortal(marker.id);
       await loadGrid();
@@ -208,6 +222,24 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     if (res) {
       setLastLog(res.log);
       await loadGrid();
+    }
+  };
+
+  const handleChallengePlayer = async () => {
+    if (!selectedPvpTarget || actionLoading || player.active_combat || isMemberNotLeader) return;
+    const now = Date.now();
+    if (now - lastMoveTimeRef.current < 600) return;
+    lastMoveTimeRef.current = now;
+    const target = selectedPvpTarget;
+    setLastLog(null);
+    const result = await movePlayer(target.x, target.y, target.id);
+    if (result) {
+      setLastLog(result.log);
+      await loadGrid();
+      const movedPlayer = useGameStore.getState().player;
+      if (result.combat_triggered || !movedPlayer || Math.max(Math.abs(target.x - movedPlayer.x), Math.abs(target.y - movedPlayer.y)) <= 2) {
+        setSelectedPvpTarget(null);
+      }
     }
   };
 
@@ -376,6 +408,18 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       </div>
 
       {/* Exploration Grid Canvas */}
+      {selectedPvpTarget && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-purple-700/50 bg-purple-950/30 p-4">
+          <div>
+            <p className="font-bold text-purple-200">Cổ sư: {selectedPvpTarget.username}</p>
+            <p className="text-xs text-zinc-400">({selectedPvpTarget.x}, {selectedPvpTarget.y}) · Nếu còn xa, tiến gần từng chặng; PvP bắt đầu khi đủ tầm.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => void handleChallengePlayer()} disabled={actionLoading || Boolean(player.active_combat) || isMemberNotLeader} className="rounded-lg border border-purple-500/60 bg-purple-700/30 px-4 py-2 text-sm font-bold text-purple-100 hover:bg-purple-700/50 disabled:opacity-50">{Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y)) <= 2 ? "Khai chiến" : "Tiến gần mục tiêu"}</button>
+            <button onClick={() => setSelectedPvpTarget(null)} className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800">Đóng</button>
+          </div>
+        </section>
+      )}
       <div className="relative bg-zinc-950/90 border border-zinc-900 rounded-3xl p-2 sm:p-3 shadow-2xl overflow-hidden flex flex-col items-center justify-center">
         {gridData ? (
           <div

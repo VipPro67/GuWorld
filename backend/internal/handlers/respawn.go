@@ -88,6 +88,31 @@ func GrantPvpImmunity(tx *sql.Tx, playerID uuid.UUID, duration time.Duration) {
 		"Bạn vừa hồi sinh và được Thiên Đạo ban cho trạng thái Miễn Chiến PvP trong 10 phút. Nếu chủ động tấn công người khác, trạng thái này sẽ bị phá vỡ!")
 }
 
+// GrantPvpInitiatorCooldown prevents the initiator from immediately pulling
+// another nearby player into combat after the shared PvP encounter ends.
+func GrantPvpInitiatorCooldown(tx *sql.Tx, playerID uuid.UUID, duration time.Duration) {
+	if duration <= 0 {
+		duration = 30 * time.Second
+	}
+	var rawStatuses []byte
+	if err := tx.QueryRow(`SELECT statuses FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&rawStatuses); err != nil {
+		return
+	}
+	var statuses models.StatusList
+	if len(rawStatuses) > 0 {
+		_ = json.Unmarshal(rawStatuses, &statuses)
+	}
+	statuses.Add("pvp_initiator_cooldown", "pvp_combat", duration, 1)
+	encoded, err := json.Marshal(statuses)
+	if err != nil {
+		return
+	}
+	if _, err := tx.Exec(`UPDATE players SET statuses=$1 WHERE id=$2`, encoded, playerID); err == nil {
+		notify.Send(tx, playerID, "pvp_initiator_cooldown", "Dư âm chiến đấu",
+			"Bạn cần chờ một lát trước khi chủ động khai chiến PvP lần nữa.")
+	}
+}
+
 // RemovePvpImmunity removes pvp_immunity when a player actively initiates PvP.
 func RemovePvpImmunity(tx *sql.Tx, playerID uuid.UUID) {
 	var rawStatuses []byte

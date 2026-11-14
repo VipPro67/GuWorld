@@ -883,6 +883,9 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 		logger.S.Errorf("MovePlayerPath: failed to evaluate mana for player=%s: %v", authID, err)
 		return http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)}
 	}
+	if req.AttackTargetID != "" && player.Statuses.Active().Has("pvp_initiator_cooldown") {
+		return http.StatusTooManyRequests, gin.H{"error": "Bạn cần chờ hết dư âm chiến đấu trước khi chủ động khai chiến PvP lần nữa."}
+	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if errMove := checkMovement(tx, &player, spec); errMove != nil {
@@ -923,7 +926,7 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 	combatTriggered := false
 	var lastStepLog string
 	for _, step := range path {
-		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(tx, &player, step[0], step[1], "", true, &mapInstanceID)
+		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(tx, &player, step[0], step[1], req.AttackTargetID, true, &mapInstanceID)
 		if errArrival != nil {
 			return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
 		}

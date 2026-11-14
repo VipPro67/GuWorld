@@ -203,6 +203,22 @@ _Avoid_: ad-hoc SQL update, unversioned mutation, manual snapshot broadcast
 Mô hình chiến đấu tất định (deterministic) theo lượt tính toán từ phía máy chủ (`backend/internal/simulator/engine.go`), dựa trên snapshot chiến đấu của các bên tham gia (Cổ sư, Hung thú, Phân thân Đạo phái), tính toán hiệu ứng kích hoạt của Cổ trùng, Sát chiêu, Đạo ngân và Buff/Debuff theo từng hiệp. Người chơi có thể lựa chọn điều khiển chiêu thức / theo dõi diễn biến trận chiến qua `CombatScreen.tsx` hoặc Quét trận tức thì (Fast Auto-resolve) qua `combat_auto_resolve.go`.
 _Avoid_: 20Hz continuous tick, physics hitbox
 
+**Kế hoạch hành động combat**:
+Tập action do người chơi chọn hoặc AI dựng trước khi server phân xử; thứ tự và kết quả thuộc quyền quyết định của trận combat.
+_Avoid_: lệnh client tự tuần tự hóa kết quả combat
+
+**Slot hành động**:
+Một vị trí trong kế hoạch hành động, chứa một action được phân xử theo luật initiative và trạng thái combat tại thời điểm đó.
+_Avoid_: mỗi slot tương đương một lượt riêng
+
+**Chiến thuật auto combat của người chơi**:
+Các ưu tiên và điều kiện do người chơi đặt để chọn action khi bật auto hoặc khi server thay người chơi ra quyết định.
+_Avoid_: combat AI profile
+
+**Combat AI Profile**:
+Quy tắc chọn action chiến đấu của NPC/quái/boss từ các lựa chọn đã trang bị; tách biệt với hành vi actor ngoài chiến đấu.
+_Avoid_: Behavior Profile
+
 ### Chiến Đấu Realtime (Retired Real-Time Combat)
 Mô hình chiến đấu liên tục theo thời gian thực đã bị loại bỏ khỏi gameplay hiện hành. Combat và các effect chiến đấu hiện hành được giải quyết theo lượt; realtime combat không còn là một chế độ chiến đấu hay kênh effect cần hỗ trợ.
 _Avoid_: active real-time combat, realtime combat effects

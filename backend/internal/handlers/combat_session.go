@@ -173,7 +173,11 @@ func autoCombatSessionCommand(ctx context.Context, sessionID, playerID uuid.UUID
 	if actor == nil {
 		return errors.New("pending combat actor not found")
 	}
-	command := simulator.CombatCommand{ActorID: actorID, ActionType: "BASIC_ATTACK"}
+	// Persist AUTO as the command so the simulator chooses a currently legal
+	// action from this actor's loadout/tactics. Replaying the command makes the
+	// timeout result deterministic and avoids getting stuck when a basic attack
+	// is unavailable because of status or target rules.
+	command := simulator.CombatCommand{ActorID: actorID, ActionType: "AUTO"}
 	commands, err := decodeCombatCommands(row.Commands)
 	if err != nil {
 		return err
@@ -623,6 +627,19 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock combat session"})
+		return
+	}
+	if row.Status != "active" {
+		state, logs, _, replayErr := replayCombatSession(row, nil)
+		if replayErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay completed combat"})
+			return
+		}
+		response := combatSessionResponse(row, state, logs)
+		if row.Status == "complete" {
+			response["winner"] = combatSessionWinner(state)
+		}
+		c.JSON(http.StatusConflict, response)
 		return
 	}
 	if req.Command.ActorID != playerID.String() {

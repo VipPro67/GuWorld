@@ -356,6 +356,7 @@ func resolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		if settleErr != nil {
 			return nil, fmt.Errorf("failed to settle PvP defender: %w", settleErr)
 		}
+		GrantPvpInitiatorCooldown(tx, player.ID, 30*time.Second)
 	}
 
 	qiGained := AddHumanQi(player, outcome.HumanQiReward)

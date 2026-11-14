@@ -1422,11 +1422,11 @@ Sau mỗi lần suy diễn, bảng **điểm của chính đạo hữu** (Cổ /
 
 Actor quái trên World Map hiện là snapshot Redis dùng cho hiển thị và công cụ quản trị. Chúng không tự phát hiện người chơi, đuổi đánh, gây sát thương hoặc mở combat. Combat turn-based được kích hoạt từ ô quái trên bản đồ lưới; bridge giữa actor Redis và encounter chưa được triển khai. Spawn tĩnh vẫn dùng `respawn_seconds` (mặc định 300 giây nếu giá trị nhỏ hơn 1).
 
-Người chơi trong cùng instance realtime có thể được chọn bằng cách nhấp vào nhân vật hoặc dùng phím chuyển mục tiêu. Bảng mục tiêu cho phép xem hồ sơ, mời tổ đội, nhắn riêng và gửi lời mời giao dịch. Tấn công PvP realtime đã gỡ; các flow PvP theo lượt chưa được xác nhận end-to-end.
+PvP bản đồ dùng trận theo lượt có điều khiển hai phía. Nhấp vào người chơi trên bản đồ để chọn mục tiêu, sau đó **Khai chiến**; không cần đối thủ chấp nhận. Người khởi chiến di chuyển áp sát mục tiêu và trận mở khi đủ tầm. HUB, SAFE_ZONE, cùng tổ đội, mục tiêu đang bận/ngoại tuyến và miễn chiến đều chặn khởi chiến theo luật server.
 
-PvP realtime trên bản đồ đã gỡ. Không sử dụng các mô tả bật/tắt PvP, tấn công trực tiếp hoặc rơi đồ PvP như gameplay hiện hành; việc hỗ trợ PvP theo lượt cần được kiểm tra riêng.
+Khi vào trận, cả hai người chơi dùng chung một phiên combat nhưng chỉ được gửi lệnh cho lượt của mình. Có thể chọn chiêu và mục tiêu từng lượt hoặc bật **Tự động lượt của tôi**; tùy chọn tự động chỉ ra quyết định cho lượt của người bật. Nếu người chơi mất kết nối hoặc hết thời gian quyết định, server tự chọn hành động hợp lệ theo chiến thuật đã lưu. Thắng/thua áp dụng kết toán, rơi đồ và hồi sinh như luật PvP; chạy thành công kết thúc encounter và giữ HP hiện tại.
 
-- HUB và SAFE_ZONE luôn cấm khởi tạo PvP, kể cả khi mục tiêu có Sát Khí cao. Miễn Chiến PvP của người chủ động chỉ bị phá khi trận thực sự bắt đầu.
+- HUB và SAFE_ZONE luôn cấm khởi tạo PvP, kể cả khi mục tiêu có Sát Khí cao. Miễn Chiến PvP của người chủ động chỉ bị phá khi trận thực sự bắt đầu. Người khởi chiến nhận 30 giây dư âm chiến đấu sau khi kết toán, tránh kéo liên tiếp nhiều người vào trận.
 
 Hồi sinh sau khi tử đạo trong combat:
 - Đạo hữu tử đạo sẽ hồi sinh tại **HUB/SAFE_ZONE an toàn gần nhất** (ưu tiên HUB, fallback SAFE ZONE) **trong Đại Vực tử vong** (không bị kéo sang Đại Vực khác); khi không có HUB/SAFE ZONE hợp lệ trên tầng đó thì hồi sinh tại **vị trí tử vong**.

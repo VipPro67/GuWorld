@@ -5764,12 +5764,21 @@ func Simulate(state *CombatState) []CombatLog {
 						logs = append(logs, turnLogs...)
 						return logs
 					}
-					var err error
-					chosen, target, err = selectCombatCommand(actor, enemyTargets, command)
-					if err != nil {
-						control.Error = err.Error()
-						logs = append(logs, turnLogs...)
-						return logs
+					if command.ActionType == "AUTO" {
+						chosen, target = chooseAutoCombatAction(actor, enemyTargets)
+						if chosen == nil {
+							control.Error = "no valid automatic action for active combatant"
+							logs = append(logs, turnLogs...)
+							return logs
+						}
+					} else {
+						var err error
+						chosen, target, err = selectCombatCommand(actor, enemyTargets, command)
+						if err != nil {
+							control.Error = err.Error()
+							logs = append(logs, turnLogs...)
+							return logs
+						}
 					}
 					control.Consumed++
 				} else {

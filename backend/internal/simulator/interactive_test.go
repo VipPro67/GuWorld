@@ -47,6 +47,20 @@ func TestInteractiveCombatRejectsUnloadedAction(t *testing.T) {
 	}
 }
 
+func TestInteractiveCombatAcceptsAutoActionForPlayerTurn(t *testing.T) {
+	state := interactiveTestState([]CombatCommand{{ActorID: "player", ActionType: "AUTO"}})
+	logs := Simulate(state)
+	if state.Interactive.Error != "" || state.Interactive.Consumed != 1 {
+		t.Fatalf("auto command was not consumed: %+v", state.Interactive)
+	}
+	if state.Enemies[0].HP >= 1000 {
+		t.Fatal("auto command did not select and execute a legal action")
+	}
+	if len(logs) == 0 || logs[len(logs)-1].Action == "AWAIT_COMMAND" {
+		t.Fatal("auto command should resolve the player's activation before pausing again")
+	}
+}
+
 func TestInteractiveCombatFastNPCActsMoreOften(t *testing.T) {
 	state := interactiveTestState(nil)
 	state.Allies[0].Speed = 1

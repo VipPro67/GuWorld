@@ -46,6 +46,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [interactiveReport, setInteractiveReport] = useState(false);
   const [interactiveSession, setInteractiveSession] = useState<ApiResponseData | null>(null);
   const [interactiveTarget, setInteractiveTarget] = useState("");
+  const [pvpAutoMode, setPvpAutoMode] = useState(false);
 
   const [autoHealHP, setAutoHealHP] = useState(false);
   const [healThreshold, setHealThreshold] = useState(30);
@@ -59,6 +60,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const startSimulationRef = useRef<() => Promise<boolean>>(async () => false);
   const actionLoadingRef = useRef(actionLoading);
   const completedInteractiveSessionRef = useRef<string | null>(null);
+  const pvpAutoSubmittedRef = useRef<string | null>(null);
+  const interactiveSessionIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     actionLoadingRef.current = actionLoading;
   }, [actionLoading]);
@@ -116,19 +119,26 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   useEffect(() => {
     if (!player.active_combat) return;
+    interactiveSessionIdRef.current = undefined;
+    setPvpAutoMode(false);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const loadSession = async () => {
-      const session = await fetchCombatSession();
+      const session = await fetchCombatSession(interactiveSessionIdRef.current);
       if (cancelled) return;
       if (session) {
+        interactiveSessionIdRef.current = String(session.session_id || "") || undefined;
+        if (session.status === "complete") {
+          showInteractiveReport(session);
+          return;
+        }
         setInteractiveSession((current: ApiResponseData | null) => !current || Number(session.revision) >= Number(current.revision) ? session : current);
         if (session.status === "active") timer = setTimeout(loadSession, 1000);
       } else if (player.active_combat?.enemy_type === "PVP") timer = setTimeout(loadSession, 1500);
     };
     void loadSession();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [player.active_combat?.combat_id, player.active_combat?.enemy_type, fetchCombatSession]);
+  }, [player.active_combat?.combat_id, player.active_combat?.enemy_type, fetchCombatSession, showInteractiveReport]);
 
   useEffect(() => {
     const event = combatSessionEvent;
@@ -167,7 +177,15 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       HealThreshold: healThreshold, AutoRestoreMana: autoRestoreMana, ManaThreshold: manaThreshold,
     };
     const session = await startCombatSession(loadout);
-    if (session) setInteractiveSession(session);
+    if (session) {
+      interactiveSessionIdRef.current = String(session.session_id || "") || undefined;
+      setInteractiveSession(session);
+    }
+  };
+
+  const handleStartPvpAuto = async () => {
+    await handleStartInteractive();
+    setPvpAutoMode(true);
   };
 
   const handleSubmitInteractive = async (action: ApiResponseData) => {
@@ -190,6 +208,16 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const isIncomingPvp = player.active_combat?.enemy_type === "PVP" &&
     Boolean(player.active_combat.combat_owner_id) && player.active_combat.combat_owner_id !== player.id;
+  const isPvpCombat = player.active_combat?.enemy_type === "PVP";
+
+  useEffect(() => {
+    if (player.active_combat?.enemy_type !== "PVP" || !interactiveSession || interactiveSession.status !== "active" || !pvpAutoMode || actionLoading) return;
+    if (interactiveSession.pending_actor !== player.id) return;
+    const submitKey = `${interactiveSession.session_id}:${interactiveSession.revision}`;
+    if (pvpAutoSubmittedRef.current === submitKey) return;
+    pvpAutoSubmittedRef.current = submitKey;
+    void handleSubmitInteractive({ action_type: "AUTO" });
+  }, [player.active_combat?.enemy_type, interactiveSession, pvpAutoMode, actionLoading, player.id, handleSubmitInteractive]);
 
   const isPartyLeader = party ? party.leader_id === player.id : true;
   const isPartyMemberNotLeader = Boolean(player.party_id) && (party === null || !isPartyLeader);
@@ -1122,6 +1150,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         onTarget={setInteractiveTarget}
         onAction={handleSubmitInteractive}
       />
+      {isPvpCombat && <button onClick={() => setPvpAutoMode((enabled) => !enabled)} disabled={actionLoading} className={`self-start rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50 ${pvpAutoMode ? "border-amber-600/60 bg-amber-950/40 text-amber-200" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"}`}>
+        Tự động lượt của tôi: {pvpAutoMode ? "Bật" : "Tắt"}
+      </button>}
       {player.active_combat?.enemy_type === "TOWER" && (
         <button onClick={() => void abandonTower()} disabled={actionLoading} className="self-start rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50">
           Rời tháp (tính 1 lượt)
@@ -1173,7 +1204,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           <Play className="w-6 h-6" />
           <span>Điều khiển từng lượt</span>
         </button>
-        <button onClick={handleStartSimulation} disabled={actionLoading || Boolean(interactiveSession)} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động mô phỏng</button>
+        {isPvpCombat ? (
+          <button onClick={() => void handleStartPvpAuto()} disabled={actionLoading || Boolean(interactiveSession) || isIncomingPvp} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động lượt của tôi</button>
+        ) : (
+          <button onClick={handleStartSimulation} disabled={actionLoading || Boolean(interactiveSession)} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động mô phỏng</button>
+        )}
         {isIncomingPvp && !interactiveSession && <p className="w-full rounded-lg border border-amber-800/50 bg-amber-950/30 p-3 text-sm text-amber-200">Đạo hữu đã bị kéo vào trận PvP. Đang chờ đối thủ nạp đội hình chiến đấu...</p>}
         {player.active_combat?.enemy_type === "TOWER" && <button onClick={() => void abandonTower()} disabled={actionLoading} className="rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50">Rời tháp (tính 1 lượt)</button>}
         {(() => {
