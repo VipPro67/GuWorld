@@ -5,11 +5,16 @@ export interface ItemIconSource {
   image_url?: string;
 }
 
-const iconUrl = (key: string) => "/assets/items/icons/" + key + (key === "blood-pill" ? ".png" : ".webp");
+const PNG_ICON_KEYS = new Set(["bagua-crystal", "animal-essence", "trigram-token", "nightfruit", "primordial-core"]);
+const iconUrl = (key: string) => "/assets/items/icons/" + key + (PNG_ICON_KEYS.has(key) ? ".png" : ".webp");
 
 export function resolveItemIconKey(item: ItemIconSource): string {
   const id = item.id.toLowerCase();
-  if (id === "item_random_race") return "blood-pill";
+  if (id === "bagua_crystals") return "bagua-crystal";
+  if (/^(poison_sand|poison_sac|rule_stone|rule_beast_horn|soul_sand|soul_devourer_stinger|space_crystal|void_beast_hide|strength_crystal|wild_boar_tusk|theft_crystal|theft_rat_claw|transformation_essence|polymorph_beast_skin|wisdom_pearl|fox_wisdom_brain)_rank1$/.test(id)) return "animal-essence";
+  if (/^(qian_sky|kun_earth|li_fire|ly_fire|gen_mountain|dui_swamp)_rank[678]$/.test(id)) return "trigram-token";
+  if (id === "xuan_rank1") return "nightfruit";
+  if (id === "xuan_rank5") return "primordial-core";
   const words = new Set((item.name.toLocaleLowerCase("vi").match(/\p{L}+/gu) ?? []));
   const has = (...terms: string[]) => terms.some((term) => words.has(term));
 

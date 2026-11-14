@@ -478,6 +478,8 @@ const GU_THEME_RULES: GuThemeRule[] = [
 
 export const CUSTOM_GU_ICONS: Record<string, string> = {
   // IDs (Uppercase & lowercase)
+  "GU_ALERT_BELL": "/assets/gu_icons/custom/gu_alert_bell_living.png",
+  "gu_alert_bell": "/assets/gu_icons/custom/gu_alert_bell_living.png",
   "FIVE_ELEMENTS_DIVINE_BARRIER_ARRAY": "/assets/gu_icons/custom/gu_five_elements_divine_barrier_array.png",
   "five_elements_divine_barrier_array": "/assets/gu_icons/custom/gu_five_elements_divine_barrier_array.png",
   "GU_TREASURE_MOONLIGHT_KING": "/assets/gu_icons/custom/gu_treasure_moonlight_king.png",
