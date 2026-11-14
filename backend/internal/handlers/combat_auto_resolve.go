@@ -58,6 +58,10 @@ func ResolveCombatFromSession(tx *sql.Tx, player *models.Player, loadout *simula
 }
 
 func resolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string, initialState *simulator.CombatState) (*CombatResolution, error) {
+	return resolveCombatWithTerminalState(tx, player, loadout, loadoutGuIDs, initialState, nil, nil)
+}
+
+func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string, initialState *simulator.CombatState, terminalState *simulator.CombatState, terminalLogs []simulator.CombatLog) (*CombatResolution, error) {
 	var err error
 	var pendingNotifications []notify.Notification
 	var immortalAnnouncements []immortalGuLootAnnouncement
@@ -65,6 +69,9 @@ func resolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 	// recorded in combat history even though ordinary PVE wins are not.
 	var immortalGuDropped bool
 	var publishClearedCell bool
+	if tx == nil {
+		return nil, fmt.Errorf("transaction is required for combat settlement")
+	}
 	if player.ActiveCombat == nil {
 		return nil, fmt.Errorf("no active combat")
 	}
@@ -97,17 +104,20 @@ func resolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		}
 	}
 
-	simState := initialState
-	if simState == nil {
-		simState, err = buildSimCombatState(tx, player, loadout, isVirtual)
+	sourceState := initialState
+	if sourceState == nil && terminalState != nil {
+		sourceState = terminalState
+	}
+	if sourceState == nil {
+		sourceState, err = buildSimCombatState(tx, player, loadout, isVirtual)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize initiator stats: %w", err)
 		}
 	}
-	simPlayer := simState.Allies[0]
+	simPlayer := sourceState.Allies[0]
 
 	var combatantInfos []CombatantInfo
-	for _, ally := range simState.Allies {
+	for _, ally := range sourceState.Allies {
 		cInst := CombatantInfo{
 			ID:            ally.ID,
 			Name:          ally.Name,
@@ -162,11 +172,23 @@ func resolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 		}
 	}
 
-	// Run Simulator
-	simState.CaptureTurnSnapshots = true
-	logs := simulator.Simulate(simState)
-	if simState.Interactive != nil && (simState.Interactive.PendingActor != "" || simState.Interactive.Error != "") {
-		return nil, fmt.Errorf("interactive combat has not reached a valid terminal state")
+	var simState *simulator.CombatState
+	var logs []simulator.CombatLog
+
+	if terminalState != nil && terminalLogs != nil {
+		simState = terminalState
+		logs = make([]simulator.CombatLog, len(terminalLogs))
+		copy(logs, terminalLogs)
+	} else {
+		simState = sourceState
+		simState.CaptureTurnSnapshots = true
+		logs = simulator.Simulate(simState)
+		if simState.Interactive != nil && (simState.Interactive.PendingActor != "" || simState.Interactive.Error != "") {
+			return nil, fmt.Errorf("interactive combat has not reached a valid terminal state")
+		}
+	}
+	if len(simState.Allies) > 0 {
+		simPlayer = simState.Allies[0]
 	}
 
 	formationLogs := BuildFormationLogs(simState.Allies)

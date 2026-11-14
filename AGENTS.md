@@ -177,7 +177,7 @@ when changing concurrent gameplay logic.
 Before modifying combat:
 
 * Inspect `backend/internal/simulator/` and `backend/internal/handlers/combat_*.go`.
-* Inspect `backend/internal/handlers/combat.go` (file split: shared mechanics, history, practice endpoints under the combat_ prefix).
+* Inspect `backend/internal/handlers/combat_lifecycle.go` (file split: shared mechanics, history, practice endpoints under the combat_ prefix).
 * Inspect relevant player/Gu/effect models.
 * Check mana/energy handling.
 * Check optimistic frontend updates if the API response affects combat state.

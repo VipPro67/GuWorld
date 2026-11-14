@@ -220,7 +220,8 @@ func autoCombatSessionCommand(ctx context.Context, sessionID, playerID uuid.UUID
 		return err
 	}
 	row.Commands = commandsJSON
-	state, _, _, err = replayCombatSession(row, nil)
+	var logs []simulator.CombatLog
+	state, logs, _, err = replayCombatSession(row, nil)
 	if err != nil || state.Interactive.Error != "" || (state.Interactive.PendingActor != "" && state.Interactive.Consumed != len(commands)) {
 		return errors.New("auto-selected combat action was rejected")
 	}
@@ -246,7 +247,7 @@ func autoCombatSessionCommand(ctx context.Context, sessionID, playerID uuid.UUID
 			return err
 		}
 		initial.Interactive.Commands = commands
-		result, err = ResolveCombatFromSession(tx, &player, &loadout, &initial)
+		result, err = SettleCombatSession(tx, &player, &loadout, &initial, state, logs)
 		if err != nil {
 			return err
 		}
@@ -863,19 +864,22 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 		row.DeadlineAt = sql.NullTime{Time: deadline, Valid: true}
 	} else {
 		var playerLoadout simulator.CombatLoadout
-		if err = json.Unmarshal(row.Loadout, &playerLoadout); err == nil {
-			var playerErr error
-			player, playerErr = evaluateManaTxEquipped(tx, row.PlayerID)
-			if playerErr != nil {
-				err = playerErr
-			} else {
-				var initial simulator.CombatState
-				if err = json.Unmarshal(row.InitialState, &initial); err == nil {
-					initial.Interactive.Commands = commands
-					result, err = ResolveCombatFromSession(tx, &player, &playerLoadout, &initial)
-				}
-			}
+		if err = json.Unmarshal(row.Loadout, &playerLoadout); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode combat loadout"})
+			return
 		}
+		player, err = evaluateManaTxEquipped(tx, row.PlayerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to evaluate player state"})
+			return
+		}
+		var initial simulator.CombatState
+		if err = json.Unmarshal(row.InitialState, &initial); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode initial combat state"})
+			return
+		}
+		initial.Interactive.Commands = commands
+		result, err = SettleCombatSession(tx, &player, &playerLoadout, &initial, state, logs)
 		if err == nil {
 			_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, pending_plans=$2, revision=$3, status='complete', pending_actor='', deadline_at=NULL, updated_at=NOW() WHERE id=$4`, commandsJSON, pendingPlansJSON, row.Revision, row.ID)
 			row.Status = "complete"
