@@ -56,8 +56,14 @@ func TestInteractiveCombatAcceptsAutoActionForPlayerTurn(t *testing.T) {
 	if state.Enemies[0].HP >= 1000 {
 		t.Fatal("auto command did not select and execute a legal action")
 	}
-	if len(logs) == 0 || (logs[len(logs)-1].Action == "AWAIT_COMMAND" && logs[len(logs)-1].Turn == 1) {
-		t.Fatal("auto command should resolve the player's activation before pausing again")
+	if len(logs) == 0 || logs[len(logs)-1].Action != "AWAIT_COMMAND" || logs[len(logs)-1].Turn <= 1 {
+		t.Fatalf("auto command should resolve the player's activation before pausing on a later turn; last log: %+v", logs[len(logs)-1])
+	}
+	if state.Interactive.PendingActor != "player" {
+		t.Fatalf("expected pending actor %q, got %q", "player", state.Interactive.PendingActor)
+	}
+	if logs[len(logs)-1].Snapshot == nil {
+		t.Fatal("pause must include a recoverable battlefield snapshot")
 	}
 }
 
