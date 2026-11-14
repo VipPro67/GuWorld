@@ -175,7 +175,7 @@ var statusDefinitions = func() map[string]Definition {
 		"DREAM_PRISON", "DREAM_ILLUSION", "LUCK_SIPHON", "LUCK_CURSE_REVERSE",
 		"BERSERK", "CALCULATED", "BLOOD_SACRIFICE",
 		"BEAR_FORM", "EAGLE_FORM", "ADAPTIVE_RESIST", "BONE_ARMOR",
-		"METAL_AEGIS", "CLOUD_MIST")
+		"METAL_AEGIS", "CLOUD_MIST", "SWORD_MARK")
 	add(DispositionPartial, "combat-legacy", "STUN", "FREEZE", "SILENCE")
 	add(DispositionMigrate, "effect-runtime-v2", "ROOT", "CONFUSION", "DECAY")
 	return result
