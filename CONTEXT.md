@@ -211,6 +211,10 @@ _Avoid_: lệnh client tự tuần tự hóa kết quả combat
 Một vị trí trong kế hoạch hành động, chứa một action được phân xử theo luật initiative và trạng thái combat tại thời điểm đó.
 _Avoid_: mỗi slot tương đương một lượt riêng
 
+**Nhịp kế hoạch chung**:
+Khoảng phân xử combat mà các bên đã sẵn sàng cùng khóa kế hoạch; action set của actor AI được dựng khi activation riêng sẵn sàng và nhập cùng bộ phân xử nếu trùng nhịp.
+_Avoid_: lượt realtime, mọi actor hành động mỗi nhịp
+
 **Chiến thuật auto combat của người chơi**:
 Các ưu tiên và điều kiện do người chơi đặt để chọn action khi bật auto hoặc khi server thay người chơi ra quyết định.
 _Avoid_: combat AI profile

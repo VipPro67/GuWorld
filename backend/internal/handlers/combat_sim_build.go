@@ -24,12 +24,13 @@ import (
 // the already-derived isVirtual flag.
 func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, isVirtual bool) (*simulator.CombatState, error) {
 	simState := &simulator.CombatState{
-		Turn:          0,
-		Seed:          time.Now().UnixNano(),
-		BossPhase:     0,
-		VirtualMode:   isVirtual,
-		ApertureHP:    player.ActiveCombat.ApertureHP,
-		ApertureMaxHP: player.ActiveCombat.ApertureMaxHP,
+		Turn:                0,
+		Seed:                time.Now().UnixNano(),
+		MaxGuActionsPerTurn: maxCombatGuActionsPerTurn(),
+		BossPhase:           0,
+		VirtualMode:         isVirtual,
+		ApertureHP:          player.ActiveCombat.ApertureHP,
+		ApertureMaxHP:       player.ActiveCombat.ApertureMaxHP,
 	}
 
 	simPlayer, err := buildSimCombatant(tx, player, isVirtual, true, loadout)

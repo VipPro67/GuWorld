@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +24,17 @@ import (
 
 const combatDecisionTimeout = 45 * time.Second
 
+func maxCombatGuActionsPerTurn() int {
+	value, err := strconv.Atoi(os.Getenv("COMBAT_MAX_GU_ACTIONS_PER_TURN"))
+	if err != nil || value < 1 {
+		return 3
+	}
+	if value > 10 {
+		return 10
+	}
+	return value
+}
+
 type combatSessionRow struct {
 	ID            uuid.UUID
 	PlayerID      uuid.UUID
@@ -31,6 +44,7 @@ type combatSessionRow struct {
 	InitialState  []byte
 	Loadout       []byte
 	Commands      []byte
+	PendingPlans  []byte
 	PendingActor  string
 	DeadlineAt    sql.NullTime
 }
@@ -173,26 +187,49 @@ func autoCombatSessionCommand(ctx context.Context, sessionID, playerID uuid.UUID
 	if actor == nil {
 		return errors.New("pending combat actor not found")
 	}
-	// Persist AUTO as the command so the simulator chooses a currently legal
-	// action from this actor's loadout/tactics. Replaying the command makes the
-	// timeout result deterministic and avoids getting stuck when a basic attack
-	// is unavailable because of status or target rules.
-	command := simulator.CombatCommand{ActorID: actorID, ActionType: "AUTO"}
 	commands, err := decodeCombatCommands(row.Commands)
 	if err != nil {
 		return err
 	}
-	commands = append(commands, command)
-	state, _, _, err = replayCombatSession(row, &command)
-	if err != nil || state.Interactive.Error != "" || state.Interactive.Consumed != len(commands) {
-		return errors.New("auto-selected combat action was rejected")
+	if row.ParticipantID.Valid {
+		plans := decodePendingCombatPlans(row.PendingPlans)
+		if len(plans) == 0 {
+			plans[row.PlayerID.String()] = simulator.CombatCommand{ActorID: row.PlayerID.String(), ActionType: "AUTO"}
+			plans[row.ParticipantID.UUID.String()] = simulator.CombatCommand{ActorID: row.ParticipantID.UUID.String(), ActionType: "AUTO"}
+		} else {
+			missingID := row.PlayerID.String()
+			if _, hasOwnerPlan := plans[missingID]; hasOwnerPlan {
+				missingID = row.ParticipantID.UUID.String()
+			}
+			plans[missingID] = simulator.CombatCommand{ActorID: missingID, ActionType: "AUTO"}
+		}
+		secondID := row.PlayerID.String()
+		if actorID == secondID {
+			secondID = row.ParticipantID.UUID.String()
+		}
+		commands = append(commands, plans[actorID], plans[secondID])
+		row.PendingPlans = []byte("{}")
+	} else {
+		// Persist AUTO so timeout selection is deterministic and uses the
+		// currently legal actions from the actor's loaded tactics/profile.
+		command := simulator.CombatCommand{ActorID: actorID, ActionType: "AUTO"}
+		commands = append(commands, command)
 	}
 	commandsJSON, err := json.Marshal(commands)
 	if err != nil {
 		return err
 	}
+	row.Commands = commandsJSON
+	state, _, _, err = replayCombatSession(row, nil)
+	if err != nil || state.Interactive.Error != "" || (state.Interactive.PendingActor != "" && state.Interactive.Consumed != len(commands)) {
+		return errors.New("auto-selected combat action was rejected")
+	}
 	commandID := uuid.New()
 	row.Revision++
+	pendingPlansJSON := row.PendingPlans
+	if len(pendingPlansJSON) == 0 {
+		pendingPlansJSON = []byte("{}")
+	}
 	var result *CombatResolution
 	var player models.Player
 	if state.Interactive.PendingActor == "" {
@@ -213,11 +250,11 @@ func autoCombatSessionCommand(ctx context.Context, sessionID, playerID uuid.UUID
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, revision=$2, status='complete', pending_actor='', deadline_at=NULL, updated_at=NOW() WHERE id=$3`, commandsJSON, row.Revision, row.ID)
+		_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, pending_plans=$2, revision=$3, status='complete', pending_actor='', deadline_at=NULL, updated_at=NOW() WHERE id=$4`, commandsJSON, pendingPlansJSON, row.Revision, row.ID)
 		row.Status = "complete"
 	} else {
 		deadline := time.Now().Add(combatDecisionTimeout)
-		_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, revision=$2, pending_actor=$3, deadline_at=$4, updated_at=NOW() WHERE id=$5`, commandsJSON, row.Revision, state.Interactive.PendingActor, deadline, row.ID)
+		_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, pending_plans=$2, revision=$3, pending_actor=$4, deadline_at=$5, updated_at=NOW() WHERE id=$6`, commandsJSON, pendingPlansJSON, row.Revision, state.Interactive.PendingActor, deadline, row.ID)
 	}
 	if err != nil {
 		return err
@@ -260,7 +297,7 @@ type combatSessionCommandRequest struct {
 
 func loadCombatSession(tx *sql.Tx, playerID uuid.UUID, sessionID *uuid.UUID, lock bool) (combatSessionRow, error) {
 	var row combatSessionRow
-	query := `SELECT id, player_id, participant_id, revision, status, initial_state, loadout, commands, deadline_at
+	query := `SELECT id, player_id, participant_id, revision, status, initial_state, loadout, commands, pending_plans, deadline_at
 		FROM combat_sessions WHERE (player_id = $1 OR participant_id = $1)`
 	args := []interface{}{playerID}
 	if sessionID != nil {
@@ -272,7 +309,7 @@ func loadCombatSession(tx *sql.Tx, playerID uuid.UUID, sessionID *uuid.UUID, loc
 	if lock {
 		query += ` FOR UPDATE`
 	}
-	err := tx.QueryRow(query, args...).Scan(&row.ID, &row.PlayerID, &row.ParticipantID, &row.Revision, &row.Status, &row.InitialState, &row.Loadout, &row.Commands, &row.DeadlineAt)
+	err := tx.QueryRow(query, args...).Scan(&row.ID, &row.PlayerID, &row.ParticipantID, &row.Revision, &row.Status, &row.InitialState, &row.Loadout, &row.Commands, &row.PendingPlans, &row.DeadlineAt)
 	return row, err
 }
 
@@ -296,7 +333,7 @@ func replayCombatSession(row combatSessionRow, extra *simulator.CombatCommand) (
 	return &state, logs, commands, nil
 }
 
-func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, logs []simulator.CombatLog) gin.H {
+func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, logs []simulator.CombatLog, viewers ...uuid.UUID) gin.H {
 	var snapshot *simulator.CombatSnapshot
 	for i := len(logs) - 1; i >= 0; i-- {
 		if logs[i].Snapshot != nil {
@@ -307,8 +344,10 @@ func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, l
 	response := gin.H{
 		"session_id": row.ID, "revision": row.Revision, "status": row.Status,
 		"snapshot": snapshot, "logs": logs,
+		"max_gu_actions": maxCombatGuActionsPerTurn(),
 	}
 	if state != nil && state.Interactive != nil {
+		response["planning"] = row.ParticipantID.Valid && len(decodePendingCombatPlans(row.PendingPlans)) < 2
 		response["pending_actor"] = state.Interactive.PendingActor
 		response["command_error"] = state.Interactive.Error
 		if state.Interactive.TribulationEventID != "" {
@@ -316,8 +355,12 @@ func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, l
 		}
 		// Send the current combat roster and the pending actor's prepared actions
 		// so clients can render legal choices without rebuilding simulator rules.
-		response["allies"] = combatSessionSide(state.Allies, state.Interactive.PendingActor, state.Enemies)
-		response["enemies"] = combatSessionSide(state.Enemies, state.Interactive.PendingActor, state.Allies)
+		viewerActors := map[string]bool{}
+		if len(viewers) > 0 {
+			viewerActors[viewers[0].String()] = true
+		}
+		response["allies"] = combatSessionSide(state.Allies, state.Interactive.PendingActor, state.Enemies, viewerActors, state.Interactive.ManualActors)
+		response["enemies"] = combatSessionSide(state.Enemies, state.Interactive.PendingActor, state.Allies, viewerActors, state.Interactive.ManualActors)
 	}
 	if row.DeadlineAt.Valid {
 		response["deadline_at"] = row.DeadlineAt.Time
@@ -325,7 +368,27 @@ func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, l
 	return response
 }
 
-func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opposingSide []*simulator.CombatantAuto) []gin.H {
+func combatSessionResponseForPlayer(row combatSessionRow, state *simulator.CombatState, logs []simulator.CombatLog, playerID uuid.UUID) gin.H {
+	response := combatSessionResponse(row, state, logs, playerID)
+	response["my_actor_id"] = playerID.String()
+	if row.ParticipantID.Valid {
+		plans := decodePendingCombatPlans(row.PendingPlans)
+		response["my_plan_locked"] = plans[playerID.String()].ActorID != ""
+		if len(plans) > 0 {
+			response["pending_actor"] = playerID.String()
+		}
+	}
+	return response
+}
+
+func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opposingSide []*simulator.CombatantAuto, manualActors ...map[string]bool) []gin.H {
+	viewerActors, allManualActors := map[string]bool{}, map[string]bool{}
+	if len(manualActors) > 0 && manualActors[0] != nil {
+		viewerActors = manualActors[0]
+	}
+	if len(manualActors) > 1 && manualActors[1] != nil {
+		allManualActors = manualActors[1]
+	}
 	result := make([]gin.H, 0, len(side))
 	for _, combatant := range side {
 		if combatant == nil {
@@ -334,7 +397,7 @@ func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opp
 		entry := gin.H{"id": combatant.ID, "name": combatant.Name, "kind": combatant.Kind,
 			"hp": combatant.HP, "max_hp": combatant.MaxHP, "mana": combatant.Mana,
 			"max_mana": combatant.MaxMana, "dead": combatant.IsDead}
-		if combatant.ID == pendingActor {
+		if viewerActors[combatant.ID] || (combatant.ID == pendingActor && !allManualActors[combatant.ID]) {
 			actions := make([]gin.H, 0, len(combatant.Actions)+2)
 			fallbackBasicAttack := simulator.SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", TargetType: "SINGLE"}
 			basicAttack := gin.H{"action_type": "BASIC_ATTACK", "name": "Đánh thường",
@@ -347,7 +410,8 @@ func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opp
 						basicAttack = gin.H{"action_type": action.ActionType, "source_id": action.SourceID,
 							"instance_id": action.InstanceID, "name": action.Name, "target_type": action.TargetType,
 							"mana_cost": action.ManaCost, "rank": action.Rank, "path": action.Path,
-							"damage": action.Damage, "defense": action.Defense, "healing": action.Healing,
+							"component_gu_ids": action.ComponentGuIDs,
+							"damage":           action.Damage, "defense": action.Defense, "healing": action.Healing,
 							"reason": action.Reason, "target_ids": simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action)}
 						hasBasicAttack = true
 					}
@@ -356,7 +420,8 @@ func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opp
 				actions = append(actions, gin.H{"action_type": action.ActionType, "source_id": action.SourceID,
 					"instance_id": action.InstanceID, "name": action.Name, "target_type": action.TargetType,
 					"mana_cost": action.ManaCost, "rank": action.Rank, "path": action.Path,
-					"damage": action.Damage, "defense": action.Defense, "healing": action.Healing,
+					"component_gu_ids": action.ComponentGuIDs,
+					"damage":           action.Damage, "defense": action.Defense, "healing": action.Healing,
 					"reason": action.Reason, "target_ids": simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action)})
 			}
 			actions = append([]gin.H{basicAttack}, actions...)
@@ -366,6 +431,14 @@ func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opp
 		result = append(result, entry)
 	}
 	return result
+}
+
+func decodePendingCombatPlans(raw []byte) map[string]simulator.CombatCommand {
+	plans := make(map[string]simulator.CombatCommand)
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &plans)
+	}
+	return plans
 }
 
 func publishCombatSessionEvent(row combatSessionRow, status, pendingActor string) {
@@ -466,6 +539,7 @@ func StartCombatSession(c *gin.Context) {
 	}
 	state.Interactive = &simulator.InteractiveCombat{
 		ManualActors:       manualActors,
+		MaxGuActions:       maxCombatGuActionsPerTurn(),
 		TribulationEventID: tribulationEventID,
 	}
 	initialJSON, err := json.Marshal(state)
@@ -499,7 +573,9 @@ func StartCombatSession(c *gin.Context) {
 	}
 	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
 	publishCombatSessionEvent(row, "active", state.Interactive.PendingActor)
-	c.JSON(http.StatusCreated, combatSessionResponse(row, state, logs))
+	response := combatSessionResponse(row, state, logs, playerID)
+	response["my_actor_id"] = playerID.String()
+	c.JSON(http.StatusCreated, response)
 }
 
 func GetCombatSession(c *gin.Context) {
@@ -528,7 +604,8 @@ func GetCombatSession(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
 		return
 	}
-	c.JSON(http.StatusOK, combatSessionResponse(row, state, logs))
+	response := combatSessionResponseForPlayer(row, state, logs, playerID)
+	c.JSON(http.StatusOK, response)
 }
 
 func GetCombatSessionByID(c *gin.Context) {
@@ -562,7 +639,7 @@ func GetCombatSessionByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
 		return
 	}
-	response := combatSessionResponse(row, state, logs)
+	response := combatSessionResponseForPlayer(row, state, logs, playerID)
 	if row.Status == "complete" {
 		response["winner"] = combatSessionWinner(state)
 	}
@@ -635,15 +712,20 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay completed combat"})
 			return
 		}
-		response := combatSessionResponse(row, state, logs)
+		response := combatSessionResponseForPlayer(row, state, logs, playerID)
 		if row.Status == "complete" {
 			response["winner"] = combatSessionWinner(state)
 		}
 		c.JSON(http.StatusConflict, response)
 		return
 	}
-	if req.Command.ActorID != playerID.String() {
+	isSharedPvp := row.ParticipantID.Valid
+	if (!isSharedPvp && req.Command.ActorID != playerID.String()) || (isSharedPvp && req.Command.ActorID != playerID.String()) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only the active player can submit this turn"})
+		return
+	}
+	if isSharedPvp && req.Command.ActionType != "PLAN" && req.Command.ActionType != "AUTO" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PvP requires locking a complete plan"})
 		return
 	}
 	var seen bool
@@ -657,21 +739,108 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
 			return
 		}
-		c.JSON(http.StatusConflict, combatSessionResponse(row, state, logs))
+		c.JSON(http.StatusConflict, combatSessionResponseForPlayer(row, state, logs, playerID))
 		return
 	}
-	state, logs, commands, err := replayCombatSession(row, &req.Command)
+	var state *simulator.CombatState
+	var logs []simulator.CombatLog
+	var commands []simulator.CombatCommand
+	if isSharedPvp {
+		current, currentLogs, _, replayErr := replayCombatSession(row, nil)
+		if replayErr != nil || current.Interactive.PendingActor == "" {
+			c.JSON(http.StatusConflict, gin.H{"error": "PvP is not accepting a combat plan"})
+			return
+		}
+		if req.Command.ActionType == "PLAN" {
+			if planErr := simulator.ValidateCombatPlan(current, playerID.String(), req.Command.Plan, maxCombatGuActionsPerTurn()); planErr != nil {
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": planErr.Error()})
+				return
+			}
+		}
+		plans := decodePendingCombatPlans(row.PendingPlans)
+		if _, exists := plans[playerID.String()]; exists {
+			c.JSON(http.StatusConflict, combatSessionResponseForPlayer(row, current, currentLogs, playerID))
+			return
+		}
+		if req.Command.ActionType == "PLAN" && (len(req.Command.Plan) == 0 || len(req.Command.Plan) > maxCombatGuActionsPerTurn()+1) {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Combat plan is empty or exceeds the action limit"})
+			return
+		}
+		plans[playerID.String()] = req.Command
+		plansJSON, marshalErr := json.Marshal(plans)
+		if marshalErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode PvP plan"})
+			return
+		}
+		row.Revision++
+		deadline := time.Now().Add(combatDecisionTimeout)
+		if len(plans) < 2 {
+			_, err = tx.Exec(`UPDATE combat_sessions SET pending_plans=$1, revision=$2, pending_actor=$3, deadline_at=$4, updated_at=NOW() WHERE id=$5`, plansJSON, row.Revision, current.Interactive.PendingActor, deadline, row.ID)
+			if err == nil {
+				_, err = tx.Exec(`INSERT INTO combat_session_commands(session_id, command_id, revision) VALUES($1,$2,$3)`, row.ID, req.CommandID, row.Revision)
+			}
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save PvP plan"})
+				return
+			}
+			if err := tx.Commit(); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit PvP plan"})
+				return
+			}
+			row.PendingPlans, row.DeadlineAt = plansJSON, sql.NullTime{Time: deadline, Valid: true}
+			response := combatSessionResponseForPlayer(row, current, currentLogs, playerID)
+			response["my_actor_id"], response["pending_actor"] = playerID.String(), playerID.String()
+			response["my_plan_locked"] = true
+			publishCombatSessionEvent(row, "active", current.Interactive.PendingActor)
+			c.JSON(http.StatusOK, response)
+			return
+		}
+		firstID := current.Interactive.PendingActor
+		secondID := row.PlayerID.String()
+		if firstID == row.PlayerID.String() {
+			secondID = row.ParticipantID.UUID.String()
+		}
+		orderedPlans := []simulator.CombatCommand{plans[firstID], plans[secondID]}
+		commands, err = decodeCombatCommands(row.Commands)
+		if err == nil {
+			commands = append(commands, orderedPlans...)
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode combat commands"})
+			return
+		}
+		commandsJSON, marshalErr := json.Marshal(commands)
+		if marshalErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode combat commands"})
+			return
+		}
+		row.Commands, row.PendingPlans = commandsJSON, []byte("{}")
+		state, logs, _, err = replayCombatSession(row, nil)
+	} else {
+		if req.Command.ActionType == "PLAN" {
+			current, _, _, replayErr := replayCombatSession(row, nil)
+			if replayErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
+				return
+			}
+			if planErr := simulator.ValidateCombatPlan(current, playerID.String(), req.Command.Plan, maxCombatGuActionsPerTurn()); planErr != nil {
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": planErr.Error()})
+				return
+			}
+		}
+		state, logs, commands, err = replayCombatSession(row, &req.Command)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat command"})
 		return
 	}
-	if state.Interactive.Error != "" || state.Interactive.Consumed != len(commands) {
+	if state.Interactive.Error != "" || (state.Interactive.PendingActor != "" && state.Interactive.Consumed != len(commands)) {
 		current, currentLogs, _, replayErr := replayCombatSession(row, nil)
 		if replayErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replay combat session"})
 			return
 		}
-		response := combatSessionResponse(row, current, currentLogs)
+		response := combatSessionResponseForPlayer(row, current, currentLogs, playerID)
 		response["error"] = state.Interactive.Error
 		c.JSON(http.StatusUnprocessableEntity, response)
 		return
@@ -682,11 +851,15 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 		return
 	}
 	row.Revision++
+	pendingPlansJSON := row.PendingPlans
+	if len(pendingPlansJSON) == 0 {
+		pendingPlansJSON = []byte("{}")
+	}
 	var result *CombatResolution
 	var player models.Player
 	if state.Interactive.PendingActor != "" {
 		deadline := time.Now().Add(combatDecisionTimeout)
-		_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, revision=$2, pending_actor=$3, deadline_at=$4, updated_at=NOW() WHERE id=$5`, commandsJSON, row.Revision, state.Interactive.PendingActor, deadline, row.ID)
+		_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, pending_plans=$2, revision=$3, pending_actor=$4, deadline_at=$5, updated_at=NOW() WHERE id=$6`, commandsJSON, pendingPlansJSON, row.Revision, state.Interactive.PendingActor, deadline, row.ID)
 		row.DeadlineAt = sql.NullTime{Time: deadline, Valid: true}
 	} else {
 		var playerLoadout simulator.CombatLoadout
@@ -704,7 +877,7 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 			}
 		}
 		if err == nil {
-			_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, revision=$2, status='complete', pending_actor='', deadline_at=NULL, updated_at=NOW() WHERE id=$3`, commandsJSON, row.Revision, row.ID)
+			_, err = tx.Exec(`UPDATE combat_sessions SET commands=$1, pending_plans=$2, revision=$3, status='complete', pending_actor='', deadline_at=NULL, updated_at=NOW() WHERE id=$4`, commandsJSON, pendingPlansJSON, row.Revision, row.ID)
 			row.Status = "complete"
 			row.DeadlineAt.Valid = false
 		}
@@ -737,10 +910,11 @@ func SubmitCombatSessionCommand(c *gin.Context) {
 		publishCombatSessionEvent(row, "active", state.Interactive.PendingActor)
 	}
 	if result != nil {
-		response := combatSessionResponse(row, state, result.Logs)
+		response := combatSessionResponseForPlayer(row, state, result.Logs, playerID)
 		response["winner"] = result.Winner
 		c.JSON(http.StatusOK, response)
 		return
 	}
-	c.JSON(http.StatusOK, combatSessionResponse(row, state, logs))
+	response := combatSessionResponseForPlayer(row, state, logs, playerID)
+	c.JSON(http.StatusOK, response)
 }

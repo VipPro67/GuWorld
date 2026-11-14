@@ -18,6 +18,9 @@ type CombatActionView = Record<string, unknown> & {
   reason?: string;
   target_ids?: string[];
   path?: string[];
+  component_gu_ids?: string[];
+  target_id?: string;
+  plan?: CombatActionView[];
 };
 
 type CombatantView = Record<string, unknown> & {
@@ -49,7 +52,7 @@ interface InteractiveCombatPanelProps {
   targetId: string;
   actionLoading: boolean;
   onTarget: (targetId: string) => void;
-  onAction: (action: CombatActionView) => Promise<void>;
+  onAction: (action: CombatActionView) => Promise<unknown>;
 }
 
 const asCombatants = (value: unknown): CombatantView[] =>
@@ -144,11 +147,14 @@ export function InteractiveCombatPanel({
   onAction,
 }: InteractiveCombatPanelProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [queuedPlan, setQueuedPlan] = useState<CombatActionView[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const allies = asCombatants(session.allies);
   const enemies = asCombatants(session.enemies);
   const logs = asLogs(session.logs);
-  const pendingActorId = String(session.pending_actor || "");
+  const planning = Boolean(session.planning);
+  const planLocked = Boolean(session.my_plan_locked);
+  const pendingActorId = planning ? playerId : String(session.pending_actor || "");
   const actor = useMemo(
     () => [...allies, ...enemies].find((combatant) => combatant.id === pendingActorId),
     [allies, enemies, pendingActorId],
@@ -162,7 +168,9 @@ export function InteractiveCombatPanel({
     return [`${actionType}|${identity}`, action] as const;
   })).values());
   const ownsTurn = actor?.id === playerId;
-  const canChooseTargets = ownsTurn && !actionLoading && !submitting;
+  const canChooseTargets = ownsTurn && !planLocked && !actionLoading && !submitting;
+  const maxGuActions = Math.max(1, Number(session.max_gu_actions || 3));
+  const queuedGuActions = queuedPlan.filter((action) => action.action_type !== "BASIC_ATTACK").length;
   const lastTurn = logs.length > 0 ? value(logs[logs.length - 1].turn) : 0;
   const activeActions = actions.filter((action) => ["GU_SKILL", "KILLER_MOVE"].includes(String(action.action_type || "")));
   const targetActions = actions.filter((action) =>
@@ -176,11 +184,40 @@ export function InteractiveCombatPanel({
     if (container) container.scrollTop = container.scrollHeight;
   }, [logs.length]);
 
-  const submitAction = async (action: CombatActionView) => {
+  useEffect(() => { setQueuedPlan([]); }, [session.revision, pendingActorId]);
+
+  const queueAction = (action: CombatActionView) => {
+    if (planLocked) return;
+    const actionType = String(action.action_type || "");
+    if (actionType === "FLEE") {
+      setQueuedPlan([{ ...action, target_id: "" }]);
+      return;
+    }
+    if (queuedPlan.some((item) => item.action_type === "FLEE")) return;
+    if (actionType === "BASIC_ATTACK") {
+      setQueuedPlan((current) => [...current.filter((item) => item.action_type !== "BASIC_ATTACK"), { ...action, target_id: targetId }]);
+      return;
+    }
+    if (queuedGuActions >= maxGuActions) return;
+    const guIDs = [
+      ...(Array.isArray(action.component_gu_ids) ? action.component_gu_ids : []),
+      ...(actionType === "GU_SKILL" ? [String(action.instance_id || action.source_id || "")] : []),
+    ].filter(Boolean);
+    const usedGuIDs = new Set(queuedPlan.flatMap((item) => [
+      ...(Array.isArray(item.component_gu_ids) ? item.component_gu_ids : []),
+      ...(item.action_type === "GU_SKILL" ? [String(item.instance_id || item.source_id || "")] : []),
+    ].filter(Boolean)));
+    if (guIDs.some((id) => usedGuIDs.has(id))) return;
+    setQueuedPlan((current) => [...current.filter((item) => item.action_type !== "BASIC_ATTACK"), { ...action, target_id: targetId }]);
+  };
+
+  const submitAction = async () => {
     if (actionLoading || submitting) return;
+    if (!queuedPlan.length) return;
     setSubmitting(true);
     try {
-      await onAction(action);
+      const submitted = await onAction({ action_type: "PLAN", plan: queuedPlan });
+      if (submitted) setQueuedPlan([]);
     } finally {
       setSubmitting(false);
     }
@@ -262,7 +299,7 @@ export function InteractiveCombatPanel({
                   {ownsTurn ? "Chọn hành động" : `Đang chờ ${actor?.name || "đối thủ"}`}
                 </h3>
                 <p className="mt-1 text-xs text-zinc-400">
-                  {ownsTurn ? `Mục tiêu: ${livingTargets.find((target) => target.id === targetId)?.name || "chọn mục tiêu trên đội hình"}` : "Các lượt còn lại sẽ tự xử lý."}
+                {planLocked ? "Đã khóa kế hoạch; đang chờ đối thủ." : ownsTurn ? `Đã chọn ${queuedGuActions}/${maxGuActions} chiêu Cổ · Mục tiêu mới: ${livingTargets.find((target) => target.id === targetId)?.name || "chọn mục tiêu trên đội hình"}` : "Các lượt còn lại sẽ tự xử lý."}
                 </p>
                 {ownsTurn && targetId && targetIsBlocked && (
                   <p className="mt-1 text-xs text-amber-300">
@@ -301,8 +338,8 @@ export function InteractiveCombatPanel({
                       <button
                         key={`${actionType}-${action.instance_id || action.source_id || index}`}
                         type="button"
-                        disabled={actionLoading || submitting || noTarget || targetBlocked}
-                        onClick={() => void submitAction(action)}
+                        disabled={actionLoading || submitting || planLocked || noTarget || targetBlocked || (actionType !== "BASIC_ATTACK" && actionType !== "FLEE" && queuedGuActions >= maxGuActions)}
+                        onClick={() => queueAction(action)}
                         className={`group flex min-h-[76px] items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
                           actionType === "FLEE"
                             ? "border-rose-900/50 bg-rose-950/20 hover:border-rose-500/60 hover:bg-rose-950/40"
@@ -321,7 +358,7 @@ export function InteractiveCombatPanel({
                               {isSkill && Number(action.rank) > 0 && <span className="rounded bg-amber-950/70 px-1.5 py-0.5 text-[9px] font-bold text-amber-200">Bậc {Number(action.rank)}</span>}
                             </span>
                             <span className="mt-0.5 block truncate text-[10px] uppercase tracking-wider text-zinc-500">
-                              {isSkill ? "Chiêu đã chọn" : actionType === "FLEE" ? "Rời khỏi giao chiến" : "Đòn cơ bản"}
+                            {isSkill ? "Thêm vào kế hoạch" : actionType === "FLEE" ? "Chỉ hành động này" : "Đòn thường cuối lượt"}
                               {paths.length > 0 && ` · ${paths.join(", ")}`}
                             </span>
                             {stats.length > 0 && <span className="mt-1 block text-[10px] text-zinc-400">{stats.join(" · ")}</span>}
@@ -339,6 +376,21 @@ export function InteractiveCombatPanel({
                     );
                   })}
                 </div>
+                {queuedPlan.length > 0 && !planLocked && (
+                  <div className="mt-3 rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-emerald-200">Kế hoạch lượt này</span>
+                      <button type="button" onClick={() => setQueuedPlan([])} className="text-[10px] text-zinc-400 hover:text-white">Xóa hết</button>
+                    </div>
+                    <ol className="space-y-1 text-xs text-zinc-300">
+                      {queuedPlan.map((item, index) => <li key={`${item.instance_id || item.source_id || item.action_type}-${index}`} className="flex justify-between gap-3">
+                        <span>{index + 1}. {String(item.name || item.action_type)} → {String(item.target_type || "").toUpperCase() === "SELF" ? "Bản thân" : livingTargets.find((target) => target.id === item.target_id)?.name || "Mục tiêu đã khóa"}</span>
+                        <button type="button" onClick={() => setQueuedPlan((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="text-zinc-500 hover:text-rose-300">Bỏ</button>
+                      </li>)}
+                    </ol>
+                    <button type="button" disabled={actionLoading || submitting} onClick={() => void submitAction()} className="mt-3 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-50">Khóa kế hoạch ({queuedPlan.length} hành động)</button>
+                  </div>
+                )}
                 {actions.some((action) => Boolean(action.reason)) && (
                   <p className="mt-2 text-[10px] text-zinc-500">{String(actions.find((action) => action.reason)?.reason)}</p>
                 )}

@@ -49,6 +49,13 @@ func NewInitiativeQueue(actors []*CombatantAuto) InitiativeQueue {
 // Next advances to the next activation. The caller must call Complete after
 // resolving the actor's one action, even when control effects skip that action.
 func (q *InitiativeQueue) Next() (string, float64, bool) {
+	return q.NextExcluding(nil)
+}
+
+// NextExcluding advances to the earliest ready actor not present in excluded.
+// It is used while a faster PvP player holds a ready activation for a shared
+// planning window; the held actor keeps its earned readiness.
+func (q *InitiativeQueue) NextExcluding(excluded map[string]bool) (string, float64, bool) {
 	if len(q.Entries) == 0 {
 		return "", q.Time, false
 	}
@@ -58,8 +65,14 @@ func (q *InitiativeQueue) Next() (string, float64, bool) {
 		}
 		return q.Entries[i].ReadyAt < q.Entries[j].ReadyAt
 	})
-	q.Time = math.Max(q.Time, q.Entries[0].ReadyAt)
-	return q.Entries[0].ActorID, q.Time, true
+	for _, entry := range q.Entries {
+		if excluded[entry.ActorID] {
+			continue
+		}
+		q.Time = math.Max(q.Time, entry.ReadyAt)
+		return entry.ActorID, q.Time, true
+	}
+	return "", q.Time, false
 }
 
 func (q *InitiativeQueue) Complete(actorID string) bool {

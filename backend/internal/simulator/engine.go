@@ -1170,6 +1170,7 @@ func Simulate(state *CombatState) []CombatLog {
 	maxTurns := 1000
 	var initiative *InitiativeQueue
 	lastStatusTick := -1
+	heldManual := make(map[string]bool)
 	actors := append(append([]*CombatantAuto{}, state.Allies...), state.Enemies...)
 	queue := NewInitiativeQueue(actors)
 	initiative = &queue
@@ -1232,9 +1233,28 @@ func Simulate(state *CombatState) []CombatLog {
 		if initiative != nil {
 			var combatTime float64
 			var ok bool
-			activeActorID, combatTime, ok = initiative.Next()
+			activeActorID, combatTime, ok = initiative.NextExcluding(heldManual)
 			if !ok {
 				break
+			}
+			if control := state.Interactive; control != nil && hasPairedPendingPlans(control) && control.ManualActors[activeActorID] {
+				allReady := true
+				for manualID := range control.ManualActors {
+					for _, entry := range initiative.Entries {
+						if entry.ActorID == manualID && entry.ReadyAt > combatTime+1e-9 {
+							allReady = false
+							break
+						}
+					}
+					if !allReady {
+						break
+					}
+				}
+				if !allReady {
+					heldManual[activeActorID] = true
+					continue
+				}
+				heldManual = make(map[string]bool)
 			}
 			tickAt := int(math.Floor(combatTime + 1e-9))
 			shouldTick = tickAt > lastStatusTick
@@ -1733,6 +1753,7 @@ func Simulate(state *CombatState) []CombatLog {
 		runOne = func(actor *CombatantAuto, a *SimAction, isAlly bool, enemyTargets []*CombatantAuto) actionOutcome {
 			res := actionOutcome{}
 			operationDamageScale := 1.0
+			guCostIDs := []string{}
 
 			if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
 				return res
@@ -1788,14 +1809,11 @@ func Simulate(state *CombatState) []CombatLog {
 						return res
 					}
 					if exists {
-						actor.GuHunger[guKey]--
+						guCostIDs = append(guCostIDs, guKey)
 					}
 				}
-				if actor.GuUsedCounts == nil {
-					actor.GuUsedCounts = make(map[string]int)
-				}
 				if guKey != "" {
-					actor.GuUsedCounts[guKey]++
+					guCostIDs = append(guCostIDs, "used:"+guKey)
 				}
 			}
 
@@ -1816,14 +1834,37 @@ func Simulate(state *CombatState) []CombatLog {
 					actor.GuUsedCounts = make(map[string]int)
 				}
 				for _, guID := range a.ComponentGuIDs {
-					actor.GuHunger[guID]--
-					actor.GuUsedCounts[guID]++
+					guCostIDs = append(guCostIDs, guID, "used:"+guID)
 				}
 			}
 
 			guRank := 1
 			if a.Rank > 0 {
 				guRank = a.Rank
+			}
+			conflictMult := actionConflictMult(actor, a.Path)
+			effectiveManaCost := a.ManaCost
+			if effectiveManaCost > 0 {
+				effectiveManaCost *= gamefx.ManaTaxMultiplier(conflictMult)
+			}
+			if (actor.Kind == "Player" || actor.Kind == "VariantNPC") && effectiveManaCost > 0 && actor.Mana < effectiveManaCost {
+				turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "INSUFFICIENT_MANA", Detail: fmt.Sprintf("%s không đủ Chân Nguyên (cần %.0f, còn %.0f) để kích hoạt [%s]!", actor.Name, effectiveManaCost, actor.Mana, a.Name)})
+				return res
+			}
+			if combatantPaysMana(actor) && effectiveManaCost > 0 {
+				actor.Mana -= effectiveManaCost
+			}
+			if len(guCostIDs) > 0 {
+				if actor.GuUsedCounts == nil {
+					actor.GuUsedCounts = make(map[string]int)
+				}
+				for _, id := range guCostIDs {
+					if strings.HasPrefix(id, "used:") {
+						actor.GuUsedCounts[strings.TrimPrefix(id, "used:")]++
+					} else {
+						actor.GuHunger[id]--
+					}
+				}
 			}
 			backlashDamage := 0.0
 			if a.BacklashDamage > 0 {
@@ -1866,28 +1907,7 @@ func Simulate(state *CombatState) []CombatLog {
 			actionStartIndex := len(turnLogs)
 
 			// ── Dao Conflict punishment (spec §3) ──
-			conflictMult := actionConflictMult(actor, a.Path)
 			conflictPenaltyMult := 1.0 // 0.5 when a non-fizzled backfire weakens the strike
-
-			if actor.Kind == "Player" || actor.Kind == "VariantNPC" {
-				effectiveManaCost := a.ManaCost
-				if effectiveManaCost > 0 {
-					effectiveManaCost *= gamefx.ManaTaxMultiplier(conflictMult)
-				}
-				if effectiveManaCost > 0 && actor.Mana < effectiveManaCost {
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "INSUFFICIENT_MANA",
-						Detail:    fmt.Sprintf("%s không đủ Chân Nguyên (cần %.0f, còn %.0f) để kích hoạt [%s]!", actor.Name, effectiveManaCost, actor.Mana, a.Name),
-					})
-					return res
-				}
-				if effectiveManaCost > 0 {
-					actor.Mana -= effectiveManaCost
-				}
-			}
 
 			// Cast Failure (fizzle): conflicting dao marks shred the technique.
 			if conflictMult < 0.70 && (a.ActionType == "GU_SKILL" || a.ActionType == "KILLER_MOVE") {
@@ -5458,6 +5478,45 @@ func Simulate(state *CombatState) []CombatLog {
 			return res
 		}
 
+		// executePlannedAction is the single action executor for both ordinary
+		// turns and paired PvP slots. Controllers may differ in how they choose
+		// actions; they must not differ in how an accepted action is resolved.
+		executePlannedAction := func(actor *CombatantAuto, item selectedCombatAction, isAlly bool, enemyTargets []*CombatantAuto, simultaneous, eligibleAtSlotStart bool) bool {
+			if simultaneous && !eligibleAtSlotStart {
+				return false
+			}
+			if !simultaneous && (actor.HP <= 0 || actor.IsDead || actor.IsStunned || actor.IsFrozen || actor.IsSleeping || actor.IsDreamPrison || actor.IsBound) {
+				return false
+			}
+			action := *item.action
+			if item.target != nil {
+				action.TargetX, action.TargetY = item.target.GridX, item.target.GridY
+			}
+			if action.ActionType == "FLEE" {
+				chance := FleeChance(actor, enemyTargets)
+				if rng.Float64() < chance {
+					state.FledBy = actor.ID
+					turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "FLEE_SUCCESS", Detail: fmt.Sprintf("%s bỏ chạy thành công (tỉ lệ %.0f%%).", actor.Name, chance*100)})
+					return true
+				}
+				turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "FLEE_FAILED", Detail: fmt.Sprintf("%s bỏ chạy thất bại (tỉ lệ %.0f%%), mất lượt này.", actor.Name, chance*100)})
+				return false
+			}
+			if action.WarmupTurns > 0 {
+				charged := action
+				actor.ChargingAction, actor.ChargingTurnsLeft = &charged, action.WarmupTurns
+				turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "START_CHARGING", Detail: fmt.Sprintf("%s bắt đầu tụ khí [%s].", actor.Name, action.Name)})
+				return false
+			}
+			targets := enemyTargets
+			if item.target != nil && item.target.ID != actor.ID && (item.target.HP <= 0 || item.target.IsDead) {
+				targets = nil
+			}
+			runOne(actor, &action, isAlly, targets)
+			postActionChecks(enemyTargets, actor)
+			return false
+		}
+
 		// ── Pre-Attack Defense Pass ──
 		// All alive combatants execute pure defensive actions (shield buffs) before attacks land.
 		executedInPrePass := make(map[*CombatantAuto]map[int]bool)
@@ -5751,6 +5810,7 @@ func Simulate(state *CombatState) []CombatLog {
 				control := state.Interactive
 				var chosen *SimAction
 				var target *CombatantAuto
+				var selectedPlan []selectedCombatAction
 				if control != nil && control.ManualActors[actor.ID] {
 					if control.Consumed >= len(control.Commands) {
 						control.PendingActor = actor.ID
@@ -5759,19 +5819,163 @@ func Simulate(state *CombatState) []CombatLog {
 						return logs
 					}
 					command := control.Commands[control.Consumed]
-					if command.ActorID != actor.ID {
-						control.Error = "command actor does not own the active turn"
-						logs = append(logs, turnLogs...)
-						return logs
+					if hasPairedPendingPlans(control) {
+						firstCommand, secondCommand := control.Commands[control.Consumed], control.Commands[control.Consumed+1]
+						findActor := func(id string) (*CombatantAuto, bool) {
+							for _, candidate := range state.Allies {
+								if candidate != nil && candidate.ID == id {
+									return candidate, true
+								}
+							}
+							for _, candidate := range state.Enemies {
+								if candidate != nil && candidate.ID == id {
+									return candidate, false
+								}
+							}
+							return nil, false
+						}
+						firstActor, firstIsAlly := findActor(firstCommand.ActorID)
+						secondActor, secondIsAlly := findActor(secondCommand.ActorID)
+						if firstActor == nil || secondActor == nil {
+							control.Error = "locked PvP actor is missing from the combat roster"
+							logs = append(logs, turnLogs...)
+							return logs
+						}
+						planFor := func(pairedActor *CombatantAuto, pairedCommand CombatCommand, pairedIsAlly bool) ([]selectedCombatAction, error) {
+							targets := state.Allies
+							if pairedIsAlly {
+								targets = state.Enemies
+							}
+							if pairedCommand.ActionType == "AUTO" {
+								return BuildAutomaticCombatPlan(pairedActor, targets, state.MaxGuActionsPerTurn), nil
+							}
+							return resolveLockedCombatPlan(pairedActor, targets, pairedCommand.Plan)
+						}
+						firstPlan, firstErr := planFor(firstActor, firstCommand, firstIsAlly)
+						secondPlan, secondErr := planFor(secondActor, secondCommand, secondIsAlly)
+						if firstErr != nil || secondErr != nil {
+							if firstErr != nil {
+								control.Error = firstErr.Error()
+							} else {
+								control.Error = secondErr.Error()
+							}
+							logs = append(logs, turnLogs...)
+							return logs
+						}
+						control.Consumed += 2
+						type pairedAction struct {
+							actor   *CombatantAuto
+							isAlly  bool
+							targets []*CombatantAuto
+							item    selectedCombatAction
+						}
+						selfActions := make([]pairedAction, 0)
+						firstTargetActions, secondTargetActions := make([]pairedAction, 0), make([]pairedAction, 0)
+						addPlan := func(planActor *CombatantAuto, planAlly bool, plan []selectedCombatAction, actorTargets *[]pairedAction) {
+							targets := state.Allies
+							if planAlly {
+								targets = state.Enemies
+							}
+							for _, item := range plan {
+								entry := pairedAction{actor: planActor, isAlly: planAlly, targets: targets, item: item}
+								if item.target != nil && item.target.ID == planActor.ID {
+									selfActions = append(selfActions, entry)
+								} else {
+									*actorTargets = append(*actorTargets, entry)
+								}
+							}
+						}
+						addPlan(firstActor, firstIsAlly, firstPlan, &firstTargetActions)
+						addPlan(secondActor, secondIsAlly, secondPlan, &secondTargetActions)
+						resolvePlanAction := func(entry pairedAction, simultaneous, eligibleAtSlotStart bool) bool {
+							return executePlannedAction(entry.actor, entry.item, entry.isAlly, entry.targets, simultaneous, eligibleAtSlotStart)
+						}
+						for _, entry := range selfActions {
+							if resolvePlanAction(entry, false, false) {
+								logs = append(logs, turnLogs...)
+								return logs
+							}
+						}
+						maxSlots := len(firstTargetActions)
+						if len(secondTargetActions) > maxSlots {
+							maxSlots = len(secondTargetActions)
+						}
+						for slot := 0; slot < maxSlots; slot++ {
+							entries := make([]pairedAction, 0, 2)
+							if slot < len(firstTargetActions) {
+								entries = append(entries, firstTargetActions[slot])
+							}
+							if slot < len(secondTargetActions) {
+								entries = append(entries, secondTargetActions[slot])
+							}
+							speed := func(entry pairedAction) float64 {
+								if entry.actor.EffectiveSpeed > 0 {
+									return entry.actor.EffectiveSpeed
+								}
+								return entry.actor.Speed
+							}
+							sameSpeed := false
+							if len(entries) == 2 {
+								sameSpeed = math.Abs(speed(entries[0])-speed(entries[1])) < 1e-9
+								if speed(entries[1]) > speed(entries[0]) {
+									entries[0], entries[1] = entries[1], entries[0]
+								}
+							}
+							eligibleAtSlotStart := make(map[string]bool, len(entries))
+							for _, entry := range entries {
+								eligibleAtSlotStart[entry.actor.ID] = entry.actor.HP > 0 && !entry.actor.IsDead && !entry.actor.IsStunned && !entry.actor.IsFrozen && !entry.actor.IsSleeping && !entry.actor.IsDreamPrison && !entry.actor.IsBound
+							}
+							for entryIndex, entry := range entries {
+								if resolvePlanAction(entry, sameSpeed && entryIndex > 0, eligibleAtSlotStart[entry.actor.ID]) {
+									logs = append(logs, turnLogs...)
+									return logs
+								}
+								// Equal-speed actions in the same slot are both committed
+								// from the slot-start eligibility snapshot, so a knockout
+								// caused by the first action must not cancel its peer.
+								if !sameSpeed && !hasLivingCombatant(entry.targets) {
+									break
+								}
+							}
+						}
+						otherID := firstActor.ID
+						if otherID == activeActorID {
+							otherID = secondActor.ID
+						}
+						initiative.Complete(otherID)
+						continue
 					}
-					if command.ActionType == "AUTO" {
-						chosen, target = chooseAutoCombatAction(actor, enemyTargets)
-						if chosen == nil {
+					if command.ActorID != actor.ID {
+						if len(control.ManualActors) < 2 || (command.ActionType != "PLAN" && command.ActionType != "AUTO") {
+							control.Error = "command actor does not own the active turn"
+							logs = append(logs, turnLogs...)
+							return logs
+						}
+						// In shared PvP, the faster player holds their next activation
+						// until the other locked plan reaches its own ReadyAt.
+					} else if command.ActionType == "PLAN" {
+						var planErr error
+						selectedPlan, planErr = resolveLockedCombatPlan(actor, enemyTargets, command.Plan)
+						if planErr != nil {
+							control.Error = planErr.Error()
+							logs = append(logs, turnLogs...)
+							return logs
+						}
+					} else if command.ActorID == actor.ID && command.ActionType == "AUTO" {
+						maxActions := state.MaxGuActionsPerTurn
+						if control.MaxGuActions > 0 {
+							maxActions = control.MaxGuActions
+						}
+						if maxActions <= 0 {
+							maxActions = 3
+						}
+						selectedPlan = BuildAutomaticCombatPlan(actor, enemyTargets, maxActions)
+						if len(selectedPlan) == 0 {
 							control.Error = "no valid automatic action for active combatant"
 							logs = append(logs, turnLogs...)
 							return logs
 						}
-					} else {
+					} else if command.ActorID == actor.ID {
 						var err error
 						chosen, target, err = selectCombatCommand(actor, enemyTargets, command)
 						if err != nil {
@@ -5780,9 +5984,30 @@ func Simulate(state *CombatState) []CombatLog {
 							return logs
 						}
 					}
-					control.Consumed++
+					if command.ActorID == actor.ID {
+						control.Consumed++
+					}
 				} else {
-					chosen, target = chooseAutoCombatAction(actor, enemyTargets)
+					maxActions := state.MaxGuActionsPerTurn
+					if maxActions < 1 {
+						maxActions = 3
+					}
+					if control != nil && control.MaxGuActions > 0 {
+						maxActions = control.MaxGuActions
+					}
+					selectedPlan = BuildAutomaticCombatPlan(actor, enemyTargets, maxActions)
+				}
+				if len(selectedPlan) > 0 {
+					for _, item := range selectedPlan {
+						if executePlannedAction(actor, item, isAlly, enemyTargets, false, false) {
+							logs = append(logs, turnLogs...)
+							return logs
+						}
+						if !hasLivingCombatant(enemyTargets) {
+							break
+						}
+					}
+					continue
 				}
 				if chosen != nil {
 					if chosen.ActionType == "FLEE" {
@@ -6075,6 +6300,24 @@ func Simulate(state *CombatState) []CombatLog {
 	}
 
 	return logs
+}
+
+func hasLivingCombatant(combatants []*CombatantAuto) bool {
+	for _, combatant := range combatants {
+		if combatant != nil && combatant.HP > 0 && !combatant.IsDead {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPairedPendingPlans(control *InteractiveCombat) bool {
+	if control == nil || len(control.ManualActors) < 2 || control.Consumed+1 >= len(control.Commands) {
+		return false
+	}
+	first, second := control.Commands[control.Consumed], control.Commands[control.Consumed+1]
+	return first.ActorID != second.ActorID && control.ManualActors[first.ActorID] && control.ManualActors[second.ActorID] &&
+		(first.ActionType == "PLAN" || first.ActionType == "AUTO") && (second.ActionType == "PLAN" || second.ActionType == "AUTO")
 }
 
 // buildSnapshot creates a CombatSnapshot from the current state.

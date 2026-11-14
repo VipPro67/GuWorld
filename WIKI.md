@@ -707,8 +707,8 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - Actor quái trên World Map hiện chỉ là snapshot phục vụ hiển thị/quản trị; chúng không tự aggro hay mở combat. Cầu nối từ actor Redis sang encounter chưa được triển khai. Combat theo lượt chỉ chạy trong các flow đã được nối; di chuyển thế giới ngoài combat vẫn realtime.
 - Đồng đội cùng khu vực và cùng map instance tham chiến cùng trưởng nhóm; trạng thái combat khóa thao tác của họ đến khi kết toán. Pet trong đội hình tiếp tục tham chiến theo lượt và lưu HP/kết quả sau trận. Quái dã ngoại chỉ dùng đội hình spawn, không tự sinh hộ vệ ngẫu nhiên.
 - **Phòng tập:** tạo encounter giả lập turn-based. Sinh lực và Chân Nguyên của hình nhân là ảo; kết thúc không ghi đè tài nguyên thật.
-- NPC tự chọn một action theo `AIProfile` của quái: profile tấn công ưu tiên action gây sát thương lớn, profile cân bằng ưu tiên hồi phục/phòng thủ khi HP thấp rồi chuyển sang sát thương; profile cơ bản giữ thứ tự action đã nạp.
-- Cổ sư dùng Cổ trang bị, có thể charge và chọn mục tiêu.
+- NPC dựng chuỗi chiêu theo `AIProfile` của quái trong giới hạn Cổ mỗi lượt: profile tấn công ưu tiên sát thương, profile cân bằng ưu tiên hồi/phòng thủ khi HP thấp rồi chuyển sang sát thương; profile cơ bản giữ thứ tự action đã nạp.
+- Mỗi activation turn-based khóa combo nhiều Cổ/Sát Chiêu theo giới hạn server; từng chiêu chọn mục tiêu riêng, đánh thường tùy chọn ở cuối. Tự động combat và NPC dựng chuỗi từ chiến thuật đã lưu hoặc `AIProfile`; kế hoạch PvP được giữ kín đến khi hai bên khóa hoặc hết giờ.
 - Chỉ định mục tiêu hỗ trợ vị trí/hàng/cột/toàn bộ tùy `target_type` của Cổ.
 - **Combat turn-based:** simulator xác định được dùng trong các flow đã nối; chuyển động thế giới vẫn realtime. Các mode PvP, đấu trường, Tông Môn Chiến và Tai Kiếp chưa được xác nhận đầy đủ end-to-end; xem `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
 - PvP ngoài bản đồ với người chơi online tạo một trận turn-based chung: cả hai người đều bị khóa khỏi di chuyển, lần lượt tự chọn chiêu khi tới lượt; HUB/SAFE_ZONE, cùng tổ đội và người đang bận không thể bị kéo vào trận. Người thua bị xử lý rơi đồ, hồi sinh 1 HP và nhận Miễn Chiến PvP.

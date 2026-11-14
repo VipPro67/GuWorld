@@ -34,6 +34,10 @@ func schemaCombat() error {
 		ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ;`); err != nil {
 		return err
 	}
+	if err := execSchema("combat_sessions_pending_plans_col", `
+	ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS pending_plans JSONB NOT NULL DEFAULT '{}';`); err != nil {
+		return err
+	}
 	if err := execSchema("combat_session_commands", `
 	CREATE TABLE IF NOT EXISTS combat_session_commands (
 		session_id UUID NOT NULL REFERENCES combat_sessions(id) ON DELETE CASCADE,

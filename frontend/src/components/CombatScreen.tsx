@@ -189,13 +189,24 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   };
 
   const handleSubmitInteractive = async (action: ApiResponseData) => {
-    if (!interactiveSession) return;
-    const actorID = interactiveSession.pending_actor as string;
-    const command = {
-      actor_id: actorID, action_type: action.action_type as string,
-      source_id: (action.source_id as string) || "", instance_id: (action.instance_id as string) || "",
-      target_id: String(action.target_type || "").toUpperCase() === "SELF" ? actorID : interactiveTarget,
-    };
+    if (!interactiveSession) return false;
+    const actorID = interactiveSession.planning ? player.id : interactiveSession.pending_actor as string;
+    const command = action.action_type === "PLAN"
+      ? {
+          actor_id: actorID,
+          action_type: "PLAN",
+          plan: (Array.isArray(action.plan) ? action.plan : []).map((item: ApiResponseData) => ({
+            action_type: item.action_type,
+            source_id: item.source_id || "",
+            instance_id: item.instance_id || "",
+            target_id: String(item.target_type || "").toUpperCase() === "SELF" ? actorID : item.target_id || "",
+          })),
+        }
+      : {
+          actor_id: actorID, action_type: action.action_type as string,
+          source_id: (action.source_id as string) || "", instance_id: (action.instance_id as string) || "",
+          target_id: String(action.target_type || "").toUpperCase() === "SELF" ? actorID : interactiveTarget,
+        };
     const next = await submitCombatCommand(interactiveSession.session_id, interactiveSession.revision, command);
     if (next) {
       setInteractiveTarget("");
@@ -204,6 +215,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         showInteractiveReport(next);
       }
     }
+    return Boolean(next);
   };
 
   const isIncomingPvp = player.active_combat?.enemy_type === "PVP" &&
@@ -212,6 +224,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   useEffect(() => {
     if (player.active_combat?.enemy_type !== "PVP" || !interactiveSession || interactiveSession.status !== "active" || !pvpAutoMode || actionLoading) return;
+    if (interactiveSession.my_plan_locked) return;
     if (interactiveSession.pending_actor !== player.id) return;
     const submitKey = `${interactiveSession.session_id}:${interactiveSession.revision}`;
     if (pvpAutoSubmittedRef.current === submitKey) return;

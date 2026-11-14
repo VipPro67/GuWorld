@@ -28,6 +28,7 @@ func simulateTournamentMatch(tx *sql.Tx, tournamentID, matchID string, sideA, si
 	seedBytes := sha256.Sum256([]byte(tournamentID + ":" + matchID))
 	state := &simulator.CombatState{
 		Seed:                 int64(binary.LittleEndian.Uint64(seedBytes[:8])),
+		MaxGuActionsPerTurn:  maxCombatGuActionsPerTurn(),
 		Allies:               sideA.combatants,
 		Enemies:              sideB.combatants,
 		CaptureTurnSnapshots: true,

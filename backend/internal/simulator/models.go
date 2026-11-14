@@ -470,6 +470,7 @@ type GuHouseState struct {
 type CombatState struct {
 	Turn                 int
 	Seed                 int64
+	MaxGuActionsPerTurn  int `json:"max_gu_actions_per_turn,omitempty"`
 	Allies               []*CombatantAuto
 	Enemies              []*CombatantAuto
 	CaptureTurnSnapshots bool
@@ -497,11 +498,19 @@ type CombatState struct {
 	FledBy      string             `json:"fled_by,omitempty"`
 }
 
-// CombatCommand selects exactly one loaded action and one legal target. The
-// handler owns command IDs/revisions; the simulator only consumes ordered,
-// already-authorized decisions.
+// CombatCommand is either one legacy action or a locked multi-action plan.
+// The handler owns command IDs/revisions and validates plans before replay.
 type CombatCommand struct {
-	ActorID    string `json:"actor_id"`
+	ActorID    string                  `json:"actor_id"`
+	ActionType string                  `json:"action_type"`
+	SourceID   string                  `json:"source_id,omitempty"`
+	InstanceID string                  `json:"instance_id,omitempty"`
+	TargetID   string                  `json:"target_id,omitempty"`
+	Plan       []CombatActionSelection `json:"plan,omitempty"`
+}
+
+// CombatActionSelection identifies one action and its independently locked target.
+type CombatActionSelection struct {
 	ActionType string `json:"action_type"`
 	SourceID   string `json:"source_id,omitempty"`
 	InstanceID string `json:"instance_id,omitempty"`
@@ -510,6 +519,7 @@ type CombatCommand struct {
 
 type InteractiveCombat struct {
 	ManualActors       map[string]bool `json:"manual_actors"`
+	MaxGuActions       int             `json:"max_gu_actions"`
 	Commands           []CombatCommand `json:"commands"`
 	PendingActor       string          `json:"pending_actor,omitempty"`
 	TribulationEventID string          `json:"tribulation_event_id,omitempty"`
