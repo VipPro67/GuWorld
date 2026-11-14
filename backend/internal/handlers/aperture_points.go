@@ -1820,7 +1820,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	completesAt := now.Add(duration)
 	// Atomic burn: the conditional UPDATE re-checks the balance under the row
 	// lock, so a concurrent spender can never push the pool below zero.
-	burn, err := tx.Exec(`UPDATE players SET current_mana = current_mana - $1 WHERE id = $2 AND current_mana >= $1`, cost, playerID)
+	burn, err := tx.Exec(`UPDATE players SET current_mana = current_mana - $1, version = version + 1, state_revision = state_revision + 1 WHERE id = $2 AND current_mana >= $1`, cost, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên"})
 		return
@@ -2122,7 +2122,7 @@ func rollPointGuWorm(tx *sql.Tx, playerID uuid.UUID, template ResourcePointTempl
 
 // addHumanQi credits a small Nhân Khí reward for harvesting.
 func addHumanQi(tx *sql.Tx, playerID uuid.UUID, amount int) {
-	_, _ = tx.Exec(`UPDATE players SET human_qi = human_qi + $1 WHERE id = $2`, float64(amount), playerID)
+	_, _ = tx.Exec(`UPDATE players SET human_qi = human_qi + $1, version = version + 1, state_revision = state_revision + 1 WHERE id = $2`, float64(amount), playerID)
 }
 
 // CollectAllAperturePointStocks drains every stocked point in one request.

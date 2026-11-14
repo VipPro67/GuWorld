@@ -8,6 +8,7 @@ import type { AuthResponse, Player } from "@/store/useGameStore";
 import { invalidateCache } from "@/lib/fetch";
 import { getUiPreferences } from "@/lib/ui-preferences";
 import { resetInventorySliceModuleState } from "@/store/slices/inventorySlice";
+import { resetWorldSliceModuleState } from "@/store/slices/worldSlice";
 import { resetProfileSliceModuleState } from "@/store/slices/profileSlice";
 
 export interface AuthSlice {
@@ -256,6 +257,7 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     get().unsubscribeBaoHoangMessages();
     invalidateCache();
     resetInventorySliceModuleState();
+    resetWorldSliceModuleState();
     resetProfileSliceModuleState();
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
     set({
@@ -284,6 +286,8 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       guHouses: [],
       guHouseCompositionRuleSet: null,
       guHousesLoading: false,
+      groundDrops: [],
+      lastDropViewport: null,
     });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");

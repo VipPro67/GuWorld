@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { Castle, Shield, Wrench, Sparkles, Plus, Check } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
-import type { GuHouseCombatProfile, KillerMoveCompositionGraph, KillerMoveEffectOption } from "@/store/slices/killerMovesSlice";
+import type { GuHouseCombatProfile } from "@/store/slices/guHouseSlice";
+import type { KillerMoveCombatProfile, KillerMoveCompositionGraph, KillerMoveEffectOption } from "@/store/slices/killerMovesSlice";
 
 
 function isGuHouseActionSupported(effect: KillerMoveEffectOption) {
@@ -327,7 +328,7 @@ export function GuHousePanel() {
               <div className="text-[11px] text-zinc-400">
                 Tích hợp {preview.actions?.length || 0} Trận Kích (Sát chiêu đặc hữu của Tiên Cổ Ốc).
               </div>
-              {preview.actions?.map((action) => <div key={action.id} className="flex justify-between rounded-lg bg-zinc-900/70 px-2 py-1.5 text-[10px]">
+              {preview.actions?.map((action: KillerMoveCombatProfile) => <div key={action.id} className="flex justify-between rounded-lg bg-zinc-900/70 px-2 py-1.5 text-[10px]">
                 <span className="text-zinc-300">{action.name}</span>
                 <span className="text-amber-200">{action.effect_label || (action.target_type === "SINGLE" ? `Đơn mục tiêu · ${action.base_damage || 0}` : `Hỗ trợ · khiên ${action.base_shield || 0} · hồi ${action.base_healing || 0}`)}</span>
               </div>)}

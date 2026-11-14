@@ -520,7 +520,8 @@ func AnchorAperture(c *gin.Context) {
 		SET current_region = 'aperture_interior', map_instance_id = $1, x = 10, y = 10,
 		    world_zone_id = 'aperture_interior', world_instance_id = $2,
 		    world_x = 10, world_y = 10, world_safe_x = 10, world_safe_y = 10,
-		    world_location_revision = world_location_revision + 1, version = version + 1
+		    world_location_revision = world_location_revision + 1, version = version + 1,
+		    state_revision = state_revision + 1
 		WHERE id = $3
 	`, ap.ID, apertureInstanceID, player.ID)
 	if err != nil {
@@ -697,7 +698,7 @@ func UnanchorAperture(c *gin.Context) {
 		UPDATE players
 		SET current_region = $1, map_instance_id = NULL, x = ($2)::int, y = ($3)::int, world_zone_id = $1, world_instance_id = '',
 		    world_x = ($2)::double precision, world_y = ($3)::double precision, world_safe_x = ($2)::double precision, world_safe_y = ($3)::double precision,
-		    world_location_revision = world_location_revision + 1, version = version + 1
+		    world_location_revision = world_location_revision + 1, version = version + 1, state_revision = state_revision + 1
 		WHERE id = $4
 	`, destRegion, destX, destY, playerID)
 	if err != nil {

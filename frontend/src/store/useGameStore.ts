@@ -39,6 +39,9 @@ import { createCombatSlice, type CombatSlice } from "@/store/slices/combatSlice"
 import { createTeleportSlice, type TeleportSlice } from "@/store/slices/teleportSlice";
 import { createScoutingSlice, type ScoutingSlice } from "@/store/slices/scoutingSlice";
 import { createKillerMovesSlice, type KillerMovesSlice } from "@/store/slices/killerMovesSlice";
+import { createWorldSlice, type WorldSlice } from "@/store/slices/worldSlice";
+import { createGuHouseSlice, type GuHouseSlice, type GuHouseRecord, type GuHouseDraft, type GuHouseCombatProfile } from "@/store/slices/guHouseSlice";
+export type { GuHouseRecord, GuHouseDraft, GuHouseCombatProfile };
 import { shouldApplyPlayerRevision } from "@/store/playerRevision";
 import { acquirePendingAction, releasePendingAction, type PendingActions } from "@/store/pendingActions";
 
@@ -1233,7 +1236,7 @@ export interface Region {
   monster_count?: number;
 }
 
-interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, RefineSessionSlice {
+interface GameState extends NotificationsSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, DreamRealmSlice, SpatialRealmSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, WorldSlice, GuHouseSlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice, RefineSessionSlice {
   player: Player | null;
   playerStateRevision: number | null;
   combatSessionEvent: { session_id: string; revision: number; status: string; pending_actor?: string } | null;
@@ -1778,6 +1781,8 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createApertureSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createTradeSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createInventorySlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createWorldSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createGuHouseSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createCultivationSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createProfileSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createAuthSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),

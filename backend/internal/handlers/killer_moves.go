@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -19,226 +17,9 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
-	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
-
-const (
-	killerMoveBalanceVersion = 2
-)
-
-type killerMoveComponent struct {
-	InstanceID string `json:"instance_id"`
-	GuID       string `json:"gu_id"`
-	Rank       int    `json:"rank"`
-}
-
-func killerMoveComponentMatches(component killerMoveComponent, gu models.GuInstance) bool {
-	return gu.InstanceID == component.InstanceID && gu.GuID == component.GuID && gu.Rank == component.Rank && !strings.EqualFold(gu.Status, "DEAD")
-}
-
-func evaluateKillerMoveComponents(components []killerMoveComponent, ownedSet map[string]ownedKillerMoveGu) (bool, bool, []string) {
-	available := true
-	hasStarvingGu := false
-	var missingGu []string
-	for _, component := range components {
-		gu, exists := ownedSet[component.InstanceID]
-		if !exists || strings.EqualFold(gu.State, "DEAD") || gu.IsLocked || gu.Location != "INVENTORY" || gu.GuID != component.GuID || gu.Rank != component.Rank {
-			available = false
-			missingGu = append(missingGu, component.InstanceID)
-			continue
-		}
-		if gu.Hunger < 1 {
-			hasStarvingGu = true
-		}
-	}
-	if len(missingGu) > 0 {
-		available = false
-	}
-	return available, hasStarvingGu, missingGu
-}
-
-type killerMoveEffectRef struct {
-	Key                  string   `json:"key"`
-	SourceBlockID        string   `json:"source_block_id"`
-	SourceRevision       string   `json:"source_revision,omitempty"`
-	Trigger              string   `json:"trigger"`
-	InstanceID           string   `json:"instance_id"`
-	GuID                 string   `json:"gu_id"`
-	Rank                 int      `json:"rank"`
-	BlockIndex           int      `json:"block_index"`
-	OpIndex              int      `json:"operation_index"`
-	PlayerATKCoefficient *float64 `json:"player_atk_coefficient,omitempty"`
-}
-
-type killerMoveEffectOption struct {
-	Key                     string                      `json:"key"`
-	SourceBlockID           string                      `json:"source_block_id"`
-	SourceRevision          string                      `json:"source_revision,omitempty"`
-	BlockIndex              int                         `json:"block_index"`
-	OperationIndex          int                         `json:"operation_index"`
-	SourceID                string                      `json:"source_instance_id"`
-	SourceName              string                      `json:"source_name"`
-	GuID                    string                      `json:"gu_id"`
-	Rank                    int                         `json:"rank"`
-	Label                   string                      `json:"label"`
-	Trigger                 string                      `json:"trigger"`
-	Operation               gameplayeffects.Operation   `json:"operation"`
-	Target                  gameplayeffects.Target      `json:"target"`
-	Conditions              []gameplayeffects.Condition `json:"conditions,omitempty"`
-	PlayerATKCoefficient    float64                     `json:"player_atk_coefficient"`
-	CompositionCapabilities []string                    `json:"composition_capabilities,omitempty"`
-	CombatSupported         bool                        `json:"combat_supported"`
-	TravelSupported         bool                        `json:"travel_supported,omitempty"`
-	UnavailableReason       string                      `json:"unavailable_reason,omitempty"`
-}
-
-type killerMoveDraftRequest struct {
-	CompositionDraftID string             `json:"composition_draft_id,omitempty"`
-	Name               string             `json:"name"`
-	MainGuInstanceID   string             `json:"main_gu_instance_id" binding:"required"`
-	ComponentIDs       []string           `json:"component_instance_ids"`
-	SelectedEffectKeys []string           `json:"selected_effect_keys"`
-	OutputEffectKey    string             `json:"output_effect_key"`
-	RuleSetRevision    string             `json:"rule_set_revision"`
-	CompositionEdges   []composition.Edge `json:"composition_edges"`
-	PreviewFingerprint string             `json:"preview_fingerprint,omitempty"`
-	AcceptAdjustments  bool               `json:"accept_adjustments,omitempty"`
-}
-
-type killerMovePreview struct {
-	Components         []killerMoveComponent          `json:"components"`
-	CompositionGraph   composition.Graph              `json:"composition_graph"`
-	SelectedEffects    []killerMoveEffectRef          `json:"selected_effects"`
-	CompiledEffects    []gameplayeffects.Block        `json:"compiled_effects"`
-	Rank               int                            `json:"rank"`
-	Path               string                         `json:"path"`
-	PathMasteryLevel   int                            `json:"path_mastery_level"`
-	PowerBudget        float64                        `json:"power_budget"`
-	PowerLoad          float64                        `json:"power_load"`
-	EffectScale        float64                        `json:"effect_scale"`
-	Harmony            float64                        `json:"harmony"`
-	Complexity         float64                        `json:"complexity"`
-	SuccessChance      float64                        `json:"success_chance"`
-	ManaCost           float64                        `json:"mana_cost"`
-	CombatProfile      models.KillerMoveCombatProfile `json:"combat_profile"`
-	Warnings           []string                       `json:"warnings"`
-	PreviewFingerprint string                         `json:"preview_fingerprint"`
-}
-
-type storedKillerMove struct {
-	ID                       string                         `json:"id"`
-	Name                     string                         `json:"name"`
-	MainGuInstance           string                         `json:"main_gu_instance_id"`
-	MainGuID                 string                         `json:"main_gu_id"`
-	MainGuRank               int                            `json:"main_gu_rank"`
-	Components               []killerMoveComponent          `json:"components"`
-	CompositionGraph         composition.Graph              `json:"composition_graph"`
-	SelectedEffects          []killerMoveEffectRef          `json:"selected_effects"`
-	CompiledEffects          []gameplayeffects.Block        `json:"compiled_effects"`
-	Path                     string                         `json:"path"`
-	CreationPathMasteryLevel int                            `json:"creation_path_mastery_level"`
-	PowerBudget              float64                        `json:"power_budget"`
-	PowerLoad                float64                        `json:"power_load"`
-	Harmony                  float64                        `json:"harmony"`
-	Complexity               float64                        `json:"complexity"`
-	SuccessChance            float64                        `json:"success_chance"`
-	CombatProfile            models.KillerMoveCombatProfile `json:"combat_profile"`
-	MasteryXP                int                            `json:"mastery_xp"`
-	MasteryLevel             int                            `json:"mastery_level"`
-	Equipped                 bool                           `json:"is_equipped"`
-	Available                bool                           `json:"available"`
-	CanRepair                bool                           `json:"can_repair"`
-	UnavailableReason        string                         `json:"unavailable_reason,omitempty"`
-	HasStarvingGu            bool                           `json:"has_starving_gu,omitempty"`
-	MissingGu                []string                       `json:"missing_gu,omitempty"`
-	BalanceVersion           int                            `json:"balance_version"`
-}
-
-type ownedKillerMoveGu struct {
-	InstanceID string  `json:"instance_id"`
-	GuID       string  `json:"gu_id"`
-	Rank       int     `json:"rank"`
-	Hunger     float64 `json:"hunger"`
-	State      string  `json:"state"`
-	Location   string  `json:"location"`
-	IsLocked   bool    `json:"is_locked"`
-}
-
-func killerMoveOwner(c *gin.Context) (uuid.UUID, bool) {
-	id, ok := middleware.GetPlayerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return uuid.Nil, false
-	}
-	return id, true
-}
-
-func loadOwnedKillerMoveGus(tx *sql.Tx, playerID uuid.UUID) (map[string]ownedKillerMoveGu, error) {
-	rows, err := tx.Query(`SELECT id, gu_id, gu_rank, hunger, state, location, is_locked FROM player_gu WHERE player_id=$1`, playerID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	owned := make(map[string]ownedKillerMoveGu)
-	for rows.Next() {
-		var gu ownedKillerMoveGu
-		if err := rows.Scan(&gu.InstanceID, &gu.GuID, &gu.Rank, &gu.Hunger, &gu.State, &gu.Location, &gu.IsLocked); err != nil {
-			return nil, err
-		}
-		owned[gu.InstanceID] = gu
-	}
-	return owned, rows.Err()
-}
-
-func getKillerMoveEffectOptions(inst ownedKillerMoveGu) ([]killerMoveEffectOption, error) {
-	spec, ok := models.GetGu(inst.GuID, inst.Rank)
-	if !ok {
-		return nil, fmt.Errorf("Không tìm thấy dữ liệu Cổ %s rank %d", inst.GuID, inst.Rank)
-	}
-	sourceRevision, err := gameplayeffects.SourceRevision(spec.Effects.GetBlocks())
-	if err != nil {
-		return nil, fmt.Errorf("Không thể tính revision effect nguồn của Cổ %s rank %d: %w", inst.GuID, inst.Rank, err)
-	}
-	var result []killerMoveEffectOption
-	for bi, block := range spec.Effects.GetBlocks() {
-		if block.Trigger != gameplayeffects.TriggerOnAction && block.Trigger != gameplayeffects.TriggerOnUse {
-			continue
-		}
-		for oi, op := range block.Operations {
-			target := block.Target
-			if op.Target != nil {
-				target = *op.Target
-			}
-			combatSupported := block.Trigger == gameplayeffects.TriggerOnAction && killerMoveOperationAllowed(op, target)
-			outsideCombatSupported := block.Trigger == gameplayeffects.TriggerOnUse && worldUseOperationAllowed(op, target)
-			if !combatSupported && !outsideCombatSupported {
-				continue
-			}
-			key := killerMoveEffectKey(inst.InstanceID, bi, oi)
-			capabilities := make([]string, 0, 1)
-			for _, grant := range spec.CompositionContributions.Grants {
-				if grant.EffectBlockID == block.ID && grant.OperationIndex == oi {
-					capabilities = append(capabilities, grant.Capability)
-				}
-			}
-			result = append(result, killerMoveEffectOption{
-				Key: key, SourceBlockID: block.ID, SourceRevision: sourceRevision, BlockIndex: bi, OperationIndex: oi, SourceID: inst.InstanceID, SourceName: spec.Name,
-				GuID: inst.GuID, Rank: inst.Rank, Label: killerMoveOperationLabel(op), Trigger: string(block.Trigger),
-				Operation: op, Target: target, Conditions: append([]gameplayeffects.Condition(nil), block.Conditions...),
-				PlayerATKCoefficient: spec.PlayerATKCoefficient, CombatSupported: combatSupported,
-				CompositionCapabilities: capabilities,
-				TravelSupported:         outsideCombatSupported,
-				UnavailableReason:       map[bool]string{true: "", false: "Chỉ dùng ngoài combat"}[combatSupported],
-			})
-		}
-	}
-	// Older dictionary effects can be compiled into blocks at load time. If a
-	// definition has no authoring blocks, it is not offered for player mixing.
-	return result, nil
-}
 
 // validateKillerMoveCompositionSnapshot revalidates persisted provenance at
 // activation/use time. Output-only legacy graphs remain readable; any graph
@@ -322,7 +103,7 @@ func validateKillerMoveCompositionSnapshotMode(graph composition.Graph, refs []k
 				}
 			}
 			snapshot, found := blocksByID[node.BlockID]
-			if !found || snapshot.Trigger != gameplayeffects.Trigger(option.Trigger) || snapshot.Target != option.Target || !reflect.DeepEqual(snapshot.Conditions, option.Conditions) || len(snapshot.Operations) != 1 || !sameKillerMoveOperationSemantics(snapshot.Operations[0], option.Operation) {
+			if !found || snapshot.Trigger != gameplayeffects.Trigger(option.Trigger) || snapshot.Target != option.Target || !reflect.DeepEqual(snapshot.Conditions, option.Conditions) || len(snapshot.Operations) != 1 || !composition.SameOperationSemantics(snapshot.Operations[0], option.Operation) {
 				return fmt.Errorf("Block v2 snapshot for %q does not match its authored operation", node.EffectKey)
 			}
 		} else if node.BlockID == "" || blocksByID[node.BlockID].ID == "" {
@@ -362,20 +143,6 @@ func validateKillerMoveCompositionSnapshotMode(graph composition.Graph, refs []k
 	}
 	_, err := composition.Resolve(graph, profile, selected)
 	return err
-}
-
-func sameKillerMoveOperationSemantics(snapshot, authored gameplayeffects.Operation) bool {
-	if snapshot.Target != nil {
-		return false
-	}
-	return snapshot.Op == authored.Op && snapshot.SubType == authored.SubType && snapshot.Path == authored.Path &&
-		snapshot.StatusID == authored.StatusID && snapshot.Stat == authored.Stat && snapshot.Unit == authored.Unit &&
-		snapshot.Resource == authored.Resource && snapshot.StackPolicy == authored.StackPolicy && snapshot.Code == authored.Code &&
-		reflect.DeepEqual(snapshot.Params, authored.Params)
-}
-
-func killerMoveEffectKey(instanceID string, blockIndex, operationIndex int) string {
-	return fmt.Sprintf("%s:%d:%d", instanceID, blockIndex, operationIndex)
 }
 
 func bindKillerMoveCompositionDraft(c *gin.Context, tx *sql.Tx, playerID uuid.UUID, req *killerMoveDraftRequest) error {
@@ -498,58 +265,6 @@ func bindKillerMoveCompositionDraft(c *gin.Context, tx *sql.Tx, playerID uuid.UU
 	req.RuleSetRevision = graph.RuleSetRevision
 	req.CompositionEdges = graph.Edges
 	return nil
-}
-
-func killerMoveOperationAllowed(op gameplayeffects.Operation, target gameplayeffects.Target) bool {
-	selector := strings.ToUpper(string(target.Selector))
-	isSelf := selector == string(gameplayeffects.TargetSelf)
-	isEnemy := selector == string(gameplayeffects.TargetSingle) || selector == string(gameplayeffects.TargetRow) ||
-		selector == string(gameplayeffects.TargetCol) || selector == "CROSS" || selector == string(gameplayeffects.TargetAll) ||
-		selector == string(gameplayeffects.TargetAllEnemies)
-	switch op.Op {
-	case gameplayeffects.OpDamage:
-		return isEnemy && (op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") || strings.EqualFold(op.SubType, "MULTIPLIER") || strings.EqualFold(op.SubType, "MAX_HP_PERCENT"))
-	case gameplayeffects.OpDirectHP:
-		return isEnemy && (strings.EqualFold(op.SubType, "MAX_HP_PERCENT") || strings.EqualFold(op.SubType, "SHIELD_STRIP"))
-	case gameplayeffects.OpShield, gameplayeffects.OpBarrier:
-		return isSelf && (op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") || strings.EqualFold(op.SubType, "MULTIPLIER") || strings.EqualFold(op.SubType, "PERCENT"))
-	case gameplayeffects.OpHeal:
-		if strings.EqualFold(op.SubType, "LIFESTEAL") {
-			return false // lifesteal needs a single damage executor to preserve ordering
-		}
-		return isSelf && (op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") || strings.EqualFold(op.SubType, "PERCENT") || strings.EqualFold(op.SubType, "MANA") || strings.EqualFold(op.SubType, "RESOURCE"))
-	case gameplayeffects.OpCleanse:
-		return isSelf
-	case gameplayeffects.OpStatus:
-		status, ok := statusfx.Spec(op.StatusID)
-		if !ok {
-			return false
-		}
-		return (status.SelfTarget && isSelf) || (!status.SelfTarget && isEnemy)
-	default:
-		return false
-	}
-}
-
-func killerMoveOperationLabel(op gameplayeffects.Operation) string {
-	switch op.Op {
-	case gameplayeffects.OpDamage:
-		return "Gây sát thương"
-	case gameplayeffects.OpShield, gameplayeffects.OpBarrier:
-		return "Tạo khiên"
-	case gameplayeffects.OpHeal:
-		return "Hồi phục"
-	case gameplayeffects.OpDirectHP:
-		return "Tổn thương trực tiếp"
-	case gameplayeffects.OpStatus:
-		return "Hiệu ứng: " + strings.ToLower(op.StatusID)
-	case gameplayeffects.OpCleanse:
-		return "Thanh tẩy"
-	case gameplayeffects.OpStatMod:
-		return "Điều chỉnh " + strings.ToLower(op.Stat)
-	default:
-		return string(op.Op)
-	}
 }
 
 func GetKillerMoveOptions(c *gin.Context) {
@@ -697,7 +412,7 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 		// Block v2 stores target selection on the block, never on the operation.
 		operation.Target = nil
 		blocks = append(blocks, gameplayeffects.Block{ID: fmt.Sprintf("EFFECT_%02d", len(blocks)+1), Trigger: gameplayeffects.Trigger(option.Trigger), Target: blockTarget, Conditions: append([]gameplayeffects.Condition(nil), option.Conditions...), Operations: []gameplayeffects.Operation{operation}})
-		effectLoad := killerMoveEffectLoad(option.Operation, blockTarget)
+		effectLoad := composition.EffectLoad(option.Operation, blockTarget)
 		load += effectLoad
 		if option.Operation.Op == gameplayeffects.OpCleanse {
 			unscalableLoad += effectLoad
@@ -802,7 +517,7 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 	}
 	for bi := range blocks {
 		for oi := range blocks[bi].Operations {
-			scaleKillerMoveOperation(&blocks[bi].Operations[oi], scale)
+			composition.ScaleOperation(&blocks[bi].Operations[oi], scale)
 		}
 	}
 	masteryBonus := math.Min(0.15, float64(masteryXP)/1000*0.15)
@@ -824,13 +539,6 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 	preview := killerMovePreview{Components: components, CompositionGraph: graph, SelectedEffects: selected, CompiledEffects: blocks, Rank: main.Rank, Path: path, PathMasteryLevel: pathMasteryLevel, PowerBudget: budget, PowerLoad: load, EffectScale: scale, Harmony: harmony, Complexity: complexity, SuccessChance: success, ManaCost: manaCost, CombatProfile: profile, Warnings: warnings}
 	preview.PreviewFingerprint = killerMovePreviewHash(preview)
 	return preview, main, nil
-}
-
-func killerMovePreviewHash(preview killerMovePreview) string {
-	preview.PreviewFingerprint = ""
-	raw, _ := json.Marshal(preview)
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:])
 }
 
 func getGuTargetType(spec models.Gu) string {
@@ -938,67 +646,6 @@ func compileKillerMoveCombatProfile(
 		BackfireHPPercent: backfirePct,
 		BackfireStatus:    backfireStatus,
 	}
-}
-
-func killerMoveEffectLoad(op gameplayeffects.Operation, target gameplayeffects.Target) float64 {
-	base := 16.0
-	switch op.Op {
-	case gameplayeffects.OpDamage, gameplayeffects.OpDirectHP:
-		base = 24
-	case gameplayeffects.OpStatus:
-		base = 20
-	case gameplayeffects.OpShield, gameplayeffects.OpBarrier:
-		base = 18
-	case gameplayeffects.OpHeal:
-		base = 17
-	case gameplayeffects.OpCleanse:
-		base = 12
-	case gameplayeffects.OpStatMod:
-		base = 14
-	}
-	valueFactor := 1 + math.Min(2.5, math.Log10(1+math.Abs(op.Value))/5)
-	scope := strings.ToUpper(string(target.Selector))
-	switch scope {
-	case "ALL", "ALL_ENEMIES", "ALL_ALLIES":
-		valueFactor *= 1.8
-	case "ROW", "COL":
-		valueFactor *= 1.35
-	}
-	if op.Op == gameplayeffects.OpStatus {
-		valueFactor *= 1 + math.Min(0.6, float64(max(0, op.Turns-1))*0.12)
-		chance := op.Chance
-		if chance <= 0 {
-			chance = 1
-		}
-		valueFactor *= 0.75 + math.Min(1, chance)*0.5
-	}
-	return base * valueFactor
-}
-
-func scaleKillerMoveOperation(op *gameplayeffects.Operation, scale float64) {
-	if op == nil || scale >= 1 {
-		return
-	}
-	if op.Op == gameplayeffects.OpStatus {
-		chance := op.Chance
-		if chance <= 0 {
-			chance = 1
-		}
-		op.Chance = math.Max(0.05, chance*scale)
-		op.Value *= scale
-		if op.Turns > 1 {
-			op.Turns = max(1, int(math.Ceil(float64(op.Turns)*scale)))
-		}
-		return
-	}
-	if op.Op == gameplayeffects.OpCleanse {
-		return
-	}
-	if (op.Op == gameplayeffects.OpDamage || op.Op == gameplayeffects.OpShield) && strings.EqualFold(op.SubType, "MULTIPLIER") {
-		op.Value = 1 + (op.Value-1)*scale
-		return
-	}
-	op.Value *= scale
 }
 
 func PreviewKillerMove(c *gin.Context) {
@@ -1185,7 +832,7 @@ func ListKillerMoves(c *gin.Context) {
 		_ = json.Unmarshal(combatProf, &m.CombatProfile)
 		m.MasteryLevel = m.MasteryXP / 100
 		currentLevel := gamefx.PathMasteryLevel(masteries[gamefx.CleanPath(m.Path)])
-		m.SuccessChance = killerMoveAdjustedChance(m.SuccessChance, m.CreationPathMasteryLevel, currentLevel, m.MasteryXP)
+		m.SuccessChance = composition.AdjustedSuccessChance(m.SuccessChance, m.CreationPathMasteryLevel, currentLevel, m.MasteryXP)
 		available, hasStarvingGu, missingGu := evaluateKillerMoveComponents(m.Components, ownedSet)
 		compositionErr := snapshotErr
 		if compositionErr == nil {
@@ -1778,62 +1425,36 @@ func UseKillerMove(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Sát chiêu không có effect ON_USE được hỗ trợ ngoài combat"})
 		return
 	}
+	componentIDs := make([]string, len(move.Components))
+	for i, comp := range move.Components {
+		componentIDs[i] = comp.InstanceID
+	}
 	cost := gamefx.EnergyCost(&player, &mainSpec)
 	if player.CurrentMana < cost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 		return
 	}
-	useSnapshot := gameplayeffects.Snapshot{
-		ID: player.ID.String(), HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(&player),
-		Mana: player.CurrentMana, MaxMana: gamefx.EffectiveMaxMana(&player),
-	}
-	player.CurrentMana -= cost
 	cleanPath := gamefx.CleanPath(move.Path)
 	if cleanPath == "" {
 		cleanPath = "strength"
 	}
 	currentLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
-	chance := killerMoveAdjustedChance(move.SuccessChance, move.CreationPathMasteryLevel, currentLevel, move.MasteryXP)
+	chance := composition.AdjustedSuccessChance(move.SuccessChance, move.CreationPathMasteryLevel, currentLevel, move.MasteryXP)
 	roll := rand.Float64()
 	success := roll < chance
 	message := ""
 	pathGain := 0
 	pathPoints := player.PathMasteries[cleanPath]
 	if success {
-		result, evalErr := compiledEffects.Evaluate(gameplayeffects.Context{
-			Actor: useSnapshot, Target: useSnapshot,
+		evalCtx := gameplayeffects.Context{
 			Rank: move.MainGuRank, Mastery: currentLevel, HasMastery: true,
-		}, gameplayeffects.Event{Trigger: gameplayeffects.TriggerOnUse})
-		if evalErr != nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Không thể đánh giá effect ON_USE"})
+		}
+		outcome, execErr := executeWorldUseEffect(tx, &player, compiledEffects, evalCtx, move.MainGuRank, cost, move.Name, componentIDs)
+		if execErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": execErr.Error()})
 			return
 		}
-		healed, restoredMana, flightDurationMinutes, stealthConcealment, hasteDurationMinutes, applyErr := applyWorldUseCommands(&player, result.Commands, move.MainGuRank, move.Name)
-		if applyErr != nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Executor ON_USE từ chối effect không hỗ trợ"})
-			return
-		}
-		if healed <= 0 && restoredMana <= 0 && flightDurationMinutes == 0 && stealthConcealment == 0 && hasteDurationMinutes == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Điều kiện effect ON_USE không thỏa hoặc không tạo tác động được hỗ trợ"})
-			return
-		}
-		effectsApplied := make([]string, 0, 5)
-		if healed > 0 {
-			effectsApplied = append(effectsApplied, fmt.Sprintf("hồi %.0f HP", healed))
-		}
-		if restoredMana > 0 {
-			effectsApplied = append(effectsApplied, fmt.Sprintf("hoàn %.0f Chân Nguyên", restoredMana))
-		}
-		if flightDurationMinutes > 0 {
-			effectsApplied = append(effectsApplied, fmt.Sprintf("Phi Hành %d phút", flightDurationMinutes))
-		}
-		if stealthConcealment > 0 {
-			effectsApplied = append(effectsApplied, fmt.Sprintf("Ẩn Nấp +%d điểm trong thời gian trạng thái", stealthConcealment))
-		}
-		if hasteDurationMinutes > 0 {
-			effectsApplied = append(effectsApplied, fmt.Sprintf("Tăng Tốc trong %d phút", hasteDurationMinutes))
-		}
-		message = fmt.Sprintf("Sát chiêu [%s] thành công: %s.", move.Name, strings.Join(effectsApplied, "; "))
+		message = fmt.Sprintf("Sát chiêu [%s] thành công: %s.", move.Name, outcome.EffectsSummary)
 		if _, err := tx.Exec(`UPDATE player_killer_moves SET mastery_xp=LEAST(5000,mastery_xp+1),updated_at=NOW() WHERE id=$1 AND player_id=$2`, move.ID, playerID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi nhận thành thạo sát chiêu"})
 			return
@@ -1850,17 +1471,14 @@ func UseKillerMove(c *gin.Context) {
 			message += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(gamefx.PathMasteryLevel(pathPoints)))
 		}
 	} else {
-		message = fmt.Sprintf("Thôi động [%s] thất bại (%.0f%% / tỉ lệ %.0f%%). Các Cổ thành phần vẫn hao độ no.", move.Name, roll*100, chance*100)
-	}
-	for _, component := range move.Components {
-		gu := owned[component.InstanceID]
-		gu.Hunger = max(0, gu.Hunger-1)
-		if _, err := tx.Exec(`UPDATE player_gu SET hunger=$1,updated_at=NOW() WHERE id=$2 AND player_id=$3`, gu.Hunger, gu.InstanceID, playerID); err != nil {
+		player.CurrentMana -= cost
+		if err := deductGuHungerTx(tx, playerID, &player, componentIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể giảm độ no Cổ thành phần"})
 			return
 		}
+		message = fmt.Sprintf("Thôi động [%s] thất bại (%.0f%% / tỉ lệ %.0f%%). Các Cổ thành phần vẫn hao độ no.", move.Name, roll*100, chance*100)
 	}
-	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2,path_masteries=$3,statuses=$4 WHERE id=$5`, player.HP, player.CurrentMana, player.PathMasteries, player.Statuses, playerID); err != nil {
+	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2,path_masteries=$3,statuses=$4,version=version+1,state_revision=state_revision+1 WHERE id=$5`, player.HP, player.CurrentMana, player.PathMasteries, player.Statuses, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái nhân vật"})
 		return
 	}
@@ -1892,15 +1510,4 @@ func UseKillerMove(c *gin.Context) {
 		return
 	}
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": message, "killer_move_id": move.ID, "success": success, "success_chance": chance, "path": cleanPath, "path_gain": pathGain, "path_masteries": player.PathMasteries})
-}
-
-func killerMoveAdjustedChance(base float64, creationLevel, currentLevel, xp int) float64 {
-	chance := base + float64(currentLevel-creationLevel)*0.035 + math.Min(.15, float64(xp)/1000*.15)
-	if chance > .95 {
-		return .95
-	}
-	if chance < .05 {
-		return .05
-	}
-	return chance
 }

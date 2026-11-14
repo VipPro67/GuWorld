@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"math"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -202,4 +204,96 @@ func worldUseStatusID(status *statusfx.StatusOp) string {
 		return ""
 	}
 	return status.ID
+}
+
+type worldUseExecutionResult struct {
+	HealedHP           float64
+	RestoredMana       float64
+	FlightDuration     int
+	StealthConcealment int
+	HasteDuration      int
+	EffectsSummary     string
+}
+
+func deductGuHungerTx(tx *sql.Tx, playerID uuid.UUID, player *models.Player, guInstanceIDs []string) error {
+	for _, id := range guInstanceIDs {
+		if _, err := tx.Exec(`UPDATE player_gu SET hunger=GREATEST(0,hunger-1),updated_at=NOW() WHERE id=$1 AND player_id=$2`, id, playerID); err != nil {
+			return err
+		}
+		if player != nil {
+			for i := range player.GuInventory {
+				if player.GuInventory[i].InstanceID == id {
+					player.GuInventory[i].Hunger = max(0, player.GuInventory[i].Hunger-1)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func executeWorldUseEffect(
+	tx *sql.Tx,
+	player *models.Player,
+	compiled *gameplayeffects.Compiled,
+	evalCtx gameplayeffects.Context,
+	rank int,
+	energyCost float64,
+	sourceTitle string,
+	guInstanceIDs []string,
+) (*worldUseExecutionResult, error) {
+	if player.CurrentMana < energyCost {
+		return nil, fmt.Errorf("%s", insufficientEnergyMessage(player))
+	}
+	snapshot := gameplayeffects.Snapshot{
+		ID: player.ID.String(), HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(player),
+		Mana: player.CurrentMana, MaxMana: gamefx.EffectiveMaxMana(player),
+	}
+	if evalCtx.Actor.ID == "" {
+		evalCtx.Actor = snapshot
+	}
+	if evalCtx.Target.ID == "" {
+		evalCtx.Target = snapshot
+	}
+	result, err := compiled.Evaluate(evalCtx, gameplayeffects.Event{Trigger: gameplayeffects.TriggerOnUse})
+	if err != nil {
+		return nil, fmt.Errorf("không thể đánh giá effect ON_USE: %w", err)
+	}
+	healed, restoredMana, flight, stealth, haste, err := applyWorldUseCommands(player, result.Commands, rank, sourceTitle)
+	if err != nil {
+		return nil, fmt.Errorf("executor ON_USE từ chối effect không hỗ trợ: %w", err)
+	}
+	if healed <= 0 && restoredMana <= 0 && flight == 0 && stealth == 0 && haste == 0 {
+		return nil, fmt.Errorf("điều kiện effect không thỏa hoặc không tạo tác động được hỗ trợ")
+	}
+	player.CurrentMana -= energyCost
+
+	effectsApplied := make([]string, 0, 5)
+	if healed > 0 {
+		effectsApplied = append(effectsApplied, fmt.Sprintf("hồi %.0f HP", healed))
+	}
+	if restoredMana > 0 {
+		effectsApplied = append(effectsApplied, fmt.Sprintf("hoàn %.0f Chân Nguyên", restoredMana))
+	}
+	if flight > 0 {
+		effectsApplied = append(effectsApplied, fmt.Sprintf("Phi Hành %d phút", flight))
+	}
+	if stealth > 0 {
+		effectsApplied = append(effectsApplied, fmt.Sprintf("Ẩn Nấp +%d điểm trong thời gian trạng thái", stealth))
+	}
+	if haste > 0 {
+		effectsApplied = append(effectsApplied, fmt.Sprintf("Tăng Tốc trong %d phút", haste))
+	}
+
+	if err := deductGuHungerTx(tx, player.ID, player, guInstanceIDs); err != nil {
+		return nil, fmt.Errorf("không thể trừ độ no Cổ: %w", err)
+	}
+
+	return &worldUseExecutionResult{
+		HealedHP:           healed,
+		RestoredMana:       restoredMana,
+		FlightDuration:     flight,
+		StealthConcealment: stealth,
+		HasteDuration:      haste,
+		EffectsSummary:     strings.Join(effectsApplied, "; "),
+	}, nil
 }

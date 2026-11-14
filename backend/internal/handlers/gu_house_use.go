@@ -125,43 +125,19 @@ func UseGuHouse(c *gin.Context) {
 		return
 	}
 	cost := gamefx.EnergyCost(&player, &spec)
-	if player.CurrentMana < cost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
+	outcome, execErr := executeWorldUseEffect(tx, &player, compiled, gameplayeffects.Context{Rank: gu.Rank}, gu.Rank, cost, houseName, []string{req.CoreGuInstanceID})
+	if execErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": execErr.Error()})
 		return
 	}
-	snapshot := gameplayeffects.Snapshot{ID: player.ID.String(), HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(&player), Mana: player.CurrentMana, MaxMana: gamefx.EffectiveMaxMana(&player)}
-	result, err := compiled.Evaluate(gameplayeffects.Context{Actor: snapshot, Target: snapshot, Rank: gu.Rank}, gameplayeffects.Event{Trigger: gameplayeffects.TriggerOnUse})
-	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Không thể đánh giá effect ON_USE"})
-		return
-	}
-	player.CurrentMana -= cost
-	healed, mana, flight, stealth, haste, err := applyWorldUseCommands(&player, result.Commands, gu.Rank, houseName)
-	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Executor ON_USE từ chối effect không hỗ trợ"})
-		return
-	}
-	if healed == 0 && mana == 0 && flight == 0 && stealth == 0 && haste == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Điều kiện effect không thỏa hoặc không tạo tác động"})
-		return
-	}
-	if _, err := tx.Exec(`UPDATE player_gu SET hunger=GREATEST(0,hunger-1),updated_at=NOW() WHERE id=$1 AND player_id=$2`, req.CoreGuInstanceID, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ độ no Cổ hạch tâm"})
-		return
-	}
-	for i := range player.GuInventory {
-		if player.GuInventory[i].InstanceID == req.CoreGuInstanceID {
-			player.GuInventory[i].Hunger = max(0, player.GuInventory[i].Hunger-1)
-		}
-	}
-	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2,statuses=$3 WHERE id=$4`, player.HP, player.CurrentMana, player.Statuses, playerID); err != nil {
+	if _, err := tx.Exec(`UPDATE players SET hp=$1,current_mana=$2,statuses=$3,version=version+1,state_revision=state_revision+1 WHERE id=$4`, player.HP, player.CurrentMana, player.Statuses, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái nhân vật"})
 		return
 	}
-	auditlog.Log(tx, auditlog.Entry{PlayerID: &playerID, Action: "gu_house.use", EntityType: "gu_house", EntityID: houseID, RequestSummary: "Dùng effect ON_USE từ Tiên Cổ Ốc " + houseName, Metadata: map[string]interface{}{"house_id": houseID, "core_gu_instance_id": gu.InstanceID, "effect_key": selected.Key, "mana_cost": cost}, IPAddress: c.ClientIP(), Success: true})
+	auditlog.Log(tx, auditlog.Entry{PlayerID: &playerID, Action: "gu_house.use", EntityType: "gu_house", EntityID: houseID, RequestSummary: "Dùng effect ON_USE từ Tiên Cổ Ốc " + houseName + ": " + outcome.EffectsSummary, Metadata: map[string]interface{}{"house_id": houseID, "core_gu_instance_id": gu.InstanceID, "effect_key": selected.Key, "mana_cost": cost}, IPAddress: c.ClientIP(), Success: true})
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất effect Tiên Cổ Ốc"})
 		return
 	}
-	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": "Tiên Cổ Ốc [" + houseName + "] đã thi triển effect ngoài combat", "gu_house_id": houseID, "success": true})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": "Tiên Cổ Ốc [" + houseName + "] đã thi triển: " + outcome.EffectsSummary, "gu_house_id": houseID, "success": true})
 }

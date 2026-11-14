@@ -1042,7 +1042,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		act.KillerMoveID = move.ID
 		act.ComponentGuIDs = move.ComponentInstanceIDs()
 		currentMasteryLevel := gamefx.PathMasteryLevel(player.PathMasteries[gamefx.CleanPath(move.Path)])
-		act.SuccessChance = killerMoveAdjustedChance(move.SuccessChance, move.CreationPathMasteryLevel, currentMasteryLevel, move.MasteryXP)
+		act.SuccessChance = composition.AdjustedSuccessChance(move.SuccessChance, move.CreationPathMasteryLevel, currentMasteryLevel, move.MasteryXP)
 		if move.CombatProfile.CooldownTurns > 0 {
 			act.CooldownTurns = move.CombatProfile.CooldownTurns
 		} else {
