@@ -608,7 +608,7 @@ func ActionInstance(c *gin.Context) {
 	}
 
 	if currentStage == nil {
-		httperr.Respond(c, httperr.Internal("Không tìm thấy giai đoạn hiện tại của phó bản!", currentStage))
+		httperr.Respond(c, httperr.Internal("Không tìm thấy giai đoạn hiện tại của phó bản!", nil))
 		return
 	}
 

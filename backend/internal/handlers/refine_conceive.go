@@ -402,7 +402,7 @@ func ConceiveRecipe(c *gin.Context) {
 
 		requiredQty := gamefx.MaterialCatalystRequiredQty(matRank, req.TargetRank)
 		if InventorySvc == nil {
-			httperr.Respond(c, httperr.Internal("Dịch vụ kho đồ không khả dụng", InventorySvc))
+			httperr.Respond(c, httperr.Internal("Dịch vụ kho đồ không khả dụng", nil))
 			return
 		}
 		if err := InventorySvc.DeductItem(tx, player.ID.String(), req.CatalystItemID, requiredQty); err != nil {

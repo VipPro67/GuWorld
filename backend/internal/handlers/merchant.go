@@ -903,7 +903,7 @@ func BuyFromMerchant(c *gin.Context) {
 			guBought = true
 		} else if isRecipeItem(tx, line.ItemID) {
 			if RecipeSvc == nil {
-				httperr.Respond(c, httperr.Internal("Không thể mở khóa bí phương", RecipeSvc))
+				httperr.Respond(c, httperr.Internal("Không thể mở khóa bí phương", nil))
 				return
 			}
 			if err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
