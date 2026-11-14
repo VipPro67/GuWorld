@@ -104,35 +104,10 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	messages := []string{}
-
-	// 1. Validation phase
-	for _, effect := range item.EffectCommands() {
-		if valHandler, ok := ValidateItemEffects[effect.Code]; ok {
-			_, err := valHandler(tx, &player, item, effect.Value)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-		}
-	}
-
-	// 2. Application phase
-	for _, effect := range item.EffectCommands() {
-		if appHandler, ok := ApplyItemEffects[effect.Code]; ok {
-			msg, err := appHandler(tx, &player, item, effect.Value)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			if msg != "" {
-				messages = append(messages, msg)
-			}
-		}
-	}
-
-	if len(messages) == 0 {
-		messages = append(messages, fmt.Sprintf("Đạo hữu sử dụng thành công %s.", item.Name))
+	messages, err := ExecuteItemConsumption(c.Request.Context(), tx, &player, item)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	// Deduct item from the correct category
@@ -272,34 +247,10 @@ func UseItems(c *gin.Context) {
 			return
 		}
 
-		// 1. Validation phase
-		for _, effect := range item.EffectCommands() {
-			if valHandler, ok := ValidateItemEffects[effect.Code]; ok {
-				_, err := valHandler(tx, &player, item, effect.Value)
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s: %s", item.Name, err.Error())})
-					return
-				}
-			}
-		}
-
-		// 2. Application phase
-		itemMsg := []string{}
-		for _, effect := range item.EffectCommands() {
-			if appHandler, ok := ApplyItemEffects[effect.Code]; ok {
-				msg, err := appHandler(tx, &player, item, effect.Value)
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s: %s", item.Name, err.Error())})
-					return
-				}
-				if msg != "" {
-					itemMsg = append(itemMsg, msg)
-				}
-			}
-		}
-
-		if len(itemMsg) == 0 {
-			itemMsg = append(itemMsg, fmt.Sprintf("Đạo hữu sử dụng thành công %s.", item.Name))
+		itemMsg, err := ExecuteItemConsumption(c.Request.Context(), tx, &player, item)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s: %s", item.Name, err.Error())})
+			return
 		}
 		messages = append(messages, itemMsg...)
 

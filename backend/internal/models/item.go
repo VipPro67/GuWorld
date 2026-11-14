@@ -118,6 +118,9 @@ func ValidateItemEffectBlocks(raw []byte) error {
 	if err != nil {
 		return err
 	}
+	if err := gameplayeffects.ValidateContextSupport(gameplayeffects.DomainItemUse, blocks); err != nil {
+		return err
+	}
 	return validateItemBlockSet(blocks)
 }
 
@@ -161,17 +164,49 @@ func (e ItemEffects) Value() (driver.Value, error) {
 
 // ItemSpec defines the static attributes for a type of item.
 type ItemSpec struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Type        string      `json:"type"`      // E.g. "Currency", "Consumable", "Food", "Material"
-	ItemType    string      `json:"item_type"` // Backward compatibility for frontend
-	Rank        int         `json:"rank"`
-	Effects     ItemEffects `json:"effects"`
-	Description string      `json:"description"`
-	BasePrice   float64     `json:"base_price"`
-	ImageURL    string      `json:"image_url"`
-	Rarity      int         `json:"rarity"`
-	Path        string      `json:"path"`
+	ID          string                  `json:"id"`
+	Name        string                  `json:"name"`
+	Type        string                  `json:"type"`      // E.g. "Currency", "Consumable", "Food", "Material"
+	ItemType    string                  `json:"item_type"` // Backward compatibility for frontend
+	Rank        int                     `json:"rank"`
+	Blocks      []gameplayeffects.Block `json:"blocks,omitempty"`
+	Effects     ItemEffects             `json:"effects"`
+	compiled    *gameplayeffects.Compiled
+	Description string                  `json:"description"`
+	BasePrice   float64                 `json:"base_price"`
+	ImageURL    string                  `json:"image_url"`
+	Rarity      int                     `json:"rarity"`
+	Path        string                  `json:"path"`
+}
+
+func (item *ItemSpec) Compiled() *gameplayeffects.Compiled {
+	if item == nil {
+		return nil
+	}
+	if item.compiled != nil {
+		return item.compiled
+	}
+	if len(item.Blocks) > 0 {
+		_ = item.compile()
+		return item.compiled
+	}
+	return nil
+}
+
+func (item *ItemSpec) compile() error {
+	if len(item.Blocks) == 0 {
+		return nil
+	}
+	compiled, err := (gameplayeffects.Compiler{}).Compile(append([]gameplayeffects.Block(nil), item.Blocks...))
+	if err != nil {
+		return err
+	}
+	item.compiled = compiled
+	return nil
+}
+
+func (item ItemSpec) GetBlocks() []gameplayeffects.Block {
+	return append([]gameplayeffects.Block(nil), item.Blocks...)
 }
 
 type ItemEffectCommand struct {
@@ -256,9 +291,10 @@ func LoadItemRegistry(db *sql.DB) error {
 
 	for rows.Next() {
 		var item ItemSpec
+		var rawEffects []byte
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Type, &item.Rank,
-			&item.Effects, &item.Description, &item.BasePrice,
+			&rawEffects, &item.Description, &item.BasePrice,
 			&item.ImageURL, &item.Rarity, &item.Path,
 		)
 		if err != nil {
@@ -267,6 +303,12 @@ func LoadItemRegistry(db *sql.DB) error {
 		}
 
 		item.ItemType = item.Type // align for backward compatibility
+		if blocks, err := gameplayeffects.DecodeBlockSet(rawEffects); err == nil && len(blocks) > 0 {
+			item.Blocks = blocks
+			_ = item.compile()
+		}
+		_ = item.Effects.Scan(rawEffects)
+
 		if _, compileErr := CompileItemEffects(item.Effects); compileErr != nil {
 			return fmt.Errorf("compile item %s effects: %w", item.ID, compileErr)
 		}

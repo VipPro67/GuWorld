@@ -60,9 +60,11 @@ actions; race, constitution, and status projections accept unconditional
 `ALWAYS_ON` self-targeted stat/registered projection operations. Conditions,
 other triggers, targets, or operations that those adapters cannot evaluate are
 rejected by Admin CRUD and CSV preflight, and the runtime loaders reject them
-as well. The compatibility matrix still reports where a valid definition can
-run in other contexts; a green schema validation alone does not mean every
-consumer supports the block.
+as well through `effects.ValidateContextSupport`. Item execution coordinates through
+`ItemUseAdapter` (`ExecuteItemConsumption`), evaluating `TriggerOnConsume` against
+the typed runtime while preserving the legacy map projection for backward compatibility.
+The compatibility matrix reports where a valid definition can run in other contexts;
+a green schema validation alone does not mean every consumer supports the block.
 
 `Gu.csv.composition_contributions` is a separate versioned authoring envelope:
 `{"schema_version":1,"grants":[{"effect_block_id":"ACTIVE_SKILL","operation_index":0,"capability":"COMBAT.DAMAGE.FLAT.SINGLE_TARGET"}]}`.
