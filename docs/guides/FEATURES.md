@@ -8,7 +8,7 @@ Tài liệu người chơi bắt đầu từ [WIKI.md](../../WIKI.md). Các tran
 | Nhiệm vụ và phần thưởng | [progression-and-rewards.md](../features/progression-and-rewards.md) | Quest, nhiệm vụ ngày, thành tựu, referral, gift code |
 | Cổ trùng và inventory | [gu-and-inventory.md](../features/gu-and-inventory.md) | Túi đồ, feed/equip, trạng thái, durability, bản mệnh |
 | Luyện Cổ | [refining.md](../features/refining.md) | Cổ phương, suy diễn/cảm ngộ, phiên luyện và minigame |
-| Sản phẩm chiến đấu | [killer-moves-and-gu-houses.md](../features/killer-moves-and-gu-houses.md) | Sát Chiêu, Tiên Cổ Ốc, composition/reservation |
+| Sản phẩm chiến đấu | [killer-moves-and-gu-houses.md](../features/killer-moves-and-gu-houses.md) | Sát Chiêu, Tiên Cổ Ốc, composition/reservation; Xuân Tiễn làm chậm và Liệu Quang Giáp thanh tẩy khi effect được chọn |
 | Thế giới | [world-and-exploration.md](../features/world-and-exploration.md) | Map, movement, portal, ground drop, tài nguyên, teleport |
 | Thiên Cơ | [scouting.md](../features/scouting.md) | Inspect, divination, tracking marks, sever clues, resonance |
 | Combat | [combat.md](../features/combat.md) | Encounter, auto/session, PvP, action plans, flee, capture, history |
@@ -26,6 +26,7 @@ Tài liệu người chơi bắt đầu từ [WIKI.md](../../WIKI.md). Các tran
 - `backend/internal/handlers/...` là gameplay HTTP; `backend/internal/db/schema_*.go` là persistence; `backend/data/*.csv` là dataset được quản trị qua Admin.
 - Nhiều nội dung và giới hạn phụ thuộc DB/config runtime. Trang feature ghi rõ khi một giá trị do dataset quyết định thay vì hard-code.
 - Công thức trong mục “Công thức” được chép theo backend hiện tại; xem phần source liên quan trong cùng trang. Phân biệt constants, CSV/config và giá trị trả về động; giữ nguyên đơn vị, clamp và thứ tự áp dụng khi cập nhật.
+- Effect được liệt kê theo data và runtime status tại [EFFECTS.md](EFFECTS.md); không xem việc pass catalog validation là bằng chứng đã có tác dụng gameplay.
 - Tên feature trên lobby là nhãn UI, không đảm bảo action mở được trong mọi rank/trạng thái.
 
 ## Cập nhật đồng bộ

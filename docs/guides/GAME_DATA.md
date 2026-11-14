@@ -40,7 +40,7 @@ Các registry được nạp khi startup gồm Gu, item, race, constitution, sta
 
 ## Effects
 
-Effects được lưu dạng JSON và runtime adapter hỗ trợ theo ngữ cảnh thực thi. Một effect hợp lệ về cấu trúc chưa chắc được mọi gameplay context hỗ trợ. Dùng effect catalog/validation của backend và Admin preflight; không tự thêm op/trigger rồi giả định simulator sẽ thực thi.
+Effects được lưu dạng JSON và runtime adapter hỗ trợ theo ngữ cảnh thực thi. Một effect hợp lệ về cấu trúc chưa chắc được mọi gameplay context hỗ trợ. Dùng [danh mục effect theo Item/Gu/Race/Constitution](EFFECTS.md) để xem code hiện có, status consumer và các no-op đã xác minh; dùng effect catalog/validation của backend và Admin preflight khi sửa data.
 
 `Gu.csv` dùng Block v2 envelope. Ví dụ rút gọn về cấu trúc (operation cụ thể vẫn phải được catalog và consumer hỗ trợ):
 
@@ -48,7 +48,7 @@ Effects được lưu dạng JSON và runtime adapter hỗ trợ theo ngữ cả
 {"schema_version":2,"blocks":[{"id":"BASIC_HIT","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":10,"unit":"FLAT"}]}]}
 ```
 
-Đây là ví dụ cấu trúc; operation, trigger, target và conditions phải nằm trong allowlist của consumer tương ứng. Item, race, constitution, status và các product như killer move/Gu House có adapter riêng. Khi thêm trigger, operation hay native hook mới, cập nhật `frontend/src/lib/wiki/effect-glossary.ts` và tài liệu API/gameplay nếu phù hợp.
+Đây là ví dụ cấu trúc; operation, trigger, target và conditions phải nằm trong allowlist của consumer tương ứng. Item, race, constitution, status và các product như killer move/Gu House có adapter riêng. Khi thêm trigger, operation hay native hook mới, cập nhật `frontend/src/lib/wiki/effect-glossary.ts` và tài liệu API/gameplay nếu phù hợp. Xuân Tiễn Tiên Cổ rank 6 bổ sung `STATUS SLOW` lên địch (20%, 2 lượt); Liệu Quang Giáp Tiên Cổ rank 6 dùng `CLEANSE` lên bản thân. Hai operation này dùng consumer combat/Sát Chiêu hiện có; cập nhật CSV cần import bộ Cổ qua Admin rồi khởi động lại backend để nạp registry.
 
 ## Thay đổi schema
 
@@ -57,3 +57,5 @@ Effects được lưu dạng JSON và runtime adapter hỗ trợ theo ngữ cả
 3. Xác nhận FK/index/unique constraints và dữ liệu cũ.
 4. Nếu cần rollout dữ liệu thủ công, tạo/điều chỉnh script rõ ràng; `InitSchema` không thay cho migration vận hành.
 5. Cập nhật tài liệu và kiểm tra package backend liên quan.
+
+`combat_sessions` cũ có `state` và ràng buộc `UNIQUE(player_id)`. Khi khởi động, `schemaCombat` bổ sung các cột cho phiên chiến đấu hiện tại, đánh dấu phiên kiểu cũ là `abandoned` (snapshot cũ không thể phát lại bằng simulator hiện tại), và bỏ ràng buộc unique cũ. Chỉ phiên `active` mới được giới hạn một phiên mỗi người chơi qua partial index.

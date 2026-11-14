@@ -25,13 +25,40 @@ func schemaCombat() error {
 	ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS participant_id UUID REFERENCES players(id) ON DELETE CASCADE;`); err != nil {
 		return err
 	}
-	// CREATE TABLE IF NOT EXISTS does not evolve installations that already
-	// have combat_sessions. Ensure columns added with the session system exist
-	// before their partial indexes are created below.
+	// Older installations have a different combat_sessions table with a state
+	// JSONB column and a UNIQUE(player_id) constraint. CREATE TABLE IF NOT EXISTS
+	// leaves that table unchanged, so add every field used by interactive sessions.
+	if err := execSchema("combat_sessions_interactive_cols", `
+	ALTER TABLE combat_sessions
+		ADD COLUMN IF NOT EXISTS mode VARCHAR(32) NOT NULL DEFAULT 'legacy',
+		ADD COLUMN IF NOT EXISTS initial_state JSONB NOT NULL DEFAULT '{}',
+		ADD COLUMN IF NOT EXISTS loadout JSONB NOT NULL DEFAULT '{}',
+		ADD COLUMN IF NOT EXISTS commands JSONB NOT NULL DEFAULT '[]',
+		ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 0,
+		ADD COLUMN IF NOT EXISTS pending_actor VARCHAR(128) NOT NULL DEFAULT '';`); err != nil {
+		return err
+	}
 	if err := execSchema("combat_sessions_status_deadline_cols", `
 	ALTER TABLE combat_sessions
 		ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'active',
 		ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ;`); err != nil {
+		return err
+	}
+	// Legacy state cannot be replayed as an interactive simulator snapshot.
+	if err := execSchema("combat_sessions_retire_legacy", `
+	UPDATE combat_sessions SET status='abandoned', updated_at=NOW()
+	WHERE mode='legacy' AND status='active';`); err != nil {
+		return err
+	}
+	if err := execSchema("combat_sessions_required_col_defaults", `
+	ALTER TABLE combat_sessions
+		ALTER COLUMN mode DROP DEFAULT,
+		ALTER COLUMN initial_state DROP DEFAULT,
+		ALTER COLUMN loadout DROP DEFAULT;`); err != nil {
+		return err
+	}
+	if err := execSchema("combat_sessions_drop_legacy_player_unique", `
+	ALTER TABLE combat_sessions DROP CONSTRAINT IF EXISTS combat_sessions_player_id_key;`); err != nil {
 		return err
 	}
 	if err := execSchema("combat_sessions_pending_plans_col", `

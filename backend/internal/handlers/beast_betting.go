@@ -269,7 +269,7 @@ func replayUnfinishedRounds() {
 	}
 	defer rows.Close()
 
-	resolvedAny := false
+	announcedAny := false
 	for rows.Next() {
 		var r BettingRound
 		var lockedAt, resolvedAt sql.NullTime
@@ -284,13 +284,14 @@ func replayUnfinishedRounds() {
 		if resolvedAt.Valid {
 			r.ResolvedAt = &resolvedAt.Time
 		}
-		if err := resolveRoundTx(&r); err != nil {
+		announced, err := resolveRoundTx(&r)
+		if err != nil {
 			logger.S.Errorf("beast_betting: replay resolve failed for round %s: %v", r.ID, err)
 			continue
 		}
-		resolvedAny = true
+		announcedAny = announcedAny || announced
 	}
-	if resolvedAny {
+	if announcedAny {
 		notifyBaoHoangMessages("world", sql.NullString{})
 	}
 }
@@ -392,7 +393,7 @@ func resolveAndAdvance() {
 	}
 	rows.Close()
 
-	resolvedAny := false
+	announcedAny := false
 	for _, pr := range pastRows {
 		r := &BettingRound{
 			ID: pr.id, Status: pr.status, Winner: pr.winner,
@@ -406,11 +407,12 @@ func resolveAndAdvance() {
 		if pr.resolvedAt.Valid {
 			r.ResolvedAt = &pr.resolvedAt.Time
 		}
-		if err := resolveRound(tx, r); err != nil {
+		announced, err := resolveRound(tx, r)
+		if err != nil {
 			logger.S.Errorf("beast_betting: resolve round %s failed: %v", r.ID, err)
 			continue
 		}
-		resolvedAny = true
+		announcedAny = announcedAny || announced
 	}
 
 	// Ensure current hour's round exists
@@ -420,7 +422,7 @@ func resolveAndAdvance() {
 
 	if err := tx.Commit(); err != nil {
 		logger.S.Errorf("beast_betting: resolveAndAdvance commit: %v", err)
-	} else if resolvedAny {
+	} else if announcedAny {
 		notifyBaoHoangMessages("world", sql.NullString{})
 	}
 
@@ -428,19 +430,23 @@ func resolveAndAdvance() {
 }
 
 // resolveRoundTx resolves a round using its own transaction (for startup replay).
-func resolveRoundTx(r *BettingRound) error {
+func resolveRoundTx(r *BettingRound) (bool, error) {
 	tx, err := db.DB.Begin()
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback()
-	if err := resolveRound(tx, r); err != nil {
-		return err
+	announced, err := resolveRound(tx, r)
+	if err != nil {
+		return false, err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return announced, nil
 }
 
-func resolveRound(tx *sql.Tx, r *BettingRound) error {
+func resolveRound(tx *sql.Tx, r *BettingRound) (bool, error) {
 	winner, battleLog := SimulateBeastFight()
 	now := time.Now()
 
@@ -450,7 +456,7 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 		WHERE id = $4
 	`, winner, battleLog, now, r.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	rows, err := tx.Query(`
@@ -459,7 +465,7 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 		WHERE round_id = $1
 	`, r.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer rows.Close()
 
@@ -474,7 +480,7 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 	for rows.Next() {
 		var b Bet
 		if err := rows.Scan(&b.ID, &b.PlayerID, &b.Team, &b.Amount); err != nil {
-			return err
+			return false, err
 		}
 		bets = append(bets, b)
 		if b.Team == "team_a" {
@@ -482,6 +488,9 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 		} else {
 			totalB += b.Amount
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
 	}
 	rows.Close()
 
@@ -565,17 +574,17 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 				RETURNING primeval_stones - $1, primeval_stones
 			`, payout, pID).Scan(&before, &after)
 			if err != nil {
-				return err
+				return false, err
 			}
 
 			if err := insertWalletTx(tx, pID, txType, "PRIMEVAL_STONE", int64(payout), int64(before), int64(after), nil, nil, note); err != nil {
-				return err
+				return false, err
 			}
 		}
 
 		_, err = tx.Exec("UPDATE beast_bets SET payout = $1 WHERE id = $2", payout, b.ID)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// Send win/lose/refund notification to player
@@ -586,6 +595,10 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 		} else {
 			notify.Send(tx, pID, "BEAST_BETTING", "Thua cược Đấu Thú", fmt.Sprintf("Rất tiếc, phe cược của đạo hữu đã thất bại ở vòng đấu %s. Hoàn trả phần dư: %.0f Nguyên Thạch.", r.CreatedAt.Format("15:00 02/01"), payout))
 		}
+	}
+
+	if len(bets) == 0 {
+		return false, nil
 	}
 
 	// Broadcast round results to global chat
@@ -611,9 +624,10 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 	`, systemID, globalUUID, chatContent)
 	if err != nil {
 		logger.S.Errorf("beast_betting: failed to insert global chat announcement: %v", err)
+		return false, nil
 	}
 
-	return nil
+	return true, nil
 }
 
 func GetCurrentBettingRound(c *gin.Context) {

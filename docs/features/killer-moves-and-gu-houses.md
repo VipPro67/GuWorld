@@ -9,6 +9,8 @@ Hai tính năng cho phép đóng gói Gu và effect thành sản phẩm có prof
 
 Không phải mọi Gu effect đều được phép nối với nhau hoặc dùng trong mọi context.
 
+Effect mới trong `backend/data/Gu.csv`: Xuân Tiễn Tiên Cổ rank 6 có `STATUS SLOW` (20%, 2 lượt) trên mục tiêu; Liệu Quang Giáp Tiên Cổ rank 6 có `CLEANSE` trên bản thân, thay cho trạng thái `BLIND` tự gây trước đây. Tên Xuân Tiễn lấy cảm hứng từ danh sách sát chiêu tiên đạo; trị số và cơ chế là thiết kế của game, không được danh sách đó mô tả. Cả hai là lựa chọn khi tạo Sát Chiêu từ Cổ tương ứng, tuân theo preview và allowlist combat; chúng không phải công thức Sát Chiêu cố định.
+
 ## Điều kiện mở và quyền truy cập
 
 - Routes `/killer-moves/*` và `/gu-houses/*` yêu cầu đăng nhập và onboarding.

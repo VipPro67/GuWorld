@@ -9,6 +9,7 @@ Các tài liệu bên dưới mô tả hành vi hiện có trong mã nguồn. C�
 | [Tính năng gameplay](guides/FEATURES.md) | Developer, tester | Từng tính năng, điều kiện/flow và nơi sở hữu trong source |
 | [Chi tiết theo domain](features/README.md) | Developer, tester | Hướng dẫn chi tiết và quy ước giữ docs đồng bộ với code |
 | [Dữ liệu game](guides/GAME_DATA.md) | Designer, admin, developer | CSV, import/export, registry và effects |
+| [Danh mục effect](guides/EFFECTS.md) | Designer, admin, developer | Effect trong Item/Gu/Race/Constitution và mức hỗ trợ runtime theo context |
 | [Triển khai production](guides/PRODUCTION_DEPLOY.md) | Operator | Cấu hình triển khai, TLS và realtime transport |
 | [Kiến trúc](architecture/ARCHITECTURE.md) | Developer | Thành phần runtime và ranh giới module |
 | [Miền Player](architecture/PLAYER_DOMAIN.md) | Developer | Quyền sở hữu dữ liệu player, snapshot và mutation |

@@ -88,7 +88,7 @@ function StatusBadge({ status }: { status: HookStatus }) {
   );
 }
 
-const HOOK_GROUP_ORDER: HookGroup[] = ["combat", "steal", "growth", "stat", "world"];
+const HOOK_GROUP_ORDER: HookGroup[] = ["combat", "steal", "growth", "stat", "world", "item"];
 
 export const effectsPages: WikiPage[] = [
   {
@@ -368,7 +368,7 @@ export const effectsPages: WikiPage[] = [
       <div className="space-y-5 text-xs leading-relaxed text-[var(--text-secondary)]">
         <p>
           Op <Code>UNIQUE</Code> gọi một mã <strong>native hook</strong> — hành vi do engine/handler xử lý chứ không nằm trong bảng op.
-          Dưới đây là toàn bộ mã đang xuất hiện trong dữ liệu Cổ. Cột <strong>Trạng thái</strong> cho biết mã đó có tác dụng thật hay chưa.
+          Dưới đây là toàn bộ mã đang xuất hiện trong dữ liệu Cổ. Cột <strong>Trạng thái</strong> tóm tắt mức triển khai; một mã chỉ chạy khi trigger và consumer đúng context, không có nghĩa dùng được ở mọi nơi. Mã được catalog chấp nhận vẫn có thể chưa có tác dụng gameplay.
         </p>
         <div className="flex flex-wrap gap-1.5">
           {(Object.keys(HOOK_STATUS_LABELS) as HookStatus[]).map((s) => (
@@ -377,7 +377,7 @@ export const effectsPages: WikiPage[] = [
               <span className="text-[10px] text-[var(--text-muted)]">
                 {s === "active" && "đã chạy trong game"}
                 {s === "partial" && "có điều kiện hoặc thiếu phần phụ"}
-                {s === "legacy" && "chỉ có tác dụng trong trận theo lượt cũ"}
+                {s === "legacy" && "tên cũ/compatibility; xem ghi chú từng mã"}
                 {s === "unimplemented" && "khai báo nhưng chưa có hiệu lực"}
               </span>
             </span>

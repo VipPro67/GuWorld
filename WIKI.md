@@ -58,6 +58,8 @@ Các công thức cấp cao hoặc bị giới hạn theo rank cần phiên luy�
 
 Sát Chiêu được tạo từ các Cổ/thành phần mà catalog cho phép kết hợp. Preview cho biết cấu hình có hợp lệ trước khi lưu. Khi trang bị/kích hoạt, các Cổ thành phần có thể bị giữ chỗ; không thể tùy ý dùng hoặc chuyển chúng trong lúc sản phẩm còn chiếm dụng. Tiên Cổ Ốc cũng có preview, tạo, trang bị, sử dụng và sửa chữa theo profile riêng. Không phải mọi Cổ đều tương thích với mọi sản phẩm.
 
+Ví dụ effect mới từ Tiên Cổ lục chuyển: Xuân Tiễn có thể gây Làm Chậm trong 2 lượt, còn Liệu Quang Giáp có thể thanh tẩy hiệu ứng bất lợi của bản thân. Chúng chỉ xuất hiện trong Sát Chiêu nếu người chơi sở hữu Cổ tương ứng và bản preview chấp nhận effect đó.
+
 ## Khám phá thế giới
 
 ### Bản đồ và di chuyển
@@ -150,7 +152,7 @@ Ví hiển thị số dư và giao dịch. Top-up tạo order và chờ kết qu
 - **Tháp Chiến Thuật:** leo tower theo encounter theo lượt; xem trạng thái và leaderboard. Hạn mức/ghi nhận thất bại theo chu kỳ do server quản lý.
 - **Đấu Trường Sinh Tử / Đại Hội Võ Thuật:** giải đấu có đăng ký hoặc ghép trận, bracket, log, lịch sử và phần thưởng riêng.
 - **Giải Trí/Gacha:** xem pool và mở lượt; kết quả, giới hạn và tiêu hao lấy từ cấu hình server.
-- **Cược Linh Thú:** xem vòng cược hiện tại/lịch sử, đặt cược vào một bên khi vòng còn nhận cược.
+- **Cược Linh Thú:** xem vòng cược hiện tại/lịch sử, đặt cược vào một bên khi vòng còn nhận cược. Kết quả chỉ được thông báo ở chat thế giới khi vòng đó có người cược.
 - **Chat và mail:** thư riêng có inbox/thread; chat Bảo Hoàng là kênh công khai riêng. Rate limit và bộ lọc nội dung áp dụng ở server.
 - **Leaderboard:** xem bảng theo hạng mục và cài đặt hiển thị của tài khoản.
 - **Feedback:** gửi phản hồi, bình chọn, bình luận và cập nhật trạng thái khi có quyền.

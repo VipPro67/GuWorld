@@ -25,6 +25,8 @@ Chọn hoạt động tại UI, kiểm tra quota/phase, đăng ký hoặc bắt 
 
 Hết quota, ngoài phase, không đủ rank/currency hoặc session đang bận sẽ chặn entry. Reward/history chỉ được ghi nhận qua settlement server-side.
 
+Vòng Cược Linh Thú vẫn có kết quả trong lịch sử khi không ai cược, nhưng chỉ gửi thông báo `[Đấu Thú]` vào chat thế giới nếu vòng đó có ít nhất một lượt cược. Người đã cược vẫn nhận thông báo cá nhân về thắng, thua hoặc hoàn trả.
+
 ## Liên hệ với hệ thống khác
 
 Combat xử lý trận đấu; rank quyết định grouping/eligibility; economy cấp/tiêu currency; worker xử lý vòng đời giải đấu.
@@ -36,7 +38,7 @@ Arena settings, schedule, bracket, reward tables, tower configuration, gacha poo
 ## Mã nguồn liên quan
 
 - Backend: `backend/internal/handlers/arena.go`, `death_arena_*.go`, `martial_arena_*.go`, `tower.go`, `gacha.go`, `beast_betting.go`.
-- Frontend: `frontend/src/store/slices/arenaSlice.ts`, `martialArenaSlice.ts`, `gachaSlice.ts`, `bettingSlice.ts`.
+- Frontend: `frontend/src/components/EntertainmentPanel.tsx`, `frontend/src/store/slices/arenaSlice.ts`, `martialArenaSlice.ts`, `gachaSlice.ts`, `bettingSlice.ts`.
 
 ## API liên quan
 

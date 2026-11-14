@@ -23,6 +23,7 @@ GuWorld là web game RPG text-based lấy cảm hứng từ hệ thống tu luy�
 | [`docs/architecture/ARCHITECTURE.md`](./docs/architecture/ARCHITECTURE.md) | Kiến trúc thư mục, luồng khởi động và module runtime. |
 | [`docs/architecture/PLAYER_DOMAIN.md`](./docs/architecture/PLAYER_DOMAIN.md) | Ranh giới dữ liệu và cập nhật trạng thái player. |
 | [`docs/guides/GAME_DATA.md`](./docs/guides/GAME_DATA.md) | Nguồn dữ liệu CSV/seed và registry runtime. |
+| [`docs/guides/EFFECTS.md`](./docs/guides/EFFECTS.md) | Danh mục effect từ Item/Gu/Race/Constitution và consumer runtime. |
 | [`docs/guides/DEVELOPMENT.md`](./docs/guides/DEVELOPMENT.md) | Cách chạy, biến môi trường, kiểm tra nhanh. |
 | [`docs/guides/PRODUCTION_DEPLOY.md`](./docs/guides/PRODUCTION_DEPLOY.md) | Checklist production: DNS, TLS, firewall, cert, WebTransport, rollback và smoke test. |
 | [`frontend/README.md`](./frontend/README.md) | Ghi chú riêng cho frontend. |
