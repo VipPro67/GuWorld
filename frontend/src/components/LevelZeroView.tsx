@@ -79,8 +79,8 @@ const STEPS = [
     heading: "Luyện Cổ, Sát Chiêu, Tông Môn",
     body: (
       <p>
-        Tự do phối hợp Cổ Hạch Tâm + Cổ Phụ Trợ để ghép <strong className="text-amber-300">Sát Chiêu</strong>,
-        rèn luyện chúng tại lò luyện và thử trong Phòng Tập trước khi vào Võ Đài hay Đấu Trường Sinh Tử.
+        Xem các thành phần được hệ thống hỗ trợ và dùng bước xem trước để kiểm tra cấu hình
+        <strong className="text-amber-300"> Sát Chiêu</strong> trước khi tạo. Sau đó thử chiến thuật trong Phòng Tập trước khi vào Võ Đài hay Đấu Trường Sinh Tử.
         Trung thành với một <strong className="text-amber-300">Tông Môn</strong> để dùng bảo khố và
         tham gia chiến tranh vùng lãnh thổ.
       </p>

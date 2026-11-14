@@ -123,14 +123,20 @@ func Retreat(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
 		return
 	}
-	if player.ActiveCombat != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Đang chiến đấu; hãy dùng lượt Bỏ chạy hoặc kết thúc trận theo luật của mode này."})
+	// Retreat is also the escape hatch from the loadout screen, before an
+	// interactive session has started. Active sessions were rejected above.
+	if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không thể rút lui khỏi trận PvP đang hoạt động."})
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 	inventoryBefore := len(before)
 
 	logMsg := "Đạo hữu trở về an toàn từ hành trình."
+	if player.ActiveCombat != nil {
+		logMsg = "Đạo hữu đã rút lui khỏi trận chiến trước khi giao phong."
+		player.ActiveCombat = nil
+	}
 
 	player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, player.CurrentRegion, player.X, player.Y)
 

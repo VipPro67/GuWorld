@@ -1,98 +1,57 @@
+# Kiến trúc GuWorld
 
-# Architecture
+## Tổng quan
 
-## Runtime overview
+GuWorld gồm backend Go/Gin, PostgreSQL, Redis và frontend Next.js. Backend phục vụ HTTP API; khi bật TLS, cùng process còn cung cấp WebSocket và WebTransport cho đồng bộ thế giới. Gameplay combat được mô phỏng theo lượt ở backend.
 
 ```text
-Browser / Next.js UI
-  -> Zustand domain slices (state + API client)
-  -> HTTP `/api/*` or one authenticated realtime session per tab
-       (WebTransport `/api/wt` preferred; WebSocket `/api/ws` fallback)
-  -> Gin handlers -> shared service (where present) -> PostgreSQL
-  -> Redis cache/pub-sub, `internal/uihub` realtime sinks and polling/batch workers
+Next.js UI + Zustand store
+        │ HTTP API / WebSocket / WebTransport
+        ▼
+Gin router ── handlers ── services (một số domain)
+                    │
+          PostgreSQL + registries/cache
+                    │
+             worker polling loops
 ```
 
-WebTransport is preferred. WebSocket carries the same world v2 and UI NDJSON protocols when WT cannot connect. Both use the same admission and authoritative simulation. TLS and QUIC are served by the Go process.
+## Backend
 
-Gameplay rules remain primarily in handlers. The wired shared services are `PlayerService`, `InventoryService`, `RecipeService`, `QuestService` and `AchievementService`; this is an incremental split, not a universal service/repository layer. Check `handlers/services.go` and the package before assuming another service exists.
+- `cmd/server/main.go` nạp `.env`, kết nối DB/Redis, gọi `InitSchema`, nạp registry, khởi tạo service, worker, router và realtime server.
+- `internal/server/server.go` đăng ký route `/api`, middleware xác thực/rate limit và quyền admin.
+- `internal/handlers/` điều phối HTTP và chứa phần lớn luật gameplay.
+- `internal/services/` hiện có `PlayerService`, `InventoryService`, `QuestService`, `RecipeService` và `AchievementService`. Chỉ dùng service khi domain đó thực sự được sở hữu ở đây.
+- `internal/playerstate/` cung cấp projection chuẩn của hàng `players`, revision của bộ sưu tập và sửa chữa lười một số trạng thái.
+- `internal/simulator/` xử lý combat theo lượt; `handlers/combat_*.go` điều phối session, lưu kết quả, loot và lịch sử.
+- `internal/db/schema_*.go` chứa DDL theo domain. `InitSchema()` khởi tạo theo thứ tự phụ thuộc, tương thích DB đã tồn tại và seed dữ liệu runtime tối thiểu; dự án không dùng migration framework có version.
+- `internal/worker/runner.go` chuẩn hóa ticker loop qua `RunEvery`/`SafeRun` để hỗ trợ cancel và recover panic ở từng tick.
+- `internal/cache/` kết nối Redis. Khi Redis không sẵn sàng sau số lần retry giới hạn, server có thể chạy với fallback trong bộ nhớ; một số chức năng realtime/cache sẽ bị giới hạn.
 
-The canonical full-row player projection and collection revision live in `internal/playerstate`. `Load` can select Gu scope; materials, Dao-mark hydration and expired-status repair are part of every successful load. `PlayerService` adds time/status projection on top of that snapshot. Intentional narrow field projections are valid when a caller does not need a full snapshot. Player-initiated cell changes go through the movement chain in `internal/handlers/movement.go`, so ownership, alive/combat checks, region policy, the destination write, the regional-wall debuff and post-commit publication do not drift between walking, portals, teleport arrays, Gu teleports, spatial realms and party joins.
+## Frontend
 
-## Backend startup
+- `frontend/src/app/` dùng Next.js App Router.
+- `frontend/src/store/useGameStore.ts` hợp nhất các Zustand slice. Store cũng gọi API và cập nhật state; không có service/API layer riêng.
+- `frontend/src/store/slices/` chia state theo domain như auth, world, inventory, combat, aperture, chat, trade, sect và arena.
+- `frontend/src/lib/auth.ts`, `config.ts`, `fetch.ts` cung cấp helper dùng chung. `authFetch` xử lý session hết hạn tập trung.
+- `frontend/src/components/` chứa các view gameplay, lobby, admin, wiki và overlay realtime.
 
-`backend/cmd/server/main.go` performs these steps:
+## Persistence và cache
 
-1. Loads the first available env file in `.env` → `backend/.env` → `../.env` → `../../.env`.
-2. Connects to PostgreSQL and runs the idempotent schema functions in `internal/db/schema_*.go`.
-3. Seeds only runtime prerequisites (sentinel dictionaries, starting hub, system players and backfills). Gameplay dictionaries are imported from Admin; quest is currently the one CSV exception refreshed during schema initialization.
-4. Connects to required Redis, configures the rate limiter and clears dictionary cache keys.
-5. Loads Gu, item, constitution, race, status, monster, zone, quest and instance registries from PostgreSQL.
-6. Wires shared services, starts background workers, the sharded `internal/uihub` sinks and Redis subscribers.
-7. Starts the HTTP server: plain HTTP on `PORT` (default `8080`) in dev, or — when `TLS_ENABLED`/`WT_ENABLED` is set — HTTPS on `TLS_ADDR` and QUIC/WebTransport on `WT_ADDR` in the same process (default `:8443`). Missing certs or realtime runtime stops startup; there is no plain-HTTP fallback.
-8. Shuts down through `context.Context` on SIGINT/SIGTERM and drains WebTransport sessions with close code `4010`.
+PostgreSQL là nguồn dữ liệu bền vững. CSV trong `backend/data/` được import qua Admin → **Dữ liệu**; không tự động import toàn bộ khi khởi động. Nhiều dictionary được nạp thành registry trong bộ nhớ lúc startup. Endpoint hoặc luồng import có thể reload một số registry; nếu thay file CSV trực tiếp thì cần import và khởi động lại khi registry tương ứng không được reload.
 
-## Backend folders
+Redis dùng cho cache, pub/sub và một số phối hợp realtime. Rate limiter có fallback trong bộ nhớ. Không coi Redis là nguồn dữ liệu gameplay chính.
 
-| Path | Responsibility |
-| --- | --- |
-| `backend/cmd/server` | Process entrypoint and lifecycle. |
-| `backend/internal/server` | Middleware setup and canonical route table. |
-| `backend/internal/db` | Connection, domain schema, static seeds and Admin CSV import/export helpers. |
-| `backend/internal/models` | Domain structs, JSON scanners and runtime registries. |
-| `backend/internal/handlers` | HTTP orchestration and domain gameplay rules. |
-| `backend/internal/services` | Existing shared player, inventory, recipe, quest and achievement operations, plus player time/status projection. |
-| `backend/internal/playerstate` | Canonical player row projection, snapshot views, collection revision and lazy repairs. |
-| `backend/internal/middleware` | Authentication, rate limits and request context. |
-| `backend/internal/cache`, `backend/internal/uihub` | Redis and transport-neutral realtime UI event sinks (shared by Redis fan-out and both realtime routes). |
-| `backend/internal/realtime/wttransport` | WebTransport and WebSocket session handling: world/UI streams, datagrams, drain. |
-| `backend/internal/realtime/sim`, `backend/internal/realtime/effects` | Authoritative zone simulation and Gu realtime effect compilation. |
-| `backend/internal/worker` | Polling, simulation and batch persistence loops. |
-| `backend/data/*.csv` | Canonical import/export files for gameplay data. |
+## Realtime và combat
 
-## Frontend folders
+- Combat thường, PvP và các flow có session được giải quyết bằng simulator theo lượt.
+- `/api/wt` là WebTransport endpoint khi được bật; `/api/ws` là WebSocket fallback theo cấu hình.
+- Realtime transport phục vụ di chuyển/vị trí thế giới, chat, notification và player events. Nó không chạy combat simulation.
+- Client player events có cơ chế reconnect; WebTransport cần HTTPS và certificate hợp lệ.
 
-| Path | Responsibility |
-| --- | --- |
-| `frontend/src/app` | App Router pages for game, top-up and dynamic wiki pages. |
-| `frontend/src/components` | Gameplay views and dialogs. |
-| `frontend/src/store/useGameStore.ts` | Root Zustand composition and shared realtime wiring. |
-| `frontend/src/store/slices` | Domain state/actions; slices call APIs and coordinate optimistic updates. |
-| `frontend/src/lib` | Shared auth, config and fetch helpers. |
+## Ranh giới khi thay đổi
 
-## State and networking
-
-- Protected HTTP calls use cookie credentials. `NEXT_PUBLIC_BACKEND_URL` defaults to `http://localhost:8080`.
-- The client tries WebTransport `/api/wt` first, then WebSocket `/api/ws` if transport establishment fails. One session per tab carries a world stream (`0x01`, binary v2), a UI stream (`0x02`, NDJSON pub/sub and RPC), and input/snapshot datagrams or equivalent WS frames. `internal/uihub` fans out UI channels from Redis Pub/Sub.
-- World-map queries remain HTTP for snapshots, rectangular cell fetches and actions; the world stream keeps nearby state fresh between snapshots. HTTP endpoints stay available as fallback for non-realtime actions.
-- A browser without WebTransport tries WebSocket. If neither connects, HTTP features keep working and the world map stays locked. See [Production deployment](../guides/PRODUCTION_DEPLOY.md) for the TLS/QUIC origin setup.
-- The Zustand root composes domain slices for inventory, combat, exploration, aperture, marketplace, sect, party, notifications, achievements, pets, gacha, betting and other systems.
-
-## Player state and movement
-
-- For a route-to-handler map and the safe workflow for player-domain changes, see [PLAYER_DOMAIN.md](PLAYER_DOMAIN.md).
-- `playerstate.Load` owns the canonical full `players` row projection and returns `sql.ErrNoRows` for a missing player. `Options.Gu` selects Gu scope; materials loading, Dao-mark hydration and lazy expired-status repair are not optional. Narrow reads and response refresh projections may select only needed fields. `playerstate.RevisionExpr` is the collection-revision definition.
-- `handlers/movement.go` is the one movement chain. Callers pass a `movementSpec` (kind + destination); the per-kind `movementPolicies` table decides party-leader, region-entry and region-action checks plus their status codes, so a new entrance cannot quietly skip a guard. Every entrance maps a guard failure through the same JSON shape, writes its own extra columns inside its transaction, then publishes through the shared helpers.
-- Server-driven placements (respawn, realm returns) use `placePlayerAt` and deliberately skip the guard chain.
-
-## Background workers
-
-Workers are cancellable polling/simulation loops, not an external job queue:
-
-- Gu/pet hunger, growth and status expiry/lazy updates.
-- Tribulation, world-index synchronization and Primeval Vein spawn/cleanup.
-- Arena, auction, beast-betting and Death Arena settlement/round processing.
-- Sect mission, territory and maintenance processing.
-- Batch player persistence, pool watchdog and optional orphaned Redis-key cleanup.
-- Variant-human production (10 minutes), society simulation (5 minutes) and Gu Master spawning (30 minutes).
-
-## Persistence model
-
-Schema is split by domain under `backend/internal/db/schema_*.go`. Important groups include:
-
-- identity/economy: players, referrals, wallets, top-up orders, transactions, achievements, quest progress, notifications and audit logs;
-- dictionaries/world: Gu, item, recipe, race, constitution, status, regions, cells, monsters, spawns, loot and map ground drops;
-- combat/social: combat sessions/history, parties/invitations, pets, killer moves, arena/shop, Death Arena, beast betting, trade, marketplace, chat and feedback/comments;
-- aperture: apertures, resource nodes, tribulations, variant-human populations, node workers, refinement queue, settlements, events and NPCs;
-- sect/activities: sect membership, requests, missions, vault/mines and instances.
-
-Dao marks and several extensible effect/state structures use JSONB. Player row reads go through `internal/playerstate`; full-row scans elsewhere are considered debt. See `docs/guides/GAME_DATA.md` for field and CSV details; the router in `backend/internal/server/server.go` remains the source of truth for endpoints.
+- Route: cập nhật `docs/guides/API.md`.
+- Player persistence hoặc state nhìn thấy bởi player: đọc [PLAYER_DOMAIN.md](PLAYER_DOMAIN.md) trước.
+- Schema/CSV: đọc [GAME_DATA.md](../guides/GAME_DATA.md) và sửa schema domain tương ứng.
+- Gameplay người chơi nhìn thấy: cập nhật [WIKI.md](../../WIKI.md).
+- Startup, env hoặc lệnh chạy: cập nhật [DEVELOPMENT.md](../guides/DEVELOPMENT.md) và README.

@@ -13,6 +13,7 @@ export interface CombatSlice {
   submitCombatCommand: (sessionId: string, revision: number, command: ApiResponseData) => Promise<ApiResponseData | null>;
   executeAutoCombat: (loadout: ApiResponseData) => Promise<ApiResponseData | null>;
   fleeCombat: () => Promise<ApiResponseData | undefined>;
+  retreatCombat: () => Promise<boolean>;
   captureMonster: () => Promise<ApiResponseData | null>;
   resolveTribulation: (eventId: string) => Promise<boolean>;
   activeCombatReplay: { logs: ApiResponseData[]; winner: string; combatants: ApiResponseData[]; enemy: CombatState } | null;
@@ -134,6 +135,20 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       get().setPlayerFromServer({ active_combat: null, hp: data.hp ?? player.hp });
     }
     return data;
+  },
+
+  retreatCombat: async () => {
+    const { player, token } = get();
+    if (!player || !token) return false;
+    const response = await authFetch(`${BACKEND_URL}/api/combat/retreat/${player.id}`, { method: "POST", timeoutMs: 30000 });
+    const data = await response.json();
+    if (!response.ok) {
+      get().addToast(data.error || "Rút lui thất bại.", "error");
+      return false;
+    }
+    get().setPlayerFromServer({ active_combat: null, hp: data.hp ?? player.hp });
+    get().addToast(data.log || "Đạo hữu đã rút lui.", "info");
+    return true;
   },
 
   captureMonster: async () => {

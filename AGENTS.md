@@ -15,12 +15,14 @@ cd frontend && npm install && npm run dev  # frontend on :3000
 ## Tests & Checks
 
 ```bash
-cd backend && go test ./...       # all backend tests
-cd frontend && npm run lint       # ESLint 9
-cd frontend && npm run build      # Next.js build
+(cd backend && go test ./...)
+(cd frontend && npm run lint)
+(cd frontend && npm run typecheck)
+(cd frontend && npm test)
+(cd frontend && npm run build)
 ```
 
-No CI/CD. No standalone typecheck script. Backend tests are distributed across packages; run `go test ./...` from `backend/`.
+No CI/CD. Backend tests are distributed across packages; run `go test ./...` from `backend/`.
 
 ## Backend Conventions (agent would likely miss)
 
@@ -48,16 +50,26 @@ No CI/CD. No standalone typecheck script. Backend tests are distributed across p
 - **SSE subscriptions** in Zustand for player events, trade, chat. Player events now have auto-reconnect with exponential backoff.
 - **Next.js 16 has breaking changes.** Check `node_modules/next/dist/docs/` before writing framework-specific code.
 
-## Documentation (update when changing code)
+## Code ↔ docs contract
 
-| Change | Update |
+Tài liệu gameplay mô tả hành vi hiện có trong code; không dùng câu chữ hiện tại để ngầm biến một ý tưởng thành tính năng đã phát hành.
+
+- Khi sửa code ảnh hưởng route, rule, màn hình, quyền mở, dữ liệu hoặc kết quả người chơi nhìn thấy, cập nhật docs liên quan trong cùng thay đổi.
+- Khi sửa docs mô tả hành vi, đối chiếu source và cập nhật code nếu nội dung đó là hành vi mới được yêu cầu. Nếu chỉ diễn đạt rõ hơn hành vi hiện tại, kiểm chứng với code; không tạo code churn không cần thiết.
+- Nếu docs và code đang mâu thuẫn, giải quyết mâu thuẫn trong cùng thay đổi: sửa code để đạt hành vi được chấp thuận hoặc sửa docs cho đúng hành vi hiện tại. Nội dung chưa triển khai phải ghi rõ là thiết kế/kế hoạch, không đặt trong phần tính năng hiện hành.
+- Mỗi tính năng player-facing cần có đường đi từ mô tả → màn hình/store → route/handler hoặc data source trong `docs/guides/FEATURES.md`.
+
+| Thay đổi | Tài liệu bắt buộc đối chiếu |
 |--------|--------|
-| Routes | `docs/guides/API.md` |
-| Schema/CSV | `docs/guides/GAME_DATA.md` |
-| Startup/commands/env | `docs/guides/DEVELOPMENT.md` + `README.md` |
-| Gameplay (player-visible) | `WIKI.md` |
-| Trigger/op/native hook mới | `docs/guides/GAME_DATA.md` + `frontend/src/lib/wiki/effect-glossary.ts` |
-| Project scope | `PROJECT.md` |
+| Route, auth, payload/API behavior | `docs/guides/API.md` + `docs/guides/FEATURES.md` nếu gameplay |
+| Schema, CSV, registry, effect | `docs/guides/GAME_DATA.md` |
+| Gameplay hoặc UI nhìn thấy được | `WIKI.md` + `docs/guides/FEATURES.md` |
+| Startup, env, deploy, lệnh | `docs/guides/DEVELOPMENT.md` + `README.md`; deploy thì thêm `PRODUCTION_DEPLOY.md` |
+| Player state/persistence | `docs/architecture/PLAYER_DOMAIN.md` và tài liệu gameplay có liên quan |
+| Effect trigger/op/native hook | `docs/guides/GAME_DATA.md` + `frontend/src/lib/wiki/effect-glossary.ts` |
+| Project scope/module inventory | `PROJECT.md` |
+
+Trước khi hoàn tất, xác nhận route/component/data pointer trong docs vẫn tồn tại và mô tả cùng điều kiện với source hiện tại.
 
 ## Key File Pointers
 

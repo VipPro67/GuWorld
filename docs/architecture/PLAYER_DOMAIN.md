@@ -1,41 +1,39 @@
-# Player Domain Guide
+# Miền Player
 
-Use this guide when changing a player route, durable player state, player-visible gameplay, or the frontend player snapshot. It is an index and workflow, not a second API or schema specification. The route table in `backend/internal/server/server.go`, the owning code, and `docs/guides/API.md` remain authoritative.
+Tài liệu này mô tả ranh giới sở hữu dữ liệu player để tránh các handler tự đọc/ghi cùng một trạng thái theo cách không nhất quán.
 
-## Ownership Map
+## Thành phần sở hữu
 
-| Concern | Start here | Boundary / notes |
-| --- | --- | --- |
-| Route and HTTP contract | `backend/internal/server/server.go`, `docs/guides/API.md` | The router is the source of truth for registration; follow the registered handler before editing. |
-| Registration and onboarding | `backend/internal/handlers/player_auth_register.go` | Also inspect schema foreign keys and region/hub data when changing creation defaults. |
-| Login, logout, current player, cookies, Google auth | `backend/internal/handlers/player_auth_login.go`, `player_auth_cookies.go`, `player_auth_google.go` | Session and current-player projection behavior is auth-sensitive. |
-| Durable player snapshot | `backend/internal/playerstate/snapshot.go` | Owns full-row columns and scan order, collection revision, Dao-mark hydration, materials, expired-status repair, and not-found behavior. |
-| Time/status projection | `backend/internal/services/player_service.go` | `PlayerService` builds gameplay projections over `playerstate`; it is not the owner of the durable row shape. |
-| Profile and disguise | `backend/internal/handlers/player_profile.go` | Player-facing profile mutations and associated validation. |
-| Stats, status, recharge | `backend/internal/handlers/player_stats.go`, `player_status.go`, `player_recharge.go` | Check projection and resource update behavior together when changing returned player state. |
-| Player mutation pipeline | `backend/internal/handlers/player_mutation.go` | Canonical transaction & persistence gateway (`MutatePlayer`) for all player-state mutations. Owns locking, passive evaluation, canonical row update with monotonic `version++` & `state_revision++`, and post-commit snapshot publication. |
-| Gu and item actions | `backend/internal/handlers/player_equip.go`, `player_use.go`, `player_feed.go`, `player_gu_use.go` | Use `InventoryService` for shared material inventory operations where applicable; Gu persistence also has its own tables/helpers. |
-| Dao marks | `backend/internal/handlers/player_daongan.go` | Verify related aperture persistence and revision behavior when changing durable marks. |
-| Player movement | `backend/internal/handlers/movement.go` | Player-initiated cell changes use the shared `ExecuteSpatialTransition` flow (covering guard validation, atomic coordinates/revision/v2-state persistence, party sync, and post-commit publication). Server-driven placement is intentionally separate. |
-| Player realtime events | `backend/internal/handlers/player_events.go` | Preserve post-commit publication and event/revision contracts. |
-| Frontend player state | `frontend/src/store/useGameStore.ts`, then the owning file under `frontend/src/store/slices/` | Trace the API action and response application; preserve optimistic rollback and central auth handling. |
+- Route đăng ký tại `backend/internal/server/server.go`.
+- `backend/internal/playerstate/` định nghĩa projection chuẩn cho toàn bộ hàng `players`, projection theo nhu cầu, revision bộ sưu tập và một số lazy repair.
+- `PlayerService` là service dùng chung cho thao tác player được nối trong `handlers/services.go`; không phải mọi handler đều đi qua service.
+- Luật gameplay và nhiều mutation vẫn ở `backend/internal/handlers/`.
+- Các bảng domain như inventory, Gu, quest, achievement, aperture và combat giữ dữ liệu chuyên biệt của chúng; không nhồi dữ liệu đó vào projection `players` nếu schema/domain đã có chủ sở hữu riêng.
 
-Shared handler services are initialized in `backend/internal/handlers/services.go`: `PlayerSvc`, `InventorySvc`, `RecipeSvc`, `QuestSvc`, and `AchievementSvc`. The service package is selective; keep domain rules in their existing owner and do not assume there is a service for every gameplay area.
+## Quy tắc đọc
 
-## Change Workflow
+- Dùng projection chuẩn khi cần trạng thái player đầy đủ hoặc khi serialization phải nhất quán với snapshot.
+- Projection hẹp vẫn phù hợp nếu caller chỉ cần một nhóm field xác định; không mở rộng mọi query chỉ để dùng một kiểu chung.
+- Cần phân biệt trạng thái lưu bền vững với giá trị tính toán từ thời gian như regen, tuổi thọ hoặc trạng thái hết hạn.
+- Collection revision dùng để phát hiện/cập nhật thay đổi bộ sưu tập. Không tự tăng revision ở nơi không sở hữu mutation tương ứng.
 
-1. Find the route in `server.go`, read its contract in `docs/guides/API.md`, and follow the registered handler. For non-route gameplay, start from the owning handler or caller.
-2. Classify the data being changed: canonical `players` row, a player collection/table, a derived response projection, or transient/realtime state. Inspect the matching schema and existing writer before changing persistence.
-3. For a full player snapshot, use `playerstate.Load`/`Scan` or the appropriate `PlayerService` loader. `Options.Gu` selects Gu scope only; materials, Dao-mark hydration, and expired-status repair are included by `playerstate.Load`. A narrow projection is appropriate when the caller needs only specific fields; do not duplicate the full canonical projection or collection revision.
-4. For player state mutations, use `MutatePlayer` in `backend/internal/handlers/player_mutation.go`. It executes the caller's mutation closure inside an atomic database transaction with `FOR UPDATE` locking, applies passive evaluations, executes a canonical full-row update that monotonically increments `version` and `state_revision`, commits atomically, and publishes post-commit player snapshot events (`PublishPlayerSnapshot`) to Redis and connected clients. Do not write hand-rolled `UPDATE players` statements with partial column subsets that omit `version` or `state_revision`.
-5. For a player-initiated move, route through `ExecuteSpatialTransition` in `movement.go`; do not create a parallel endpoint-specific guard sequence or ad-hoc coordinate update. Keep server-directed placement on its separate path when appropriate.
-6. If the response changes frontend player state, use `executeGameAction` from `frontend/src/store/actionGateway.ts`. It provides a unified gateway with concurrency locking, token validation, automatic response reconciliation via `applyInventoryFromResponse`/`setPlayerFromServer`, activity logging, and user toast notifications.
-7. Add or update a test beside the owning package. Run `cd backend && go test ./...` for backend behavior; for frontend changes run `cd frontend && npm run lint` and `npm run build`. For concurrency-sensitive backend changes, also run `cd backend && go test -race ./...`.
+## Quy tắc ghi
 
-## Persistence Guardrails
+1. Xác định bảng/domain sở hữu field và đọc schema tương ứng trong `backend/internal/db/schema_*.go`.
+2. Giữ các cập nhật liên quan trong cùng transaction khi có nhiều bản ghi cần đồng bộ.
+3. Tôn trọng compare-and-swap/revision và khóa hiện có; player state được cập nhật thường xuyên.
+4. Sau mutation, phát snapshot/event theo flow domain đang dùng để frontend không phải tự suy đoán trạng thái server.
+5. Thêm hoặc cập nhật test ở package sở hữu hành vi.
 
-- The canonical full-row projection lives in `playerstate`; use its scan order and revision definition rather than maintaining a second full-row read.
-- `playerstate.Load` may repair expired statuses and therefore is not a pure, side-effect-free read. Choose it with that behavior in mind; use an existing narrow projection when only response fields are needed.
-- Materials are loaded from `player_inventory_items`; Gu inventory is loaded only for the selected Gu scope. A missing player is reported as `sql.ErrNoRows` and can be checked with `playerstate.IsNotFound`.
-- Schema definitions and compatibility DDL live in `backend/internal/db/schema_*.go`. The project has no versioned migration framework; inspect whether a change also needs an explicit operational data migration.
-- For player-visible gameplay values backed by CSV/JSON registries, inspect the source data and `docs/guides/GAME_DATA.md`; update `WIKI.md` when player-facing rules change.
+Player đổi vị trí phải đi qua `handlers/movement.go`, dùng chung kiểm tra quyền/đích, ghi vị trí và phát sự kiện. Không tự viết một nhánh cập nhật tọa độ riêng trong handler khác.
+
+## Frontend và đồng bộ
+
+`useGameStore` nhận response và player events rồi cập nhật state thông qua `setPlayerFromServer` cùng các helper hiện có. Tái sử dụng luồng này khi API trả snapshot player. `authFetch` xử lý 401 tập trung; slice không thêm chính sách logout riêng.
+
+## Trước khi đổi
+
+- Đọc các handler/route liên quan và schema domain.
+- Kiểm tra caller cần full-row projection hay projection hẹp.
+- Kiểm tra mutation có ảnh hưởng event, collection revision, inventory hoặc snapshot frontend không.
+- Chạy test backend phù hợp; dùng `go test -race ./...` khi thay đổi concurrency.

@@ -1,24 +1,26 @@
-# GuWorld Documentation
+# Tài liệu GuWorld
 
-Mục lục tài liệu dự án. Tài liệu trong `docs/` có thể mô tả hành vi hiện hành hoặc một đề xuất; xem trạng thái và ngày của từng tài liệu trước khi dùng nó làm contract.
+Các tài liệu bên dưới mô tả hành vi hiện có trong mã nguồn. Các bản thiết kế hoặc ghi chú triển khai cũ không được xem là cam kết tính năng.
 
-## Bắt đầu
+| Tài liệu | Đối tượng đọc | Nội dung |
+| --- | --- | --- |
+| [Hướng dẫn phát triển](guides/DEVELOPMENT.md) | Developer, operator | Chạy ứng dụng, cấu hình, vòng đời backend và kiểm tra |
+| [API](guides/API.md) | Frontend, tích hợp | Route backend hiện đăng ký và yêu cầu xác thực tổng quát |
+| [Tính năng gameplay](guides/FEATURES.md) | Developer, tester | Từng tính năng, điều kiện/flow và nơi sở hữu trong source |
+| [Chi tiết theo domain](features/README.md) | Developer, tester | Hướng dẫn chi tiết và quy ước giữ docs đồng bộ với code |
+| [Dữ liệu game](guides/GAME_DATA.md) | Designer, admin, developer | CSV, import/export, registry và effects |
+| [Triển khai production](guides/PRODUCTION_DEPLOY.md) | Operator | Cấu hình triển khai, TLS và realtime transport |
+| [Kiến trúc](architecture/ARCHITECTURE.md) | Developer | Thành phần runtime và ranh giới module |
+| [Miền Player](architecture/PLAYER_DOMAIN.md) | Developer | Quyền sở hữu dữ liệu player, snapshot và mutation |
+| [Wiki gameplay](../WIKI.md) | Người chơi, tester | Mô tả các hệ thống gameplay đang có |
+| [Trạng thái dự án](../PROJECT.md) | Cả nhóm | Tóm tắt codebase và feature inventory |
 
-- [Phát triển và vận hành](guides/README.md): chạy dự án, API, dữ liệu, deploy và quản trị.
-- [Kiến trúc](architecture/README.md): kiến trúc codebase hiện tại và hướng dẫn ownership.
-- [Gameplay](../WIKI.md): wiki hệ thống gameplay đã có.
-- [Game data](guides/GAME_DATA.md): CSV, import và registry runtime.
-- [Kế hoạch](plans/): kế hoạch phát triển; kiểm tra trạng thái trước khi làm theo.
-- [Nghiên cứu](research/): audit và khảo sát theo thời điểm.
-- [MMO realtime](mmo/): kiến trúc, protocol, vận hành và migration MMO.
-- [Wayfinder](wayfinder/): initiative với map, ticket, research và spec.
-- [Local work maps and tickets](wayfinder/workmaps/README.md): hồ sơ initiative và nơi lưu ticket Markdown theo quy ước local.
-- [Quyết định kiến trúc](adr/): ADR đã chấp nhận.
+## Nguyên tắc nguồn chuẩn
 
-## Quy ước
+- Route được đăng ký trong `backend/internal/server/server.go`.
+- Schema được khởi tạo từ `backend/internal/db/schema_*.go` và `InitSchema()`.
+- Gameplay nằm chủ yếu trong `backend/internal/handlers/`, với simulator combat trong `backend/internal/simulator/`.
+- Màn hình và client state nằm trong `frontend/src/app/`, `frontend/src/components/` và `frontend/src/store/`.
+- Giá trị gameplay dạng bảng lấy từ `backend/data/` và dữ liệu đã import vào PostgreSQL.
 
-- Hành vi hiện hành cần được đối chiếu với code và các guide được đánh dấu là hiện hành.
-- Plan, ticket, research và audit không tự động là contract đang chạy.
-- Khi di chuyển file, cập nhật mọi liên kết và chỉ dẫn trong cùng thay đổi.
-- Tài liệu hết hiệu lực cần được đánh dấu và liên kết tới tài liệu thay thế; không xóa chỉ vì cũ.
-
+Khi tài liệu và code mâu thuẫn, code hiện tại là hành vi thực tế; hãy cập nhật tài liệu liên quan cùng thay đổi.

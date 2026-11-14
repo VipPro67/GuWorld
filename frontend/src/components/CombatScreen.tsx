@@ -73,6 +73,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const setActiveCombatReplay = useGameStore((state) => state.setActiveCombatReplay);
   const submitCombatCommand = useGameStore((state) => state.submitCombatCommand);
   const abandonTower = useGameStore((state) => state.abandonTower);
+  const retreatCombat = useGameStore((state) => state.retreatCombat);
   const executePracticeCombat = useGameStore((state) => state.executePracticeCombat);
   const killerMoves = useGameStore((state) => state.killerMoves);
   const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
@@ -1176,6 +1177,18 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     <div className="flex flex-col gap-6">
       {/* Aperture (Tiên Khiếu) HP — tribulation combat only */}
       {renderApertureBar()}
+
+      {player.active_combat && player.active_combat.enemy_type !== "PVP" && (
+        <button
+          onClick={async () => {
+            if (await retreatCombat()) await fetchPlayerStatus(player.id, true);
+          }}
+          disabled={actionLoading || Boolean(interactiveSession)}
+          className="self-start rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50"
+        >
+          Rút lui khỏi trận trước khi bắt đầu
+        </button>
+      )}
 
       {/* Enemy Intel Panel */}
       {renderEnemyIntel()}

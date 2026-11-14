@@ -1,112 +1,56 @@
-# GuWorld Project Status
+# GuWorld: trạng thái codebase
 
-Tài liệu này mô tả trạng thái codebase hiện tại, không phải backlog phase cũ.
+Tài liệu này là inventory ngắn về ứng dụng hiện có, căn cứ vào route backend và view frontend. Dữ liệu/flag runtime có thể làm thay đổi nội dung hoặc quyền truy cập trong từng môi trường.
 
-## Tổng quan
+## Sản phẩm
 
-GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay xoay quanh người chơi tu luyện, quản lý Cổ trùng, khám phá map, chiến đấu PvE, giao dịch, gia nhập môn phái và phát triển lên Cổ Tiên.
+GuWorld là game RPG web về tu luyện và Cổ trùng. Backend Go/Gin xử lý luật game, persistence và combat theo lượt. Frontend Next.js cung cấp lobby, bản đồ và các màn hình domain. PostgreSQL lưu trạng thái; Redis hỗ trợ cache/realtime và có fallback một phần.
 
-## Kiến trúc hiện tại
+## Thành phần
 
-- `backend/cmd/server/main.go`: entrypoint backend, load `.env`, kết nối PostgreSQL/Redis, khởi tạo schema, load các registry từ DB, chạy worker, Gin router và WebTransport server (HTTPS + QUIC trong cùng process).
-- `backend/internal/server/server.go`: khai báo toàn bộ route `/api`.
-- `backend/internal/db/db.go` + `backend/internal/db/schema_*.go`: khởi tạo schema idempotent, gồm DDL tương thích cho database đã tồn tại và seed hệ thống tối thiểu. Dự án không dùng migration framework có version; một số thay đổi dữ liệu vẫn có script triển khai riêng. Dictionary gameplay được import qua Admin.
-- `backend/internal/models`: struct domain cho player, Cổ, item, recipe, combat, aperture, monster, cell, feedback, killer move.
-- `backend/internal/handlers`: điều phối HTTP và phần lớn luật gameplay theo từng domain.
-- `backend/internal/services`: các service hiện có cho player, inventory, recipe, quest và achievement; không phải mọi handler đều đi qua service.
-- `backend/internal/playerstate`: projection chuẩn cho full row `players`, revision bộ sưu tập, Gu scope, vật liệu, Dao Marks, repair trạng thái hết hạn và not-found; `PlayerService` bổ sung projection thời gian/trạng thái.
-- `backend/internal/handlers/movement.go`: chuỗi kiểm tra/ghi đích/phát sự kiện dùng chung cho đi bộ, cổng chuyển vùng, truyền tống trận, Cổ dịch chuyển, bí cảnh và vào tổ đội.
-- `backend/internal/worker`: polling/batch worker cho đói/tăng trưởng, persistence, môn phái và mô phỏng xã hội tiên khiếu.
-- `backend/internal/cache`: Redis client (bắt buộc).
-- `frontend/src/app`: Next.js App Router pages/layout.
-- `frontend/src/store/useGameStore.ts`: Zustand store, API client phía frontend và state gameplay.
-- `frontend/src/components`: UI module gameplay.
+| Thành phần | Vị trí | Vai trò |
+| --- | --- | --- |
+| Backend entrypoint | `backend/cmd/server/main.go` | Env, DB/schema, registry, workers, router và realtime server |
+| Router | `backend/internal/server/server.go` | Route `/api`, auth/rate limit, permission admin |
+| Gameplay handlers | `backend/internal/handlers/` | Điều phối HTTP và đa số luật gameplay |
+| Shared services | `backend/internal/services/` | Player, inventory, quest, recipe, achievement |
+| Player projection | `backend/internal/playerstate/` | Snapshot/projection player và collection revision |
+| Turn based simulator | `backend/internal/simulator/` | Combat deterministic theo lượt |
+| Schema | `backend/internal/db/schema_*.go` | DDL idempotent, compatibility changes và backfill |
+| Frontend | `frontend/src/app`, `components`, `store` | App Router, UI gameplay và Zustand state/API client |
+| Game data | `backend/data/` | CSV dataset quản lý qua Admin |
 
-## Module backend đang có
+## Feature inventory
 
-### Auth, player và profile
+- Tài khoản, onboarding/tutorial, hồ sơ, avatar, referral, gift code, notification, audit log, wallet/top-up.
+- Tu luyện, phá vách, Thăng Tiên, độ kiếp, nhiệm vụ/ngày, thành tựu và leaderboard.
+- Inventory Gu/item, trạng thái/độ bền Gu, luyện hóa, Cổ phương, phiên luyện Cổ, Sát Chiêu và Tiên Cổ Ốc.
+- Bản đồ theo vùng, movement/portal/teleport, quái, loot trên map, scouting/divination.
+- Combat turn based, session PvP, capture, replay/lịch sử, party và practice.
+- Sủng vật và canonical actor roster.
+- Tiên khiếu: node/điểm tài nguyên, dị nhân, refinement queue, settlements, NPC, Gu swarms, portal/guest.
+- Instance, Mộng Cảnh, Bí Cảnh Không Gian và truyền thừa.
+- Môn phái, kho/nhiệm vụ/lãnh địa; shop/merchant, marketplace/auction/buyback, P2P trade; chat/mail.
+- Gacha, cược linh thú, Võ Đài, Tháp Chiến Thuật, Đấu Trường Sinh Tử, Đại Hội Võ Thuật và feedback.
+- Admin: RBAC, player/domain operations, data import/export, moderation, audit và monitoring.
 
-- Đăng ký, đăng nhập, đăng xuất, `/auth/me`.
-- Google OAuth callback.
-- Hồ sơ công khai, chỉnh username/bio/mật khẩu, ngụy trang thông tin, avatar upload.
-- Referral, gift code, notification, audit log cá nhân, ví và tick regen.
+Danh sách này không khẳng định mọi dataset đều đã được import hoặc mọi flow luôn mở cho mọi nhân vật. Điều kiện theo rank, vị trí, quyền, trạng thái và cấu hình nằm ở server.
 
-### Tu luyện và sinh tồn
+## Runtime notes
 
-- Phá vách (`break-wall`) cho Rank 1-5.
-- Dùng Xá Lợi Cổ.
-- Thăng Tiên và Độ Kiếp cơ bản.
-- Recharge bằng nguyên thạch, clear stress, quest completion.
-- Hồi mana/HP dựa trên thời gian và hệ số tốc độ.
+- PostgreSQL DDL được khởi tạo qua `InitSchema()`; không có migration framework versioned.
+- CSV được import qua Admin. Registry được load trong startup và một số luồng import có reload cụ thể.
+- Redis được thử kết nối có giới hạn; khi lỗi, backend có fallback bộ nhớ cho một số chức năng nhưng không đảm bảo đủ realtime/cache.
+- Worker là polling goroutine có context cancellation; recurring loop dùng `internal/worker/runner.go`.
+- WebSocket/WebTransport phục vụ đồng bộ world/player/chat/trade. Combat simulation dùng API/session theo lượt.
 
-### Cổ, vật phẩm, luyện Cổ, sát chiêu
+## Tài liệu chi tiết
 
-- Dictionary Cổ/vật phẩm public.
-- Inventory: feed, feed group, equip, sleep/active/dead status, set vital Gu, consume/support/drop.
-- Item effects: hồi mana/HP, soul, đạo ngân, xóa trạng thái xấu và điều kiện mortal/immortal.
-- Refining: luyện theo recipe và suy diễn recipe.
-- Killer move: preview, tạo, liệt kê, xem, xóa, cast trong combat.
-
-### Khám phá, combat, phó bản
-
-- Grid map theo vùng, di chuyển, explore node, retreat.
-- Combat PvE/PvP dùng Cổ, charge, target theo hàng/cột/vị trí, status effects, loot vào túi và ground drop khi tử vong.
-- Bắt quái vật làm sủng vật (Monster Capture): rank check, hpFactor, typeFactor, capture bonus.
-- Sủng vật (Pets): CRUD, feed, formation, sleep, merge, hunger worker, chiến đấu tự động.
-- Party tạo/mời/phản hồi lời mời/rời; combat luyện tập và lịch sử trận đấu.
-- Instance template/session/action.
-
-### Tiên khiếu và độ kiếp nâng cao
-
-- Immortal aperture, node tài nguyên, thu hoạch/gỡ/xóa/sửa node.
-- Time rate, nâng cấp/sửa node, phân công lao động dị nhân, hàng đợi luyện chế, khu định cư, xã hội và NPC dị nhân.
-- Dao marks.
-- Active tribulation, enemy grid, attack/resolve, worker tự trigger/process.
-
-### Economy và social
-
-- Shop NPC buy/sell.
-- Bảo Hoàng Thiên: listing market/auction/trade, bid, buy, cancel, settle expired auctions.
-- P2P trade: initiate/accept/decline/cancel/offer/lock/confirm + cập nhật realtime qua WebTransport.
-- Chat/mail private, Bảo Hoàng chat và sự kiện realtime qua WebTransport (UI stream `0x02`).
-- Wallet, topup package/order, PayOS webhook, premium package shop, admin wallet/topup listing.
-
-### Môn phái, mỏ, arena, feedback
-
-- Môn phái: list/join/leave/create, cấp bậc, đóng góp, kho, nhiệm vụ, thành viên, duyệt đơn, nâng cấp.
-- Nguyên Tuyền ngoài bản đồ: tự spawn/hết hạn, bể sản lượng chung, ai đứng tại ô cũng thu hoạch; trứng Nguyên Tuyền cấy mỏ.
-- Mỏ môn phái: claim/tấn công.
-- Võ đài leaderboard/challenge/shop, Đấu Trường Sinh Tử theo giải, gacha, thành tựu và bảng xếp hạng nhiều hạng mục.
-- Cược linh thú, thông báo, lịch sử chiến đấu và nhật ký hành động.
-- Feedback: submit/list/vote/update status.
-
-## Frontend đang có
-
-- Lobby/dashboard chính và điều hướng view.
-- `Aperture` cho trạng thái người chơi, tu luyện, quest/thành tựu, hồ sơ, referral và gift code.
-- `GuInventory`, `RefiningFurnace`, `KillerMoveBuilder`.
-- `ExplorationMap`, `ExploreCard`, `CombatScreen`, `DungeonView`.
-- `ImmortalApertureView`, `SectView`, `ArenaView`, `DeathArenaView` và bảng xếp hạng.
-- `BaoHoangMarket`, `TradeRoomModal`, `CaravanShop`.
-- `PremiumWallet`, `PremiumShopView`, `TopupView`.
-- `FeedbackView`, `PlayerProfileModal`, toast/log UI.
-- `PetPanel`: quản lý sủng vật (formation, feed, sleep, release, merge).
-
-## Dữ liệu gameplay hiện tại
-
-Nguồn chuẩn nằm trong `backend/data/`, gồm dictionary Cổ/vật phẩm/công thức/quái/loot, vùng và ô bản đồ, spawn, chủng tộc/thể chất/trạng thái, quest, môn phái, các shop, gói nạp, node tiên khiếu và mộng cảnh. Không ghi số dòng tại đây vì dataset thay đổi thường xuyên.
-
-`InitSchema()` chỉ tạo schema và seed các bản ghi bắt buộc để server hoạt động (system player, hub, sentinel dictionary, mỏ, wallet/leaderboard backfill). Quản trị viên import/export dictionary ở tab **Dữ liệu**. Registry trong bộ nhớ được load từ DB lúc startup, vì vậy cần restart sau các import ảnh hưởng registry.
-
-## Tài liệu liên quan
-
-- API: `docs/guides/API.md`.
-- Kiến trúc: `docs/architecture/ARCHITECTURE.md`.
-- Ownership và workflow khi sửa player: `docs/architecture/PLAYER_DOMAIN.md`.
-- Dữ liệu: `docs/guides/GAME_DATA.md`.
-- Hướng dẫn phát triển: `docs/guides/DEVELOPMENT.md`.
-- Wiki gameplay: `WIKI.md`.
-
-### Turn-based combat and realtime world transport
-
-Combat encounters are resolved by the backend turn-based simulator. WebTransport/WebSocket remain for world movement and non-combat synchronization such as chat and player events; they are not combat engines. Historical combat-realtime migration notes are in `docs/architecture/REALTIME_COMBAT_TO_TURN_BASED.md`.
+- [README và chạy nhanh](README.md)
+- [Wiki gameplay](WIKI.md)
+- [Chi tiết từng tính năng và source map](docs/guides/FEATURES.md)
+- [API](docs/guides/API.md)
+- [Phát triển và cấu hình](docs/guides/DEVELOPMENT.md)
+- [Dữ liệu game](docs/guides/GAME_DATA.md)
+- [Kiến trúc](docs/architecture/ARCHITECTURE.md)
+- [Miền player](docs/architecture/PLAYER_DOMAIN.md)
