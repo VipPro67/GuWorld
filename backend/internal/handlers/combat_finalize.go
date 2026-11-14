@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
@@ -147,6 +149,9 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 	// NOTE: Pet and VariantNPC allies are persisted by their dedicated blocks
 	// below; only real player allies are handled here.
 	if !isVirtual {
+		if len(simState.Allies) > 0 && simState.Allies[0] != nil && simState.Allies[0].GuHouse != nil {
+			persistGuHouseOutcome(tx, player.ID.String(), simState.Allies[0].GuHouse)
+		}
 		for _, simAlly := range simState.Allies {
 			if !isRealPlayerAlly(simAlly, player.ID.String()) {
 				continue
@@ -211,6 +216,10 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 				if hunger, ok := simAlly.GuHunger[guKey]; ok {
 					_, _ = tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`, hunger, guKey, simAlly.ID)
 				}
+			}
+
+			if simAlly.GuHouse != nil {
+				persistGuHouseOutcome(tx, simAlly.ID, simAlly.GuHouse)
 			}
 		}
 	} else {
@@ -368,4 +377,29 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		}
 	}
 	return logs, nil
+}
+
+// persistGuHouseOutcome persists durability loss or breach consequences for an Immortal Gu House.
+func persistGuHouseOutcome(tx *sql.Tx, playerID string, house *simulator.GuHouseState) {
+	if tx == nil || playerID == "" || house == nil || house.ID == "" {
+		return
+	}
+	if house.IsDestroyed {
+		// Vỡ phòng: độ bền về 0, tự động gỡ trang bị
+		if _, err := tx.Exec(`UPDATE player_gu_houses SET current_durability = 0, is_equipped = false, updated_at = NOW() WHERE id = $1 AND player_id = $2`, house.ID, playerID); err != nil {
+			logger.S.Errorf("Failed to update destroyed gu house %s: %v", house.ID, err)
+		}
+		// 30% xung kích chấn thương làm suy giảm độ bền của toàn bộ Cổ hạch tâm
+		var coreBytes []byte
+		if errQuery := tx.QueryRow(`SELECT core_gu_instances FROM player_gu_houses WHERE id = $1`, house.ID).Scan(&coreBytes); errQuery == nil {
+			var coreIDs []string
+			if errUn := json.Unmarshal(coreBytes, &coreIDs); errUn == nil && len(coreIDs) > 0 {
+				_, _ = tx.Exec(`UPDATE player_gu SET durability = GREATEST(0, durability - 30), updated_at = NOW() WHERE id = ANY($1) AND player_id = $2`, pq.Array(coreIDs), playerID)
+			}
+		}
+	} else if house.MaxHP > 0 {
+		// Cổ Phòng còn nguyên: cập nhật độ bền tương ứng với tỷ lệ Form HP còn lại
+		newDur := math.Max(0.5, (house.HP/house.MaxHP)*100.0)
+		_, _ = tx.Exec(`UPDATE player_gu_houses SET current_durability = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`, newDur, house.ID, playerID)
+	}
 }

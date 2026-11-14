@@ -50,6 +50,8 @@ Effects được lưu dạng JSON và runtime adapter hỗ trợ theo ngữ cả
 
 Đây là ví dụ cấu trúc; operation, trigger, target và conditions phải nằm trong allowlist của consumer tương ứng. Item, race, constitution, status và các product như killer move/Gu House có adapter riêng. Khi thêm trigger, operation hay native hook mới, cập nhật `frontend/src/lib/wiki/effect-glossary.ts` và tài liệu API/gameplay nếu phù hợp. Xuân Tiễn Tiên Cổ rank 6 bổ sung `STATUS SLOW` lên địch (20%, 2 lượt); Liệu Quang Giáp Tiên Cổ rank 6 dùng `CLEANSE` lên bản thân. Hai operation này dùng consumer combat/Sát Chiêu hiện có; cập nhật CSV cần import bộ Cổ qua Admin rồi khởi động lại backend để nạp registry.
 
+Các đợt effect theo lưu phái thêm block `PATH_SIGNATURE_*` trong `Gu.csv`. Đợt 1 gồm Thiên, Vũ (Space Path), Trụ, Nhân, Khí; đợt 2 gồm Thổ, Kim, Mộc, Hỏa, Băng; đợt 3 gồm Hồn, Độc, Huyết, Lôi, Phong; đợt 4 gồm Trí, Kiếm, Lực, Biến Hóa, Vận; đợt 5 gồm Mộng, Tinh, Vân, Tin Tức, Luật; đợt 6 gồm Không Gian, Tử Vong, Sáng Tạo, Luyện, Quang Minh; đợt 7 gồm Tình Cảm, Hội Họa, Nô, Đao, Thực; đợt 8 gồm Cốt, Ám, Hủy Diệt, Trận, Sát; đợt 9 gồm Ảo Ảnh, Âm, Đạo Tặc, Thủy, Huyền (XUAN) và Điều Tra. Điều Tra dùng `STAT_MOD INVESTIGATION` ở `ALWAYS_ON`, consumer hiện có là scouting/profile; các phái còn lại dùng status combat. Đa số dùng Tiên Cổ rank 6; một số effect rank 7 hoặc 8 do thiếu lựa chọn rank 6 phù hợp. Các trị số là thiết kế của game lấy cảm hứng từ danh sách sát chiêu, không phải cơ chế được xác nhận bởi tài liệu gốc. Chi tiết từng Cổ ở [tài liệu Sát Chiêu](../features/killer-moves-and-gu-houses.md).
+
 ## Thay đổi schema
 
 1. Tìm schema file domain trong `backend/internal/db/schema_*.go`.

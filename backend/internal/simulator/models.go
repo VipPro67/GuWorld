@@ -181,6 +181,7 @@ type SimAction struct {
 	BackfireDamage float64 // HP damage to caster on failure
 	BackfireStatus string  // status applied to caster on failure (e.g. "THOUGHT_CHAOS")
 	IsFromGuHouse  bool    // executed by an Immortal Gu House
+	HungerCost     int     // hunger deducted per cast for component Gus (0 defaults to 1)
 
 	// Targeting (AOE support)
 	TargetType string // "SINGLE" | "ROW" | "COL" | "CROSS" | "ALL" | "ALL_ENEMIES"
@@ -464,6 +465,7 @@ type GuHouseState struct {
 	Defense         float64
 	DamageReduction float64
 	IsDestroyed     bool
+	Active          bool
 }
 
 // CombatState represents the mutable snapshot of the battlefield at any given moment.

@@ -10,7 +10,7 @@ Encounter thường bắt đầu từ world trigger, arena hoặc route combat t
 
 ## Cách sử dụng
 
-Vào encounter, chọn đội hình rồi bắt đầu điều khiển theo lượt hoặc mô phỏng tự động. Trước khi bắt đầu session, có thể rút lui khỏi encounter; PvP không có thao tác rút lui ở màn hình chuẩn bị. Khi session hoạt động, đọc actor đang chờ và deadline, gửi command với UUID cùng expected revision. Chọn action hoặc plan; PvP dùng PLAN/AUTO và lượt chỉ giải quyết khi hai phía đã sẵn sàng. Sau mỗi response cập nhật session revision.
+Vào encounter, chọn đội hình rồi bắt đầu điều khiển theo lượt hoặc mô phỏng tự động. Hiệu ứng kết thúc trận ngay lúc bắt đầu sẽ settle encounter và mở báo cáo kết quả mà không yêu cầu command. Trước khi bắt đầu session, có thể rút lui khỏi encounter; PvP không có thao tác rút lui ở màn hình chuẩn bị. Khi session hoạt động, đọc actor đang chờ và deadline, gửi command với UUID cùng expected revision. Chọn action hoặc plan; PvP dùng PLAN/AUTO và lượt chỉ giải quyết khi hai phía đã sẵn sàng. Sau mỗi response cập nhật session revision.
 
 ## Luật, chi phí và giới hạn
 
@@ -44,6 +44,8 @@ Gu capture bonus cao nhất phải có rank ít nhất bằng monster rank. Dao 
 - Session giữ snapshot/loadout cần thiết để giải quyết nhất quán; combat không chạy trên WebTransport/WebSocket.
 - PvP plan có timeout 45 giây; timeout có thể kích hoạt auto action.
 - Mana, energy, cooldown, Gu status và effect context được kiểm tra tại server/simulator.
+- Khi dung nhập Tiên Cổ Phòng (`GuHouse.Active == true`), combatant chỉ có thể thi triển 6 chiêu thức Trận Kích của Cổ Phòng và lệnh `EXIT_GU_HOUSE`; Cổ kỹ và Sát chiêu cá nhân bị khóa hoàn toàn. Khi ở ngoài Cổ Phòng, combatant dùng Cổ kỹ cá nhân và có thể dùng `ENTER_GU_HOUSE` nếu Cổ Phòng chưa vỡ.
+- Đòn đánh phá vỡ Form HP của Tiên Cổ Phòng áp dụng quy tắc 100% No Spillover (không tràn sát thương vào nhục thân tại lượt đó). Cổ Tiên bị văng ra chịu phản phệ mất 30% Max HP nhục thân và bị Choáng 2 lượt. Độ bền Cổ Phòng về 0 và tất cả Cổ hạch tâm bị trừ 30% độ bền trong database.
 
 ## Kết quả và trường hợp thất bại
 

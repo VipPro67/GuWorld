@@ -172,11 +172,11 @@ type ItemSpec struct {
 	Blocks      []gameplayeffects.Block `json:"blocks,omitempty"`
 	Effects     ItemEffects             `json:"effects"`
 	compiled    *gameplayeffects.Compiled
-	Description string                  `json:"description"`
-	BasePrice   float64                 `json:"base_price"`
-	ImageURL    string                  `json:"image_url"`
-	Rarity      int                     `json:"rarity"`
-	Path        string                  `json:"path"`
+	Description string  `json:"description"`
+	BasePrice   float64 `json:"base_price"`
+	ImageURL    string  `json:"image_url"`
+	Rarity      int     `json:"rarity"`
+	Path        string  `json:"path"`
 }
 
 func (item *ItemSpec) Compiled() *gameplayeffects.Compiled {

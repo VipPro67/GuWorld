@@ -399,34 +399,94 @@ func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opp
 		entry := gin.H{"id": combatant.ID, "name": combatant.Name, "kind": combatant.Kind,
 			"hp": combatant.HP, "max_hp": combatant.MaxHP, "mana": combatant.Mana,
 			"max_mana": combatant.MaxMana, "dead": combatant.IsDead}
-		if viewerActors[combatant.ID] || (combatant.ID == pendingActor && !allManualActors[combatant.ID]) {
-			actions := make([]gin.H, 0, len(combatant.Actions)+2)
-			fallbackBasicAttack := simulator.SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", TargetType: "SINGLE"}
-			basicAttack := gin.H{"action_type": "BASIC_ATTACK", "name": "Đánh thường",
-				"target_type": fallbackBasicAttack.TargetType,
-				"target_ids":  simulator.InteractiveActionTargetIDs(combatant, opposingSide, &fallbackBasicAttack)}
-			hasBasicAttack := false
-			for _, action := range combatant.Actions {
-				if action.ActionType == "BASIC_ATTACK" {
-					if !hasBasicAttack {
-						basicAttack = gin.H{"action_type": action.ActionType, "source_id": action.SourceID,
-							"instance_id": action.InstanceID, "name": action.Name, "target_type": action.TargetType,
-							"mana_cost": action.ManaCost, "rank": action.Rank, "path": action.Path,
-							"component_gu_ids": action.ComponentGuIDs,
-							"damage":           action.Damage, "defense": action.Defense, "healing": action.Healing,
-							"reason": action.Reason, "target_ids": simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action)}
-						hasBasicAttack = true
-					}
-					continue
-				}
-				actions = append(actions, gin.H{"action_type": action.ActionType, "source_id": action.SourceID,
-					"instance_id": action.InstanceID, "name": action.Name, "target_type": action.TargetType,
-					"mana_cost": action.ManaCost, "rank": action.Rank, "path": action.Path,
-					"component_gu_ids": action.ComponentGuIDs,
-					"damage":           action.Damage, "defense": action.Defense, "healing": action.Healing,
-					"reason": action.Reason, "target_ids": simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action)})
+		if combatant.GuHouse != nil {
+			entry["gu_house"] = gin.H{
+				"id":               combatant.GuHouse.ID,
+				"name":             combatant.GuHouse.Name,
+				"rank":             combatant.GuHouse.Rank,
+				"hp":               combatant.GuHouse.HP,
+				"max_hp":           combatant.GuHouse.MaxHP,
+				"active":           combatant.GuHouse.Active,
+				"is_destroyed":     combatant.GuHouse.IsDestroyed,
+				"damage_reduction": combatant.GuHouse.DamageReduction,
 			}
-			actions = append([]gin.H{basicAttack}, actions...)
+		}
+		if viewerActors[combatant.ID] || (combatant.ID == pendingActor && !allManualActors[combatant.ID]) {
+			actions := make([]gin.H, 0, len(combatant.Actions)+3)
+			isInHouse := combatant.GuHouse != nil && !combatant.GuHouse.IsDestroyed && combatant.GuHouse.Active
+			canEnterHouse := combatant.GuHouse != nil && !combatant.GuHouse.IsDestroyed && !combatant.GuHouse.Active && !combatant.IsStunned && !combatant.HasGuSeal
+
+			if isInHouse {
+				// While inside the Gu House, ONLY show Trận Kích and Exit Gu House
+				for _, action := range combatant.Actions {
+					if !action.IsFromGuHouse {
+						continue
+					}
+					actions = append(actions, gin.H{
+						"action_type":      action.ActionType,
+						"source_id":        action.SourceID,
+						"instance_id":      action.InstanceID,
+						"name":             action.Name,
+						"target_type":      action.TargetType,
+						"mana_cost":        action.ManaCost,
+						"hunger_cost":      action.HungerCost,
+						"rank":             action.Rank,
+						"path":             action.Path,
+						"component_gu_ids": action.ComponentGuIDs,
+						"damage":           action.Damage,
+						"defense":          action.Defense,
+						"healing":          action.Healing,
+						"reason":           action.Reason,
+						"target_ids":       simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action),
+						"is_from_gu_house": true,
+					})
+				}
+				actions = append(actions, gin.H{
+					"action_type":      "EXIT_GU_HOUSE",
+					"name":             "Lệnh Rời Phòng",
+					"target_type":      "SELF",
+					"target_ids":       []string{combatant.ID},
+					"is_from_gu_house": true,
+				})
+			} else {
+				fallbackBasicAttack := simulator.SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", TargetType: "SINGLE"}
+				basicAttack := gin.H{"action_type": "BASIC_ATTACK", "name": "Đánh thường",
+					"target_type": fallbackBasicAttack.TargetType,
+					"target_ids":  simulator.InteractiveActionTargetIDs(combatant, opposingSide, &fallbackBasicAttack)}
+				hasBasicAttack := false
+				for _, action := range combatant.Actions {
+					if action.IsFromGuHouse {
+						continue
+					}
+					if action.ActionType == "BASIC_ATTACK" {
+						if !hasBasicAttack {
+							basicAttack = gin.H{"action_type": action.ActionType, "source_id": action.SourceID,
+								"instance_id": action.InstanceID, "name": action.Name, "target_type": action.TargetType,
+								"mana_cost": action.ManaCost, "rank": action.Rank, "path": action.Path,
+								"component_gu_ids": action.ComponentGuIDs,
+								"damage":           action.Damage, "defense": action.Defense, "healing": action.Healing,
+								"reason": action.Reason, "target_ids": simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action)}
+							hasBasicAttack = true
+						}
+						continue
+					}
+					actions = append(actions, gin.H{"action_type": action.ActionType, "source_id": action.SourceID,
+						"instance_id": action.InstanceID, "name": action.Name, "target_type": action.TargetType,
+						"mana_cost": action.ManaCost, "rank": action.Rank, "path": action.Path,
+						"component_gu_ids": action.ComponentGuIDs,
+						"damage":           action.Damage, "defense": action.Defense, "healing": action.Healing,
+						"reason": action.Reason, "target_ids": simulator.InteractiveActionTargetIDs(combatant, opposingSide, &action)})
+				}
+				actions = append([]gin.H{basicAttack}, actions...)
+				if canEnterHouse {
+					actions = append(actions, gin.H{
+						"action_type": "ENTER_GU_HOUSE",
+						"name":        "Dung Nhập Cổ Phòng",
+						"target_type": "SELF",
+						"target_ids":  []string{combatant.ID},
+					})
+				}
+			}
 			actions = append(actions, gin.H{"action_type": "FLEE", "name": "Bỏ chạy"})
 			entry["actions"] = actions
 		}
@@ -554,29 +614,61 @@ func StartCombatSession(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Failed to encode loadout", err))
 		return
 	}
+	initialCombatState := state
 	row := combatSessionRow{PlayerID: playerID, ParticipantID: participantID, InitialState: initialJSON, Loadout: loadoutJSON, Commands: []byte("[]"), Revision: 0, Status: "active"}
 	state, logs, _, err := replayCombatSession(row, nil)
-	if err != nil || state.Interactive.Error != "" || state.Interactive.PendingActor == "" {
+	if err != nil || state.Interactive.Error != "" {
 		httperr.Respond(c, httperr.Internal("Combat did not reach a player decision", err))
 		return
 	}
-	deadline := time.Now().Add(combatDecisionTimeout)
-	err = tx.QueryRow(`INSERT INTO combat_sessions (player_id, participant_id, mode, initial_state, loadout, commands, pending_actor, deadline_at)
-		VALUES ($1, $2, $3, $4, $5, '[]', $6, $7) RETURNING id`, playerID, participantID, player.ActiveCombat.CombatMode, initialJSON, loadoutJSON, state.Interactive.PendingActor, deadline).Scan(&row.ID)
+	var result *CombatResolution
+	var deadlineAt *time.Time
+	if state.Interactive.PendingActor == "" {
+		result, err = SettleCombatSession(tx, &player, &req.Loadout, initialCombatState, state, logs)
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Failed to settle combat completed at battle start", err))
+			return
+		}
+		row.Status = "complete"
+	} else {
+		deadline := time.Now().Add(combatDecisionTimeout)
+		deadlineAt = &deadline
+	}
+	err = tx.QueryRow(`INSERT INTO combat_sessions (player_id, participant_id, mode, status, initial_state, loadout, commands, pending_actor, deadline_at)
+		VALUES ($1, $2, $3, $4, $5, $6, '[]', $7, $8) RETURNING id`, playerID, participantID, player.ActiveCombat.CombatMode, row.Status, initialJSON, loadoutJSON, state.Interactive.PendingActor, deadlineAt).Scan(&row.ID)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Could not create combat session"})
 		return
 	}
-	row.DeadlineAt = sql.NullTime{Time: deadline, Valid: true}
+	if deadlineAt != nil {
+		row.DeadlineAt = sql.NullTime{Time: *deadlineAt, Valid: true}
+	}
 	row.PendingActor = state.Interactive.PendingActor
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Failed to commit combat session", err))
 		return
 	}
-	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
-	publishCombatSessionEvent(row, "active", state.Interactive.PendingActor)
+	if row.Status == "complete" {
+		PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
+		publishCombatSessionEvent(row, "complete", "")
+		if result != nil && result.AfterCommit != nil {
+			result.AfterCommit()
+		}
+		if result != nil {
+			for _, notification := range result.Notifications {
+				notify.Publish(notification)
+			}
+		}
+		setWorldPosFromPlayer(&player)
+	} else {
+		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
+		publishCombatSessionEvent(row, "active", state.Interactive.PendingActor)
+	}
 	response := combatSessionResponse(row, state, logs, playerID)
 	response["my_actor_id"] = playerID.String()
+	if result != nil {
+		response["winner"] = result.Winner
+	}
 	c.JSON(http.StatusCreated, response)
 }
 

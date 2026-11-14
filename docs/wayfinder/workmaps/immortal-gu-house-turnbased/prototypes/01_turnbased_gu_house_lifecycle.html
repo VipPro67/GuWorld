@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype 01: Vòng Đời Dung Nhập & Thoát Tiên Cổ Phòng Theo Lượt</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --card-bg: #18181b;
+      --border: #27272a;
+      --gold: #f59e0b;
+      --gold-glow: rgba(245, 158, 11, 0.25);
+      --red: #ef4444;
+      --green: #10b981;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+    .container { max-width: 1000px; margin: 0 auto; }
+
+    header { border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }
+    h1 { font-size: 20px; color: var(--gold); display: flex; align-items: center; gap: 8px; }
+    .badge { font-size: 11px; background: rgba(245, 158, 11, 0.15); color: var(--gold); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--gold); }
+    .subtitle { color: var(--text-muted); font-size: 13px; margin-top: 6px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .panel-title { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* Stance indicator */
+    .stance-box { padding: 12px; border-radius: 6px; border: 1px solid var(--border); background: #121214; margin-bottom: 16px; transition: all 0.3s; }
+    .stance-box.gu-house { border-color: var(--gold); background: radial-gradient(circle at top, rgba(245, 158, 11, 0.1) 0%, #121214 70%); box-shadow: 0 0 15px var(--gold-glow); }
+    .stance-box.breached { border-color: var(--red); background: rgba(239, 68, 68, 0.08); }
+
+    .stat-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
+    .bar-wrap { background: #27272a; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 12px; }
+    .bar-fill { height: 100%; transition: width 0.3s ease; }
+    .bar-hp { background: var(--green); }
+    .bar-form-hp { background: var(--gold); }
+    .bar-mana { background: var(--blue); }
+
+    /* Free play actions */
+    .action-group { margin-bottom: 16px; }
+    .action-group-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 500; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    button { background: #27272a; color: var(--text); border: 1px solid #3f3f46; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    button:hover:not(:disabled) { background: #3f3f46; border-color: #52525b; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.btn-gold { background: rgba(245, 158, 11, 0.2); border-color: var(--gold); color: #fef08a; }
+    button.btn-gold:hover:not(:disabled) { background: rgba(245, 158, 11, 0.35); }
+    button.btn-red { background: rgba(239, 68, 68, 0.2); border-color: var(--red); color: #fca5a5; }
+    button.btn-red:hover:not(:disabled) { background: rgba(239, 68, 68, 0.35); }
+    button.btn-blue { background: rgba(59, 130, 246, 0.2); border-color: var(--blue); color: #93c5fd; }
+    button.btn-blue:hover:not(:disabled) { background: rgba(59, 130, 246, 0.35); }
+
+    /* Guided Walkthrough tabs */
+    .walkthrough-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+    .tab-nav { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px; }
+    .tab-btn { background: transparent; border: none; padding: 6px 12px; color: var(--text-muted); font-size: 13px; }
+    .tab-btn.active { color: var(--gold); border-bottom: 2px solid var(--gold); border-radius: 0; font-weight: 600; }
+    .walkthrough-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6; }
+    .step-runner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .step-badge { font-size: 11px; background: #3f3f46; color: #fff; padding: 3px 8px; border-radius: 4px; }
+
+    /* Battle Log */
+    .log-panel { background: #0c0c0e; border: 1px solid var(--border); border-radius: 6px; padding: 12px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    .log-item { margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .log-gold { color: #fde047; }
+    .log-red { color: #f87171; font-weight: 600; }
+    .log-green { color: #4ade80; }
+    .log-blue { color: #60a5fa; }
+    .log-muted { color: #71717a; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>
+      <span>Thử Nghiệm Logic Vòng Đời Tiên Cổ Phòng Theo Lượt</span>
+      <span class="badge">Ticket 01 Prototype</span>
+    </h1>
+    <p class="subtitle">
+      Kiểm chứng mô hình trạng thái (State Model): Phân hóa Auto-mode vs Interactive-mode, hoán đổi Palette Trận Kích, hấp thu No Spillover và phản phệ Vỡ Phòng.
+    </p>
+  </header>
+
+  <div class="grid">
+    <!-- Current State View -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>Trạng Thái Thực Thể</span>
+        <span id="turnIndicator" style="color: var(--blue);">Turn 1</span>
+      </div>
+
+      <!-- Stance Display -->
+      <div id="stanceBox" class="stance-box">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <strong id="stanceName" style="font-size: 14px;">Nhục Thân Cổ Tiên</strong>
+          <span id="stanceBadge" class="badge" style="background:#27272a; color:#a1a1aa; border-color:#52525b;">Dạng Bản Thể</span>
+        </div>
+        <div id="stanceDesc" style="font-size: 12px; color: var(--text-muted);">
+          Đang chiến đấu bằng nhục thân và Cổ trùng bản mệnh. Nhận 100% sát thương trực tiếp.
+        </div>
+      </div>
+
+      <!-- Form HP (Gu House) -->
+      <div id="guHouseStats" style="display: none;">
+        <div class="stat-row">
+          <span style="color: var(--gold); font-weight: 500;">🛡️ Form HP (Tiên Cổ Phòng)</span>
+          <span id="formHpText">4,000 / 4,000</span>
+        </div>
+        <div class="bar-wrap">
+          <div id="formHpBar" class="bar-fill bar-form-hp" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <!-- Player HP -->
+      <div class="stat-row">
+        <span>❤️ Sinh Mệnh (Nhục Thân)</span>
+        <span id="hpText">2,000 / 2,000</span>
+      </div>
+      <div class="bar-wrap">
+        <div id="hpBar" class="bar-fill bar-hp" style="width: 100%;"></div>
+      </div>
+
+      <!-- Mana -->
+      <div class="stat-row">
+        <span>💧 Tiên Nguyên (Mana)</span>
+        <span id="manaText">500 / 500</span>
+      </div>
+      <div class="bar-wrap">
+        <div id="manaBar" class="bar-fill bar-mana" style="width: 100%;"></div>
+      </div>
+
+      <!-- Status badges -->
+      <div style="margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap;">
+        <span id="modeBadge" class="badge" style="border-color: var(--blue); color: var(--blue);">Chế độ: Interactive</span>
+        <span id="stunBadge" class="badge" style="border-color: var(--red); color: var(--red); display: none;">Choáng (2 lượt)</span>
+        <span id="durabilityBadge" class="badge" style="border-color: #71717a; color: #a1a1aa;">Độ bền Cổ Phòng: 100%</span>
+      </div>
+    </div>
+
+    <!-- Free Play Controls -->
+    <div class="panel">
+      <div class="panel-title">Bảng Lệnh Tự Do (Free-Play)</div>
+
+      <!-- Mode Selection -->
+      <div class="action-group">
+        <div class="action-group-label">1. Cấu hình Chế Độ Khởi Động:</div>
+        <div class="btn-row">
+          <button onclick="setMode('INTERACTIVE', false)">Interactive (Khởi đầu Nhục Thân)</button>
+          <button onclick="setMode('INTERACTIVE', true)">Interactive (Khởi đầu Cổ Phòng)</button>
+          <button onclick="setMode('AUTO', true)" class="btn-blue">Auto-Mode (Tự động xuất chiến)</button>
+        </div>
+      </div>
+
+      <!-- Integration / Stance Actions -->
+      <div class="action-group">
+        <div class="action-group-label">2. Lệnh Hoán Đổi Trạng Thái (Stance Commands):</div>
+        <div class="btn-row">
+          <button id="btnEnter" onclick="doEnterGuHouse()" class="btn-gold">🏛️ Dung Nhập Tiên Cổ Phòng</button>
+          <button id="btnExit" onclick="doExitGuHouse()" class="btn-red">🚪 Lệnh Rời Phòng (Slot 6)</button>
+        </div>
+      </div>
+
+      <!-- Combat Skills -->
+      <div class="action-group">
+        <div class="action-group-label">3. Thi Triển Kỹ Năng (Action Palette):</div>
+        <div id="humanSkills" class="btn-row">
+          <button onclick="castHumanSkill('Phong Nhận', 150, 20)">🍃 Phong Nhận Cổ</button>
+          <button onclick="castHumanSkill('Nguyệt Quang', 280, 45)">🌙 Nguyệt Quang Sát Chiêu</button>
+        </div>
+        <div id="houseSkills" class="btn-row" style="display: none;">
+          <button onclick="castHouseStrike('Pháo Kích', 450, 40)" class="btn-gold">💥 Pháo Kích (Slot 1)</button>
+          <button onclick="castHouseStrike('Xung Kích', 320, 35)" class="btn-gold">🚜 Xung Kích Trample (Slot 2)</button>
+          <button onclick="castHouseStrike('Hộ Trận Khiên', 0, 50, 'SHIELD')" class="btn-gold">🛡️ Đại Trận Khiên (Slot 3)</button>
+          <button onclick="castHouseStrike('Tu Bổ Khẩn Cấp', 0, 60, 'HEAL_HOUSE')" class="btn-gold">🔧 Tu Bổ Form HP (Slot 4)</button>
+          <button onclick="castHouseStrike('Thần Thông Tối Hậu', 1200, 150, 'ULT')" class="btn-gold">⚡ Thần Thông Tối Hậu (Slot 5)</button>
+        </div>
+      </div>
+
+      <!-- Inbound Enemy Damage -->
+      <div class="action-group">
+        <div class="action-group-label">4. Nhận Sát Thương Đối Thủ:</div>
+        <div class="btn-row">
+          <button onclick="takeEnemyDamage(800)">Đòn đánh nhẹ (800 dmg)</button>
+          <button onclick="takeEnemyDamage(2500)">Đòn đánh mạnh (2,500 dmg)</button>
+          <button onclick="takeEnemyDamage(6000)" class="btn-red">Đại Chiêu Diệt Thế (6,000 dmg)</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 10px;">
+        <button onclick="resetModel()" style="width: 100%;">🔄 Khôi Phục Toàn Bộ Trạng Thái Ban Đầu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guided Walkthroughs -->
+  <div class="walkthrough-section">
+    <div class="panel-title">Kịch Bản Hướng Dẫn Kiểm Chứng (Guided Walkthroughs)</div>
+    
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchScenario(1)">Kịch bản 1: Auto-Mode Chuẩn</button>
+      <button class="tab-btn" onclick="switchScenario(2)">Kịch bản 2: Thoát Phòng Chiến Thuật</button>
+      <button class="tab-btn" onclick="switchScenario(3)">Kịch bản 3: Vỡ Phòng Phản Phệ</button>
+      <button class="tab-btn" onclick="switchScenario(4)">Kịch bản 4: Vi Phạm Tiên Quyết</button>
+    </div>
+
+    <div id="scenarioContent">
+      <!-- Dynamic Scenario View -->
+    </div>
+  </div>
+
+  <!-- Battle Log -->
+  <div class="panel">
+    <div class="panel-title">
+      <span>Nhật Ký Chiến Báo (Combat Log)</span>
+      <button onclick="clearLog()" style="padding: 2px 8px; font-size: 11px;">Xóa log</button>
+    </div>
+    <div id="battleLog" class="log-panel"></div>
+  </div>
+</div>
+
+<script>
+/**
+ * ────────────────────────────────────────────────────────────────
+ * PURE LOGIC MODULE: Turn-based Gu House Lifecycle State Machine
+ * Module thuần túy có thể trích xuất trực tiếp vào backend Go simulator.
+ * ────────────────────────────────────────────────────────────────
+ */
+class GuHouseLifecycleModel {
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    this.turn = 1;
+    this.mode = 'INTERACTIVE'; // 'AUTO' | 'INTERACTIVE'
+    
+    // Player Stats
+    this.maxHp = 2000;
+    this.hp = 2000;
+    this.maxMana = 500;
+    this.mana = 500;
+    this.stunTurns = 0;
+    this.hasGuSeal = false;
+
+    // Gu House Stats
+    this.guHouse = {
+      id: "house_bach_ngoc_lau",
+      name: "Bạch Ngọc Lâu",
+      rank: 6,
+      maxFormHp: 4000,
+      formHp: 4000,
+      defense: 120,
+      damageReduction: 0.20, // 20% giảm sát thương
+      durability: 100, // 0 - 100%
+      active: false,   // Đang dung nhập hay không
+      isDestroyed: false
+    };
+
+    this.logs = [];
+    this.log("Khởi tạo trận địa chiến đấu. Thực thể Cổ Tiên đã sẵn sàng.", "log-muted");
+  }
+
+  log(msg, cls = "") {
+    this.logs.unshift({ turn: this.turn, msg, cls });
+  }
+
+  // Khởi động trận đấu theo chế độ
+  initCombat(mode = 'INTERACTIVE', autoEnter = false) {
+    this.mode = mode;
+    this.turn = 1;
+    if (this.mode === 'AUTO' || autoEnter) {
+      this.enterGuHouse(true);
+    } else {
+      this.guHouse.active = false;
+      this.log(`[Khởi Trận - Interactive] Cổ Tiên xuất chiến ở dạng Nhục Thân. Tiên Cổ Phòng [${this.guHouse.name}] đang chờ lệnh dung nhập.`, "log-blue");
+    }
+  }
+
+  // Lệnh Dung Nhập
+  canEnterGuHouse() {
+    if (this.guHouse.isDestroyed || this.guHouse.durability <= 0) {
+      return { ok: false, reason: "Tiên Cổ Phòng đã bị công phá vỡ nát, cần tu sửa mới có thể dùng lại." };
+    }
+    if (this.guHouse.active) {
+      return { ok: false, reason: "Đang ở trong Tiên Cổ Phòng rồi." };
+    }
+    if (this.stunTurns > 0) {
+      return { ok: false, reason: "Đang bị Choáng (Stun), không thể thao túng tâm niệm dung nhập Cổ Phòng." };
+    }
+    if (this.hasGuSeal) {
+      return { ok: false, reason: "Đang bị Phong Ấn Cổ (Gu Seal), mạch trận Tiên Cổ bị gián đoạn." };
+    }
+    return { ok: true };
+  }
+
+  enterGuHouse(isInitial = false) {
+    const check = this.canEnterGuHouse();
+    if (!check.ok) {
+      this.log(`[Thất Bại] Không thể Dung Nhập: ${check.reason}`, "log-red");
+      return false;
+    }
+    this.guHouse.active = true;
+    const prefix = isInitial ? "[Xuất Chiến]" : "[Lệnh Điều Khiển]";
+    this.log(`${prefix} Cổ Tiên dung nhập vào Tiên Cổ Phòng [${this.guHouse.name}]! Kích hoạt Form HP (${this.guHouse.formHp}/${this.guHouse.maxFormHp}), giảm 20% sát thương nhận vào, hoán đổi toàn bộ chiêu thức sang Trận Kích.`, "log-gold");
+    return true;
+  }
+
+  // Lệnh Rời Cổ Phòng (Slot 6)
+  canExitGuHouse() {
+    if (!this.guHouse.active) {
+      return { ok: false, reason: "Không ở trong Cổ Phòng." };
+    }
+    if (this.stunTurns > 0) {
+      return { ok: false, reason: "Đang bị Choáng." };
+    }
+    return { ok: true };
+  }
+
+  exitGuHouse() {
+    const check = this.canExitGuHouse();
+    if (!check.ok) {
+      this.log(`[Thất Bại] Không thể rời phòng: ${check.reason}`, "log-red");
+      return false;
+    }
+    this.guHouse.active = false;
+    this.log(`[Thoát Cổ Phòng - Slot 6] Cổ Tiên chủ động thu hồi tâm niệm, rời khỏi [${this.guHouse.name}] trở về nhục thân! Bảo toàn kết cấu Cổ Phòng còn (${this.guHouse.formHp} Form HP). Hoán đổi về chiêu thức Cổ trùng cá nhân.`, "log-blue");
+    return true;
+  }
+
+  // Thi triển chiêu thức Trận Kích
+  castHouseStrike(name, damage, manaCost, special = null) {
+    if (!this.guHouse.active) {
+      this.log(`[Lỗi] Không thể dùng Trận Kích [${name}] khi chưa Dung Nhập Cổ Phòng!`, "log-red");
+      return false;
+    }
+    if (this.mana < manaCost) {
+      this.log(`[Thiếu Mana] Cần ${manaCost} Tiên Nguyên để phát động [${name}], hiện chỉ có ${this.mana}.`, "log-red");
+      return false;
+    }
+    this.mana -= manaCost;
+
+    if (special === 'HEAL_HOUSE') {
+      const heal = Math.floor(this.guHouse.maxFormHp * 0.20);
+      this.guHouse.formHp = Math.min(this.guHouse.maxFormHp, this.guHouse.formHp + heal);
+      this.log(`[Trận Kích - Slot 4 Tu Bổ] Tiêu hao ${manaCost} Tiên Nguyên sửa chữa kết cấu, hồi phục +${heal} Form HP cho [${this.guHouse.name}]! (Hiện có ${this.guHouse.formHp}/${this.guHouse.maxFormHp})`, "log-green");
+    } else if (special === 'SHIELD') {
+      this.log(`[Trận Kích - Slot 3 Hộ Trận] Tiêu hao ${manaCost} Tiên Nguyên kích hoạt Quang Thuẫn Đại Trận, tăng mạnh phòng ngự!`, "log-gold");
+    } else if (special === 'ULT') {
+      this.log(`[Trận Kích - Slot 5 Thần Thông Tối Hậu] Toàn bộ 5 Tiên Cổ hạch tâm đồng loạt phát sáng! Oanh tạc sát thương hủy diệt ${damage} lên quân địch! (Tiêu hao ${manaCost} Tiên Nguyên & độ no các Cổ)`, "log-gold");
+    } else {
+      this.log(`[Trận Kích - ${name}] Thôi động [${this.guHouse.name}] phát động công kích, gây ${damage} sát thương! (Tiêu hao ${manaCost} Tiên Nguyên)`, "log-gold");
+    }
+    this.nextTurn();
+    return true;
+  }
+
+  // Thi triển chiêu thức nhục thân
+  castHumanSkill(name, damage, manaCost) {
+    if (this.guHouse.active) {
+      this.log(`[Khóa Chiêu] Khi đang trong Cổ Phòng, bảng chiêu thức cá nhân bị khóa! Hãy dùng Trận Kích hoặc Rời Phòng.`, "log-red");
+      return false;
+    }
+    if (this.mana < manaCost) {
+      this.log(`[Thiếu Mana] Cần ${manaCost} Chân Nguyên.`, "log-red");
+      return false;
+    }
+    this.mana -= manaCost;
+    this.log(`[Cổ Trùng Nhục Thân - ${name}] Cổ Tiên tự thân kết ấn, gây ${damage} sát thương.`, "log-green");
+    this.nextTurn();
+    return true;
+  }
+
+  // Nhận sát thương đối thủ
+  takeEnemyDamage(incomingDamage) {
+    this.log(`⚔️ Địch tấn công với lực sát thương danh nghĩa: ${incomingDamage}!`, "log-muted");
+
+    if (this.guHouse.active && !this.guHouse.isDestroyed) {
+      // Giảm thương của Cổ Phòng
+      const reducedDamage = Math.floor(incomingDamage * (1 - this.guHouse.damageReduction));
+      this.log(`[Phòng Hộ Cổ Phòng] Giáp trận pháp giảm 20% sát thương: còn ${reducedDamage} sát thương nện vào kết cấu.`, "log-gold");
+
+      if (this.guHouse.formHp >= reducedDamage) {
+        this.guHouse.formHp -= reducedDamage;
+        this.log(`[Hấp Thu Thành Công] [${this.guHouse.name}] hứng trọn ${reducedDamage} sát thương thay chủ nhân! Form HP còn: ${this.guHouse.formHp}/${this.guHouse.maxFormHp}. Nhục thân Cổ Tiên hoàn toàn bình an!`, "log-green");
+      } else {
+        // Cổ Phòng bị công phá: NO SPILLOVER
+        const absorbed = this.guHouse.formHp;
+        this.guHouse.formHp = 0;
+        this.guHouse.isDestroyed = true;
+        this.guHouse.active = false;
+        this.guHouse.durability = 0; // Hỏng hoàn toàn
+
+        // Phản phệ Vỡ Phòng
+        const recoilDamage = Math.floor(this.maxHp * 0.30);
+        this.hp = Math.max(1, this.hp - recoilDamage);
+        this.stunTurns = 2;
+
+        this.log(`💥 [VỠ PHÒNG - NO SPILLOVER] Tiên Cổ Phòng [${this.guHouse.name}] hấp thu triệt để ${absorbed} sát thương trước khi sụp đổ hoàn toàn! Đòn đánh KHÔNG tràn vào nhục thân!`, "log-red");
+        this.log(`⚡ [PHẢN PHỆ TRẬN PHÁP] Kết cấu đại trận nổ tung hất văng Cổ Tiên ra ngoài! Chịu Choáng (Stun) 2 lượt và tổn thương 30% sinh mệnh (-${recoilDamage} HP)! Độ bền Cổ Phòng về 0%!`, "log-red");
+      }
+    } else {
+      // Đánh trực tiếp vào nhục thân
+      this.hp = Math.max(0, this.hp - incomingDamage);
+      this.log(`🩸 [Trúng Đòn Nhục Thân] Cổ Tiên trực tiếp hứng chịu ${incomingDamage} sát thương! Máu nhục thân còn: ${this.hp}/${this.maxHp}.`, "log-red");
+      if (this.hp <= 0) {
+        this.log(`☠️ Cổ Tiên trọng thương ngã xuống! Thất bại trong trận chiến.`, "log-red");
+      }
+    }
+
+    this.nextTurn();
+  }
+
+  nextTurn() {
+    this.turn += 1;
+    if (this.stunTurns > 0) {
+      this.stunTurns -= 1;
+      if (this.stunTurns === 0) {
+        this.log(`[Giải Trừ Khống Chế] Cổ Tiên hồi phục ý thức, thoát khỏi trạng thái Choáng.`, "log-blue");
+      }
+    }
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// UI BINDING & INTERACTIVE CONTROLLER
+// ────────────────────────────────────────────────────────────────
+const model = new GuHouseLifecycleModel();
+
+function updateUI() {
+  document.getElementById('turnIndicator').innerText = `Turn ${model.turn}`;
+  
+  // Stance Box
+  const stanceBox = document.getElementById('stanceBox');
+  const stanceName = document.getElementById('stanceName');
+  const stanceBadge = document.getElementById('stanceBadge');
+  const stanceDesc = document.getElementById('stanceDesc');
+  const guHouseStats = document.getElementById('guHouseStats');
+
+  if (model.guHouse.isDestroyed) {
+    stanceBox.className = "stance-box breached";
+    stanceName.innerText = "Nhục Thân (Cổ Phòng Đã Vỡ)";
+    stanceName.style.color = "var(--red)";
+    stanceBadge.innerText = "Vỡ Trận Phản Phệ";
+    stanceBadge.style.color = "var(--red)";
+    stanceBadge.style.borderColor = "var(--red)";
+    stanceDesc.innerText = "Tiên Cổ Phòng đã nổ tung! Không thể dung nhập lại cho đến khi Tu Sửa.";
+    guHouseStats.style.display = "none";
+  } else if (model.guHouse.active) {
+    stanceBox.className = "stance-box gu-house";
+    stanceName.innerText = `🏛️ Tiên Cổ Phòng: ${model.guHouse.name} (Rank ${model.guHouse.rank})`;
+    stanceName.style.color = "var(--gold)";
+    stanceBadge.innerText = "Dung Nhập Hoạt Hóa";
+    stanceBadge.style.color = "var(--gold)";
+    stanceBadge.style.borderColor = "var(--gold)";
+    stanceDesc.innerText = "Cổ Phòng che chở 100% sát thương thay nhục thân. Bộ 6 Trận Kích đã kích hoạt.";
+    guHouseStats.style.display = "block";
+  } else {
+    stanceBox.className = "stance-box";
+    stanceName.innerText = "Nhục Thân Cổ Tiên";
+    stanceName.style.color = "var(--text)";
+    stanceBadge.innerText = "Dạng Bản Thể";
+    stanceBadge.style.color = "var(--text-muted)";
+    stanceBadge.style.borderColor = "#52525b";
+    stanceDesc.innerText = "Đang chiến đấu bằng nhục thân và Cổ trùng bản mệnh. Nhận 100% sát thương trực tiếp.";
+    guHouseStats.style.display = "none";
+  }
+
+  // Form HP Bar
+  document.getElementById('formHpText').innerText = `${model.guHouse.formHp.toLocaleString()} / ${model.guHouse.maxFormHp.toLocaleString()}`;
+  document.getElementById('formHpBar').style.width = `${(model.guHouse.formHp / model.guHouse.maxFormHp) * 100}%`;
+
+  // Player HP Bar
+  document.getElementById('hpText').innerText = `${model.hp.toLocaleString()} / ${model.maxHp.toLocaleString()}`;
+  document.getElementById('hpBar').style.width = `${(model.hp / model.maxHp) * 100}%`;
+
+  // Mana Bar
+  document.getElementById('manaText').innerText = `${model.mana.toLocaleString()} / ${model.maxMana.toLocaleString()}`;
+  document.getElementById('manaBar').style.width = `${(model.mana / model.maxMana) * 100}%`;
+
+  // Badges
+  document.getElementById('modeBadge').innerText = `Chế độ: ${model.mode}`;
+  const stunBadge = document.getElementById('stunBadge');
+  if (model.stunTurns > 0) {
+    stunBadge.style.display = "inline-block";
+    stunBadge.innerText = `Choáng (${model.stunTurns} lượt)`;
+  } else {
+    stunBadge.style.display = "none";
+  }
+  document.getElementById('durabilityBadge').innerText = `Độ bền Cổ Phòng: ${model.guHouse.durability}%`;
+
+  // Stance Buttons
+  const canEnter = model.canEnterGuHouse().ok;
+  const canExit = model.canExitGuHouse().ok;
+  document.getElementById('btnEnter').disabled = !canEnter;
+  document.getElementById('btnExit').disabled = !canExit;
+
+  // Skill Palette Swapping
+  const humanSkills = document.getElementById('humanSkills');
+  const houseSkills = document.getElementById('houseSkills');
+  if (model.guHouse.active) {
+    humanSkills.style.display = "none";
+    houseSkills.style.display = "flex";
+  } else {
+    humanSkills.style.display = "flex";
+    houseSkills.style.display = "none";
+  }
+
+  // Render Log
+  renderLog();
+}
+
+function renderLog() {
+  const container = document.getElementById('battleLog');
+  container.innerHTML = model.logs.map(l => `<div class="log-item ${l.cls}">[T${l.turn}] ${l.msg}</div>`).join('');
+}
+
+function clearLog() {
+  model.logs = [];
+  renderLog();
+}
+
+// Controller Actions
+function setMode(mode, autoEnter) {
+  model.initCombat(mode, autoEnter);
+  updateUI();
+}
+
+function doEnterGuHouse() {
+  model.enterGuHouse();
+  updateUI();
+}
+
+function doExitGuHouse() {
+  model.exitGuHouse();
+  updateUI();
+}
+
+function castHouseStrike(name, damage, mana, special) {
+  model.castHouseStrike(name, damage, mana, special);
+  updateUI();
+}
+
+function castHumanSkill(name, damage, mana) {
+  model.castHumanSkill(name, damage, mana);
+  updateUI();
+}
+
+function takeEnemyDamage(dmg) {
+  model.takeEnemyDamage(dmg);
+  updateUI();
+}
+
+function resetModel() {
+  model.reset();
+  updateUI();
+}
+
+// ────────────────────────────────────────────────────────────────
+// GUIDED WALKTHROUGHS CONTROLLER
+// ────────────────────────────────────────────────────────────────
+let currentScenario = 1;
+let scenarioStep = 0;
+
+const scenarios = {
+  1: {
+    title: "Kịch bản 1: Luồng Auto-Mode Chuẩn (Tự động vào & Càn quét)",
+    desc: "Cổ Tiên trang bị Tiên Cổ Phòng xuất chiến ở chế độ Auto. Ngay Turn 1, hệ thống tự động Dung Nhập, kích hoạt Form HP 4,000 và hoán đổi thanh kỹ năng sang Trận Kích. Form HP gánh chịu đòn đánh mà không hao tổn máu Cổ Tiên.",
+    steps: [
+      { label: "1. Khởi động Auto Combat", act: () => setMode('AUTO', true) },
+      { label: "2. Thi triển Pháo Kích (Slot 1)", act: () => castHouseStrike('Pháo Kích', 450, 40) },
+      { label: "3. Nhận đòn địch (800 dmg)", act: () => takeEnemyDamage(800) },
+      { label: "4. Tung Thần Thông Tối Hậu diệt địch", act: () => castHouseStrike('Thần Thông Tối Hậu', 1200, 150, 'ULT') }
+    ]
+  },
+  2: {
+    title: "Kịch bản 2: Thoát Phòng Chiến Thuật (Tránh Vỡ Phòng)",
+    desc: "Cổ Tiên đang dung nhập Cổ Phòng trong trận đấu có điều khiển (Interactive). Sau các đợt giao tranh khốc liệt, Form HP của Cổ Phòng chỉ còn ít ỏi. Nhận thấy đòn chí mạng sắp giáng xuống, Cổ Tiên dùng chiêu 'Slot 6 Lệnh Rời Phòng' để lui về nhục thân, bảo toàn Cổ Phòng không bị phá hủy.",
+    steps: [
+      { label: "1. Khởi động Interactive & Vào Cổ Phòng", act: () => { setMode('INTERACTIVE', true); } },
+      { label: "2. Hứng 2 đòn liên tiếp làm Form HP nguy cấp", act: () => { takeEnemyDamage(2500); takeEnemyDamage(800); } },
+      { label: "3. Bấm [Slot 6: Lệnh Rời Phòng]", act: () => doExitGuHouse() },
+      { label: "4. Nhận đòn bằng nhục thân (Cổ Phòng an toàn)", act: () => takeEnemyDamage(800) }
+    ]
+  },
+  3: {
+    title: "Kịch bản 3: Thử Nghiệm Vỡ Phòng & Phản Phệ (No Spillover + Stun)",
+    desc: "Cổ Phòng nhận Đại Chiêu 6,000 sát thương vượt quá 4,000 Form HP. Cơ chế chuẩn hóa: 100% sát thương bị triệt tiêu tại kết cấu (KHÔNG tràn vào nhục thân). Ngay sau đó Cổ Phòng nổ tung, kích phát phản phệ làm Cổ Tiên chịu Choáng 2 lượt + mất 30% Max HP nhục thân.",
+    steps: [
+      { label: "1. Bắt đầu trong Cổ Phòng (4,000 Form HP)", act: () => setMode('INTERACTIVE', true) },
+      { label: "2. Địch tung Đại Chiêu 6,000 Sát Thương", act: () => takeEnemyDamage(6000) },
+      { label: "3. Quan sát: Nhục thân chỉ mất 30% HP do phản chấn (không bị tràn đòn 6k)", act: () => {} },
+      { label: "4. Thử bấm Dung Nhập lại (Bị từ chối vì đã vỡ)", act: () => doEnterGuHouse() }
+    ]
+  },
+  4: {
+    title: "Kịch bản 4: Vi Phạm Điều Kiện Tiên Quyết (Stun / Vỡ Trận)",
+    desc: "Kiểm tra ma trận điều kiện của Server: Nếu Cổ Tiên đang bị Choáng hoặc Cổ Phòng có độ bền = 0, hành động 'Dung Nhập' bị từ chối triệt để, ngăn chặn gian lận hoặc lỗi trạng thái.",
+    steps: [
+      { label: "1. Khởi động nhục thân & giả lập Choáng", act: () => { setMode('INTERACTIVE', false); model.stunTurns = 2; updateUI(); model.log("Cổ Tiên bị dính bùa chú định thân Choáng 2 lượt!", "log-red"); } },
+      { label: "2. Cố tình bấm [Dung Nhập Tiên Cổ Phòng]", act: () => doEnterGuHouse() },
+      { label: "3. Đợi hết Choáng & Dung Nhập thành công", act: () => { model.nextTurn(); model.nextTurn(); updateUI(); doEnterGuHouse(); } }
+    ]
+  }
+};
+
+function switchScenario(num) {
+  currentScenario = num;
+  scenarioStep = 0;
+  
+  const btns = document.querySelectorAll('.tab-btn');
+  btns.forEach((b, idx) => {
+    if (idx + 1 === num) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+
+  renderScenario();
+}
+
+function renderScenario() {
+  const s = scenarios[currentScenario];
+  const container = document.getElementById('scenarioContent');
+  
+  let stepsHtml = s.steps.map((st, idx) => {
+    const isCurrent = idx === scenarioStep;
+    const isDone = idx < scenarioStep;
+    const btnStyle = isCurrent ? "btn-gold" : (isDone ? "btn-blue" : "");
+    const badgeText = isDone ? "✓ Xong" : (isCurrent ? "Đang chờ bấm" : "Chưa tới");
+    return `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="${btnStyle}" ${isCurrent ? "" : "disabled"} onclick="runStep(${idx})">${st.label}</button>
+        <span class="step-badge">${badgeText}</span>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="font-weight: 600; color: var(--gold); margin-bottom: 6px;">${s.title}</div>
+    <div class="walkthrough-desc">${s.desc}</div>
+    <div class="step-runner">${stepsHtml}</div>
+  `;
+}
+
+function runStep(idx) {
+  const s = scenarios[currentScenario];
+  if (idx < s.steps.length) {
+    s.steps[idx].act();
+    scenarioStep = idx + 1;
+    renderScenario();
+  }
+}
+
+// Khởi tạo ban đầu
+setMode('INTERACTIVE', false);
+switchScenario(1);
+</script>
+
+</body>
+</html>

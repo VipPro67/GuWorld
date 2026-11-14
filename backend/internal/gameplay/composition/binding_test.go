@@ -14,7 +14,7 @@ func TestBindCatalogGraphMaterializesSourcesAndPreservesInput(t *testing.T) {
 		Edges: []Edge{{From: "support:6:BLOCK_HELP:1", To: "core:6:BLOCK_OUT:0", Kind: ContributionCombine, RuleID: "combine"}},
 	}
 	bindings := map[string]SourceBinding{
-		"core:6:BLOCK_OUT:0": {EffectKey: "player-core:2:0", GuInstanceID: "player-core", GuID: "core", Rank: 6, SourceBlockID: "BLOCK_OUT", SourceRevision: "rev-core", OperationIndex: 0, Trigger: "ON_ACTION", Context: "TURN_BASED_COMBAT", Executor: "TURN_BASED_COMBAT_ADAPTER"},
+		"core:6:BLOCK_OUT:0":     {EffectKey: "player-core:2:0", GuInstanceID: "player-core", GuID: "core", Rank: 6, SourceBlockID: "BLOCK_OUT", SourceRevision: "rev-core", OperationIndex: 0, Trigger: "ON_ACTION", Context: "TURN_BASED_COMBAT", Executor: "TURN_BASED_COMBAT_ADAPTER"},
 		"support:6:BLOCK_HELP:1": {EffectKey: "player-support:4:1", GuInstanceID: "player-support", GuID: "support", Rank: 6, SourceBlockID: "BLOCK_HELP", SourceRevision: "rev-support", OperationIndex: 1, Trigger: "ON_ACTION", Context: "TURN_BASED_COMBAT", Executor: "TURN_BASED_COMBAT_ADAPTER"},
 	}
 

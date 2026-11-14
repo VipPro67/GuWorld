@@ -180,7 +180,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     const session = await startCombatSession(loadout);
     if (session) {
       interactiveSessionIdRef.current = String(session.session_id || "") || undefined;
-      setInteractiveSession(session);
+      if (session.status === "complete") {
+        showInteractiveReport(session);
+      } else {
+        setInteractiveSession(session);
+      }
     }
   };
 

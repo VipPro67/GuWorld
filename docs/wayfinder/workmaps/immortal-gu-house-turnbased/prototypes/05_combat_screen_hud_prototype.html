@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype 05: Giao Diện Form HP Kép, Aura Cổ Phòng & Điều Khiển Interactive</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --card: #18181b;
+      --border: #27272a;
+      --gold: #f59e0b;
+      --gold-light: #fef08a;
+      --gold-glow: rgba(245, 158, 11, 0.4);
+      --red: #f43f5e;
+      --green: #10b981;
+      --blue: #0ea5e9;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }
+    .container { max-width: 1050px; margin: 0 auto; }
+
+    header { border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 20px; }
+    h1 { font-size: 20px; color: var(--gold); display: flex; align-items: center; gap: 8px; }
+    .badge { font-size: 11px; background: rgba(245, 158, 11, 0.15); color: var(--gold); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--gold); }
+    .subtitle { color: var(--text-muted); font-size: 13px; margin-top: 6px; }
+
+    /* Battlefield layout */
+    .battlefield { background: radial-gradient(circle at center, #18181b 0%, #09090b 100%); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; position: relative; overflow: hidden; }
+    
+    /* Screen shake for breach */
+    .shake { animation: shakeEffect 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+    @keyframes shakeEffect {
+      10%, 90% { transform: translate3d(-2px, 0, 0); }
+      20%, 80% { transform: translate3d(3px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-5px, 0, 0); }
+      40%, 60% { transform: translate3d(5px, 0, 0); }
+    }
+
+    .teams-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: center; }
+    .vs-divider { font-size: 12px; font-weight: 900; color: var(--gold); background: #121214; border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+
+    /* Combatant Card */
+    .card { background: #121214; border: 1px solid var(--border); border-radius: 12px; padding: 14px; position: relative; transition: all 0.3s ease; }
+    
+    /* Golden Aura effect for Gu House Integration */
+    .card.has-gu-house {
+      border-color: var(--gold);
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, #121214 70%);
+      box-shadow: 0 0 20px var(--gold-glow), inset 0 0 15px rgba(245, 158, 11, 0.1);
+      animation: pulseAura 3s infinite alternate;
+    }
+    @keyframes pulseAura {
+      0% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.25); }
+      100% { box-shadow: 0 0 28px rgba(245, 158, 11, 0.55); }
+    }
+
+    .card.breached {
+      border-color: var(--red);
+      background: rgba(244, 63, 94, 0.06);
+      box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
+    }
+
+    .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .avatar-wrap { position: relative; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; border: 2px solid #3f3f46; background: #27272a; }
+    .has-gu-house .avatar-wrap { border-color: var(--gold); color: var(--gold-light); box-shadow: 0 0 10px var(--gold); }
+    
+    .name-title { font-weight: 700; font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 6px; }
+    .house-badge { font-size: 10px; background: rgba(245, 158, 11, 0.2); border: 1px solid var(--gold); color: var(--gold-light); padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+    
+    /* Progress Bars */
+    .bar-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; font-weight: 500; }
+    .bar-bg { background: rgba(0,0,0,0.6); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); }
+    .bar-fill { height: 100%; transition: width 0.4s ease; }
+    .bar-form-hp { background: linear-gradient(90deg, #d97706, #fbbf24, #fef08a); box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
+    .bar-hp { background: linear-gradient(90deg, #059669, #10b981, #6ee7b7); }
+    .bar-mana { background: linear-gradient(90deg, #0284c7, #38bdf8); height: 6px; }
+
+    /* Interactive Action Palette */
+    .controls-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+    .controls-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    
+    .actions-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .action-btn { background: #121214; border: 1px solid #3f3f46; border-radius: 8px; padding: 10px 12px; text-align: left; cursor: pointer; transition: all 0.15s; }
+    .action-btn:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--gold); background: rgba(245, 158, 11, 0.1); }
+    .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    
+    .action-btn.strike { border-color: rgba(245, 158, 11, 0.5); background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, #121214 100%); }
+    .action-btn.strike:hover:not(:disabled) { border-color: var(--gold); box-shadow: 0 0 12px rgba(245, 158, 11, 0.3); }
+    .action-btn.exit-btn { border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.08); }
+    .action-btn.exit-btn:hover:not(:disabled) { border-color: var(--red); background: rgba(244, 63, 94, 0.2); }
+
+    .action-title { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+    .action-desc { font-size: 11px; color: var(--text-muted); }
+    .action-cost { font-size: 10px; color: var(--blue); font-weight: 600; margin-top: 4px; }
+
+    /* Simulation & Testing Buttons */
+    .test-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    button.tool-btn { background: #27272a; border: 1px solid #3f3f46; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    button.tool-btn:hover { background: #3f3f46; }
+
+    /* Battle Log */
+    .log-panel { background: #0c0c0e; border: 1px solid var(--border); border-radius: 8px; padding: 12px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    .log-item { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 3px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>
+      <span>Giao Diện Form HP Kép, Aura & Điều Khiển Tiên Cổ Phòng</span>
+      <span class="badge">Ticket 05 Prototype</span>
+    </h1>
+    <p class="subtitle">
+      Kiểm nghiệm thị giác (Visual UX): Thanh máu Form HP hoàng kim xếp chồng, hào quang aura pháo đài, bảng 6 nút Trận Kích chuyên biệt và hiệu ứng Vỡ Phòng.
+    </p>
+  </header>
+
+  <!-- Battlefield View -->
+  <div id="battlefield" class="battlefield">
+    <div class="teams-grid">
+      <!-- Phe Ta (Player) -->
+      <div id="playerCard" class="card has-gu-house">
+        <div class="card-header">
+          <div class="avatar-wrap">Tiên</div>
+          <div>
+            <div class="name-title">
+              <span>Phương Nguyên</span>
+              <span id="stanceBadge" class="house-badge">🏛️ Tiên Cổ Ốc · Rank 7</span>
+            </div>
+            <div id="stanceDesc" style="font-size: 11px; color: var(--gold-light);">Dung Nhập Vấn Đạo Lâu (Giảm 25% sát thương)</div>
+          </div>
+        </div>
+
+        <!-- Form HP (Gu House) -->
+        <div id="formHpGroup">
+          <div class="bar-label">
+            <span style="color: var(--gold-light);">🛡️ Form HP Cổ Phòng</span>
+            <span id="formHpText" style="color: var(--gold-light); font-weight: 700;">4,800 / 6,000</span>
+          </div>
+          <div class="bar-bg">
+            <div id="formHpFill" class="bar-fill bar-form-hp" style="width: 80%;"></div>
+          </div>
+        </div>
+
+        <!-- Player Sinh Lực -->
+        <div class="bar-label">
+          <span style="color: #6ee7b7;">❤️ Sinh Lực Bản Thể</span>
+          <span id="hpText">2,400 / 2,400</span>
+        </div>
+        <div class="bar-bg">
+          <div id="hpFill" class="bar-fill bar-hp" style="width: 100%;"></div>
+        </div>
+
+        <!-- Player Chân Nguyên -->
+        <div class="bar-label">
+          <span style="color: #7dd3fc;">💧 Tiên Nguyên (Mana)</span>
+          <span id="manaText">650 / 800</span>
+        </div>
+        <div class="bar-bg" style="height: 6px;">
+          <div id="manaFill" class="bar-fill bar-mana" style="width: 81%;"></div>
+        </div>
+      </div>
+
+      <!-- VS Divider -->
+      <div class="vs-divider">VS</div>
+
+      <!-- Phe Địch (Enemy) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="avatar-wrap" style="border-color: var(--red); color: #fca5a5;">Ma</div>
+          <div>
+            <div class="name-title">
+              <span>Hắc Lâu Lan</span>
+              <span style="font-size: 10px; background: rgba(244, 63, 94, 0.2); border: 1px solid var(--red); color: #fca5a5; padding: 1px 6px; border-radius: 4px;">Cổ Tiên Lực Đạo</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted);">Đang chuẩn bị sát chiêu</div>
+          </div>
+        </div>
+
+        <!-- Enemy HP -->
+        <div class="bar-label">
+          <span style="color: #fca5a5;">❤️ Sinh Lực</span>
+          <span id="enemyHpText">5,000 / 5,000</span>
+        </div>
+        <div class="bar-bg">
+          <div id="enemyHpFill" class="bar-fill" style="background: var(--red); width: 100%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Controls Panel -->
+  <div class="controls-panel">
+    <div class="controls-header">
+      <div style="font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+        <span style="color: var(--gold);">⚡ BẢNG CHIÊU THỨC TRẬN KÍCH (INTERACTIVE TURN)</span>
+        <span id="turnIndicator" class="badge" style="border-color: var(--blue); color: var(--blue);">Lượt 1 · Đến lượt bạn</span>
+      </div>
+      <div id="chargingAlert" style="font-size: 12px; color: var(--gold-light); display: none;">⚡ Đang Tụ Khí Thần Thông (+30% Giảm Thương)</div>
+    </div>
+
+    <!-- 6 Standardized Strike Slots -->
+    <div class="actions-grid">
+      <!-- Slot 1 -->
+      <button class="action-btn strike" onclick="castStrike(1, 'Pháo Kích Công Kích', 650, 40)">
+        <div class="action-title">💥 [1] Pháo Kích Công Kích</div>
+        <div class="action-desc">Đơn mục tiêu tầm xa · 650 Sát thương</div>
+        <div class="action-cost">Tiêu hao 40 Tiên Nguyên · Trừ 1 độ no</div>
+      </button>
+
+      <!-- Slot 2 -->
+      <button class="action-btn strike" onclick="castStrike(2, 'Xung Kích Trample', 420, 45)">
+        <div class="action-title">🚜 [2] Xung Kích Trample</div>
+        <div class="action-desc">Càn quét AoE · Đẩy lùi 30% Thanh lượt</div>
+        <div class="action-cost">Tiêu hao 45 Tiên Nguyên · Cooldown 3</div>
+      </button>
+
+      <!-- Slot 3 -->
+      <button class="action-btn strike" onclick="castStrike(3, 'Đại Trận Hộ Thể', 0, 50, 'SHIELD')">
+        <div class="action-title">🛡️ [3] Đại Trận Hộ Thể</div>
+        <div class="action-desc">Tạo Quang Thuẫn 1,500 bảo vệ Form HP</div>
+        <div class="action-cost">Tiêu hao 50 Tiên Nguyên · Cooldown 3</div>
+      </button>
+
+      <!-- Slot 4 -->
+      <button class="action-btn strike" onclick="castStrike(4, 'Tu Bổ Kết Cấu', 0, 60, 'HEAL')">
+        <div class="action-title">🔧 [4] Tu Bổ Kết Cấu</div>
+        <div class="action-desc">Hồi phục +1,200 Form HP Cổ Phòng</div>
+        <div class="action-cost">Tiêu hao 60 Tiên Nguyên · Cooldown 4</div>
+      </button>
+
+      <!-- Slot 5 -->
+      <button id="btnSlot5" class="action-btn strike" onclick="castStrike(5, 'Thần Thông Tối Hậu', 1800, 160, 'ULT')">
+        <div class="action-title">⚡ [5] Thần Thông Tối Hậu</div>
+        <div class="action-desc">Tụ lực 1 lượt $\to$ Diệt thế AoE bỏ qua giáp</div>
+        <div class="action-cost">Tiêu hao 160 Tiên Nguyên · Trừ 2 độ no all</div>
+      </button>
+
+      <!-- Slot 6 -->
+      <button id="btnSlot6" class="action-btn exit-btn" onclick="toggleStance()">
+        <div class="action-title" id="titleSlot6">🚪 [6] Lệnh Rời Phòng</div>
+        <div class="action-desc" id="descSlot6">Rút về nhục thân, bảo toàn Cổ Phòng</div>
+        <div class="action-cost">Tiêu hao 0 Tiên Nguyên · Thoát tức thì</div>
+      </button>
+    </div>
+
+    <!-- Visual Testing Tools -->
+    <div class="test-toolbar">
+      <span style="font-size: 11px; color: var(--text-muted); align-self: center;">Thử nghiệm tình huống:</span>
+      <button class="tool-btn" onclick="takeHit(1200)">🔨 Địch đánh nhẹ (1,200 dmg)</button>
+      <button class="tool-btn" onclick="takeHit(5500)" style="border-color: var(--red); color: #fca5a5;">💥 Đòn diệt thế gây Vỡ Phòng (5,500 dmg)</button>
+      <button class="tool-btn" onclick="resetUI()">🔄 Khôi phục ban đầu</button>
+    </div>
+  </div>
+
+  <!-- Combat Log -->
+  <div class="controls-panel">
+    <div style="font-weight: 600; font-size: 13px; margin-bottom: 8px; color: var(--text-muted);">CHIẾN BÁO TRỰC QUAN (COMBAT LOG)</div>
+    <div id="combatLog" class="log-panel"></div>
+  </div>
+</div>
+
+<script>
+let state = {
+  turn: 1,
+  formHp: 4800,
+  maxFormHp: 6000,
+  hp: 2400,
+  maxHp: 2400,
+  mana: 650,
+  maxMana: 800,
+  enemyHp: 5000,
+  maxEnemyHp: 5000,
+  inGuHouse: true,
+  isBreached: false,
+  isCharging: false,
+  logs: []
+};
+
+function addLog(msg, color = "#fff") {
+  state.logs.unshift({ turn: state.turn, msg, color });
+  const container = document.getElementById('combatLog');
+  container.innerHTML = state.logs.map(l => `<div class="log-item" style="color: ${l.color};">[T${l.turn}] ${l.msg}</div>`).join('');
+}
+
+function updateVisuals() {
+  const playerCard = document.getElementById('playerCard');
+  const stanceBadge = document.getElementById('stanceBadge');
+  const stanceDesc = document.getElementById('stanceDesc');
+  const formHpGroup = document.getElementById('formHpGroup');
+  const btnSlot6 = document.getElementById('btnSlot6');
+
+  // Form HP Bar
+  const formPct = Math.max(0, Math.min(100, (state.formHp / state.maxFormHp) * 100));
+  document.getElementById('formHpFill').style.width = `${formPct}%`;
+  document.getElementById('formHpText').innerText = `${state.formHp.toLocaleString()} / ${state.maxFormHp.toLocaleString()}`;
+
+  // HP Bar
+  const hpPct = Math.max(0, Math.min(100, (state.hp / state.maxHp) * 100));
+  document.getElementById('hpFill').style.width = `${hpPct}%`;
+  document.getElementById('hpText').innerText = `${state.hp.toLocaleString()} / ${state.maxHp.toLocaleString()}`;
+
+  // Mana Bar
+  const manaPct = Math.max(0, Math.min(100, (state.mana / state.maxMana) * 100));
+  document.getElementById('manaFill').style.width = `${manaPct}%`;
+  document.getElementById('manaText').innerText = `${state.mana.toLocaleString()} / ${state.maxMana.toLocaleString()}`;
+
+  // Enemy HP Bar
+  const enemyPct = Math.max(0, Math.min(100, (state.enemyHp / state.maxEnemyHp) * 100));
+  document.getElementById('enemyHpFill').style.width = `${enemyPct}%`;
+  document.getElementById('enemyHpText').innerText = `${state.enemyHp.toLocaleString()} / ${state.maxEnemyHp.toLocaleString()}`;
+
+  if (state.isBreached) {
+    playerCard.className = "card breached";
+    stanceBadge.innerText = "💥 Vỡ Phòng (Choáng 2 lượt)";
+    stanceBadge.style.borderColor = "var(--red)";
+    stanceBadge.style.color = "#fca5a5";
+    stanceDesc.innerText = "Cổ Phòng sụp đổ! Bị phản chấn trừ 30% HP và Choáng!";
+    formHpGroup.style.display = "none";
+    btnSlot6.disabled = true;
+  } else if (state.inGuHouse) {
+    playerCard.className = "card has-gu-house";
+    stanceBadge.innerText = "🏛️ Tiên Cổ Ốc · Rank 7";
+    stanceBadge.style.borderColor = "var(--gold)";
+    stanceBadge.style.color = "var(--gold-light)";
+    stanceDesc.innerText = "Dung Nhập Vấn Đạo Lâu (Giảm 25% sát thương)";
+    formHpGroup.style.display = "block";
+    document.getElementById('titleSlot6').innerText = "🚪 [6] Lệnh Rời Phòng";
+    document.getElementById('descSlot6').innerText = "Rút về nhục thân, bảo toàn Cổ Phòng";
+    btnSlot6.disabled = false;
+  } else {
+    playerCard.className = "card";
+    stanceBadge.innerText = "Nhục Thân Cổ Tiên";
+    stanceBadge.style.borderColor = "#52525b";
+    stanceBadge.style.color = "var(--text-muted)";
+    stanceDesc.innerText = "Đang chiến đấu bằng nhục thân và Cổ trùng bản mệnh";
+    formHpGroup.style.display = "none";
+    document.getElementById('titleSlot6').innerText = "🏛️ [6] Dung Nhập Cổ Phòng";
+    document.getElementById('descSlot6').innerText = "Kích hoạt Cổ Phòng che chắn nhục thân";
+    btnSlot6.disabled = false;
+  }
+
+  // Charging alert
+  document.getElementById('chargingAlert').style.display = state.isCharging ? "block" : "none";
+  const btnSlot5 = document.getElementById('btnSlot5');
+  if (state.isCharging) {
+    btnSlot5.style.borderColor = "var(--red)";
+    btnSlot5.style.background = "rgba(244, 63, 94, 0.2)";
+    btnSlot5.querySelector('.action-title').innerText = "⚡ [5] BẮN ĐẠI CHIÊU DIỆT THẾ!";
+  } else {
+    btnSlot5.style.borderColor = "rgba(245, 158, 11, 0.5)";
+    btnSlot5.style.background = "linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, #121214 100%)";
+    btnSlot5.querySelector('.action-title').innerText = "⚡ [5] Thần Thông Tối Hậu";
+  }
+}
+
+function castStrike(slot, name, dmg, mana, special) {
+  if (state.isBreached) {
+    addLog(`Không thể dùng chiêu khi đang bị Choáng do Vỡ Phòng!`, "var(--red)");
+    return;
+  }
+  if (!state.inGuHouse) {
+    addLog(`Đang ở dạng nhục thân, hãy Dung Nhập trước khi dùng Trận Kích!`, "var(--red)");
+    return;
+  }
+  if (state.mana < mana) {
+    addLog(`Không đủ Tiên Nguyên (cần ${mana}, còn ${state.mana})!`, "var(--red)");
+    return;
+  }
+
+  state.mana -= mana;
+
+  if (special === 'SHIELD') {
+    addLog(`[Slot 3] Đại Trận Hộ Thể phóng thích quang thuẫn 1,500 bảo vệ Form HP!`, "var(--gold-light)");
+  } else if (special === 'HEAL') {
+    state.formHp = Math.min(state.maxFormHp, state.formHp + 1200);
+    addLog(`[Slot 4] Tu Bổ Kết Cấu: Hồi phục +1,200 Form HP (Hiện có ${state.formHp}/${state.maxFormHp})!`, "var(--green)");
+  } else if (special === 'ULT') {
+    if (!state.isCharging) {
+      state.isCharging = true;
+      addLog(`[Slot 5 Tụ Lực] Bắt đầu tích tụ Tiên Nguyên đại trận! Tăng 30% giảm sát thương trong lượt này!`, "#c084fc");
+    } else {
+      state.enemyHp = Math.max(0, state.enemyHp - dmg);
+      addLog(`[Slot 5 BÙNG NỔ] Thần Thông Tối Hậu oanh tạc diệt thế! Gây ${dmg} sát thương lên Hắc Lâu Lan!`, "#f43f5e");
+      state.isCharging = false;
+    }
+  } else {
+    state.enemyHp = Math.max(0, state.enemyHp - dmg);
+    addLog(`[Slot ${slot}: ${name}] Oanh kích gây ${dmg} sát thương lên kẻ địch!`, "var(--gold)");
+  }
+
+  state.turn += 1;
+  updateVisuals();
+}
+
+function toggleStance() {
+  if (state.isBreached) return;
+  state.inGuHouse = !state.inGuHouse;
+  if (state.inGuHouse) {
+    addLog(`[Dung Nhập] Phương Nguyên tiến vào Vấn Đạo Lâu, kích hoạt Form HP và Trận Kích!`, "var(--gold)");
+  } else {
+    addLog(`[Rời Phòng] Phương Nguyên chủ động thu hồi tâm niệm, rút về nhục thân an toàn!`, "var(--blue)");
+  }
+  updateVisuals();
+}
+
+function takeHit(incomingDamage) {
+  addLog(`⚔️ Hắc Lâu Lan tung sát chiêu gây ${incomingDamage} sát thương!`, "var(--text-muted)");
+
+  if (state.inGuHouse && !state.isBreached) {
+    // 25% damage reduction
+    const netDmg = Math.floor(incomingDamage * 0.75);
+    if (state.formHp >= netDmg) {
+      state.formHp -= netDmg;
+      addLog(`🛡️ Vấn Đạo Lâu che chắn cho chủ nhân: Hấp thụ ${netDmg} sát thương! Form HP còn ${state.formHp}/${state.maxFormHp}.`, "var(--gold)");
+    } else {
+      // BREACH: No Spillover
+      state.formHp = 0;
+      state.isBreached = true;
+      state.inGuHouse = false;
+      
+      // Recoil: -30% max hp
+      const recoil = Math.floor(state.maxHp * 0.30);
+      state.hp = Math.max(1, state.hp - recoil);
+
+      // Trigger screen shake
+      const bf = document.getElementById('battlefield');
+      bf.classList.add('shake');
+      setTimeout(() => bf.classList.remove('shake'), 600);
+
+      addLog(`💥 [VỠ PHÒNG - NO SPILLOVER] Vấn Đạo Lâu hấp thu toàn bộ đòn đánh trước khi nổ tung! Đòn đánh KHÔNG tràn vào nhục thân!`, "var(--red)");
+      addLog(`⚡ [PHẢN PHỆ] Đại trận sụp đổ hất văng Phương Nguyên ra ngoài, chịu Choáng 2 lượt và tổn thương 30% sinh mệnh (-${recoil} HP)!`, "var(--red)");
+    }
+  } else {
+    state.hp = Math.max(0, state.hp - incomingDamage);
+    addLog(`🩸 [Trúng Đòn Nhục Thân] Phương Nguyên trực tiếp hứng chịu ${incomingDamage} sát thương!`, "var(--red)");
+  }
+
+  state.turn += 1;
+  updateVisuals();
+}
+
+function resetUI() {
+  state.turn = 1;
+  state.formHp = 4800;
+  state.hp = 2400;
+  state.mana = 650;
+  state.enemyHp = 5000;
+  state.inGuHouse = true;
+  state.isBreached = false;
+  state.isCharging = false;
+  state.logs = [];
+  addLog("Khôi phục trạng thái ban đầu. Tiên Cổ Ốc sẵn sàng.");
+  updateVisuals();
+}
+
+// Khởi chạy
+resetUI();
+</script>
+
+</body>
+</html>

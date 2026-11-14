@@ -112,6 +112,7 @@ func TestSimulator_GuHouseDamageAbsorption(t *testing.T) {
 		MaxHP:           600,
 		HP:              600,
 		DamageReduction: 0.20, // 20% damage reduction
+		Active:          true,
 	}
 
 	enemy := newTestCombatant("boss_1", "Enemy", 300, 100)
@@ -148,5 +149,92 @@ func TestSimulator_GuHouseDamageAbsorption(t *testing.T) {
 	}
 	if player.HP != 1000 {
 		t.Fatalf("player HP should be protected by GuHouse, got %.0f", player.HP)
+	}
+}
+
+func TestSimulator_GuHouseStructuralBreach_NoSpilloverAndRecoil(t *testing.T) {
+	player := newTestCombatant("p1", "Player", 4000, 50)
+	player.Speed = 10
+	player.GuHouse = &GuHouseState{
+		ID:              "house_breach",
+		Name:            "Vấn Đạo Lâu",
+		Rank:            6,
+		MaxHP:           500,
+		HP:              200, // Only 200 HP left
+		DamageReduction: 0.0,
+		Active:          true,
+	}
+	player.Actions = []SimAction{
+		{
+			ActionType: "BASIC_ATTACK",
+			Name:       "Phản Kích",
+			Damage:     500,
+			DamageMult: 1.0,
+		},
+	}
+
+	enemy := newTestCombatant("boss_1", "Enemy", 300, 100)
+	enemy.Speed = 20
+	// Deals 2,000 damage - massive overkill against 200 Form HP
+	enemy.Actions = []SimAction{
+		{
+			ActionType: "BASIC_ATTACK",
+			Name:       "Diệt Thế Thần Lôi",
+			Damage:     2000,
+			DamageMult: 1.0,
+		},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{player},
+		Enemies: []*CombatantAuto{enemy},
+	}
+
+	logs := Simulate(state)
+
+	hasDestroyedLog := false
+	hasStunnedLog := false
+	for _, l := range logs {
+		if strings.Contains(l.Detail, "[Tiên Cổ Ốc Vỡ Vụn - Không Tràn Sát Thương]") {
+			hasDestroyedLog = true
+		}
+		if l.Action == "STUNNED" && l.ActorId == "p1" {
+			hasStunnedLog = true
+		}
+	}
+	if !hasDestroyedLog {
+		for _, l := range logs {
+			t.Logf("Log: %s | %s", l.Action, l.Detail)
+		}
+		t.Fatalf("expected GU_HOUSE_DESTROYED log with no spillover")
+	}
+	if !hasStunnedLog {
+		t.Fatalf("expected player to lose turn due to STUNNED action")
+	}
+
+	if !player.GuHouse.IsDestroyed {
+		t.Fatalf("expected GuHouse to be destroyed")
+	}
+	if player.GuHouse.Active {
+		t.Fatalf("expected GuHouse to be inactive after breach")
+	}
+	if player.GuHouse.HP != 0 {
+		t.Fatalf("expected GuHouse HP to be 0, got %.0f", player.GuHouse.HP)
+	}
+
+	// Verify that at Turn 1, player took only 30% MaxHP recoil (1200 dmg), NOT the 2000 incoming attack!
+	foundTurn1Breach := false
+	for _, l := range logs {
+		if l.Turn == 1 && strings.Contains(l.Detail, "-1200 HP") && strings.Contains(l.Detail, "còn 2800 HP") {
+			foundTurn1Breach = true
+			break
+		}
+	}
+	if !foundTurn1Breach {
+		for _, l := range logs {
+			t.Logf("Log: T%d | %s | %s", l.Turn, l.Action, l.Detail)
+		}
+		t.Fatalf("expected Turn 1 breach recoil of -1200 HP and remaining 2800 HP")
 	}
 }

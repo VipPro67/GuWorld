@@ -50,7 +50,7 @@ Base path: `/api`. Route được đăng ký trong `backend/internal/server/serv
 | `/pets` | GET `/`; POST `/feed`, `/formation`, `/sleep`, `/release`, `/merge` |
 | `/actors` | GET `/`, `/:id`; chỉ đọc roster actor của player hiện tại |
 
-Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/combat/session/*` dành cho session command có revision. `/combat/retreat/:id` cho phép rút lui khỏi encounter trước khi session bắt đầu; PvP không hỗ trợ rút lui ở bước chuẩn bị. `/combat/flee/:id` giữ tương thích; khi session hoạt động, flee phải gửi như command trong lượt.
+Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/combat/session/*` dành cho session command có revision. `POST /combat/session/start` có thể trả session `complete` ngay nếu hiệu ứng lúc bắt đầu trận đã kết thúc encounter; client hiển thị báo cáo kết quả mà không chờ command. `/combat/retreat/:id` cho phép rút lui khỏi encounter trước khi session bắt đầu; PvP không hỗ trợ rút lui ở bước chuẩn bị. `/combat/flee/:id` giữ tương thích; khi session hoạt động, flee phải gửi như command trong lượt.
 
 ## Thế giới, aperture và instance
 

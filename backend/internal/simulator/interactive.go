@@ -30,6 +30,17 @@ func combatActionAvailable(actor *CombatantAuto, action *SimAction, target *Comb
 			return false
 		}
 	}
+	if (action.ActionType == "KILLER_MOVE" || action.IsFromGuHouse) && actor.GuHunger != nil && len(action.ComponentGuIDs) > 0 {
+		cost := action.HungerCost
+		if cost <= 0 {
+			cost = 1
+		}
+		for _, guID := range action.ComponentGuIDs {
+			if hunger, present := actor.GuHunger[guID]; present && hunger < cost {
+				return false
+			}
+		}
+	}
 	return true
 }
 
@@ -85,6 +96,21 @@ func CanSelectCombatTarget(actor *CombatantAuto, enemies []*CombatantAuto, actio
 func selectCombatCommand(actor *CombatantAuto, enemies []*CombatantAuto, command CombatCommand) (*SimAction, *CombatantAuto, error) {
 	if command.ActionType == "FLEE" && command.SourceID == "" && command.InstanceID == "" {
 		return &SimAction{ActionType: "FLEE", Name: "Bỏ chạy"}, nil, nil
+	}
+	if command.ActionType == "EXIT_GU_HOUSE" {
+		if actor == nil || actor.GuHouse == nil || !actor.GuHouse.Active {
+			return nil, nil, errors.New("cannot exit: not inside an active Gu House")
+		}
+		return &SimAction{ActionType: "EXIT_GU_HOUSE", Name: "Rời Cổ Phòng", TargetType: "SELF", IsFromGuHouse: true}, actor, nil
+	}
+	if command.ActionType == "ENTER_GU_HOUSE" {
+		if actor == nil || actor.GuHouse == nil || actor.GuHouse.IsDestroyed || actor.GuHouse.Active {
+			return nil, nil, errors.New("cannot enter: Gu House is unavailable or already active")
+		}
+		if actor.IsStunned || actor.HasGuSeal {
+			return nil, nil, errors.New("cannot enter: stunned or Gu sealed")
+		}
+		return &SimAction{ActionType: "ENTER_GU_HOUSE", Name: "Dung Nhập Cổ Phòng", TargetType: "SELF"}, actor, nil
 	}
 	var selected *SimAction
 	for i := range actor.Actions {
@@ -169,6 +195,14 @@ func selectCombatPlan(actor *CombatantAuto, enemies []*CombatantAuto, plan []Com
 				return nil, errors.New("flee must be the only action in a plan")
 			}
 			action, target, err := selectCombatCommand(actor, enemies, CombatCommand{ActionType: "FLEE"})
+			if err != nil {
+				return nil, err
+			}
+			selected = append(selected, selectedCombatAction{action, target})
+			continue
+		}
+		if choice.ActionType == "EXIT_GU_HOUSE" || choice.ActionType == "ENTER_GU_HOUSE" {
+			action, target, err := selectCombatCommand(actor, enemies, CombatCommand{ActionType: choice.ActionType})
 			if err != nil {
 				return nil, err
 			}
@@ -262,6 +296,14 @@ func resolveLockedCombatPlan(actor *CombatantAuto, enemies []*CombatantAuto, pla
 				return nil, errors.New("flee must be the only action in a plan")
 			}
 			selected = append(selected, selectedCombatAction{action: &SimAction{ActionType: "FLEE", Name: "Bỏ chạy"}})
+			continue
+		}
+		if choice.ActionType == "EXIT_GU_HOUSE" || choice.ActionType == "ENTER_GU_HOUSE" {
+			action, target, err := selectCombatCommand(actor, enemies, CombatCommand{ActionType: choice.ActionType})
+			if err != nil {
+				continue
+			}
+			selected = append(selected, selectedCombatAction{action, target})
 			continue
 		}
 		var action *SimAction
@@ -411,6 +453,10 @@ func chooseAutoCombatAction(actor *CombatantAuto, enemies []*CombatantAuto) (*Si
 			return rememberAutoAction(actor, action, target)
 		}
 	}
+	if actor != nil && actor.GuHouse != nil && !actor.GuHouse.IsDestroyed && actor.GuHouse.Active {
+		basic := &SimAction{ActionType: "KILLER_MOVE", Name: "Trận Kích Cơ Bản", Damage: actor.BaseDmg, DamageMult: 1, TargetType: "SINGLE", IsFromGuHouse: true}
+		return rememberAutoAction(actor, basic, target)
+	}
 	basic := &SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: actor.BaseDmg, DamageMult: 1, TargetType: "SINGLE", Path: []string{"strength"}}
 	return rememberAutoAction(actor, basic, target)
 }
@@ -535,11 +581,18 @@ func BuildAutomaticCombatPlan(actor *CombatantAuto, enemies []*CombatantAuto, ma
 		plan = append(plan, selectedCombatAction{action: action, target: checkTarget})
 	}
 	if len(plan) == 0 && target != nil {
-		basic := &SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: actor.BaseDmg, DamageMult: 1, TargetType: "SINGLE", Path: []string{"strength"}}
-		plan = append(plan, selectedCombatAction{basic, target})
+		if actor != nil && actor.GuHouse != nil && !actor.GuHouse.IsDestroyed && actor.GuHouse.Active {
+			basic := &SimAction{ActionType: "KILLER_MOVE", Name: "Trận Kích Cơ Bản", Damage: actor.BaseDmg, DamageMult: 1, TargetType: "SINGLE", IsFromGuHouse: true}
+			plan = append(plan, selectedCombatAction{basic, target})
+		} else {
+			basic := &SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: actor.BaseDmg, DamageMult: 1, TargetType: "SINGLE", Path: []string{"strength"}}
+			plan = append(plan, selectedCombatAction{basic, target})
+		}
 	} else if target != nil {
-		basic := &SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: actor.BaseDmg, DamageMult: 1, TargetType: "SINGLE", Path: []string{"strength"}}
-		plan = append(plan, selectedCombatAction{basic, target})
+		if actor == nil || actor.GuHouse == nil || actor.GuHouse.IsDestroyed || !actor.GuHouse.Active {
+			basic := &SimAction{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: actor.BaseDmg, DamageMult: 1, TargetType: "SINGLE", Path: []string{"strength"}}
+			plan = append(plan, selectedCombatAction{basic, target})
+		}
 	}
 	// AUTO owns only the choice policy. Re-enter the same plan validator used
 	// for player-submitted plans so resource, target, limit, and Gu-use rules

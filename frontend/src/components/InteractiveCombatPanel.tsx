@@ -1,8 +1,19 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Heart, Shield, Sparkles, Swords, Zap } from "lucide-react";
+import { Heart, LogOut, Shield, Sparkles, Swords, Zap } from "lucide-react";
 import { Num } from "@/components/Num";
+
+type GuHouseView = {
+  id?: string;
+  name?: string;
+  rank?: number;
+  hp?: number;
+  max_hp?: number;
+  active?: boolean;
+  is_destroyed?: boolean;
+  damage_reduction?: number;
+};
 
 type CombatActionView = Record<string, unknown> & {
   action_type?: string;
@@ -12,6 +23,7 @@ type CombatActionView = Record<string, unknown> & {
   target_type?: string;
   rank?: number;
   mana_cost?: number;
+  hunger_cost?: number;
   damage?: number;
   defense?: number;
   healing?: number;
@@ -21,6 +33,7 @@ type CombatActionView = Record<string, unknown> & {
   component_gu_ids?: string[];
   target_id?: string;
   plan?: CombatActionView[];
+  is_from_gu_house?: boolean;
 };
 
 type CombatantView = Record<string, unknown> & {
@@ -32,6 +45,7 @@ type CombatantView = Record<string, unknown> & {
   mana?: number;
   max_mana?: number;
   dead?: boolean;
+  gu_house?: GuHouseView;
   actions?: CombatActionView[];
 };
 
@@ -88,13 +102,23 @@ function TeamCombatant({
   const maxMana = Math.max(1, value(combatant.max_mana));
   const manaPercent = Math.max(0, Math.min(100, (mana / maxMana) * 100));
   const dead = Boolean(combatant.dead) || hp <= 0;
+
+  const guHouse = combatant.gu_house;
+  const inGuHouse = Boolean(guHouse && guHouse.active && !guHouse.is_destroyed);
+  const houseDestroyed = Boolean(guHouse && guHouse.is_destroyed);
+  const formHp = Math.max(0, value(guHouse?.hp));
+  const maxFormHp = Math.max(1, value(guHouse?.max_hp));
+  const formHpPercent = Math.max(0, Math.min(100, (formHp / maxFormHp) * 100));
+
   const borderColor = target
-    ? "border-amber-300 bg-amber-950/30 ring-2 ring-amber-300/30"
-    : active
-      ? side === "ally"
-        ? "border-emerald-400 bg-emerald-950/40 ring-1 ring-emerald-400/40"
-        : "border-rose-400 bg-rose-950/40 ring-1 ring-rose-400/40"
-      : "border-zinc-800 bg-zinc-900/70";
+    ? "border-amber-300 bg-amber-950/40 ring-2 ring-amber-300/50"
+    : inGuHouse
+      ? "border-amber-500/80 bg-gradient-to-b from-amber-950/40 via-zinc-900/90 to-zinc-950 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/20"
+      : active
+        ? side === "ally"
+          ? "border-emerald-400 bg-emerald-950/40 ring-1 ring-emerald-400/40"
+          : "border-rose-400 bg-rose-950/40 ring-1 ring-rose-400/40"
+        : "border-zinc-800 bg-zinc-900/70";
 
   return (
     <button
@@ -107,21 +131,61 @@ function TeamCombatant({
       } disabled:cursor-default`}
     >
       <div className="mb-3 flex items-center gap-3">
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border bg-gradient-to-br ${
-          side === "ally" ? "border-emerald-400/40 from-emerald-900 to-zinc-950 text-emerald-200" : "border-rose-400/40 from-rose-900 to-zinc-950 text-rose-200"
+        <div className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border bg-gradient-to-br ${
+          inGuHouse
+            ? "border-amber-400 from-amber-800 to-zinc-950 text-amber-200 shadow-md shadow-amber-500/30"
+            : side === "ally"
+              ? "border-emerald-400/40 from-emerald-900 to-zinc-950 text-emerald-200"
+              : "border-rose-400/40 from-rose-900 to-zinc-950 text-rose-200"
         }`}>
-          <span className="text-lg font-black">{String(combatant.name || "?").slice(0, 1).toUpperCase()}</span>
+          {inGuHouse ? (
+            <span className="text-lg">🏛️</span>
+          ) : (
+            <span className="text-lg font-black">{String(combatant.name || "?").slice(0, 1).toUpperCase()}</span>
+          )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate font-bold text-zinc-100">{String(combatant.name || "Chiến binh")}</div>
+          <div className="flex items-center gap-1.5 truncate font-bold text-zinc-100">
+            <span className="truncate">{String(combatant.name || "Chiến binh")}</span>
+            {inGuHouse && (
+              <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
+                🏛️ Tiên Cổ Ốc · Bậc {guHouse?.rank || 6}
+              </span>
+            )}
+            {houseDestroyed && (
+              <span className="shrink-0 rounded-full border border-rose-500/40 bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-300">
+                💥 Vỡ Phòng
+              </span>
+            )}
+          </div>
           <div className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-            {dead ? "Đã gục" : active ? "Đang hành động" : String(combatant.kind || "Chiến binh")}
+            {dead ? "Đã gục" : active ? "Đang hành động" : inGuHouse ? `${guHouse?.name || "Cổ Phòng"} (Giảm ${Math.round((guHouse?.damage_reduction || 0) * 100)}% ST)` : String(combatant.kind || "Chiến binh")}
           </div>
         </div>
         {target && <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-200">Mục tiêu</span>}
       </div>
+
+      {inGuHouse && (
+        <div className="mb-2.5 rounded-xl border border-amber-500/40 bg-amber-950/30 p-2">
+          <div className="mb-1 flex items-center justify-between text-[11px] text-amber-300">
+            <span className="flex items-center gap-1.5 font-semibold">
+              <Shield className="h-3.5 w-3.5 text-amber-400" /> Form HP Cổ Phòng
+            </span>
+            <span className="font-mono text-amber-200">
+              <Num value={Math.round(formHp)} /><span className="text-amber-500/60"> / </span><Num value={Math.round(maxFormHp)} />
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-black/70">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-300 transition-all duration-500"
+              style={{ width: `${formHpPercent}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="mb-1.5 flex items-center justify-between text-[11px] text-zinc-400">
-        <span className="flex items-center gap-1.5"><Heart className="h-3.5 w-3.5 text-rose-400" /> Sinh lực</span>
+        <span className="flex items-center gap-1.5"><Heart className="h-3.5 w-3.5 text-rose-400" /> Sinh lực nhục thân</span>
         <span className="font-mono text-zinc-200"><Num value={Math.round(hp)} /><span className="text-zinc-600"> / </span><Num value={Math.round(maxHP)} /></span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-black/70">
@@ -170,11 +234,20 @@ export function InteractiveCombatPanel({
   const ownsTurn = actor?.id === playerId;
   const canChooseTargets = ownsTurn && !planLocked && !actionLoading && !submitting;
   const maxGuActions = Math.max(1, Number(session.max_gu_actions || 3));
-  const queuedGuActions = queuedPlan.filter((action) => action.action_type !== "BASIC_ATTACK").length;
+  const queuedGuActions = queuedPlan.filter((action) => action.action_type !== "BASIC_ATTACK" && action.action_type !== "EXIT_GU_HOUSE" && action.action_type !== "ENTER_GU_HOUSE").length;
   const lastTurn = logs.length > 0 ? value(logs[logs.length - 1].turn) : 0;
-  const activeActions = actions.filter((action) => ["GU_SKILL", "KILLER_MOVE"].includes(String(action.action_type || "")));
-  const targetActions = actions.filter((action) =>
-    String(action.action_type || "") !== "FLEE" && String(action.target_type || "").toUpperCase() !== "SELF",
+
+  const inGuHouse = Boolean(actor?.gu_house && actor.gu_house.active && !actor.gu_house.is_destroyed);
+  const strikeActions = actions.filter((action) => action.is_from_gu_house || action.action_type === "EXIT_GU_HOUSE");
+  const normalActions = actions.filter((action) => !action.is_from_gu_house && action.action_type !== "EXIT_GU_HOUSE");
+  const displayActions = inGuHouse ? strikeActions : normalActions;
+
+  const activeActions = displayActions.filter((action) => ["GU_SKILL", "KILLER_MOVE"].includes(String(action.action_type || "")));
+  const targetActions = displayActions.filter((action) =>
+    String(action.action_type || "") !== "FLEE" &&
+    String(action.action_type || "") !== "EXIT_GU_HOUSE" &&
+    String(action.action_type || "") !== "ENTER_GU_HOUSE" &&
+    String(action.target_type || "").toUpperCase() !== "SELF",
   );
   const targetIsBlocked = targetActions.some((action) => Array.isArray(action.target_ids)) &&
     targetActions.every((action) => Array.isArray(action.target_ids) && !action.target_ids.includes(targetId));
@@ -189,11 +262,11 @@ export function InteractiveCombatPanel({
   const queueAction = (action: CombatActionView) => {
     if (planLocked) return;
     const actionType = String(action.action_type || "");
-    if (actionType === "FLEE") {
+    if (actionType === "FLEE" || actionType === "EXIT_GU_HOUSE" || actionType === "ENTER_GU_HOUSE") {
       setQueuedPlan([{ ...action, target_id: "" }]);
       return;
     }
-    if (queuedPlan.some((item) => item.action_type === "FLEE")) return;
+    if (queuedPlan.some((item) => ["FLEE", "EXIT_GU_HOUSE", "ENTER_GU_HOUSE"].includes(String(item.action_type || "")))) return;
     if (actionType === "BASIC_ATTACK") {
       setQueuedPlan((current) => [...current.filter((item) => item.action_type !== "BASIC_ATTACK"), { ...action, target_id: targetId }]);
       return;
@@ -296,10 +369,20 @@ export function InteractiveCombatPanel({
               <div>
                 <h3 className="flex items-center gap-2 font-semibold text-amber-100">
                   <Sparkles className="h-4 w-4 text-amber-300" />
-                  {ownsTurn ? "Chọn hành động" : `Đang chờ ${actor?.name || "đối thủ"}`}
+                  {ownsTurn
+                    ? inGuHouse
+                      ? `🏛️ Bảng Chiêu Thức Trận Kích: ${actor?.gu_house?.name || "Tiên Cổ Ốc"}`
+                      : "Chọn hành động"
+                    : `Đang chờ ${actor?.name || "đối thủ"}`}
                 </h3>
                 <p className="mt-1 text-xs text-zinc-400">
-                {planLocked ? "Đã khóa kế hoạch; đang chờ đối thủ." : ownsTurn ? `Đã chọn ${queuedGuActions}/${maxGuActions} chiêu Cổ · Mục tiêu mới: ${livingTargets.find((target) => target.id === targetId)?.name || "chọn mục tiêu trên đội hình"}` : "Các lượt còn lại sẽ tự xử lý."}
+                  {planLocked
+                    ? "Đã khóa kế hoạch; đang chờ đối thủ."
+                    : ownsTurn
+                      ? inGuHouse
+                        ? `Đang Dung Nhập Cổ Phòng (Bậc ${actor?.gu_house?.rank || 6}) · Cổ kỹ cá nhân tạm khóa · Đã chọn ${queuedGuActions}/${maxGuActions} Trận Kích`
+                        : `Đã chọn ${queuedGuActions}/${maxGuActions} chiêu Cổ · Mục tiêu mới: ${livingTargets.find((target) => target.id === targetId)?.name || "chọn mục tiêu trên đội hình"}`
+                      : "Các lượt còn lại sẽ tự xử lý."}
                 </p>
                 {ownsTurn && targetId && targetIsBlocked && (
                   <p className="mt-1 text-xs text-amber-300">
@@ -309,24 +392,48 @@ export function InteractiveCombatPanel({
               </div>
               {ownsTurn && <span className="rounded-full border border-zinc-700 bg-zinc-950/80 px-2.5 py-1 text-[10px] text-zinc-400">Tự ra chiêu khi hết giờ</span>}
             </div>
-            {ownsTurn && actions.length > 0 ? (
+
+            {inGuHouse && ownsTurn && (
+              <div className="mb-3 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-950/60 via-zinc-950 to-amber-950/40 p-3">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                  <span className="flex items-center gap-1.5">
+                    <Shield className="h-4 w-4 text-amber-400" /> DUNG NHẬP TIÊN CỔ PHÒNG HOẠT HÓA
+                  </span>
+                  <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-200 border border-amber-400/30">
+                    Pháo Đài Phòng Ngự
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-amber-200/80">
+                  Nhục thân đã ẩn vào trận nhãn — Cổ kỹ cá nhân tạm thời vô hiệu hóa; chỉ có thể thôi động Trận Kích của Tiên Cổ Phòng.
+                </p>
+              </div>
+            )}
+
+            {ownsTurn && displayActions.length > 0 ? (
               <>
                 {activeActions.length > 0 && (
                   <p className="mb-2 text-[10px] text-emerald-300/80">
-                    {activeActions.length} chiêu từ Cổ / Sát Chiêu đã chọn được nạp vào trận.
+                    {inGuHouse
+                      ? `${activeActions.length} Trận Kích từ Tiên Cổ Phòng khả dụng lượt này.`
+                      : `${activeActions.length} chiêu từ Cổ / Sát Chiêu đã chọn được nạp vào trận.`}
                   </p>
                 )}
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {actions.map((action, index) => {
+                  {displayActions.map((action, index) => {
                     const actionType = String(action.action_type || "");
                     const selfTarget = String(action.target_type || "").toUpperCase() === "SELF";
+                    const isFlee = actionType === "FLEE";
+                    const isExit = actionType === "EXIT_GU_HOUSE";
+                    const isEnter = actionType === "ENTER_GU_HOUSE";
+                    const isHouseStrike = Boolean(action.is_from_gu_house) && !isExit;
                     const targetIDs = Array.isArray(action.target_ids)
                       ? action.target_ids.filter((id): id is string => typeof id === "string")
                       : null;
-                    const targetBlocked = targetIDs !== null && !selfTarget && actionType !== "FLEE" && !targetIDs.includes(targetId);
-                    const noTarget = livingTargets.length === 0 && !selfTarget && actionType !== "FLEE";
+                    const targetBlocked = targetIDs !== null && !selfTarget && !isFlee && !isExit && !isEnter && !targetIDs.includes(targetId);
+                    const noTarget = livingTargets.length === 0 && !selfTarget && !isFlee && !isExit && !isEnter;
                     const isSkill = ["GU_SKILL", "KILLER_MOVE", "KILLER_MOVE_EFFECT"].includes(actionType);
                     const manaCost = value(action.mana_cost);
+                    const hungerCost = value(action.hunger_cost);
                     const title = String(action.name || (actionType === "BASIC_ATTACK" ? "Đánh thường" : actionType));
                     const paths = Array.isArray(action.path) ? action.path.filter((path): path is string => typeof path === "string") : [];
                     const stats = [
@@ -334,38 +441,55 @@ export function InteractiveCombatPanel({
                       value(action.defense) > 0 ? `Khiên ${Math.round(value(action.defense))}` : "",
                       value(action.healing) > 0 ? `Hồi ${Math.round(value(action.healing))}` : "",
                     ].filter(Boolean);
+
+                    const buttonBorderClass = isExit
+                      ? "border-rose-900/60 bg-gradient-to-br from-rose-950/30 to-zinc-900 hover:border-rose-400 hover:bg-rose-950/50"
+                      : isEnter
+                        ? "border-amber-500/60 bg-gradient-to-br from-amber-950/30 to-zinc-900 hover:border-amber-400 hover:bg-amber-950/50"
+                        : isHouseStrike
+                          ? "border-amber-500/50 bg-gradient-to-br from-amber-950/30 via-zinc-900 to-zinc-950 hover:border-amber-300 hover:shadow-lg hover:shadow-amber-500/10"
+                          : isFlee
+                            ? "border-rose-900/50 bg-rose-950/20 hover:border-rose-500/60 hover:bg-rose-950/40"
+                            : "border-zinc-700/80 bg-zinc-900/80 hover:border-amber-400/50 hover:bg-amber-950/30";
+
                     return (
                       <button
                         key={`${actionType}-${action.instance_id || action.source_id || index}`}
                         type="button"
-                        disabled={actionLoading || submitting || planLocked || noTarget || targetBlocked || (actionType !== "BASIC_ATTACK" && actionType !== "FLEE" && queuedGuActions >= maxGuActions)}
+                        disabled={actionLoading || submitting || planLocked || noTarget || targetBlocked || (!isFlee && !isExit && !isEnter && actionType !== "BASIC_ATTACK" && queuedGuActions >= maxGuActions)}
                         onClick={() => queueAction(action)}
-                        className={`group flex min-h-[76px] items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
-                          actionType === "FLEE"
-                            ? "border-rose-900/50 bg-rose-950/20 hover:border-rose-500/60 hover:bg-rose-950/40"
-                            : "border-zinc-700/80 bg-zinc-900/80 hover:border-amber-400/50 hover:bg-amber-950/30"
-                        } disabled:cursor-not-allowed disabled:opacity-45`}
+                        className={`group flex min-h-[76px] items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition ${buttonBorderClass} disabled:cursor-not-allowed disabled:opacity-45`}
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
                           <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
-                            isSkill ? "border-amber-400/20 bg-amber-400/10 text-amber-300" : actionType === "FLEE" ? "border-rose-400/20 bg-rose-400/10 text-rose-300" : "border-zinc-700 bg-zinc-800/70 text-zinc-300"
+                            isExit
+                              ? "border-rose-500/40 bg-rose-500/20 text-rose-300"
+                              : isEnter || isHouseStrike
+                                ? "border-amber-400/40 bg-amber-400/20 text-amber-300"
+                                : isSkill
+                                  ? "border-amber-400/20 bg-amber-400/10 text-amber-300"
+                                  : isFlee
+                                    ? "border-rose-400/20 bg-rose-400/10 text-rose-300"
+                                    : "border-zinc-700 bg-zinc-800/70 text-zinc-300"
                           }`}>
-                            {isSkill ? <Sparkles className="h-4 w-4" /> : actionType === "FLEE" ? <Shield className="h-4 w-4" /> : <Swords className="h-4 w-4" />}
+                            {isExit ? <LogOut className="h-4 w-4" /> : isEnter ? <Shield className="h-4 w-4" /> : isHouseStrike ? <Sparkles className="h-4 w-4" /> : isSkill ? <Sparkles className="h-4 w-4" /> : isFlee ? <Shield className="h-4 w-4" /> : <Swords className="h-4 w-4" />}
                           </span>
                           <span className="min-w-0">
                             <span className="flex flex-wrap items-center gap-1.5">
                               <span className="block max-w-full truncate text-sm font-semibold text-zinc-100">{title}</span>
-                              {isSkill && Number(action.rank) > 0 && <span className="rounded bg-amber-950/70 px-1.5 py-0.5 text-[9px] font-bold text-amber-200">Bậc {Number(action.rank)}</span>}
+                              {isHouseStrike && <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-300 border border-amber-500/30">Trận Kích</span>}
+                              {!isHouseStrike && isSkill && Number(action.rank) > 0 && <span className="rounded bg-amber-950/70 px-1.5 py-0.5 text-[9px] font-bold text-amber-200">Bậc {Number(action.rank)}</span>}
                             </span>
                             <span className="mt-0.5 block truncate text-[10px] uppercase tracking-wider text-zinc-500">
-                            {isSkill ? "Thêm vào kế hoạch" : actionType === "FLEE" ? "Chỉ hành động này" : "Đòn thường cuối lượt"}
-                              {paths.length > 0 && ` · ${paths.join(", ")}`}
+                              {isExit ? "Rút về nhục thân (khẩn cấp)" : isEnter ? "Tiến vào Tiên Cổ Phòng" : isHouseStrike ? (paths.length > 0 ? paths.join(", ") : "Uy lực Cổ Phòng") : isSkill ? "Thêm vào kế hoạch" : isFlee ? "Chỉ hành động này" : "Đòn thường cuối lượt"}
+                              {!isHouseStrike && paths.length > 0 && ` · ${paths.join(", ")}`}
                             </span>
                             {stats.length > 0 && <span className="mt-1 block text-[10px] text-zinc-400">{stats.join(" · ")}</span>}
+                            {hungerCost > 0 && <span className="mt-0.5 block text-[10px] text-amber-400/80 font-mono">Độ no Cổ hạch tâm: -{hungerCost}</span>}
                             {targetBlocked && <span className="mt-1 block text-[10px] text-amber-300/80">Không thể nhắm mục tiêu này</span>}
                           </span>
                         </span>
-                        {actionType !== "FLEE" && (
+                        {!isFlee && !isExit && !isEnter && (
                           <span className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${
                             manaCost > 0 ? "bg-sky-950/60 text-sky-200" : "bg-zinc-800/70 text-zinc-400"
                           }`}>
@@ -432,6 +556,9 @@ export function InteractiveCombatPanel({
                 AWAIT_COMMAND: "Chờ ra lệnh",
                 TURN_START: "Mở lượt",
                 BATTLE_START: "Khai chiến",
+                GU_HOUSE_EXIT: "Rời Cổ Phòng",
+                GU_HOUSE_ENTER: "Dung Nhập",
+                GU_HOUSE_RESTRICTED: "Hạn chế Cổ Phòng",
               };
               return (
                 <article key={`${index}-${action}`} className={`rounded-xl border px-3 py-2.5 ${

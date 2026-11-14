@@ -780,6 +780,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 				HP:              houseProf.MaxHouseHP * (durability / 100.0),
 				Defense:         houseProf.HouseDefense,
 				DamageReduction: houseProf.DamageReduction,
+				Active:          true,
 			}
 			if houseProf.ProductProfile == guHouseProductProfile.ID && houseProf.Context == guHouseProductProfile.Context && houseProf.Executor == guHouseProductProfile.Executor {
 				coreSet := make(map[string]bool, len(coreIDs))

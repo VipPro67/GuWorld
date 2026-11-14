@@ -1167,6 +1167,24 @@ func Simulate(state *CombatState) []CombatLog {
 		}
 	}
 
+	// Resolve battle-start terminal effects before asking a manual actor for a
+	// command. Otherwise interactive combat pauses on the player's first turn
+	// even though a battle-start effect has already ended the fight.
+	alliesAlive := hasLivingCombatant(state.Allies)
+	enemiesAlive := hasLivingCombatant(state.Enemies)
+	if !alliesAlive || !enemiesAlive {
+		winner := "Phe Địch"
+		if alliesAlive {
+			winner = "Phe Ta"
+		}
+		logs = append(logs, CombatLog{
+			Turn: 0, Action: "BATTLE_END",
+			Detail:   fmt.Sprintf("Trận chiến kết thúc. %s chiến thắng!", winner),
+			Snapshot: buildSnapshot(state),
+		})
+		return logs
+	}
+
 	maxTurns := 1000
 	var initiative *InitiativeQueue
 	lastStatusTick := -1
@@ -1759,6 +1777,55 @@ func Simulate(state *CombatState) []CombatLog {
 				return res
 			}
 
+			if actor.GuHouse != nil && !actor.GuHouse.IsDestroyed && actor.GuHouse.Active && !a.IsFromGuHouse && a.ActionType != "FLEE" && a.ActionType != "EXIT_GU_HOUSE" {
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "GU_HOUSE_RESTRICTED",
+					Detail:    fmt.Sprintf("%s đang dung nhập trong Tiên Cổ Phòng [%s], chỉ có thể thi triển Trận Kích của Cổ Phòng!", actor.Name, actor.GuHouse.Name),
+				})
+				return res
+			}
+
+			if a.ActionType == "EXIT_GU_HOUSE" {
+				if actor.GuHouse != nil && actor.GuHouse.Active {
+					actor.GuHouse.Active = false
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "GU_HOUSE_EXIT",
+						Detail:    fmt.Sprintf("%s chủ động rút lui khỏi Tiên Cổ Phòng [%s], trở về trạng thái nhục thân!", actor.Name, actor.GuHouse.Name),
+					})
+				}
+				return res
+			}
+
+			if a.ActionType == "ENTER_GU_HOUSE" {
+				if actor.GuHouse != nil && !actor.GuHouse.IsDestroyed && !actor.GuHouse.Active {
+					if actor.IsStunned || actor.HasGuSeal {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "GU_HOUSE_ENTER_FAIL",
+							Detail:    fmt.Sprintf("%s đang bị khống chế hoặc phong ấn Cổ, không thể dung nhập Tiên Cổ Phòng!", actor.Name),
+						})
+					} else {
+						actor.GuHouse.Active = true
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "GU_HOUSE_ENTER",
+							Detail:    fmt.Sprintf("%s một lần nữa dung nhập vào Tiên Cổ Phòng [%s]!", actor.Name, actor.GuHouse.Name),
+						})
+					}
+				}
+				return res
+			}
+
 			if actor.HasGuSeal && (a.ActionType == "GU_SKILL" || a.ActionType == "KILLER_MOVE") {
 				turnLogs = append(turnLogs, CombatLog{
 					Turn:      turn,
@@ -1817,11 +1884,15 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
-			if a.ActionType == "KILLER_MOVE" && actor.Kind == "Player" && len(a.ComponentGuIDs) > 0 {
+			if (a.ActionType == "KILLER_MOVE" || a.IsFromGuHouse) && actor.Kind == "Player" && len(a.ComponentGuIDs) > 0 {
+				cost := a.HungerCost
+				if cost <= 0 {
+					cost = 1
+				}
 				canCast := true
 				for _, guID := range a.ComponentGuIDs {
 					h, exists := actor.GuHunger[guID]
-					if !exists || h <= 0 {
+					if !exists || h < cost {
 						canCast = false
 						break
 					}
@@ -1858,11 +1929,18 @@ func Simulate(state *CombatState) []CombatLog {
 				if actor.GuUsedCounts == nil {
 					actor.GuUsedCounts = make(map[string]int)
 				}
+				cost := a.HungerCost
+				if cost <= 0 {
+					cost = 1
+				}
 				for _, id := range guCostIDs {
 					if strings.HasPrefix(id, "used:") {
-						actor.GuUsedCounts[strings.TrimPrefix(id, "used:")]++
+						actor.GuUsedCounts[strings.TrimPrefix(id, "used:")] += cost
 					} else {
-						actor.GuHunger[id]--
+						actor.GuHunger[id] -= cost
+						if actor.GuHunger[id] < 0 {
+							actor.GuHunger[id] = 0
+						}
 					}
 				}
 			}
@@ -6605,7 +6683,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 	}
 
 	// ── Immortal Gu House (Tiên Cổ Ốc) damage absorption ──
-	if target.GuHouse != nil && !target.GuHouse.IsDestroyed {
+	if target.GuHouse != nil && !target.GuHouse.IsDestroyed && target.GuHouse.Active {
 		if target.GuHouse.DamageReduction > 0 {
 			damage *= (1.0 - math.Min(0.85, target.GuHouse.DamageReduction))
 		}
@@ -6622,17 +6700,29 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 			return 0
 		}
 		absorbed := target.GuHouse.HP
-		damage -= absorbed
 		target.GuHouse.HP = 0
 		target.GuHouse.IsDestroyed = true
+		target.GuHouse.Active = false
+
+		// Phản phệ Vỡ Phòng (Structural Breach): Không tràn sát thương sang nhục thân (No Spillover),
+		// nhưng Cổ Tiên bị văng ra chịu Choáng 2 lượt và tổn thương 30% sinh mệnh tối đa do phản chấn trận pháp.
+		recoil := math.Floor(target.MaxHP * 0.30)
+		target.HP = math.Max(1, target.HP-recoil)
+		target.IsStunned = true
+		target.ActiveEffects = append(target.ActiveEffects, Effect{
+			ID:       statusfx.StatusStun,
+			Duration: 2,
+		})
+
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   actor.ID,
 			ActorName: actor.Name,
 			Action:    "GU_HOUSE_DESTROYED",
 			Damage:    absorbed,
-			Detail:    fmt.Sprintf("[Tiên Cổ Ốc Vỡ Vụn] Kiến trúc phòng ngự %s của %s bị công phá! %s phải trực tiếp nghênh địch!", target.GuHouse.Name, target.Name, target.Name),
+			Detail:    fmt.Sprintf("[Tiên Cổ Ốc Vỡ Vụn - Không Tràn Sát Thương] Kiến trúc phòng ngự %s của %s đã hấp thụ toàn bộ đòn đánh trước khi sụp đổ hoàn toàn! Phản phệ trận pháp khiến %s bị hất văng, chịu Choáng 2 lượt và tổn thương 30%% sinh mệnh (-%.0f HP)!", target.GuHouse.Name, target.Name, target.Name, recoil),
 		})
+		return 0
 	}
 
 	// Phá Không Cổ shield bypass
@@ -6853,8 +6943,24 @@ func redirectApertureOverflow(state *CombatState, target *CombatantAuto, logs *[
 
 // checkActionCondition returns true if the action's use condition is met.
 func checkActionCondition(action *SimAction, actor, target *CombatantAuto) bool {
-	if action != nil && action.IsFromGuHouse && (actor == nil || actor.GuHouse == nil || actor.GuHouse.IsDestroyed) {
+	if action != nil && action.IsFromGuHouse && (actor == nil || actor.GuHouse == nil || actor.GuHouse.IsDestroyed || !actor.GuHouse.Active) {
 		return false
+	}
+	if action != nil && actor != nil && actor.GuHouse != nil && !actor.GuHouse.IsDestroyed && actor.GuHouse.Active {
+		if !action.IsFromGuHouse && action.ActionType != "EXIT_GU_HOUSE" && action.ActionType != "FLEE" {
+			return false
+		}
+	}
+	if action != nil && (action.ActionType == "KILLER_MOVE" || action.IsFromGuHouse) && actor != nil && actor.GuHunger != nil && len(action.ComponentGuIDs) > 0 {
+		cost := action.HungerCost
+		if cost <= 0 {
+			cost = 1
+		}
+		for _, guID := range action.ComponentGuIDs {
+			if hunger, present := actor.GuHunger[guID]; present && hunger < cost {
+				return false
+			}
+		}
 	}
 	if action != nil && actor != nil && actor.ActionCooldowns != nil {
 		actionKey := action.KillerMoveID

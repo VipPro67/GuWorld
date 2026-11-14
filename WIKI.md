@@ -60,6 +60,8 @@ Sát Chiêu được tạo từ các Cổ/thành phần mà catalog cho phép k�
 
 Ví dụ effect mới từ Tiên Cổ lục chuyển: Xuân Tiễn có thể gây Làm Chậm trong 2 lượt, còn Liệu Quang Giáp có thể thanh tẩy hiệu ứng bất lợi của bản thân. Chúng chỉ xuất hiện trong Sát Chiêu nếu người chơi sở hữu Cổ tương ứng và bản preview chấp nhận effect đó.
 
+Các đợt effect theo lưu phái đã mở thêm lựa chọn cho toàn bộ 45 phái trong dữ liệu. Mỗi phái có 5 effect; riêng Điều Tra đạo tăng chỉ số điều tra từ passive Gu và được dùng bởi scouting/profile. Các phái combat có effect như Phá Giáp, Mê Loạn, Đoạt Vận, Trói Buộc, Huyết Tế Cuồng Bạo hoặc Hồi Phục. Xem danh sách Cổ và effect cụ thể trong tài liệu Sát Chiêu.
+
 ## Khám phá thế giới
 
 ### Bản đồ và di chuyển
@@ -86,7 +88,7 @@ Trinh sát gồm xem người chơi ở gần, suy diễn mục tiêu/Cổ, đá
 
 ### Combat theo lượt
 
-Khi gặp encounter, có thể chạy tự động hoặc mở session điều khiển. Trước khi bắt đầu, người chơi có thể rút lui khỏi encounter; PvP không có lựa chọn này ở màn hình chuẩn bị. Trong session, người chơi chọn kế hoạch hành động/Gu/mục tiêu theo thông tin phiên, rồi gửi lệnh kèm revision hiện tại. PvP giữ kế hoạch của mỗi bên đến lúc cả hai khóa hoặc timeout; revision cũ cần tải lại snapshot trước khi gửi lại.
+Khi gặp encounter, có thể chạy tự động hoặc mở session điều khiển. Nếu hiệu ứng lúc bắt đầu trận kết thúc encounter ngay, kết quả được settle và báo cáo hiện tức thì. Trước khi bắt đầu, người chơi có thể rút lui khỏi encounter; PvP không có lựa chọn này ở màn hình chuẩn bị. Trong session, người chơi chọn kế hoạch hành động/Gu/mục tiêu theo thông tin phiên, rồi gửi lệnh kèm revision hiện tại. PvP giữ kế hoạch của mỗi bên đến lúc cả hai khóa hoặc timeout; revision cũ cần tải lại snapshot trước khi gửi lại.
 
 Combat được mô phỏng ở server theo lượt. Kết quả có thể gồm HP/tài nguyên thay đổi, trạng thái, loot, capture, flee hoặc lịch sử/replay. Chỉnh sửa client hay gửi lại command không thay đổi kết quả đã settlement.
 
