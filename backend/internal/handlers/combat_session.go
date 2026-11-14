@@ -168,9 +168,20 @@ func autoCombatSessionCommand(ctx context.Context, sessionID, playerID uuid.UUID
 	if !row.DeadlineAt.Valid || row.DeadlineAt.Time.After(time.Now()) {
 		return nil
 	}
-	state, _, _, err := replayCombatSession(row, nil)
+	state, logs, _, err := replayCombatSession(row, nil)
 	if err != nil {
 		return err
+	}
+	if combatSessionHasEnded(state, logs) {
+		player, result, err := recoverTerminalCombatSession(tx, &row, state, logs)
+		if err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		publishRecoveredCombatSession(row, player, result)
+		return nil
 	}
 	actorID := state.Interactive.PendingActor
 	if actorID == "" {
@@ -221,7 +232,6 @@ func autoCombatSessionCommand(ctx context.Context, sessionID, playerID uuid.UUID
 		return err
 	}
 	row.Commands = commandsJSON
-	var logs []simulator.CombatLog
 	state, logs, _, err = replayCombatSession(row, nil)
 	if err != nil || state.Interactive.Error != "" || (state.Interactive.PendingActor != "" && state.Interactive.Consumed != len(commands)) {
 		return errors.New("auto-selected combat action was rejected")
@@ -335,6 +345,18 @@ func replayCombatSession(row combatSessionRow, extra *simulator.CombatCommand) (
 	return &state, logs, commands, nil
 }
 
+func combatSessionHasEnded(state *simulator.CombatState, logs []simulator.CombatLog) bool {
+	if state == nil || state.Interactive == nil || state.Interactive.PendingActor != "" {
+		return false
+	}
+	for _, log := range logs {
+		if log.Action == "BATTLE_END" {
+			return true
+		}
+	}
+	return false
+}
+
 func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, logs []simulator.CombatLog, viewers ...uuid.UUID) gin.H {
 	var snapshot *simulator.CombatSnapshot
 	for i := len(logs) - 1; i >= 0; i-- {
@@ -343,8 +365,12 @@ func combatSessionResponse(row combatSessionRow, state *simulator.CombatState, l
 			break
 		}
 	}
+	status := row.Status
+	if status == "active" && combatSessionHasEnded(state, logs) {
+		status = "complete"
+	}
 	response := gin.H{
-		"session_id": row.ID, "revision": row.Revision, "status": row.Status,
+		"session_id": row.ID, "revision": row.Revision, "status": status,
 		"snapshot": snapshot, "logs": logs,
 		"max_gu_actions": maxCombatGuActionsPerTurn(),
 	}
@@ -376,11 +402,73 @@ func combatSessionResponseForPlayer(row combatSessionRow, state *simulator.Comba
 	if row.ParticipantID.Valid {
 		plans := decodePendingCombatPlans(row.PendingPlans)
 		response["my_plan_locked"] = plans[playerID.String()].ActorID != ""
-		if len(plans) > 0 {
+		if len(plans) > 0 && response["status"] == "active" {
 			response["pending_actor"] = playerID.String()
 		}
 	}
 	return response
+}
+
+func recoverTerminalCombatSession(tx *sql.Tx, row *combatSessionRow, state *simulator.CombatState, logs []simulator.CombatLog) (*models.Player, *CombatResolution, error) {
+	if row.Status != "active" || !combatSessionHasEnded(state, logs) {
+		return nil, nil, nil
+	}
+	var loadout simulator.CombatLoadout
+	if err := json.Unmarshal(row.Loadout, &loadout); err != nil {
+		return nil, nil, err
+	}
+	player, err := evaluateManaTxEquipped(tx, row.PlayerID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var initial simulator.CombatState
+	if err := json.Unmarshal(row.InitialState, &initial); err != nil {
+		return nil, nil, err
+	}
+	commands, err := decodeCombatCommands(row.Commands)
+	if err != nil {
+		return nil, nil, err
+	}
+	if initial.Interactive == nil {
+		return nil, nil, errors.New("combat session has no interactive controller")
+	}
+	initial.Interactive.Commands = commands
+	result, err := SettleCombatSession(tx, &player, &loadout, &initial, state, logs)
+	if err != nil {
+		return nil, nil, err
+	}
+	if result == nil {
+		return nil, nil, errors.New("completed combat session returned no resolution")
+	}
+
+	row.Revision++
+	updated, err := tx.Exec(`UPDATE combat_sessions
+		SET revision=$1,status='complete',pending_actor='',deadline_at=NULL,updated_at=NOW()
+		WHERE id=$2 AND status='active'`, row.Revision, row.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if count, err := updated.RowsAffected(); err != nil {
+		return nil, nil, err
+	} else if count != 1 {
+		return nil, nil, errors.New("combat session changed while recovering terminal state")
+	}
+	row.Status = "complete"
+	row.PendingActor = ""
+	row.DeadlineAt.Valid = false
+	return &player, result, nil
+}
+
+func publishRecoveredCombatSession(row combatSessionRow, player *models.Player, result *CombatResolution) {
+	publishCombatSessionEvent(row, "complete", "")
+	PublishPlayerCombatDelta(row.PlayerID, CombatEventEnded, nil)
+	if result.AfterCommit != nil {
+		result.AfterCommit()
+	}
+	for _, notification := range result.Notifications {
+		notify.Publish(notification)
+	}
+	setWorldPosFromPlayer(player)
 }
 
 func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opposingSide []*simulator.CombatantAuto, manualActors ...map[string]bool) []gin.H {
@@ -678,13 +766,13 @@ func GetCombatSession(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{ReadOnly: true})
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
-	row, err := loadCombatSession(tx, playerID, nil, false)
+	row, err := loadCombatSession(tx, playerID, nil, true)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No active combat session"})
 		return
@@ -698,7 +786,22 @@ func GetCombatSession(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Failed to replay combat session", err))
 		return
 	}
+	player, result, err := recoverTerminalCombatSession(tx, &row, state, logs)
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Failed to settle terminal combat session", err))
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		httperr.Respond(c, httperr.Internal("Failed to commit combat session", err))
+		return
+	}
+	if result != nil {
+		publishRecoveredCombatSession(row, player, result)
+	}
 	response := combatSessionResponseForPlayer(row, state, logs, playerID)
+	if row.Status == "complete" {
+		response["winner"] = combatSessionWinner(state)
+	}
 	c.JSON(http.StatusOK, response)
 }
 
@@ -713,13 +816,13 @@ func GetCombatSessionByID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID"})
 		return
 	}
-	tx, err := db.DB.BeginTx(c.Request.Context(), &sql.TxOptions{ReadOnly: true})
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
-	row, err := loadCombatSession(tx, playerID, &sessionID, false)
+	row, err := loadCombatSession(tx, playerID, &sessionID, true)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Combat session not found"})
 		return
@@ -732,6 +835,18 @@ func GetCombatSessionByID(c *gin.Context) {
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Failed to replay combat session", err))
 		return
+	}
+	player, result, err := recoverTerminalCombatSession(tx, &row, state, logs)
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Failed to settle terminal combat session", err))
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		httperr.Respond(c, httperr.Internal("Failed to commit combat session", err))
+		return
+	}
+	if result != nil {
+		publishRecoveredCombatSession(row, player, result)
 	}
 	response := combatSessionResponseForPlayer(row, state, logs, playerID)
 	if row.Status == "complete" {

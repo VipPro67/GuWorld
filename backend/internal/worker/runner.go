@@ -4,16 +4,31 @@ import (
 	"context"
 	"fmt"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-var workerEventRecorder func(workerName string, err error, duration time.Duration)
+var workerEventRecorder struct {
+	sync.RWMutex
+	fn func(workerName string, err error, duration time.Duration)
+}
 
 // SetWorkerEventRecorder wires an external telemetry collector (e.g. monitor.RecordWorkerEvent).
 func SetWorkerEventRecorder(fn func(workerName string, err error, duration time.Duration)) {
-	workerEventRecorder = fn
+	workerEventRecorder.Lock()
+	workerEventRecorder.fn = fn
+	workerEventRecorder.Unlock()
+}
+
+func recordWorkerEvent(name string, err error, duration time.Duration) {
+	workerEventRecorder.RLock()
+	recorder := workerEventRecorder.fn
+	workerEventRecorder.RUnlock()
+	if recorder != nil {
+		recorder(name, err, duration)
+	}
 }
 
 // RunEvery starts a goroutine that calls fn on every tick until ctx is
@@ -67,14 +82,10 @@ func SafeRunE(name string, ctx context.Context, fn func(context.Context) error) 
 		dur := time.Since(start)
 		if p := recover(); p != nil {
 			logger.S.Errorf("%s panicked: %v\n%s", name, p, debug.Stack())
-			if workerEventRecorder != nil {
-				workerEventRecorder(name, fmt.Errorf("panic: %v", p), dur)
-			}
+			recordWorkerEvent(name, fmt.Errorf("panic: %v", p), dur)
 		} else if runErr != nil {
 			logger.S.Errorf("%s failed: %v", name, runErr)
-			if workerEventRecorder != nil {
-				workerEventRecorder(name, runErr, dur)
-			}
+			recordWorkerEvent(name, runErr, dur)
 		}
 	}()
 	runErr = fn(ctx)
