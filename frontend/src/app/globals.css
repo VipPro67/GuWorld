@@ -478,6 +478,12 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Keep nested game panels scrollable with native touch momentum on phones. */
+.overflow-y-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Full-screen overlays follow the visible mobile viewport when browser bars move. */
 .fixed.inset-0 {
   bottom: auto;

@@ -5,10 +5,11 @@ export interface ItemIconSource {
   image_url?: string;
 }
 
-const iconUrl = (key: string) => "/assets/items/icons/" + key + ".webp";
+const iconUrl = (key: string) => "/assets/items/icons/" + key + (key === "blood-pill" ? ".png" : ".webp");
 
 export function resolveItemIconKey(item: ItemIconSource): string {
   const id = item.id.toLowerCase();
+  if (id === "item_random_race") return "blood-pill";
   const words = new Set((item.name.toLocaleLowerCase("vi").match(/\p{L}+/gu) ?? []));
   const has = (...terms: string[]) => terms.some((term) => words.has(term));
 

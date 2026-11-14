@@ -565,6 +565,16 @@ export default function Home() {
                     </div>
                   </div>
                   )}
+                  {isExploreView && (
+                    <button
+                      onClick={() => setView("dashboard")}
+                      aria-label="Thoát khám phá"
+                      title="Thoát khám phá"
+                      className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-zinc-950/80 text-zinc-100 shadow-lg backdrop-blur-sm transition-colors hover:bg-zinc-800"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  )}
                   <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-28 sm:p-4 sm:pb-8 ${isFullBleedView ? "p-0" : ""}`}>
         {currentView === "practice-room" ? (
           <div className="w-full">

@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import { GameButton } from "./GameButton";
 import { GameDisclosure } from "./GameDisclosure";
 
+let activeGameModalCount = 0;
+let bodyOverflowBeforeGameModal = "";
+
 export type GameModalSize =
   | "sm"
   | "md"
@@ -88,11 +91,20 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
     useEffect(() => {
       if (open) {
         document.addEventListener("keydown", handleKeyDown);
+        if (activeGameModalCount === 0) {
+          bodyOverflowBeforeGameModal = document.body.style.overflow;
+        }
+        activeGameModalCount += 1;
         document.body.style.overflow = "hidden";
       }
       return () => {
         document.removeEventListener("keydown", handleKeyDown);
-        document.body.style.overflow = "";
+        if (open) {
+          activeGameModalCount = Math.max(0, activeGameModalCount - 1);
+          if (activeGameModalCount === 0) {
+            document.body.style.overflow = bodyOverflowBeforeGameModal;
+          }
+        }
       };
     }, [open, handleKeyDown]);
 
