@@ -461,13 +461,31 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               const otherPlayersOnCell = isOutOfBounds
                 ? []
                 : gridData.players_on_map?.filter((p) => p.x === x && p.y === y) || [];
-              const dropOnCell = isOutOfBounds ? null : gridData.ground_drops?.find((d) => d.x === x && d.y === y);
+              const dropsOnCell = isOutOfBounds ? [] : gridData.ground_drops?.filter((d) => d.x === x && d.y === y) || [];
+              const dropOnCell = dropsOnCell[0] || null;
               const markersOnCell = isOutOfBounds ? [] : markersByCell.get(`${x},${y}`) || [];
               const primaryMarker = markersOnCell.find((marker) => marker.kind === "aperture_portal")
                 || markersOnCell.find((marker) => marker.kind === "teleport")
                 || markersOnCell.find((marker) => marker.kind === "sect")
                 || markersOnCell.find((marker) => marker.kind === "merchant")
                 || markersOnCell[0];
+              const cellTint = cellData.cell_type === "ENTRY_PORTAL" || cellData.cell_type === "EXIT_PORTAL" || cellData.cell_type === "PORTAL_EXIT"
+                ? "bg-emerald-950/60 border-emerald-500/50"
+                : cellData.cell_type === "INHERITANCE_ALTAR"
+                  ? "bg-purple-950/60 border-purple-500/50"
+                  : cellData.cell_type === "Boss" || cellData.cell_type === "Monster"
+                    ? "bg-rose-950/45 border-rose-500/40"
+                    : cellData.cell_type === "Resource" || cellData.cell_type === "PrimevalVein"
+                      ? "bg-cyan-950/45 border-cyan-500/40"
+                      : primaryMarker?.kind === "sect"
+                        ? "bg-amber-950/45 border-amber-500/40"
+                        : primaryMarker?.kind === "teleport"
+                          ? "bg-sky-950/45 border-sky-500/40"
+                          : primaryMarker?.kind === "aperture_portal"
+                            ? "bg-violet-950/45 border-violet-500/40"
+                            : dropOnCell
+                              ? "bg-amber-950/35 border-amber-500/35"
+                              : "";
               const portalMarker = markersOnCell.find((marker) => marker.kind === "aperture_portal");
               const teleportMarker = markersOnCell.find((marker) => marker.kind === "teleport");
               const merchantMarker = markersOnCell.find((marker) => marker.kind === "merchant");
@@ -499,7 +517,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                     isPlayerCell
                       ? "bg-emerald-500/25 border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.35)] z-20"
                     : isMovable
-                      ? "bg-emerald-950/30 border-emerald-500/40 hover:bg-emerald-900/50 hover:border-emerald-300 cursor-pointer z-10 shadow-sm"
+                      ? `${cellTint || "bg-emerald-950/30 border-emerald-500/40"} hover:bg-emerald-900/50 hover:border-emerald-300 cursor-pointer z-10 shadow-sm`
                       : isOutOfBounds
                       ? "bg-zinc-950 border-zinc-900/30 opacity-20 cursor-not-allowed"
                       : "bg-zinc-950/60 border-zinc-800/60 opacity-40 cursor-default"
@@ -529,22 +547,24 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                         <Store className="w-6 h-6 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] animate-pulse" />
                       ) : null
                     ))}
-                    {primaryMarker && (
-                      <span className="absolute right-0.5 top-0.5 rounded-full bg-zinc-950/90 border border-zinc-600/70 p-0.5 shadow" title={markerTitle}>
-                        {primaryMarker.kind === "sect" ? <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
-                          : primaryMarker.kind === "teleport" ? <Waypoints className="w-3.5 h-3.5 text-sky-300" />
-                            : primaryMarker.kind === "aperture_portal" ? <DoorOpen className="w-3.5 h-3.5 text-violet-300" />
-                              : primaryMarker.kind === "merchant" ? <Store className="w-3.5 h-3.5 text-amber-400" />
-                                : <Mountain className="w-3.5 h-3.5 text-lime-300" />}
+                    {markersOnCell.length > 0 && (
+                      <span className="absolute right-0.5 top-0.5 flex max-w-[70%] flex-wrap justify-end gap-0.5 rounded-md border border-zinc-600/70 bg-zinc-950/90 p-0.5 shadow" title={markerTitle}>
+                        {markersOnCell.map((marker) => (
+                          <span key={`${marker.kind}:${marker.id}`} aria-hidden="true">
+                            {marker.kind === "sect" ? <ShieldAlert className="h-3 w-3 text-amber-300" />
+                              : marker.kind === "teleport" ? <Waypoints className="h-3 w-3 text-sky-300" />
+                                : marker.kind === "aperture_portal" ? <DoorOpen className="h-3 w-3 text-violet-300" />
+                                  : marker.kind === "merchant" ? <Store className="h-3 w-3 text-amber-400" />
+                                    : <Mountain className="h-3 w-3 text-lime-300" />}
+                          </span>
+                        ))}
                       </span>
                     )}
-                    {markersOnCell.length > 1 && (
-                      <span className="absolute left-0.5 top-0.5 rounded-full bg-zinc-950/90 px-1 text-[7px] leading-3 text-zinc-200 border border-zinc-600/70">
-                        +{markersOnCell.length - 1}
+                    {dropsOnCell.length > 0 && (
+                      <span className="absolute bottom-0.5 left-0.5 flex items-center gap-0.5 rounded-full border border-amber-300/60 bg-zinc-950/95 px-1 py-0.5 shadow" title={`${dropsOnCell.length} túi chiến lợi phẩm`}>
+                        <Package className="h-3.5 w-3.5 text-amber-300" />
+                        {dropsOnCell.length > 1 && <span className="text-[8px] font-bold leading-none text-amber-100">{dropsOnCell.length}</span>}
                       </span>
-                    )}
-                    {dropOnCell && !isPlayerCell && (
-                      <Package className="w-4 h-4 text-amber-400 animate-bounce drop-shadow" />
                     )}
                   </div>
 

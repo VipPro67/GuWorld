@@ -61,6 +61,26 @@ func TestInitiativeQueueStableTieAfterSerialization(t *testing.T) {
 	}
 }
 
+func TestInitiativeQueueNextExcludingChoosesEarliestAvailable(t *testing.T) {
+	q := NewInitiativeQueue([]*CombatantAuto{
+		{ID: "first", EffectiveSpeed: 4},
+		{ID: "second", EffectiveSpeed: 4},
+		{ID: "fast", EffectiveSpeed: 9},
+	})
+	excluded := map[string]bool{"fast": true}
+	actorID, _, ok := q.NextExcluding(excluded)
+	if !ok || actorID != "first" {
+		t.Fatalf("first available activation = %q, ok=%t; want first", actorID, ok)
+	}
+	if q.Entries[0].ActorID != "first" {
+		t.Fatalf("NextExcluding reordered entries: first entry = %q", q.Entries[0].ActorID)
+	}
+
+	if _, _, ok := q.NextExcluding(map[string]bool{"first": true, "second": true, "fast": true}); ok {
+		t.Fatal("expected no activation when every actor is excluded")
+	}
+}
+
 func TestInitiativeQueuePrioritizesOpeningActorOnlyOnce(t *testing.T) {
 	q := NewInitiativeQueue([]*CombatantAuto{
 		{ID: "fast", EffectiveSpeed: 20},

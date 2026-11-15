@@ -48,46 +48,26 @@ func processPetHungerDecay(ctx context.Context, db *sql.DB) {
 		return
 	}
 
-	// Starving pets: hunger <= 0 → death
-	rows, err := tx.Query(`
-		DELETE FROM non_player_actors
-		WHERE hunger <= 0 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
-		  AND execution_state IN ('STORED', 'RECOVERING')
-		RETURNING id, owner_player_id, name
-	`)
-	if err != nil {
-		logger.S.Errorf("Pet Hunger Worker: failed to query starving pets: %v", err)
-		return
-	}
-	defer rows.Close()
-
-	// Collect starved pets for audit log within the same transaction
-	type starvedPet struct {
-		id       string
-		playerID string
-		nickname string
-	}
-	var starved []starvedPet
-	starvedCount := 0
-	for rows.Next() {
-		var id, playerID, nickname string
-		if errScan := rows.Scan(&id, &playerID, &nickname); errScan != nil {
-			continue
-		}
-		starvedCount++
-		starved = append(starved, starvedPet{id: id, playerID: playerID, nickname: nickname})
-	}
-	rows.Close()
-
-	// Insert audit logs inside the transaction for consistency
-	for _, p := range starved {
-		if _, err := tx.Exec(`
+	// Delete starving pets and write their audit rows in one statement and transaction.
+	var starvedCount int
+	err = tx.QueryRow(`
+		WITH starved AS (
+			DELETE FROM non_player_actors
+			WHERE hunger <= 0 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
+			  AND execution_state IN ('STORED', 'RECOVERING')
+			RETURNING id, owner_player_id, name
+		), audit AS (
 			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-			VALUES ($1, 'pet.starve_death', 'player_pet', $2, $3, '{}', '', false, 'Pet chết đói', NOW())
-		`, p.playerID, p.id, p.nickname+" chết đói"); err != nil {
-			logger.S.Errorf("Pet Hunger Worker: failed to audit starvation: %v", err)
-			return
-		}
+			SELECT owner_player_id, 'pet.starve_death', 'player_pet', id::text,
+			       name || ' chết đói', '{}', '', false, 'Pet chết đói', NOW()
+			FROM starved
+			RETURNING 1
+		)
+		SELECT count(*) FROM starved
+	`).Scan(&starvedCount)
+	if err != nil {
+		logger.S.Errorf("Pet Hunger Worker: failed to delete and audit starving pets: %v", err)
+		return
 	}
 
 	if starvedCount > 0 {

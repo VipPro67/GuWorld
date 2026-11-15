@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -778,30 +779,60 @@ func DonateBulk(c *gin.Context) {
 
 	// 1. Process Materials
 	if len(req.Materials) > 0 {
+		// Load all requested inventory rows in one round trip. Keep each item's
+		// category rows in database-return order because deductions prefer the
+		// materials category, then consume the remaining categories in that order.
+		materialIDs := make([]string, 0, len(req.Materials))
+		seenMaterialIDs := make(map[string]struct{}, len(req.Materials))
 		for _, matReq := range req.Materials {
-			rows, err := tx.Query(`SELECT category, quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, playerID.String(), matReq.MaterialID)
-			if err != nil {
-				httperr.Respond(c, httperr.Internal("Database error checking inventory", err))
+			if _, seen := seenMaterialIDs[matReq.MaterialID]; seen {
+				continue
+			}
+			seenMaterialIDs[matReq.MaterialID] = struct{}{}
+			materialIDs = append(materialIDs, matReq.MaterialID)
+		}
+
+		type invItem struct {
+			category string
+			quantity int64
+		}
+		inventoryByMaterialID := make(map[string][]invItem, len(materialIDs))
+		rows, err := tx.Query(`
+			SELECT item_id, category, quantity
+			FROM player_inventory_items
+			WHERE player_id = $1 AND item_id = ANY($2)
+		`, playerID.String(), pq.Array(materialIDs))
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Database error checking inventory", err))
+			return
+		}
+		for rows.Next() {
+			var itemID string
+			var item invItem
+			if err := rows.Scan(&itemID, &item.category, &item.quantity); err != nil {
+				rows.Close()
+				httperr.Respond(c, httperr.Internal("Database error scanning inventory", err))
 				return
 			}
-
-			type invItem struct {
-				category string
-				quantity int64
-			}
-			var invs []invItem
-			totalQty := int64(0)
-			for rows.Next() {
-				var iv invItem
-				if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
-					rows.Close()
-					httperr.Respond(c, httperr.Internal("Database error scanning inventory", err))
-					return
-				}
-				invs = append(invs, iv)
-				totalQty += iv.quantity
-			}
+			inventoryByMaterialID[itemID] = append(inventoryByMaterialID[itemID], item)
+		}
+		if err := rows.Err(); err != nil {
 			rows.Close()
+			httperr.Respond(c, httperr.Internal("Database error checking inventory", err))
+			return
+		}
+		if err := rows.Close(); err != nil {
+			httperr.Respond(c, httperr.Internal("Database error checking inventory", err))
+			return
+		}
+
+		deductedByMaterialCategory := make(map[string]map[string]int64, len(materialIDs))
+		for _, matReq := range req.Materials {
+			invs := inventoryByMaterialID[matReq.MaterialID]
+			totalQty := int64(0)
+			for _, iv := range invs {
+				totalQty += iv.quantity - deductedByMaterialCategory[matReq.MaterialID][iv.category]
+			}
 
 			if totalQty < matReq.Amount {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu không có đủ linh tài: %s", matReq.MaterialID)})
@@ -848,7 +879,11 @@ func DonateBulk(c *gin.Context) {
 			remainingDeduct := matReq.Amount
 			for _, iv := range invs {
 				if iv.category == preferredCat {
-					deduct := iv.quantity
+					available := iv.quantity - deductedByMaterialCategory[matReq.MaterialID][iv.category]
+					if available <= 0 {
+						continue
+					}
+					deduct := available
 					if deduct > remainingDeduct {
 						deduct = remainingDeduct
 					}
@@ -856,6 +891,10 @@ func DonateBulk(c *gin.Context) {
 						httperr.Respond(c, httperr.Internal("Không thể xóa vật phẩm khỏi túi đồ", err))
 						return
 					}
+					if deductedByMaterialCategory[matReq.MaterialID] == nil {
+						deductedByMaterialCategory[matReq.MaterialID] = make(map[string]int64)
+					}
+					deductedByMaterialCategory[matReq.MaterialID][iv.category] += deduct
 					remainingDeduct -= deduct
 					if remainingDeduct <= 0 {
 						break
@@ -865,7 +904,11 @@ func DonateBulk(c *gin.Context) {
 			if remainingDeduct > 0 {
 				for _, iv := range invs {
 					if iv.category != preferredCat {
-						deduct := iv.quantity
+						available := iv.quantity - deductedByMaterialCategory[matReq.MaterialID][iv.category]
+						if available <= 0 {
+							continue
+						}
+						deduct := available
 						if deduct > remainingDeduct {
 							deduct = remainingDeduct
 						}
@@ -873,6 +916,10 @@ func DonateBulk(c *gin.Context) {
 							httperr.Respond(c, httperr.Internal("Không thể xóa vật phẩm khỏi túi đồ", err))
 							return
 						}
+						if deductedByMaterialCategory[matReq.MaterialID] == nil {
+							deductedByMaterialCategory[matReq.MaterialID] = make(map[string]int64)
+						}
+						deductedByMaterialCategory[matReq.MaterialID][iv.category] += deduct
 						remainingDeduct -= deduct
 						if remainingDeduct <= 0 {
 							break

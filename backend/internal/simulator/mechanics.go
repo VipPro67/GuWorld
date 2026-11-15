@@ -302,8 +302,12 @@ func TryTenacityDispel(c *CombatantAuto, turn int, rng *rand.Rand) []CombatLog {
 
 // tickDoTs applies damage-over-time effects and returns log entries.
 func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
-	var logs []CombatLog
-	var remaining []DoTEffect
+	return appendTickDoTs(nil, c, turn)
+}
+
+func appendTickDoTs(logs []CombatLog, c *CombatantAuto, turn int) []CombatLog {
+	// Reuse the combatant-owned slice instead of allocating survivors every tick.
+	remaining := c.ActiveDoT[:0]
 
 	for _, dot := range c.ActiveDoT {
 		if dot.Turns <= 0 {
@@ -429,7 +433,11 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 			remaining = append(remaining, dot)
 		}
 	}
-	c.ActiveDoT = remaining
+	if len(remaining) == 0 {
+		c.ActiveDoT = nil
+	} else {
+		c.ActiveDoT = remaining
+	}
 	return logs
 }
 

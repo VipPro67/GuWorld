@@ -25,6 +25,9 @@ func targetDaoFactors(target *CombatantAuto, path string) (resistance, resonance
 		return 0, 1
 	}
 	ensureDaoProfile(target)
+	if target.DaoProfile == nil {
+		return 0, 1
+	}
 	path = daoPathForAction([]string{path})
 	return target.DaoProfile.GetDefensiveResistance(path), target.DaoProfile.GetTargetDaoResonance(path)
 }

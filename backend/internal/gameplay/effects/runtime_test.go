@@ -135,6 +135,53 @@ func TestCapabilityQueryIgnoresNonUniqueOperations(t *testing.T) {
 	}
 }
 
+func TestLastNativeParamFloatReturnsLastMatchingValue(t *testing.T) {
+	compiled, err := (Compiler{}).Compile([]Block{
+		{
+			Trigger: TriggerAlwaysOn,
+			Target:  Target{Selector: TargetSelf},
+			Operations: []Operation{{
+				Op: OpUnique, Code: "GROWTH_DURATION_HOURS", Params: []byte(`{"value":100}`),
+			}},
+		},
+		{
+			Trigger: TriggerAlwaysOn,
+			Target:  Target{Selector: TargetSelf},
+			Operations: []Operation{{
+				Op: OpUnique, Code: "GROWTH_DURATION_HOURS", Params: []byte(`{"value":200}`),
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := compiled.LastNativeParamFloat(TriggerAlwaysOn, "growth_duration_hours", "value"); !ok || got != 200 {
+		t.Fatalf("LastNativeParamFloat() = %v, %v; want 200, true", got, ok)
+	}
+}
+
+func TestNativeMechanicReturnsDefensiveCopy(t *testing.T) {
+	compiled, err := (Compiler{}).Compile([]Block{{
+		Trigger: TriggerCapability,
+		Target:  Target{Selector: TargetSelf},
+		Operations: []Operation{{
+			Op: OpUnique, Code: "MARKETPLACE_ACCESS", Params: []byte(`{}`),
+		}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mechanic, ok := compiled.NativeMechanic(" marketplace_access ")
+	if !ok || mechanic.Code != "MARKETPLACE_ACCESS" {
+		t.Fatalf("unexpected mechanic: %+v, %v", mechanic, ok)
+	}
+	mechanic.Params[0] = 'x'
+	again, _ := compiled.NativeMechanic("MARKETPLACE_ACCESS")
+	if string(again.Params) != `{}` {
+		t.Fatalf("compiled mechanic was mutated: %s", again.Params)
+	}
+}
+
 func TestOperationsAndStatValueAreTypedDefensiveProjections(t *testing.T) {
 	compiled, err := (Compiler{}).Compile([]Block{{Trigger: TriggerAlwaysOn, Target: Target{Selector: TargetSelf}, Operations: []Operation{{Op: OpStatMod, Stat: "INVESTIGATION", SubType: "ADD_FLAT", Value: 3}}}})
 	if err != nil {

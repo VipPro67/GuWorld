@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -20,6 +21,23 @@ func TestCombatLifecycleRegionPolicy(t *testing.T) {
 	}
 	if !requiresRegionCombatPolicy(&models.CombatState{EnemyType: "PVP"}) {
 		t.Error("PVP must require region combat policy")
+	}
+}
+
+func TestBuildGuHungerBatch(t *testing.T) {
+	hunger := map[string]int{"gu-b": 0, "gu-a": 4, "": 7}
+	keys := []string{"gu-b", "missing", "", "gu-a"}
+	ids, values := buildGuHungerBatch(hunger, keys, true)
+	if !reflect.DeepEqual(ids, []string{"gu-a", "gu-b"}) {
+		t.Fatalf("instance IDs = %v, want [gu-a gu-b]", ids)
+	}
+	if !reflect.DeepEqual(values, []int{4, 0}) {
+		t.Fatalf("hunger values = %v, want [4 0]", values)
+	}
+
+	ids, values = buildGuHungerBatch(hunger, []string{""}, false)
+	if !reflect.DeepEqual(ids, []string{""}) || !reflect.DeepEqual(values, []int{7}) {
+		t.Fatalf("empty-key batch = (%v, %v), want ([\"\"], [7])", ids, values)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -103,6 +104,10 @@ func planVaultGuDeductions(matchedRows []VaultGuRow, quantity int64) ([]VaultGuD
 // enforces the rank gates (10 sect levels = 1 rank level, up to rank 9).
 // Returns (unitCost, effectiveRank, httpStatusOK, "") on success; otherwise (0, 0, status, errorMessage).
 func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int64, int, int, string) {
+	return stockItemUnitCostFromCatalog(tx, sectLevel, itemType, itemID, nil, nil)
+}
+
+func stockItemUnitCostFromCatalog(tx *sql.Tx, sectLevel int, itemType, itemID string, materials map[string]stockMaterialInfo, recipes map[string]stockRecipeInfo) (int64, int, int, string) {
 	itemType = strings.ToLower(itemType)
 	if itemType == "consumable" || itemType == "currency" {
 		return 0, 0, http.StatusForbidden, "Không thể nhập vật phẩm loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn."
@@ -121,7 +126,12 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int6
 		var matBasePrice float64
 		var dbItemType string
 		var err error = sql.ErrNoRows
-		if tx != nil {
+		if materials != nil {
+			if info, ok := materials[itemID]; ok {
+				matRank, matRarity, matBasePrice, dbItemType = info.rank, info.rarity, info.basePrice, info.itemType
+				err = nil
+			}
+		} else if tx != nil {
 			err = tx.QueryRow(`SELECT COALESCE(rank, 1), COALESCE(rarity, 0), COALESCE(base_price, 0), COALESCE(item_type, '') FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank, &matRarity, &matBasePrice, &dbItemType)
 		}
 		if err != nil {
@@ -165,14 +175,22 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int6
 	if itemType == "recipe" {
 		var targetGuRank int = 1
 		var targetGuRarity int = 0
-		err := tx.QueryRow(`
-			SELECT COALESCE(gd.rank, 1), COALESCE(gd.rarity, 0)
-			FROM refining_recipes rr
-			JOIN gu_dictionary gd ON gd.id = rr.target_gu_id AND gd.rank = rr.target_rank
-			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text) = $1
-		`, itemID).Scan(&targetGuRank, &targetGuRarity)
-		if err != nil {
-			return 0, 0, http.StatusBadRequest, "Bí phương không tồn tại trong tàng kinh các"
+		if recipes != nil {
+			info, ok := recipes[itemID]
+			if !ok {
+				return 0, 0, http.StatusBadRequest, "Bí phương không tồn tại trong tàng kinh các"
+			}
+			targetGuRank, targetGuRarity = info.rank, info.rarity
+		} else {
+			err := tx.QueryRow(`
+				SELECT COALESCE(gd.rank, 1), COALESCE(gd.rarity, 0)
+				FROM refining_recipes rr
+				JOIN gu_dictionary gd ON gd.id = rr.target_gu_id AND gd.rank = rr.target_rank
+				WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text) = $1
+			`, itemID).Scan(&targetGuRank, &targetGuRarity)
+			if err != nil {
+				return 0, 0, http.StatusBadRequest, "Bí phương không tồn tại trong tàng kinh các"
+			}
 		}
 
 		effectiveLevel := targetGuRank
@@ -497,6 +515,93 @@ type StockVaultBulkRequest struct {
 	Items []StockVaultBulkItem `json:"items" binding:"required,min=1"`
 }
 
+type stockMaterialInfo struct {
+	rank      int
+	rarity    int
+	basePrice float64
+	itemType  string
+}
+
+type stockRecipeInfo struct {
+	rank   int
+	rarity int
+}
+
+type stockCost struct {
+	unitCost      int64
+	effectiveRank int
+	status        int
+	message       string
+}
+
+func loadBulkStockCatalog(tx *sql.Tx, items []StockVaultBulkItem) (map[string]stockMaterialInfo, map[string]stockRecipeInfo) {
+	materials := make(map[string]stockMaterialInfo)
+	recipes := make(map[string]stockRecipeInfo)
+	materialIDs := make([]string, 0, len(items))
+	recipeIDs := make([]string, 0, len(items))
+	seenMaterials := make(map[string]struct{}, len(items))
+	seenRecipes := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		switch strings.ToLower(item.ItemType) {
+		case "material":
+			if _, seen := seenMaterials[item.ItemID]; !seen {
+				seenMaterials[item.ItemID] = struct{}{}
+				materialIDs = append(materialIDs, item.ItemID)
+			}
+		case "recipe":
+			if _, seen := seenRecipes[item.ItemID]; !seen {
+				seenRecipes[item.ItemID] = struct{}{}
+				recipeIDs = append(recipeIDs, item.ItemID)
+			}
+		}
+	}
+
+	if len(materialIDs) > 0 {
+		rows, err := tx.Query(`
+			SELECT id, COALESCE(rank, 1), COALESCE(rarity, 0), COALESCE(base_price, 0), COALESCE(item_type, '')
+			FROM item_dictionary WHERE id = ANY($1)
+		`, pq.Array(materialIDs))
+		if err == nil {
+			for rows.Next() {
+				var id string
+				var info stockMaterialInfo
+				if rows.Scan(&id, &info.rank, &info.rarity, &info.basePrice, &info.itemType) == nil {
+					materials[id] = info
+				}
+			}
+			rowsErr := rows.Err()
+			closeErr := rows.Close()
+			if rowsErr != nil || closeErr != nil {
+				clear(materials)
+			}
+		}
+	}
+	if len(recipeIDs) > 0 {
+		rows, err := tx.Query(`
+			SELECT 'recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text,
+			       COALESCE(gd.rank, 1), COALESCE(gd.rarity, 0)
+			FROM refining_recipes rr
+			JOIN gu_dictionary gd ON gd.id = rr.target_gu_id AND gd.rank = rr.target_rank
+			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text) = ANY($1)
+		`, pq.Array(recipeIDs))
+		if err == nil {
+			for rows.Next() {
+				var id string
+				var info stockRecipeInfo
+				if rows.Scan(&id, &info.rank, &info.rarity) == nil {
+					recipes[id] = info
+				}
+			}
+			rowsErr := rows.Err()
+			closeErr := rows.Close()
+			if rowsErr != nil || closeErr != nil {
+				clear(recipes)
+			}
+		}
+	}
+	return materials, recipes
+}
+
 // StockSectVaultBulk stocks multiple vault items in a single atomic transaction.
 func StockSectVaultBulk(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
@@ -556,20 +661,52 @@ func StockSectVaultBulk(c *gin.Context) {
 	lines := make([]stockLine, 0, len(req.Items))
 	var totalCost int64
 	plannedImmortalQty := make(map[string]int64)
-	for _, it := range req.Items {
-		unitCost, effectiveRank, code, msg := stockItemUnitCost(tx, s.Level, it.ItemType, it.ItemID)
-		if code != http.StatusOK {
-			c.JSON(code, gin.H{"error": msg})
+	materials, recipes := loadBulkStockCatalog(tx, req.Items)
+	costs := make([]stockCost, len(req.Items))
+	immortalIDs := make([]string, 0, len(req.Items))
+	seenImmortalIDs := make(map[string]struct{}, len(req.Items))
+	for i, it := range req.Items {
+		unitCost, effectiveRank, code, msg := stockItemUnitCostFromCatalog(tx, s.Level, it.ItemType, it.ItemID, materials, recipes)
+		costs[i] = stockCost{unitCost: unitCost, effectiveRank: effectiveRank, status: code, message: msg}
+		if code == http.StatusOK && effectiveRank >= 6 && strings.EqualFold(it.ItemType, "material") {
+			if _, seen := seenImmortalIDs[it.ItemID]; !seen {
+				seenImmortalIDs[it.ItemID] = struct{}{}
+				immortalIDs = append(immortalIDs, it.ItemID)
+			}
+		}
+	}
+	currentImmortalQty := make(map[string]int64, len(immortalIDs))
+	if len(immortalIDs) > 0 {
+		rows, err := tx.Query(`
+			SELECT item_id, COALESCE(quantity, 0)
+			FROM sect_vault_materials WHERE sect_id = $1 AND item_id = ANY($2)
+		`, s.ID, pq.Array(immortalIDs))
+		if err == nil {
+			for rows.Next() {
+				var itemID string
+				var quantity int64
+				if rows.Scan(&itemID, &quantity) == nil {
+					currentImmortalQty[itemID] = quantity
+				}
+			}
+			_ = rows.Err()
+			_ = rows.Close()
+		}
+	}
+
+	for i, it := range req.Items {
+		cost := costs[i]
+		if cost.status != http.StatusOK {
+			c.JSON(cost.status, gin.H{"error": cost.message})
 			return
 		}
-		if effectiveRank >= 6 {
+		if cost.effectiveRank >= 6 {
 			if it.Quantity > 5 {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Mỗi lần chỉ được nhập tối đa 5 Tiên phẩm cùng loại: %s", it.ItemID)})
 				return
 			}
 			if strings.ToLower(it.ItemType) == "material" {
-				var currentInVault int64
-				_ = tx.QueryRow(`SELECT COALESCE(quantity, 0) FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2`, s.ID, it.ItemID).Scan(&currentInVault)
+				currentInVault := currentImmortalQty[it.ItemID]
 				if currentInVault+plannedImmortalQty[it.ItemID]+it.Quantity > 200 {
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bảo khố chỉ có thể lưu trữ tối đa 200 đơn vị Tiên phẩm cùng loại (%s hiện có: %d)!", it.ItemID, currentInVault+plannedImmortalQty[it.ItemID])})
 					return
@@ -577,8 +714,8 @@ func StockSectVaultBulk(c *gin.Context) {
 				plannedImmortalQty[it.ItemID] += it.Quantity
 			}
 		}
-		lines = append(lines, stockLine{strings.ToLower(it.ItemType), it.ItemID, it.Quantity, unitCost, effectiveRank})
-		totalCost += unitCost * it.Quantity
+		lines = append(lines, stockLine{strings.ToLower(it.ItemType), it.ItemID, it.Quantity, cost.unitCost, cost.effectiveRank})
+		totalCost += cost.unitCost * it.Quantity
 	}
 
 	if s.Funds < totalCost {

@@ -410,3 +410,16 @@ func TestStockSectVaultGatingAndPricing(t *testing.T) {
 		t.Fatalf("expected unitCost 135000 for rank 9 material, got %d", unitCost9)
 	}
 }
+
+func TestStockItemUnitCostUsesPreloadedMaterialCatalog(t *testing.T) {
+	materials := map[string]stockMaterialInfo{
+		"bulk_test_r6": {rank: 6, rarity: 6, basePrice: 60, itemType: "Material"},
+	}
+	unitCost, effectiveRank, status, message := stockItemUnitCostFromCatalog(nil, 50, "material", "bulk_test_r6", materials, nil)
+	if status != http.StatusOK {
+		t.Fatalf("preloaded rank 6 material was rejected: status=%d message=%q", status, message)
+	}
+	if effectiveRank != 6 || unitCost != 90000 {
+		t.Fatalf("preloaded rank 6 material cost = (%d, %d), want (90000, 6)", unitCost, effectiveRank)
+	}
+}

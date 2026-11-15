@@ -146,6 +146,23 @@ func TestDeterminism(t *testing.T) {
 	}
 }
 
+func TestEmptyDaoInputsUseNeutralFactorsWithoutBuildingProfile(t *testing.T) {
+	combatant := newTestCombatant("neutral", "Player", 100, 10)
+	ensureDaoProfile(combatant)
+	if combatant.DaoProfile != nil {
+		t.Fatal("empty Dao inputs should not allocate a combat profile")
+	}
+	if got := actionConflictMult(combatant, []string{"fire"}); got != 1 {
+		t.Fatalf("empty Dao inputs conflict multiplier = %v, want 1", got)
+	}
+	if got, ok := actorDaoMultiplier(combatant, []string{"fire"}); !ok || got != 1 {
+		t.Fatalf("empty Dao inputs offensive multiplier = %v, ok=%v; want 1, true", got, ok)
+	}
+	if resistance, resonance := targetDaoFactors(combatant, "fire"); resistance != 0 || resonance != 1 {
+		t.Fatalf("empty Dao inputs defense factors = %v, %v; want 0, 1", resistance, resonance)
+	}
+}
+
 func TestSpecialBehaviorComesFromEffectMechanicNotSourceID(t *testing.T) {
 	run := func(sourceID string, mechanics []CombatMechanic) (hp, shield float64) {
 		attacker := newTestCombatant("ally", "Player", 100, 100)

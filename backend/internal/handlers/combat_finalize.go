@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -28,6 +29,24 @@ func isRealPlayerAlly(ally *simulator.CombatantAuto, playerID string) bool {
 		return false
 	}
 	return ally.ID != playerID
+}
+
+func buildGuHungerBatch(hunger map[string]int, keys []string, skipEmpty bool) ([]string, []int) {
+	sort.Strings(keys)
+	instanceIDs := make([]string, 0, len(keys))
+	values := make([]int, 0, len(keys))
+	for _, instanceID := range keys {
+		if skipEmpty && instanceID == "" {
+			continue
+		}
+		value, exists := hunger[instanceID]
+		if !exists {
+			continue
+		}
+		instanceIDs = append(instanceIDs, instanceID)
+		values = append(values, value)
+	}
+	return instanceIDs, values
 }
 
 // finalizeAutoCombatOutcome applies the shared tail of an auto-combat after the
@@ -88,6 +107,8 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		for _, e := range simState.Enemies {
 			finalByID[e.ID] = e.HP
 		}
+		var enemyIDs []string
+		var enemyHP []float64
 		for _, en := range player.ActiveCombat.Enemies {
 			finalHP, ok := finalByID[en.ID]
 			if !ok {
@@ -96,13 +117,22 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 			if math.IsNaN(finalHP) || math.IsInf(finalHP, 0) || finalHP < 0 {
 				finalHP = 0
 			}
+			enemyIDs = append(enemyIDs, en.ID)
+			enemyHP = append(enemyHP, finalHP)
+		}
+		if len(enemyIDs) > 0 {
 			_, errEn := tx.Exec(`
-				UPDATE tribulation_enemies
-				SET hp = LEAST(hp, $1), is_dead = CASE WHEN LEAST(hp, $1) <= 0 THEN true ELSE is_dead END, updated_at = NOW()
-				WHERE id = $2
-			`, finalHP, en.ID)
+				UPDATE tribulation_enemies AS enemy
+				SET hp = LEAST(enemy.hp, changes.hp),
+				    is_dead = CASE WHEN LEAST(enemy.hp, changes.hp) <= 0 THEN true ELSE enemy.is_dead END,
+				    updated_at = NOW()
+				FROM (
+					SELECT unnest($1::uuid[]) AS id, unnest($2::double precision[]) AS hp
+				) AS changes
+				WHERE enemy.id = changes.id
+			`, pq.Array(enemyIDs), pq.Array(enemyHP))
 			if errEn != nil {
-				logger.S.Errorf("Failed to sync tribulation enemy %s HP: %v", en.ID, errEn)
+				logger.S.Errorf("Failed to sync tribulation enemy HP: %v", errEn)
 				return logs, errEn
 			}
 		}
@@ -209,13 +239,18 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 			}
 
 			// Sync ally Gu hunger for instances used in this battle
+			guKeys := make([]string, 0, len(simAlly.GuUsedCounts))
 			for guKey := range simAlly.GuUsedCounts {
-				if guKey == "" {
-					continue
-				}
-				if hunger, ok := simAlly.GuHunger[guKey]; ok {
-					_, _ = tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`, hunger, guKey, simAlly.ID)
-				}
+				guKeys = append(guKeys, guKey)
+			}
+			guIDs, hungerValues := buildGuHungerBatch(simAlly.GuHunger, guKeys, true)
+			if len(guIDs) > 0 {
+				_, _ = tx.Exec(`
+					UPDATE player_gu AS gu
+					SET hunger = changes.hunger, updated_at = NOW()
+					FROM (SELECT unnest($1::text[]) AS id, unnest($2::integer[]) AS hunger) AS changes
+					WHERE gu.id = changes.id AND gu.player_id = $3
+				`, pq.Array(guIDs), pq.Array(hungerValues), simAlly.ID)
 			}
 
 			if simAlly.GuHouse != nil {
@@ -322,9 +357,19 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 			if combatant.Kind != "VariantNPC" {
 				return nil
 			}
-			for guID, hunger := range combatant.GuHunger {
-				if _, err := tx.Exec(`UPDATE player_gu SET hunger=$1,updated_at=NOW() WHERE id=$2
-					AND EXISTS (SELECT 1 FROM actor_gu_equipment WHERE actor_id=$3 AND player_gu_id=$2)`, hunger, guID, combatant.ID); err != nil {
+			guKeys := make([]string, 0, len(combatant.GuHunger))
+			for guID := range combatant.GuHunger {
+				guKeys = append(guKeys, guID)
+			}
+			guIDs, hungerValues := buildGuHungerBatch(combatant.GuHunger, guKeys, false)
+			if len(guIDs) > 0 {
+				if _, err := tx.Exec(`
+					UPDATE player_gu AS gu
+					SET hunger = changes.hunger, updated_at = NOW()
+					FROM (SELECT unnest($1::text[]) AS id, unnest($2::integer[]) AS hunger) AS changes
+					WHERE gu.id = changes.id
+					  AND EXISTS (SELECT 1 FROM actor_gu_equipment WHERE actor_id = $3 AND player_gu_id = changes.id)
+				`, pq.Array(guIDs), pq.Array(hungerValues), combatant.ID); err != nil {
 					return err
 				}
 			}

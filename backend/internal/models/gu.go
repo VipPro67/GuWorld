@@ -536,13 +536,7 @@ func GuNativeMechanic(spec GuDictionaryItem, code string) (gameplayeffects.Compi
 	if compiled == nil {
 		return gameplayeffects.CompiledOperation{}, false
 	}
-	code = strings.ToUpper(strings.TrimSpace(code))
-	for _, operation := range compiled.NativeMechanics() {
-		if operation.Code == code {
-			return operation, true
-		}
-	}
-	return gameplayeffects.CompiledOperation{}, false
+	return compiled.NativeMechanic(code)
 }
 
 // GuAlwaysOnValue sums the "value" param of ALWAYS_ON UNIQUE operations with
@@ -603,12 +597,8 @@ func GrowthProfile(spec GuDictionaryItem) (GuGrowthProfile, bool) {
 		MaxHP:      compiled.StatValue(gameplayeffects.TriggerAlwaysOn, "HP", "GROWTH_CAP"),
 		MaxSpeed:   compiled.StatValue(gameplayeffects.TriggerAlwaysOn, "SPEED", "GROWTH_CAP"),
 	}
-	for _, op := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
-		if op.Type == gameplayeffects.OpUnique && op.Code == "GROWTH_DURATION_HOURS" {
-			if value, ok := op.Values["value"].(float64); ok {
-				profile.HoursToMax = value
-			}
-		}
+	if hours, ok := compiled.LastNativeParamFloat(gameplayeffects.TriggerAlwaysOn, "GROWTH_DURATION_HOURS", "value"); ok {
+		profile.HoursToMax = hours
 	}
 	return profile, profile.HoursToMax > 0
 }

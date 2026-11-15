@@ -358,9 +358,9 @@ func MitigateEnvironmentalHazard(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":               msg,
-		"cell_extinguished":     true,
-		"all_extinguished":      allExtinguished,
+		"message":                msg,
+		"cell_extinguished":      true,
+		"all_extinguished":       allExtinguished,
 		"transitioned_aftermath": transitioned,
 	})
 }

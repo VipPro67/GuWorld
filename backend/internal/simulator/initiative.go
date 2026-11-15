@@ -2,7 +2,6 @@ package simulator
 
 import (
 	"math"
-	"sort"
 )
 
 // InitiativeEntry is the persistent scheduling state for one combatant. Time is
@@ -59,20 +58,27 @@ func (q *InitiativeQueue) NextExcluding(excluded map[string]bool) (string, float
 	if len(q.Entries) == 0 {
 		return "", q.Time, false
 	}
-	sort.SliceStable(q.Entries, func(i, j int) bool {
-		if q.Entries[i].ReadyAt == q.Entries[j].ReadyAt {
-			return q.Entries[i].Order < q.Entries[j].Order
-		}
-		return q.Entries[i].ReadyAt < q.Entries[j].ReadyAt
-	})
-	for _, entry := range q.Entries {
+	bestIndex := -1
+	for i := range q.Entries {
+		entry := &q.Entries[i]
 		if excluded[entry.ActorID] {
 			continue
 		}
-		q.Time = math.Max(q.Time, entry.ReadyAt)
-		return entry.ActorID, q.Time, true
+		if bestIndex < 0 {
+			bestIndex = i
+			continue
+		}
+		best := &q.Entries[bestIndex]
+		if entry.ReadyAt < best.ReadyAt || (entry.ReadyAt == best.ReadyAt && entry.Order < best.Order) {
+			bestIndex = i
+		}
 	}
-	return "", q.Time, false
+	if bestIndex < 0 {
+		return "", q.Time, false
+	}
+	entry := &q.Entries[bestIndex]
+	q.Time = math.Max(q.Time, entry.ReadyAt)
+	return entry.ActorID, q.Time, true
 }
 
 func (q *InitiativeQueue) Complete(actorID string) bool {

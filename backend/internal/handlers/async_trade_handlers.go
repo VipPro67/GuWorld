@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -98,6 +99,58 @@ func validateTradeOfferData(data models.TradeOfferData) error {
 		}
 	}
 	return nil
+}
+
+func matchRequestedTradeGus(requestedIDs []string, inventory models.GuInventory) ([]string, string, bool) {
+	instancesByID := make(map[string][]string, len(inventory)*2)
+	for _, gu := range inventory {
+		if gu.Status == "DEAD" || gu.Equipped || gu.IsVital {
+			continue
+		}
+		instancesByID[gu.GuID] = append(instancesByID[gu.GuID], gu.InstanceID)
+		if gu.InstanceID != gu.GuID {
+			instancesByID[gu.InstanceID] = append(instancesByID[gu.InstanceID], gu.InstanceID)
+		}
+	}
+
+	matched := make([]string, 0, len(requestedIDs))
+	used := make(map[string]struct{}, len(requestedIDs))
+	for _, requestedID := range requestedIDs {
+		found := false
+		for _, instanceID := range instancesByID[requestedID] {
+			if _, alreadyUsed := used[instanceID]; alreadyUsed {
+				continue
+			}
+			used[instanceID] = struct{}{}
+			matched = append(matched, instanceID)
+			found = true
+			break
+		}
+		if !found {
+			return nil, requestedID, false
+		}
+	}
+	return matched, "", true
+}
+
+func materialBatchEntries(materials map[string]int64) []services.ItemBatchEntry {
+	materialIDs := make([]string, 0, len(materials))
+	for materialID, quantity := range materials {
+		if quantity > 0 {
+			materialIDs = append(materialIDs, materialID)
+		}
+	}
+	sort.Strings(materialIDs)
+
+	entries := make([]services.ItemBatchEntry, 0, len(materialIDs))
+	for _, materialID := range materialIDs {
+		entries = append(entries, services.ItemBatchEntry{
+			ItemID:   materialID,
+			Category: "materials",
+			Quantity: materials[materialID],
+		})
+	}
+	return entries
 }
 
 // System BHTH UUID sentinel for locking offered Gu items
@@ -214,57 +267,138 @@ func CreateTradeOffer(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s (Cần %d, hiện có %d)", matID, qty, creatorMats[matID])})
 			return
 		}
-		if err := deductMaterialTx(tx, creator.ID, matID, qty); err != nil {
+	}
+	if len(offered.Materials) > 0 {
+		if err := InventorySvc.BulkRemoveItems(tx, creator.ID.String(), "materials", offered.Materials); err != nil {
 			httperr.Respond(c, httperr.Internal("Lỗi trừ nguyên liệu trao đổi", err))
 			return
 		}
 	}
 
-	for _, guInstID := range offered.Gus {
-		var ownerID uuid.UUID
-		var isVital, equipped, isLocked bool
-		var state string
-		err := tx.QueryRow(`SELECT player_id, is_vital, equipped, is_locked, state FROM player_gu WHERE id = $1`, guInstID).Scan(&ownerID, &isVital, &equipped, &isLocked, &state)
-		if err != nil || ownerID != creator.ID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không sở hữu Cổ trùng đưa trao đổi"})
+	if len(offered.Gus) > 0 {
+		type tradeGuState struct {
+			ownerID                   uuid.UUID
+			isVital, equipped, locked bool
+			state                     string
+		}
+		guStates := make(map[string]tradeGuState, len(offered.Gus))
+		rows, err := tx.Query(`
+			SELECT id, player_id, is_vital, equipped, is_locked, state
+			FROM player_gu
+			WHERE id = ANY($1)
+			ORDER BY id
+			FOR UPDATE
+		`, pq.Array(offered.Gus))
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Cổ trùng trao đổi", err))
 			return
 		}
-		if isVital {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể dùng Bổn Mạng Cổ làm vật trao đổi!"})
+		for rows.Next() {
+			var id string
+			var state tradeGuState
+			if err := rows.Scan(&id, &state.ownerID, &state.isVital, &state.equipped, &state.locked, &state.state); err != nil {
+				rows.Close()
+				httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Cổ trùng trao đổi", err))
+				return
+			}
+			guStates[id] = state
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Cổ trùng trao đổi", err))
 			return
 		}
-		if equipped {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đang trang bị!"})
+		if err := rows.Close(); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Cổ trùng trao đổi", err))
 			return
 		}
-		if isLocked {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đang bị khóa!"})
-			return
+
+		for _, guInstID := range offered.Gus {
+			state, found := guStates[guInstID]
+			if !found || state.ownerID != creator.ID {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không sở hữu Cổ trùng đưa trao đổi"})
+				return
+			}
+			if state.isVital {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể dùng Bổn Mạng Cổ làm vật trao đổi!"})
+				return
+			}
+			if state.equipped {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đang trang bị!"})
+				return
+			}
+			if state.locked {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đang bị khóa!"})
+				return
+			}
+			if state.state == "DEAD" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đã tử vong!"})
+				return
+			}
 		}
-		if state == "DEAD" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đã tử vong!"})
-			return
-		}
-		// Lock Gu to system BHTH UUID
-		_, err = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, BHTHSystemUUID, guInstID)
+
+		// All requested rows are locked in a stable order and validated before a
+		// single update transfers ownership to the BHTH system account.
+		_, err = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = ANY($2)`, BHTHSystemUUID, pq.Array(offered.Gus))
 		if err != nil {
 			httperr.Respond(c, httperr.Internal("Lỗi khóa Cổ trùng trao đổi", err))
 			return
 		}
 	}
 
-	for recID, rate := range offered.Recipes {
-		recProgress, err := RecipeSvc.Get(tx, creator.ID.String(), recID)
-		if err != nil || recProgress == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bạn chưa khai mở Bí phương %s để đem trao đổi", recID)})
+	if len(offered.Recipes) > 0 {
+		recipeIDs := make([]string, 0, len(offered.Recipes))
+		for recipeID := range offered.Recipes {
+			recipeIDs = append(recipeIDs, recipeID)
+		}
+		sort.Strings(recipeIDs)
+
+		rows, err := tx.Query(`
+			SELECT recipe_id, completion_rate
+			FROM player_recipe_progress
+			WHERE player_id = $1 AND recipe_id = ANY($2)
+			ORDER BY recipe_id
+			FOR UPDATE
+		`, creator.ID.String(), pq.Array(recipeIDs))
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Bí phương trao đổi", err))
 			return
 		}
-		if err := RecipeSvc.Delete(tx, creator.ID.String(), recID); err != nil {
+		recipeRates := make(map[string]float64, len(recipeIDs))
+		for rows.Next() {
+			var recipeID string
+			var completionRate float64
+			if err := rows.Scan(&recipeID, &completionRate); err != nil {
+				rows.Close()
+				httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Bí phương trao đổi", err))
+				return
+			}
+			recipeRates[recipeID] = completionRate
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Bí phương trao đổi", err))
+			return
+		}
+		if err := rows.Close(); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Bí phương trao đổi", err))
+			return
+		}
+
+		for _, recipeID := range recipeIDs {
+			completionRate, exists := recipeRates[recipeID]
+			if !exists {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bạn chưa khai mở Bí phương %s để đem trao đổi", recipeID)})
+				return
+			}
+			if offered.Recipes[recipeID] <= 0 {
+				offered.Recipes[recipeID] = completionRate
+			}
+		}
+
+		if err := RecipeSvc.DeleteBatch(tx, creator.ID.String(), recipeIDs); err != nil {
 			httperr.Respond(c, httperr.Internal("Lỗi khóa Bí phương trao đổi", err))
 			return
-		}
-		if rate <= 0 {
-			offered.Recipes[recID] = recProgress.CompletionRate
 		}
 	}
 
@@ -529,32 +663,11 @@ func AcceptTradeOffer(c *gin.Context) {
 			return
 		}
 	}
-	// For Gus in requested: match by Gu ID or instance IDs
-	var matchedAcceptorGus []string
-	for _, reqGuID := range requested.Gus {
-		// Find matching Gu instance in acceptor inventory
-		found := false
-		for _, g := range acceptor.GuInventory {
-			if (g.GuID == reqGuID || g.InstanceID == reqGuID) && g.Status != "DEAD" && !g.Equipped && !g.IsVital {
-				// Check not already matched
-				alreadyUsed := false
-				for _, usedID := range matchedAcceptorGus {
-					if usedID == g.InstanceID {
-						alreadyUsed = true
-						break
-					}
-				}
-				if !alreadyUsed {
-					matchedAcceptorGus = append(matchedAcceptorGus, g.InstanceID)
-					found = true
-					break
-				}
-			}
-		}
-		if !found {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bạn không có Cổ trùng yêu cầu: %s", reqGuID)})
-			return
-		}
+	// Match by Gu ID or instance ID while preserving inventory order.
+	matchedAcceptorGus, missingGuID, matchedAll := matchRequestedTradeGus(requested.Gus, acceptor.GuInventory)
+	if !matchedAll {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bạn không có Cổ trùng yêu cầu: %s", missingGuID)})
+		return
 	}
 	for _, guInstID := range matchedAcceptorGus {
 		var ownerID uuid.UUID
@@ -598,12 +711,9 @@ func AcceptTradeOffer(c *gin.Context) {
 		_, _ = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, amt, acceptor.ID)
 		_, _ = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id = $2`, amt, creator.ID)
 	}
-	for matID, qty := range requested.Materials {
-		if qty <= 0 {
-			continue
-		}
-		_ = deductMaterialTx(tx, acceptor.ID, matID, qty)
-		_ = addMaterialTx(tx, creator.ID, matID, qty)
+	if len(requested.Materials) > 0 {
+		_ = InventorySvc.BulkRemoveItems(tx, acceptor.ID.String(), "materials", requested.Materials)
+		_ = InventorySvc.AddItemsBatch(tx, creator.ID.String(), materialBatchEntries(requested.Materials))
 	}
 	for _, guInstID := range matchedAcceptorGus {
 		var guID string
@@ -640,20 +750,50 @@ func AcceptTradeOffer(c *gin.Context) {
 		amt := pricing.Quantize(offered.ImmortalStones)
 		_, _ = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id = $2`, amt, acceptor.ID)
 	}
-	for matID, qty := range offered.Materials {
-		if qty <= 0 {
-			continue
-		}
-		_ = addMaterialTx(tx, acceptor.ID, matID, qty)
+	if len(offered.Materials) > 0 {
+		_ = InventorySvc.AddItemsBatch(tx, acceptor.ID.String(), materialBatchEntries(offered.Materials))
 	}
-	for _, guInstID := range offered.Gus {
-		var guID string
-		var rank int
-		if err := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE id = $1`, guInstID).Scan(&guID, &rank); err == nil && rank >= 6 {
-			_ = db.LogGuHistory(tx, guInstID, guID, rank, "bhth_trade_offer", &creator.ID, &acceptor.ID,
+	if len(offered.Gus) > 0 {
+		rows, err := tx.Query(`
+			UPDATE player_gu SET player_id = $1, equipped = false
+			WHERE id = ANY($2)
+			RETURNING id, gu_id, gu_rank
+		`, acceptor.ID, pq.Array(offered.Gus))
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi chuyển giao Cổ trùng đã trao đổi", err))
+			return
+		}
+		type immortalGuHistory struct {
+			instanceID string
+			guID       string
+			rank       int
+		}
+		var history []immortalGuHistory
+		for rows.Next() {
+			var instanceID, guID string
+			var rank int
+			if err := rows.Scan(&instanceID, &guID, &rank); err != nil {
+				rows.Close()
+				httperr.Respond(c, httperr.Internal("Lỗi đọc Cổ trùng đã chuyển giao", err))
+				return
+			}
+			if rank >= 6 {
+				history = append(history, immortalGuHistory{instanceID: instanceID, guID: guID, rank: rank})
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			httperr.Respond(c, httperr.Internal("Lỗi đọc Cổ trùng đã chuyển giao", err))
+			return
+		}
+		if err := rows.Close(); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi đọc Cổ trùng đã chuyển giao", err))
+			return
+		}
+		for _, gu := range history {
+			_ = db.LogGuHistory(tx, gu.instanceID, gu.guID, gu.rank, "bhth_trade_offer", &creator.ID, &acceptor.ID,
 				fmt.Sprintf("Trao đổi Bảo Hoàng Thiên từ %s sang %s", creator.Username, acceptor.Username), nil)
 		}
-		_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, acceptor.ID, guInstID)
 	}
 	for offRecID, offRate := range offered.Recipes {
 		finalRate := offRate

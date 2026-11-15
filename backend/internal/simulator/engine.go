@@ -742,6 +742,10 @@ func ensureDaoProfile(c *CombatantAuto) {
 	if c == nil || c.DaoProfile != nil {
 		return
 	}
+	if len(c.DaoMarks) == 0 && len(c.PathMasteries) == 0 && len(c.DaoBonus) == 0 {
+		// Empty inputs produce neutral factors, which the profile getters default to.
+		return
+	}
 	var daoMarks map[string]int64
 	if c.DaoMarks != nil {
 		daoMarks = make(map[string]int64, len(c.DaoMarks))
@@ -759,6 +763,9 @@ func actionConflictMult(c *CombatantAuto, paths []string) float64 {
 		return 1.0
 	}
 	ensureDaoProfile(c)
+	if c.DaoProfile == nil {
+		return 1.0
+	}
 	pathKey := "strength"
 	if len(paths) > 0 {
 		pathKey = paths[0]
@@ -776,9 +783,12 @@ func daoBackfireExplanation(c *CombatantAuto, action *SimAction, conflictMult, c
 	if len(action.Path) > 0 {
 		castPath = gamefx.CleanPath(action.Path[0])
 	}
-	dominantPath := c.DaoProfile.DominantPath
+	dominantPath := ""
+	if c.DaoProfile != nil {
+		dominantPath = c.DaoProfile.DominantPath
+	}
 	dominantPurity := 0.0
-	if dominantPath != "" {
+	if dominantPath != "" && c.DaoProfile != nil {
 		if dominant, ok := c.DaoProfile.Paths[dominantPath]; ok {
 			dominantPurity = dominant.Purity * 100
 		}
@@ -802,6 +812,9 @@ func actorDaoMultiplier(c *CombatantAuto, paths []string) (float64, bool) {
 		return 1.0, false
 	}
 	ensureDaoProfile(c)
+	if c.DaoProfile == nil {
+		return 1.0, true
+	}
 	pathKey := "strength"
 	if len(paths) > 0 {
 		pathKey = paths[0]
@@ -919,7 +932,7 @@ func getFirstAliveDeterministic(alive []*CombatantAuto) *CombatantAuto {
 }
 
 func getTarget(enemies []*CombatantAuto) *CombatantAuto {
-	var alive []*CombatantAuto
+	alive := make([]*CombatantAuto, 0, len(enemies))
 	for _, e := range enemies {
 		if e.HP > 0 {
 			alive = append(alive, e)
@@ -949,7 +962,7 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 	// Stealth: single-target actions cannot select stealthed combatants unless
 	// there are no other valid targets.
 	if targetType == "SINGLE" {
-		var visible []*CombatantAuto
+		visible := alive[:0]
 		for _, e := range alive {
 			if !e.IsStealthed {
 				visible = append(visible, e)
@@ -965,7 +978,7 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 
 	switch targetType {
 	case "ROW":
-		var hits []*CombatantAuto
+		hits := make([]*CombatantAuto, 0, len(alive))
 		for _, e := range alive {
 			if e.GridX == targetX {
 				hits = append(hits, e)
@@ -976,12 +989,13 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 		}
 		// fallback: first alive row
 		if fallback := getFirstAliveDeterministic(alive); fallback != nil {
-			return []*CombatantAuto{fallback}
+			alive[0] = fallback
+			return alive[:1]
 		}
-		return []*CombatantAuto{alive[0]}
+		return alive[:1]
 
 	case "COL", "COLUMN":
-		var hits []*CombatantAuto
+		hits := make([]*CombatantAuto, 0, len(alive))
 		for _, e := range alive {
 			if e.GridY == targetY {
 				hits = append(hits, e)
@@ -991,12 +1005,13 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 			return hits
 		}
 		if fallback := getFirstAliveDeterministic(alive); fallback != nil {
-			return []*CombatantAuto{fallback}
+			alive[0] = fallback
+			return alive[:1]
 		}
-		return []*CombatantAuto{alive[0]}
+		return alive[:1]
 
 	case "CROSS":
-		var hits []*CombatantAuto
+		hits := make([]*CombatantAuto, 0, len(alive))
 		for _, e := range alive {
 			dx := e.GridX - targetX
 			dy := e.GridY - targetY
@@ -1014,9 +1029,10 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 			return hits
 		}
 		if fallback := getFirstAliveDeterministic(alive); fallback != nil {
-			return []*CombatantAuto{fallback}
+			alive[0] = fallback
+			return alive[:1]
 		}
-		return []*CombatantAuto{alive[0]}
+		return alive[:1]
 
 	case "ALL", "ALL_ENEMIES":
 		return alive
@@ -1069,7 +1085,8 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 			best = getFirstAliveDeterministic(alive)
 		}
 		if best != nil {
-			return []*CombatantAuto{best}
+			alive[0] = best
+			return alive[:1]
 		}
 		return nil
 	}
@@ -1293,7 +1310,7 @@ func Simulate(state *CombatState) []CombatLog {
 					if c.HP <= 0 {
 						continue
 					}
-					turnLogs = append(turnLogs, tickDoTs(c, turn)...)
+					turnLogs = appendTickDoTs(turnLogs, c, turn)
 				}
 			}
 

@@ -169,8 +169,13 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 	}
 	type growthGroup struct {
 		spec     models.GuDictionaryItem
+		growth   models.GuGrowthProfile
 		active   []int
 		maxHours float64
+	}
+	type growthMetadata struct {
+		profile   models.GuGrowthProfile
+		hasGrowth bool
 	}
 
 	for pID, pRow := range playerMap {
@@ -210,17 +215,27 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 		}
 
 		groups := make(map[typeKey]*growthGroup)
+		// Growth metadata is immutable for this inventory type during the tick.
+		growthProfiles := make(map[typeKey]growthMetadata)
 
 		for i := range guInv {
 			gu := &guInv[i]
 			spec, ok := models.GetGu(gu.GuID, gu.Rank)
-			if _, hasGrowth := models.GrowthProfile(spec); !ok || !hasGrowth {
+			if !ok {
 				continue
 			}
 			key := typeKey{guID: gu.GuID, rank: gu.Rank}
+			metadata, cached := growthProfiles[key]
+			if !cached {
+				metadata.profile, metadata.hasGrowth = models.GrowthProfile(spec)
+				growthProfiles[key] = metadata
+			}
+			if !metadata.hasGrowth {
+				continue
+			}
 			g, exists := groups[key]
 			if !exists {
-				g = &growthGroup{spec: spec}
+				g = &growthGroup{spec: spec, growth: metadata.profile}
 				groups[key] = g
 			}
 			if gu.GrowthHours > g.maxHours {
@@ -294,7 +309,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 				gu.GrowthHours = g.maxHours
 			}
 
-			atk, def, hpBoost, spd := ApplyGrowthProgressWorker(gu, spec, elapsed)
+			atk, def, hpBoost, spd := applyGrowthProfileWorker(gu, g.growth, elapsed)
 			if atk != 0 || def != 0 || hpBoost != 0 || spd != 0 {
 				growthData.Boosts.Attack += atk
 				growthData.Boosts.Defense += def
@@ -303,13 +318,12 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 				baseHP += hpBoost
 			}
 
-			growth, _ := models.GrowthProfile(spec)
-			if gu.GrowthHours >= growth.HoursToMax {
+			if gu.GrowthHours >= g.growth.HoursToMax {
 				growthData.FullyGrown = append(growthData.FullyGrown, models.FullyGrownInfo{
 					GuID:   gu.GuID,
 					Rank:   gu.Rank,
-					Attack: growth.MaxAttack, Defense: growth.MaxDefense,
-					HP: growth.MaxHP, Speed: growth.MaxSpeed,
+					Attack: g.growth.MaxAttack, Defense: g.growth.MaxDefense,
+					HP: g.growth.MaxHP, Speed: g.growth.MaxSpeed,
 				})
 			}
 
@@ -482,6 +496,13 @@ func findGrowthAffectedPlayers(ctx context.Context, db *sql.DB) ([]string, error
 func ApplyGrowthProgressWorker(gu *models.GuInstance, spec models.GuDictionaryItem, elapsedHours float64) (attack, defense, hp, speed float64) {
 	g, ok := models.GrowthProfile(spec)
 	if !ok || elapsedHours <= 0 {
+		return 0, 0, 0, 0
+	}
+	return applyGrowthProfileWorker(gu, g, elapsedHours)
+}
+
+func applyGrowthProfileWorker(gu *models.GuInstance, g models.GuGrowthProfile, elapsedHours float64) (attack, defense, hp, speed float64) {
+	if elapsedHours <= 0 {
 		return 0, 0, 0, 0
 	}
 	maxHours := g.HoursToMax

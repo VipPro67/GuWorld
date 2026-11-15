@@ -153,17 +153,20 @@ var groupCompatibilityMatrix = map[DaoGroup]map[DaoGroup]float64{
 	},
 }
 
-func pairKey(a, b string) string {
-	a = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(a)), " path")
-	b = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(b)), " path")
+type pathPair struct {
+	first  string
+	second string
+}
+
+func pairKey(a, b string) pathPair {
 	if a < b {
-		return a + ":" + b
+		return pathPair{first: a, second: b}
 	}
-	return b + ":" + a
+	return pathPair{first: b, second: a}
 }
 
 // pairOverrides stores specific path pair compatibilities that override group defaults.
-var pairOverrides = map[string]float64{
+var pairOverrides = map[pathPair]float64{
 	// Tương khắc sâu
 	pairKey("fire", "water"):  0.55,
 	pairKey("fire", "ice"):    0.60,
@@ -202,6 +205,10 @@ func CleanPath(path string) string {
 func GetCompatibility(pathA, pathB string) float64 {
 	a := CleanPath(pathA)
 	b := CleanPath(pathB)
+	return getCanonicalCompatibility(a, b)
+}
+
+func getCanonicalCompatibility(a, b string) float64 {
 	if a == b {
 		return 1.0
 	}
@@ -288,7 +295,7 @@ func effectivePathCount(p string, active map[string]int64, level int) float64 {
 		if q == p || amt <= 0 {
 			continue
 		}
-		comp := GetCompatibility(p, q)
+		comp := getCanonicalCompatibility(p, q)
 		discount := 1.0
 		if level >= 2 && comp >= 0.90 {
 			discount = 0.50
@@ -557,7 +564,7 @@ func BuildDaoCombatProfileWithReduction(
 			if otherP == p {
 				continue
 			}
-			rawConflict += float64(otherAmt) * (1.0 - GetCompatibility(p, otherP))
+			rawConflict += float64(otherAmt) * (1.0 - getCanonicalCompatibility(p, otherP))
 		}
 		nEff := effectivePathCount(p, activeForeign, lvl)
 		fMulti := MultiPathFactor(nEff, purity)
@@ -579,7 +586,7 @@ func BuildDaoCombatProfileWithReduction(
 			if defAmt <= 0 {
 				continue
 			}
-			defConflict += float64(defAmt) * (1.0 - GetCompatibility(p, defP))
+			defConflict += float64(defAmt) * (1.0 - getCanonicalCompatibility(p, defP))
 		}
 		natResist := 0.0
 		if !hasNonConflictingDao && defConflict > 0 {

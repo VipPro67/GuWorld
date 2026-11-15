@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/sectmechanics"
@@ -117,69 +118,58 @@ func CalculateSectMaintenanceFee(ctx context.Context, q QueryContextRunner, sect
 	breakdown.SectLevel = sectLevel
 	breakdown.LevelFee = int64(sectLevel) * dailyLevelFee
 	var treasuryLevel int
-	if err := q.QueryRowContext(ctx, `SELECT COALESCE((buildings->>'treasury')::int, 1) FROM sects WHERE id = $1`, sectID).Scan(&treasuryLevel); err != nil {
-		return 0, breakdown, fmt.Errorf("failed to load treasury level: %w", err)
+	var memberCount int64
+	var guJSON []byte
+	var recipeIDs pq.StringArray
+	if err := q.QueryRowContext(ctx, `
+		SELECT COALESCE((s.buildings->>'treasury')::int, 1),
+		       (SELECT COUNT(*) FROM sect_members WHERE sect_id = s.id),
+		       (SELECT COALESCE(SUM(quantity), 0) FROM sect_vault_materials WHERE sect_id = s.id AND quantity > 0),
+	       COALESCE((
+		           SELECT json_agg(json_build_object('rank', rank, 'quantity', quantity))
+		           FROM sect_vault_gu WHERE sect_id = s.id AND quantity > 0
+	       ), '[]'::json),
+		       COALESCE((
+		           SELECT array_agg(recipe_id::text)
+		           FROM sect_vault_recipes WHERE sect_id = s.id
+	       ), ARRAY[]::text[])
+		FROM sects s WHERE s.id = $1
+	`, sectID).Scan(&treasuryLevel, &memberCount, &breakdown.MaterialsCount, &guJSON, &recipeIDs); err != nil {
+		return 0, breakdown, fmt.Errorf("failed to load sect maintenance inputs: %w", err)
 	}
 	breakdown.TreasuryLevel = treasuryLevel
+	breakdown.MemberCount = int(memberCount)
+	breakdown.MemberFee = memberCount * dailyMemberFee
 
-	// 1. Members
-	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM sect_members WHERE sect_id = $1`, sectID).Scan(&breakdown.MemberCount)
-	if err != nil && err != sql.ErrNoRows {
-		return 0, breakdown, fmt.Errorf("failed to count sect members: %w", err)
+	var guRows []struct {
+		Rank     int   `json:"rank"`
+		Quantity int64 `json:"quantity"`
 	}
-	breakdown.MemberFee = int64(breakdown.MemberCount) * dailyMemberFee
-
-	// 2. Materials — counted only; priced flat by computeVaultFees.
-	matRows, err := q.QueryContext(ctx, `SELECT quantity FROM sect_vault_materials WHERE sect_id = $1 AND quantity > 0`, sectID)
-	if err == nil {
-		for matRows.Next() {
-			var qty int64
-			if err := matRows.Scan(&qty); err == nil && qty > 0 {
-				breakdown.MaterialsCount += qty
-			}
-		}
-		matRows.Close()
+	if err := json.Unmarshal(guJSON, &guRows); err != nil {
+		return 0, breakdown, fmt.Errorf("failed to decode sect vault Gu rows: %w", err)
 	}
-
-	// 3. Gu
 	var mortalGu, immortalGu []rankedQty
-	guRows, err := q.QueryContext(ctx, `SELECT rank, quantity FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0`, sectID)
-	if err == nil {
-		for guRows.Next() {
-			var rank int
-			var qty int64
-			if err := guRows.Scan(&rank, &qty); err == nil && qty > 0 {
-				if rank < 6 {
-					mortalGu = append(mortalGu, rankedQty{Rank: rank, Qty: qty})
-					breakdown.MortalGuCount += qty
-				} else {
-					immortalGu = append(immortalGu, rankedQty{Rank: rank, Qty: qty})
-					breakdown.ImmortalGuCount += qty
-				}
-			}
+	for _, gu := range guRows {
+		if gu.Rank < 6 {
+			mortalGu = append(mortalGu, rankedQty{Rank: gu.Rank, Qty: gu.Quantity})
+			breakdown.MortalGuCount += gu.Quantity
+		} else {
+			immortalGu = append(immortalGu, rankedQty{Rank: gu.Rank, Qty: gu.Quantity})
+			breakdown.ImmortalGuCount += gu.Quantity
 		}
-		guRows.Close()
 	}
 
-	// 4. Recipes
-	var recipeRanks []int
-	recRows, err := q.QueryContext(ctx, `SELECT recipe_id FROM sect_vault_recipes WHERE sect_id = $1`, sectID)
-	if err == nil {
-		for recRows.Next() {
-			var recID string
-			if err := recRows.Scan(&recID); err == nil {
-				targetRank := 1
-				if _, tr, _, parseErr := models.ParseRecipeID(recID); parseErr == nil && tr > 0 {
-					targetRank = tr
-				} else if guDef, ok := models.GetGuAny(recID); ok && guDef.Rank > 0 {
-					targetRank = guDef.Rank
-				}
-				recipeRanks = append(recipeRanks, targetRank)
-				breakdown.RecipesCount++
-			}
+	recipeRanks := make([]int, 0, len(recipeIDs))
+	for _, recID := range recipeIDs {
+		targetRank := 1
+		if _, tr, _, parseErr := models.ParseRecipeID(recID); parseErr == nil && tr > 0 {
+			targetRank = tr
+		} else if guDef, ok := models.GetGuAny(recID); ok && guDef.Rank > 0 {
+			targetRank = guDef.Rank
 		}
-		recRows.Close()
+		recipeRanks = append(recipeRanks, targetRank)
 	}
+	breakdown.RecipesCount = len(recipeRanks)
 
 	// 5. Price everything in one place so the formula stays testable.
 	materialsFee, mortalGuFee, immortalGuFee, recipesFee, saved := computeVaultFees(vaultFeeInput{

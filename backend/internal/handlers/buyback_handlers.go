@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
@@ -220,42 +221,55 @@ func CreateBuybackOrder(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Mục tiêu Cổ trùng không hợp lệ"})
 				return
 			}
+			guStates, err := lockGuInstances(tx, guInstIDs)
+			if err != nil {
+				httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Cổ trùng đăng bán", err))
+				return
+			}
+			reservations, err := loadActiveProductGuReservationsForInstances(tx, guInstIDs)
+			if err != nil {
+				httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", err))
+				return
+			}
 			for _, instID := range guInstIDs {
-				var ownerID uuid.UUID
-				var guID, state string
-				var rank int
-				var isVital, equipped, isLocked bool
-				err := tx.QueryRow(`SELECT player_id, gu_id, gu_rank, is_vital, equipped, is_locked, state FROM player_gu WHERE id = $1 FOR UPDATE`, instID).Scan(&ownerID, &guID, &rank, &isVital, &equipped, &isLocked, &state)
-				if err != nil || ownerID != creator.ID {
+				gu, found := guStates[instID]
+				if !found || gu.ownerID != creator.ID {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không sở hữu Cổ trùng đăng bán"})
 					return
 				}
-				if isVital {
+				if gu.isVital {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đăng bán Bổn Mạng Cổ!"})
 					return
 				}
-				if guID != target.GuID || rank != target.Rank {
+				if gu.guID != target.GuID || gu.rank != target.Rank {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đăng bán không đúng loại hoặc hạng đã chọn"})
 					return
 				}
-				if equipped || isLocked || state == "DEAD" {
+				if gu.equipped || gu.locked || gu.state == "DEAD" {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đang trang bị, bị khóa hoặc đã chết không thể đăng bán"})
 					return
 				}
-				reserved, reservationErr := guHasActiveProductReservation(tx, instID)
-				if reservationErr != nil {
-					httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
-					return
-				}
-				if reserved {
+				if reservations[instID] {
 					c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
 					return
 				}
-				_, err = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, BHTHSystemUUID, instID)
-				if err != nil {
-					httperr.Respond(c, httperr.Internal("Lỗi khóa Cổ trùng rao bán", err))
-					return
-				}
+			}
+			result, err := tx.Exec(`
+				UPDATE player_gu SET player_id = $1, equipped = false
+				WHERE id = ANY($2) AND player_id = $3
+			`, BHTHSystemUUID, pq.Array(guInstIDs), creator.ID)
+			if err != nil {
+				httperr.Respond(c, httperr.Internal("Lỗi khóa Cổ trùng rao bán", err))
+				return
+			}
+			affected, err := result.RowsAffected()
+			if err != nil {
+				httperr.Respond(c, httperr.Internal("Không thể xác nhận Cổ trùng đã khóa", err))
+				return
+			}
+			if affected != int64(len(guInstIDs)) {
+				c.JSON(http.StatusConflict, gin.H{"error": "Một hoặc nhiều Cổ trùng đã thay đổi, vui lòng thử lại"})
+				return
 			}
 			itemDataJSON, _ = json.Marshal(guInstIDs)
 		} else if req.ItemType == "Recipe" {
@@ -487,41 +501,55 @@ func SellToBuybackOrder(c *gin.Context) {
 				return
 			}
 			sort.Strings(guInstIDs)
+			guStates, err := lockGuInstances(tx, guInstIDs)
+			if err != nil {
+				httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Cổ trùng cần bán", err))
+				return
+			}
+			reservations, err := loadActiveProductGuReservationsForInstances(tx, guInstIDs)
+			if err != nil {
+				httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", err))
+				return
+			}
 			for _, instID := range guInstIDs {
-				var ownerID uuid.UUID
-				var guID, state string
-				var rank int
-				var isVital, equipped, isLocked bool
-				err := tx.QueryRow(`SELECT player_id, gu_id, gu_rank, is_vital, equipped, is_locked, state FROM player_gu WHERE id = $1 FOR UPDATE`, instID).Scan(&ownerID, &guID, &rank, &isVital, &equipped, &isLocked, &state)
-				if err != nil || ownerID != actor.ID {
+				gu, found := guStates[instID]
+				if !found || gu.ownerID != actor.ID {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không sở hữu Cổ trùng này"})
 					return
 				}
-				if isVital {
+				if gu.isVital {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể bán Bổn Mạng Cổ!"})
 					return
 				}
-				if guID != target.GuID || rank != target.Rank {
+				if gu.guID != target.GuID || gu.rank != target.Rank {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không đúng loại hoặc hạng mà đơn thu mua yêu cầu"})
 					return
 				}
-				if equipped || isLocked || state == "DEAD" {
+				if gu.equipped || gu.locked || gu.state == "DEAD" {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đang trang bị, bị khóa hoặc đã chết không thể bán"})
 					return
 				}
-				reserved, reservationErr := guHasActiveProductReservation(tx, instID)
-				if reservationErr != nil {
-					httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
-					return
-				}
-				if reserved {
+				if reservations[instID] {
 					c.JSON(http.StatusConflict, gin.H{"error": "Cổ đang được Sát Chiêu hoặc Tiên Cổ Ốc active giữ chỗ; hãy tháo công trình trước"})
 					return
 				}
-				if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2 AND player_id = $3`, buyerUUID, instID, actor.ID); err != nil {
-					httperr.Respond(c, httperr.Internal("Lỗi chuyển giao Cổ trùng", err))
-					return
-				}
+			}
+			result, err := tx.Exec(`
+				UPDATE player_gu SET player_id = $1, equipped = false
+				WHERE id = ANY($2) AND player_id = $3
+			`, buyerUUID, pq.Array(guInstIDs), actor.ID)
+			if err != nil {
+				httperr.Respond(c, httperr.Internal("Lỗi chuyển giao Cổ trùng", err))
+				return
+			}
+			affected, err := result.RowsAffected()
+			if err != nil {
+				httperr.Respond(c, httperr.Internal("Không thể xác nhận Cổ trùng đã chuyển giao", err))
+				return
+			}
+			if affected != int64(len(guInstIDs)) {
+				c.JSON(http.StatusConflict, gin.H{"error": "Một hoặc nhiều Cổ trùng đã thay đổi, vui lòng thử lại"})
+				return
 			}
 		} else if o.ItemType == "Recipe" {
 			var recTarget string

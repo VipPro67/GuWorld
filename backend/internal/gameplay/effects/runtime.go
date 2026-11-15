@@ -248,21 +248,52 @@ func (c *Compiled) Capabilities() []Capability {
 	return out
 }
 
-// Capability returns a defensive copy of the first compiled capability with
-// the requested code. Capability consumers must query this projection instead
-// of interpreting the persisted authoring JSON.
+// Capability scans compiled operations and returns a defensive copy of the
+// first capability with the requested code. Consumers should query this
+// projection instead of interpreting persisted authoring JSON.
 func (c *Compiled) Capability(code string) (Capability, bool) {
 	if c == nil {
 		return Capability{}, false
 	}
 	code = strings.ToUpper(strings.TrimSpace(code))
-	for _, capability := range c.Capabilities() {
-		if strings.ToUpper(capability.Code) == code {
-			return capability, true
+	for _, block := range c.blocks {
+		if block.trigger != TriggerCapability {
+			continue
+		}
+		for _, op := range block.operations {
+			if op.Type == OpUnique && op.Code == code {
+				return Capability{Code: op.Code, Params: append([]byte(nil), op.Params...)}, true
+			}
 		}
 	}
 	return Capability{}, false
 }
+
+// LastNativeParamFloat returns the last numeric native-operation parameter
+// matching trigger, code, and key without copying unrelated operations.
+func (c *Compiled) LastNativeParamFloat(trigger Trigger, code, key string) (float64, bool) {
+	if c == nil {
+		return 0, false
+	}
+	code = strings.ToUpper(strings.TrimSpace(code))
+	var value float64
+	found := false
+	for _, block := range c.blocks {
+		if block.trigger != trigger {
+			continue
+		}
+		for _, op := range block.operations {
+			if op.Type != OpUnique || op.Code != code {
+				continue
+			}
+			if number, ok := op.Values[key].(float64); ok {
+				value, found = number, true
+			}
+		}
+	}
+	return value, found
+}
+
 func (c *Compiled) Growth() []Growth {
 	var out []Growth
 	for _, b := range c.blocks {
@@ -303,13 +334,22 @@ func (c *Compiled) Operations(trigger Trigger) []CompiledOperation {
 	return out
 }
 
-// StatValue sums a typed stat projection for one trigger and subtype.
+// StatValue sums a typed stat projection for one trigger and subtype. It scans
+// immutable compiled operations directly so scalar reads do not clone them.
 func (c *Compiled) StatValue(trigger Trigger, stat, subType string) float64 {
 	stat, subType = strings.ToUpper(stat), strings.ToUpper(subType)
 	var total float64
-	for _, op := range c.Operations(trigger) {
-		if op.Type == OpStatMod && op.Stat == stat && (subType == "" || op.SubType == subType) {
-			total += op.Value
+	if c == nil {
+		return total
+	}
+	for _, block := range c.blocks {
+		if block.trigger != trigger {
+			continue
+		}
+		for _, op := range block.operations {
+			if op.Type == OpStatMod && op.Stat == stat && (subType == "" || op.SubType == subType) {
+				total += op.Value
+			}
 		}
 	}
 	return total
@@ -317,19 +357,24 @@ func (c *Compiled) StatValue(trigger Trigger, stat, subType string) float64 {
 func cloneOps(in []CompiledOperation) []CompiledOperation {
 	out := append([]CompiledOperation(nil), in...)
 	for i := range out {
-		out[i].Params = append([]byte(nil), out[i].Params...)
-		out[i].Conditions = append([]Condition(nil), out[i].Conditions...)
-		out[i].Values = cloneValues(out[i].Values)
-		if out[i].Target != nil {
-			t := *out[i].Target
-			out[i].Target = &t
-		}
-		if out[i].Status != nil {
-			s := *out[i].Status
-			out[i].Status = &s
-		}
+		out[i] = cloneOperation(out[i])
 	}
 	return out
+}
+
+func cloneOperation(op CompiledOperation) CompiledOperation {
+	op.Params = append([]byte(nil), op.Params...)
+	op.Conditions = append([]Condition(nil), op.Conditions...)
+	op.Values = cloneValues(op.Values)
+	if op.Target != nil {
+		target := *op.Target
+		op.Target = &target
+	}
+	if op.Status != nil {
+		status := *op.Status
+		op.Status = &status
+	}
+	return op
 }
 
 func cloneValues(input map[string]any) map[string]any {
@@ -348,13 +393,33 @@ func (c *Compiled) NativeMechanics() []CompiledOperation {
 	for _, b := range c.blocks {
 		for _, op := range b.operations {
 			if op.Type == OpUnique {
-				cloned := cloneOps([]CompiledOperation{op})[0]
+				cloned := cloneOperation(op)
 				cloned.Trigger = b.trigger
 				out = append(out, cloned)
 			}
 		}
 	}
 	return out
+}
+
+// NativeMechanic returns a defensive copy of the first native operation with
+// the requested code without cloning unrelated operations.
+func (c *Compiled) NativeMechanic(code string) (CompiledOperation, bool) {
+	if c == nil {
+		return CompiledOperation{}, false
+	}
+	code = strings.ToUpper(strings.TrimSpace(code))
+	for _, block := range c.blocks {
+		for _, op := range block.operations {
+			if op.Type != OpUnique || op.Code != code {
+				continue
+			}
+			cloned := cloneOperation(op)
+			cloned.Trigger = block.trigger
+			return cloned, true
+		}
+	}
+	return CompiledOperation{}, false
 }
 
 func (c *Compiled) Evaluate(ctx Context, event Event) (Result, error) {

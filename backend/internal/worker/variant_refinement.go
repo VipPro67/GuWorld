@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -32,6 +34,18 @@ type autoRecipe struct {
 type refinementCandidate struct {
 	id   string
 	rank int
+}
+
+type refinementInventoryEntry struct {
+	materialID string
+	category   string
+	quantity   int64
+}
+
+type refinementMaterialDeduction struct {
+	materialID string
+	category   string
+	quantity   int64
 }
 
 // processApertureRefinement performs at most one attempt per queued job and
@@ -190,13 +204,42 @@ func processRefinementJob(ctx context.Context, database *sql.DB, jobID string, r
 		}
 	}
 
-	for materialID, quantity := range recipe.materials {
-		var available int64
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(quantity),0) FROM player_inventory_items WHERE player_id=$1 AND item_id=$2`, playerID, materialID).Scan(&available); err != nil {
+	materialIDs := make([]string, 0, len(recipe.materials))
+	for materialID := range recipe.materials {
+		materialIDs = append(materialIDs, materialID)
+	}
+	sort.Strings(materialIDs)
+	if len(materialIDs) > 0 {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT item_id, COALESCE(SUM(quantity), 0)
+			FROM player_inventory_items
+			WHERE player_id = $1 AND item_id = ANY($2)
+			GROUP BY item_id
+		`, playerID, pq.Array(materialIDs))
+		if err != nil {
 			return err
 		}
-		if available < quantity {
-			return pauseRefinement(ctx, tx, jobID, "Không đủ nguyên liệu")
+		availableByMaterial := make(map[string]int64, len(materialIDs))
+		for rows.Next() {
+			var materialID string
+			var available int64
+			if err := rows.Scan(&materialID, &available); err != nil {
+				rows.Close()
+				return err
+			}
+			availableByMaterial[materialID] = available
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		for _, materialID := range materialIDs {
+			if availableByMaterial[materialID] < recipe.materials[materialID] {
+				return pauseRefinement(ctx, tx, jobID, "Không đủ nguyên liệu")
+			}
 		}
 	}
 	var canPay bool
@@ -207,10 +250,8 @@ func processRefinementJob(ctx context.Context, database *sql.DB, jobID string, r
 		return pauseRefinement(ctx, tx, jobID, "Không đủ nguyên thạch")
 	}
 
-	for materialID, quantity := range recipe.materials {
-		if err := deductRefinementMaterial(ctx, tx, playerID, materialID, quantity); err != nil {
-			return err
-		}
+	if err := deductRefinementMaterials(ctx, tx, playerID, materialIDs, recipe.materials); err != nil {
+		return err
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE players SET primeval_stones=primeval_stones-$2,immortal_stones=immortal_stones-$3 WHERE id=$1 AND primeval_stones >= $2 AND immortal_stones >= $3`, playerID, recipe.primevalCost, recipe.immortalCost)
 	if err != nil {
@@ -259,28 +300,61 @@ func processRefinementJob(ctx context.Context, database *sql.DB, jobID string, r
 	return tx.Commit()
 }
 
-func deductRefinementMaterial(ctx context.Context, tx *sql.Tx, playerID, itemID string, quantity int64) error {
+func planRefinementMaterialDeductions(materialIDs []string, materials map[string]int64, inventory map[string][]refinementInventoryEntry) ([]refinementMaterialDeduction, bool) {
+	var deductions []refinementMaterialDeduction
+	for _, materialID := range materialIDs {
+		entries := inventory[materialID]
+		var available int64
+		for _, entry := range entries {
+			available += entry.quantity
+		}
+		quantity := materials[materialID]
+		if available < quantity {
+			return nil, false
+		}
+
+		remaining := quantity
+		for _, entry := range entries {
+			if remaining == 0 {
+				break
+			}
+			deduct := entry.quantity
+			if deduct > remaining {
+				deduct = remaining
+			}
+			deductions = append(deductions, refinementMaterialDeduction{
+				materialID: materialID,
+				category:   entry.category,
+				quantity:   deduct,
+			})
+			remaining -= deduct
+		}
+	}
+	return deductions, true
+}
+
+func deductRefinementMaterials(ctx context.Context, tx *sql.Tx, playerID string, materialIDs []string, materials map[string]int64) error {
+	if len(materialIDs) == 0 {
+		return nil
+	}
 	rows, err := tx.QueryContext(ctx, `
-		SELECT category, quantity FROM player_inventory_items
-		WHERE player_id=$1 AND item_id=$2 AND quantity>0
-		ORDER BY quantity DESC FOR UPDATE SKIP LOCKED`, playerID, itemID)
+		SELECT item_id, category, quantity
+		FROM player_inventory_items
+		WHERE player_id=$1 AND item_id=ANY($2) AND quantity>0
+		ORDER BY item_id, quantity DESC
+		FOR UPDATE SKIP LOCKED
+	`, playerID, pq.Array(materialIDs))
 	if err != nil {
 		return err
 	}
-	type inventoryRow struct {
-		category string
-		quantity int64
-	}
-	var entries []inventoryRow
-	var available int64
+	inventory := make(map[string][]refinementInventoryEntry, len(materialIDs))
 	for rows.Next() {
-		var entry inventoryRow
-		if err := rows.Scan(&entry.category, &entry.quantity); err != nil {
+		var entry refinementInventoryEntry
+		if err := rows.Scan(&entry.materialID, &entry.category, &entry.quantity); err != nil {
 			rows.Close()
 			return err
 		}
-		entries = append(entries, entry)
-		available += entry.quantity
+		inventory[entry.materialID] = append(inventory[entry.materialID], entry)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -289,24 +363,34 @@ func deductRefinementMaterial(ctx context.Context, tx *sql.Tx, playerID, itemID 
 	if err := rows.Close(); err != nil {
 		return err
 	}
-	if available < quantity {
+	deductions, sufficient := planRefinementMaterialDeductions(materialIDs, materials, inventory)
+	if !sufficient {
 		return sql.ErrNoRows
 	}
-	remaining := quantity
-	for _, entry := range entries {
-		if remaining == 0 {
-			break
-		}
-		deduct := entry.quantity
-		if deduct > remaining {
-			deduct = remaining
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE player_inventory_items SET quantity=quantity-$4,updated_at=NOW() WHERE player_id=$1 AND item_id=$2 AND category=$3`, playerID, itemID, entry.category, deduct); err != nil {
-			return err
-		}
-		remaining -= deduct
+	if len(deductions) == 0 {
+		return nil
 	}
-	return nil
+	itemIDs := make([]string, len(deductions))
+	categories := make([]string, len(deductions))
+	quantities := make([]int64, len(deductions))
+	for i, deduction := range deductions {
+		itemIDs[i] = deduction.materialID
+		categories[i] = deduction.category
+		quantities[i] = deduction.quantity
+	}
+	_, err = tx.ExecContext(ctx, `
+		UPDATE player_inventory_items AS inventory
+		SET quantity=inventory.quantity-deduction.quantity, updated_at=NOW()
+		FROM (
+			SELECT unnest($1::text[]) AS item_id,
+			       unnest($2::text[]) AS category,
+			       unnest($3::bigint[]) AS quantity
+		) AS deduction
+		WHERE inventory.player_id=$4
+		  AND inventory.item_id=deduction.item_id
+		  AND inventory.category=deduction.category
+	`, pq.Array(itemIDs), pq.Array(categories), pq.Array(quantities), playerID)
+	return err
 }
 
 func blockRefinement(ctx context.Context, tx *sql.Tx, jobID, reason string) error {
