@@ -150,9 +150,16 @@ func advanceMartialRound(tournamentID string) {
 	}
 
 	if currentRound >= totalRounds {
-		finishMartialTournament(tx, tournamentID, currentRound)
-		_ = tx.Commit()
+		if err := finishMartialTournament(tx, tournamentID, currentRound); err != nil {
+			logger.S.Errorf("Martial Arena: failed to settle tournament %s: %v", tournamentID, err)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			logger.S.Errorf("Martial Arena: failed to commit tournament finish %s: %v", tournamentID, err)
+			return
+		}
 		invalidateMartialCache(tournamentID)
+		BroadcastMartialArenaEvent("tournament_finished", tournamentID, nil)
 		return
 	}
 
@@ -188,9 +195,16 @@ func advanceMartialRound(tournamentID string) {
 	}
 
 	if len(winners) <= 1 {
-		finishMartialTournament(tx, tournamentID, currentRound)
-		_ = tx.Commit()
+		if err := finishMartialTournament(tx, tournamentID, currentRound); err != nil {
+			logger.S.Errorf("Martial Arena: failed to settle tournament %s: %v", tournamentID, err)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			logger.S.Errorf("Martial Arena: failed to commit tournament finish %s: %v", tournamentID, err)
+			return
+		}
 		invalidateMartialCache(tournamentID)
+		BroadcastMartialArenaEvent("tournament_finished", tournamentID, nil)
 		return
 	}
 
@@ -231,7 +245,7 @@ func advanceMartialRound(tournamentID string) {
 }
 
 // finishMartialTournament crowns the champion, awards rewards, and marks FINISHED.
-func finishMartialTournament(tx *sql.Tx, tournamentID string, finalRound int) {
+func finishMartialTournament(tx *sql.Tx, tournamentID string, finalRound int) error {
 	var championCombatantID string
 	err := tx.QueryRow(`
 		SELECT COALESCE(winner_combatant_id, combatant_a_id) FROM martial_matches
@@ -241,32 +255,37 @@ func finishMartialTournament(tx *sql.Tx, tournamentID string, finalRound int) {
 	`, tournamentID, finalRound).Scan(&championCombatantID)
 
 	if err != nil || championCombatantID == "" {
-		_, _ = tx.Exec(`UPDATE martial_tournaments SET status = 'FINISHED', finished_at = NOW() WHERE id = $1`, tournamentID)
-		BroadcastMartialArenaEvent("tournament_finished", tournamentID, nil)
-		return
+		if err != nil {
+			return fmt.Errorf("find martial arena champion for tournament %s: %w", tournamentID, err)
+		}
+		return fmt.Errorf("tournament %s has no champion combatant", tournamentID)
 	}
 
 	var championPlayerID string
-	_ = tx.QueryRow(`SELECT player_id FROM martial_combatants WHERE id = $1`, championCombatantID).Scan(&championPlayerID)
-
-	_, _ = tx.Exec(`
-		UPDATE martial_tournaments SET status = 'FINISHED', champion_player_id = $1, finished_at = NOW()
-		WHERE id = $2
-	`, championPlayerID, tournamentID)
-
-	if err := awardMartialChampionRewards(tx, tournamentID); err != nil {
-		logger.S.Errorf("Martial Arena: failed to award rewards for %s: %v", tournamentID, err)
+	if err := tx.QueryRow(`SELECT player_id FROM martial_combatants WHERE id = $1`, championCombatantID).Scan(&championPlayerID); err != nil {
+		return fmt.Errorf("load martial arena champion player %s: %w", championCombatantID, err)
 	}
 
-	_, _ = tx.Exec(`
+	if _, err := tx.Exec(`
+		UPDATE martial_tournaments SET status = 'FINISHED', champion_player_id = $1, finished_at = NOW()
+		WHERE id = $2
+	`, championPlayerID, tournamentID); err != nil {
+		return fmt.Errorf("mark martial arena tournament %s finished: %w", tournamentID, err)
+	}
+
+	if err := awardMartialChampionRewards(tx, tournamentID); err != nil {
+		return fmt.Errorf("award martial arena rewards for %s: %w", tournamentID, err)
+	}
+
+	if _, err := tx.Exec(`
 		INSERT INTO messages (sender_id, content, channel)
 		VALUES ('00000000-0000-0000-0000-000000000000', $1, 'world')
-	`, fmt.Sprintf("[Đại Hội Võ Thuật] Giải đấu rank %d đã kết thúc! Chúc mừng nhà vô địch!", rankOfMartialTournament(tx, tournamentID)))
+	`, fmt.Sprintf("[Đại Hội Võ Thuật] Giải đấu rank %d đã kết thúc! Chúc mừng nhà vô địch!", rankOfMartialTournament(tx, tournamentID))); err != nil {
+		logger.S.Errorf("Martial Arena: failed to announce tournament %s: %v", tournamentID, err)
+	}
 
-	BroadcastMartialArenaEvent("tournament_finished", tournamentID, map[string]interface{}{
-		"champion_player_id": championPlayerID,
-	})
 	logger.S.Infof("Martial Arena: tournament %s finished with champion %s", tournamentID, championPlayerID)
+	return nil
 }
 
 func rankOfMartialTournament(q db.Queryer, tournamentID string) int {

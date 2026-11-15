@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { GamePanel, GameButton, GameCard, GameTabs } from "@/components/ui";
+import { Swords, Trophy } from "lucide-react";
 import DeathArenaBracket from "./DeathArenaBracket";
 import DeathArenaTeamView from "./DeathArenaTeamView";
 import DeathArenaRewards from "./DeathArenaRewards";
@@ -13,7 +14,9 @@ export default function DeathArenaView() {
     deathArenaTournament,
     deathArenaMyTeam,
     deathArenaLoading,
+    deathArenaRewards,
     fetchDeathArenaCurrent,
+    fetchDeathArenaRewards,
     registerDeathArena,
     unregisterDeathArena,
   } = useGameStore();
@@ -22,7 +25,8 @@ export default function DeathArenaView() {
 
   useEffect(() => {
     fetchDeathArenaCurrent();
-  }, [fetchDeathArenaCurrent]);
+    fetchDeathArenaRewards();
+  }, [fetchDeathArenaCurrent, fetchDeathArenaRewards]);
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -45,16 +49,26 @@ export default function DeathArenaView() {
   };
 
   const isRegistered = deathArenaMyTeam !== null;
+  const pendingRewardCount = deathArenaRewards.filter((reward) => !reward.claimed).length;
 
   return (
-    <GamePanel className="p-4">
-      <h2 className="text-xl font-bold mb-4 text-center">Đấu Trường Sinh Tử</h2>
+    <GamePanel className="p-4 sm:p-5">
+      <header className="mb-5 flex items-center gap-3 border-b border-white/10 pb-4">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-300/20 bg-amber-300/10 text-amber-200">
+          <Swords className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-zinc-100">Đấu Trường Sinh Tử</h2>
+          <p className="mt-0.5 text-sm text-zinc-400">Lập đội, vượt từng vòng và tranh ngôi quán quân.</p>
+        </div>
+      </header>
 
       {/* Tournament Status Banner */}
       {deathArenaTournament ? (
-        <div className="mb-4 p-3 bg-black/30 rounded-lg">
+        <div className="mb-4 rounded-xl border border-white/10 bg-gradient-to-r from-amber-300/[0.08] to-black/25 p-4">
           <div className="flex justify-between items-center">
-            <span className={`font-semibold ${getStatusColor(deathArenaTournament.status)}`}>
+            <span className={`flex items-center gap-2 font-semibold ${getStatusColor(deathArenaTournament.status)}`}>
+              <span className="h-2 w-2 rounded-full bg-current" />
               {getStatusLabel(deathArenaTournament.status)}
             </span>
             <span className="text-sm text-gray-400">
@@ -73,8 +87,9 @@ export default function DeathArenaView() {
           )}
         </div>
       ) : (
-        <div className="mb-4 p-3 bg-black/30 rounded-lg text-center text-gray-400">
-          Chưa có giải đấu nào. Giải đấu tiếp theo: 17:00 Thứ 7 hàng tuần (Mở đăng ký từ 16:00)
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-zinc-300">
+          <Trophy className="h-5 w-5 shrink-0 text-amber-300/80" />
+          <span>Chưa có giải đang mở. Đăng ký từ 16:00, khai chiến lúc 17:00 Thứ 7 hàng tuần.</span>
         </div>
       )}
 
@@ -107,7 +122,7 @@ export default function DeathArenaView() {
           { id: "current", label: "Giải Đấu" },
           { id: "bracket", label: "Bảng Đấu" },
           { id: "team", label: "Đội Của Tôi" },
-          { id: "rewards", label: "Phần Thưởng" },
+          { id: "rewards", label: pendingRewardCount ? `Phần thưởng · ${pendingRewardCount}` : "Phần thưởng" },
           { id: "history", label: "Lịch Sử" },
         ]}
         activeId={activeTab}

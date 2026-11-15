@@ -88,7 +88,7 @@ func awardMartialChampionRewards(tx *sql.Tx, tournamentID string) error {
 			(tournament_id, player_id, placement, combatant_id, title, reward_stones, reward_immortal_stones, reward_gu_id, reward_gu_rank)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		`, tournamentID, playerID, place, combatantID, r.title, r.stones, r.immortalStones, guIDArg, guRankArg); err != nil {
-			logger.S.Errorf("Martial Arena: failed to insert champion reward: %v", err)
+			return fmt.Errorf("insert martial arena placement %d reward for player %s: %w", place, playerID, err)
 		}
 
 		if r.guID != "" {
@@ -102,11 +102,13 @@ func awardMartialChampionRewards(tx *sql.Tx, tournamentID string) error {
 				IsVital:    false,
 			}
 			if err := db.AddPlayerGu(tx, playerID, gu); err != nil {
-				logger.S.Errorf("Martial Arena: failed to award Gu %s to %s: %v", r.guID, playerID, err)
+				return fmt.Errorf("award martial arena Gu %s to player %s: %w", r.guID, playerID, err)
 			}
 		}
 
-		_, _ = tx.Exec(`UPDATE martial_combatants SET final_placement = $1 WHERE id = $2`, place, combatantID)
+		if _, err := tx.Exec(`UPDATE martial_combatants SET final_placement = $1 WHERE id = $2`, place, combatantID); err != nil {
+			return fmt.Errorf("save martial arena placement %d for combatant %s: %w", place, combatantID, err)
+		}
 	}
 	return nil
 }

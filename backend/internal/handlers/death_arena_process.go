@@ -295,7 +295,8 @@ func advanceToNextRound(tournamentID string) {
 
 		// Award champion rewards
 		if err := awardChampionRewards(tx, tournamentID, championTeamID, 1); err != nil {
-			logger.S.Errorf("Death Arena: Failed to award champion rewards: %v", err)
+			logger.S.Errorf("Death Arena: failed to settle champion rewards: %v", err)
+			return
 		}
 
 		// Send notification
@@ -360,7 +361,8 @@ func advanceToNextRound(tournamentID string) {
 			`, championTeamID, tournamentID)
 
 			if err := awardChampionRewards(tx, tournamentID, championTeamID, 1); err != nil {
-				logger.S.Errorf("Death Arena: Failed to award champion rewards: %v", err)
+				logger.S.Errorf("Death Arena: failed to settle champion rewards: %v", err)
+				return
 			}
 
 			_, _ = tx.Exec(`

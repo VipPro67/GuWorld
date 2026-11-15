@@ -8,7 +8,6 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 var RoundDuration = 5 * time.Minute
@@ -78,7 +77,7 @@ func GenerateBracket(tournamentID string) error {
 
 			// Award champion rewards
 			if err := awardChampionRewards(tx, tournamentID, teams[0].ID, 1); err != nil {
-				logger.S.Errorf("Failed to award champion rewards: %v", err)
+				return err
 			}
 		} else {
 			// 0 teams registered - tournament cannot proceed

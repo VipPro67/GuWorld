@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { GamePanel, GameCard, GameTabs } from "@/components/ui";
+import { Swords, Trophy } from "lucide-react";
 import { rankLabel } from "@/lib/combat";
 import MartialArenaBracket from "./MartialArenaBracket";
 import MartialArenaRewards from "./MartialArenaRewards";
@@ -29,25 +30,32 @@ const statusColor = (status: string) => {
 };
 
 export default function MartialArenaView() {
-  const { martialCurrent, fetchMartialCurrent } = useGameStore();
+  const { martialCurrent, martialRewards, fetchMartialCurrent, fetchMartialRewards } = useGameStore();
   const [activeTab, setActiveTab] = useState<"current" | "bracket" | "rewards" | "history">("current");
+  const pendingRewardCount = martialRewards.filter((reward) => !reward.claimed).length;
 
   useEffect(() => {
     fetchMartialCurrent();
-  }, [fetchMartialCurrent]);
+    fetchMartialRewards();
+  }, [fetchMartialCurrent, fetchMartialRewards]);
 
   return (
-    <GamePanel className="p-4">
-      <h2 className="text-xl font-bold mb-1 text-center">Đại Hội Võ Thuật</h2>
-      <p className="text-sm text-gray-400 text-center mb-4">
-        Giải đấu 1v1 theo cảnh giới — mở định kỳ 12:00 Thứ 3 hàng tuần. Các đạo hữu online cùng cảnh giới sẽ tự động được gom vào bảng đấu.
-      </p>
+    <GamePanel className="p-4 sm:p-5">
+      <header className="mb-5 flex items-center gap-3 border-b border-white/10 pb-4">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-300/20 bg-amber-300/10 text-amber-200">
+          <Swords className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-zinc-100">Đại Hội Võ Thuật</h2>
+          <p className="mt-0.5 text-sm text-zinc-400">Đấu loại trực tiếp 1v1 giữa các đạo hữu cùng cảnh giới.</p>
+        </div>
+      </header>
 
       <GameTabs
         items={[
           { id: "current", label: "Đang Diễn Ra" },
           { id: "bracket", label: "Bảng Đấu" },
-          { id: "rewards", label: "Phần Thưởng" },
+          { id: "rewards", label: pendingRewardCount ? `Phần thưởng · ${pendingRewardCount}` : "Phần thưởng" },
           { id: "history", label: "Lịch Sử" },
         ]}
         activeId={activeTab}
@@ -58,12 +66,14 @@ export default function MartialArenaView() {
         {activeTab === "current" && (
           <div className="space-y-3">
             {martialCurrent.length === 0 ? (
-              <div className="text-center text-gray-400 py-8">
-                Hiện không có giải đấu nào đang diễn ra.
+              <div className="rounded-xl border border-white/10 bg-black/20 px-6 py-10 text-center">
+                <Trophy className="mx-auto mb-3 h-8 w-8 text-amber-300/70" />
+                <p className="font-semibold text-zinc-200">Chưa có bảng đấu đang mở</p>
+                <p className="mt-1 text-sm text-zinc-400">Người chơi đủ điều kiện và đang online sẽ được đưa vào giải tự động.</p>
               </div>
             ) : (
               martialCurrent.map((entry) => (
-                <GameCard key={entry.tournament.id} className="p-4">
+                <GameCard key={entry.tournament.id} className="border border-white/10 bg-gradient-to-r from-amber-300/[0.06] to-black/20 p-4">
                   <div className="flex justify-between items-center">
                     <div className="font-bold">
                       {rankName(entry.rank)} — {statusLabel(entry.tournament.status)}

@@ -160,7 +160,7 @@ Ví hiển thị số dư và giao dịch. Top-up tạo order và chờ kết qu
 
 - **Võ Đài:** challenge, leaderboard và shop phần thưởng.
 - **Tháp Chiến Thuật:** leo tower theo encounter theo lượt; xem trạng thái và leaderboard. Hạn mức/ghi nhận thất bại theo chu kỳ do server quản lý.
-- **Đấu Trường Sinh Tử / Đại Hội Võ Thuật:** giải đấu có đăng ký hoặc ghép trận, bracket, log, lịch sử và phần thưởng riêng.
+- **Đấu Trường Sinh Tử / Đại Hội Võ Thuật:** giải đấu có đăng ký hoặc ghép trận, bracket, log, lịch sử và phần thưởng riêng. Khi giải kết thúc, mở tab **Phần thưởng** và bấm **Nhận thưởng** để nhận tiền cùng danh hiệu; số thưởng chờ nhận hiển thị ngay trên tab.
 - **Giải Trí/Gacha:** xem pool và mở lượt; kết quả, giới hạn và tiêu hao lấy từ cấu hình server.
 - **Cược Linh Thú:** xem vòng cược hiện tại/lịch sử, đặt cược vào một bên khi vòng còn nhận cược. Kết quả chỉ được thông báo ở chat thế giới khi vòng đó có người cược.
 - **Chat và mail:** thư riêng có inbox/thread; chat Bảo Hoàng là kênh công khai riêng. Rate limit và bộ lọc nội dung áp dụng ở server.

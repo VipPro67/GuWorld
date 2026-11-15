@@ -2336,6 +2336,7 @@ export const useGameStore = create<GameState>((set, get) => {
             if (useUIStore.getState().currentView === "death-arena") {
               get().fetchDeathArenaBracket();
             }
+            get().fetchDeathArenaRewards();
           }
         } catch (err) {
           console.error("Failed to process death arena event", err);
@@ -2366,6 +2367,7 @@ export const useGameStore = create<GameState>((set, get) => {
               get().fetchMartialCurrent();
             }
           } else if (eventType === "tournament_finished") {
+            get().fetchMartialRewards();
             if (useUIStore.getState().currentView === "martial-arena") {
               get().fetchMartialBracket();
               get().fetchMartialCurrent();

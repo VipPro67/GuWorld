@@ -69,7 +69,10 @@ type teamMemberCombatant struct {
 // awardChampionRewards awards rewards to top 3 teams
 func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, placement int) error {
 	// Get all teams ordered by placement
-	teams := getTeamPlacements(tx, tournamentID)
+	teams, err := getTeamPlacements(tx, tournamentID)
+	if err != nil {
+		return err
+	}
 
 	placementTitles := map[int]string{
 		1: "Quán Quân Đấu Trường Sinh Tử",
@@ -111,7 +114,10 @@ func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, place
 		gu := placementGuRewards[place]
 
 		// Get team members
-		members := getTeamMembers(tx, teamID)
+		members, err := getTeamMembers(tx, teamID)
+		if err != nil {
+			return err
+		}
 		for _, memberID := range members {
 			_, err := tx.Exec(`
 				INSERT INTO death_arena_champion_rewards 
@@ -119,7 +125,7 @@ func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, place
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			`, tournamentID, memberID, place, teamID, title, stones, immortalStones, gu.guID, gu.rank)
 			if err != nil {
-				logger.S.Errorf("Failed to insert champion reward: %v", err)
+				return fmt.Errorf("insert death arena placement %d reward for player %s: %w", place, memberID, err)
 			}
 
 			// Award Gu directly to player
@@ -133,26 +139,31 @@ func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, place
 				IsVital:    false,
 			}
 			if err := db.AddPlayerGu(tx, memberID, newGu); err != nil {
-				logger.S.Errorf("Failed to award Gu %s rank %d to player %s: %v", gu.guID, gu.rank, memberID, err)
+				return fmt.Errorf("award Gu %s rank %d to player %s: %w", gu.guID, gu.rank, memberID, err)
 			}
 		}
 
 		// Update team final placement
-		_, _ = tx.Exec(`UPDATE death_arena_teams SET final_placement = $1 WHERE id = $2`, place, teamID)
+		if _, err := tx.Exec(`UPDATE death_arena_teams SET final_placement = $1 WHERE id = $2`, place, teamID); err != nil {
+			return fmt.Errorf("save death arena placement %d for team %s: %w", place, teamID, err)
+		}
 	}
 
 	return nil
 }
 
 // getTeamPlacements returns team IDs ordered by placement
-func getTeamPlacements(tx *sql.Tx, tournamentID string) []string {
+func getTeamPlacements(tx *sql.Tx, tournamentID string) ([]string, error) {
 	// First get champion
 	var championID string
 	err := tx.QueryRow(`
 		SELECT champion_team_id FROM death_arena_tournaments WHERE id = $1
 	`, tournamentID).Scan(&championID)
 	if err != nil || championID == "" {
-		return nil
+		if err == nil {
+			err = fmt.Errorf("tournament %s has no champion team", tournamentID)
+		}
+		return nil, err
 	}
 
 	result := []string{championID}
@@ -169,6 +180,8 @@ func getTeamPlacements(tx *sql.Tx, tournamentID string) []string {
 	`, tournamentID).Scan(&runnerUp)
 	if err == nil && runnerUp != nil && *runnerUp != "" {
 		result = append(result, *runnerUp)
+	} else if err != nil && err != sql.ErrNoRows {
+		return nil, err
 	}
 
 	// Get 3rd place from semi-final losers
@@ -189,32 +202,46 @@ func getTeamPlacements(tx *sql.Tx, tournamentID string) []string {
 		LIMIT 1
 	`, tournamentID, championID, runnerUpID)
 	if err == nil {
-		defer rows.Close()
 		if rows.Next() {
 			var third string
-			if errScan := rows.Scan(&third); errScan == nil && third != "" {
+			if errScan := rows.Scan(&third); errScan != nil {
+				rows.Close()
+				return nil, errScan
+			}
+			if third != "" {
 				result = append(result, third)
 			}
 		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	} else if err != sql.ErrNoRows {
+		return nil, err
 	}
 
-	return result
+	return result, nil
 }
 
 // getTeamMembers returns player IDs for a team
-func getTeamMembers(tx *sql.Tx, teamID string) []string {
+func getTeamMembers(tx *sql.Tx, teamID string) ([]string, error) {
 	rows, err := tx.Query(`SELECT player_id FROM death_arena_team_members WHERE team_id = $1`, teamID)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 
 	var members []string
 	for rows.Next() {
 		var id string
-		if errScan := rows.Scan(&id); errScan == nil {
-			members = append(members, id)
+		if errScan := rows.Scan(&id); errScan != nil {
+			return nil, errScan
 		}
+		members = append(members, id)
 	}
-	return members
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return members, nil
 }
