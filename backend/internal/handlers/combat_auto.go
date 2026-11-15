@@ -105,6 +105,10 @@ func AutoCombatStart(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không trong trạng thái chiến đấu."})
 		return
 	}
+	if player.ActiveCombat.EnemyType == "PVP" && player.ActiveCombat.CombatMode == "real" {
+		c.JSON(http.StatusConflict, gin.H{"error": "PvP thật cần cả hai bên khóa đội hình và bắt đầu qua phiên chiến đấu."})
+		return
+	}
 	if !combatOwnedByPlayer(player.ActiveCombat, player.ID.String()) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Trận chiến tổ đội do trưởng nhóm điều khiển."})
 		return
@@ -863,7 +867,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	var autoRestoreMana bool
 	var manaThreshold float64
 
-	if isInitiator && reqLoadout != nil && (len(reqLoadout.GuIds) > 0 || reqLoadout.NoGuSkills) {
+	if reqLoadout != nil && (len(reqLoadout.GuIds) > 0 || reqLoadout.NoGuSkills) {
 		if !reqLoadout.NoGuSkills {
 			for _, id := range reqLoadout.GuIds {
 				if inst, ok := resolveGuInstance(id); ok {

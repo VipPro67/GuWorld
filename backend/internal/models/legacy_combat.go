@@ -58,6 +58,8 @@ type CombatState struct {
 	ChargePoints           int                  `json:"charge_points"`
 	TargetPlayerID         string               `json:"target_player_id,omitempty"`
 	RetreatRequestedBy     string               `json:"retreat_requested_by,omitempty"`
+	PreparationLockedBy    []string             `json:"preparation_locked_by,omitempty"`
+	PreparationLoadouts    json.RawMessage      `json:"preparation_loadouts,omitempty"`
 	TargetSectID           string               `json:"target_sect_id,omitempty"`
 	EnemyStatusEffects     []StatusEffect       `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects    []StatusEffect       `json:"player_status_effects,omitempty"`

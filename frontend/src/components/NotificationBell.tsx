@@ -57,39 +57,56 @@ const NotificationItem: React.FC<{ notification: PlayerNotification }> = ({ noti
   return (
     <div
       role="listitem"
-      className={`w-full text-left px-4 py-3 flex items-start gap-3 border-b border-[var(--border-default)] last:border-b-0 ${
-        n.is_read ? "opacity-60" : ""
+      className={`w-full px-3 sm:px-4 py-3 border-b border-[var(--border-default)] last:border-b-0 transition-colors hover:bg-white/[0.03] ${
+        n.is_read ? "opacity-60 hover:opacity-100" : ""
       }`}
     >
-      <span aria-hidden="true" className={`mt-0.5 shrink-0 ${meta.color}`}>{meta.icon}</span>
-      <button type="button" onClick={handleClick} className="flex-1 min-w-0 text-left rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 hover:bg-[var(--bg-elevated)]">
-        <span className="block text-xs font-semibold text-[var(--text-primary)]">{n.title}</span>
-        <span className={`mt-1 block text-[11px] text-zinc-300 leading-relaxed ${expanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>{n.content}</span>
-        <span className="mt-1.5 block text-left text-[10px] text-zinc-500">{relativeTime(n.created_at)}{!n.is_read ? " · Chưa đọc" : ""}</span>
-      </button>
-      <div className="flex shrink-0 items-center gap-2">
-        <div className="flex items-center justify-between mt-1.5">
-          {isLong && (
+      <div className="flex items-start gap-2.5">
+        <span
+          aria-hidden="true"
+          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a88952]/25 bg-[#251a13] ${meta.color}`}
+        >
+          {meta.icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
-              onClick={handleToggle}
-              aria-expanded={expanded}
-              aria-label={expanded ? `Thu gọn: ${n.title}` : `Xem thêm: ${n.title}`}
-              className="inline-flex min-h-11 items-center gap-0.5 text-[10px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors py-0.5 px-1.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer"
+              onClick={handleClick}
+              className="min-w-0 flex-1 rounded text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300"
             >
-              {expanded ? (
-                <>
-                  Thu gọn <ChevronUp className="w-3 h-3" />
-                </>
-              ) : (
-                <>
-                  Xem thêm <ChevronDown className="w-3 h-3" />
-                </>
-              )}
+              <span className="block truncate text-xs font-semibold text-[#f4e8cb]">{n.title}</span>
             </button>
-          )}
+            {isLong && (
+              <button
+                type="button"
+                onClick={handleToggle}
+                aria-expanded={expanded}
+                aria-label={expanded ? `Thu gọn: ${n.title}` : `Xem thêm: ${n.title}`}
+                title={expanded ? "Thu gọn" : "Xem thêm"}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#a88952]/30 bg-[#251a13] text-[#bba47a] transition-colors hover:border-[#c5a66f]/60 hover:bg-[#302216] hover:text-[#ffeac0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300"
+              >
+                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleClick}
+            className="mt-1 block w-full min-w-0 rounded text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300"
+          >
+            <span className={`text-[11px] leading-relaxed text-[#cbb894] ${expanded ? "block whitespace-pre-wrap break-words" : "line-clamp-2"}`}>{n.content}</span>
+          </button>
+          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-[#907d60]">
+            <span>{relativeTime(n.created_at)}</span>
+            {!n.is_read && (
+              <>
+                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-emerald-400" />
+                <span className="text-emerald-300">Chưa đọc</span>
+              </>
+            )}
+          </div>
         </div>
-        {!n.is_read && <span aria-hidden="true" className="mt-1 h-2 w-2 rounded-full bg-emerald-500" />}
       </div>
     </div>
   );
@@ -166,19 +183,21 @@ export const NotificationBell: React.FC<{ size?: "sm" | "md" }> = ({ size = "md"
             className="absolute right-0 top-full mt-2 box-border w-[calc(100vw-2rem)] max-w-[380px] sm:w-[380px] max-h-[min(75dvh,640px)] flex flex-col rounded-2xl border border-[#a88952]/80 bg-[#16100bfd] text-[#f4e8cb] shadow-[0_20px_50px_rgba(0,0,0,.9)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-serif"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#a88952]/30 bg-[#251a13]/90 rounded-t-2xl">
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <Bell className="w-4 h-4 text-amber-300" />
-                <span className="text-sm font-serif font-bold text-[#ffeac0]">Thông báo ({notifications.length})</span>
+                <span className="truncate text-xs sm:text-sm font-serif font-bold text-[#ffeac0]">Thông báo ({notifications.length})</span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-3">
                 <button
                   type="button"
                   onClick={markAllNotificationsRead}
                   disabled={unreadNotifications === 0}
-                  className="inline-flex min-h-11 items-center gap-1 text-xs font-serif text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                  aria-label="Đánh dấu tất cả là đã đọc"
+                  title="Đánh dấu tất cả là đã đọc"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg text-xs font-serif text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-40 cursor-pointer"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
-                  Đã đọc hết
+                  <span className="hidden sm:inline">Đã đọc hết</span>
                 </button>
                 <button
                   type="button"

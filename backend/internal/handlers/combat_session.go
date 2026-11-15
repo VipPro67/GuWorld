@@ -109,12 +109,114 @@ func processExpiredPvpPreparation(ctx context.Context) {
 	}
 }
 
+// LockPvPPreparation stores each participant's selected loadout on both
+// mirrored encounter states. Neither participant can launch until both lock.
+func LockPvPPreparation(c *gin.Context) {
+	var req AutoCombatStartRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	tx, cancel := beginCombatTx(c)
+	if tx == nil {
+		return
+	}
+	defer cancel()
+	defer tx.Rollback()
+	if err := lockPvPCombatPreparation(tx, playerID); err != nil {
+		respondCombatTxErr(c, err, "Không thể khóa trạng thái chuẩn bị PvP.")
+		return
+	}
+	player, err := evaluateManaTxEquipped(tx, playerID)
+	if err != nil {
+		respondCombatTxErr(c, err, "Không thể đọc nhân vật.")
+		return
+	}
+	combat := player.ActiveCombat
+	if combat == nil || combat.EnemyType != "PVP" || combat.CombatMode != "real" {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không có trận PvP thật đang chuẩn bị."})
+		return
+	}
+	opponentID, ok := pvpPreparationOpponentID(combat, playerID)
+	if !ok {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không thể xác minh đối phương."})
+		return
+	}
+	var opponentRaw []byte
+	if err := tx.QueryRow(`SELECT active_combat FROM players WHERE id=$1 FOR UPDATE`, opponentID).Scan(&opponentRaw); err != nil {
+		respondCombatTxErr(c, err, "Không thể đồng bộ đội hình.")
+		return
+	}
+	var opponentCombat models.CombatState
+	if len(opponentRaw) == 0 || json.Unmarshal(opponentRaw, &opponentCombat) != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Đối phương không còn ở bước chuẩn bị PvP."})
+		return
+	}
+	if linkedID, linked := pvpPreparationOpponentID(&opponentCombat, opponentID); !linked || linkedID != playerID {
+		c.JSON(http.StatusConflict, gin.H{"error": "Đối phương không còn ở bước chuẩn bị PvP này."})
+		return
+	}
+	if containsString(combat.PreparationLockedBy, playerID.String()) {
+		c.JSON(http.StatusConflict, gin.H{"error": "Đội hình đã được khóa."})
+		return
+	}
+	lockedBy := append(append([]string(nil), combat.PreparationLockedBy...), playerID.String())
+	loadoutJSON, _ := json.Marshal(req.Loadout)
+	loadouts := map[string]json.RawMessage{}
+	if len(combat.PreparationLoadouts) > 0 {
+		if err := json.Unmarshal(combat.PreparationLoadouts, &loadouts); err != nil {
+			respondCombatTxErr(c, err, "Không đọc được đội hình đã khóa.")
+			return
+		}
+	}
+	loadouts[playerID.String()] = loadoutJSON
+	loadoutsJSON, err := json.Marshal(loadouts)
+	if err != nil {
+		respondCombatTxErr(c, err, "Không thể lưu đội hình.")
+		return
+	}
+	for _, id := range []uuid.UUID{playerID, opponentID} {
+		state := combat
+		if id == opponentID {
+			state = &opponentCombat
+		}
+		state.PreparationLockedBy = lockedBy
+		state.PreparationLoadouts = loadoutsJSON
+		encoded, marshalErr := json.Marshal(state)
+		if marshalErr != nil {
+			respondCombatTxErr(c, marshalErr, "Không thể lưu đội hình.")
+			return
+		}
+		if _, err := tx.Exec(`UPDATE players SET active_combat=$1,version=version+1,state_revision=state_revision+1 WHERE id=$2`, string(encoded), id); err != nil {
+			respondCombatTxErr(c, err, "Không thể đồng bộ đội hình.")
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		respondCombatTxErr(c, err, "Không thể khóa đội hình.")
+		return
+	}
+	_ = cache.Delete("player_snapshot:" + playerID.String())
+	_ = cache.Delete("player_snapshot:" + opponentID.String())
+	PublishPlayerCombatDelta(playerID, CombatEventStarted, combat)
+	PublishPlayerCombatDelta(opponentID, CombatEventStarted, &opponentCombat)
+	respondActionOnly(c, http.StatusOK, player, gin.H{"active_combat": combat, "preparation_locked_by": lockedBy})
+}
+
 func autoResolveExpiredPvpPreparation(ctx context.Context, playerID uuid.UUID) error {
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	if err := lockPvPCombatPreparation(tx, playerID); err != nil {
+		return err
+	}
 	if _, err := loadCombatSession(tx, playerID, nil, true); err == nil {
 		return nil
 	} else if err != sql.ErrNoRows {
@@ -129,6 +231,32 @@ func autoResolveExpiredPvpPreparation(ctx context.Context, playerID uuid.UUID) e
 	}
 	if !player.ActiveCombat.CombatStartedAt.IsZero() && time.Since(player.ActiveCombat.CombatStartedAt) < combatDecisionTimeout {
 		return nil
+	}
+	opponentID, hasOpponent := pvpPreparationOpponentID(player.ActiveCombat, playerID)
+	if hasOpponent {
+		var opponentRaw []byte
+		if err := tx.QueryRow(`SELECT active_combat FROM players WHERE id=$1 FOR UPDATE`, opponentID).Scan(&opponentRaw); err != nil {
+			return err
+		}
+		var opponentCombat models.CombatState
+		validPair := len(opponentRaw) > 0 && json.Unmarshal(opponentRaw, &opponentCombat) == nil
+		if validPair {
+			linked, ok := pvpPreparationOpponentID(&opponentCombat, opponentID)
+			validPair = ok && linked == playerID
+		}
+		if !validPair {
+			if _, err := tx.Exec(`UPDATE players SET active_combat=NULL,version=version+1,state_revision=state_revision+1 WHERE id=$1`, playerID); err != nil {
+				return err
+			}
+			if err := tx.Commit(); err != nil {
+				return err
+			}
+			_ = cache.Delete("player_snapshot:" + playerID.String())
+			_ = cache.Delete("player_snapshot:" + opponentID.String())
+			ClearPendingPlayerQueues(playerID.String())
+			PublishPlayerCombatDelta(playerID, CombatEventEnded, nil)
+			return nil
+		}
 	}
 	var sessionExists bool
 	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM combat_sessions WHERE player_id=$1 AND status='active')`, playerID).Scan(&sessionExists); err != nil {
@@ -656,6 +784,28 @@ func StartCombatSession(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "The attacking player starts the shared PvP session"})
 		return
 	}
+	if player.ActiveCombat.EnemyType == "PVP" && player.ActiveCombat.CombatMode == "real" {
+		opponentID, ok := pvpPreparationOpponentID(player.ActiveCombat, playerID)
+		if !ok || !containsString(player.ActiveCombat.PreparationLockedBy, playerID.String()) || !containsString(player.ActiveCombat.PreparationLockedBy, opponentID.String()) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cả hai bên cần khóa đội hình trước khi bắt đầu PvP."})
+			return
+		}
+		var opponentRaw []byte
+		if err := tx.QueryRow(`SELECT active_combat FROM players WHERE id=$1 FOR UPDATE`, opponentID).Scan(&opponentRaw); err != nil {
+			respondCombatTxErr(c, err, "Không thể xác minh đội hình đối phương.")
+			return
+		}
+		var opponentCombat models.CombatState
+		if err := json.Unmarshal(opponentRaw, &opponentCombat); err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Đang chờ đối phương khóa đội hình PvP."})
+			return
+		}
+		linkedID, linked := pvpPreparationOpponentID(&opponentCombat, opponentID)
+		if !linked || linkedID != playerID || !containsString(opponentCombat.PreparationLockedBy, playerID.String()) || !containsString(opponentCombat.PreparationLockedBy, opponentID.String()) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Đang chờ đối phương khóa đội hình PvP."})
+			return
+		}
+	}
 	if requiresRegionCombatPolicy(player.ActiveCombat) {
 		if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -670,6 +820,18 @@ func StartCombatSession(c *gin.Context) {
 	}
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
 	combatMode := player.ActiveCombat.CombatMode
+	if player.ActiveCombat.EnemyType == "PVP" && combatMode == "real" {
+		var loadouts map[string]json.RawMessage
+		if err := json.Unmarshal(player.ActiveCombat.PreparationLoadouts, &loadouts); err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Không đọc được đội hình đã khóa."})
+			return
+		}
+		lockedLoadout := loadouts[playerID.String()]
+		if len(lockedLoadout) == 0 || json.Unmarshal(lockedLoadout, &req.Loadout) != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Không tìm thấy đội hình đã khóa của người khởi chiến."})
+			return
+		}
+	}
 	if isVirtual {
 		req.Loadout.AutoHealHP = false
 		req.Loadout.AutoRestoreMana = false

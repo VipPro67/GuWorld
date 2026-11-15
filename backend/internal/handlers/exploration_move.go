@@ -440,7 +440,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 						EnemySpeed: attackerStats["speed"], EnemyRank: player.Rank, EnemySubRank: player.SubRank,
 						EnemyGuInventory: player.GuInventory, EnemyDaoMarks: player.DaoMarks,
 						EnemyPathMasteries: player.PathMasteries, EnemyCombatSettings: &player.CombatSettings,
-						TargetPlayerID: player.ID.String(),
+						TargetPlayerID: targetPlayer.ID.String(),
 					}
 					gamefx.ApplyEnemyEffects(&defenderCombat, player)
 					defenderJSON, marshalErr := json.Marshal(&defenderCombat)

@@ -8,6 +8,7 @@ import type {
 } from "@/store/useGameStore";
 
 export interface CombatSlice {
+  lockPvpPreparation: (loadout: ApiResponseData) => Promise<boolean>;
   startCombatSession: (loadout: ApiResponseData) => Promise<ApiResponseData | null>;
   fetchCombatSession: (sessionId?: string) => Promise<ApiResponseData | null>;
   submitCombatCommand: (sessionId: string, revision: number, command: ApiResponseData) => Promise<ApiResponseData | null>;
@@ -40,6 +41,24 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   combatSettingsLoading: false,
   combatHistory: [],
   combatHistoryLoading: false,
+
+  lockPvpPreparation: async (loadout) => {
+    const { player } = get();
+    if (!player) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/session/prepare`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ loadout }),
+      });
+      const data = await response.json();
+      if (!response.ok) { get().addToast(data.error || "Không thể khóa đội hình.", "error"); return false; }
+      await get().fetchPlayerStatus(player.id, true);
+      get().addToast("Đã khóa đội hình. Đang chờ đối phương.", "success");
+      return true;
+    } catch (caught) {
+      get().addToast(caught instanceof Error ? caught.message : "Không thể khóa đội hình.", "error");
+      return false;
+    }
+  },
 
   startCombatSession: async (loadout) => {
     try {

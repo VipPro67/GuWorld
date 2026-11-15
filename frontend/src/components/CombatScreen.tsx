@@ -57,6 +57,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [showRecommendation, setShowRecommendation] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const actionLoadingRef = useRef(actionLoading);
+  const autoStartedPvpPreparationRef = useRef("");
   const completedInteractiveSessionRef = useRef<string | null>(null);
   const pvpAutoSubmittedRef = useRef<string | null>(null);
   const interactiveSessionIdRef = useRef<string | undefined>(undefined);
@@ -66,6 +67,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
   const startCombatSession = useGameStore((state) => state.startCombatSession);
+  const lockPvpPreparation = useGameStore((state) => state.lockPvpPreparation);
   const fetchCombatSession = useGameStore((state) => state.fetchCombatSession);
   const combatSessionEvent = useGameStore((state) => state.combatSessionEvent);
   const setActiveCombatReplay = useGameStore((state) => state.setActiveCombatReplay);
@@ -169,7 +171,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [interactiveSession?.pending_actor, interactiveSession?.allies, interactiveSession?.enemies, interactiveTarget]);
 
   const handleStartInteractive = async () => {
-    if (player.active_combat?.enemy_type === "PVP" && player.active_combat.combat_owner_id && player.active_combat.combat_owner_id !== player.id) return;
+    if (player.active_combat?.enemy_type === "PVP" && player.active_combat.combat_owner_id && player.active_combat.combat_owner_id !== player.id) return false;
     const loadout = {
       GuIds: selectedGuIds, KillerMoveIds: selectedKmIds, ImmortalGuId: null,
       NoGuSkills: selectedGuIds.length === 0, AutoHealHP: autoHealHP,
@@ -183,7 +185,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       } else {
         setInteractiveSession(session);
       }
+      return true;
     }
+    return false;
   };
 
   const handleStartPvpAuto = async () => {
@@ -224,6 +228,28 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const isIncomingPvp = player.active_combat?.enemy_type === "PVP" &&
     Boolean(player.active_combat.combat_owner_id) && player.active_combat.combat_owner_id !== player.id;
   const isPvpCombat = player.active_combat?.enemy_type === "PVP";
+  const isRealPvpPreparation = isPvpCombat && player.active_combat?.combat_mode === "real";
+  const pvpPreparationLocks = ((player.active_combat as (typeof player.active_combat & { preparation_locked_by?: string[] }) | null)?.preparation_locked_by || []);
+  const isPvpLoadoutLocked = isRealPvpPreparation && pvpPreparationLocks.includes(player.id);
+  const bothPvpSidesLocked = pvpPreparationLocks.includes(player.id) &&
+    pvpPreparationLocks.includes(player.active_combat?.combat_owner_id === player.id
+      ? player.active_combat?.target_player_id || ""
+      : player.active_combat?.combat_owner_id || "");
+  const pvpPreparationKey = String(player.active_combat?.combat_id ||
+    (player.active_combat as { combat_started_at?: string } | null)?.combat_started_at || "");
+  const handleLockPvpPreparation = async () => {
+    await lockPvpPreparation({ GuIds: selectedGuIds, KillerMoveIds: selectedKmIds, ImmortalGuId: null,
+      NoGuSkills: selectedGuIds.length === 0, AutoHealHP: autoHealHP, HealThreshold: healThreshold,
+      AutoRestoreMana: autoRestoreMana, ManaThreshold: manaThreshold });
+  };
+
+  useEffect(() => {
+    if (!isRealPvpPreparation || isIncomingPvp || !bothPvpSidesLocked || interactiveSession || actionLoading) return;
+    const combatKey = pvpPreparationKey;
+    if (!combatKey || autoStartedPvpPreparationRef.current === combatKey) return;
+    autoStartedPvpPreparationRef.current = combatKey;
+    void handleStartInteractive();
+  }, [isRealPvpPreparation, isIncomingPvp, bothPvpSidesLocked, interactiveSession, actionLoading, pvpPreparationKey, handleStartInteractive]);
 
   useEffect(() => {
     if (player.active_combat?.enemy_type !== "PVP" || !interactiveSession || interactiveSession.status !== "active" || !pvpAutoMode || actionLoading) return;
@@ -346,6 +372,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   };
 
   const toggleGu = (id: string) => {
+    if (isPvpLoadoutLocked) return;
     if (selectedGuIds.includes(id)) {
       setSelectedGuIds(selectedGuIds.filter(i => i !== id));
     } else {
@@ -1201,20 +1228,28 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           <p className="mt-1 text-xs text-zinc-400">Chọn điều khiển từng lượt hoặc để hệ thống tự mô phỏng trận đấu.</p>
         </div>
       <div className="flex gap-4 flex-wrap">
+        {isRealPvpPreparation && !bothPvpSidesLocked && (
+          <div className="w-full rounded-lg border border-amber-800/50 bg-amber-950/30 p-3 text-sm text-amber-200">
+            <p>{pvpPreparationLocks.includes(player.id) ? "Đội hình của bạn đã khóa." : "Hãy chọn đội hình rồi khóa để xác nhận sẵn sàng."} {pvpPreparationLocks.length > 0 && !bothPvpSidesLocked ? "Đang chờ người còn lại khóa đội hình." : "Cả hai bên có 45 giây để chuẩn bị."}</p>
+            {!pvpPreparationLocks.includes(player.id) && <button onClick={() => void handleLockPvpPreparation()} disabled={actionLoading} className="mt-3 rounded-lg border border-amber-500/60 bg-amber-700/30 px-4 py-2 font-bold hover:bg-amber-700/50 disabled:opacity-50">Khóa đội hình</button>}
+          </div>
+        )}
+        {isRealPvpPreparation && bothPvpSidesLocked && <p className="w-full rounded-lg border border-emerald-800/50 bg-emerald-950/30 p-3 text-sm text-emerald-200">Hai bên đã khóa đội hình. Trận chiến đang tự khởi chạy.</p>}
+        {!isRealPvpPreparation && !isIncomingPvp && <>
         <button
           onClick={handleStartInteractive}
-          disabled={actionLoading || Boolean(interactiveSession) || isIncomingPvp}
+          disabled={actionLoading || Boolean(interactiveSession)}
           className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Play className="w-6 h-6" />
           <span>Điều khiển Thủ Công</span>
         </button>
         {isPvpCombat ? (
-          <button onClick={() => void handleStartPvpAuto()} disabled={actionLoading || Boolean(interactiveSession) || isIncomingPvp} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động</button>
+          <button onClick={() => void handleStartPvpAuto()} disabled={actionLoading || Boolean(interactiveSession)} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động</button>
         ) : (
           <button onClick={handleStartSimulation} disabled={actionLoading || Boolean(interactiveSession)} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động mô phỏng</button>
         )}
-        {isIncomingPvp && !interactiveSession && <p className="w-full rounded-lg border border-amber-800/50 bg-amber-950/30 p-3 text-sm text-amber-200">Đạo hữu đã bị kéo vào trận PvP. Đang chờ đối thủ nạp đội hình chiến đấu...</p>}
+        </>}
         {player.active_combat?.enemy_type === "TOWER" && <button onClick={() => void abandonTower()} disabled={actionLoading} className="rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50">Rời tháp (tính 1 lượt)</button>}
         {(() => {
           if (isPracticeMode) return null;
@@ -1451,7 +1486,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   <div
                     key={gu.instance_id}
                     onClick={() => toggleGu(gu.instance_id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] relative ${isSelected ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/30' :
+                    aria-disabled={isPvpLoadoutLocked}
+                    className={`p-3 rounded-xl border ${isPvpLoadoutLocked ? "cursor-not-allowed opacity-70" : "cursor-pointer"} transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] relative ${isSelected ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/30' :
                         isHigherRank ? 'border-rose-800/40 bg-rose-950/10' :
                           pathMatch ? 'border-emerald-800/40 bg-emerald-950/10' :
                             'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
@@ -1535,6 +1571,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               {killerMoves.map(km => {
                 const isSelected = selectedKmIds.includes(km.id);
                 const toggleKm = () => {
+                  if (isPvpLoadoutLocked) return;
                   if (isSelected) {
                     setSelectedKmIds(selectedKmIds.filter(id => id !== km.id));
                   } else {
@@ -1552,7 +1589,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                     key={km.id}
                     type="button"
                     onClick={toggleKm}
-                    disabled={!km.available && !isSelected || (!isSelected && selectedKmIds.length >= 4)}
+                    disabled={isPvpLoadoutLocked || (!km.available && !isSelected) || (!isSelected && selectedKmIds.length >= 4)}
                     aria-pressed={isSelected}
                     className={`w-full p-3 rounded-xl border text-left transition-[background-color,border-color,box-shadow] relative disabled:cursor-not-allowed ${
                       !km.available ? 'border-zinc-800/40 bg-zinc-950/30 opacity-50 cursor-not-allowed' :

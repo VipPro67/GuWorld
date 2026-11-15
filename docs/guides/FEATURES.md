@@ -11,7 +11,7 @@ Tài liệu người chơi bắt đầu từ [WIKI.md](../../WIKI.md). Các tran
 | Sản phẩm chiến đấu | [killer-moves-and-gu-houses.md](../features/killer-moves-and-gu-houses.md) | Sát Chiêu, Tiên Cổ Ốc, composition/reservation; Xuân Tiễn làm chậm và Liệu Quang Giáp thanh tẩy khi effect được chọn |
 | Thế giới | [world-and-exploration.md](../features/world-and-exploration.md) | Map popup, movement, thao tác PvP/giao dịch người chơi theo khoảng cách, portal, ground drop, tài nguyên, teleport, auto farm theo tuyến |
 | Thiên Cơ | [scouting.md](../features/scouting.md) | Inspect, divination, tracking marks, sever clues, resonance |
-| Combat | [combat.md](../features/combat.md) | Encounter, auto/session, PvP (đồng thuận khi rút PvP thật), action plans, tự xử lý combat khi farm, flee, capture, history |
+| Combat | [combat.md](../features/combat.md) | Encounter, auto/session, PvP (hai bên khóa thì tự vào; timeout 45 giây tự mô phỏng; đồng thuận khi rút PvP thật), action plans, tự xử lý combat khi farm, flee, capture, history |
 | Party và sủng vật | [party-and-pets.md](../features/party-and-pets.md) | Party, formation, capture/pet lifecycle, actor roster |
 | Tiên Khiếu | [immortal-aperture.md](../features/immortal-aperture.md) | Node, resource points, workers, NPC, swarms, portal, tribulation |
 | Realm | [realms-and-instances.md](../features/realms-and-instances.md) | Mộng Cảnh, Bí Cảnh Không Gian, truyền thừa, instance |

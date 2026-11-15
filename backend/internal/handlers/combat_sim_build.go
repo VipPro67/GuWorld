@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -342,7 +343,19 @@ func buildSimPlayerDefender(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		logger.S.Warnf("buildSimPlayerDefender: failed to load defender %s: %v", enemy.ID, errLoad)
 		return nil, false
 	}
-	simDef, errBuild := buildSimCombatant(tx, &defPlayer, isVirtual, false, nil)
+	var defenderLoadout *simulator.CombatLoadout
+	if len(activeCombat.PreparationLoadouts) > 0 {
+		var loadouts map[string]json.RawMessage
+		if err := json.Unmarshal(activeCombat.PreparationLoadouts, &loadouts); err == nil {
+			if raw := loadouts[defUUID.String()]; len(raw) > 0 {
+				var loadout simulator.CombatLoadout
+				if json.Unmarshal(raw, &loadout) == nil {
+					defenderLoadout = &loadout
+				}
+			}
+		}
+	}
+	simDef, errBuild := buildSimCombatant(tx, &defPlayer, isVirtual, false, defenderLoadout)
 	if errBuild != nil {
 		logger.S.Warnf("buildSimPlayerDefender: failed to build defender %s: %v", enemy.ID, errBuild)
 		return nil, false

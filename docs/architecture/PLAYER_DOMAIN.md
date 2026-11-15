@@ -31,6 +31,8 @@ Player đổi vị trí phải đi qua `handlers/movement.go`, dùng chung kiể
 
 `useGameStore` nhận response và player events rồi cập nhật state thông qua `setPlayerFromServer` cùng các helper hiện có. Tái sử dụng luồng này khi API trả snapshot player. `authFetch` xử lý 401 tập trung; slice không thêm chính sách logout riêng.
 
+Trạng thái encounter đang chuẩn bị nằm trong `players.active_combat` JSONB. PvP thật đồng bộ `preparation_locked_by` và `preparation_loadouts` lên hai bản ghi trong transaction, tăng `version`/`state_revision`, rồi phát combat delta cho cả hai người. Thay đổi cặp trạng thái phải dùng advisory lock theo cặp người chơi như luồng `Retreat`/`StartCombatSession`.
+
 ## Trước khi đổi
 
 - Đọc các handler/route liên quan và schema domain.

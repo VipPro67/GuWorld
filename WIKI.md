@@ -72,11 +72,11 @@ Các đợt effect theo lưu phái đã mở thêm lựa chọn cho toàn bộ 4
 
 ### Bản đồ và di chuyển
 
-Khám Phá Dã Ngoại hiển thị bản đồ ô theo vùng, người chơi, quái, portal, điểm tài nguyên và vật phẩm rơi trên đất. Chọn người chơi trên lưới để khai chiến khi ở trong tầm đánh hoặc giao dịch tại chỗ khi cùng khu vực và cách tối đa 10 ô; giao dịch tại chỗ không cần Cổ liên lạc. Giao dịch khởi tạo từ chat là giao dịch từ xa, cả hai bên cần có Thông Thiên Cổ và Thần Niệm Cổ. Di chuyển hoặc chuyển vùng sẽ được server kiểm tra theo vị trí, trạng thái và quyền movement hiện tại. Khi một realtime session đang nắm quyền điều khiển vị trí, một số lệnh di chuyển HTTP có thể bị từ chối.
+Khám Phá Dã Ngoại hiển thị bản đồ ô theo vùng, người chơi, quái, portal, điểm tài nguyên và vật phẩm rơi trên đất; chú giải phân biệt điểm dịch chuyển, Nguyên Tuyền, chiến lợi phẩm, cổng Bí Cảnh và cổng Tiên Khiếu. Chọn người chơi mở popup xem hồ sơ, tiến gần/khai chiến hoặc giao dịch tại chỗ; chọn chiến lợi phẩm để xem nội dung và nhặt khi đứng đúng tọa độ. Giao dịch tại chỗ cần cùng khu vực và cách tối đa 10 ô, không cần Cổ liên lạc. Giao dịch khởi tạo từ chat là giao dịch từ xa, cả hai bên cần có Thông Thiên Cổ và Thần Niệm Cổ. Di chuyển hoặc chuyển vùng sẽ được server kiểm tra theo vị trí, trạng thái và quyền movement hiện tại. Khi một realtime session đang nắm quyền điều khiển vị trí, một số lệnh di chuyển HTTP có thể bị từ chối.
 
 ### Nhặt vật phẩm rơi
 
-Ground drop chỉ nhặt được khi nhân vật đứng đúng vùng và tọa độ của drop, drop còn hạn và không bị khóa cho người chơi khác. Nếu request bị từ chối, kiểm tra vị trí/quyền sở hữu thay vì gửi lại liên tục.
+Chọn drop trên bản đồ để xem nội dung, người hạ, trạng thái bảo hộ và hạn tồn tại. Nhặt chỉ khả dụng khi nhân vật đứng đúng vùng và tọa độ của drop, drop còn hạn và không bị khóa cho người chơi khác.
 
 ### Truyền tống trận
 
@@ -94,7 +94,7 @@ Trinh sát gồm xem người chơi ở gần, suy diễn mục tiêu/Cổ, đá
 
 ### Combat theo lượt
 
-Khi gặp encounter, có thể chạy tự động hoặc mở session điều khiển. Nếu hiệu ứng lúc bắt đầu trận kết thúc encounter ngay, kết quả được settle và báo cáo hiện tức thì; session đã có log kết thúc nhưng còn trạng thái active cũng được tự hoàn tất khi tải lại. Ở bước chuẩn bị, PvP ảo có thể hủy ngay; PvP thật cần cả hai người đồng ý và khi hủy sẽ gỡ trạng thái chờ của cả hai. Encounter PvE do quái chủ động tấn công không thể rút lui trước khi bắt đầu; sau đó có thể chọn đánh hoặc bỏ chạy trong lượt. PvP giữ kế hoạch của mỗi bên đến lúc cả hai khóa hoặc timeout; revision cũ cần tải lại snapshot trước khi gửi lại.
+Khi gặp encounter, có thể chạy tự động hoặc mở session điều khiển. Nếu hiệu ứng lúc bắt đầu trận kết thúc encounter ngay, kết quả được settle và báo cáo hiện tức thì; session đã có log kết thúc nhưng còn trạng thái active cũng được tự hoàn tất khi tải lại. Ở bước chuẩn bị, PvP ảo có thể hủy ngay; PvP thật cần cả hai người đồng ý và khi hủy sẽ gỡ trạng thái chờ của cả hai; hai bên khóa đội hình thì session tự vào, còn sau 45 giây server tự mô phỏng nếu chưa mở session. Encounter PvE do quái chủ động tấn công không thể rút lui trước khi bắt đầu; sau đó có thể chọn đánh hoặc bỏ chạy trong lượt. PvP giữ kế hoạch của mỗi bên đến lúc cả hai khóa hoặc timeout; revision cũ cần tải lại snapshot trước khi gửi lại.
 
 Combat được mô phỏng ở server theo lượt. Kết quả có thể gồm HP/tài nguyên thay đổi, trạng thái, loot, capture, flee hoặc lịch sử/replay. Chỉnh sửa client hay gửi lại command không thay đổi kết quả đã settlement.
 

@@ -803,6 +803,7 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		{
 			combat.POST("/start", handlers.AutoCombatStart)
 			combat.POST("/session/start", handlers.StartCombatSession)
+			combat.POST("/session/prepare", handlers.LockPvPPreparation)
 			combat.POST("/retreat/:id", handlers.Retreat)
 			combat.GET("/session", handlers.GetCombatSession)
 			combat.GET("/session/:id", handlers.GetCombatSessionByID)

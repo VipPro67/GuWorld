@@ -40,7 +40,10 @@ func pvpPreparationOpponentID(state *models.CombatState, playerID uuid.UUID) (uu
 	if ownerID == playerID && targetID != playerID {
 		return targetID, true
 	}
-	if ownerID != playerID && targetID == playerID {
+	// Defender-side mirrored states historically stored the attacker as both
+	// owner and target. Accept that shape while new encounters use the defender
+	// as TargetPlayerID.
+	if ownerID != playerID && (targetID == playerID || targetID == ownerID) {
 		return ownerID, true
 	}
 	return uuid.Nil, false

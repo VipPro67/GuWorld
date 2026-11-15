@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass, Sparkles, DoorOpen, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Waypoints, Store } from "lucide-react";
-import { useGameStore, Player } from "@/store/useGameStore";
+import { Compass, Sparkles, DoorOpen, Droplets, Footprints, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Swords, Waypoints, Store, UserRound } from "lucide-react";
+import { useGameStore, Player, GroundDrop } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 import { usePolling } from "@/lib/usePolling";
 import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
+import { GameModal } from "@/components/ui/GameModal";
 import { WorldAtlasModal } from "@/components/WorldAtlasModal";
 import { TeleportBuildModal } from "@/components/Teleport/TeleportBuildModal";
 import { TeleportDirectoryModal } from "@/components/Teleport/TeleportDirectoryModal";
@@ -34,7 +35,7 @@ interface GridData {
   cells: GridCell[];
   stats: { movement?: number; investigation?: number };
   players_on_map?: MapPlayer[];
-  ground_drops?: { id: string; x: number; y: number; loser_name?: string }[];
+  ground_drops?: GroundDrop[];
   world_width?: number;
   world_height?: number;
 }
@@ -77,6 +78,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const collectWorldResourcePoint = useWorldStore((state) => state.collectWorldResourcePoint);
   const lootGroundDrop = useGameStore((state) => state.lootGroundDrop);
   const initiateTrade = useGameStore((state) => state.initiateTrade);
+  const fetchPlayerProfile = useGameStore((state) => state.fetchPlayerProfile);
+  const profileLoading = useGameStore((state) => state.profileLoading);
   const addToast = useGameStore((state) => state.addToast);
   const actionLoading = useGameStore((state) => state.actionLoading);
   const party = useGameStore((state) => state.party);
@@ -100,6 +103,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   });
   const [lastLog, setLastLog] = useState<string | null>(null);
   const [selectedPvpTarget, setSelectedPvpTarget] = useState<MapPlayer | null>(null);
+  const [selectedGroundDrop, setSelectedGroundDrop] = useState<GroundDrop | null>(null);
   const [autoFarmRunning, setAutoFarmRunning] = useState(false);
   const autoFarmRunningRef = useRef(false);
   const [showAtlas, setShowAtlas] = useState(false);
@@ -208,10 +212,19 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean; name?: string }, resourcePointId?: string) => {
     if (autoFarmRunningRef.current) return;
     const playerOnCell = gridData?.players_on_map?.find((target) => target.x === x && target.y === y && target.id !== player.id);
+    const dropOnCell = gridData?.ground_drops?.find((drop) => drop.x === x && drop.y === y);
     if (playerOnCell) {
       setSelectedPvpTarget(playerOnCell);
+      setSelectedGroundDrop(dropOnCell || null);
       return;
     }
+    if (dropOnCell) {
+      setSelectedPvpTarget(null);
+      setSelectedGroundDrop(dropOnCell);
+      return;
+    }
+    setSelectedPvpTarget(null);
+    setSelectedGroundDrop(null);
     if (marker?.kind === "merchant") {
       const isNovice = marker.id.startsWith("merchant_tan_thu_") || Boolean(marker.name?.includes("Tân Thủ"));
       const maxDist = isNovice ? 15 : 2;
@@ -264,16 +277,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       await harvestVein(cell.content);
       await loadGrid();
       return;
-    }
-
-    // Check ground drops on cell
-    const dropOnCell = gridData?.ground_drops?.find((d) => d.x === x && d.y === y);
-    if (dropOnCell && Math.max(Math.abs(x - player.x), Math.abs(y - player.y)) <= 1) {
-      const res = await lootGroundDrop(dropOnCell.id);
-      if (res?.success) {
-        await loadGrid();
-        return;
-      }
     }
 
     if (!isMovable || actionLoading || player.active_combat) return;
@@ -446,7 +449,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       case "WildGu":
         return <Sparkles className="w-5 h-5 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)] animate-spin" />;
       case "PrimevalVein":
-        return <Landmark className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" />;
+        return <Droplets className="w-6 h-6 text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.65)]" />;
       case "ENTRY_PORTAL":
       case "EXIT_PORTAL":
       case "PORTAL_EXIT":
@@ -462,6 +465,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const radius = Math.min(maxAllowedRadius, Math.max(2, preferredRadius));
   const diameter = radius * 2 + 1;
   const maxContainerWidth = radius <= 2 ? "max-w-[560px]" : radius === 3 ? "max-w-[660px]" : "max-w-[760px]";
+  const markerIconSizeClass = diameter <= 5 ? "h-4 w-4" : diameter <= 7 ? "h-3.5 w-3.5" : "h-3 w-3";
+  const markerBadgePaddingClass = diameter <= 5 ? "p-1" : "p-0.5";
+  const cellLabelSizeClass = diameter <= 5 ? "text-[9px]" : diameter <= 7 ? "text-[8px]" : diameter <= 9 ? "text-[7px]" : "text-[6px]";
 
   const cellMap = useMemo(() => {
     const map = new Map<string, GridCell>();
@@ -610,19 +616,140 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       ))}
 
       {/* Exploration Grid Canvas */}
-      {selectedPvpTarget && (
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-purple-700/50 bg-purple-950/30 p-4">
-          <div>
-            <p className="font-bold text-purple-200">Cổ sư: {selectedPvpTarget.username}</p>
-            <p className="text-xs text-zinc-400">({selectedPvpTarget.x}, {selectedPvpTarget.y}) · PvP cần trong tầm đánh; giao dịch trên map cần cách tối đa 10 ô.</p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => void handleChallengePlayer()} disabled={actionLoading || Boolean(player.active_combat) || isMemberNotLeader} className="rounded-lg border border-purple-500/60 bg-purple-700/30 px-4 py-2 text-sm font-bold text-purple-100 hover:bg-purple-700/50 disabled:opacity-50">{Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y)) <= 2 ? "Khai chiến" : "Tiến gần mục tiêu"}</button>
-            <button onClick={() => void handleMapTrade()} disabled={actionLoading || Boolean(player.active_combat) || isMemberNotLeader || Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y)) > 10} className="rounded-lg border border-emerald-500/50 bg-emerald-700/30 px-4 py-2 text-sm font-bold text-emerald-100 hover:bg-emerald-700/50 disabled:opacity-50">Giao dịch tại chỗ</button>
-            <button onClick={() => setSelectedPvpTarget(null)} className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800">Đóng</button>
-          </div>
-        </section>
-      )}
+      <GameModal
+        open={Boolean(selectedPvpTarget || selectedGroundDrop)}
+        onClose={() => {
+          setSelectedPvpTarget(null);
+          setSelectedGroundDrop(null);
+        }}
+        title={selectedPvpTarget && selectedGroundDrop ? "Tương tác tại vị trí" : selectedPvpTarget ? "Cổ sư trên bản đồ" : "Chiến lợi phẩm"}
+        size="lg"
+        className="border-zinc-700 bg-zinc-950"
+      >
+        <div className="space-y-5">
+          {selectedPvpTarget && (
+            <section className="rounded-2xl border border-purple-500/30 bg-purple-950/35 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-purple-300/60 bg-purple-900 text-sm font-bold text-purple-100">
+                  {selectedPvpTarget.avatar_url
+                    ? <img src={selectedPvpTarget.avatar_url} alt="" className="h-full w-full object-cover" />
+                    : selectedPvpTarget.username.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="truncate font-bold text-purple-100">{selectedPvpTarget.username}</h3>
+                  <p className="text-xs text-zinc-400">Tọa độ ({selectedPvpTarget.x}, {selectedPvpTarget.y}) · Cách {Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y))} ô</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const username = selectedPvpTarget.username;
+                    setSelectedPvpTarget(null);
+                    setSelectedGroundDrop(null);
+                    void fetchPlayerProfile(username);
+                  }}
+                  disabled={profileLoading}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-600 bg-zinc-800/80 px-4 py-2 text-sm font-semibold text-zinc-100 transition-colors hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  <UserRound className="h-4 w-4" /> Xem hồ sơ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleChallengePlayer()}
+                  disabled={actionLoading || Boolean(player.active_combat) || isMemberNotLeader}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rose-400/50 bg-rose-700/80 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-rose-600 disabled:opacity-50"
+                >
+                  {Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y)) <= 2
+                    ? <><Swords className="h-4 w-4" /> Khai chiến</>
+                    : <><Footprints className="h-4 w-4" /> Tiến gần mục tiêu</>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleMapTrade()}
+                  disabled={actionLoading || Boolean(player.active_combat) || isMemberNotLeader || Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y)) > 10}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-800/50 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-700/70 disabled:opacity-50 sm:col-span-2"
+                >
+                  Giao dịch tại chỗ
+                </button>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-zinc-400">
+                {Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y)) <= 2
+                  ? "Có thể khai chiến trong tầm hiện tại."
+                  : "Tiến gần sẽ di chuyển tối đa 5 ô mỗi lần; khi vào tầm, nút sẽ chuyển thành Khai chiến."}
+              </p>
+            </section>
+          )}
+          {selectedGroundDrop && (
+            <section className="rounded-2xl border border-amber-500/30 bg-amber-950/30 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-amber-200">Chiến lợi phẩm của {selectedGroundDrop.loser_name}</h3>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Rơi tại ({selectedGroundDrop.x}, {selectedGroundDrop.y})
+                    {selectedGroundDrop.killer_name ? ` · Hạ bởi ${selectedGroundDrop.killer_name}` : ""}
+                  </p>
+                </div>
+                <Package className="h-5 w-5 shrink-0 text-amber-300" />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-200">
+                {(selectedGroundDrop.loot_data?.primeval_stones || 0) > 0 && <span className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5">Nguyên thạch ×{selectedGroundDrop.loot_data.primeval_stones}</span>}
+                {(selectedGroundDrop.loot_data?.immortal_stones || 0) > 0 && <span className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5">Tiên nguyên thạch ×{selectedGroundDrop.loot_data.immortal_stones}</span>}
+                {(selectedGroundDrop.loot_data?.items || []).map((item, index) => <span key={`${item.item_id}-${index}`} className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5">{itemDictionary[item.item_id]?.name || item.item_id} ×{item.quantity}</span>)}
+                {(selectedGroundDrop.loot_data?.gus || []).map((gu: ApiResponseData, index: number) => <span key={`${gu.instance_id || gu.gu_id}-${index}`} className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5">{gu.name || gu.gu_name || gu.gu_id || "Cổ"}</span>)}
+                {(selectedGroundDrop.loot_data?.recipes || []).map((recipe, index) => <span key={`${recipe}-${index}`} className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5">Công thức: {recipe}</span>)}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-amber-200/80">
+                {selectedGroundDrop.is_protected && selectedGroundDrop.protected_until && new Date(selectedGroundDrop.protected_until).getTime() > Date.now()
+                  ? `Đang được bảo hộ đến ${new Date(selectedGroundDrop.protected_until).toLocaleString("vi-VN")}`
+                  : "Không còn bảo hộ"}
+                {" · "}Hết hạn {new Date(selectedGroundDrop.expires_at).toLocaleString("vi-VN")}
+              </p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {(player.x !== selectedGroundDrop.x || player.y !== selectedGroundDrop.y) && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const result = await movePlayer(selectedGroundDrop.x, selectedGroundDrop.y);
+                      if (result) await loadGrid();
+                    }}
+                    disabled={actionLoading || Boolean(player.active_combat) || isMemberNotLeader}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-sky-400/50 bg-sky-800/60 px-4 py-2 text-sm font-semibold text-sky-100 transition-colors hover:bg-sky-700/70 disabled:opacity-50"
+                  >
+                    <Footprints className="h-4 w-4" /> Tiến gần chiến lợi phẩm
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const result = await lootGroundDrop(selectedGroundDrop.id);
+                    if (result?.success) {
+                      setSelectedGroundDrop(null);
+                      await loadGrid();
+                    }
+                  }}
+                  disabled={actionLoading || player.x !== selectedGroundDrop.x || player.y !== selectedGroundDrop.y}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-amber-400/60 bg-amber-700/80 px-4 py-2 text-sm font-bold text-amber-50 transition-colors hover:bg-amber-600 disabled:opacity-50"
+                >
+                  <Package className="h-4 w-4" /> Nhặt chiến lợi phẩm
+                </button>
+              </div>
+              {player.x !== selectedGroundDrop.x || player.y !== selectedGroundDrop.y
+                ? <p className="mt-3 text-xs text-zinc-400">Nhân vật phải đứng đúng ô mới nhặt được. Mỗi lần tiến gần, tối đa 5 ô.</p>
+                : null}
+            </section>
+          )}
+        </div>
+      </GameModal>
+      <section aria-label="Chú giải bản đồ" className={`mx-auto mb-3 flex w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-zinc-700/80 bg-zinc-950/90 px-3 py-2 text-[10px] shadow-lg ${maxContainerWidth}`}>
+        <span className="font-bold uppercase tracking-wider text-zinc-400">Ký hiệu</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sky-200"><Waypoints className="h-4 w-4 text-sky-300" />Điểm dịch chuyển</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-cyan-100"><Droplets className="h-4 w-4 text-cyan-300" />Nguyên Tuyền</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-amber-100"><Package className="h-4 w-4 text-amber-300" />Chiến lợi phẩm</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-emerald-100"><DoorOpen className="h-4 w-4 text-emerald-300" />Cổng Bí Cảnh</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-violet-100"><DoorOpen className="h-4 w-4 text-violet-300" />Cổng Tiên Khiếu</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-lime-100"><Mountain className="h-4 w-4 text-lime-300" />Điểm tài nguyên</span>
+      </section>
       <div className="relative border border-zinc-900 rounded-3xl p-2 sm:p-3 shadow-2xl overflow-hidden flex flex-col items-center justify-center" style={mapBackgroundStyle}>
         {gridData ? (
           <div
@@ -648,29 +775,46 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                 || markersOnCell.find((marker) => marker.kind === "merchant")
                 || markersOnCell[0];
               const cellTint = cellData.cell_type === "ENTRY_PORTAL" || cellData.cell_type === "EXIT_PORTAL" || cellData.cell_type === "PORTAL_EXIT"
-                ? "bg-emerald-950/60 border-emerald-500/50"
+                ? "bg-emerald-950/80 border-emerald-300/75 ring-1 ring-inset ring-emerald-300/25"
                 : cellData.cell_type === "INHERITANCE_ALTAR"
-                  ? "bg-purple-950/60 border-purple-500/50"
+                  ? "bg-purple-950/80 border-purple-300/75 ring-1 ring-inset ring-purple-300/25"
                   : cellData.cell_type === "Boss" || cellData.cell_type === "Monster"
-                    ? "bg-rose-950/45 border-rose-500/40"
+                    ? "bg-rose-950/75 border-rose-300/70 ring-1 ring-inset ring-rose-300/20"
                     : cellData.cell_type === "Resource" || cellData.cell_type === "PrimevalVein"
-                      ? "bg-cyan-950/45 border-cyan-500/40"
+                      ? "bg-cyan-950/80 border-cyan-300/75 ring-1 ring-inset ring-cyan-300/25"
                       : primaryMarker?.kind === "sect"
-                        ? "bg-amber-950/45 border-amber-500/40"
+                        ? "bg-amber-950/75 border-amber-300/70 ring-1 ring-inset ring-amber-300/20"
                         : primaryMarker?.kind === "teleport"
-                          ? "bg-sky-950/45 border-sky-500/40"
+                          ? "bg-sky-950/80 border-sky-300/75 ring-1 ring-inset ring-sky-300/25"
                           : primaryMarker?.kind === "aperture_portal"
-                            ? "bg-violet-950/45 border-violet-500/40"
-                            : dropOnCell
-                              ? "bg-amber-950/35 border-amber-500/35"
-                              : "";
+                            ? "bg-violet-950/80 border-violet-300/75 ring-1 ring-inset ring-violet-300/25"
+                            : primaryMarker?.kind === "resource_point"
+                              ? "bg-lime-950/75 border-lime-300/70 ring-1 ring-inset ring-lime-300/20"
+                              : dropOnCell
+                                ? "bg-amber-950/75 border-amber-300/70 ring-1 ring-inset ring-amber-300/20"
+                                : "";
               const portalMarker = markersOnCell.find((marker) => marker.kind === "aperture_portal");
               const teleportMarker = markersOnCell.find((marker) => marker.kind === "teleport");
               const merchantMarker = markersOnCell.find((marker) => marker.kind === "merchant");
               const resourcePoint = markersOnCell.find((marker) => marker.kind === "resource_point");
               const markerTitle = markersOnCell.map((marker) => marker.name).join(", ");
+              const cellLabel = cellData.cell_type === "PrimevalVein"
+                ? "Nguyên Tuyền"
+                : cellData.cell_type === "ENTRY_PORTAL" || cellData.cell_type === "EXIT_PORTAL" || cellData.cell_type === "PORTAL_EXIT"
+                  ? "Cổng Bí Cảnh"
+                  : primaryMarker?.kind === "teleport"
+                    ? "Điểm dịch chuyển"
+                    : primaryMarker?.kind === "aperture_portal"
+                      ? "Cổng Tiên Khiếu"
+                      : primaryMarker?.kind === "resource_point"
+                        ? "Điểm tài nguyên"
+                        : dropOnCell
+                          ? "Chiến lợi phẩm"
+                          : cellData.cell_type !== "Empty"
+                            ? getEntityName(cellData.cell_type, cellData.content)
+                            : primaryMarker?.name;
               const isCellInteractive = !isOutOfBounds && (
-                isMovable || isPlayerCell || otherPlayersOnCell.length > 0 || markersOnCell.length > 0 || cellData.cell_type !== "Empty"
+                isMovable || isPlayerCell || otherPlayersOnCell.length > 0 || dropsOnCell.length > 0 || markersOnCell.length > 0 || cellData.cell_type !== "Empty"
               );
               const cellAccessibleName = isOutOfBounds
                 ? "Hư vô (Ngoại biên bản đồ)"
@@ -726,29 +870,29 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                       ) : null
                     ))}
                     {markersOnCell.length > 0 && (
-                      <span className="absolute right-0.5 top-0.5 flex max-w-[70%] flex-wrap justify-end gap-0.5 rounded-md border border-zinc-600/70 bg-zinc-950/90 p-0.5 shadow" title={markerTitle}>
+                      <span className={`absolute right-1 top-1 flex max-w-[75%] flex-wrap justify-end gap-1 rounded-md border border-zinc-500/80 bg-zinc-950/95 shadow-lg ${markerBadgePaddingClass}`} title={markerTitle}>
                         {markersOnCell.map((marker) => (
                           <span key={`${marker.kind}:${marker.id}`} aria-hidden="true">
-                            {marker.kind === "sect" ? <ShieldAlert className="h-3 w-3 text-amber-300" />
-                              : marker.kind === "teleport" ? <Waypoints className="h-3 w-3 text-sky-300" />
-                                : marker.kind === "aperture_portal" ? <DoorOpen className="h-3 w-3 text-violet-300" />
-                                  : marker.kind === "merchant" ? <Store className="h-3 w-3 text-amber-400" />
-                                    : <Mountain className="h-3 w-3 text-lime-300" />}
+                            {marker.kind === "sect" ? <ShieldAlert className={`${markerIconSizeClass} text-amber-300`} />
+                              : marker.kind === "teleport" ? <Waypoints className={`${markerIconSizeClass} text-sky-300`} />
+                                : marker.kind === "aperture_portal" ? <DoorOpen className={`${markerIconSizeClass} text-violet-300`} />
+                                  : marker.kind === "merchant" ? <Store className={`${markerIconSizeClass} text-amber-300`} />
+                                    : <Mountain className={`${markerIconSizeClass} text-lime-300`} />}
                           </span>
                         ))}
                       </span>
                     )}
                     {dropsOnCell.length > 0 && (
-                      <span className="absolute bottom-0.5 left-0.5 flex items-center gap-0.5 rounded-full border border-amber-300/60 bg-zinc-950/95 px-1 py-0.5 shadow" title={`${dropsOnCell.length} túi chiến lợi phẩm`}>
-                        <Package className="h-3.5 w-3.5 text-amber-300" />
+                      <span className="absolute left-1 top-1 flex items-center gap-1 rounded-md border border-amber-300/80 bg-zinc-950/95 px-1.5 py-1 shadow-lg" title={`${dropsOnCell.length} túi chiến lợi phẩm`}>
+                        <Package className="h-4 w-4 text-amber-300" />
                         {dropsOnCell.length > 1 && <span className="text-[8px] font-bold leading-none text-amber-100">{dropsOnCell.length}</span>}
                       </span>
                     )}
                   </div>
 
-                  {(cellData.cell_type !== "Empty" || primaryMarker) && !isOutOfBounds && !isPlayerCell && (
-                    <span className="text-[6px] leading-tight font-mono text-zinc-400 absolute bottom-0.5 px-0.5 truncate max-w-full text-center">
-                      {cellData.cell_type !== "Empty" ? getEntityName(cellData.cell_type, cellData.content) : primaryMarker.name}
+                  {cellLabel && !isOutOfBounds && !isPlayerCell && (
+                    <span className={`absolute bottom-0.5 left-1/2 z-20 max-w-[calc(100%-0.5rem)] -translate-x-1/2 truncate rounded border border-white/15 bg-zinc-950/95 px-1 py-0.5 text-center font-mono font-semibold leading-tight text-zinc-100 shadow ${cellLabelSizeClass}`}>
+                      {cellLabel}
                     </span>
                   )}
                 </div>

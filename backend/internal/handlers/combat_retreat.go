@@ -206,7 +206,7 @@ func Retreat(c *gin.Context) {
 			WHERE id = $1 AND active_combat->>'enemy_type' = 'PVP'
 			  AND active_combat->>'combat_mode' = 'real'
 			  AND active_combat->>'combat_owner_id' = $2
-			  AND active_combat->>'target_player_id' = $3`, opponentID, combat.CombatOwnerID, player.ID.String()); err != nil {
+			  AND active_combat->>'target_player_id' IN ($3, $2)`, opponentID, combat.CombatOwnerID, player.ID.String()); err != nil {
 			respondCombatTxErr(c, err, "Không thể hủy trận PvP chuẩn bị.")
 			return
 		}
