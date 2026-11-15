@@ -1973,7 +1973,8 @@ export const useGameStore = create<GameState>((set, get) => {
             if (changedDomains.has("ascension")) void get().fetchAscensionSession();
             if (changedDomains.has("pets")) void get().fetchPlayerPets();
           }
-          if (eventType !== "session.kicked" && !shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision)) {
+          const isCombatLifecycleEvent = eventType === "combat.started" || eventType === "combat.ended";
+          if (eventType !== "session.kicked" && !shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision, { allowEqual: isCombatLifecycleEvent })) {
             return;
           }
           const currentPlayer = get().player;
@@ -1996,7 +1997,7 @@ export const useGameStore = create<GameState>((set, get) => {
               // A completed combat event can arrive before the HTTP response
               // that contains its replay. Keep the replay until the user exits;
               // a new encounter starts a fresh replay lifecycle.
-              ...(eventType === "combat.started" ? { activeCombatReplay: null } : {}),
+              ...(eventType === "combat.started" ? { activeCombatReplay: null, combatSessionEvent: null } : {}),
             }));
             return;
           }

@@ -779,10 +779,11 @@ func AscensionStartCalamityCombat(c *gin.Context) {
 	}
 	combat := models.BuildCombatStateFromMonster(boss, actor.Rank, actor.SubRank)
 	combat.EnemyHP, combat.EnemyMaxHP = actor.HP, actor.MaxHP
+	combat.CombatMode = "real"
 	combat.WorldMonsterRegionID, combat.WorldMonsterID = actor.RegionID, actor.InstanceID
 	combat.AscensionCalamity = true
-	player.ActiveCombat = &combat
-	combatJSON, err := json.Marshal(combat)
+	player.ActiveCombat = StartCombat(tx, &combat, &player)
+	combatJSON, err := json.Marshal(player.ActiveCombat)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể tạo trạng thái chiến đấu", err))
 		return

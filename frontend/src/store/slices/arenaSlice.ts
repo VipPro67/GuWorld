@@ -142,7 +142,10 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
-      if (data.active_combat) get().setPlayerFromServer({ active_combat: data.active_combat });
+      if (data.active_combat) {
+        get().setActiveCombatReplay(null);
+        get().setPlayerFromServer({ active_combat: data.active_combat });
+      }
       get().addLog(data.message || "Đã thách đấu đối thủ!");
       return true;
     } catch (caught: unknown) {

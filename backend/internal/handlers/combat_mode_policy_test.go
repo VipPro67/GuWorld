@@ -30,6 +30,9 @@ func TestPvPCombatDoesNotJoinInitiatingParty(t *testing.T) {
 	if !partyJoinsCombat(&models.CombatState{EnemyType: "MONSTER", CombatMode: "real"}) {
 		t.Fatal("real world PvE should continue to include eligible party members")
 	}
+	if !partyJoinsCombat(&models.CombatState{EnemyType: "BOSS", CombatMode: "real", AscensionCalamity: true}) {
+		t.Fatal("ascension calamities should include eligible party members")
+	}
 }
 
 func TestCombatSessionWinnerTracksWhichSideFled(t *testing.T) {

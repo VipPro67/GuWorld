@@ -585,13 +585,19 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         </div>
       </section>
 
-      {worldMonsters.filter((actor) => actor.owner_player_id === player.id && actor.monster_template_id === "monster_earth_calamity_boss").map((actor) => (
+      {worldMonsters.filter((actor) => actor.owner_player_id && actor.monster_template_id === "monster_earth_calamity_boss").map((actor) => (
         <section key={actor.instance_id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-700/50 bg-rose-950/20 p-3 shadow-lg">
           <div className="flex items-center gap-2">
             <MonsterSprite templateId={actor.monster_template_id} alt="Địa Tai Bản Yếu" className="h-10 w-10 object-contain" />
-            <div><div className="text-xs font-bold text-rose-200">Địa Tai Bản Yếu · Chuyển 5.4</div><div className="text-[10px] text-zinc-400">Thực thể ngoài grid · ({Math.round(actor.x)}, {Math.round(actor.y)}) · HP {Math.round(actor.hp)}/{Math.round(actor.max_hp)}</div></div>
+            <div>
+              <div className="text-xs font-bold text-rose-200">Địa Tai Bản Yếu · Chuyển 5.4</div>
+              <div className="text-[10px] text-zinc-400">Thực thể ngoài grid · ({Math.round(actor.x)}, {Math.round(actor.y)}) · HP {Math.round(actor.hp)}/{Math.round(actor.max_hp)}</div>
+              {actor.owner_player_id !== player.id && <div className="text-[10px] text-amber-300">Người độ kiếp cần nghênh chiến; thành viên tổ đội cùng khu vực sẽ tham chiến cùng.</div>}
+            </div>
           </div>
-          <button disabled={actionLoading || Boolean(player.active_combat)} onClick={() => void engageAscensionWorldMonster(actor)} className="rounded-lg bg-rose-700 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 disabled:opacity-50">Nghênh chiến</button>
+          {actor.owner_player_id === player.id && (
+            <button disabled={actionLoading || Boolean(player.active_combat)} onClick={() => void engageAscensionWorldMonster(actor)} className="rounded-lg bg-rose-700 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 disabled:opacity-50">Nghênh chiến</button>
+          )}
         </section>
       ))}
 

@@ -34,7 +34,9 @@ export interface CombatSlice {
 export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, CombatSlice> = (set, get) => ({
   combatSettings: null,
   activeCombatReplay: null,
-  setActiveCombatReplay: (replay) => set({ activeCombatReplay: replay }),
+  setActiveCombatReplay: (replay) => set(replay
+    ? { activeCombatReplay: replay }
+    : { activeCombatReplay: null, combatSessionEvent: null }),
   combatSettingsLoading: false,
   combatHistory: [],
   combatHistoryLoading: false,

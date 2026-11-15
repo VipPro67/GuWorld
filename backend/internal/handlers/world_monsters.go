@@ -37,7 +37,15 @@ const (
 type WorldMonster = cache.WorldMonster
 
 func worldMonsterVisibleToPlayer(monster WorldMonster, playerID string) bool {
-	return monster.OwnerPlayerID == "" || monster.OwnerPlayerID == playerID
+	return strings.HasPrefix(monster.SpawnID, "ascension:") ||
+		monster.OwnerPlayerID == "" ||
+		monster.OwnerPlayerID == playerID
+}
+
+func ascensionWorldMonsterVisibleAtPosition(monster WorldMonster, entry WorldPosEntry, radius int) bool {
+	return strings.HasPrefix(monster.SpawnID, "ascension:") &&
+		monster.State != MonsterStateDefeated &&
+		math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) <= float64(radius)
 }
 
 var (
@@ -353,10 +361,6 @@ func GetWorldMonsters(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Player position unavailable"})
 		return
 	}
-	if entry.MapID != "world_map" || entry.InstanceID != "" {
-		c.JSON(http.StatusOK, gin.H{"monsters": []WorldMonster{}, "server_time": time.Now().UTC()})
-		return
-	}
 	radius, _ := strconv.Atoi(c.DefaultQuery("r", strconv.Itoa(WorldMonsterActivationRadius)))
 	if radius < 1 {
 		radius = 1
@@ -367,6 +371,40 @@ func GetWorldMonsters(c *gin.Context) {
 	snapshotStartedAt := time.Now()
 	mapID := worldMapIDForRegion(entry.Region)
 	scopeRegions := activeScopeRegions(entry.X-radius, entry.Y-radius, entry.X+radius, entry.Y+radius, mapID, entry.Region)
+	if entry.MapID != "world_map" || entry.InstanceID != "" {
+		minBX, minBY := monsterBucket(entry.X-radius, entry.Y-radius)
+		maxBX, maxBY := monsterBucket(entry.X+radius, entry.Y+radius)
+		coords := make([]cache.WorldMonsterBucketCoord, 0, (maxBX-minBX+1)*(maxBY-minBY+1))
+		for bx := minBX; bx <= maxBX; bx++ {
+			for by := minBY; by <= maxBY; by++ {
+				coords = append(coords, cache.WorldMonsterBucketCoord{X: bx, Y: by})
+			}
+		}
+		monsters := make([]WorldMonster, 0, 1)
+		seen := make(map[string]struct{}, 1)
+		for _, region := range scopeRegions {
+			buckets, err := cache.WorldMonstersInBuckets(c.Request.Context(), region, coords)
+			if err != nil {
+				logger.S.Errorf("load ascension actors for player %s in region %s: %v", playerID, region, err)
+				httperr.Respond(c, httperr.Internal("Cannot load ascension encounter", err))
+				return
+			}
+			for _, actors := range buckets {
+				for _, actor := range actors {
+					if !ascensionWorldMonsterVisibleAtPosition(actor, entry, radius) {
+						continue
+					}
+					if _, exists := seen[actor.InstanceID]; exists {
+						continue
+					}
+					seen[actor.InstanceID] = struct{}{}
+					monsters = append(monsters, actor)
+				}
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": time.Now().UTC()})
+		return
+	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT region_id, monster_id, x, y, respawn_seconds, min_rank
 		FROM monster_spawns WHERE is_active=TRUE AND is_boss_spawn=FALSE AND x IS NOT NULL AND y IS NOT NULL

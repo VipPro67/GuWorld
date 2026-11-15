@@ -29,7 +29,7 @@ Phá vách tiêu hao Chân Nguyên để tăng tiến độ vách khiếu. Khi �
 
 Thăng Tiên là một nghi thức nhiều bước chứ không phải một nút thăng cấp. Màn hình phiên cho biết giai đoạn hiện tại. Người chơi cần đạt điều kiện rank, tiểu cảnh giới, tiến độ, tài nguyên và Cổ cần thiết; sau đó lần lượt vượt khảo nghiệm, đối đầu tai kiếp và hoàn tất bước Thả Cổ. Thất bại hoặc hết hạn có thể kết thúc phiên và áp dụng hậu quả tương ứng.
 
-Địa Tai Bản Yếu được triệu hồi thành thực thể riêng cạnh nhân vật, ngoài lưới khám phá. Người chơi chọn thực thể trên bản đồ để mở combat theo lượt; thắng hoàn tất bước này, thua kết thúc nghi thức và mất 20% Nhân Khí, còn rút lui không mất Nhân Khí và có thể nghênh chiến lại trong thời hạn.
+Địa Tai Bản Yếu được triệu hồi thành thực thể cạnh người độ kiếp, ngoài lưới khám phá; người chơi gần đó nhìn thấy nó cả trên map khu vực riêng. Người độ kiếp khởi chiến, thành viên tổ đội cùng khu vực có thể hỗ trợ trong combat theo lượt. Thắng hoàn tất bước này, thua kết thúc nghi thức và mất 20% Nhân Khí, còn rút lui không mất Nhân Khí và có thể nghênh chiến lại trong thời hạn.
 
 ### Nhiệm vụ, nhiệm vụ ngày và thành tựu
 
