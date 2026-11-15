@@ -12,6 +12,10 @@ Người chơi cần đăng nhập và hoàn tất onboarding để dùng world.
 
 Chọn đường đi trên bản đồ rồi gửi move. Backend kiểm tra từng ô trên đường, áp dụng trigger trung gian và dừng tại ô đầu tiên bắt đầu encounter. Portal/teleport dùng flow movement dùng chung để kiểm tra đích và phát sự kiện cập nhật vị trí. Drop trên mặt đất được nhặt qua tương tác tại vị trí hợp lệ.
 
+Trong **Lobby → Cài Đặt → Chiến thuật turn-based**, bật **Tự động xử lý chiến đấu khi farm** để encounter quái phát sinh lúc di chuyển được mô phỏng và settle ngay; màn điều khiển cùng báo cáo trận không mở. Tắt tùy chọn để vào encounter theo lượt như thường lệ. Cài đặt này lưu trong `combat_settings.skip_battle` và không áp dụng cho encounter bắt đầu trực tiếp từ màn chiến đấu.
+
+Mở **Khám Phá Dã Ngoại** từ Lobby để dùng bản đồ trong popup. **Auto farm quanh vị trí hiện tại** ưu tiên nhắm quái đang thấy trong phạm vi 2 ô; khi chưa thấy mục tiêu, nhân vật tuần tra theo vòng nhỏ bán kính 2 ô để tìm encounter. Auto farm gửi tuần tự lệnh di chuyển qua API hiện có; nhấn Dừng hoặc đóng popup để ngừng gửi request mới. Cần bật `skip_battle`; tính năng chạy trên tab đang mở và dừng khi request lỗi, không tải được bản đồ hoặc nhân vật không thể tiến thêm. Request đang chạy sẽ hoàn tất trước khi dừng hẳn.
+
 ## Luật, chi phí và giới hạn
 
 ### Xác suất ambush
@@ -39,6 +43,7 @@ Map/region và portal data quyết định địa hình, vùng, ô vào và đi�
 
 - Backend: `backend/internal/handlers/exploration_move.go`, `movement.go`, `world.go`, `portal_transfer.go`, `ground_drops.go`.
 - Frontend: `frontend/src/components/ExplorationMap.tsx`, `frontend/src/store/slices/worldSlice.ts`.
+- UI: `frontend/src/app/page.tsx`, `frontend/src/components/ExplorationMap.tsx`; cài đặt: `frontend/src/components/LobbySettingsPanel.tsx`, `frontend/src/store/slices/combatSlice.ts`; API `GET/PUT /api/player/combat-settings`.
 
 ## API liên quan
 

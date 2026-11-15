@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useGameStore } from "@/store/useGameStore";
 import {
   useUiPreferences,
   updateUiPreferences,
@@ -10,6 +11,15 @@ import {
 
 export const LobbySettingsPanel: React.FC = () => {
   const prefs = useUiPreferences();
+  const [savingCombatSettings, setSavingCombatSettings] = React.useState(false);
+  const combatSettings = useGameStore((state) => state.combatSettings);
+  const combatSettingsLoading = useGameStore((state) => state.combatSettingsLoading);
+  const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
+  const saveCombatSettings = useGameStore((state) => state.saveCombatSettings);
+
+  React.useEffect(() => {
+    if (!combatSettings) void fetchCombatSettings();
+  }, [combatSettings, fetchCombatSettings]);
 
   const handleThemeChange = (preset: MenuThemePreset) => {
     updateUiPreferences({
@@ -30,6 +40,16 @@ export const LobbySettingsPanel: React.FC = () => {
     updateUiPreferences({
       showOtherPlayerNames: !prefs.showOtherPlayerNames,
     });
+  };
+
+  const handleSkipBattleToggle = async (skipBattle: boolean) => {
+    if (!combatSettings) return;
+    setSavingCombatSettings(true);
+    try {
+      await saveCombatSettings({ ...combatSettings, skip_battle: skipBattle });
+    } finally {
+      setSavingCombatSettings(false);
+    }
   };
 
   return (
@@ -83,6 +103,23 @@ export const LobbySettingsPanel: React.FC = () => {
             checked={prefs.showOtherPlayerNames}
             onChange={handlePlayerNamesToggle}
             className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 h-4 w-4"
+          />
+        </label>
+      </div>
+
+      <div className="border-t border-zinc-800 pt-4 space-y-3">
+        <h3 className="font-serif font-semibold text-amber-200">Chiến thuật turn-based</h3>
+        <label className="flex items-center justify-between gap-4 cursor-pointer p-3 rounded-lg bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-800">
+          <span className="min-w-0">
+            <span className="block">Tự động xử lý chiến đấu khi farm</span>
+            <span className="mt-1 block text-xs text-zinc-500">Bỏ qua màn điều khiển và báo cáo trận khi gặp quái lúc di chuyển.</span>
+          </span>
+          <input
+            type="checkbox"
+            checked={combatSettings?.skip_battle ?? false}
+            disabled={combatSettingsLoading || savingCombatSettings || !combatSettings}
+            onChange={(event) => void handleSkipBattleToggle(event.target.checked)}
+            className="h-4 w-4 shrink-0 rounded border-zinc-700 text-amber-500 focus:ring-amber-500 disabled:opacity-50"
           />
         </label>
       </div>

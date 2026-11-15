@@ -156,6 +156,8 @@ Ví hiển thị số dư và giao dịch. Top-up tạo order và chờ kết qu
 
 ## Hoạt động phụ và tương tác xã hội
 
+- **Khám phá và chiến đấu:** bản đồ mở trong popup từ Lobby; di chuyển có thể gặp quái và mở combat theo lượt. Auto farm ưu tiên tìm quái trong 2 ô, nếu chưa có thì tuần tra quanh vị trí hiện tại; cần bật tự xử lý encounter tại Lobby → Cài Đặt → Chiến thuật turn-based. Đóng popup sẽ dừng gửi request mới.
+
 - **Võ Đài:** challenge, leaderboard và shop phần thưởng.
 - **Tháp Chiến Thuật:** leo tower theo encounter theo lượt; xem trạng thái và leaderboard. Hạn mức/ghi nhận thất bại theo chu kỳ do server quản lý.
 - **Đấu Trường Sinh Tử / Đại Hội Võ Thuật:** giải đấu có đăng ký hoặc ghép trận, bracket, log, lịch sử và phần thưởng riêng.

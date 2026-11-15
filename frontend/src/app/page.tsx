@@ -188,7 +188,7 @@ export default function Home() {
   const changelogDialogRef = useRef<HTMLDivElement>(null);
   const featureDialogOpen = Boolean(
     player && !player.active_combat && !activeCombatReplay && player.rank !== 0 && !player.needs_onboarding &&
-    !isExploreView && currentView !== "dashboard" && currentView !== "practice-room"
+    currentView !== "dashboard" && currentView !== "practice-room"
   );
 
   useEffect(() => {
@@ -409,8 +409,8 @@ export default function Home() {
     );
   }
 
-  const isFullBleedView = currentView === "practice-room" || isExploreView;
-  const isWideFeatureView = ["aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "infinite-tower", "death-arena", "martial-arena"].includes(currentView);
+  const isFullBleedView = currentView === "practice-room";
+  const isWideFeatureView = ["explore", "mmo-world", "aperture", "sect", "shop", "auction", "premium-store", "premium-shop", "topup", "arena", "infinite-tower", "death-arena", "martial-arena"].includes(currentView);
 
   const viewTitles: Record<string, string> = {
     dashboard: "Sảnh chính",
@@ -645,16 +645,10 @@ export default function Home() {
           </div>
         ) : (
             <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
-            {isExploreView ? (
-              <div className="w-full h-full overflow-y-auto py-2 sm:py-4">
-                <ExplorationMap player={player} />
-              </div>
-            ) : (
-              <div inert={featureDialogOpen} className="w-full h-full overflow-y-auto py-2 sm:py-4 px-2 sm:px-6">
-                <LobbyView />
-              </div>
-            )}
-            {!isExploreView && currentView !== "dashboard" && (
+            <div inert={featureDialogOpen} className="w-full h-full overflow-y-auto py-2 sm:py-4 px-2 sm:px-6">
+              <LobbyView />
+            </div>
+            {currentView !== "dashboard" && (
               <div className={`absolute inset-0 z-40 flex items-center justify-center ${isFullBleedView ? "" : "bg-black/55 backdrop-blur-[2px] md:p-4"}`}>
                 <section
                   ref={featureDialogRef}
@@ -683,18 +677,12 @@ export default function Home() {
                     </div>
                   </div>
                   )}
-                  {isExploreView && (
-                    <button
-                      onClick={() => setView("dashboard")}
-                      aria-label="Thoát khám phá"
-                      title="Thoát khám phá"
-                      className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-zinc-950/80 text-zinc-100 shadow-lg backdrop-blur-sm transition-colors hover:bg-zinc-800"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  )}
                   <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-28 sm:p-4 sm:pb-8 ${isFullBleedView ? "p-0" : ""}`}>
-        {currentView === "practice-room" ? (
+        {isExploreView ? (
+          <div className="w-full h-full min-h-0 overflow-y-auto">
+            <ExplorationMap player={player} />
+          </div>
+        ) : currentView === "practice-room" ? (
           <div className="w-full">
             <TrainingRoom onClose={() => setView("dashboard")} />
           </div>

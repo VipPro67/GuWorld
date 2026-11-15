@@ -87,6 +87,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   });
   const [lastLog, setLastLog] = useState<string | null>(null);
   const [selectedPvpTarget, setSelectedPvpTarget] = useState<MapPlayer | null>(null);
+  const [autoFarmRunning, setAutoFarmRunning] = useState(false);
+  const autoFarmRunningRef = useRef(false);
   const [showAtlas, setShowAtlas] = useState(false);
   const [showBuildTeleport, setShowBuildTeleport] = useState(false);
   const [showDirectoryModal, setShowDirectoryModal] = useState(false);
@@ -94,6 +96,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const [selectedManageArray, setSelectedManageArray] = useState<TeleportArray | null>(null);
   const lastMoveTimeRef = useRef(0);
   const setView = useUIStore((state) => state.setView);
+
+  useEffect(() => () => {
+    autoFarmRunningRef.current = false;
+  }, []);
 
   const standingOnTeleport = useMemo(() => {
     return mapMarkers.find(
@@ -152,6 +158,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const regionName = currentRegion?.name || "Thế Giới Cổ Sư";
 
   const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean; name?: string }, resourcePointId?: string) => {
+    if (autoFarmRunningRef.current) return;
     const playerOnCell = gridData?.players_on_map?.find((target) => target.x === x && target.y === y && target.id !== player.id);
     if (playerOnCell) {
       setSelectedPvpTarget(playerOnCell);
@@ -237,6 +244,104 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       setLastLog(res.log);
       await loadGrid();
     }
+  };
+
+  const stopAutoFarm = () => {
+    autoFarmRunningRef.current = false;
+    setAutoFarmRunning(false);
+  };
+
+  const startAutoFarm = async () => {
+    if (autoFarmRunningRef.current) return;
+    if (isMemberNotLeader || player.active_combat) {
+      addToast("Chỉ Trưởng nhóm hoặc người chơi solo có thể bắt đầu auto farm khi không chiến đấu.", "error");
+      return;
+    }
+
+    const store = useGameStore.getState();
+    if (!store.combatSettings) await store.fetchCombatSettings();
+    if (!useGameStore.getState().combatSettings?.skip_battle) {
+      addToast("Hãy bật ‘Tự động xử lý chiến đấu khi farm’ trong Lobby → Cài Đặt trước.", "error");
+      return;
+    }
+
+    const origin = { x: player.x, y: player.y };
+    const region = player.current_region;
+    const bounds = regions.find((item) => item.id === region);
+    if (bounds && ["HUB", "SAFE_ZONE"].includes(bounds.zone_type || "")) {
+      addToast("Auto farm chỉ hoạt động ngoài vùng an toàn.", "error");
+      return;
+    }
+    const latestGridResponse = await useGameStore.getState().fetchGrid(preferredRadius);
+    let latestGrid = latestGridResponse as GridData | null;
+    if (!latestGrid || !Array.isArray(latestGrid.cells)) {
+      addToast("Không thể tải bản đồ để bắt đầu auto farm.", "error");
+      return;
+    }
+    const patrolOffsets = [
+      [-2, -2], [-1, -2], [0, -2], [1, -2], [2, -2],
+      [2, -1], [2, 0], [2, 1], [2, 2], [1, 2],
+      [0, 2], [-1, 2], [-2, 2], [-2, 1], [-2, 0], [-2, -1],
+    ];
+    const worldWidth = latestGrid.world_width || 100000;
+    const worldHeight = latestGrid.world_height || 100000;
+    const patrolPoints = patrolOffsets
+      .map(([dx, dy]) => ({ x: origin.x + dx, y: origin.y + dy }))
+      .filter((point) => point.x >= 0 && point.y >= 0 && point.x < worldWidth && point.y < worldHeight)
+      .filter((point) => !bounds || (
+        point.x >= (bounds.min_x ?? 0) && point.x <= (bounds.max_x ?? worldWidth - 1) &&
+        point.y >= (bounds.min_y ?? 0) && point.y <= (bounds.max_y ?? worldHeight - 1)
+      ));
+    if (patrolPoints.length === 0) {
+      addToast("Không có ô tuần tra hợp lệ quanh vị trí hiện tại.", "error");
+      return;
+    }
+    let patrolIndex = 0;
+    autoFarmRunningRef.current = true;
+    setAutoFarmRunning(true);
+    setGridData(latestGrid);
+    addToast("Auto farm đã bắt đầu: sẽ tìm quái trong tầm nhìn, nếu chưa có thì tuần tra quanh vị trí hiện tại.", "info");
+
+    while (autoFarmRunningRef.current) {
+      const before = useGameStore.getState().player as Player | null;
+      if (!before || before.current_region !== region || before.active_combat) break;
+      const visibleMonsters = latestGrid.cells
+        .filter((cell) => (cell.cell_type === "Monster" || cell.cell_type === "Boss")
+          && Math.max(Math.abs(cell.x - origin.x), Math.abs(cell.y - origin.y)) <= 2
+          && !(cell.x === before.x && cell.y === before.y))
+        .sort((left, right) => Math.max(Math.abs(left.x - before.x), Math.abs(left.y - before.y)) - Math.max(Math.abs(right.x - before.x), Math.abs(right.y - before.y)));
+      let destination = visibleMonsters[0] ? { x: visibleMonsters[0].x, y: visibleMonsters[0].y } : patrolPoints[patrolIndex];
+      if (!visibleMonsters[0]) patrolIndex = (patrolIndex + 1) % patrolPoints.length;
+      if (destination.x === before.x && destination.y === before.y) {
+        patrolIndex = (patrolIndex + 1) % patrolPoints.length;
+        destination = patrolPoints[patrolIndex];
+      }
+
+      const result = await useGameStore.getState().movePlayer(destination.x, destination.y);
+      if (!autoFarmRunningRef.current) break;
+      const after = useGameStore.getState().player as Player | null;
+      if (!result || !after || after.active_combat) break;
+      if (after.current_region !== region) {
+        addToast("Auto farm đã dừng vì nhân vật chuyển sang khu vực khác.", "info");
+        break;
+      }
+      if (after.x === before.x && after.y === before.y) {
+        addToast("Auto farm đã dừng vì không thể tiếp tục di chuyển trên tuyến này.", "error");
+        break;
+      }
+      const refreshedGrid = await useGameStore.getState().fetchGrid(preferredRadius);
+      if (refreshedGrid && Array.isArray(refreshedGrid.cells)) {
+        latestGrid = refreshedGrid as GridData;
+        setGridData(latestGrid);
+      } else {
+        addToast("Auto farm đã dừng vì không tải lại được bản đồ.", "error");
+        break;
+      }
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 800));
+    }
+
+    autoFarmRunningRef.current = false;
+    setAutoFarmRunning(false);
   };
 
   const handleChallengePlayer = async () => {
@@ -389,12 +494,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
           </div>
 
           <button
-            onClick={() => setView("dashboard")}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700/60 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif text-xs font-semibold cursor-pointer shadow-lg"
-          >
-            <span>⬅ Sảnh</span>
-          </button>
-          <button
             onClick={() => setShowAtlas(true)}
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif text-xs font-semibold shadow-lg shadow-amber-950/20 cursor-pointer"
           >
@@ -421,6 +520,24 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
           )}
         </div>
       </div>
+
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-800/60 bg-emerald-950/20 p-3 shadow-lg">
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-emerald-200">Auto farm quanh vị trí hiện tại</p>
+          <p className="mt-1 text-[10px] text-zinc-400">
+            {autoFarmRunning
+              ? "Đang tìm quái trong tầm; nếu chưa có sẽ tuần tra trong bán kính 2 ô. Lệnh hiện tại hoàn tất trước khi dừng."
+              : "Tự nhắm quái thường đang thấy; khi không có mục tiêu sẽ tuần tra vòng quanh bán kính 2 ô."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {autoFarmRunning ? (
+            <button type="button" onClick={stopAutoFarm} className="min-h-10 rounded-lg border border-rose-500/40 bg-rose-950/40 px-3 text-xs font-semibold text-rose-200 hover:bg-rose-900/50">Dừng auto farm</button>
+          ) : (
+            <button type="button" onClick={() => void startAutoFarm()} disabled={isMemberNotLeader || actionLoading || Boolean(player.active_combat)} className="min-h-10 rounded-lg border border-emerald-500/50 bg-emerald-700/70 px-3 text-xs font-bold text-white hover:bg-emerald-600 disabled:opacity-50">Bắt đầu auto farm</button>
+          )}
+        </div>
+      </section>
 
       {worldMonsters.filter((actor) => actor.owner_player_id === player.id && actor.monster_template_id === "monster_earth_calamity_boss").map((actor) => (
         <section key={actor.instance_id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-700/50 bg-rose-950/20 p-3 shadow-lg">
