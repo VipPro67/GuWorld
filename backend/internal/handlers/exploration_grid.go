@@ -69,6 +69,41 @@ func GetGrid(c *gin.Context) {
 	if maxVisionRadius > MaxVisualGridRadius {
 		maxVisionRadius = MaxVisualGridRadius
 	}
+	isApertureInstance := false
+	isApertureOwner := false
+	apertureOwnerName := ""
+	instanceID := mapInstanceIDForPlayer(player.ID.String())
+	if player.CurrentRegion == "aperture_interior" && instanceID != "" {
+		tx, txErr := db.DB.BeginTx(c.Request.Context(), nil)
+		if txErr != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Tiên Khiếu", txErr))
+			return
+		}
+		authorizedInstanceID, apertureOwner, accessErr := apertureInstanceForPlayer(tx, player.ID)
+		_ = tx.Rollback()
+		if accessErr != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra quyền vào Tiên Khiếu", accessErr))
+			return
+		}
+		if authorizedInstanceID == "" || authorizedInstanceID != instanceID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Không có quyền khám phá Tiên Khiếu này"})
+			return
+		}
+		isApertureOwner = apertureOwner
+		isApertureInstance = true
+		if err := db.DB.QueryRowContext(c.Request.Context(), `
+			SELECT owner.username
+			FROM immortal_apertures a
+			JOIN players owner ON owner.id = a.player_id
+			WHERE a.id = $1
+		`, authorizedInstanceID).Scan(&apertureOwnerName); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi tải tên chủ Tiên Khiếu", err))
+			return
+		}
+		if isApertureOwner {
+			maxVisionRadius = 10
+		}
+	}
 
 	// Read player's preferred radius from client query (e.g., ?radius=2 or ?r=3)
 	// Default radius is 2 (5x5).
@@ -78,7 +113,9 @@ func GetGrid(c *gin.Context) {
 			visualVisionRadius = rVal
 		}
 	}
-	if visualVisionRadius > maxVisionRadius {
+	if isApertureInstance && isApertureOwner {
+		visualVisionRadius = 10
+	} else if visualVisionRadius > maxVisionRadius {
 		visualVisionRadius = maxVisionRadius
 	}
 	if visualVisionRadius < 2 {
@@ -92,26 +129,42 @@ func GetGrid(c *gin.Context) {
 			"vision_radius":     visualVisionRadius,
 			"max_vision_radius": maxVisionRadius,
 			"stats":             gridStats,
-			"world_width":       WorldWidth,
-			"world_height":      WorldHeight,
+			"world_width":       mapWidthForInstance(isApertureInstance),
+			"world_height":      mapWidthForInstance(isApertureInstance),
 		})
 		return
 	}
 
 	mapID := worldMapIDForRegion(player.CurrentRegion)
-	mapInstanceID := mapInstanceIDForPlayer(player.ID.String())
+	mapInstanceID := instanceID
 
 	cellCoords := make([]cache.CellCoordKey, 0, (2*visualVisionRadius+1)*(2*visualVisionRadius+1))
-	for dx := -visualVisionRadius; dx <= visualVisionRadius; dx++ {
-		for dy := -visualVisionRadius; dy <= visualVisionRadius; dy++ {
-			cx := player.X + dx
-			cy := player.Y + dy
-			if cx >= 0 && cx < WorldWidth && cy >= 0 && cy < WorldHeight {
-				cellCoords = append(cellCoords, cache.CellCoordKey{RegionID: player.CurrentRegion, X: cx, Y: cy})
+	if isApertureInstance && isApertureOwner {
+		for y := 0; y < 20; y++ {
+			for x := 0; x < 20; x++ {
+				cellCoords = append(cellCoords, cache.CellCoordKey{RegionID: player.CurrentRegion, X: x, Y: y})
+			}
+		}
+	} else {
+		for dx := -visualVisionRadius; dx <= visualVisionRadius; dx++ {
+			for dy := -visualVisionRadius; dy <= visualVisionRadius; dy++ {
+				cx := player.X + dx
+				cy := player.Y + dy
+				inBounds := cx >= 0 && cx < WorldWidth && cy >= 0 && cy < WorldHeight
+				if isApertureInstance {
+					inBounds = cx >= 0 && cx < 20 && cy >= 0 && cy < 20
+				}
+				if inBounds {
+					cellCoords = append(cellCoords, cache.CellCoordKey{RegionID: player.CurrentRegion, X: cx, Y: cy})
+				}
 			}
 		}
 	}
-	clearedCells, errCleared := cache.GetClearedCells(cellCoords)
+	clearedCells := make(map[cache.CellCoordKey]cache.MapCellState)
+	var errCleared error
+	if !isApertureInstance {
+		clearedCells, errCleared = cache.GetClearedCells(cellCoords)
+	}
 	if errCleared != nil {
 		logger.S.Errorf("Failed to batch-read cleared map cells: %v", errCleared)
 		// Preserve the old per-cell fallback behavior if Redis cannot serve MGET.
@@ -136,7 +189,7 @@ func GetGrid(c *gin.Context) {
 		}
 		cells = append(cells, cell)
 	}
-	if worldMapIDForRegion(player.CurrentRegion) == "world_map" {
+	if !isApertureInstance && worldMapIDForRegion(player.CurrentRegion) == "world_map" {
 		cellIndex := make(map[[2]int]int, len(cells))
 		for i, cell := range cells {
 			cellIndex[[2]int{cell.X, cell.Y}] = i
@@ -161,12 +214,16 @@ func GetGrid(c *gin.Context) {
 	}
 	nearbyPlayers := []NearbyPlayer{}
 	seenIDs := map[string]bool{}
+	nearbyRadius := visualVisionRadius
+	if isApertureInstance && isApertureOwner {
+		nearbyRadius = 20
+	}
 
 	// Radius-based nearby players come from the in-memory position index
 	// (fast path). SQL fallback only while the index is cold.
-	entries := worldPosIndex.NearbyInScope(player.X, player.Y, visualVisionRadius, player.ID.String(), mapID, mapInstanceID)
+	entries := worldPosIndex.NearbyInScope(player.X, player.Y, nearbyRadius, player.ID.String(), mapID, mapInstanceID)
 	if worldPosIndex.Len() == 0 {
-		entries = queryNearbyPlayersSQL(c, player.ID, player.X, player.Y, visualVisionRadius, mapID, mapInstanceID)
+		entries = queryNearbyPlayersSQL(c, player.ID, player.X, player.Y, nearbyRadius, mapID, mapInstanceID)
 	}
 	for _, e := range entries {
 		seenIDs[e.ID] = true
@@ -189,7 +246,8 @@ func GetGrid(c *gin.Context) {
 			for partyRows.Next() {
 				var np NearbyPlayer
 				if errScan := partyRows.Scan(&np.ID, &np.Username, &np.AvatarURL, &np.X, &np.Y); errScan == nil {
-					if !seenIDs[np.ID] {
+					distance := maxInt(maxInt(np.X-player.X, player.X-np.X), maxInt(np.Y-player.Y, player.Y-np.Y))
+					if !seenIDs[np.ID] && (!isApertureInstance || distance <= nearbyRadius) {
 						nearbyPlayers = append(nearbyPlayers, np)
 						seenIDs[np.ID] = true
 					}
@@ -216,21 +274,25 @@ func GetGrid(c *gin.Context) {
 	}
 
 	groundDrops := []GroundDropItem{}
-	minX := player.X - visualVisionRadius
-	maxX := player.X + visualVisionRadius
-	minY := player.Y - visualVisionRadius
-	maxY := player.Y + visualVisionRadius
+	minX := player.X - nearbyRadius
+	maxX := player.X + nearbyRadius
+	minY := player.Y - nearbyRadius
+	maxY := player.Y + nearbyRadius
+	if isApertureInstance && isApertureOwner {
+		minX, minY, maxX, maxY = 0, 0, 19, 19
+	}
 
 	dropRows, errDrops := db.DB.Query(`
 		SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
 		       loot_data, protected_until, expires_at, created_at
 		FROM map_ground_drops
 		WHERE region_id = $1
+		  AND map_instance_id IS NOT DISTINCT FROM NULLIF($6, '')::uuid
 		  AND x BETWEEN $2 AND $3
 		  AND y BETWEEN $4 AND $5
 		  AND expires_at > NOW()
 		ORDER BY created_at DESC
-	`, player.CurrentRegion, minX, maxX, minY, maxY)
+	`, player.CurrentRegion, minX, maxX, minY, maxY, mapInstanceID)
 	if errDrops == nil {
 		defer dropRows.Close()
 		now := time.Now()
@@ -244,7 +306,7 @@ func GetGrid(c *gin.Context) {
 				&d.ID, &d.RegionID, &d.X, &d.Y, &d.LoserID, &d.LoserName,
 				&killerID, &killerName, &lootBytes, &protectedUntil, &d.ExpiresAt, &d.CreatedAt,
 			); errScan == nil {
-				if IsSafeZone(d.RegionID, d.X, d.Y) {
+				if !isApertureInstance && IsSafeZone(d.RegionID, d.X, d.Y) {
 					continue
 				}
 				if killerID.Valid {
@@ -270,17 +332,25 @@ func GetGrid(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"x":                 player.X,
-		"y":                 player.Y,
-		"vision_radius":     visualVisionRadius,
-		"max_vision_radius": maxVisionRadius,
-		"cells":             cells,
-		"stats":             gridStats,
-		"players_on_map":    nearbyPlayers,
-		"ground_drops":      groundDrops,
-		"world_width":       WorldWidth,
-		"world_height":      WorldHeight,
+		"x":                   player.X,
+		"y":                   player.Y,
+		"vision_radius":       visualVisionRadius,
+		"max_vision_radius":   maxVisionRadius,
+		"cells":               cells,
+		"stats":               gridStats,
+		"players_on_map":      nearbyPlayers,
+		"ground_drops":        groundDrops,
+		"world_width":         mapWidthForInstance(isApertureInstance),
+		"world_height":        mapWidthForInstance(isApertureInstance),
+		"aperture_owner_name": apertureOwnerName,
 	})
+}
+
+func mapWidthForInstance(aperture bool) int {
+	if aperture {
+		return 20
+	}
+	return WorldWidth
 }
 
 // HasExplorationInventorySpace checks bag capacity of the real inventory.

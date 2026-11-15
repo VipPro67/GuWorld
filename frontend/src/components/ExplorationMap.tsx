@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass, Sparkles, DoorOpen, Droplets, Footprints, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Swords, Waypoints, Store, UserRound } from "lucide-react";
-import { useGameStore, Player, GroundDrop } from "@/store/useGameStore";
+import { Compass, Sparkles, DoorOpen, Droplets, Footprints, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Swords, Waypoints, Store, UserRound, LogOut } from "lucide-react";
+import { useGameStore, Player, GroundDrop, ApertureResourcePoint } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 import { usePolling } from "@/lib/usePolling";
 import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
@@ -38,6 +38,7 @@ interface GridData {
   ground_drops?: GroundDrop[];
   world_width?: number;
   world_height?: number;
+  aperture_owner_name?: string;
 }
 
 interface MapPlayer {
@@ -72,6 +73,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const resourcePoints = useWorldStore((state) => state.resourcePoints);
   const resourcePointsRegion = useWorldStore((state) => state.resourcePointsRegion);
   const fetchWorldResourcePoints = useWorldStore((state) => state.fetchWorldResourcePoints);
+  const aperturePoints = useGameStore((state) => state.aperturePoints);
+  const fetchAperturePoints = useGameStore((state) => state.fetchAperturePoints);
+  const collectAperturePoint = useGameStore((state) => state.collectAperturePoint);
+  const leaveAperture = useGameStore((state) => state.leaveAperture);
   const worldMonsters = useWorldStore((state) => state.worldMonsters);
   const fetchWorldMonsters = useWorldStore((state) => state.fetchWorldMonsters);
   const engageAscensionWorldMonster = useWorldStore((state) => state.engageAscensionWorldMonster);
@@ -104,6 +109,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const [lastLog, setLastLog] = useState<string | null>(null);
   const [selectedPvpTarget, setSelectedPvpTarget] = useState<MapPlayer | null>(null);
   const [selectedGroundDrop, setSelectedGroundDrop] = useState<GroundDrop | null>(null);
+  const [selectedAperturePoint, setSelectedAperturePoint] = useState<ApertureResourcePoint | null>(null);
   const [autoFarmRunning, setAutoFarmRunning] = useState(false);
   const autoFarmRunningRef = useRef(false);
   const [showAtlas, setShowAtlas] = useState(false);
@@ -179,13 +185,16 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     void loadGrid();
   }, [player.current_region, player.x, player.y, loadGrid]);
   usePolling(() => loadGrid().then(() => undefined), 10000);
+  usePolling(() => fetchZoneMarkers(player.current_region).then(() => undefined), 10000);
   useEffect(() => { void fetchWorldMonsters(); }, [player.current_region, player.x, player.y, fetchWorldMonsters]);
   usePolling(() => fetchWorldMonsters().then(() => undefined), 5000);
+  usePolling(() => player.current_region === "aperture_interior" ? fetchAperturePoints(true) : undefined, 10000);
 
   useEffect(() => {
     if (mapMarkersRegion !== player.current_region) void fetchZoneMarkers(player.current_region);
-    if (resourcePointsRegion !== player.current_region) void fetchWorldResourcePoints(player.current_region);
-  }, [player.current_region, mapMarkersRegion, resourcePointsRegion, fetchZoneMarkers, fetchWorldResourcePoints]);
+    if (player.current_region === "aperture_interior") void fetchAperturePoints(true);
+    else if (resourcePointsRegion !== player.current_region) void fetchWorldResourcePoints(player.current_region);
+  }, [player.current_region, mapMarkersRegion, resourcePointsRegion, fetchZoneMarkers, fetchWorldResourcePoints, fetchAperturePoints]);
 
   const isMemberNotLeader = Boolean(player.party_id) && (party === null || party.leader_id !== player.id);
   const currentRegion = regions.find((r) => r.id === player.current_region);
@@ -269,7 +278,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       return;
     }
     if (resourcePointId && Math.max(Math.abs(x - player.x), Math.abs(y - player.y)) <= 6) {
-      if (await collectWorldResourcePoint(resourcePointId)) await fetchWorldResourcePoints(player.current_region);
+      if (player.current_region === "aperture_interior") {
+        setSelectedAperturePoint(aperturePoints.find((point) => point.id === resourcePointId) || null);
+      } else if (await collectWorldResourcePoint(resourcePointId)) await fetchWorldResourcePoints(player.current_region);
       return;
     }
     if (cell?.cell_type === "PrimevalVein"
@@ -461,6 +472,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     }
   };
 
+  const isApertureMap = player.current_region === "aperture_interior";
   const maxAllowedRadius = Math.max(2, gridData?.max_vision_radius || 2);
   const radius = Math.min(maxAllowedRadius, Math.max(2, preferredRadius));
   const diameter = radius * 2 + 1;
@@ -492,16 +504,17 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         }]);
       }
     }
-    if (resourcePointsRegion === player.current_region) {
-      for (const point of resourcePoints) {
+    const visibleResourcePoints = isApertureMap
+      ? aperturePoints
+      : resourcePointsRegion === player.current_region ? resourcePoints : [];
+    for (const point of visibleResourcePoints) {
         if (point.region_id && point.region_id !== player.current_region) continue;
         if (point.state === "GONE") continue;
         const key = `${Math.round(point.x)},${Math.round(point.y)}`;
         map.set(key, [...(map.get(key) || []), { kind: "resource_point", id: point.id, name: point.name }]);
-      }
     }
     return map;
-  }, [mapMarkers, mapMarkersRegion, player.current_region, player.id, resourcePoints, resourcePointsRegion]);
+  }, [aperturePoints, mapMarkers, mapMarkersRegion, player.current_region, player.id, resourcePoints, resourcePointsRegion]);
 
   const gridArray = useMemo(() => {
     const arr = [];
@@ -515,7 +528,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       }
     }
     return arr;
-  }, [player.x, player.y, radius, gridData?.world_width, gridData?.world_height]);
+  }, [isApertureMap, player.x, player.y, radius, gridData?.world_width, gridData?.world_height]);
 
   return (
     <div className="w-full flex flex-col gap-4 max-w-5xl mx-auto p-2 sm:p-4">
@@ -527,15 +540,32 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs uppercase font-mono tracking-widest text-emerald-500 font-semibold">Khu vực hiện tại</span>
+              <span className="text-xs uppercase font-mono tracking-widest text-emerald-500 font-semibold">
+                {isApertureMap ? `Tiên Khiếu của ${gridData?.aperture_owner_name || "..."}` : "Khu vực hiện tại"}
+              </span>
               <span className="text-xs text-zinc-500">·</span>
               <span className="text-xs font-mono text-zinc-400">({player.x}, {player.y})</span>
             </div>
-            <h2 className="text-lg font-serif font-bold text-zinc-100">{regionName}</h2>
+            <h2 className="text-lg font-serif font-bold text-zinc-100">
+              {isApertureMap ? "Lưới Địa Hình" : regionName}
+            </h2>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          {isApertureMap && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("Rời Tiên Khiếu và trở về vị trí Môn Hộ?")) void leaveAperture();
+              }}
+              disabled={actionLoading}
+              className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 shadow-md transition-colors hover:bg-rose-500/20 disabled:opacity-50"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Rời Tiên Khiếu</span>
+            </button>
+          )}
           {/* Vision Range Selector */}
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs shadow-md">
             <Eye className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -553,6 +583,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
             </select>
           </div>
 
+          {!isApertureMap && <>
           <button
             onClick={() => setShowAtlas(true)}
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif text-xs font-semibold shadow-lg shadow-amber-950/20 cursor-pointer"
@@ -578,6 +609,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               <span>Dịch Chuyển</span>
             </button>
           )}
+          </>}
         </div>
       </div>
 
@@ -599,6 +631,12 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         </div>
       </section>
 
+      {isApertureMap && (
+        <p className="-mt-2 text-center text-xs text-violet-200/80">
+          Tiên Khiếu rộng 20×20 · Bản đồ chỉ hiển thị khu vực quanh vị trí của bạn.
+        </p>
+      )}
+
       {worldMonsters.filter((actor) => actor.owner_player_id && actor.monster_template_id === "monster_earth_calamity_boss").map((actor) => (
         <section key={actor.instance_id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-700/50 bg-rose-950/20 p-3 shadow-lg">
           <div className="flex items-center gap-2">
@@ -617,16 +655,34 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
 
       {/* Exploration Grid Canvas */}
       <GameModal
-        open={Boolean(selectedPvpTarget || selectedGroundDrop)}
+        open={Boolean(selectedPvpTarget || selectedGroundDrop || selectedAperturePoint)}
         onClose={() => {
           setSelectedPvpTarget(null);
           setSelectedGroundDrop(null);
+          setSelectedAperturePoint(null);
         }}
-        title={selectedPvpTarget && selectedGroundDrop ? "Tương tác tại vị trí" : selectedPvpTarget ? "Cổ sư trên bản đồ" : "Chiến lợi phẩm"}
+        title={selectedAperturePoint ? "Mỏ tài nguyên Tiên Khiếu" : selectedPvpTarget && selectedGroundDrop ? "Tương tác tại vị trí" : selectedPvpTarget ? "Cổ sư trên bản đồ" : "Chiến lợi phẩm"}
         size="lg"
         className="border-zinc-700 bg-zinc-950"
       >
         <div className="space-y-5">
+          {selectedAperturePoint && (
+            <section className="rounded-2xl border border-lime-500/30 bg-lime-950/20 p-4">
+              <h3 className="font-bold text-lime-100">{selectedAperturePoint.name}</h3>
+              <p className="mt-1 text-xs text-zinc-300">Tọa độ ({selectedAperturePoint.x}, {selectedAperturePoint.y}) · Cấp {selectedAperturePoint.level} · Sinh khí {selectedAperturePoint.vitality}%</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={actionLoading || Math.max(Math.abs(player.x - selectedAperturePoint.x), Math.abs(player.y - selectedAperturePoint.y)) > 6}
+                  onClick={async () => {
+                    if (await collectAperturePoint(selectedAperturePoint.id)) setSelectedAperturePoint(null);
+                  }}
+                  className="min-h-11 rounded-xl border border-emerald-400/50 bg-emerald-800/70 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-700 disabled:opacity-50"
+                >Thu hoạch</button>
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-400">Cần ở trong phạm vi 6 ô để thu hoạch.</p>
+            </section>
+          )}
           {selectedPvpTarget && (
             <section className="rounded-2xl border border-purple-500/30 bg-purple-950/35 p-4">
               <div className="flex items-center gap-3">
@@ -768,6 +824,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                 : gridData.players_on_map?.filter((p) => p.x === x && p.y === y) || [];
               const dropsOnCell = isOutOfBounds ? [] : gridData.ground_drops?.filter((d) => d.x === x && d.y === y) || [];
               const dropOnCell = dropsOnCell[0] || null;
+              const monsterActorOnCell = worldMonsters.find((actor) => Math.round(actor.x) === x && Math.round(actor.y) === y);
               const markersOnCell = isOutOfBounds ? [] : markersByCell.get(`${x},${y}`) || [];
               const primaryMarker = markersOnCell.find((marker) => marker.kind === "aperture_portal")
                 || markersOnCell.find((marker) => marker.kind === "teleport")
@@ -814,13 +871,13 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                             ? getEntityName(cellData.cell_type, cellData.content)
                             : primaryMarker?.name;
               const isCellInteractive = !isOutOfBounds && (
-                isMovable || isPlayerCell || otherPlayersOnCell.length > 0 || dropsOnCell.length > 0 || markersOnCell.length > 0 || cellData.cell_type !== "Empty"
+                isMovable || isPlayerCell || otherPlayersOnCell.length > 0 || dropsOnCell.length > 0 || markersOnCell.length > 0 || Boolean(monsterActorOnCell) || cellData.cell_type !== "Empty"
               );
               const cellAccessibleName = isOutOfBounds
                 ? "Hư vô (Ngoại biên bản đồ)"
                 : `Tọa độ: (${x}, ${y})${isPlayerCell ? " [Vị trí của bạn]" : ""}${
                     cellData.cell_type !== "Empty" ? ` | ${getEntityName(cellData.cell_type, cellData.content)}` : ""
-                  }${markerTitle ? ` | ${markerTitle}` : ""}${otherPlayersOnCell.length > 0 ? ` | Cổ sư: ${otherPlayersOnCell.map((p) => p.username).join(", ")}` : ""}${dropOnCell ? " | Chiến lợi phẩm" : ""}`;
+                  }${markerTitle ? ` | ${markerTitle}` : ""}${monsterActorOnCell ? ` | Quái: ${getEntityName("Monster", monsterActorOnCell.monster_template_id)}` : ""}${otherPlayersOnCell.length > 0 ? ` | Cổ sư: ${otherPlayersOnCell.map((p) => p.username).join(", ")}` : ""}${dropOnCell ? " | Chiến lợi phẩm" : ""}`;
 
               return (
                 <div
@@ -880,6 +937,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                                     : <Mountain className={`${markerIconSizeClass} text-lime-300`} />}
                           </span>
                         ))}
+                      </span>
+                    )}
+                    {monsterActorOnCell && !isPlayerCell && (
+                      <span className="absolute bottom-1 right-1 z-10 rounded border border-rose-400/70 bg-zinc-950/90 p-0.5" title={getEntityName("Monster", monsterActorOnCell.monster_template_id)}>
+                        <MonsterSprite templateId={monsterActorOnCell.monster_template_id} alt="Quái" className="h-4 w-4 object-contain" />
                       </span>
                     )}
                     {dropsOnCell.length > 0 && (

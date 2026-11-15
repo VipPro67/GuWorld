@@ -211,8 +211,10 @@ func LootGroundDrop(c *gin.Context) {
 	err = tx.QueryRow(`
 		SELECT region_id, x, y, killer_id, killer_name, loser_id, loser_name, loot_data, protected_until, expires_at
 		FROM map_ground_drops
-		WHERE id = $1 FOR UPDATE NOWAIT
-	`, dropUUID).Scan(
+		WHERE id = $1
+		  AND map_instance_id IS NOT DISTINCT FROM (SELECT map_instance_id FROM players WHERE id = $2)
+		FOR UPDATE NOWAIT
+	`, dropUUID, authID).Scan(
 		&dropRegion, &dropX, &dropY, &killerID, &killerName, &loserID, &loserName, &lootBytes, &protectedUntil, &expiresAt,
 	)
 	if err != nil {

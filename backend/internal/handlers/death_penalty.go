@@ -556,15 +556,16 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 			summary += fmt.Sprintf(" [Oán Khí Tầng %d: Mất đồ x%.1f]", satKhiLevel, mult)
 		}
 
-		if hasGroundLoot && loserRegion.Valid && loserRegion.String != "" && !IsSafeZone(loserRegion.String, loserX, loserY) {
+		if hasGroundLoot && loserRegion.Valid && loserRegion.String != "" &&
+			(!IsSafeZone(loserRegion.String, loserX, loserY) || loserRegion.String == "aperture_interior") {
 			lootBytes, _ := json.Marshal(lootData)
 			if _, spErr := tx.Exec("SAVEPOINT sp_ground_drop"); spErr == nil {
 				_, errDrop := tx.Exec(`
 					INSERT INTO map_ground_drops (
-						region_id, x, y, loser_id, loser_name, killer_id, killer_name,
+						region_id, map_instance_id, x, y, loser_id, loser_name, killer_id, killer_name,
 						loot_data, protected_until, expires_at
 					) VALUES (
-						$1, $2, $3, $4, $5, $6, $7,
+						$1, (SELECT map_instance_id FROM players WHERE id = $4), $2, $3, $4, $5, $6, $7,
 						$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '30 minutes'
 					)
 				`, loserRegion.String, loserX, loserY, loserID, loserName, winnerID, killerName, lootBytes)

@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { operationsBy } from "@/lib/effect-blocks";
 import { useGameStore, ApertureResourceNode, ApertureResourcePoint, TribulationEnemy, ApertureGuest } from "@/store/useGameStore";
+import { useWorldStore } from "@/store/useWorldStore";
+import { MonsterSprite } from "@/components/MonsterSprite";
 import {
   Shield,
   Activity,
@@ -41,6 +43,12 @@ import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, 
 import { AperturePointsPanel, pointGlyph, pointIsReady } from "./AperturePointsPanel";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
+import { usePolling } from "@/lib/usePolling";
+
+interface ApertureMapSnapshot {
+  players_on_map?: { id: string; username: string; x: number; y: number }[];
+  ground_drops?: { id: string; x: number; y: number }[];
+}
 
 export interface DaoGroupDef {
   id: string;
@@ -310,12 +318,34 @@ export const ImmortalApertureView: React.FC = () => {
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "map" | "points" | "dao" | "tribulation" | "variant_humans">("overview");
+  const fetchGrid = useGameStore((state) => state.fetchGrid);
+  const worldMonsters = useWorldStore((state) => state.worldMonsters);
+  const fetchWorldMonsters = useWorldStore((state) => state.fetchWorldMonsters);
+  const [apertureMapSnapshot, setApertureMapSnapshot] = useState<ApertureMapSnapshot | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [buildCells, setBuildCells] = useState<{ x: number; y: number }[]>([]);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
   const [showHealMenu, setShowHealMenu] = useState(false);
+  const ownerInsideAperture = Boolean(aperture?.is_placed && player?.current_region === "aperture_interior" && player.map_instance_id === aperture.id);
+
+  const refreshApertureMap = useCallback(async () => {
+    if (!ownerInsideAperture) return;
+    const snapshot = await fetchGrid(10) as ApertureMapSnapshot | null;
+    if (useGameStore.getState().player?.map_instance_id === aperture?.id && snapshot) {
+      setApertureMapSnapshot(snapshot);
+    }
+  }, [aperture?.id, fetchGrid, ownerInsideAperture]);
+
+  useEffect(() => {
+    if (activeTab === "map" && ownerInsideAperture) void refreshApertureMap();
+  }, [activeTab, ownerInsideAperture, refreshApertureMap]);
+  usePolling(refreshApertureMap, 10000, activeTab === "map" && ownerInsideAperture);
+  useEffect(() => {
+    if (activeTab === "map" && ownerInsideAperture) void fetchWorldMonsters();
+  }, [activeTab, ownerInsideAperture, fetchWorldMonsters]);
+  usePolling(() => fetchWorldMonsters().then(() => undefined), 5000, activeTab === "map" && ownerInsideAperture);
 
   // Aperture Anchoring & Portal / Guest State
   const [showAnchorModal, setShowAnchorModal] = useState<boolean>(false);
@@ -396,6 +426,12 @@ export const ImmortalApertureView: React.FC = () => {
       setSliderRate(aperture.time_rate);
     }
   }, [aperture]);
+
+  useEffect(() => {
+    if (aperture?.is_placed && player?.current_region === "aperture_interior" && player.map_instance_id === aperture.id) {
+      setActiveTab("map");
+    }
+  }, [aperture?.id, aperture?.is_placed, player?.current_region, player?.map_instance_id]);
 
   const [isReloading, setIsReloading] = useState(false);
 
@@ -597,6 +633,17 @@ export const ImmortalApertureView: React.FC = () => {
       enemyMap.set(`${enemy.x},${enemy.y}`, enemy);
     });
   }
+
+  const playersByCell = new Map<string, { id: string; username: string }[]>();
+  apertureMapSnapshot?.players_on_map?.forEach((mapPlayer) => {
+    const key = `${mapPlayer.x},${mapPlayer.y}`;
+    playersByCell.set(key, [...(playersByCell.get(key) || []), mapPlayer]);
+  });
+  const dropsByCell = new Map<string, { id: string }[]>();
+  apertureMapSnapshot?.ground_drops?.forEach((drop) => {
+    const key = `${drop.x},${drop.y}`;
+    dropsByCell.set(key, [...(dropsByCell.get(key) || []), drop]);
+  });
 
   const handleCellClick = (x: number, y: number) => {
     const coordKey = `${x},${y}`;
@@ -1500,6 +1547,10 @@ return (
                       const node = nodeMap.get(coordKey);
                       const enemy = enemyMap.get(coordKey);
                       const pointsHere = pointsMap.get(coordKey);
+                      const playersHere = playersByCell.get(coordKey) || [];
+                      const dropsHere = dropsByCell.get(coordKey) || [];
+                      const worldMonsterHere = worldMonsters.find((monster) => Math.round(monster.x) === x && Math.round(monster.y) === y);
+                      const isOwnerHere = player?.x === x && player?.y === y;
                       const hasPoint = !!pointsHere?.length;
                       const readyPointHere = pointsHere?.some(pointIsReady) ?? false;
                       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
@@ -1585,16 +1636,16 @@ return (
                           onClick={() => {
                             if (!pendingBuildZone) handleCellClick(x, y);
                           }}
-                          className={`w-full aspect-square flex items-center justify-center text-sm font-bold rounded cursor-pointer border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${cellColor}`}
-                          title={node
-                            ? `${node.name} · ${node.cells?.length || 1} ô · (${x}, ${y})${hasPoint ? ` · có ${pointsHere?.length} điểm tài nguyên` : ""}`
-                            : hasPoint
-                              ? `${pointsHere?.[0]?.name} · (${x}, ${y}) — bấm để mở Điểm Tài Nguyên`
-                              : `Tọa độ: (${x}, ${y})`}
+                          className={`w-full aspect-square flex items-center justify-center text-sm font-bold rounded cursor-pointer border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${cellColor} ${isOwnerHere ? "ring-2 ring-emerald-300" : ""}`}
+                          title={`${node ? `${node.name} · ${node.cells?.length || 1} ô · ` : hasPoint ? `${pointsHere?.[0]?.name} · ` : ""}Tọa độ: (${x}, ${y})${isOwnerHere ? " · Chủ khiếu" : ""}${worldMonsterHere ? ` · Quái: ${worldMonsterHere.monster_template_id}` : ""}${playersHere.length ? ` · ${playersHere.map((p) => p.username).join(", ")}` : ""}${dropsHere.length ? ` · ${dropsHere.length} chiến lợi phẩm` : ""}${hasPoint && !node ? " · bấm để mở Điểm Tài Nguyên" : ""}`}
                           style={{ minWidth: "28px" }}
                         >
                           <span className="relative flex h-full w-full items-center justify-center">
                             {cellIcon}
+                            {isOwnerHere && <span className="absolute left-0.5 top-0.5 z-10 rounded border border-emerald-300/80 bg-emerald-950/90 px-0.5 text-[7px] leading-3 text-emerald-100">Ta</span>}
+                            {playersHere.length > 0 && <span className="absolute right-0.5 top-0.5 z-10 rounded border border-violet-300/80 bg-violet-950/90 px-0.5 text-[7px] leading-3 text-violet-100" title={playersHere.map((p) => p.username).join(", ")}>{playersHere.length}</span>}
+                            {dropsHere.length > 0 && <Package className="absolute bottom-0.5 left-0.5 z-10 h-2.5 w-2.5 text-amber-300" />}
+                            {worldMonsterHere && <MonsterSprite templateId={worldMonsterHere.monster_template_id} alt="Quái" className="absolute bottom-0.5 right-0.5 z-10 h-3 w-3 object-contain" />}
                             {hasPoint && (
                               <span className={`absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full ${readyPointHere ? "bg-emerald-400" : "bg-emerald-700"}`} />
                             )}
@@ -1608,6 +1659,9 @@ return (
 
               {/* Dynamic Map Legend */}
               <div className="flex gap-3 mt-4 text-xs text-slate-400 flex-wrap justify-center">
+                <div className="flex items-center gap-1"><span className="rounded border border-emerald-300/80 bg-emerald-950/90 px-1 text-[8px] text-emerald-100">Ta</span><span>Chủ khiếu</span></div>
+                <div className="flex items-center gap-1"><span className="rounded border border-violet-300/80 bg-violet-950/90 px-1 text-[8px] text-violet-100">n</span><span>Khách</span></div>
+                <div className="flex items-center gap-1"><Package className="h-3 w-3 text-amber-300" /><span>Chiến lợi phẩm</span></div>
                 {(() => {
                   const activePaths = Array.from(
                     new Set(apertureNodes.filter(n => !n.is_destroyed && n.node_category !== "DEFENSE" && n.path).map(n => n.path))

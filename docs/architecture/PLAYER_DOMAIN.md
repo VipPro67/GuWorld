@@ -13,6 +13,7 @@ Tài liệu này mô tả ranh giới sở hữu dữ liệu player để tránh
 ## Quy tắc đọc
 
 - Dùng projection chuẩn khi cần trạng thái player đầy đủ hoặc khi serialization phải nhất quán với snapshot.
+- Projection chuẩn đưa `map_instance_id` vào player response để client phân biệt chủ Tiên Khiếu với khách đang ở cùng loại khu vực.
 - Projection hẹp vẫn phù hợp nếu caller chỉ cần một nhóm field xác định; không mở rộng mọi query chỉ để dùng một kiểu chung.
 - Cần phân biệt trạng thái lưu bền vững với giá trị tính toán từ thời gian như regen, tuổi thọ hoặc trạng thái hết hạn.
 - Collection revision dùng để phát hiện/cập nhật thay đổi bộ sưu tập. Không tự tăng revision ở nơi không sở hữu mutation tương ứng.

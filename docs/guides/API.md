@@ -31,6 +31,8 @@ Base path: `/api`. Route được đăng ký trong `backend/internal/server/serv
 - GET `/player/respawn-choice`, `/player/status/:id`, `/player/inventory/gus`, `/player/stats`, `/player/passive-stats`, `/player/profile/:username`, `/player/referrals`, `/player/combat-settings`, `/player/audit-logs`, `/player/notifications`, `/player/notifications/unread-count`, `/player/beast-betting/current`, `/player/beast-betting/history`.
 - POST `/player/respawn-choice`, `/player/use-item`, `/player/use-items`, `/player/recharge`, `/player/clear-stress`, `/player/referrals/claim`, `/player/referrals/bind`, `/player/avatar`, `/player/redeem-gift-code`, `/player/complete-tutorial`, `/player/complete-onboarding`, `/player/notifications/read`, `/player/notifications/read-all`, `/player/beast-betting/bet`.
 - PUT `/player/profile/settings`, `/player/combat-settings`.
+
+Snapshot player trả `map_instance_id` cùng `current_region`, `x`, `y` để frontend phân biệt người đang ở Tiên Khiếu của mình với khách trong một instance khác.
 - GET `/wallet`; thanh toán dùng GET `/topup/packages`, POST `/topup/orders`, GET `/topup/orders/:orderCode`, POST `/webhooks/payos`.
 - GET `/shop/packages` trả gói premium; POST mua gói nằm tại `/shop/buy-package`.
 
@@ -56,10 +58,10 @@ Combat được xử lý theo lượt. `/combat/start` chạy tự động ngo�
 
 | Prefix | Route chính |
 | --- | --- |
-| `/explore` | GET `/grid`, `/regions`, `/cells/rect`; POST `/move` (di chuyển trong ranh giới instance bí cảnh hoặc Tiên Khiếu hiện tại) |
+| `/explore` | GET `/grid`, `/regions`, `/cells/rect`; POST `/move` (di chuyển trong ranh giới instance bí cảnh hoặc Tiên Khiếu hiện tại). `/grid` trả toàn cảnh 20×20 cho chủ Tiên Khiếu; khách nhận viewport theo tầm nhìn thường, dữ liệu theo `map_instance_id` và `aperture_owner_name` để hiện tên chủ. |
 | `/world` | GET `/map-objects`, `/monsters`, `/drops`; POST `/portal/transfer`, `/drops/:id/loot` |
 | `/teleport` | GET `/templates`, `/effect-options`, `/mine`, `/directory`; POST `/preview`, `/build`, `/travel`, `/manage`, `/repair`, `/withdraw`, `/dismantle` |
-| `/immortal-aperture` | GET aperture, nodes, points, world-points, workers, portal, guests, swarms, refinement queue, settlements, NPCs; POST/DELETE quản lý nodes, resource points/workers, time rate/labor, portals/guest, Gu swarms, refinement, settlements, NPCs |
+| `/immortal-aperture` | GET aperture, nodes, points, world-points, workers, portal, guests, swarms, refinement queue, settlements, NPCs; người trong roster được đọc `/points` của instance đang vào trong phạm vi nhìn thấy, POST `/points/:id/collect` thu hoạch trong phạm vi 6 ô; khách tự rời instance bằng POST `/leave`, không cần chủ phê duyệt. POST `/world-points/:id/transplant` khởi động/hoàn tất nghi thức di dời mỏ ngoài map vào Tiên Khiếu của người thao tác, có phí và thời gian theo cấp mỏ. Các route quản trị còn lại vẫn theo quyền chủ. |
 | `/dao-marks` | GET `/`, `/dao-ngan` |
 | `/tribulations` | GET `/active`; POST `/:eventId/engage`, `/:eventId/resolve`, `/:eventId/start`, `/:eventId/mitigate-hazard`, `/:eventId/capture-beast`, `/:eventId/claim-spoil`, `/:eventId/claim-all-spoils`, `/:eventId/finalize-aftermath` |
 | `/instance` | GET `/active`, `/list`, `/spatial`, `/spatial/active`; POST `/enter`, `/action`, `/spatial/enter`, `/spatial/exit` |
@@ -83,9 +85,10 @@ Combat được xử lý theo lượt. `/combat/start` chạy tự động ngo�
 
 ## Admin
 
-Admin UI dùng `/admin/*`. Mọi route yêu cầu `AuthRequired`, `admin` rate limit và permission tương ứng. Route inventory là `adminRouteSpecs()` trong `server.go`; các nhóm bao gồm access/resources, monitor/traces, billing, combat history/rankings, player/inventory, aperture, Gu, sect, data import/export, cache, audit, regions/map cells/drops, shop, arena shop, monsters, pets, moderation và role management. Các thao tác ghi được audit; mutation nguy hiểm có thể yêu cầu reason/confirmation/re-auth/idempotency.
+Admin UI dùng `/admin/*`. Mọi route yêu cầu `AuthRequired`, `admin` rate limit và permission tương ứng. Route inventory là `adminRouteSpecs()` trong `server.go`; các nhóm bao gồm access/resources, monitor/traces, billing, combat history/rankings, player/inventory, aperture, Gu, sect, data import/export, cache, audit, regions/map cells/drops, mỏ tài nguyên thế giới và Nguyên Tuyền (`/admin/primeval-veins*`, `/admin/world-resource-points*`), shop, arena shop, monsters, pets, moderation và role management. Các thao tác ghi được audit; mutation nguy hiểm có thể yêu cầu reason/confirmation/re-auth/idempotency.
 
 Dataset API: GET `/admin/data/tables`; POST `/admin/data/import`, `/admin/data/import/commit`, `/admin/data/import/:table`, `/admin/data/import/:table/commit`, `/admin/data/export`, `/admin/data/export/:table`.
+Mines & Resource Points API: GET/POST `/admin/primeval-veins`, POST `/admin/primeval-veins/spawn-random`, PUT/DELETE `/admin/primeval-veins/:id`; GET/POST `/admin/world-resource-points`, GET `/admin/world-resource-points/templates`, POST `/admin/world-resource-points/sweep`, PUT/DELETE `/admin/world-resource-points/:id`.
 
 ## Realtime
 

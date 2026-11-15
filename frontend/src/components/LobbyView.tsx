@@ -343,7 +343,9 @@ export const LobbyView: React.FC = () => {
   const activityItems: HubItem[] = [
     {
       id: "explore",
-      label: "Khám Phá Dã Ngoại",
+      label: player?.current_region === "aperture_interior" && aperture?.id === player.map_instance_id
+        ? "Lưới Địa Hình Tiên Khiếu"
+        : "Khám Phá Dã Ngoại",
       icon: Compass,
       gradient: "from-emerald-600 to-teal-700",
       glow: "group-hover:shadow-[0_0_25px_rgba(16,185,129,0.45)]",
@@ -432,6 +434,10 @@ export const LobbyView: React.FC = () => {
     }
     if (item.id === "spatial-realms") {
       setSpatialDirectoryOpen(true);
+      return;
+    }
+    if (item.id === "explore" && player?.current_region === "aperture_interior" && aperture?.id === player.map_instance_id) {
+      setView("aperture");
       return;
     }
     setView(item.id);

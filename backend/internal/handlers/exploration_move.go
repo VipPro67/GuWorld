@@ -241,6 +241,9 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 			}
 			insideInstance = strings.EqualFold(zoneType, ZoneTypeAperture) && x >= minX && x <= maxX && y >= minY && y <= maxY
 		}
+		if player.CurrentRegion == "aperture_interior" && insideInstance {
+			insideInstance = x >= 0 && x < 20 && y >= 0 && y < 20
+		}
 		if !insideInstance {
 			return "Ranh giới khu vực hiện tại không cho phép di chuyển tới tọa độ này.", false, nil
 		}

@@ -12,11 +12,17 @@ Player cần đạt Rank 6 và anchor khi không đang trong aperture khác. Ch�
 
 Anchor aperture, quản lý node và worker, phân quyền khách, rồi mở portal để di chuyển. Tribulation được khởi động và giải quyết theo lượt; khách có thể tham gia nếu luật session cho phép.
 
+Khi Hạ Khiếu, chủ được chuyển tới tab Bản đồ & Phòng thủ với toàn cảnh lưới 20×20. Khách đã vào qua Môn Hộ chỉ thấy map khám phá quanh vị trí theo tầm nhìn thường; API chỉ trả người chơi, tác nhân quái, chiến lợi phẩm và mỏ trong phạm vi này. Khách có thể thu hoạch điểm tài nguyên khi ở trong phạm vi và tự rời Tiên Khiếu qua nút Rời Tiên Khiếu mà không cần chủ phê duyệt. Khi rời, khách trở về vị trí Môn Hộ bên ngoài. Các thao tác quản trị Tiên Khiếu vẫn theo quyền chủ hiện có.
+
 ## Luật, chi phí và giới hạn
 
 - Rank 6+ mới dùng aperture.
 - Không thể anchor bên trong aperture khác.
 - Portal entry kiểm tra world, combat và policy; chỉ có gateway phù hợp mới cho vào.
+- Grid, người chơi, mỏ, quái và chiến lợi phẩm của Tiên Khiếu được giới hạn theo `map_instance_id`; khách chỉ nhận dữ liệu trong tầm nhìn thường và chỉ đọc mỏ khi còn trong roster, đúng instance.
+- Lưới và phạm vi di chuyển của Tiên Khiếu dùng tọa độ 0–19 trên mỗi trục.
+- Thu hoạch mỏ Tiên Khiếu ghi tài nguyên vào túi của người thao tác; khách cần ở trong phạm vi 6 ô. Khách có thể tự rời Tiên Khiếu bất cứ lúc nào qua `POST /api/immortal-aperture/leave`; chủ không cần phê duyệt.
+- Mỏ ngoài map có nghi thức di dời vào Tiên Khiếu của người chơi qua `POST /api/immortal-aperture/world-points/:id/transplant`; nghi thức tiêu hao mana/tiên nguyên theo cấp mỏ và cần đứng tại mỏ đến khi hoàn tất. Đây là di chuyển mỏ, không phải xóa mỏ. Hiện chưa có combat để tấn công phá mỏ; tai kiếp có thể làm giảm sinh khí mỏ trong Tiên Khiếu.
 - Resource production, worker upkeep, capacity và tribulation dùng state/config server-side.
 
 ## Kết quả và trường hợp thất bại
@@ -33,8 +39,8 @@ Node, resource, worker, NPC, swarm và tribulation parameters nằm trong schema
 
 ## Mã nguồn liên quan
 
-- Backend: `backend/internal/handlers/aperture_core.go`, `aperture_portal.go`, `tribulation_multiform.go`, `tribulation_handlers.go`, `legacy_engage_tribulation.go`, `legacy_resolve_tribulation.go`.
-- Frontend: `frontend/src/store/slices/apertureSlice.ts` và `frontend/src/components/ImmortalApertureView.tsx`.
+- Backend: `backend/internal/handlers/aperture_core.go`, `aperture_portal.go`, `aperture_points.go`, `exploration_grid.go`, `ground_drops.go`, `tribulation_multiform.go`, `tribulation_handlers.go`, `legacy_engage_tribulation.go`, `legacy_resolve_tribulation.go`.
+- Frontend: `frontend/src/store/slices/apertureSlice.ts`, `frontend/src/components/ImmortalApertureView.tsx` và `frontend/src/components/ExplorationMap.tsx`.
 
 ## Hệ thống Đa Dạng Hóa Tai Kiếp (Multi-form Tribulation)
 Tai kiếp Tiên Khiếu vận hành theo 3 Archetype và vòng đời 3 giai đoạn:

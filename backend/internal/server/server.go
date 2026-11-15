@@ -238,6 +238,18 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/world-bosses/spawn", "world_bosses.update", handlers.AdminSpawnWorldBosses, "admin.spawn_world_bosses", "world_boss", false, "", false, false, false},
 		{http.MethodPut, "/world-bosses/:region_id/:instance_id", "world_bosses.update", handlers.AdminUpdateWorldBoss, "admin.update_world_boss", "world_boss", false, "", false, false, false},
 		{http.MethodDelete, "/world-bosses", "world_bosses.delete", handlers.AdminPurgeWorldBosses, "admin.purge_world_bosses", "world_boss", true, "path", false, false, true},
+		// mines: primeval veins & world resource points
+		{http.MethodGet, "/primeval-veins", "mines.read", handlers.AdminListPrimevalVeins, "", "", false, "", false, false, false},
+		{http.MethodPost, "/primeval-veins", "mines.update", handlers.AdminCreatePrimevalVein, "admin.create_primeval_vein", "primeval_vein", false, "", false, false, false},
+		{http.MethodPost, "/primeval-veins/spawn-random", "mines.update", handlers.AdminSpawnRandomPrimevalVein, "admin.spawn_random_primeval_vein", "primeval_vein", false, "", false, false, false},
+		{http.MethodPut, "/primeval-veins/:id", "mines.update", handlers.AdminUpdatePrimevalVein, "admin.update_primeval_vein", "primeval_vein", false, "", false, false, false},
+		{http.MethodDelete, "/primeval-veins/:id", "mines.delete", handlers.AdminDeletePrimevalVein, "admin.delete_primeval_vein", "primeval_vein", true, "id", false, false, true},
+		{http.MethodGet, "/world-resource-points", "mines.read", handlers.AdminListWorldResourcePoints, "", "", false, "", false, false, false},
+		{http.MethodGet, "/world-resource-points/templates", "mines.read", handlers.AdminGetResourcePointTemplates, "", "", false, "", false, false, false},
+		{http.MethodPost, "/world-resource-points", "mines.update", handlers.AdminCreateWorldResourcePoint, "admin.create_world_resource_point", "aperture_resource_point", false, "", false, false, false},
+		{http.MethodPost, "/world-resource-points/sweep", "mines.update", handlers.AdminSweepWorldResourcePoints, "admin.sweep_world_resource_points", "aperture_resource_point", false, "", false, false, false},
+		{http.MethodPut, "/world-resource-points/:id", "mines.update", handlers.AdminUpdateWorldResourcePoint, "admin.update_world_resource_point", "aperture_resource_point", false, "", false, false, false},
+		{http.MethodDelete, "/world-resource-points/:id", "mines.delete", handlers.AdminDeleteWorldResourcePoint, "admin.delete_world_resource_point", "aperture_resource_point", true, "id", false, false, true},
 		// quests
 		{http.MethodGet, "/quests", "quests.read", handlers.AdminListQuests, "", "", false, "", false, false, false},
 		{http.MethodPost, "/quests", "quests.update", handlers.AdminCreateQuest, "admin.create_quest", "quest", false, "", false, false, false},

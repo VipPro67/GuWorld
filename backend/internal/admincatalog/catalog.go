@@ -52,6 +52,7 @@ var resources = []Resource{
 	resource("status_dictionary", "content", "Trạng thái", "/admin/data", crud(), []string{"status_dictionary.read"}, []string{"status_dictionary.update", "status_dictionary.delete"}, "high", []string{"status dictionary"}, []string{"status registry"}, "admin."),
 	resource("monster_spawns", "world", "Điểm sinh quái", "/admin/data", crud(), []string{"monster_spawns.read"}, []string{"monster_spawns.update", "monster_spawns.delete"}, "high", []string{"monster spawn dictionary"}, []string{"zone and monster registries"}, "admin."),
 	resource("world_bosses", "world", "Boss thế giới", "/admin/world_bosses", []string{"read", "update", "delete"}, []string{"world_bosses.read"}, []string{"world_bosses.update", "world_bosses.delete"}, "high", []string{"live world boss actors in Redis"}, nil, "admin."),
+	resource("mines", "world", "Mỏ & Nguyên Tuyền", "/admin/mines", crud(), []string{"mines.read"}, []string{"mines.update", "mines.delete"}, "high", []string{"primeval veins", "world resource points"}, nil, "admin."),
 	resource("quests", "content", "Nhiệm vụ", "/admin/data", crud(), []string{"quests.read"}, []string{"quests.update", "quests.delete"}, "high", []string{"game_quests_list"}, []string{"quest registry"}, "admin."),
 	resource("dungeons", "world", "Phó bản", "/admin/data", crud(), []string{"dungeons.read"}, []string{"dungeons.update", "dungeons.delete"}, "high", nil, []string{"instance cache"}, "admin."),
 }

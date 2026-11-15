@@ -930,15 +930,36 @@ func GetApertureResourcePoints(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var apertureID string
-	err = tx.QueryRow(`SELECT id FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&apertureID)
+	apertureID, isOwner, err := apertureInstanceForPlayer(tx, playerID)
 	if err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra quyền Tiên Khiếu", err))
+		return
+	}
+	if apertureID == "" {
+		var currentRegion string
+		if err = tx.QueryRow(`SELECT COALESCE(current_region, '') FROM players WHERE id = $1`, playerID).Scan(&currentRegion); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra khu vực hiện tại", err))
+			return
+		}
+		if currentRegion == "aperture_interior" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Không có quyền xem mỏ của Tiên Khiếu này"})
+			return
+		}
+		err = tx.QueryRow(`SELECT id FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&apertureID)
+		isOwner = err == nil
+	}
+	if err != nil || apertureID == "" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
 		return
 	}
 
-	areaSize, effectiveTimeRate := effectiveApertureTimeRate(tx, playerID.String())
-	ctx, err := loadAperturePointRewardContext(tx, playerID, apertureID)
+	var ownerID uuid.UUID
+	if err := tx.QueryRow(`SELECT player_id FROM immortal_apertures WHERE id = $1`, apertureID).Scan(&ownerID); err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi tải chủ Tiên Khiếu", err))
+		return
+	}
+	areaSize, effectiveTimeRate := effectiveApertureTimeRate(tx, ownerID.String())
+	ctx, err := loadAperturePointRewardContext(tx, ownerID, apertureID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi tải bối cảnh sản lượng", err))
 		return
@@ -989,6 +1010,20 @@ func GetApertureResourcePoints(c *gin.Context) {
 		preview := aperturePointYield(ctx, p.ApertureResourcePoint, p.template, areaSize, workerMult)
 		decorateAperturePointView(&p.ApertureResourcePoint, p.template, preview, effectiveTimeRate, ctx.assignedWorkers[p.ID])
 		points[i] = p.ApertureResourcePoint
+	}
+	if !isOwner {
+		var playerX, playerY int
+		if err := tx.QueryRow(`SELECT x, y FROM players WHERE id = $1`, playerID).Scan(&playerX, &playerY); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi tải vị trí trong Tiên Khiếu", err))
+			return
+		}
+		visible := points[:0]
+		for _, point := range points {
+			if maxInt(maxInt(point.X-playerX, playerX-point.X), maxInt(point.Y-playerY, playerY-point.Y)) <= 5 {
+				visible = append(visible, point)
+			}
+		}
+		points = visible
 	}
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi lưu tích lũy", err))
@@ -1917,18 +1952,38 @@ func CollectAperturePointStock(c *gin.Context) {
 	defer tx.Rollback()
 
 	var apertureID string
+	var pointX, pointY int
+	var isOwner bool
 	err = tx.QueryRow(`
-		SELECT p.aperture_id FROM aperture_resource_points p
+		SELECT p.aperture_id::text, p.x, p.y, a.player_id = $2 FROM aperture_resource_points p
 		JOIN immortal_apertures a ON a.id = p.aperture_id
-		WHERE p.id = $1 AND a.player_id = $2
+		WHERE p.id = $1 AND (
+			a.player_id = $2 OR EXISTS (
+				SELECT 1 FROM aperture_guest_roster g
+				JOIN players guest ON guest.id = g.player_id
+				WHERE g.aperture_id = a.id AND g.player_id = $2
+				  AND guest.current_region = 'aperture_interior' AND guest.map_instance_id = a.id
+			)
+		)
 		FOR UPDATE OF p
-	`, pointID, playerID).Scan(&apertureID)
+	`, pointID, playerID).Scan(&apertureID, &pointX, &pointY, &isOwner)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Điểm tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
 		return
 	} else if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi truy vấn điểm tài nguyên", err))
 		return
+	}
+	if !isOwner {
+		var x, y int
+		if err := tx.QueryRow(`SELECT x, y FROM players WHERE id = $1`, playerID).Scan(&x, &y); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra vị trí", err))
+			return
+		}
+		if math.Max(math.Abs(float64(x-pointX)), math.Abs(float64(y-pointY))) > 6 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cần đến gần mỏ trong phạm vi 6 ô mới thu hoạch được."})
+			return
+		}
 	}
 
 	message, granted, err := harvestAperturePoint(tx, playerID, apertureID, pointID)

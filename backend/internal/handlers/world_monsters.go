@@ -361,12 +361,34 @@ func GetWorldMonsters(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Player position unavailable"})
 		return
 	}
+	isApertureOwner := false
+	if entry.Region == "aperture_interior" {
+		tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra quyền Tiên Khiếu", err))
+			return
+		}
+		apertureID, owner, accessErr := apertureInstanceForPlayer(tx, playerID)
+		_ = tx.Rollback()
+		if accessErr != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra quyền Tiên Khiếu", accessErr))
+			return
+		}
+		if apertureID == "" || apertureID != entry.InstanceID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Không có quyền xem quái trong Tiên Khiếu này"})
+			return
+		}
+		isApertureOwner = owner
+	}
 	radius, _ := strconv.Atoi(c.DefaultQuery("r", strconv.Itoa(WorldMonsterActivationRadius)))
 	if radius < 1 {
 		radius = 1
 	}
 	if radius > WorldMonsterActivationRadius {
 		radius = WorldMonsterActivationRadius
+	}
+	if entry.Region == "aperture_interior" && entry.InstanceID != "" && !isApertureOwner && radius > 5 {
+		radius = 5
 	}
 	snapshotStartedAt := time.Now()
 	mapID := worldMapIDForRegion(entry.Region)

@@ -286,6 +286,7 @@ type WorldState struct {
 	X                int                 `json:"x"`
 	Y                int                 `json:"y"`
 	CurrentRegion    string              `json:"current_region"`
+	MapInstanceID    string              `json:"map_instance_id,omitempty"`
 	WorldZoneID      string              `json:"world_zone_id,omitempty"`
 	ClearedCells     ClearedCellsMap     `json:"cleared_cells"`
 	VisitedSubZones  VisitedSubZonesList `json:"visited_subzones"`
@@ -299,6 +300,7 @@ func NewWorldState(p *Player) WorldState {
 		X:                p.X,
 		Y:                p.Y,
 		CurrentRegion:    p.CurrentRegion,
+		MapInstanceID:    p.MapInstanceID,
 		WorldZoneID:      p.WorldZoneID,
 		ClearedCells:     p.ClearedCells,
 		VisitedSubZones:  p.VisitedSubZones,
@@ -312,6 +314,7 @@ func (s WorldState) Apply(p *Player) {
 	p.X = s.X
 	p.Y = s.Y
 	p.CurrentRegion = s.CurrentRegion
+	p.MapInstanceID = s.MapInstanceID
 	p.WorldZoneID = s.WorldZoneID
 	p.ClearedCells = s.ClearedCells
 	p.VisitedSubZones = s.VisitedSubZones

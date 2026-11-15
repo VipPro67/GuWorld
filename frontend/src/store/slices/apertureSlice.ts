@@ -34,6 +34,7 @@ let lastApertureNodesFetchTime = 0;
 const APERTURE_NODES_TTL_MS = 10000;
 
 let fetchAperturePointsPromise: Promise<void> | null = null;
+let fetchAperturePointsPromiseKey: string | null = null;
 let lastAperturePointsPlayerId: string | null = null;
 let lastAperturePointsFetchTime = 0;
 const APERTURE_POINTS_TTL_MS = 10000;
@@ -170,7 +171,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   activeTribulation: null,
 
   fetchAperture: async (forceRefresh = false) => {
-    const currentPlayerId = get().player?.id || "";
+    const currentPlayer = get().player;
+    const currentPlayerId = `${currentPlayer?.id || ""}:${currentPlayer?.current_region || ""}:${currentPlayer?.map_instance_id || ""}`;
     const now = Date.now();
     if (
       !forceRefresh &&
@@ -396,7 +398,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchAperturePoints: async (forceRefresh = false) => {
-    const currentPlayerId = get().player?.id || "";
+    const currentPlayer = get().player;
+    const currentPlayerId = `${currentPlayer?.id || ""}:${currentPlayer?.current_region || ""}:${currentPlayer?.map_instance_id || ""}`;
     const now = Date.now();
     if (
       !forceRefresh &&
@@ -406,14 +409,17 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     ) {
       return;
     }
-    if (fetchAperturePointsPromise) return fetchAperturePointsPromise;
+    if (fetchAperturePointsPromise && fetchAperturePointsPromiseKey === currentPlayerId) return fetchAperturePointsPromise;
     const executeFetch = async () => {
       const { token } = get();
-      if (!token) return;
       try {
+        if (!token) return;
         const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/points`);
         if (response.ok) {
           const data = await response.json();
+          const player = get().player;
+          const activeKey = `${player?.id || ""}:${player?.current_region || ""}:${player?.map_instance_id || ""}`;
+          if (activeKey !== currentPlayerId) return;
           lastAperturePointsPlayerId = currentPlayerId;
           lastAperturePointsFetchTime = Date.now();
           set({ aperturePoints: Array.isArray(data) ? data : [] });
@@ -422,10 +428,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         console.error("Failed to fetch aperture points:", err);
         get().addToast("Lỗi tải điểm tài nguyên.", "error");
       } finally {
-        fetchAperturePointsPromise = null;
+        if (fetchAperturePointsPromiseKey === currentPlayerId) {
+          fetchAperturePointsPromise = null;
+          fetchAperturePointsPromiseKey = null;
+        }
       }
     };
     fetchAperturePointsPromise = executeFetch();
+    fetchAperturePointsPromiseKey = currentPlayerId;
     return fetchAperturePointsPromise;
   },
 
@@ -1521,9 +1531,11 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           current_region: data.aperture_region,
           world_zone_id: data.aperture_region,
           world_instance_id: data.aperture_instance || "",
+          map_instance_id: data.aperture_instance?.replace(/^aperture:/, "") || null,
           x: 10,
           y: 10,
         });
+        get().setView("aperture");
         get().requestWorldReconnect();
       }
       await get().fetchAperture(true);
@@ -1556,6 +1568,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           current_region: data.current_region,
           world_zone_id: data.current_region,
           world_instance_id: "",
+          map_instance_id: null,
           x: data.x,
           y: data.y,
         });
@@ -1591,6 +1604,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           current_region: data.aperture_region,
           world_zone_id: data.aperture_region,
           world_instance_id: data.aperture_instance || "",
+          map_instance_id: data.aperture_instance?.replace(/^aperture:/, "") || null,
           x: data.x || 10,
           y: data.y || 10,
         });
@@ -1608,8 +1622,11 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   leaveAperture: async () => {
-    const { token, aperture } = get();
-    if (aperture?.is_placed) {
+    const { token, aperture, player } = get();
+    const isOwnerInside = Boolean(
+      aperture?.is_placed && player?.current_region === "aperture_interior" && player.map_instance_id === aperture.id
+    );
+    if (isOwnerInside) {
       return get().unanchorAperture();
     }
     if (!token || !get().beginAction("aperture")) return false;
@@ -1627,6 +1644,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           current_region: data.current_region,
           world_zone_id: data.current_region,
           world_instance_id: "",
+          map_instance_id: null,
           x: data.x,
           y: data.y,
         });
