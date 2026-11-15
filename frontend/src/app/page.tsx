@@ -779,7 +779,7 @@ export default function Home() {
       {/* Changelog Modal */}
       {player && showChangelog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] animate-fade-in" onClick={handleCloseChangelog}>
-          <div className="w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-xl max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-[var(--bg-surface)] border border-amber-300/20 rounded-3xl p-4 sm:p-5 shadow-[0_28px_90px_rgba(0,0,0,.65)] overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
             <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2">
@@ -788,149 +788,34 @@ export default function Home() {
               </div>
               <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed pr-1 custom-scrollbar">
-              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.4</strong> — Cải Tiến PvP Ngũ Vực & Chống Lợi Dụng Chuyển Đồ:</p>
-              <div className="space-y-2">
-                <div className="flex gap-2.5 items-start bg-sky-950/20 border border-sky-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🐾</span>
-                  <div>
-                    <span className="font-bold text-sky-300">Chiến Đấu Theo Lượt</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Combat realtime và AI đuổi đánh quái đã được gỡ. Chạm trán turn-based hiện bắt đầu khi di chuyển tới ô quái; actor quái Redis chưa được nối với encounter.</p>
-                  </div>
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+              <section className="relative isolate overflow-hidden rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-950/70 via-zinc-950/80 to-emerald-950/50 p-4 sm:p-5">
+                <img src="/assets/world/form-six-arm-ice-demon.webp" alt="" aria-hidden="true" className="pointer-events-none absolute -right-4 -top-8 h-36 w-40 object-contain opacity-35 sm:h-44 sm:w-48" />
+                <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/10 via-zinc-950/30 to-zinc-950/75" />
+                <div className="relative z-[1] max-w-[78%]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[9px] font-mono uppercase tracking-[.18em] text-amber-200"><Sparkles className="h-3 w-3" /> Bản cập nhật mới</span>
+                  <h4 className="mt-2 font-serif text-xl font-bold text-amber-100">Ngũ Vực dậy sóng</h4>
+                  <p className="mt-1 text-[11px] leading-relaxed text-stone-300/80">PvP, hồi sinh và chiến lợi phẩm được tinh chỉnh.</p>
                 </div>
-                <div className="flex gap-2.5 items-start bg-red-950/20 border border-red-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">💥</span>
-                  <div>
-                    <span className="font-bold text-red-400">Thiên Đạo Tiêu Hủy (40% Void Destruction)</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Tăng tỷ lệ tổn thất khi tử đạo lên 40% tiền, 40% nguyên liệu, 30% Cổ trùng và Bí phương. Trong lượng mất, <strong>40% bị chấn nát tiêu hủy vĩnh viễn khỏi server</strong>, chỉ 60% còn lại rơi ra bãi đất (tồn tại 10 phút). Chống triệt để việc mượn cái chết để tuồn chuyển tài nguyên.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">⚔️</span>
-                  <div>
-                    <span className="font-bold text-amber-300">Cơ Chế Sát Khí & Safe Zone</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Kẻ đồ sát có Sát Khí &gt; 10 sẽ bị tước bỏ quyền bảo hộ trong Safe Zone/Hub (người khác có thể vây sát ngay trong vùng an toàn, trừ khi kẻ này trốn vào Lãnh địa Tông Môn). Khi Sát Khí &gt; 5, Cổ trùng đang trang bị có thể bị đánh rơi khi bại trận (Cổ Bản Mệnh luôn được bảo toàn).</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🛡️</span>
-                  <div>
-                    <span className="font-bold text-emerald-300">Miễn Chiến Hồi Sinh</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Khi bị người khác tấn công và thua trận, nạn nhân nhận buff <strong>Miễn Chiến 10 phút</strong> (chủ động khai chiến sẽ mất buff). Sát Khí không còn giảm theo thời gian; mỗi lần đồ sát nhận thêm Sát Khí theo chênh lệch cảnh giới (rank càng cao hạ rank càng thấp càng nhiều).</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-purple-950/20 border border-purple-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🏰</span>
-                  <div>
-                    <span className="font-bold text-purple-300">Hồi Sinh Ngũ Vực & Tông Môn Chiến</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Khi tử đạo, đạo hữu sẽ hồi sinh tại HUB/SAFE_ZONE an toàn gần nhất (ưu tiên HUB, fallback SAFE ZONE) trong Đại Vực tử vong; khi không có HUB/SAFE ZONE hợp lệ trên tầng đó thì hồi sinh tại vị trí tử vong. Sau khi hồi sinh, nạn nhân PvP nhận Miễn Chiến 10 phút (chủ động khai chiến sẽ mất buff). Tán tu không tông có thể phát động Tông Môn Chiến (khi thắng: Cổ/item/bí phương chia đều, Quỹ cướp được sẽ đi vào hư vô; khi thua: toàn đội bị tử đạo rơi đồ). Đặc biệt: <strong>Khi Tông Môn đang trong trạng thái Hộ Sơn bảo hộ (shield_until), người chơi bên trong sẽ không được lãnh địa che chở và vẫn có thể bị tấn công</strong>.</p>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.3</strong> — Tuổi Thọ, Trạng Thái Tử Vong & Tiên Cương:</p>
-              <div className="space-y-2">
-                <div className="flex gap-2.5 items-start bg-red-950/20 border border-red-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">⏳</span>
-                  <div>
-                    <span className="font-bold text-red-400">Cơ chế Tuổi Thọ & Trạng Thái Tử Vong</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Thọ nguyên tiêu hao dần theo thời gian thực (nhân hệ số gia tốc time_speed). Khi tuổi thọ giảm về 0, Cổ sư rơi vào cõi chết và bị phong tỏa mọi hoạt động chiến đấu, thám hiểm, tu luyện cho tới khi khôi phục tuổi thọ.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🧟</span>
-                  <div>
-                    <span className="font-bold text-emerald-300">Chủng Tộc Cương Thi (Tiên Cương) & Tiên Khiếu Chết</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Cương Thi sở hữu năng lực Bất Tử Tuổi Thọ, đổi lại bị cấm tự hồi phục HP, Chân Nguyên/Tiên Nguyên, Nguyên Lực, Hồn Phách. Khi lên Tiên Cương, gia tốc thời gian khóa ở 1.0 và Tiên Khiếu bị suy thoái giảm dần diện tích và tốc độ thời gian.</p>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.2</strong> — Hợp Luyện & Cảnh Giới Chân Ý:</p>
-              <div className="space-y-2">
-                <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">📊</span>
-                  <div>
-                    <span className="font-bold text-amber-300">Hiện chi tiết % Luyện Cổ</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Hiển thị chi tiết đóng góp tỷ lệ % của từng thành phần (tỷ lệ gốc, đạo ngân, cảnh giới, vận khí, hỗ trợ, địa lợi...) khi lò luyện thành công hoặc thất bại.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🌀</span>
-                  <div>
-                    <span className="font-bold text-emerald-300">Đạo Ngân vô hạn & Cảnh giới tương quan</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Bỏ giới hạn đạo ngân luyện cổ (unlimit), tăng chậm dần theo căn bậc hai và giảm dần theo bậc Cổ đích (chia theo Rank). Cảnh giới Chân Ý nhân trực tiếp vào đạo ngân giúp hóa giải độ khó luyện Cổ bậc cao!</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-purple-950/20 border border-purple-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🎓</span>
-                  <div>
-                    <span className="font-bold text-purple-300">Cập nhật mốc điểm Cảnh giới</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Đồng bộ lại điểm Chân Ý: Đại Sư (100), Tông Sư (1.000 - khắc chế Tiên Cổ R6), Đại Tông Sư (10.000 - R7), Vô Thượng (100.000 - R8).</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-cyan-950/20 border border-cyan-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🛡️</span>
-                  <div>
-                    <span className="font-bold text-cyan-300">Scale Chân Ý Luyện Đạo & Giới hạn Bậc</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Luyện Cổ chỉ tăng Chân Ý Luyện Đạo (scale theo cấp Cổ: R1 +2đ, R2-3 +5~15đ, R4-5 +40~100đ, Tiên Cổ +500~50.000đ). Cổ R1 chỉ cho điểm dưới 1.000đ, R2-3 dưới 10.000đ, R4+ trên 10.000đ.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-rose-950/20 border border-rose-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">📖</span>
-                  <div>
-                    <span className="font-bold text-rose-300">Đọc kỹ Wiki thường xuyên</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Cơ chế Luyện Cổ và thăng thiên vô cùng phức tạp, khuyến cáo đạo hữu hãy thường xuyên tra cứu Wiki để thấu suốt thiên cơ!</p>
-                  </div>
-                </div>
-              </div>
-              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.1</strong> — Sủng vật & Hồn Phách:</p>
-              <div className="space-y-2">
-                <div className="flex gap-2.5 items-start bg-purple-950/20 border border-purple-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🐾</span>
-                  <div>
-                    <span className="font-bold text-purple-300">Gộp bầy giới hạn theo Hồn Phách</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Bầy sủng vật tối đa <strong>max_soul/10</strong> cá thể. Hiệu ứng cộng dồn khi gộp đã giảm — chỉ số tăng theo <strong>N^0.65</strong> (sub-linear), không còn bị lũy tiến quá mạnh khi gộp nhiều lần.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-indigo-950/20 border border-indigo-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">👻</span>
-                  <div>
-                    <span className="font-bold text-indigo-300">Hồn Phách tiêu hao khi ra trận</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Mỗi lần ra trận thật, mỗi cá thể sủng vật tiêu tốn <strong>1 soul_hp</strong>. Hồn Phách không đủ thì sủng vật đó bị bỏ qua, không xuất trận. Võ Đài (đấu ảo) miễn phí Hồn Phách.</p>
-                  </div>
-                </div>
-              </div>
-              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.0</strong> — Tối ưu trải nghiệm & Thăng Tiên:</p>
-              <div className="space-y-2">
-                <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🚀</span>
-                  <div>
-                    <span className="font-bold text-amber-300">Tối ưu lưu trữ</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Kho Cổ trùng giờ lưu trữ gọn gàng hơn: mở kho, trang bị, cho ăn nhanh mượt hơn dù sở hữu nhiều Cổ.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🍽️</span>
-                  <div>
-                    <span className="font-bold text-emerald-300">Cho ăn Cổ trùng ổn định</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Chăm sóc Cổ trùng mượt mà hơn: độ no giảm đều theo thời gian, tránh tình trạng lag khi toàn máy chủ xử lý cùng lúc.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">☯️</span>
-                  <div>
-                    <span className="font-bold text-amber-300">Đạo Ngân vận hành tốt hơn</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Đạo Ngân hiển thị và hoạt động chính xác, áp dụng hiệu ứng cho cả đồng đội lẫn địch trong chiến đấu tự động.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-fuchsia-950/20 border border-fuchsia-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🐉</span>
-                  <div>
-                    <span className="font-bold text-fuchsia-300">Thăng Tiên theo Nhân Khí</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Tỉ lệ thành công Thăng Tiên tính theo Tư chất (Giáp: 20% gốc, Ất/Bính/Đinh: 5% gốc) + Bonus Nhân Khí (+20% mỗi 100k Nhân Khí tích lũy, trần tối đa 500.000, cap 90% thành công). Thành công lên Lục Chuyển Cổ Tiên và khai mở Tiên Khiếu.</p>
-                  </div>
-                </div>
+                <span className="absolute bottom-3 right-4 font-mono text-[10px] text-amber-100/50">v0.8.4</span>
+              </section>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <article className="rounded-xl border border-sky-400/20 bg-sky-950/30 p-3">
+                  <span className="text-lg">⚔️</span><h4 className="mt-1 text-xs font-bold text-sky-200">Giao chiến theo lượt</h4>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-300/75">Chạm trán quái khi bước vào ô có quái.</p>
+                </article>
+                <article className="rounded-xl border border-rose-400/20 bg-rose-950/30 p-3">
+                  <span className="text-lg">💀</span><h4 className="mt-1 text-xs font-bold text-rose-200">Tử đạo có giá</h4>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-300/75">Một phần chiến lợi phẩm bị hủy; phần còn lại rơi tại chỗ.</p>
+                </article>
+                <article className="rounded-xl border border-orange-400/20 bg-orange-950/30 p-3">
+                  <span className="text-lg">🔥</span><h4 className="mt-1 text-xs font-bold text-orange-200">Sát khí & vùng an toàn</h4>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-300/75">Sát khí cao ảnh hưởng bảo hộ và nguy cơ rơi Cổ khi bại trận.</p>
+                </article>
+                <article className="rounded-xl border border-emerald-400/20 bg-emerald-950/30 p-3">
+                  <span className="text-lg">🛡️</span><h4 className="mt-1 text-xs font-bold text-emerald-200">Hồi sinh & miễn chiến</h4>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-300/75">Hồi sinh gần khu an toàn; nạn nhân PvP được miễn chiến 10 phút.</p>
+                </article>
               </div>
             </div>
              <label className="flex items-center gap-2 mt-4 mb-1 text-xs text-[var(--text-secondary)] cursor-pointer select-none shrink-0">

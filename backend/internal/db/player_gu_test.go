@@ -1,6 +1,8 @@
 package db
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -83,5 +85,30 @@ func TestMortalApertureCapacity(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("MortalApertureCapacity(%d, %d) = %d, want %d", tc.rank, tc.subRank, got, tc.want)
 		}
+	}
+}
+
+func TestApertureCapacityError(t *testing.T) {
+	err := &ApertureCapacityError{Current: 80, Max: 80}
+	if !errors.Is(err, ErrApertureCapacity) {
+		t.Fatalf("expected err to match ErrApertureCapacity via errors.Is")
+	}
+	if !IsApertureCapacity(err) {
+		t.Fatalf("expected IsApertureCapacity(err) to be true")
+	}
+	if !strings.Contains(err.Error(), "80/80") {
+		t.Fatalf("expected error message to contain 80/80, got: %s", err.Error())
+	}
+
+	legacyErr := fmt.Errorf("không khiếu đã đạt giới hạn sức chứa (15/15 cổ trùng), chân nguyên không đủ dung nạp thêm")
+	if !IsApertureCapacity(legacyErr) {
+		t.Fatalf("expected legacy format to be recognized by IsApertureCapacity")
+	}
+
+	if IsApertureCapacity(nil) {
+		t.Fatalf("expected IsApertureCapacity(nil) to be false")
+	}
+	if IsApertureCapacity(fmt.Errorf("random error")) {
+		t.Fatalf("expected IsApertureCapacity(random error) to be false")
 	}
 }

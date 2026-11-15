@@ -408,13 +408,29 @@ export const LobbyView: React.FC = () => {
     character: "/assets/world/form-reckless-savage.webp",
     inventory: "/assets/items/preview.webp",
     refine: "/assets/world/spirit-herb.webp",
+    aperture: "/assets/world/ground-moss.webp",
+    "caravan-shop": "/assets/world/spirit-herb.webp",
+    "premium-store": "/assets/items/icons/chest.webp",
+    shop: "/assets/items/icons/gourd.webp",
+    auction: "/assets/items/icons/crystal.webp",
     explore: "/assets/world/great-regions-atlas.png",
     "dream-realm": "/assets/world/spirit-beast.webp",
     "spatial-realms": "/assets/world/ground-moss.webp",
     sect: "/assets/world/cultivator.webp",
+    "practice-room": "/assets/world/form-reckless-savage.webp",
     arena: "/assets/world/form-six-arm-ice-demon.webp",
     "infinite-tower": "/assets/world/form-reckless-savage.webp",
+    "death-arena": "/assets/world/form-six-arm-ice-demon.webp",
+    "martial-arena": "/assets/world/form-reckless-savage.webp",
+    achievements: "/assets/items/icons/scroll.webp",
+    utilities: "/assets/items/icons/formation.webp",
     pets: "/assets/world/spirit-beast.webp",
+    gacha: "/assets/items/icons/star.webp",
+    leaderboard: "/assets/items/icons/star.webp",
+    divination: "/assets/items/icons/eye.webp",
+    feedback: "/assets/items/icons/scroll.webp",
+    "combat-history": "/assets/items/icons/blade.webp",
+    "audit-logs": "/assets/items/icons/map.webp",
   };
   const visibleLobbyItems = orderLobbyItems([...managementItems, ...activityItems]).map((item) => ({
     ...item,
@@ -463,7 +479,7 @@ export const LobbyView: React.FC = () => {
     <div
       className="mmo-paper-theme mmo-paper-surface relative isolate w-full mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-6 text-[var(--text-primary,#f4e8cb)]"
       style={{
-        backgroundImage: "linear-gradient(rgba(18, 13, 9, 0.94), rgba(18, 13, 9, 0.97)), url('/assets/world/great-regions-atlas.png')",
+        backgroundImage: "linear-gradient(rgba(18, 13, 9, 0.88), rgba(18, 13, 9, 0.92)), url('/assets/world/great-regions-atlas.png')",
         backgroundSize: "cover, 700% 100%",
         backgroundPosition: "center, left center",
       }}
@@ -642,7 +658,7 @@ export const LobbyView: React.FC = () => {
                 {item.artwork && (
                   <>
                     <img src={item.artwork} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute inset-y-0 right-0 h-full w-[58%] object-cover object-center opacity-35 transition duration-300 group-hover:scale-105 group-hover:opacity-50" />
-                    <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[var(--mmo-menu-bg,#211810)] via-[var(--mmo-menu-bg,#211810)]/85 to-transparent" />
+                    <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[var(--mmo-menu-bg,#211810)]/58 via-[var(--mmo-menu-bg,#211810)]/30 to-transparent" />
                     <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-amber-300/45 via-amber-200/10 to-transparent" />
                   </>
                 )}

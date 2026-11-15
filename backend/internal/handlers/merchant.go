@@ -865,6 +865,26 @@ func BuyFromMerchant(c *gin.Context) {
 	before := append(models.GuInventory(nil), player.GuInventory...)
 	beforePrimeval, beforeImmortal := player.PrimevalStones, player.ImmortalStones
 	guBought := false
+
+	guCount := 0
+	for _, line := range req.Items {
+		rank := line.Rank
+		if rank <= 0 {
+			rank = 1
+		}
+		if _, ok := models.GetGu(line.ItemID, rank); ok {
+			guCount += int(line.Quantity)
+		} else if _, ok := models.GetGuAny(line.ItemID); ok {
+			guCount += int(line.Quantity)
+		}
+	}
+	if guCount > 0 {
+		if err := db.CheckApertureCapacity(tx, player.ID.String(), guCount); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
 	for _, line := range req.Items {
 		var price float64
 		var stock, rank int
@@ -896,8 +916,14 @@ func BuyFromMerchant(c *gin.Context) {
 		if spec, ok := models.GetGu(line.ItemID, rank); ok {
 			for i := int64(0); i < line.Quantity; i++ {
 				player.GuInventory = append(player.GuInventory, models.GuInstance{
-					InstanceID: uuid.New().String(), GuID: spec.ID, Rank: spec.Rank,
-					Hunger: 100, Status: "ACTIVE", Equipped: false,
+					InstanceID:         uuid.New().String(),
+					GuID:               spec.ID,
+					Rank:               spec.Rank,
+					Hunger:             100,
+					RefinementProgress: 100,
+					Durability:         100,
+					Status:             "ACTIVE",
+					Equipped:           false,
 				})
 			}
 			guBought = true
@@ -942,6 +968,14 @@ func BuyFromMerchant(c *gin.Context) {
 	}
 	if guBought {
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+			if db.IsApertureCapacity(err) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if db.IsImmortalConflict(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ này đã tồn tại trong thiên hạ, không thể mua"})
+				return
+			}
 			httperr.Respond(c, httperr.Internal("Không lưu được Cổ trùng mới", err))
 			return
 		}

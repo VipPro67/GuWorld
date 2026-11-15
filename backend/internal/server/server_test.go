@@ -3,12 +3,14 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"go.uber.org/zap"
@@ -174,6 +176,80 @@ func TestRequestLogging_ErrorResponseBody(t *testing.T) {
 	}
 	if completedLog["request_body"] == nil {
 		t.Error("expected request_body in http_request_completed")
+	}
+}
+
+func TestRequestLogging_DetailedUnderlyingError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mem := &memorySyncer{}
+	encCfg := zapcore.EncoderConfig{
+		TimeKey:        "ts",
+		LevelKey:       "level",
+		MessageKey:     "msg",
+		EncodeLevel:    zapcore.LowercaseLevelEncoder,
+		EncodeTime:     zapcore.ISO8601TimeEncoder,
+		EncodeDuration: zapcore.StringDurationEncoder,
+	}
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(encCfg), mem, zapcore.DebugLevel)
+	origLogger := logger.L
+	logger.L = zap.New(core)
+	defer func() {
+		logger.L = origLogger
+	}()
+
+	r := gin.New()
+	r.Use(requestLogging())
+	r.Use(monitor.Middleware())
+
+	r.POST("/api/shop/buy-test", func(c *gin.Context) {
+		underlyingErr := errors.New("không khiếu đã đạt giới hạn sức chứa (80/80)")
+		httperr.Respond(c, httperr.Internal("Không thể lưu Cổ trùng mới vào CSDL", underlyingErr))
+	})
+
+	body := bytes.NewBufferString(`{"item_id":"GU_RAIN_GATE_5","quantity":1}`)
+	req, _ := http.NewRequest(http.MethodPost, "/api/shop/buy-test", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", w.Code)
+	}
+
+	lines := strings.Split(strings.TrimSpace(mem.buf.String()), "\n")
+	var errorLog map[string]interface{}
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &parsed); err != nil {
+			continue
+		}
+		if parsed["msg"] == "http_request_error" {
+			errorLog = parsed
+		}
+	}
+
+	if errorLog == nil {
+		t.Fatal("expected http_request_error log")
+	}
+
+	errField, ok := errorLog["error"].(string)
+	if !ok || errField == "" {
+		t.Fatalf("expected non-empty error field in http_request_error, got %v", errorLog["error"])
+	}
+
+	// Must include the underlying root-cause message
+	if !strings.Contains(errField, "không khiếu đã đạt giới hạn sức chứa (80/80)") {
+		t.Errorf("expected detailed error to contain root cause 'không khiếu đã đạt giới hạn sức chứa (80/80)', got %q", errField)
+	}
+
+	// Must also retain the user/context prefix
+	if !strings.Contains(errField, "Không thể lưu Cổ trùng mới vào CSDL") {
+		t.Errorf("expected detailed error to contain 'Không thể lưu Cổ trùng mới vào CSDL', got %q", errField)
 	}
 }
 

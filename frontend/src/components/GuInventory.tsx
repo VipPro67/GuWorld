@@ -675,8 +675,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     <div className="relative glass-panel-gold rounded-3xl p-3 sm:p-6 w-full space-y-4 sm:space-y-6 overflow-hidden">
       {/* Header */}
       <div className="relative isolate flex flex-col gap-3 overflow-hidden rounded-2xl border border-amber-900/25 bg-gradient-to-r from-amber-950/35 via-zinc-950/35 to-transparent px-3 pb-4 pt-3 sm:flex-row sm:items-center sm:justify-between">
-        <img src={selectedTab === "material" ? "/assets/items/preview.webp" : "/assets/world/spirit-beast.webp"} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute -right-4 -top-8 h-36 w-48 object-contain opacity-20 sm:h-44 sm:w-60" />
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/20 via-zinc-950/20 to-zinc-950/75" />
+        <img src={selectedTab === "material" ? "/assets/world/spirit-herb.webp" : "/assets/world/spirit-beast.webp"} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute -right-4 -top-8 h-40 w-52 object-contain opacity-55 sm:h-48 sm:w-64" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/5 via-zinc-950/10 to-zinc-950/35" />
         <div className="relative z-[1] flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-950/60 shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">
             <Sparkles className="w-5 h-5 text-amber-300" />

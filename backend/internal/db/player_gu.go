@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -139,6 +140,38 @@ func MortalApertureCapacity(rank int, subRank int) int {
 	}
 }
 
+// ErrApertureCapacity indicates that adding Gus would exceed the player's mortal aperture capacity.
+var ErrApertureCapacity = errors.New("không khiếu đã đạt giới hạn sức chứa")
+
+// ApertureCapacityError details an aperture capacity overflow.
+type ApertureCapacityError struct {
+	Current int
+	Max     int
+}
+
+func (e *ApertureCapacityError) Error() string {
+	return fmt.Sprintf("Không khiếu đã đạt giới hạn sức chứa (%d/%d Cổ trùng), chân nguyên không đủ dung nạp thêm! Hãy phóng sinh bớt Cổ trùng hoặc đột phá cảnh giới để mở rộng Không khiếu.", e.Current, e.Max)
+}
+
+func (e *ApertureCapacityError) Is(target error) bool {
+	return target == ErrApertureCapacity
+}
+
+// IsApertureCapacity reports whether err is caused by mortal aperture capacity exhaustion.
+func IsApertureCapacity(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrApertureCapacity) {
+		return true
+	}
+	var ace *ApertureCapacityError
+	if errors.As(err, &ace) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "giới hạn sức chứa")
+}
+
 // CheckApertureCapacity checks if adding delta Gus would exceed the player's aperture capacity.
 func CheckApertureCapacity(q Queryer, playerID string, delta int) error {
 	if delta <= 0 {
@@ -154,11 +187,11 @@ func CheckApertureCapacity(q Queryer, playerID string, delta int) error {
 		return nil // Immortal: unlimited
 	}
 	var currentCount int
-	if err := q.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1 AND location <> 'ACTOR'`, playerID).Scan(&currentCount); err != nil {
+	if err := q.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1 AND location IS DISTINCT FROM 'ACTOR'`, playerID).Scan(&currentCount); err != nil {
 		return err
 	}
 	if currentCount+delta > cap {
-		return fmt.Errorf("không khiếu đã đạt giới hạn sức chứa (%d/%d cổ trùng), chân nguyên không đủ dung nạp thêm", currentCount, cap)
+		return &ApertureCapacityError{Current: currentCount, Max: cap}
 	}
 	return nil
 }

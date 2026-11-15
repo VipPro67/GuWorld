@@ -96,7 +96,44 @@ func BuyShopItem(c *gin.Context) {
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
-	// 3.1 Enforce daily stock for virtual random-pool items (rank<5 Gus + food).
+	// 3.1 Validate Funds
+	currency := selectedItem.Currency
+	if currency != "immortal" {
+		currency = "primeval"
+	}
+	totalCost := selectedItem.Price * float64(req.Quantity)
+	currencyName := "Nguyên Thạch"
+	if currency == "immortal" {
+		currencyName = "Tiên Nguyên Thạch"
+		if player.ImmortalStones < totalCost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName + " để giao dịch."})
+			return
+		}
+	} else if player.PrimevalStones < totalCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName + " để giao dịch."})
+		return
+	}
+
+	// 3.2 Validate Inventory / Aperture space
+	if selectedItem.Type == "Gu" {
+		if err := db.CheckApertureCapacity(tx, player.ID.String(), int(req.Quantity)); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	} else {
+		incomingCount := 0
+		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), selectedItem.ID)
+		if qty == 0 {
+			incomingCount = 1
+		}
+
+		if !HasInventorySpace(&player, incomingCount) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Bách Bảo Nang đã đầy! Hãy trang bị thêm Thố Ti Hoa Cổ hoặc thăng cấp lên Lục Chuyển."})
+			return
+		}
+	}
+
+	// 3.3 Enforce daily stock for virtual random-pool items (rank<5 Gus + food).
 	if selectedItem.IsAuto {
 		limit := randomPoolStock(selectedItem.Rank)
 		// Ensure a row exists for today (full daily limit) when never sold yet.
@@ -146,40 +183,6 @@ func BuyShopItem(c *gin.Context) {
 		}
 	}
 
-	// 4. Validate Funds
-	currency := selectedItem.Currency
-	if currency != "immortal" {
-		currency = "primeval"
-	}
-	totalCost := selectedItem.Price * float64(req.Quantity)
-	currencyName := "Nguyên Thạch"
-	if currency == "immortal" {
-		currencyName = "Tiên Nguyên Thạch"
-		if player.ImmortalStones < totalCost {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName + " để giao dịch."})
-			return
-		}
-	} else if player.PrimevalStones < totalCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName + " để giao dịch."})
-		return
-	}
-
-	// Validate Inventory space
-	incomingCount := 0
-	if selectedItem.Type == "Gu" {
-		incomingCount = int(req.Quantity)
-	} else {
-		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), selectedItem.ID)
-		if qty == 0 {
-			incomingCount = 1
-		}
-	}
-
-	if !HasInventorySpace(&player, incomingCount) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bách Bảo Nang đã đầy! Hãy trang bị thêm Thố Ti Hoa Cổ hoặc thăng cấp lên Lục Chuyển."})
-		return
-	}
-
 	// Deduct currency
 	if currency == "immortal" {
 		player.ImmortalStones -= totalCost
@@ -202,12 +205,14 @@ func BuyShopItem(c *gin.Context) {
 
 		for i := int64(0); i < req.Quantity; i++ {
 			newInstance := models.GuInstance{
-				InstanceID: uuid.New().String(),
-				GuID:       spec.ID,
-				Rank:       spec.Rank,
-				Hunger:     100,
-				Status:     "ACTIVE",
-				Equipped:   false,
+				InstanceID:         uuid.New().String(),
+				GuID:               spec.ID,
+				Rank:               spec.Rank,
+				Hunger:             100,
+				RefinementProgress: 100,
+				Durability:         100,
+				Status:             "ACTIVE",
+				Equipped:           false,
 			}
 			player.GuInventory = append(player.GuInventory, newInstance)
 		}
@@ -237,6 +242,14 @@ func BuyShopItem(c *gin.Context) {
 	qiGained := 0.0
 	if selectedItem.Type == "Gu" {
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+			if db.IsApertureCapacity(err) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if db.IsImmortalConflict(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ này đã tồn tại trong thiên hạ, không thể mua"})
+				return
+			}
 			httperr.Respond(c, httperr.Internal("Không thể lưu Cổ trùng mới vào CSDL", err))
 			return
 		}

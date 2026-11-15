@@ -516,6 +516,10 @@ func runGachaOpen(c *gin.Context, forced int) {
 			fmt.Println("Gacha immortal conflict:", err)
 			return
 		}
+		if db.IsApertureCapacity(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		httperr.Respond(c, httperr.Internal("Lỗi cập nhật cổ trùng", err))
 		fmt.Println("Error saving player Gu inventory:", err)
 		return

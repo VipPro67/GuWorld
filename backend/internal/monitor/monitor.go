@@ -785,8 +785,12 @@ func Middleware() gin.HandlerFunc {
 			responseBytes = 0
 		}
 		errMsg := rw.ErrorMessage()
-		if errMsg == "" && len(c.Errors) > 0 {
-			errMsg = c.Errors.String()
+		if len(c.Errors) > 0 {
+			if len(c.Errors) == 1 {
+				errMsg = c.Errors.Last().Error()
+			} else {
+				errMsg = strings.TrimSpace(c.Errors.String())
+			}
 		}
 		c.Set("response_body", responseBody)
 		c.Set("response_body_truncated", responseBodyTruncated)

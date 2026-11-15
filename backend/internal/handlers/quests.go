@@ -441,6 +441,10 @@ func CompleteQuest(c *gin.Context) {
 		}
 	}
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+		if db.IsApertureCapacity(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		httperr.Respond(c, httperr.Internal("Failed to update player Gus", err))
 		return
 	}

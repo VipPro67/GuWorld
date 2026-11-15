@@ -346,6 +346,13 @@ func requestLogging() gin.HandlerFunc {
 		if v, ok := errMsgRaw.(string); ok {
 			errMsg = v
 		}
+		if errMsg == "" && len(c.Errors) > 0 {
+			if len(c.Errors) == 1 {
+				errMsg = c.Errors.Last().Error()
+			} else {
+				errMsg = strings.TrimSpace(c.Errors.String())
+			}
+		}
 
 		isTruncated, _ := bodyTruncated.(bool)
 

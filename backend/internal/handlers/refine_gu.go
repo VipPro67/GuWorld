@@ -444,6 +444,10 @@ func RefineGu(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"})
 			return
 		}
+		if db.IsApertureCapacity(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		httperr.Respond(c, httperr.Internal("Không thể lưu túi đồ: "+err.Error(), err))
 		return
 	}
