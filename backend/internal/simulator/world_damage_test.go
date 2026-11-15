@@ -22,7 +22,7 @@ func TestResolveBasicDamageRoutesThroughReductionAndShield(t *testing.T) {
 	}
 }
 
-// minHP is the Bất Tử floor handed over by the overworld combat path.
+// minHP is the minimum HP retained while the Bất Tử floor is active.
 func TestResolveBasicDamageHonoursLastStandFloor(t *testing.T) {
 	floored := ResolveBasicDamage(500, 0, 0, 30, 0, LastStandMinHP)
 	if floored.HP != LastStandMinHP {

@@ -94,7 +94,7 @@ export interface CombatState {
   enemy_damage: number; enemy_defense: number; charge_points: number;
   target_player_id?: string; enemy_template_id?: string;
   world_monster_region_id?: string; world_monster_id?: string;
-  world_monster_encounter_id?: string; allies?: Combatant[]; enemies?: Combatant[];
+  allies?: Combatant[]; enemies?: Combatant[];
   enemy_type?: string; enemy_rank?: number; enemy_sub_rank?: number;
   combat_mode?: string; tribulation_event_id?: string; target_sect_id?: string;
   aperture_hp?: number; aperture_max_hp?: number;

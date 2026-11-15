@@ -1,51 +1,12 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
-
-func combatOwnedByPlayer(state *models.CombatState, playerID string) bool {
-	return state == nil || state.CombatOwnerID == "" || state.CombatOwnerID == playerID
-}
-
-func completeWorldMonsterCombat(ctx context.Context, state *models.CombatState, winner, playerID string) {
-	clearWorldMonsterPartyCombat(state, playerID)
-}
-
-func clearWorldMonsterPartyCombat(state *models.CombatState, playerID string) {
-	if state == nil || state.WorldMonsterEncounterID == "" || db.DB == nil {
-		return
-	}
-	for _, ally := range state.Allies {
-		if (ally.Kind != "Ally" && ally.Kind != "Player") || ally.ID == playerID {
-			continue
-		}
-		allyID, err := uuid.Parse(ally.ID)
-		if err != nil {
-			continue
-		}
-		result, err := db.DB.Exec(`UPDATE players SET active_combat=NULL,version=version+1,state_revision=COALESCE(state_revision,0)+1
-			WHERE id=$1 AND (active_combat IS NULL OR
-				(active_combat->>'combat_owner_id'=$2 AND active_combat->>'world_monster_encounter_id'=$3))`,
-			allyID, playerID, state.WorldMonsterEncounterID)
-		if err != nil {
-			logger.S.Errorf("clear world monster combat lock for ally=%s: %v", ally.ID, err)
-			continue
-		}
-		if rows, _ := result.RowsAffected(); rows > 0 {
-			ClearPendingPlayerQueues(ally.ID)
-			PublishPlayerCombatDelta(allyID, CombatEventEnded, nil)
-		}
-	}
-}
 
 func savePlayerMovement(tx *sql.Tx, player *models.Player, combat any) error {
 	var active any

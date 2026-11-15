@@ -109,7 +109,6 @@ func AutoCombatStart(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Trận chiến tổ đội do trưởng nhóm điều khiển."})
 		return
 	}
-	worldMonsterCombat := *player.ActiveCombat
 	if requiresRegionCombatPolicy(player.ActiveCombat) {
 		if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -155,8 +154,6 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	setWorldPosFromPlayer(&player)
-	completeWorldMonsterCombat(c.Request.Context(), &worldMonsterCombat, res.Winner, player.ID.String())
-
 	qiGained := 0.0
 	if v, ok := res.Summary["human_qi_gained"].(float64); ok {
 		qiGained = v

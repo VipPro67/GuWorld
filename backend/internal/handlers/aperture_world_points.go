@@ -395,11 +395,9 @@ func sweepOneWorldRegion(ctx context.Context, regionID string) (int, int, error)
 }
 
 // worldPointGuardStatus reports whether a live world actor (boss or regular
-// monster) currently stands on the point's cell. The realtime world manager
-// owns materialization, so the Redis actor cache is the authority: a mine is
-// guarded exactly while something alive occupies its cell. Redis being
-// unavailable fails open — the harvest still requires proximity, and a live
-// boss usually intercepts the player in world combat anyway.
+// monster) currently stands on the point's cell. The Redis actor cache is the
+// authority: a mine is guarded exactly while something alive occupies its
+// cell. Redis being unavailable fails open; harvest still requires proximity.
 func worldPointGuardStatus(ctx context.Context, regionID string, x, y int) bool {
 	bosses, err := cache.WorldBossesInRegion(ctx, regionID)
 	if err == nil {

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"math"
 	"math/rand"
@@ -53,15 +52,6 @@ var (
 	// dominated /api/world/monsters latency (up to (2r+1)^2 calls per request).
 	worldMonsterCellsCleared = func(coords []cache.CellCoordKey) (map[cache.CellCoordKey]cache.MapCellState, error) {
 		return cache.GetClearedCells(coords)
-	}
-	loadWorldMonsterSpawnRank = func(ctx context.Context, spawnID string) (int, error) {
-		regionID, monsterID, ok := parseStaticSpawnID(spawnID)
-		if !ok {
-			return 0, sql.ErrNoRows
-		}
-		var rank int
-		err := db.DB.QueryRowContext(ctx, `SELECT min_rank FROM monster_spawns WHERE region_id=$1 AND monster_id=$2`, regionID, monsterID).Scan(&rank)
-		return rank, err
 	}
 )
 
@@ -244,23 +234,6 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 		RespawnSeconds: spawn.RespawnSeconds,
 	}
 	return monster, nil
-}
-
-// applyWorldMonsterTuning upgrades rank metadata left by older runtime snapshots.
-// World actors no longer run an autonomous chase/attack simulation.
-func applyWorldMonsterTuning(ctx context.Context, monster *WorldMonster) {
-	if monster.Rank < 1 {
-		cell := resolveWorldMonsterCell(int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY)))
-		if cell.Content == monster.MonsterTemplateID && cell.Rank > 0 {
-			monster.Rank, monster.SubRank = cell.Rank, cell.SubRank
-		} else if rank, err := loadWorldMonsterSpawnRank(ctx, monster.SpawnID); err == nil && rank > 0 {
-			monster.Rank = rank
-		}
-	}
-	monster.Rank = clampRankToZoneBand(monster.RegionID, monster.Rank)
-	if monster.Rank < 1 {
-		monster.Rank = 1
-	}
 }
 
 func worldMonsterTemplateIsElite(templateID string) bool {

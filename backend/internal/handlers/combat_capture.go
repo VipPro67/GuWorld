@@ -197,7 +197,6 @@ func CaptureMonster(c *gin.Context) {
 		}
 
 		// Kết thúc combat
-		worldMonsterCombat := *player.ActiveCombat
 		enemyRank := player.ActiveCombat.EnemyRank
 		enemySubRank := player.ActiveCombat.EnemySubRank
 		enemyName := player.ActiveCombat.EnemyName
@@ -237,8 +236,6 @@ func CaptureMonster(c *gin.Context) {
 			return
 		}
 		PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
-		completeWorldMonsterCombat(c.Request.Context(), &worldMonsterCombat, "Phe Ta", player.ID.String())
-
 		respondActionGuOnly(c, http.StatusOK, player, gin.H{
 			"captured":       true,
 			"monster_name":   enemyName,

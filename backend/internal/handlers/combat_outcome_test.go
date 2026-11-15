@@ -52,14 +52,10 @@ func TestInfiniteTowerDoesNotAwardArenaCoinsThroughArenaSettlement(t *testing.T)
 	}
 }
 
-func TestWorldMonsterCombatUsesOnlySpawnedEnemies(t *testing.T) {
-	worldEncounter := &models.CombatState{WorldMonsterEncounterID: "zone:event", EnemyHP: 100, EnemyTemplateID: "wolf"}
-	if shouldSpawnCombatMinions(worldEncounter) {
-		t.Fatal("world monster encounter should not synthesize random guards")
-	}
-	legacyEncounter := &models.CombatState{EnemyHP: 100, EnemyTemplateID: "wolf"}
-	if !shouldSpawnCombatMinions(legacyEncounter) {
-		t.Fatal("legacy exploration combat should preserve its configured guard behavior")
+func TestExplorationCombatCanSpawnConfiguredMinions(t *testing.T) {
+	encounter := &models.CombatState{EnemyHP: 100, EnemyTemplateID: "wolf"}
+	if !shouldSpawnCombatMinions(encounter) {
+		t.Fatal("eligible exploration combat should preserve its configured guard behavior")
 	}
 }
 

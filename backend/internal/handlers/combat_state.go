@@ -21,12 +21,12 @@ func partyJoinsCombat(base *models.CombatState) bool {
 	return base != nil && base.CombatMode != "virtual" && base.EnemyType != "PVP"
 }
 
+func combatOwnedByPlayer(state *models.CombatState, playerID string) bool {
+	return state == nil || state.CombatOwnerID == "" || state.CombatOwnerID == playerID
+}
+
 func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
 	soloBattle := !partyJoinsCombat(base)
-	worldInstanceID := ""
-	if base.WorldMonsterEncounterID != "" {
-		_ = tx.QueryRow(`SELECT COALESCE(map_instance_id::text,'') FROM players WHERE id=$1`, player.ID).Scan(&worldInstanceID)
-	}
 	if base.CombatID == "" {
 		base.CombatID = uuid.NewString()
 		base.TitleEffectSnapshot = snapshotEquippedTitleEffect(tx, player.ID.String(), base.EnemyType)
@@ -113,7 +113,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		for _, e := range formation {
 			switch e.Kind {
 			case "player":
-				if !soloBattle && partyMemberInWorldInstance(tx, e.ID, worldInstanceID, base.WorldMonsterEncounterID != "") {
+				if !soloBattle {
 					if ally, ok := loadPartyMemberCombatant(tx, e.ID, player, base.CombatMode == "virtual"); ok {
 						base.Allies = append(base.Allies, *ally)
 						lineupGrids = append(lineupGrids, allySlots[takeLineupPos(&usedPos, e.Pos)])
@@ -147,9 +147,6 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 				json.Unmarshal(membersRaw, &members)
 				for _, m := range members {
 					if m.ID == player.ID.String() {
-						continue
-					}
-					if !partyMemberInWorldInstance(tx, m.ID, worldInstanceID, base.WorldMonsterEncounterID != "") {
 						continue
 					}
 					if ally, ok := loadPartyMemberCombatant(tx, m.ID, player, base.CombatMode == "virtual"); ok {
@@ -257,23 +254,9 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 }
 
 func shouldSpawnCombatMinions(base *models.CombatState) bool {
-	return base != nil && base.WorldMonsterEncounterID == "" && base.TargetPlayerID == "" &&
+	return base != nil && base.TargetPlayerID == "" &&
 		base.TribulationEventID == "" && base.TargetSectID == "" &&
 		base.EnemyTemplateID != "monster_heavenly_tribulation" && base.EnemyHP < 1000
-}
-
-// partyMemberInWorldInstance keeps an open-world monster encounter scoped to
-// the leader's current private instance. Legacy combats retain their existing
-// region-only party eligibility.
-func partyMemberInWorldInstance(tx *sql.Tx, memberID, leaderInstanceID string, enforce bool) bool {
-	if !enforce {
-		return true
-	}
-	var memberInstanceID string
-	if err := tx.QueryRow(`SELECT COALESCE(map_instance_id::text,'') FROM players WHERE id=$1`, memberID).Scan(&memberInstanceID); err != nil {
-		return false
-	}
-	return memberInstanceID == leaderInstanceID
 }
 
 // takeLineupPos resolves a lineup entry's grid cell: explicit pos when free,
