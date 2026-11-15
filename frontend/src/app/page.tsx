@@ -625,7 +625,7 @@ export default function Home() {
             </div>
           </div>
         ) : player.active_combat || activeCombatReplay ? (
-          <div className="w-full flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          <div className="w-full flex-1 min-h-0 overflow-y-auto overscroll-contain pb-20 sm:pb-4">
             <CombatScreen
               player={player}
               enemy={player.active_combat || activeCombatReplay!.enemy}

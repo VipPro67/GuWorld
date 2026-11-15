@@ -98,12 +98,12 @@ export const CombatHistoryView: React.FC = () => {
                   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.08),transparent_65%)]" />
                   <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-cyan-500/30 bg-zinc-950/70 shadow-lg shadow-cyan-950/30">
                     <img src={player?.avatar_url || "/assets/world/cultivator.webp"} alt={player?.username || "Nhân vật"} className="h-full w-full object-cover" />
-                    <span className="absolute bottom-0 inset-x-0 bg-zinc-950/75 py-0.5 text-center text-[9px] font-semibold text-zinc-200">{player?.username || "Bạn"}</span>
+                    <span className="absolute bottom-0 inset-x-3 z-10 truncate bg-zinc-950/75 py-0.5 text-left text-[9px] font-semibold text-zinc-200">{player?.username || "Bạn"}</span>
                   </div>
                   <span className="relative rounded-full border border-zinc-600 bg-zinc-950/80 px-2 py-1 text-[10px] font-black text-amber-300">VS</span>
                   <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-rose-500/30 bg-zinc-950/70 shadow-lg shadow-rose-950/30">
                     <img src="/assets/world/spirit-beast.webp" alt={opponent} className="h-full w-full object-cover" />
-                    <span className="absolute bottom-0 inset-x-0 truncate bg-zinc-950/75 px-1 py-0.5 text-center text-[9px] font-semibold text-zinc-200">{opponent}</span>
+                    <span className="absolute bottom-0 inset-x-3 z-10 truncate bg-zinc-950/75 py-0.5 text-left text-[9px] font-semibold text-zinc-200">{opponent}</span>
                   </div>
                 </div>
                 <div className="p-3.5">
@@ -115,7 +115,7 @@ export const CombatHistoryView: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] text-zinc-400">
                     <span className="flex min-w-0 items-center gap-1"><MapPin className="h-3 w-3 shrink-0 text-zinc-500" /><span className="truncate">{entry.region || "Không rõ khu vực"}</span></span>
-                    <span className="flex items-center gap-1"><Heart className="h-3 w-3 shrink-0 text-rose-400" />HP còn: {summary.final_player_hp ?? "?"}</span>
+                    <span className="flex min-w-0 items-center gap-1"><Heart className="h-3 w-3 shrink-0 text-rose-400" />HP còn: {summary.final_player_hp == null ? "?" : <Num value={Number(summary.final_player_hp)} />}</span>
                     <span className="flex items-center gap-1"><Swords className="h-3 w-3 shrink-0 text-amber-400" />DMG: <Num value={summary.total_damage_dealt || 0} /></span>
                     <span className="flex items-center gap-1"><Eye className="h-3 w-3 shrink-0 text-zinc-500" />{entry.logs_count ?? entry.logs?.length ?? 0} bước</span>
                   </div>

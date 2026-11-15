@@ -213,7 +213,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
     <>
       {/* Toggle Button */}
       {!chatOpen && (
-        <div className={`fixed ${togglePosition} z-[70]`}>
+        <div className={`fixed ${togglePosition} z-40`}>
           <button
             onClick={() => {
               setChatOpen(true);
@@ -238,7 +238,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
 
       {/* Chat Overlay Panel */}
       {chatOpen && (
-        <div className={`${placement === "mmo" ? "mmo-panel-theme" : ""} fixed ${chatPosition} ${widthClasses} ${heightClasses} z-[70] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-3rem)] overflow-hidden flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
+        <div className={`${placement === "mmo" ? "mmo-panel-theme" : ""} fixed ${chatPosition} ${widthClasses} ${heightClasses} z-40 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-3rem)] overflow-hidden flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
           {/* Channel Tabs */}
           <div className="flex items-center justify-between">
             <div className="flex gap-1.5 border-b border-[var(--border-default)] pb-2">

@@ -3482,12 +3482,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
           {playersTab === "list" && (
           <>
           <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4 mb-4">
-            <div className="flex gap-3 items-end">
-              <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end">
+              <div className="col-span-2 min-w-0 space-y-1 sm:col-span-1">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
                   <Filter className="w-3 h-3" /> Loại tìm kiếm
                 </label>
-                <select value={searchBy} onChange={e => { updatePlayerQuery({ search_by: e.target.value, page: "1" }); }} className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer">
+                <select value={searchBy} onChange={e => { updatePlayerQuery({ search_by: e.target.value, page: "1" }); }} className="min-h-[44px] w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer sm:w-auto">
                   <option value="all">Tất cả (tự nhận diện ID)</option>
                   <option value="id">ID</option>
                   <option value="username">Tên đăng nhập</option>
@@ -3496,14 +3496,14 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <option value="gu">Cổ trùng sở hữu</option>
                 </select>
               </div>
-              <div className="flex-1 space-y-1">
+              <div className="col-span-2 min-w-0 space-y-1 sm:flex-1">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
                   <Search className="w-3 h-3" /> Tìm kiếm
                 </label>
-                <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { updatePlayerQuery({ page: "1", search: searchText }); } }} placeholder={searchBy === "item" ? "ID hoặc tên vật phẩm..." : searchBy === "gu" ? "ID hoặc tên cổ trùng..." : "ID, tên đăng nhập hoặc email..."} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600" />
+                <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { updatePlayerQuery({ page: "1", search: searchText }); } }} placeholder={searchBy === "item" ? "ID hoặc tên vật phẩm..." : searchBy === "gu" ? "ID hoặc tên cổ trùng..." : "ID, tên đăng nhập hoặc email..."} className="min-h-[44px] w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600" />
               </div>
-              <button onClick={() => { updatePlayerQuery({ page: "1", search: searchText }); }} className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">Tìm</button>
-              <button onClick={fetchPlayers} disabled={loading} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
+              <button onClick={() => { updatePlayerQuery({ page: "1", search: searchText }); }} className="min-h-11 rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-zinc-100 transition-colors cursor-pointer hover:bg-amber-500">Tìm</button>
+              <button onClick={fetchPlayers} disabled={loading} aria-label="Làm mới danh sách người chơi" className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 transition-all hover:text-white disabled:opacity-50 cursor-pointer">
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
               </button>
             </div>

@@ -126,8 +126,8 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="spatial-realms-title" tabIndex={-1} className="relative max-h-[90dvh] w-full max-w-3xl overflow-y-auto overscroll-contain rounded-3xl border border-amber-500/50 bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 p-6 text-left shadow-[0_0_50px_rgba(245,158,11,0.25)]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overscroll-contain bg-black/80 p-4 pt-[calc(4rem+env(safe-area-inset-top))] backdrop-blur-sm animate-fade-in sm:items-center sm:pt-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="spatial-realms-title" tabIndex={-1} className="relative max-h-[calc(100dvh-5rem-env(safe-area-inset-top))] w-full max-w-3xl overflow-y-auto overscroll-contain rounded-3xl border border-amber-500/50 bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 p-6 text-left shadow-[0_0_50px_rgba(245,158,11,0.25)] sm:max-h-[90dvh]">
         {/* Close Button */}
         <button
           type="button"
