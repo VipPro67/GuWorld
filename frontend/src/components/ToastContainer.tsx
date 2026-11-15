@@ -9,7 +9,7 @@ export const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-[calc(env(safe-area-inset-left)+1rem)] sm:bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:left-[calc(env(safe-area-inset-left)+1.5rem)] z-[9999] flex flex-col gap-2 sm:gap-3 max-w-[280px] sm:max-w-sm w-full pointer-events-none">
+    <div aria-label="Thông báo" className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-[calc(env(safe-area-inset-left)+1rem)] sm:bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:left-[calc(env(safe-area-inset-left)+1.5rem)] z-[9999] flex flex-col gap-2 sm:gap-3 max-w-[280px] sm:max-w-sm w-full pointer-events-none">
       {toasts.map((toast) => {
         return (
           <ToastItem
@@ -77,7 +77,9 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
 
   return (
     <div
-      className={`pointer-events-auto flex items-start gap-2 sm:gap-3 w-full p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border ${config.borderColor} bg-zinc-950/90 backdrop-blur-md shadow-xl ${config.shadowColor} transition-all duration-300 transform translate-x-0 animate-toast-in relative overflow-hidden`}
+      role={type === "error" ? "alert" : "status"}
+      aria-live={type === "error" ? "assertive" : "polite"}
+      className={`pointer-events-auto flex items-start gap-2 sm:gap-3 w-full p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border ${config.borderColor} bg-zinc-950/90 backdrop-blur-md shadow-xl ${config.shadowColor} transition-[transform,opacity] duration-300 transform translate-x-0 animate-toast-in relative overflow-hidden`}
       style={{
         boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.6), 0 0 15px ${config.glowColor}`,
       }}
@@ -110,8 +112,10 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
 
       {/* Close button */}
       <button
+        type="button"
         onClick={onClose}
-        className="shrink-0 p-0.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60 transition-all cursor-pointer"
+        aria-label="Đóng thông báo"
+        className="shrink-0 p-0.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60 transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300"
       >
         <X className="w-3.5 h-3.5 sm:w-4 h-4" />
       </button>

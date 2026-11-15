@@ -2,6 +2,43 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+.dark {
+  color-scheme: dark;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 10000;
+  transform: translateY(-200%);
+  border-radius: 0.5rem;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 0.75rem 1rem;
+  box-shadow: 0 0 0 2px var(--brand-primary);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 @theme {
   --font-serif: "Times New Roman", Times, "Noto Serif", serif;
   --font-sans: var(--font-geist-sans), "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -633,4 +670,10 @@ body {
 
 .animate-toast-in {
   animation: slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-toast-in {
+    animation: none;
+  }
 }

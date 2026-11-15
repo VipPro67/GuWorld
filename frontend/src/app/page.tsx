@@ -295,7 +295,8 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="flex-grow flex items-center justify-center w-full max-w-[1600px] px-2 sm:px-8 mx-auto">
+        <a href="#main-content" className="skip-link">Bỏ qua đến nội dung chính</a>
+        <main id="main-content" tabIndex={-1} className="flex-grow flex items-center justify-center w-full max-w-[1600px] px-2 sm:px-8 mx-auto">
           <MaintenanceView />
         </main>
 
@@ -401,16 +402,19 @@ export default function Home() {
 
   return (
     <div className="mmo-paper-theme h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0 relative">
+      <a href="#main-content" className="skip-link">Bỏ qua đến nội dung chính</a>
       {/* Top Header Navigation */}
       <header className="w-full max-w-[1600px] px-2 sm:px-6 mx-auto py-2.5 sm:py-3 border-b border-[var(--border-default)] flex justify-between items-center gap-3 shrink-0 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30">
         <div className="flex items-center gap-3 sm:gap-6">
-          <div
+          <button
+            type="button"
             onClick={() => {
               if (player && currentView !== "dashboard") {
                 setView("dashboard");
               }
             }}
-            className={`flex items-center gap-2 ${player && currentView !== "dashboard" ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+            disabled={!player || currentView === "dashboard"}
+            className={`flex items-center gap-2 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-300 ${player && currentView !== "dashboard" ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"}`}
             title={player && currentView !== "dashboard" ? "Trở về Sảnh Chính" : undefined}
           >
             <div className="w-8 h-8 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)] flex items-center justify-center shrink-0">
@@ -419,7 +423,7 @@ export default function Home() {
             <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-[var(--text-primary)]">
               Cổ Giới
             </h1>
-          </div>
+          </button>
 
         </div>
 
@@ -454,7 +458,7 @@ export default function Home() {
       </header>
 
       {/* Main Content Area */}
-      <main className={`w-full flex-1 min-h-0 max-w-none px-0 mx-0 flex flex-col ${player ? "overflow-hidden" : "overflow-y-auto"}`}>
+      <main id="main-content" tabIndex={-1} className={`w-full flex-1 min-h-0 max-w-none px-0 mx-0 flex flex-col ${player ? "overflow-hidden" : "overflow-y-auto"}`}>
         {!player ? (
           <div className="relative isolate flex-1 min-h-full w-full overflow-hidden bg-[#101814]">
             <div
