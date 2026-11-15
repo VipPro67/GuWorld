@@ -267,13 +267,15 @@ export default function Home() {
 
   }, [isPlayerReady]);
 
-  // Load merchant proximity when entering/changing world region. The merchant
-  // panel refreshes its own list while open; polling here duplicated requests
+  // Load merchant proximity when entering/changing world region, or when viewing shop.
+  // The merchant panel refreshes its own list while open; polling here duplicated requests
   // for players standing idle on the world page.
   useEffect(() => {
-    if (!playerId || !isExploreView) return;
-    void fetchMerchants();
-  }, [playerId, player?.current_region, isExploreView, fetchMerchants]);
+    if (!playerId) return;
+    if (isExploreView || currentView === "shop") {
+      void fetchMerchants();
+    }
+  }, [playerId, player?.current_region, isExploreView, currentView, fetchMerchants]);
 
   const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 

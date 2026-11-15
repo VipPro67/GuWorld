@@ -242,18 +242,17 @@ func ensureRegionMerchants(regionID string) error {
 	}
 	if strings.HasPrefix(regionID, "tan_thu_coc_") {
 		merchantID := "merchant_" + regionID
-		if _, err := db.DB.Exec(`
-			INSERT INTO merchants (id, profile_id, region_id, x, y, is_active)
-			VALUES ($1, 'tan_thu_merchant', $2, 500, 500, TRUE)
-			ON CONFLICT (id) DO UPDATE SET
-				profile_id = EXCLUDED.profile_id,
-				x = EXCLUDED.x,
-				y = EXCLUDED.y,
-				is_active = TRUE`, merchantID, regionID); err != nil {
-			return err
-		}
-		if err := db.SeedTanThuMerchantStock(db.DB); err != nil {
-			return err
+		var exists bool
+		if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM merchants WHERE id = $1)`, merchantID).Scan(&exists); err == nil && !exists {
+			if _, err := db.DB.Exec(`
+				INSERT INTO merchants (id, profile_id, region_id, x, y, is_active)
+				VALUES ($1, 'tan_thu_merchant', $2, 500, 500, TRUE)
+				ON CONFLICT (id) DO NOTHING`, merchantID, regionID); err != nil {
+				return err
+			}
+			if err := db.SeedTanThuMerchantStock(db.DB); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

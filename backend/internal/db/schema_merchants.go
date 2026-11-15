@@ -190,9 +190,6 @@ func SeedTanThuMerchantStock(exec csvImportExecutor) error {
 			('GU_CLEANSING_WATER', 1, 200.0, 2, 36)
 		) AS s(item_id, rank, price, stock, sort_order)
 		WHERE m.profile_id = 'tan_thu_merchant'
-		ON CONFLICT (merchant_id, item_id, rank) DO UPDATE SET
-			price = EXCLUDED.price,
-			stock = EXCLUDED.stock,
-			sort_order = EXCLUDED.sort_order`)
+		ON CONFLICT (merchant_id, item_id, rank) DO NOTHING`)
 	return err
 }

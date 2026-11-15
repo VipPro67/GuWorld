@@ -116,7 +116,7 @@ export const MerchantTradeView: React.FC<MerchantTradeViewProps> = ({ player, ac
     <GamePanel variant="gold" className="rounded-3xl p-3 sm:p-6 w-full mx-auto space-y-5 animate-fade-in">
       <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
         <Store className="w-5 h-5 text-amber-500" />
-        <h3 className="text-lg font-bold text-zinc-100 font-serif">Thương Nhân Lang Thang</h3>
+        <h3 className="text-lg font-bold text-zinc-100 font-serif">{selected?.name || "Thương Nhân"}</h3>
         <span className="ml-auto text-[10px] font-mono text-zinc-500">{region}</span>
       </div>
 

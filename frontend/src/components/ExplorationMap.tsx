@@ -151,16 +151,20 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const currentRegion = regions.find((r) => r.id === player.current_region);
   const regionName = currentRegion?.name || "Thế Giới Cổ Sư";
 
-  const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean }, resourcePointId?: string) => {
+  const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean; name?: string }, resourcePointId?: string) => {
     const playerOnCell = gridData?.players_on_map?.find((target) => target.x === x && target.y === y && target.id !== player.id);
     if (playerOnCell) {
       setSelectedPvpTarget(playerOnCell);
       return;
     }
-    if (marker?.kind === "merchant" && Math.hypot(x - player.x, y - player.y) <= 2) {
-      void useGameStore.getState().fetchMerchants();
-      useUIStore.getState().setView("shop");
-      return;
+    if (marker?.kind === "merchant") {
+      const isNovice = marker.id.startsWith("merchant_tan_thu_") || Boolean(marker.name?.includes("Tân Thủ"));
+      const maxDist = isNovice ? 15 : 2;
+      if (Math.hypot(x - player.x, y - player.y) <= maxDist) {
+        void useGameStore.getState().fetchMerchants();
+        useUIStore.getState().setView("shop");
+        return;
+      }
     }
     if (marker?.kind === "aperture_portal" && !marker.isMine && Math.hypot(x - player.x, y - player.y) <= 3) {
       await enterAperturePortal(marker.id);
