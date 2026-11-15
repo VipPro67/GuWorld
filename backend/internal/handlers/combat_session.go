@@ -639,6 +639,10 @@ func StartCombatSession(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Failed to inspect combat session", existingErr))
 		return
 	}
+	if err := lockPvPCombatPreparation(tx, playerID); err != nil {
+		respondCombatTxErr(c, err, "Không thể khóa trạng thái chuẩn bị PvP.")
+		return
+	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Failed to fetch player", err))

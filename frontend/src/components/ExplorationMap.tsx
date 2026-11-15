@@ -76,6 +76,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const engageAscensionWorldMonster = useWorldStore((state) => state.engageAscensionWorldMonster);
   const collectWorldResourcePoint = useWorldStore((state) => state.collectWorldResourcePoint);
   const lootGroundDrop = useGameStore((state) => state.lootGroundDrop);
+  const initiateTrade = useGameStore((state) => state.initiateTrade);
   const addToast = useGameStore((state) => state.addToast);
   const actionLoading = useGameStore((state) => state.actionLoading);
   const party = useGameStore((state) => state.party);
@@ -408,6 +409,13 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     }
   };
 
+  const handleMapTrade = async () => {
+    if (!selectedPvpTarget || actionLoading || player.active_combat || isMemberNotLeader) return;
+    const distance = Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y));
+    if (distance > 10) return;
+    if (await initiateTrade(selectedPvpTarget.username, "map")) setSelectedPvpTarget(null);
+  };
+
   const getEntityName = (type: string, content: string) => {
     if (type === "EXIT_PORTAL" || type === "PORTAL_EXIT") return "Phúc Địa Thoát Ly Trận";
     if (type === "ENTRY_PORTAL") return `Phúc Địa Giới Môn Trận: ${content.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`;
@@ -606,10 +614,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-purple-700/50 bg-purple-950/30 p-4">
           <div>
             <p className="font-bold text-purple-200">Cổ sư: {selectedPvpTarget.username}</p>
-            <p className="text-xs text-zinc-400">({selectedPvpTarget.x}, {selectedPvpTarget.y}) · Nếu còn xa, tiến gần từng chặng; PvP bắt đầu khi đủ tầm.</p>
+            <p className="text-xs text-zinc-400">({selectedPvpTarget.x}, {selectedPvpTarget.y}) · PvP cần trong tầm đánh; giao dịch trên map cần cách tối đa 10 ô.</p>
           </div>
           <div className="flex gap-2">
             <button onClick={() => void handleChallengePlayer()} disabled={actionLoading || Boolean(player.active_combat) || isMemberNotLeader} className="rounded-lg border border-purple-500/60 bg-purple-700/30 px-4 py-2 text-sm font-bold text-purple-100 hover:bg-purple-700/50 disabled:opacity-50">{Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y)) <= 2 ? "Khai chiến" : "Tiến gần mục tiêu"}</button>
+            <button onClick={() => void handleMapTrade()} disabled={actionLoading || Boolean(player.active_combat) || isMemberNotLeader || Math.max(Math.abs(selectedPvpTarget.x - player.x), Math.abs(selectedPvpTarget.y - player.y)) > 10} className="rounded-lg border border-emerald-500/50 bg-emerald-700/30 px-4 py-2 text-sm font-bold text-emerald-100 hover:bg-emerald-700/50 disabled:opacity-50">Giao dịch tại chỗ</button>
             <button onClick={() => setSelectedPvpTarget(null)} className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800">Đóng</button>
           </div>
         </section>

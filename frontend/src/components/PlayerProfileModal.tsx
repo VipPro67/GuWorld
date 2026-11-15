@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from "react";
 import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { statusRemainLabel } from "@/lib/utils";
-import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart } from "lucide-react";
+import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart, MessageCircle, Copy, ArrowLeftRight } from "lucide-react";
 import { Num } from "./Num";
 
 import { pathLabels } from "@/lib/translate";
@@ -24,7 +24,7 @@ const translatePath = (path: string): string => {
 };
 
 export const PlayerProfileModal: React.FC = () => {
-  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
+  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, openDivinationModal, setActiveChannel, setChatOpen, fetchPrivateThread, addToast, aperture, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
   const dialogRef = useRef<HTMLDivElement>(null);
   const isOpen = Boolean(inspectedProfile);
 
@@ -198,6 +198,8 @@ export const PlayerProfileModal: React.FC = () => {
     if (!name) return "?";
     return name.slice(0, 2).toUpperCase();
   };
+
+  const profileActionButtonClass = "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-hover)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] cursor-pointer";
 
   return (
     <div
@@ -520,18 +522,67 @@ export const PlayerProfileModal: React.FC = () => {
 
           {/* Direct P2P Trade Action */}
           {player && inspectedProfile && player.username !== username && (
-            <div className="sm:col-span-2 border-t border-zinc-900/40 pt-4 flex justify-end">
-              <button
-                onClick={() => {
-                  if (inspectedUsernameQuery) {
-                    initiateTrade(inspectedUsernameQuery);
-                  }
-                  clearInspectedProfile();
-                }}
-                className="w-full py-3 rounded-2xl font-serif font-bold text-sm bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-[var(--text-primary)] shadow-lg shadow-emerald-950/20 active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/20"
-              >
-                <Sparkles className="w-4 h-4" /> Bắt Đầu Giao Dịch
-              </button>
+            <div className="sm:col-span-2 border-t border-zinc-900/40 pt-4 flex justify-center">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearInspectedProfile();
+                    openDivinationModal(username);
+                  }}
+                  aria-label={`Suy diễn thiên cơ về ${username}`}
+                  title="Suy diễn thiên cơ"
+                  className={profileActionButtonClass}
+                >
+                  <Sparkles aria-hidden="true" className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearInspectedProfile();
+                    setActiveChannel("private");
+                    setChatOpen(true);
+                    void fetchPrivateThread(username);
+                  }}
+                  aria-label={`Nhắn riêng cho ${username}`}
+                  title="Nhắn riêng"
+                  className={profileActionButtonClass}
+                >
+                  <MessageCircle aria-hidden="true" className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!navigator.clipboard?.writeText) {
+                      addToast("Trình duyệt không hỗ trợ sao chép tên.", "error");
+                      return;
+                    }
+                    void navigator.clipboard.writeText(username).then(
+                      () => addToast(`Đã sao chép: ${username}`, "info"),
+                      () => addToast("Không thể sao chép tên người chơi.", "error")
+                    );
+                  }}
+                  aria-label={`Sao chép tên ${username}`}
+                  title="Sao chép tên"
+                  className={profileActionButtonClass}
+                >
+                  <Copy aria-hidden="true" className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (inspectedUsernameQuery) {
+                      initiateTrade(inspectedUsernameQuery);
+                    }
+                    clearInspectedProfile();
+                  }}
+                  aria-label={`Giao dịch với ${username}`}
+                  title="Giao dịch"
+                  className={profileActionButtonClass}
+                >
+                  <ArrowLeftRight aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           )}
         </div>

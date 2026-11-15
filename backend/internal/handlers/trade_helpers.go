@@ -128,6 +128,7 @@ func getTradeParticipantsWithUsernames(tradeID string) (senderID uuid.UUID, send
 
 type InitiateTradeRequest struct {
 	ReceiverUsername string `json:"receiver_username" binding:"required"`
+	Source           string `json:"source"`
 }
 
 // transferRecipe moves a recipe from one player to another in a trade.

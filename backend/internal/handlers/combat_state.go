@@ -25,6 +25,54 @@ func combatOwnedByPlayer(state *models.CombatState, playerID string) bool {
 	return state == nil || state.CombatOwnerID == "" || state.CombatOwnerID == playerID
 }
 
+func pvpPreparationOpponentID(state *models.CombatState, playerID uuid.UUID) (uuid.UUID, bool) {
+	if state == nil || state.EnemyType != "PVP" || state.CombatMode != "real" {
+		return uuid.Nil, false
+	}
+	ownerID, err := uuid.Parse(state.CombatOwnerID)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	targetID, err := uuid.Parse(state.TargetPlayerID)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	if ownerID == playerID && targetID != playerID {
+		return targetID, true
+	}
+	if ownerID != playerID && targetID == playerID {
+		return ownerID, true
+	}
+	return uuid.Nil, false
+}
+
+// lockPvPCombatPreparation serializes canceling a real duel with starting its session.
+func lockPvPCombatPreparation(tx *sql.Tx, playerID uuid.UUID) error {
+	var raw []byte
+	if err := tx.QueryRow(`SELECT active_combat FROM players WHERE id = $1`, playerID).Scan(&raw); err != nil {
+		return fmt.Errorf("load active combat before PvP preparation lock: %w", err)
+	}
+	if len(raw) == 0 {
+		return nil
+	}
+	var active models.CombatState
+	if err := json.Unmarshal(raw, &active); err != nil {
+		return fmt.Errorf("decode active combat before PvP preparation lock: %w", err)
+	}
+	opponentID, ok := pvpPreparationOpponentID(&active, playerID)
+	if !ok {
+		return nil
+	}
+	firstID, secondID := playerID.String(), opponentID.String()
+	if secondID < firstID {
+		firstID, secondID = secondID, firstID
+	}
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2, 0))`, firstID, secondID); err != nil {
+		return fmt.Errorf("lock PvP preparation pair: %w", err)
+	}
+	return nil
+}
+
 func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
 	soloBattle := !partyJoinsCombat(base)
 	if base.CombatID == "" {

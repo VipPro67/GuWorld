@@ -50,7 +50,7 @@ Base path: `/api`. Route được đăng ký trong `backend/internal/server/serv
 | `/pets` | GET `/`; POST `/feed`, `/formation`, `/sleep`, `/release`, `/merge` |
 | `/actors` | GET `/`, `/:id`; chỉ đọc roster actor của player hiện tại |
 
-Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/combat/session/*` dành cho session command có revision. `POST /combat/session/start` có thể trả session `complete` ngay nếu hiệu ứng lúc bắt đầu trận đã kết thúc encounter; client hiển thị báo cáo kết quả mà không chờ command. `GET /combat/session` và `GET /combat/session/:id` cũng settle và đóng phiên cũ nếu replay đã có `BATTLE_END` nhưng không còn actor chờ. `/combat/retreat/:id` cho phép rút lui khỏi encounter trước khi session bắt đầu; PvP không hỗ trợ rút lui ở bước chuẩn bị. `/combat/flee/:id` giữ tương thích; khi session hoạt động, flee phải gửi như command trong lượt.
+Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/combat/session/*` dành cho session command có revision. `POST /combat/session/start` có thể trả session `complete` ngay nếu hiệu ứng lúc bắt đầu trận đã kết thúc encounter; client hiển thị báo cáo kết quả mà không chờ command. `GET /combat/session` và `GET /combat/session/:id` cũng settle và đóng phiên cũ nếu replay đã có `BATTLE_END` nhưng không còn actor chờ. `/combat/retreat/:id` cho phép hủy PvP ở bước chuẩn bị: PvP ảo thoát ngay, PvP thật lần gọi đầu ghi đề nghị và chỉ lần gọi từ đối phương mới hủy trạng thái của cả hai; phản hồi đề nghị có `retreat_pending: true` và `active_combat` mới. PvE do quái tấn công bị từ chối ở bước này; sau khi session hoạt động, bỏ chạy phải gửi như command trong lượt qua `/combat/flee/:id`.
 
 ## Thế giới, aperture và instance
 
@@ -74,7 +74,7 @@ Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/co
 - `/chat`: mail private và chat Bảo Hoàng ở `/mail/*`, `/bao-hoang/*`.
 - `/shop`: GET `/list`; POST `/buy`, `/sell`, `/sell-bulk`, `/exchange`, `/buy-package`; marketplace `/bao-hoang/listings`, `/buy`, `/bid`, `/cancel`, `/settle`, `/buyback/*`, `/trade-offers/*`.
 - `/merchant`: GET `/`; POST `/quote`, `/sell`, `/buy`.
-- `/trade`: POST `/initiate`, `/accept/:id`, `/decline/:id`, `/cancel/:id`, `/offer/:id`, `/lock/:id`, `/unlock/:id`, `/confirm/:id`; GET `/active`.
+- `/trade`: POST `/initiate` (`receiver_username`, `source: "map"|"chat"`), `/accept/:id`, `/decline/:id`, `/cancel/:id`, `/offer/:id`, `/lock/:id`, `/unlock/:id`, `/confirm/:id`; GET `/active`. `map` yêu cầu cùng khu vực và cách tối đa 10 ô, không yêu cầu Gu giao liên lạc; `chat` yêu cầu cả hai người có Thông Thiên Cổ (`REMOTE_TRADE`) và Thần Niệm Cổ (`CHAT_PERCEIVE`). Client cũ không gửi `source` được xem là `chat`.
 - `/sects`: đọc/join/leave/create, rank, donation, vault, missions, membership requests, territory, defense/attack, building và relocation. Danh sách đầy đủ ở router `server.go`.
 - `/arena`: GET `/leaderboard`, `/shop`; POST `/challenge`, `/shop/buy`.
 - `/infinite-tower`: GET `/state`, `/leaderboard`; POST `/challenge`, `/abandon`.

@@ -89,7 +89,7 @@ export interface Combatant {
 }
 
 export interface CombatState {
-  combat_id?: string; combat_owner_id?: string;
+  combat_id?: string; combat_owner_id?: string; retreat_requested_by?: string;
   enemy_name: string; enemy_hp: number; enemy_max_hp: number;
   enemy_damage: number; enemy_defense: number; charge_points: number;
   target_player_id?: string; enemy_template_id?: string;

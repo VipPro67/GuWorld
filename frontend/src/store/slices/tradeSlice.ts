@@ -5,7 +5,7 @@ import { BACKEND_URL } from "@/lib/config";
 export interface TradeSlice {
   activeTrade: ApiResponseData | null;
   fetchActiveTrade: () => Promise<void>;
-  initiateTrade: (receiverUsername: string) => Promise<boolean>;
+  initiateTrade: (receiverUsername: string, source?: "map" | "chat") => Promise<boolean>;
   acceptTrade: (tradeId: string) => Promise<boolean>;
   declineTrade: (tradeId: string) => Promise<boolean>;
   cancelTrade: (tradeId: string) => Promise<boolean>;
@@ -33,7 +33,7 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
     }
   },
 
-  initiateTrade: async (receiverUsername) => {
+  initiateTrade: async (receiverUsername, source = "chat") => {
     const { token, logout } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
@@ -41,7 +41,7 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       const response = await authFetch(`${BACKEND_URL}/api/trade/initiate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiver_username: receiverUsername }),
+        body: JSON.stringify({ receiver_username: receiverUsername, source }),
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();

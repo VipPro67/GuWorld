@@ -10,7 +10,7 @@ Mỗi hoạt động có lịch, rank, phí hoặc registration window riêng. A
 
 ## Cách sử dụng
 
-Chọn hoạt động tại UI, kiểm tra quota/phase, đăng ký hoặc bắt đầu challenge. Match được xử lý theo combat engine; sau khi giải chốt, phần thưởng xếp hạng xuất hiện trong tab **Phần thưởng** và người chơi bấm **Nhận thưởng** để cộng tiền/danh hiệu vào nhân vật. UI làm mới danh sách khi nhận sự kiện kết thúc giải. Death Arena trao Gu được chỉ định trực tiếp lúc settlement; Martial Arena chỉ có Gu nếu phần thưởng được cấu hình. Gacha/cược có flow riêng và phải xác nhận chi phí trước khi gửi.
+Chọn hoạt động tại UI, kiểm tra quota/phase, đăng ký hoặc bắt đầu challenge. Khiêu chiến Võ Đài mở bước chuẩn bị; PvP thật chỉ hủy được khi cả hai người đồng ý, còn PvP ảo có thể hủy ngay; việc hủy trước khi bắt đầu combat không kết toán thắng thua. Match được xử lý theo combat engine; sau khi giải chốt, phần thưởng xếp hạng xuất hiện trong tab **Phần thưởng** và người chơi bấm **Nhận thưởng** để cộng tiền/danh hiệu vào nhân vật. UI làm mới danh sách khi nhận sự kiện kết thúc giải. Death Arena trao Gu được chỉ định trực tiếp lúc settlement; Martial Arena chỉ có Gu nếu phần thưởng được cấu hình. Gacha/cược có flow riêng và phải xác nhận chi phí trước khi gửi.
 
 ## Luật, chi phí và giới hạn
 

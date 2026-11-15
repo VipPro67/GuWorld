@@ -49,9 +49,6 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
     sendBaoHoangChat,
     actionLoading,
     fetchPlayerProfile,
-    openDivinationModal,
-    invitePlayer,
-    initiateTrade,
     addToast,
     activeChannel,
     setActiveChannel,
@@ -71,7 +68,6 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
   const [chatInput, setChatInput] = useState("");
   const [privateRecipient, setPrivateRecipient] = useState("");
   const [showTimeIds, setShowTimeIds] = useState<Record<string, boolean>>({});
-  const [selectedUserMenu, setSelectedUserMenu] = useState<{ msgId: string; username: string } | null>(null);
 
   const toggleTimeVisibility = (id: string) => {
     setShowTimeIds((prev) => ({
@@ -99,6 +95,12 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const regionChatSubscription = useRef<{ key: string; unsubscribe: () => void } | null>(null);
+
+  useEffect(() => {
+    if (activeChannel === "private" && activePrivateUsername) {
+      setPrivateRecipient(activePrivateUsername);
+    }
+  }, [activeChannel, activePrivateUsername]);
 
   const handleReply = (username: string) => {
     setChatInput((prev) => {
@@ -196,9 +198,9 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
   }[chatWidth];
 
   const heightClasses = {
-    sm: "h-[360px] sm:h-[440px] md:h-[520px]",
-    md: "h-[460px] sm:h-[560px] md:h-[640px]",
-    lg: "h-[560px] sm:h-[680px] md:h-[760px] lg:h-[860px]",
+    sm: "h-[min(38dvh,320px)] sm:h-[440px] md:h-[520px]",
+    md: "h-[min(48dvh,380px)] sm:h-[560px] md:h-[640px]",
+    lg: "h-[min(58dvh,440px)] sm:h-[680px] md:h-[760px] lg:h-[860px]",
   }[chatHeight];
 
   const chatPosition = placement === "mmo"
@@ -240,8 +242,8 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
       {chatOpen && (
         <div className={`${placement === "mmo" ? "mmo-panel-theme" : ""} fixed ${chatPosition} ${widthClasses} ${heightClasses} z-40 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-3rem)] overflow-hidden flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
           {/* Channel Tabs */}
-          <div className="flex items-center justify-between">
-            <div className="flex gap-1.5 border-b border-[var(--border-default)] pb-2">
+          <div className="flex min-w-0 items-center justify-between gap-1">
+            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto whitespace-nowrap border-b border-[var(--border-default)] pb-2 scrollbar-hide">
               {[
                 { id: "world", label: "Thế Giới" },
                 { id: "general", label: "Bảo Hoàng" },
@@ -283,7 +285,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                       subscribeAllBaoHoangMessages();
                       fetchBaoHoangMessages(ch.id);
                     }}
-                    className={`px-2.5 py-1.5 rounded-xl font-serif text-[10px] sm:text-[11px] font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] border cursor-pointer flex items-center gap-1 ${
+                    className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-xl font-serif text-[10px] sm:text-[11px] font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] border cursor-pointer flex items-center gap-1 ${
                       activeChannel === ch.id
                         ? "bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-default)]"
                         : "bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
@@ -298,7 +300,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                 );
               })}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 onClick={toggleWidth}
@@ -386,7 +388,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                 const contentColorClass = isSystem ? "text-[#f1dfbd]" : "text-zinc-800 dark:text-zinc-200";
 
                 return (
-                  <div key={msg.id || index} className={`${cardClass} leading-relaxed break-all flex items-start gap-1.5`}>
+                  <div key={msg.id || index} className={`${cardClass} leading-relaxed break-words flex items-start gap-1.5`}>
                     <div className="w-5 h-5 rounded-full shrink-0 overflow-hidden bg-zinc-300 dark:bg-zinc-800 flex items-center justify-center text-[7px] font-bold text-zinc-500 mt-0.5">
                       {msg.sender_avatar ? (
                         <img src={msg.sender_avatar} alt="" className="w-full h-full object-cover" />
@@ -394,17 +396,14 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                         msg.sender_username.slice(0, 2).toUpperCase()
                       )}
                     </div>
-                    <div className="min-w-0 flex-1 leading-relaxed break-all">
+                    <div className="min-w-0 flex-1 leading-relaxed break-words">
                       <span className="mr-1.5">
-                        {!isSystem && !isMe ? (
+                        {!isSystem ? (
                           <button
                             type="button"
-                            onClick={() => {
-                              const msgId = msg.id || index.toString();
-                              setSelectedUserMenu(selectedUserMenu?.msgId === msgId ? null : { msgId, username: msg.sender_username });
-                            }}
+                            onClick={() => void fetchPlayerProfile(msg.sender_username)}
                             className={`${nameColorClass} rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300`}
-                            title="Mở tùy chọn cổ sư"
+                            title="Xem hồ sơ người chơi"
                           >
                             {msg.sender_username}
                           </button>
@@ -430,78 +429,21 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                             <Clock aria-hidden="true" className="h-3 w-3" />
                           )}
                         </button>
+                        {!isSystem && (
+                          <button
+                            type="button"
+                            onClick={() => handleReply(msg.sender_username)}
+                            aria-label={`Nhắc tên ${msg.sender_username}`}
+                            title="Nhắc tên"
+                            className="ml-0.5 inline-flex h-6 w-6 items-center justify-center rounded-sm align-middle text-zinc-400 opacity-60 transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+                          >
+                            <CornerUpLeft aria-hidden="true" className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         :
                       </span>
                       <span className={`${contentColorClass} ml-0.5`}>{msg.content}</span>
-
-                      {/* User Context Actions Popup */}
-                      {selectedUserMenu?.msgId === (msg.id || index.toString()) && (
-                        <div
-                          className="mt-1.5 flex flex-wrap gap-1.5 rounded-lg border border-amber-500/40 bg-neutral-900/95 p-2 shadow-xl backdrop-blur-md"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            onClick={() => {
-                              openDivinationModal(msg.sender_username);
-                              setSelectedUserMenu(null);
-                            }}
-                            className="flex items-center gap-1 rounded bg-amber-700/80 px-2 py-1 text-[10px] font-bold text-white hover:bg-amber-600"
-                          >
-                            🔮 Suy Diễn Thiên Cơ
-                          </button>
-                          <button
-                            onClick={() => {
-                              initiateTrade(msg.sender_username);
-                              setSelectedUserMenu(null);
-                            }}
-                            className="flex items-center gap-1 rounded bg-emerald-700/80 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-600"
-                          >
-                            🤝 Giao dịch
-                          </button>
-                          <button
-                            onClick={() => {
-                              setPrivateRecipient(msg.sender_username);
-                              setActiveChannel("private");
-                              void fetchPrivateThread(msg.sender_username);
-                              setSelectedUserMenu(null);
-                            }}
-                            className="flex items-center gap-1 rounded bg-indigo-700/80 px-2 py-1 text-[10px] font-bold text-white hover:bg-indigo-600"
-                          >
-                            ✉ Nhắn riêng
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleReply(msg.sender_username);
-                              setSelectedUserMenu(null);
-                            }}
-                            className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
-                          >
-                            💬 Nhắc tên
-                          </button>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard?.writeText(msg.sender_username);
-                              addToast(`Đã sao chép: ${msg.sender_username}`, "info");
-                              setSelectedUserMenu(null);
-                            }}
-                            className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
-                          >
-                            📋 Sao chép
-                          </button>
-                        </div>
-                      )}
                     </div>
-                    {!isSystem && (
-                      <button
-                        type="button"
-                        onClick={() => handleReply(msg.sender_username)}
-                        aria-label={`Nhắc tên ${msg.sender_username}`}
-                        className="min-h-11 min-w-11 opacity-0 group-hover:opacity-100 sm:opacity-50 hover:sm:opacity-100 p-1 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer self-start shrink-0 ml-1"
-                        title="Phản hồi (Nhắc tên)"
-                      >
-                        <CornerUpLeft className="w-3.5 h-3.5" />
-                      </button>
-                    )}
                   </div>
                 );
               })

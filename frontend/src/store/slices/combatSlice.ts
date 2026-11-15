@@ -159,6 +159,12 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       get().addToast(data.error || "Rút lui thất bại.", "error");
       return false;
     }
+    if (data.retreat_pending) {
+      get().setPlayerFromServer({ active_combat: data.active_combat });
+      get().addToast(data.log || "Đã gửi đề nghị thoát PvP; chờ đối phương đồng ý.", "info");
+      return false;
+    }
+    get().setActiveCombatReplay(null);
     get().setPlayerFromServer({ active_combat: null, hp: data.hp ?? player.hp });
     get().addToast(data.log || "Đạo hữu đã rút lui.", "info");
     return true;

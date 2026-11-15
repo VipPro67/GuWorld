@@ -10,7 +10,7 @@ Người chơi cần đăng nhập và hoàn tất onboarding để dùng world.
 
 ## Cách sử dụng
 
-Chọn đường đi trên bản đồ rồi gửi move. Backend kiểm tra từng ô trên đường, áp dụng trigger trung gian và dừng tại ô đầu tiên bắt đầu encounter. Portal/teleport dùng flow movement dùng chung để kiểm tra đích và phát sự kiện cập nhật vị trí. Drop trên mặt đất được nhặt qua tương tác tại vị trí hợp lệ.
+Chọn đường đi trên bản đồ rồi gửi move. Backend kiểm tra từng ô trên đường, áp dụng trigger trung gian và dừng tại ô đầu tiên bắt đầu encounter. Chọn người chơi trên lưới để mở hành động khai chiến PvP (cần trong tầm đánh) hoặc giao dịch tại chỗ (cùng khu vực, tối đa 10 ô, không cần Cổ liên lạc). Portal/teleport dùng flow movement dùng chung để kiểm tra đích và phát sự kiện cập nhật vị trí. Drop trên mặt đất được nhặt qua tương tác tại vị trí hợp lệ.
 
 Trong **Lobby → Cài Đặt → Chiến thuật turn-based**, bật **Tự động xử lý chiến đấu khi farm** để encounter quái phát sinh lúc di chuyển được mô phỏng và settle ngay; màn điều khiển cùng báo cáo trận không mở. Tắt tùy chọn để vào encounter theo lượt như thường lệ. Cài đặt này lưu trong `combat_settings.skip_battle` và không áp dụng cho encounter bắt đầu trực tiếp từ màn chiến đấu.
 

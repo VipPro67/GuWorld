@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -105,11 +105,8 @@ func Retreat(c *gin.Context) {
 	}
 	defer cancel()
 	defer tx.Rollback()
-	if _, sessionErr := loadCombatSession(tx, authID, nil, true); sessionErr == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu cần dùng action Bỏ chạy trong lượt chiến đấu."})
-		return
-	} else if sessionErr != sql.ErrNoRows {
-		respondCombatTxErr(c, sessionErr, "Không thể kiểm tra phiên chiến đấu.")
+	if err := lockPvPCombatPreparation(tx, authID); err != nil {
+		respondCombatTxErr(c, err, "Không thể khóa trạng thái chuẩn bị PvP.")
 		return
 	}
 
@@ -118,72 +115,121 @@ func Retreat(c *gin.Context) {
 		respondCombatTxErr(c, err, "Failed to lock player Aperture")
 		return
 	}
+	if _, sessionErr := loadCombatSession(tx, authID, nil, true); sessionErr == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu cần dùng action Bỏ chạy trong lượt chiến đấu."})
+		return
+	} else if sessionErr != sql.ErrNoRows {
+		respondCombatTxErr(c, sessionErr, "Không thể kiểm tra phiên chiến đấu.")
+		return
+	}
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
 		return
 	}
-	// Retreat is also the escape hatch from the loadout screen, before an
-	// interactive session has started. Active sessions were rejected above.
-	if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" {
-		c.JSON(http.StatusConflict, gin.H{"error": "Không thể rút lui khỏi trận PvP đang hoạt động."})
+	if player.ActiveCombat == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không còn trận PvP nào đang chuẩn bị."})
 		return
 	}
-	before := append(models.GuInventory(nil), player.GuInventory...)
-	inventoryBefore := len(before)
-
-	logMsg := "Đạo hữu trở về an toàn từ hành trình."
-	if player.ActiveCombat != nil {
-		logMsg = "Đạo hữu đã rút lui khỏi trận chiến trước khi giao phong."
-		player.ActiveCombat = nil
-	}
-
-	player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, player.CurrentRegion, player.X, player.Y)
-
-	qiGained := AddHumanQi(&player, 2.0)
-
-	updateQuery := `
-		UPDATE players
-		SET hp = $1, current_mana = $2, active_combat = $3, x = $4, y = $5, primeval_stones = $6,
-		    current_region = $7, human_qi = $8
-		WHERE id = $9
-	`
-	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.ActiveCombat, player.X, player.Y, player.PrimevalStones,
-		player.CurrentRegion, player.HumanQi, player.ID)
-	if err != nil {
-		respondCombatTxErr(c, err, "Failed to save player status after retreat")
+	if player.ActiveCombat.EnemyType != "PVP" {
+		c.JSON(http.StatusConflict, gin.H{"error": "Encounter PvE này không thể rút lui ở bước chuẩn bị; hãy bắt đầu trận để đánh hoặc bỏ chạy trong lượt."})
 		return
 	}
 
-	var dbBefore int
-	_ = tx.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbBefore)
-
-	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-		respondCombatTxErr(c, err, "Failed to save player Gus after retreat")
+	combat := player.ActiveCombat
+	opponentID, hasOpponent := pvpPreparationOpponentID(combat, player.ID)
+	if combat.CombatMode == "real" && !hasOpponent {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không thể xác minh đối phương để xin đồng ý thoát PvP."})
 		return
 	}
+	if hasOpponent {
+		var opponentRaw []byte
+		if err := tx.QueryRow(`SELECT active_combat FROM players WHERE id = $1 FOR UPDATE`, opponentID).Scan(&opponentRaw); err != nil {
+			respondCombatTxErr(c, err, "Không thể đọc trạng thái PvP của đối phương.")
+			return
+		}
+		if len(opponentRaw) == 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "Đối phương không còn ở bước chuẩn bị trận PvP này."})
+			return
+		}
+		var opponentCombat models.CombatState
+		if err := json.Unmarshal(opponentRaw, &opponentCombat); err != nil {
+			respondCombatTxErr(c, err, "Không thể đọc trạng thái PvP của đối phương.")
+			return
+		}
+		if id, ok := pvpPreparationOpponentID(&opponentCombat, opponentID); !ok || id != player.ID {
+			c.JSON(http.StatusConflict, gin.H{"error": "Đối phương không còn ở bước chuẩn bị trận PvP này."})
+			return
+		}
+		if opponentCombat.RetreatRequestedBy != combat.RetreatRequestedBy {
+			c.JSON(http.StatusConflict, gin.H{"error": "Trạng thái đề nghị thoát PvP giữa hai bên không đồng bộ."})
+			return
+		}
 
-	inventoryAfter := len(player.GuInventory)
-	var dbAfterTx int
-	_ = tx.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbAfterTx)
-
+		if combat.RetreatRequestedBy != opponentID.String() {
+			if combat.RetreatRequestedBy == "" {
+				combat.RetreatRequestedBy = player.ID.String()
+				opponentCombat.RetreatRequestedBy = player.ID.String()
+				player.ActiveCombat = combat
+				if _, err := tx.Exec(`UPDATE players SET active_combat=jsonb_set(active_combat, '{retreat_requested_by}', to_jsonb($2::text), true), version=version+1, state_revision=state_revision+1 WHERE id=$1`, player.ID, player.ID.String()); err != nil {
+					respondCombatTxErr(c, err, "Không thể gửi đề nghị thoát PvP.")
+					return
+				}
+				if _, err := tx.Exec(`UPDATE players SET active_combat=jsonb_set(active_combat, '{retreat_requested_by}', to_jsonb($2::text), true), version=version+1, state_revision=state_revision+1 WHERE id=$1`, opponentID, player.ID.String()); err != nil {
+					respondCombatTxErr(c, err, "Không thể gửi đề nghị thoát PvP.")
+					return
+				}
+				if err := tx.Commit(); err != nil {
+					respondCombatTxErr(c, err, "Không thể gửi đề nghị thoát PvP.")
+					return
+				}
+				_ = cache.Delete("player_snapshot:" + player.ID.String())
+				_ = cache.Delete("player_snapshot:" + opponentID.String())
+				PublishPlayerCombatDelta(player.ID, CombatEventStarted, combat)
+				PublishPlayerCombatDelta(opponentID, CombatEventStarted, &opponentCombat)
+				respondActionOnly(c, http.StatusOK, player, gin.H{"retreat_pending": true, "active_combat": combat, "log": "Đã gửi đề nghị thoát PvP; chờ đối phương đồng ý."})
+				return
+			}
+			// Repeating one's own request is idempotent; only the opponent can confirm it.
+			if combat.RetreatRequestedBy == player.ID.String() {
+				c.JSON(http.StatusConflict, gin.H{"error": "Đang chờ đối phương đồng ý thoát PvP."})
+				return
+			}
+			c.JSON(http.StatusConflict, gin.H{"error": "Đề nghị thoát PvP không hợp lệ."})
+			return
+		}
+	}
+	player.ActiveCombat = nil
+	if hasOpponent {
+		if _, err := tx.Exec(`UPDATE players
+			SET active_combat = NULL, version = version + 1, state_revision = state_revision + 1
+			WHERE id = $1 AND active_combat->>'enemy_type' = 'PVP'
+			  AND active_combat->>'combat_mode' = 'real'
+			  AND active_combat->>'combat_owner_id' = $2
+			  AND active_combat->>'target_player_id' = $3`, opponentID, combat.CombatOwnerID, player.ID.String()); err != nil {
+			respondCombatTxErr(c, err, "Không thể hủy trận PvP chuẩn bị.")
+			return
+		}
+	}
+	if _, err := tx.Exec(`UPDATE players
+		SET active_combat = NULL, version = version + 1, state_revision = state_revision + 1
+		WHERE id = $1`, player.ID); err != nil {
+		respondCombatTxErr(c, err, "Không thể hủy trận PvP chuẩn bị.")
+		return
+	}
 	if err = tx.Commit(); err != nil {
-		respondCombatTxErr(c, err, "Transaction commit failed")
+		respondCombatTxErr(c, err, "Không thể hoàn tất việc hủy trận PvP.")
 		return
 	}
 	ClearPendingPlayerQueues(player.ID.String())
 	_ = cache.Delete("player_snapshot:" + player.ID.String())
 	PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
-
-	setWorldPosFromPlayer(&player)
-
-	var dbAfter int
-	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbAfter)
-	logger.S.Infof("Retreat player=%s invBefore=%d invAfter=%d added=%d dbBefore=%d dbAfterTx=%d dbAfter=%d",
-		player.ID, inventoryBefore, inventoryAfter, inventoryAfter-inventoryBefore, dbBefore, dbAfterTx, dbAfter)
-	respondActionOnly(c, http.StatusOK, player, gin.H{
-		"log": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
-	})
+	if hasOpponent {
+		ClearPendingPlayerQueues(opponentID.String())
+		_ = cache.Delete("player_snapshot:" + opponentID.String())
+		PublishPlayerCombatDelta(opponentID, CombatEventEnded, nil)
+	}
+	respondActionOnly(c, http.StatusOK, player, gin.H{"log": "Đã rời trận PvP trước khi bắt đầu."})
 }
 
 func Flee(c *gin.Context) {

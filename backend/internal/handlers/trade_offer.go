@@ -88,32 +88,9 @@ func InitiateTrade(c *gin.Context) {
 		return
 	}
 
-	isCloseEnough := false
-	if sender.CurrentRegion == receiver.CurrentRegion {
-		dist := int(math.Max(math.Abs(float64(sender.X-receiver.X)), math.Abs(float64(sender.Y-receiver.Y))))
-		if dist <= 10 {
-			isCloseEnough = true
-		}
-	}
-
-	if !isCloseEnough {
-		// Verify sender has Connecting Heaven Gu
-		_, _, senderHasConnecting := models.FindFirstMatchingGu(sender.GuInventory, func(gu models.GuInstance) bool {
-			return models.InventoryHasGuCapability(models.GuInventory{gu}, "REMOTE_TRADE", false)
-		})
-		if !senderHasConnecting {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) hoặc ở gần đối phương để mở kết nối giao dịch!"})
-			return
-		}
-
-		// Verify receiver has Connecting Heaven Gu
-		_, _, receiverHasConnecting := models.FindFirstMatchingGu(receiver.GuInventory, func(gu models.GuInstance) bool {
-			return models.InventoryHasGuCapability(models.GuInventory{gu}, "REMOTE_TRADE", false)
-		})
-		if !receiverHasConnecting {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Đối phương không sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối giao dịch từ xa!"})
-			return
-		}
+	if err := validateTradeSource(sender, receiver, req.Source); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	// Check if either player is already in an active trade (PENDING or ACCEPTED)
@@ -155,6 +132,42 @@ func InitiateTrade(c *gin.Context) {
 		"message":  "Yêu cầu giao dịch đã được gửi! Nhân Khí +2.",
 		"trade_id": tradeID,
 	})
+}
+
+func validateTradeSource(sender, receiver models.Player, source string) error {
+	source = strings.ToLower(strings.TrimSpace(source))
+	if source == "" {
+		source = "chat"
+	}
+	switch source {
+	case "map":
+		distance := math.Max(math.Abs(float64(sender.X-receiver.X)), math.Abs(float64(sender.Y-receiver.Y)))
+		if sender.CurrentRegion != receiver.CurrentRegion || distance > 10 {
+			return fmt.Errorf("giao dịch tại chỗ cần cùng khu vực và cách nhau tối đa 10 ô")
+		}
+	case "chat":
+		_, _, senderHasConnecting := models.FindFirstMatchingGu(sender.GuInventory, func(gu models.GuInstance) bool {
+			return models.InventoryHasGuCapability(models.GuInventory{gu}, "REMOTE_TRADE", false)
+		})
+		if !senderHasConnecting {
+			return fmt.Errorf("đạo hữu cần có Thông Thiên Cổ để giao dịch qua chat")
+		}
+		_, _, receiverHasConnecting := models.FindFirstMatchingGu(receiver.GuInventory, func(gu models.GuInstance) bool {
+			return models.InventoryHasGuCapability(models.GuInventory{gu}, "REMOTE_TRADE", false)
+		})
+		if !receiverHasConnecting {
+			return fmt.Errorf("đối phương cần có Thông Thiên Cổ để nhận giao dịch qua chat")
+		}
+		if !models.InventoryHasGuCapability(sender.GuInventory, "CHAT_PERCEIVE", false) {
+			return fmt.Errorf("đạo hữu cần có Thần Niệm Cổ để giao dịch qua chat")
+		}
+		if !models.InventoryHasGuCapability(receiver.GuInventory, "CHAT_PERCEIVE", false) {
+			return fmt.Errorf("đối phương cần có Thần Niệm Cổ để nhận giao dịch qua chat")
+		}
+	default:
+		return fmt.Errorf("nguồn giao dịch không hợp lệ")
+	}
+	return nil
 }
 
 func GetActiveTrade(c *gin.Context) {

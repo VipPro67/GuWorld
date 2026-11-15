@@ -1155,17 +1155,17 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       {/* Aperture (Tiên Khiếu) HP — tribulation combat only */}
       {renderApertureBar()}
 
-      {player.active_combat && player.active_combat.enemy_type !== "PVP" && (
+      {player.active_combat?.enemy_type === "PVP" && (
         <button
           onClick={async () => {
             if (await retreatCombat()) await fetchPlayerStatus(player.id, true);
           }}
-          aria-label="Rút lui khỏi trận trước khi bắt đầu"
-          title="Rút lui khỏi trận trước khi bắt đầu"
-          disabled={actionLoading || Boolean(interactiveSession)}
+          aria-label={player.active_combat.combat_mode === "virtual" ? "Thoát PvP ảo" : player.active_combat.retreat_requested_by === player.id ? "Chờ đối phương đồng ý thoát PvP" : player.active_combat.retreat_requested_by ? "Đồng ý thoát PvP" : "Đề nghị thoát PvP"}
+          title={player.active_combat.combat_mode === "virtual" ? "Thoát PvP ảo" : player.active_combat.retreat_requested_by === player.id ? "Chờ đối phương đồng ý thoát PvP" : player.active_combat.retreat_requested_by ? "Đồng ý thoát PvP" : "Đề nghị thoát PvP"}
+          disabled={actionLoading || Boolean(interactiveSession) || player.active_combat.retreat_requested_by === player.id}
           className="self-start rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50"
         >
-          Rút lui
+          {player.active_combat.combat_mode === "virtual" ? "Thoát PvP ảo" : player.active_combat.retreat_requested_by === player.id ? "Đang chờ đồng ý..." : player.active_combat.retreat_requested_by ? "Đồng ý thoát PvP" : "Đề nghị thoát PvP"}
         </button>
       )}
 
@@ -1207,10 +1207,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Play className="w-6 h-6" />
-          <span>Điều khiển từng lượt</span>
+          <span>Điều khiển Thủ Công</span>
         </button>
         {isPvpCombat ? (
-          <button onClick={() => void handleStartPvpAuto()} disabled={actionLoading || Boolean(interactiveSession) || isIncomingPvp} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động lượt của tôi</button>
+          <button onClick={() => void handleStartPvpAuto()} disabled={actionLoading || Boolean(interactiveSession) || isIncomingPvp} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động</button>
         ) : (
           <button onClick={handleStartSimulation} disabled={actionLoading || Boolean(interactiveSession)} className="rounded-xl border border-sky-700/60 bg-sky-950/50 px-5 py-4 font-bold text-sky-200 hover:bg-sky-900/60 disabled:opacity-50">Tự động mô phỏng</button>
         )}
