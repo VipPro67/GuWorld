@@ -30,7 +30,7 @@ export interface WorldSlice {
   groundDrops: GroundDrop[];
   lastDropViewport: GroundDropViewport | null;
   fetchGroundDrops: (viewport?: GroundDropViewport) => Promise<void>;
-  applyWorldDropsEvent: (event: { region_id?: string }) => void;
+  applyWorldDropsEvent: (event: { region_id?: string; map_instance_id?: string; scope?: { region_id?: string; map_instance_id?: string } }) => void;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
   movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
   fetchGrid: (radius?: number) => Promise<{ x: number; y: number; vision_radius: number; max_vision_radius?: number; cells: ApiResponseData[]; stats: ApiResponseData; players_on_map?: ApiResponseData[]; ground_drops?: ApiResponseData[]; world_width?: number; world_height?: number } | null>;
@@ -83,14 +83,18 @@ export const createWorldSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
 
   applyWorldDropsEvent: (event) => {
     const currentRegion = get().player?.current_region;
-    if (!event?.region_id || (currentRegion && event.region_id !== currentRegion)) return;
+    const eventRegion = event?.scope?.region_id || event?.region_id;
+    const eventInstance = event?.scope?.map_instance_id || event?.map_instance_id || "";
+    const player = get().player;
+    if (!eventRegion || (currentRegion && eventRegion !== currentRegion)) return;
+    if ((player?.map_instance_id || "") !== eventInstance) return;
     const viewport = get().lastDropViewport;
     if (!viewport) return;
     if (groundDropRefreshTimer) clearTimeout(groundDropRefreshTimer);
     groundDropRefreshTimer = setTimeout(() => {
       groundDropRefreshTimer = null;
       void get().fetchGroundDrops(viewport);
-    }, 250);
+    }, 50);
   },
 
   lootGroundDrop: async (dropId) => {

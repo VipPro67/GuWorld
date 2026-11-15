@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -207,12 +208,12 @@ func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Reg
 }
 
 func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool) (returnedMessage string, startedCombat bool, returnedErr error) {
-	return resolveCellArrivalWithInstance(tx, player, x, y, attackTargetID, allowAmbush, nil)
+	return resolveCellArrivalWithInstance(tx, player, x, y, attackTargetID, allowAmbush, nil, nil)
 }
 
 // resolveCellArrivalWithInstance lets a multi-cell move reuse the locked
 // player's map-instance value instead of querying the same row on every step.
-func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool, loadedInstanceID *sql.NullString) (returnedMessage string, startedCombat bool, returnedErr error) {
+func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool, loadedInstanceID *sql.NullString, pendingWorldChanges *[]worldfeed.Event) (returnedMessage string, startedCombat bool, returnedErr error) {
 	regionWarning := ""
 	defer func() {
 		if regionWarning != "" {
@@ -511,7 +512,11 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 					logger.S.Errorf("Failed to persist cleared resource cell %s (%d,%d) for player %s: %v", player.CurrentRegion, player.X, player.Y, player.ID, err)
 					return "", false, err
 				}
-				broadcastWorldCell(cellEventCleared, WorldCellEvent{RegionID: player.CurrentRegion, X: player.X, Y: player.Y, CellType: cell.Type, ContentID: cell.Content})
+				instanceID := ""
+				if loadedInstanceID != nil && loadedInstanceID.Valid {
+					instanceID = loadedInstanceID.String
+				}
+				queueWorldChange(pendingWorldChanges, newWorldCellChange("cleared", WorldCellEvent{RegionID: player.CurrentRegion, InstanceID: instanceID, X: player.X, Y: player.Y, CellType: cell.Type, ContentID: cell.Content}))
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -561,7 +566,11 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 					logger.S.Errorf("Failed to persist cleared Gu cell %s (%d,%d) for player %s: %v", player.CurrentRegion, player.X, player.Y, player.ID, err)
 					return "", false, err
 				}
-				cache.BroadcastWildGuCaptured(player.X, player.Y, cell.Content)
+				instanceID := ""
+				if loadedInstanceID != nil && loadedInstanceID.Valid {
+					instanceID = loadedInstanceID.String
+				}
+				queueWorldChange(pendingWorldChanges, newWorldChangeEvent("map_cell", "wild_gu_captured", player.CurrentRegion, instanceID, player.X, player.Y, map[string]any{"gu_id": cell.Content}))
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -732,7 +741,11 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 					if err := cache.SetCellCleared(player.CurrentRegion, adjX, adjY, player.ID.String(), clearedCellCooldown); err != nil {
 						logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, adjX, adjY, err)
 					}
-					cache.BroadcastMonsterKilled(adjX, adjY, mon.Name, player.CurrentRegion)
+					instanceID := ""
+					if loadedInstanceID != nil && loadedInstanceID.Valid {
+						instanceID = loadedInstanceID.String
+					}
+					queueWorldChange(pendingWorldChanges, newWorldChangeEvent("world_monster", "killed", player.CurrentRegion, instanceID, adjX, adjY, map[string]any{"monster_name": mon.Name}))
 					if player.ClearedCells == nil {
 						player.ClearedCells = make(models.ClearedCellsMap)
 					}
@@ -934,11 +947,12 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 		return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
 	}
 	reached := false
+	var pendingWorldChanges []worldfeed.Event
 	var eventLogs []string
 	combatTriggered := false
 	var lastStepLog string
 	for _, step := range path {
-		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(tx, &player, step[0], step[1], req.AttackTargetID, true, &mapInstanceID)
+		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(tx, &player, step[0], step[1], req.AttackTargetID, true, &mapInstanceID, &pendingWorldChanges)
 		if errArrival != nil {
 			return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
 		}
@@ -994,14 +1008,15 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 				logger.S.Errorf("MovePlayerPath: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
 				return http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()}
 			}
+			syncPlayerFlying(&player)
+			broadcastPlayerWorldPos(&player)
 			if afterCombatCommit != nil {
 				afterCombatCommit()
 			}
+			publishWorldChanges(pendingWorldChanges)
 			for _, notification := range pendingNotifications {
 				notify.Publish(notification)
 			}
-			syncPlayerFlying(&player)
-			broadcastPlayerWorldPos(&player)
 			PublishPlayerSnapshot(&player, PlayerEventUpdated)
 
 			finalLog := strings.Join(eventLogs, "\n")
@@ -1042,9 +1057,9 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 		logger.S.Errorf("MovePlayerPath: tx.Commit failed for player=%s: %v", player.ID, err)
 		return http.StatusInternalServerError, gin.H{"error": "Transaction commit failure: " + err.Error()}
 	}
-
 	syncPlayerFlying(&player)
 	broadcastPlayerWorldPos(&player)
+	publishWorldChanges(pendingWorldChanges)
 	publishPartyMovement(syncedMembers, publishPartyPositionDelta)
 
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)

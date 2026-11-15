@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { BACKEND_URL } from "@/lib/config";
 import { authFetch } from "@/lib/auth";
-import { useGameStore, type ApertureResourcePoint } from "@/store/useGameStore";
+import { useGameStore, type ApertureResourcePoint, type Region } from "@/store/useGameStore";
 
 export interface NearbyVeinInfo {
   id: string;
@@ -46,6 +46,10 @@ export interface MapMarkerView {
 }
 
 export interface WorldChangedEvent {
+	event_id?: string;
+	entity_type?: string;
+	action?: string;
+	scope?: { region_id?: string; world_map_id?: string; map_instance_id?: string };
   type?: string;
   region_id?: string;
   x?: number;
@@ -72,6 +76,7 @@ interface WorldStoreState {
   resourcePoints: ApertureResourcePoint[];
   resourcePointsRegion: string | null;
   worldMonsters: WorldMonsterActor[];
+  mapRevision: number;
   /** Last rectangle queried for cells; world events reuse it to refetch. */
   lastCellsViewport: { x: number; y: number; radius: number } | null;
   loading: boolean;
@@ -89,6 +94,7 @@ interface WorldStoreState {
   applyWorldCellEvent: (event: WorldChangedEvent) => void;
   /** Event-driven replacement for the old 10s/30s resource-point polling. */
   applyWorldPointsEvent: (event: WorldChangedEvent) => void;
+  applyWorldChangeEvent: (event: WorldChangedEvent) => void;
 }
 
 let cellsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -121,8 +127,19 @@ function scheduleCellsExpiryRefresh(
 
 function worldEventMatchesRegion(regionID: string | undefined): boolean {
   if (!regionID) return false;
-  const currentRegion = useGameStore.getState().player?.current_region;
-  return !currentRegion || currentRegion === regionID;
+  const state = useGameStore.getState();
+  const currentRegion = state.player?.current_region;
+  if (!currentRegion) return false;
+  if (currentRegion === regionID) return true;
+  for (let region: Region | undefined = state.regions.find((entry) => entry.id === currentRegion); region; ) {
+    if (region.id === regionID) return true;
+    region = region.parent_id ? state.regions.find((entry) => entry.id === region?.parent_id) : undefined;
+  }
+  return false;
+}
+
+function worldEventRegion(event: WorldChangedEvent): string | undefined {
+  return event.scope?.region_id || event.region_id;
 }
 
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
@@ -132,6 +149,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   resourcePoints: [],
   resourcePointsRegion: null,
   worldMonsters: [],
+  mapRevision: 0,
   lastCellsViewport: null,
   loading: false,
   error: null,
@@ -291,28 +309,60 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   },
 
   applyWorldCellEvent: (event: WorldChangedEvent) => {
-    if (!worldEventMatchesRegion(event?.region_id)) return;
+    const regionID = worldEventRegion(event);
+    if (!worldEventMatchesRegion(regionID)) return;
+    const x = event.x;
+    const y = event.y;
+    if (event.action === "cleared" && typeof x === "number" && typeof y === "number") {
+      set((state) => ({ nearbyCells: state.nearbyCells.filter((cell) => cell.x !== x || cell.y !== y) }));
+    }
     const viewport = get().lastCellsViewport;
     if (cellsRefreshTimer) clearTimeout(cellsRefreshTimer);
     cellsRefreshTimer = setTimeout(() => {
       cellsRefreshTimer = null;
-      if (viewport) {
+      if (viewport && event.action !== "cleared") {
         void get().fetchNearbyCells(viewport.x, viewport.y, viewport.radius);
       }
-      if (event?.region_id) {
-        void get().fetchZoneMarkers(event.region_id);
+      if (regionID && ["portal_spawn", "portal_despawn", "portal_update"].includes(event.action || "")) {
+        void get().fetchZoneMarkers(regionID);
       }
-    }, 250);
+    }, 50);
   },
 
   applyWorldPointsEvent: (event: WorldChangedEvent) => {
-    if (!worldEventMatchesRegion(event?.region_id)) return;
-    const region = get().resourcePointsRegion || useGameStore.getState().player?.current_region || event?.region_id || "";
+    const eventRegion = worldEventRegion(event);
+    if (!worldEventMatchesRegion(eventRegion)) return;
+    const region = get().resourcePointsRegion || useGameStore.getState().player?.current_region || eventRegion || "";
     if (!region) return;
     if (pointsRefreshTimer) clearTimeout(pointsRefreshTimer);
     pointsRefreshTimer = setTimeout(() => {
       pointsRefreshTimer = null;
       void get().fetchWorldResourcePoints(region);
-    }, 250);
+    }, 50);
+  },
+
+  applyWorldChangeEvent: (event: WorldChangedEvent) => {
+    if (!event || !worldEventMatchesRegion(worldEventRegion(event))) return;
+    const player = useGameStore.getState().player;
+    const eventInstance = event.scope?.map_instance_id || "";
+    if (player?.map_instance_id && player.map_instance_id !== eventInstance) return;
+    if (!player?.map_instance_id && eventInstance) return;
+
+    switch (event.entity_type) {
+      case "map_cell":
+        set((state) => ({ mapRevision: state.mapRevision + 1 }));
+        get().applyWorldCellEvent(event);
+        break;
+      case "ground_drop":
+        set((state) => ({ mapRevision: state.mapRevision + 1 }));
+        break;
+      case "resource_point":
+        set((state) => ({ mapRevision: state.mapRevision + 1 }));
+        get().applyWorldPointsEvent(event);
+        break;
+      case "world_monster":
+        void get().fetchWorldMonsters();
+        break;
+    }
   },
 }));

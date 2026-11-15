@@ -473,9 +473,7 @@ func (s *Server) ServeUIStream(ctx context.Context, rw io.ReadWriter, playerID u
 		"death_arena",
 		"martial_arena",
 		"catalog",
-		"world:cell",
-		"world:drops",
-		"world:points",
+		"world:change",
 	} {
 		sink.subscribe(ChannelName(ch))
 	}

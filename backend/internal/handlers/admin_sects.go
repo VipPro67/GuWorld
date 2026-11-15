@@ -24,10 +24,14 @@ func AdminListSects(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT s.id, s.name, s.description, s.region, s.level, s.funds, s.require_approval, s.require_promotion_approval,
-			COALESCE(m.member_count, 0) AS member_count,
-			l.leader_name
+	search := strings.TrimSpace(c.Query("search"))
+	paging := parseAdminPageQuery(c, 25, map[string]string{
+		"name":  "s.name",
+		"level": "s.level",
+		"funds": "s.funds",
+	}, "name")
+
+	baseFrom := `
 		FROM sects s
 		LEFT JOIN (
 			SELECT sect_id, COUNT(*) AS member_count FROM sect_members GROUP BY sect_id
@@ -38,8 +42,31 @@ func AdminListSects(c *gin.Context) {
 			JOIN players p ON p.id = sm.player_id
 			WHERE sm.member_rank = 'CHUONG_MON'
 		) l ON l.sect_id = s.id
-		ORDER BY s.name
-	`)
+	`
+
+	whereClause := ""
+	args := []interface{}{}
+	if search != "" {
+		whereClause = " WHERE (s.name ILIKE $1 OR s.region ILIKE $1 OR s.description ILIKE $1 OR l.leader_name ILIKE $1)"
+		args = append(args, "%"+search+"%")
+	}
+
+	var total int
+	countQuery := "SELECT COUNT(*) " + baseFrom + whereClause
+	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đếm tông môn", err))
+		return
+	}
+
+	orderClause := fmt.Sprintf(" ORDER BY %s %s", paging.Sort, strings.ToUpper(paging.Direction))
+	limitOffset := fmt.Sprintf(" LIMIT %d OFFSET %d", paging.PageSize, paging.Offset)
+	query := `
+		SELECT s.id, s.name, s.description, s.region, s.level, s.funds, s.require_approval, s.require_promotion_approval,
+			COALESCE(m.member_count, 0) AS member_count,
+			l.leader_name
+	` + baseFrom + whereClause + orderClause + limitOffset
+
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể tải danh sách tông môn", err))
 		return
@@ -59,7 +86,7 @@ func AdminListSects(c *gin.Context) {
 		LeaderName               string `json:"leader_name,omitempty"`
 	}
 
-	var sects []SectInfo
+	sects := []SectInfo{}
 	for rows.Next() {
 		var s SectInfo
 		var leaderName *string
@@ -72,7 +99,13 @@ func AdminListSects(c *gin.Context) {
 		sects = append(sects, s)
 	}
 
-	c.JSON(http.StatusOK, sects)
+	c.JSON(http.StatusOK, gin.H{
+		"data":      sects,
+		"sects":     sects,
+		"total":     total,
+		"page":      paging.Page,
+		"page_size": paging.PageSize,
+	})
 }
 
 func AdminGetSectDetail(c *gin.Context) {

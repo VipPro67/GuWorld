@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -95,14 +94,7 @@ func ManageAperturePortal(c *gin.Context) {
 		WHERE a.player_id = $1 AND p.is_active = true
 	`, playerID).Scan(&regionID, &px, &py, &apID)
 	if regionID != "" {
-		_ = cache.PublishEventQuick("world:cell", map[string]any{
-			"type":       "portal_update",
-			"region_id":  regionID,
-			"x":          int(px),
-			"y":          int(py),
-			"cell_type":  "AperturePortal",
-			"content_id": apID.String(),
-		})
+		publishWorldCellChange("portal_update", WorldCellEvent{RegionID: regionID, X: int(px), Y: int(py), CellType: "AperturePortal", ContentID: apID.String()})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật Môn Hộ thành công", "access_policy": req.AccessPolicy})

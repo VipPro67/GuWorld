@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -58,6 +59,26 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 		ch := pubsub.Channel()
 		for msg := range ch {
 			clientChannel, clientMsg, broadcastNormalized := formatClientEvent(msg.Channel, []byte(msg.Payload))
+			if msg.Channel == worldfeed.RedisChannel {
+				deliveries, err := worldfeed.DecodeEnvelope([]byte(msg.Payload))
+				if err != nil {
+					logger.S.Warnf("discard invalid world-change event: %v", err)
+					continue
+				}
+				for _, delivery := range deliveries {
+					eventPayload, err := json.Marshal(delivery.Event)
+					if err != nil {
+						continue
+					}
+					_, clientPayload, _ := formatClientEvent(msg.Channel, eventPayload)
+					targets := make(map[uuid.UUID]struct{}, len(delivery.Targets))
+					for _, target := range delivery.Targets {
+						targets[target] = struct{}{}
+					}
+					shub.BroadcastToTargets(ChannelName(clientChannel), clientPayload, targets)
+				}
+				continue
+			}
 			shub.BroadcastToChannel(ChannelName(msg.Channel), clientMsg, uuid.Nil)
 			if broadcastNormalized && clientChannel != msg.Channel {
 				shub.BroadcastToChannel(ChannelName(clientChannel), clientMsg, uuid.Nil)

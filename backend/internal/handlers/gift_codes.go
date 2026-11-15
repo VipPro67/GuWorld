@@ -137,12 +137,41 @@ func AdminListGiftCodes(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, code, rewards, max_uses, used_count, max_per_player, expires_at, is_active, created_by, created_at
-		FROM gift_codes
-		ORDER BY created_at DESC
-		LIMIT 200
-	`)
+	search := strings.TrimSpace(c.Query("search"))
+	paging := parseAdminPageQuery(c, 25, map[string]string{
+		"created_at": "created_at",
+		"code":       "code",
+		"used_count": "used_count",
+		"max_uses":   "max_uses",
+	}, "created_at")
+
+	whereClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if search != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("code ILIKE $%d", argIdx))
+		args = append(args, "%"+search+"%")
+		argIdx++
+	}
+
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	var total int
+	countQuery := "SELECT COUNT(*) FROM gift_codes" + whereClause
+	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đếm mã quà", err))
+		return
+	}
+
+	orderClause := fmt.Sprintf(" ORDER BY %s %s", paging.Sort, strings.ToUpper(paging.Direction))
+	limitOffset := fmt.Sprintf(" LIMIT %d OFFSET %d", paging.PageSize, paging.Offset)
+	query := "SELECT id, code, rewards, max_uses, used_count, max_per_player, expires_at, is_active, created_by, created_at FROM gift_codes" + whereClause + orderClause + limitOffset
+
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể tải danh sách mã quà", err))
 		return
@@ -166,9 +195,133 @@ func AdminListGiftCodes(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"codes": codes,
-		"total": len(codes),
+		"data":      codes,
+		"codes":     codes,
+		"total":     total,
+		"page":      paging.Page,
+		"page_size": paging.PageSize,
 	})
+}
+
+type AdminUpdateGiftCodeRequest struct {
+	MaxUses      *int       `json:"max_uses"`
+	MaxPerPlayer *int       `json:"max_per_player"`
+	IsActive     *bool      `json:"is_active"`
+	ExpiresAt    *time.Time `json:"expires_at"`
+}
+
+func AdminUpdateGiftCode(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+
+	codeIDStr := c.Param("id")
+	codeID, err := uuid.Parse(codeIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID mã quà không hợp lệ"})
+		return
+	}
+
+	var req AdminUpdateGiftCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	sets := []string{}
+	args := []interface{}{}
+	idx := 1
+
+	if req.MaxUses != nil {
+		sets = append(sets, fmt.Sprintf("max_uses = $%d", idx))
+		args = append(args, *req.MaxUses)
+		idx++
+	}
+	if req.MaxPerPlayer != nil {
+		sets = append(sets, fmt.Sprintf("max_per_player = $%d", idx))
+		args = append(args, *req.MaxPerPlayer)
+		idx++
+	}
+	if req.IsActive != nil {
+		sets = append(sets, fmt.Sprintf("is_active = $%d", idx))
+		args = append(args, *req.IsActive)
+		idx++
+	}
+	if req.ExpiresAt != nil {
+		sets = append(sets, fmt.Sprintf("expires_at = $%d", idx))
+		args = append(args, *req.ExpiresAt)
+		idx++
+	}
+
+	if len(sets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có thông tin cần cập nhật"})
+		return
+	}
+
+	args = append(args, codeID)
+	query := fmt.Sprintf("UPDATE gift_codes SET %s WHERE id = $%d", strings.Join(sets, ", "), idx)
+	res, err := db.DB.ExecContext(c.Request.Context(), query, args...)
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể cập nhật mã quà", err))
+		return
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mã quà"})
+		return
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &adminID,
+		Action:         "admin.update_gift_code",
+		EntityType:     "gift_code",
+		EntityID:       codeID.String(),
+		RequestSummary: fmt.Sprintf("sets=%d", len(sets)),
+		IPAddress:      c.ClientIP(),
+		Success:        true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mã quà thành công"})
+}
+
+func AdminDeleteGiftCode(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+
+	codeIDStr := c.Param("id")
+	codeID, err := uuid.Parse(codeIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID mã quà không hợp lệ"})
+		return
+	}
+
+	var code string
+	err = db.DB.QueryRowContext(c.Request.Context(), `SELECT code FROM gift_codes WHERE id = $1`, codeID).Scan(&code)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mã quà"})
+		return
+	}
+
+	// CASCADE on gift_code_redemptions will delete redemptions
+	if _, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM gift_codes WHERE id = $1`, codeID); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể xóa mã quà", err))
+		return
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &adminID,
+		Action:         "admin.delete_gift_code",
+		EntityType:     "gift_code",
+		EntityID:       codeID.String(),
+		RequestSummary: fmt.Sprintf("code=%s", code),
+		IPAddress:      c.ClientIP(),
+		Success:        true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Đã xóa mã quà %s", code)})
 }
 
 func RedeemGiftCode(c *gin.Context) {

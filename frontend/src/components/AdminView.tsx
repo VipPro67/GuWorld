@@ -90,6 +90,10 @@ import { ArenaRankingsAdminTab } from "./admin/ArenaRankingsAdminTab";
 import { WorldBossesAdminTab } from "./admin/WorldBossesAdminTab";
 import { MinesAdminTab } from "./admin/MinesAdminTab";
 import { EffectCompositionsAdminTab } from "./admin/EffectCompositionsAdminTab";
+import { FeedbackAdminTab } from "./admin/FeedbackAdminTab";
+import { MarketplaceAdminTab } from "./admin/MarketplaceAdminTab";
+import { RegionLootAdminTab } from "./admin/RegionLootAdminTab";
+import { TeleportAdminTab } from "./admin/TeleportAdminTab";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
@@ -501,7 +505,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const adminAccess = useAdminAccess();
   const canAdminAction = (action: Parameters<typeof canPerformAdminAction>[1]) => canPerformAdminAction(adminAccess.effective_permissions, action);
   const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
-  const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "quests" | "instances" | "sect_missions" | "tracking_marks" | "achievements" | "combat">("items");
+  const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "quests" | "instances" | "sect_missions" | "tracking_marks" | "achievements" | "combat" | "gu_houses" | "killer_moves">("items");
   const [isCombatEquippedExpanded, setIsCombatEquippedExpanded] = useState(true);
   const [isCombatStatsExpanded, setIsCombatStatsExpanded] = useState(true);
   const [isCombatGrowthExpanded, setIsCombatGrowthExpanded] = useState(true);
@@ -576,6 +580,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [achievementFrame, setAchievementFrame] = useState("");
   const [achievementUnlockedAt, setAchievementUnlockedAt] = useState("");
   const [achievementToGrant, setAchievementToGrant] = useState("");
+  const [playerGuHouses, setPlayerGuHouses] = useState<ApiResponseData[]>([]);
+  const [playerGuHousesLoading, setPlayerGuHousesLoading] = useState(false);
+  const [playerKillerMoves, setPlayerKillerMoves] = useState<ApiResponseData[]>([]);
+  const [playerKillerMovesLoading, setPlayerKillerMovesLoading] = useState(false);
 
   // Edit player modal
   const [showEditPlayer, setShowEditPlayer] = useState(false);
@@ -661,6 +669,15 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   // ----- Gift codes state -----
   const [giftCodes, setGiftCodes] = useState<ApiResponseData[]>([]);
   const [giftLoading, setGiftLoading] = useState(false);
+  const [giftSearch, setGiftSearch] = useState("");
+  const [giftSearchDebounce, setGiftSearchDebounce] = useState("");
+  const [giftPage, setGiftPage] = useState(1);
+  const [giftTotal, setGiftTotal] = useState(0);
+  const [giftLimit] = useState(25);
+  const [editingGiftCode, setEditingGiftCode] = useState<ApiResponseData | null>(null);
+  const [editGiftMaxUses, setEditGiftMaxUses] = useState(100);
+  const [editGiftMaxPerPlayer, setEditGiftMaxPerPlayer] = useState(1);
+  const [editGiftIsActive, setEditGiftIsActive] = useState(true);
   const [newGiftCode, setNewGiftCode] = useState("");
   const [newGiftMaxUses, setNewGiftMaxUses] = useState(100);
   const [newGiftPerPlayer, setNewGiftPerPlayer] = useState(1);
@@ -674,7 +691,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [onlineLoading, setOnlineLoading] = useState(false);
 
   // ----- Dictionary state -----
-  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells" | "scouting" | "constitution" | "race" | "status" | "spawns" | "quests" | "dungeons" | "compositions">("import");
+  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells" | "scouting" | "constitution" | "race" | "status" | "spawns" | "quests" | "dungeons" | "compositions" | "region_loot" | "teleport">("import");
   const [regions, setRegions] = useState<ApiResponseData[]>([]);
   const [regionsLoading, setRegionsLoading] = useState(false);
   const [regionEdit, setRegionEdit] = useState<ApiResponseData | null>(null);
@@ -738,6 +755,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   // ----- Sect state -----
   const [sects, setSects] = useState<ApiResponseData[]>([]);
   const [sectsLoading, setSectsLoading] = useState(false);
+  const [sectsTotal, setSectsTotal] = useState(0);
+  const [sectsPage, setSectsPage] = useState(1);
+  const [sectsLimit] = useState(25);
+  const [sectsSearch, setSectsSearch] = useState("");
+  const [sectSearchDebounce, setSectSearchDebounce] = useState("");
   const [selectedSect, setSelectedSect] = useState<ApiResponseData | null>(null);
   const [selectedSectMembers, setSelectedSectMembers] = useState<ApiResponseData[]>([]);
   const [selectedSectId, setSelectedSectId] = useState<string | null>(null);
@@ -906,14 +928,19 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     }
   };
 
-  const fetchSects = useCallback(async () => {
+  const fetchSects = useCallback(async (page = sectsPage, search = sectsSearch) => {
     setSectsLoading(true);
     try {
-      const res = await authFetch(`${BACKEND_URL}/api/admin/sects`);
+      const params = new URLSearchParams({ page: String(page), page_size: String(sectsLimit) });
+      if (search) params.set("search", search);
+      const res = await authFetch(`${BACKEND_URL}/api/admin/sects?${params}`);
       if (!res.ok) throw new Error("Lỗi tải tông môn");
-      setSects(await res.json());
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.data || data.sects || []);
+      setSects(list);
+      setSectsTotal(typeof data.total === "number" ? data.total : list.length);
     } catch {} finally { setSectsLoading(false); }
-  }, []);
+  }, [sectsPage, sectsLimit, sectsSearch]);
 
   const fetchSectDetail = useCallback(async (id: string) => {
     setSectsLoading(true);
@@ -950,18 +977,22 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     } catch {} finally { setOnlineLoading(false); }
   }, []);
 
-  const fetchGiftCodes = useCallback(async () => {
+  const fetchGiftCodes = useCallback(async (page = giftPage, search = giftSearch) => {
     setGiftLoading(true);
     try {
-      const res = await authFetch(`${BACKEND_URL}/api/admin/gift-codes`);
+      const params = new URLSearchParams({ page: String(page), page_size: String(giftLimit) });
+      if (search) params.set("search", search);
+      const res = await authFetch(`${BACKEND_URL}/api/admin/gift-codes?${params}`);
       if (!res.ok) throw new Error("Không thể tải mã quà");
       const data = await res.json();
-      setGiftCodes(data.codes || []);
+      const list = Array.isArray(data) ? data : (data.data || data.codes || []);
+      setGiftCodes(list);
+      setGiftTotal(typeof data.total === "number" ? data.total : list.length);
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error(err);
     } finally { setGiftLoading(false); }
-  }, []);
+  }, [giftPage, giftLimit, giftSearch]);
 
   const handleCreateGiftCode = async () => {
     if (!newGiftCode.trim()) { if (addToast) addToast("Vui lòng nhập mã code", "error"); return; }
@@ -1077,8 +1108,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   }, [shopSearchLoaded]);
 
   useEffect(() => {
-    if (section === "sects") fetchSects();
-  }, [section, fetchSects]);
+    const t = setTimeout(() => {
+      setSectsSearch(sectSearchDebounce);
+      setSectsPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [sectSearchDebounce]);
+
+  useEffect(() => {
+    if (section === "sects") fetchSects(sectsPage, sectsSearch);
+  }, [section, sectsPage, sectsSearch, fetchSects]);
 
   useEffect(() => {
     if (section === "apertures") fetchApertures();
@@ -1107,8 +1146,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   }, [section, fetchShopItems, fetchArenaShopItems]);
 
   useEffect(() => {
-    if (section === "gift_codes") fetchGiftCodes();
-  }, [section, fetchGiftCodes]);
+    const t = setTimeout(() => {
+      setGiftSearch(giftSearchDebounce);
+      setGiftPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [giftSearchDebounce]);
+
+  useEffect(() => {
+    if (section === "gift_codes") fetchGiftCodes(giftPage, giftSearch);
+  }, [section, giftPage, giftSearch, fetchGiftCodes]);
 
   useEffect(() => {
     if (section === "data") {
@@ -1264,6 +1311,28 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     catch {} finally { setPlayerAchievementsLoading(false); }
   }, []);
 
+  const fetchPlayerGuHouses = useCallback(async (id: string) => {
+    setPlayerGuHousesLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/players/${id}/gu-houses`);
+      if (res.ok) {
+        const data = await res.json();
+        setPlayerGuHouses(Array.isArray(data) ? data : data.houses || []);
+      }
+    } catch {} finally { setPlayerGuHousesLoading(false); }
+  }, []);
+
+  const fetchPlayerKillerMoves = useCallback(async (id: string) => {
+    setPlayerKillerMovesLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/players/${id}/killer-moves`);
+      if (res.ok) {
+        const data = await res.json();
+        setPlayerKillerMoves(Array.isArray(data) ? data : data.moves || []);
+      }
+    } catch {} finally { setPlayerKillerMovesLoading(false); }
+  }, []);
+
 
 
   useEffect(() => {
@@ -1298,6 +1367,14 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     if (selectedId && activeTab === "achievements") fetchPlayerAchievements(selectedId);
   }, [selectedId, activeTab, fetchPlayerAchievements]);
 
+  useEffect(() => {
+    if (selectedId && activeTab === "gu_houses") fetchPlayerGuHouses(selectedId);
+  }, [selectedId, activeTab, fetchPlayerGuHouses]);
+
+  useEffect(() => {
+    if (selectedId && activeTab === "killer_moves") fetchPlayerKillerMoves(selectedId);
+  }, [selectedId, activeTab, fetchPlayerKillerMoves]);
+
 
 
   const exec = async (url: string, method: string, body?: ApiResponseData) => {
@@ -1306,7 +1383,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 	  const idempotencyKey = typeof body?.idempotencyKey === "string" ? body.idempotencyKey : undefined;
       const requestBody = body ? { ...body } : undefined;
       if (requestBody && typeof requestBody.confirmation_target === "string") {
-        const pathTargetRoute = method === "DELETE" || /\/api\/admin\/(?:players\/[^/]+\/(items(?:\/|$)|recipes\/|quests\/|instance-sessions\/|sect-missions\/|tracking-marks\/|achievements(?:\/|$))|residual-traces\/)/.test(new URL(url, window.location.origin).pathname);
+        const pathTargetRoute = method === "DELETE" || /\/api\/admin\/(?:players\/[^/]+\/(items(?:\/|$)|recipes\/|quests\/|instance-sessions\/|sect-missions\/|tracking-marks\/|achievements(?:\/|$)|gu-houses\/|killer-moves\/)|residual-traces\/)/.test(new URL(url, window.location.origin).pathname);
         if (pathTargetRoute) requestBody.confirmation_target = new URL(url, window.location.origin).pathname;
       }
       const res = await authFetch(url, {
@@ -1326,6 +1403,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
         else if (activeTab === "sect_missions") fetchPlayerSectMissions(selectedId);
         else if (activeTab === "tracking_marks") fetchPlayerTrackingMarks(selectedId);
         else if (activeTab === "achievements") fetchPlayerAchievements(selectedId);
+        else if (activeTab === "gu_houses") fetchPlayerGuHouses(selectedId);
+        else if (activeTab === "killer_moves") fetchPlayerKillerMoves(selectedId);
       }
       if (addToast) addToast(data.message || "Thành công", "success");
       return true;
@@ -1484,14 +1563,14 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             </button>}
             <button onClick={() => {
               if (detail) {
-                window.location.assign("/admin/apertures");
+                window.location.assign(`/admin/apertures?search=${encodeURIComponent(detail.username)}`);
                 setApertureSearchDebounce(detail.username);
                 setSelectedId(null);
                 setDetail(null);
               }
-            }} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
+            }} disabled={!detail} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors cursor-pointer disabled:opacity-50 ${detail?.rank && detail.rank >= 6 ? "bg-amber-950/40 border-amber-600/60 text-amber-300 hover:text-white hover:bg-amber-900/60 font-semibold" : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white"}`}>
               <Globe className="w-3.5 h-3.5 text-amber-500" />
-              Xem Tiên Khiếu
+              {detail?.rank && detail.rank >= 6 ? "⚡ Mở Tiên Khiếu" : "Xem Tiên Khiếu"}
             </button>
             {(adminAccess.effective_permissions.includes("admin.*") || adminAccess.effective_permissions.includes("admin_roles.read") || canAdminAction("assignPlayerRoles")) && <button onClick={() => setShowRolesEditor(true)} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
               <Crown className="w-3.5 h-3.5 text-amber-400" />
@@ -1565,6 +1644,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               </button>
               <button onClick={() => setActiveTab("combat")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "combat" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
                 <Swords className="w-3.5 h-3.5 inline mr-1.5" />Chỉ số & Chiến đấu ({detail.equipped_gus?.length || 0})
+              </button>
+              <button onClick={() => setActiveTab("gu_houses")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "gu_houses" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <Building2 className="w-3.5 h-3.5 inline mr-1.5" />Cổ Ốc ({playerGuHouses.length})
+              </button>
+              <button onClick={() => setActiveTab("killer_moves")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "killer_moves" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <Zap className="w-3.5 h-3.5 inline mr-1.5" />Sát Chiêu ({playerKillerMoves.length})
               </button>
             </div>
 
@@ -1879,6 +1964,181 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="space-y-3">
                 {canAdminAction("grantPlayerAchievement")&&availableAchievements.length>0&&<div className="flex gap-2"><select value={achievementToGrant} onChange={e=>setAchievementToGrant(e.target.value)} className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200">{availableAchievements.map(a=><option key={String(a.id)} value={String(a.id)}>{String(a.name)} · {String(a.id)}</option>)}</select><button onClick={async()=>{const endpoint=`${BACKEND_URL}/api/admin/players/${selectedId}/achievements`;const prepared=prepareAdminAction("grantPlayerAchievement","cấp thành tựu",endpoint);if(!prepared)return;await exec(endpoint,"POST",{achievement_id:achievementToGrant,...prepared});}} className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 cursor-pointer"><Plus className="w-3.5 h-3.5 inline mr-1"/>Cấp</button></div>}
                 {playerAchievementsLoading?<div className="flex flex-col items-center py-12"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin"/><span className="text-xs text-zinc-500 mt-2">Đang tải thành tựu...</span></div>:playerAchievements.length===0?<div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl"><Star className="w-8 h-8 text-zinc-700 mx-auto mb-2"/><p className="text-xs text-zinc-500">Người chơi chưa mở khóa thành tựu</p></div>:<div className="overflow-x-auto rounded-xl border border-zinc-800/80"><table className="w-full text-left text-xs"><thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]"><th className="px-3 py-2.5">Mã thành tựu</th><th className="px-3 py-2.5">Danh hiệu</th><th className="px-3 py-2.5">Khung</th><th className="px-3 py-2.5">Mở khóa lúc</th><th className="px-3 py-2.5 text-right">Thao tác</th></tr></thead><tbody>{playerAchievements.map(a=><tr key={a.achievement_id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30"><td className="px-3 py-2.5 font-mono text-zinc-300">{a.achievement_id}</td><td className="px-3 py-2.5 text-zinc-300">{a.selected_title||"—"}</td><td className="px-3 py-2.5 text-zinc-400">{a.selected_frame||"—"}</td><td className="px-3 py-2.5 text-zinc-500">{new Date(a.unlocked_at).toLocaleString("vi-VN")}</td><td className="px-3 py-2.5 text-right">{canAdminAction("updatePlayerAchievement")&&<button onClick={()=>{setAchievementTitle(a.selected_title);setAchievementFrame(a.selected_frame);setAchievementUnlockedAt(new Date(a.unlocked_at).toISOString().slice(0,16));setShowAchievementEditor(a);}} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 mr-1 cursor-pointer"><Edit3 className="w-3.5 h-3.5"/></button>}{canAdminAction("deletePlayerAchievement")&&<button onClick={async()=>{const endpoint=`${BACKEND_URL}/api/admin/players/${selectedId}/achievements/${encodeURIComponent(a.achievement_id)}`;const prepared=prepareAdminAction("deletePlayerAchievement","thu hồi thành tựu",endpoint);if(!prepared)return;await exec(endpoint,"DELETE",prepared);}} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 cursor-pointer"><Trash2 className="w-3.5 h-3.5"/></button>}</td></tr>)}</tbody></table></div>}
+              </div>
+            )}
+
+            {/* Gu Houses Tab */}
+            {activeTab === "gu_houses" && (
+              <div className="space-y-3">
+                {playerGuHousesLoading ? (
+                  <div className="flex flex-col items-center py-12">
+                    <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />
+                    <span className="text-xs text-zinc-500 mt-2 font-mono">Đang tải Cổ Ốc...</span>
+                  </div>
+                ) : playerGuHouses.length === 0 ? (
+                  <div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                    <Building2 className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                    <p className="text-xs text-zinc-500">Người chơi chưa sở hữu Cổ Ốc nào</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                          <th className="px-3 py-2.5">Tên Cổ Ốc</th>
+                          <th className="px-3 py-2.5">Chuyển</th>
+                          <th className="px-3 py-2.5">Độ Bền</th>
+                          <th className="px-3 py-2.5">Trạng Thái</th>
+                          <th className="px-3 py-2.5">Cổ Phụ Trợ</th>
+                          <th className="px-3 py-2.5">Ngày Tạo</th>
+                          <th className="px-3 py-2.5 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {playerGuHouses.map((house: ApiResponseData) => (
+                          <tr key={String(house.id)} className="border-t border-zinc-800/40 hover:bg-zinc-900/30">
+                            <td className="px-3 py-2.5 text-zinc-200 font-semibold">
+                              {String(house.name)}
+                              <span className="block text-[10px] text-zinc-500 font-mono">{String(house.id)}</span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/40 text-amber-400 border border-amber-800/40">
+                                Chuyển {String(house.rank)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-zinc-300">
+                              {Math.round(Number(house.current_durability) || 0)}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {house.is_equipped ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-800/40">
+                                  Đang xuất chiến
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] text-zinc-500">
+                                  Lưu trữ
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-zinc-400 font-mono">
+                              {String(house.aux_gu_count || 0)} Cổ
+                            </td>
+                            <td className="px-3 py-2.5 text-zinc-500">
+                              {house.created_at ? new Date(String(house.created_at)).toLocaleString("vi-VN") : "—"}
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              {canAdminAction("deletePlayerGuHouse") && (
+                                <button
+                                  onClick={async () => {
+                                    const endpoint = `${BACKEND_URL}/api/admin/players/${selectedId}/gu-houses/${house.id}`;
+                                    const prepared = prepareAdminAction("deletePlayerGuHouse", "xóa Cổ Ốc của người chơi", endpoint);
+                                    if (!prepared) return;
+                                    await exec(endpoint, "DELETE", prepared);
+                                    if (selectedId) fetchPlayerGuHouses(selectedId);
+                                  }}
+                                  className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 cursor-pointer"
+                                  title="Xóa Cổ Ốc"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Killer Moves Tab */}
+            {activeTab === "killer_moves" && (
+              <div className="space-y-3">
+                {playerKillerMovesLoading ? (
+                  <div className="flex flex-col items-center py-12">
+                    <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />
+                    <span className="text-xs text-zinc-500 mt-2 font-mono">Đang tải Sát Chiêu...</span>
+                  </div>
+                ) : playerKillerMoves.length === 0 ? (
+                  <div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                    <Zap className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                    <p className="text-xs text-zinc-500">Người chơi chưa suy diễn hoặc trang bị Sát Chiêu nào</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                          <th className="px-3 py-2.5">Tên Sát Chiêu</th>
+                          <th className="px-3 py-2.5">Lưu Phái</th>
+                          <th className="px-3 py-2.5">Cổ Chủ Lực</th>
+                          <th className="px-3 py-2.5">Độ Hài Hòa</th>
+                          <th className="px-3 py-2.5">Tải Lực</th>
+                          <th className="px-3 py-2.5">Trạng Thái</th>
+                          <th className="px-3 py-2.5">Ngày Tạo</th>
+                          <th className="px-3 py-2.5 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {playerKillerMoves.map((move: ApiResponseData) => (
+                          <tr key={String(move.id)} className="border-t border-zinc-800/40 hover:bg-zinc-900/30">
+                            <td className="px-3 py-2.5 text-zinc-200 font-semibold">
+                              {String(move.name)}
+                              <span className="block text-[10px] text-zinc-500 font-mono">{String(move.id)}</span>
+                            </td>
+                            <td className="px-3 py-2.5 text-amber-400 font-medium">
+                              {String(move.path || "Chung")}
+                            </td>
+                            <td className="px-3 py-2.5 text-zinc-300">
+                              <span className="font-mono text-zinc-200">{String(move.main_gu_id)}</span>
+                              <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-400">
+                                Chuyển {String(move.main_gu_rank)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-zinc-300">
+                              {String(move.harmony)}%
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-zinc-400">
+                              {String(move.power_load)} / {String(move.power_budget)}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {move.is_equipped ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-800/40">
+                                  Đang trang bị
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] text-zinc-500">
+                                  Chưa trang bị
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-zinc-500">
+                              {move.created_at ? new Date(String(move.created_at)).toLocaleString("vi-VN") : "—"}
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              {canAdminAction("deletePlayerKillerMove") && (
+                                <button
+                                  onClick={async () => {
+                                    const endpoint = `${BACKEND_URL}/api/admin/players/${selectedId}/killer-moves/${move.id}`;
+                                    const prepared = prepareAdminAction("deletePlayerKillerMove", "xóa Sát Chiêu của người chơi", endpoint);
+                                    if (!prepared) return;
+                                    await exec(endpoint, "DELETE", prepared);
+                                    if (selectedId) fetchPlayerKillerMoves(selectedId);
+                                  }}
+                                  className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 cursor-pointer"
+                                  title="Xóa Sát Chiêu"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2962,8 +3222,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <UserPlus className="w-3.5 h-3.5" /> Thêm thành viên
             </button>
             <button onClick={async () => {
-              if (!confirm(`Giải tán "${selectedSect?.name}"? Hành động này không thể hoàn tác!`)) return;
-              const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}`, "DELETE");
+              const prepared = prepareAdminAction("deleteSect", "giải tán tông môn", selectedSect?.name || selectedSectId);
+              if (!prepared) return;
+              const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}`, "DELETE", prepared);
               if (ok) { setSelectedSectId(null); setSelectedSect(null); fetchSects(); }
             }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/40 hover:bg-red-900/60 border border-red-800/40 text-xs text-red-400 transition-colors cursor-pointer">
               <Trash2 className="w-3.5 h-3.5" /> Giải tán
@@ -3049,8 +3310,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                                 </button>
                               )}
                               <button onClick={async () => {
-                                if (!confirm(`Đuổi ${m.username} khỏi tông môn?`)) return;
-                                const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}/members/${m.player_id}`, "DELETE");
+                                const prepared = prepareAdminAction("kickSectMember", "trục xuất thành viên", `${m.username} · ${m.player_id}`);
+                                if (!prepared) return;
+                                const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}/members/${m.player_id}`, "DELETE", prepared);
                                 if (ok) fetchSectDetail(selectedSectId);
                               }} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer" title="Đuổi">
                                 <UserMinus className="w-3.5 h-3.5" />
@@ -3177,8 +3439,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                           </div>
                         </div>
                         <button onClick={async () => {
-                          if (!confirm(`Xóa nhiệm vụ "${m.title}"?`)) return;
-                          const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}/missions/${m.id}`, "DELETE");
+                          const prepared = prepareAdminAction("deleteSectMission", "xóa nhiệm vụ tông môn", `${m.title} · ${m.id}`);
+                          if (!prepared) return;
+                          const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}/missions/${m.id}`, "DELETE", prepared);
                           if (ok && selectedSectId) fetchSectMissions(selectedSectId);
                         }} className="p-1.5 hover:bg-red-950/40 rounded-lg text-zinc-500 hover:text-red-400 transition-colors shrink-0 cursor-pointer">
                           <Trash2 className="w-3.5 h-3.5" />
@@ -3362,7 +3625,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowRemoveVault(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading} onClick={async () => {
-                  const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}/vault/stock`, "DELETE", { item_type: showRemoveVault.type, item_id: showRemoveVault.id, quantity: removeVaultQty });
+                  const prepared = prepareAdminAction("removeSectVaultItem", "rút vật phẩm kho tông môn", `${showRemoveVault.id} (${removeVaultQty})`);
+                  if (!prepared) return;
+                  const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}/vault/stock`, "DELETE", { ...prepared, item_type: showRemoveVault.type, item_id: showRemoveVault.id, quantity: removeVaultQty });
                   if (ok) { fetchSectDetail(selectedSectId!); setShowRemoveVault(null); }
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Xóa"}
@@ -3703,6 +3968,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             <button onClick={() => setDataTab("compositions")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "compositions" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Swords className="w-3.5 h-3.5 inline mr-1.5" />Tổ hợp effect
             </button>
+            <button onClick={() => setDataTab("region_loot")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "region_loot" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Gift className="w-3.5 h-3.5 inline mr-1.5" />Loot Khu Vực
+            </button>
+            <button onClick={() => setDataTab("teleport")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "teleport" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Sparkles className="w-3.5 h-3.5 inline mr-1.5" />Trận Pháp Truyền Tống
+            </button>
           </div>
 
           {dataTab === "import" && (
@@ -3782,10 +4053,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
           {dataTab === "gus" && (
             <CoreDataAdminTab kind="gus" rows={gus} loading={gusLoading}
+              canCreate={canAdminAction("updateGuDictionary")} canEdit={canAdminAction("updateGuDictionary")} canCopy={canAdminAction("updateGuDictionary")} canDelete={canAdminAction("deleteGuDictionary")}
               onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, player_atk_coefficient: 0, effects: { schema_version: 2, blocks: [] }, composition_contributions: { schema_version: 1, grants: [] }, _compositionContributionsText: '{"schema_version":1,"grants":[]}', food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
               onEdit={(g) => setGuEdit({ ...structuredClone(g), _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects, composition_contributions: typeof g.composition_contributions === "string" ? JSON.parse(g.composition_contributions) : (g.composition_contributions || { schema_version: 1, grants: [] }), _compositionContributionsText: JSON.stringify(typeof g.composition_contributions === "string" ? JSON.parse(g.composition_contributions) : (g.composition_contributions || { schema_version: 1, grants: [] }), null, 2) })}
               onCopy={(g) => setGuEdit({ ...structuredClone(g), id: "", _isNew: true, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects, composition_contributions: { schema_version: 1, grants: [] }, _compositionContributionsText: '{"schema_version":1,"grants":[]}' })}
-              onDelete={async (g) => { if (!confirm(`Xóa toàn bộ các rank của ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} />
+              onDelete={async (g) => { const prepared = prepareAdminAction("deleteGuDictionary", "xóa cổ trùng", String(g.name || g.id)); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE", prepared); if (ok) fetchGus(); }} />
           )}
 
           {dataTab === "items" && (
@@ -3969,6 +4241,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
           {dataTab === "quests" && <WorldExtendedAdminTab type="quests" addToast={addToast} canWrite={canAdminAction("updateWorldQuest")} canDelete={canAdminAction("deleteWorldQuest")} />}
           {dataTab === "dungeons" && <WorldExtendedAdminTab type="dungeons" addToast={addToast} canWrite={canAdminAction("updateDungeon")} canDelete={canAdminAction("deleteDungeon")} />}
           {dataTab === "compositions" && <EffectCompositionsAdminTab canWrite={canAdminAction("updateGuDictionary")} addToast={addToast} />}
+          {dataTab === "region_loot" && <RegionLootAdminTab addToast={addToast} />}
+          {dataTab === "teleport" && <TeleportAdminTab addToast={addToast} />}
         </div>
       )}
 
@@ -3988,6 +4262,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
       {section === "arena_rankings" && <ArenaRankingsAdminTab addToast={addToast} canEdit={canAdminAction("updateArenaRanking")} />}
       {section === "world_bosses" && <WorldBossesAdminTab addToast={addToast} canEdit={canAdminAction("updateWorldBoss")} canDelete={canAdminAction("purgeWorldBosses")} />}
       {section === "mines" && <MinesAdminTab addToast={addToast} canEdit={canAdminAction("updatePrimevalVein")} canDelete={canAdminAction("deletePrimevalVein")} />}
+
+      {/* Feedback & Bug Reports Section */}
+      {section === "feedback" && <FeedbackAdminTab addToast={addToast} />}
+
+      {/* Marketplace & Auctions Section */}
+      {section === "marketplace" && <MarketplaceAdminTab addToast={addToast} />}
 
       {/* Shop section */}
       {section === "shop" && (
@@ -4314,33 +4594,88 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               </button>
             </div>
 
+            {/* Gift codes search and refresh */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
+                <input
+                  value={giftSearchDebounce}
+                  onChange={e => setGiftSearchDebounce(e.target.value)}
+                  placeholder="Tìm theo mã quà tặng..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <button onClick={() => fetchGiftCodes(giftPage, giftSearch)} disabled={giftLoading} className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white disabled:opacity-50 cursor-pointer">
+                <RefreshCw className={`w-3.5 h-3.5 ${giftLoading ? "animate-spin" : ""}`} /> Làm mới
+              </button>
+            </div>
+
             {/* Gift codes list */}
             <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs min-w-max">
                 <thead>
                   <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
                     <th className="px-3 py-2.5 font-semibold">Mã</th>
                     <th className="px-3 py-2.5 font-semibold">Phần thưởng</th>
                     <th className="px-3 py-2.5 font-semibold">Lượt</th>
+                    <th className="px-3 py-2.5 font-semibold">Tối đa/người</th>
                     <th className="px-3 py-2.5 font-semibold">Hạn</th>
                     <th className="px-3 py-2.5 font-semibold">Trạng thái</th>
+                    <th className="px-3 py-2.5 font-semibold text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {giftCodes.length === 0 ? (
-                    <tr><td colSpan={5} className="text-center py-10 text-zinc-600 italic">Chưa có mã quà nào.</td></tr>
+                    <tr><td colSpan={7} className="text-center py-10 text-zinc-600 italic">Chưa có mã quà nào.</td></tr>
                   ) : (
                     giftCodes.map((gc: ApiResponseData) => (
                       <tr key={gc.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5 font-mono font-bold text-amber-400">{gc.code}</td>
                         <td className="px-3 py-2.5 text-zinc-300 max-w-[200px] truncate">{gc.rewards?.map((r: ApiResponseData) => r.label).join(", ")}</td>
                         <td className="px-3 py-2.5 text-zinc-400">{gc.used_count}/{gc.max_uses}</td>
+                        <td className="px-3 py-2.5 text-zinc-400">{gc.max_per_player || 1}</td>
                         <td className="px-3 py-2.5 text-[10px] text-zinc-500">{gc.expires_at ? new Date(gc.expires_at).toLocaleDateString("vi-VN") : "—"}</td>
                         <td className="px-3 py-2.5">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${gc.is_active ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700/50" : "bg-red-900/40 text-red-400 border border-red-700/50"}`}>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const ok = await exec(`${BACKEND_URL}/api/admin/gift-codes/${gc.id}`, "PUT", { is_active: !gc.is_active });
+                              if (ok) fetchGiftCodes(giftPage, giftSearch);
+                            }}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer ${gc.is_active ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-900/60" : "bg-red-900/40 text-red-400 border border-red-700/50 hover:bg-red-900/60"}`}
+                            title="Nhấn để đổi trạng thái"
+                          >
                             {gc.is_active ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                             {gc.is_active ? "Hoạt động" : "Vô hiệu"}
-                          </span>
+                          </button>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingGiftCode(gc);
+                                setEditGiftMaxUses(gc.max_uses ?? 100);
+                                setEditGiftMaxPerPlayer(gc.max_per_player ?? 1);
+                                setEditGiftIsActive(Boolean(gc.is_active));
+                              }}
+                              className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer"
+                              title="Sửa"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const prepared = prepareAdminAction("deleteGiftCode", "xóa mã quà tặng", gc.code);
+                                if (!prepared) return;
+                                const ok = await exec(`${BACKEND_URL}/api/admin/gift-codes/${gc.id}`, "DELETE", prepared);
+                                if (ok) fetchGiftCodes(giftPage, giftSearch);
+                              }}
+                              className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                              title="Xóa"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -4348,14 +4683,77 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 </tbody>
               </table>
             </div>
+
+            {giftTotal > giftLimit && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500 font-mono mt-3">
+                <div>Tổng số: <span className="text-zinc-300">{giftTotal.toLocaleString()}</span> mã quà</div>
+                <div className="flex items-center gap-2">
+                  <span>Trang {giftPage}/{Math.ceil(giftTotal / giftLimit) || 1}</span>
+                  <button onClick={() => setGiftPage(Math.max(1, giftPage - 1))} disabled={giftPage <= 1 || giftLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                    <ChevronLeft className="w-3.5 h-3.5" /> Trước
+                  </button>
+                  <button onClick={() => setGiftPage(giftPage + 1)} disabled={giftPage >= Math.ceil(giftTotal / giftLimit) || giftLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                    Sau <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Gift Code Modal */}
+            {editingGiftCode && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm" onClick={() => setEditingGiftCode(null)}>
+                <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa mã quà: <span className="text-amber-400 font-mono">{editingGiftCode.code}</span></h3>
+                    <button onClick={() => setEditingGiftCode(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-zinc-500 font-mono block mb-1">Số lượt tối đa</label>
+                      <input type="number" min={1} value={editGiftMaxUses} onChange={e => setEditGiftMaxUses(Number(e.target.value))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-zinc-500 font-mono block mb-1">Tối đa / người</label>
+                      <input type="number" min={1} value={editGiftMaxPerPlayer} onChange={e => setEditGiftMaxPerPlayer(Number(e.target.value))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                    </div>
+                    <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                      <input type="checkbox" checked={editGiftIsActive} onChange={e => setEditGiftIsActive(e.target.checked)} className="rounded bg-zinc-800 border-zinc-700" />
+                      <span className="text-xs text-zinc-300">Đang hoạt động (cho phép nhập)</span>
+                    </label>
+                  </div>
+                  <div className="flex gap-3 justify-end pt-2">
+                    <button onClick={() => setEditingGiftCode(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
+                    <button disabled={actionLoading} onClick={async () => {
+                      const ok = await exec(`${BACKEND_URL}/api/admin/gift-codes/${editingGiftCode.id}`, "PUT", {
+                        max_uses: editGiftMaxUses,
+                        max_per_player: editGiftMaxPerPlayer,
+                        is_active: editGiftIsActive,
+                      });
+                      if (ok) { setEditingGiftCode(null); fetchGiftCodes(giftPage, giftSearch); }
+                    }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
+                      {actionLoading ? "Đang xử lý..." : "Lưu"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
       {/* Sects section */}
       {section === "sects" && (
         <>
-          <div className="flex items-center justify-end mb-4">
-            <button onClick={fetchSects} disabled={sectsLoading} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+              <input
+                value={sectSearchDebounce}
+                onChange={e => setSectSearchDebounce(e.target.value)}
+                placeholder="Tìm tông môn theo tên, khu vực, chưởng môn..."
+                className="w-full pl-9 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
+              />
+            </div>
+            <button onClick={() => fetchSects(sectsPage, sectsSearch)} disabled={sectsLoading} className="flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
               <RefreshCw className={`w-3.5 h-3.5 ${sectsLoading ? "animate-spin" : ""}`} /> Làm mới
             </button>
           </div>
@@ -4371,38 +4769,54 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <p className="text-sm text-zinc-400 font-medium">Không có tông môn nào.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-              <table className="w-full text-left text-xs min-w-max">
-                <thead>
-                  <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">ID</th>
-                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Tên</th>
-                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Khu vực</th>
-                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Cấp</th>
-                    <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Quỹ</th>
-                    <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Thành viên</th>
-                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Chưởng môn</th>
-                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Phê duyệt</th>
-                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Duyệt lên cấp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sects?.map((s: ApiResponseData) => (
-                    <tr key={s.id} onClick={() => { setSelectedSectId(s.id); }} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors cursor-pointer">
-                      <td className="px-3 py-2.5 text-zinc-500 font-mono whitespace-nowrap">{s.id}</td>
-                      <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{s.name}</td>
-                      <td className="px-3 py-2.5 text-zinc-400 whitespace-nowrap">{s.region}</td>
-                      <td className="px-3 py-2.5 font-bold text-zinc-300 whitespace-nowrap">{s.level}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-yellow-500 whitespace-nowrap">{s.funds?.toLocaleString() || 0}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{s.member_count}</td>
-                      <td className="px-3 py-2.5 text-zinc-300 whitespace-nowrap">{s.leader_name || <span className="text-zinc-600 italic">Trống</span>}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">{s.require_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">{s.require_promotion_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
+            <>
+              <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                <table className="w-full text-left text-xs min-w-max">
+                  <thead>
+                    <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">ID</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Tên</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Khu vực</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Cấp</th>
+                      <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Quỹ</th>
+                      <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Thành viên</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Chưởng môn</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Phê duyệt</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Duyệt lên cấp</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {sects?.map((s: ApiResponseData) => (
+                      <tr key={s.id} onClick={() => { setSelectedSectId(s.id); }} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors cursor-pointer">
+                        <td className="px-3 py-2.5 text-zinc-500 font-mono whitespace-nowrap">{s.id}</td>
+                        <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{s.name}</td>
+                        <td className="px-3 py-2.5 text-zinc-400 whitespace-nowrap">{s.region}</td>
+                        <td className="px-3 py-2.5 font-bold text-zinc-300 whitespace-nowrap">{s.level}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500 whitespace-nowrap">{s.funds?.toLocaleString() || 0}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{s.member_count}</td>
+                        <td className="px-3 py-2.5 text-zinc-300 whitespace-nowrap">{s.leader_name || <span className="text-zinc-600 italic">Trống</span>}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{s.require_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{s.require_promotion_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {sectsTotal > sectsLimit && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500 font-mono mt-3">
+                  <div>Tổng số: <span className="text-zinc-300">{sectsTotal.toLocaleString()}</span> tông môn</div>
+                  <div className="flex items-center gap-2">
+                    <span>Trang {sectsPage}/{Math.ceil(sectsTotal / sectsLimit) || 1}</span>
+                    <button onClick={() => setSectsPage(Math.max(1, sectsPage - 1))} disabled={sectsPage <= 1 || sectsLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                      <ChevronLeft className="w-3.5 h-3.5" /> Trước
+                    </button>
+                    <button onClick={() => setSectsPage(sectsPage + 1)} disabled={sectsPage >= Math.ceil(sectsTotal / sectsLimit) || sectsLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                      Sau <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

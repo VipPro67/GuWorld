@@ -68,6 +68,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const enterAperturePortal = useGameStore((state) => state.enterPortal);
   const harvestVein = useWorldStore((state) => state.harvestVein);
   const mapMarkers = useWorldStore((state) => state.zoneMarkers);
+  const mapRevision = useWorldStore((state) => state.mapRevision);
   const mapMarkersRegion = useWorldStore((state) => state.zoneMarkersRegion);
   const fetchZoneMarkers = useWorldStore((state) => state.fetchZoneMarkers);
   const resourcePoints = useWorldStore((state) => state.resourcePoints);
@@ -183,7 +184,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
 
   useEffect(() => {
     void loadGrid();
-  }, [player.current_region, player.x, player.y, loadGrid]);
+  }, [player.current_region, player.x, player.y, mapRevision, loadGrid]);
   usePolling(() => loadGrid().then(() => undefined), 10000);
   usePolling(() => fetchZoneMarkers(player.current_region).then(() => undefined), 10000);
   useEffect(() => { void fetchWorldMonsters(); }, [player.current_region, player.x, player.y, fetchWorldMonsters]);

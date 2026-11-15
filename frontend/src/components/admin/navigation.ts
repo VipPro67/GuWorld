@@ -9,8 +9,10 @@ import {
   Globe,
   History,
   MapPin,
+  MessageSquare,
   Mountain,
   Package,
+  Scale,
   Skull,
   Swords,
   Users,
@@ -19,7 +21,7 @@ import {
 export const ADMIN_MODULE_KEYS = [
   "players", "sects", "data", "logs", "monitoring", "shop", "mines",
   "gift_codes", "apertures", "topup_wallet", "gu_history", "combat_history", "map_drops",
-  "arena_rankings", "world_bosses",
+  "arena_rankings", "world_bosses", "feedback", "marketplace",
 ] as const;
 
 export type AdminModuleKey = (typeof ADMIN_MODULE_KEYS)[number];
@@ -45,7 +47,9 @@ export const ADMIN_NAVIGATION: readonly AdminNavigationItem[] = [
   { key: "world_bosses", label: "Boss thế giới", icon: Skull, route: "/admin/world_bosses", permission: "world_bosses.read", group: "game", order: 48 },
   { key: "mines", label: "Mỏ & Nguyên Tuyền", icon: Mountain, route: "/admin/mines", permission: "mines.read", group: "game", order: 49 },
   { key: "data", label: "Dữ liệu", icon: Database, route: "/admin/data", permission: "game_data.read", group: "content", order: 50 },
+  { key: "feedback", label: "Ý Kiến & Báo Lỗi", icon: MessageSquare, route: "/admin/feedback", permission: "feedback.read", group: "content", order: 55 },
   { key: "shop", label: "Cửa hàng", icon: Package, route: "/admin/shop", permission: "shop.read", group: "economy", order: 60 },
+  { key: "marketplace", label: "Thị Trường & Đấu Giá", icon: Scale, route: "/admin/marketplace", permission: "marketplace.read", group: "economy", order: 70 },
   { key: "gift_codes", label: "Mã Quà", icon: Gift, route: "/admin/gift_codes", permission: "gift_codes.read", group: "economy", order: 80 },
   { key: "topup_wallet", label: "Nạp Tiền & Ví", icon: Coins, route: "/admin/topup_wallet", permission: "billing.read", group: "economy", order: 90 },
   { key: "logs", label: "Nhật ký", icon: BookOpen, route: "/admin/logs", permission: "audit.read", group: "system", order: 100 },

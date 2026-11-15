@@ -211,10 +211,9 @@ func CaptureMonster(c *gin.Context) {
 			logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
 		}
 		if player.ActiveCombat != nil {
-			_ = cache.BroadcastMonsterKilled(player.X, player.Y, player.ActiveCombat.EnemyName, player.CurrentRegion)
 			markBossCleared(tx, &player)
 		}
-		_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
+		enemyTemplateID := player.ActiveCombat.EnemyTemplateID
 
 		player.ActiveCombat = nil
 
@@ -235,6 +234,10 @@ func CaptureMonster(c *gin.Context) {
 			respondCombatTxErr(c, errTx, "Transaction commit failed")
 			return
 		}
+		publishWorldChange("map_cell", "cleared", player.CurrentRegion, player.MapInstanceID, player.X, player.Y, map[string]any{
+			"cell_type":  "Monster",
+			"content_id": enemyTemplateID,
+		})
 		PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
 		respondActionGuOnly(c, http.StatusOK, player, gin.H{
 			"captured":       true,

@@ -46,6 +46,8 @@ Redis dùng cho cache, pub/sub và một số phối hợp realtime. Rate limite
 - Combat thường, PvP và các flow có session được giải quyết bằng simulator theo lượt.
 - `/api/wt` là WebTransport endpoint khi được bật; `/api/ws` là WebSocket fallback theo cấu hình.
 - Realtime transport phục vụ di chuyển/vị trí thế giới, chat, notification và player events. Nó không chạy combat simulation.
+- `world:change` là World Change Feed cho thay đổi ô map, ground drop, resource point và portal. Sau commit, publisher phân giải người nhận theo region/map/instance một lần, gửi event cùng danh sách người nhận qua Redis; mỗi backend instance chỉ chuyển tiếp tới các phiên cục bộ khớp danh sách đó. Client patch các thay đổi có payload đủ rõ và tải lại snapshot tọa độ khi cần.
+- `world:pos` giữ đường phát trực tiếp theo bán kính lân cận cho chuyển động người chơi. Delta di chuyển quái/boss và revision/resync của snapshot map chưa nằm trong feed hiện tại; xem các bước tiếp theo trong tài liệu thế giới.
 - Client player events có cơ chế reconnect; WebTransport cần HTTPS và certificate hợp lệ.
 
 ## Ranh giới khi thay đổi

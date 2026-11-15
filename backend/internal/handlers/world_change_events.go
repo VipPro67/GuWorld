@@ -1,38 +1,73 @@
 package handlers
 
 import (
-	"github.com/vippro67/GuWorld/backend/internal/cache"
+	"strings"
+
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 )
 
-// WorldChangedEvent tells subscribed UI clients that the world snapshot for a
-// region changed. The payload deliberately carries the location instead of the
-// full row: the owning screen refetches its existing viewport projection, so
-// the event stays tiny and the HTTP/RPC contract is unchanged.
-type WorldChangedEvent struct {
-	Type     string `json:"type"`
-	RegionID string `json:"region_id"`
-	X        int    `json:"x"`
-	Y        int    `json:"y"`
+func newWorldChangeEvent(entityType, action, regionID, instanceID string, x, y int, data map[string]any) worldfeed.Event {
+	if strings.TrimSpace(regionID) == "" {
+		return worldfeed.Event{}
+	}
+	mapID := worldMapIDForRegion(regionID)
+	if mapID == "" {
+		mapID = "world_map"
+	}
+	return worldfeed.Event{
+		EntityType: entityType,
+		Action:     action,
+		Scope: worldfeed.Scope{
+			RegionID:   regionID,
+			WorldMapID: mapID,
+			InstanceID: instanceID,
+		},
+		X: x, Y: y, Data: data,
+	}
 }
 
-// publishWorldDropsChanged runs after the transaction commits so subscribers
-// never observe a drop row that was rolled back.
-func publishWorldDropsChanged(regionID string, x, y int) {
-	if regionID == "" {
+func publishWorldChange(entityType, action, regionID, instanceID string, x, y int, data map[string]any) {
+	event := newWorldChangeEvent(entityType, action, regionID, instanceID, x, y, data)
+	if event.EntityType != "" {
+		_ = worldfeed.Publish(event)
+	}
+}
+
+func publishWorldChanges(events []worldfeed.Event) {
+	_ = worldfeed.PublishBatch(events)
+}
+
+func queueWorldChange(events *[]worldfeed.Event, event worldfeed.Event) {
+	if event.EntityType == "" {
 		return
 	}
-	_ = cache.PublishEventQuick("world:drops", WorldChangedEvent{
-		Type: "changed", RegionID: regionID, X: x, Y: y,
+	if events == nil {
+		_ = worldfeed.Publish(event)
+		return
+	}
+	*events = append(*events, event)
+}
+
+// publishWorldDropsChanged runs after the owning transaction commits.
+func publishWorldDropsChanged(regionID string, x, y int) {
+	publishWorldChange("ground_drop", "changed", regionID, "", x, y, nil)
+}
+
+// publishWorldPointsChanged runs after the owning transaction commits.
+func publishWorldPointsChanged(regionID string, x, y int) {
+	publishWorldChange("resource_point", "changed", regionID, "", x, y, nil)
+}
+
+func publishWorldCellChange(action string, data WorldCellEvent) {
+	publishWorldChange("map_cell", action, data.RegionID, data.InstanceID, data.X, data.Y, map[string]any{
+		"cell_type":  data.CellType,
+		"content_id": data.ContentID,
 	})
 }
 
-// publishWorldPointsChanged runs after the transaction commits for resource
-// point seeding/harvest/transplant so the map panel refreshes on demand.
-func publishWorldPointsChanged(regionID string, x, y int) {
-	if regionID == "" {
-		return
-	}
-	_ = cache.PublishEventQuick("world:points", WorldChangedEvent{
-		Type: "changed", RegionID: regionID, X: x, Y: y,
+func newWorldCellChange(action string, data WorldCellEvent) worldfeed.Event {
+	return newWorldChangeEvent("map_cell", action, data.RegionID, data.InstanceID, data.X, data.Y, map[string]any{
+		"cell_type":  data.CellType,
+		"content_id": data.ContentID,
 	})
 }

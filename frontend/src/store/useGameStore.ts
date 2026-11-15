@@ -2379,8 +2379,14 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
-      const unsubscribeWorldDrops = uiRealtimeManager.subscribe("world:drops", (payload: ApiResponseData) => {
-        get().applyWorldDropsEvent(payload as { region_id?: string });
+      const unsubscribeWorldChange = uiRealtimeManager.subscribe("world:change", (payload: ApiResponseData) => {
+        const event = payload as ApiResponseData;
+        if (event?.entity_type === "ground_drop") {
+          get().applyWorldDropsEvent(event as { region_id?: string; map_instance_id?: string; scope?: { region_id?: string; map_instance_id?: string } });
+        }
+        void import("@/store/useWorldStore").then(({ useWorldStore }) => {
+          useWorldStore.getState().applyWorldChangeEvent(event);
+        });
       });
 
       const unsubscribeCatalog = uiRealtimeManager.subscribe("catalog", (payload: ApiResponseData) => {
@@ -2401,7 +2407,7 @@ export const useGameStore = create<GameState>((set, get) => {
         unsubscribeSectChat();
         unsubscribeDeathArena();
         unsubscribeMartialArena();
-        unsubscribeWorldDrops();
+        unsubscribeWorldChange();
         unsubscribeCatalog();
         releaseConnection();
       };

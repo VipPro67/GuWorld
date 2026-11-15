@@ -177,8 +177,18 @@ func publishCombatClearedCell(region string, x, y int, playerID, enemyName, enem
 	if err := cache.SetCellCleared(region, x, y, playerID, clearedCellCooldown); err != nil {
 		logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", playerID, x, y, err)
 	}
-	_ = cache.BroadcastMonsterKilled(x, y, enemyName, region)
-	_ = cache.BroadcastCellCleared(region, x, y, "Monster", enemyTemplateID)
+	instanceID := ""
+	if db.DB != nil {
+		var dbInstanceID sql.NullString
+		if err := db.DB.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, playerID).Scan(&dbInstanceID); err == nil && dbInstanceID.Valid {
+			instanceID = dbInstanceID.String
+		}
+	}
+	publishWorldChange("map_cell", "cleared", region, instanceID, x, y, map[string]any{
+		"cell_type":    "Monster",
+		"content_id":   enemyTemplateID,
+		"monster_name": enemyName,
+	})
 }
 
 // buildSimEnemyCombatant constructs a simulator.CombatantAuto for an enemy/defender in combat.

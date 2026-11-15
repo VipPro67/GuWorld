@@ -44,21 +44,21 @@ const rolePermissions: Record<string, readonly string[]> = {
   anonymous: [],
   player: [],
   observer: ADMIN_NAVIGATION.filter((item) => item.permission !== "billing.read").map((item) => item.permission),
-  support_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "gus.read", "audit.read"],
-  content_admin: ["game_data.read", "game_data.import", "game_data.import_all", "cache.reload"],
-  game_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "sects.read", "apertures.read", "gus.read", "combat_history.read", "map_drops.read", "map_drops.update", "map_drops.delete", "arena_rankings.read", "arena_rankings.update", "shop.read", "gift_codes.read", "audit.read", "monitoring.read", "world_bosses.read", "world_bosses.update", "world_bosses.delete", "mines.read", "mines.update", "mines.delete"],
-  finance_viewer: ["billing.read"],
+  support_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "gus.read", "audit.read", "feedback.read", "feedback.update", "feedback.delete"],
+  content_admin: ["game_data.read", "game_data.import", "game_data.import_all", "cache.reload", "region_loot.read", "region_loot.update", "region_loot.delete", "feedback.read"],
+  game_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "sects.read", "apertures.read", "gus.read", "combat_history.read", "map_drops.read", "map_drops.update", "map_drops.delete", "arena_rankings.read", "arena_rankings.update", "shop.read", "gift_codes.read", "audit.read", "monitoring.read", "world_bosses.read", "world_bosses.update", "world_bosses.delete", "mines.read", "mines.update", "mines.delete", "feedback.read", "feedback.update", "feedback.delete", "marketplace.read", "marketplace.delete", "region_loot.read", "region_loot.update", "region_loot.delete", "teleport.read", "teleport.update"],
+  finance_viewer: ["billing.read", "marketplace.read"],
   super_admin: ["admin.*"],
 };
 
 test("role matrix exposes only permitted navigation resources", () => {
   const expected: Record<string, readonly string[]> = {
     anonymous: [], player: [],
-    observer: ["players", "sects", "apertures", "gu_history", "combat_history", "map_drops", "arena_rankings", "world_bosses", "mines", "data", "shop", "gift_codes", "logs", "monitoring"],
-    support_admin: ["players", "gu_history", "logs"],
-    content_admin: ["data"],
-    game_admin: ["players", "sects", "apertures", "gu_history", "combat_history", "map_drops", "arena_rankings", "world_bosses", "mines", "shop", "gift_codes", "logs", "monitoring"],
-    finance_viewer: ["topup_wallet"],
+    observer: ADMIN_NAVIGATION.filter((item) => item.permission !== "billing.read").map((item) => item.key),
+    support_admin: ["players", "gu_history", "feedback", "logs"],
+    content_admin: ["data", "feedback"],
+    game_admin: ["players", "sects", "apertures", "gu_history", "combat_history", "map_drops", "arena_rankings", "world_bosses", "mines", "feedback", "shop", "marketplace", "gift_codes", "logs", "monitoring"],
+    finance_viewer: ["marketplace", "topup_wallet"],
     super_admin: ADMIN_NAVIGATION.map((item) => item.key),
   };
   for (const [role, permissions] of Object.entries(rolePermissions)) {

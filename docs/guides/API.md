@@ -89,12 +89,19 @@ Admin UI dùng `/admin/*`. Mọi route yêu cầu `AuthRequired`, `admin` rate l
 
 Dataset API: GET `/admin/data/tables`; POST `/admin/data/import`, `/admin/data/import/commit`, `/admin/data/import/:table`, `/admin/data/import/:table/commit`, `/admin/data/export`, `/admin/data/export/:table`.
 Mines & Resource Points API: GET/POST `/admin/primeval-veins`, POST `/admin/primeval-veins/spawn-random`, PUT/DELETE `/admin/primeval-veins/:id`; GET/POST `/admin/world-resource-points`, GET `/admin/world-resource-points/templates`, POST `/admin/world-resource-points/sweep`, PUT/DELETE `/admin/world-resource-points/:id`.
+Sects & Gift Codes API: GET/POST `/admin/gift-codes`, PUT/DELETE `/admin/gift-codes/:id`; GET `/admin/sects` (hỗ trợ search và pagination `page`, `page_size`), GET/PUT/DELETE `/admin/sects/:id`.
+Player Extensions API: GET/DELETE `/admin/players/:id/gu-houses[/:house_id]`, GET/DELETE `/admin/players/:id/killer-moves[/:move_id]`.
+Region Loot API: GET/POST `/admin/region-loot-tables`, PUT/DELETE `/admin/region-loot-tables/:region_id/:loot_table_id/:monster_type`.
+Feedback API: GET `/admin/feedback`, PUT `/admin/feedback/:id/status`, DELETE `/admin/feedback/:id`.
+Marketplace API: GET `/admin/marketplace/auctions`, DELETE `/admin/marketplace/auctions/:id`, GET `/admin/marketplace/trades`.
+Teleport API: GET/PUT `/admin/teleport-arrays[/:id]`.
 
 ## Realtime
 
 - WebTransport: `CONNECT /api/wt`, xử lý ngoài Gin khi bật.
 - WebSocket fallback: `/api/ws`, tùy `WS_FALLBACK_ENABLED`.
 - `POST /api/realtime/metrics` nhận telemetry client có xác thực.
-- Transport phát world/player/chat/trade synchronization. Combat simulation vẫn dùng HTTP combat session API.
+- UI stream phát `world:change` sau khi dữ liệu tọa độ đã commit. Event có `scope` gồm `region_id`, `world_map_id` và `map_instance_id` (nếu là instance), cùng `entity_type`, `action`, `x`, `y`; backend chỉ chuyển tiếp đến người chơi thuộc phạm vi đó. Client patch ô đã rõ dữ liệu hoặc tải lại snapshot cho drop/resource point.
+- Vị trí người chơi tiếp tục phát riêng qua `world:pos` với fan-out tới người chơi lân cận cùng map/instance. Combat simulation vẫn dùng HTTP combat session API.
 
 Rate limits, role requirements và payload validation có thể thay đổi theo middleware/handler; kiểm tra source trước khi xây client contract mới.

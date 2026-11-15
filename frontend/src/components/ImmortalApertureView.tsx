@@ -320,6 +320,7 @@ export const ImmortalApertureView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"overview" | "map" | "points" | "dao" | "tribulation" | "variant_humans">("overview");
   const fetchGrid = useGameStore((state) => state.fetchGrid);
   const worldMonsters = useWorldStore((state) => state.worldMonsters);
+  const mapRevision = useWorldStore((state) => state.mapRevision);
   const fetchWorldMonsters = useWorldStore((state) => state.fetchWorldMonsters);
   const [apertureMapSnapshot, setApertureMapSnapshot] = useState<ApertureMapSnapshot | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
@@ -340,7 +341,7 @@ export const ImmortalApertureView: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === "map" && ownerInsideAperture) void refreshApertureMap();
-  }, [activeTab, ownerInsideAperture, refreshApertureMap]);
+  }, [activeTab, ownerInsideAperture, mapRevision, refreshApertureMap]);
   usePolling(refreshApertureMap, 10000, activeTab === "map" && ownerInsideAperture);
   useEffect(() => {
     if (activeTab === "map" && ownerInsideAperture) void fetchWorldMonsters();

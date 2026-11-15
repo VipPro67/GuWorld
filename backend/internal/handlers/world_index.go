@@ -17,7 +17,7 @@ import (
 const WorldPosIndexBucket = 300
 
 // WorldPosInterestRadius is how far (in world cells) a moving player's update
-// is fanned out over SSE. It is a superset of the client's default viewport;
+// is fanned out over the realtime UI stream. It is a superset of the client's default viewport;
 // clients still apply their own window filter, so this only bounds server-side
 // fan-out (no global O(N^2) broadcast).
 const WorldPosInterestRadius = 300

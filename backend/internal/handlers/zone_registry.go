@@ -771,7 +771,7 @@ func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, regionID string, 
 			return err
 		}
 	}
-	if !wasCleared {
+	if !wasCleared && tx == nil {
 		broadcastWorldCell(cellEventCleared, WorldCellEvent{RegionID: pc.RegionID, X: pc.X, Y: pc.Y, CellType: pc.Type, ContentID: pc.Content})
 	}
 	return nil

@@ -205,6 +205,8 @@ func adminRouteSpecs() []adminRouteSpec {
 		// gift_codes
 		{http.MethodPost, "/gift-codes", "gift_codes.update", handlers.AdminCreateGiftCode, "admin.create_gift_code", "gift_code", false, "", false, false, false},
 		{http.MethodGet, "/gift-codes", "gift_codes.read", handlers.AdminListGiftCodes, "", "", false, "", false, false, false},
+		{http.MethodPut, "/gift-codes/:id", "gift_codes.update", handlers.AdminUpdateGiftCode, "admin.update_gift_code", "gift_code", false, "", false, false, false},
+		{http.MethodDelete, "/gift-codes/:id", "gift_codes.delete", handlers.AdminDeleteGiftCode, "admin.delete_gift_code", "gift_code", true, "path", false, false, true},
 		// images
 		{http.MethodPost, "/upload-image", "images.update", handlers.AdminUploadImage, "admin.upload_image", "image", false, "", false, false, false},
 		// players
@@ -289,6 +291,27 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/apertures/:id/variant-humans", "apertures.update", handlers.AdminCreateApertureVariantHuman, "admin.create_aperture_variant_human", "aperture", false, "", false, false, false},
 		{http.MethodPut, "/apertures/:id/variant-humans/:vh_id", "apertures.update", handlers.AdminUpdateApertureVariantHuman, "admin.update_aperture_variant_human", "aperture", false, "", false, false, false},
 		{http.MethodDelete, "/apertures/:id/variant-humans/:vh_id", "apertures.delete", handlers.AdminDeleteApertureVariantHuman, "admin.delete_aperture_variant_human", "aperture", true, "path", false, false, true},
+		// player gu houses & killer moves
+		{http.MethodGet, "/players/:id/gu-houses", "players.read", handlers.AdminListPlayerGuHouses, "", "", false, "", false, false, false},
+		{http.MethodDelete, "/players/:id/gu-houses/:house_id", "players.delete", handlers.AdminDeletePlayerGuHouse, "admin.delete_player_gu_house", "player_gu_houses", true, "path", false, false, true},
+		{http.MethodGet, "/players/:id/killer-moves", "players.read", handlers.AdminListPlayerKillerMoves, "", "", false, "", false, false, false},
+		{http.MethodDelete, "/players/:id/killer-moves/:move_id", "players.delete", handlers.AdminDeletePlayerKillerMove, "admin.delete_player_killer_move", "player_killer_moves", true, "path", false, false, true},
+		// region loot tables
+		{http.MethodGet, "/region-loot-tables", "region_loot.read", handlers.AdminListRegionLootTables, "", "", false, "", false, false, false},
+		{http.MethodPost, "/region-loot-tables", "region_loot.update", handlers.AdminCreateRegionLootTable, "admin.create_region_loot", "region_loot_tables", false, "", false, false, false},
+		{http.MethodPut, "/region-loot-tables/:region_id/:loot_table_id/:monster_type", "region_loot.update", handlers.AdminUpdateRegionLootTable, "admin.update_region_loot", "region_loot_tables", false, "", false, false, false},
+		{http.MethodDelete, "/region-loot-tables/:region_id/:loot_table_id/:monster_type", "region_loot.delete", handlers.AdminDeleteRegionLootTable, "admin.delete_region_loot", "region_loot_tables", true, "path", false, false, true},
+		// feedback
+		{http.MethodGet, "/feedback", "feedback.read", handlers.AdminListFeedback, "", "", false, "", false, false, false},
+		{http.MethodPut, "/feedback/:id/status", "feedback.update", handlers.AdminUpdateFeedbackStatus, "admin.update_feedback_status", "feedback", false, "", false, false, false},
+		{http.MethodDelete, "/feedback/:id", "feedback.delete", handlers.AdminDeleteFeedback, "admin.delete_feedback", "feedback", true, "path", false, false, true},
+		// marketplace & auctions
+		{http.MethodGet, "/marketplace/auctions", "marketplace.read", handlers.AdminListAuctions, "", "", false, "", false, false, false},
+		{http.MethodDelete, "/marketplace/auctions/:id", "marketplace.delete", handlers.AdminCancelAuction, "admin.cancel_auction", "auction", true, "path", false, false, true},
+		{http.MethodGet, "/marketplace/trades", "marketplace.read", handlers.AdminListTrades, "", "", false, "", false, false, false},
+		// teleport arrays
+		{http.MethodGet, "/teleport-arrays", "teleport.read", handlers.AdminListTeleportArrays, "", "", false, "", false, false, false},
+		{http.MethodPut, "/teleport-arrays/:id", "teleport.update", handlers.AdminUpdateTeleportArray, "admin.update_teleport_array", "teleport_arrays", false, "", false, false, false},
 	}
 }
 

@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
@@ -542,14 +541,7 @@ func AnchorAperture(c *gin.Context) {
 	apUUID, _ := uuid.Parse(ap.ID)
 	syncSpatialPlayer(playerID, "aperture_interior", 10, 10, apUUID)
 
-	_ = cache.PublishEventQuick("world:cell", map[string]any{
-		"type":       "portal_spawn",
-		"region_id":  player.CurrentRegion,
-		"x":          player.X,
-		"y":          player.Y,
-		"cell_type":  "AperturePortal",
-		"content_id": ap.ID,
-	})
+	publishWorldCellChange("portal_spawn", WorldCellEvent{RegionID: player.CurrentRegion, X: player.X, Y: player.Y, CellType: "AperturePortal", ContentID: ap.ID})
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("Hạ Khiếu thành công tại %s (%d, %d). Môn Hộ đã hiển hiện ngoài thế giới. Thân thể Cổ Tiên đã bước vào tọa trấn bên trong Tiên Khiếu, dòng sông Quang Âm đồng bộ với ngoại giới (1.0x). Đang hấp thụ Thiên Khí và Địa Khí...",
@@ -718,14 +710,7 @@ func UnanchorAperture(c *gin.Context) {
 	}
 	syncSpatialPlayer(playerID, destRegion, destX, destY, uuid.Nil)
 
-	_ = cache.PublishEventQuick("world:cell", map[string]any{
-		"type":       "portal_despawn",
-		"region_id":  destRegion,
-		"x":          destX,
-		"y":          destY,
-		"cell_type":  "AperturePortal",
-		"content_id": ap.ID,
-	})
+	publishWorldCellChange("portal_despawn", WorldCellEvent{RegionID: destRegion, X: destX, Y: destY, CellType: "AperturePortal", ContentID: ap.ID})
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("Thu Khiếu thành công! Môn Hộ thế giới đã khép lại. Tiên Khiếu đã thu hồi vào nhục thân. Đã nạp +%.0f Thiên Khí và +%.0f Địa Khí. Tốc độ thời gian Tiên Khiếu đã khôi phục bình thường. Thân thể Cổ Tiên đã trở lại %s (%d, %d).",

@@ -45,7 +45,7 @@ var resources = []Resource{
 	resource("recipes", "content", "Cổ phương", "/admin/data", crud(), []string{"recipes.read"}, []string{"recipes.update", "recipes.delete"}, "high", []string{"recipe catalog", "gacha pools"}, []string{"recipe catalog"}, "admin."),
 	resource("monsters", "content", "Quái vật", "/admin/data", crud(), []string{"monsters.read"}, []string{"monsters.update", "monsters.delete"}, "high", []string{"monster dictionary"}, []string{"monster registry"}, "admin."),
 	resource("loot_tables", "content", "Bảng chiến lợi phẩm", "/admin/data", crud(), []string{"loot_tables.read"}, []string{"loot_tables.update", "loot_tables.delete"}, "high", []string{"loot table dictionary"}, []string{"monster registry"}, "admin."),
-	resource("gift_codes", "economy", "Mã quà", "/admin/gift_codes", []string{"read", "create"}, []string{"gift_codes.read"}, []string{"gift_codes.update"}, "high", nil, nil, "admin."),
+	resource("gift_codes", "economy", "Mã quà", "/admin/gift_codes", crud(), []string{"gift_codes.read"}, []string{"gift_codes.update", "gift_codes.delete"}, "high", nil, nil, "admin."),
 	resource("images", "content", "Hình ảnh", "/admin/data", []string{"upload"}, nil, []string{"images.update"}, "medium", nil, nil, "admin."),
 	resource("constitution_dictionary", "content", "Thể chất", "/admin/data", crud(), []string{"constitution_dictionary.read"}, []string{"constitution_dictionary.update", "constitution_dictionary.delete"}, "high", []string{"constitution dictionary"}, []string{"constitution registry"}, "admin."),
 	resource("race_dictionary", "content", "Chủng tộc", "/admin/data", crud(), []string{"race_dictionary.read"}, []string{"race_dictionary.update", "race_dictionary.delete"}, "high", []string{"race dictionary"}, []string{"race registry"}, "admin."),
@@ -55,6 +55,10 @@ var resources = []Resource{
 	resource("mines", "world", "Mỏ & Nguyên Tuyền", "/admin/mines", crud(), []string{"mines.read"}, []string{"mines.update", "mines.delete"}, "high", []string{"primeval veins", "world resource points"}, nil, "admin."),
 	resource("quests", "content", "Nhiệm vụ", "/admin/data", crud(), []string{"quests.read"}, []string{"quests.update", "quests.delete"}, "high", []string{"game_quests_list"}, []string{"quest registry"}, "admin."),
 	resource("dungeons", "world", "Phó bản", "/admin/data", crud(), []string{"dungeons.read"}, []string{"dungeons.update", "dungeons.delete"}, "high", nil, []string{"instance cache"}, "admin."),
+	resource("region_loot", "world", "Bảng rơi đồ khu vực", "/admin/data", crud(), []string{"region_loot.read"}, []string{"region_loot.update", "region_loot.delete"}, "high", nil, nil, "admin."),
+	resource("feedback", "content", "Ý kiến & Báo lỗi", "/admin/feedback", []string{"read", "update", "delete"}, []string{"feedback.read"}, []string{"feedback.update", "feedback.delete"}, "medium", nil, nil, "admin."),
+	resource("marketplace", "economy", "Thị trường & Đấu giá", "/admin/marketplace", []string{"read", "delete"}, []string{"marketplace.read"}, []string{"marketplace.delete"}, "high", nil, nil, "admin."),
+	resource("teleport", "world", "Truyền tống trận", "/admin/mines", []string{"read", "update"}, []string{"teleport.read"}, []string{"teleport.update"}, "high", nil, nil, "admin."),
 }
 
 func resource(key, domain, label, route string, capabilities, reads, writes []string, risk string, invalidation, reload []string, auditPrefix string) Resource {
