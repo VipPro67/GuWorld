@@ -1695,7 +1695,7 @@ return (
                           className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
                         >
                           <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                          ⚡ Xuất Trận Nghênh Kiếp Sớm (Vào Tác Chiến Ngay)
+                          ⚡ Nghênh kiếp sớm
                         </button>
                       </div>
                     )}
@@ -1816,7 +1816,8 @@ return (
                             className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-rose-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg ring-1 ring-amber-400/40"
                           >
                             <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                            Xuất trận nghênh chiến tai kiếp (Turn-based)
+                            <span>Nghênh chiến tai kiếp</span>
+                            <span className="rounded-md border border-white/20 bg-black/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-100/80">Theo lượt</span>
                           </button>
                         </div>
                       </div>
@@ -1901,7 +1902,7 @@ return (
                           className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
                         >
                           <Shield className="w-4 h-4 text-emerald-300" />
-                          🏆 Hoàn Tất Độ Kiếp & Ổn Định Tiên Khiếu
+                          🏆 Hoàn tất độ kiếp
                         </button>
                       </div>
                     )}

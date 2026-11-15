@@ -494,8 +494,12 @@ export function PartyView() {
                       }
                     }}
                     className="w-full py-2 bg-amber-950/40 border border-amber-600/40 text-amber-300 hover:bg-amber-900/40 font-bold rounded-xl text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] disabled:opacity-50"
+                    aria-label={`Lưu đội hình, ${formationCells.filter(Boolean).length} trên 8 ô dành cho thành viên ngoài trưởng nhóm`}
                   >
-                    Lưu Đội Hình ({formationCells.filter(Boolean).length}/8 sau trưởng nhóm)
+                    <span>Lưu đội hình</span>
+                    <span className="ml-2 rounded-md border border-amber-500/20 bg-black/20 px-1.5 py-0.5 font-mono text-[10px]">
+                      {formationCells.filter(Boolean).length}/8
+                    </span>
                   </button>
                   <p className="text-[11px] text-zinc-600 leading-relaxed">
                     Chỉ ai trong lưới mới xuất trận đúng ô đó (kẻ không đủ điều kiện: khác region/hết HP, thú đói/ngủ/thiếu soul, dị nhân đang làm việc — tự bỏ qua). Xóa hết + lưu để về chế độ tự động.

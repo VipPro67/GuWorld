@@ -868,15 +868,15 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 onClick={openRefinePanel}
                 className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-rose-600/50 bg-rose-950/40 hover:bg-rose-900/40 transition-colors text-left"
               >
-                <span className="flex items-center gap-2 text-xs text-rose-200">
+                <span className="flex min-w-0 items-center gap-2 text-xs text-rose-200">
                   <Flame className="w-4 h-4 text-rose-400 animate-pulse shrink-0" />
-                  <span>
-                    <span className="font-semibold">Đang có phiên luyện chạy</span>
-                    <span className="text-rose-300/70"> — mục tiêu R{refineSession.target_rank}, điểm {Math.round(refineSession.accuracy * 10) / 10}%</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">Đang luyện · mục tiêu R{refineSession.target_rank}</span>
+                    <span className="block text-rose-300/70">Độ chính xác {Math.round(refineSession.accuracy * 10) / 10}%</span>
                   </span>
                 </span>
-                <span className="text-xs font-mono text-amber-300 shrink-0">
-                  {sessionEndShown && `⏳ ${sessionEndShown}`} · Xem phiên ›
+                <span className="shrink-0 text-xs font-mono text-amber-300">
+                  {sessionEndShown && `⏳ ${sessionEndShown} · `}Xem phiên ›
                 </span>
               </button>
             )}

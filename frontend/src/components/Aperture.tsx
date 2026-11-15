@@ -2238,7 +2238,8 @@ function AscensionRitual() {
           )}
           <button
             disabled={!hasVital || humanQi < 100000 || player.current_mana < shatterCost || store.actionLoading}
-            className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 uppercase tracking-wider"
+            aria-label={`Trùng kích nát khiếu, tốn ${Math.round(shatterCost).toLocaleString("vi-VN")} Chân Nguyên`}
+            className="flex w-full flex-col items-center px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs leading-tight rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 uppercase tracking-wider"
             onClick={async () => {
               const attempts = session?.step === "SHATTERING" ? session.attempts : 0;
               const chance = Math.min(ASCENSION_SHATTER_MAX, ASCENSION_SHATTER_BASE + ASCENSION_SHATTER_STEP * attempts);
@@ -2247,7 +2248,10 @@ function AscensionRitual() {
               if (res) store.addToast(res.message, res.shattered ? "success" : "error");
             }}
           >
-            Trùng Kích Nát Khiếu (−{Math.round(shatterCost).toLocaleString("vi-VN")} Chân Nguyên)
+            <span>Trùng kích nát khiếu</span>
+            <span aria-hidden="true" className="mt-0.5 text-[10px] font-semibold tracking-normal opacity-80">
+              −{Math.round(shatterCost).toLocaleString("vi-VN")} Chân Nguyên
+            </span>
           </button>
         </div>
       )}
@@ -2289,13 +2293,15 @@ function AscensionRitual() {
           </div>
           <button
             disabled={store.actionLoading}
+            aria-label="Nghênh chiến Địa Tai bản yếu"
+            title="Nghênh chiến Địa Tai bản yếu"
             className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 uppercase tracking-wider cursor-pointer"
             onClick={async () => {
               const res = await store.engageAscensionCalamity();
               if (res) store.addToast(res.message, "info");
             }}
           >
-            Nghênh Chiến Địa Tai Bản Yếu
+            Nghênh chiến
           </button>
           <div className="text-[10px] text-zinc-500">Thua trận = nghi thức thất bại, mất một phần Nhân Khí. Rút lui an toàn được phép, có thể nghênh chiến lại trong thời hạn.</div>
         </div>
@@ -2328,7 +2334,8 @@ function AscensionRitual() {
           </div>
           <button
             disabled={selectedGu.length === 0 || store.actionLoading}
-            className="w-full px-5 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-zinc-950 font-black text-xs rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+            aria-label={`Thả ${selectedGu.length} Cổ để thăng tiên, nhận ${selectedGu.length * 300} Đạo Ngân`}
+            className="flex w-full flex-col items-center px-5 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-zinc-950 font-black text-xs leading-tight rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
             onClick={async () => {
               const totalMarks = selectedGu.length * 300;
               if (!(await store.showConfirm(`Thả ${selectedGu.length} cổ 5C để tiêu hủy, nhận ${totalMarks} Đạo Ngân và THĂNG TIÊN? Hành động không thể đảo ngược!`))) return;
@@ -2339,7 +2346,10 @@ function AscensionRitual() {
               }
             }}
           >
-            Thả Cổ — Hoàn Thành Thăng Tiên ({selectedGu.length} cổ · {selectedGu.length * 300} Đạo Ngân)
+            <span>Thả Cổ &amp; Thăng Tiên</span>
+            <span aria-hidden="true" className="mt-0.5 text-[10px] font-semibold normal-case tracking-normal opacity-80">
+              {selectedGu.length} cổ · +{selectedGu.length * 300} Đạo Ngân
+            </span>
           </button>
         </div>
       )}

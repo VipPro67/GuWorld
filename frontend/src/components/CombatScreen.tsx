@@ -1160,10 +1160,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           onClick={async () => {
             if (await retreatCombat()) await fetchPlayerStatus(player.id, true);
           }}
+          aria-label="Rút lui khỏi trận trước khi bắt đầu"
+          title="Rút lui khỏi trận trước khi bắt đầu"
           disabled={actionLoading || Boolean(interactiveSession)}
           className="self-start rounded-lg border border-red-800/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50"
         >
-          Rút lui khỏi trận trước khi bắt đầu
+          Rút lui
         </button>
       )}
 

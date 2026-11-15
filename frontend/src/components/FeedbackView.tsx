@@ -507,7 +507,7 @@ export const FeedbackView: React.FC = () => {
                                 }}
                                 className="text-[10px] text-fuchsia-400 hover:text-fuchsia-300 hover:underline font-mono cursor-pointer"
                               >
-                                Thay đổi trạng thái / Viết phản hồi
+                                Quản lý ý kiến
                               </button>
                             )}
                           </div>

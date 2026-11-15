@@ -74,7 +74,7 @@ export const GameLoadingScreen: React.FC<GameLoadingScreenProps> = ({
               className="min-h-11 w-full py-2 px-4 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 text-amber-400 hover:text-amber-300 font-medium text-xs flex items-center justify-center gap-2 border border-amber-500/30 active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,transform] cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Xóa bộ nhớ đệm (Clear Cache) & Thử lại
+              Xóa bộ nhớ đệm & tải lại
             </button>
           </div>
         ) : (

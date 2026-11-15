@@ -2893,10 +2893,13 @@ export const SectView: React.FC = () => {
                   await donateSectStones(donateStones);
                 }}
                 disabled={player.primeval_stones <= 0 || actionLoading}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-2 tracking-wide"
+                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex flex-wrap items-center justify-center gap-x-2 gap-y-1 tracking-wide"
               >
                 <Gift className="w-4 h-4" />
-                DÂNG NỘP LINH THẠCH (Nhận +{donateStones.toLocaleString()} Pts)
+                <span>Dâng nộp linh thạch</span>
+                <span className="rounded-md border border-white/20 bg-black/15 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal">
+                  +{donateStones.toLocaleString()} điểm
+                </span>
               </button>
             </div>
           )}
@@ -4969,7 +4972,7 @@ export const SectView: React.FC = () => {
                     className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-serif font-bold text-sm shadow-lg shadow-amber-950/40 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-2 mt-2"
                   >
                     <Navigation className="w-4 h-4 text-amber-200" />
-                    TIẾN HÀNH ĐẠI ĐIỂN DI DỜI SƠN MÔN
+                    Di dời sơn môn
                   </button>
                 </div>
               )}
