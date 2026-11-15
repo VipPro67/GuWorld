@@ -7,6 +7,7 @@ import { CombatReplayView } from "./CombatReplayView";
 import { CombatReportView } from "./CombatReportView";
 import { Num } from "./Num";
 import { getPathColor } from "@/lib/utils";
+import { getGuIconUrl } from "@/lib/gu-icons";
 import { masteryKeyForPoints, masteryLevelForPoints, pathLabels } from "@/lib/translate";
 import { GamePanel, GameButton, GameCard, GameProgressBar, GameSection } from "@/components/ui";
 import { rankLabel, subRankLabel, typeColor, gridXLabel, getCombatEffects } from "@/lib/combat";
@@ -939,12 +940,19 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         <div className="space-y-1.5">
           {combatants.map(c => (
             <div key={c.id} className="flex items-center gap-2 text-xs bg-zinc-950/40 border border-zinc-800/50 rounded-lg px-3 py-2">
-              <div className="w-5 h-5 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[8px] font-bold text-zinc-400">
-                {c.avatar_url ? (
-                  <img src={c.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  c.name.slice(0, 2).toUpperCase()
-                )}
+              <div className={`w-7 h-7 rounded-full shrink-0 overflow-hidden border ${isEnemy ? "border-rose-800/60 bg-rose-950/40" : "border-emerald-800/60 bg-emerald-950/40"} flex items-center justify-center`}>
+                <img
+                  src={c.avatar_url || (isEnemy
+                    ? enemy.enemy_type === "TOWER"
+                      ? "/assets/world/form-reckless-savage.webp"
+                      : enemy.enemy_type === "PVP"
+                        ? "/assets/world/cultivator.webp"
+                        : "/assets/world/spirit-beast.webp"
+                    : player.avatar_url || "/assets/world/cultivator.webp")}
+                  alt=""
+                  aria-hidden="true"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <span className="text-zinc-200 font-medium truncate flex-1">{c.name}</span>
               <span className="text-zinc-400 shrink-0">{rankLabel(c.rank)}</span>
@@ -1447,11 +1455,21 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                             'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
                       }`}
                   >
-                    <div className="font-bold text-sm text-zinc-200 truncate">{spec?.name || gu.gu_id}</div>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <img
+                        src={getGuIconUrl(gu.gu_id, spec?.name || gu.gu_id)}
+                        alt=""
+                        aria-hidden="true"
+                        loading="lazy"
+                        decoding="async"
+                        className="h-10 w-10 shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-950/60 object-contain p-1"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-bold text-sm text-zinc-200">{spec?.name || gu.gu_id}</div>
+                        <div className="mt-1 text-[10px] text-zinc-500">Bậc {guRank}</div>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      <span className={`text-[10px] ${isHigherRank ? 'text-rose-400 font-bold' : 'text-zinc-500'}`}>
-                        Bậc {guRank}
-                      </span>
                       {spec?.path && spec.path.map(p => (
                         <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${p.toLowerCase().includes(bestPath.toLowerCase()) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
                           }`}>

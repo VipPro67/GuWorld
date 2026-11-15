@@ -88,6 +88,11 @@ export const CombatHistoryView: React.FC = () => {
             const isVictory = entry.winner === "Phe Ta";
             const summary = entry.summary || {};
             const opponent = entry.enemy_name || entry.enemy_type || "Kẻ địch";
+            const opponentArtwork = entry.enemy_type === "PVP"
+              ? "/assets/world/cultivator.webp"
+              : entry.enemy_type === "TOWER"
+                ? "/assets/world/form-reckless-savage.webp"
+                : "/assets/world/spirit-beast.webp";
             return (
               <button
                 key={entry.id}
@@ -102,7 +107,7 @@ export const CombatHistoryView: React.FC = () => {
                   </div>
                   <span className="relative rounded-full border border-zinc-600 bg-zinc-950/80 px-2 py-1 text-[10px] font-black text-amber-300">VS</span>
                   <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-rose-500/30 bg-zinc-950/70 shadow-lg shadow-rose-950/30">
-                    <img src="/assets/world/spirit-beast.webp" alt={opponent} className="h-full w-full object-cover" />
+                    <img src={opponentArtwork} alt={opponent} className="h-full w-full object-cover" />
                     <span className="absolute bottom-0 inset-x-3 z-10 truncate bg-zinc-950/75 py-0.5 text-left text-[9px] font-semibold text-zinc-200">{opponent}</span>
                   </div>
                 </div>
